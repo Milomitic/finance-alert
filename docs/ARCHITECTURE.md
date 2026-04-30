@@ -405,3 +405,4 @@ Questo file è **vincolante**: ogni commit che introduce uno dei seguenti cambia
 | 2026-04-30 | 93e6056 | Watchlists CRUD endpoints live: list/create/get/patch/delete + items add/remove/bulk-delete. CSRF guard on mutating routes via require_json. |
 | 2026-04-30 | bb5ec8d | APScheduler in-process started via FastAPI lifespan. Cron job `refresh_catalog` runs Sat 03:00 Europe/Rome. Health endpoint returns scheduler_running. |
 | 2026-04-30 | 23578f3 | Frontend complete: autosave watchlist editor with create-on-first-edit, debounced text saves, AbortController race-safety, optimistic add/remove. End-to-end watchlist CRUD UI is live. |
+| 2026-04-30 | b2f96f9 | Production-local mode: FastAPI serves frontend `dist/` as static + SPA fallback. `just prod-local` runs the full app on a single port (8000). |
