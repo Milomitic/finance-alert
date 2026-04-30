@@ -1,0 +1,21 @@
+ticker,name,exchange,sector,industry,country,currency
+AAPL,Apple Inc.,NASDAQ,Information Technology,Technology Hardware Storage & Peripherals,US,USD
+MSFT,Microsoft Corporation,NASDAQ,Information Technology,Systems Software,US,USD
+GOOGL,Alphabet Inc. Class A,NASDAQ,Communication Services,Interactive Media & Services,US,USD
+AMZN,Amazon.com Inc.,NASDAQ,Consumer Discretionary,Broadline Retail,US,USD
+NVDA,NVIDIA Corporation,NASDAQ,Information Technology,Semiconductors,US,USD
+META,Meta Platforms Inc.,NASDAQ,Communication Services,Interactive Media & Services,US,USD
+TSLA,Tesla Inc.,NASDAQ,Consumer Discretionary,Automobile Manufacturers,US,USD
+PEP,PepsiCo Inc.,NASDAQ,Consumer Staples,Soft Drinks & Non-alcoholic Beverages,US,USD
+ADBE,Adobe Inc.,NASDAQ,Information Technology,Application Software,US,USD
+NFLX,Netflix Inc.,NASDAQ,Communication Services,Movies & Entertainment,US,USD
+COST,Costco Wholesale Corporation,NASDAQ,Consumer Staples,Consumer Staples Merchandise Retail,US,USD
+INTC,Intel Corporation,NASDAQ,Information Technology,Semiconductors,US,USD
+AMGN,Amgen Inc.,NASDAQ,Health Care,Biotechnology,US,USD
+GILD,Gilead Sciences Inc.,NASDAQ,Health Care,Biotechnology,US,USD
+CSCO,Cisco Systems Inc.,NASDAQ,Information Technology,Communications Equipment,US,USD
+AVGO,Broadcom Inc.,NASDAQ,Information Technology,Semiconductors,US,USD
+PYPL,PayPal Holdings Inc.,NASDAQ,Financials,Transaction & Payment Processing Services,US,USD
+AMD,Advanced Micro Devices Inc.,NASDAQ,Information Technology,Semiconductors,US,USD
+QCOM,QUALCOMM Incorporated,NASDAQ,Information Technology,Semiconductors,US,USD
+TXN,Texas Instruments Incorporated,NASDAQ,Information Technology,Semiconductors,US,USD

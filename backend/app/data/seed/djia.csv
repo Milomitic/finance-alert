@@ -1,0 +1,31 @@
+ticker,name,exchange,sector,industry,country,currency
+AAPL,Apple Inc.,NASDAQ,Information Technology,Technology Hardware Storage & Peripherals,US,USD
+AMGN,Amgen Inc.,NASDAQ,Health Care,Biotechnology,US,USD
+AXP,American Express Company,NYSE,Financials,Consumer Finance,US,USD
+BA,Boeing Company,NYSE,Industrials,Aerospace & Defense,US,USD
+CAT,Caterpillar Inc.,NYSE,Industrials,Construction Machinery & Heavy Transportation Equipment,US,USD
+CRM,Salesforce Inc.,NYSE,Information Technology,Application Software,US,USD
+CSCO,Cisco Systems Inc.,NASDAQ,Information Technology,Communications Equipment,US,USD
+CVX,Chevron Corporation,NYSE,Energy,Integrated Oil & Gas,US,USD
+DIS,Walt Disney Company,NYSE,Communication Services,Movies & Entertainment,US,USD
+GS,Goldman Sachs Group Inc.,NYSE,Financials,Investment Banking & Brokerage,US,USD
+HD,Home Depot Inc.,NYSE,Consumer Discretionary,Home Improvement Retail,US,USD
+HON,Honeywell International Inc.,NASDAQ,Industrials,Industrial Conglomerates,US,USD
+IBM,International Business Machines Corporation,NYSE,Information Technology,IT Consulting & Other Services,US,USD
+JNJ,Johnson & Johnson,NYSE,Health Care,Pharmaceuticals,US,USD
+JPM,JPMorgan Chase & Co.,NYSE,Financials,Diversified Banks,US,USD
+KO,Coca-Cola Company,NYSE,Consumer Staples,Soft Drinks & Non-alcoholic Beverages,US,USD
+MCD,McDonald's Corporation,NYSE,Consumer Discretionary,Restaurants,US,USD
+MMM,3M Company,NYSE,Industrials,Industrial Conglomerates,US,USD
+MRK,Merck & Co. Inc.,NYSE,Health Care,Pharmaceuticals,US,USD
+MSFT,Microsoft Corporation,NASDAQ,Information Technology,Systems Software,US,USD
+NKE,NIKE Inc.,NYSE,Consumer Discretionary,Footwear,US,USD
+PG,Procter & Gamble Company,NYSE,Consumer Staples,Personal Care Products,US,USD
+SHW,Sherwin-Williams Company,NYSE,Materials,Specialty Chemicals,US,USD
+TRV,Travelers Companies Inc.,NYSE,Financials,Property & Casualty Insurance,US,USD
+UNH,UnitedHealth Group Incorporated,NYSE,Health Care,Managed Health Care,US,USD
+V,Visa Inc.,NYSE,Financials,Transaction & Payment Processing Services,US,USD
+VZ,Verizon Communications Inc.,NYSE,Communication Services,Integrated Telecommunication Services,US,USD
+WBA,Walgreens Boots Alliance Inc.,NASDAQ,Consumer Staples,Drug Retail,US,USD
+WMT,Walmart Inc.,NYSE,Consumer Staples,Consumer Staples Merchandise Retail,US,USD
+NVDA,NVIDIA Corporation,NASDAQ,Information Technology,Semiconductors,US,USD

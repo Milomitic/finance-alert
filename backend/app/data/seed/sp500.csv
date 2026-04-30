@@ -1,0 +1,26 @@
+ticker,name,exchange,sector,industry,country,currency
+AAPL,Apple Inc.,NASDAQ,Information Technology,Technology Hardware Storage & Peripherals,US,USD
+MSFT,Microsoft Corporation,NASDAQ,Information Technology,Systems Software,US,USD
+GOOGL,Alphabet Inc. Class A,NASDAQ,Communication Services,Interactive Media & Services,US,USD
+AMZN,Amazon.com Inc.,NASDAQ,Consumer Discretionary,Broadline Retail,US,USD
+NVDA,NVIDIA Corporation,NASDAQ,Information Technology,Semiconductors,US,USD
+META,Meta Platforms Inc.,NASDAQ,Communication Services,Interactive Media & Services,US,USD
+TSLA,Tesla Inc.,NASDAQ,Consumer Discretionary,Automobile Manufacturers,US,USD
+BRK.B,Berkshire Hathaway Inc. Class B,NYSE,Financials,Multi-Sector Holdings,US,USD
+JPM,JPMorgan Chase & Co.,NYSE,Financials,Diversified Banks,US,USD
+V,Visa Inc.,NYSE,Financials,Transaction & Payment Processing Services,US,USD
+MA,Mastercard Incorporated,NYSE,Financials,Transaction & Payment Processing Services,US,USD
+JNJ,Johnson & Johnson,NYSE,Health Care,Pharmaceuticals,US,USD
+WMT,Walmart Inc.,NYSE,Consumer Staples,Consumer Staples Merchandise Retail,US,USD
+PG,Procter & Gamble Company,NYSE,Consumer Staples,Personal Care Products,US,USD
+UNH,UnitedHealth Group Incorporated,NYSE,Health Care,Managed Health Care,US,USD
+HD,Home Depot Inc.,NYSE,Consumer Discretionary,Home Improvement Retail,US,USD
+BAC,Bank of America Corporation,NYSE,Financials,Diversified Banks,US,USD
+XOM,Exxon Mobil Corporation,NYSE,Energy,Integrated Oil & Gas,US,USD
+CVX,Chevron Corporation,NYSE,Energy,Integrated Oil & Gas,US,USD
+KO,Coca-Cola Company,NYSE,Consumer Staples,Soft Drinks & Non-alcoholic Beverages,US,USD
+PEP,PepsiCo Inc.,NASDAQ,Consumer Staples,Soft Drinks & Non-alcoholic Beverages,US,USD
+DIS,Walt Disney Company,NYSE,Communication Services,Movies & Entertainment,US,USD
+ADBE,Adobe Inc.,NASDAQ,Information Technology,Application Software,US,USD
+NFLX,Netflix Inc.,NASDAQ,Communication Services,Movies & Entertainment,US,USD
+CRM,Salesforce Inc.,NYSE,Information Technology,Application Software,US,USD

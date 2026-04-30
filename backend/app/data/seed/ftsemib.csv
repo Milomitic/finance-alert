@@ -1,0 +1,31 @@
+ticker,name,exchange,sector,industry,country,currency
+ENI.MI,Eni S.p.A.,BIT,Energy,Integrated Oil & Gas,IT,EUR
+ENEL.MI,Enel S.p.A.,BIT,Utilities,Electric Utilities,IT,EUR
+ISP.MI,Intesa Sanpaolo S.p.A.,BIT,Financials,Diversified Banks,IT,EUR
+UCG.MI,UniCredit S.p.A.,BIT,Financials,Diversified Banks,IT,EUR
+STM.MI,STMicroelectronics N.V.,BIT,Information Technology,Semiconductors,IT,EUR
+STLAM.MI,Stellantis N.V.,BIT,Consumer Discretionary,Automobile Manufacturers,IT,EUR
+RACE.MI,Ferrari N.V.,BIT,Consumer Discretionary,Automobile Manufacturers,IT,EUR
+LDO.MI,Leonardo S.p.A.,BIT,Industrials,Aerospace & Defense,IT,EUR
+TRN.MI,Terna S.p.A.,BIT,Utilities,Electric Utilities,IT,EUR
+SRG.MI,Snam S.p.A.,BIT,Utilities,Gas Utilities,IT,EUR
+AZM.MI,Azimut Holding S.p.A.,BIT,Financials,Asset Management & Custody Banks,IT,EUR
+BAMI.MI,Banco BPM S.p.A.,BIT,Financials,Diversified Banks,IT,EUR
+BMED.MI,Banca Mediolanum S.p.A.,BIT,Financials,Asset Management & Custody Banks,IT,EUR
+BPE.MI,BPER Banca S.p.A.,BIT,Financials,Regional Banks,IT,EUR
+CPR.MI,Davide Campari-Milano N.V.,BIT,Consumer Staples,Distillers & Vintners,IT,EUR
+DIA.MI,DiaSorin S.p.A.,BIT,Health Care,Health Care Equipment,IT,EUR
+G.MI,Assicurazioni Generali S.p.A.,BIT,Financials,Multi-line Insurance,IT,EUR
+HER.MI,Hera S.p.A.,BIT,Utilities,Multi-Utilities,IT,EUR
+IG.MI,Italgas S.p.A.,BIT,Utilities,Gas Utilities,IT,EUR
+INW.MI,Infrastrutture Wireless Italiane S.p.A.,BIT,Communication Services,Wireless Telecommunication Services,IT,EUR
+MB.MI,Mediobanca Banca di Credito Finanziario S.p.A.,BIT,Financials,Investment Banking & Brokerage,IT,EUR
+MONC.MI,Moncler S.p.A.,BIT,Consumer Discretionary,Apparel Accessories & Luxury Goods,IT,EUR
+NEXI.MI,Nexi S.p.A.,BIT,Information Technology,Transaction & Payment Processing Services,IT,EUR
+PIRC.MI,Pirelli & C. S.p.A.,BIT,Consumer Discretionary,Tires & Rubber,IT,EUR
+PST.MI,Poste Italiane S.p.A.,BIT,Financials,Diversified Financial Services,IT,EUR
+PRY.MI,Prysmian S.p.A.,BIT,Industrials,Electrical Components & Equipment,IT,EUR
+REC.MI,Recordati Industria Chimica e Farmaceutica S.p.A.,BIT,Health Care,Pharmaceuticals,IT,EUR
+TIT.MI,Telecom Italia S.p.A.,BIT,Communication Services,Integrated Telecommunication Services,IT,EUR
+US.MI,Unipol Assicurazioni S.p.A.,BIT,Financials,Multi-line Insurance,IT,EUR
+AMP.MI,Amplifon S.p.A.,BIT,Health Care,Health Care Distributors,IT,EUR
