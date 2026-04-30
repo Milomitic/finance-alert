@@ -8,7 +8,8 @@ Prerequisites: Python 3.11+, Node 20+, [uv](https://docs.astral.sh/uv/), [just](
 
 ```bash
 cp .env.example .env
-# Generate ADMIN_PASSWORD_HASH:
+# After `just install`, generate ADMIN_PASSWORD_HASH and paste it into .env:
+#   cd backend && uv run python -m app.scripts.set_admin_password
 just install
 just up
 ```

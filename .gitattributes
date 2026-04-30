@@ -1,0 +1,15 @@
+# Default: normalize line endings to LF in the repo, check out as LF on all platforms
+* text=auto eol=lf
+
+# Windows-only files (none yet, but reserved for future PowerShell scripts)
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Binary files
+*.png binary
+*.jpg binary
+*.ico binary
+*.db binary
+*.db-wal binary
+*.db-shm binary
