@@ -400,3 +400,4 @@ Questo file è **vincolante**: ogni commit che introduce uno dei seguenti cambia
 | Data | Commit | Cambiamento |
 |---|---|---|
 | 2026-04-30 | initial | Creazione documento, descrizione architettura Fase 1 (in pianificazione) |
+| 2026-04-30 | 0ffebfb | Schema persisted via Alembic migration. SQLite tables: users, stocks, indices, stock_indices, watchlists, watchlist_items, catalog_refresh_log. WAL mode active via SQLAlchemy connect-listener. |
