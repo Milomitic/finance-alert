@@ -68,10 +68,18 @@ if FRONTEND_DIST.exists():
         if full_path.startswith("api/"):
             raise HTTPException(status_code=404, detail="Not Found")
 
-        # Try a literal file first (e.g. /vite.svg, /favicon.ico)
-        candidate = FRONTEND_DIST / full_path
-        if full_path and candidate.is_file():
-            return FileResponse(candidate)
+        # Try a literal file first (e.g. /vite.svg, /favicon.ico).
+        # Defense-in-depth: resolve and verify the candidate stays inside FRONTEND_DIST
+        # to prevent any path-traversal via crafted full_path values.
+        if full_path:
+            candidate = (FRONTEND_DIST / full_path).resolve()
+            try:
+                candidate.relative_to(FRONTEND_DIST)
+            except ValueError:
+                # Outside dist root — treat as not-found, fall through to SPA shell.
+                candidate = None
+            if candidate is not None and candidate.is_file():
+                return FileResponse(candidate)
 
         # Otherwise serve the SPA shell
         index = FRONTEND_DIST / "index.html"
