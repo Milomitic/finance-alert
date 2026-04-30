@@ -565,6 +565,7 @@ Una feature è "fatta" quando:
 3. La feature è esercitata manualmente nel browser
 4. Le migration Alembic sono generate e committate
 5. Il README riflette eventuali nuovi step
+6. **`docs/ARCHITECTURE.md` è aggiornato** se il commit modifica architettura, modello dati, endpoint, flussi, dipendenze esterne, scheduler, o policy di sicurezza (vedi policy nel doc, §10)
 
 ## 12. Sicurezza
 
