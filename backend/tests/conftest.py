@@ -3,6 +3,7 @@ from collections.abc import Iterator
 import pytest
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import StaticPool
 
 from app.core.db import Base
 import app.models  # noqa: F401
@@ -10,7 +11,11 @@ import app.models  # noqa: F401
 
 @pytest.fixture
 def db() -> Iterator[Session]:
-    engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
+    engine = create_engine(
+        "sqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
 
     # In-memory SQLite still benefits from FK enforcement for cascade tests.
     @event.listens_for(engine, "connect")
