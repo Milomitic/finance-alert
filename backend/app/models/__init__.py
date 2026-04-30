@@ -1,0 +1,16 @@
+"""Aggregate model imports so Alembic sees them."""
+from app.models.catalog_log import CatalogRefreshLog
+from app.models.index import Index, StockIndex
+from app.models.stock import Stock
+from app.models.user import User
+from app.models.watchlist import Watchlist, WatchlistItem
+
+__all__ = [
+    "User",
+    "Stock",
+    "Index",
+    "StockIndex",
+    "Watchlist",
+    "WatchlistItem",
+    "CatalogRefreshLog",
+]
