@@ -1,0 +1,211 @@
+"""Refresh stock catalog from Wikipedia constituent tables."""
+import time
+from dataclasses import dataclass
+from datetime import datetime, timezone
+
+import pandas as pd
+from loguru import logger
+from sqlalchemy import delete, select
+from sqlalchemy.orm import Session
+
+from app.models import CatalogRefreshLog, Index, Stock, StockIndex
+
+
+USER_AGENT = "FinanceAlert/0.1 (personal use)"
+
+INDEX_SOURCES: dict[str, dict[str, object]] = {
+    "SP500": {
+        "url": "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies",
+        "name": "S&P 500",
+        "country": "US",
+        "table_index": 0,
+        "ticker_col": "Symbol",
+        "name_col": "Security",
+        "sector_col": "GICS Sector",
+        "industry_col": "GICS Sub-Industry",
+        "default_exchange": "NASDAQ",
+        "currency": "USD",
+    },
+    "NDX": {
+        "url": "https://en.wikipedia.org/wiki/Nasdaq-100",
+        "name": "Nasdaq-100",
+        "country": "US",
+        "table_index": 4,
+        "ticker_col": "Ticker",
+        "name_col": "Company",
+        "sector_col": "GICS Sector",
+        "industry_col": "GICS Sub-Industry",
+        "default_exchange": "NASDAQ",
+        "currency": "USD",
+    },
+    "DJI": {
+        "url": "https://en.wikipedia.org/wiki/Dow_Jones_Industrial_Average",
+        "name": "Dow Jones Industrial Average",
+        "country": "US",
+        "table_index": 1,
+        "ticker_col": "Symbol",
+        "name_col": "Company",
+        "sector_col": "Industry",
+        "industry_col": None,
+        "default_exchange": "NYSE",
+        "currency": "USD",
+    },
+    "FTSEMIB": {
+        "url": "https://en.wikipedia.org/wiki/FTSE_MIB",
+        "name": "FTSE MIB",
+        "country": "IT",
+        "table_index": 1,
+        "ticker_col": "Ticker",
+        "name_col": "Company",
+        "sector_col": "ICB Sector",
+        "industry_col": None,
+        "default_exchange": "BIT",
+        "currency": "EUR",
+    },
+}
+
+
+@dataclass
+class RefreshResult:
+    index_code: str
+    status: str
+    stocks_added: int = 0
+    stocks_updated: int = 0
+    stocks_removed: int = 0
+    error_message: str | None = None
+
+
+def _fetch_table(url: str, table_index: int) -> pd.DataFrame:
+    """Wrap pandas.read_html with retry. Patchable for tests."""
+    last: Exception | None = None
+    for attempt, delay in enumerate([0, 30, 120]):
+        if delay:
+            time.sleep(delay)
+        try:
+            tables = pd.read_html(url, storage_options={"User-Agent": USER_AGENT})
+            return tables[table_index]
+        except Exception as e:  # noqa: BLE001
+            last = e
+            logger.warning(f"read_html failed for {url} (attempt {attempt + 1}): {e}")
+    assert last is not None
+    raise last
+
+
+def _normalize_ticker(raw: str, default_exchange: str) -> tuple[str, str]:
+    t = str(raw).strip().upper()
+    if "." in t:
+        return t, "BIT" if t.endswith(".MI") else default_exchange
+    return t, default_exchange
+
+
+def _start_log(db: Session, index_code: str) -> CatalogRefreshLog:
+    log = CatalogRefreshLog(index_code=index_code, status="in_progress")
+    db.add(log)
+    db.flush()
+    return log
+
+
+def _finalize_log(log: CatalogRefreshLog, result: RefreshResult) -> None:
+    log.status = result.status
+    log.stocks_added = result.stocks_added
+    log.stocks_updated = result.stocks_updated
+    log.stocks_removed = result.stocks_removed
+    log.error_message = result.error_message
+    log.completed_at = datetime.now(timezone.utc)
+
+
+def _ensure_index(db: Session, code: str, name: str, country: str) -> Index:
+    idx = db.execute(select(Index).where(Index.code == code)).scalar_one_or_none()
+    if idx is None:
+        idx = Index(code=code, name=name, country=country)
+        db.add(idx)
+        db.flush()
+    return idx
+
+
+def refresh_index(db: Session, index_code: str) -> RefreshResult:
+    if index_code not in INDEX_SOURCES:
+        raise KeyError(index_code)
+    src = INDEX_SOURCES[index_code]
+    log = _start_log(db, index_code)
+    result = RefreshResult(index_code=index_code, status="in_progress")
+    try:
+        df = _fetch_table(str(src["url"]), int(src["table_index"]))  # type: ignore[arg-type]
+        idx = _ensure_index(db, index_code, str(src["name"]), str(src["country"]))
+        added = updated = 0
+        seen_stock_ids: set[int] = set()
+        for _, row in df.iterrows():
+            ticker_raw = row.get(src["ticker_col"])
+            if pd.isna(ticker_raw):
+                continue
+            ticker, exchange = _normalize_ticker(ticker_raw, str(src["default_exchange"]))
+            name_val = str(row.get(src["name_col"]) or ticker)
+            sector_val = (
+                str(row.get(src["sector_col"]))
+                if src["sector_col"] and not pd.isna(row.get(src["sector_col"]))
+                else None
+            )
+            industry_col = src.get("industry_col")
+            industry_val = (
+                str(row.get(industry_col))
+                if industry_col and not pd.isna(row.get(industry_col))
+                else None
+            )
+            stmt = select(Stock).where(Stock.ticker == ticker, Stock.exchange == exchange)
+            stock = db.execute(stmt).scalar_one_or_none()
+            if stock is None:
+                stock = Stock(
+                    ticker=ticker,
+                    exchange=exchange,
+                    name=name_val,
+                    sector=sector_val,
+                    industry=industry_val,
+                    country=str(src["country"]),
+                    currency=str(src["currency"]),
+                )
+                db.add(stock)
+                db.flush()
+                added += 1
+            else:
+                stock.name = name_val
+                if sector_val:
+                    stock.sector = sector_val
+                if industry_val:
+                    stock.industry = industry_val
+                updated += 1
+            seen_stock_ids.add(stock.id)
+            existing_link = db.execute(
+                select(StockIndex).where(
+                    StockIndex.stock_id == stock.id, StockIndex.index_id == idx.id
+                )
+            ).scalar_one_or_none()
+            if existing_link is None:
+                db.add(StockIndex(stock_id=stock.id, index_id=idx.id))
+
+        # remove stale memberships for this index
+        stale = db.execute(
+            delete(StockIndex)
+            .where(StockIndex.index_id == idx.id)
+            .where(~StockIndex.stock_id.in_(seen_stock_ids))
+        )
+        removed = stale.rowcount
+
+        result = RefreshResult(
+            index_code=index_code,
+            status="success",
+            stocks_added=added,
+            stocks_updated=updated,
+            stocks_removed=removed,
+        )
+    except Exception as e:  # noqa: BLE001
+        logger.exception(f"Catalog refresh failed for {index_code}")
+        result = RefreshResult(index_code=index_code, status="failed", error_message=str(e))
+    _finalize_log(log, result)
+    return result
+
+
+def refresh_all(db: Session) -> list[RefreshResult]:
+    results: list[RefreshResult] = []
+    for code in INDEX_SOURCES:
+        results.append(refresh_index(db, code))
+    return results
