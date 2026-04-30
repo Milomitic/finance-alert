@@ -1,23 +1,36 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { useParams } from "react-router-dom";
 
 import type { Stock } from "@/api/types";
 import { StockFiltersTab } from "@/components/StockFiltersTab";
 import { StockSearchTab } from "@/components/StockSearchTab";
+import {
+  WatchlistEditor,
+  type WatchlistEditorHandle,
+} from "@/components/WatchlistEditor";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useWatchlistDetail } from "@/hooks/useWatchlists";
 
 export default function WatchlistDetailPage() {
-  // I3 will wire actual watchlist state here
-  const [pickedIds] = useState<Set<number>>(new Set());
+  const { id } = useParams<{ id: string }>();
+  const numericId = id ? Number.parseInt(id, 10) : null;
+  const detailQuery = useWatchlistDetail(numericId);
 
-  const handleAdd = (_stock: Stock) => {
-    // I3 will replace with real autosave POST to /api/watchlists/:id/items
-    console.log("add stock placeholder", _stock.ticker);
+  const editorRef = useRef<WatchlistEditorHandle | null>(null);
+  const [, setTick] = useState(0);
+  const forceTick = () => setTick((v) => v + 1);
+
+  const handleAdd = async (stock: Stock) => {
+    await editorRef.current?.addStock(stock);
+    forceTick();
+  };
+  const handleAddBulk = async (list: Stock[]) => {
+    await editorRef.current?.addBulk(list);
+    forceTick();
   };
 
-  const handleAddBulk = (_list: Stock[]) => {
-    console.log("add bulk placeholder", _list.length);
-  };
+  const pickedIds = editorRef.current?.pickedIds ?? new Set<number>();
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -43,12 +56,23 @@ export default function WatchlistDetailPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Watchlist</CardTitle>
+          <CardTitle className="text-base">
+            {numericId ? "Watchlist" : "Nuova watchlist"}
+          </CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-muted-foreground">
-            Pannello watchlist (autosave) — Task I3.
-          </p>
+          {numericId !== null && detailQuery.isLoading && (
+            <p className="text-sm text-muted-foreground">Caricamento…</p>
+          )}
+          {numericId !== null && detailQuery.isError && (
+            <p className="text-sm text-destructive">Errore caricamento.</p>
+          )}
+          {(numericId === null || detailQuery.data !== undefined) && (
+            <WatchlistEditor
+              ref={editorRef}
+              detail={numericId !== null ? detailQuery.data ?? null : null}
+            />
+          )}
         </CardContent>
       </Card>
     </div>
