@@ -1,5 +1,6 @@
 """Stock search and filter options."""
 from dataclasses import dataclass, field
+
 from sqlalchemy import distinct, func, or_, select
 from sqlalchemy.orm import Session
 
@@ -75,9 +76,21 @@ def search_stocks(db: Session, f: StockFilter) -> StockPage:
 
 
 def get_filter_options(db: Session) -> FilterOptions:
-    exchanges = [r[0] for r in db.execute(select(distinct(Stock.exchange)).order_by(Stock.exchange)).all() if r[0]]
-    sectors = [r[0] for r in db.execute(select(distinct(Stock.sector)).order_by(Stock.sector)).all() if r[0]]
-    countries = [r[0] for r in db.execute(select(distinct(Stock.country)).order_by(Stock.country)).all() if r[0]]
+    exchanges = [
+        r[0]
+        for r in db.execute(select(distinct(Stock.exchange)).order_by(Stock.exchange)).all()
+        if r[0]
+    ]
+    sectors = [
+        r[0]
+        for r in db.execute(select(distinct(Stock.sector)).order_by(Stock.sector)).all()
+        if r[0]
+    ]
+    countries = [
+        r[0]
+        for r in db.execute(select(distinct(Stock.country)).order_by(Stock.country)).all()
+        if r[0]
+    ]
     indices = [
         IndexOption(code=row.code, name=row.name)
         for row in db.execute(select(Index).order_by(Index.code)).scalars().all()

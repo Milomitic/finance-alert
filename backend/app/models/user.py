@@ -1,5 +1,6 @@
 """User model — single-user admin in Fase 1."""
 from datetime import datetime
+
 from sqlalchemy import DateTime, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 

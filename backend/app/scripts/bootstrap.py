@@ -1,6 +1,7 @@
 """Idempotent first-run setup: ensure dirs, secret, migrations, seed, admin user."""
 import secrets
 from pathlib import Path
+
 from loguru import logger
 from sqlalchemy import select
 
@@ -37,8 +38,9 @@ def ensure_secret_key() -> None:
 
 
 def apply_migrations() -> None:
-    from alembic import command
     from alembic.config import Config
+
+    from alembic import command
 
     cfg = Config("alembic.ini")
     command.upgrade(cfg, "head")
@@ -52,9 +54,16 @@ def ensure_admin_user() -> None:
         return
     db = SessionLocal()
     try:
-        existing = db.execute(select(User).where(User.username == settings.admin_username)).scalar_one_or_none()
+        existing = db.execute(
+            select(User).where(User.username == settings.admin_username)
+        ).scalar_one_or_none()
         if existing is None:
-            db.add(User(username=settings.admin_username, password_hash=settings.admin_password_hash))
+            db.add(
+                User(
+                    username=settings.admin_username,
+                    password_hash=settings.admin_password_hash,
+                )
+            )
             db.commit()
             logger.info(f"Created admin user: {settings.admin_username}")
         elif existing.password_hash != settings.admin_password_hash:

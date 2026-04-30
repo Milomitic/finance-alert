@@ -24,7 +24,12 @@ def _run_refresh(index_code: str | None) -> None:
         db.close()
 
 
-@router.post("/refresh", status_code=202, response_model=RefreshAccepted, dependencies=[Depends(require_json)])
+@router.post(
+    "/refresh",
+    status_code=202,
+    response_model=RefreshAccepted,
+    dependencies=[Depends(require_json)],
+)
 def trigger(
     payload: RefreshRequest,
     background: BackgroundTasks,
@@ -35,7 +40,9 @@ def trigger(
 
 
 @router.get("/status", response_model=CatalogStatusOut)
-def status(db: Session = Depends(get_db), _user: User = Depends(get_current_user)) -> CatalogStatusOut:
+def status(
+    db: Session = Depends(get_db), _user: User = Depends(get_current_user)
+) -> CatalogStatusOut:
     items: list[IndexStatusOut] = []
     for code in INDEX_SOURCES:
         last = db.execute(

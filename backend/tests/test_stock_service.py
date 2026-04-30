@@ -2,7 +2,7 @@
 from sqlalchemy.orm import Session
 
 from app.models import Index, Stock, StockIndex
-from app.services.stock_service import StockFilter, search_stocks, get_filter_options
+from app.services.stock_service import StockFilter, get_filter_options, search_stocks
 
 
 def _seed(db: Session) -> None:

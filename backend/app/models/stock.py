@@ -1,6 +1,8 @@
 """Stock model."""
 from datetime import datetime
-from sqlalchemy import BigInteger, DateTime, Index as SAIndex, Integer, String, UniqueConstraint, func
+
+from sqlalchemy import BigInteger, DateTime, Integer, String, UniqueConstraint, func
+from sqlalchemy import Index as SAIndex
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base

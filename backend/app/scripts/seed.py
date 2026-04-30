@@ -1,5 +1,6 @@
 """Run all four index seeds against the configured DB."""
 from pathlib import Path
+
 from loguru import logger
 
 from app.core.db import SessionLocal
@@ -24,7 +25,9 @@ def run() -> None:
                 logger.warning(f"Seed file missing: {path}")
                 continue
             with path.open(encoding="utf-8") as f:
-                result = seed_index_from_csv(db, f, index_code=code, index_name=name, country=country)
+                result = seed_index_from_csv(
+                    db, f, index_code=code, index_name=name, country=country
+                )
             logger.info(f"{code}: added={result.added} updated={result.updated}")
         db.commit()
     finally:

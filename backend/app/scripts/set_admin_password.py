@@ -1,5 +1,6 @@
 """Generate a bcrypt hash to paste into ADMIN_PASSWORD_HASH."""
 import getpass
+
 import bcrypt
 
 

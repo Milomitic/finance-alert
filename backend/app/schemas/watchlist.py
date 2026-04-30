@@ -1,5 +1,6 @@
 """Watchlist request/response schemas."""
 from datetime import datetime
+
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.schemas.stock import StockOut

@@ -1,5 +1,6 @@
 """Stock router."""
 from typing import Annotated
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -44,7 +45,9 @@ def search(
 
 
 @router.get("/filters", response_model=FilterOptionsOut)
-def filters(db: Session = Depends(get_db), _user: User = Depends(get_current_user)) -> FilterOptionsOut:
+def filters(
+    db: Session = Depends(get_db), _user: User = Depends(get_current_user)
+) -> FilterOptionsOut:
     opts = get_filter_options(db)
     return FilterOptionsOut(
         exchanges=opts.exchanges,

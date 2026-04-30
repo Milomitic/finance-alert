@@ -1,13 +1,14 @@
 """Watchlist business logic."""
 from dataclasses import dataclass
 from datetime import datetime
+
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.models import Stock, Watchlist, WatchlistItem
 
 
-class DuplicateName(Exception):
+class DuplicateName(Exception):  # noqa: N818  (semantic name; not an "Error"-suffixed sentinel)
     pass
 
 
@@ -38,7 +39,9 @@ def _exists_by_name(db: Session, name: str, exclude_id: int | None = None) -> bo
     return db.execute(stmt).scalar_one_or_none() is not None
 
 
-def create_watchlist(db: Session, *, user_id: int, name: str, description: str | None = None) -> Watchlist:
+def create_watchlist(
+    db: Session, *, user_id: int, name: str, description: str | None = None
+) -> Watchlist:
     if _exists_by_name(db, name):
         raise DuplicateName(name)
     wl = Watchlist(user_id=user_id, name=name, description=description)

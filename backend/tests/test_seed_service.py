@@ -1,5 +1,6 @@
 """Tests for seed service idempotent upsert."""
 import io
+
 from sqlalchemy.orm import Session
 
 from app.models import Index, Stock, StockIndex
@@ -12,7 +13,9 @@ MSFT,Microsoft Corporation,NASDAQ,Information Technology,Software,US,USD
 
 
 def test_seed_creates_stocks_and_membership(db: Session) -> None:
-    result = seed_index_from_csv(db, io.StringIO(CSV_SAMPLE), index_code="NDX", index_name="Nasdaq-100", country="US")
+    result = seed_index_from_csv(
+        db, io.StringIO(CSV_SAMPLE), index_code="NDX", index_name="Nasdaq-100", country="US"
+    )
     db.commit()
 
     assert result.added == 2
@@ -23,9 +26,13 @@ def test_seed_creates_stocks_and_membership(db: Session) -> None:
 
 
 def test_seed_is_idempotent(db: Session) -> None:
-    seed_index_from_csv(db, io.StringIO(CSV_SAMPLE), index_code="NDX", index_name="Nasdaq-100", country="US")
+    seed_index_from_csv(
+        db, io.StringIO(CSV_SAMPLE), index_code="NDX", index_name="Nasdaq-100", country="US"
+    )
     db.commit()
-    result2 = seed_index_from_csv(db, io.StringIO(CSV_SAMPLE), index_code="NDX", index_name="Nasdaq-100", country="US")
+    result2 = seed_index_from_csv(
+        db, io.StringIO(CSV_SAMPLE), index_code="NDX", index_name="Nasdaq-100", country="US"
+    )
     db.commit()
 
     assert result2.added == 0

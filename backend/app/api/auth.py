@@ -13,7 +13,9 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
 @router.post("/login")
-def login(payload: LoginRequest, response: Response, db: Session = Depends(get_db)) -> dict[str, str]:
+def login(
+    payload: LoginRequest, response: Response, db: Session = Depends(get_db)
+) -> dict[str, str]:
     user = authenticate(db, payload.username, payload.password)
     if user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")

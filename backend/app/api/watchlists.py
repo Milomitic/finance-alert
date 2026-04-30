@@ -32,7 +32,9 @@ def _to_detail_out(detail) -> WatchlistDetailOut:
 
 
 @router.get("", response_model=list[WatchlistSummaryOut])
-def list_all(db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> list[WatchlistSummaryOut]:
+def list_all(
+    db: Session = Depends(get_db), user: User = Depends(get_current_user)
+) -> list[WatchlistSummaryOut]:
     return [
         WatchlistSummaryOut(
             id=s.id,
@@ -58,9 +60,11 @@ def create(
     user: User = Depends(get_current_user),
 ) -> WatchlistDetailOut:
     try:
-        wl = ws.create_watchlist(db, user_id=user.id, name=payload.name, description=payload.description)
-    except ws.DuplicateName:
-        raise HTTPException(status_code=409, detail="Watchlist name already exists")
+        wl = ws.create_watchlist(
+            db, user_id=user.id, name=payload.name, description=payload.description
+        )
+    except ws.DuplicateName as err:
+        raise HTTPException(status_code=409, detail="Watchlist name already exists") from err
     if payload.stock_ids:
         ws.add_items(db, wl.id, payload.stock_ids)
     db.commit()
@@ -92,8 +96,8 @@ def patch(
 ) -> WatchlistDetailOut:
     try:
         wl = ws.update_watchlist(db, wl_id, name=payload.name, description=payload.description)
-    except ws.DuplicateName:
-        raise HTTPException(status_code=409, detail="Watchlist name already exists")
+    except ws.DuplicateName as err:
+        raise HTTPException(status_code=409, detail="Watchlist name already exists") from err
     if wl is None:
         raise HTTPException(status_code=404, detail="Watchlist not found")
     db.commit()

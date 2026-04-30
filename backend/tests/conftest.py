@@ -1,12 +1,13 @@
 """Pytest fixtures: isolated in-memory DB per test."""
 from collections.abc import Iterator
+
 import pytest
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.core.db import Base
 import app.models  # noqa: F401
+from app.core.db import Base
 
 
 @pytest.fixture

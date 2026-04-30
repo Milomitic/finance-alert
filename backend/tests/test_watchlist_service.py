@@ -2,7 +2,7 @@
 import pytest
 from sqlalchemy.orm import Session
 
-from app.models import Stock, User, Watchlist
+from app.models import Stock, User
 from app.services import watchlist_service as ws
 
 

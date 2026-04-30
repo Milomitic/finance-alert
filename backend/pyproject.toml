@@ -31,9 +31,18 @@ dev = [
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+extend-exclude = ["alembic/versions"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "N", "SIM"]
+# B008: FastAPI uses `param: T = Depends(...)` pattern extensively; not a bug in this codebase.
+ignore = ["B008"]
+
+[tool.ruff.lint.per-file-ignores]
+# Alembic env.py is a stock template — leave its long lines alone.
+"alembic/env.py" = ["E501"]
+# Tests use SQLAlchemy session classes (PascalCase locals) and that's idiomatic.
+"tests/conftest.py" = ["N806"]
 
 [tool.pyright]
 include = ["app", "tests"]

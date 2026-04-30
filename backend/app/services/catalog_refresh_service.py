@@ -1,7 +1,7 @@
 """Refresh stock catalog from Wikipedia constituent tables."""
 import time
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pandas as pd
 from loguru import logger
@@ -9,7 +9,6 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.models import CatalogRefreshLog, Index, Stock, StockIndex
-
 
 USER_AGENT = "FinanceAlert/0.1 (personal use)"
 
@@ -111,7 +110,7 @@ def _finalize_log(log: CatalogRefreshLog, result: RefreshResult) -> None:
     log.stocks_updated = result.stocks_updated
     log.stocks_removed = result.stocks_removed
     log.error_message = result.error_message
-    log.completed_at = datetime.now(timezone.utc)
+    log.completed_at = datetime.now(UTC)
 
 
 def _ensure_index(db: Session, code: str, name: str, country: str) -> Index:

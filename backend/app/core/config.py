@@ -1,5 +1,6 @@
 """Application configuration loaded from environment / .env."""
 from pathlib import Path
+
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 

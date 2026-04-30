@@ -1,15 +1,15 @@
 """Catalog refresh service tests."""
 from unittest.mock import patch
+
 import pandas as pd
 import pytest
 from sqlalchemy.orm import Session
 
 from app.models import CatalogRefreshLog, Index, Stock, StockIndex
 from app.services.catalog_refresh_service import (
-    refresh_index,
     refresh_all,
+    refresh_index,
 )
-
 
 SP500_TABLE = pd.DataFrame(
     {
@@ -33,7 +33,9 @@ def test_refresh_index_success(db: Session) -> None:
 
 
 def test_refresh_index_failure_logs_error(db: Session) -> None:
-    with patch("app.services.catalog_refresh_service._fetch_table", side_effect=RuntimeError("boom")):
+    with patch(
+        "app.services.catalog_refresh_service._fetch_table", side_effect=RuntimeError("boom")
+    ):
         result = refresh_index(db, "SP500")
     db.commit()
     assert result.status == "failed"

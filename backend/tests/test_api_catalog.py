@@ -1,5 +1,5 @@
 """Catalog API tests."""
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 from fastapi.testclient import TestClient
@@ -38,8 +38,8 @@ def test_status_reflects_recent_log(client: TestClient, db: Session) -> None:
     db.add(
         CatalogRefreshLog(
             index_code="SP500",
-            started_at=datetime.now(timezone.utc),
-            completed_at=datetime.now(timezone.utc),
+            started_at=datetime.now(UTC),
+            completed_at=datetime.now(UTC),
             status="success",
             stocks_added=2,
             stocks_updated=0,
