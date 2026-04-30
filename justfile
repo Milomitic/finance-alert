@@ -1,3 +1,7 @@
+# Use copy-mode for venv creation: avoids Windows hardlink failures on
+# default-config systems (no Developer Mode). Harmless on Linux/macOS.
+export UV_LINK_MODE := "copy"
+
 default:
 	@just --list
 
