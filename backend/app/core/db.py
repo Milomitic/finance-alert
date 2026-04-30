@@ -1,7 +1,6 @@
 """SQLAlchemy engine, session, and Base."""
 from collections.abc import Iterator
 from sqlalchemy import create_engine, event
-from sqlalchemy.engine import Engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from app.core.config import settings
@@ -18,9 +17,9 @@ engine = create_engine(
 )
 
 
-@event.listens_for(Engine, "connect")
-def _set_sqlite_pragma(dbapi_connection, _connection_record):
-    if settings.database_url.startswith("sqlite"):
+if engine.dialect.name == "sqlite":
+    @event.listens_for(engine, "connect")
+    def _set_sqlite_pragma(dbapi_connection, _connection_record):
         cursor = dbapi_connection.cursor()
         cursor.execute("PRAGMA journal_mode=WAL")
         cursor.execute("PRAGMA foreign_keys=ON")
