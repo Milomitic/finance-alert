@@ -399,6 +399,7 @@ Questo file è **vincolante**: ogni commit che introduce uno dei seguenti cambia
 
 | Data | Commit | Cambiamento |
 |---|---|---|
+| 2026-04-30 | 6fd274a | Fase 1 complete: 30 tasks across 10 sections (A-J) shipped. Backend (FastAPI + SQLAlchemy + APScheduler + 48 tests) and frontend (React + Vite + shadcn + autosave) deliver an end-to-end watchlist editor over a seeded catalog with weekly Wikipedia refresh. README finalized; Windows auto-start scripts ready. |
 | 2026-04-30 | initial | Creazione documento, descrizione architettura Fase 1 (in pianificazione) |
 | 2026-04-30 | 0ffebfb | Schema persisted via Alembic migration. SQLite tables: users, stocks, indices, stock_indices, watchlists, watchlist_items, catalog_refresh_log. WAL mode active via SQLAlchemy connect-listener. |
 | 2026-04-30 | 1621dfa | Auth endpoints live: POST /api/auth/login, POST /api/auth/logout, GET /api/auth/me. Cookie session with SameSite=Strict, signed via itsdangerous. CSRF guard via JSON content-type on mutating routes (deps.require_json). |
