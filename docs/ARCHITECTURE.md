@@ -403,3 +403,4 @@ Questo file è **vincolante**: ogni commit che introduce uno dei seguenti cambia
 | 2026-04-30 | 0ffebfb | Schema persisted via Alembic migration. SQLite tables: users, stocks, indices, stock_indices, watchlists, watchlist_items, catalog_refresh_log. WAL mode active via SQLAlchemy connect-listener. |
 | 2026-04-30 | 1621dfa | Auth endpoints live: POST /api/auth/login, POST /api/auth/logout, GET /api/auth/me. Cookie session with SameSite=Strict, signed via itsdangerous. CSRF guard via JSON content-type on mutating routes (deps.require_json). |
 | 2026-04-30 | 93e6056 | Watchlists CRUD endpoints live: list/create/get/patch/delete + items add/remove/bulk-delete. CSRF guard on mutating routes via require_json. |
+| 2026-04-30 | bb5ec8d | APScheduler in-process started via FastAPI lifespan. Cron job `refresh_catalog` runs Sat 03:00 Europe/Rome. Health endpoint returns scheduler_running. |
