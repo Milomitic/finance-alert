@@ -35,7 +35,6 @@ Consegnare un'applicazione web full-stack eseguibile localmente sul PC dell'uten
 | Calcolo indicatori tecnici | Fase 2 |
 | Regole di alert | Fase 2 |
 | Notifiche Telegram | Fase 2 |
-| Scheduler APScheduler attivo | Fase 2 (skeleton in Fase 1, no job registrati) |
 | Dashboard Home con KPI | Fase 3 |
 | Pagina Stock Detail con grafico candlestick | Fase 3 |
 | Statistiche hit rate | Fase 3 |
@@ -44,6 +43,8 @@ Consegnare un'applicazione web full-stack eseguibile localmente sul PC dell'uten
 | Import/export watchlist | Post-MVP |
 | Multi-utente | Non previsto |
 | Deploy su OCI | Post-MVP |
+
+**In scope Fase 1**: scheduler APScheduler con un job attivo (refresh catalogo settimanale, vedi §6.2); esecuzione background su Windows via Task Scheduler (vedi §12.5).
 
 ## 4. Architettura tecnica
 
@@ -57,7 +58,8 @@ Consegnare un'applicazione web full-stack eseguibile localmente sul PC dell'uten
 | Migrations | Alembic | latest |
 | Settings | pydantic-settings | latest |
 | Logging | loguru | latest |
-| Scheduler (skeleton) | APScheduler | 3.x |
+| Scheduler | APScheduler | 3.x |
+| HTML scraping (catalog refresh) | pandas (`read_html`) + lxml | latest |
 | Auth | itsdangerous (signed cookie) + bcrypt (passlib) | latest |
 | Test backend | pytest, pytest-asyncio, httpx | latest |
 | Lint/format Python | ruff | latest |
@@ -91,7 +93,7 @@ In sviluppo (due processi):
                        localhost:5173
 ```
 
-In esecuzione "produzione locale" (un processo):
+In esecuzione "produzione locale" (un processo, eventualmente lanciato da Windows Task Scheduler al logon):
 
 ```
 ┌────────────────────────────────────────────┐
@@ -99,7 +101,8 @@ In esecuzione "produzione locale" (un processo):
 │ FastAPI                                    │
 │ ├── /api/* → router                        │
 │ └── /*     → StaticFiles(frontend/dist)    │
-│ APScheduler (skeleton, no jobs in Fase 1)  │
+│ APScheduler                                │
+│ └── refresh_catalog (weekly, Sat 03:00)    │
 │ SQLite ./backend/data/app.db               │
 └────────────────────────────────────────────┘
                        ↑
@@ -134,7 +137,7 @@ In Fase 1 c'è esattamente UNA riga, seedata da `.env` (`ADMIN_USERNAME`, `ADMIN
 | industry | TEXT NULL | "Consumer Electronics" |
 | country | TEXT NULL | "US", "IT" |
 | currency | TEXT NULL | "USD", "EUR" |
-| market_cap | BIGINT NULL | snapshot al seed; aggiornato in Fase 3 |
+| market_cap | BIGINT NULL | popolato dal seed se presente nel CSV; non aggiornato dal refresh Wikipedia (la fonte non lo include consistentemente) |
 | created_at | TIMESTAMP | |
 | updated_at | TIMESTAMP | |
 
@@ -179,7 +182,25 @@ PK composta. Indici su entrambi i campi.
 
 PK composta `(watchlist_id, stock_id)`.
 
-## 6. Seed catalog
+### 5.7 `catalog_refresh_log`
+
+Tracking del job di refresh catalogo (vedi §6.2).
+
+| Campo | Tipo | Note |
+|---|---|---|
+| id | INTEGER PK | |
+| index_code | TEXT NOT NULL | "SP500", "NDX", "DJI", "FTSEMIB" |
+| started_at | TIMESTAMP NOT NULL | |
+| completed_at | TIMESTAMP NULL | NULL se fallito |
+| status | TEXT NOT NULL | "success" \| "failed" |
+| stocks_added | INTEGER NULL | |
+| stocks_updated | INTEGER NULL | |
+| stocks_removed | INTEGER NULL | dalla membership dell'indice |
+| error_message | TEXT NULL | |
+
+## 6. Seed e refresh catalogo
+
+### 6.1 Seed iniziale (bootstrap)
 
 Quattro CSV statici in `backend/app/data/seed/`, committati nel repo:
 
@@ -207,7 +228,27 @@ Script di seed idempotente (`uv run python -m app.scripts.seed`):
 
 L'esecuzione del seed è parte di `just install`. Re-eseguibile a piacere senza danni.
 
-**Sorgente CSV**: per la Fase 1 i CSV sono committati statici (snapshot scaricato manualmente, es. da Wikipedia/SlickCharts). L'aggiornamento programmatico via job è Fase 3.
+I CSV iniziali sono uno snapshot scaricato manualmente da Wikipedia. Servono come fallback offline e per il primo bootstrap senza rete.
+
+### 6.2 Refresh periodico (in Fase 1)
+
+Job APScheduler `refresh_catalog`:
+
+- **Trigger**: cron settimanale, sabato 03:00 ora locale (mercati chiusi, traffico ridotto)
+- **Strategia**: per ogni indice, fetch della pagina Wikipedia tramite `pandas.read_html(url)`, parsing della tabella dei constituenti, upsert delle righe in `stocks` e ricostruzione della membership in `stock_indices`. Tracking dell'esito per indice in `catalog_refresh_log`.
+- **Fonti**:
+  - S&P 500: `https://en.wikipedia.org/wiki/List_of_S%26P_500_companies`
+  - NASDAQ-100: `https://en.wikipedia.org/wiki/Nasdaq-100`
+  - Dow Jones: `https://en.wikipedia.org/wiki/Dow_Jones_Industrial_Average`
+  - FTSE MIB: `https://en.wikipedia.org/wiki/FTSE_MIB`
+- **Resilienza**:
+  - Fallimento di un indice non blocca gli altri.
+  - Retry con backoff esponenziale (3 tentativi, 30s/2min/8min).
+  - Timeout 30s per richiesta.
+  - User-Agent identificato (rispetto delle policy Wikipedia).
+  - Se la struttura della tabella cambia (parsing fallisce), logga error e marca `status=failed` per quell'indice; i dati esistenti restano intatti.
+- **Trigger manuale**: endpoint `POST /api/catalog/refresh` (auth richiesta) avvia il job ad-hoc.
+- **Stato visibile**: endpoint `GET /api/catalog/status` ritorna ultimo refresh per indice (timestamp, status, conteggi). In Fase 1 nessuna pagina UI lo consuma; sarà aggiunta in Fase 3.
 
 ## 7. API surface (Fase 1)
 
@@ -221,7 +262,7 @@ Tutti gli endpoint sotto prefisso `/api`. Risposte JSON. OpenAPI auto-generato d
 | POST | `/api/auth/logout` | — | 204, cookie scaduto |
 | GET | `/api/auth/me` | — | `{username}` se loggato, 401 altrimenti |
 
-Cookie: `httpOnly`, `SameSite=Lax`, `Secure=false` in dev (no HTTPS local). Scadenza 7 giorni con sliding refresh.
+Cookie: `httpOnly`, `SameSite=Strict`, `Secure=false` in dev (no HTTPS local). Scadenza 7 giorni con sliding refresh. Vedi §12 per il modello CSRF.
 
 ### 7.2 Stocks
 
@@ -248,11 +289,18 @@ La ricerca testuale `q` matcha case-insensitive su `ticker` (prefix) e `name` (s
 
 Tutti gli endpoint richiedono autenticazione tranne `/api/auth/login` e `/api/health`.
 
-### 7.4 Health
+### 7.4 Catalog
+
+| Method | Path | Body | Risposta |
+|---|---|---|---|
+| POST | `/api/catalog/refresh` | `{index_code?: string}` | 202 Accepted, job avviato in background; se `index_code` omesso, refresha tutti |
+| GET | `/api/catalog/status` | — | Per ogni indice: ultimo refresh, status, conteggi, ultimo errore se presente |
+
+### 7.5 Health
 
 | Method | Path | Risposta |
 |---|---|---|
-| GET | `/api/health` | `{status: "ok", db_ok: bool, version: string}` |
+| GET | `/api/health` | `{status: "ok", db_ok: bool, scheduler_running: bool, version: string}` |
 
 ## 8. Frontend (Fase 1)
 
@@ -297,11 +345,18 @@ Layout a due colonne:
   - Bottone "Aggiungi tutti i selezionati"
 
 **Colonna destra — watchlist corrente**
-- Input nome watchlist
-- Textarea descrizione (opzionale)
-- Tabella stock contenuti con: ticker, nome, exchange, settore, X per rimuovere
-- Bottone in basso "Salva" (in modalità create) o salvataggio implicito on-blur (in modalità edit) — **decisione: salvataggio esplicito con bottone in entrambe le modalità per rendere il flusso chiaro**.
-- Bottone secondario "Elimina watchlist" (solo in edit, con conferma modale).
+- Input nome watchlist (autosave debounced)
+- Textarea descrizione opzionale (autosave debounced)
+- Tabella stock contenuti con: ticker, nome, exchange, settore, X per rimuovere (rimozione immediata)
+- Indicatore stato salvataggio in alto a destra: "Salvataggio…" → "Salvato" (ultima ora) — fade out dopo 2s
+- Bottone secondario "Elimina watchlist" (solo in edit, con conferma modale)
+
+**Modello autosave**:
+- **Campi testo (nome, descrizione)**: debounce 500ms dopo l'ultimo keystroke; al primo trigger valido in modalità *create*, l'API crea la watchlist e l'URL viene riscritto con `replaceState` da `/watchlists/new` a `/watchlists/:id`. Da quel momento i salvataggi sono PATCH.
+- **Aggiunta stock**: POST immediato a `/api/watchlists/{id}/items` non appena l'utente clicca "+ aggiungi". In modalità create senza watchlist ancora persistita, l'azione forza prima la creazione (richiede nome non vuoto; se nome vuoto, mostra hint "Inserisci un nome per iniziare").
+- **Rimozione stock**: DELETE immediato.
+- **Rete down / errore**: l'indicatore mostra "Errore di salvataggio" in rosso con bottone "Riprova"; lo stato locale non viene perso fino a successo.
+- **Validazione nome**: vuoto = no save; duplicato = errore inline. Min 1 char, max 100.
 
 ## 9. Configurazione
 
@@ -360,14 +415,18 @@ finance-alert/
 │   │   ├── services/
 │   │   │   ├── auth_service.py
 │   │   │   ├── stock_service.py
-│   │   │   └── watchlist_service.py
+│   │   │   ├── watchlist_service.py
+│   │   │   └── catalog_refresh_service.py
 │   │   ├── core/
 │   │   │   ├── config.py              # pydantic-settings
 │   │   │   ├── db.py                  # engine, session, Base
 │   │   │   ├── security.py            # bcrypt, signed cookies
 │   │   │   └── logging.py             # loguru config
 │   │   ├── scheduler/
-│   │   │   └── __init__.py            # APScheduler skeleton, no jobs in Fase 1
+│   │   │   ├── __init__.py            # APScheduler setup
+│   │   │   └── jobs/
+│   │   │       ├── __init__.py
+│   │   │       └── refresh_catalog.py
 │   │   ├── data/
 │   │   │   └── seed/
 │   │   │       ├── sp500.csv
@@ -376,6 +435,7 @@ finance-alert/
 │   │   │       └── ftsemib.csv
 │   │   └── scripts/
 │   │       ├── seed.py
+│   │       ├── bootstrap.py
 │   │       └── set_admin_password.py
 │   ├── alembic/
 │   │   ├── versions/
@@ -419,6 +479,11 @@ finance-alert/
 │   ├── tsconfig.json
 │   ├── package.json
 │   └── .nvmrc
+├── scripts/
+│   └── windows/
+│       ├── Register-FinanceAlertStartup.ps1
+│       ├── Unregister-FinanceAlertStartup.ps1
+│       └── Run-FinanceAlert.ps1
 ├── docs/
 │   └── superpowers/specs/
 │       └── 2026-04-30-finance-alert-fase1-design.md
@@ -451,7 +516,8 @@ be:
 fe:
     cd frontend && npm run dev
 
-# avvia entrambi in parallelo (richiede `just` con feature `parallel`, oppure due terminali)
+# avvia entrambi in parallelo (Git Bash su Windows: `&` backgrounda il primo)
+# In alternativa: aprire due terminali e lanciare `just be` in uno e `just fe` nell'altro
 up:
     just be & just fe
 
@@ -503,12 +569,91 @@ Una feature è "fatta" quando:
 ## 12. Sicurezza
 
 - Password admin: bcrypt con cost 12.
-- Session cookie: signed con `SECRET_KEY`, `httpOnly`, `SameSite=Lax`.
-- CSRF: tutte le richieste mutanti (POST/PATCH/DELETE) richiedono header `X-Requested-With: XMLHttpRequest` (semplice ma efficace per single-page same-origin).
+- Session cookie: signed con `SECRET_KEY`, `httpOnly`, **`SameSite=Strict`**, `Secure=false` in dev.
+- **CSRF**: difesa strutturale combinando due meccanismi:
+  1. `SameSite=Strict` impedisce al browser di inviare il cookie di sessione su navigazioni cross-site (anche da link/form esterni).
+  2. Tutte le mutating routes (POST/PATCH/DELETE) richiedono `Content-Type: application/json` ed un body JSON. I form HTML cross-origin non possono inviare JSON, eliminando il vettore CSRF classico.
+
+  Niente token CSRF dedicato: il modello del browser già garantisce la protezione per un single-page same-origin con session cookie strict.
 - Validazione input: Pydantic sui body, query parameter typed.
 - SQL injection: solo SQLAlchemy parametrizzato, mai stringhe concatenate.
 - Nessun secret in codice; tutto via `.env`.
 - `.env` in `.gitignore`, `.env.example` no.
+
+## 12.5 Esecuzione background su Windows
+
+Strategia: registrare un task in **Windows Task Scheduler** che lancia l'app al logon dell'utente.
+
+### 12.5.1 `Run-FinanceAlert.ps1`
+
+Wrapper che:
+1. Si sposta nella cartella del progetto.
+2. Attiva l'environment Python (`uv run`) e lancia `uvicorn app.main:app --port 8000` (modalità prod-local con frontend buildato).
+3. Reindirizza stdout/stderr a `backend/data/logs/windows-task.log` con rotazione semplice via PowerShell (rinomina + nuovo file se >10 MB).
+
+Lo script è invocato senza finestra visibile (`-WindowStyle Hidden`).
+
+### 12.5.2 `Register-FinanceAlertStartup.ps1`
+
+Crea un'entry in Task Scheduler:
+
+```powershell
+Register-ScheduledTask `
+  -TaskName "FinanceAlert" `
+  -Description "Avvia l'app Finance Alert al logon utente" `
+  -Trigger (New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME) `
+  -Action (New-ScheduledTaskAction `
+            -Execute "powershell.exe" `
+            -Argument "-WindowStyle Hidden -File `"$PSScriptRoot\Run-FinanceAlert.ps1`"") `
+  -Settings (New-ScheduledTaskSettingsSet `
+              -AllowStartIfOnBatteries `
+              -DontStopIfGoingOnBatteries `
+              -RestartOnIdle `
+              -RestartCount 3 `
+              -RestartInterval (New-TimeSpan -Minutes 1))
+```
+
+Caratteristiche:
+
+- **Nessun privilegio admin richiesto** (esegue come utente loggato).
+- Sopravvive al riavvio: parte automaticamente al logon successivo.
+- Restart automatico (3 tentativi) in caso di crash dell'app.
+- Funziona anche con laptop a batteria.
+
+### 12.5.3 `Unregister-FinanceAlertStartup.ps1`
+
+Rimuove il task: `Unregister-ScheduledTask -TaskName "FinanceAlert" -Confirm:$false`.
+
+### 12.5.4 Workflow utente
+
+```powershell
+# Setup iniziale (una volta)
+just install
+just build-fe
+.\scripts\windows\Register-FinanceAlertStartup.ps1
+
+# Verifica avvio
+Start-Process "http://localhost:8000"
+
+# Per disattivare in futuro
+.\scripts\windows\Unregister-FinanceAlertStartup.ps1
+```
+
+### 12.5.5 Verifica stato
+
+L'utente può controllare lo stato del task con:
+
+```powershell
+Get-ScheduledTask -TaskName "FinanceAlert" | Get-ScheduledTaskInfo
+```
+
+Oppure aprire `taskschd.msc` e cercare "FinanceAlert" nella libreria.
+
+### 12.5.6 Out of scope per Fase 1
+
+- Servizio Windows true (con NSSM o `sc.exe`): richiede privilegi admin, non necessario.
+- Notifiche di "app non disponibile" se il task crasha: ci si affida a Task Scheduler restart policy.
+- Aggiornamento automatico dell'app via `git pull` allo startup: post-MVP.
 
 ## 13. Logging
 
@@ -526,16 +671,20 @@ L'utente, partendo da repo clonato, esegue:
 
 ```bash
 cp .env.example .env
-# edita ADMIN_PASSWORD_HASH (generato con just bootstrap o utility)
+# edita ADMIN_PASSWORD_HASH (generato con script utility)
 just install
 just up
 ```
 
-Apre `http://localhost:5173`, fa login, crea una watchlist "Tech USA" filtrando per exchange=NASDAQ + settore=Information Technology, vede il conteggio anteprima (~30 stock), salva, ricarica la pagina, la watchlist è ancora lì con gli stessi item.
+Apre `http://localhost:5173`, fa login, crea una watchlist "Tech USA" filtrando per exchange=NASDAQ + settore=Information Technology, vede il conteggio anteprima (~30 stock), aggiunge gli stock — l'indicatore segna "Salvato" pochi istanti dopo. Ricarica la pagina, la watchlist è lì con tutti gli item.
 
 Ferma il backend, lo riavvia: tutto persistito.
 
 Lancia `just prod-local`, apre `http://localhost:8000`, stessa esperienza con frontend statico buildato.
+
+Esegue `.\scripts\windows\Register-FinanceAlertStartup.ps1` da PowerShell, riavvia Windows, dopo il logon l'app è già attiva su `localhost:8000` senza terminali aperti.
+
+Triggers manualmente `POST /api/catalog/refresh` (via Swagger UI in dev), il job parte; `GET /api/catalog/status` ritorna timestamp e conteggi non-zero per ogni indice.
 
 Tutti i quality gates passanti.
 
@@ -555,26 +704,30 @@ Tutti i quality gates passanti.
 - Statistiche hit rate
 - Timeframe 1h, regole MACD/BB/volume spike/breakout
 - Editor regole UI con AND/OR
-- Aggiornamento programmatico catalogo stock (job settimanale)
+- UI per stato refresh catalogo (consumo `/api/catalog/status`)
 
 ## 16. Assunzioni esplicite
 
 1. **NASDAQ = NASDAQ-100**, non Composite. Documentato in §6.
-2. **Catalogo stock** è uno snapshot statico committato in repo per Fase 1; nessun aggiornamento programmatico finché Fase 3.
+2. **Catalogo stock**: bootstrap iniziale da CSV statici committati; refresh settimanale automatico da Wikipedia attivo da Fase 1 (vedi §6.2).
 3. **Single-user**: l'app non gestisce più di un account; il modello dati lo permetterebbe ma l'UI e gli endpoint assumono l'unico admin.
 4. **Niente HTTPS in locale**: cookie con `Secure=false`. Quando/se si farà deploy, `Secure=true` via env.
-5. **Salvataggio watchlist con bottone esplicito** (no autosave on-blur), per chiarezza di flusso.
+5. **Salvataggio watchlist autosave real-time** con debounce 500ms su testo, immediato su add/remove stock (vedi §8.5).
 6. **Lingua UI**: italiano hard-coded; nessuna libreria i18n in Fase 1.
-7. **Windows 11 host**: comandi `just` cross-platform; nessun comando shell-specifico nel codice.
-8. **Esecuzione background Windows**: fuori scope. L'utente lancia da terminale; quando chiude, l'app si ferma. Operazionalizzare via Task Scheduler è post-MVP.
+7. **Windows 11 host**: comandi `just` cross-platform; gli script di startup (`scripts/windows/*.ps1`) sono Windows-specifici.
+8. **Esecuzione background Windows**: in scope Fase 1 via Task Scheduler con script PowerShell (vedi §12.5).
 9. **OCI deploy**: completamente fuori scope per Fase 1. Il `Dockerfile` viene scritto come artefatto futuro.
+10. **Wikipedia come fonte**: dipendenza accettata per il refresh settimanale; fallback graceful documentato in §6.2 e §17.
 
 ## 17. Rischi e mitigazioni
 
 | Rischio | Mitigazione |
 |---|---|
-| Snapshot CSV catalogo invecchia rapidamente (IPO, delisting) | Documentato come limite; aggiornamento in Fase 3 |
+| Wikipedia cambia struttura HTML delle tabelle constituenti | Parsing tollerante (cerca colonne per nome, non per indice); fallimento di un indice non blocca gli altri; CSV statici come fallback offline; log + endpoint status per visibilità |
+| Wikipedia rate-limit o blocca scraping | Retry con backoff esponenziale; User-Agent identificato; frequenza settimanale ben sotto soglia |
 | Performance ricerca stock con many-to-many indici | Indici DB su colonne filtro; pagination obbligatoria; limit max 500 risultati |
 | Frontend bundle size con tutte le icone shadcn | Tree-shaking di lucide-react via import nominali; verifica con `npm run build -- --report` |
 | Alembic autogenerate manca colonne con SQLite (tipi flessibili) | Test che applica migrations da zero in pytest fixture |
 | Cookie session non funziona cross-port in dev (5173 vs 8000) | Vite proxy `/api → :8000` rende same-origin lato browser |
+| Autosave race condition (utente digita più veloce della rete) | Debounce 500ms + AbortController sulla request precedente quando arriva una nuova; ultima vince |
+| Task Scheduler Windows non lancia l'app (PATH, working dir) | Script `Run-FinanceAlert.ps1` imposta `Set-Location` esplicito; log dedicato in `windows-task.log` per debug |
