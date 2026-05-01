@@ -1,4 +1,4 @@
-import { ListChecks, BarChart3, Search, Bell, Sliders, Settings, LogOut } from "lucide-react";
+import { ListChecks, LayoutDashboard, Search, Bell, Sliders, Settings, LogOut } from "lucide-react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
@@ -15,8 +15,8 @@ interface NavEntry {
 }
 
 const NAV: NavEntry[] = [
+  { to: "/", label: "Dashboard", icon: LayoutDashboard, enabled: true },
   { to: "/watchlists", label: "Watchlists", icon: ListChecks, enabled: true },
-  { to: "/dashboard", label: "Dashboard", icon: BarChart3, enabled: false },
   { to: "/stocks", label: "Stocks", icon: Search, enabled: false },
   { to: "/alerts", label: "Alerts", icon: Bell, enabled: true },
   { to: "/rules", label: "Regole", icon: Sliders, enabled: false },
@@ -60,6 +60,7 @@ export default function Layout() {
               <NavLink
                 key={entry.to}
                 to={entry.to}
+                end={entry.to === "/"}
                 className={({ isActive }) =>
                   cn(
                     "flex items-center gap-2 rounded px-3 py-2 text-sm transition-colors",

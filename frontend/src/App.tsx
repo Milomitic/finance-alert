@@ -1,8 +1,9 @@
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Route, Routes } from "react-router-dom";
 
 import Layout from "@/components/Layout";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import AlertsPage from "@/pages/AlertsPage";
+import HomePage from "@/pages/HomePage";
 import LoginPage from "@/pages/LoginPage";
 import WatchlistDetailPage from "@/pages/WatchlistDetailPage";
 import WatchlistListPage from "@/pages/WatchlistListPage";
@@ -18,7 +19,7 @@ export default function App() {
           </ProtectedRoute>
         }
       >
-        <Route path="/" element={<Navigate to="/watchlists" replace />} />
+        <Route path="/" element={<HomePage />} />
         <Route path="/watchlists" element={<WatchlistListPage />} />
         <Route path="/watchlists/new" element={<WatchlistDetailPage />} />
         <Route path="/watchlists/:id" element={<WatchlistDetailPage />} />
