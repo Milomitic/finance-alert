@@ -1,5 +1,6 @@
 """Market statistics service: computes per-stock metrics and aggregates them
 into the dashboard market_snapshot payload."""
+from collections import defaultdict
 from dataclasses import dataclass
 
 import pandas as pd
@@ -113,3 +114,132 @@ def derive_mood(pct_above_sma200: float, advancers: int, decliners: int) -> str:
     if pct_above_sma200 <= 40 and decliners > advancers:
         return "bearish"
     return "neutral"
+
+
+def aggregate_global(metrics: list[StockMetrics]) -> dict:
+    """Aggregate per-stock metrics into the 'global' block of the snapshot."""
+    stocks_total = len(metrics)
+    if stocks_total == 0:
+        return {
+            "stocks_total": 0, "stocks_with_data": 0,
+            "advancers": 0, "decliners": 0, "unchanged": 0,
+            "avg_change_pct": 0.0,
+            "pct_above_sma200": 0.0, "pct_above_sma50": 0.0,
+            "rsi_oversold_count": 0, "rsi_overbought_count": 0,
+            "near_52w_high_count": 0, "near_52w_low_count": 0,
+            "mood": "neutral",
+        }
+
+    full_data = [m for m in metrics if m.has_full_data]
+    advancers = sum(1 for m in metrics if m.change_pct is not None and m.change_pct > 0)
+    decliners = sum(1 for m in metrics if m.change_pct is not None and m.change_pct < 0)
+    unchanged = sum(1 for m in metrics if m.change_pct == 0.0)
+
+    changes = [m.change_pct for m in metrics if m.change_pct is not None]
+    avg_change = round(sum(changes) / len(changes), 2) if changes else 0.0
+
+    pct_above_sma200 = (
+        round(100.0 * sum(1 for m in full_data if m.sma200 and m.last_close > m.sma200) / len(full_data), 1)
+        if full_data else 0.0
+    )
+    has_sma50 = [m for m in metrics if m.sma50 is not None]
+    pct_above_sma50 = (
+        round(100.0 * sum(1 for m in has_sma50 if m.last_close > m.sma50) / len(has_sma50), 1)
+        if has_sma50 else 0.0
+    )
+
+    rsi_oversold = sum(1 for m in metrics if m.rsi14 is not None and m.rsi14 < 30)
+    rsi_overbought = sum(1 for m in metrics if m.rsi14 is not None and m.rsi14 > 70)
+    near_high = sum(1 for m in metrics if m.near_52w_high)
+    near_low = sum(1 for m in metrics if m.near_52w_low)
+
+    mood = derive_mood(pct_above_sma200, advancers, decliners)
+    return {
+        "stocks_total": stocks_total,
+        "stocks_with_data": len(full_data),
+        "advancers": advancers, "decliners": decliners, "unchanged": unchanged,
+        "avg_change_pct": avg_change,
+        "pct_above_sma200": pct_above_sma200, "pct_above_sma50": pct_above_sma50,
+        "rsi_oversold_count": rsi_oversold, "rsi_overbought_count": rsi_overbought,
+        "near_52w_high_count": near_high, "near_52w_low_count": near_low,
+        "mood": mood,
+    }
+
+
+def aggregate_by_index(
+    metrics: list[StockMetrics],
+    indices: list[tuple[str, str]],     # [(code, name), ...]
+) -> list[dict]:
+    """Group metrics by index_code and produce one row per index in `indices`.
+
+    Stocks belonging to multiple indices are counted in each.
+    """
+    by_code: dict[str, list[StockMetrics]] = defaultdict(list)
+    for m in metrics:
+        for code in m.index_codes:
+            by_code[code].append(m)
+
+    out = []
+    for code, name in indices:
+        bucket = by_code.get(code, [])
+        if not bucket:
+            out.append({
+                "code": code, "name": name, "n": 0,
+                "pct_above_sma200": None, "pct_above_sma50": None,
+                "rsi_oversold_count": 0, "rsi_overbought_count": 0,
+                "avg_change_pct": None,
+                "advancers": 0, "decliners": 0,
+                "new_52w_highs": 0, "new_52w_lows": 0,
+                "volume_spikes_count": 0,
+            })
+            continue
+        full_data = [m for m in bucket if m.has_full_data]
+        has_sma50 = [m for m in bucket if m.sma50 is not None]
+        pct_sma200 = (
+            round(100.0 * sum(1 for m in full_data if m.sma200 and m.last_close > m.sma200) / len(full_data), 1)
+            if full_data else None
+        )
+        pct_sma50 = (
+            round(100.0 * sum(1 for m in has_sma50 if m.last_close > m.sma50) / len(has_sma50), 1)
+            if has_sma50 else None
+        )
+        changes = [m.change_pct for m in bucket if m.change_pct is not None]
+        avg_change = round(sum(changes) / len(changes), 2) if changes else None
+        out.append({
+            "code": code, "name": name, "n": len(bucket),
+            "pct_above_sma200": pct_sma200, "pct_above_sma50": pct_sma50,
+            "rsi_oversold_count": sum(1 for m in bucket if m.rsi14 is not None and m.rsi14 < 30),
+            "rsi_overbought_count": sum(1 for m in bucket if m.rsi14 is not None and m.rsi14 > 70),
+            "avg_change_pct": avg_change,
+            "advancers": sum(1 for m in bucket if m.change_pct is not None and m.change_pct > 0),
+            "decliners": sum(1 for m in bucket if m.change_pct is not None and m.change_pct < 0),
+            "new_52w_highs": sum(1 for m in bucket if m.new_52w_high),
+            "new_52w_lows": sum(1 for m in bucket if m.new_52w_low),
+            "volume_spikes_count": sum(1 for m in bucket if m.vol_ratio is not None and m.vol_ratio > 2.0),
+        })
+    return out
+
+
+def aggregate_by_sector(metrics: list[StockMetrics]) -> list[dict]:
+    """Group metrics by sector. Returns sectors sorted DESC by avg_change_pct."""
+    by_sector: dict[str, list[StockMetrics]] = defaultdict(list)
+    for m in metrics:
+        if m.sector:
+            by_sector[m.sector].append(m)
+
+    out = []
+    for sector, bucket in by_sector.items():
+        full_data = [m for m in bucket if m.has_full_data]
+        changes = [m.change_pct for m in bucket if m.change_pct is not None]
+        avg_change = round(sum(changes) / len(changes), 2) if changes else 0.0
+        pct_sma200 = (
+            round(100.0 * sum(1 for m in full_data if m.sma200 and m.last_close > m.sma200) / len(full_data), 1)
+            if full_data else 0.0
+        )
+        out.append({
+            "sector": sector, "n_stocks": len(bucket),
+            "avg_change_pct": avg_change,
+            "pct_above_sma200": pct_sma200,
+        })
+    out.sort(key=lambda r: r["avg_change_pct"], reverse=True)
+    return out

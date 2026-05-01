@@ -72,3 +72,80 @@ def test_derive_mood_neutral_by_breadth():
 def test_derive_mood_neutral_by_advancers():
     # high breadth but more decliners → neutral
     assert derive_mood(pct_above_sma200=70.0, advancers=80, decliners=120) == "neutral"
+
+
+from app.services.market_stats_service import (
+    aggregate_by_index,
+    aggregate_by_sector,
+    aggregate_global,
+)
+
+
+def _metric(stock_id, ticker, *, sector=None, indices=None, change_pct=0.5,
+            sma50=99.0, sma200=95.0, rsi14=50.0, near_high=False, near_low=False,
+            new_high=False, new_low=False, vol_ratio=1.0, has_full=True,
+            last_close=100.0):
+    return StockMetrics(
+        stock_id=stock_id, ticker=ticker, sector=sector,
+        index_codes=indices or [], market_cap=1e9, bars_count=250,
+        last_close=last_close, prev_close=last_close - 1.0,
+        change_pct=change_pct, sma50=sma50, sma200=sma200, rsi14=rsi14,
+        high_252=last_close, low_252=last_close - 10.0,
+        near_52w_high=near_high, near_52w_low=near_low,
+        new_52w_high=new_high, new_52w_low=new_low,
+        vol_today=1_000_000, vol_avg_20=500_000.0, vol_ratio=vol_ratio,
+        has_full_data=has_full,
+    )
+
+
+def test_aggregate_global_breadth():
+    ms = [
+        _metric(1, "A", change_pct=1.0, sma200=99.0, last_close=100.0, rsi14=72.0),
+        _metric(2, "B", change_pct=-0.5, sma200=99.0, last_close=98.0, rsi14=25.0),
+        _metric(3, "C", change_pct=2.0, sma200=99.0, last_close=110.0, rsi14=55.0),
+    ]
+    g = aggregate_global(ms)
+    assert g["stocks_total"] == 3
+    assert g["stocks_with_data"] == 3
+    assert g["advancers"] == 2
+    assert g["decliners"] == 1
+    # 2 of 3 above sma200 (A: 100>99 ✓, B: 98<99 ✗, C: 110>99 ✓)
+    assert g["pct_above_sma200"] == 66.7
+    assert g["rsi_oversold_count"] == 1
+    assert g["rsi_overbought_count"] == 1
+
+
+def test_aggregate_global_empty():
+    g = aggregate_global([])
+    assert g["stocks_total"] == 0
+    assert g["mood"] == "neutral"
+
+
+def test_aggregate_by_index_buckets():
+    ms = [
+        _metric(1, "A", indices=["NDX", "SP500"], change_pct=1.0, sma200=90.0, last_close=100.0),
+        _metric(2, "B", indices=["NDX"], change_pct=-1.0, sma200=99.0, last_close=98.0, new_low=True),
+        _metric(3, "C", indices=["SSE50"], change_pct=2.0, sma200=99.0, last_close=110.0, vol_ratio=3.0),
+    ]
+    rows = aggregate_by_index(ms, [("NDX", "Nasdaq"), ("SP500", "S&P"), ("SSE50", "SSE"), ("DJI", "Dow")])
+    by_code = {r["code"]: r for r in rows}
+    assert by_code["NDX"]["n"] == 2
+    assert by_code["SP500"]["n"] == 1
+    assert by_code["SSE50"]["n"] == 1
+    assert by_code["DJI"]["n"] == 0
+    assert by_code["DJI"]["pct_above_sma200"] is None    # empty bucket
+    assert by_code["NDX"]["new_52w_lows"] == 1
+    assert by_code["SSE50"]["volume_spikes_count"] == 1
+
+
+def test_aggregate_by_sector_sorted_by_avg_change():
+    ms = [
+        _metric(1, "A", sector="Tech", change_pct=2.0),
+        _metric(2, "B", sector="Tech", change_pct=1.0),
+        _metric(3, "C", sector="Energy", change_pct=-1.5),
+        _metric(4, "D", sector="Finance", change_pct=0.5),
+    ]
+    rows = aggregate_by_sector(ms)
+    assert [r["sector"] for r in rows] == ["Tech", "Finance", "Energy"]
+    assert rows[0]["n_stocks"] == 2
+    assert rows[0]["avg_change_pct"] == 1.5
