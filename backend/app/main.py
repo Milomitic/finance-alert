@@ -12,6 +12,7 @@ from loguru import logger
 from app.api import alerts as alerts_router
 from app.api import auth as auth_router
 from app.api import catalog as catalog_router
+from app.api import dashboard as dashboard_router
 from app.api import rules as rules_router
 from app.api import stocks as stocks_router
 from app.api import watchlists as watchlists_router
@@ -48,6 +49,7 @@ app.include_router(watchlists_router.router)
 app.include_router(catalog_router.router)
 app.include_router(rules_router.router)
 app.include_router(alerts_router.router)
+app.include_router(dashboard_router.router)
 
 
 @app.get("/api/health")
