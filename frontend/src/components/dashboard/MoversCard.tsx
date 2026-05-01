@@ -2,7 +2,7 @@ import type { Mover, MoversBlock, VolumeSpike } from "@/api/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { IndexBadge } from "@/components/dashboard/IndexBadge";
-import { SectorBadge } from "@/components/dashboard/SectorBadge";
+import { StockLogo } from "@/components/dashboard/StockLogo";
 
 interface Props {
   movers: MoversBlock;
@@ -13,8 +13,8 @@ function MoverRow({ m }: { m: Mover | VolumeSpike }) {
   return (
     <tr className="border-b border-border/50 hover:bg-muted/40 transition-colors">
       <td className="px-3 py-1.5 font-semibold">
-        <span className="inline-flex items-center gap-1.5">
-          <SectorBadge sector={m.sector} variant="icon-only" size="xs" />
+        <span className="inline-flex items-center gap-2">
+          <StockLogo ticker={m.ticker} size="xs" />
           <span>{m.ticker}</span>
         </span>
       </td>

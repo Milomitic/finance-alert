@@ -82,7 +82,14 @@ export function BreadthMatrixTable({ data }: Props) {
                 >
                   <td className="px-4 py-2 font-semibold">
                     <span className="inline-flex items-center gap-2">
-                      <span aria-hidden="true" className="text-base leading-none">{getIndexMeta(r.code).flag}</span>
+                      {getIndexMeta(r.code).countryCode && (
+                        <img
+                          src={`/flags/${getIndexMeta(r.code).countryCode}.svg`}
+                          alt={getIndexMeta(r.code).country}
+                          style={{ height: "13px", width: "auto" }}
+                          className="rounded-[1px] shadow-sm"
+                        />
+                      )}
                       <span>{r.code}</span>
                     </span>
                   </td>

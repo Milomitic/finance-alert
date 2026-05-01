@@ -13,9 +13,16 @@ const SIZE_CLASSES: Record<NonNullable<Props["size"]>, string> = {
   md: "text-sm px-2.5 py-1 gap-2",
 };
 
+const FLAG_HEIGHT_PX: Record<NonNullable<Props["size"]>, number> = {
+  xs: 9,
+  sm: 11,
+  md: 13,
+};
+
 export function IndexBadge({ code, size = "sm", showCode = true }: Props) {
   if (!code) return <span className="text-muted-foreground">—</span>;
   const meta = getIndexMeta(code);
+  const flagHeight = FLAG_HEIGHT_PX[size];
   return (
     <span
       className={cn(
@@ -24,7 +31,15 @@ export function IndexBadge({ code, size = "sm", showCode = true }: Props) {
       )}
       title={`${meta.fullName} · ${meta.country}`}
     >
-      <span aria-hidden="true">{meta.flag}</span>
+      {meta.countryCode && (
+        <img
+          src={`/flags/${meta.countryCode}.svg`}
+          alt={meta.country}
+          height={flagHeight}
+          style={{ height: `${flagHeight}px`, width: "auto" }}
+          className="rounded-[1px] shadow-sm"
+        />
+      )}
       {showCode && <span>{code}</span>}
     </span>
   );
