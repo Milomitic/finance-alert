@@ -81,10 +81,10 @@ export function GlobalKpiTiles({ global }: Props) {
         return (
           <Card key={t.label}>
             <CardContent className="p-3 text-center flex flex-col items-center justify-center h-full relative">
-              <Icon className="h-3.5 w-3.5 text-muted-foreground/40 absolute top-2 right-2" />
-              <div className="text-[11px] uppercase text-muted-foreground tracking-wide">{t.label}</div>
-              <div className={`text-xl font-bold tabular-nums mt-1 ${t.tone ? TONE_FG[t.tone] : ""}`}>{t.value}</div>
-              <div className="text-[11px] text-muted-foreground mt-0.5">{t.sub}</div>
+              <Icon className="h-4 w-4 text-muted-foreground/40 absolute top-2 right-2" />
+              <div className="text-xs uppercase text-muted-foreground tracking-wide">{t.label}</div>
+              <div className={`text-2xl font-bold tabular-nums mt-1 ${t.tone ? TONE_FG[t.tone] : ""}`}>{t.value}</div>
+              <div className="text-xs text-muted-foreground mt-1">{t.sub}</div>
             </CardContent>
           </Card>
         );

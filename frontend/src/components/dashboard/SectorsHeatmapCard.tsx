@@ -19,11 +19,11 @@ export function SectorsHeatmapCard({ sectors }: Props) {
   return (
     <Card>
       <CardContent className="p-4">
-        <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">Sectors (Avg Δ%)</div>
+        <div className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-2">Sectors (Avg Δ%)</div>
         {sectors.length === 0 ? (
-          <div className="text-xs text-muted-foreground text-center py-6">Nessun settore</div>
+          <div className="text-sm text-muted-foreground text-center py-6">Nessun settore</div>
         ) : (
-          <table className="w-full text-xs tabular-nums">
+          <table className="w-full text-sm tabular-nums">
             <tbody>
               {sectors.map((s) => {
                 const Icon = getSectorIcon(s.sector);

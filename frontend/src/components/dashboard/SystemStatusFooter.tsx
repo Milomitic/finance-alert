@@ -19,19 +19,19 @@ function fmtShort(iso: string | null): string {
 export function SystemStatusFooter({ status }: Props) {
   return (
     <Card>
-      <CardContent className="px-4 py-2.5 flex flex-wrap items-center gap-x-5 gap-y-1.5 text-xs text-muted-foreground">
+      <CardContent className="px-4 py-3 flex flex-wrap items-center gap-x-5 gap-y-1.5 text-sm text-muted-foreground">
         <span className="flex items-center gap-1.5">
           {status.scheduler_running ? (
-            <><Server className="h-3.5 w-3.5 text-green-600" />Scheduler attivo</>
+            <><Server className="h-4 w-4 text-green-600" />Scheduler attivo</>
           ) : (
-            <><ServerOff className="h-3.5 w-3.5 text-destructive" />Scheduler offline</>
+            <><ServerOff className="h-4 w-4 text-destructive" />Scheduler offline</>
           )}
         </span>
         <span className="flex items-center gap-1.5">
           {status.telegram_configured ? (
-            <><MessageSquare className="h-3.5 w-3.5 text-green-600" />Telegram OK</>
+            <><MessageSquare className="h-4 w-4 text-green-600" />Telegram OK</>
           ) : (
-            <><MessageSquareOff className="h-3.5 w-3.5 text-amber-600" />Telegram non configurato</>
+            <><MessageSquareOff className="h-4 w-4 text-amber-600" />Telegram non configurato</>
           )}
         </span>
         <span>Prossimo scan: <strong className="text-foreground tabular-nums">{fmtShort(status.scan_alerts_next_run)}</strong></span>

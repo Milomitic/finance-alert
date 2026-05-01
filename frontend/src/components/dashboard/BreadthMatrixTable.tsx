@@ -49,14 +49,14 @@ export function BreadthMatrixTable({ data }: Props) {
   return (
     <Card>
       <CardContent className="p-0">
-        <div className="flex items-center px-4 py-2 bg-muted/40 border-b">
-          <span className="text-xs font-semibold uppercase tracking-wide">Breadth per indice</span>
-          <span className="text-xs text-muted-foreground ml-3">snapshot ultima chiusura</span>
+        <div className="flex items-center px-4 py-2.5 bg-muted/40 border-b">
+          <span className="text-sm font-semibold uppercase tracking-wide">Breadth per indice</span>
+          <span className="text-sm text-muted-foreground ml-3">snapshot ultima chiusura</span>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-xs tabular-nums">
+          <table className="w-full border-collapse text-sm tabular-nums">
             <thead>
-              <tr className="bg-muted/30 text-[10px] uppercase tracking-wide text-muted-foreground">
+              <tr className="bg-muted/30 text-xs uppercase tracking-wide text-muted-foreground">
                 <th className="text-left px-4 py-2">Indice</th>
                 <th className="text-right px-3 py-2">N</th>
                 <th className="text-right px-3 py-2">&gt;SMA200</th>
@@ -86,8 +86,10 @@ export function BreadthMatrixTable({ data }: Props) {
                         <img
                           src={`/flags/${getIndexMeta(r.code).countryCode}.svg`}
                           alt={getIndexMeta(r.code).country}
-                          style={{ height: "13px", width: "auto" }}
-                          className="rounded-[1px] shadow-sm"
+                          width={24}
+                          height={16}
+                          style={{ width: "24px", height: "16px", objectFit: "cover" }}
+                          className="rounded-[1px] shadow-sm shrink-0"
                         />
                       )}
                       <span>{r.code}</span>

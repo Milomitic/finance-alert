@@ -27,9 +27,9 @@ export function RsiHistogramCard({ rsi, indices }: Props) {
     <Card>
       <CardContent className="p-4">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">RSI distribution</span>
+          <span className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">RSI distribution</span>
           <Select value={selected} onValueChange={setSelected}>
-            <SelectTrigger className="h-7 text-xs w-28">
+            <SelectTrigger className="h-8 text-sm w-32">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -43,8 +43,8 @@ export function RsiHistogramCard({ rsi, indices }: Props) {
         <div className="h-[160px]">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-              <XAxis dataKey="bin" fontSize={10} tickLine={false} axisLine={false} interval={1} />
-              <YAxis fontSize={10} tickLine={false} axisLine={false} allowDecimals={false} width={28} />
+              <XAxis dataKey="bin" fontSize={11} tickLine={false} axisLine={false} interval={1} />
+              <YAxis fontSize={11} tickLine={false} axisLine={false} allowDecimals={false} width={28} />
               <Bar dataKey="count" radius={[2, 2, 0, 0]}>
                 {data.map((d, i) => <Cell key={i} fill={colorFor(d.idx)} />)}
               </Bar>

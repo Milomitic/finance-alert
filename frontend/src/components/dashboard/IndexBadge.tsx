@@ -8,21 +8,25 @@ interface Props {
 }
 
 const SIZE_CLASSES: Record<NonNullable<Props["size"]>, string> = {
-  xs: "text-[10px] px-1.5 py-0 gap-1",
-  sm: "text-xs px-2 py-0.5 gap-1.5",
-  md: "text-sm px-2.5 py-1 gap-2",
+  xs: "text-xs px-1.5 py-0.5 gap-1",
+  sm: "text-sm px-2 py-0.5 gap-1.5",
+  md: "text-base px-2.5 py-1 gap-2",
 };
 
 const FLAG_HEIGHT_PX: Record<NonNullable<Props["size"]>, number> = {
-  xs: 9,
-  sm: 11,
-  md: 13,
+  xs: 11,
+  sm: 14,
+  md: 18,
 };
 
 export function IndexBadge({ code, size = "sm", showCode = true }: Props) {
   if (!code) return <span className="text-muted-foreground">—</span>;
   const meta = getIndexMeta(code);
   const flagHeight = FLAG_HEIGHT_PX[size];
+  // Force a 3:2 aspect ratio so the US flag (natively 1.9:1) doesn't render
+  // wider than the others. `object-fit: cover` slightly crops the US flag's
+  // horizontal stripes; EU/IT/CN/HK (all 3:2 source) fill the box exactly.
+  const flagWidth = Math.round(flagHeight * 1.5);
   return (
     <span
       className={cn(
@@ -35,9 +39,14 @@ export function IndexBadge({ code, size = "sm", showCode = true }: Props) {
         <img
           src={`/flags/${meta.countryCode}.svg`}
           alt={meta.country}
+          width={flagWidth}
           height={flagHeight}
-          style={{ height: `${flagHeight}px`, width: "auto" }}
-          className="rounded-[1px] shadow-sm"
+          style={{
+            width: `${flagWidth}px`,
+            height: `${flagHeight}px`,
+            objectFit: "cover",
+          }}
+          className="rounded-[1px] shadow-sm shrink-0"
         />
       )}
       {showCode && <span>{code}</span>}
