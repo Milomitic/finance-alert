@@ -166,3 +166,92 @@ export interface DashboardSummary {
   recent_alerts: Alert[];
   system_status: SystemStatus;
 }
+
+// === Fase 3A-bis: Market Dashboard ===
+
+export interface MarketGlobal {
+  stocks_total: number;
+  stocks_with_data: number;
+  advancers: number;
+  decliners: number;
+  unchanged: number;
+  avg_change_pct: number;
+  pct_above_sma200: number;
+  pct_above_sma50: number;
+  rsi_oversold_count: number;
+  rsi_overbought_count: number;
+  near_52w_high_count: number;
+  near_52w_low_count: number;
+  mood: "bullish" | "neutral" | "bearish";
+}
+
+export interface IndexBreadth {
+  code: string;
+  name: string;
+  n: number;
+  pct_above_sma200: number | null;
+  pct_above_sma50: number | null;
+  rsi_oversold_count: number;
+  rsi_overbought_count: number;
+  avg_change_pct: number | null;
+  advancers: number;
+  decliners: number;
+  new_52w_highs: number;
+  new_52w_lows: number;
+  volume_spikes_count: number;
+}
+
+export interface RsiDistribution {
+  all: number[];
+  by_index: Record<string, number[]>;
+}
+
+export interface SectorBreadth {
+  sector: string;
+  n_stocks: number;
+  avg_change_pct: number;
+  pct_above_sma200: number;
+}
+
+export interface Mover {
+  ticker: string;
+  index: string | null;
+  sector: string | null;
+  change_pct: number;
+  last_close: number;
+  prev_close: number | null;
+}
+
+export interface VolumeSpike extends Mover {
+  vol_ratio: number;
+}
+
+export interface MoversBlock {
+  gainers: Mover[];
+  losers: Mover[];
+  volume_spikes: VolumeSpike[];
+  new_52w_high: Mover[];
+  new_52w_low: Mover[];
+}
+
+export interface TreemapLeaf {
+  ticker: string;
+  index: string | null;
+  sector: string | null;
+  market_cap: number;
+  change_pct: number;
+}
+
+export interface MarketSummary {
+  available: boolean;
+  is_stale: boolean;
+  reason?: string | null;
+  computed_at?: string | null;
+  scan_run_id?: number | null;
+  global?: MarketGlobal;
+  by_index?: IndexBreadth[];
+  rsi_distribution?: RsiDistribution;
+  sectors?: SectorBreadth[];
+  movers?: MoversBlock;
+  treemap?: TreemapLeaf[];
+}
