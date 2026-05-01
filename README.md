@@ -46,6 +46,52 @@ Open <http://localhost:5173> and log in with `admin` / the password you just set
 
 ---
 
+## Fase 2: Alert engine (live)
+
+The app continuously scans ~700 catalogued stocks (US S&P 500 / NASDAQ-100 /
+DJIA + EuroStoxx 50 + SSE 50 + Hang Seng top 30 + FTSE MIB) every night
+at 23:30 Europe/Rome, evaluates 4 pre-installed rules per stock with
+edge-trigger semantics, and sends a single Telegram digest the next
+morning at 08:00.
+
+### Pre-installed global rules (Tier 1)
+
+| Kind | Default params |
+|---|---|
+| RSI Oversold | period=14, threshold=30 |
+| RSI Overbought | period=14, threshold=70 |
+| Golden Cross | fast=50, slow=200 |
+| Death Cross | fast=50, slow=200 |
+
+Modify globally via `PATCH /api/rules/{id}`. Override per watchlist
+from the WatchlistDetailPage (3 states per kind: Default global /
+Disabled / Custom params).
+
+### Telegram setup (optional)
+
+1. Talk to `@BotFather` on Telegram, `/newbot`, get a `BOT_TOKEN`.
+2. Open the chat with your bot, send `/start`.
+3. `curl https://api.telegram.org/bot<BOT_TOKEN>/getUpdates` → find `result[0].message.chat.id`.
+4. In `backend/.env`, set:
+   ```
+   TELEGRAM_BOT_TOKEN=<your token>
+   TELEGRAM_CHAT_ID=<your chat id>
+   ```
+5. Restart the app; click "Invia digest ora" in `/alerts` to test.
+
+### First-run notes
+
+The first scan backfills 250 days of OHLCV for the entire catalog —
+~5-10 minutes via yfinance batch download. Subsequent daily scans
+take 30-90 seconds. The first digest may include a large number
+of "initial-state" alerts; use bulk archive in `/alerts` to clear
+them.
+
+See [docs/superpowers/specs/2026-05-01-finance-alert-fase2-design.md](docs/superpowers/specs/2026-05-01-finance-alert-fase2-design.md)
+for the full design.
+
+---
+
 ## Daily development
 
 | Recipe              | What it does                                                         |
