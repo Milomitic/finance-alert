@@ -179,3 +179,36 @@ def get_top_stocks(db: Session, *, days: int = 30, limit: int = 10) -> list[TopS
             )
         )
     return result
+
+
+@dataclass
+class SystemStatus:
+    scheduler_running: bool
+    scan_alerts_next_run: datetime | None
+    send_digest_next_run: datetime | None
+    refresh_catalog_next_run: datetime | None
+    telegram_configured: bool
+    last_digest_sent_at: datetime | None  # always None in 3A; will be wired in 3D
+
+
+def get_system_status(db: Session) -> SystemStatus:
+    from app.core.config import settings
+    from app.scheduler import get_scheduler
+
+    sched = get_scheduler()
+    next_runs: dict[str, datetime | None] = {}
+    for job_id in ("scan_alerts", "send_digest", "refresh_catalog"):
+        job = sched.get_job(job_id)
+        if job is None:
+            next_runs[job_id] = None
+        else:
+            next_runs[job_id] = getattr(job, "next_run_time", None)
+
+    return SystemStatus(
+        scheduler_running=sched.running,
+        scan_alerts_next_run=next_runs["scan_alerts"],
+        send_digest_next_run=next_runs["send_digest"],
+        refresh_catalog_next_run=next_runs["refresh_catalog"],
+        telegram_configured=bool(settings.telegram_bot_token) and bool(settings.telegram_chat_id),
+        last_digest_sent_at=None,
+    )

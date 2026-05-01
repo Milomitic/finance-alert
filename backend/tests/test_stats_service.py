@@ -181,3 +181,36 @@ def test_top_stocks_excludes_archived(db: Session) -> None:
     _make_alert(db, stock, rule, age_hours=2, archived=True)
     top = get_top_stocks(db, days=30, limit=10)
     assert len(top) == 1 and top[0].alert_count == 1
+
+
+import pytest
+from app.services.stats_service import SystemStatus, get_system_status
+
+
+def test_system_status_telegram_configured_when_token_and_chat_set(
+    db: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.core.config import settings
+    monkeypatch.setattr(settings, "telegram_bot_token", "FAKE_TOKEN")
+    monkeypatch.setattr(settings, "telegram_chat_id", "12345")
+    status = get_system_status(db)
+    assert isinstance(status, SystemStatus)
+    assert status.telegram_configured is True
+
+
+def test_system_status_telegram_not_configured_when_blank(
+    db: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.core.config import settings
+    monkeypatch.setattr(settings, "telegram_bot_token", "")
+    monkeypatch.setattr(settings, "telegram_chat_id", "")
+    status = get_system_status(db)
+    assert status.telegram_configured is False
+
+
+def test_system_status_includes_scheduler_next_runs(db: Session) -> None:
+    """next_run fields are pulled from the live APScheduler. With the scheduler
+    not started in this test, the fields are None — that's the contract."""
+    status = get_system_status(db)
+    assert isinstance(status.scheduler_running, bool)
+    assert status.scan_alerts_next_run is None or hasattr(status.scan_alerts_next_run, "isoformat")
