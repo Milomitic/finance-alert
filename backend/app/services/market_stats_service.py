@@ -243,3 +243,74 @@ def aggregate_by_sector(metrics: list[StockMetrics]) -> list[dict]:
         })
     out.sort(key=lambda r: r["avg_change_pct"], reverse=True)
     return out
+
+
+def build_movers(metrics: list[StockMetrics], *, top_n: int = 10) -> dict:
+    """Build the 'movers' block: gainers, losers, volume_spikes, new_52w_high/low."""
+    with_change = [m for m in metrics if m.change_pct is not None]
+    gainers = sorted(with_change, key=lambda m: m.change_pct, reverse=True)[:top_n]
+    losers = sorted(with_change, key=lambda m: m.change_pct)[:top_n]
+    with_vol = [m for m in metrics if m.vol_ratio is not None]
+    vol_spikes = sorted(with_vol, key=lambda m: m.vol_ratio, reverse=True)[:top_n]
+    new_highs = [m for m in metrics if m.new_52w_high]
+    new_lows = [m for m in metrics if m.new_52w_low]
+
+    def _row(m: StockMetrics) -> dict:
+        return {
+            "ticker": m.ticker,
+            "index": m.index_codes[0] if m.index_codes else None,
+            "sector": m.sector,
+            "change_pct": m.change_pct,
+            "last_close": m.last_close,
+            "prev_close": m.prev_close,
+        }
+
+    return {
+        "gainers": [_row(m) for m in gainers],
+        "losers": [_row(m) for m in losers],
+        "volume_spikes": [
+            {**_row(m), "vol_ratio": round(m.vol_ratio, 2)} for m in vol_spikes
+        ],
+        "new_52w_high": [_row(m) for m in new_highs],
+        "new_52w_low": [_row(m) for m in new_lows],
+    }
+
+
+def build_rsi_distribution(
+    metrics: list[StockMetrics],
+    indices: list[tuple[str, str]],
+) -> dict:
+    """Build histogram bins (10 bins of width 10) for RSI(14) values, total + per-index."""
+    bins = [0] * 10
+    by_index_bins: dict[str, list[int]] = {code: [0] * 10 for code, _ in indices}
+
+    def _bin(rsi: float) -> int:
+        # 0-10 -> 0, 10-20 -> 1, ..., 90-100 -> 9 (clamp to [0,9])
+        idx = int(rsi // 10)
+        return max(0, min(9, idx))
+
+    for m in metrics:
+        if m.rsi14 is None:
+            continue
+        b = _bin(m.rsi14)
+        bins[b] += 1
+        for code in m.index_codes:
+            if code in by_index_bins:
+                by_index_bins[code][b] += 1
+
+    return {"all": bins, "by_index": by_index_bins}
+
+
+def build_treemap(metrics: list[StockMetrics]) -> list[dict]:
+    """Treemap leaves: stocks with known market_cap and change_pct."""
+    return [
+        {
+            "ticker": m.ticker,
+            "index": m.index_codes[0] if m.index_codes else None,
+            "sector": m.sector,
+            "market_cap": m.market_cap,
+            "change_pct": m.change_pct,
+        }
+        for m in metrics
+        if m.market_cap is not None and m.change_pct is not None
+    ]

@@ -149,3 +149,64 @@ def test_aggregate_by_sector_sorted_by_avg_change():
     assert [r["sector"] for r in rows] == ["Tech", "Finance", "Energy"]
     assert rows[0]["n_stocks"] == 2
     assert rows[0]["avg_change_pct"] == 1.5
+
+
+from app.services.market_stats_service import (
+    build_movers,
+    build_rsi_distribution,
+    build_treemap,
+)
+
+
+def test_build_movers_ordering():
+    ms = [
+        _metric(1, "A", change_pct=2.0),
+        _metric(2, "B", change_pct=-3.0),
+        _metric(3, "C", change_pct=1.0),
+        _metric(4, "D", change_pct=-1.5),
+    ]
+    out = build_movers(ms, top_n=2)
+    assert [r["ticker"] for r in out["gainers"]] == ["A", "C"]
+    assert [r["ticker"] for r in out["losers"]] == ["B", "D"]
+
+
+def test_build_movers_volume_spikes():
+    ms = [
+        _metric(1, "A", vol_ratio=1.0),
+        _metric(2, "B", vol_ratio=4.5),
+        _metric(3, "C", vol_ratio=2.5),
+    ]
+    out = build_movers(ms)
+    assert out["volume_spikes"][0]["ticker"] == "B"
+    assert out["volume_spikes"][0]["vol_ratio"] == 4.5
+
+
+def test_build_rsi_distribution_binning():
+    ms = [
+        _metric(1, "A", rsi14=5.0),     # bin 0
+        _metric(2, "B", rsi14=25.0),    # bin 2 (oversold edge)
+        _metric(3, "C", rsi14=50.0),    # bin 5
+        _metric(4, "D", rsi14=72.0, indices=["NDX"]),    # bin 7 (overbought)
+        _metric(5, "E", rsi14=99.9, indices=["NDX"]),   # bin 9
+    ]
+    dist = build_rsi_distribution(ms, indices=[("NDX", "Nasdaq"), ("SP500", "S&P")])
+    assert dist["all"] == [1, 0, 1, 0, 0, 1, 0, 1, 0, 1]
+    assert dist["by_index"]["NDX"] == [0, 0, 0, 0, 0, 0, 0, 1, 0, 1]
+    assert dist["by_index"]["SP500"] == [0] * 10
+
+
+def test_build_treemap_filters_no_marketcap():
+    ms = [
+        _metric(1, "A", change_pct=1.0),                                      # has cap
+        StockMetrics(stock_id=2, ticker="B", sector=None, index_codes=[],
+                     market_cap=None,                                         # no cap → excluded
+                     bars_count=250, last_close=10.0, prev_close=9.5,
+                     change_pct=1.0, sma50=None, sma200=None, rsi14=None,
+                     high_252=None, low_252=None,
+                     near_52w_high=False, near_52w_low=False,
+                     new_52w_high=False, new_52w_low=False,
+                     vol_today=0, vol_avg_20=None, vol_ratio=None, has_full_data=False),
+    ]
+    out = build_treemap(ms)
+    assert len(out) == 1
+    assert out[0]["ticker"] == "A"
