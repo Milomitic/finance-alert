@@ -9,6 +9,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from loguru import logger
 
+from app.api import alerts as alerts_router
 from app.api import auth as auth_router
 from app.api import catalog as catalog_router
 from app.api import rules as rules_router
@@ -46,6 +47,7 @@ app.include_router(stocks_router.router)
 app.include_router(watchlists_router.router)
 app.include_router(catalog_router.router)
 app.include_router(rules_router.router)
+app.include_router(alerts_router.router)
 
 
 @app.get("/api/health")
