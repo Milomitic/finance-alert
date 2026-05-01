@@ -61,6 +61,43 @@ INDEX_SOURCES: dict[str, dict[str, object]] = {
         "default_exchange": "BIT",
         "currency": "EUR",
     },
+    "EUSTX50": {
+        "url": "https://en.wikipedia.org/wiki/EURO_STOXX_50",
+        "name": "EuroStoxx 50",
+        "country": "EU",
+        "table_index": 4,
+        "ticker_col": "Ticker",
+        "name_col": "Name",
+        "sector_col": "ICB Sector",
+        "industry_col": None,
+        "default_exchange": "XETRA",
+        "currency": "EUR",
+    },
+    "SSE50": {
+        "url": "https://en.wikipedia.org/wiki/SSE_50_Index",
+        "name": "SSE 50",
+        "country": "CN",
+        "table_index": 1,
+        "ticker_col": "Ticker symbol",
+        "name_col": "Name",
+        "sector_col": "Industry",
+        "industry_col": None,
+        "default_exchange": "SSE",
+        "currency": "CNY",
+    },
+    "HSI30": {
+        "url": "https://en.wikipedia.org/wiki/Hang_Seng_Index",
+        "name": "Hang Seng top 30",
+        "country": "HK",
+        "table_index": 5,
+        "ticker_col": "Ticker",
+        "name_col": "Name",
+        "sector_col": "Sector",
+        "industry_col": None,
+        "default_exchange": "HKEX",
+        "currency": "HKD",
+        "slice_n": 30,
+    },
 }
 
 
@@ -91,9 +128,25 @@ def _fetch_table(url: str, table_index: int) -> pd.DataFrame:
 
 
 def _normalize_ticker(raw: str, default_exchange: str) -> tuple[str, str]:
+    """Map ticker suffix to exchange code; fall back to default_exchange."""
     t = str(raw).strip().upper()
-    if "." in t:
-        return t, "BIT" if t.endswith(".MI") else default_exchange
+    suffix_to_exchange = {
+        ".MI": "BIT",      # Borsa Italiana
+        ".DE": "XETRA",    # Deutsche Boerse
+        ".PA": "EPA",      # Euronext Paris
+        ".AS": "AEX",      # Amsterdam
+        ".SW": "SIX",      # Swiss
+        ".CO": "CSE",      # Copenhagen
+        ".HE": "HEL",      # Helsinki
+        ".BR": "BRU",      # Brussels
+        ".MC": "BME",      # Madrid
+        ".IR": "ISE",      # Irish
+        ".SS": "SSE",      # Shanghai
+        ".HK": "HKEX",     # Hong Kong
+    }
+    for suffix, exchange in suffix_to_exchange.items():
+        if t.endswith(suffix):
+            return t, exchange
     return t, default_exchange
 
 
@@ -130,6 +183,10 @@ def refresh_index(db: Session, index_code: str) -> RefreshResult:
     result = RefreshResult(index_code=index_code, status="in_progress")
     try:
         df = _fetch_table(str(src["url"]), int(src["table_index"]))  # type: ignore[arg-type]
+        # Optional top-N slice (e.g., HSI30 takes top 30 of more constituents)
+        slice_n = src.get("slice_n")
+        if slice_n is not None:
+            df = df.head(int(slice_n))
         idx = _ensure_index(db, index_code, str(src["name"]), str(src["country"]))
         added = updated = 0
         seen_stock_ids: set[int] = set()

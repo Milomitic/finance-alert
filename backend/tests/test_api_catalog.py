@@ -28,7 +28,7 @@ def test_status_returns_entry_per_index(client: TestClient) -> None:
     assert resp.status_code == 200
     data = resp.json()
     codes = {i["index_code"] for i in data["indices"]}
-    assert codes == {"SP500", "NDX", "DJI", "FTSEMIB"}
+    assert codes == {"SP500", "NDX", "DJI", "FTSEMIB", "EUSTX50", "SSE50", "HSI30"}
     # Each entry is null-shaped initially
     for entry in data["indices"]:
         assert entry["last_status"] is None

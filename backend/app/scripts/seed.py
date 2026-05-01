@@ -11,6 +11,9 @@ SEEDS = [
     ("nasdaq100.csv", "NDX", "Nasdaq-100", "US"),
     ("djia.csv", "DJI", "Dow Jones Industrial Average", "US"),
     ("ftsemib.csv", "FTSEMIB", "FTSE MIB", "IT"),
+    ("eustx50.csv", "EUSTX50", "EuroStoxx 50", "EU"),
+    ("sse50.csv", "SSE50", "SSE 50", "CN"),
+    ("hsi30.csv", "HSI30", "Hang Seng top 30", "HK"),
 ]
 
 SEED_DIR = Path(__file__).resolve().parent.parent / "data" / "seed"
