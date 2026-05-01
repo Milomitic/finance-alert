@@ -2,6 +2,7 @@
 from app.models.alert import Alert
 from app.models.catalog_log import CatalogRefreshLog
 from app.models.index import Index, StockIndex
+from app.models.market_snapshot import MarketSnapshot
 from app.models.ohlcv import OhlcvDaily
 from app.models.rule import Rule, RuleState
 from app.models.scan_run import ScanRun
@@ -18,6 +19,7 @@ __all__ = [
     "WatchlistItem",
     "CatalogRefreshLog",
     "OhlcvDaily",
+    "MarketSnapshot",
     "Rule",
     "RuleState",
     "Alert",
