@@ -63,3 +63,7 @@ migrate-apply:
 
 seed:
 	cd backend && uv run python -m app.scripts.seed
+
+# Set the admin password interactively (writes hash to backend/.env and creates the user)
+set-password:
+	cd backend && uv run python -m app.scripts.set_admin_password

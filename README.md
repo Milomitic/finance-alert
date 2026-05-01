@@ -20,54 +20,25 @@ On Windows, the recipes work from **PowerShell** or **cmd** out of the box (the 
 
 ## First-time setup
 
-### Linux / macOS / Git Bash
-
 ```bash
 # 1. Clone
 git clone <your-remote> finance-alert
 cd finance-alert
 
 # 2. Copy the env template into backend/ (where pydantic-settings reads it)
-cp .env.example backend/.env
+#    Linux/macOS/Git Bash:    cp .env.example backend/.env
+#    Windows PowerShell:      Copy-Item .env.example backend/.env
 
 # 3. Install backend + frontend deps and bootstrap the DB
 #    (runs alembic upgrade head, generates SECRET_KEY if empty,
 #     seeds the 4 indices and ~79 stocks)
 just install
 
-# 4. Generate an admin password hash, paste it into backend/.env on the
-#    ADMIN_PASSWORD_HASH= line, then re-run install so the user is created
-cd backend && uv run python -m app.scripts.set_admin_password
-# (paste the printed hash into backend/.env)
-cd .. && just install
+# 4. Set the admin password — the script hashes it, writes it to
+#    backend/.env, AND creates/updates the user in the DB in one go
+just set-password
 
 # 5. Start the dev servers (backend :8000, frontend :5173)
-just up
-```
-
-### Windows PowerShell
-
-PowerShell 5.1 does NOT support `&&` as a chain operator — use `;` or split commands across lines:
-
-```powershell
-# 1. Clone
-git clone <your-remote> finance-alert
-cd finance-alert
-
-# 2. Copy the env template into backend/
-Copy-Item .env.example backend/.env
-
-# 3. Install
-just install
-
-# 4. Generate admin password hash
-cd backend
-uv run python -m app.scripts.set_admin_password
-# (paste the printed hash into backend/.env on ADMIN_PASSWORD_HASH=)
-cd ..
-just install   # re-run so the admin user is created
-
-# 5. Start dev servers
 just up
 ```
 
