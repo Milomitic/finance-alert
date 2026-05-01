@@ -1,6 +1,8 @@
 import type { Mover, MoversBlock, VolumeSpike } from "@/api/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { IndexBadge } from "@/components/dashboard/IndexBadge";
+import { SectorBadge } from "@/components/dashboard/SectorBadge";
 
 interface Props {
   movers: MoversBlock;
@@ -10,10 +12,15 @@ function ListRow({ m, kind }: { m: Mover; kind: "high" | "low" }) {
   const arrow = kind === "high" ? "📈" : "📉";
   const color = kind === "high" ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400";
   return (
-    <tr className="border-b border-border/50">
+    <tr className="border-b border-border/50 hover:bg-muted/40 transition-colors">
       <td className="px-2 py-1.5">{arrow}</td>
-      <td className="px-3 py-1.5 font-semibold">{m.ticker}</td>
-      <td className="px-2 py-1.5 text-[10px] text-muted-foreground">{m.index ?? "—"}</td>
+      <td className="px-3 py-1.5 font-semibold">
+        <span className="inline-flex items-center gap-1.5">
+          <SectorBadge sector={m.sector} variant="icon-only" size="xs" />
+          <span>{m.ticker}</span>
+        </span>
+      </td>
+      <td className="px-2 py-1.5"><IndexBadge code={m.index} size="xs" /></td>
       <td className={`px-3 py-1.5 text-right tabular-nums ${color}`}>${m.last_close.toFixed(2)}</td>
     </tr>
   );
@@ -22,9 +29,14 @@ function ListRow({ m, kind }: { m: Mover; kind: "high" | "low" }) {
 function VolRow({ m }: { m: VolumeSpike }) {
   const positive = m.change_pct >= 0;
   return (
-    <tr className="border-b border-border/50">
-      <td className="px-3 py-1.5 font-semibold">{m.ticker}</td>
-      <td className="px-2 py-1.5 text-[10px] text-muted-foreground">{m.index ?? "—"}</td>
+    <tr className="border-b border-border/50 hover:bg-muted/40 transition-colors">
+      <td className="px-3 py-1.5 font-semibold">
+        <span className="inline-flex items-center gap-1.5">
+          <SectorBadge sector={m.sector} variant="icon-only" size="xs" />
+          <span>{m.ticker}</span>
+        </span>
+      </td>
+      <td className="px-2 py-1.5"><IndexBadge code={m.index} size="xs" /></td>
       <td className="px-3 py-1.5 text-right tabular-nums">{m.vol_ratio.toFixed(1)}×</td>
       <td className={`px-3 py-1.5 text-right tabular-nums ${positive ? "text-green-600" : "text-red-600"}`}>
         {m.change_pct >= 0 ? "+" : ""}{m.change_pct.toFixed(2)}%

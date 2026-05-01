@@ -1,6 +1,7 @@
 import type { IndexBreadth } from "@/api/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { getIndexMeta } from "@/lib/indexMeta";
 
 interface Props {
   data: IndexBreadth[];
@@ -73,10 +74,18 @@ export function BreadthMatrixTable({ data }: Props) {
               {data.map((r) => (
                 <tr
                   key={r.code}
-                  className={cn("border-b border-border/50", rowHighlight(r))}
-                  title="Drill-down disponibile in Fase 3B"
+                  className={cn(
+                    "border-b border-border/50 hover:bg-muted/40 transition-colors",
+                    rowHighlight(r),
+                  )}
+                  title={`${getIndexMeta(r.code).fullName} — drill-down disponibile in Fase 3B`}
                 >
-                  <td className="px-4 py-2 font-semibold">{r.code}</td>
+                  <td className="px-4 py-2 font-semibold">
+                    <span className="inline-flex items-center gap-2">
+                      <span aria-hidden="true" className="text-base leading-none">{getIndexMeta(r.code).flag}</span>
+                      <span>{r.code}</span>
+                    </span>
+                  </td>
                   <td className="text-right px-3 py-2">{r.n}</td>
                   <td className={cn("text-right px-3 py-2", cellTone(r.pct_above_sma200, "pct"))}>{fmtPct(r.pct_above_sma200)}</td>
                   <td className={cn("text-right px-3 py-2", cellTone(r.pct_above_sma50, "pct"))}>{fmtPct(r.pct_above_sma50)}</td>

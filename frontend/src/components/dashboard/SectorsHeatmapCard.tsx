@@ -1,5 +1,6 @@
 import type { SectorBreadth } from "@/api/types";
 import { Card, CardContent } from "@/components/ui/card";
+import { getSectorIcon } from "@/lib/sectorMeta";
 
 interface Props {
   sectors: SectorBreadth[];
@@ -24,14 +25,22 @@ export function SectorsHeatmapCard({ sectors }: Props) {
         ) : (
           <table className="w-full text-xs tabular-nums">
             <tbody>
-              {sectors.map((s) => (
-                <tr key={s.sector}>
-                  <td className="px-2 py-1.5 truncate max-w-[140px]">{s.sector}</td>
-                  <td className={`px-3 py-1.5 text-right font-semibold w-[60%] ${bgFor(s.avg_change_pct)}`}>
-                    {s.avg_change_pct >= 0 ? "+" : ""}{s.avg_change_pct.toFixed(2)}
-                  </td>
-                </tr>
-              ))}
+              {sectors.map((s) => {
+                const Icon = getSectorIcon(s.sector);
+                return (
+                  <tr key={s.sector} className="hover:bg-muted/30 transition-colors">
+                    <td className="px-2 py-1.5 truncate max-w-[140px]">
+                      <span className="inline-flex items-center gap-1.5">
+                        <Icon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                        <span className="truncate">{s.sector}</span>
+                      </span>
+                    </td>
+                    <td className={`px-3 py-1.5 text-right font-semibold w-[60%] ${bgFor(s.avg_change_pct)}`}>
+                      {s.avg_change_pct >= 0 ? "+" : ""}{s.avg_change_pct.toFixed(2)}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         )}

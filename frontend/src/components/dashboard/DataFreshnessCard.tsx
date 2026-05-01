@@ -1,3 +1,5 @@
+import { Clock } from "lucide-react";
+
 import { Card, CardContent } from "@/components/ui/card";
 
 interface Props {
@@ -19,6 +21,7 @@ export function DataFreshnessCard({ computedAt, isStale, nextScanAt }: Props) {
   return (
     <Card>
       <CardContent className="p-4 flex flex-col items-center justify-center text-center h-full">
+        <Clock className="h-4 w-4 text-muted-foreground/60 mb-1" />
         <div className="text-[11px] uppercase text-muted-foreground tracking-wide">Dati aggiornati</div>
         <div className="text-sm font-bold mt-1 tabular-nums">{formatShort(computedAt)}</div>
         {isStale && (

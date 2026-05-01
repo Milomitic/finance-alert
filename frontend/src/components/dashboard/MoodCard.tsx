@@ -1,4 +1,4 @@
-import { TrendingDown, TrendingUp, Minus } from "lucide-react";
+import { Globe2, TrendingDown, TrendingUp, Minus } from "lucide-react";
 import type { ReactNode } from "react";
 
 import type { MarketGlobal } from "@/api/types";
@@ -35,6 +35,7 @@ export function MoodCard({ global }: Props) {
   return (
     <Card className={cn(cfg.bg)}>
       <CardContent className="p-4 flex flex-col items-center justify-center text-center h-full">
+        <Globe2 className={cn("h-4 w-4 mb-1 opacity-60", cfg.fg)} />
         <div className={cn("text-[11px] font-bold uppercase tracking-wide", cfg.fg)}>Market Mood</div>
         <div className={cn("flex items-center gap-2 mt-2", cfg.fg)}>
           {cfg.icon}
