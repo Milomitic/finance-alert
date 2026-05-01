@@ -125,3 +125,44 @@ export interface ScanStatusInfo {
   alerts_fired: number | null;
   error_message: string | null;
 }
+
+export interface KpiSummary {
+  alerts_last_24h: number;
+  alerts_prev_24h: number;
+  alerts_unread: number;
+  stocks_monitored: number;
+  indices_count: number;
+  last_scan: ScanStatusInfo | null;
+  next_scan_at: string | null;
+  next_digest_at: string | null;
+}
+
+export interface AlertsByDayPoint {
+  date: string; // ISO date "YYYY-MM-DD"
+  count: number;
+  by_kind: Record<string, number>;
+}
+
+export interface TopStock {
+  stock_id: number;
+  ticker: string;
+  alert_count: number;
+  top_kind: string | null;
+}
+
+export interface SystemStatus {
+  scheduler_running: boolean;
+  scan_alerts_next_run: string | null;
+  send_digest_next_run: string | null;
+  refresh_catalog_next_run: string | null;
+  telegram_configured: boolean;
+  last_digest_sent_at: string | null;
+}
+
+export interface DashboardSummary {
+  kpis: KpiSummary;
+  alerts_by_day: AlertsByDayPoint[];
+  top_stocks_30d: TopStock[];
+  recent_alerts: Alert[];
+  system_status: SystemStatus;
+}
