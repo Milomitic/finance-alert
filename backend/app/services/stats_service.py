@@ -106,3 +106,76 @@ def get_alerts_by_day(db: Session, days: int = 30) -> list[AlertsByDayPoint]:
             AlertsByDayPoint(date=day, count=sum(kinds.values()), by_kind=kinds)
         )
     return points
+
+
+@dataclass
+class TopStock:
+    stock_id: int
+    ticker: str
+    alert_count: int
+    top_kind: str | None
+
+
+def get_top_stocks(db: Session, *, days: int = 30, limit: int = 10) -> list[TopStock]:
+    """Return up to `limit` stocks with the most alerts in the last `days` days.
+
+    Order: alert_count DESC, ticker ASC (deterministic tie-break).
+    `top_kind` = most frequent rule.kind for that stock in the same window.
+    """
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+
+    # Step 1: top stock_ids by count
+    counts = db.execute(
+        select(
+            Alert.stock_id,
+            func.count(Alert.id).label("c"),
+        )
+        .where(Alert.triggered_at >= cutoff, Alert.archived_at.is_(None))
+        .group_by(Alert.stock_id)
+        .order_by(func.count(Alert.id).desc(), Alert.stock_id.asc())
+        .limit(limit)
+    ).all()
+
+    if not counts:
+        return []
+
+    stock_ids = [row.stock_id for row in counts]
+    tickers = {
+        s.id: s.ticker
+        for s in db.execute(select(Stock).where(Stock.id.in_(stock_ids))).scalars().all()
+    }
+
+    # Step 2: top kind per stock (subquery LIMIT 1 each)
+    top_kind_by_stock: dict[int, str] = {}
+    for sid in stock_ids:
+        kind_row = db.execute(
+            select(Rule.kind, func.count(Alert.id).label("c"))
+            .join(Alert, Alert.rule_id == Rule.id)
+            .where(
+                Alert.stock_id == sid,
+                Alert.triggered_at >= cutoff,
+                Alert.archived_at.is_(None),
+            )
+            .group_by(Rule.kind)
+            .order_by(func.count(Alert.id).desc(), Rule.kind.asc())
+            .limit(1)
+        ).first()
+        if kind_row is not None:
+            top_kind_by_stock[sid] = kind_row.kind
+
+    # Compose, preserving the ordering from step 1 but re-sorted by ticker tie-break
+    enriched = sorted(
+        [(row.stock_id, int(row.c), tickers.get(row.stock_id, "")) for row in counts],
+        key=lambda t: (-t[1], t[2]),
+    )
+    result: list[TopStock] = []
+    for stock_id, c, ticker in enriched:
+        result.append(
+            TopStock(
+                stock_id=stock_id,
+                ticker=ticker,
+                alert_count=c,
+                top_kind=top_kind_by_stock.get(stock_id),
+            )
+        )
+    return result

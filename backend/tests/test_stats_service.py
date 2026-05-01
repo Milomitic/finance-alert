@@ -7,8 +7,10 @@ from app.models import Alert, Rule, Stock
 from app.services.stats_service import (
     AlertsByDayPoint,
     KpiSummary,
+    TopStock,
     get_alerts_by_day,
     get_kpi_summary,
+    get_top_stocks,
 )
 
 
@@ -130,3 +132,52 @@ def test_alerts_by_day_excludes_archived(db: Session) -> None:
     points = get_alerts_by_day(db, days=1)
     today_pt = next(p for p in points if p.date == date.today())
     assert today_pt.count == 1
+
+
+def test_top_stocks_orders_by_count_desc_limit_10(db: Session) -> None:
+    rule = Rule(watchlist_id=None, kind="rsi_oversold", params="{}", enabled=True)
+    db.add(rule)
+    db.commit()
+    db.refresh(rule)
+    stocks = []
+    for i in range(12):
+        s = Stock(ticker=f"T{i:02d}", exchange="X", name=f"Stock {i}")
+        db.add(s)
+        db.commit()
+        db.refresh(s)
+        stocks.append(s)
+        # Stock with index i gets (i+1) alerts to enforce ordering
+        for _ in range(i + 1):
+            _make_alert(db, s, rule, age_hours=1)
+    top = get_top_stocks(db, days=30, limit=10)
+    assert len(top) == 10
+    # Highest count first; ties broken by ticker ASC (no ties here, but verify ordering)
+    assert top[0].ticker == "T11" and top[0].alert_count == 12
+    assert top[-1].ticker == "T02" and top[-1].alert_count == 3
+
+
+def test_top_stocks_top_kind_is_most_frequent(db: Session) -> None:
+    stock = Stock(ticker="AAPL", exchange="NASDAQ", name="Apple")
+    db.add(stock)
+    rule_oversold = Rule(watchlist_id=None, kind="rsi_oversold", params="{}", enabled=True)
+    rule_cross = Rule(watchlist_id=None, kind="golden_cross", params="{}", enabled=True)
+    db.add(rule_oversold)
+    db.add(rule_cross)
+    db.commit()
+    db.refresh(stock)
+    db.refresh(rule_oversold)
+    db.refresh(rule_cross)
+    _make_alert(db, stock, rule_oversold, age_hours=2)
+    _make_alert(db, stock, rule_oversold, age_hours=3)
+    _make_alert(db, stock, rule_cross, age_hours=4)
+    top = get_top_stocks(db, days=30, limit=10)
+    assert len(top) == 1
+    assert top[0].top_kind == "rsi_oversold"
+
+
+def test_top_stocks_excludes_archived(db: Session) -> None:
+    stock, rule = _seed_baseline(db)
+    _make_alert(db, stock, rule, age_hours=2)
+    _make_alert(db, stock, rule, age_hours=2, archived=True)
+    top = get_top_stocks(db, days=30, limit=10)
+    assert len(top) == 1 and top[0].alert_count == 1
