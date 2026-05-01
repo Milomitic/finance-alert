@@ -210,3 +210,75 @@ def test_build_treemap_filters_no_marketcap():
     out = build_treemap(ms)
     assert len(out) == 1
     assert out[0]["ticker"] == "A"
+
+
+import json as _json
+
+from app.models import Index, MarketSnapshot, OhlcvDaily, Stock
+from app.models.index import StockIndex
+from app.services.market_stats_service import get_latest_snapshot, recompute_snapshot
+
+
+def _seed_basic(session, *, n_stocks=3, n_bars=250):
+    """Seed indices + stocks + OHLCV for integration testing.
+    Note: Stock.market_cap is BigInteger so we use int values.
+    """
+    idx_ndx = Index(code="NDX", name="Nasdaq-100")
+    idx_sp = Index(code="SP500", name="S&P 500")
+    session.add_all([idx_ndx, idx_sp])
+    session.flush()
+
+    base_ohlcv = build_ohlcv(n_bars=n_bars, start_close=100.0, drift=0.1)
+    for i in range(n_stocks):
+        s = Stock(
+            ticker=f"T{i}", exchange="NMS", name=f"Stock {i}",
+            sector="Technology" if i % 2 == 0 else "Energy",
+            market_cap=int(1e9) + i * int(1e8),
+        )
+        session.add(s)
+        session.flush()
+        # All in NDX, every other also in SP500
+        session.add(StockIndex(stock_id=s.id, index_id=idx_ndx.id))
+        if i % 2 == 0:
+            session.add(StockIndex(stock_id=s.id, index_id=idx_sp.id))
+        for _, row in base_ohlcv.iterrows():
+            session.add(OhlcvDaily(
+                stock_id=s.id, date=row["date"],
+                open=row["open"], high=row["high"], low=row["low"],
+                close=row["close"], volume=row["volume"],
+            ))
+    session.commit()
+
+
+def test_recompute_snapshot_creates_row(db):
+    _seed_basic(db, n_stocks=3, n_bars=250)
+    snap = recompute_snapshot(db)
+    assert snap.id == 1
+    assert snap.stocks_total == 3
+    payload = _json.loads(snap.payload)
+    assert payload["global"]["stocks_total"] == 3
+    assert len(payload["by_index"]) >= 2     # NDX + SP500
+    by_code = {r["code"]: r for r in payload["by_index"]}
+    assert by_code["NDX"]["n"] == 3
+    assert by_code["SP500"]["n"] == 2
+
+
+def test_recompute_snapshot_idempotent(db):
+    """Calling twice keeps a single row, second overwrites payload."""
+    _seed_basic(db, n_stocks=2, n_bars=210)
+    s1 = recompute_snapshot(db, scan_run_id=None)
+    s2 = recompute_snapshot(db, scan_run_id=None)
+    rows = db.query(MarketSnapshot).all()
+    assert len(rows) == 1
+    assert s2.computed_at >= s1.computed_at
+
+
+def test_get_latest_snapshot_none_when_empty(db):
+    assert get_latest_snapshot(db) is None
+
+
+def test_get_latest_snapshot_returns_row(db):
+    _seed_basic(db, n_stocks=1, n_bars=210)
+    recompute_snapshot(db)
+    snap = get_latest_snapshot(db)
+    assert snap is not None and snap.id == 1

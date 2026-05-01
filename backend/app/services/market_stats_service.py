@@ -1,12 +1,18 @@
 """Market statistics service: computes per-stock metrics and aggregates them
 into the dashboard market_snapshot payload."""
+import json
 from collections import defaultdict
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
 import pandas as pd
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 from app.indicators.rsi import rsi as rsi_indicator
 from app.indicators.sma import sma as sma_indicator
+from app.models import Index, MarketSnapshot, OhlcvDaily, Stock
+from app.models.index import StockIndex
 
 
 @dataclass
@@ -314,3 +320,93 @@ def build_treemap(metrics: list[StockMetrics]) -> list[dict]:
         for m in metrics
         if m.market_cap is not None and m.change_pct is not None
     ]
+
+
+def _load_metrics(db: Session) -> tuple[list[StockMetrics], list[tuple[str, str]]]:
+    """Load all stocks + their OHLCV history, compute per-stock metrics.
+
+    Returns (metrics_list, indices_list_for_aggregation).
+    Eager-loads index memberships via a separate join query to avoid N+1.
+    """
+    # Stock-to-indices map (one query)
+    si_rows = db.execute(
+        select(StockIndex.stock_id, Index.code).join(Index, Index.id == StockIndex.index_id)
+    ).all()
+    stock_to_indices: dict[int, list[str]] = defaultdict(list)
+    for sid, code in si_rows:
+        stock_to_indices[sid].append(code)
+
+    indices_rows = db.execute(
+        select(Index.code, Index.name).order_by(Index.code)
+    ).all()
+    indices = [(c, n) for c, n in indices_rows]
+
+    stocks = db.execute(select(Stock)).scalars().all()
+
+    # Bulk-load OHLCV for all stocks (one query, ordered by stock+date)
+    ohlcv_rows = db.execute(
+        select(OhlcvDaily).order_by(OhlcvDaily.stock_id, OhlcvDaily.date)
+    ).scalars().all()
+    by_stock: dict[int, list] = defaultdict(list)
+    for r in ohlcv_rows:
+        by_stock[r.stock_id].append(r)
+
+    metrics: list[StockMetrics] = []
+    for stock in stocks:
+        rows = by_stock.get(stock.id, [])
+        if not rows:
+            continue
+        # Take last 252 bars to match 52w window
+        rows = rows[-252:]
+        ohlcv = pd.DataFrame({
+            "date": [r.date for r in rows],
+            "open": [float(r.open) for r in rows],
+            "high": [float(r.high) for r in rows],
+            "low": [float(r.low) for r in rows],
+            "close": [float(r.close) for r in rows],
+            "volume": [int(r.volume) for r in rows],
+        })
+        m = compute_stock_metrics(
+            stock_id=stock.id,
+            ticker=stock.ticker,
+            sector=stock.sector,
+            index_codes=stock_to_indices.get(stock.id, []),
+            market_cap=float(stock.market_cap) if stock.market_cap is not None else None,
+            ohlcv=ohlcv,
+        )
+        if m is not None:
+            metrics.append(m)
+    return metrics, indices
+
+
+def recompute_snapshot(db: Session, *, scan_run_id: int | None = None) -> MarketSnapshot:
+    """Compute the full market snapshot and UPSERT it as id=1."""
+    metrics, indices = _load_metrics(db)
+
+    payload = {
+        "computed_at": datetime.now(UTC).isoformat(),
+        "scan_run_id": scan_run_id,
+        "global": aggregate_global(metrics),
+        "by_index": aggregate_by_index(metrics, indices),
+        "rsi_distribution": build_rsi_distribution(metrics, indices),
+        "sectors": aggregate_by_sector(metrics),
+        "movers": build_movers(metrics),
+        "treemap": build_treemap(metrics),
+    }
+
+    snap = MarketSnapshot(
+        id=1,
+        computed_at=datetime.now(UTC),
+        stocks_total=payload["global"]["stocks_total"],
+        stocks_with_data=payload["global"]["stocks_with_data"],
+        payload=json.dumps(payload),
+        scan_run_id=scan_run_id,
+    )
+    db.merge(snap)
+    db.commit()
+    return snap
+
+
+def get_latest_snapshot(db: Session) -> MarketSnapshot | None:
+    """Return the live snapshot (id=1) or None if not yet computed."""
+    return db.get(MarketSnapshot, 1)
