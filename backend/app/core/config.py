@@ -17,6 +17,13 @@ class Settings(BaseSettings):
     admin_username: str = "admin"
     admin_password_hash: str = ""
     public_base_url: str = "http://localhost:8000"
+    telegram_bot_token: str = ""
+    telegram_chat_id: str = ""
+    telegram_delivery_mode: str = "digest"  # only "digest" implemented in Fase 2
+    digest_hour: int = 8
+    digest_minute: int = 0
+    scan_hour: int = 23
+    scan_minute: int = 30
 
     @property
     def is_dev(self) -> bool:
