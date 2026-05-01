@@ -13,9 +13,9 @@ interface Props {
 const BIN_LABELS = ["0-10", "10-20", "20-30", "30-40", "40-50", "50-60", "60-70", "70-80", "80-90", "90-100"];
 
 function colorFor(binIdx: number): string {
-  if (binIdx < 3) return "#fb923c";        // oversold (orange)
-  if (binIdx >= 7) return "#dc2626";       // overbought (red)
-  return "#9ca3af";                         // neutral (slate)
+  if (binIdx < 3) return "#fb923c";
+  if (binIdx >= 7) return "#dc2626";
+  return "#9ca3af";
 }
 
 export function RsiHistogramCard({ rsi, indices }: Props) {
@@ -25,11 +25,11 @@ export function RsiHistogramCard({ rsi, indices }: Props) {
 
   return (
     <Card>
-      <CardContent className="p-3">
-        <div className="flex items-center justify-between mb-1">
-          <span className="text-[10px] font-semibold uppercase text-muted-foreground">RSI distribution</span>
+      <CardContent className="p-4">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">RSI distribution</span>
           <Select value={selected} onValueChange={setSelected}>
-            <SelectTrigger className="h-6 text-[10px] w-24">
+            <SelectTrigger className="h-7 text-xs w-28">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -40,11 +40,11 @@ export function RsiHistogramCard({ rsi, indices }: Props) {
             </SelectContent>
           </Select>
         </div>
-        <div className="h-[100px]">
+        <div className="h-[160px]">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={data} margin={{ top: 4, right: 0, left: -25, bottom: -8 }}>
-              <XAxis dataKey="bin" fontSize={8} tickLine={false} axisLine={false} interval={1} />
-              <YAxis fontSize={8} tickLine={false} axisLine={false} allowDecimals={false} />
+            <BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+              <XAxis dataKey="bin" fontSize={10} tickLine={false} axisLine={false} interval={1} />
+              <YAxis fontSize={10} tickLine={false} axisLine={false} allowDecimals={false} width={28} />
               <Bar dataKey="count" radius={[2, 2, 0, 0]}>
                 {data.map((d, i) => <Cell key={i} fill={colorFor(d.idx)} />)}
               </Bar>

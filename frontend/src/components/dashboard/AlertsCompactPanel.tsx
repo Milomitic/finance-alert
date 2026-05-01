@@ -21,18 +21,18 @@ export function AlertsCompactPanel({ alertsByDay, topStocks, recentAlerts, alert
     <Card>
       <CardContent className="p-0">
         <Tabs defaultValue="trend">
-          <div className="flex items-center border-b px-2 bg-muted/30">
-            <span className="text-[11px] font-semibold py-1.5 pl-1 pr-2">Alerts</span>
-            <span className="text-[10px] bg-amber-100 dark:bg-amber-900/40 text-amber-900 dark:text-amber-200 px-2 py-0.5 rounded-full font-semibold">
+          <div className="flex items-center border-b px-3 bg-muted/30">
+            <span className="text-xs font-semibold uppercase tracking-wide py-2 pl-1 pr-3">Alerts</span>
+            <span className="text-xs bg-amber-100 dark:bg-amber-900/40 text-amber-900 dark:text-amber-200 px-2.5 py-0.5 rounded-full font-semibold">
               {alertsLast24h} ult. 24h · {deltaLabel}
             </span>
-            <TabsList className="h-8 ml-3 bg-transparent rounded-none">
-              <TabsTrigger value="trend" className="text-[10px] h-7 px-2">Trend 30gg</TabsTrigger>
-              <TabsTrigger value="top" className="text-[10px] h-7 px-2">Top stocks</TabsTrigger>
-              <TabsTrigger value="feed" className="text-[10px] h-7 px-2">Feed</TabsTrigger>
-              <TabsTrigger value="byindex" className="text-[10px] h-7 px-2">Per indice</TabsTrigger>
+            <TabsList className="h-9 ml-4 bg-transparent rounded-none">
+              <TabsTrigger value="trend" className="text-xs h-8 px-3">Trend 30gg</TabsTrigger>
+              <TabsTrigger value="top" className="text-xs h-8 px-3">Top stocks</TabsTrigger>
+              <TabsTrigger value="feed" className="text-xs h-8 px-3">Feed</TabsTrigger>
+              <TabsTrigger value="byindex" className="text-xs h-8 px-3">Per indice</TabsTrigger>
             </TabsList>
-            <a href="/alerts" className="ml-auto text-[10px] text-blue-600 dark:text-blue-400 hover:underline pr-2">Vedi tutti →</a>
+            <a href="/alerts" className="ml-auto text-xs text-blue-600 dark:text-blue-400 hover:underline pr-2">Vedi tutti →</a>
           </div>
           <TabsContent value="trend" className="m-0">
             <AlertsByDayChart data={alertsByDay} compact />

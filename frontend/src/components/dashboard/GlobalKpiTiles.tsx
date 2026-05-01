@@ -44,13 +44,13 @@ export function GlobalKpiTiles({ global }: Props) {
   ];
 
   return (
-    <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+    <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 h-full">
       {tiles.map((t) => (
         <Card key={t.label}>
-          <CardContent className="p-2 text-center">
-            <div className="text-[9px] uppercase text-muted-foreground">{t.label}</div>
-            <div className={`text-base font-bold tabular-nums ${t.tone ? TONE_FG[t.tone] : ""}`}>{t.value}</div>
-            <div className="text-[9px] text-muted-foreground">{t.sub}</div>
+          <CardContent className="p-3 text-center flex flex-col items-center justify-center h-full">
+            <div className="text-[11px] uppercase text-muted-foreground tracking-wide">{t.label}</div>
+            <div className={`text-xl font-bold tabular-nums mt-1 ${t.tone ? TONE_FG[t.tone] : ""}`}>{t.value}</div>
+            <div className="text-[11px] text-muted-foreground mt-0.5">{t.sub}</div>
           </CardContent>
         </Card>
       ))}

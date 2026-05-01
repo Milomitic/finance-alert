@@ -49,14 +49,14 @@ export default function HomePage() {
   // Loading skeleton
   if (market.isLoading || summary.isLoading) {
     return (
-      <div className="space-y-2">
-        <div className="grid lg:grid-cols-[200px_1fr_200px] gap-2">
+      <div className="space-y-4">
+        <div className="grid lg:grid-cols-[220px_1fr_220px] gap-3">
           <Card><CardContent className="p-4 h-[80px] animate-pulse bg-muted/40" /></Card>
           <Card><CardContent className="p-4 h-[80px] animate-pulse bg-muted/40" /></Card>
           <Card><CardContent className="p-4 h-[80px] animate-pulse bg-muted/40" /></Card>
         </div>
         <Card><CardContent className="p-0 h-[200px] animate-pulse bg-muted/40" /></Card>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
           {[0, 1, 2, 3].map((i) => (
             <Card key={i}><CardContent className="p-4 h-[160px] animate-pulse bg-muted/40" /></Card>
           ))}
@@ -70,7 +70,7 @@ export default function HomePage() {
   // Market unavailable (no snapshot yet) — still show alerts panel below if summary loaded
   if (market.isError) {
     return (
-      <div className="space-y-2">
+      <div className="space-y-4">
         <MarketError onRetry={() => market.refetch()} />
         {summaryData && (
           <AlertsCompactPanel
@@ -87,7 +87,7 @@ export default function HomePage() {
 
   if (!market.data || market.data.available === false) {
     return (
-      <div className="space-y-2">
+      <div className="space-y-4">
         <MarketUnavailable />
         {summaryData && (
           <AlertsCompactPanel
@@ -111,7 +111,7 @@ export default function HomePage() {
   const nextScanAt = summaryData?.kpis.next_scan_at ?? null;
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-4">
       <HeroStrip
         global={m.global}
         computedAt={m.computed_at}
@@ -119,13 +119,13 @@ export default function HomePage() {
         nextScanAt={nextScanAt}
       />
       <BreadthMatrixTable data={m.by_index} />
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
         <MoversCard movers={m.movers} />
         <RsiHistogramCard rsi={m.rsi_distribution} indices={m.by_index} />
         <SectorsHeatmapCard sectors={m.sectors} />
         <FiftyTwoWeekVolCard movers={m.movers} />
       </div>
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-2">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
         <div className="lg:col-span-2">
           <MarketTreemap treemap={m.treemap} indices={m.by_index} />
         </div>

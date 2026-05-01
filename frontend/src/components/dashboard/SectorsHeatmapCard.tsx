@@ -17,17 +17,17 @@ function bgFor(change: number): string {
 export function SectorsHeatmapCard({ sectors }: Props) {
   return (
     <Card>
-      <CardContent className="p-3">
-        <div className="text-[10px] font-semibold uppercase text-muted-foreground mb-1">Sectors (Avg Δ%)</div>
+      <CardContent className="p-4">
+        <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">Sectors (Avg Δ%)</div>
         {sectors.length === 0 ? (
-          <div className="text-[10px] text-muted-foreground text-center py-4">Nessun settore</div>
+          <div className="text-xs text-muted-foreground text-center py-6">Nessun settore</div>
         ) : (
-          <table className="w-full text-[10px] tabular-nums">
+          <table className="w-full text-xs tabular-nums">
             <tbody>
               {sectors.map((s) => (
                 <tr key={s.sector}>
-                  <td className="px-1 py-0.5 truncate max-w-[120px]">{s.sector}</td>
-                  <td className={`px-2 py-0.5 text-right font-semibold ${bgFor(s.avg_change_pct)}`}>
+                  <td className="px-2 py-1.5 truncate max-w-[140px]">{s.sector}</td>
+                  <td className={`px-3 py-1.5 text-right font-semibold w-[60%] ${bgFor(s.avg_change_pct)}`}>
                     {s.avg_change_pct >= 0 ? "+" : ""}{s.avg_change_pct.toFixed(2)}
                   </td>
                 </tr>

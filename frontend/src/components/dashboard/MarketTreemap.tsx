@@ -37,12 +37,12 @@ function CustomCell(props: ContentProps) {
     <g>
       <rect x={x} y={y} width={width} height={height} fill={colorFor(change_pct)} stroke="#fff" strokeWidth={1} />
       {showLabel && (
-        <text x={x + width / 2} y={y + height / 2} textAnchor="middle" fill="#fff" fontSize={10} fontWeight="bold">
+        <text x={x + width / 2} y={y + height / 2} textAnchor="middle" fill="#fff" fontSize={11} fontWeight="bold">
           {ticker}
         </text>
       )}
       {showChange && (
-        <text x={x + width / 2} y={y + height / 2 + 12} textAnchor="middle" fill="#fff" fontSize={9}>
+        <text x={x + width / 2} y={y + height / 2 + 13} textAnchor="middle" fill="#fff" fontSize={10}>
           {change_pct >= 0 ? "+" : ""}{change_pct.toFixed(1)}%
         </text>
       )}
@@ -64,11 +64,11 @@ export function MarketTreemap({ treemap, indices }: Props) {
 
   return (
     <Card>
-      <CardContent className="p-3">
-        <div className="flex items-center justify-between mb-1">
-          <span className="text-[10px] font-semibold uppercase text-muted-foreground">Treemap mkt-cap × performance</span>
+      <CardContent className="p-4 h-full flex flex-col">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Treemap mkt-cap × performance</span>
           <Select value={selected} onValueChange={setSelected}>
-            <SelectTrigger className="h-6 text-[10px] w-24">
+            <SelectTrigger className="h-7 text-xs w-28">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -79,9 +79,9 @@ export function MarketTreemap({ treemap, indices }: Props) {
             </SelectContent>
           </Select>
         </div>
-        <div className="h-[180px]" title="Drill-down su singolo stock disponibile in Fase 3B">
+        <div className="h-[260px] flex-1" title="Drill-down su singolo stock disponibile in Fase 3B">
           {filtered.length === 0 ? (
-            <div className="h-full flex items-center justify-center text-[10px] text-muted-foreground">Nessun dato</div>
+            <div className="h-full flex items-center justify-center text-xs text-muted-foreground">Nessun dato</div>
           ) : (
             <ResponsiveContainer width="100%" height="100%">
               <Treemap data={filtered} dataKey="size" content={<CustomCell />} />

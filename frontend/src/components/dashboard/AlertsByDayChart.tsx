@@ -56,7 +56,7 @@ export function AlertsByDayChart({ data, compact = false }: Props) {
         </CardHeader>
       )}
       <CardContent>
-        <div className={compact ? "h-[80px]" : "h-[260px]"}>
+        <div className={compact ? "h-[140px]" : "h-[260px]"}>
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={data} margin={{ top: 5, right: 8, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" className="opacity-30" />

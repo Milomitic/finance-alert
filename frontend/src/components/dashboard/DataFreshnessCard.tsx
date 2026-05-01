@@ -18,13 +18,13 @@ function formatShort(iso: string | null | undefined): string {
 export function DataFreshnessCard({ computedAt, isStale, nextScanAt }: Props) {
   return (
     <Card>
-      <CardContent className="p-3">
-        <div className="text-[9px] uppercase text-muted-foreground">Dati aggiornati</div>
-        <div className="text-xs font-bold mt-0.5 tabular-nums">{formatShort(computedAt)}</div>
+      <CardContent className="p-4 flex flex-col items-center justify-center text-center h-full">
+        <div className="text-[11px] uppercase text-muted-foreground tracking-wide">Dati aggiornati</div>
+        <div className="text-sm font-bold mt-1 tabular-nums">{formatShort(computedAt)}</div>
         {isStale && (
-          <div className="text-[10px] text-amber-600 dark:text-amber-400 mt-0.5">⚠ Dati &gt; 24h</div>
+          <div className="text-xs text-amber-600 dark:text-amber-400 mt-1">⚠ Dati &gt; 24h</div>
         )}
-        <div className="text-[10px] text-blue-600 dark:text-blue-400 mt-1">
+        <div className="text-xs text-blue-600 dark:text-blue-400 mt-2">
           Prossimo scan: {formatShort(nextScanAt)}
         </div>
       </CardContent>

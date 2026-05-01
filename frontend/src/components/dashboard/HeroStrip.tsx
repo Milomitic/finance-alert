@@ -12,7 +12,7 @@ interface Props {
 
 export function HeroStrip({ global, computedAt, isStale, nextScanAt }: Props) {
   return (
-    <div className="grid gap-2 lg:grid-cols-[200px_1fr_200px]">
+    <div className="grid gap-3 lg:grid-cols-[220px_1fr_220px]">
       <MoodCard global={global} />
       <GlobalKpiTiles global={global} />
       <DataFreshnessCard
