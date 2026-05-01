@@ -1,0 +1,51 @@
+ticker,name,exchange,sector,industry,country,currency
+SAP.DE,SAP SE,XETRA,Information Technology,Software,DE,EUR
+ASML.AS,ASML Holding NV,Euronext Amsterdam,Information Technology,Semiconductors,NL,EUR
+MC.PA,LVMH Moet Hennessy Louis Vuitton SE,Euronext Paris,Consumer Discretionary,Apparel Accessories & Luxury Goods,FR,EUR
+NOVO-B.CO,Novo Nordisk A/S Class B,Nasdaq Copenhagen,Health Care,Pharmaceuticals,DK,DKK
+SIE.DE,Siemens AG,XETRA,Industrials,Industrial Conglomerates,DE,EUR
+TTE.PA,TotalEnergies SE,Euronext Paris,Energy,Integrated Oil & Gas,FR,EUR
+SAN.PA,Sanofi SA,Euronext Paris,Health Care,Pharmaceuticals,FR,EUR
+ALV.DE,Allianz SE,XETRA,Financials,Multi-line Insurance,DE,EUR
+ABI.BR,Anheuser-Busch InBev SA,Euronext Brussels,Consumer Staples,Brewers,BE,EUR
+OR.PA,L Oreal SA,Euronext Paris,Consumer Staples,Personal Care Products,FR,EUR
+DTE.DE,Deutsche Telekom AG,XETRA,Communication Services,Integrated Telecommunication Services,DE,EUR
+AIR.PA,Airbus SE,Euronext Paris,Industrials,Aerospace & Defense,FR,EUR
+SU.PA,Schneider Electric SE,Euronext Paris,Industrials,Electrical Components & Equipment,FR,EUR
+RMS.PA,Hermes International SCA,Euronext Paris,Consumer Discretionary,Apparel Accessories & Luxury Goods,FR,EUR
+BNP.PA,BNP Paribas SA,Euronext Paris,Financials,Diversified Banks,FR,EUR
+BAS.DE,BASF SE,XETRA,Materials,Diversified Chemicals,DE,EUR
+DPW.DE,DHL Group,XETRA,Industrials,Air Freight & Logistics,DE,EUR
+DB1.DE,Deutsche Boerse AG,XETRA,Financials,Financial Exchanges & Data,DE,EUR
+MUV2.DE,Muenchener Rueckversicherungs-Gesellschaft AG,XETRA,Financials,Reinsurance,DE,EUR
+IFX.DE,Infineon Technologies AG,XETRA,Information Technology,Semiconductors,DE,EUR
+BAYN.DE,Bayer AG,XETRA,Health Care,Pharmaceuticals,DE,EUR
+ADS.DE,Adidas AG,XETRA,Consumer Discretionary,Footwear,DE,EUR
+MBG.DE,Mercedes-Benz Group AG,XETRA,Consumer Discretionary,Automobile Manufacturers,DE,EUR
+BMW.DE,Bayerische Motoren Werke AG,XETRA,Consumer Discretionary,Automobile Manufacturers,DE,EUR
+VOW3.DE,Volkswagen AG Preference,XETRA,Consumer Discretionary,Automobile Manufacturers,DE,EUR
+ENEL.MI,Enel SpA,Borsa Italiana,Utilities,Electric Utilities,IT,EUR
+ENI.MI,Eni SpA,Borsa Italiana,Energy,Integrated Oil & Gas,IT,EUR
+ISP.MI,Intesa Sanpaolo SpA,Borsa Italiana,Financials,Diversified Banks,IT,EUR
+UCG.MI,UniCredit SpA,Borsa Italiana,Financials,Diversified Banks,IT,EUR
+STLAM.MI,Stellantis NV,Borsa Italiana,Consumer Discretionary,Automobile Manufacturers,IT,EUR
+ITX.MC,Industria de Diseno Textil SA,BME,Consumer Discretionary,Apparel Retail,ES,EUR
+SAN.MC,Banco Santander SA,BME,Financials,Diversified Banks,ES,EUR
+BBVA.MC,Banco Bilbao Vizcaya Argentaria SA,BME,Financials,Diversified Banks,ES,EUR
+IBE.MC,Iberdrola SA,BME,Utilities,Electric Utilities,ES,EUR
+TEF.MC,Telefonica SA,BME,Communication Services,Integrated Telecommunication Services,ES,EUR
+PRX.AS,Prosus NV,Euronext Amsterdam,Communication Services,Interactive Media & Services,NL,EUR
+INGA.AS,ING Groep NV,Euronext Amsterdam,Financials,Diversified Banks,NL,EUR
+ADYEN.AS,Adyen NV,Euronext Amsterdam,Financials,Transaction & Payment Processing Services,NL,EUR
+WKL.AS,Wolters Kluwer NV,Euronext Amsterdam,Industrials,Research & Consulting Services,NL,EUR
+AD.AS,Koninklijke Ahold Delhaize NV,Euronext Amsterdam,Consumer Staples,Food Retail,NL,EUR
+PHIA.AS,Koninklijke Philips NV,Euronext Amsterdam,Health Care,Health Care Equipment,NL,EUR
+NDA-FI.HE,Nordea Bank Abp,Nasdaq Helsinki,Financials,Diversified Banks,FI,EUR
+KNEBV.HE,Kone Oyj Class B,Nasdaq Helsinki,Industrials,Industrial Machinery,FI,EUR
+CRG.IR,CRH plc,Euronext Dublin,Materials,Construction Materials,IE,EUR
+FLTR.IR,Flutter Entertainment plc,Euronext Dublin,Consumer Discretionary,Casinos & Gaming,IE,EUR
+SAF.PA,Safran SA,Euronext Paris,Industrials,Aerospace & Defense,FR,EUR
+EL.PA,EssilorLuxottica SA,Euronext Paris,Health Care,Health Care Supplies,FR,EUR
+KER.PA,Kering SA,Euronext Paris,Consumer Discretionary,Apparel Accessories & Luxury Goods,FR,EUR
+CS.PA,AXA SA,Euronext Paris,Financials,Multi-line Insurance,FR,EUR
+BN.PA,Danone SA,Euronext Paris,Consumer Staples,Packaged Foods & Meats,FR,EUR
