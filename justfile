@@ -32,8 +32,10 @@ up:
 
 [windows]
 up:
-	start /B "be" cmd /C "just be"
-	just fe
+	start "Finance Alert backend" /MIN cmd /K "just be"
+	start "Finance Alert frontend" /MIN cmd /K "just fe"
+	@echo Backend and frontend launched in two minimized cmd windows.
+	@echo Open http://localhost:5173 in your browser. Close the windows to stop the servers.
 
 build-fe:
 	cd frontend && npm run build
