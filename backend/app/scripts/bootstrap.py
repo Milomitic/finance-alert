@@ -8,6 +8,7 @@ from sqlalchemy import select
 from app.core.config import ensure_data_dir, settings
 from app.core.db import SessionLocal
 from app.models import User
+from app.scripts import bootstrap_rules
 from app.scripts import seed as seed_module
 
 
@@ -79,6 +80,7 @@ def main() -> None:
     ensure_secret_key()
     apply_migrations()
     seed_module.run()
+    bootstrap_rules.ensure_global_rules()
     ensure_admin_user()
     logger.info("Bootstrap complete.")
 
