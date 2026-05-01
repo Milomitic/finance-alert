@@ -2,6 +2,11 @@
 # default-config systems (no Developer Mode). Harmless on Linux/macOS.
 export UV_LINK_MODE := "copy"
 
+# On Windows, use cmd.exe (always available, supports `&&`) instead of looking
+# for `sh` which is not on PATH unless Git Bash exposes it. On Unix-like systems
+# just defaults to `sh -cu`, which is fine.
+set windows-shell := ["cmd.exe", "/C"]
+
 default:
 	@just --list
 
@@ -19,8 +24,16 @@ be:
 fe:
 	cd frontend && npm run dev
 
+# `up` runs both servers in parallel. POSIX backgrounding (`&`) on Linux/macOS;
+# `start /B` on Windows (cmd) so the second command does not block.
+[unix]
 up:
 	just be & just fe
+
+[windows]
+up:
+	start /B "be" cmd /C "just be"
+	just fe
 
 build-fe:
 	cd frontend && npm run build

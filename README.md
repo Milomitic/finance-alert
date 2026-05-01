@@ -10,34 +10,64 @@ Phase 1 (current) ships the catalog browser and the watchlist editor. Phase 2 wi
 
 - **Python 3.11+**
 - **Node.js 20+** (with `npm`)
-- **[uv](https://docs.astral.sh/uv/)** — Python package manager
-- **[just](https://github.com/casey/just)** — task runner (`scoop install just` on Windows)
+- **[uv](https://docs.astral.sh/uv/)** — Python package manager (`winget install astral-sh.uv` on Windows)
+- **[just](https://github.com/casey/just)** — task runner (`winget install Casey.Just` on Windows)
 - **Git**
 
-On Windows, run the commands below in **Git Bash** (the `just up` recipe uses `&` to background the backend, which needs a POSIX shell).
+On Windows, the recipes work from **PowerShell** or **cmd** out of the box (the `justfile` declares `set windows-shell := ["cmd.exe", "/C"]`). The `just up` recipe uses platform-specific recipe attributes (`[unix]` / `[windows]`) so it works on both.
 
 ---
 
 ## First-time setup
+
+### Linux / macOS / Git Bash
 
 ```bash
 # 1. Clone
 git clone <your-remote> finance-alert
 cd finance-alert
 
-# 2. Copy the env template
-cp .env.example .env
+# 2. Copy the env template into backend/ (where pydantic-settings reads it)
+cp .env.example backend/.env
 
 # 3. Install backend + frontend deps and bootstrap the DB
 #    (runs alembic upgrade head, generates SECRET_KEY if empty,
 #     seeds the 4 indices and ~79 stocks)
 just install
 
-# 4. Set the admin password (writes ADMIN_PASSWORD_HASH into .env)
+# 4. Generate an admin password hash, paste it into backend/.env on the
+#    ADMIN_PASSWORD_HASH= line, then re-run install so the user is created
 cd backend && uv run python -m app.scripts.set_admin_password
-cd ..
+# (paste the printed hash into backend/.env)
+cd .. && just install
 
 # 5. Start the dev servers (backend :8000, frontend :5173)
+just up
+```
+
+### Windows PowerShell
+
+PowerShell 5.1 does NOT support `&&` as a chain operator — use `;` or split commands across lines:
+
+```powershell
+# 1. Clone
+git clone <your-remote> finance-alert
+cd finance-alert
+
+# 2. Copy the env template into backend/
+Copy-Item .env.example backend/.env
+
+# 3. Install
+just install
+
+# 4. Generate admin password hash
+cd backend
+uv run python -m app.scripts.set_admin_password
+# (paste the printed hash into backend/.env on ADMIN_PASSWORD_HASH=)
+cd ..
+just install   # re-run so the admin user is created
+
+# 5. Start dev servers
 just up
 ```
 
@@ -51,7 +81,7 @@ Open <http://localhost:5173> and log in with `admin` / the password you just set
 | ------------------- | -------------------------------------------------------------------- |
 | `just be`           | Run backend with `--reload` on port 8000                             |
 | `just fe`           | Run Vite dev server on port 5173 (proxies `/api` → 8000)             |
-| `just up`           | Run backend + frontend together (Git Bash on Windows)                |
+| `just up`           | Run backend + frontend together (cross-platform via `[unix]`/`[windows]` recipes) |
 | `just test`         | `pytest` (backend) + `vitest --run` (frontend)                       |
 | `just lint`         | `ruff check` + `pyright` (backend) + `eslint` (frontend)             |
 | `just fmt`          | `ruff format` (backend) + `prettier` (frontend)                      |
