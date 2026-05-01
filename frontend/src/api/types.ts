@@ -64,3 +64,44 @@ export interface IndexStatus {
 export interface CatalogStatus {
   indices: IndexStatus[];
 }
+
+export type RuleKind = "rsi_oversold" | "rsi_overbought" | "golden_cross" | "death_cross";
+
+export interface Rule {
+  id: number;
+  watchlist_id: number | null;
+  kind: RuleKind;
+  params: Record<string, unknown>;
+  enabled: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Alert {
+  id: number;
+  rule_id: number;
+  rule_kind: RuleKind | null;
+  stock_id: number;
+  ticker: string | null;
+  triggered_at: string;
+  trigger_price: number;
+  snapshot: Record<string, unknown>;
+  read_at: string | null;
+  archived_at: string | null;
+}
+
+export interface AlertList {
+  items: Alert[];
+  total: number;
+  has_more: boolean;
+}
+
+export interface UnreadCount {
+  count: number;
+}
+
+export interface DigestResult {
+  sent: boolean;
+  alerts_count: number;
+  reason: string | null;
+}
