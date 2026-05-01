@@ -4,6 +4,7 @@ import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { useLogout, useMe } from "@/hooks/useAuth";
+import { useUnreadAlertsCount } from "@/hooks/useUnreadAlertsCount";
 import { cn } from "@/lib/utils";
 
 interface NavEntry {
@@ -17,7 +18,7 @@ const NAV: NavEntry[] = [
   { to: "/watchlists", label: "Watchlists", icon: ListChecks, enabled: true },
   { to: "/dashboard", label: "Dashboard", icon: BarChart3, enabled: false },
   { to: "/stocks", label: "Stocks", icon: Search, enabled: false },
-  { to: "/alerts", label: "Alerts", icon: Bell, enabled: false },
+  { to: "/alerts", label: "Alerts", icon: Bell, enabled: true },
   { to: "/rules", label: "Regole", icon: Sliders, enabled: false },
   { to: "/settings", label: "Impostazioni", icon: Settings, enabled: false },
 ];
@@ -70,6 +71,7 @@ export default function Layout() {
               >
                 <Icon className="h-4 w-4" />
                 {entry.label}
+                {entry.to === "/alerts" && <UnreadBadge />}
               </NavLink>
             );
           })}
@@ -90,5 +92,16 @@ export default function Layout() {
         </main>
       </div>
     </div>
+  );
+}
+
+function UnreadBadge() {
+  const q = useUnreadAlertsCount();
+  const count = q.data?.count ?? 0;
+  if (!count) return null;
+  return (
+    <span className="ml-auto rounded-full bg-destructive text-destructive-foreground text-xs px-2 py-0.5">
+      {count > 99 ? "99+" : count}
+    </span>
   );
 }
