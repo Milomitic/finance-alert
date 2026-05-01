@@ -2,8 +2,8 @@
 
 > Documento vivo. **Aggiornare ad ogni commit che modifica architettura, flussi, modello dati, dipendenze esterne, o policy operative.** Vedi §10 (Policy di manutenzione).
 
-**Ultimo aggiornamento**: 2026-05-01
-**Stato applicazione**: Fase 1 in production. Fase 2 (alert engine) implemented. Fase 3A (Dashboard Home) implemented.
+**Ultimo aggiornamento**: 2026-05-02
+**Stato applicazione**: Fase 1 in production. Fase 2 (alert engine) implemented. Fase 3A (Dashboard Home) implemented. Fase 3A-bis (Market Dashboard redesign) implemented.
 
 ---
 
@@ -14,6 +14,7 @@ Applicazione web full-stack single-user per:
 - Catalogare e selezionare azioni in watchlist tematiche
 - **(Fase 2 — implementato)** Monitorare segnali tecnici e inviare alert Telegram
 - **(Fase 3A — implementato)** Dashboard riepilogativa su `/` con KPI, grafico alert/giorno, top 10 stock, feed alert recenti, stato sistema
+- **(Fase 3A-bis — implementato)** Dashboard ridisegnata: hero strip (mood + KPI globali) + matrice breadth per-indice (7×11) + 4-col grid (movers tabbed/RSI histogram/sectors heatmap/52w-vol tabbed) + treemap mkt-cap × performance + alerts compact panel + system status footer slim. Snapshot pre-computato in `market_snapshot` rigenerato a fine scan (~0.75s su 201 stock)
 - (Fase 3B+) Stock Detail con candlestick, indicatori avanzati, settings/hit-rate, multi-channel notifiers
 
 **Modello di deployment**: locale sul PC dell'utente (Windows 11). Nessun cloud, nessuna esposizione di rete.
@@ -414,6 +415,7 @@ Setup tramite `scripts/windows/Register-FinanceAlertStartup.ps1` (no admin richi
 | **Fase 1** — Watchlist viewer | **Implementata** | Catalogo, watchlist CRUD, autosave, refresh catalogo, login, autostart Windows |
 | **Fase 2** — Alert engine | **Implementata** | Fetch OHLCV (yfinance), indicatori (SMA/EMA/RSI), regole alert (RSI, Golden/Death cross), notifier Telegram, scheduler giornaliero |
 | **Fase 3A** — Dashboard Home | **Implementata** | Dashboard `/` con KPI cards, AlertsByDayChart (Recharts), TopStocksTable, RecentAlertsFeed, SystemStatusCard. BFF `/api/dashboard/summary`, polling 30s |
+| **Fase 3A-bis** — Market Dashboard | **Implementata** | Redesign con primary-focus su statistiche tecniche per-indice. Snapshot pre-computato (`market_snapshot`) a fine scan; endpoint `/api/dashboard/market-summary`; 13 nuovi componenti (HeroStrip + BreadthMatrix + Movers/RSI/Sectors/52w-Vol + Treemap + AlertsCompactPanel + SystemStatusFooter); densità informativa alta con breakdown per i 7 indici (SP500/NDX/DJI/EUSTX50/FTSEMIB/SSE50/HSI30) |
 | **Fase 3B** — Stock Detail | Futura | Pagina stock con candlestick (lightweight-charts), regole per-stock (Tier 3 override) |
 | **Fase 3C** — Indicatori avanzati | Futura | MACD, Bollinger Bands, ATR, ADX; regole volume/breakout; editor regole UI con AND/OR |
 | **Fase 3D** — Multi-channel notifiers | Futura | Telegram per-watchlist/stream, email, webhook |
@@ -455,3 +457,4 @@ Questo file è **vincolante**: ogni commit che introduce uno dei seguenti cambia
 | 2026-04-30 | 2f926ab | Windows auto-start at user logon via PowerShell scripts (`scripts/windows/`). Register-FinanceAlertStartup.ps1 creates a Task Scheduler entry without admin; Run-FinanceAlert.ps1 boots prod-local with rotated logs. |
 | 2026-05-01 | 6b66d02 | Fase 2 alert engine: catalog espanso a ~210 stocks (+EuroStoxx 50, SSE 50, Hang Seng top 30); 4 regole pre-installate con edge-trigger; APScheduler jobs scan_alerts (23:30) + send_digest (08:00); Telegram digest mode; pagina /alerts con filtri+bulk+export CSV; RulesOverrideEditor 3-stati nella WatchlistDetailPage; sidebar unread badge. ~103 test backend. |
 | 2026-05-01 | 6e51068 | Fase 3A: Dashboard Home `/` con KPI cards (alert 24h con delta, non letti, stock monitorati, ultimo scan), AlertsByDayChart (Recharts AreaChart 30gg con tooltip per-rule), TopStocksTable (link a /alerts?ticker=), RecentAlertsFeed (riusa AlertDetailDialog), SystemStatusCard (scheduler/Telegram/next runs). Single BFF endpoint `/api/dashboard/summary` aggrega tutto via `stats_service` (4 funzioni); polling 30s via TanStack Query. Sidebar Dashboard entry attivata. ~13 nuovi test backend (stats_service + dashboard API). |
+| 2026-05-02 | ae58161 | Fase 3A-bis: Market Dashboard redesign con primary-focus su statistiche tecniche per-indice. Nuova tabella `market_snapshot` (single-row, UPSERT id=1) generata a fine ogni scan in modo non-fatal (~0.75s su 201 stock). Nuovo `market_stats_service` con compute_stock_metrics (SMA50/200, RSI14, 52w extremes, vol_ratio), aggregate per global/index/sector, builders per movers/RSI distribution/treemap, e derive_mood (bullish/neutral/bearish da breadth). Nuovo endpoint `/api/dashboard/market-summary` parallelo a `/summary`, polling 30s indipendente. UI: 13 nuovi componenti dashboard (HeroStrip + MoodCard + GlobalKpiTiles + DataFreshnessCard + BreadthMatrixTable 7×11 + MoversCard tabbed + RsiHistogramCard con dropdown indice + SectorsHeatmapCard + FiftyTwoWeekVolCard tabbed + MarketTreemap Recharts + SpotlightPlaceholder + AlertsCompactPanel tabbed + SystemStatusFooter slim). HomePage rewrite, vecchio SystemStatusCard rimosso, AlertsByDayChart con prop `compact`. ~22 nuovi test backend (totale 142 + 2 flake date-rollover). Bundle 933→999 kB. |
