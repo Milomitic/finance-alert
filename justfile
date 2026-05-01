@@ -67,3 +67,11 @@ seed:
 # Set the admin password interactively (writes hash to backend/.env and creates the user)
 set-password:
 	cd backend && uv run python -m app.scripts.set_admin_password
+
+# Set the admin password non-interactively (use when getpass is unreliable through cmd /C).
+# Example: just set-password-arg MyPassword123
+# NOTE: don't wrap the password in quotes — cmd.exe forwards them as part of the value.
+# If your password contains spaces, run the script directly:
+#   cd backend && uv run python -m app.scripts.set_admin_password --password "your password"
+set-password-arg pw:
+	cd backend && uv run python -m app.scripts.set_admin_password --password {{pw}}

@@ -1,4 +1,13 @@
-"""Set the admin password: hash it, write to .env, create/update the user."""
+"""Set the admin password: hash it, write to .env, create/update the user.
+
+Usage:
+    uv run python -m app.scripts.set_admin_password
+    uv run python -m app.scripts.set_admin_password --password "MyPassword123"
+
+The --password flag is useful when running through wrappers (just, cmd /C, etc.)
+where getpass may not read terminal input reliably.
+"""
+import argparse
 import getpass
 from pathlib import Path
 
@@ -9,6 +18,8 @@ from sqlalchemy import select
 from app.core.config import settings
 from app.core.db import SessionLocal
 from app.models import User
+
+MIN_PASSWORD_LENGTH = 8
 
 
 def _write_hash_to_env(hashed: str) -> Path:
@@ -57,13 +68,38 @@ def _upsert_admin_user(username: str, hashed: str) -> str:
         db.close()
 
 
+def _prompt_password() -> str:
+    """Prompt twice and validate. Loops until a valid password is entered."""
+    while True:
+        pw = getpass.getpass("New admin password (min 8 chars): ")
+        if len(pw) < MIN_PASSWORD_LENGTH:
+            print(f"Too short ({len(pw)} chars). Try again.")
+            continue
+        pw2 = getpass.getpass("Confirm: ")
+        if pw != pw2:
+            print("Passwords do not match. Try again.")
+            continue
+        return pw
+
+
 def main() -> None:
-    pw = getpass.getpass("New admin password: ")
-    pw2 = getpass.getpass("Confirm: ")
-    if pw != pw2:
-        raise SystemExit("Passwords do not match")
-    if len(pw) < 8:
-        raise SystemExit("Password must be at least 8 characters")
+    parser = argparse.ArgumentParser(description="Set the Finance Alert admin password")
+    parser.add_argument(
+        "--password",
+        help=(
+            "Password to set non-interactively. If omitted, prompts via getpass. "
+            "Use this when running through wrappers (just, cmd /C) where getpass "
+            "may not read terminal input reliably."
+        ),
+    )
+    args = parser.parse_args()
+
+    if args.password:
+        if len(args.password) < MIN_PASSWORD_LENGTH:
+            raise SystemExit(f"Password must be at least {MIN_PASSWORD_LENGTH} characters")
+        pw = args.password
+    else:
+        pw = _prompt_password()
 
     hashed = bcrypt.hashpw(pw.encode("utf-8"), bcrypt.gensalt(rounds=12)).decode("utf-8")
 
