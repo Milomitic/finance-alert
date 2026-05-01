@@ -75,6 +75,16 @@ def run_tracked_scan(
         run.stocks_scanned = result.stocks_scanned
         run.stocks_skipped = result.stocks_skipped
         run.alerts_fired = result.alerts_fired
+
+        # Recompute market dashboard snapshot — non-fatal, alert pipeline succeeded already.
+        try:
+            from app.services import market_stats_service
+
+            market_stats_service.recompute_snapshot(db, scan_run_id=run.id)
+            logger.info(f"[scan_runner] market snapshot refreshed for ScanRun {run.id}")
+        except Exception as snap_exc:  # noqa: BLE001
+            logger.warning(f"[scan_runner] snapshot recompute failed (non-fatal): {snap_exc}")
+
         run.completed_at = datetime.now(UTC)
         db.commit()
         logger.info(

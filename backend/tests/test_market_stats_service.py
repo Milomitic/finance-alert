@@ -282,3 +282,49 @@ def test_get_latest_snapshot_returns_row(db):
     recompute_snapshot(db)
     snap = get_latest_snapshot(db)
     assert snap is not None and snap.id == 1
+
+
+from app.services import market_stats_service, scan_runner
+
+
+def test_scan_runner_recomputes_snapshot(db, monkeypatch):
+    """run_tracked_scan invokes recompute_snapshot at the end."""
+    _seed_basic(db, n_stocks=2, n_bars=210)
+
+    # Stub scan_universe to avoid the full alert evaluation pipeline
+    from app.services import scan_service
+    monkeypatch.setattr(
+        scan_service,
+        "scan_universe",
+        lambda db, on_progress=None, progress_every=10: scan_service.ScanResult(
+            stocks_scanned=2, stocks_skipped=0, alerts_fired=0, states_updated=0
+        ),
+    )
+
+    run = scan_runner.run_tracked_scan(db, trigger="manual")
+    assert run.status == "success"
+    snap = market_stats_service.get_latest_snapshot(db)
+    assert snap is not None
+    assert snap.scan_run_id == run.id
+
+
+def test_scan_runner_recompute_failure_is_non_fatal(db, monkeypatch):
+    """If recompute_snapshot raises, scan still finishes successfully."""
+    _seed_basic(db, n_stocks=1, n_bars=210)
+
+    from app.services import scan_service
+    monkeypatch.setattr(
+        scan_service,
+        "scan_universe",
+        lambda db, on_progress=None, progress_every=10: scan_service.ScanResult(
+            stocks_scanned=1, stocks_skipped=0, alerts_fired=0, states_updated=0
+        ),
+    )
+
+    def _boom(db, scan_run_id=None):
+        raise RuntimeError("boom")
+    monkeypatch.setattr(market_stats_service, "recompute_snapshot", _boom)
+
+    run = scan_runner.run_tracked_scan(db, trigger="manual")
+    assert run.status == "success"      # snapshot failure must not mark scan failed
+    assert run.completed_at is not None
