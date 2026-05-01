@@ -2,6 +2,13 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { alerts } from "@/api/alerts";
+import { ApiError } from "@/api/client";
+
+function describeError(err: unknown, fallback: string): string {
+  if (err instanceof ApiError) return `${fallback}: ${err.detail || err.status}`;
+  if (err instanceof Error) return `${fallback}: ${err.message}`;
+  return fallback;
+}
 
 export function usePatchAlert() {
   const qc = useQueryClient();
@@ -31,10 +38,18 @@ export function useBulkAlerts() {
 }
 
 export function useTriggerScan() {
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: () => alerts.scan(),
-    onSuccess: () => toast.success("Scan avviato in background"),
-    onError: () => toast.error("Errore durante l'avvio dello scan"),
+    onSuccess: () => {
+      toast.success(
+        "Scan avviato in background — la card sotto mostrerà il progresso live",
+        { duration: 5000 },
+      );
+      // Force-refresh scan-status immediately so the running card appears within ~1s
+      qc.invalidateQueries({ queryKey: ["alerts", "scan-status"] });
+    },
+    onError: (err) => toast.error(describeError(err, "Errore avvio scan")),
   });
 }
 
@@ -43,11 +58,20 @@ export function useSendDigest() {
     mutationFn: () => alerts.sendDigest(),
     onSuccess: (data) => {
       if (data.sent) {
-        toast.success(`Digest inviato (${data.alerts_count} alert)`);
+        toast.success(
+          `Digest Telegram inviato — ${data.alerts_count} alert riepilogati`,
+          { duration: 5000 },
+        );
+      } else if (data.reason === "telegram_disabled") {
+        toast.warning(
+          "Telegram non configurato (TELEGRAM_BOT_TOKEN o CHAT_ID mancanti in .env)",
+        );
+      } else if (data.reason === "no_alerts") {
+        toast.info("Nessun alert nelle ultime 24h — nessun digest da inviare");
       } else {
-        toast.info(`Digest non inviato: ${data.reason ?? "—"}`);
+        toast.info(`Digest non inviato: ${data.reason ?? "motivo sconosciuto"}`);
       }
     },
-    onError: () => toast.error("Errore invio digest"),
+    onError: (err) => toast.error(describeError(err, "Errore invio digest")),
   });
 }

@@ -30,3 +30,6 @@ backend/data/logs/
 
 # OS
 Thumbs.db
+
+.claude/
+finance-alert/

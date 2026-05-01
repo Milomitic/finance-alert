@@ -7,7 +7,7 @@ from sqlalchemy import select
 from app.core.db import SessionLocal
 from app.models import Stock
 from app.services.ohlcv_service import fetch_and_upsert, latest_ohlcv_date
-from app.services.scan_service import scan_universe
+from app.services.scan_runner import run_tracked_scan
 
 
 def run_scan_alerts() -> None:
@@ -39,13 +39,8 @@ def run_scan_alerts() -> None:
                 db.rollback()
                 # continue with next chunk
 
-        # Step 2: evaluate rules + fire alerts
-        result = scan_universe(db)
-        db.commit()
-        logger.info(
-            f"[scan_alerts] result: scanned={result.stocks_scanned} "
-            f"skipped={result.stocks_skipped} alerts_fired={result.alerts_fired}"
-        )
+        # Step 2: evaluate rules + fire alerts (tracked via ScanRun)
+        run_tracked_scan(db, trigger="cron")
     finally:
         db.close()
     logger.info("[scan_alerts] job: done")

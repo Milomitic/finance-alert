@@ -1,5 +1,5 @@
 import { api } from "./client";
-import type { Alert, AlertList, DigestResult, UnreadCount } from "./types";
+import type { Alert, AlertList, DigestResult, ScanStatusInfo, UnreadCount } from "./types";
 
 export interface AlertListParams {
   ticker?: string;
@@ -52,4 +52,5 @@ export const alerts = {
       method: "POST",
       body: "{}",
     }),
+  scanStatus: () => api<ScanStatusInfo>("/api/alerts/scan-status"),
 };

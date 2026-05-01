@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { Download, PlayCircle, Send } from "lucide-react";
+import { Download, Loader2, PlayCircle, Send } from "lucide-react";
 
 import { alerts as alertsApi, type AlertListParams } from "@/api/alerts";
 import type { Alert } from "@/api/types";
 import { AlertDetailDialog } from "@/components/AlertDetailDialog";
 import { AlertFilters } from "@/components/AlertFilters";
 import { AlertsTable } from "@/components/AlertsTable";
+import { ScanStatusCard } from "@/components/ScanStatusCard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useAlertsList } from "@/hooks/useAlerts";
@@ -14,6 +15,7 @@ import {
   useSendDigest,
   useTriggerScan,
 } from "@/hooks/useAlertMutations";
+import { useScanStatus } from "@/hooks/useScanStatus";
 
 const PAGE_SIZE = 50;
 
@@ -31,6 +33,8 @@ export default function AlertsPage() {
   const bulk = useBulkAlerts();
   const triggerScan = useTriggerScan();
   const sendDigest = useSendDigest();
+  const scanStatus = useScanStatus();
+  const isScanning = scanStatus.data?.is_running ?? false;
 
   const items = list.data?.items ?? [];
   const total = list.data?.total ?? 0;
@@ -67,17 +71,38 @@ export default function AlertsPage() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={() => triggerScan.mutate()}>
-            <PlayCircle className="h-4 w-4 mr-2" /> Esegui scan ora
+          <Button
+            variant="outline"
+            onClick={() => triggerScan.mutate()}
+            disabled={isScanning || triggerScan.isPending}
+            title={isScanning ? "Uno scan è già in corso" : "Avvia uno scan in background"}
+          >
+            {isScanning || triggerScan.isPending ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <PlayCircle className="h-4 w-4 mr-2" />
+            )}
+            {isScanning ? "Scan in corso…" : "Esegui scan ora"}
           </Button>
-          <Button variant="outline" onClick={() => sendDigest.mutate()}>
-            <Send className="h-4 w-4 mr-2" /> Invia digest ora
+          <Button
+            variant="outline"
+            onClick={() => sendDigest.mutate()}
+            disabled={sendDigest.isPending}
+          >
+            {sendDigest.isPending ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <Send className="h-4 w-4 mr-2" />
+            )}
+            Invia digest ora
           </Button>
           <Button variant="outline" onClick={exportCsv}>
             <Download className="h-4 w-4 mr-2" /> Esporta CSV
           </Button>
         </div>
       </div>
+
+      <ScanStatusCard status={scanStatus.data} isFetching={scanStatus.isFetching} />
 
       <AlertFilters value={filters} onChange={(v) => { setPage(0); setFilters(v); }} />
 

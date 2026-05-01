@@ -66,3 +66,25 @@ class DigestResultOut(BaseModel):
     sent: bool
     alerts_count: int
     reason: str | None
+
+
+class ScanStatusOut(BaseModel):
+    """Live status of the most recent scan run.
+
+    `is_running=False, last_run=None` means no scan has ever been triggered.
+    """
+
+    is_running: bool
+    last_run_id: int | None = None
+    trigger: str | None = None  # "cron" | "manual"
+    status: str | None = None   # "running" | "success" | "failed"
+    phase: str | None = None    # "fetching" | "evaluating" | None when finished
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    progress_done: int = 0
+    progress_total: int = 0
+    stocks_scanned: int | None = None
+    stocks_skipped: int | None = None
+    alerts_fired: int | None = None
+    error_message: str | None = None
+

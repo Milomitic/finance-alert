@@ -105,3 +105,23 @@ export interface DigestResult {
   alerts_count: number;
   reason: string | null;
 }
+
+export type ScanStatus = "running" | "success" | "failed";
+export type ScanTrigger = "cron" | "manual";
+export type ScanPhase = "fetching" | "evaluating";
+
+export interface ScanStatusInfo {
+  is_running: boolean;
+  last_run_id: number | null;
+  trigger: ScanTrigger | null;
+  status: ScanStatus | null;
+  phase: ScanPhase | null;
+  started_at: string | null;
+  completed_at: string | null;
+  progress_done: number;
+  progress_total: number;
+  stocks_scanned: number | null;
+  stocks_skipped: number | null;
+  alerts_fired: number | null;
+  error_message: string | null;
+}

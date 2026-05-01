@@ -1,6 +1,7 @@
 """Daily alert scan: fetch OHLCV, evaluate rules with Tier 1/Tier 2 resolution,
 fire alerts on edge transitions (False -> True)."""
 import json
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
@@ -114,20 +115,38 @@ def _get_or_create_state(db: Session, rule_id: int, stock_id: int) -> RuleState 
     ).scalar_one_or_none()
 
 
-def scan_universe(db: Session) -> ScanResult:
-    """Scan all stocks, evaluate global rules with Tier 2 overrides, fire edge alerts."""
+def scan_universe(
+    db: Session,
+    *,
+    on_progress: Callable[[int, int, "ScanResult"], None] | None = None,
+    progress_every: int = 10,
+) -> ScanResult:
+    """Scan all stocks, evaluate global rules with Tier 2 overrides, fire edge alerts.
+
+    on_progress, if provided, is called every `progress_every` stocks AND at start/end
+    with (stocks_done, stocks_total, result_so_far). Use this to surface live progress
+    to a UI (e.g. by updating a `scan_runs` row).
+    """
     result = ScanResult()
-    stocks = db.execute(select(Stock)).scalars().all()
+    stocks = list(db.execute(select(Stock)).scalars().all())
+    total = len(stocks)
     global_rules = _load_global_rules(db)
     tier2 = _load_tier2_overrides_by_stock(db)
     if not global_rules:
         logger.warning("[scan] no Tier 1 rules configured; skipping scan")
+        if on_progress:
+            on_progress(0, total, result)
         return result
 
-    for stock in stocks:
+    if on_progress:
+        on_progress(0, total, result)
+
+    for idx, stock in enumerate(stocks, start=1):
         ohlcv = _load_ohlcv(db, stock.id)
         if ohlcv is None or len(ohlcv) < 2:
             result.stocks_skipped += 1
+            if on_progress and (idx % progress_every == 0 or idx == total):
+                on_progress(idx, total, result)
             continue
         result.stocks_scanned += 1
         last_close = float(ohlcv["close"].iloc[-1])
@@ -184,6 +203,12 @@ def scan_universe(db: Session) -> ScanResult:
                 state.last_evaluation = new_eval
                 state.last_evaluated_at = now
                 result.states_updated += 1
+
+        if on_progress and (idx % progress_every == 0 or idx == total):
+            on_progress(idx, total, result)
+
+    if on_progress:
+        on_progress(total, total, result)
 
     logger.info(
         f"[scan] complete: scanned={result.stocks_scanned} skipped={result.stocks_skipped} "
