@@ -2,8 +2,8 @@
 
 > Documento vivo. **Aggiornare ad ogni commit che modifica architettura, flussi, modello dati, dipendenze esterne, o policy operative.** Vedi §10 (Policy di manutenzione).
 
-**Ultimo aggiornamento**: 2026-04-30
-**Stato applicazione**: Fase 1 in pianificazione, nessun codice implementato.
+**Ultimo aggiornamento**: 2026-05-01
+**Stato applicazione**: Fase 1 in production. Fase 2 (alert engine) implemented.
 
 ---
 
@@ -12,7 +12,7 @@
 Applicazione web full-stack single-user per:
 
 - Catalogare e selezionare azioni in watchlist tematiche
-- (Fase 2) Monitorare segnali tecnici e inviare alert
+- **(Fase 2 — implementato)** Monitorare segnali tecnici e inviare alert Telegram
 - (Fase 3) Visualizzare statistiche e grafici
 
 **Modello di deployment**: locale sul PC dell'utente (Windows 11). Nessun cloud, nessuna esposizione di rete.
@@ -37,6 +37,7 @@ Applicazione web full-stack single-user per:
 │ APScheduler (in-process)                        │
 │ pydantic-settings, loguru                       │
 │ pandas + lxml (HTML scraping)                   │
+│ yfinance + numpy (OHLCV fetch)                  │
 │ bcrypt + itsdangerous (auth)                    │
 └─────────────────────────────────────────────────┘
               ↕ SQLAlchemy
@@ -81,7 +82,9 @@ Un solo processo. FastAPI serve sia API che assets React buildati.
 │ │             SPA fallback → index.html      │   │
 │ └────────────────────────────────────────────┘   │
 │ APScheduler                                      │
-│ └── refresh_catalog (weekly, Sat 03:00 local)    │
+│ ├── refresh_catalog (weekly Sat 03:00)           │
+│ ├── scan_alerts    (daily 23:30)                 │
+│ └── send_digest    (daily 08:00)                 │
 │ ./backend/data/app.db                            │
 └────────────────────▲─────────────────────────────┘
                      │
@@ -161,6 +164,43 @@ ERD (Fase 1):
 - `stock_indices(stock_id)`, `stock_indices(index_id)` per join
 
 **Migrations**: gestite da Alembic, versioned in `backend/alembic/versions/`. Ogni cambio di modello richiede una migration generata e committata insieme al codice.
+
+### Aggiunte Fase 2 — alert engine
+
+```
+┌──────────────────┐         ┌──────────────────┐
+│  ohlcv_daily     │         │      rules       │  (Tier 1: watchlist_id=NULL
+├──────────────────┤         ├──────────────────┤   Tier 2: watchlist_id IS NOT NULL)
+│ stock_id ────┐   │         │ id               │
+│ date         │PK │         │ watchlist_id ────┼──N:1──▶ watchlists (FK CASCADE, NULLABLE)
+│ open/high/low│   │         │ kind             │
+│ close/volume │   │         │ params (JSON)    │
+└──────┬───────┘   │         │ enabled          │
+       │ N:1       │         │ created_at       │
+       ▼           │         │ updated_at       │
+    stocks         │         └────────┬─────────┘
+                   │                  │ 1:N
+                   │                  ▼
+┌──────────────────┐    ┌──────────────────────┐
+│   rule_states    │    │      alerts          │
+├──────────────────┤    ├──────────────────────┤
+│ rule_id  ────────┼──N:1│ id                   │
+│ stock_id ────────┼──N:1│ rule_id ─────────────┼──N:1──▶ rules
+│ last_evaluation  │    │ stock_id ────────────┼──N:1──▶ stocks
+│ last_evaluated_at│    │ triggered_at         │
+└──────────────────┘    │ trigger_price        │
+                        │ snapshot (JSON)      │
+                        │ read_at              │
+                        │ archived_at          │
+                        └──────────────────────┘
+```
+
+- **Edge-trigger model**: `rule_states` keyed by `(rule_id, stock_id)`; alerts fired only on `False → True` transition.
+- **3-tier rule resolution**: per `(stock, kind)` la regola effettiva si determina come segue:
+  1. Tier 2 disabled override (most restrictive) → rule skipped
+  2. Tier 2 enabled override with custom params → uses overridden params, state still keyed by global `rule_id`
+  3. Tier 1 global → default behavior
+- Migration `aabe2bc3256f` applied via Alembic.
 
 ## 5. Flussi applicativi principali
 
@@ -371,7 +411,7 @@ Setup tramite `scripts/windows/Register-FinanceAlertStartup.ps1` (no admin richi
 | Fase | Stato | Contenuto principale |
 |---|---|---|
 | **Fase 1** — Watchlist viewer | In pianificazione | Catalogo, watchlist CRUD, autosave, refresh catalogo, login, autostart Windows |
-| **Fase 2** — Alert engine | Futura | Fetch OHLCV (yfinance), indicatori (SMA/EMA/RSI), regole alert (RSI, Golden/Death cross), notifier Telegram, scheduler giornaliero |
+| **Fase 2** — Alert engine | **Implementata** | Fetch OHLCV (yfinance), indicatori (SMA/EMA/RSI), regole alert (RSI, Golden/Death cross), notifier Telegram, scheduler giornaliero |
 | **Fase 3** — Dashboard & analytics | Futura | Home con KPI, candlestick stock detail, hit rate, regole MACD/BB/volume/breakout, editor regole UI con AND/OR, UI stato refresh catalogo |
 
 ## 10. Policy di manutenzione di questo documento
@@ -408,3 +448,4 @@ Questo file è **vincolante**: ogni commit che introduce uno dei seguenti cambia
 | 2026-04-30 | 23578f3 | Frontend complete: autosave watchlist editor with create-on-first-edit, debounced text saves, AbortController race-safety, optimistic add/remove. End-to-end watchlist CRUD UI is live. |
 | 2026-04-30 | b2f96f9 | Production-local mode: FastAPI serves frontend `dist/` as static + SPA fallback. `just prod-local` runs the full app on a single port (8000). |
 | 2026-04-30 | 2f926ab | Windows auto-start at user logon via PowerShell scripts (`scripts/windows/`). Register-FinanceAlertStartup.ps1 creates a Task Scheduler entry without admin; Run-FinanceAlert.ps1 boots prod-local with rotated logs. |
+| 2026-05-01 | 6b66d02 | Fase 2 alert engine: catalog espanso a ~210 stocks (+EuroStoxx 50, SSE 50, Hang Seng top 30); 4 regole pre-installate con edge-trigger; APScheduler jobs scan_alerts (23:30) + send_digest (08:00); Telegram digest mode; pagina /alerts con filtri+bulk+export CSV; RulesOverrideEditor 3-stati nella WatchlistDetailPage; sidebar unread badge. ~103 test backend. |
