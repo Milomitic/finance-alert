@@ -1,5 +1,4 @@
 """Tests for Telegram digest notifier."""
-from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
 import pytest

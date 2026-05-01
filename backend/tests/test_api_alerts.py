@@ -1,7 +1,7 @@
 """Tests for Alerts API."""
-import io
 import csv
-from datetime import datetime, timezone
+import io
+from datetime import UTC, datetime
 
 import pytest
 from fastapi.testclient import TestClient
@@ -67,7 +67,7 @@ def test_list_alerts_filter_by_rule_kind(client: TestClient, db: Session) -> Non
 
 def test_list_alerts_default_excludes_archived(client: TestClient, db: Session) -> None:
     alerts = _seed_alerts(db, n=2)
-    alerts[0].archived_at = datetime.now(timezone.utc)
+    alerts[0].archived_at = datetime.now(UTC)
     db.commit()
     resp = client.get("/api/alerts")
     assert resp.json()["total"] == 1
@@ -123,7 +123,9 @@ def test_scan_accepted(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> N
     assert resp.status_code == 202
 
 
-def test_send_digest_endpoint_no_alerts(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_send_digest_endpoint_no_alerts(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
     from app.core.config import settings
     monkeypatch.setattr(settings, "telegram_bot_token", "")
     monkeypatch.setattr(settings, "telegram_chat_id", "")

@@ -1,6 +1,5 @@
 """Fetch OHLCV from yfinance and upsert into ohlcv_daily."""
 from dataclasses import dataclass
-from datetime import datetime
 from typing import Any
 
 import pandas as pd
@@ -72,7 +71,7 @@ def _upsert_one_stock(db: Session, stock: Stock, frame: pd.DataFrame) -> tuple[i
                 volume = excluded.volume
             """
         )
-        result = db.execute(
+        db.execute(
             stmt,
             {
                 "stock_id": stock.id,

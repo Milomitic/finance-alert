@@ -1,7 +1,7 @@
 """Tests for Golden Cross / Death Cross rules."""
 import pandas as pd
 
-from app.rules.cross_rules import GoldenCrossRule, DeathCrossRule
+from app.rules.cross_rules import DeathCrossRule, GoldenCrossRule
 
 
 def _build_cross_data(transition: bool, *, fast_above_slow: bool) -> pd.DataFrame:

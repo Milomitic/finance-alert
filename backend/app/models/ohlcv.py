@@ -1,7 +1,8 @@
 """Daily OHLCV bar per stock."""
 from datetime import date as date_type
 
-from sqlalchemy import BigInteger, Date, ForeignKey, Index as SAIndex, Integer, Numeric
+from sqlalchemy import BigInteger, Date, ForeignKey, Integer, Numeric
+from sqlalchemy import Index as SAIndex
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base

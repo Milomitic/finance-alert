@@ -1,12 +1,11 @@
 """Tests for OHLCV fetch + upsert service."""
-from datetime import date
 from unittest.mock import patch
 
 import pandas as pd
 from sqlalchemy.orm import Session
 
 from app.models import OhlcvDaily, Stock
-from app.services.ohlcv_service import fetch_and_upsert, FetchResult
+from app.services.ohlcv_service import FetchResult, fetch_and_upsert
 
 
 def _seed_stock(db: Session, ticker: str = "AAPL") -> Stock:

@@ -2,7 +2,7 @@
 fire alerts on edge transitions (False -> True)."""
 import json
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import pandas as pd
@@ -132,7 +132,7 @@ def scan_universe(db: Session) -> ScanResult:
         result.stocks_scanned += 1
         last_close = float(ohlcv["close"].iloc[-1])
 
-        for kind in global_rules.keys():
+        for kind in global_rules:
             resolved = _resolve_effective_rule(stock.id, kind, global_rules, tier2)
             if resolved is None:
                 continue
@@ -147,7 +147,7 @@ def scan_universe(db: Session) -> ScanResult:
                 continue
 
             state = _get_or_create_state(db, global_rule.id, stock.id)
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             if state is None:
                 if new_eval:
                     snapshot = rule_obj.snapshot(ohlcv, eff_params)

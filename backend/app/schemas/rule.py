@@ -4,7 +4,6 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-
 _VALID_KINDS = {"rsi_oversold", "rsi_overbought", "golden_cross", "death_cross"}
 
 

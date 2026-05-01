@@ -1,8 +1,7 @@
 """Tests for RSI rules."""
 import pandas as pd
-import pytest
 
-from app.rules.rsi_rules import RsiOversoldRule, RsiOverboughtRule
+from app.rules.rsi_rules import RsiOverboughtRule, RsiOversoldRule
 
 
 def _series_for_rsi(target_rsi: float, length: int = 30) -> pd.Series:

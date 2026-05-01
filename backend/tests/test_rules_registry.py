@@ -1,9 +1,9 @@
 """Tests for rule registry."""
 import pytest
 
+from app.rules.cross_rules import DeathCrossRule, GoldenCrossRule
 from app.rules.registry import RULES, get_rule
-from app.rules.rsi_rules import RsiOversoldRule, RsiOverboughtRule
-from app.rules.cross_rules import GoldenCrossRule, DeathCrossRule
+from app.rules.rsi_rules import RsiOverboughtRule, RsiOversoldRule
 
 
 def test_registry_contains_all_4_kinds() -> None:

@@ -1,9 +1,9 @@
 """Alert query and mutation service."""
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from typing import Any
 
-from sqlalchemy import and_, func, or_, select, update
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import and_, func, select, update
+from sqlalchemy.orm import Session
 
 from app.models import Alert, Rule, Stock
 
@@ -100,7 +100,7 @@ def patch_alert(
     a = get_alert(db, alert_id)
     if a is None:
         return None
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     if read is True:
         a.read_at = now
     elif read is False:
@@ -118,7 +118,7 @@ def bulk_action(db: Session, ids: list[int], action: str) -> int:
     """Apply bulk action (mark_read, mark_unread, archive, unarchive). Returns affected count."""
     if not ids:
         return 0
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     if action == "mark_read":
         stmt = update(Alert).where(Alert.id.in_(ids)).values(read_at=now)
     elif action == "mark_unread":

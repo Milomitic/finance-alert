@@ -2,7 +2,6 @@
 import math
 
 import pandas as pd
-import pytest
 
 from app.indicators.rsi import rsi
 

@@ -1,6 +1,6 @@
 """Telegram digest notifier — single daily summary message."""
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import httpx
 from loguru import logger
@@ -44,7 +44,7 @@ def _telegram_enabled() -> bool:
 
 
 def _fetch_alerts_last_24h(db: Session) -> list[Alert]:
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+    cutoff = datetime.now(UTC) - timedelta(hours=24)
     return list(
         db.execute(
             select(Alert)
@@ -59,7 +59,7 @@ def _fetch_alerts_last_24h(db: Session) -> list[Alert]:
 def build_digest_message(db: Session, alerts: list[Alert]) -> str:
     """Format the digest as Telegram HTML."""
     n = len(alerts)
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    today = datetime.now(UTC).strftime("%Y-%m-%d")
 
     # Group counts by kind
     rule_ids = {a.rule_id for a in alerts}

@@ -108,7 +108,9 @@ def export_csv(
     )
     buf = io.StringIO()
     w = csv.writer(buf)
-    w.writerow(["id", "triggered_at", "ticker", "rule_kind", "trigger_price", "read_at", "archived_at"])
+    w.writerow(
+        ["id", "triggered_at", "ticker", "rule_kind", "trigger_price", "read_at", "archived_at"]
+    )
     for it in items:
         w.writerow(
             [
@@ -140,7 +142,8 @@ def patch(
     if a is None:
         raise HTTPException(status_code=404, detail="Alert not found")
     # Resolve ticker + rule_kind for AlertOut
-    from app.models import Rule as _Rule, Stock as _Stock
+    from app.models import Rule as _Rule
+    from app.models import Stock as _Stock
     rule_kind = db.execute(select(_Rule.kind).where(_Rule.id == a.rule_id)).scalar_one_or_none()
     ticker = db.execute(select(_Stock.ticker).where(_Stock.id == a.stock_id)).scalar_one_or_none()
     return AlertOut(

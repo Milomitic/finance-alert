@@ -4,11 +4,13 @@ from datetime import datetime
 from sqlalchemy import (
     DateTime,
     ForeignKey,
-    Index as SAIndex,
     Integer,
     Numeric,
     Text,
     func,
+)
+from sqlalchemy import (
+    Index as SAIndex,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 

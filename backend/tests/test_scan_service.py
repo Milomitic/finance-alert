@@ -1,8 +1,6 @@
 """Tests for scan_service: rule resolution + edge-triggered alert firing."""
-from datetime import date, datetime, timedelta, timezone
-from unittest.mock import patch
+from datetime import UTC, date, datetime, timedelta
 
-import pandas as pd
 from sqlalchemy.orm import Session
 
 from app.models import (
@@ -11,11 +9,11 @@ from app.models import (
     Rule,
     RuleState,
     Stock,
+    User,
     Watchlist,
     WatchlistItem,
-    User,
 )
-from app.services.scan_service import scan_universe, ScanResult
+from app.services.scan_service import ScanResult, scan_universe
 
 
 def _create_admin(db: Session) -> User:
@@ -89,7 +87,7 @@ def test_scan_does_not_refire_when_state_already_true(db: Session) -> None:
             rule_id=rule.id,
             stock_id=stock.id,
             last_evaluation=True,
-            last_evaluated_at=datetime.now(timezone.utc),
+            last_evaluated_at=datetime.now(UTC),
         )
     )
     db.commit()
@@ -103,7 +101,7 @@ def test_scan_does_not_refire_when_state_already_true(db: Session) -> None:
 
 def test_scan_skips_stocks_without_ohlcv(db: Session) -> None:
     _create_admin(db)
-    Stock_no_data = _seed_stock_with_ohlcv(db, "EMPTY", [])  # no closes -> no rows
+    _seed_stock_with_ohlcv(db, "EMPTY", [])  # no closes -> no rows
     _create_global_rule(db, "rsi_oversold", params='{"period": 14, "threshold": 30}')
 
     result = scan_universe(db)
@@ -151,7 +149,7 @@ def test_scan_tier2_disable_overrides_global(db: Session) -> None:
 
 
 def test_scan_tier2_custom_params_used_in_evaluation(db: Session) -> None:
-    """Tier 2 with custom threshold should use those params (state recorded under global rule_id)."""
+    """Tier 2 custom threshold should be used (state recorded under global rule_id)."""
     user = _create_admin(db)
     closes = [100.0 - 0.4 * i for i in range(30)]
     stock = _seed_stock_with_ohlcv(db, "AAPL", closes)
@@ -171,7 +169,7 @@ def test_scan_tier2_custom_params_used_in_evaluation(db: Session) -> None:
     )
     db.commit()
 
-    result = scan_universe(db)
+    scan_universe(db)
     db.commit()
     # Check state was created under the global rule_id (not the Tier 2 one)
     states = db.query(RuleState).filter_by(stock_id=stock.id).all()
