@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 
 import type { Stock } from "@/api/types";
+import { RulesOverrideEditor } from "@/components/RulesOverrideEditor";
 import { StockFiltersTab } from "@/components/StockFiltersTab";
 import { StockSearchTab } from "@/components/StockSearchTab";
 import {
@@ -54,27 +55,32 @@ export default function WatchlistDetailPage() {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">
-            {numericId ? "Watchlist" : "Nuova watchlist"}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {numericId !== null && detailQuery.isLoading && (
-            <p className="text-sm text-muted-foreground">Caricamento…</p>
-          )}
-          {numericId !== null && detailQuery.isError && (
-            <p className="text-sm text-destructive">Errore caricamento.</p>
-          )}
-          {(numericId === null || detailQuery.data !== undefined) && (
-            <WatchlistEditor
-              ref={editorRef}
-              detail={numericId !== null ? detailQuery.data ?? null : null}
-            />
-          )}
-        </CardContent>
-      </Card>
+      <div className="space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">
+              {numericId ? "Watchlist" : "Nuova watchlist"}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {numericId !== null && detailQuery.isLoading && (
+              <p className="text-sm text-muted-foreground">Caricamento…</p>
+            )}
+            {numericId !== null && detailQuery.isError && (
+              <p className="text-sm text-destructive">Errore caricamento.</p>
+            )}
+            {(numericId === null || detailQuery.data !== undefined) && (
+              <WatchlistEditor
+                ref={editorRef}
+                detail={numericId !== null ? detailQuery.data ?? null : null}
+              />
+            )}
+          </CardContent>
+        </Card>
+        {numericId !== null && (
+          <RulesOverrideEditor watchlistId={numericId} />
+        )}
+      </div>
     </div>
   );
 }
