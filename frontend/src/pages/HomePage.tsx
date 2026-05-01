@@ -1,136 +1,146 @@
-import { AlertCircle, Bell, FileBarChart2, ListChecks, ScanSearch } from "lucide-react";
+import { AlertCircle, RefreshCw } from "lucide-react";
 
-import { AlertsByDayChart } from "@/components/dashboard/AlertsByDayChart";
-import { KpiCard } from "@/components/dashboard/KpiCard";
-import { RecentAlertsFeed } from "@/components/dashboard/RecentAlertsFeed";
-import { SystemStatusCard } from "@/components/dashboard/SystemStatusCard";
-import { TopStocksTable } from "@/components/dashboard/TopStocksTable";
+import { AlertsCompactPanel } from "@/components/dashboard/AlertsCompactPanel";
+import { BreadthMatrixTable } from "@/components/dashboard/BreadthMatrixTable";
+import { FiftyTwoWeekVolCard } from "@/components/dashboard/FiftyTwoWeekVolCard";
+import { HeroStrip } from "@/components/dashboard/HeroStrip";
+import { MarketTreemap } from "@/components/dashboard/MarketTreemap";
+import { MoversCard } from "@/components/dashboard/MoversCard";
+import { RsiHistogramCard } from "@/components/dashboard/RsiHistogramCard";
+import { SectorsHeatmapCard } from "@/components/dashboard/SectorsHeatmapCard";
+import { SpotlightPlaceholder } from "@/components/dashboard/SpotlightPlaceholder";
+import { SystemStatusFooter } from "@/components/dashboard/SystemStatusFooter";
 import { Card, CardContent } from "@/components/ui/card";
 import { useDashboardSummary } from "@/hooks/useDashboardSummary";
+import { useMarketSummary } from "@/hooks/useMarketSummary";
 
-function deltaLabel(curr: number, prev: number): string {
-  const diff = curr - prev;
-  if (diff === 0) return "= ieri";
-  const arrow = diff > 0 ? "↑" : "↓";
-  const sign = diff > 0 ? "+" : "";
-  return `${sign}${diff} vs ieri ${arrow}`;
+function MarketUnavailable() {
+  return (
+    <Card>
+      <CardContent className="p-6 text-center">
+        <AlertCircle className="h-5 w-5 text-muted-foreground mx-auto mb-2" />
+        <div className="text-sm font-semibold">Nessuno scan ancora eseguito</div>
+        <div className="text-xs text-muted-foreground mt-1">
+          Vai su <a href="/alerts" className="text-blue-600 hover:underline">/alerts</a> e clicca <strong>Esegui scan ora</strong> per generare il primo snapshot di mercato.
+        </div>
+      </CardContent>
+    </Card>
+  );
 }
 
-function lastScanLabel(
-  lastScan: ReturnType<typeof useDashboardSummary>["data"] extends infer T
-    ? T extends { kpis: { last_scan: infer S } }
-      ? S
-      : never
-    : never,
-): string {
-  if (!lastScan) return "Mai eseguito";
-  if (lastScan.is_running) return "In corso…";
-  if (lastScan.completed_at) {
-    const dt = new Date(lastScan.completed_at);
-    return dt.toLocaleString("it-IT", { dateStyle: "short", timeStyle: "short" });
-  }
-  return "—";
+function MarketError({ onRetry }: { onRetry: () => void }) {
+  return (
+    <Card>
+      <CardContent className="p-4 flex items-center gap-3 text-sm">
+        <AlertCircle className="h-5 w-5 text-destructive" />
+        <span>Errore nel caricamento del riepilogo di mercato.</span>
+        <button onClick={onRetry} className="ml-auto text-blue-600 hover:underline flex items-center gap-1">
+          <RefreshCw className="h-3 w-3" /> Riprova
+        </button>
+      </CardContent>
+    </Card>
+  );
 }
 
 export default function HomePage() {
-  const q = useDashboardSummary();
+  const market = useMarketSummary();
+  const summary = useDashboardSummary();
 
-  if (q.isLoading) {
+  // Loading skeleton
+  if (market.isLoading || summary.isLoading) {
     return (
-      <div className="space-y-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <Card key={i}>
-              <CardContent className="p-4 h-[88px] animate-pulse bg-muted/40" />
-            </Card>
+      <div className="space-y-2">
+        <div className="grid lg:grid-cols-[200px_1fr_200px] gap-2">
+          <Card><CardContent className="p-4 h-[80px] animate-pulse bg-muted/40" /></Card>
+          <Card><CardContent className="p-4 h-[80px] animate-pulse bg-muted/40" /></Card>
+          <Card><CardContent className="p-4 h-[80px] animate-pulse bg-muted/40" /></Card>
+        </div>
+        <Card><CardContent className="p-0 h-[200px] animate-pulse bg-muted/40" /></Card>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2">
+          {[0, 1, 2, 3].map((i) => (
+            <Card key={i}><CardContent className="p-4 h-[160px] animate-pulse bg-muted/40" /></Card>
           ))}
         </div>
-        <Card>
-          <CardContent className="h-[260px] animate-pulse bg-muted/40" />
-        </Card>
       </div>
     );
   }
 
-  if (q.isError || !q.data) {
+  const summaryData = summary.data;
+
+  // Market unavailable (no snapshot yet) — still show alerts panel below if summary loaded
+  if (market.isError) {
     return (
-      <Card>
-        <CardContent className="p-6 flex items-center gap-3 text-sm">
-          <AlertCircle className="h-5 w-5 text-destructive" />
-          <span>Errore nel caricamento del riepilogo dashboard.</span>
-          <button
-            className="underline"
-            onClick={() => q.refetch()}
-          >
-            Riprova
-          </button>
-        </CardContent>
-      </Card>
+      <div className="space-y-2">
+        <MarketError onRetry={() => market.refetch()} />
+        {summaryData && (
+          <AlertsCompactPanel
+            alertsByDay={summaryData.alerts_by_day}
+            topStocks={summaryData.top_stocks_30d}
+            recentAlerts={summaryData.recent_alerts}
+            alertsLast24h={summaryData.kpis.alerts_last_24h}
+            alertsPrev24h={summaryData.kpis.alerts_prev_24h}
+          />
+        )}
+      </div>
     );
   }
 
-  const { kpis, alerts_by_day, top_stocks_30d, recent_alerts, system_status } = q.data;
+  if (!market.data || market.data.available === false) {
+    return (
+      <div className="space-y-2">
+        <MarketUnavailable />
+        {summaryData && (
+          <AlertsCompactPanel
+            alertsByDay={summaryData.alerts_by_day}
+            topStocks={summaryData.top_stocks_30d}
+            recentAlerts={summaryData.recent_alerts}
+            alertsLast24h={summaryData.kpis.alerts_last_24h}
+            alertsPrev24h={summaryData.kpis.alerts_prev_24h}
+          />
+        )}
+        {summaryData && <SystemStatusFooter status={summaryData.system_status} />}
+      </div>
+    );
+  }
+
+  // Happy path — destructure with defaults to satisfy TS (all fields are optional in API type)
+  const m = market.data;
+  if (!m.global || !m.by_index || !m.movers || !m.rsi_distribution || !m.sectors || !m.treemap) {
+    return <MarketError onRetry={() => market.refetch()} />;
+  }
+  const nextScanAt = summaryData?.kpis.next_scan_at ?? null;
 
   return (
-    <div className="space-y-4">
-      <div>
-        <h2 className="text-2xl font-semibold">Dashboard</h2>
-        <p className="text-sm text-muted-foreground">
-          Riepilogo dell'attività di monitoring (aggiornato ogni 30s)
-        </p>
+    <div className="space-y-2">
+      <HeroStrip
+        global={m.global}
+        computedAt={m.computed_at}
+        isStale={m.is_stale}
+        nextScanAt={nextScanAt}
+      />
+      <BreadthMatrixTable data={m.by_index} />
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2">
+        <MoversCard movers={m.movers} />
+        <RsiHistogramCard rsi={m.rsi_distribution} indices={m.by_index} />
+        <SectorsHeatmapCard sectors={m.sectors} />
+        <FiftyTwoWeekVolCard movers={m.movers} />
       </div>
-
-      {/* KPI row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-        <KpiCard
-          title="Alert ultime 24h"
-          value={kpis.alerts_last_24h}
-          subtext={deltaLabel(kpis.alerts_last_24h, kpis.alerts_prev_24h)}
-          icon={<Bell className="h-4 w-4" />}
-        />
-        <KpiCard
-          title="Non letti"
-          value={kpis.alerts_unread}
-          subtext={
-            kpis.alerts_unread > 0
-              ? "vedi /alerts per gestirli"
-              : "tutti gestiti"
-          }
-          icon={<FileBarChart2 className="h-4 w-4" />}
-          tone={kpis.alerts_unread > 0 ? "warning" : "default"}
-        />
-        <KpiCard
-          title="Stock monitorati"
-          value={kpis.stocks_monitored}
-          subtext={`${kpis.indices_count} indici`}
-          icon={<ListChecks className="h-4 w-4" />}
-        />
-        <KpiCard
-          title="Ultimo scan"
-          value={lastScanLabel(kpis.last_scan)}
-          subtext={
-            kpis.last_scan?.alerts_fired != null
-              ? `${kpis.last_scan.alerts_fired} alert generati`
-              : kpis.next_scan_at
-                ? `Prossimo: ${new Date(kpis.next_scan_at).toLocaleString("it-IT", { dateStyle: "short", timeStyle: "short" })}`
-                : undefined
-          }
-          icon={<ScanSearch className="h-4 w-4" />}
-          tone={kpis.last_scan?.status === "failed" ? "destructive" : "default"}
-        />
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-2">
+        <div className="lg:col-span-2">
+          <MarketTreemap treemap={m.treemap} indices={m.by_index} />
+        </div>
+        <SpotlightPlaceholder />
       </div>
-
-      {/* Chart + Top */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <AlertsByDayChart data={alerts_by_day} />
-        <TopStocksTable data={top_stocks_30d} />
-      </div>
-
-      {/* Recent alerts */}
-      <RecentAlertsFeed alerts={recent_alerts} />
-
-      {/* System status footer */}
-      <SystemStatusCard status={system_status} />
+      {summaryData && (
+        <AlertsCompactPanel
+          alertsByDay={summaryData.alerts_by_day}
+          topStocks={summaryData.top_stocks_30d}
+          recentAlerts={summaryData.recent_alerts}
+          alertsLast24h={summaryData.kpis.alerts_last_24h}
+          alertsPrev24h={summaryData.kpis.alerts_prev_24h}
+        />
+      )}
+      {summaryData && <SystemStatusFooter status={summaryData.system_status} />}
     </div>
   );
 }
