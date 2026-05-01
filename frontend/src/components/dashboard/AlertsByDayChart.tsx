@@ -13,6 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 interface Props {
   data: AlertsByDayPoint[];
+  compact?: boolean;
 }
 
 const KIND_LABEL: Record<string, string> = {
@@ -46,14 +47,16 @@ function CustomTooltip({ active, payload }: { active?: boolean; payload?: Toolti
   );
 }
 
-export function AlertsByDayChart({ data }: Props) {
+export function AlertsByDayChart({ data, compact = false }: Props) {
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="text-base">Alert per giorno (ultimi 30gg)</CardTitle>
-      </CardHeader>
+      {!compact && (
+        <CardHeader>
+          <CardTitle className="text-base">Alert per giorno (ultimi 30gg)</CardTitle>
+        </CardHeader>
+      )}
       <CardContent>
-        <div className="h-[260px]">
+        <div className={compact ? "h-[80px]" : "h-[260px]"}>
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={data} margin={{ top: 5, right: 8, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
