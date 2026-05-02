@@ -215,6 +215,7 @@ export interface SectorBreadth {
 
 export interface Mover {
   ticker: string;
+  name: string;
   index: string | null;
   sector: string | null;
   change_pct: number;

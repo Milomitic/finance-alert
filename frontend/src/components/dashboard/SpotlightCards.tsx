@@ -12,7 +12,7 @@ interface ListCardProps {
   label: string;
   icon: typeof Bell;
   accent: string;
-  items: Array<{ ticker: string; subtitle: string; subtitleColor?: string }>;
+  items: Array<{ ticker: string; name?: string; subtitle: string; subtitleColor?: string }>;
   emptyText: string;
 }
 
@@ -44,12 +44,15 @@ function ListCard({ label, icon: Icon, accent, items, emptyText }: ListCardProps
                   className="flex items-center gap-2 px-3 py-2 hover:bg-accent/30 transition-colors"
                 >
                   <StockLogo ticker={it.ticker} size="xs" />
-                  <span className="text-sm font-bold tabular-nums truncate">
-                    {it.ticker}
-                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-bold tabular-nums truncate">{it.ticker}</div>
+                    {it.name && (
+                      <div className="text-[10px] text-muted-foreground truncate" title={it.name}>{it.name}</div>
+                    )}
+                  </div>
                   <span
                     className={cn(
-                      "ml-auto text-sm font-semibold tabular-nums shrink-0",
+                      "text-sm font-semibold tabular-nums shrink-0",
                       it.subtitleColor ?? "text-muted-foreground",
                     )}
                   >
@@ -116,20 +119,22 @@ export function SpotlightCards() {
   // Build the lists
   const gainersItems = gainers.map((m) => {
     const f = fmtChange(m.change_pct);
-    return { ticker: m.ticker, subtitle: f.text, subtitleColor: f.color };
+    return { ticker: m.ticker, name: m.name, subtitle: f.text, subtitleColor: f.color };
   });
   const losersItems = losers.map((m) => {
     const f = fmtChange(m.change_pct);
-    return { ticker: m.ticker, subtitle: f.text, subtitleColor: f.color };
+    return { ticker: m.ticker, name: m.name, subtitle: f.text, subtitleColor: f.color };
   });
   const volItems = volSpikes.map((v) => ({
     ticker: v.ticker,
+    name: v.name,
     subtitle: `${v.vol_ratio.toFixed(1)}× vol`,
     subtitleColor: "text-blue-600 dark:text-blue-400",
   }));
   const mostAlertedItems = mostAlertedCard
     ? [{
         ticker: mostAlertedCard.ticker,
+        name: undefined,
         subtitle: `${mostAlertedCard.alerts_count ?? 0} alert ult. 7gg`,
         subtitleColor: "text-amber-600 dark:text-amber-400",
       }]

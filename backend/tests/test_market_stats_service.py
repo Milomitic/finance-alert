@@ -12,7 +12,7 @@ from tests.conftest_market import build_ohlcv, build_ohlcv_volume_spike
 def test_compute_metrics_full_data():
     ohlcv = build_ohlcv(n_bars=250, start_close=100.0, drift=0.1)
     m = compute_stock_metrics(
-        stock_id=1, ticker="X", sector="Tech",
+        stock_id=1, ticker="X", name="X Inc", sector="Tech",
         index_codes=["NDX"], market_cap=1_000_000_000.0, ohlcv=ohlcv,
     )
     assert m is not None
@@ -33,7 +33,7 @@ def test_compute_metrics_full_data():
 def test_compute_metrics_short_history_partial():
     ohlcv = build_ohlcv(n_bars=30, start_close=100.0, drift=0.1)
     m = compute_stock_metrics(
-        stock_id=2, ticker="Y", sector=None,
+        stock_id=2, ticker="Y", name="Y Corp", sector=None,
         index_codes=[], market_cap=None, ohlcv=ohlcv,
     )
     assert m is not None
@@ -46,13 +46,13 @@ def test_compute_metrics_short_history_partial():
 
 def test_compute_metrics_too_short_returns_none():
     ohlcv = build_ohlcv(n_bars=10)
-    m = compute_stock_metrics(1, "Z", None, [], None, ohlcv)
+    m = compute_stock_metrics(1, "Z", "Z Ltd", None, [], None, ohlcv)
     assert m is None
 
 
 def test_compute_metrics_volume_spike():
     ohlcv = build_ohlcv_volume_spike(n_bars=30)
-    m = compute_stock_metrics(1, "V", None, [], None, ohlcv)
+    m = compute_stock_metrics(1, "V", "V Corp", None, [], None, ohlcv)
     assert m is not None
     assert m.vol_ratio is not None and m.vol_ratio > 4.0
 
@@ -86,7 +86,7 @@ def _metric(stock_id, ticker, *, sector=None, indices=None, change_pct=0.5,
             new_high=False, new_low=False, vol_ratio=1.0, has_full=True,
             last_close=100.0):
     return StockMetrics(
-        stock_id=stock_id, ticker=ticker, sector=sector,
+        stock_id=stock_id, ticker=ticker, name=ticker, sector=sector,
         index_codes=indices or [], market_cap=1e9, bars_count=250,
         last_close=last_close, prev_close=last_close - 1.0,
         change_pct=change_pct, sma50=sma50, sma200=sma200, rsi14=rsi14,
@@ -198,7 +198,7 @@ def test_build_rsi_distribution_binning():
 def test_build_treemap_filters_no_marketcap():
     ms = [
         _metric(1, "A", change_pct=1.0),                                      # has cap
-        StockMetrics(stock_id=2, ticker="B", sector=None, index_codes=[],
+        StockMetrics(stock_id=2, ticker="B", name="B Corp", sector=None, index_codes=[],
                      market_cap=None,                                         # no cap → excluded
                      bars_count=250, last_close=10.0, prev_close=9.5,
                      change_pct=1.0, sma50=None, sma200=None, rsi14=None,

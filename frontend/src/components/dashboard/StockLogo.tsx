@@ -50,12 +50,12 @@ export function StockLogo({ ticker, size = "sm" }: Props) {
           width: px,
           height: px,
           backgroundColor: colorForTicker(ticker),
-          fontSize: Math.round(px * 0.5),
+          fontSize: Math.round(px * 0.4),
         }}
         title={ticker}
         aria-label={`${ticker} logo`}
       >
-        {ticker.charAt(0).toUpperCase()}
+        {ticker.split(".")[0].slice(0, 2).toUpperCase()}
       </span>
     );
   }

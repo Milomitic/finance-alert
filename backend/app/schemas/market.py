@@ -50,6 +50,7 @@ class SectorBreadthOut(BaseModel):
 
 class MoverOut(BaseModel):
     ticker: str
+    name: str
     index: str | None
     sector: str | None
     change_pct: float

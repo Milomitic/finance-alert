@@ -17,9 +17,12 @@ function ListRow({ m, kind }: { m: Mover; kind: "high" | "low" }) {
     <tr className="border-b border-border/50 hover:bg-muted/40 transition-colors">
       <td className="px-2 py-1.5">{arrow}</td>
       <td className="px-3 py-1.5 font-semibold">
-        <Link to={`/stocks/${encodeURIComponent(m.ticker)}`} className="inline-flex items-center gap-2 hover:underline">
+        <Link to={`/stocks/${encodeURIComponent(m.ticker)}`} className="inline-flex items-start gap-2 hover:underline">
           <StockLogo ticker={m.ticker} size="xs" />
-          <span>{m.ticker}</span>
+          <div className="min-w-0">
+            <div>{m.ticker}</div>
+            <div className="text-[10px] text-muted-foreground font-normal truncate max-w-[120px]" title={m.name}>{m.name}</div>
+          </div>
         </Link>
       </td>
       <td className="px-2 py-1.5"><IndexBadge code={m.index} size="xs" /></td>
@@ -33,9 +36,12 @@ function VolRow({ m }: { m: VolumeSpike }) {
   return (
     <tr className="border-b border-border/50 hover:bg-muted/40 transition-colors">
       <td className="px-3 py-1.5 font-semibold">
-        <Link to={`/stocks/${encodeURIComponent(m.ticker)}`} className="inline-flex items-center gap-2 hover:underline">
+        <Link to={`/stocks/${encodeURIComponent(m.ticker)}`} className="inline-flex items-start gap-2 hover:underline">
           <StockLogo ticker={m.ticker} size="xs" />
-          <span>{m.ticker}</span>
+          <div className="min-w-0">
+            <div>{m.ticker}</div>
+            <div className="text-[10px] text-muted-foreground font-normal truncate max-w-[120px]" title={m.name}>{m.name}</div>
+          </div>
         </Link>
       </td>
       <td className="px-2 py-1.5"><IndexBadge code={m.index} size="xs" /></td>

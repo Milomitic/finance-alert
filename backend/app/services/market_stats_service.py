@@ -19,6 +19,7 @@ from app.models.index import StockIndex
 class StockMetrics:
     stock_id: int
     ticker: str
+    name: str
     sector: str | None
     index_codes: list[str]              # all indices this stock belongs to
     market_cap: float | None
@@ -44,6 +45,7 @@ class StockMetrics:
 def compute_stock_metrics(
     stock_id: int,
     ticker: str,
+    name: str,
     sector: str | None,
     index_codes: list[str],
     market_cap: float | None,
@@ -88,6 +90,7 @@ def compute_stock_metrics(
     return StockMetrics(
         stock_id=stock_id,
         ticker=ticker,
+        name=name,
         sector=sector,
         index_codes=index_codes,
         market_cap=market_cap,
@@ -264,6 +267,7 @@ def build_movers(metrics: list[StockMetrics], *, top_n: int = 10) -> dict:
     def _row(m: StockMetrics) -> dict:
         return {
             "ticker": m.ticker,
+            "name": m.name,
             "index": m.index_codes[0] if m.index_codes else None,
             "sector": m.sector,
             "change_pct": m.change_pct,
@@ -369,6 +373,7 @@ def _load_metrics(db: Session) -> tuple[list[StockMetrics], list[tuple[str, str]
         m = compute_stock_metrics(
             stock_id=stock.id,
             ticker=stock.ticker,
+            name=stock.name,
             sector=stock.sector,
             index_codes=stock_to_indices.get(stock.id, []),
             market_cap=float(stock.market_cap) if stock.market_cap is not None else None,
