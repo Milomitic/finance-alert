@@ -13,14 +13,16 @@ interface Props {
 
 export function HeroStrip({ global, byIndex, computedAt, isStale, nextScanAt }: Props) {
   return (
-    <div className="grid gap-3 lg:grid-cols-[340px_1fr_200px]">
+    <div className="grid gap-3 lg:grid-cols-[3fr_2fr]">
       <MoodCard global={global} byIndex={byIndex} />
-      <GlobalKpiTiles global={global} />
-      <DataFreshnessCard
-        computedAt={computedAt}
-        isStale={isStale}
-        nextScanAt={nextScanAt}
-      />
+      <div className="grid grid-rows-[1fr_auto] gap-3 min-h-[320px]">
+        <GlobalKpiTiles global={global} />
+        <DataFreshnessCard
+          computedAt={computedAt}
+          isStale={isStale}
+          nextScanAt={nextScanAt}
+        />
+      </div>
     </div>
   );
 }

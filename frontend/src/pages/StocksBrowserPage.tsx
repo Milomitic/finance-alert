@@ -4,8 +4,10 @@ import { useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useStockFilters, useStockSearch } from "@/hooks/useStockSearch";
+import { IndexPanoramaCard } from "@/components/stocks/IndexPanoramaCard";
 import { StockBrowserTable } from "@/components/stocks/StockBrowserTable";
 import { StockSearchBar, type SearchState } from "@/components/stocks/StockSearchBar";
+import { useMarketSummary } from "@/hooks/useMarketSummary";
 
 const PAGE_SIZE = 50;
 
@@ -38,6 +40,12 @@ export default function StocksBrowserPage() {
     setPage(0);   // reset pagination on filter change
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state]);
+
+  const market = useMarketSummary();
+  const singleIndexCode = state.indexCodes.length === 1 ? state.indexCodes[0] : null;
+  const singleIndexBreadth = singleIndexCode
+    ? (market.data?.by_index ?? []).find((i) => i.code === singleIndexCode) ?? null
+    : null;
 
   const filtersQ = useStockFilters();
   const searchQ = useStockSearch({
@@ -83,6 +91,11 @@ export default function StocksBrowserPage() {
           />
         </CardContent>
       </Card>
+
+      {/* Index panorama header (shown when exactly 1 index is selected) */}
+      {singleIndexBreadth && (
+        <IndexPanoramaCard data={singleIndexBreadth} />
+      )}
 
       {/* Results */}
       {searchQ.isLoading && !searchQ.data ? (

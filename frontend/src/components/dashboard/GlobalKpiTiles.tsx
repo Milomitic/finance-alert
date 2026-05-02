@@ -83,7 +83,7 @@ export function GlobalKpiTiles({ global }: Props) {
   ];
 
   return (
-    <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 h-full">
+    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 h-full">
       {tiles.map((t) => {
         const Icon = t.icon;
         return (

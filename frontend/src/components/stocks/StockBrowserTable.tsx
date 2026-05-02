@@ -36,7 +36,7 @@ interface HeaderProps {
 function SortableHeader({ column, label, align = "left", sortKey, sortDir, onClick }: HeaderProps) {
   const active = sortKey === column;
   return (
-    <th className={cn("px-3 py-2", align === "right" ? "text-right" : "text-left")}>
+    <th className={cn("px-3 py-1.5", align === "right" ? "text-right" : "text-left")}>
       <button
         type="button"
         onClick={() => onClick(column)}
@@ -144,18 +144,18 @@ export function StockBrowserTable({ items }: Props) {
                     key={s.id}
                     className="border-b border-border/50 hover:bg-muted/40 transition-colors"
                   >
-                    <td className="px-3 py-2">
+                    <td className="px-3 py-1.5">
                       <Link to={`/stocks/${encodeURIComponent(s.ticker)}`} className="inline-flex items-center gap-2 font-semibold hover:underline">
                         <StockLogo ticker={s.ticker} size="xs" />
                         <span>{s.ticker}</span>
                       </Link>
                     </td>
-                    <td className="px-3 py-2 text-muted-foreground truncate max-w-[280px]">
+                    <td className="px-3 py-1.5 text-muted-foreground truncate max-w-[280px]">
                       <Link to={`/stocks/${encodeURIComponent(s.ticker)}`} className="hover:underline">
                         {s.name}
                       </Link>
                     </td>
-                    <td className="px-3 py-2">
+                    <td className="px-3 py-1.5">
                       <span className="inline-flex items-center gap-1.5">
                         {flag && (
                           <img
@@ -169,11 +169,11 @@ export function StockBrowserTable({ items }: Props) {
                         <span className="text-xs text-muted-foreground">{s.exchange}</span>
                       </span>
                     </td>
-                    <td className="px-3 py-2 text-xs text-muted-foreground truncate max-w-[160px]">
+                    <td className="px-3 py-1.5 text-xs text-muted-foreground truncate max-w-[160px]">
                       {s.sector ?? "—"}
                     </td>
-                    <td className="px-3 py-2 text-right">{fmtMc(s.market_cap)}</td>
-                    <td className={cn("px-3 py-2 text-right", changeColor)}>
+                    <td className="px-3 py-1.5 text-right">{fmtMc(s.market_cap)}</td>
+                    <td className={cn("px-3 py-1.5 text-right", changeColor)}>
                       {change == null ? "—" : `${change >= 0 ? "+" : ""}${change.toFixed(2)}%`}
                     </td>
                   </tr>
