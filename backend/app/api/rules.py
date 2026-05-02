@@ -19,6 +19,7 @@ def _to_out(r: Rule) -> RuleOut:
         kind=r.kind,
         params=json.loads(r.params or "{}"),
         enabled=r.enabled,
+        expression=json.loads(r.expression) if r.expression else None,
         created_at=r.created_at,
         updated_at=r.updated_at,
     )
@@ -80,6 +81,7 @@ def create_rule(
         kind=payload.kind,
         params=json.dumps(payload.params),
         enabled=payload.enabled,
+        expression=json.dumps(payload.expression) if payload.expression else None,
     )
     db.add(r)
     db.commit()
@@ -101,6 +103,8 @@ def patch_rule(
         r.enabled = payload.enabled
     if payload.params is not None:
         r.params = json.dumps(payload.params)
+    if payload.expression is not None:
+        r.expression = json.dumps(payload.expression)
     db.commit()
     db.refresh(r)
     return _to_out(r)

@@ -19,6 +19,12 @@ def client(db: Session) -> TestClient:
     app.dependency_overrides.clear()
 
 
+@pytest.fixture
+def auth_headers() -> dict:
+    # Auth is bypassed via dependency override in `client` fixture; no headers needed.
+    return {}
+
+
 def test_list_globals_when_no_watchlist_id(client: TestClient, db: Session) -> None:
     db.add(Rule(watchlist_id=None, kind="rsi_oversold", params="{}", enabled=True))
     db.add(Rule(watchlist_id=None, kind="golden_cross", params="{}", enabled=True))
@@ -115,3 +121,44 @@ def test_delete_rule(client: TestClient, db: Session) -> None:
     resp = client.delete(f"/api/rules/{rule.id}")
     assert resp.status_code == 204
     assert db.query(Rule).filter_by(id=rule.id).count() == 0
+
+
+def test_create_rule_with_expression(client, auth_headers):
+    expr = {
+        "op": "and",
+        "children": [
+            {"op": "atomic", "kind": "rsi_oversold", "params": {"period": 14, "threshold": 30}},
+            {"op": "atomic", "kind": "volume_spike", "params": {"window": 20, "threshold": 2.0}},
+        ],
+    }
+    resp = client.post(
+        "/api/rules",
+        headers=auth_headers,
+        json={"kind": "composite", "params": {}, "enabled": True, "expression": expr},
+    )
+    assert resp.status_code == 201
+    body = resp.json()
+    assert body["expression"] == expr
+
+
+def test_create_rule_with_invalid_expression_returns_422(client, auth_headers):
+    expr = {"op": "and", "children": [{"op": "atomic", "kind": "DOES_NOT_EXIST", "params": {}}]}
+    resp = client.post(
+        "/api/rules",
+        headers=auth_headers,
+        json={"kind": "composite", "params": {}, "enabled": True, "expression": expr},
+    )
+    assert resp.status_code == 422
+
+
+def test_create_rule_with_too_deep_expression_returns_422(client, auth_headers):
+    leaf = {"op": "atomic", "kind": "rsi_oversold", "params": {}}
+    expr = leaf
+    for _ in range(6):
+        expr = {"op": "and", "children": [expr]}
+    resp = client.post(
+        "/api/rules",
+        headers=auth_headers,
+        json={"kind": "composite", "params": {}, "enabled": True, "expression": expr},
+    )
+    assert resp.status_code == 422
