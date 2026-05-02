@@ -47,10 +47,10 @@ function ListCard({ label, icon: Icon, accent, items, emptyText, sparkline }: Li
               <li key={it.ticker} className="flex-1 max-h-[60px] flex">
                 <Link
                   to={`/stocks/${encodeURIComponent(it.ticker)}`}
-                  className="flex items-center gap-2 px-3 py-1 hover:bg-accent/30 transition-colors flex-1"
+                  className="flex items-center gap-2 pl-3 pr-3 py-1 hover:bg-accent/30 transition-colors flex-1 min-w-0"
                 >
                   <StockLogo ticker={it.ticker} size="xs" />
-                  <div className="min-w-0 flex-1">
+                  <div className="min-w-0 flex-1 overflow-hidden">
                     <div className="text-sm font-bold tabular-nums truncate leading-tight">{it.ticker}</div>
                     {it.name && (
                       <div className="text-[10px] text-muted-foreground truncate leading-tight" title={it.name}>{it.name}</div>
@@ -58,7 +58,7 @@ function ListCard({ label, icon: Icon, accent, items, emptyText, sparkline }: Li
                   </div>
                   <span
                     className={cn(
-                      "text-sm font-semibold tabular-nums shrink-0",
+                      "text-sm font-semibold tabular-nums shrink-0 ml-auto text-right",
                       it.subtitleColor ?? "text-muted-foreground",
                     )}
                   >

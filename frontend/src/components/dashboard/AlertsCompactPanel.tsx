@@ -34,7 +34,7 @@ export function AlertsCompactPanel({ alertsByDay, topStocks, recentAlerts, alert
             </TabsList>
             <a href="/alerts" className="ml-auto text-sm text-blue-600 dark:text-blue-400 hover:underline pr-2">Vedi tutti →</a>
           </div>
-          <TabsContent value="trend" className="m-0">
+          <TabsContent value="trend" className="m-0 px-3 py-2">
             <AlertsByDayChart data={alertsByDay} compact />
           </TabsContent>
           <TabsContent value="top" className="m-0">
