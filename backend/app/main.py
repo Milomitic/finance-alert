@@ -15,6 +15,7 @@ from app.api import catalog as catalog_router
 from app.api import dashboard as dashboard_router
 from app.api import market as market_router
 from app.api import price_alerts as price_alerts_router
+from app.api import spotlight as spotlight_router
 from app.api import rules as rules_router
 from app.api import stocks as stocks_router
 from app.api import watchlists as watchlists_router
@@ -54,6 +55,7 @@ app.include_router(alerts_router.router)
 app.include_router(dashboard_router.router)
 app.include_router(market_router.router)
 app.include_router(price_alerts_router.router)
+app.include_router(spotlight_router.router)
 
 
 @app.get("/api/health")
