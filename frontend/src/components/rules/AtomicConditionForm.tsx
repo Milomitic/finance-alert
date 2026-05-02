@@ -18,8 +18,20 @@ interface Props {
 export function AtomicConditionForm({ value, onChange }: Props) {
   const catalog = useRuleCatalog();
 
-  if (catalog.isLoading || !catalog.data) {
+  if (catalog.isLoading) {
     return <div className="text-xs text-muted-foreground">Caricamento catalog…</div>;
+  }
+  if (catalog.error) {
+    const msg = catalog.error instanceof Error ? catalog.error.message : "errore catalog";
+    return (
+      <div className="text-xs text-red-600 p-2 border border-red-200 rounded">
+        Catalog non caricato: {msg}.<br />
+        Riavvia il backend (l'endpoint <code>/api/rules/catalog</code> è stato aggiunto in Fase 3C).
+      </div>
+    );
+  }
+  if (!catalog.data || catalog.data.length === 0) {
+    return <div className="text-xs text-red-600">Catalog vuoto — verifica /api/rules/catalog</div>;
   }
 
   const entry = catalog.data.find((c) => c.kind === value.kind);

@@ -69,9 +69,11 @@ export function MarketTreemap({ treemap, indices }: Props) {
   const [selected, setSelected] = useState<string>("all");
   const filtered = useMemo(() => {
     const src = selected === "all" ? treemap : treemap.filter((t) => t.index === selected);
+    // Recharts 3.x default dataKey is "value"; use that to avoid any internal
+    // field collision with "size".
     return src.map((t) => ({
       name: t.ticker,
-      size: t.market_cap,
+      value: t.market_cap,
       ticker: t.ticker,
       change_pct: t.change_pct,
     }));
@@ -94,16 +96,20 @@ export function MarketTreemap({ treemap, indices }: Props) {
             </SelectContent>
           </Select>
         </div>
-        <div className="flex-1 min-h-[220px]" title="Click su un tile per andare alla pagina dello stock">
+        <div className="text-[10px] text-muted-foreground mb-1">
+          {filtered.length} stocks · totale mkt-cap ${(filtered.reduce((s, t) => s + (t.value ?? 0), 0) / 1e12).toFixed(1)}T
+        </div>
+        <div className="h-[320px]" title="Click su un tile per andare alla pagina dello stock">
           {filtered.length === 0 ? (
             <div className="h-full flex items-center justify-center text-sm text-muted-foreground">Nessun dato</div>
           ) : (
             <ResponsiveContainer width="100%" height="100%">
               <Treemap
                 data={filtered}
-                dataKey="size"
+                dataKey="value"
                 nameKey="ticker"
                 content={renderCell as never}
+                isAnimationActive={false}
                 onClick={(payload) => {
                   const ticker = (payload as { ticker?: string } | undefined)?.ticker;
                   if (ticker) navigate(`/stocks/${ticker}`);
