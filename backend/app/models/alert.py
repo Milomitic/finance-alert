@@ -28,8 +28,8 @@ class Alert(Base):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    rule_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("rules.id", ondelete="CASCADE"), nullable=False
+    rule_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("rules.id", ondelete="CASCADE"), nullable=True
     )
     stock_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("stocks.id", ondelete="CASCADE"), nullable=False
