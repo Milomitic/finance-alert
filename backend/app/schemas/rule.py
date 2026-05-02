@@ -4,7 +4,13 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-_VALID_KINDS = {"rsi_oversold", "rsi_overbought", "golden_cross", "death_cross"}
+_VALID_KINDS = {
+    "rsi_oversold", "rsi_overbought", "golden_cross", "death_cross",
+    "volume_spike", "breakout",
+    "macd_bullish_cross", "macd_bearish_cross",
+    "bollinger_squeeze", "bollinger_breakout",
+    "composite",
+}
 
 
 class RuleBase(BaseModel):

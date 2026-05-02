@@ -7,7 +7,9 @@ from app.rules.rsi_rules import RsiOverboughtRule, RsiOversoldRule
 
 
 def test_registry_contains_all_4_kinds() -> None:
-    assert set(RULES.keys()) == {"rsi_oversold", "rsi_overbought", "golden_cross", "death_cross"}
+    # Original 4 kinds must still be present (registry now contains more)
+    for kind in {"rsi_oversold", "rsi_overbought", "golden_cross", "death_cross"}:
+        assert kind in RULES
 
 
 def test_get_rule_returns_correct_class() -> None:
@@ -20,3 +22,14 @@ def test_get_rule_returns_correct_class() -> None:
 def test_get_rule_unknown_raises_keyerror() -> None:
     with pytest.raises(KeyError):
         get_rule("nonexistent_rule")
+
+
+def test_registry_contains_all_3c_rules() -> None:
+    from app.rules.registry import RULES
+    expected = {
+        "rsi_oversold", "rsi_overbought", "golden_cross", "death_cross",
+        "volume_spike", "breakout",
+        "macd_bullish_cross", "macd_bearish_cross",
+        "bollinger_squeeze", "bollinger_breakout",
+    }
+    assert expected.issubset(set(RULES.keys()))
