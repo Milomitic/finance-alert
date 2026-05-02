@@ -255,3 +255,104 @@ export interface MarketSummary {
   movers?: MoversBlock;
   treemap?: TreemapLeaf[];
 }
+
+// === Fase 3B: Stock Detail ===
+
+export interface OhlcvBar {
+  date: string;     // YYYY-MM-DD
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+}
+
+export interface IndicatorPoint {
+  date: string;
+  value: number | null;
+}
+
+export interface IndicatorSeries {
+  sma50: IndicatorPoint[];
+  sma200: IndicatorPoint[];
+  rsi14: IndicatorPoint[];
+}
+
+export interface StockKpis {
+  last_close: number | null;
+  prev_close: number | null;
+  change_pct: number | null;
+  high_52w: number | null;
+  low_52w: number | null;
+  vol_avg_20: number | null;
+  vol_today: number | null;
+  vol_ratio: number | null;
+}
+
+export interface EffectiveRule {
+  kind: string;
+  enabled: boolean;
+  params: Record<string, unknown>;
+  source: "tier1" | "tier2";
+  watchlist_name: string | null;
+}
+
+export interface StockDetail {
+  stock: Stock;
+  ohlcv: OhlcvBar[];
+  indicators: IndicatorSeries;
+  kpis: StockKpis;
+  effective_rules: EffectiveRule[];
+  alerts_history: Alert[];
+}
+
+export interface StockNewsItem {
+  title: string;
+  link: string;
+  publisher: string;
+  published_at: string | null;
+}
+
+export interface StockNews {
+  items: StockNewsItem[];
+}
+
+export interface PriceAlert {
+  id: number;
+  stock_id: number;
+  target_price: number;
+  direction: "above" | "below";
+  enabled: boolean;
+  note: string | null;
+  triggered_at: string | null;
+  created_at: string;
+}
+
+export interface PriceAlertCreate {
+  target_price: number;
+  direction: "above" | "below";
+  note?: string | null;
+}
+
+export interface PriceAlertUpdate {
+  enabled?: boolean;
+  target_price?: number;
+  direction?: "above" | "below";
+  note?: string | null;
+}
+
+export type SpotlightCardType = "top_gainer" | "most_alerted_7d" | "vol_spike";
+
+export interface SpotlightCard {
+  type: SpotlightCardType;
+  ticker: string;
+  last_close: number | null;
+  sparkline: number[];
+  change_pct?: number | null;
+  vol_ratio?: number | null;
+  alerts_count?: number | null;
+}
+
+export interface SpotlightSummary {
+  cards: SpotlightCard[];
+}
