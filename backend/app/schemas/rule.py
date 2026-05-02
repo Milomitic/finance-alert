@@ -44,9 +44,19 @@ class RuleCreate(RuleBase):
 
 
 class RuleUpdate(BaseModel):
+    kind: str | None = None
     enabled: bool | None = None
     params: dict[str, Any] | None = None
     expression: dict[str, Any] | None = None
+
+    @field_validator("kind")
+    @classmethod
+    def kind_must_be_known(cls, v: str | None) -> str | None:
+        if v is None:
+            return v
+        if v not in _VALID_KINDS:
+            raise ValueError(f"unknown rule kind: {v}")
+        return v
 
     @model_validator(mode="after")
     def expression_structure_valid(self) -> "RuleUpdate":

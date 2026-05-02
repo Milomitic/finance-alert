@@ -103,12 +103,17 @@ def patch_rule(
     r = db.execute(select(Rule).where(Rule.id == rule_id)).scalar_one_or_none()
     if r is None:
         raise HTTPException(status_code=404, detail="Rule not found")
+    if payload.kind is not None:
+        r.kind = payload.kind
     if payload.enabled is not None:
         r.enabled = payload.enabled
     if payload.params is not None:
         r.params = json.dumps(payload.params)
-    if payload.expression is not None:
-        r.expression = json.dumps(payload.expression)
+    # expression: PATCH supports both setting (dict) and explicit clearing.
+    # Pydantic doesn't distinguish "field omitted" from "field set to null", so
+    # we use model_fields_set to detect whether the client sent the key at all.
+    if "expression" in payload.model_fields_set:
+        r.expression = json.dumps(payload.expression) if payload.expression else None
     db.commit()
     db.refresh(r)
     return _to_out(r)

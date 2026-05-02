@@ -16,6 +16,7 @@ export interface RuleCreatePayload {
 }
 
 export interface RuleUpdatePayload {
+  kind?: string;
   enabled?: boolean;
   params?: Record<string, unknown>;
   expression?: RuleExpressionNode | null;

@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import type { Rule, RuleExpressionNode } from "@/api/types";
+import type { Rule, RuleExpressionNode, RuleKind } from "@/api/types";
 import { ExpressionPreview } from "@/components/rules/ExpressionPreview";
 import { ExpressionTree } from "@/components/rules/ExpressionTree";
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,27 @@ const DEFAULT_EXPRESSION: RuleExpressionNode = {
   ],
 };
 
+/**
+ * Strip single-child wrappers down to the innermost expression. If the result
+ * is a single atomic, return a payload using the legacy kind+params path
+ * (expression=null) — semantically NOT a composite. Otherwise return a true
+ * composite payload.
+ */
+function compactExpression(expr: RuleExpressionNode): {
+  kind: string;
+  params: Record<string, unknown>;
+  expression: RuleExpressionNode | null;
+} {
+  let current: RuleExpressionNode = expr;
+  while (current.op !== "atomic" && current.children.length === 1) {
+    current = current.children[0];
+  }
+  if (current.op === "atomic") {
+    return { kind: current.kind, params: current.params, expression: null };
+  }
+  return { kind: "composite", params: {}, expression: current };
+}
+
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -40,19 +61,25 @@ export function RuleEditorDialog({ open, onOpenChange, rule }: Props) {
 
   async function handleSave() {
     setError(null);
+    const compact = compactExpression(expression);
     try {
       if (isEdit && rule) {
         await updateMut.mutateAsync({
           id: rule.id,
-          payload: { enabled, expression },
+          payload: {
+            kind: compact.kind,
+            enabled,
+            params: compact.params,
+            expression: compact.expression,
+          },
         });
       } else {
         await createMut.mutateAsync({
           watchlist_id: null,
-          kind: "composite",
-          params: {},
+          kind: compact.kind as RuleKind,
+          params: compact.params,
           enabled,
-          expression,
+          expression: compact.expression,
         });
       }
       onOpenChange(false);
