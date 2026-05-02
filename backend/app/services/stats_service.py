@@ -188,7 +188,7 @@ class SystemStatus:
     send_digest_next_run: datetime | None
     refresh_catalog_next_run: datetime | None
     telegram_configured: bool
-    last_digest_sent_at: datetime | None  # always None in 3A; will be wired in 3D
+    last_digest_sent_at: datetime | None  # always None until a digest audit log is added (out of scope for 3A/3A-bis/3B)
 
 
 def get_system_status(db: Session) -> SystemStatus:

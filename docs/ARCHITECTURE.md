@@ -3,6 +3,7 @@
 > Documento vivo. **Aggiornare ad ogni commit che modifica architettura, flussi, modello dati, dipendenze esterne, o policy operative.** Vedi §10 (Policy di manutenzione).
 
 **Ultimo aggiornamento**: 2026-05-02
+**Roadmap update 2026-05-02**: Fase 3D (Multi-channel notifiers) rimossa dal piano — out of scope.
 **Stato applicazione**: Fase 1 in production. Fase 2 (alert engine) implemented. Fase 3A (Dashboard Home) implemented. Fase 3A-bis (Market Dashboard redesign) implemented.
 
 ---
@@ -418,7 +419,6 @@ Setup tramite `scripts/windows/Register-FinanceAlertStartup.ps1` (no admin richi
 | **Fase 3A-bis** — Market Dashboard | **Implementata** | Redesign con primary-focus su statistiche tecniche per-indice. Snapshot pre-computato (`market_snapshot`) a fine scan; endpoint `/api/dashboard/market-summary`; 13 nuovi componenti (HeroStrip + BreadthMatrix + Movers/RSI/Sectors/52w-Vol + Treemap + AlertsCompactPanel + SystemStatusFooter); densità informativa alta con breakdown per i 7 indici (SP500/NDX/DJI/EUSTX50/FTSEMIB/SSE50/HSI30) |
 | **Fase 3B** — Stock Detail | Futura | Pagina stock con candlestick (lightweight-charts), regole per-stock (Tier 3 override) |
 | **Fase 3C** — Indicatori avanzati | Futura | MACD, Bollinger Bands, ATR, ADX; regole volume/breakout; editor regole UI con AND/OR |
-| **Fase 3D** — Multi-channel notifiers | Futura | Telegram per-watchlist/stream, email, webhook |
 | **Fase 3E** — Settings & hit-rate | Futura | Pagina settings, statistiche hit-rate per regola, UI stato refresh catalogo |
 
 ## 10. Policy di manutenzione di questo documento
