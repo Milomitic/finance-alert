@@ -85,6 +85,16 @@ def run_tracked_scan(
         except Exception as snap_exc:  # noqa: BLE001
             logger.warning(f"[scan_runner] snapshot recompute failed (non-fatal): {snap_exc}")
 
+        # Evaluate price-target alerts — non-fatal, scan succeeded already.
+        try:
+            from app.services import price_alert_service
+
+            fired = price_alert_service.evaluate_all(db)
+            if fired:
+                logger.info(f"[scan_runner] {fired} price alert(s) fired for ScanRun {run.id}")
+        except Exception as pa_exc:  # noqa: BLE001
+            logger.warning(f"[scan_runner] price alert evaluation failed (non-fatal): {pa_exc}")
+
         run.completed_at = datetime.now(UTC)
         db.commit()
         logger.info(

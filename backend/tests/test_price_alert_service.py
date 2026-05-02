@@ -85,3 +85,42 @@ def test_update_resets_triggered_when_target_changes(db):
     assert pa.triggered_at is not None
     updated = price_alert_service.update(db, pa.id, target_price=110.0)
     assert updated.triggered_at is None
+
+
+from app.services import scan_runner
+
+
+def test_scan_runner_fires_price_alerts(db, monkeypatch):
+    """run_tracked_scan invokes evaluate_all at the end."""
+    s = _seed_stock_with_two_bars(db, "FIRE", prev_close=99.0, last_close=101.0)
+    price_alert_service.create(db, s.id, 100.0, "above")
+
+    # Stub scan_universe so we don't run the full alert engine
+    from app.services import scan_service
+    monkeypatch.setattr(
+        scan_service, "scan_universe",
+        lambda db, on_progress=None, progress_every=10: scan_service.ScanResult(
+            stocks_scanned=1, stocks_skipped=0, alerts_fired=0, states_updated=0,
+        ),
+    )
+
+    run = scan_runner.run_tracked_scan(db, trigger="manual")
+    assert run.status == "success"
+    pa = db.query(PriceAlert).first()
+    assert pa.triggered_at is not None
+
+
+def test_scan_runner_price_alert_failure_is_non_fatal(db, monkeypatch):
+    s = _seed_stock_with_two_bars(db, "X", prev_close=100.0, last_close=100.0)
+    from app.services import scan_service
+    monkeypatch.setattr(
+        scan_service, "scan_universe",
+        lambda db, on_progress=None, progress_every=10: scan_service.ScanResult(
+            stocks_scanned=1, stocks_skipped=0, alerts_fired=0, states_updated=0,
+        ),
+    )
+    monkeypatch.setattr(price_alert_service, "evaluate_all",
+                        lambda db: (_ for _ in ()).throw(RuntimeError("boom")))
+
+    run = scan_runner.run_tracked_scan(db, trigger="manual")
+    assert run.status == "success"   # price alert failure must not mark scan failed
