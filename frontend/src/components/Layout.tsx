@@ -17,7 +17,7 @@ interface NavEntry {
 const NAV: NavEntry[] = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, enabled: true },
   { to: "/watchlists", label: "Watchlists", icon: ListChecks, enabled: true },
-  { to: "/stocks/AAPL", label: "Stocks", icon: Search, enabled: true },
+  { to: "/stocks", label: "Stocks", icon: Search, enabled: true },
   { to: "/alerts", label: "Alerts", icon: Bell, enabled: true },
   { to: "/rules", label: "Regole", icon: Sliders, enabled: false },
   { to: "/settings", label: "Impostazioni", icon: Settings, enabled: false },

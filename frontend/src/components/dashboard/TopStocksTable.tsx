@@ -53,7 +53,7 @@ export function TopStocksTable({ data }: Props) {
                 <TableRow key={s.stock_id}>
                   <TableCell className="font-medium">
                     <Link
-                      to={`/alerts?ticker=${encodeURIComponent(s.ticker)}`}
+                      to={`/stocks/${encodeURIComponent(s.ticker)}`}
                       className="hover:underline"
                     >
                       {s.ticker}

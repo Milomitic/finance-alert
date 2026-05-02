@@ -1,4 +1,5 @@
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
+import { Link } from "react-router-dom";
 import { useMemo, useState } from "react";
 
 import type { IndexBreadth } from "@/api/types";
@@ -171,10 +172,13 @@ export function BreadthMatrixTable({ data }: Props) {
                     "border-b border-border/50 hover:bg-muted/40 transition-colors",
                     rowHighlight(r),
                   )}
-                  title={`${getIndexMeta(r.code).fullName} — drill-down disponibile in Fase 3B`}
+                  title={`${getIndexMeta(r.code).fullName} — click per filtrare browser`}
                 >
                   <td className="px-4 py-2 font-semibold">
-                    <span className="inline-flex items-center gap-2">
+                    <Link
+                      to={`/stocks?index=${encodeURIComponent(r.code)}`}
+                      className="inline-flex items-center gap-2 hover:underline"
+                    >
                       {getIndexMeta(r.code).countryCode && (
                         <img
                           src={`/flags/${getIndexMeta(r.code).countryCode}.svg`}
@@ -186,7 +190,7 @@ export function BreadthMatrixTable({ data }: Props) {
                         />
                       )}
                       <span>{r.code}</span>
-                    </span>
+                    </Link>
                   </td>
                   <td className="text-right px-3 py-2">{r.n}</td>
                   <td className={cn("text-right px-3 py-2", cellTone(r.pct_above_sma200, "pct"))}>{fmtPct(r.pct_above_sma200)}</td>

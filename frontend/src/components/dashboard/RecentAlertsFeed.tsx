@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 
 import type { Alert } from "@/api/types";
 import { AlertDetailDialog } from "@/components/AlertDetailDialog";
@@ -54,7 +55,17 @@ export function RecentAlertsFeed({ alerts }: Props) {
                   <span className="text-lg" aria-hidden="true">
                     {KIND_EMOJI[a.rule_kind ?? ""] ?? "•"}
                   </span>
-                  <span className="font-medium min-w-[60px]">{a.ticker ?? "—"}</span>
+                  {a.ticker ? (
+                    <Link
+                      to={`/stocks/${encodeURIComponent(a.ticker)}`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="font-medium min-w-[60px] hover:underline"
+                    >
+                      {a.ticker}
+                    </Link>
+                  ) : (
+                    <span className="font-medium min-w-[60px]">—</span>
+                  )}
                   <Badge variant="secondary" className="text-xs">
                     {KIND_LABEL[a.rule_kind ?? ""] ?? a.rule_kind ?? "—"}
                   </Badge>
