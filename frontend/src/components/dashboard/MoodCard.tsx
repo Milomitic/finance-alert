@@ -23,9 +23,9 @@ interface RegionDef {
 }
 
 const REGIONS: RegionDef[] = [
-  { code: "US",   label: "Stati Uniti", flagSrc: "/flags/us.svg",   indexCodes: ["SP500", "NDX", "DJI"] },
-  { code: "EU",   label: "Europa",       flagSrc: "/flags/eu.svg",   indexCodes: ["EUSTX50", "FTSEMIB"] },
-  { code: "ASIA", label: "Asia",         flagSrc: null, emoji: "🌏", indexCodes: ["SSE50", "HSI30"] },
+  { code: "US",   label: "USA",     flagSrc: "/flags/us.svg",   indexCodes: ["SP500", "NDX", "DJI"] },
+  { code: "EU",   label: "Europa",  flagSrc: "/flags/eu.svg",   indexCodes: ["EUSTX50", "FTSEMIB"] },
+  { code: "ASIA", label: "Asia",    flagSrc: null, emoji: "🌏", indexCodes: ["SSE50", "HSI30"] },
 ];
 
 const MOOD_CONFIG: Record<MoodKey, {
@@ -88,17 +88,36 @@ function deriveMood(indices: IndexBreadth[]): RegionMood {
   return { mood, pct_above_sma200: weightedPct, advancers, decliners, avg_change: weightedChange, total_stocks: totalN };
 }
 
-function MoodPill({ mood }: { mood: MoodKey }) {
-  const Icon = mood === "bullish" ? TrendingUp : mood === "bearish" ? TrendingDown : Minus;
+function MoodDot({ mood }: { mood: MoodKey }) {
   return (
     <span className={cn(
-      "inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold",
-      mood === "bullish" && "bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-200",
-      mood === "bearish" && "bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-200",
-      mood === "neutral" && "bg-slate-200/80 dark:bg-slate-700/50 text-slate-800 dark:text-slate-200",
-    )}>
-      <Icon className="h-2.5 w-2.5" />
-      {mood === "bullish" ? "Bull" : mood === "bearish" ? "Bear" : "Neutr"}
+      "inline-block h-2 w-2 rounded-full shrink-0",
+      mood === "bullish" && "bg-green-500",
+      mood === "bearish" && "bg-red-500",
+      mood === "neutral" && "bg-slate-400",
+    )} title={mood} />
+  );
+}
+
+function IndexPill({ idx }: { idx: IndexBreadth }) {
+  const meta = getIndexMeta(idx.code);
+  const change = idx.avg_change_pct;
+  const sma = idx.pct_above_sma200;
+  const changeColor =
+    change == null ? "text-muted-foreground" :
+    change > 0 ? "text-green-700 dark:text-green-300" :
+    change < 0 ? "text-red-700 dark:text-red-300" :
+    "text-muted-foreground";
+  return (
+    <span
+      className="inline-flex items-center gap-1 rounded bg-background/70 dark:bg-black/30 px-1.5 py-0.5 text-[10px] tabular-nums whitespace-nowrap"
+      title={`${meta.fullName} · ${idx.n} stocks`}
+    >
+      <span className="font-bold">{idx.code}</span>
+      <span className="opacity-60">{sma == null ? "—" : `${sma.toFixed(0)}%`}</span>
+      <span className={cn("font-semibold", changeColor)}>
+        {change == null ? "—" : `${change >= 0 ? "+" : ""}${change.toFixed(2)}%`}
+      </span>
     </span>
   );
 }
@@ -112,71 +131,38 @@ function RegionRow({ region, byIndex, parentFg }: { region: RegionDef; byIndex: 
     "text-muted-foreground";
 
   return (
-    <div className="rounded-md bg-white/60 dark:bg-black/20 border border-white/40 dark:border-white/5 p-2 hover:bg-white/80 dark:hover:bg-black/30 transition-colors">
-      <div className="flex items-center gap-1.5 mb-1.5">
-        {region.flagSrc ? (
-          <img
-            src={region.flagSrc} alt={region.label}
-            width={18} height={12}
-            style={{ width: "18px", height: "12px", objectFit: "cover" }}
-            className="rounded-[1px] shadow-sm shrink-0"
-          />
-        ) : (
-          <span className="text-sm shrink-0" aria-hidden="true">{region.emoji}</span>
-        )}
-        <span className={cn("text-xs font-semibold", parentFg)}>{region.label}</span>
-        <MoodPill mood={m.mood} />
-        <span className={cn("ml-auto text-[10px] tabular-nums", changeColor)} title={ACRONYM_HELP.AVG_CHANGE}>
-          {m.avg_change >= 0 ? "+" : ""}{m.avg_change.toFixed(2)}%
-        </span>
-      </div>
-      <div className="flex items-center gap-1.5 text-[10px] flex-wrap">
-        <span className={cn("opacity-80 tabular-nums", parentFg)} title={ACRONYM_HELP.SMA200}>
-          <strong>{m.pct_above_sma200.toFixed(0)}%</strong> &gt; SMA200
-        </span>
-        <span className={cn("opacity-50", parentFg)}>·</span>
-        <span className={cn("opacity-80 tabular-nums", parentFg)} title={ACRONYM_HELP.AD_RATIO}>
-          A/D <strong>{m.advancers}/{m.decliners}</strong>
-        </span>
-        <span className={cn("opacity-50", parentFg)}>·</span>
-        <span className={cn("opacity-80 tabular-nums", parentFg)}>{m.total_stocks} st.</span>
-      </div>
-      {indices.length > 0 && (
-        <div className="mt-1.5 grid grid-cols-3 gap-1">
-          {indices.map((idx) => {
-            const meta = getIndexMeta(idx.code);
-            const change = idx.avg_change_pct;
-            const sma = idx.pct_above_sma200;
-            const cellClr =
-              sma === null ? "text-muted-foreground" :
-              sma >= 70 ? "text-green-700 dark:text-green-300 font-bold" :
-              sma >= 50 ? "text-foreground" :
-              sma >= 40 ? "text-amber-700 dark:text-amber-300" :
-              "text-red-700 dark:text-red-300 font-bold";
-            return (
-              <div
-                key={idx.code}
-                className="bg-background/60 rounded px-1.5 py-1 text-[9px]"
-                title={`${meta.fullName} · ${idx.n} stocks`}
-              >
-                <div className="font-semibold leading-none">{idx.code}</div>
-                <div className={cn("tabular-nums leading-tight mt-0.5", cellClr)}>
-                  {sma === null ? "—" : `${sma.toFixed(0)}%`}
-                </div>
-                <div className={cn(
-                  "tabular-nums leading-tight",
-                  change === null ? "text-muted-foreground" :
-                  change > 0 ? "text-green-700 dark:text-green-300" :
-                  change < 0 ? "text-red-700 dark:text-red-300" :
-                  "text-muted-foreground",
-                )}>
-                  {change === null ? "—" : `${change >= 0 ? "+" : ""}${change.toFixed(2)}%`}
-                </div>
-              </div>
-            );
-          })}
-        </div>
+    <div className="flex items-center gap-2 rounded-md bg-white/60 dark:bg-black/20 border border-white/40 dark:border-white/5 px-2 py-1.5 hover:bg-white/80 dark:hover:bg-black/30 transition-colors">
+      {/* flag */}
+      {region.flagSrc ? (
+        <img
+          src={region.flagSrc} alt={region.label}
+          width={18} height={12}
+          style={{ width: "18px", height: "12px", objectFit: "cover" }}
+          className="rounded-[1px] shadow-sm shrink-0"
+        />
+      ) : (
+        <span className="text-sm shrink-0" aria-hidden="true">{region.emoji}</span>
       )}
+      {/* name */}
+      <span className={cn("text-xs font-bold shrink-0", parentFg)}>{region.label}</span>
+      {/* mood dot */}
+      <MoodDot mood={m.mood} />
+      {/* compact stats group */}
+      <span className={cn("text-[10px] tabular-nums shrink-0", parentFg, "opacity-80")} title={ACRONYM_HELP.SMA200}>
+        <strong>{m.pct_above_sma200.toFixed(0)}%</strong>
+        <span className="opacity-60 ml-0.5">SMA200</span>
+      </span>
+      <span className={cn("text-[10px] tabular-nums shrink-0", parentFg, "opacity-80")} title={ACRONYM_HELP.AD_RATIO}>
+        <strong>{m.advancers}/{m.decliners}</strong>
+        <span className="opacity-60 ml-0.5">A/D</span>
+      </span>
+      <span className={cn("text-[10px] tabular-nums shrink-0 font-bold", changeColor)} title={ACRONYM_HELP.AVG_CHANGE}>
+        {m.avg_change >= 0 ? "+" : ""}{m.avg_change.toFixed(2)}%
+      </span>
+      {/* index pills - on the right, allow wrap to next line if too narrow */}
+      <div className="ml-auto flex flex-wrap items-center gap-1 justify-end">
+        {indices.map((idx) => <IndexPill key={idx.code} idx={idx} />)}
+      </div>
     </div>
   );
 }
@@ -186,10 +172,10 @@ export function MoodCard({ global, byIndex }: Props) {
   const cfg = MOOD_CONFIG[moodKey];
 
   return (
-    <Card className={cn(cfg.bg, cfg.ring, "overflow-hidden")}>
-      <CardContent className="p-3 flex flex-col h-full gap-2">
+    <Card className={cn(cfg.bg, cfg.ring, "overflow-hidden h-full")}>
+      <CardContent className="p-3 flex flex-col h-full gap-2 overflow-hidden">
         {/* Header */}
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 shrink-0">
           <div className="relative">
             <Globe2 className={cn("h-4 w-4 opacity-70", cfg.fg)} />
             <span className={cn(
@@ -205,9 +191,9 @@ export function MoodCard({ global, byIndex }: Props) {
           </span>
         </div>
 
-        {/* Big mood block — compact */}
+        {/* Big mood block */}
         <div
-          className={cn("flex items-center gap-2.5 rounded-lg bg-white/40 dark:bg-black/20 p-2.5 border border-white/40 dark:border-white/5")}
+          className={cn("flex items-center gap-2.5 rounded-lg bg-white/40 dark:bg-black/20 p-2.5 border border-white/40 dark:border-white/5 shrink-0")}
           title={cfg.help}
         >
           <div className={cfg.fg}>{cfg.icon}</div>
@@ -237,8 +223,8 @@ export function MoodCard({ global, byIndex }: Props) {
           </div>
         </div>
 
-        {/* Per-region breakdown — scrollable if overflows */}
-        <div className="flex-1 min-h-0 overflow-y-auto pr-0.5 space-y-1.5">
+        {/* Per-region breakdown — single-row each, scrollable if overflows */}
+        <div className="flex-1 min-h-0 overflow-y-auto pr-0.5 space-y-1">
           {REGIONS.map((region) => (
             <RegionRow key={region.code} region={region} byIndex={byIndex} parentFg={cfg.fg} />
           ))}
