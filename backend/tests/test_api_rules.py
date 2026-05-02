@@ -162,3 +162,38 @@ def test_create_rule_with_too_deep_expression_returns_422(client, auth_headers):
         json={"kind": "composite", "params": {}, "enabled": True, "expression": expr},
     )
     assert resp.status_code == 422
+
+
+def test_create_multiple_composite_rules_in_same_scope_allowed(client, auth_headers):
+    """Composite rules are exempt from the (watchlist, kind) uniqueness check —
+    you can have several composites in the same scope, distinguished by their
+    expressions."""
+    expr1 = {
+        "op": "atomic", "kind": "rsi_oversold",
+        "params": {"period": 14, "threshold": 30},
+    }
+    expr2 = {
+        "op": "atomic", "kind": "volume_spike",
+        "params": {"window": 20, "threshold": 2.0},
+    }
+    r1 = client.post("/api/rules", headers=auth_headers, json={
+        "kind": "composite", "params": {}, "enabled": True, "expression": expr1,
+    })
+    assert r1.status_code == 201
+    r2 = client.post("/api/rules", headers=auth_headers, json={
+        "kind": "composite", "params": {}, "enabled": True, "expression": expr2,
+    })
+    assert r2.status_code == 201
+    assert r1.json()["id"] != r2.json()["id"]
+
+
+def test_create_duplicate_atomic_rule_still_409(client, auth_headers):
+    """The legacy atomic-kind uniqueness check is preserved."""
+    r1 = client.post("/api/rules", headers=auth_headers, json={
+        "kind": "rsi_oversold", "params": {"period": 14, "threshold": 30}, "enabled": True,
+    })
+    assert r1.status_code == 201
+    r2 = client.post("/api/rules", headers=auth_headers, json={
+        "kind": "rsi_oversold", "params": {"period": 14, "threshold": 25}, "enabled": True,
+    })
+    assert r2.status_code == 409

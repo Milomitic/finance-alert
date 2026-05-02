@@ -1,7 +1,7 @@
 """Alert rules (Tier 1 globals + Tier 2 watchlist overrides) and per-(rule, stock) edge state."""
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
@@ -9,12 +9,9 @@ from app.core.db import Base
 
 class Rule(Base):
     __tablename__ = "rules"
-    __table_args__ = (
-        # Note: SQLite treats NULL as distinct in UNIQUE — so multiple Tier 1 rules
-        # cannot share a kind (good), and multiple Tier 2 overrides cannot collide
-        # for the same (watchlist_id, kind).
-        UniqueConstraint("watchlist_id", "kind", name="uq_rules_watchlist_kind"),
-    )
+    # Note: no DB-level UNIQUE on (watchlist_id, kind) — Fase 3C composite rules
+    # share kind="composite" (or kind="composite_*") and the same scope can hold
+    # several. Uniqueness for atomic kinds is enforced API-side in `create_rule`.
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     # NULL => Tier 1 (global). Non-null => Tier 2 (override for that watchlist).

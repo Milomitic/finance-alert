@@ -61,21 +61,25 @@ def create_rule(
     db: Session = Depends(get_db),
     _user: User = Depends(get_current_user),
 ) -> RuleOut:
-    # Check duplicate (watchlist_id, kind) — manually since SQLite NULL handling in UNIQUE varies
-    if payload.watchlist_id is None:
-        existing = db.execute(
-            select(Rule).where(Rule.watchlist_id.is_(None), Rule.kind == payload.kind)
-        ).scalar_one_or_none()
-    else:
-        existing = db.execute(
-            select(Rule).where(
-                Rule.watchlist_id == payload.watchlist_id, Rule.kind == payload.kind
+    # Uniqueness check is enforced API-side only for atomic kinds: a watchlist
+    # can hold at most one rsi_oversold, golden_cross, etc. Composite rules are
+    # exempt — multiple composites with different expressions can coexist in the
+    # same scope.
+    if payload.kind != "composite":
+        if payload.watchlist_id is None:
+            existing = db.execute(
+                select(Rule).where(Rule.watchlist_id.is_(None), Rule.kind == payload.kind)
+            ).scalar_one_or_none()
+        else:
+            existing = db.execute(
+                select(Rule).where(
+                    Rule.watchlist_id == payload.watchlist_id, Rule.kind == payload.kind
+                )
+            ).scalar_one_or_none()
+        if existing is not None:
+            raise HTTPException(
+                status_code=409, detail="Rule already exists for this (watchlist, kind)"
             )
-        ).scalar_one_or_none()
-    if existing is not None:
-        raise HTTPException(
-            status_code=409, detail="Rule already exists for this (watchlist, kind)"
-        )
     r = Rule(
         watchlist_id=payload.watchlist_id,
         kind=payload.kind,
