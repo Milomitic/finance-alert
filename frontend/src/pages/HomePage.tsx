@@ -4,6 +4,7 @@ import { AlertsCompactPanel } from "@/components/dashboard/AlertsCompactPanel";
 import { BreadthMatrixTable } from "@/components/dashboard/BreadthMatrixTable";
 import { FiftyTwoWeekVolCard } from "@/components/dashboard/FiftyTwoWeekVolCard";
 import { HeroStrip } from "@/components/dashboard/HeroStrip";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { MarketTreemap } from "@/components/dashboard/MarketTreemap";
 import { RsiHistogramCard } from "@/components/dashboard/RsiHistogramCard";
 import { SectorsHeatmapCard } from "@/components/dashboard/SectorsHeatmapCard";
@@ -139,7 +140,9 @@ export default function HomePage() {
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
         <div className="lg:col-span-2">
-          <MarketTreemap treemap={m.treemap} indices={m.by_index} />
+          <ErrorBoundary>
+            <MarketTreemap treemap={m.treemap} indices={m.by_index} />
+          </ErrorBoundary>
         </div>
         <SpotlightCards />
       </div>

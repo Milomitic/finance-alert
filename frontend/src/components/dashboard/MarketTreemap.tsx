@@ -1,3 +1,4 @@
+import * as React from "react";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ResponsiveContainer, Treemap } from "recharts";
@@ -20,23 +21,35 @@ function colorFor(change: number): string {
   return "#dc2626";
 }
 
-interface ContentProps {
+// Recharts 3.x passes a TreemapNode (with original data fields spread at root)
+// to the content function. Use function form (not ReactNode) for reliability:
+// the ReactNode form is brittle when libraries change cloneElement behavior.
+interface CellNode {
   x?: number;
   y?: number;
   width?: number;
   height?: number;
+  depth?: number;
   ticker?: string;
   change_pct?: number;
+  name?: string;
+  // Some Recharts versions nest the original row inside `payload`
+  payload?: { ticker?: string; change_pct?: number };
 }
 
-function CustomCell(props: ContentProps) {
-  const { x = 0, y = 0, width = 0, height = 0, ticker = "", change_pct = 0 } = props;
-  if (width < 2 || height < 2) return null;
+function renderCell(node: CellNode): React.ReactElement {
+  const x = node.x ?? 0;
+  const y = node.y ?? 0;
+  const width = node.width ?? 0;
+  const height = node.height ?? 0;
+  const ticker = node.ticker ?? node.payload?.ticker ?? node.name ?? "";
+  const changePct = node.change_pct ?? node.payload?.change_pct ?? 0;
+  if (width < 2 || height < 2) return <g />;
   const showLabel = width > 40 && height > 22;
   const showChange = width > 60 && height > 36;
   return (
     <g>
-      <rect x={x} y={y} width={width} height={height} fill={colorFor(change_pct)} stroke="#fff" strokeWidth={1} />
+      <rect x={x} y={y} width={width} height={height} fill={colorFor(changePct)} stroke="#fff" strokeWidth={1} />
       {showLabel && (
         <text x={x + width / 2} y={y + height / 2} textAnchor="middle" fill="#fff" fontSize={12} fontWeight="bold">
           {ticker}
@@ -44,7 +57,7 @@ function CustomCell(props: ContentProps) {
       )}
       {showChange && (
         <text x={x + width / 2} y={y + height / 2 + 14} textAnchor="middle" fill="#fff" fontSize={11}>
-          {change_pct >= 0 ? "+" : ""}{change_pct.toFixed(1)}%
+          {changePct >= 0 ? "+" : ""}{changePct.toFixed(1)}%
         </text>
       )}
     </g>
@@ -89,7 +102,8 @@ export function MarketTreemap({ treemap, indices }: Props) {
               <Treemap
                 data={filtered}
                 dataKey="size"
-                content={<CustomCell />}
+                nameKey="ticker"
+                content={renderCell as never}
                 onClick={(payload) => {
                   const ticker = (payload as { ticker?: string } | undefined)?.ticker;
                   if (ticker) navigate(`/stocks/${ticker}`);
