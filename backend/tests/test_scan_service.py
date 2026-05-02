@@ -174,3 +174,39 @@ def test_scan_tier2_custom_params_used_in_evaluation(db: Session) -> None:
     # Check state was created under the global rule_id (not the Tier 2 one)
     states = db.query(RuleState).filter_by(stock_id=stock.id).all()
     assert len(states) == 1
+
+
+def test_scan_uses_expression_when_present(db) -> None:
+    """When Rule.expression is set, scan_service uses the composite evaluator."""
+    import json
+    from datetime import date, timedelta
+
+    from app.models import OhlcvDaily, Rule, Stock
+    from app.services.scan_service import scan_universe
+
+    s = Stock(ticker="EXPRTEST.MI", name="Test", exchange="BIT", currency="EUR")
+    db.add(s)
+    db.commit()
+    db.refresh(s)
+    base = date(2025, 1, 1)
+    closes = [100.0 - i * 0.5 for i in range(40)]
+    for i, c in enumerate(closes):
+        db.add(OhlcvDaily(stock_id=s.id, date=base + timedelta(days=i),
+                          open=c, high=c, low=c, close=c, volume=1000))
+    expr = {
+        "op": "and",
+        "children": [
+            {"op": "atomic", "kind": "rsi_oversold", "params": {"period": 14, "threshold": 30}},
+            {"op": "atomic", "kind": "volume_spike", "params": {"window": 5, "threshold": 0.0}},
+        ],
+    }
+    rule = Rule(
+        kind="composite",
+        params="{}",
+        expression=json.dumps(expr),
+        enabled=True,
+    )
+    db.add(rule)
+    db.commit()
+    result = scan_universe(db)
+    assert result.alerts_fired >= 1

@@ -19,6 +19,7 @@ from app.models import (
     Stock,
     WatchlistItem,
 )
+from app.rules.composite import evaluate_expression, snapshot_expression
 from app.rules.registry import RULES
 
 
@@ -151,25 +152,43 @@ def scan_universe(
         result.stocks_scanned += 1
         last_close = float(ohlcv["close"].iloc[-1])
 
-        for kind in global_rules:
-            resolved = _resolve_effective_rule(stock.id, kind, global_rules, tier2)
-            if resolved is None:
+        for kind, candidate_global in global_rules.items():
+            global_rule = candidate_global
+            if not global_rule.enabled:
                 continue
-            global_rule, eff_params = resolved
-            rule_obj = RULES.get(kind)
-            if rule_obj is None:
-                continue
-            try:
-                new_eval = rule_obj.evaluate(ohlcv, eff_params)
-            except Exception as e:  # noqa: BLE001
-                logger.exception(f"[scan] eval crashed for stock={stock.ticker} kind={kind}: {e}")
-                continue
+            if global_rule.expression:
+                try:
+                    expr = json.loads(global_rule.expression)
+                    new_eval = evaluate_expression(expr, ohlcv)
+                except Exception as e:  # noqa: BLE001
+                    logger.exception(
+                        f"[scan] composite eval crashed stock={stock.ticker} rule_id={global_rule.id}: {e}"
+                    )
+                    continue
+                eff_params: dict[str, Any] = {}
+                rule_obj = None  # signals "use composite snapshot below"
+            else:
+                resolved = _resolve_effective_rule(stock.id, kind, global_rules, tier2)
+                if resolved is None:
+                    continue
+                global_rule, eff_params = resolved
+                rule_obj = RULES.get(kind)
+                if rule_obj is None:
+                    continue
+                try:
+                    new_eval = rule_obj.evaluate(ohlcv, eff_params)
+                except Exception as e:  # noqa: BLE001
+                    logger.exception(f"[scan] eval crashed for stock={stock.ticker} kind={kind}: {e}")
+                    continue
 
             state = _get_or_create_state(db, global_rule.id, stock.id)
             now = datetime.now(UTC)
             if state is None:
                 if new_eval:
-                    snapshot = rule_obj.snapshot(ohlcv, eff_params)
+                    if rule_obj is not None:
+                        snapshot = rule_obj.snapshot(ohlcv, eff_params)
+                    else:
+                        snapshot = snapshot_expression(json.loads(global_rule.expression), ohlcv)
                     db.add(
                         Alert(
                             rule_id=global_rule.id,
@@ -190,7 +209,10 @@ def scan_universe(
                 result.states_updated += 1
             else:
                 if not state.last_evaluation and new_eval:
-                    snapshot = rule_obj.snapshot(ohlcv, eff_params)
+                    if rule_obj is not None:
+                        snapshot = rule_obj.snapshot(ohlcv, eff_params)
+                    else:
+                        snapshot = snapshot_expression(json.loads(global_rule.expression), ohlcv)
                     db.add(
                         Alert(
                             rule_id=global_rule.id,
