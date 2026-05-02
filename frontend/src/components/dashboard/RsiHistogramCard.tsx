@@ -54,7 +54,7 @@ export function RsiHistogramCard({ rsi, indices }: Props) {
   const visibleIndices = indices.filter((i) => !excluded.has(i.code));
 
   return (
-    <Card className="h-full">
+    <Card className="h-full overflow-hidden">
       <CardContent className="p-4 flex flex-col h-full min-h-0">
         <div className="flex items-center justify-between mb-2 gap-2">
           <span className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">

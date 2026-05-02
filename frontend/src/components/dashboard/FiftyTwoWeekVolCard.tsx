@@ -55,9 +55,9 @@ function VolRow({ m }: { m: VolumeSpike }) {
 
 export function FiftyTwoWeekVolCard({ movers }: Props) {
   return (
-    <Card className="h-full">
+    <Card className="h-full overflow-hidden">
       <CardContent className="p-0 h-full flex flex-col min-h-0">
-        <Tabs defaultValue="hilo" className="flex-1 flex flex-col">
+        <Tabs defaultValue="hilo" className="flex-1 flex flex-col min-h-0">
           <TabsList className="h-10 px-1 rounded-none border-b w-full justify-start bg-muted/30">
             <TabsTrigger value="hilo" className="text-sm h-9 px-3" title="Stock che oggi raggiungono nuovi massimi/minimi a 52 settimane">52w events</TabsTrigger>
             <TabsTrigger value="vol" className="text-sm h-9 px-3" title="Stock con volume oggi maggiore di 2× la media a 20 giorni">Volume spikes</TabsTrigger>

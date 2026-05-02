@@ -17,7 +17,7 @@ function bgFor(change: number): string {
 
 export function SectorsHeatmapCard({ sectors }: Props) {
   return (
-    <Card className="h-full">
+    <Card className="h-full overflow-hidden">
       <CardContent className="p-4 flex flex-col h-full min-h-0">
         <div className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-2 shrink-0">Sectors (Avg Δ%)</div>
         {sectors.length === 0 ? (
