@@ -20,7 +20,7 @@ const NAV: NavEntry[] = [
   { to: "/watchlists", label: "Watchlists", icon: ListChecks, enabled: true },
   { to: "/stocks", label: "Stocks", icon: Search, enabled: true },
   { to: "/alerts", label: "Alerts", icon: Bell, enabled: true },
-  { to: "/rules", label: "Regole", icon: Sliders, enabled: false },
+  { to: "/rules", label: "Regole", icon: Sliders, enabled: true },
   { to: "/settings", label: "Impostazioni", icon: Settings, enabled: false },
 ];
 

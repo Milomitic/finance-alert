@@ -5,6 +5,7 @@ import ProtectedRoute from "@/components/ProtectedRoute";
 import AlertsPage from "@/pages/AlertsPage";
 import HomePage from "@/pages/HomePage";
 import LoginPage from "@/pages/LoginPage";
+import RulesPage from "@/pages/RulesPage";
 import StockDetailPage from "@/pages/StockDetailPage";
 import StocksBrowserPage from "@/pages/StocksBrowserPage";
 import WatchlistDetailPage from "@/pages/WatchlistDetailPage";
@@ -28,6 +29,7 @@ export default function App() {
         <Route path="/alerts" element={<AlertsPage />} />
         <Route path="/stocks" element={<StocksBrowserPage />} />
         <Route path="/stocks/:ticker" element={<StockDetailPage />} />
+        <Route path="/rules" element={<RulesPage />} />
       </Route>
       <Route path="*" element={<div className="p-8">404</div>} />
     </Routes>
