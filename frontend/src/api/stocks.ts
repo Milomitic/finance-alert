@@ -1,5 +1,11 @@
 import { api } from "./client";
-import type { FilterOptions, Stock, StockSearch } from "./types";
+import type {
+  FilterOptions,
+  Stock,
+  StockDetail,
+  StockNews,
+  StockSearch,
+} from "./types";
 
 export interface SearchParams {
   q?: string;
@@ -28,5 +34,14 @@ export const stocks = {
   search: (params: SearchParams = {}, signal?: AbortSignal) =>
     api<StockSearch>(`/api/stocks/search${toQuery(params)}`, { signal }),
   filters: () => api<FilterOptions>("/api/stocks/filters"),
-  byTicker: (ticker: string) => api<Stock>(`/api/stocks/${encodeURIComponent(ticker)}`),
+  byTicker: (ticker: string) =>
+    api<Stock>(`/api/stocks/${encodeURIComponent(ticker)}`),
+  detail: (ticker: string, range = "1y") =>
+    api<StockDetail>(
+      `/api/stocks/${encodeURIComponent(ticker)}/detail?range=${range}`
+    ),
+  news: (ticker: string, limit = 5) =>
+    api<StockNews>(
+      `/api/stocks/${encodeURIComponent(ticker)}/news?limit=${limit}`
+    ),
 };
