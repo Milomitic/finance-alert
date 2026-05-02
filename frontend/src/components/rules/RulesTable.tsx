@@ -5,10 +5,11 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useDeleteRule, useUpdateRule } from "@/hooks/useRules";
 
-function describeExpression(expr: RuleExpressionNode | null, kind: string): string {
-  if (expr === null) return kind;
-  if (expr.op === "atomic") return expr.kind;
-  return `${expr.op.toUpperCase()} (${expr.children.length} cond.)`;
+function describeExpression(expr: RuleExpressionNode | null | undefined, kind: string): string {
+  if (expr === null || expr === undefined) return kind;
+  if (expr.op === "atomic") return expr.kind ?? kind;
+  const children = expr.children ?? [];
+  return `${expr.op.toUpperCase()} (${children.length} cond.)`;
 }
 
 interface Props {

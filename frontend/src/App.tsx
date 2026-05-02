@@ -1,5 +1,6 @@
 import { Route, Routes } from "react-router-dom";
 
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import Layout from "@/components/Layout";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import AlertsPage from "@/pages/AlertsPage";
@@ -29,7 +30,14 @@ export default function App() {
         <Route path="/alerts" element={<AlertsPage />} />
         <Route path="/stocks" element={<StocksBrowserPage />} />
         <Route path="/stocks/:ticker" element={<StockDetailPage />} />
-        <Route path="/rules" element={<RulesPage />} />
+        <Route
+          path="/rules"
+          element={
+            <ErrorBoundary>
+              <RulesPage />
+            </ErrorBoundary>
+          }
+        />
       </Route>
       <Route path="*" element={<div className="p-8">404</div>} />
     </Routes>
