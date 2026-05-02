@@ -13,9 +13,9 @@ interface Props {
 
 export function HeroStrip({ global, byIndex, computedAt, isStale, nextScanAt }: Props) {
   return (
-    <div className="grid gap-3 lg:grid-cols-[3fr_2fr]">
+    <div className="grid gap-3 lg:grid-cols-[3fr_2fr] max-h-[340px]">
       <MoodCard global={global} byIndex={byIndex} />
-      <div className="grid grid-rows-[1fr_auto] gap-3 min-h-[320px]">
+      <div className="grid grid-rows-[1fr_auto] gap-3 min-h-0">
         <GlobalKpiTiles global={global} />
         <DataFreshnessCard
           computedAt={computedAt}

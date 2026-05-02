@@ -147,7 +147,7 @@ export function BreadthMatrixTable({ data }: Props) {
           <span className="text-sm font-semibold uppercase tracking-wide">Breadth per indice</span>
           <span className="text-sm text-muted-foreground ml-3">snapshot ultima chiusura · clicca header per ordinare</span>
         </div>
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
           <table className="w-full border-collapse text-sm tabular-nums">
             <thead>
               <tr className="bg-muted/30 text-xs uppercase tracking-wide text-muted-foreground">

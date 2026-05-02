@@ -1,4 +1,5 @@
 import { ListChecks, LayoutDashboard, Search, Bell, Sliders, Settings, LogOut } from "lucide-react";
+import { NavbarSearch } from "@/components/NavbarSearch";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
@@ -79,8 +80,9 @@ export default function Layout() {
         </nav>
       </aside>
       <div className="flex flex-1 flex-col">
-        <header className="flex h-14 items-center justify-end gap-3 border-b px-6">
-          <span className="text-sm text-muted-foreground">
+        <header className="flex h-14 items-center gap-4 border-b px-6">
+          <NavbarSearch />
+          <span className="ml-auto text-sm text-muted-foreground">
             {me.data ? me.data.username : ""}
           </span>
           <Button variant="ghost" size="sm" onClick={onLogout} disabled={logout.isPending}>

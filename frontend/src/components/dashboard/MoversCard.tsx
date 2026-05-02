@@ -55,16 +55,16 @@ export function MoversCard({ movers }: Props) {
             <TabsTrigger value="vol" className="text-sm h-9 px-3" title="Top stock con volume oggi maggiore di 2× la media a 20 giorni">Volume×</TabsTrigger>
             <TabsTrigger value="hilo" className="text-sm h-9 px-3" title="Stock che oggi raggiungono nuovi massimi/minimi a 52 settimane">52w↑↓</TabsTrigger>
           </TabsList>
-          <TabsContent value="gainers" className="m-0">
+          <TabsContent value="gainers" className="m-0 max-h-[280px] overflow-y-auto">
             <MoversTable rows={movers.gainers} />
           </TabsContent>
-          <TabsContent value="losers" className="m-0">
+          <TabsContent value="losers" className="m-0 max-h-[280px] overflow-y-auto">
             <MoversTable rows={movers.losers} />
           </TabsContent>
-          <TabsContent value="vol" className="m-0">
+          <TabsContent value="vol" className="m-0 max-h-[280px] overflow-y-auto">
             <MoversTable rows={movers.volume_spikes} />
           </TabsContent>
-          <TabsContent value="hilo" className="m-0">
+          <TabsContent value="hilo" className="m-0 max-h-[280px] overflow-y-auto">
             <div className="px-3 py-2 text-sm text-muted-foreground">
               📈 {movers.new_52w_high.length} highs · 📉 {movers.new_52w_low.length} lows
             </div>
