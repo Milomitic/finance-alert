@@ -18,14 +18,14 @@ import {
   useUpdateRule,
 } from "@/hooks/useRules";
 
-const KIND_LABEL: Record<RuleKind, string> = {
+const KIND_LABEL: Record<string, string> = {
   rsi_oversold: "RSI Oversold",
   rsi_overbought: "RSI Overbought",
   golden_cross: "Golden Cross",
   death_cross: "Death Cross",
 };
 
-const KIND_DEFAULT_DESCRIPTION: Record<RuleKind, string> = {
+const KIND_DEFAULT_DESCRIPTION: Record<string, string> = {
   rsi_oversold: "default: RSI(14) < 30",
   rsi_overbought: "default: RSI(14) > 70",
   golden_cross: "default: SMA(50) attraversa SMA(200) verso l'alto",
