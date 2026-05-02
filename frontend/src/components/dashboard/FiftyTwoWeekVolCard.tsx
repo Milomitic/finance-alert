@@ -51,8 +51,8 @@ export function FiftyTwoWeekVolCard({ movers }: Props) {
       <CardContent className="p-0">
         <Tabs defaultValue="hilo">
           <TabsList className="h-10 px-1 rounded-none border-b w-full justify-start bg-muted/30">
-            <TabsTrigger value="hilo" className="text-sm h-9 px-3">52w events</TabsTrigger>
-            <TabsTrigger value="vol" className="text-sm h-9 px-3">Volume spikes</TabsTrigger>
+            <TabsTrigger value="hilo" className="text-sm h-9 px-3" title="Stock che oggi raggiungono nuovi massimi/minimi a 52 settimane">52w events</TabsTrigger>
+            <TabsTrigger value="vol" className="text-sm h-9 px-3" title="Stock con volume oggi maggiore di 2× la media a 20 giorni">Volume spikes</TabsTrigger>
           </TabsList>
           <TabsContent value="hilo" className="m-0">
             <div className="px-3 py-2 text-sm text-muted-foreground">

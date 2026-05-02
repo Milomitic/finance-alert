@@ -50,7 +50,7 @@ export default function HomePage() {
   if (market.isLoading || summary.isLoading) {
     return (
       <div className="space-y-4">
-        <div className="grid lg:grid-cols-[220px_1fr_220px] gap-3">
+        <div className="grid lg:grid-cols-[340px_1fr_200px] gap-3">
           <Card><CardContent className="p-4 h-[80px] animate-pulse bg-muted/40" /></Card>
           <Card><CardContent className="p-4 h-[80px] animate-pulse bg-muted/40" /></Card>
           <Card><CardContent className="p-4 h-[80px] animate-pulse bg-muted/40" /></Card>
@@ -114,6 +114,7 @@ export default function HomePage() {
     <div className="space-y-4">
       <HeroStrip
         global={m.global}
+        byIndex={m.by_index}
         computedAt={m.computed_at}
         isStale={m.is_stale}
         nextScanAt={nextScanAt}

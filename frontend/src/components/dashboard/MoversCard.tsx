@@ -50,8 +50,8 @@ export function MoversCard({ movers }: Props) {
           <TabsList className="h-10 px-1 rounded-none border-b w-full justify-start bg-muted/30">
             <TabsTrigger value="gainers" className="text-sm h-9 px-3">Gainers</TabsTrigger>
             <TabsTrigger value="losers" className="text-sm h-9 px-3">Losers</TabsTrigger>
-            <TabsTrigger value="vol" className="text-sm h-9 px-3">Volume×</TabsTrigger>
-            <TabsTrigger value="hilo" className="text-sm h-9 px-3">52w↑↓</TabsTrigger>
+            <TabsTrigger value="vol" className="text-sm h-9 px-3" title="Top stock con volume oggi maggiore di 2× la media a 20 giorni">Volume×</TabsTrigger>
+            <TabsTrigger value="hilo" className="text-sm h-9 px-3" title="Stock che oggi raggiungono nuovi massimi/minimi a 52 settimane">52w↑↓</TabsTrigger>
           </TabsList>
           <TabsContent value="gainers" className="m-0">
             <MoversTable rows={movers.gainers} />

@@ -1,10 +1,34 @@
+import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
+import { useMemo, useState } from "react";
+
 import type { IndexBreadth } from "@/api/types";
 import { Card, CardContent } from "@/components/ui/card";
-import { cn } from "@/lib/utils";
+import { ACRONYM_HELP } from "@/lib/acronymHelp";
 import { getIndexMeta } from "@/lib/indexMeta";
+import { cn } from "@/lib/utils";
 
 interface Props {
   data: IndexBreadth[];
+}
+
+type SortKey =
+  | "code"
+  | "n"
+  | "pct_above_sma200"
+  | "pct_above_sma50"
+  | "rsi_oversold_count"
+  | "rsi_overbought_count"
+  | "avg_change_pct"
+  | "ad_ratio"
+  | "new_52w_highs"
+  | "new_52w_lows"
+  | "volume_spikes_count";
+
+type SortDir = "asc" | "desc" | null;
+
+interface SortState {
+  key: SortKey | null;
+  dir: SortDir;
 }
 
 function fmtPct(v: number | null): string {
@@ -45,33 +69,102 @@ function cellTone(value: number | null, kind: "pct" | "change"): string {
   return "";
 }
 
+function getSortValue(r: IndexBreadth, key: SortKey): number | string {
+  if (key === "code") return r.code;
+  if (key === "ad_ratio") return r.advancers / Math.max(1, r.decliners);
+  const v = r[key];
+  if (v === null || v === undefined) return -Infinity;
+  return v as number;
+}
+
+interface HeaderProps {
+  column: SortKey;
+  label: string;
+  align?: "left" | "right";
+  help?: string;
+  state: SortState;
+  onClick: (col: SortKey) => void;
+}
+
+function SortableHeader({ column, label, align = "right", help, state, onClick }: HeaderProps) {
+  const active = state.key === column;
+  const dir = active ? state.dir : null;
+  return (
+    <th className={cn("px-3 py-2", align === "left" ? "text-left" : "text-right")}>
+      <button
+        type="button"
+        onClick={() => onClick(column)}
+        title={help}
+        className={cn(
+          "inline-flex items-center gap-1 hover:text-foreground transition-colors",
+          help && "cursor-help",
+          align === "right" && "ml-auto",
+        )}
+      >
+        <span>{label}</span>
+        {dir === "desc" && <ArrowDown className="h-3 w-3 text-foreground" />}
+        {dir === "asc" && <ArrowUp className="h-3 w-3 text-foreground" />}
+        {!active && <ArrowUpDown className="h-3 w-3 opacity-30" />}
+      </button>
+    </th>
+  );
+}
+
 export function BreadthMatrixTable({ data }: Props) {
+  const [sort, setSort] = useState<SortState>({ key: null, dir: null });
+
+  const handleSort = (col: SortKey) => {
+    if (sort.key !== col) {
+      // Default first click: descending for numbers, ascending for code
+      setSort({ key: col, dir: col === "code" ? "asc" : "desc" });
+    } else if (sort.dir === "desc") {
+      setSort({ key: col, dir: "asc" });
+    } else if (sort.dir === "asc") {
+      setSort({ key: null, dir: null });
+    } else {
+      setSort({ key: col, dir: "desc" });
+    }
+  };
+
+  const sortedData = useMemo(() => {
+    if (!sort.key || !sort.dir) return data;
+    const key = sort.key;
+    const dir = sort.dir;
+    return [...data].sort((a, b) => {
+      const aVal = getSortValue(a, key);
+      const bVal = getSortValue(b, key);
+      if (aVal < bVal) return dir === "asc" ? -1 : 1;
+      if (aVal > bVal) return dir === "asc" ? 1 : -1;
+      return 0;
+    });
+  }, [data, sort]);
+
   return (
     <Card>
       <CardContent className="p-0">
         <div className="flex items-center px-4 py-2.5 bg-muted/40 border-b">
           <span className="text-sm font-semibold uppercase tracking-wide">Breadth per indice</span>
-          <span className="text-sm text-muted-foreground ml-3">snapshot ultima chiusura</span>
+          <span className="text-sm text-muted-foreground ml-3">snapshot ultima chiusura · clicca header per ordinare</span>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full border-collapse text-sm tabular-nums">
             <thead>
               <tr className="bg-muted/30 text-xs uppercase tracking-wide text-muted-foreground">
-                <th className="text-left px-4 py-2">Indice</th>
-                <th className="text-right px-3 py-2">N</th>
-                <th className="text-right px-3 py-2">&gt;SMA200</th>
-                <th className="text-right px-3 py-2">&gt;SMA50</th>
-                <th className="text-right px-3 py-2">RSI&lt;30</th>
-                <th className="text-right px-3 py-2">RSI&gt;70</th>
-                <th className="text-right px-3 py-2">Avg Δ%</th>
-                <th className="text-right px-3 py-2">A/D</th>
-                <th className="text-right px-3 py-2">52wHi</th>
-                <th className="text-right px-3 py-2">52wLo</th>
-                <th className="text-right px-3 py-2 pr-4">Vol×</th>
+                <SortableHeader column="code" label="Indice" align="left" state={sort} onClick={handleSort} />
+                <SortableHeader column="n" label="N" help={ACRONYM_HELP.N_STOCKS} state={sort} onClick={handleSort} />
+                <SortableHeader column="pct_above_sma200" label=">SMA200" help={ACRONYM_HELP.SMA200} state={sort} onClick={handleSort} />
+                <SortableHeader column="pct_above_sma50" label=">SMA50" help={ACRONYM_HELP.SMA50} state={sort} onClick={handleSort} />
+                <SortableHeader column="rsi_oversold_count" label="RSI<30" help={ACRONYM_HELP.RSI_OVERSOLD} state={sort} onClick={handleSort} />
+                <SortableHeader column="rsi_overbought_count" label="RSI>70" help={ACRONYM_HELP.RSI_OVERBOUGHT} state={sort} onClick={handleSort} />
+                <SortableHeader column="avg_change_pct" label="Avg Δ%" help={ACRONYM_HELP.AVG_CHANGE} state={sort} onClick={handleSort} />
+                <SortableHeader column="ad_ratio" label="A/D" help={ACRONYM_HELP.AD_RATIO} state={sort} onClick={handleSort} />
+                <SortableHeader column="new_52w_highs" label="52wHi" help={ACRONYM_HELP.NEW_52W_HIGH} state={sort} onClick={handleSort} />
+                <SortableHeader column="new_52w_lows" label="52wLo" help={ACRONYM_HELP.NEW_52W_LOW} state={sort} onClick={handleSort} />
+                <SortableHeader column="volume_spikes_count" label="Vol×" help={ACRONYM_HELP.VOL_SPIKE} state={sort} onClick={handleSort} />
               </tr>
             </thead>
             <tbody>
-              {data.map((r) => (
+              {sortedData.map((r) => (
                 <tr
                   key={r.code}
                   className={cn(

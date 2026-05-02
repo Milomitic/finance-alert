@@ -10,6 +10,7 @@ import type { LucideIcon } from "lucide-react";
 
 import type { MarketGlobal } from "@/api/types";
 import { Card, CardContent } from "@/components/ui/card";
+import { ACRONYM_HELP } from "@/lib/acronymHelp";
 
 interface Props {
   global: MarketGlobal;
@@ -21,6 +22,7 @@ interface Tile {
   sub: string;
   icon: LucideIcon;
   tone?: "default" | "good" | "warn" | "bad";
+  help: string;
 }
 
 const TONE_FG: Record<NonNullable<Tile["tone"]>, string> = {
@@ -37,6 +39,7 @@ export function GlobalKpiTiles({ global }: Props) {
       value: String(global.stocks_total),
       sub: `${global.stocks_with_data} con dati`,
       icon: Building2,
+      help: ACRONYM_HELP.UNIVERSE,
     },
     {
       label: "A/D Ratio",
@@ -44,6 +47,7 @@ export function GlobalKpiTiles({ global }: Props) {
       sub: global.advancers > global.decliners ? "advancers in lead" : "decliners in lead",
       tone: global.advancers > global.decliners ? "good" : "bad",
       icon: Scale,
+      help: ACRONYM_HELP.AD_RATIO,
     },
     {
       label: "Avg Δ%",
@@ -51,6 +55,7 @@ export function GlobalKpiTiles({ global }: Props) {
       sub: "vs ieri",
       tone: global.avg_change_pct >= 0 ? "good" : "bad",
       icon: Activity,
+      help: ACRONYM_HELP.AVG_CHANGE,
     },
     {
       label: "RSI < 30",
@@ -58,6 +63,7 @@ export function GlobalKpiTiles({ global }: Props) {
       sub: "oversold",
       tone: "warn",
       icon: ArrowDownToLine,
+      help: ACRONYM_HELP.RSI_OVERSOLD,
     },
     {
       label: "RSI > 70",
@@ -65,12 +71,14 @@ export function GlobalKpiTiles({ global }: Props) {
       sub: "overbought",
       tone: "bad",
       icon: ArrowUpToLine,
+      help: ACRONYM_HELP.RSI_OVERBOUGHT,
     },
     {
       label: "52w Hi/Lo",
       value: `${global.near_52w_high_count}/${global.near_52w_low_count}`,
       sub: "entro 5%",
       icon: TrendingUp,
+      help: ACRONYM_HELP.HI_LO_5PCT,
     },
   ];
 
@@ -79,7 +87,7 @@ export function GlobalKpiTiles({ global }: Props) {
       {tiles.map((t) => {
         const Icon = t.icon;
         return (
-          <Card key={t.label}>
+          <Card key={t.label} title={t.help} className="cursor-help">
             <CardContent className="p-3 text-center flex flex-col items-center justify-center h-full relative">
               <Icon className="h-4 w-4 text-muted-foreground/40 absolute top-2 right-2" />
               <div className="text-xs uppercase text-muted-foreground tracking-wide">{t.label}</div>
