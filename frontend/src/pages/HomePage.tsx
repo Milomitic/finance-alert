@@ -8,7 +8,7 @@ import { MarketTreemap } from "@/components/dashboard/MarketTreemap";
 import { MoversCard } from "@/components/dashboard/MoversCard";
 import { RsiHistogramCard } from "@/components/dashboard/RsiHistogramCard";
 import { SectorsHeatmapCard } from "@/components/dashboard/SectorsHeatmapCard";
-import { SpotlightPlaceholder } from "@/components/dashboard/SpotlightPlaceholder";
+import { SpotlightCards } from "@/components/dashboard/SpotlightCards";
 import { SystemStatusFooter } from "@/components/dashboard/SystemStatusFooter";
 import { Card, CardContent } from "@/components/ui/card";
 import { useDashboardSummary } from "@/hooks/useDashboardSummary";
@@ -130,7 +130,7 @@ export default function HomePage() {
         <div className="lg:col-span-2">
           <MarketTreemap treemap={m.treemap} indices={m.by_index} />
         </div>
-        <SpotlightPlaceholder />
+        <SpotlightCards />
       </div>
       {summaryData && (
         <AlertsCompactPanel

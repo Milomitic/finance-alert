@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { ResponsiveContainer, Treemap } from "recharts";
 
 import type { IndexBreadth, TreemapLeaf } from "@/api/types";
@@ -51,6 +52,7 @@ function CustomCell(props: ContentProps) {
 }
 
 export function MarketTreemap({ treemap, indices }: Props) {
+  const navigate = useNavigate();
   const [selected, setSelected] = useState<string>("all");
   const filtered = useMemo(() => {
     const src = selected === "all" ? treemap : treemap.filter((t) => t.index === selected);
@@ -79,12 +81,20 @@ export function MarketTreemap({ treemap, indices }: Props) {
             </SelectContent>
           </Select>
         </div>
-        <div className="h-[260px] flex-1" title="Drill-down su singolo stock disponibile in Fase 3B">
+        <div className="h-[260px] flex-1" title="Click su un tile per andare alla pagina dello stock">
           {filtered.length === 0 ? (
             <div className="h-full flex items-center justify-center text-sm text-muted-foreground">Nessun dato</div>
           ) : (
             <ResponsiveContainer width="100%" height="100%">
-              <Treemap data={filtered} dataKey="size" content={<CustomCell />} />
+              <Treemap
+                data={filtered}
+                dataKey="size"
+                content={<CustomCell />}
+                onClick={(payload) => {
+                  const ticker = (payload as { ticker?: string } | undefined)?.ticker;
+                  if (ticker) navigate(`/stocks/${ticker}`);
+                }}
+              />
             </ResponsiveContainer>
           )}
         </div>
