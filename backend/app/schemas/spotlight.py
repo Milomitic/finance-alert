@@ -5,7 +5,7 @@ from pydantic import BaseModel
 
 
 class SpotlightCardOut(BaseModel):
-    type: Literal["top_gainer", "most_alerted_7d", "vol_spike"]
+    type: Literal["top_gainer", "top_loser", "most_alerted_7d", "vol_spike"]
     ticker: str
     last_close: float | None = None
     sparkline: list[float] = []

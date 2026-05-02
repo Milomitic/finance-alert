@@ -341,7 +341,7 @@ export interface PriceAlertUpdate {
   note?: string | null;
 }
 
-export type SpotlightCardType = "top_gainer" | "most_alerted_7d" | "vol_spike";
+export type SpotlightCardType = "top_gainer" | "top_loser" | "most_alerted_7d" | "vol_spike";
 
 export interface SpotlightCard {
   type: SpotlightCardType;

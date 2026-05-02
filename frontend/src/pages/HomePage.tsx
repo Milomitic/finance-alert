@@ -5,7 +5,6 @@ import { BreadthMatrixTable } from "@/components/dashboard/BreadthMatrixTable";
 import { FiftyTwoWeekVolCard } from "@/components/dashboard/FiftyTwoWeekVolCard";
 import { HeroStrip } from "@/components/dashboard/HeroStrip";
 import { MarketTreemap } from "@/components/dashboard/MarketTreemap";
-import { MoversCard } from "@/components/dashboard/MoversCard";
 import { RsiHistogramCard } from "@/components/dashboard/RsiHistogramCard";
 import { SectorsHeatmapCard } from "@/components/dashboard/SectorsHeatmapCard";
 import { SpotlightCards } from "@/components/dashboard/SpotlightCards";
@@ -133,8 +132,7 @@ export default function HomePage() {
       </div>
       <HeroStrip global={m.global} byIndex={m.by_index} />
       <BreadthMatrixTable data={m.by_index} />
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-        <MoversCard movers={m.movers} />
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
         <RsiHistogramCard rsi={m.rsi_distribution} indices={m.by_index} />
         <SectorsHeatmapCard sectors={m.sectors} />
         <FiftyTwoWeekVolCard movers={m.movers} />

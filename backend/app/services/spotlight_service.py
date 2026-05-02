@@ -56,6 +56,18 @@ def build(db: Session) -> list[dict[str, Any]]:
             "sparkline": _sparkline(db, sid) if sid else [],
         })
 
+    losers = movers.get("losers", [])
+    if losers:
+        top = losers[0]
+        sid = _stock_id_by_ticker(db, top["ticker"])
+        cards.append({
+            "type": "top_loser",
+            "ticker": top["ticker"],
+            "change_pct": top.get("change_pct"),
+            "last_close": top.get("last_close"),
+            "sparkline": _sparkline(db, sid) if sid else [],
+        })
+
     most_alerted = stats_service.get_top_alerted_stock_7d(db)
     if most_alerted is not None:
         stock, count = most_alerted

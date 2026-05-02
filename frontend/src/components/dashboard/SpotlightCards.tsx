@@ -1,4 +1,4 @@
-import { Bell, Sparkles, TrendingUp, Zap } from "lucide-react";
+import { Bell, Sparkles, TrendingDown, TrendingUp, Zap } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Line, LineChart, ResponsiveContainer } from "recharts";
 
@@ -12,6 +12,11 @@ const TYPE_META: Record<SpotlightCard["type"], { label: string; icon: typeof Bel
     label: "Top gainer",
     icon: TrendingUp,
     accent: "text-green-600 dark:text-green-400",
+  },
+  top_loser: {
+    label: "Top loser",
+    icon: TrendingDown,
+    accent: "text-red-600 dark:text-red-400",
   },
   most_alerted_7d: {
     label: "Most alerted 7d",
@@ -31,9 +36,11 @@ function CardItem({ card }: { card: SpotlightCard }) {
   const sparkData = card.sparkline.map((v, i) => ({ idx: i, v }));
   const trendUp = sparkData.length >= 2 && sparkData[sparkData.length - 1].v >= sparkData[0].v;
   const subtitle =
-    card.type === "top_gainer" ? `${card.change_pct! >= 0 ? "+" : ""}${card.change_pct?.toFixed(2)}%` :
-    card.type === "vol_spike"  ? `${card.vol_ratio?.toFixed(1)}× volume` :
-                                  `${card.alerts_count} alerts last 7d`;
+    card.type === "top_gainer" || card.type === "top_loser"
+      ? `${card.change_pct! >= 0 ? "+" : ""}${card.change_pct?.toFixed(2)}%`
+      : card.type === "vol_spike"
+        ? `${card.vol_ratio?.toFixed(1)}× volume`
+        : `${card.alerts_count} alerts last 7d`;
 
   return (
     <Link to={`/stocks/${card.ticker}`} className="block">
@@ -104,7 +111,7 @@ export function SpotlightCards() {
   }
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
       {cards.map((c) => <CardItem key={c.type} card={c} />)}
     </div>
   );
