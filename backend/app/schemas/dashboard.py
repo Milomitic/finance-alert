@@ -32,6 +32,7 @@ class TopStockOut(BaseModel):
 
     stock_id: int
     ticker: str
+    name: str | None = None
     alert_count: int
     top_kind: str | None
 

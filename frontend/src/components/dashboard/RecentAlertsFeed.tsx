@@ -66,6 +66,9 @@ export function RecentAlertsFeed({ alerts }: Props) {
                   ) : (
                     <span className="font-medium min-w-[60px]">—</span>
                   )}
+                  <span className="text-xs text-muted-foreground truncate max-w-[160px]" title={a.name ?? ""}>
+                    {a.name ?? ""}
+                  </span>
                   <Badge variant="secondary" className="text-xs">
                     {KIND_LABEL[a.rule_kind ?? ""] ?? a.rule_kind ?? "—"}
                   </Badge>

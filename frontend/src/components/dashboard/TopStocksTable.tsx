@@ -44,6 +44,7 @@ export function TopStocksTable({ data }: Props) {
             <TableHeader>
               <TableRow>
                 <TableHead>Ticker</TableHead>
+                <TableHead>Nome</TableHead>
                 <TableHead>Regola top</TableHead>
                 <TableHead className="text-right">Alert</TableHead>
               </TableRow>
@@ -58,6 +59,9 @@ export function TopStocksTable({ data }: Props) {
                     >
                       {s.ticker}
                     </Link>
+                  </TableCell>
+                  <TableCell className="text-xs text-muted-foreground truncate max-w-[180px]" title={s.name ?? ""}>
+                    {s.name ?? "—"}
                   </TableCell>
                   <TableCell>
                     {s.top_kind ? (

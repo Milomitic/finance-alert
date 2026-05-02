@@ -139,6 +139,7 @@ export interface Alert {
   rule_kind: RuleKind | null;
   stock_id: number;
   ticker: string | null;
+  name: string | null;
   triggered_at: string;
   trigger_price: number;
   snapshot: Record<string, unknown>;
@@ -202,6 +203,7 @@ export interface AlertsByDayPoint {
 export interface TopStock {
   stock_id: number;
   ticker: string;
+  name: string | null;
   alert_count: number;
   top_kind: string | null;
 }

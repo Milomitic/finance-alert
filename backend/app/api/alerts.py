@@ -218,13 +218,18 @@ def patch(
     from app.models import Rule as _Rule
     from app.models import Stock as _Stock
     rule_kind = db.execute(select(_Rule.kind).where(_Rule.id == a.rule_id)).scalar_one_or_none()
-    ticker = db.execute(select(_Stock.ticker).where(_Stock.id == a.stock_id)).scalar_one_or_none()
+    stock_row = db.execute(
+        select(_Stock.ticker, _Stock.name).where(_Stock.id == a.stock_id)
+    ).first()
+    ticker = stock_row.ticker if stock_row else None
+    name = stock_row.name if stock_row else None
     return AlertOut(
         id=a.id,
         rule_id=a.rule_id,
         rule_kind=rule_kind,
         stock_id=a.stock_id,
         ticker=ticker,
+        name=name,
         triggered_at=a.triggered_at,
         trigger_price=float(a.trigger_price),
         snapshot=a.snapshot,

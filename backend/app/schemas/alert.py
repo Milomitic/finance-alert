@@ -15,6 +15,7 @@ class AlertOut(BaseModel):
     rule_kind: str | None = None  # joined for convenience
     stock_id: int
     ticker: str | None = None  # joined
+    name: str | None = None  # joined company name
     triggered_at: datetime
     trigger_price: float
     snapshot: dict[str, Any]

@@ -46,6 +46,7 @@ export function AlertsTable({
           </TableHead>
           <TableHead>Timestamp</TableHead>
           <TableHead>Ticker</TableHead>
+          <TableHead>Nome</TableHead>
           <TableHead>Regola</TableHead>
           <TableHead className="text-right">Prezzo</TableHead>
           <TableHead>Stato</TableHead>
@@ -64,6 +65,9 @@ export function AlertsTable({
               {new Date(a.triggered_at).toLocaleString("it-IT")}
             </TableCell>
             <TableCell className="font-medium">{a.ticker ?? "—"}</TableCell>
+            <TableCell className="text-xs text-muted-foreground truncate max-w-[200px]" title={a.name ?? ""}>
+              {a.name ?? "—"}
+            </TableCell>
             <TableCell>
               <Badge variant="secondary">{KIND_LABEL[a.rule_kind ?? ""] ?? a.rule_kind}</Badge>
             </TableCell>

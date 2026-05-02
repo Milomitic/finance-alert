@@ -52,7 +52,12 @@ def list_alerts(
     """List alerts with joined rule.kind and stock.ticker. Returns (items, total, has_more)."""
     limit = max(1, min(limit, 500))
     base = (
-        select(Alert, Rule.kind.label("rule_kind"), Stock.ticker.label("ticker"))
+        select(
+            Alert,
+            Rule.kind.label("rule_kind"),
+            Stock.ticker.label("ticker"),
+            Stock.name.label("name"),
+        )
         .join(Rule, Rule.id == Alert.rule_id)
         .join(Stock, Stock.id == Alert.stock_id)
     )
@@ -72,7 +77,7 @@ def list_alerts(
     ).all()
     has_more = len(rows) > limit
     items = []
-    for alert, rule_kind_val, ticker_val in rows[:limit]:
+    for alert, rule_kind_val, ticker_val, name_val in rows[:limit]:
         items.append(
             {
                 "id": alert.id,
@@ -80,6 +85,7 @@ def list_alerts(
                 "rule_kind": rule_kind_val,
                 "stock_id": alert.stock_id,
                 "ticker": ticker_val,
+                "name": name_val,
                 "triggered_at": alert.triggered_at,
                 "trigger_price": float(alert.trigger_price),
                 "snapshot": alert.snapshot,

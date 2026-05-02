@@ -112,6 +112,7 @@ def get_alerts_by_day(db: Session, days: int = 30) -> list[AlertsByDayPoint]:
 class TopStock:
     stock_id: int
     ticker: str
+    name: str | None
     alert_count: int
     top_kind: str | None
 
@@ -140,8 +141,8 @@ def get_top_stocks(db: Session, *, days: int = 30, limit: int = 10) -> list[TopS
         return []
 
     stock_ids = [row.stock_id for row in counts]
-    tickers = {
-        s.id: s.ticker
+    stock_meta: dict[int, tuple[str, str | None]] = {
+        s.id: (s.ticker, s.name)
         for s in db.execute(select(Stock).where(Stock.id.in_(stock_ids))).scalars().all()
     }
 
@@ -165,15 +166,20 @@ def get_top_stocks(db: Session, *, days: int = 30, limit: int = 10) -> list[TopS
 
     # Compose, preserving the ordering from step 1 but re-sorted by ticker tie-break
     enriched = sorted(
-        [(row.stock_id, int(row.c), tickers.get(row.stock_id, "")) for row in counts],
+        [
+            (row.stock_id, int(row.c), stock_meta.get(row.stock_id, ("", None))[0])
+            for row in counts
+        ],
         key=lambda t: (-t[1], t[2]),
     )
     result: list[TopStock] = []
     for stock_id, c, ticker in enriched:
+        _, name = stock_meta.get(stock_id, ("", None))
         result.append(
             TopStock(
                 stock_id=stock_id,
                 ticker=ticker,
+                name=name,
                 alert_count=c,
                 top_kind=top_kind_by_stock.get(stock_id),
             )
