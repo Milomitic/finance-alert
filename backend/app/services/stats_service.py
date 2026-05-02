@@ -212,3 +212,25 @@ def get_system_status(db: Session) -> SystemStatus:
         telegram_configured=bool(settings.telegram_bot_token) and bool(settings.telegram_chat_id),
         last_digest_sent_at=None,
     )
+
+
+def get_top_alerted_stock_7d(db: Session) -> tuple[Stock, int] | None:
+    """Top 1 stock by alert count in last 7 days. Returns (stock, count) or None.
+    Excludes archived alerts."""
+    from datetime import UTC, datetime, timedelta
+    from sqlalchemy import func, select
+    from app.models import Alert, Stock as StockModel
+
+    cutoff = datetime.now(UTC) - timedelta(days=7)
+    row = db.execute(
+        select(StockModel, func.count(Alert.id).label("cnt"))
+        .join(Alert, Alert.stock_id == StockModel.id)
+        .where(Alert.triggered_at >= cutoff)
+        .where(Alert.archived_at.is_(None))
+        .group_by(StockModel.id)
+        .order_by(func.count(Alert.id).desc())
+        .limit(1)
+    ).first()
+    if row is None:
+        return None
+    return (row[0], int(row[1]))
