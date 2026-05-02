@@ -81,7 +81,7 @@ export function MarketTreemap({ treemap, indices }: Props) {
             </SelectContent>
           </Select>
         </div>
-        <div className="h-[260px] flex-1" title="Click su un tile per andare alla pagina dello stock">
+        <div className="flex-1 min-h-[220px]" title="Click su un tile per andare alla pagina dello stock">
           {filtered.length === 0 ? (
             <div className="h-full flex items-center justify-center text-sm text-muted-foreground">Nessun dato</div>
           ) : (

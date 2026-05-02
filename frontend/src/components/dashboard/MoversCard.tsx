@@ -47,8 +47,8 @@ function MoversTable({ rows }: { rows: Mover[] | VolumeSpike[] }) {
 export function MoversCard({ movers }: Props) {
   return (
     <Card>
-      <CardContent className="p-0">
-        <Tabs defaultValue="gainers">
+      <CardContent className="p-0 h-full flex flex-col">
+        <Tabs defaultValue="gainers" className="flex-1 flex flex-col">
           <TabsList className="h-10 px-1 rounded-none border-b w-full justify-start bg-muted/30">
             <TabsTrigger value="gainers" className="text-sm h-9 px-3">Gainers</TabsTrigger>
             <TabsTrigger value="losers" className="text-sm h-9 px-3">Losers</TabsTrigger>

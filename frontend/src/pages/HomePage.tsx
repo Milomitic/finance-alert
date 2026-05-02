@@ -1,4 +1,4 @@
-import { AlertCircle, RefreshCw } from "lucide-react";
+import { AlertCircle, Clock, RefreshCw } from "lucide-react";
 
 import { AlertsCompactPanel } from "@/components/dashboard/AlertsCompactPanel";
 import { BreadthMatrixTable } from "@/components/dashboard/BreadthMatrixTable";
@@ -112,13 +112,26 @@ export default function HomePage() {
 
   return (
     <div className="space-y-4">
-      <HeroStrip
-        global={m.global}
-        byIndex={m.by_index}
-        computedAt={m.computed_at}
-        isStale={m.is_stale}
-        nextScanAt={nextScanAt}
-      />
+      <div className="flex items-center justify-between gap-3 px-1">
+        <h2 className="text-base font-semibold tracking-tight">Dashboard</h2>
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <Clock className="h-3 w-3" />
+          {m.computed_at && (
+            <span className={m.is_stale ? "text-amber-600 dark:text-amber-400" : ""}>
+              Aggiornato {new Date(m.computed_at).toLocaleString("it-IT", { dateStyle: "short", timeStyle: "short" })}
+            </span>
+          )}
+          {nextScanAt && (
+            <>
+              <span className="opacity-50">·</span>
+              <span className="text-blue-600 dark:text-blue-400">
+                Prossimo scan: {new Date(nextScanAt).toLocaleString("it-IT", { dateStyle: "short", timeStyle: "short" })}
+              </span>
+            </>
+          )}
+        </div>
+      </div>
+      <HeroStrip global={m.global} byIndex={m.by_index} />
       <BreadthMatrixTable data={m.by_index} />
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
         <MoversCard movers={m.movers} />
