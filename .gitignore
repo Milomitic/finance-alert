@@ -34,3 +34,6 @@ Thumbs.db
 .claude/
 finance-alert/
 .superpowers/
+
+# Runtime logs (emitted by uvicorn started from repo root)
+data/logs/
