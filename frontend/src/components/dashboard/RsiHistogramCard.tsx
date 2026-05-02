@@ -54,8 +54,8 @@ export function RsiHistogramCard({ rsi, indices }: Props) {
   const visibleIndices = indices.filter((i) => !excluded.has(i.code));
 
   return (
-    <Card>
-      <CardContent className="p-4 flex flex-col h-full">
+    <Card className="h-full">
+      <CardContent className="p-4 flex flex-col h-full min-h-0">
         <div className="flex items-center justify-between mb-2 gap-2">
           <span className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
             RSI distribution per indice
@@ -91,7 +91,7 @@ export function RsiHistogramCard({ rsi, indices }: Props) {
           })}
         </div>
 
-        <div className="flex-1 min-h-[180px]">
+        <div className="flex-1 min-h-0">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" className="opacity-30" />

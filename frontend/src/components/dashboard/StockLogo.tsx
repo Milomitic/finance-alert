@@ -9,9 +9,9 @@ interface Props {
 }
 
 const SIZE_PX: Record<NonNullable<Props["size"]>, number> = {
-  xs: 20,
-  sm: 26,
-  md: 34,
+  xs: 28,
+  sm: 36,
+  md: 48,
 };
 
 /**
