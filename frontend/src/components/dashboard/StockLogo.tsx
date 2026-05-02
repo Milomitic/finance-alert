@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { Building2 } from "lucide-react";
+import { useEffect, useState } from "react";
 
 import { cn } from "@/lib/utils";
 
@@ -14,59 +15,64 @@ const SIZE_PX: Record<NonNullable<Props["size"]>, number> = {
 };
 
 /**
- * Strip yfinance exchange suffix (AAPL.MX -> AAPL, ENI.MI -> ENI, 600519.SS -> 600519).
- * The fmp endpoint expects the base ticker for US stocks; for non-US tickers
- * it usually 404s and we fall through to the initials avatar.
+ * CDN chain for stock logos. Tries each in order, falling through on 404.
+ * Probed coverage:
+ *   - parqet (full ticker, e.g. ENI.MI, 0688.HK): best EU/HK/CN coverage
+ *   - parqet (ticker base, e.g. STLA): catches stocks listed on multiple exchanges
+ *     where parqet only has the US listing
+ *   - FMP (bare ticker, e.g. AAPL): good US coverage
  */
-function logoUrl(ticker: string): string {
+function logoSources(ticker: string): string[] {
   const base = ticker.split(".")[0];
-  return `https://financialmodelingprep.com/image-stock/${base}.png`;
-}
-
-/**
- * Deterministic HSL colour from ticker hash — same ticker always gets the
- * same colour. Range avoids dark/desaturated colours so the white initial
- * letter stays legible.
- */
-function colorForTicker(ticker: string): string {
-  let hash = 0;
-  for (let i = 0; i < ticker.length; i++) {
-    hash = (hash * 31 + ticker.charCodeAt(i)) | 0;
-  }
-  const hue = Math.abs(hash) % 360;
-  return `hsl(${hue}deg 55% 45%)`;
+  const enc = encodeURIComponent(ticker);
+  const encBase = encodeURIComponent(base);
+  return [
+    `https://assets.parqet.com/logos/symbol/${enc}`,
+    base !== ticker ? `https://assets.parqet.com/logos/symbol/${encBase}` : null,
+    `https://financialmodelingprep.com/image-stock/${encBase}.png`,
+  ].filter((u): u is string => u !== null);
 }
 
 export function StockLogo({ ticker, size = "sm" }: Props) {
-  const [errored, setErrored] = useState(false);
+  const [srcIdx, setSrcIdx] = useState(0);
+  const [exhausted, setExhausted] = useState(false);
+
+  // Reset state when ticker changes (e.g. row in a list re-renders with new ticker)
+  useEffect(() => {
+    setSrcIdx(0);
+    setExhausted(false);
+  }, [ticker]);
+
   if (!ticker) return null;
   const px = SIZE_PX[size];
+  const sources = logoSources(ticker);
 
-  if (errored) {
+  if (exhausted) {
     return (
       <span
-        className="inline-flex items-center justify-center rounded-full text-white font-bold shrink-0"
-        style={{
-          width: px,
-          height: px,
-          backgroundColor: colorForTicker(ticker),
-          fontSize: Math.round(px * 0.4),
-        }}
+        className="inline-flex items-center justify-center rounded-full bg-muted/60 text-muted-foreground shrink-0"
+        style={{ width: px, height: px }}
         title={ticker}
-        aria-label={`${ticker} logo`}
+        aria-label={`${ticker} logo unavailable`}
       >
-        {ticker.split(".")[0].slice(0, 2).toUpperCase()}
+        <Building2 style={{ width: px * 0.55, height: px * 0.55 }} />
       </span>
     );
   }
 
   return (
     <img
-      src={logoUrl(ticker)}
+      src={sources[srcIdx]}
       alt={`${ticker} logo`}
       width={px}
       height={px}
-      onError={() => setErrored(true)}
+      onError={() => {
+        if (srcIdx < sources.length - 1) {
+          setSrcIdx(srcIdx + 1);
+        } else {
+          setExhausted(true);
+        }
+      }}
       className={cn("rounded-full bg-white border border-border/50 shrink-0")}
       style={{ width: px, height: px, objectFit: "contain" }}
       loading="lazy"

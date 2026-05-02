@@ -254,15 +254,34 @@ def aggregate_by_sector(metrics: list[StockMetrics]) -> list[dict]:
     return out
 
 
+def _dedupe_by_ticker(items: list[StockMetrics]) -> list[StockMetrics]:
+    """Keep first occurrence of each ticker. Catalog has 5 IT tickers
+    (ENEL.MI, ENI.MI, ISP.MI, STLAM.MI, UCG.MI) duplicated under different
+    `exchange` strings ('BIT' vs 'Borsa Italiana'); without dedupe they
+    appear twice in movers lists."""
+    seen: set[str] = set()
+    out: list[StockMetrics] = []
+    for m in items:
+        if m.ticker in seen:
+            continue
+        seen.add(m.ticker)
+        out.append(m)
+    return out
+
+
 def build_movers(metrics: list[StockMetrics], *, top_n: int = 10) -> dict:
-    """Build the 'movers' block: gainers, losers, volume_spikes, new_52w_high/low."""
+    """Build the 'movers' block: gainers, losers, volume_spikes, new_52w_high/low.
+
+    Deduplicates by ticker (first occurrence wins) to avoid the catalog
+    duplicates from showing up twice in the same list.
+    """
     with_change = [m for m in metrics if m.change_pct is not None]
-    gainers = sorted(with_change, key=lambda m: m.change_pct, reverse=True)[:top_n]
-    losers = sorted(with_change, key=lambda m: m.change_pct)[:top_n]
+    gainers = _dedupe_by_ticker(sorted(with_change, key=lambda m: m.change_pct, reverse=True))[:top_n]
+    losers = _dedupe_by_ticker(sorted(with_change, key=lambda m: m.change_pct))[:top_n]
     with_vol = [m for m in metrics if m.vol_ratio is not None]
-    vol_spikes = sorted(with_vol, key=lambda m: m.vol_ratio, reverse=True)[:top_n]
-    new_highs = [m for m in metrics if m.new_52w_high]
-    new_lows = [m for m in metrics if m.new_52w_low]
+    vol_spikes = _dedupe_by_ticker(sorted(with_vol, key=lambda m: m.vol_ratio, reverse=True))[:top_n]
+    new_highs = _dedupe_by_ticker([m for m in metrics if m.new_52w_high])
+    new_lows = _dedupe_by_ticker([m for m in metrics if m.new_52w_low])
 
     def _row(m: StockMetrics) -> dict:
         return {
