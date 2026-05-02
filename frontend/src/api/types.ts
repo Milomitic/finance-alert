@@ -65,7 +65,62 @@ export interface CatalogStatus {
   indices: IndexStatus[];
 }
 
-export type RuleKind = "rsi_oversold" | "rsi_overbought" | "golden_cross" | "death_cross";
+export type RuleKind =
+  | "rsi_oversold"
+  | "rsi_overbought"
+  | "golden_cross"
+  | "death_cross"
+  | "volume_spike"
+  | "breakout"
+  | "macd_bullish_cross"
+  | "macd_bearish_cross"
+  | "bollinger_squeeze"
+  | "bollinger_breakout"
+  | "composite";
+
+export type RuleExpressionAtomic = {
+  op: "atomic";
+  kind: string;
+  params: Record<string, unknown>;
+};
+
+export type RuleExpressionComposite = {
+  op: "and" | "or";
+  children: RuleExpressionNode[];
+};
+
+export type RuleExpressionNode = RuleExpressionAtomic | RuleExpressionComposite;
+
+export interface RuleCatalogEntry {
+  kind: string;
+  label: string;
+  description: string;
+  default_params: Record<string, unknown>;
+}
+
+export interface RulePreviewSnapshotAtomic {
+  op: "atomic";
+  kind: string;
+  params: Record<string, unknown>;
+  matched?: boolean;
+  snapshot?: Record<string, unknown>;
+  error?: string;
+}
+
+export interface RulePreviewSnapshotComposite {
+  op: "and" | "or";
+  matched: boolean;
+  children: RulePreviewSnapshotNode[];
+}
+
+export type RulePreviewSnapshotNode =
+  | RulePreviewSnapshotAtomic
+  | RulePreviewSnapshotComposite;
+
+export interface RulePreviewResponse {
+  matched: boolean;
+  snapshot: RulePreviewSnapshotNode;
+}
 
 export interface Rule {
   id: number;
@@ -73,6 +128,7 @@ export interface Rule {
   kind: RuleKind;
   params: Record<string, unknown>;
   enabled: boolean;
+  expression: RuleExpressionNode | null;
   created_at: string;
   updated_at: string;
 }

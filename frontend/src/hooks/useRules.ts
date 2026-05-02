@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { rules, type RuleCreatePayload, type RuleUpdatePayload } from "@/api/rules";
+import type { RuleExpressionNode } from "@/api/types";
 
 export function useGlobalRules() {
   return useQuery({
@@ -50,5 +51,20 @@ export function useDeleteRule() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["rules"] });
     },
+  });
+}
+
+export function useRuleCatalog() {
+  return useQuery({
+    queryKey: ["rules", "catalog"],
+    queryFn: () => rules.catalog(),
+    staleTime: 5 * 60_000,
+  });
+}
+
+export function useRulePreview() {
+  return useMutation({
+    mutationFn: ({ ticker, expression }: { ticker: string; expression: RuleExpressionNode }) =>
+      rules.preview(ticker, expression),
   });
 }

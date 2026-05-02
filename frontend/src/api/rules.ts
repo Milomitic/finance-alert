@@ -1,16 +1,24 @@
 import { api } from "./client";
-import type { Rule, RuleKind } from "./types";
+import type {
+  Rule,
+  RuleCatalogEntry,
+  RuleExpressionNode,
+  RuleKind,
+  RulePreviewResponse,
+} from "./types";
 
 export interface RuleCreatePayload {
   watchlist_id: number | null;
   kind: RuleKind;
   params?: Record<string, unknown>;
   enabled?: boolean;
+  expression?: RuleExpressionNode | null;
 }
 
 export interface RuleUpdatePayload {
   enabled?: boolean;
   params?: Record<string, unknown>;
+  expression?: RuleExpressionNode | null;
 }
 
 export const rules = {
@@ -29,4 +37,10 @@ export const rules = {
     }),
   delete: (id: number) =>
     api<void>(`/api/rules/${id}`, { method: "DELETE" }),
+  catalog: () => api<RuleCatalogEntry[]>("/api/rules/catalog"),
+  preview: (ticker: string, expression: RuleExpressionNode) =>
+    api<RulePreviewResponse>("/api/rules/preview", {
+      method: "POST",
+      body: JSON.stringify({ ticker, expression }),
+    }),
 };
