@@ -95,14 +95,46 @@ def fetch_and_upsert(
 
     period: yfinance period string ('1mo', '1y', etc.). Use '1y' for first backfill,
             '1mo' for incremental scans.
+
+    Resilience: if the yfinance circuit breaker is OPEN we skip yfinance and
+    route the entire batch through the Stooq fallback. If yfinance fails on
+    THIS call (rate-limit fingerprint), we trip the breaker and re-route via
+    Stooq. Stooq has no batch endpoint, so the fallback is per-ticker.
     """
+    from app.services import yfinance_health
+    from app.services.stooq_ohlcv_service import upsert_via_stooq
+
     if not stocks:
         return FetchResult()
     tickers = [s.ticker for s in stocks]
-    logger.info(f"[ohlcv] fetching {len(tickers)} tickers, period={period}")
+
+    # Map yfinance period string to a days-back number for Stooq fallback
+    days_for_period = {"1mo": 35, "3mo": 100, "6mo": 200, "1y": 380, "2y": 760}.get(period, 380)
+
+    if yfinance_health.is_open():
+        logger.info(f"[ohlcv] yfinance breaker OPEN — using Stooq fallback for {len(tickers)} tickers")
+        sr = upsert_via_stooq(db, stocks, days=days_for_period)
+        return FetchResult(
+            rows_inserted=sr.rows_inserted,
+            stocks_succeeded=sr.stocks_succeeded,
+            stocks_failed=sr.stocks_failed,
+            failed_tickers=sr.failed_tickers,
+        )
+
+    logger.info(f"[ohlcv] fetching {len(tickers)} tickers via yfinance, period={period}")
     try:
         df = _yf_download(tickers, period=period)
     except Exception as e:  # noqa: BLE001
+        if yfinance_health.is_rate_limit_error(e):
+            yfinance_health.record_failure(f"yf.download: {e}")
+            logger.warning(f"[ohlcv] yfinance.download rate-limited → Stooq fallback")
+            sr = upsert_via_stooq(db, stocks, days=days_for_period)
+            return FetchResult(
+                rows_inserted=sr.rows_inserted,
+                stocks_succeeded=sr.stocks_succeeded,
+                stocks_failed=sr.stocks_failed,
+                failed_tickers=sr.failed_tickers,
+            )
         logger.error(f"[ohlcv] yfinance.download crashed: {e}")
         return FetchResult(stocks_failed=len(stocks), failed_tickers=tickers[:])
 
@@ -123,6 +155,10 @@ def fetch_and_upsert(
             logger.exception(f"[ohlcv] upsert failed for {stock.ticker}: {e}")
             result.stocks_failed += 1
             result.failed_tickers.append(stock.ticker)
+
+    if result.stocks_succeeded > 0:
+        yfinance_health.record_success()
+
     logger.info(
         f"[ohlcv] result: succeeded={result.stocks_succeeded} "
         f"failed={result.stocks_failed} rows={result.rows_inserted}"

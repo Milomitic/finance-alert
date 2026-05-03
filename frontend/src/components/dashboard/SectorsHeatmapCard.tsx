@@ -24,20 +24,29 @@ export function SectorsHeatmapCard({ sectors }: Props) {
           <div className="text-sm text-muted-foreground text-center py-6">Nessun settore</div>
         ) : (
           <div className="flex-1 min-h-0 overflow-y-auto">
-          <table className="w-full text-sm tabular-nums">
+          {/* Re-balanced: sector name takes the bulk of the row, % stays
+              right-aligned with a fixed width tinted by sign. The previous
+              w-[60%] on the % cell forced the heatmap blob to be wider than
+              the sector label even on long names — flipping it makes the
+              text the focal point. */}
+          <table className="w-full text-sm tabular-nums table-fixed">
+            <colgroup>
+              <col style={{ width: "70%" }} />
+              <col style={{ width: "30%" }} />
+            </colgroup>
             <tbody>
               {sectors.map((s) => {
                 const Icon = getSectorIcon(s.sector);
                 return (
                   <tr key={s.sector} className="hover:bg-muted/30 transition-colors">
-                    <td className="px-2 py-1.5 truncate max-w-[140px]">
-                      <span className="inline-flex items-center gap-1.5">
+                    <td className="px-2 py-1.5">
+                      <span className="inline-flex items-center gap-1.5 min-w-0 w-full">
                         <Icon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                        <span className="truncate">{s.sector}</span>
+                        <span className="truncate" title={s.sector}>{s.sector}</span>
                       </span>
                     </td>
-                    <td className={`px-3 py-1.5 text-right font-semibold w-[60%] ${bgFor(s.avg_change_pct)}`}>
-                      {s.avg_change_pct >= 0 ? "+" : ""}{s.avg_change_pct.toFixed(2)}
+                    <td className={`px-2 py-1.5 text-right font-semibold ${bgFor(s.avg_change_pct)}`}>
+                      {s.avg_change_pct >= 0 ? "+" : ""}{s.avg_change_pct.toFixed(2)}%
                     </td>
                   </tr>
                 );

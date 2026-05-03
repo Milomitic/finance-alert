@@ -6,6 +6,7 @@ import { ResponsiveContainer, Treemap } from "recharts";
 import type { IndexBreadth, TreemapLeaf } from "@/api/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { getIndexMeta } from "@/lib/indexMeta";
 
 interface Props {
   treemap: TreemapLeaf[];
@@ -91,7 +92,9 @@ export function MarketTreemap({ treemap, indices }: Props) {
             <SelectContent>
               <SelectItem value="all">Tutti</SelectItem>
               {indices.map((i) => (
-                <SelectItem key={i.code} value={i.code}>{i.code}</SelectItem>
+                <SelectItem key={i.code} value={i.code}>
+                  {getIndexMeta(i.code).displayCode || i.code}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>

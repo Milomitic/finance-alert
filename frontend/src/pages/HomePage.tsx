@@ -9,7 +9,6 @@ import { MarketTreemap } from "@/components/dashboard/MarketTreemap";
 import { TopMoversCard } from "@/components/dashboard/TopMoversCard";
 import { RsiHistogramCard } from "@/components/dashboard/RsiHistogramCard";
 import { SectorsHeatmapCard } from "@/components/dashboard/SectorsHeatmapCard";
-import { SpotlightCards } from "@/components/dashboard/SpotlightCards";
 import { SystemStatusFooter } from "@/components/dashboard/SystemStatusFooter";
 import { Card, CardContent } from "@/components/ui/card";
 import { useDashboardSummary } from "@/hooks/useDashboardSummary";
@@ -75,7 +74,6 @@ export default function HomePage() {
         <MarketError onRetry={() => market.refetch()} />
         {summaryData && (
           <AlertsCompactPanel
-            alertsByDay={summaryData.alerts_by_day}
             topStocks={summaryData.top_stocks_30d}
             recentAlerts={summaryData.recent_alerts}
             alertsLast24h={summaryData.kpis.alerts_last_24h}
@@ -92,7 +90,6 @@ export default function HomePage() {
         <MarketUnavailable />
         {summaryData && (
           <AlertsCompactPanel
-            alertsByDay={summaryData.alerts_by_day}
             topStocks={summaryData.top_stocks_30d}
             recentAlerts={summaryData.recent_alerts}
             alertsLast24h={summaryData.kpis.alerts_last_24h}
@@ -140,19 +137,13 @@ export default function HomePage() {
         <div className="h-full min-h-0"><TopMoversCard movers={m.movers} /></div>
         <div className="h-full min-h-0"><FiftyTwoWeekVolCard movers={m.movers} /></div>
       </div>
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-3">
-        <div className="lg:col-span-3">
-          <ErrorBoundary>
-            <MarketTreemap treemap={m.treemap} indices={m.by_index} />
-          </ErrorBoundary>
-        </div>
-        <div className="lg:col-span-2">
-          <SpotlightCards />
-        </div>
-      </div>
+      {/* Treemap full-width — Spotlight rimossa, i suoi top movers / volume
+          spikes / most-alerted ora vivono nelle card del top row. */}
+      <ErrorBoundary>
+        <MarketTreemap treemap={m.treemap} indices={m.by_index} />
+      </ErrorBoundary>
       {summaryData && (
         <AlertsCompactPanel
-          alertsByDay={summaryData.alerts_by_day}
           topStocks={summaryData.top_stocks_30d}
           recentAlerts={summaryData.recent_alerts}
           alertsLast24h={summaryData.kpis.alerts_last_24h}

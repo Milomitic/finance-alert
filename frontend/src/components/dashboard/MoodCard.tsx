@@ -113,7 +113,7 @@ function IndexPill({ idx }: { idx: IndexBreadth }) {
       className="inline-flex items-center gap-1 rounded bg-background/70 dark:bg-black/30 px-2 py-0.5 text-xs tabular-nums whitespace-nowrap"
       title={`${meta.fullName} · ${idx.n} stocks`}
     >
-      <span className="font-bold">{idx.code}</span>
+      <span className="font-bold">{meta.displayCode || idx.code}</span>
       <span className="opacity-60">{sma == null ? "—" : `${sma.toFixed(0)}%`}</span>
       <span className={cn("font-semibold", changeColor)}>
         {change == null ? "—" : `${change >= 0 ? "+" : ""}${change.toFixed(2)}%`}

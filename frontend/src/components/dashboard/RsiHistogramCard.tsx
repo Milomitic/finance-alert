@@ -5,6 +5,7 @@ import {
 
 import type { IndexBreadth, RsiDistribution } from "@/api/types";
 import { Card, CardContent } from "@/components/ui/card";
+import { getIndexMeta } from "@/lib/indexMeta";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -84,7 +85,7 @@ export function RsiHistogramCard({ rsi, indices }: Props) {
                   style={{ background: colorFor(idx.code) }}
                 />
                 <span className={cn("font-medium tabular-nums", !isOn && "line-through")}>
-                  {idx.code}
+                  {getIndexMeta(idx.code).displayCode || idx.code}
                 </span>
               </button>
             );

@@ -263,34 +263,79 @@ def _extract_price_target(pt: Any) -> AnalystPriceTarget:
 
 
 def _fetch_fresh(ticker: str) -> Fundamentals:
+    from app.services import yfinance_health
     import yfinance as yf
+
     f = Fundamentals(ticker=ticker, fetched_at=time.time())
+
+    if yfinance_health.is_open():
+        f.error = "yfinance circuit breaker is open (rate-limited); try again later"
+        logger.info(f"[fundamentals] breaker OPEN — returning empty payload for {ticker}")
+        return f
+
+    saw_success = False
+    def _maybe_record(exc: Exception | None) -> None:
+        if exc is None:
+            return
+        if yfinance_health.is_rate_limit_error(exc):
+            yfinance_health.record_failure(f"fundamentals {ticker}: {exc}")
     try:
         t = yf.Ticker(ticker)
         # Each of these is independently network-bound and may individually
         # fail; we wrap each in a try so a single 429 doesn't blank out
         # the whole payload.
-        try: f.annual = _extract_annual(t.income_stmt)
-        except Exception as e: logger.debug(f"[fund] annual {ticker}: {e}")
-        try: f.quarterly = _extract_quarterly(t.quarterly_income_stmt)
-        except Exception as e: logger.debug(f"[fund] quarterly {ticker}: {e}")
+        try:
+            f.annual = _extract_annual(t.income_stmt)
+            if f.annual: saw_success = True
+        except Exception as e:
+            logger.debug(f"[fund] annual {ticker}: {e}")
+            _maybe_record(e)
+        try:
+            f.quarterly = _extract_quarterly(t.quarterly_income_stmt)
+            if f.quarterly: saw_success = True
+        except Exception as e:
+            logger.debug(f"[fund] quarterly {ticker}: {e}")
+            _maybe_record(e)
         try:
             hist, nxt_date, nxt_est = _extract_earnings(t.earnings_dates)
             f.earnings = hist
             f.next_earnings_date = nxt_date
             f.next_eps_estimate = nxt_est
-        except Exception as e: logger.debug(f"[fund] earnings {ticker}: {e}")
-        try: f.micro = _extract_micro(t.get_info())
-        except Exception as e: logger.debug(f"[fund] info {ticker}: {e}")
-        try: f.insiders = _extract_insiders(t.insider_transactions)
-        except Exception as e: logger.debug(f"[fund] insiders {ticker}: {e}")
-        try: f.analyst_ratings = _extract_ratings(t.recommendations)
-        except Exception as e: logger.debug(f"[fund] recommendations {ticker}: {e}")
-        try: f.price_target = _extract_price_target(t.analyst_price_targets)
-        except Exception as e: logger.debug(f"[fund] price_target {ticker}: {e}")
+            if hist or nxt_date: saw_success = True
+        except Exception as e:
+            logger.debug(f"[fund] earnings {ticker}: {e}")
+            _maybe_record(e)
+        try:
+            f.micro = _extract_micro(t.get_info())
+            if any(getattr(f.micro, k) is not None for k in vars(f.micro)): saw_success = True
+        except Exception as e:
+            logger.debug(f"[fund] info {ticker}: {e}")
+            _maybe_record(e)
+        try:
+            f.insiders = _extract_insiders(t.insider_transactions)
+            if f.insiders: saw_success = True
+        except Exception as e:
+            logger.debug(f"[fund] insiders {ticker}: {e}")
+            _maybe_record(e)
+        try:
+            f.analyst_ratings = _extract_ratings(t.recommendations)
+            if f.analyst_ratings: saw_success = True
+        except Exception as e:
+            logger.debug(f"[fund] recommendations {ticker}: {e}")
+            _maybe_record(e)
+        try:
+            f.price_target = _extract_price_target(t.analyst_price_targets)
+            if f.price_target.mean is not None: saw_success = True
+        except Exception as e:
+            logger.debug(f"[fund] price_target {ticker}: {e}")
+            _maybe_record(e)
     except Exception as e:  # noqa: BLE001
         logger.warning(f"[fundamentals] top-level failure for {ticker}: {e}")
         f.error = str(e)
+        if yfinance_health.is_rate_limit_error(e):
+            yfinance_health.record_failure(f"fundamentals top-level {ticker}: {e}")
+    if saw_success:
+        yfinance_health.record_success()
     return f
 
 

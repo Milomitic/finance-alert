@@ -21,6 +21,19 @@ class MarketCapRefreshResult:
     failed_tickers: list[str] = field(default_factory=list)
 
 
+def _is_yf_open() -> bool:
+    from app.services import yfinance_health
+    return yfinance_health.is_open()
+
+
+def _record_yf_outcome(success: bool, reason: str = "") -> None:
+    from app.services import yfinance_health
+    if success:
+        yfinance_health.record_success()
+    else:
+        yfinance_health.record_failure(reason)
+
+
 def _fetch_market_cap(ticker: str) -> int | None:
     """Wrapped for monkeypatching in tests. Returns market cap in the stock's
     base currency (or None on failure).
@@ -72,24 +85,54 @@ def refresh_market_caps(db: Session) -> MarketCapRefreshResult:
 
     Network-bound (~209 calls × ~0.2s ≈ 40s on a warm cache). Safe to run
     concurrently with scans (uses its own session and only writes one column).
+
+    Honors the yfinance circuit breaker: if it opens mid-loop (5+ consecutive
+    rate-limit fingerprints), we abort the rest of the batch instead of
+    drilling Yahoo deeper.
     """
+    from app.services import yfinance_health
+
+    if _is_yf_open():
+        logger.warning("[market_cap] yfinance breaker OPEN — skipping refresh")
+        return MarketCapRefreshResult()
+
     result = MarketCapRefreshResult()
     stocks = list(db.execute(select(Stock)).scalars().all())
+    consecutive_failures = 0
     for stock in stocks:
+        if _is_yf_open():
+            logger.warning(
+                f"[market_cap] breaker tripped during run; aborting after "
+                f"{result.stocks_updated} updates"
+            )
+            break
         try:
             cap = _fetch_market_cap(stock.ticker)
+            consecutive_failures = 0
         except Exception as e:  # noqa: BLE001
-            logger.warning(f"[market_cap] fetch crashed for {stock.ticker}: {e}")
+            if yfinance_health.is_rate_limit_error(e):
+                _record_yf_outcome(False, f"market_cap {stock.ticker}: {e}")
+            else:
+                logger.warning(f"[market_cap] fetch crashed for {stock.ticker}: {e}")
             result.stocks_failed += 1
             result.failed_tickers.append(stock.ticker)
             continue
         if cap is None:
             result.stocks_failed += 1
             result.failed_tickers.append(stock.ticker)
+            consecutive_failures += 1
+            # If many tickers in a row return None it usually means yfinance
+            # is silently rate-limited. Trip the breaker pre-emptively.
+            if consecutive_failures >= 10:
+                _record_yf_outcome(False, "10 consecutive None returns")
+                consecutive_failures = 0
             continue
         stock.market_cap = cap
         result.stocks_updated += 1
+        consecutive_failures = 0
     db.commit()
+    if result.stocks_updated > 0:
+        _record_yf_outcome(True)
     logger.info(
         f"[market_cap] refresh complete: updated={result.stocks_updated} "
         f"failed={result.stocks_failed}"

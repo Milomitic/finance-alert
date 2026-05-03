@@ -49,7 +49,7 @@ export function IndexBadge({ code, size = "sm", showCode = true }: Props) {
           className="rounded-[1px] shadow-sm shrink-0"
         />
       )}
-      {showCode && <span>{code}</span>}
+      {showCode && <span>{meta.displayCode || code}</span>}
     </span>
   );
 }

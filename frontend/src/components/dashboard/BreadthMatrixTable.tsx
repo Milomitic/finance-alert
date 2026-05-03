@@ -199,7 +199,7 @@ export function BreadthMatrixTable({ data }: Props) {
                           className="rounded-[1px] shadow-sm shrink-0"
                         />
                       )}
-                      <span>{r.code}</span>
+                      <span>{getIndexMeta(r.code).displayCode || r.code}</span>
                     </Link>
                   </td>
                   <td className="text-right px-3 py-2">{r.n}</td>

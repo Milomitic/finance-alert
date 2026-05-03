@@ -54,6 +54,59 @@ function VolRow({ m }: { m: VolumeSpike }) {
   );
 }
 
+/**
+ * Compact sparkline-rich row for the 3rd tab. Each row shows the per-stock
+ * 30-day price sparkline as a faded background, in the style of the (now
+ * removed) SpotlightCards Volume Spikes column.
+ */
+function VolSparkRow({ m }: { m: VolumeSpike }) {
+  const sl = m.sparkline ?? [];
+  const min = sl.length ? Math.min(...sl) : 0;
+  const max = sl.length ? Math.max(...sl) : 1;
+  const range = max - min || 1;
+  const W = 100, H = 30;
+  const points = sl
+    .map((v, i) => `${((i / Math.max(1, sl.length - 1)) * W).toFixed(2)},${(H - ((v - min) / range) * H).toFixed(2)}`)
+    .join(" ");
+  const change = m.change_pct ?? 0;
+  const trend = change >= 0 ? "#16a34a" : "#dc2626";
+  return (
+    <li className="border-b border-border/50 last:border-b-0 relative">
+      {sl.length > 1 && (
+        <svg
+          className="absolute inset-0 w-full h-full pointer-events-none"
+          viewBox={`0 0 ${W} ${H}`}
+          preserveAspectRatio="none"
+          aria-hidden="true"
+        >
+          <defs>
+            <linearGradient id={`sp-vol-${m.ticker}`} x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stopColor={trend} stopOpacity={0} />
+              <stop offset="100%" stopColor={trend} stopOpacity={0.45} />
+            </linearGradient>
+          </defs>
+          <polyline points={points} fill="none" stroke={`url(#sp-vol-${m.ticker})`} strokeWidth={1.4} vectorEffect="non-scaling-stroke" />
+        </svg>
+      )}
+      <Link
+        to={`/stocks/${encodeURIComponent(m.ticker)}`}
+        className="relative z-10 flex items-center gap-2 px-3 py-2 hover:bg-accent/30 transition-colors"
+      >
+        <StockLogo ticker={m.ticker} size="xs" />
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-bold tabular-nums leading-tight">{m.ticker}</div>
+          {m.name && (
+            <div className="text-[10px] text-muted-foreground truncate leading-tight" title={m.name}>{m.name}</div>
+          )}
+        </div>
+        <span className="text-sm font-semibold tabular-nums shrink-0 text-blue-600 dark:text-blue-400">
+          {m.vol_ratio.toFixed(1)}× vol
+        </span>
+      </Link>
+    </li>
+  );
+}
+
 export function FiftyTwoWeekVolCard({ movers }: Props) {
   return (
     <Card className="h-full overflow-hidden">
@@ -62,6 +115,7 @@ export function FiftyTwoWeekVolCard({ movers }: Props) {
           <TabsList className="h-10 px-1 rounded-none border-b w-full justify-start bg-muted/30">
             <TabsTrigger value="hilo" className="text-sm h-9 px-3" title="Stock che oggi raggiungono nuovi massimi/minimi a 52 settimane">52w events</TabsTrigger>
             <TabsTrigger value="vol" className="text-sm h-9 px-3" title="Stock con volume oggi maggiore di 2× la media a 20 giorni">Volume spikes</TabsTrigger>
+            <TabsTrigger value="vol-spark" className="text-sm h-9 px-3" title="Stesso elenco con grafico in dissolvenza per riga">Spikes ⚡</TabsTrigger>
           </TabsList>
           <TabsContent value="hilo" className="m-0 flex-1 overflow-y-auto">
             <div className="px-3 py-2 text-sm text-muted-foreground">
@@ -86,6 +140,15 @@ export function FiftyTwoWeekVolCard({ movers }: Props) {
                 )}
               </tbody>
             </table>
+          </TabsContent>
+          <TabsContent value="vol-spark" className="m-0 flex-1 overflow-y-auto">
+            {movers.volume_spikes.length === 0 ? (
+              <div className="text-sm text-muted-foreground text-center py-6">Nessuno spike</div>
+            ) : (
+              <ul>
+                {movers.volume_spikes.slice(0, 8).map((m) => <VolSparkRow key={m.ticker} m={m} />)}
+              </ul>
+            )}
           </TabsContent>
         </Tabs>
       </CardContent>
