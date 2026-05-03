@@ -26,7 +26,7 @@ export function StockAlertsHistoryCard({ alerts }: Props) {
             Alert storici ({alerts.length})
           </div>
           {alerts.length === 0 ? (
-            <div className="text-xs text-muted-foreground text-center py-4">
+            <div className="text-sm text-muted-foreground text-center py-4">
               Nessun alert per questo ticker.
             </div>
           ) : (
@@ -34,7 +34,7 @@ export function StockAlertsHistoryCard({ alerts }: Props) {
               {alerts.slice(0, 10).map((a) => (
                 <li
                   key={a.id}
-                  className="py-1.5 cursor-pointer hover:bg-accent transition-colors text-xs flex items-center gap-2"
+                  className="py-1.5 cursor-pointer hover:bg-accent transition-colors text-sm flex items-center gap-2"
                   onClick={() => setOpen(a)}
                 >
                   <span className="font-medium">
@@ -50,7 +50,7 @@ export function StockAlertsHistoryCard({ alerts }: Props) {
             </ul>
           )}
           {alerts.length > 10 && (
-            <div className="text-xs text-muted-foreground mt-2 text-center">
+            <div className="text-sm text-muted-foreground mt-2 text-center">
               +{alerts.length - 10} non mostrati
             </div>
           )}

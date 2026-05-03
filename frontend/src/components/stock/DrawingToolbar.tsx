@@ -21,7 +21,7 @@ export function DrawingToolbar({ mode, onSetMode, onClearAll }: Props) {
       variant={mode === target ? "default" : "outline"}
       onClick={() => onSetMode(mode === target ? "none" : target)}
       title={title}
-      className={cn("text-xs h-8")}
+      className={cn("text-sm h-8")}
     >
       <Icon className="h-3.5 w-3.5 mr-1" />
       {label}
@@ -36,7 +36,7 @@ export function DrawingToolbar({ mode, onSetMode, onClearAll }: Props) {
       <Button
         type="button" size="sm" variant="ghost" onClick={onClearAll}
         title="Rimuovi tutti i drawing per questo stock"
-        className="text-xs h-8"
+        className="text-sm h-8"
       >
         <Eraser className="h-3.5 w-3.5 mr-1" /> Clear
       </Button>

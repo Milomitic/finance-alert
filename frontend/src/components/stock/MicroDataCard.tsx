@@ -125,7 +125,7 @@ function TileBox({ t }: { t: Tile }) {
       className="rounded-lg border border-border/50 bg-card/80 dark:bg-black/20 p-2.5 text-center min-w-0"
       title={t.tip}
     >
-      <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium truncate">
+      <div className="text-[13px] uppercase tracking-wider text-muted-foreground font-medium truncate">
         {t.label}
       </div>
       <div className={cn("mt-0.5 text-base font-bold tabular-nums", tone)}>
@@ -161,13 +161,13 @@ export function MicroDataCard({ ticker }: Props) {
           <div className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
             Valuation & Quality
           </div>
-          <span className="text-[10px] text-muted-foreground" title="Aggiornato ogni 24h">
+          <span className="text-sm text-muted-foreground" title="Aggiornato ogni 24h">
             cache 24h
           </span>
         </div>
         <div className="flex-1 min-h-0 overflow-y-auto">
           {!anyValue ? (
-            <div className="text-xs text-muted-foreground">
+            <div className="text-sm text-muted-foreground">
               Dati non disponibili (Yahoo Finance non li espone per questo ticker o è temporaneamente rate-limited).
             </div>
           ) : (

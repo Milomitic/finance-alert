@@ -24,13 +24,13 @@ export function EffectiveRulesCard({ rules }: Props) {
           Regole effettive
         </div>
         {rules.length === 0 ? (
-          <div className="text-xs text-muted-foreground text-center py-4">
+          <div className="text-sm text-muted-foreground text-center py-4">
             Nessuna regola configurata.
           </div>
         ) : (
           <ul className="space-y-1.5">
             {rules.map((r) => (
-              <li key={r.kind} className="flex items-center gap-2 text-xs">
+              <li key={r.kind} className="flex items-center gap-2 text-sm">
                 {r.enabled
                   ? <Check className="h-3.5 w-3.5 text-green-600" />
                   : <X className="h-3.5 w-3.5 text-muted-foreground" />}
@@ -39,7 +39,7 @@ export function EffectiveRulesCard({ rules }: Props) {
                 </span>
                 <Badge
                   variant={r.source === "tier2" ? "secondary" : "outline"}
-                  className="ml-auto text-[10px] h-5"
+                  className="ml-auto text-sm h-5"
                   title={r.source === "tier2" ? `Override da watchlist "${r.watchlist_name}"` : "Regola globale"}
                 >
                   {r.source === "tier2" ? `WL: ${r.watchlist_name}` : "Globale"}
@@ -48,7 +48,7 @@ export function EffectiveRulesCard({ rules }: Props) {
             ))}
           </ul>
         )}
-        <div className="text-[10px] text-muted-foreground mt-3 italic">
+        <div className="text-sm text-muted-foreground mt-3 italic">
           Override per-stock disponibili in fasi future.
         </div>
       </CardContent>

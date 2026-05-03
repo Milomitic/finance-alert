@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { useCreatePriceAlert, useStockPriceAlerts } from "@/hooks/useStockPriceAlerts";
 import { useStockDetail } from "@/hooks/useStockDetail";
 import { useStockDrawings } from "@/hooks/useStockDrawings";
+import { AnalystTargetCard } from "@/components/stock/AnalystTargetCard";
 import { DrawingToolbar, type DrawingMode } from "@/components/stock/DrawingToolbar";
 import { FundamentalsCard } from "@/components/stock/FundamentalsCard";
 import { InsidersAnalystCard } from "@/components/stock/InsidersAnalystCard";
@@ -92,7 +93,14 @@ export default function StockDetailPage() {
 
   return (
     <div className="space-y-3">
-      <StockHeader stock={d.stock} kpis={d.kpis} effectiveRules={d.effective_rules} />
+      {/* Top hero row: big StockHeader on the left, Analyst price-target on
+          the right. The header naturally has more content (KPI strip etc.)
+          so it gets the larger column; the analyst card is sized to match
+          its height via h-full on both children. */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-3 items-stretch">
+        <StockHeader stock={d.stock} kpis={d.kpis} effectiveRules={d.effective_rules} />
+        <AnalystTargetCard ticker={ticker} />
+      </div>
 
       {/* Three side-by-side cards: Fundamentals | Valuation | News.
           Fixed row height → all 3 cards share the same height; each one's
@@ -126,7 +134,7 @@ export default function StockDetailPage() {
                 />
               </div>
               <div className="flex items-center gap-2 px-2 py-1.5 rounded-md bg-muted/30 border border-border/50">
-                <span className="text-[11px] uppercase tracking-wider font-bold text-muted-foreground shrink-0">
+                <span className="text-[13px] uppercase tracking-wider font-bold text-muted-foreground shrink-0">
                   Indicatori
                 </span>
                 <div className="h-4 w-px bg-border" />

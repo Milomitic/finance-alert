@@ -60,9 +60,9 @@ function StyleEditor({
   return (
     <PopoverContent className="w-60 p-3 text-sm">
       <div className="font-semibold mb-1">{meta.label}</div>
-      <div className="text-xs text-muted-foreground mb-3">{meta.description}</div>
+      <div className="text-sm text-muted-foreground mb-3">{meta.description}</div>
 
-      <div className="text-xs font-medium mb-1">Colore</div>
+      <div className="text-sm font-medium mb-1">Colore</div>
       <div className="grid grid-cols-6 gap-1.5 mb-3">
         {COLOR_PALETTE.map((c) => (
           <button
@@ -77,17 +77,17 @@ function StyleEditor({
         ))}
       </div>
       <div className="flex items-center gap-2 mb-3">
-        <span className="text-xs">Custom:</span>
+        <span className="text-sm">Custom:</span>
         <input
           type="color"
           value={style.color}
           onChange={(e) => onChange({ ...style, color: e.target.value })}
           className="h-7 w-12 cursor-pointer rounded border"
         />
-        <span className="text-xs font-mono text-muted-foreground">{style.color}</span>
+        <span className="text-sm font-mono text-muted-foreground">{style.color}</span>
       </div>
 
-      <div className="text-xs font-medium mb-1">Spessore linea</div>
+      <div className="text-sm font-medium mb-1">Spessore linea</div>
       <div className="flex items-center gap-2 mb-1">
         <input
           type="range"
@@ -96,7 +96,7 @@ function StyleEditor({
           onChange={(e) => onChange({ ...style, width: Number(e.target.value) })}
           className="flex-1 cursor-pointer"
         />
-        <span className="text-xs font-mono w-6 text-right">{style.width}px</span>
+        <span className="text-sm font-mono w-6 text-right">{style.width}px</span>
       </div>
     </PopoverContent>
   );
@@ -132,7 +132,7 @@ export function IndicatorToggles({ state, onChange }: Props) {
             <button
               type="button"
               onClick={() => onChange(meta.key, { ...s, visible: !on })}
-              className="px-2.5 py-1 text-xs font-semibold transition-colors"
+              className="px-2.5 py-1 text-sm font-semibold transition-colors"
               title={`${on ? "Nascondi" : "Mostra"} ${meta.label}`}
               style={{ color: on ? s.color : "var(--muted-foreground, #64748b)" }}
             >

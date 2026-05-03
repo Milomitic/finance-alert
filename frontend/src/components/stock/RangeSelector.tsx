@@ -22,7 +22,7 @@ export function RangeSelector({ value, onChange }: Props) {
           type="button"
           onClick={() => onChange(opt.key)}
           className={cn(
-            "px-3 py-1 text-xs font-medium rounded transition-colors",
+            "px-3 py-1 text-sm font-medium rounded transition-colors",
             value === opt.key
               ? "bg-background shadow-sm text-foreground"
               : "text-muted-foreground hover:text-foreground",

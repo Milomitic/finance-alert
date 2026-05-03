@@ -22,7 +22,7 @@ export function ResizableSection({ defaultHeight, minHeight = 80, label, childre
       style={{ height: `${defaultHeight}px`, minHeight: `${minHeight}px` }}
     >
       {label && (
-        <div className="absolute top-1 left-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground pointer-events-none z-10 bg-background/70 px-1 rounded">
+        <div className="absolute top-1 left-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground pointer-events-none z-10 bg-background/70 px-1 rounded">
           {label}
         </div>
       )}

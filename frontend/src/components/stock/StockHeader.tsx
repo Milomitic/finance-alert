@@ -107,7 +107,7 @@ export function StockHeader({ stock, kpis, effectiveRules = [] }: Props) {
           <div className="text-right tabular-nums shrink-0 flex flex-col gap-1 items-end">
             {kpis.last_close != null && (
               <>
-                <div className="text-xs uppercase tracking-wide text-muted-foreground">Last close</div>
+                <div className="text-sm uppercase tracking-wide text-muted-foreground">Last close</div>
                 <div className="text-5xl font-bold leading-none">${kpis.last_close.toFixed(2)}</div>
               </>
             )}
@@ -134,7 +134,7 @@ export function StockHeader({ stock, kpis, effectiveRules = [] }: Props) {
                 <Link
                   key={wl}
                   to="/watchlists"
-                  className="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold bg-amber-100 dark:bg-amber-900/40 text-amber-900 dark:text-amber-100 hover:bg-amber-200 dark:hover:bg-amber-900/60 transition-colors"
+                  className="inline-flex items-center rounded-md px-2 py-0.5 text-sm font-semibold bg-amber-100 dark:bg-amber-900/40 text-amber-900 dark:text-amber-100 hover:bg-amber-200 dark:hover:bg-amber-900/60 transition-colors"
                   title={`Apri /watchlists per modificare gli override di "${wl}"`}
                 >
                   {wl}
@@ -202,7 +202,7 @@ function KpiTile({
       className="rounded-lg bg-card/80 dark:bg-black/20 border border-border/50 p-3 text-center"
       title={tooltip}
     >
-      <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium">{label}</div>
+      <div className="text-[13px] uppercase tracking-wider text-muted-foreground font-medium">{label}</div>
       <div className={cn("mt-1 tabular-nums", valueClass)}>{value}</div>
     </div>
   );

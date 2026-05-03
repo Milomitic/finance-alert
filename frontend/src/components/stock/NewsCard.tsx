@@ -30,7 +30,7 @@ export function NewsCard({ ticker }: Props) {
           <span className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
             News
           </span>
-          <span className="ml-auto text-[10px] text-muted-foreground italic">
+          <span className="ml-auto text-sm text-muted-foreground italic">
             Powered by yfinance
           </span>
         </div>
@@ -40,13 +40,13 @@ export function NewsCard({ ticker }: Props) {
               {[0,1,2].map((i) => <div key={i} className="h-4 bg-muted/40 animate-pulse rounded" />)}
             </div>
           ) : items.length === 0 ? (
-            <div className="text-xs text-muted-foreground text-center py-4">
+            <div className="text-sm text-muted-foreground text-center py-4">
               News non disponibili per questo ticker.
             </div>
           ) : (
             <ul className="space-y-2">
               {items.map((n) => (
-                <li key={n.link} className="text-xs">
+                <li key={n.link} className="text-sm">
                   <a
                     href={n.link}
                     target="_blank"
@@ -56,7 +56,7 @@ export function NewsCard({ ticker }: Props) {
                     <span className="line-clamp-2">{n.title}</span>
                     <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground mt-0.5" />
                   </a>
-                  <div className="text-[10px] text-muted-foreground mt-0.5">
+                  <div className="text-sm text-muted-foreground mt-0.5">
                     {n.publisher}
                     {n.published_at && <> · {formatRelative(n.published_at)}</>}
                   </div>
