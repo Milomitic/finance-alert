@@ -1,7 +1,7 @@
 import { ArrowDownRight, ArrowUpRight, CalendarClock } from "lucide-react";
 import { useMemo } from "react";
 import {
-  Bar, CartesianGrid, ComposedChart, Legend, Line,
+  Bar, CartesianGrid, ComposedChart, Legend, Line, ReferenceLine,
   ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
 
@@ -77,9 +77,25 @@ function MiniTrendChart({
     revenue: p.revenue != null ? p.revenue / 1e9 : null,
     revenue_est: p.revenue_est != null ? p.revenue_est / 1e9 : null,
   }));
+  // Detect EPS sign range so we draw the zero reference line only when needed
+  const epsValues = scaled.flatMap((p) => [p.eps, p.eps_est]).filter((v): v is number => v != null);
+  const hasNegativeEps = epsValues.some((v) => v < 0);
+  const hasPositiveEps = epsValues.some((v) => v > 0);
+  const showZeroLine = hasNegativeEps && hasPositiveEps;
+  // EPS line: indigo so it's distinct from Revenue blue and reads well over
+  // both light and dark backgrounds. The estimate line is the same hue but
+  // muted + dashed.
+  const EPS_COLOR = "#6366f1";       // indigo-500
+  const EPS_EST_COLOR = "#a5b4fc";   // indigo-300
+
   return (
     <ResponsiveContainer width="100%" height="100%">
-      <ComposedChart data={scaled} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+      <ComposedChart
+        data={scaled}
+        margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
+        barCategoryGap="35%"
+        barGap={2}
+      >
         <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
         <XAxis dataKey="label" fontSize={10} tickLine={false} axisLine={false} />
         <YAxis
@@ -87,7 +103,7 @@ function MiniTrendChart({
           tickFormatter={(v) => `${v.toFixed(0)}B`}
         />
         <YAxis
-          yAxisId="eps" orientation="right" fontSize={10} tickLine={false} axisLine={false} width={32}
+          yAxisId="eps" orientation="right" fontSize={10} tickLine={false} axisLine={false} width={36}
           tickFormatter={(v) => `$${v.toFixed(1)}`}
         />
         <Tooltip
@@ -101,21 +117,49 @@ function MiniTrendChart({
           }}
         />
         <Legend wrapperStyle={{ fontSize: 10, paddingTop: 4 }} iconSize={8} />
+        {showZeroLine && (
+          <ReferenceLine yAxisId="eps" y={0} stroke="#64748b" strokeOpacity={0.6}
+            strokeDasharray="2 2" />
+        )}
         {hasEstimate && (
           <Bar yAxisId="rev" dataKey="revenue_est" name="Revenue est"
-            fill="#94a3b8" fillOpacity={0.45} radius={[2, 2, 0, 0]} />
+            fill="#94a3b8" fillOpacity={0.45} radius={[2, 2, 0, 0]} maxBarSize={32} />
         )}
         <Bar yAxisId="rev" dataKey="revenue" name="Revenue"
-          fill="#3b82f6" radius={[2, 2, 0, 0]} />
+          fill="#3b82f6" radius={[2, 2, 0, 0]} maxBarSize={32} />
         {hasEstimate && (
           <Line yAxisId="eps" type="monotone" dataKey="eps_est" name="EPS est"
-            stroke="#a3a3a3" strokeDasharray="4 3" strokeWidth={1.5} dot={false} />
+            stroke={EPS_EST_COLOR} strokeDasharray="4 3" strokeWidth={1.5}
+            dot={{ r: 2, fill: EPS_EST_COLOR, stroke: EPS_EST_COLOR }} />
         )}
         <Line yAxisId="eps" type="monotone" dataKey="eps" name="EPS"
-          stroke="#16a34a" strokeWidth={2} dot={{ r: 2.5 }} />
+          stroke={EPS_COLOR} strokeWidth={2.5}
+          dot={{ r: 3, fill: EPS_COLOR, stroke: EPS_COLOR }}
+          activeDot={{ r: 5, fill: EPS_COLOR, stroke: "#fff", strokeWidth: 2 }} />
       </ComposedChart>
     </ResponsiveContainer>
   );
+}
+
+/* ─── Quarter mapping helpers ───────────────────────────────────────────── */
+
+/** Map an earnings RELEASE date (YYYY-MM-DD) to the fiscal quarter it
+ *  reports on. Earnings are typically released ~4-6 weeks after quarter end,
+ *  so we subtract 45 days to land in the right quarter. Returns "YYYY-Q[1-4]". */
+function earningsDateToFiscalQuarter(isoDate: string): string {
+  const d = new Date(isoDate);
+  d.setDate(d.getDate() - 45);
+  const y = d.getFullYear();
+  const q = Math.floor(d.getMonth() / 3) + 1;
+  return `${y}-Q${q}`;
+}
+
+/** Map a quarterly fiscal_quarter_end (YYYY-MM-DD) to "YYYY-Q[1-4]". */
+function fiscalEndToQuarter(isoDate: string): string {
+  const d = new Date(isoDate);
+  const y = d.getFullYear();
+  const q = Math.floor(d.getMonth() / 3) + 1;
+  return `${y}-Q${q}`;
 }
 
 /* ─── Tab content builders ──────────────────────────────────────────────── */
@@ -247,12 +291,14 @@ function QuarterlyTabBody({
   }, [earnings]);
   const hasEstimate = earnings.some((e) => e.eps_estimate != null);
 
-  // Pair up earnings with quarterly to expose Revenue actuals in the table
-  // when revenue_reported is missing from earnings.
+  // Pair up earnings with quarterly history by FISCAL QUARTER (YYYY-Q1..Q4),
+  // NOT by year-month. Earnings release date ≠ quarter end date — subtracting
+  // ~45 days from the release date lands in the reporting quarter.
   const revByQuarter = new Map<string, number | null>();
   for (const q of quarterly) {
-    revByQuarter.set(q.fiscal_quarter_end.slice(0, 7), q.revenue);
+    revByQuarter.set(fiscalEndToQuarter(q.fiscal_quarter_end), q.revenue);
   }
+  const earningsQuarters = new Set(earnings.map((e) => earningsDateToFiscalQuarter(e.date)));
 
   return (
     <div className="h-full flex flex-col gap-2 min-h-0">
@@ -275,10 +321,14 @@ function QuarterlyTabBody({
             {earnings.map((e) => {
               const surp = fmtPctSurp(e.surprise_pct);
               const beat = e.surprise_pct != null && e.surprise_pct > 0;
-              const revActual = e.revenue_reported ?? revByQuarter.get(e.date.slice(0, 7)) ?? null;
+              const fq = earningsDateToFiscalQuarter(e.date);
+              const revActual = e.revenue_reported ?? revByQuarter.get(fq) ?? null;
               return (
                 <tr key={e.date} className="border-t border-border/40 hover:bg-muted/30">
-                  <td className="px-1.5 py-1">{shortDate(e.date)}</td>
+                  <td className="px-1.5 py-1">
+                    <span className="font-mono">{shortQuarter(`${fq.slice(0, 4)}-${(parseInt(fq.slice(6), 10) * 3).toString().padStart(2, "0")}-01`)}</span>
+                    <span className="text-muted-foreground ml-1">({shortDate(e.date)})</span>
+                  </td>
                   <td className="px-1.5 py-1 text-right">{fmtBig(revActual)}</td>
                   <td className="px-1.5 py-1 text-right text-muted-foreground">
                     {e.revenue_estimate != null ? fmtBig(e.revenue_estimate) : "—"}
@@ -298,10 +348,10 @@ function QuarterlyTabBody({
                 </tr>
               );
             })}
-            {/* If we have quarterly history beyond what earnings_dates covers,
-                append the older bars as a "history" section — actuals only. */}
+            {/* History: only quarters NOT already covered by an earnings row.
+                Dedup via the YYYY-Q identifier (release date − 45d → quarter). */}
             {quarterly
-              .filter((q) => !earnings.some((e) => e.date.startsWith(q.fiscal_quarter_end.slice(0, 7))))
+              .filter((q) => !earningsQuarters.has(fiscalEndToQuarter(q.fiscal_quarter_end)))
               .map((q) => (
                 <tr key={`hist-${q.fiscal_quarter_end}`} className="border-t border-border/40 text-muted-foreground">
                   <td className="px-1.5 py-1 font-mono">{shortQuarter(q.fiscal_quarter_end)}</td>
