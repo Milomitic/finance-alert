@@ -67,6 +67,73 @@ def health() -> dict[str, object]:
     return {"status": "ok", "scheduler_running": get_scheduler().running, "version": app.version}
 
 
+@app.post("/api/admin/warmup-fundamentals")
+def warmup_fundamentals(
+    limit: int | None = None,
+    skip_cached: bool = True,
+) -> dict[str, object]:
+    """Iterate the catalog (largest market_cap first) and prefetch fundamentals
+    in-process. Honors the yfinance circuit breaker — when it opens we abort
+    cleanly instead of wasting requests on a blocked endpoint.
+
+    `limit`: cap how many tickers to process (None = all).
+    `skip_cached`: don't hit network for tickers whose cache is still fresh.
+
+    Runs synchronously (blocks the request). For ~1100 stocks at ~0.4s each
+    this is ~7-8min on a warm Yahoo, instant when the breaker is open.
+    """
+    import time
+    from app.core.db import SessionLocal
+    from app.models import Stock
+    from app.services import yfinance_health
+    from app.services.stock_fundamentals_service import (
+        _CACHE, _TTL_SECONDS, get_fundamentals,
+    )
+    from sqlalchemy import select
+
+    db = SessionLocal()
+    try:
+        stocks = db.execute(
+            select(Stock).order_by(Stock.market_cap.desc().nullslast())
+        ).scalars().all()
+        if limit:
+            stocks = stocks[:limit]
+        ok = err = empty = cached_skip = 0
+        breaker_aborted_at: int | None = None
+        now = time.time()
+        for i, s in enumerate(stocks):
+            if yfinance_health.is_open():
+                breaker_aborted_at = i
+                break
+            if skip_cached:
+                c = _CACHE.get(s.ticker)
+                if c is not None and (now - c.fetched_at) < _TTL_SECONDS:
+                    cached_skip += 1
+                    continue
+            try:
+                f = get_fundamentals(s.ticker)
+                if f.error:
+                    err += 1
+                elif f.annual or (f.micro and f.micro.trailing_pe is not None):
+                    ok += 1
+                else:
+                    empty += 1
+            except Exception:  # noqa: BLE001
+                err += 1
+            time.sleep(0.3)
+        return {
+            "total_stocks": len(stocks),
+            "succeeded": ok,
+            "errors": err,
+            "empty_payload": empty,
+            "skipped_cached": cached_skip,
+            "breaker_aborted_at": breaker_aborted_at,
+            "yfinance_breaker": yfinance_health.status(),
+        }
+    finally:
+        db.close()
+
+
 @app.get("/api/health/data-sources")
 def data_sources_health() -> dict[str, object]:
     """Per-source per-operation success/failure counters + breaker state +

@@ -65,11 +65,13 @@ class AnalystRating:
 
 @dataclass
 class AnalystPriceTarget:
-    current: float | None
-    low: float | None
-    mean: float | None
-    median: float | None
-    high: float | None
+    # Defaults so Fundamentals.price_target = field(default_factory=AnalystPriceTarget)
+    # works without needing to pass all 5 fields.
+    current: float | None = None
+    low: float | None = None
+    mean: float | None = None
+    median: float | None = None
+    high: float | None = None
 
 
 @dataclass
