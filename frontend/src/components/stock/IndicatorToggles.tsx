@@ -36,12 +36,12 @@ export const INDICATOR_CATALOG: IndicatorMeta[] = [
 ];
 
 export const DEFAULT_INDICATOR_STATE: IndicatorState = {
-  sma20:  { visible: false, color: "#a855f7", width: 2 },
-  sma50:  { visible: true,  color: "#3b82f6", width: 2 },
-  sma200: { visible: true,  color: "#f59e0b", width: 2 },
+  sma20:  { visible: false, color: "#a855f7", width: 1 },
+  sma50:  { visible: true,  color: "#3b82f6", width: 1 },
+  sma200: { visible: true,  color: "#f59e0b", width: 1 },
   bb:     { visible: false, color: "#0ea5e9", width: 1 },
-  rsi:    { visible: true,  color: "#7c3aed", width: 2 },
-  macd:   { visible: false, color: "#ef4444", width: 2 },
+  rsi:    { visible: true,  color: "#7c3aed", width: 1 },
+  macd:   { visible: false, color: "#ef4444", width: 1 },
 };
 
 interface Props {
@@ -102,22 +102,37 @@ function StyleEditor({
   );
 }
 
+/** Append an alpha hex pair to a 6-digit hex color. e.g. "#3b82f6" + 0.18 → "#3b82f62E" */
+function withAlpha(hex: string, a: number): string {
+  const clamped = Math.max(0, Math.min(1, a));
+  const ah = Math.round(clamped * 255).toString(16).padStart(2, "0");
+  return `${hex}${ah}`;
+}
+
 export function IndicatorToggles({ state, onChange }: Props) {
   return (
     <div className="inline-flex items-center gap-x-2 gap-y-1 flex-wrap">
       {INDICATOR_CATALOG.map((meta) => {
         const s = state[meta.key];
         const on = s.visible;
+        // Active: fill the whole pill with a tinted version of the indicator
+        // color (~18% alpha), border in the same color at full opacity.
+        // Inactive: neutral card background, muted border.
+        const activeBg = on ? withAlpha(s.color, 0.18) : undefined;
+        const activeBorder = on ? s.color : undefined;
         return (
           <div
             key={meta.key}
-            className="inline-flex items-center rounded-md border border-border/50 bg-card overflow-hidden"
-            style={on ? { boxShadow: `inset 3px 0 0 0 ${s.color}` } : undefined}
+            className="inline-flex items-center rounded-md overflow-hidden transition-colors"
+            style={{
+              backgroundColor: activeBg,
+              border: `1px solid ${activeBorder ?? "hsl(var(--border))"}`,
+            }}
           >
             <button
               type="button"
               onClick={() => onChange(meta.key, { ...s, visible: !on })}
-              className="px-2 py-1 text-xs font-medium hover:bg-accent/40 transition-colors"
+              className="px-2.5 py-1 text-xs font-semibold transition-colors"
               title={`${on ? "Nascondi" : "Mostra"} ${meta.label}`}
               style={{ color: on ? s.color : "var(--muted-foreground, #64748b)" }}
             >
@@ -128,7 +143,8 @@ export function IndicatorToggles({ state, onChange }: Props) {
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="h-full px-1.5 rounded-none border-l border-border/50"
+                  className="h-full px-1.5 rounded-none"
+                  style={{ borderLeft: `1px solid ${on ? withAlpha(s.color, 0.5) : "hsl(var(--border))"}` }}
                   title="Personalizza colore e spessore"
                 >
                   <Settings2 className="h-3 w-3" />

@@ -174,7 +174,7 @@ export function MicroDataCard({ ticker }: Props) {
             Dati non disponibili (Yahoo Finance non li espone per questo ticker o è temporaneamente rate-limited).
           </div>
         ) : (
-          <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-7 gap-2">
+          <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-7 xl:grid-cols-[repeat(13,minmax(0,1fr))] gap-2">
             {tiles.map((t) => <TileBox key={t.label} t={t} />)}
           </div>
         )}

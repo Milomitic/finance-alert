@@ -8,7 +8,6 @@ import { useCreatePriceAlert, useStockPriceAlerts } from "@/hooks/useStockPriceA
 import { useStockDetail } from "@/hooks/useStockDetail";
 import { useStockDrawings } from "@/hooks/useStockDrawings";
 import { DrawingToolbar, type DrawingMode } from "@/components/stock/DrawingToolbar";
-import { EffectiveRulesCard } from "@/components/stock/EffectiveRulesCard";
 import { FundamentalsCard } from "@/components/stock/FundamentalsCard";
 import { InsidersAnalystCard } from "@/components/stock/InsidersAnalystCard";
 import { MicroDataCard } from "@/components/stock/MicroDataCard";
@@ -93,11 +92,18 @@ export default function StockDetailPage() {
 
   return (
     <div className="space-y-3">
-      <StockHeader stock={d.stock} kpis={d.kpis} />
+      <StockHeader stock={d.stock} kpis={d.kpis} effectiveRules={d.effective_rules} />
 
-      {/* Micro-data (ratios) + Insiders & Analyst go between header and chart */}
+      {/* Pre-chart full-width sections, ordered by relevance:
+            1. MicroData (valuation ratios — quick read)
+            2. Fundamentals (annual + quarterly + earnings — wider, denser)
+            3. Insiders & Analyst (consensus + transactions)
+            4. News (curated headlines, used to be at the bottom of the sidebar)
+          The chart + sidebar follow below. */}
       <MicroDataCard ticker={ticker} />
+      <FundamentalsCard ticker={ticker} />
       <InsidersAnalystCard ticker={ticker} />
+      <NewsCard ticker={ticker} />
 
       <div className="grid lg:grid-cols-[1fr_400px] gap-3">
         <Card>
@@ -176,11 +182,8 @@ export default function StockDetailPage() {
 
         <div className="space-y-3">
           <TechnicalKpiCard kpis={d.kpis} indicators={d.indicators} />
-          <FundamentalsCard ticker={ticker} />
           <PriceAlertsCard ticker={ticker} />
           <StockAlertsHistoryCard alerts={d.alerts_history} />
-          <EffectiveRulesCard rules={d.effective_rules} />
-          <NewsCard ticker={ticker} />
         </div>
       </div>
 
