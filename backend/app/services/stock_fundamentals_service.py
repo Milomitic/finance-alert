@@ -334,8 +334,16 @@ def _fetch_fresh(ticker: str) -> Fundamentals:
         f.error = str(e)
         if yfinance_health.is_rate_limit_error(e):
             yfinance_health.record_failure(f"fundamentals top-level {ticker}: {e}")
+    # Per-source metrics: count this fetch attempt
+    from app.services import data_source_metrics
     if saw_success:
         yfinance_health.record_success()
+        data_source_metrics.record_success("yfinance", "fundamentals")
+    elif f.error or not saw_success:
+        data_source_metrics.record_failure(
+            "yfinance", "fundamentals",
+            reason=f.error or f"empty payload for {ticker}",
+        )
     return f
 
 

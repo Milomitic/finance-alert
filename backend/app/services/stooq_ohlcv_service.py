@@ -138,6 +138,15 @@ def upsert_via_stooq(db: Any, stocks: list[Any], *, days: int = 365) -> StooqRes
             logger.warning(f"[stooq] upsert failed for {stock.ticker}: {exc}")
             result.stocks_failed += 1
             result.failed_tickers.append(stock.ticker)
+    from app.services import data_source_metrics
+    if result.stocks_succeeded > 0:
+        data_source_metrics.record_success("stooq", "ohlcv", count=result.stocks_succeeded)
+    if result.stocks_failed > 0:
+        data_source_metrics.record_failure(
+            "stooq", "ohlcv",
+            reason=f"{result.stocks_failed} unmappable / missing tickers",
+            count=result.stocks_failed,
+        )
     logger.info(
         f"[stooq] fallback complete: ok={result.stocks_succeeded} "
         f"fail={result.stocks_failed} rows={result.rows_inserted}"

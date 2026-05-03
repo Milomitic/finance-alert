@@ -159,6 +159,17 @@ def fetch_and_upsert(
     if result.stocks_succeeded > 0:
         yfinance_health.record_success()
 
+    # Record per-source metrics for the health dashboard
+    from app.services import data_source_metrics
+    if result.stocks_succeeded > 0:
+        data_source_metrics.record_success("yfinance", "ohlcv", count=result.stocks_succeeded)
+    if result.stocks_failed > 0:
+        data_source_metrics.record_failure(
+            "yfinance", "ohlcv",
+            reason=f"{result.stocks_failed} tickers without data (e.g. {(result.failed_tickers or [])[:3]})",
+            count=result.stocks_failed,
+        )
+
     logger.info(
         f"[ohlcv] result: succeeded={result.stocks_succeeded} "
         f"failed={result.stocks_failed} rows={result.rows_inserted}"

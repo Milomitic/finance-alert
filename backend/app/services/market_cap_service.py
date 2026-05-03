@@ -133,6 +133,16 @@ def refresh_market_caps(db: Session) -> MarketCapRefreshResult:
     db.commit()
     if result.stocks_updated > 0:
         _record_yf_outcome(True)
+    # Per-source metrics
+    from app.services import data_source_metrics
+    if result.stocks_updated > 0:
+        data_source_metrics.record_success("yfinance", "market_cap", count=result.stocks_updated)
+    if result.stocks_failed > 0:
+        data_source_metrics.record_failure(
+            "yfinance", "market_cap",
+            reason=f"{result.stocks_failed} tickers without market_cap",
+            count=result.stocks_failed,
+        )
     logger.info(
         f"[market_cap] refresh complete: updated={result.stocks_updated} "
         f"failed={result.stocks_failed}"

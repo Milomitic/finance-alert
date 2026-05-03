@@ -67,6 +67,35 @@ def health() -> dict[str, object]:
     return {"status": "ok", "scheduler_running": get_scheduler().running, "version": app.version}
 
 
+@app.get("/api/health/data-sources")
+def data_sources_health() -> dict[str, object]:
+    """Per-source per-operation success/failure counters + breaker state +
+    gap-analysis suggestions. Useful to spot when a source needs a fallback."""
+    from app.services import data_source_metrics, yfinance_health
+    metrics = data_source_metrics.snapshot()
+    return {
+        "yfinance_breaker": yfinance_health.status(),
+        "metrics": [
+            {
+                "source": m.source,
+                "op": m.op,
+                "success": m.success,
+                "failure": m.failure,
+                "success_rate": m.success_rate,
+                "last_success_at": m.last_success_at,
+                "last_failure_at": m.last_failure_at,
+                "last_failure_reason": m.last_failure_reason,
+                "health": m.health,
+            }
+            for m in metrics
+        ],
+        "suggestions": [
+            {"op": g.op, "why": g.why, "suggestion": g.suggestion}
+            for g in data_source_metrics.analyse_gaps()
+        ],
+    }
+
+
 # Serve built frontend in prod-local mode if dist exists.
 # Resolve relative to this file's location: backend/app/main.py -> ../../frontend/dist
 FRONTEND_DIST = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"

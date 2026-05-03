@@ -4,6 +4,7 @@ import { AlertsCompactPanel } from "@/components/dashboard/AlertsCompactPanel";
 import { BreadthMatrixTable } from "@/components/dashboard/BreadthMatrixTable";
 import { FiftyTwoWeekVolCard } from "@/components/dashboard/FiftyTwoWeekVolCard";
 import { HeroStrip } from "@/components/dashboard/HeroStrip";
+import { DataSourcesCard } from "@/components/dashboard/DataSourcesCard";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { MarketTreemap } from "@/components/dashboard/MarketTreemap";
 import { TopMoversCard } from "@/components/dashboard/TopMoversCard";
@@ -150,6 +151,7 @@ export default function HomePage() {
           alertsPrev24h={summaryData.kpis.alerts_prev_24h}
         />
       )}
+      <DataSourcesCard />
       {summaryData && <SystemStatusFooter status={summaryData.system_status} />}
     </div>
   );

@@ -94,16 +94,19 @@ export default function StockDetailPage() {
     <div className="space-y-3">
       <StockHeader stock={d.stock} kpis={d.kpis} effectiveRules={d.effective_rules} />
 
-      {/* Pre-chart full-width sections, ordered by relevance:
-            1. MicroData (valuation ratios — quick read)
-            2. Fundamentals (annual + quarterly + earnings — wider, denser)
-            3. Insiders & Analyst (consensus + transactions)
-            4. News (curated headlines, used to be at the bottom of the sidebar)
-          The chart + sidebar follow below. */}
-      <MicroDataCard ticker={ticker} />
-      <FundamentalsCard ticker={ticker} />
+      {/* Three side-by-side cards: Fundamentals | Valuation | News.
+          Each is variable in height — `items-start` keeps them top-aligned
+          rather than stretching the shorter ones. On narrow screens they
+          stack vertically. */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 items-start">
+        <FundamentalsCard ticker={ticker} />
+        <MicroDataCard ticker={ticker} />
+        <NewsCard ticker={ticker} />
+      </div>
+
+      {/* Insiders & Analyst stays full-width below — its tables (analyst bars
+          + insider list) are wide and would get cramped in a third of a row. */}
       <InsidersAnalystCard ticker={ticker} />
-      <NewsCard ticker={ticker} />
 
       <div className="grid lg:grid-cols-[1fr_400px] gap-3">
         <Card>
