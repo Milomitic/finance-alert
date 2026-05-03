@@ -349,12 +349,15 @@ function QuarterlyTabBody({
               );
             })}
             {/* History: only quarters NOT already covered by an earnings row.
-                Dedup via the YYYY-Q identifier (release date − 45d → quarter). */}
+                Dedup via the YYYY-Q identifier (release date − 45d → quarter).
+                Capped at 3 to avoid the table dwarfing the chart above and
+                spilling visually into the next card. */}
             {quarterly
               .filter((q) => !earningsQuarters.has(fiscalEndToQuarter(q.fiscal_quarter_end)))
+              .slice(0, 3)
               .map((q) => (
-                <tr key={`hist-${q.fiscal_quarter_end}`} className="border-t border-border/40 text-muted-foreground">
-                  <td className="px-1.5 py-1 font-mono">{shortQuarter(q.fiscal_quarter_end)}</td>
+                <tr key={`hist-${q.fiscal_quarter_end}`} className="border-t border-border/40 text-muted-foreground italic">
+                  <td className="px-1.5 py-1 font-mono">{shortQuarter(q.fiscal_quarter_end)}<span className="ml-1 text-[10px] not-italic opacity-60">(storico)</span></td>
                   <td className="px-1.5 py-1 text-right">{fmtBig(q.revenue)}</td>
                   <td className="px-1.5 py-1 text-right">—</td>
                   <td className="px-1.5 py-1 text-right">{q.eps != null ? `$${q.eps.toFixed(2)}` : "—"}</td>
@@ -435,14 +438,19 @@ export function FundamentalsCard({ ticker }: Props) {
               Trimestrale
             </TabsTrigger>
           </TabsList>
-          <TabsContent value="annual" className="m-0 mt-2 flex-1 min-h-0">
+          {/* `flex flex-col` on TabsContent is what stops the table from
+              spilling out of the card and overlapping InsidersAnalystCard
+              below — without it, h-full on the inner body has no parent
+              height to measure against and the table renders at natural
+              height. */}
+          <TabsContent value="annual" className="m-0 mt-2 flex-1 min-h-0 flex flex-col">
             {hasAnnual ? (
               <AnnualTabBody annual={f.annual} earnings={f.earnings} />
             ) : (
               <div className="text-sm text-muted-foreground text-center py-4">N/D</div>
             )}
           </TabsContent>
-          <TabsContent value="quarterly" className="m-0 mt-2 flex-1 min-h-0">
+          <TabsContent value="quarterly" className="m-0 mt-2 flex-1 min-h-0 flex flex-col">
             {hasQuarterly ? (
               <QuarterlyTabBody quarterly={f.quarterly} earnings={f.earnings} />
             ) : (
