@@ -252,6 +252,7 @@ export interface IndexBreadth {
   rsi_oversold_count: number;
   rsi_overbought_count: number;
   avg_change_pct: number | null;
+  total_market_cap?: number | null;
   advancers: number;
   decliners: number;
   new_52w_highs: number;
@@ -276,7 +277,9 @@ export interface Mover {
   name: string;
   index: string | null;
   sector: string | null;
-  change_pct: number;
+  change_pct: number | null;
+  change_pct_5d?: number | null;
+  change_pct_20d?: number | null;
   last_close: number;
   prev_close: number | null;
   sparkline?: number[];  // last ~30 close prices for the row's faded background trend
@@ -289,6 +292,10 @@ export interface VolumeSpike extends Mover {
 export interface MoversBlock {
   gainers: Mover[];
   losers: Mover[];
+  gainers_5d?: Mover[];
+  losers_5d?: Mover[];
+  gainers_20d?: Mover[];
+  losers_20d?: Mover[];
   volume_spikes: VolumeSpike[];
   new_52w_high: Mover[];
   new_52w_low: Mover[];

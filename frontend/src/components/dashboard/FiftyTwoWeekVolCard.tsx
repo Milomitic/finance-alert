@@ -32,7 +32,8 @@ function ListRow({ m, kind }: { m: Mover; kind: "high" | "low" }) {
 }
 
 function VolRow({ m }: { m: VolumeSpike }) {
-  const positive = m.change_pct >= 0;
+  const change = m.change_pct ?? 0;
+  const positive = change >= 0;
   return (
     <tr className="border-b border-border/50 hover:bg-muted/40 transition-colors">
       <td className="px-3 py-1.5 font-semibold">
@@ -47,7 +48,7 @@ function VolRow({ m }: { m: VolumeSpike }) {
       <td className="px-2 py-1.5"><IndexBadge code={m.index} size="xs" /></td>
       <td className="px-3 py-1.5 text-right tabular-nums">{m.vol_ratio.toFixed(1)}×</td>
       <td className={`px-3 py-1.5 text-right tabular-nums ${positive ? "text-green-600" : "text-red-600"}`}>
-        {m.change_pct >= 0 ? "+" : ""}{m.change_pct.toFixed(2)}%
+        {change >= 0 ? "+" : ""}{change.toFixed(2)}%
       </td>
     </tr>
   );

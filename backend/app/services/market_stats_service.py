@@ -26,7 +26,7 @@ class StockMetrics:
     bars_count: int
     last_close: float | None
     prev_close: float | None
-    change_pct: float | None
+    change_pct: float | None              # 1-day
     sma50: float | None
     sma200: float | None
     rsi14: float | None
@@ -41,6 +41,8 @@ class StockMetrics:
     vol_ratio: float | None              # vol_today / vol_avg_20
     has_full_data: bool                  # bars_count >= 200 (SMA200 defined)
     sparkline: list[float] = field(default_factory=list)  # last 30 closes for per-row UI sparklines
+    change_pct_5d: float | None = None    # ~1 week (5 trading days)
+    change_pct_20d: float | None = None   # ~1 month (20 trading days)
 
 
 def compute_stock_metrics(
@@ -67,6 +69,16 @@ def compute_stock_metrics(
     last_close = float(close.iloc[-1])
     prev_close = float(close.iloc[-2])
     change_pct = ((last_close - prev_close) / prev_close * 100.0) if prev_close else None
+    # Windowed % change vs N trading days ago (5 ≈ 1w, 20 ≈ 1m)
+    def _pct_n(days_back: int) -> float | None:
+        if n <= days_back:
+            return None
+        ref = float(close.iloc[-days_back - 1])
+        if not ref:
+            return None
+        return (last_close - ref) / ref * 100.0
+    change_pct_5d = _pct_n(5)
+    change_pct_20d = _pct_n(20)
 
     # Window-based metrics
     window_252 = close.tail(252)
@@ -101,6 +113,8 @@ def compute_stock_metrics(
         last_close=last_close,
         prev_close=prev_close,
         change_pct=change_pct,
+        change_pct_5d=change_pct_5d,
+        change_pct_20d=change_pct_20d,
         sma50=sma50,
         sma200=sma200,
         rsi14=rsi14,
@@ -208,6 +222,9 @@ def aggregate_by_index(
             continue
         full_data = [m for m in bucket if m.has_full_data]
         has_sma50 = [m for m in bucket if m.sma50 is not None]
+        # Sum of known market caps (fallback to None if zero coverage)
+        caps = [m.market_cap for m in bucket if m.market_cap is not None]
+        total_mc = float(sum(caps)) if caps else None
         pct_sma200 = (
             round(100.0 * sum(1 for m in full_data if m.sma200 and m.last_close > m.sma200) / len(full_data), 1)
             if full_data else None
@@ -224,6 +241,7 @@ def aggregate_by_index(
             "rsi_oversold_count": sum(1 for m in bucket if m.rsi14 is not None and m.rsi14 < 30),
             "rsi_overbought_count": sum(1 for m in bucket if m.rsi14 is not None and m.rsi14 > 70),
             "avg_change_pct": avg_change,
+            "total_market_cap": total_mc,
             "advancers": sum(1 for m in bucket if m.change_pct is not None and m.change_pct > 0),
             "decliners": sum(1 for m in bucket if m.change_pct is not None and m.change_pct < 0),
             "new_52w_highs": sum(1 for m in bucket if m.new_52w_high),
@@ -294,14 +312,28 @@ def build_movers(metrics: list[StockMetrics], *, top_n: int = 10) -> dict:
             "index": m.index_codes[0] if m.index_codes else None,
             "sector": m.sector,
             "change_pct": m.change_pct,
+            "change_pct_5d": m.change_pct_5d,
+            "change_pct_20d": m.change_pct_20d,
             "last_close": m.last_close,
             "prev_close": m.prev_close,
             "sparkline": m.sparkline,
         }
 
+    # Top 10 by 5-day and 20-day windows for the dashboard "Top movers" picker
+    with_5d = [m for m in metrics if m.change_pct_5d is not None]
+    with_20d = [m for m in metrics if m.change_pct_20d is not None]
+    gainers_5d = _dedupe_by_ticker(sorted(with_5d, key=lambda m: m.change_pct_5d, reverse=True))[:top_n]
+    losers_5d = _dedupe_by_ticker(sorted(with_5d, key=lambda m: m.change_pct_5d))[:top_n]
+    gainers_20d = _dedupe_by_ticker(sorted(with_20d, key=lambda m: m.change_pct_20d, reverse=True))[:top_n]
+    losers_20d = _dedupe_by_ticker(sorted(with_20d, key=lambda m: m.change_pct_20d))[:top_n]
+
     return {
         "gainers": [_row(m) for m in gainers],
         "losers": [_row(m) for m in losers],
+        "gainers_5d": [_row(m) for m in gainers_5d],
+        "losers_5d": [_row(m) for m in losers_5d],
+        "gainers_20d": [_row(m) for m in gainers_20d],
+        "losers_20d": [_row(m) for m in losers_20d],
         "volume_spikes": [
             {**_row(m), "vol_ratio": round(m.vol_ratio, 2)} for m in vol_spikes
         ],

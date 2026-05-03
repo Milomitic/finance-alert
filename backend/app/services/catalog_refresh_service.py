@@ -51,8 +51,18 @@ INDEX_SOURCES: dict[str, dict[str, object]] = {
         "default_exchange": "NYSE",
         "currency": "USD",
     },
-    # FTSEMIB rimosso a favore di FTSE100 (UK): le poche italiane di interesse
-    # restano coperte da EUSTX50 (Stellantis, Enel, ENI, Intesa, UniCredit).
+    "FTSEMIB": {
+        "url": "https://en.wikipedia.org/wiki/FTSE_MIB",
+        "name": "FTSE MIB (Milano)",
+        "country": "IT",
+        "table_index": 1,
+        "ticker_col": "Ticker",
+        "name_col": "Company",
+        "sector_col": "ICB Sector",
+        "industry_col": None,
+        "default_exchange": "BIT",
+        "currency": "EUR",
+    },
     "EUSTX50": {
         # Constituents now at table index 3.
         "url": "https://en.wikipedia.org/wiki/EURO_STOXX_50",
@@ -158,6 +168,9 @@ def _normalize_ticker(raw: str, default_exchange: str) -> tuple[str, str]:
     them on London (FTSE 100 entries are listed bare on Wikipedia).
     """
     t = str(raw).strip().upper()
+    # Strip non-breaking space (U+00A0) which Wikipedia sometimes injects
+    # between the prefix and the number ("SEHK:\xa05" → "SEHK: 5").
+    t = t.replace("\xa0", " ")
     # CSI 300: "SSE: 600519" / "SZSE: 002475"
     if t.startswith("SSE:") or t.startswith("SZSE:"):
         prefix, _, num = t.partition(":")
@@ -165,6 +178,12 @@ def _normalize_ticker(raw: str, default_exchange: str) -> tuple[str, str]:
         if prefix == "SSE":
             return f"{num}.SS", "SSE"
         return f"{num}.SZ", "SZSE"
+    # Hang Seng (Wikipedia 2026): "SEHK: 5" → "0005.HK" (4-digit pad)
+    if t.startswith("SEHK:"):
+        _, _, num = t.partition(":")
+        num = num.strip()
+        if num.isdigit():
+            return f"{int(num):04d}.HK", "HKEX"
     suffix_to_exchange = {
         ".MI": "BIT",      # Borsa Italiana
         ".DE": "XETRA",    # Deutsche Boerse

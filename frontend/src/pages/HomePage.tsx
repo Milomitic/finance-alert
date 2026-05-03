@@ -6,6 +6,7 @@ import { FiftyTwoWeekVolCard } from "@/components/dashboard/FiftyTwoWeekVolCard"
 import { HeroStrip } from "@/components/dashboard/HeroStrip";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { MarketTreemap } from "@/components/dashboard/MarketTreemap";
+import { TopMoversCard } from "@/components/dashboard/TopMoversCard";
 import { RsiHistogramCard } from "@/components/dashboard/RsiHistogramCard";
 import { SectorsHeatmapCard } from "@/components/dashboard/SectorsHeatmapCard";
 import { SpotlightCards } from "@/components/dashboard/SpotlightCards";
@@ -138,6 +139,7 @@ export default function HomePage() {
         <div className="h-full min-h-0"><SectorsHeatmapCard sectors={m.sectors} /></div>
         <div className="h-full min-h-0"><FiftyTwoWeekVolCard movers={m.movers} /></div>
       </div>
+      <TopMoversCard movers={m.movers} />
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
         <div className="lg:col-span-2">
           <ErrorBoundary>

@@ -29,6 +29,7 @@ class IndexBreadthOut(BaseModel):
     rsi_oversold_count: int
     rsi_overbought_count: int
     avg_change_pct: float | None
+    total_market_cap: float | None = None
     advancers: int
     decliners: int
     new_52w_highs: int
@@ -53,7 +54,9 @@ class MoverOut(BaseModel):
     name: str
     index: str | None
     sector: str | None
-    change_pct: float
+    change_pct: float | None = None
+    change_pct_5d: float | None = None
+    change_pct_20d: float | None = None
     last_close: float
     prev_close: float | None
     sparkline: list[float] = []  # last ~30 close prices for the per-row UI sparkline
@@ -66,6 +69,10 @@ class VolumeSpikeOut(MoverOut):
 class MoversBlockOut(BaseModel):
     gainers: list[MoverOut]
     losers: list[MoverOut]
+    gainers_5d: list[MoverOut] = []
+    losers_5d: list[MoverOut] = []
+    gainers_20d: list[MoverOut] = []
+    losers_20d: list[MoverOut] = []
     volume_spikes: list[VolumeSpikeOut]
     new_52w_high: list[MoverOut]
     new_52w_low: list[MoverOut]

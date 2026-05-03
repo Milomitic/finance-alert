@@ -15,6 +15,7 @@ interface Props {
 type SortKey =
   | "code"
   | "n"
+  | "total_market_cap"
   | "pct_above_sma200"
   | "pct_above_sma50"
   | "rsi_oversold_count"
@@ -45,6 +46,14 @@ function fmtNum(v: number | null): string {
 function fmtChange(v: number | null): string {
   if (v === null) return "—";
   return `${v >= 0 ? "+" : ""}${v.toFixed(2)}`;
+}
+
+function fmtMarketCap(v: number | null | undefined): string {
+  if (v == null) return "—";
+  if (v >= 1e12) return `$${(v / 1e12).toFixed(2)}T`;
+  if (v >= 1e9) return `$${(v / 1e9).toFixed(0)}B`;
+  if (v >= 1e6) return `$${(v / 1e6).toFixed(0)}M`;
+  return `$${v.toLocaleString()}`;
 }
 
 function rowHighlight(r: IndexBreadth): string {
@@ -153,6 +162,7 @@ export function BreadthMatrixTable({ data }: Props) {
               <tr className="bg-muted/30 text-xs uppercase tracking-wide text-muted-foreground">
                 <SortableHeader column="code" label="Indice" align="left" state={sort} onClick={handleSort} />
                 <SortableHeader column="n" label="N" help={ACRONYM_HELP.N_STOCKS} state={sort} onClick={handleSort} />
+                <SortableHeader column="total_market_cap" label="Tot MC" help="Somma dei market cap noti delle stock dell'indice" state={sort} onClick={handleSort} />
                 <SortableHeader column="pct_above_sma200" label=">SMA200" help={ACRONYM_HELP.SMA200} state={sort} onClick={handleSort} />
                 <SortableHeader column="pct_above_sma50" label=">SMA50" help={ACRONYM_HELP.SMA50} state={sort} onClick={handleSort} />
                 <SortableHeader column="rsi_oversold_count" label="RSI<30" help={ACRONYM_HELP.RSI_OVERSOLD} state={sort} onClick={handleSort} />
@@ -193,6 +203,9 @@ export function BreadthMatrixTable({ data }: Props) {
                     </Link>
                   </td>
                   <td className="text-right px-3 py-2">{r.n}</td>
+                  <td className="text-right px-3 py-2 font-semibold" title={r.total_market_cap != null ? `$${r.total_market_cap.toLocaleString()}` : undefined}>
+                    {fmtMarketCap(r.total_market_cap)}
+                  </td>
                   <td className={cn("text-right px-3 py-2", cellTone(r.pct_above_sma200, "pct"))}>{fmtPct(r.pct_above_sma200)}</td>
                   <td className={cn("text-right px-3 py-2", cellTone(r.pct_above_sma50, "pct"))}>{fmtPct(r.pct_above_sma50)}</td>
                   <td className={cn("text-right px-3 py-2", r.rsi_oversold_count > 0 ? "text-amber-600" : "")}>{r.rsi_oversold_count}</td>

@@ -11,7 +11,8 @@ interface Props {
 }
 
 function MoverRow({ m }: { m: Mover | VolumeSpike }) {
-  const positive = m.change_pct >= 0;
+  const change = m.change_pct ?? 0;
+  const positive = change >= 0;
   return (
     <tr className="border-b border-border/50 hover:bg-muted/40 transition-colors">
       <td className="px-3 py-1.5 font-semibold">
@@ -22,7 +23,7 @@ function MoverRow({ m }: { m: Mover | VolumeSpike }) {
       </td>
       <td className="px-2 py-1.5"><IndexBadge code={m.index} size="xs" /></td>
       <td className={`px-3 py-1.5 text-right ${positive ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
-        {m.change_pct >= 0 ? "+" : ""}{m.change_pct.toFixed(2)}%
+        {change >= 0 ? "+" : ""}{change.toFixed(2)}%
       </td>
       {"vol_ratio" in m && (
         <td className="px-3 py-1.5 text-right">{(m as VolumeSpike).vol_ratio.toFixed(1)}×</td>

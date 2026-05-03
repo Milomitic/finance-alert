@@ -30,7 +30,7 @@ def test_status_returns_entry_per_index(client: TestClient) -> None:
     codes = {i["index_code"] for i in data["indices"]}
     assert codes == {
         "SP500", "NDX", "DJI",
-        "EUSTX50", "FTSE100",
+        "FTSEMIB", "EUSTX50", "FTSE100",
         "SSE50", "HSI30", "CSI300",
     }
     # Each entry is null-shaped initially
