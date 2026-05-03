@@ -1,8 +1,10 @@
-"""Fetch company fundamentals (revenue, net income, EPS history + earnings
-surprises and next-quarter estimate) from yfinance.
+"""Fetch company fundamentals + micro-data + insider transactions + analyst
+recommendations from yfinance in a single cached call per ticker.
 
-Cached in-memory with a 24h TTL — fundamentals only change quarterly. Network
-failures are non-fatal: empty payload is returned and logged.
+Why one combined service: each yfinance Ticker creation is cheap, but Yahoo
+rate-limits the slow endpoints (Ticker.info, Ticker.recommendations,
+Ticker.insider_transactions). Bundling them into one fetch + 24h TTL cache
+amortises the cost across every UI subview that needs any of these fields.
 """
 import math
 import time
@@ -15,33 +17,95 @@ from loguru import logger
 
 @dataclass
 class AnnualPoint:
-    fiscal_year_end: str  # ISO date YYYY-MM-DD
+    fiscal_year_end: str
     revenue: float | None
     net_income: float | None
-    eps: float | None     # diluted EPS for the year (None if unavailable)
+    eps: float | None
+
+
+@dataclass
+class QuarterlyPoint:
+    """Reported quarterly revenue + EPS (historical only — yfinance doesn't
+    expose forward revenue per-quarter in a clean format)."""
+    fiscal_quarter_end: str
+    revenue: float | None
+    eps: float | None
 
 
 @dataclass
 class EarningsPoint:
     """One quarter of earnings — historical (with reported) or forward (estimate only)."""
-    date: str             # ISO date of the earnings release
+    date: str
     eps_estimate: float | None
     eps_reported: float | None
-    surprise_pct: float | None  # (reported - estimate) / |estimate| * 100
+    surprise_pct: float | None
+    revenue_estimate: float | None = None
+    revenue_reported: float | None = None
+
+
+@dataclass
+class InsiderTransaction:
+    insider: str
+    position: str
+    transaction: str        # e.g. "Sale at price 275.00"
+    date: str
+    shares: int | None
+    value: float | None     # USD
+
+
+@dataclass
+class AnalystRating:
+    period: str             # "0m" / "-1m" / "-2m" / "-3m"
+    strong_buy: int
+    buy: int
+    hold: int
+    sell: int
+    strong_sell: int
+
+
+@dataclass
+class AnalystPriceTarget:
+    current: float | None
+    low: float | None
+    mean: float | None
+    median: float | None
+    high: float | None
+
+
+@dataclass
+class MicroData:
+    """Snapshot fundamentals from Ticker.info — slow endpoint, cached 24h."""
+    trailing_pe: float | None = None
+    forward_pe: float | None = None
+    peg_ratio: float | None = None
+    beta: float | None = None
+    dividend_yield: float | None = None
+    price_to_book: float | None = None
+    price_to_sales: float | None = None
+    enterprise_to_ebitda: float | None = None
+    return_on_equity: float | None = None
+    debt_to_equity: float | None = None
+    profit_margins: float | None = None
+    revenue_growth: float | None = None
+    earnings_growth: float | None = None
 
 
 @dataclass
 class Fundamentals:
     ticker: str
     annual: list[AnnualPoint] = field(default_factory=list)
+    quarterly: list[QuarterlyPoint] = field(default_factory=list)
     earnings: list[EarningsPoint] = field(default_factory=list)
     next_earnings_date: str | None = None
     next_eps_estimate: float | None = None
+    micro: MicroData = field(default_factory=MicroData)
+    insiders: list[InsiderTransaction] = field(default_factory=list)
+    analyst_ratings: list[AnalystRating] = field(default_factory=list)
+    price_target: AnalystPriceTarget = field(default_factory=AnalystPriceTarget)
     fetched_at: float = 0.0
     error: str | None = None
 
 
-# Simple in-process TTL cache. 24h is fine since fundamentals change quarterly.
 _CACHE: dict[str, Fundamentals] = {}
 _CACHE_LOCK = Lock()
 _TTL_SECONDS = 24 * 60 * 60
@@ -57,33 +121,52 @@ def _safe_float(v: Any) -> float | None:
     return f
 
 
+def _safe_int(v: Any) -> int | None:
+    f = _safe_float(v)
+    return int(f) if f is not None else None
+
+
+def _row_at(df: Any, row_name: str, col: Any) -> Any:
+    """Helper: safely lookup df.at[row, col] without raising on missing rows."""
+    if df is None or df.empty or row_name not in df.index:
+        return None
+    try:
+        return df.at[row_name, col]
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def _extract_annual(inc_stmt: Any) -> list[AnnualPoint]:
-    """income_stmt is a DataFrame with columns = year-end Timestamps and
-    rows = field names. We pull Total Revenue, Net Income, Diluted EPS."""
     if inc_stmt is None or inc_stmt.empty:
         return []
     rows: list[AnnualPoint] = []
     for col in inc_stmt.columns:
-        rev = inc_stmt.at["Total Revenue", col] if "Total Revenue" in inc_stmt.index else None
-        ni = inc_stmt.at["Net Income", col] if "Net Income" in inc_stmt.index else None
-        eps = inc_stmt.at["Diluted EPS", col] if "Diluted EPS" in inc_stmt.index else None
-        rows.append(
-            AnnualPoint(
-                fiscal_year_end=str(col.date()) if hasattr(col, "date") else str(col),
-                revenue=_safe_float(rev),
-                net_income=_safe_float(ni),
-                eps=_safe_float(eps),
-            )
-        )
-    # Newest first → reverse to chronological for the UI line chart
-    rows.reverse()
+        rows.append(AnnualPoint(
+            fiscal_year_end=str(col.date()) if hasattr(col, "date") else str(col),
+            revenue=_safe_float(_row_at(inc_stmt, "Total Revenue", col)),
+            net_income=_safe_float(_row_at(inc_stmt, "Net Income", col)),
+            eps=_safe_float(_row_at(inc_stmt, "Diluted EPS", col)),
+        ))
+    rows.reverse()  # chronological
     return rows
 
 
+def _extract_quarterly(qinc_stmt: Any) -> list[QuarterlyPoint]:
+    if qinc_stmt is None or qinc_stmt.empty:
+        return []
+    rows: list[QuarterlyPoint] = []
+    for col in qinc_stmt.columns:
+        rows.append(QuarterlyPoint(
+            fiscal_quarter_end=str(col.date()) if hasattr(col, "date") else str(col),
+            revenue=_safe_float(_row_at(qinc_stmt, "Total Revenue", col)),
+            eps=_safe_float(_row_at(qinc_stmt, "Diluted EPS", col)),
+        ))
+    rows.reverse()
+    # Cap at 8 quarters
+    return rows[-8:]
+
+
 def _extract_earnings(ed: Any) -> tuple[list[EarningsPoint], str | None, float | None]:
-    """earnings_dates DataFrame: index=Earnings Date, columns include
-    'EPS Estimate', 'Reported EPS', 'Surprise(%)'. Returns
-    (historical_quarters, next_date, next_estimate)."""
     if ed is None or ed.empty:
         return [], None, None
 
@@ -91,25 +174,92 @@ def _extract_earnings(ed: Any) -> tuple[list[EarningsPoint], str | None, float |
     next_date: str | None = None
     next_estimate: float | None = None
 
-    # Index is timezone-aware Timestamp. Sort ascending so we can split
-    # historical (with Reported EPS) from forthcoming (Reported EPS NaN).
     ed_sorted = ed.sort_index(ascending=True)
     for ts, row in ed_sorted.iterrows():
         d = str(ts.date()) if hasattr(ts, "date") else str(ts)
         est = _safe_float(row.get("EPS Estimate"))
         rep = _safe_float(row.get("Reported EPS"))
         surp = _safe_float(row.get("Surprise(%)"))
+        # Some yfinance versions also expose Revenue Estimate / Revenue Reported
+        rev_est = _safe_float(row.get("Revenue Estimate")) if "Revenue Estimate" in row.index else None
+        rev_rep = _safe_float(row.get("Revenue Reported")) if "Revenue Reported" in row.index else None
         if rep is not None:
             historical.append(EarningsPoint(
                 date=d, eps_estimate=est, eps_reported=rep, surprise_pct=surp,
+                revenue_estimate=rev_est, revenue_reported=rev_rep,
             ))
-        elif next_date is None:  # first not-yet-reported quarter
+        elif next_date is None:
             next_date = d
             next_estimate = est
 
-    # Keep only the last 8 historical quarters
     historical = historical[-8:]
     return historical, next_date, next_estimate
+
+
+def _extract_micro(info: dict | None) -> MicroData:
+    if not info:
+        return MicroData()
+    return MicroData(
+        trailing_pe=_safe_float(info.get("trailingPE")),
+        forward_pe=_safe_float(info.get("forwardPE")),
+        peg_ratio=_safe_float(info.get("pegRatio")),
+        beta=_safe_float(info.get("beta")),
+        dividend_yield=_safe_float(info.get("dividendYield")),
+        price_to_book=_safe_float(info.get("priceToBook")),
+        price_to_sales=_safe_float(info.get("priceToSalesTrailing12Months")),
+        enterprise_to_ebitda=_safe_float(info.get("enterpriseToEbitda")),
+        return_on_equity=_safe_float(info.get("returnOnEquity")),
+        debt_to_equity=_safe_float(info.get("debtToEquity")),
+        profit_margins=_safe_float(info.get("profitMargins")),
+        revenue_growth=_safe_float(info.get("revenueGrowth")),
+        earnings_growth=_safe_float(info.get("earningsGrowth")),
+    )
+
+
+def _extract_insiders(it_df: Any, limit: int = 10) -> list[InsiderTransaction]:
+    if it_df is None or it_df.empty:
+        return []
+    out: list[InsiderTransaction] = []
+    for _, row in it_df.head(limit).iterrows():
+        date_v = row.get("Start Date")
+        date_s = str(date_v.date()) if hasattr(date_v, "date") else str(date_v) if date_v is not None else ""
+        out.append(InsiderTransaction(
+            insider=str(row.get("Insider") or "").strip(),
+            position=str(row.get("Position") or "").strip(),
+            transaction=str(row.get("Text") or row.get("Transaction") or "").strip(),
+            date=date_s,
+            shares=_safe_int(row.get("Shares")),
+            value=_safe_float(row.get("Value")),
+        ))
+    return out
+
+
+def _extract_ratings(rec_df: Any) -> list[AnalystRating]:
+    if rec_df is None or rec_df.empty:
+        return []
+    out: list[AnalystRating] = []
+    for _, row in rec_df.iterrows():
+        out.append(AnalystRating(
+            period=str(row.get("period") or ""),
+            strong_buy=_safe_int(row.get("strongBuy")) or 0,
+            buy=_safe_int(row.get("buy")) or 0,
+            hold=_safe_int(row.get("hold")) or 0,
+            sell=_safe_int(row.get("sell")) or 0,
+            strong_sell=_safe_int(row.get("strongSell")) or 0,
+        ))
+    return out
+
+
+def _extract_price_target(pt: Any) -> AnalystPriceTarget:
+    if not pt or not isinstance(pt, dict):
+        return AnalystPriceTarget(current=None, low=None, mean=None, median=None, high=None)
+    return AnalystPriceTarget(
+        current=_safe_float(pt.get("current")),
+        low=_safe_float(pt.get("low")),
+        mean=_safe_float(pt.get("mean")),
+        median=_safe_float(pt.get("median")),
+        high=_safe_float(pt.get("high")),
+    )
 
 
 def _fetch_fresh(ticker: str) -> Fundamentals:
@@ -117,20 +267,34 @@ def _fetch_fresh(ticker: str) -> Fundamentals:
     f = Fundamentals(ticker=ticker, fetched_at=time.time())
     try:
         t = yf.Ticker(ticker)
-        f.annual = _extract_annual(t.income_stmt)
-        hist, nxt_date, nxt_est = _extract_earnings(t.earnings_dates)
-        f.earnings = hist
-        f.next_earnings_date = nxt_date
-        f.next_eps_estimate = nxt_est
+        # Each of these is independently network-bound and may individually
+        # fail; we wrap each in a try so a single 429 doesn't blank out
+        # the whole payload.
+        try: f.annual = _extract_annual(t.income_stmt)
+        except Exception as e: logger.debug(f"[fund] annual {ticker}: {e}")
+        try: f.quarterly = _extract_quarterly(t.quarterly_income_stmt)
+        except Exception as e: logger.debug(f"[fund] quarterly {ticker}: {e}")
+        try:
+            hist, nxt_date, nxt_est = _extract_earnings(t.earnings_dates)
+            f.earnings = hist
+            f.next_earnings_date = nxt_date
+            f.next_eps_estimate = nxt_est
+        except Exception as e: logger.debug(f"[fund] earnings {ticker}: {e}")
+        try: f.micro = _extract_micro(t.get_info())
+        except Exception as e: logger.debug(f"[fund] info {ticker}: {e}")
+        try: f.insiders = _extract_insiders(t.insider_transactions)
+        except Exception as e: logger.debug(f"[fund] insiders {ticker}: {e}")
+        try: f.analyst_ratings = _extract_ratings(t.recommendations)
+        except Exception as e: logger.debug(f"[fund] recommendations {ticker}: {e}")
+        try: f.price_target = _extract_price_target(t.analyst_price_targets)
+        except Exception as e: logger.debug(f"[fund] price_target {ticker}: {e}")
     except Exception as e:  # noqa: BLE001
-        logger.warning(f"[fundamentals] fetch failed for {ticker}: {e}")
+        logger.warning(f"[fundamentals] top-level failure for {ticker}: {e}")
         f.error = str(e)
     return f
 
 
 def get_fundamentals(ticker: str, *, force_refresh: bool = False) -> Fundamentals:
-    """Return fundamentals (cached 24h). Network call only on cache miss/stale
-    or when `force_refresh=True`."""
     now = time.time()
     if not force_refresh:
         with _CACHE_LOCK:
@@ -144,6 +308,5 @@ def get_fundamentals(ticker: str, *, force_refresh: bool = False) -> Fundamental
 
 
 def clear_cache() -> None:
-    """For tests."""
     with _CACHE_LOCK:
         _CACHE.clear()

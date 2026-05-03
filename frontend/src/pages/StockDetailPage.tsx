@@ -10,8 +10,12 @@ import { useStockDrawings } from "@/hooks/useStockDrawings";
 import { DrawingToolbar, type DrawingMode } from "@/components/stock/DrawingToolbar";
 import { EffectiveRulesCard } from "@/components/stock/EffectiveRulesCard";
 import { FundamentalsCard } from "@/components/stock/FundamentalsCard";
+import { InsidersAnalystCard } from "@/components/stock/InsidersAnalystCard";
+import { MicroDataCard } from "@/components/stock/MicroDataCard";
 import {
-  IndicatorToggles, type IndicatorKey, type IndicatorState,
+  DEFAULT_INDICATOR_STATE,
+  IndicatorToggles,
+  type IndicatorKey, type IndicatorState, type IndicatorStyle,
 } from "@/components/stock/IndicatorToggles";
 import { MacdPanel } from "@/components/stock/MacdPanel";
 import { NewsCard } from "@/components/stock/NewsCard";
@@ -25,15 +29,6 @@ import { StockAlertsHistoryCard } from "@/components/stock/StockAlertsHistoryCar
 import { StockHeader } from "@/components/stock/StockHeader";
 import { TechnicalKpiCard } from "@/components/stock/TechnicalKpiCard";
 
-const DEFAULT_INDICATORS: IndicatorState = {
-  sma20: false,
-  sma50: true,
-  sma200: true,
-  bb: false,
-  rsi: true,
-  macd: false,
-};
-
 export default function StockDetailPage() {
   const { ticker = "" } = useParams<{ ticker: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -44,13 +39,13 @@ export default function StockDetailPage() {
   const createPa = useCreatePriceAlert(ticker);
   const drawings = useStockDrawings(ticker);
 
-  const [indicators, setIndicators] = useState<IndicatorState>(DEFAULT_INDICATORS);
+  const [indicators, setIndicators] = useState<IndicatorState>(DEFAULT_INDICATOR_STATE);
   const [mode, setMode] = useState<DrawingMode>("none");
   const [pendingPrice, setPendingPrice] = useState<number | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
 
-  const onToggle = (key: IndicatorKey, value: boolean) =>
-    setIndicators((prev) => ({ ...prev, [key]: value }));
+  const onIndicatorChange = (key: IndicatorKey, next: IndicatorStyle) =>
+    setIndicators((prev) => ({ ...prev, [key]: next }));
 
   const handleChartClick = (price: number) => {
     if (mode === "alert") {
@@ -100,21 +95,33 @@ export default function StockDetailPage() {
     <div className="space-y-3">
       <StockHeader stock={d.stock} kpis={d.kpis} />
 
-      <div className="grid lg:grid-cols-[1fr_320px] gap-3">
+      {/* Micro-data (ratios) + Insiders & Analyst go between header and chart */}
+      <MicroDataCard ticker={ticker} />
+      <InsidersAnalystCard ticker={ticker} />
+
+      <div className="grid lg:grid-cols-[1fr_400px] gap-3">
         <Card>
           <CardContent className="p-4">
-            <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
-              <RangeSelector
-                value={range}
-                onChange={(r) => setSearchParams({ range: r })}
-              />
-              <div className="flex items-center gap-3 flex-wrap">
-                <IndicatorToggles state={indicators} onToggle={onToggle} />
+            {/* Toolbar: range on the left, indicators row, drawing tools on the right.
+                Each row breaks independently when the card narrows. */}
+            <div className="space-y-2 mb-3">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <RangeSelector
+                  value={range}
+                  onChange={(r) => setSearchParams({ range: r })}
+                />
                 <DrawingToolbar
                   mode={mode}
                   onSetMode={setMode}
                   onClearAll={drawings.clearAll}
                 />
+              </div>
+              <div className="flex items-center gap-2 px-2 py-1.5 rounded-md bg-muted/30 border border-border/50">
+                <span className="text-[11px] uppercase tracking-wider font-bold text-muted-foreground shrink-0">
+                  Indicatori
+                </span>
+                <div className="h-4 w-px bg-border" />
+                <IndicatorToggles state={indicators} onChange={onIndicatorChange} />
               </div>
             </div>
 
@@ -128,10 +135,12 @@ export default function StockDetailPage() {
                 <PriceChart
                   ohlcv={d.ohlcv}
                   indicators={d.indicators}
-                  showSma20={indicators.sma20}
-                  showSma50={indicators.sma50}
-                  showSma200={indicators.sma200}
-                  showBb={indicators.bb}
+                  styles={{
+                    sma20: indicators.sma20,
+                    sma50: indicators.sma50,
+                    sma200: indicators.sma200,
+                    bb: indicators.bb,
+                  }}
                   priceAlerts={priceAlerts}
                   horizontalDrawings={drawings.drawings.horizontal}
                   onChartClick={handleChartClick}
@@ -140,22 +149,24 @@ export default function StockDetailPage() {
             )}
 
             {/* RSI sub-panel — togglable + resizable */}
-            {indicators.rsi && d.indicators.rsi14.length > 0 && (
+            {indicators.rsi.visible && d.indicators.rsi14.length > 0 && (
               <div className="mt-3">
                 <ResizableSection defaultHeight={140} minHeight={80} label="RSI(14)">
-                  <RsiPanel rsi14={d.indicators.rsi14} />
+                  <RsiPanel rsi14={d.indicators.rsi14} color={indicators.rsi.color} width={indicators.rsi.width} />
                 </ResizableSection>
               </div>
             )}
 
             {/* MACD sub-panel — togglable + resizable */}
-            {indicators.macd && hasMacd && (
+            {indicators.macd.visible && hasMacd && (
               <div className="mt-3">
                 <ResizableSection defaultHeight={160} minHeight={80} label="MACD(12,26,9)">
                   <MacdPanel
                     line={d.indicators.macd_line ?? []}
                     signal={d.indicators.macd_signal ?? []}
                     hist={d.indicators.macd_hist ?? []}
+                    color={indicators.macd.color}
+                    width={indicators.macd.width}
                   />
                 </ResizableSection>
               </div>

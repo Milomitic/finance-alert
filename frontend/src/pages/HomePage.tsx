@@ -134,19 +134,21 @@ export default function HomePage() {
       </div>
       <HeroStrip global={m.global} byIndex={m.by_index} />
       <BreadthMatrixTable data={m.by_index} />
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 lg:h-[420px]">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 lg:h-[420px]">
         <div className="h-full min-h-0"><RsiHistogramCard rsi={m.rsi_distribution} indices={m.by_index} /></div>
         <div className="h-full min-h-0"><SectorsHeatmapCard sectors={m.sectors} /></div>
+        <div className="h-full min-h-0"><TopMoversCard movers={m.movers} /></div>
         <div className="h-full min-h-0"><FiftyTwoWeekVolCard movers={m.movers} /></div>
       </div>
-      <TopMoversCard movers={m.movers} />
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-        <div className="lg:col-span-2">
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-3">
+        <div className="lg:col-span-3">
           <ErrorBoundary>
             <MarketTreemap treemap={m.treemap} indices={m.by_index} />
           </ErrorBoundary>
         </div>
-        <SpotlightCards />
+        <div className="lg:col-span-2">
+          <SpotlightCards />
+        </div>
       </div>
       {summaryData && (
         <AlertsCompactPanel

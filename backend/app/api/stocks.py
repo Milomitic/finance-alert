@@ -10,8 +10,10 @@ from app.models import Stock, User
 from app.schemas.alert import AlertOut
 from app.schemas.stock import FilterOptionsOut, IndexOptionOut, StockOut, StockSearchOut
 from app.schemas.stock_detail import (
-    EffectiveRuleOut, FundamentalsAnnualOut, FundamentalsEarningsOut,
-    FundamentalsOut, IndicatorPointOut, IndicatorSeriesOut, OhlcvBarOut,
+    AnalystPriceTargetOut, AnalystRatingOut, EffectiveRuleOut,
+    FundamentalsAnnualOut, FundamentalsEarningsOut, FundamentalsOut,
+    FundamentalsQuarterlyOut, IndicatorPointOut, IndicatorSeriesOut,
+    InsiderTransactionOut, MicroDataOut, OhlcvBarOut,
     StockDetailOut, StockKpisOut, StockNewsItemOut, StockNewsOut,
 )
 from app.services import stock_detail_service, stock_fundamentals_service, stock_news_service
@@ -161,8 +163,13 @@ def get_stock_fundamentals(
     return FundamentalsOut(
         ticker=f.ticker,
         annual=[FundamentalsAnnualOut(**a.__dict__) for a in f.annual],
+        quarterly=[FundamentalsQuarterlyOut(**q.__dict__) for q in f.quarterly],
         earnings=[FundamentalsEarningsOut(**e.__dict__) for e in f.earnings],
         next_earnings_date=f.next_earnings_date,
         next_eps_estimate=f.next_eps_estimate,
+        micro=MicroDataOut(**f.micro.__dict__),
+        insiders=[InsiderTransactionOut(**i.__dict__) for i in f.insiders],
+        analyst_ratings=[AnalystRatingOut(**r.__dict__) for r in f.analyst_ratings],
+        price_target=AnalystPriceTargetOut(**f.price_target.__dict__),
         error=f.error,
     )

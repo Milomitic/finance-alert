@@ -5,14 +5,17 @@ import {
 } from "lightweight-charts";
 
 import type { IndicatorPoint, IndicatorSeries, OhlcvBar, PriceAlert } from "@/api/types";
+import type { IndicatorStyle } from "@/components/stock/IndicatorToggles";
 
 interface Props {
   ohlcv: OhlcvBar[];
   indicators: IndicatorSeries;
-  showSma20: boolean;
-  showSma50: boolean;
-  showSma200: boolean;
-  showBb: boolean;
+  styles: {
+    sma20: IndicatorStyle;
+    sma50: IndicatorStyle;
+    sma200: IndicatorStyle;
+    bb: IndicatorStyle;
+  };
   priceAlerts: PriceAlert[];
   horizontalDrawings?: { id: string; price: number }[];
   onChartClick?: (price: number) => void;
@@ -30,8 +33,7 @@ function pointsToChartData(points: IndicatorPoint[] | undefined) {
 }
 
 export function PriceChart({
-  ohlcv, indicators,
-  showSma20, showSma50, showSma200, showBb,
+  ohlcv, indicators, styles,
   priceAlerts, horizontalDrawings = [], onChartClick,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -75,25 +77,21 @@ export function PriceChart({
       wickUpColor: "#16a34a", wickDownColor: "#dc2626",
     });
     sma20Ref.current = chart.addLineSeries({
-      color: "#a855f7", lineWidth: 2, priceLineVisible: false, lastValueVisible: false, title: "SMA 20",
+      priceLineVisible: false, lastValueVisible: false, title: "SMA 20",
     });
     sma50Ref.current = chart.addLineSeries({
-      color: "#3b82f6", lineWidth: 2, priceLineVisible: false, lastValueVisible: false, title: "SMA 50",
+      priceLineVisible: false, lastValueVisible: false, title: "SMA 50",
     });
     sma200Ref.current = chart.addLineSeries({
-      color: "#f59e0b", lineWidth: 2, priceLineVisible: false, lastValueVisible: false, title: "SMA 200",
+      priceLineVisible: false, lastValueVisible: false, title: "SMA 200",
     });
-    // Bollinger Bands: upper + lower drawn dashed (the band envelope), middle solid
     bbUpperRef.current = chart.addLineSeries({
-      color: "#0ea5e9", lineWidth: 1, lineStyle: 2,
-      priceLineVisible: false, lastValueVisible: false, title: "BB upper",
+      lineStyle: 2, priceLineVisible: false, lastValueVisible: false, title: "BB upper",
     });
     bbLowerRef.current = chart.addLineSeries({
-      color: "#0ea5e9", lineWidth: 1, lineStyle: 2,
-      priceLineVisible: false, lastValueVisible: false, title: "BB lower",
+      lineStyle: 2, priceLineVisible: false, lastValueVisible: false, title: "BB lower",
     });
     bbMiddleRef.current = chart.addLineSeries({
-      color: "#0ea5e9", lineWidth: 1,
       priceLineVisible: false, lastValueVisible: false, title: "BB middle",
     });
     volumeRef.current = chart.addHistogramSeries({
@@ -152,34 +150,47 @@ export function PriceChart({
   // SMA20
   useEffect(() => {
     if (!sma20Ref.current) return;
-    sma20Ref.current.applyOptions({ visible: showSma20 });
+    sma20Ref.current.applyOptions({
+      visible: styles.sma20.visible,
+      color: styles.sma20.color,
+      lineWidth: styles.sma20.width as 1 | 2 | 3 | 4,
+    });
     sma20Ref.current.setData(pointsToChartData(indicators.sma20));
-  }, [indicators.sma20, showSma20]);
+  }, [indicators.sma20, styles.sma20]);
 
   // SMA50
   useEffect(() => {
     if (!sma50Ref.current) return;
-    sma50Ref.current.applyOptions({ visible: showSma50 });
+    sma50Ref.current.applyOptions({
+      visible: styles.sma50.visible,
+      color: styles.sma50.color,
+      lineWidth: styles.sma50.width as 1 | 2 | 3 | 4,
+    });
     sma50Ref.current.setData(pointsToChartData(indicators.sma50));
-  }, [indicators.sma50, showSma50]);
+  }, [indicators.sma50, styles.sma50]);
 
   // SMA200
   useEffect(() => {
     if (!sma200Ref.current) return;
-    sma200Ref.current.applyOptions({ visible: showSma200 });
+    sma200Ref.current.applyOptions({
+      visible: styles.sma200.visible,
+      color: styles.sma200.color,
+      lineWidth: styles.sma200.width as 1 | 2 | 3 | 4,
+    });
     sma200Ref.current.setData(pointsToChartData(indicators.sma200));
-  }, [indicators.sma200, showSma200]);
+  }, [indicators.sma200, styles.sma200]);
 
-  // Bollinger Bands (3 series toggle as a group)
+  // Bollinger Bands (3 series share style)
   useEffect(() => {
     if (!bbUpperRef.current || !bbMiddleRef.current || !bbLowerRef.current) return;
-    bbUpperRef.current.applyOptions({ visible: showBb });
-    bbMiddleRef.current.applyOptions({ visible: showBb });
-    bbLowerRef.current.applyOptions({ visible: showBb });
+    const w = styles.bb.width as 1 | 2 | 3 | 4;
+    bbUpperRef.current.applyOptions({ visible: styles.bb.visible, color: styles.bb.color, lineWidth: w });
+    bbMiddleRef.current.applyOptions({ visible: styles.bb.visible, color: styles.bb.color, lineWidth: w });
+    bbLowerRef.current.applyOptions({ visible: styles.bb.visible, color: styles.bb.color, lineWidth: w });
     bbUpperRef.current.setData(pointsToChartData(indicators.bb_upper));
     bbMiddleRef.current.setData(pointsToChartData(indicators.bb_middle));
     bbLowerRef.current.setData(pointsToChartData(indicators.bb_lower));
-  }, [indicators.bb_upper, indicators.bb_middle, indicators.bb_lower, showBb]);
+  }, [indicators.bb_upper, indicators.bb_middle, indicators.bb_lower, styles.bb]);
 
   // Price alert lines (dashed)
   useEffect(() => {
@@ -192,7 +203,7 @@ export function PriceChart({
           price: pa.target_price,
           color: pa.direction === "above" ? "#16a34a" : "#dc2626",
           lineWidth: 1,
-          lineStyle: 2,   // dashed
+          lineStyle: 2,
           axisLabelVisible: true,
           title: `${pa.direction === "above" ? "↑" : "↓"} $${pa.target_price.toFixed(2)}`,
         }),
@@ -202,7 +213,7 @@ export function PriceChart({
     };
   }, [priceAlerts]);
 
-  // Horizontal drawings (solid gray)
+  // Horizontal drawings
   useEffect(() => {
     if (!candleRef.current) return;
     const series = candleRef.current;
@@ -211,7 +222,7 @@ export function PriceChart({
         price: h.price,
         color: "#6b7280",
         lineWidth: 1,
-        lineStyle: 0,   // solid
+        lineStyle: 0,
         axisLabelVisible: true,
         title: `H $${h.price.toFixed(2)}`,
       }),

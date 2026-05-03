@@ -1,6 +1,8 @@
 import { ArrowDownRight, ArrowUpRight, CalendarClock } from "lucide-react";
 
-import type { FundamentalsAnnual, FundamentalsEarnings } from "@/api/types";
+import type {
+  FundamentalsAnnual, FundamentalsEarnings, FundamentalsQuarterly,
+} from "@/api/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { useStockFundamentals } from "@/hooks/useStockFundamentals";
 import { cn } from "@/lib/utils";
@@ -29,9 +31,15 @@ function fmtPct(v: number | null | undefined): { text: string; color: string } {
 }
 
 function shortYear(isoDate: string): string {
-  // "2025-09-30" → "FY25"
-  const yy = isoDate.slice(2, 4);
-  return `FY${yy}`;
+  return `FY${isoDate.slice(2, 4)}`;
+}
+
+function shortQuarter(isoDate: string): string {
+  // e.g. "2025-09-30" → "Q3 25" (Sept = Q3 fiscal proxy)
+  const [y, m] = isoDate.split("-");
+  const month = parseInt(m, 10);
+  const q = Math.ceil(month / 3);
+  return `Q${q} ${y.slice(2)}`;
 }
 
 function shortDate(isoDate: string): string {
@@ -39,12 +47,13 @@ function shortDate(isoDate: string): string {
   return `${d}/${m}/${y.slice(2)}`;
 }
 
+function yoy(curr: number | null, prev: number | null | undefined): string {
+  if (curr == null || prev == null || prev === 0) return "—";
+  const pct = ((curr - prev) / Math.abs(prev)) * 100;
+  return `${pct >= 0 ? "+" : ""}${pct.toFixed(1)}%`;
+}
+
 function AnnualRow({ a, prev }: { a: FundamentalsAnnual; prev?: FundamentalsAnnual }) {
-  const yoy = (curr: number | null, p: number | null | undefined): string => {
-    if (curr == null || p == null || p === 0) return "—";
-    const pct = ((curr - p) / Math.abs(p)) * 100;
-    return `${pct >= 0 ? "+" : ""}${pct.toFixed(1)}%`;
-  };
   return (
     <tr className="border-t border-border/40 hover:bg-muted/30">
       <td className="px-2 py-1.5 font-mono text-xs">{shortYear(a.fiscal_year_end)}</td>
@@ -55,6 +64,21 @@ function AnnualRow({ a, prev }: { a: FundamentalsAnnual; prev?: FundamentalsAnnu
       <td className="px-2 py-1.5 text-right tabular-nums">{fmtBig(a.net_income)}</td>
       <td className="px-2 py-1.5 text-right tabular-nums">
         {a.eps != null ? `$${a.eps.toFixed(2)}` : "—"}
+      </td>
+    </tr>
+  );
+}
+
+function QuarterRow({ q, prev }: { q: FundamentalsQuarterly; prev?: FundamentalsQuarterly }) {
+  return (
+    <tr className="border-t border-border/40 hover:bg-muted/30">
+      <td className="px-2 py-1.5 font-mono text-xs">{shortQuarter(q.fiscal_quarter_end)}</td>
+      <td className="px-2 py-1.5 text-right tabular-nums">{fmtBig(q.revenue)}</td>
+      <td className="px-2 py-1.5 text-right tabular-nums text-[11px] text-muted-foreground">
+        {prev ? yoy(q.revenue, prev.revenue) : "—"}
+      </td>
+      <td className="px-2 py-1.5 text-right tabular-nums">
+        {q.eps != null ? `$${q.eps.toFixed(2)}` : "—"}
       </td>
     </tr>
   );
@@ -72,9 +96,16 @@ function EarningsRow({ e }: { e: FundamentalsEarnings }) {
       <td className="px-2 py-1.5 text-right tabular-nums text-xs font-semibold">
         {e.eps_reported != null ? `$${e.eps_reported.toFixed(2)}` : "—"}
       </td>
-      <td className={cn("px-2 py-1.5 text-right tabular-nums text-xs font-semibold inline-flex items-center gap-0.5 justify-end", surp.color)}>
-        {e.surprise_pct != null && (beat ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />)}
-        {surp.text}
+      <td className={cn("px-2 py-1.5 text-right tabular-nums text-xs font-semibold", surp.color)}>
+        <span className="inline-flex items-center gap-0.5 justify-end">
+          {e.surprise_pct != null && (beat ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />)}
+          {surp.text}
+        </span>
+      </td>
+      <td className="px-2 py-1.5 text-right tabular-nums text-[11px] text-muted-foreground">
+        {e.revenue_reported != null ? fmtBig(e.revenue_reported)
+          : e.revenue_estimate != null ? `est ${fmtBig(e.revenue_estimate)}`
+          : "—"}
       </td>
     </tr>
   );
@@ -97,7 +128,7 @@ export function FundamentalsCard({ ticker }: Props) {
   }
 
   const f = q.data;
-  if (!f || f.error || (f.annual.length === 0 && f.earnings.length === 0)) {
+  if (!f || f.error || (f.annual.length === 0 && f.earnings.length === 0 && f.quarterly.length === 0)) {
     return (
       <Card>
         <CardContent className="p-4">
@@ -161,19 +192,44 @@ export function FundamentalsCard({ ticker }: Props) {
           </div>
         )}
 
+        {/* Quarterly income */}
+        {f.quarterly.length > 0 && (
+          <div className="mb-3">
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-1">
+              Trimestrali (ultimi {f.quarterly.length})
+            </div>
+            <table className="w-full text-xs">
+              <thead className="text-[10px] text-muted-foreground uppercase">
+                <tr>
+                  <th className="px-2 py-1 text-left">Q</th>
+                  <th className="px-2 py-1 text-right">Revenue</th>
+                  <th className="px-2 py-1 text-right">YoY</th>
+                  <th className="px-2 py-1 text-right">EPS</th>
+                </tr>
+              </thead>
+              <tbody>
+                {f.quarterly.map((q, i) => (
+                  <QuarterRow key={q.fiscal_quarter_end} q={q} prev={i >= 4 ? f.quarterly[i - 4] : undefined} />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
         {/* Earnings surprises */}
         {f.earnings.length > 0 && (
           <div>
             <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-1">
-              Earnings Surprises (ultimi {f.earnings.length} trimestri)
+              Earnings — atteso vs reported (ultimi {f.earnings.length})
             </div>
             <table className="w-full text-xs">
               <thead className="text-[10px] text-muted-foreground uppercase">
                 <tr>
                   <th className="px-2 py-1 text-left">Data</th>
-                  <th className="px-2 py-1 text-right">Atteso</th>
+                  <th className="px-2 py-1 text-right">Est EPS</th>
                   <th className="px-2 py-1 text-right">Reported</th>
                   <th className="px-2 py-1 text-right">Sorpresa</th>
+                  <th className="px-2 py-1 text-right">Revenue</th>
                 </tr>
               </thead>
               <tbody>

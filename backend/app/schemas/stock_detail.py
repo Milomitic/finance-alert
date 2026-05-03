@@ -29,19 +29,76 @@ class FundamentalsAnnualOut(BaseModel):
     eps: float | None
 
 
+class FundamentalsQuarterlyOut(BaseModel):
+    fiscal_quarter_end: str
+    revenue: float | None
+    eps: float | None
+
+
 class FundamentalsEarningsOut(BaseModel):
     date: str
     eps_estimate: float | None
     eps_reported: float | None
     surprise_pct: float | None
+    revenue_estimate: float | None = None
+    revenue_reported: float | None = None
+
+
+class MicroDataOut(BaseModel):
+    trailing_pe: float | None = None
+    forward_pe: float | None = None
+    peg_ratio: float | None = None
+    beta: float | None = None
+    dividend_yield: float | None = None
+    price_to_book: float | None = None
+    price_to_sales: float | None = None
+    enterprise_to_ebitda: float | None = None
+    return_on_equity: float | None = None
+    debt_to_equity: float | None = None
+    profit_margins: float | None = None
+    revenue_growth: float | None = None
+    earnings_growth: float | None = None
+
+
+class InsiderTransactionOut(BaseModel):
+    insider: str
+    position: str
+    transaction: str
+    date: str
+    shares: int | None
+    value: float | None
+
+
+class AnalystRatingOut(BaseModel):
+    period: str
+    strong_buy: int
+    buy: int
+    hold: int
+    sell: int
+    strong_sell: int
+
+
+class AnalystPriceTargetOut(BaseModel):
+    current: float | None
+    low: float | None
+    mean: float | None
+    median: float | None
+    high: float | None
 
 
 class FundamentalsOut(BaseModel):
     ticker: str
     annual: list[FundamentalsAnnualOut] = []
+    quarterly: list[FundamentalsQuarterlyOut] = []
     earnings: list[FundamentalsEarningsOut] = []
     next_earnings_date: str | None = None
     next_eps_estimate: float | None = None
+    micro: MicroDataOut = MicroDataOut()
+    insiders: list[InsiderTransactionOut] = []
+    analyst_ratings: list[AnalystRatingOut] = []
+    price_target: AnalystPriceTargetOut = AnalystPriceTargetOut(
+        current=None, low=None, mean=None, median=None, high=None
+    )
     error: str | None = None
 
 

@@ -10,6 +10,8 @@ interface Props {
   line: IndicatorPoint[];
   signal: IndicatorPoint[];
   hist: IndicatorPoint[];
+  color?: string;       // Color for the MACD line; signal stays sky-blue
+  width?: number;
 }
 
 function dateToTime(d: string): UTCTimestamp {
@@ -21,7 +23,7 @@ function dateToTime(d: string): UTCTimestamp {
  * volume-style series (green when ≥0, red when <0). Mirrors the look of
  * the RSI panel so the chart stack feels uniform.
  */
-export function MacdPanel({ line, signal, hist }: Props) {
+export function MacdPanel({ line, signal, hist, color = "#ef4444", width = 2 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const lineRef = useRef<ISeriesApi<"Line"> | null>(null);
@@ -44,10 +46,10 @@ export function MacdPanel({ line, signal, hist }: Props) {
       color: "rgba(100,116,139,0.5)",
     });
     lineRef.current = chart.addLineSeries({
-      color: "#ef4444", lineWidth: 2, priceLineVisible: false, lastValueVisible: true, title: "MACD",
+      color, lineWidth: width as 1 | 2 | 3 | 4, priceLineVisible: false, lastValueVisible: true, title: "MACD",
     });
     signalRef.current = chart.addLineSeries({
-      color: "#0ea5e9", lineWidth: 2, priceLineVisible: false, lastValueVisible: true, title: "Signal",
+      color: "#0ea5e9", lineWidth: width as 1 | 2 | 3 | 4, priceLineVisible: false, lastValueVisible: true, title: "Signal",
     });
     return () => {
       chart.remove();
@@ -57,6 +59,12 @@ export function MacdPanel({ line, signal, hist }: Props) {
       histRef.current = null;
     };
   }, []);
+
+  // Apply style updates without recreating the chart
+  useEffect(() => {
+    if (!lineRef.current) return;
+    lineRef.current.applyOptions({ color, lineWidth: width as 1 | 2 | 3 | 4 });
+  }, [color, width]);
 
   useEffect(() => {
     if (!lineRef.current || !signalRef.current || !histRef.current) return;

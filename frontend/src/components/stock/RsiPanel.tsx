@@ -8,13 +8,15 @@ import type { IndicatorPoint } from "@/api/types";
 
 interface Props {
   rsi14: IndicatorPoint[];
+  color?: string;
+  width?: number;
 }
 
 function dateToTime(d: string): UTCTimestamp {
   return (Date.parse(d) / 1000) as UTCTimestamp;
 }
 
-export function RsiPanel({ rsi14 }: Props) {
+export function RsiPanel({ rsi14, color = "#7c3aed", width = 2 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const lineRef = useRef<ISeriesApi<"Line"> | null>(null);
@@ -31,9 +33,8 @@ export function RsiPanel({ rsi14 }: Props) {
     });
     chartRef.current = chart;
     lineRef.current = chart.addLineSeries({
-      color: "#7c3aed", lineWidth: 2, priceLineVisible: false,
+      color, lineWidth: width as 1 | 2 | 3 | 4, priceLineVisible: false,
     });
-    // Reference lines at oversold (30) and overbought (70) thresholds
     lineRef.current.createPriceLine({
       price: 30, color: "#fb923c", lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: "30",
     });
@@ -46,6 +47,12 @@ export function RsiPanel({ rsi14 }: Props) {
       lineRef.current = null;
     };
   }, []);
+
+  // Apply style updates without recreating the chart
+  useEffect(() => {
+    if (!lineRef.current) return;
+    lineRef.current.applyOptions({ color, lineWidth: width as 1 | 2 | 3 | 4 });
+  }, [color, width]);
 
   useEffect(() => {
     if (!lineRef.current) return;

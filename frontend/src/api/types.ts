@@ -439,18 +439,73 @@ export interface FundamentalsAnnual {
   eps: number | null;
 }
 
+export interface FundamentalsQuarterly {
+  fiscal_quarter_end: string;
+  revenue: number | null;
+  eps: number | null;
+}
+
 export interface FundamentalsEarnings {
   date: string;
   eps_estimate: number | null;
   eps_reported: number | null;
   surprise_pct: number | null;
+  revenue_estimate?: number | null;
+  revenue_reported?: number | null;
+}
+
+export interface MicroData {
+  trailing_pe: number | null;
+  forward_pe: number | null;
+  peg_ratio: number | null;
+  beta: number | null;
+  dividend_yield: number | null;
+  price_to_book: number | null;
+  price_to_sales: number | null;
+  enterprise_to_ebitda: number | null;
+  return_on_equity: number | null;
+  debt_to_equity: number | null;
+  profit_margins: number | null;
+  revenue_growth: number | null;
+  earnings_growth: number | null;
+}
+
+export interface InsiderTransaction {
+  insider: string;
+  position: string;
+  transaction: string;
+  date: string;
+  shares: number | null;
+  value: number | null;
+}
+
+export interface AnalystRating {
+  period: string;
+  strong_buy: number;
+  buy: number;
+  hold: number;
+  sell: number;
+  strong_sell: number;
+}
+
+export interface AnalystPriceTarget {
+  current: number | null;
+  low: number | null;
+  mean: number | null;
+  median: number | null;
+  high: number | null;
 }
 
 export interface Fundamentals {
   ticker: string;
   annual: FundamentalsAnnual[];
+  quarterly: FundamentalsQuarterly[];
   earnings: FundamentalsEarnings[];
   next_earnings_date: string | null;
   next_eps_estimate: number | null;
+  micro: MicroData;
+  insiders: InsiderTransaction[];
+  analyst_ratings: AnalystRating[];
+  price_target: AnalystPriceTarget;
   error: string | null;
 }
