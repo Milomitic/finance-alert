@@ -2,7 +2,7 @@
 into the dashboard market_snapshot payload."""
 import json
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
 import pandas as pd
@@ -40,6 +40,7 @@ class StockMetrics:
     vol_avg_20: float | None
     vol_ratio: float | None              # vol_today / vol_avg_20
     has_full_data: bool                  # bars_count >= 200 (SMA200 defined)
+    sparkline: list[float] = field(default_factory=list)  # last 30 closes for per-row UI sparklines
 
 
 def compute_stock_metrics(
@@ -87,6 +88,8 @@ def compute_stock_metrics(
     vol_avg_20 = float(volume.tail(20).mean()) if n >= 20 else None
     vol_ratio = (vol_today / vol_avg_20) if vol_avg_20 and vol_avg_20 > 0 else None
 
+    sparkline = [round(float(v), 4) for v in close.tail(30).tolist()]
+
     return StockMetrics(
         stock_id=stock_id,
         ticker=ticker,
@@ -111,6 +114,7 @@ def compute_stock_metrics(
         vol_avg_20=vol_avg_20,
         vol_ratio=vol_ratio,
         has_full_data=n >= 200,
+        sparkline=sparkline,
     )
 
 
@@ -292,6 +296,7 @@ def build_movers(metrics: list[StockMetrics], *, top_n: int = 10) -> dict:
             "change_pct": m.change_pct,
             "last_close": m.last_close,
             "prev_close": m.prev_close,
+            "sparkline": m.sparkline,
         }
 
     return {

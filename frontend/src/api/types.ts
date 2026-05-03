@@ -279,6 +279,7 @@ export interface Mover {
   change_pct: number;
   last_close: number;
   prev_close: number | null;
+  sparkline?: number[];  // last ~30 close prices for the row's faded background trend
 }
 
 export interface VolumeSpike extends Mover {

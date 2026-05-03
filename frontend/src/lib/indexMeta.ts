@@ -15,9 +15,10 @@ const META: Record<string, IndexMeta> = {
   NDX:     { countryCode: "us", country: "USA",       fullName: "Nasdaq-100" },
   DJI:     { countryCode: "us", country: "USA",       fullName: "Dow Jones Industrial Average" },
   EUSTX50: { countryCode: "eu", country: "Europe",    fullName: "EuroStoxx 50" },
-  FTSEMIB: { countryCode: "it", country: "Italy",     fullName: "FTSE MIB" },
+  FTSE100: { countryCode: "gb", country: "UK",        fullName: "FTSE 100 (London)" },
   SSE50:   { countryCode: "cn", country: "China",     fullName: "SSE 50" },
-  HSI30:   { countryCode: "hk", country: "Hong Kong", fullName: "Hang Seng" },
+  CSI300:  { countryCode: "cn", country: "China",     fullName: "CSI 300 (Shanghai + Shenzhen)" },
+  HSI30:   { countryCode: "hk", country: "Hong Kong", fullName: "Hang Seng top 50" },
 };
 
 const FALLBACK: IndexMeta = { countryCode: "", country: "—", fullName: "—" };

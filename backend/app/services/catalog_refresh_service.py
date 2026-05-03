@@ -51,18 +51,8 @@ INDEX_SOURCES: dict[str, dict[str, object]] = {
         "default_exchange": "NYSE",
         "currency": "USD",
     },
-    "FTSEMIB": {
-        "url": "https://en.wikipedia.org/wiki/FTSE_MIB",
-        "name": "FTSE MIB",
-        "country": "IT",
-        "table_index": 1,
-        "ticker_col": "Ticker",
-        "name_col": "Company",
-        "sector_col": "ICB Sector",
-        "industry_col": None,
-        "default_exchange": "BIT",
-        "currency": "EUR",
-    },
+    # FTSEMIB rimosso a favore di FTSE100 (UK): le poche italiane di interesse
+    # restano coperte da EUSTX50 (Stellantis, Enel, ENI, Intesa, UniCredit).
     "EUSTX50": {
         # Constituents now at table index 3.
         "url": "https://en.wikipedia.org/wiki/EURO_STOXX_50",
@@ -118,7 +108,7 @@ INDEX_SOURCES: dict[str, dict[str, object]] = {
     },
     "FTSE100": {
         "url": "https://en.wikipedia.org/wiki/FTSE_100_Index",
-        "name": "FTSE 100 top 50 (London)",
+        "name": "FTSE 100 (London)",
         "country": "GB",
         "table_index": 6,
         "ticker_col": "Ticker",
@@ -127,7 +117,7 @@ INDEX_SOURCES: dict[str, dict[str, object]] = {
         "industry_col": None,
         "default_exchange": "LSE",
         "currency": "GBP",
-        "slice_n": 50,
+        # No slice_n — take all 100 components.
     },
 }
 

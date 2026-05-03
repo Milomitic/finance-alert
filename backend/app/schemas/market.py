@@ -56,6 +56,7 @@ class MoverOut(BaseModel):
     change_pct: float
     last_close: float
     prev_close: float | None
+    sparkline: list[float] = []  # last ~30 close prices for the per-row UI sparkline
 
 
 class VolumeSpikeOut(MoverOut):
