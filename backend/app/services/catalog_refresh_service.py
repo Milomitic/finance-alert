@@ -26,14 +26,16 @@ INDEX_SOURCES: dict[str, dict[str, object]] = {
         "currency": "USD",
     },
     "NDX": {
+        # As of 2026, Wikipedia constituents table moved to index 5 and uses
+        # ICB classification columns instead of GICS.
         "url": "https://en.wikipedia.org/wiki/Nasdaq-100",
         "name": "Nasdaq-100",
         "country": "US",
-        "table_index": 4,
+        "table_index": 5,
         "ticker_col": "Ticker",
         "name_col": "Company",
-        "sector_col": "GICS Sector",
-        "industry_col": "GICS Sub-Industry",
+        "sector_col": "ICB Industry[14]",
+        "industry_col": "ICB Subsector[14]",
         "default_exchange": "NASDAQ",
         "currency": "USD",
     },
@@ -62,10 +64,11 @@ INDEX_SOURCES: dict[str, dict[str, object]] = {
         "currency": "EUR",
     },
     "EUSTX50": {
+        # Constituents now at table index 3.
         "url": "https://en.wikipedia.org/wiki/EURO_STOXX_50",
         "name": "EuroStoxx 50",
         "country": "EU",
-        "table_index": 4,
+        "table_index": 3,
         "ticker_col": "Ticker",
         "name_col": "Name",
         "sector_col": "ICB Sector",
@@ -86,17 +89,45 @@ INDEX_SOURCES: dict[str, dict[str, object]] = {
         "currency": "CNY",
     },
     "HSI30": {
+        # Code kept as HSI30 for backward-compat with snapshots/alerts; display
+        # name now reflects the wider top-50 cut. Constituents table is at
+        # index 6 in the current Wikipedia layout (was 5 in 2025).
         "url": "https://en.wikipedia.org/wiki/Hang_Seng_Index",
-        "name": "Hang Seng top 30",
+        "name": "Hang Seng top 50",
         "country": "HK",
-        "table_index": 5,
+        "table_index": 6,
         "ticker_col": "Ticker",
         "name_col": "Name",
-        "sector_col": "Sector",
+        "sector_col": "Sub-index",
         "industry_col": None,
         "default_exchange": "HKEX",
         "currency": "HKD",
-        "slice_n": 30,
+        "slice_n": 50,
+    },
+    "CSI300": {
+        "url": "https://en.wikipedia.org/wiki/CSI_300_Index",
+        "name": "CSI 300 (Shanghai + Shenzhen)",
+        "country": "CN",
+        "table_index": 3,
+        "ticker_col": "Ticker",
+        "name_col": "Company",
+        "sector_col": "Segment",
+        "industry_col": None,
+        "default_exchange": "SSE",
+        "currency": "CNY",
+    },
+    "FTSE100": {
+        "url": "https://en.wikipedia.org/wiki/FTSE_100_Index",
+        "name": "FTSE 100 top 50 (London)",
+        "country": "GB",
+        "table_index": 6,
+        "ticker_col": "Ticker",
+        "name_col": "Company",
+        "sector_col": "FTSE industry classification benchmark sector[39]",
+        "industry_col": None,
+        "default_exchange": "LSE",
+        "currency": "GBP",
+        "slice_n": 50,
     },
 }
 
@@ -128,8 +159,22 @@ def _fetch_table(url: str, table_index: int) -> pd.DataFrame:
 
 
 def _normalize_ticker(raw: str, default_exchange: str) -> tuple[str, str]:
-    """Map ticker suffix to exchange code; fall back to default_exchange."""
+    """Map ticker suffix to exchange code; fall back to default_exchange.
+
+    For CSI 300 entries that come as "SSE: 600519" or "SZSE: 002475", strip
+    the prefix and append the proper yfinance suffix.
+
+    For LSE-default tickers without a suffix, append ".L" so yfinance resolves
+    them on London (FTSE 100 entries are listed bare on Wikipedia).
+    """
     t = str(raw).strip().upper()
+    # CSI 300: "SSE: 600519" / "SZSE: 002475"
+    if t.startswith("SSE:") or t.startswith("SZSE:"):
+        prefix, _, num = t.partition(":")
+        num = num.strip()
+        if prefix == "SSE":
+            return f"{num}.SS", "SSE"
+        return f"{num}.SZ", "SZSE"
     suffix_to_exchange = {
         ".MI": "BIT",      # Borsa Italiana
         ".DE": "XETRA",    # Deutsche Boerse
@@ -142,11 +187,16 @@ def _normalize_ticker(raw: str, default_exchange: str) -> tuple[str, str]:
         ".MC": "BME",      # Madrid
         ".IR": "ISE",      # Irish
         ".SS": "SSE",      # Shanghai
+        ".SZ": "SZSE",     # Shenzhen
         ".HK": "HKEX",     # Hong Kong
+        ".L":  "LSE",      # London Stock Exchange
     }
     for suffix, exchange in suffix_to_exchange.items():
         if t.endswith(suffix):
             return t, exchange
+    # LSE-default tickers without explicit suffix → append .L for yfinance
+    if default_exchange == "LSE" and "." not in t:
+        return f"{t}.L", "LSE"
     return t, default_exchange
 
 
