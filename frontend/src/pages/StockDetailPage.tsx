@@ -95,10 +95,10 @@ export default function StockDetailPage() {
       <StockHeader stock={d.stock} kpis={d.kpis} effectiveRules={d.effective_rules} />
 
       {/* Three side-by-side cards: Fundamentals | Valuation | News.
-          Each is variable in height — `items-start` keeps them top-aligned
-          rather than stretching the shorter ones. On narrow screens they
-          stack vertically. */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 items-start">
+          Fixed row height → all 3 cards share the same height; each one's
+          internal content scrolls if needed. The Fundamentals card uses
+          tabs (Annuali / Trimestrali / Earnings) to fit in the same box. */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 lg:h-[400px]">
         <FundamentalsCard ticker={ticker} />
         <MicroDataCard ticker={ticker} />
         <NewsCard ticker={ticker} />

@@ -140,16 +140,12 @@ export function MicroDataCard({ ticker }: Props) {
 
   if (q.isLoading) {
     return (
-      <Card>
-        <CardContent className="p-4">
+      <Card className="h-full">
+        <CardContent className="p-4 h-full flex flex-col">
           <div className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-2">
             Valuation & Quality
           </div>
-          <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-2">
-            {Array.from({ length: 12 }).map((_, i) => (
-              <div key={i} className="h-14 animate-pulse bg-muted/40 rounded" />
-            ))}
-          </div>
+          <div className="flex-1 animate-pulse bg-muted/40 rounded" />
         </CardContent>
       </Card>
     );
@@ -159,9 +155,9 @@ export function MicroDataCard({ ticker }: Props) {
   const anyValue = tiles.some((t) => t.raw != null && Number.isFinite(t.raw));
 
   return (
-    <Card>
-      <CardContent className="p-4">
-        <div className="flex items-center justify-between mb-2">
+    <Card className="h-full">
+      <CardContent className="p-4 h-full flex flex-col min-h-0">
+        <div className="flex items-center justify-between mb-2 shrink-0">
           <div className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
             Valuation & Quality
           </div>
@@ -169,17 +165,19 @@ export function MicroDataCard({ ticker }: Props) {
             cache 24h
           </span>
         </div>
-        {!anyValue ? (
-          <div className="text-xs text-muted-foreground">
-            Dati non disponibili (Yahoo Finance non li espone per questo ticker o è temporaneamente rate-limited).
-          </div>
-        ) : (
-          // Sized for a 1/3-width column: 2 cols on mobile, 3 cols thereafter.
-          // xl gets 4 cols once the card is wide enough.
-          <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2">
-            {tiles.map((t) => <TileBox key={t.label} t={t} />)}
-          </div>
-        )}
+        <div className="flex-1 min-h-0 overflow-y-auto">
+          {!anyValue ? (
+            <div className="text-xs text-muted-foreground">
+              Dati non disponibili (Yahoo Finance non li espone per questo ticker o è temporaneamente rate-limited).
+            </div>
+          ) : (
+            // Sized for a 1/3-width column: 2 cols on mobile, 3 cols thereafter.
+            // xl gets 4 cols once the card is wide enough.
+            <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2">
+              {tiles.map((t) => <TileBox key={t.label} t={t} />)}
+            </div>
+          )}
+        </div>
       </CardContent>
     </Card>
   );

@@ -4,6 +4,7 @@ import type {
   FundamentalsAnnual, FundamentalsEarnings, FundamentalsQuarterly,
 } from "@/api/types";
 import { Card, CardContent } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useStockFundamentals } from "@/hooks/useStockFundamentals";
 import { cn } from "@/lib/utils";
 
@@ -30,22 +31,15 @@ function fmtPct(v: number | null | undefined): { text: string; color: string } {
   };
 }
 
-function shortYear(isoDate: string): string {
-  return `FY${isoDate.slice(2, 4)}`;
-}
-
-function shortQuarter(isoDate: string): string {
-  // e.g. "2025-09-30" → "Q3 25" (Sept = Q3 fiscal proxy)
-  const [y, m] = isoDate.split("-");
-  const month = parseInt(m, 10);
-  const q = Math.ceil(month / 3);
-  return `Q${q} ${y.slice(2)}`;
-}
-
-function shortDate(isoDate: string): string {
-  const [y, m, d] = isoDate.split("-");
+const shortYear = (iso: string) => `FY${iso.slice(2, 4)}`;
+const shortQuarter = (iso: string) => {
+  const [y, m] = iso.split("-");
+  return `Q${Math.ceil(parseInt(m, 10) / 3)} ${y.slice(2)}`;
+};
+const shortDate = (iso: string) => {
+  const [y, m, d] = iso.split("-");
   return `${d}/${m}/${y.slice(2)}`;
-}
+};
 
 function yoy(curr: number | null, prev: number | null | undefined): string {
   if (curr == null || prev == null || prev === 0) return "—";
@@ -53,61 +47,107 @@ function yoy(curr: number | null, prev: number | null | undefined): string {
   return `${pct >= 0 ? "+" : ""}${pct.toFixed(1)}%`;
 }
 
-function AnnualRow({ a, prev }: { a: FundamentalsAnnual; prev?: FundamentalsAnnual }) {
+/* Compact tables: tighter padding (px-1.5 py-1), text-[11px] base, no box
+   borders between rows — just hover highlight. Scroll inside the tab body
+   keeps the card height fixed. */
+
+function AnnualTable({ rows }: { rows: FundamentalsAnnual[] }) {
   return (
-    <tr className="border-t border-border/40 hover:bg-muted/30">
-      <td className="px-2 py-1.5 font-mono text-xs">{shortYear(a.fiscal_year_end)}</td>
-      <td className="px-2 py-1.5 text-right tabular-nums">{fmtBig(a.revenue)}</td>
-      <td className="px-2 py-1.5 text-right tabular-nums text-[11px] text-muted-foreground">
-        {prev ? yoy(a.revenue, prev.revenue) : "—"}
-      </td>
-      <td className="px-2 py-1.5 text-right tabular-nums">{fmtBig(a.net_income)}</td>
-      <td className="px-2 py-1.5 text-right tabular-nums">
-        {a.eps != null ? `$${a.eps.toFixed(2)}` : "—"}
-      </td>
-    </tr>
+    <table className="w-full text-[11px] tabular-nums">
+      <thead className="text-[10px] text-muted-foreground uppercase">
+        <tr>
+          <th className="px-1.5 py-1 text-left">FY</th>
+          <th className="px-1.5 py-1 text-right">Rev</th>
+          <th className="px-1.5 py-1 text-right">YoY</th>
+          <th className="px-1.5 py-1 text-right">Net Inc</th>
+          <th className="px-1.5 py-1 text-right">EPS</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((a, i) => (
+          <tr key={a.fiscal_year_end} className="border-t border-border/40 hover:bg-muted/30">
+            <td className="px-1.5 py-1 font-mono">{shortYear(a.fiscal_year_end)}</td>
+            <td className="px-1.5 py-1 text-right">{fmtBig(a.revenue)}</td>
+            <td className="px-1.5 py-1 text-right text-muted-foreground">
+              {i > 0 ? yoy(a.revenue, rows[i - 1].revenue) : "—"}
+            </td>
+            <td className="px-1.5 py-1 text-right">{fmtBig(a.net_income)}</td>
+            <td className="px-1.5 py-1 text-right">{a.eps != null ? `$${a.eps.toFixed(2)}` : "—"}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   );
 }
 
-function QuarterRow({ q, prev }: { q: FundamentalsQuarterly; prev?: FundamentalsQuarterly }) {
+function QuarterlyTable({ rows }: { rows: FundamentalsQuarterly[] }) {
   return (
-    <tr className="border-t border-border/40 hover:bg-muted/30">
-      <td className="px-2 py-1.5 font-mono text-xs">{shortQuarter(q.fiscal_quarter_end)}</td>
-      <td className="px-2 py-1.5 text-right tabular-nums">{fmtBig(q.revenue)}</td>
-      <td className="px-2 py-1.5 text-right tabular-nums text-[11px] text-muted-foreground">
-        {prev ? yoy(q.revenue, prev.revenue) : "—"}
-      </td>
-      <td className="px-2 py-1.5 text-right tabular-nums">
-        {q.eps != null ? `$${q.eps.toFixed(2)}` : "—"}
-      </td>
-    </tr>
+    <table className="w-full text-[11px] tabular-nums">
+      <thead className="text-[10px] text-muted-foreground uppercase">
+        <tr>
+          <th className="px-1.5 py-1 text-left">Q</th>
+          <th className="px-1.5 py-1 text-right">Rev</th>
+          <th className="px-1.5 py-1 text-right">YoY</th>
+          <th className="px-1.5 py-1 text-right">EPS</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((q, i) => (
+          <tr key={q.fiscal_quarter_end} className="border-t border-border/40 hover:bg-muted/30">
+            <td className="px-1.5 py-1 font-mono">{shortQuarter(q.fiscal_quarter_end)}</td>
+            <td className="px-1.5 py-1 text-right">{fmtBig(q.revenue)}</td>
+            <td className="px-1.5 py-1 text-right text-muted-foreground">
+              {i >= 4 ? yoy(q.revenue, rows[i - 4].revenue) : "—"}
+            </td>
+            <td className="px-1.5 py-1 text-right">{q.eps != null ? `$${q.eps.toFixed(2)}` : "—"}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   );
 }
 
-function EarningsRow({ e }: { e: FundamentalsEarnings }) {
-  const surp = fmtPct(e.surprise_pct);
-  const beat = e.surprise_pct != null && e.surprise_pct > 0;
+function EarningsTable({ rows }: { rows: FundamentalsEarnings[] }) {
   return (
-    <tr className="border-t border-border/40 hover:bg-muted/30">
-      <td className="px-2 py-1.5 text-xs tabular-nums">{shortDate(e.date)}</td>
-      <td className="px-2 py-1.5 text-right tabular-nums text-xs text-muted-foreground">
-        {e.eps_estimate != null ? `$${e.eps_estimate.toFixed(2)}` : "—"}
-      </td>
-      <td className="px-2 py-1.5 text-right tabular-nums text-xs font-semibold">
-        {e.eps_reported != null ? `$${e.eps_reported.toFixed(2)}` : "—"}
-      </td>
-      <td className={cn("px-2 py-1.5 text-right tabular-nums text-xs font-semibold", surp.color)}>
-        <span className="inline-flex items-center gap-0.5 justify-end">
-          {e.surprise_pct != null && (beat ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />)}
-          {surp.text}
-        </span>
-      </td>
-      <td className="px-2 py-1.5 text-right tabular-nums text-[11px] text-muted-foreground">
-        {e.revenue_reported != null ? fmtBig(e.revenue_reported)
-          : e.revenue_estimate != null ? `est ${fmtBig(e.revenue_estimate)}`
-          : "—"}
-      </td>
-    </tr>
+    <table className="w-full text-[11px] tabular-nums">
+      <thead className="text-[10px] text-muted-foreground uppercase">
+        <tr>
+          <th className="px-1.5 py-1 text-left">Data</th>
+          <th className="px-1.5 py-1 text-right">Est</th>
+          <th className="px-1.5 py-1 text-right">Real</th>
+          <th className="px-1.5 py-1 text-right">Surp</th>
+          <th className="px-1.5 py-1 text-right">Rev</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((e) => {
+          const surp = fmtPct(e.surprise_pct);
+          const beat = e.surprise_pct != null && e.surprise_pct > 0;
+          return (
+            <tr key={e.date} className="border-t border-border/40 hover:bg-muted/30">
+              <td className="px-1.5 py-1">{shortDate(e.date)}</td>
+              <td className="px-1.5 py-1 text-right text-muted-foreground">
+                {e.eps_estimate != null ? `$${e.eps_estimate.toFixed(2)}` : "—"}
+              </td>
+              <td className="px-1.5 py-1 text-right font-semibold">
+                {e.eps_reported != null ? `$${e.eps_reported.toFixed(2)}` : "—"}
+              </td>
+              <td className={cn("px-1.5 py-1 text-right font-semibold", surp.color)}>
+                <span className="inline-flex items-center gap-0.5 justify-end">
+                  {e.surprise_pct != null && (beat ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />)}
+                  {surp.text}
+                </span>
+              </td>
+              <td className="px-1.5 py-1 text-right text-[10px] text-muted-foreground">
+                {e.revenue_reported != null ? fmtBig(e.revenue_reported)
+                  : e.revenue_estimate != null ? `est ${fmtBig(e.revenue_estimate)}`
+                  : "—"}
+              </td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
   );
 }
 
@@ -116,12 +156,12 @@ export function FundamentalsCard({ ticker }: Props) {
 
   if (q.isLoading) {
     return (
-      <Card>
-        <CardContent className="p-4">
+      <Card className="h-full">
+        <CardContent className="p-4 h-full flex flex-col">
           <div className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-2">
             Fundamentals
           </div>
-          <div className="h-32 animate-pulse bg-muted/40 rounded" />
+          <div className="flex-1 animate-pulse bg-muted/40 rounded" />
         </CardContent>
       </Card>
     );
@@ -130,12 +170,12 @@ export function FundamentalsCard({ ticker }: Props) {
   const f = q.data;
   if (!f || f.error || (f.annual.length === 0 && f.earnings.length === 0 && f.quarterly.length === 0)) {
     return (
-      <Card>
-        <CardContent className="p-4">
+      <Card className="h-full">
+        <CardContent className="p-4 h-full flex flex-col">
           <div className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-2">
             Fundamentals
           </div>
-          <div className="text-xs text-muted-foreground">
+          <div className="flex-1 flex items-center justify-center text-xs text-muted-foreground text-center px-3">
             {f?.error ? `Errore: ${f.error}` : "Dati non disponibili per questo ticker."}
           </div>
         </CardContent>
@@ -143,101 +183,56 @@ export function FundamentalsCard({ ticker }: Props) {
     );
   }
 
+  // Pick the best default tab based on what data is available
+  const defaultTab =
+    f.annual.length > 0 ? "annual" :
+    f.quarterly.length > 0 ? "quarterly" :
+    "earnings";
+
   return (
-    <Card>
-      <CardContent className="p-4">
-        <div className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-2">
-          Fundamentals
+    <Card className="h-full">
+      <CardContent className="p-4 h-full flex flex-col min-h-0">
+        <div className="flex items-center gap-2 mb-2 shrink-0">
+          <span className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+            Fundamentals
+          </span>
+          {f.next_earnings_date && (
+            <span
+              className="ml-auto inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-950/30 border border-blue-200/60 dark:border-blue-900/40 text-blue-700 dark:text-blue-300"
+              title={`Prossima earnings — EPS atteso: ${f.next_eps_estimate != null ? `$${f.next_eps_estimate.toFixed(2)}` : "—"}`}
+            >
+              <CalendarClock className="h-3 w-3" />
+              {shortDate(f.next_earnings_date)}
+              {f.next_eps_estimate != null && <> · est ${f.next_eps_estimate.toFixed(2)}</>}
+            </span>
+          )}
         </div>
 
-        {/* Next earnings forecast banner */}
-        {f.next_earnings_date && (
-          <div className="mb-3 px-3 py-2 rounded-md bg-blue-50 dark:bg-blue-950/30 border border-blue-200/60 dark:border-blue-900/40 flex items-center gap-2">
-            <CalendarClock className="h-4 w-4 text-blue-600 dark:text-blue-400 shrink-0" />
-            <div className="text-xs">
-              <div className="font-semibold text-blue-700 dark:text-blue-300">
-                Prossima earnings: {shortDate(f.next_earnings_date)}
-              </div>
-              {f.next_eps_estimate != null && (
-                <div className="text-muted-foreground">
-                  EPS atteso: <span className="font-mono">${f.next_eps_estimate.toFixed(2)}</span>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Annual income */}
-        {f.annual.length > 0 && (
-          <div className="mb-3">
-            <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-1">
-              Annuali (ultimi {f.annual.length} esercizi)
-            </div>
-            <table className="w-full text-xs">
-              <thead className="text-[10px] text-muted-foreground uppercase">
-                <tr>
-                  <th className="px-2 py-1 text-left">FY</th>
-                  <th className="px-2 py-1 text-right">Revenue</th>
-                  <th className="px-2 py-1 text-right">YoY</th>
-                  <th className="px-2 py-1 text-right">Net Income</th>
-                  <th className="px-2 py-1 text-right">EPS</th>
-                </tr>
-              </thead>
-              <tbody>
-                {f.annual.map((a, i) => (
-                  <AnnualRow key={a.fiscal_year_end} a={a} prev={i > 0 ? f.annual[i - 1] : undefined} />
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {/* Quarterly income */}
-        {f.quarterly.length > 0 && (
-          <div className="mb-3">
-            <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-1">
-              Trimestrali (ultimi {f.quarterly.length})
-            </div>
-            <table className="w-full text-xs">
-              <thead className="text-[10px] text-muted-foreground uppercase">
-                <tr>
-                  <th className="px-2 py-1 text-left">Q</th>
-                  <th className="px-2 py-1 text-right">Revenue</th>
-                  <th className="px-2 py-1 text-right">YoY</th>
-                  <th className="px-2 py-1 text-right">EPS</th>
-                </tr>
-              </thead>
-              <tbody>
-                {f.quarterly.map((q, i) => (
-                  <QuarterRow key={q.fiscal_quarter_end} q={q} prev={i >= 4 ? f.quarterly[i - 4] : undefined} />
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {/* Earnings surprises */}
-        {f.earnings.length > 0 && (
-          <div>
-            <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-1">
-              Earnings — atteso vs reported (ultimi {f.earnings.length})
-            </div>
-            <table className="w-full text-xs">
-              <thead className="text-[10px] text-muted-foreground uppercase">
-                <tr>
-                  <th className="px-2 py-1 text-left">Data</th>
-                  <th className="px-2 py-1 text-right">Est EPS</th>
-                  <th className="px-2 py-1 text-right">Reported</th>
-                  <th className="px-2 py-1 text-right">Sorpresa</th>
-                  <th className="px-2 py-1 text-right">Revenue</th>
-                </tr>
-              </thead>
-              <tbody>
-                {f.earnings.map((e) => <EarningsRow key={e.date} e={e} />)}
-              </tbody>
-            </table>
-          </div>
-        )}
+        <Tabs defaultValue={defaultTab} className="flex-1 flex flex-col min-h-0">
+          <TabsList className="h-7 p-0.5 shrink-0">
+            <TabsTrigger value="annual" className="h-6 text-[10px] px-2" disabled={f.annual.length === 0}>
+              Annuali
+            </TabsTrigger>
+            <TabsTrigger value="quarterly" className="h-6 text-[10px] px-2" disabled={f.quarterly.length === 0}>
+              Trimestrali
+            </TabsTrigger>
+            <TabsTrigger value="earnings" className="h-6 text-[10px] px-2" disabled={f.earnings.length === 0}>
+              Earnings
+            </TabsTrigger>
+          </TabsList>
+          <TabsContent value="annual" className="m-0 mt-2 flex-1 min-h-0 overflow-y-auto">
+            {f.annual.length > 0 ? <AnnualTable rows={f.annual} /> :
+              <div className="text-xs text-muted-foreground text-center py-4">N/D</div>}
+          </TabsContent>
+          <TabsContent value="quarterly" className="m-0 mt-2 flex-1 min-h-0 overflow-y-auto">
+            {f.quarterly.length > 0 ? <QuarterlyTable rows={f.quarterly} /> :
+              <div className="text-xs text-muted-foreground text-center py-4">N/D</div>}
+          </TabsContent>
+          <TabsContent value="earnings" className="m-0 mt-2 flex-1 min-h-0 overflow-y-auto">
+            {f.earnings.length > 0 ? <EarningsTable rows={f.earnings} /> :
+              <div className="text-xs text-muted-foreground text-center py-4">N/D</div>}
+          </TabsContent>
+        </Tabs>
       </CardContent>
     </Card>
   );
