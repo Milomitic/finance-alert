@@ -1,10 +1,11 @@
-import { ListChecks } from "lucide-react";
+import { ListChecks, Radio } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import type { EffectiveRule, Stock, StockKpis } from "@/api/types";
 import { StockLogo } from "@/components/dashboard/StockLogo";
 import { Card, CardContent } from "@/components/ui/card";
 import { ACRONYM_HELP } from "@/lib/acronymHelp";
+import { useLiveQuote } from "@/hooks/useLiveQuote";
 import { getStockFlagCode } from "@/lib/stockMeta";
 import { cn } from "@/lib/utils";
 
@@ -43,7 +44,17 @@ export function StockHeader({ stock, kpis, effectiveRules = [] }: Props) {
     ),
   );
   const flag = getStockFlagCode(stock.country);
-  const change = kpis.change_pct;
+
+  // Live quote — polls every 15s. Falls back to the kpis snapshot (last
+  // close from the daily scan) when the live fetch hasn't returned yet,
+  // when it errored (e.g. yfinance breaker open), or when the live price
+  // isn't available (e.g. delisted ticker).
+  const live = useLiveQuote(stock.ticker);
+  const liveOk = live.data && live.data.price != null && live.data.error == null;
+  const displayPrice = liveOk ? live.data!.price! : kpis.last_close;
+  const change = liveOk ? (live.data!.change_pct ?? null) : kpis.change_pct;
+  const changeAbs = liveOk ? live.data!.change_abs : null;
+  const liveAge = liveOk ? Date.now() / 1000 - live.data!.fetched_at : null;
 
   // Tone: subtle tinted card + accent stripe on left, no aggressive gradient
   const tone =
@@ -105,15 +116,38 @@ export function StockHeader({ stock, kpis, effectiveRules = [] }: Props) {
 
           {/* Price block */}
           <div className="text-right tabular-nums shrink-0 flex flex-col gap-1 items-end">
-            {kpis.last_close != null && (
+            {displayPrice != null && (
               <>
-                <div className="text-sm uppercase tracking-wide text-muted-foreground">Last close</div>
-                <div className="text-5xl font-bold leading-none">${kpis.last_close.toFixed(2)}</div>
+                <div className="flex items-center gap-1.5 text-sm uppercase tracking-wide text-muted-foreground">
+                  {liveOk ? (
+                    <span
+                      className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-300 font-semibold"
+                      title={liveAge != null ? `Aggiornato ${Math.round(liveAge)}s fa · cache server 10s + polling 15s` : ""}
+                    >
+                      <span className="relative inline-flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                      </span>
+                      <Radio className="h-3 w-3" />
+                      LIVE
+                    </span>
+                  ) : (
+                    <span title="Live quote non disponibile — mostra l'ultima chiusura giornaliera">
+                      Last close
+                    </span>
+                  )}
+                </div>
+                <div className="text-5xl font-bold leading-none">${displayPrice.toFixed(2)}</div>
               </>
             )}
             {change != null && (
-              <div className={cn("inline-flex items-center gap-1.5 text-2xl font-bold mt-1", tone.text)}>
+              <div className={cn("inline-flex items-baseline gap-1.5 text-2xl font-bold mt-1", tone.text)}>
                 <span className="text-lg">{tone.arrow}</span>
+                {changeAbs != null && (
+                  <span className="text-base font-semibold opacity-80">
+                    {changeAbs >= 0 ? "+" : ""}{changeAbs.toFixed(2)}
+                  </span>
+                )}
                 <span>{change >= 0 ? "+" : ""}{change.toFixed(2)}%</span>
               </div>
             )}

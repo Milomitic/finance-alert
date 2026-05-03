@@ -509,3 +509,19 @@ export interface Fundamentals {
   price_target: AnalystPriceTarget;
   error: string | null;
 }
+
+export interface LiveQuote {
+  ticker: string;
+  price: number | null;
+  prev_close: number | null;
+  change_abs: number | null;
+  change_pct: number | null;
+  day_open: number | null;
+  day_high: number | null;
+  day_low: number | null;
+  volume: number | null;
+  market_state: string | null;
+  currency: string | null;
+  fetched_at: number;
+  error: string | null;
+}

@@ -13,10 +13,13 @@ from app.schemas.stock_detail import (
     AnalystPriceTargetOut, AnalystRatingOut, EffectiveRuleOut,
     FundamentalsAnnualOut, FundamentalsEarningsOut, FundamentalsOut,
     FundamentalsQuarterlyOut, IndicatorPointOut, IndicatorSeriesOut,
-    InsiderTransactionOut, MicroDataOut, OhlcvBarOut,
-    StockDetailOut, StockKpisOut, StockNewsItemOut, StockNewsOut,
+    InsiderTransactionOut, LiveQuoteOut, LiveQuotesBatchOut, MicroDataOut,
+    OhlcvBarOut, StockDetailOut, StockKpisOut, StockNewsItemOut, StockNewsOut,
 )
-from app.services import stock_detail_service, stock_fundamentals_service, stock_news_service
+from app.services import (
+    live_quote_service, stock_detail_service, stock_fundamentals_service,
+    stock_news_service,
+)
 from app.services.stock_service import StockFilter, get_filter_options, search_stocks
 
 router = APIRouter(prefix="/api/stocks", tags=["stocks"])
@@ -173,3 +176,52 @@ def get_stock_fundamentals(
         price_target=AnalystPriceTargetOut(**f.price_target.__dict__),
         error=f.error,
     )
+
+
+@router.get("/quotes", response_model=LiveQuotesBatchOut)
+def get_quotes_batch(
+    tickers: str,    # comma-separated
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+) -> LiveQuotesBatchOut:
+    """Live (10s-cached) quotes for up to 50 tickers in one request.
+
+    Format: ?tickers=AAPL,MSFT,GOOGL — comma-separated. Order in the
+    response matches the request order. Unknown tickers (not in catalog)
+    are skipped silently rather than 404'ing the whole batch.
+    """
+    requested = [t.strip().upper() for t in tickers.split(",") if t.strip()]
+    if not requested:
+        raise HTTPException(status_code=422, detail="tickers query param required")
+    if len(requested) > 50:
+        raise HTTPException(status_code=422, detail="max 50 tickers per request")
+    # Filter to tickers we know about (avoid hitting Yahoo for typos)
+    known = set(
+        db.execute(select(Stock.ticker).where(Stock.ticker.in_(requested)))
+        .scalars().all()
+    )
+    valid = [t for t in requested if t in known]
+    quotes_map = live_quote_service.get_quotes_batch(valid)
+    return LiveQuotesBatchOut(
+        quotes=[LiveQuoteOut(**quotes_map[t].__dict__) for t in valid if t in quotes_map],
+    )
+
+
+@router.get("/{ticker}/quote", response_model=LiveQuoteOut)
+def get_stock_quote(
+    ticker: str,
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+) -> LiveQuoteOut:
+    """Live (10s-cached) quote for a single ticker. Honors the yfinance
+    circuit breaker — returns the cached quote (with `error` set) when
+    Yahoo is rate-limited rather than blocking the request."""
+    # Catalog has duplicates for tickers in multiple indices (e.g. AAPL is
+    # in both SP500 and NDX), so use .first() not scalar_one_or_none().
+    exists = db.execute(
+        select(Stock.id).where(Stock.ticker == ticker).limit(1)
+    ).first()
+    if exists is None:
+        raise HTTPException(status_code=404, detail=f"Ticker not found: {ticker}")
+    q = live_quote_service.get_quote(ticker)
+    return LiveQuoteOut(**q.__dict__)

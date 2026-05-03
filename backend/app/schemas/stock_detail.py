@@ -22,6 +22,26 @@ class IndicatorPointOut(BaseModel):
     value: float | None
 
 
+class LiveQuoteOut(BaseModel):
+    ticker: str
+    price: float | None = None
+    prev_close: float | None = None
+    change_abs: float | None = None
+    change_pct: float | None = None
+    day_open: float | None = None
+    day_high: float | None = None
+    day_low: float | None = None
+    volume: int | None = None
+    market_state: str | None = None
+    currency: str | None = None
+    fetched_at: float = 0.0
+    error: str | None = None
+
+
+class LiveQuotesBatchOut(BaseModel):
+    quotes: list[LiveQuoteOut]
+
+
 class FundamentalsAnnualOut(BaseModel):
     fiscal_year_end: str
     revenue: float | None

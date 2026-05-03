@@ -1,0 +1,142 @@
+"""Tests for live_quote_service."""
+import time
+
+import pytest
+
+from app.services import live_quote_service, yfinance_health
+
+
+def setup_function() -> None:
+    live_quote_service.clear_cache()
+    yfinance_health.reset()
+
+
+def _fake_fast_info(values: dict[str, object]) -> object:
+    """Build a FastInfo-like object that supports `.get(key)`."""
+    class FakeFastInfo:
+        def get(self, key: str, default: object = None) -> object:
+            return values.get(key, default)
+    return FakeFastInfo()
+
+
+def _patch_yf(monkeypatch: pytest.MonkeyPatch, fi: object) -> None:
+    class FakeTicker:
+        def __init__(self, _t: str) -> None:
+            self.fast_info = fi
+    monkeypatch.setattr("yfinance.Ticker", FakeTicker)
+
+
+def test_quote_returns_price_change_and_pct(monkeypatch: pytest.MonkeyPatch) -> None:
+    fi = _fake_fast_info({
+        "lastPrice": 280.14, "previousClose": 271.35,
+        "open": 272.0, "dayHigh": 282.0, "dayLow": 270.0,
+        "lastVolume": 45_000_000, "currency": "USD", "quoteType": "EQUITY",
+    })
+    _patch_yf(monkeypatch, fi)
+    q = live_quote_service.get_quote("AAPL")
+    assert q.price == 280.14
+    assert q.prev_close == 271.35
+    assert q.change_abs is not None and abs(q.change_abs - 8.79) < 1e-6
+    assert q.change_pct is not None and abs(q.change_pct - 3.239358) < 1e-3
+    assert q.day_open == 272.0
+    assert q.day_high == 282.0
+    assert q.day_low == 270.0
+    assert q.volume == 45_000_000
+    assert q.currency == "USD"
+    assert q.error is None
+
+
+def test_quote_normalises_gbp_pence_to_pounds(monkeypatch: pytest.MonkeyPatch) -> None:
+    """LSE tickers come back as GBp (pence). All price fields divide by 100;
+    currency normalised to GBP for the response."""
+    fi = _fake_fast_info({
+        "lastPrice": 1359.4, "previousClose": 1340.0,
+        "open": 1342.0, "dayHigh": 1365.0, "dayLow": 1335.0,
+        "currency": "GBp",
+    })
+    _patch_yf(monkeypatch, fi)
+    q = live_quote_service.get_quote("HSBA.L")
+    assert q.price == pytest.approx(13.594, rel=1e-9)
+    assert q.prev_close == pytest.approx(13.40, rel=1e-9)
+    assert q.day_high == pytest.approx(13.65, rel=1e-9)
+    assert q.currency == "GBP"
+
+
+def test_quote_caches_within_ttl(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Two get_quote calls within TTL must return the SAME instance (no
+    second yfinance hit)."""
+    call_count = {"n": 0}
+
+    class FakeFastInfo:
+        def get(self, key: str, default: object = None) -> object:
+            return {"lastPrice": 100.0, "previousClose": 99.0}.get(key, default)
+
+    class FakeTicker:
+        def __init__(self, _t: str) -> None:
+            call_count["n"] += 1
+            self.fast_info = FakeFastInfo()
+
+    monkeypatch.setattr("yfinance.Ticker", FakeTicker)
+    a = live_quote_service.get_quote("AAPL")
+    b = live_quote_service.get_quote("AAPL")
+    assert a is b
+    assert call_count["n"] == 1
+
+
+def test_force_refresh_bypasses_cache(monkeypatch: pytest.MonkeyPatch) -> None:
+    call_count = {"n": 0}
+
+    class FakeFastInfo:
+        def get(self, key: str, default: object = None) -> object:
+            return {"lastPrice": 100.0, "previousClose": 99.0}.get(key, default)
+
+    class FakeTicker:
+        def __init__(self, _t: str) -> None:
+            call_count["n"] += 1
+            self.fast_info = FakeFastInfo()
+
+    monkeypatch.setattr("yfinance.Ticker", FakeTicker)
+    live_quote_service.get_quote("AAPL")
+    live_quote_service.get_quote("AAPL", force_refresh=True)
+    assert call_count["n"] == 2
+
+
+def test_open_breaker_returns_error_quote(monkeypatch: pytest.MonkeyPatch) -> None:
+    """When the breaker is open we don't hit Yahoo at all — quote.error set."""
+    for _ in range(yfinance_health.N_FAILURES):
+        yfinance_health.record_failure("simulated 429")
+    assert yfinance_health.is_open()
+
+    # If yfinance got called we'd raise; the test relies on the breaker
+    # short-circuit.
+    def boom(_t: str) -> None:
+        raise RuntimeError("yfinance should not be called when breaker is open")
+    monkeypatch.setattr("yfinance.Ticker", boom)
+
+    q = live_quote_service.get_quote("AAPL")
+    assert q.error is not None
+    assert "breaker" in q.error.lower()
+    assert q.price is None
+
+
+def test_yfinance_exception_sets_error_and_records_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakeTicker:
+        def __init__(self, _t: str) -> None:
+            raise RuntimeError("429 Too Many Requests")
+        # @property would normally need a value, but __init__ raises first
+    monkeypatch.setattr("yfinance.Ticker", FakeTicker)
+    q = live_quote_service.get_quote("AAPL")
+    assert q.error is not None
+    assert "429" in q.error
+    # Single failure shouldn't trip the breaker yet (need N)
+    assert not yfinance_health.is_open()
+
+
+def test_batch_returns_one_quote_per_ticker(monkeypatch: pytest.MonkeyPatch) -> None:
+    fi = _fake_fast_info({"lastPrice": 100.0, "previousClose": 99.0})
+    _patch_yf(monkeypatch, fi)
+    batch = live_quote_service.get_quotes_batch(["AAPL", "MSFT", "GOOGL"])
+    assert set(batch.keys()) == {"AAPL", "MSFT", "GOOGL"}
+    assert all(q.price == 100.0 for q in batch.values())
