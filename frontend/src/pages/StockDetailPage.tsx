@@ -9,16 +9,30 @@ import { useStockDetail } from "@/hooks/useStockDetail";
 import { useStockDrawings } from "@/hooks/useStockDrawings";
 import { DrawingToolbar, type DrawingMode } from "@/components/stock/DrawingToolbar";
 import { EffectiveRulesCard } from "@/components/stock/EffectiveRulesCard";
-import { IndicatorToggles } from "@/components/stock/IndicatorToggles";
+import { FundamentalsCard } from "@/components/stock/FundamentalsCard";
+import {
+  IndicatorToggles, type IndicatorKey, type IndicatorState,
+} from "@/components/stock/IndicatorToggles";
+import { MacdPanel } from "@/components/stock/MacdPanel";
 import { NewsCard } from "@/components/stock/NewsCard";
 import { PriceAlertDialog } from "@/components/stock/PriceAlertDialog";
 import { PriceAlertsCard } from "@/components/stock/PriceAlertsCard";
 import { PriceChart } from "@/components/stock/PriceChart";
 import { RangeSelector } from "@/components/stock/RangeSelector";
+import { ResizableSection } from "@/components/stock/ResizableSection";
 import { RsiPanel } from "@/components/stock/RsiPanel";
 import { StockAlertsHistoryCard } from "@/components/stock/StockAlertsHistoryCard";
 import { StockHeader } from "@/components/stock/StockHeader";
 import { TechnicalKpiCard } from "@/components/stock/TechnicalKpiCard";
+
+const DEFAULT_INDICATORS: IndicatorState = {
+  sma20: false,
+  sma50: true,
+  sma200: true,
+  bb: false,
+  rsi: true,
+  macd: false,
+};
 
 export default function StockDetailPage() {
   const { ticker = "" } = useParams<{ ticker: string }>();
@@ -30,11 +44,13 @@ export default function StockDetailPage() {
   const createPa = useCreatePriceAlert(ticker);
   const drawings = useStockDrawings(ticker);
 
-  const [showSma50, setShowSma50] = useState(true);
-  const [showSma200, setShowSma200] = useState(true);
+  const [indicators, setIndicators] = useState<IndicatorState>(DEFAULT_INDICATORS);
   const [mode, setMode] = useState<DrawingMode>("none");
   const [pendingPrice, setPendingPrice] = useState<number | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+
+  const onToggle = (key: IndicatorKey, value: boolean) =>
+    setIndicators((prev) => ({ ...prev, [key]: value }));
 
   const handleChartClick = (price: number) => {
     if (mode === "alert") {
@@ -45,15 +61,14 @@ export default function StockDetailPage() {
       drawings.addHorizontal(Math.round(price * 100) / 100);
       setMode("none");
     }
-    // mode === "trend" is deferred — no-op for now
   };
 
   if (detail.isLoading) {
     return (
       <div className="space-y-3">
-        <Card><CardContent className="p-4 h-[80px] animate-pulse bg-muted/40" /></Card>
+        <Card><CardContent className="p-4 h-[100px] animate-pulse bg-muted/40" /></Card>
         <div className="grid lg:grid-cols-[1fr_320px] gap-3">
-          <Card><CardContent className="p-4 h-[540px] animate-pulse bg-muted/40" /></Card>
+          <Card><CardContent className="p-4 h-[600px] animate-pulse bg-muted/40" /></Card>
           <div className="space-y-3">
             {[0,1,2,3,4].map((i) =>
               <Card key={i}><CardContent className="p-4 h-[100px] animate-pulse bg-muted/40" /></Card>
@@ -79,6 +94,8 @@ export default function StockDetailPage() {
   const priceAlerts: PriceAlert[] = priceAlertsQuery.data ?? [];
   const lastClose = d.kpis.last_close ?? 0;
 
+  const hasMacd = (d.indicators.macd_line?.length ?? 0) > 0;
+
   return (
     <div className="space-y-3">
       <StockHeader stock={d.stock} kpis={d.kpis} />
@@ -86,17 +103,13 @@ export default function StockDetailPage() {
       <div className="grid lg:grid-cols-[1fr_320px] gap-3">
         <Card>
           <CardContent className="p-4">
-            <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
+            <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
               <RangeSelector
                 value={range}
                 onChange={(r) => setSearchParams({ range: r })}
               />
-              <div className="flex items-center gap-3">
-                <IndicatorToggles
-                  showSma50={showSma50}
-                  showSma200={showSma200}
-                  onToggle={(k, v) => k === "sma50" ? setShowSma50(v) : setShowSma200(v)}
-                />
+              <div className="flex items-center gap-3 flex-wrap">
+                <IndicatorToggles state={indicators} onToggle={onToggle} />
                 <DrawingToolbar
                   mode={mode}
                   onSetMode={setMode}
@@ -104,27 +117,47 @@ export default function StockDetailPage() {
                 />
               </div>
             </div>
+
+            {/* Price chart — resizable; defaults to 460px */}
             {d.ohlcv.length < 2 ? (
-              <div className="h-[420px] flex items-center justify-center text-sm text-muted-foreground">
+              <div className="h-[460px] flex items-center justify-center text-sm text-muted-foreground border border-border/50 rounded-md">
                 Dati insufficienti per il chart
               </div>
             ) : (
-              <PriceChart
-                ohlcv={d.ohlcv}
-                indicators={d.indicators}
-                showSma50={showSma50}
-                showSma200={showSma200}
-                priceAlerts={priceAlerts}
-                horizontalDrawings={drawings.drawings.horizontal}
-                onChartClick={handleChartClick}
-              />
+              <ResizableSection defaultHeight={460} minHeight={240} label="Price">
+                <PriceChart
+                  ohlcv={d.ohlcv}
+                  indicators={d.indicators}
+                  showSma20={indicators.sma20}
+                  showSma50={indicators.sma50}
+                  showSma200={indicators.sma200}
+                  showBb={indicators.bb}
+                  priceAlerts={priceAlerts}
+                  horizontalDrawings={drawings.drawings.horizontal}
+                  onChartClick={handleChartClick}
+                />
+              </ResizableSection>
             )}
-            {d.indicators.rsi14.length > 0 && (
-              <div className="mt-2">
-                <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1">
-                  RSI(14)
-                </div>
-                <RsiPanel rsi14={d.indicators.rsi14} />
+
+            {/* RSI sub-panel — togglable + resizable */}
+            {indicators.rsi && d.indicators.rsi14.length > 0 && (
+              <div className="mt-3">
+                <ResizableSection defaultHeight={140} minHeight={80} label="RSI(14)">
+                  <RsiPanel rsi14={d.indicators.rsi14} />
+                </ResizableSection>
+              </div>
+            )}
+
+            {/* MACD sub-panel — togglable + resizable */}
+            {indicators.macd && hasMacd && (
+              <div className="mt-3">
+                <ResizableSection defaultHeight={160} minHeight={80} label="MACD(12,26,9)">
+                  <MacdPanel
+                    line={d.indicators.macd_line ?? []}
+                    signal={d.indicators.macd_signal ?? []}
+                    hist={d.indicators.macd_hist ?? []}
+                  />
+                </ResizableSection>
               </div>
             )}
           </CardContent>
@@ -132,6 +165,7 @@ export default function StockDetailPage() {
 
         <div className="space-y-3">
           <TechnicalKpiCard kpis={d.kpis} indicators={d.indicators} />
+          <FundamentalsCard ticker={ticker} />
           <PriceAlertsCard ticker={ticker} />
           <StockAlertsHistoryCard alerts={d.alerts_history} />
           <EffectiveRulesCard rules={d.effective_rules} />

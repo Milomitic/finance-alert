@@ -22,10 +22,40 @@ class IndicatorPointOut(BaseModel):
     value: float | None
 
 
+class FundamentalsAnnualOut(BaseModel):
+    fiscal_year_end: str
+    revenue: float | None
+    net_income: float | None
+    eps: float | None
+
+
+class FundamentalsEarningsOut(BaseModel):
+    date: str
+    eps_estimate: float | None
+    eps_reported: float | None
+    surprise_pct: float | None
+
+
+class FundamentalsOut(BaseModel):
+    ticker: str
+    annual: list[FundamentalsAnnualOut] = []
+    earnings: list[FundamentalsEarningsOut] = []
+    next_earnings_date: str | None = None
+    next_eps_estimate: float | None = None
+    error: str | None = None
+
+
 class IndicatorSeriesOut(BaseModel):
+    sma20: list[IndicatorPointOut] = []
     sma50: list[IndicatorPointOut]
     sma200: list[IndicatorPointOut]
     rsi14: list[IndicatorPointOut]
+    bb_upper: list[IndicatorPointOut] = []
+    bb_middle: list[IndicatorPointOut] = []
+    bb_lower: list[IndicatorPointOut] = []
+    macd_line: list[IndicatorPointOut] = []
+    macd_signal: list[IndicatorPointOut] = []
+    macd_hist: list[IndicatorPointOut] = []
 
 
 class StockKpisOut(BaseModel):

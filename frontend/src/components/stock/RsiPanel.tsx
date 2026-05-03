@@ -57,5 +57,5 @@ export function RsiPanel({ rsi14 }: Props) {
     chartRef.current?.timeScale().fitContent();
   }, [rsi14]);
 
-  return <div ref={containerRef} className="w-full h-[120px]" />;
+  return <div ref={containerRef} className="w-full h-full" />;
 }

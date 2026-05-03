@@ -22,14 +22,21 @@ class MarketCapRefreshResult:
 
 
 def _fetch_market_cap(ticker: str) -> int | None:
-    """Wrapped for monkeypatching in tests. Returns market cap (USD/local) or None."""
+    """Wrapped for monkeypatching in tests. Returns market cap in the stock's
+    base currency (or None on failure).
+
+    Quirk: yfinance reports LSE-listed stocks (".L") with currency "GBp"
+    (pence/penny) instead of "GBP" (pounds). The price IS in pence (e.g.
+    HSBA.L last=1359.4 pence) so the marketCap is also in pence. We divide
+    by 100 to bring it back to pounds — otherwise HSBA shows ~£23 trillion
+    instead of the real ~£233 billion.
+    """
     import yfinance as yf
 
     t = yf.Ticker(ticker)
-    # fast_info is a dict-like proxy; key may be "market_cap" or "marketCap" depending on
-    # yfinance version. Try both. Returns None / 0 / NaN for unknown.
     fi: Any = t.fast_info
     raw: Any = None
+    currency: str | None = None
     # yfinance 1.x: keys are camelCase ("marketCap"). Older 0.2.x used snake_case
     # ("market_cap"). Try both for forward/backward compat. Use .get() (not [k])
     # because the FastInfo dict raises on unknown keys.
@@ -40,13 +47,24 @@ def _fetch_market_cap(ticker: str) -> int | None:
                 break
         except Exception:  # noqa: BLE001
             continue
+    try:
+        currency = fi.get("currency")
+    except Exception:  # noqa: BLE001
+        currency = None
     if raw is None:
         return None
     try:
-        cap = int(raw)
+        cap = float(raw)
     except (TypeError, ValueError):
         return None
-    return cap if cap > 0 else None
+    if cap <= 0:
+        return None
+    # GBp / GBX (London pence) → divide by 100 to get pounds.
+    if currency in ("GBp", "GBX"):
+        cap = cap / 100.0
+    # Other minor-unit currencies (ZAc cents, ILA agorot, etc.) could be added
+    # here as needed; only GBp showed up in our LSE-heavy catalog.
+    return int(cap)
 
 
 def refresh_market_caps(db: Session) -> MarketCapRefreshResult:

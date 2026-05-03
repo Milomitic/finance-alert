@@ -333,9 +333,16 @@ export interface IndicatorPoint {
 }
 
 export interface IndicatorSeries {
+  sma20?: IndicatorPoint[];
   sma50: IndicatorPoint[];
   sma200: IndicatorPoint[];
   rsi14: IndicatorPoint[];
+  bb_upper?: IndicatorPoint[];
+  bb_middle?: IndicatorPoint[];
+  bb_lower?: IndicatorPoint[];
+  macd_line?: IndicatorPoint[];
+  macd_signal?: IndicatorPoint[];
+  macd_hist?: IndicatorPoint[];
 }
 
 export interface StockKpis {
@@ -415,4 +422,28 @@ export interface SpotlightCard {
 
 export interface SpotlightSummary {
   cards: SpotlightCard[];
+}
+
+
+export interface FundamentalsAnnual {
+  fiscal_year_end: string;
+  revenue: number | null;
+  net_income: number | null;
+  eps: number | null;
+}
+
+export interface FundamentalsEarnings {
+  date: string;
+  eps_estimate: number | null;
+  eps_reported: number | null;
+  surprise_pct: number | null;
+}
+
+export interface Fundamentals {
+  ticker: string;
+  annual: FundamentalsAnnual[];
+  earnings: FundamentalsEarnings[];
+  next_earnings_date: string | null;
+  next_eps_estimate: number | null;
+  error: string | null;
 }

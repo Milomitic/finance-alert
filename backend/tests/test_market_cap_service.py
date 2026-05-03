@@ -62,3 +62,34 @@ def test_refresh_continues_after_per_ticker_exception(
     assert b.market_cap is None
     assert result.stocks_updated == 2
     assert result.stocks_failed == 1
+
+
+def test_fetch_market_cap_handles_gbp_pence(monkeypatch: pytest.MonkeyPatch) -> None:
+    """LSE stocks return marketCap in pence with currency 'GBp' — must /100."""
+    class FakeFastInfo:
+        def get(self, key: str, default=None):
+            return {"marketCap": 23_311_271_917_422, "currency": "GBp"}.get(key, default)
+
+    class FakeTicker:
+        def __init__(self, _t):
+            self.fast_info = FakeFastInfo()
+
+    monkeypatch.setattr("yfinance.Ticker", FakeTicker)
+    cap = market_cap_service._fetch_market_cap("HSBA.L")
+    # 23,311,271,917,422 pence / 100 = 233,112,719,174 pounds
+    assert cap == 233_112_719_174
+
+
+def test_fetch_market_cap_passes_through_normal_currency(monkeypatch: pytest.MonkeyPatch) -> None:
+    """USD/EUR/etc. — value stays as-is."""
+    class FakeFastInfo:
+        def get(self, key: str, default=None):
+            return {"marketCap": 3_000_000_000_000, "currency": "USD"}.get(key, default)
+
+    class FakeTicker:
+        def __init__(self, _t):
+            self.fast_info = FakeFastInfo()
+
+    monkeypatch.setattr("yfinance.Ticker", FakeTicker)
+    cap = market_cap_service._fetch_market_cap("AAPL")
+    assert cap == 3_000_000_000_000

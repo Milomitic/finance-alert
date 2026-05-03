@@ -9,6 +9,8 @@ import pandas as pd
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.indicators.bb import bollinger
+from app.indicators.macd import macd
 from app.indicators.rsi import rsi as rsi_indicator
 from app.indicators.sma import sma as sma_indicator
 from app.models import Alert, OhlcvDaily, Rule, Stock, Watchlist, WatchlistItem
@@ -50,23 +52,46 @@ class StockKpis:
 class StockDetail:
     stock: Stock
     ohlcv: list[OhlcvDaily]
+    sma20: list[IndicatorPoint]
     sma50: list[IndicatorPoint]
     sma200: list[IndicatorPoint]
     rsi14: list[IndicatorPoint]
+    bb_upper: list[IndicatorPoint]
+    bb_middle: list[IndicatorPoint]
+    bb_lower: list[IndicatorPoint]
+    macd_line: list[IndicatorPoint]
+    macd_signal: list[IndicatorPoint]
+    macd_hist: list[IndicatorPoint]
     kpis: StockKpis
     effective_rules: list[EffectiveRule]
     alerts_history: list[Alert]
 
 
-def _compute_indicator_series(
-    bars: list[OhlcvDaily],
-) -> tuple[list[IndicatorPoint], list[IndicatorPoint], list[IndicatorPoint]]:
+@dataclass
+class _IndicatorBundle:
+    sma20: list[IndicatorPoint]
+    sma50: list[IndicatorPoint]
+    sma200: list[IndicatorPoint]
+    rsi14: list[IndicatorPoint]
+    bb_upper: list[IndicatorPoint]
+    bb_middle: list[IndicatorPoint]
+    bb_lower: list[IndicatorPoint]
+    macd_line: list[IndicatorPoint]
+    macd_signal: list[IndicatorPoint]
+    macd_hist: list[IndicatorPoint]
+
+
+def _compute_indicator_series(bars: list[OhlcvDaily]) -> _IndicatorBundle:
+    empty = _IndicatorBundle(*[[] for _ in range(10)])
     if len(bars) < 2:
-        return [], [], []
+        return empty
     close = pd.Series([float(b.close) for b in bars])
+    sma20_s = sma_indicator(close, 20)
     sma50_s = sma_indicator(close, 50)
     sma200_s = sma_indicator(close, 200)
     rsi_s = rsi_indicator(close, 14)
+    bb_u, bb_m, bb_l = bollinger(close, period=20, k=2.0)
+    macd_line_s, macd_sig_s, macd_hist_s = macd(close)
 
     def to_points(series: pd.Series) -> list[IndicatorPoint]:
         return [
@@ -77,7 +102,18 @@ def _compute_indicator_series(
             for i, v in enumerate(series)
         ]
 
-    return to_points(sma50_s), to_points(sma200_s), to_points(rsi_s)
+    return _IndicatorBundle(
+        sma20=to_points(sma20_s),
+        sma50=to_points(sma50_s),
+        sma200=to_points(sma200_s),
+        rsi14=to_points(rsi_s),
+        bb_upper=to_points(bb_u),
+        bb_middle=to_points(bb_m),
+        bb_lower=to_points(bb_l),
+        macd_line=to_points(macd_line_s),
+        macd_signal=to_points(macd_sig_s),
+        macd_hist=to_points(macd_hist_s),
+    )
 
 
 def _compute_kpis(bars: list[OhlcvDaily]) -> StockKpis:
@@ -168,12 +204,15 @@ def get_detail(db: Session, ticker: str, range_key: str = "1y") -> StockDetail |
     else:
         ohlcv_view = bars
 
-    sma50, sma200, rsi14 = _compute_indicator_series(bars)
+    bundle = _compute_indicator_series(bars)
     if days is not None and bars:
         cutoff_idx = len(bars) - len(ohlcv_view)
-        sma50 = sma50[cutoff_idx:]
-        sma200 = sma200[cutoff_idx:]
-        rsi14 = rsi14[cutoff_idx:]
+        for f in (
+            "sma20", "sma50", "sma200", "rsi14",
+            "bb_upper", "bb_middle", "bb_lower",
+            "macd_line", "macd_signal", "macd_hist",
+        ):
+            setattr(bundle, f, getattr(bundle, f)[cutoff_idx:])
 
     kpis = _compute_kpis(bars)
     effective_rules = resolve_effective_rules(db, stock.id)
@@ -188,7 +227,16 @@ def get_detail(db: Session, ticker: str, range_key: str = "1y") -> StockDetail |
     return StockDetail(
         stock=stock,
         ohlcv=ohlcv_view,
-        sma50=sma50, sma200=sma200, rsi14=rsi14,
+        sma20=bundle.sma20,
+        sma50=bundle.sma50,
+        sma200=bundle.sma200,
+        rsi14=bundle.rsi14,
+        bb_upper=bundle.bb_upper,
+        bb_middle=bundle.bb_middle,
+        bb_lower=bundle.bb_lower,
+        macd_line=bundle.macd_line,
+        macd_signal=bundle.macd_signal,
+        macd_hist=bundle.macd_hist,
         kpis=kpis,
         effective_rules=effective_rules,
         alerts_history=alerts_history,

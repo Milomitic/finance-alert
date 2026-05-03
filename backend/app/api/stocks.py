@@ -10,10 +10,11 @@ from app.models import Stock, User
 from app.schemas.alert import AlertOut
 from app.schemas.stock import FilterOptionsOut, IndexOptionOut, StockOut, StockSearchOut
 from app.schemas.stock_detail import (
-    EffectiveRuleOut, IndicatorPointOut, IndicatorSeriesOut, OhlcvBarOut,
+    EffectiveRuleOut, FundamentalsAnnualOut, FundamentalsEarningsOut,
+    FundamentalsOut, IndicatorPointOut, IndicatorSeriesOut, OhlcvBarOut,
     StockDetailOut, StockKpisOut, StockNewsItemOut, StockNewsOut,
 )
-from app.services import stock_detail_service, stock_news_service
+from app.services import stock_detail_service, stock_fundamentals_service, stock_news_service
 from app.services.stock_service import StockFilter, get_filter_options, search_stocks
 
 router = APIRouter(prefix="/api/stocks", tags=["stocks"])
@@ -95,9 +96,16 @@ def get_stock_detail(
             for b in detail.ohlcv
         ],
         indicators=IndicatorSeriesOut(
+            sma20=[IndicatorPointOut(date=p.date, value=p.value) for p in detail.sma20],
             sma50=[IndicatorPointOut(date=p.date, value=p.value) for p in detail.sma50],
             sma200=[IndicatorPointOut(date=p.date, value=p.value) for p in detail.sma200],
             rsi14=[IndicatorPointOut(date=p.date, value=p.value) for p in detail.rsi14],
+            bb_upper=[IndicatorPointOut(date=p.date, value=p.value) for p in detail.bb_upper],
+            bb_middle=[IndicatorPointOut(date=p.date, value=p.value) for p in detail.bb_middle],
+            bb_lower=[IndicatorPointOut(date=p.date, value=p.value) for p in detail.bb_lower],
+            macd_line=[IndicatorPointOut(date=p.date, value=p.value) for p in detail.macd_line],
+            macd_signal=[IndicatorPointOut(date=p.date, value=p.value) for p in detail.macd_signal],
+            macd_hist=[IndicatorPointOut(date=p.date, value=p.value) for p in detail.macd_hist],
         ),
         kpis=StockKpisOut(
             last_close=detail.kpis.last_close, prev_close=detail.kpis.prev_close,
@@ -136,3 +144,25 @@ def get_stock_news(
         raise HTTPException(status_code=422, detail="limit must be 1..20")
     items = stock_news_service.get_news(ticker, limit=limit)
     return StockNewsOut(items=[StockNewsItemOut(**n) for n in items])
+
+
+@router.get("/{ticker}/fundamentals", response_model=FundamentalsOut)
+def get_stock_fundamentals(
+    ticker: str,
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+) -> FundamentalsOut:
+    """Annual revenue/net income/EPS + earnings history with surprise %.
+    Cached 24h; non-fatal on yfinance failure (returns empty payload)."""
+    stock = db.execute(select(Stock).where(Stock.ticker == ticker)).scalar_one_or_none()
+    if stock is None:
+        raise HTTPException(status_code=404, detail=f"Ticker not found: {ticker}")
+    f = stock_fundamentals_service.get_fundamentals(ticker)
+    return FundamentalsOut(
+        ticker=f.ticker,
+        annual=[FundamentalsAnnualOut(**a.__dict__) for a in f.annual],
+        earnings=[FundamentalsEarningsOut(**e.__dict__) for e in f.earnings],
+        next_earnings_date=f.next_earnings_date,
+        next_eps_estimate=f.next_eps_estimate,
+        error=f.error,
+    )

@@ -4,13 +4,15 @@ import {
   type IChartApi, type ISeriesApi, type UTCTimestamp,
 } from "lightweight-charts";
 
-import type { IndicatorSeries, OhlcvBar, PriceAlert } from "@/api/types";
+import type { IndicatorPoint, IndicatorSeries, OhlcvBar, PriceAlert } from "@/api/types";
 
 interface Props {
   ohlcv: OhlcvBar[];
   indicators: IndicatorSeries;
+  showSma20: boolean;
   showSma50: boolean;
   showSma200: boolean;
+  showBb: boolean;
   priceAlerts: PriceAlert[];
   horizontalDrawings?: { id: string; price: number }[];
   onChartClick?: (price: number) => void;
@@ -20,20 +22,30 @@ function dateToTime(d: string): UTCTimestamp {
   return (Date.parse(d) / 1000) as UTCTimestamp;
 }
 
+function pointsToChartData(points: IndicatorPoint[] | undefined) {
+  if (!points) return [];
+  return points
+    .filter((p) => p.value !== null)
+    .map((p) => ({ time: dateToTime(p.date), value: p.value as number }));
+}
+
 export function PriceChart({
-  ohlcv, indicators, showSma50, showSma200, priceAlerts,
-  horizontalDrawings = [], onChartClick,
+  ohlcv, indicators,
+  showSma20, showSma50, showSma200, showBb,
+  priceAlerts, horizontalDrawings = [], onChartClick,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const candleRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
+  const sma20Ref = useRef<ISeriesApi<"Line"> | null>(null);
   const sma50Ref = useRef<ISeriesApi<"Line"> | null>(null);
   const sma200Ref = useRef<ISeriesApi<"Line"> | null>(null);
+  const bbUpperRef = useRef<ISeriesApi<"Line"> | null>(null);
+  const bbMiddleRef = useRef<ISeriesApi<"Line"> | null>(null);
+  const bbLowerRef = useRef<ISeriesApi<"Line"> | null>(null);
   const volumeRef = useRef<ISeriesApi<"Histogram"> | null>(null);
   const onChartClickRef = useRef(onChartClick);
 
-  // Keep latest callback in a ref so the click handler always reads the
-  // current closure without recreating the chart.
   useEffect(() => {
     onChartClickRef.current = onChartClick;
   }, [onChartClick]);
@@ -62,11 +74,27 @@ export function PriceChart({
       borderUpColor: "#16a34a", borderDownColor: "#dc2626",
       wickUpColor: "#16a34a", wickDownColor: "#dc2626",
     });
+    sma20Ref.current = chart.addLineSeries({
+      color: "#a855f7", lineWidth: 2, priceLineVisible: false, lastValueVisible: false, title: "SMA 20",
+    });
     sma50Ref.current = chart.addLineSeries({
-      color: "#3b82f6", lineWidth: 2, priceLineVisible: false, lastValueVisible: false,
+      color: "#3b82f6", lineWidth: 2, priceLineVisible: false, lastValueVisible: false, title: "SMA 50",
     });
     sma200Ref.current = chart.addLineSeries({
-      color: "#f59e0b", lineWidth: 2, priceLineVisible: false, lastValueVisible: false,
+      color: "#f59e0b", lineWidth: 2, priceLineVisible: false, lastValueVisible: false, title: "SMA 200",
+    });
+    // Bollinger Bands: upper + lower drawn dashed (the band envelope), middle solid
+    bbUpperRef.current = chart.addLineSeries({
+      color: "#0ea5e9", lineWidth: 1, lineStyle: 2,
+      priceLineVisible: false, lastValueVisible: false, title: "BB upper",
+    });
+    bbLowerRef.current = chart.addLineSeries({
+      color: "#0ea5e9", lineWidth: 1, lineStyle: 2,
+      priceLineVisible: false, lastValueVisible: false, title: "BB lower",
+    });
+    bbMiddleRef.current = chart.addLineSeries({
+      color: "#0ea5e9", lineWidth: 1,
+      priceLineVisible: false, lastValueVisible: false, title: "BB middle",
     });
     volumeRef.current = chart.addHistogramSeries({
       priceFormat: { type: "volume" },
@@ -92,13 +120,17 @@ export function PriceChart({
       chart.remove();
       chartRef.current = null;
       candleRef.current = null;
+      sma20Ref.current = null;
       sma50Ref.current = null;
       sma200Ref.current = null;
+      bbUpperRef.current = null;
+      bbMiddleRef.current = null;
+      bbLowerRef.current = null;
       volumeRef.current = null;
     };
   }, []);
 
-  // Set OHLCV data
+  // OHLCV data
   useEffect(() => {
     if (!candleRef.current || !volumeRef.current) return;
     candleRef.current.setData(
@@ -117,27 +149,37 @@ export function PriceChart({
     chartRef.current?.timeScale().fitContent();
   }, [ohlcv]);
 
+  // SMA20
+  useEffect(() => {
+    if (!sma20Ref.current) return;
+    sma20Ref.current.applyOptions({ visible: showSma20 });
+    sma20Ref.current.setData(pointsToChartData(indicators.sma20));
+  }, [indicators.sma20, showSma20]);
+
   // SMA50
   useEffect(() => {
     if (!sma50Ref.current) return;
     sma50Ref.current.applyOptions({ visible: showSma50 });
-    sma50Ref.current.setData(
-      indicators.sma50
-        .filter((p) => p.value !== null)
-        .map((p) => ({ time: dateToTime(p.date), value: p.value as number })),
-    );
+    sma50Ref.current.setData(pointsToChartData(indicators.sma50));
   }, [indicators.sma50, showSma50]);
 
   // SMA200
   useEffect(() => {
     if (!sma200Ref.current) return;
     sma200Ref.current.applyOptions({ visible: showSma200 });
-    sma200Ref.current.setData(
-      indicators.sma200
-        .filter((p) => p.value !== null)
-        .map((p) => ({ time: dateToTime(p.date), value: p.value as number })),
-    );
+    sma200Ref.current.setData(pointsToChartData(indicators.sma200));
   }, [indicators.sma200, showSma200]);
+
+  // Bollinger Bands (3 series toggle as a group)
+  useEffect(() => {
+    if (!bbUpperRef.current || !bbMiddleRef.current || !bbLowerRef.current) return;
+    bbUpperRef.current.applyOptions({ visible: showBb });
+    bbMiddleRef.current.applyOptions({ visible: showBb });
+    bbLowerRef.current.applyOptions({ visible: showBb });
+    bbUpperRef.current.setData(pointsToChartData(indicators.bb_upper));
+    bbMiddleRef.current.setData(pointsToChartData(indicators.bb_middle));
+    bbLowerRef.current.setData(pointsToChartData(indicators.bb_lower));
+  }, [indicators.bb_upper, indicators.bb_middle, indicators.bb_lower, showBb]);
 
   // Price alert lines (dashed)
   useEffect(() => {
@@ -179,5 +221,5 @@ export function PriceChart({
     };
   }, [horizontalDrawings]);
 
-  return <div ref={containerRef} className="w-full h-[420px]" />;
+  return <div ref={containerRef} className="w-full h-full" />;
 }
