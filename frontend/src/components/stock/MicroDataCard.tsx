@@ -6,23 +6,31 @@ import { cn } from "@/lib/utils";
 interface Props {
   ticker: string;
   /** Anagrafica + market_cap. Optional for backward-compat with callers that
-   *  don't show the trading-snapshot strip at the bottom. */
+   *  don't want the trading-snapshot KPIs (52w / mkt cap / volume / vol×avg20)
+   *  prepended to the valuation list. When provided alongside `kpis` these
+   *  4 metrics render as the first 4 rows of the left column. */
   stock?: Stock;
-  /** Daily-scan KPIs (52w hi/lo, today's volume, vol×avg20). When provided
-   *  with `stock`, renders a 4-tile "Trading snapshot" strip below the
-   *  valuation list — these used to live in StockHeader but were moved here
-   *  to free up vertical space in the page hero. */
+  /** Daily-scan KPIs. See `stock` above. */
   kpis?: StockKpis;
 }
 
 interface Row {
   label: string;
-  raw: number | null;
-  format: (v: number) => string;
+  /** Pre-formatted display value. Bypasses the numeric raw → format pipeline
+   *  used by valuation rows so we can show e.g. "$2.41T" or "$155 – $237"
+   *  without inventing a "string raw" type. When set, `raw`/`format` are
+   *  ignored. */
+  preformatted?: string;
+  raw?: number | null;
+  format?: (v: number) => string;
   /** Tooltip on hover */
   tip: string;
-  /** Optional color rule */
+  /** Optional color rule. For preformatted rows pass a static class instead. */
   toneFor?: (v: number) => string;
+  toneClass?: string;
+  /** Visual emphasis: snapshot rows render with a subtle bg + bold value
+   *  to set them apart from the valuation rows below. */
+  emphasis?: boolean;
 }
 
 /* ─── Formatters ────────────────────────────────────────────────────────── */
@@ -46,6 +54,74 @@ function bigUsd(v: number): string {
   if (abs >= 1e6) return `${sign}$${(abs / 1e6).toFixed(0)}M`;
   return `${sign}$${abs.toLocaleString()}`;
 }
+
+/* ─── Snapshot row formatters (52w / mkt cap / volume / vol×avg20) ──────── */
+
+function fmtCompactNum(v: number | null | undefined): string {
+  if (v == null || !Number.isFinite(v)) return "—";
+  const abs = Math.abs(v);
+  if (abs >= 1e9) return `${(v / 1e9).toFixed(2)}B`;
+  if (abs >= 1e6) return `${(v / 1e6).toFixed(2)}M`;
+  if (abs >= 1e3) return `${(v / 1e3).toFixed(1)}k`;
+  return v.toLocaleString();
+}
+
+function fmtPrice(v: number | null | undefined): string {
+  return v != null && Number.isFinite(v) ? `$${v.toFixed(2)}` : "—";
+}
+
+/** Build the 4 trading-snapshot rows that get prepended to the valuation list.
+ *  Order is intentional: market cap first (most-asked-for at-a-glance metric),
+ *  then 52w range, then today's volume + ratio. Nothing is computed lazily here
+ *  — these are pure formatting calls so the row can be cheaply re-derived
+ *  on every render. */
+function buildSnapshotRows(stock: Stock, kpis: StockKpis): Row[] {
+  const range52 =
+    kpis.low_52w != null && kpis.high_52w != null
+      ? `${fmtPrice(kpis.low_52w)} – ${fmtPrice(kpis.high_52w)}`
+      : "—";
+
+  // Volume ratio coloring: green if >1.5× (unusual buying/selling activity),
+  // red if <0.5× (very thin session). Kept here as a static class rather than
+  // toneFor() because we're already pre-formatting the value as "1.23×".
+  let volRatioClass = "";
+  const vr = kpis.vol_ratio;
+  if (vr != null && Number.isFinite(vr)) {
+    if (vr >= 1.5) volRatioClass = "text-emerald-600 dark:text-emerald-400";
+    else if (vr < 0.5) volRatioClass = "text-rose-600 dark:text-rose-400";
+  }
+
+  return [
+    {
+      label: "Market cap",
+      preformatted: stock.market_cap != null ? bigUsd(stock.market_cap) : "—",
+      tip: "Capitalizzazione di mercato (prezzo × azioni in circolazione). T=trillion, B=billion, M=million.",
+      emphasis: true,
+    },
+    {
+      label: "52w range",
+      preformatted: range52,
+      tip: "Prezzo minimo e massimo nelle ultime 52 settimane (basato sulle chiusure giornaliere).",
+      emphasis: true,
+    },
+    {
+      label: "Volume oggi",
+      preformatted: fmtCompactNum(kpis.vol_today),
+      tip: "Volume scambiato nella sessione corrente (n. azioni).",
+      emphasis: true,
+    },
+    {
+      label: "Vol × avg20",
+      preformatted:
+        vr != null && Number.isFinite(vr) ? `${vr.toFixed(2)}×` : "—",
+      tip: "Volume oggi diviso per la media dei 20 giorni precedenti. >1.5× = volume anomalo, <0.5× = sessione molto sottile.",
+      toneClass: volRatioClass,
+      emphasis: true,
+    },
+  ];
+}
+
+/* ─── Valuation rows (yfinance fundamentals → display) ──────────────────── */
 
 function buildColumns(m: MicroData): { left: Row[]; right: Row[] } {
   const left: Row[] = [
@@ -200,127 +276,44 @@ function buildColumns(m: MicroData): { left: Row[]; right: Row[] } {
   return { left, right };
 }
 
-/* ─── Trading snapshot strip ────────────────────────────────────────────── */
-/* These 4 KPIs (52w range, market cap, today's volume, vol×avg20) used to
- * live in the StockHeader but were moved here so the page hero can be more
- * compact and feature the price-trend sparkline as its background.
- *
- * Render style is intentionally different from the valuation rows above:
- * a 2×2 grid of tiles with a label on top and a tabular-nums value below,
- * because these are "live trading" data points (snapshot of today/52w),
- * not slow-moving fundamentals — visual separation reinforces the meaning. */
-
-function fmtCompactUsd(v: number | null | undefined): string {
-  if (v == null || !Number.isFinite(v)) return "—";
-  const abs = Math.abs(v);
-  const sign = v < 0 ? "-" : "";
-  if (abs >= 1e12) return `${sign}$${(abs / 1e12).toFixed(2)}T`;
-  if (abs >= 1e9) return `${sign}$${(abs / 1e9).toFixed(1)}B`;
-  if (abs >= 1e6) return `${sign}$${(abs / 1e6).toFixed(0)}M`;
-  return `${sign}$${abs.toLocaleString()}`;
-}
-
-function fmtCompactNum(v: number | null | undefined): string {
-  if (v == null || !Number.isFinite(v)) return "—";
-  const abs = Math.abs(v);
-  if (abs >= 1e9) return `${(v / 1e9).toFixed(2)}B`;
-  if (abs >= 1e6) return `${(v / 1e6).toFixed(2)}M`;
-  if (abs >= 1e3) return `${(v / 1e3).toFixed(1)}k`;
-  return v.toLocaleString();
-}
-
-function fmtPrice(v: number | null | undefined): string {
-  return v != null && Number.isFinite(v) ? `$${v.toFixed(2)}` : "—";
-}
-
-interface SnapshotTileProps {
-  label: string;
-  value: string;
-  /** Tooltip explaining the metric. */
-  tip: string;
-  /** Optional accent class for the value (e.g. green/red). */
-  valueClass?: string;
-}
-
-function SnapshotTile({ label, value, tip, valueClass }: SnapshotTileProps) {
-  return (
-    <div
-      className="rounded-md border border-border/50 bg-muted/30 dark:bg-muted/15 px-3 py-2"
-      title={tip}
-    >
-      <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
-        {label}
-      </div>
-      <div className={cn("text-sm font-bold tabular-nums mt-0.5 truncate", valueClass)}>
-        {value}
-      </div>
-    </div>
-  );
-}
-
-function TradingSnapshot({ stock, kpis }: { stock: Stock; kpis: StockKpis }) {
-  // 52w range as "low – high", or em-dash if either side is missing.
-  const range52 =
-    kpis.low_52w != null && kpis.high_52w != null
-      ? `${fmtPrice(kpis.low_52w)} – ${fmtPrice(kpis.high_52w)}`
-      : "—";
-
-  // Volume ratio: green if >1.5× (unusual activity), red if <0.5× (very thin).
-  // Most rows will be ~1.0 and stay neutral.
-  const volRatio = kpis.vol_ratio;
-  let volRatioClass = "";
-  if (volRatio != null && Number.isFinite(volRatio)) {
-    if (volRatio >= 1.5) volRatioClass = "text-emerald-600 dark:text-emerald-400";
-    else if (volRatio < 0.5) volRatioClass = "text-rose-600 dark:text-rose-400";
-  }
-
-  return (
-    <div className="shrink-0 mt-3 pt-3 border-t border-border/50">
-      <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">
-        Trading snapshot
-      </div>
-      <div className="grid grid-cols-2 gap-2">
-        <SnapshotTile
-          label="52w range"
-          value={range52}
-          tip="Prezzo minimo e massimo nelle ultime 52 settimane (basato sulle chiusure giornaliere)."
-        />
-        <SnapshotTile
-          label="Market cap"
-          value={fmtCompactUsd(stock.market_cap)}
-          tip="Capitalizzazione di mercato (prezzo × azioni in circolazione). T=trillion, B=billion, M=million."
-        />
-        <SnapshotTile
-          label="Volume oggi"
-          value={fmtCompactNum(kpis.vol_today)}
-          tip="Volume scambiato nella sessione corrente (n. azioni)."
-        />
-        <SnapshotTile
-          label="Vol × avg20"
-          value={
-            volRatio != null && Number.isFinite(volRatio)
-              ? `${volRatio.toFixed(2)}×`
-              : "—"
-          }
-          tip="Volume oggi diviso per la media dei 20 giorni precedenti. >1.5× = volume anomalo, <0.5× = sessione molto sottile."
-          valueClass={volRatioClass}
-        />
-      </div>
-    </div>
-  );
-}
-
 function RowItem({ row }: { row: Row }) {
-  const isNum = row.raw != null && Number.isFinite(row.raw);
-  const tone = isNum && row.toneFor ? row.toneFor(row.raw as number) : "";
+  // Two render paths: preformatted (snapshot rows — string already shaped)
+  // vs numeric (valuation rows — pipe through .format()).
+  const isPreformatted = row.preformatted != null;
+  const isNum = !isPreformatted && row.raw != null && Number.isFinite(row.raw);
+  const display = isPreformatted
+    ? (row.preformatted as string)
+    : isNum
+      ? row.format!(row.raw as number)
+      : "—";
+  const tone = isNum && row.toneFor ? row.toneFor(row.raw as number) : (row.toneClass ?? "");
   return (
     <div
-      className="flex items-center justify-between gap-2 py-1 border-b border-border/40 last:border-b-0"
+      className={cn(
+        "flex items-center justify-between gap-2 py-1 border-b border-border/40 last:border-b-0",
+        // Snapshot rows get a subtle muted background so the eye groups them
+        // separately from the valuation rows below — without losing the
+        // unified row-list treatment the user asked for.
+        row.emphasis && "bg-muted/40 dark:bg-muted/15 px-2 -mx-2 rounded",
+      )}
       title={row.tip}
     >
-      <span className="text-sm text-muted-foreground truncate">{row.label}</span>
-      <span className={cn("text-sm font-semibold tabular-nums shrink-0", tone)}>
-        {isNum ? row.format(row.raw as number) : "—"}
+      <span
+        className={cn(
+          "text-sm text-muted-foreground truncate",
+          row.emphasis && "font-semibold text-foreground/80",
+        )}
+      >
+        {row.label}
+      </span>
+      <span
+        className={cn(
+          "text-sm font-semibold tabular-nums shrink-0",
+          row.emphasis && "font-bold",
+          tone,
+        )}
+      >
+        {display}
       </span>
     </div>
   );
@@ -329,31 +322,49 @@ function RowItem({ row }: { row: Row }) {
 export function MicroDataCard({ ticker, stock, kpis }: Props) {
   const q = useStockFundamentals(ticker);
 
+  const snapshotRows: Row[] =
+    stock && kpis ? buildSnapshotRows(stock, kpis) : [];
+
   if (q.isLoading) {
     return (
-      <Card className="h-full overflow-hidden">
-        <CardContent className="p-4 h-full flex flex-col">
-          <div className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-2">
+      <Card className="overflow-hidden">
+        <CardContent className="p-4 flex flex-col gap-2">
+          <div className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
             Valuation & Quality
           </div>
-          <div className="flex-1 animate-pulse bg-muted/40 rounded" />
-          {/* Snapshot rendered even during fundamentals loading — its data
+          {/* Snapshot rows render even during fundamentals loading — their data
               comes from the parent (already resolved via /detail), no fetch
               needed. Gives the user something useful while micro data warms. */}
-          {stock && kpis && <TradingSnapshot stock={stock} kpis={kpis} />}
+          {snapshotRows.length > 0 && (
+            <div className="flex flex-col">
+              {snapshotRows.map((r) => <RowItem key={r.label} row={r} />)}
+            </div>
+          )}
+          <div className="h-32 animate-pulse bg-muted/40 rounded" />
         </CardContent>
       </Card>
     );
   }
 
   const cols = buildColumns(q.data?.micro ?? ({} as MicroData));
-  const allRows = [...cols.left, ...cols.right];
-  const anyValue = allRows.some((r) => r.raw != null && Number.isFinite(r.raw));
+  // Prepend snapshot rows to the LEFT column so "Market cap" is the very first
+  // row of the card — the user's stated priority. The right column starts with
+  // ROE so the two columns stay roughly the same length.
+  const left = [...snapshotRows, ...cols.left];
+  const right = cols.right;
+  const allRows = [...left, ...right];
+  const anyValue = allRows.some(
+    (r) => r.preformatted != null || (r.raw != null && Number.isFinite(r.raw)),
+  );
 
+  // No fixed height + no h-full: card is exactly as tall as its content.
+  // The 2-col grid below stays unscrolled — if the visible row count exceeds
+  // a sensible height we'd reintroduce flex-1+overflow-y-auto, but the
+  // current ~26 rows split across 2 columns is fine on any normal viewport.
   return (
-    <Card className="h-full overflow-hidden">
-      <CardContent className="p-4 h-full flex flex-col min-h-0">
-        <div className="flex items-center justify-between mb-2 shrink-0">
+    <Card className="overflow-hidden">
+      <CardContent className="p-4 flex flex-col gap-2">
+        <div className="flex items-center justify-between shrink-0">
           <div className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
             Valuation & Quality
           </div>
@@ -361,26 +372,20 @@ export function MicroDataCard({ ticker, stock, kpis }: Props) {
             cache 24h
           </span>
         </div>
-        {/* Scroll area: only the valuation rows scroll. The Trading-snapshot
-            strip below stays pinned (shrink-0) so the 52w/Mkt cap/Volume
-            tiles are always visible without the user having to scroll. */}
-        <div className="flex-1 min-h-0 overflow-y-auto">
-          {!anyValue ? (
-            <div className="text-sm text-muted-foreground">
-              Dati non disponibili (Yahoo Finance non li espone per questo ticker o è temporaneamente rate-limited).
+        {!anyValue ? (
+          <div className="text-sm text-muted-foreground">
+            Dati non disponibili (Yahoo Finance non li espone per questo ticker o è temporaneamente rate-limited).
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6">
+            <div className="flex flex-col">
+              {left.map((r) => <RowItem key={r.label} row={r} />)}
             </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6">
-              <div className="flex flex-col">
-                {cols.left.map((r) => <RowItem key={r.label} row={r} />)}
-              </div>
-              <div className="flex flex-col">
-                {cols.right.map((r) => <RowItem key={r.label} row={r} />)}
-              </div>
+            <div className="flex flex-col">
+              {right.map((r) => <RowItem key={r.label} row={r} />)}
             </div>
-          )}
-        </div>
-        {stock && kpis && <TradingSnapshot stock={stock} kpis={kpis} />}
+          </div>
+        )}
       </CardContent>
     </Card>
   );

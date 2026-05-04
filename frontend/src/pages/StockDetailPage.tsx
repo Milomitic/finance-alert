@@ -110,12 +110,12 @@ export default function StockDetailPage() {
         <AnalystTargetCard ticker={ticker} />
       </div>
 
-      {/* Three side-by-side cards: Fundamentals | Valuation+Snapshot | News.
-          Row is taller (640px) so the Fundamentals table can show all rows
-          without scrolling, the Valuation card has room for both ratio
-          columns + the new Trading-snapshot strip pinned at the bottom,
-          and News headlines aren't cut off. */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 lg:h-[640px]">
+      {/* Three side-by-side cards: Fundamentals | Valuation+KPIs | News.
+          `items-start` lets each card size to its content height (per user
+          request — the previous fixed `lg:h-[640px]` made the Fundamentals
+          card stretch beyond its needs). Cards may end up at different
+          heights now; that's the trade-off for "alta quanto il contenuto". */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 items-start">
         <FundamentalsCard ticker={ticker} />
         <MicroDataCard ticker={ticker} stock={d.stock} kpis={d.kpis} />
         <NewsCard ticker={ticker} />
