@@ -312,11 +312,32 @@ function QuarterlyTabBody({
   nextEpsEstimate: number | null;
   nextRevenueEstimate: number | null;
 }) {
+  // **Dedup earnings by fiscal quarter**, keeping the most recent release per
+  // quarter. yfinance occasionally returns two earnings entries that both map
+  // to the same fiscal quarter via the `release_date - 45d` heuristic — for
+  // example a fiscal-Q1 release in early Feb and an estimates row carrying
+  // the next quarter's estimates that lands in the same bucket. The user
+  // sees both as "Q1 26" with different dates which is confusing. We pick
+  // the row with the latest release date (which is also the row with
+  // populated `eps_reported` 99% of the time) and drop the rest.
+  const earningsDedup = useMemo(() => {
+    const byFq = new Map<string, FundamentalsEarnings>();
+    for (const e of earnings) {
+      const fq = earningsDateToFiscalQuarter(e.date);
+      const existing = byFq.get(fq);
+      if (!existing || e.date.localeCompare(existing.date) > 0) {
+        byFq.set(fq, e);
+      }
+    }
+    return Array.from(byFq.values());
+  }, [earnings]);
+
   // Chart goes oldest → newest (left → right) so the trend reads naturally.
-  // The table below reverses to show newest → oldest at the top.
+  // The table below reverses to show newest → oldest at the top. Both views
+  // operate on the deduped set.
   const earningsAsc = useMemo(
-    () => [...earnings].sort((a, b) => a.date.localeCompare(b.date)),
-    [earnings],
+    () => [...earningsDedup].sort((a, b) => a.date.localeCompare(b.date)),
+    [earningsDedup],
   );
   const earningsDesc = useMemo(() => [...earningsAsc].reverse(), [earningsAsc]);
 
@@ -329,7 +350,7 @@ function QuarterlyTabBody({
       eps_est: e.eps_estimate,
     }));
   }, [earningsAsc]);
-  const hasEstimate = earnings.some((e) => e.eps_estimate != null);
+  const hasEstimate = earningsDedup.some((e) => e.eps_estimate != null);
 
   // Pair up earnings with quarterly history by FISCAL QUARTER (YYYY-Q1..Q4),
   // NOT by year-month. Earnings release date ≠ quarter end date — subtracting
@@ -338,17 +359,11 @@ function QuarterlyTabBody({
   for (const q of quarterly) {
     revByQuarter.set(fiscalEndToQuarter(q.fiscal_quarter_end), q.revenue);
   }
-  const earningsQuarters = new Set(earnings.map((e) => earningsDateToFiscalQuarter(e.date)));
-
-  // Historical-only quarters (no earnings row): sort desc too so newest first.
-  const historicalDesc = useMemo(
-    () =>
-      [...quarterly]
-        .filter((q) => !earningsQuarters.has(fiscalEndToQuarter(q.fiscal_quarter_end)))
-        .sort((a, b) => b.fiscal_quarter_end.localeCompare(a.fiscal_quarter_end))
-        .slice(0, 3),
-    [quarterly, earningsQuarters],
-  );
+  // NOTE: the "storico" tail (quarters from `quarterly` not covered by
+  // `earnings`) was removed per user request. Those rows were redundant —
+  // they carried only revenue/EPS without estimates or surprise %, and
+  // visually duplicated quarter labels already shown above. The deduped
+  // earnings list is the canonical view.
 
   // Next-earnings row only renders when we have at least a date — without
   // a date the whole row is meaningless. EPS/Revenue estimates may be null
@@ -431,22 +446,6 @@ function QuarterlyTabBody({
                 </tr>
               );
             })}
-            {/* Historical-only quarters (no earnings release yet captured):
-                show the revenue/EPS we DO have from quarterly fundamentals.
-                Capped at 3 so the table doesn't dwarf the chart above. */}
-            {historicalDesc.map((q) => (
-              <tr key={`hist-${q.fiscal_quarter_end}`} className="border-t border-border/40 text-muted-foreground italic">
-                <td className="px-1.5 py-1 font-mono">
-                  {shortQuarter(q.fiscal_quarter_end)}
-                  <span className="ml-1 text-[10px] not-italic opacity-60">(storico)</span>
-                </td>
-                <td className="px-1.5 py-1 text-right">{fmtBig(q.revenue)}</td>
-                <td className="px-1.5 py-1 text-right">—</td>
-                <td className="px-1.5 py-1 text-right">{q.eps != null ? `$${q.eps.toFixed(2)}` : "—"}</td>
-                <td className="px-1.5 py-1 text-right">—</td>
-                <td className="px-1.5 py-1 text-right">—</td>
-              </tr>
-            ))}
           </tbody>
         </table>
       </div>

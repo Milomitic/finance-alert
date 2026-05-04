@@ -102,9 +102,16 @@ export default function AlertsPage() {
         </div>
       </div>
 
-      <ScanStatusCard status={scanStatus.data} isFetching={scanStatus.isFetching} />
-
-      <AlertFilters value={filters} onChange={(v) => { setPage(0); setFilters(v); }} />
+      {/* Filters + Scan status side-by-side on wide viewports.
+          The scan-status card is sized smaller (right column) since it's
+          informational — most of the time it just shows "Ultimo scan
+          completato" + counters. The filters card carries the primary
+          interaction so it gets the larger left column. Stacks vertically
+          on narrow viewports. */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-3 items-start">
+        <AlertFilters value={filters} onChange={(v) => { setPage(0); setFilters(v); }} />
+        <ScanStatusCard status={scanStatus.data} isFetching={scanStatus.isFetching} />
+      </div>
 
       {selectedIds.size > 0 && (
         <Card>

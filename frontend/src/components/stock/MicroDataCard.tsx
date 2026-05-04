@@ -1,5 +1,8 @@
+import { Info } from "lucide-react";
+
 import type { MicroData, Stock, StockKpis } from "@/api/types";
 import { Card, CardContent } from "@/components/ui/card";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useStockFundamentals } from "@/hooks/useStockFundamentals";
 import { cn } from "@/lib/utils";
 
@@ -406,6 +409,76 @@ function buildColumns(m: MicroData): { left: Row[]; right: Row[] } {
   return { left, right };
 }
 
+/* ─── Rich tooltip body ────────────────────────────────────────────────── */
+/* Renders the row's label + value + definition + (optional) threshold reason
+ * in a typographically-structured layout. The reason lives in a tinted card
+ * matching the value's tone class so the user can visually link the colored
+ * cell to the colored explanation block. */
+function RowTooltipBody({
+  row,
+  display,
+  toneSignal,
+}: {
+  row: Row;
+  display: string;
+  toneSignal: ToneSignal | null;
+}) {
+  // Map tone CSS class → background + border accent for the reason block.
+  // Done as a static lookup (not template strings) so Tailwind's purger
+  // sees every class — same constraint as the other tone maps in the app.
+  let reasonAccent = "";
+  if (toneSignal?.cls.includes("green")) {
+    reasonAccent =
+      "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/50 text-emerald-900 dark:text-emerald-200";
+  } else if (toneSignal?.cls.includes("red")) {
+    reasonAccent =
+      "bg-rose-50 dark:bg-rose-950/30 border-rose-200 dark:border-rose-800/50 text-rose-900 dark:text-rose-200";
+  } else if (toneSignal?.cls.includes("amber")) {
+    reasonAccent =
+      "bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800/50 text-amber-900 dark:text-amber-200";
+  }
+
+  return (
+    <div className="space-y-2">
+      {/* Header row: metric label + actual value side-by-side */}
+      <div className="flex items-baseline justify-between gap-3 pb-1.5 border-b border-border/50">
+        <span className="text-xs font-bold uppercase tracking-wider text-foreground/90">
+          {row.label}
+        </span>
+        <span
+          className={cn(
+            "text-sm font-bold tabular-nums shrink-0",
+            toneSignal?.cls,
+          )}
+        >
+          {display}
+        </span>
+      </div>
+
+      {/* Definition: what does this metric actually measure */}
+      <div className="text-xs leading-relaxed text-foreground/85">
+        {row.tip}
+      </div>
+
+      {/* Threshold reason: only when toneFor matched. Visually tinted to the
+          value's color so the eye links cell color → explanation block. */}
+      {toneSignal?.reason && (
+        <div
+          className={cn(
+            "text-xs leading-relaxed rounded-md border px-2 py-1.5",
+            reasonAccent || "bg-muted/40 border-border/50",
+          )}
+        >
+          <div className="flex items-start gap-1.5">
+            <Info className="h-3 w-3 shrink-0 mt-0.5" />
+            <span>{toneSignal.reason}</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function RowItem({ row }: { row: Row }) {
   // Two render paths: preformatted (snapshot rows — string already shaped)
   // vs numeric (valuation rows — pipe through .format()).
@@ -424,48 +497,55 @@ function RowItem({ row }: { row: Row }) {
     isNum && row.toneFor ? row.toneFor(row.raw as number) : null;
   const toneCls = toneSignal?.cls ?? row.toneClass ?? "";
 
-  // Tooltip composition: definition first, then the threshold reason on a
-  // new line so the user always sees WHAT the metric is + WHY it's colored.
-  // The double-newline visually separates the two pieces in the native
-  // tooltip across browsers (Chrome/Edge collapse single newlines, but
-  // both render \n\n as a real break).
-  const tooltipText = toneSignal?.reason
-    ? `${row.tip}\n\n→ ${toneSignal.reason}`
-    : row.tip;
-
+  // Wrap the row in a Radix Tooltip — the rich tooltip body replaces what
+  // was previously a `\n\n`-joined native title attribute.
+  // - asChild lets the tooltip trigger on the row div directly (no extra DOM).
+  // - sideOffset=8 leaves a small gap so the arrow doesn't overlap the cell.
   return (
-    <div
-      className={cn(
-        "flex items-center justify-between gap-2 py-1 border-b border-border/40 last:border-b-0",
-        // Snapshot rows get a subtle muted background so the eye groups them
-        // separately from the valuation rows below — without losing the
-        // unified row-list treatment the user asked for.
-        row.emphasis && "bg-muted/40 dark:bg-muted/15 px-2 -mx-2 rounded",
-        // Cursor-help when there's a tone reason — signals the value is
-        // hover-explainable. Without this the user might not realize there's
-        // additional context beyond the metric definition.
-        toneSignal?.reason && "cursor-help",
-      )}
-      title={tooltipText}
-    >
-      <span
-        className={cn(
-          "text-sm text-muted-foreground truncate",
-          row.emphasis && "font-semibold text-foreground/80",
-        )}
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <div
+          className={cn(
+            "flex items-center justify-between gap-2 py-1 border-b border-border/40 last:border-b-0",
+            // Snapshot rows get a subtle muted background so the eye groups them
+            // separately from the valuation rows below — without losing the
+            // unified row-list treatment the user asked for.
+            row.emphasis && "bg-muted/40 dark:bg-muted/15 px-2 -mx-2 rounded",
+            // Cursor-help signals the value is hover-explainable. Applied to
+            // ALL rows now (not just toned ones) since every row has a
+            // definition tooltip even when no threshold matches.
+            "cursor-help",
+          )}
+        >
+          <span
+            className={cn(
+              "text-sm text-muted-foreground truncate",
+              row.emphasis && "font-semibold text-foreground/80",
+            )}
+          >
+            {row.label}
+          </span>
+          <span
+            className={cn(
+              "text-sm font-semibold tabular-nums shrink-0",
+              row.emphasis && "font-bold",
+              toneCls,
+            )}
+          >
+            {display}
+          </span>
+        </div>
+      </TooltipTrigger>
+      <TooltipContent
+        side="top"
+        align="end"
+        sideOffset={8}
+        collisionPadding={12}
+        className="w-72 p-3"
       >
-        {row.label}
-      </span>
-      <span
-        className={cn(
-          "text-sm font-semibold tabular-nums shrink-0",
-          row.emphasis && "font-bold",
-          toneCls,
-        )}
-      >
-        {display}
-      </span>
-    </div>
+        <RowTooltipBody row={row} display={display} toneSignal={toneSignal} />
+      </TooltipContent>
+    </Tooltip>
   );
 }
 
