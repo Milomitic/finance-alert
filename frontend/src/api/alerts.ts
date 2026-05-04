@@ -1,5 +1,5 @@
 import { api } from "./client";
-import type { Alert, AlertList, DigestResult, ScanStatusInfo, UnreadCount } from "./types";
+import type { Alert, AlertList, DigestResult, ScanStatusInfo, ScanStopResultInfo, UnreadCount } from "./types";
 
 export interface AlertListParams {
   ticker?: string;
@@ -47,6 +47,11 @@ export const alerts = {
       method: "POST",
       body: JSON.stringify(stockIds ? { stock_ids: stockIds } : {}),
     }),
+  /** Cancel the currently-running scan. Backend handles both live workers
+   *  (cooperative cancel via in-memory flag) and stuck/orphan rows (force-
+   *  close inline). Idempotent — safe to call when nothing is running. */
+  scanStop: () =>
+    api<ScanStopResultInfo>("/api/alerts/scan/stop", { method: "POST" }),
   sendDigest: () =>
     api<DigestResult>("/api/alerts/send-digest", {
       method: "POST",

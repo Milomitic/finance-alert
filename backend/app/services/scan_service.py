@@ -116,17 +116,29 @@ def _get_or_create_state(db: Session, rule_id: int, stock_id: int) -> RuleState 
     ).scalar_one_or_none()
 
 
+class ScanCancelled(RuntimeError):
+    """Raised when the cancel_check callback returned True between iterations.
+    The runner catches this and marks the ScanRun row as 'failed' with a clear
+    user-cancel message (distinct from a crash)."""
+
+
 def scan_universe(
     db: Session,
     *,
     on_progress: Callable[[int, int, "ScanResult"], None] | None = None,
     progress_every: int = 10,
+    cancel_check: Callable[[], bool] | None = None,
 ) -> ScanResult:
     """Scan all stocks, evaluate global rules with Tier 2 overrides, fire edge alerts.
 
     on_progress, if provided, is called every `progress_every` stocks AND at start/end
     with (stocks_done, stocks_total, result_so_far). Use this to surface live progress
     to a UI (e.g. by updating a `scan_runs` row).
+
+    cancel_check, if provided, is called at the same cadence as on_progress.
+    When it returns True the loop raises ScanCancelled so the caller can mark
+    the run as user-cancelled. The check is O(1) (in-memory set membership)
+    so the overhead is negligible.
     """
     result = ScanResult()
     stocks = list(db.execute(select(Stock)).scalars().all())
@@ -143,6 +155,17 @@ def scan_universe(
         on_progress(0, total, result)
 
     for idx, stock in enumerate(stocks, start=1):
+        # Cooperative cancel: bail out cleanly between iterations. We check at
+        # the same cadence as on_progress to keep the overhead bounded; a per-
+        # iteration check would be ~110× more frequent for the 1132-stock
+        # universe but adds no real responsiveness for the user.
+        if cancel_check is not None and (idx % progress_every == 1 or idx == 1):
+            if cancel_check():
+                logger.info(
+                    f"[scan] cancel requested at idx={idx}/{total} — aborting cleanly"
+                )
+                raise ScanCancelled("Cancellato dall'utente")
+
         ohlcv = _load_ohlcv(db, stock.id)
         if ohlcv is None or len(ohlcv) < 2:
             result.stocks_skipped += 1
