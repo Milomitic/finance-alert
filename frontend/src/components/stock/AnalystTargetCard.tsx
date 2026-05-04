@@ -261,6 +261,33 @@ function priceTargetTone(action: string | null | undefined): {
   }
 }
 
+/** Compact price-target chip: shows the new dollar number + a tone-colored
+ *  arrow indicating the direction of the change. The full prior→current
+ *  detail moves to the row's hover tooltip — single-line layout doesn't
+ *  have horizontal budget for both numbers, so we surface the most
+ *  important value (new target) and the direction signal (↑/↓/=/✦). */
+function PriceTargetChip({ a }: { a: AnalystAction }) {
+  const hasTarget = a.current_price_target != null && Number.isFinite(a.current_price_target);
+  if (!hasTarget) return null;
+  const ptTone = priceTargetTone(a.price_target_action);
+  const target = a.current_price_target!;
+  // Drop cents when the target is a round number to save 3 chars of width
+  // — yfinance's analyst targets are almost always whole-dollar values
+  // (e.g. $296, $350) so this almost always trims.
+  const fmt = Number.isInteger(target) ? `$${target}` : `$${target.toFixed(2)}`;
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-0.5 tabular-nums font-bold shrink-0",
+        ptTone.cls,
+      )}
+    >
+      <span className="text-[11px]">{ptTone.arrow}</span>
+      <span>{fmt}</span>
+    </span>
+  );
+}
+
 function ActionsList({ actions }: { actions: AnalystAction[] }) {
   if (actions.length === 0) {
     return (
@@ -270,15 +297,13 @@ function ActionsList({ actions }: { actions: AnalystAction[] }) {
     );
   }
   return (
-    <ul className="space-y-2">
+    <ul className="space-y-1">
       {actions.map((a, i) => {
         const tone = gradeTone(a.to_grade);
         const hasTarget = a.current_price_target != null && Number.isFinite(a.current_price_target);
         const hasPrior = a.prior_price_target != null && Number.isFinite(a.prior_price_target);
-        const ptTone = priceTargetTone(a.price_target_action);
-        // Rich tooltip text for the row — covers grade change + target
-        // change + action label. Good enough for the native title until/unless
-        // the user asks for a Radix tooltip here too.
+        // Rich tooltip text — single-line layout can't show prior→current
+        // detail inline, so the full transition lives on hover.
         const tooltipParts = [
           `${a.firm}: ${a.from_grade || "—"} → ${a.to_grade} (${a.action})`,
         ];
@@ -297,61 +322,31 @@ function ActionsList({ actions }: { actions: AnalystAction[] }) {
         return (
           <li
             key={`${a.date}-${a.firm}-${i}`}
-            className="text-[11px] py-1 border-b border-border/40 last:border-b-0"
+            className="flex items-center gap-1.5 text-[11px] py-1 border-b border-border/40 last:border-b-0"
             title={tooltipParts.join("\n")}
           >
-            {/* Top line: action icon + firm name + rating grade + date */}
-            <div className="flex items-center gap-2">
-              {actionIcon(a.action)}
-              <span className="font-semibold truncate flex-1 min-w-0" title={a.firm}>
-                {a.firm}
-              </span>
-              <span
-                className={cn(
-                  "px-1.5 py-0.5 rounded font-semibold shrink-0",
-                  TONE_CLASSES[tone],
-                )}
-              >
-                {a.to_grade || "—"}
-              </span>
-              <span className="text-muted-foreground tabular-nums shrink-0 w-10 text-right">
-                {fmtShortDate(a.date)}
-              </span>
-            </div>
-            {/* Bottom line: price target. Only rendered when the API gave us
-                a current target — older yfinance versions leave it null and
-                we just don't add visual noise. The line is indented past the
-                action-icon column so it visually associates with the row above. */}
-            {hasTarget && (
-              <div className="mt-0.5 ml-5 flex items-center gap-1.5 tabular-nums">
-                <span
-                  className={cn("font-semibold shrink-0", ptTone.cls)}
-                  title={a.price_target_action ?? undefined}
-                >
-                  {ptTone.arrow}
-                </span>
-                {hasPrior ? (
-                  <>
-                    <span className="text-muted-foreground/80 line-through">
-                      ${a.prior_price_target!.toFixed(2)}
-                    </span>
-                    <span className="text-muted-foreground">→</span>
-                    <span className={cn("font-bold", ptTone.cls)}>
-                      ${a.current_price_target!.toFixed(2)}
-                    </span>
-                  </>
-                ) : (
-                  // Initiation / no prior — just the new target with a
-                  // qualifier so the user knows it's a fresh number.
-                  <span className={cn("font-bold", ptTone.cls)}>
-                    ${a.current_price_target!.toFixed(2)}
-                    <span className="ml-1 text-[10px] uppercase tracking-wider text-muted-foreground font-medium normal-case">
-                      target
-                    </span>
-                  </span>
-                )}
-              </div>
-            )}
+            {actionIcon(a.action)}
+            {/* Firm: shrinks first when the row gets tight. min-w-0 is
+                required for `truncate` to work inside a flex item. */}
+            <span className="font-semibold truncate flex-1 min-w-0" title={a.firm}>
+              {a.firm}
+            </span>
+            {/* Grade chip — buy/hold/sell tone */}
+            <span
+              className={cn(
+                "px-1.5 py-0.5 rounded font-semibold shrink-0",
+                TONE_CLASSES[tone],
+              )}
+            >
+              {a.to_grade || "—"}
+            </span>
+            {/* Price target chip — directly adjacent to the grade so they
+                read as a "rating + target" unit. Renders only when the
+                API gave us a target. */}
+            <PriceTargetChip a={a} />
+            <span className="text-muted-foreground tabular-nums shrink-0 w-10 text-right">
+              {fmtShortDate(a.date)}
+            </span>
           </li>
         );
       })}
@@ -436,12 +431,11 @@ export function AnalystTargetCard({ ticker }: Props) {
         )}
 
         {/* Actions list — capped at ~5 visible rows then scrolls internally.
-            max-h: 320px ≈ 5 two-line rows (top: firm/grade ~28px, bottom:
-            price target ~20px, divider + spacing ~16px = ~64px each).
-            Switching from `flex-1 min-h-0` (which let the list eat all
-            remaining vertical space) to a fixed cap means the card stays
-            compact even when there are 12 actions, and the user
-            consistently sees a similar amount of information. */}
+            max-h: 180px ≈ 5-6 single-line rows (each ~28px = py-1 + content
+            + border). Halved from the previous 320px since rows compacted
+            from 2 lines to 1 with the price target moved inline. Fixed
+            cap (vs flex-1) keeps the card compact regardless of action
+            count and gives the user a consistent visible window. */}
         <div className="flex flex-col min-h-0">
           <div className="text-[11px] uppercase tracking-wider text-muted-foreground mb-1 shrink-0 flex items-center justify-between">
             <span>Azioni recenti</span>
@@ -451,7 +445,7 @@ export function AnalystTargetCard({ ticker }: Props) {
               </span>
             )}
           </div>
-          <div className="overflow-y-auto pr-1 max-h-[320px]">
+          <div className="overflow-y-auto pr-1 max-h-[180px]">
             <ActionsList actions={actions} />
           </div>
         </div>
