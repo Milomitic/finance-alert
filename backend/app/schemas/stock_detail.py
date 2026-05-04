@@ -126,6 +126,13 @@ class AnalystActionOut(BaseModel):
     to_grade: str
     from_grade: str
     action: str
+    # Optional per-analyst price target fields. Recent yfinance versions
+    # expose these via upgrades_downgrades; older versions don't, in which
+    # case all three are None and the UI shows a placeholder. See the
+    # AnalystAction dataclass docstring for context.
+    current_price_target: float | None = None
+    prior_price_target: float | None = None
+    price_target_action: str | None = None
 
 
 class FundamentalsOut(BaseModel):

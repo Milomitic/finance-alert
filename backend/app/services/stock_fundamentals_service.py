@@ -77,13 +77,29 @@ class AnalystPriceTarget:
 @dataclass
 class AnalystAction:
     """One historical analyst rating action (upgrade/downgrade/initiation).
-    Per-analyst price targets aren't exposed by yfinance — we surface what
-    IS available (firm, new grade, prior grade, action label, date)."""
+
+    Recent yfinance versions also expose per-analyst price targets via
+    upgrades_downgrades; we surface them when present so the UI can show
+    the actual dollar number alongside the grade change. Older yfinance
+    versions don't include these columns — the optional fields stay None
+    and the UI gracefully shows "—".
+    """
     date: str          # ISO date YYYY-MM-DD
     firm: str
     to_grade: str
     from_grade: str
-    action: str        # e.g. "main", "up", "down", "init"
+    action: str        # e.g. "main", "up", "down", "init", "reit"
+    # Per-analyst price target the firm assigned in this action. Optional —
+    # only populated when yfinance returns the `currentPriceTarget` column.
+    current_price_target: float | None = None
+    # The same firm's previous target before this action; "Raises 287→296"
+    # is more informative than "Raises to 296" alone.
+    prior_price_target: float | None = None
+    # Yahoo's labeled change — "Raises", "Lowers", "Maintains", or "Initiates".
+    # Distinct from `action` (which is the rating-grade movement code) and
+    # captured separately because a Maintain on the rating can still pair
+    # with a target raise/lower.
+    price_target_action: str | None = None
 
 
 @dataclass
@@ -316,21 +332,39 @@ def _extract_ratings(rec_df: Any) -> list[AnalystRating]:
 
 def _extract_actions(df: Any, limit: int = 12) -> list[AnalystAction]:
     """yfinance Ticker.upgrades_downgrades returns a DataFrame indexed by
-    GradeDate with columns Firm / ToGrade / FromGrade / Action. Most-recent
-    `limit` entries, newest first."""
+    GradeDate. Recent yfinance versions add 3 columns beyond the original
+    Firm/ToGrade/FromGrade/Action: priceTargetAction, currentPriceTarget,
+    priorPriceTarget. We capture them when present, leave None otherwise so
+    the API response is forward-compatible with older yfinance.
+    Most-recent `limit` entries, newest first."""
     if df is None or df.empty:
         return []
+    cols = set(df.columns)
+    has_price_target_cols = "currentPriceTarget" in cols
+
     out: list[AnalystAction] = []
     # Sort descending by index (date) so newest first
     df_sorted = df.sort_index(ascending=False)
     for ts, row in df_sorted.head(limit).iterrows():
         d = str(ts.date()) if hasattr(ts, "date") else str(ts)
+        # Per-analyst targets only attempted when the column set indicates
+        # this yfinance version exposes them — avoids false-positive None
+        # warnings on older versions.
+        cur_pt = _safe_float(row.get("currentPriceTarget")) if has_price_target_cols else None
+        prior_pt = _safe_float(row.get("priorPriceTarget")) if has_price_target_cols else None
+        pt_action_raw = row.get("priceTargetAction") if has_price_target_cols else None
+        pt_action = (
+            str(pt_action_raw).strip() if pt_action_raw is not None and str(pt_action_raw).strip() else None
+        )
         out.append(AnalystAction(
             date=d,
             firm=str(row.get("Firm") or "").strip(),
             to_grade=str(row.get("ToGrade") or "").strip(),
             from_grade=str(row.get("FromGrade") or "").strip(),
             action=str(row.get("Action") or "").strip(),
+            current_price_target=cur_pt,
+            prior_price_target=prior_pt,
+            price_target_action=pt_action,
         ))
     return out
 

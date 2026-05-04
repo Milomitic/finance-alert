@@ -169,11 +169,12 @@ function RatingBar({ r }: { r: AnalystRating }) {
 }
 
 /* ─── Per-analyst actions list (upgrades/downgrades/coverage init) ──────── */
-/* yfinance doesn't expose per-analyst price targets directly — only the
- * aggregate (low/mean/median/high) above. The closest "list of individual
- * analyst valuations" we can get is the upgrades_downgrades feed: each row
- * has firm + new grade + previous grade + action + date. We render those
- * as a scrollable list so the user can see the latest moves at a glance.
+/* Recent yfinance versions DO expose per-analyst price targets via
+ * upgrades_downgrades — the AnalystAction type carries optional
+ * current_price_target / prior_price_target / price_target_action fields.
+ * When present, we render the dollar number and the prior→current arrow
+ * inline alongside the rating grade so the user sees both signals at once.
+ * When absent (older yfinance, missing data) the row just shows the rating.
  */
 
 /** Map a Yahoo "ToGrade" string to a tone: buy/hold/sell. Yahoo returns
@@ -238,6 +239,28 @@ function fmtShortDate(iso: string): string {
   return d.toLocaleDateString("it-IT", { day: "numeric", month: "short" });
 }
 
+/** Format a price-target action ("Raises" / "Lowers" / "Maintains" /
+ *  "Initiates") into a tone-classed mini-arrow + label pair. We use the
+ *  yfinance label rather than infer direction from current vs prior numbers
+ *  because the label disambiguates the "Initiates" case (no prior value)
+ *  and matches the source-of-truth labeling. */
+function priceTargetTone(action: string | null | undefined): {
+  cls: string;
+  arrow: string;
+} {
+  switch (action) {
+    case "Raises":
+      return { cls: "text-emerald-700 dark:text-emerald-300", arrow: "↑" };
+    case "Lowers":
+      return { cls: "text-rose-700 dark:text-rose-300", arrow: "↓" };
+    case "Initiates":
+      return { cls: "text-blue-700 dark:text-blue-300", arrow: "✦" };
+    case "Maintains":
+    default:
+      return { cls: "text-muted-foreground", arrow: "→" };
+  }
+}
+
 function ActionsList({ actions }: { actions: AnalystAction[] }) {
   if (actions.length === 0) {
     return (
@@ -247,30 +270,88 @@ function ActionsList({ actions }: { actions: AnalystAction[] }) {
     );
   }
   return (
-    <ul className="space-y-1.5">
+    <ul className="space-y-2">
       {actions.map((a, i) => {
         const tone = gradeTone(a.to_grade);
+        const hasTarget = a.current_price_target != null && Number.isFinite(a.current_price_target);
+        const hasPrior = a.prior_price_target != null && Number.isFinite(a.prior_price_target);
+        const ptTone = priceTargetTone(a.price_target_action);
+        // Rich tooltip text for the row — covers grade change + target
+        // change + action label. Good enough for the native title until/unless
+        // the user asks for a Radix tooltip here too.
+        const tooltipParts = [
+          `${a.firm}: ${a.from_grade || "—"} → ${a.to_grade} (${a.action})`,
+        ];
+        if (hasTarget) {
+          if (hasPrior) {
+            tooltipParts.push(
+              `Target ${a.price_target_action ?? "—"}: $${a.prior_price_target!.toFixed(2)} → $${a.current_price_target!.toFixed(2)}`,
+            );
+          } else {
+            tooltipParts.push(
+              `Target ${a.price_target_action ?? "—"}: $${a.current_price_target!.toFixed(2)}`,
+            );
+          }
+        }
+
         return (
           <li
             key={`${a.date}-${a.firm}-${i}`}
-            className="flex items-center gap-2 text-[11px]"
-            title={`${a.firm}: ${a.from_grade || "—"} → ${a.to_grade} (${a.action})`}
+            className="text-[11px] py-1 border-b border-border/40 last:border-b-0"
+            title={tooltipParts.join("\n")}
           >
-            {actionIcon(a.action)}
-            <span className="font-semibold truncate flex-1 min-w-0" title={a.firm}>
-              {a.firm}
-            </span>
-            <span
-              className={cn(
-                "px-1.5 py-0.5 rounded font-semibold shrink-0",
-                TONE_CLASSES[tone],
-              )}
-            >
-              {a.to_grade || "—"}
-            </span>
-            <span className="text-muted-foreground tabular-nums shrink-0 w-10 text-right">
-              {fmtShortDate(a.date)}
-            </span>
+            {/* Top line: action icon + firm name + rating grade + date */}
+            <div className="flex items-center gap-2">
+              {actionIcon(a.action)}
+              <span className="font-semibold truncate flex-1 min-w-0" title={a.firm}>
+                {a.firm}
+              </span>
+              <span
+                className={cn(
+                  "px-1.5 py-0.5 rounded font-semibold shrink-0",
+                  TONE_CLASSES[tone],
+                )}
+              >
+                {a.to_grade || "—"}
+              </span>
+              <span className="text-muted-foreground tabular-nums shrink-0 w-10 text-right">
+                {fmtShortDate(a.date)}
+              </span>
+            </div>
+            {/* Bottom line: price target. Only rendered when the API gave us
+                a current target — older yfinance versions leave it null and
+                we just don't add visual noise. The line is indented past the
+                action-icon column so it visually associates with the row above. */}
+            {hasTarget && (
+              <div className="mt-0.5 ml-5 flex items-center gap-1.5 tabular-nums">
+                <span
+                  className={cn("font-semibold shrink-0", ptTone.cls)}
+                  title={a.price_target_action ?? undefined}
+                >
+                  {ptTone.arrow}
+                </span>
+                {hasPrior ? (
+                  <>
+                    <span className="text-muted-foreground/80 line-through">
+                      ${a.prior_price_target!.toFixed(2)}
+                    </span>
+                    <span className="text-muted-foreground">→</span>
+                    <span className={cn("font-bold", ptTone.cls)}>
+                      ${a.current_price_target!.toFixed(2)}
+                    </span>
+                  </>
+                ) : (
+                  // Initiation / no prior — just the new target with a
+                  // qualifier so the user knows it's a fresh number.
+                  <span className={cn("font-bold", ptTone.cls)}>
+                    ${a.current_price_target!.toFixed(2)}
+                    <span className="ml-1 text-[10px] uppercase tracking-wider text-muted-foreground font-medium normal-case">
+                      target
+                    </span>
+                  </span>
+                )}
+              </div>
+            )}
           </li>
         );
       })}
@@ -354,12 +435,23 @@ export function AnalystTargetCard({ ticker }: Props) {
           </div>
         )}
 
-        {/* Actions list takes the remaining space and scrolls internally. */}
-        <div className="flex-1 min-h-0 flex flex-col">
-          <div className="text-[11px] uppercase tracking-wider text-muted-foreground mb-1 shrink-0">
-            Azioni recenti
+        {/* Actions list — capped at ~5 visible rows then scrolls internally.
+            max-h: 320px ≈ 5 two-line rows (top: firm/grade ~28px, bottom:
+            price target ~20px, divider + spacing ~16px = ~64px each).
+            Switching from `flex-1 min-h-0` (which let the list eat all
+            remaining vertical space) to a fixed cap means the card stays
+            compact even when there are 12 actions, and the user
+            consistently sees a similar amount of information. */}
+        <div className="flex flex-col min-h-0">
+          <div className="text-[11px] uppercase tracking-wider text-muted-foreground mb-1 shrink-0 flex items-center justify-between">
+            <span>Azioni recenti</span>
+            {actions.length > 0 && (
+              <span className="tabular-nums normal-case text-muted-foreground/70">
+                {actions.length} totali
+              </span>
+            )}
           </div>
-          <div className="flex-1 min-h-0 overflow-y-auto pr-1">
+          <div className="overflow-y-auto pr-1 max-h-[320px]">
             <ActionsList actions={actions} />
           </div>
         </div>

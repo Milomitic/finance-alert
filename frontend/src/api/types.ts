@@ -558,7 +558,20 @@ export interface AnalystAction {
   firm: string;
   to_grade: string;
   from_grade: string;
+  /** Rating-grade movement code: "main" | "up" | "down" | "init" | "reit" | other. */
   action: string;
+  /** Per-analyst price target the firm assigned in this action.
+   *  Optional — present only when yfinance exposes the price-target columns
+   *  (recent versions). Older API responses leave it null and the UI
+   *  shows a placeholder. */
+  current_price_target?: number | null;
+  /** Same firm's previous target. Pair with `current_price_target` to
+   *  show "Raises 287→296" instead of just "Raises to 296". */
+  prior_price_target?: number | null;
+  /** Yahoo's labeled change: "Raises" | "Lowers" | "Maintains" | "Initiates".
+   *  Distinct from `action` — a Maintain on the rating can pair with a
+   *  target raise/lower. */
+  price_target_action?: string | null;
 }
 
 export interface Fundamentals {
