@@ -60,7 +60,11 @@ def preview_rule(
         validate_expression(payload.expression)
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
-    stock = db.execute(select(Stock).where(Stock.ticker == payload.ticker)).scalar_one_or_none()
+    # Catalog has duplicate rows for tickers in multiple indices; .first()
+    # tolerates that (any matching row is fine for OHLCV preview).
+    stock = db.execute(
+        select(Stock).where(Stock.ticker == payload.ticker).limit(1)
+    ).scalars().first()
     if stock is None:
         raise HTTPException(status_code=404, detail=f"Ticker not found: {payload.ticker}")
     ohlcv = _load_ohlcv(db, stock.id)

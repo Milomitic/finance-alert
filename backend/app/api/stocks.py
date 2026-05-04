@@ -10,7 +10,7 @@ from app.models import Stock, User
 from app.schemas.alert import AlertOut
 from app.schemas.stock import FilterOptionsOut, IndexOptionOut, StockOut, StockSearchOut
 from app.schemas.stock_detail import (
-    AnalystPriceTargetOut, AnalystRatingOut, EffectiveRuleOut,
+    AnalystActionOut, AnalystPriceTargetOut, AnalystRatingOut, EffectiveRuleOut,
     FundamentalsAnnualOut, FundamentalsEarningsOut, FundamentalsOut,
     FundamentalsQuarterlyOut, IndicatorPointOut, IndicatorSeriesOut,
     InsiderTransactionOut, LiveQuoteOut, LiveQuotesBatchOut, MicroDataOut,
@@ -73,7 +73,13 @@ def filters(
 def get_one(
     ticker: str, db: Session = Depends(get_db), _user: User = Depends(get_current_user)
 ) -> StockOut:
-    stock = db.execute(select(Stock).where(Stock.ticker == ticker)).scalar_one_or_none()
+    # NOTE: catalog has duplicate rows for tickers in multiple indices (e.g. AAPL
+    # is in both SP500 and NDX). Use .first() instead of scalar_one_or_none() to
+    # tolerate duplicates — picking any row is fine since the anagrafica fields
+    # are essentially identical.
+    stock = db.execute(
+        select(Stock).where(Stock.ticker == ticker).limit(1)
+    ).scalars().first()
     if stock is None:
         raise HTTPException(status_code=404, detail="Stock not found")
     return StockOut.model_validate(stock)
@@ -159,7 +165,10 @@ def get_stock_fundamentals(
 ) -> FundamentalsOut:
     """Annual revenue/net income/EPS + earnings history with surprise %.
     Cached 24h; non-fatal on yfinance failure (returns empty payload)."""
-    stock = db.execute(select(Stock).where(Stock.ticker == ticker)).scalar_one_or_none()
+    # See note in get_one(): tolerate duplicate catalog rows.
+    stock = db.execute(
+        select(Stock).where(Stock.ticker == ticker).limit(1)
+    ).scalars().first()
     if stock is None:
         raise HTTPException(status_code=404, detail=f"Ticker not found: {ticker}")
     f = stock_fundamentals_service.get_fundamentals(ticker)
@@ -173,6 +182,7 @@ def get_stock_fundamentals(
         micro=MicroDataOut(**f.micro.__dict__),
         insiders=[InsiderTransactionOut(**i.__dict__) for i in f.insiders],
         analyst_ratings=[AnalystRatingOut(**r.__dict__) for r in f.analyst_ratings],
+        analyst_actions=[AnalystActionOut(**a.__dict__) for a in f.analyst_actions],
         price_target=AnalystPriceTargetOut(**f.price_target.__dict__),
         error=f.error,
     )

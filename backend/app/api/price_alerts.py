@@ -12,7 +12,11 @@ router = APIRouter(tags=["price-alerts"])
 
 
 def _stock_id_or_404(db: Session, ticker: str) -> int:
-    s = db.execute(select(Stock).where(Stock.ticker == ticker)).scalar_one_or_none()
+    # Catalog has duplicate rows for tickers in multiple indices; .first()
+    # tolerates that (any matching row is fine for FK purposes here).
+    s = db.execute(
+        select(Stock).where(Stock.ticker == ticker).limit(1)
+    ).scalars().first()
     if s is None:
         raise HTTPException(status_code=404, detail="Ticker not found")
     return s.id

@@ -120,6 +120,14 @@ class AnalystPriceTargetOut(BaseModel):
     high: float | None
 
 
+class AnalystActionOut(BaseModel):
+    date: str
+    firm: str
+    to_grade: str
+    from_grade: str
+    action: str
+
+
 class FundamentalsOut(BaseModel):
     ticker: str
     annual: list[FundamentalsAnnualOut] = []
@@ -130,6 +138,7 @@ class FundamentalsOut(BaseModel):
     micro: MicroDataOut = MicroDataOut()
     insiders: list[InsiderTransactionOut] = []
     analyst_ratings: list[AnalystRatingOut] = []
+    analyst_actions: list[AnalystActionOut] = []
     price_target: AnalystPriceTargetOut = AnalystPriceTargetOut(
         current=None, low=None, mean=None, median=None, high=None
     )

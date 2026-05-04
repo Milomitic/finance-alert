@@ -10,16 +10,49 @@ _CACHE: dict[str, tuple[datetime, list[dict[str, Any]]]] = {}
 
 def _normalize_yf_item(raw: dict) -> dict[str, Any] | None:
     """yfinance.Ticker.news returns dicts of varying shape across versions.
-    Normalize to {title, link, publisher, published_at: ISO8601 str | None}."""
-    title = raw.get("title")
-    link = raw.get("link") or raw.get("url")
-    publisher = raw.get("publisher") or raw.get("source")
-    ts = raw.get("providerPublishTime") or raw.get("publish_time")
+    Normalize to {title, link, publisher, published_at: ISO8601 str | None}.
+
+    Two known shapes:
+    - NEW (yfinance ≥ ~0.2.40, post mid-2024): nested under `content` →
+        {id, content: {title, pubDate, canonicalUrl:{url}, clickThroughUrl:{url},
+                       provider:{displayName}, ...}}
+    - OLD (legacy flat): {title, link, publisher, providerPublishTime, ...}
+    """
+    # Unwrap the new nested shape if present, otherwise treat raw as flat.
+    inner = raw.get("content") if isinstance(raw.get("content"), dict) else raw
+
+    title = inner.get("title")
+
+    # Link: prefer canonicalUrl (publisher's own page) over clickThroughUrl
+    # (Yahoo's wrapper). Fall back to legacy `link`/`url` flat keys.
+    link: str | None = None
+    for key in ("canonicalUrl", "clickThroughUrl"):
+        v = inner.get(key)
+        if isinstance(v, dict) and v.get("url"):
+            link = v["url"]
+            break
+    if not link:
+        link = inner.get("link") or inner.get("url")
+
+    # Publisher: new shape nests it under provider.displayName; old shape was flat.
+    publisher: str | None = None
+    prov = inner.get("provider")
+    if isinstance(prov, dict):
+        publisher = prov.get("displayName") or prov.get("sourceId")
+    publisher = publisher or inner.get("publisher") or inner.get("source")
+
+    # published_at: new shape gives an ISO8601 string already; old shape gave a unix ts.
+    published_at: str | None = None
+    pub = inner.get("pubDate") or inner.get("displayTime")
+    if isinstance(pub, str) and pub:
+        published_at = pub
+    else:
+        ts = inner.get("providerPublishTime") or inner.get("publish_time")
+        if isinstance(ts, (int, float)):
+            published_at = datetime.fromtimestamp(ts, tz=UTC).isoformat()
+
     if not title or not link:
         return None
-    published_at = (
-        datetime.fromtimestamp(ts, tz=UTC).isoformat() if isinstance(ts, (int, float)) else None
-    )
     return {
         "title": str(title),
         "link": str(link),
