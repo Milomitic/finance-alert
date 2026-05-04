@@ -507,3 +507,55 @@ def test_recompute_all_idempotent(db: Session, monkeypatch):
     score_service.recompute_all(db)
     score_service.recompute_all(db)
     assert db.query(StockScore).count() == 1
+
+
+def test_recompute_all_updates_existing_score_in_place(db: Session, monkeypatch):
+    """Regression: when a stock already has a score row, recompute_all must
+    UPDATE it rather than attempt an INSERT (which would IntegrityError on
+    the PK). This is what broke the live system when a 50-stock seed ran
+    concurrently with a full recompute and the bulk INSERT collided.
+
+    We simulate the race deterministically by:
+      1) running recompute_all once with one set of fundamentals → row inserted
+      2) flipping the fundamentals to produce a different score
+      3) running recompute_all again → row updated, NOT duplicated
+    """
+    fund: dict[str, Fundamentals] = {"X": Fundamentals(ticker="X")}
+    monkeypatch.setattr(
+        stock_fundamentals_service, "get_fundamentals",
+        lambda ticker, force_refresh=False: fund.get(ticker, Fundamentals(ticker=ticker)),
+    )
+    monkeypatch.setattr(stock_news_service, "get_news", lambda ticker, limit=5: [])
+
+    s = Stock(ticker="X", exchange="NMS", name="X", sector="Technology", market_cap=int(1e10))
+    db.add(s)
+    db.commit()
+    _seed_ohlcv(db, s.id, n_bars=250)
+    db.commit()
+
+    # First recompute — row inserted with a score driven by empty fundamentals.
+    score_service.recompute_all(db)
+    first = db.query(StockScore).filter_by(stock_id=s.id).one()
+    first_composite = first.composite
+
+    # Now flip the fundamentals so the recomputed composite WILL differ.
+    # MicroData with strong margins/ROE will push Quality up.
+    from app.services.stock_fundamentals_service import MicroData
+    fund["X"] = Fundamentals(
+        ticker="X",
+        micro=MicroData(
+            return_on_equity=0.30,
+            profit_margins=0.25,
+            free_cashflow=int(50e9),
+            debt_to_equity=40.0,
+            current_ratio=2.5,
+        ),
+    )
+
+    score_service.recompute_all(db)
+    # Still exactly one row — the UPSERT path took it.
+    assert db.query(StockScore).count() == 1
+    second = db.query(StockScore).filter_by(stock_id=s.id).one()
+    # And the score actually CHANGED (proves the row was updated, not the
+    # original kept stale).
+    assert second.composite != first_composite

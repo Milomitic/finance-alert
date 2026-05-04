@@ -804,8 +804,21 @@ def compute_score(db: Session, stock: Stock) -> StockScore:
 def recompute_all(db: Session) -> int:
     """Batch UPSERT scores for every stock. Returns count successfully scored.
 
-    One transaction. Uses the fundamentals + news caches (no extra network if
-    they're warm). Does NOT raise on per-stock failure — logs and continues.
+    Persists incrementally (commit after each successful score) and uses
+    `db.merge()` for true UPSERT semantics: each merge resolves
+    exists-vs-insert at flush time, so we don't depend on a snapshot taken
+    minutes earlier — important because compute_score hits the fundamentals
+    cache (24h TTL) and may trigger network calls for cold tickers, making
+    a full recompute take several minutes during which the table can
+    legitimately receive other writes.
+
+    Why per-row commits instead of one big transaction: a 1000+ stock
+    recompute holding a single transaction for ~5 minutes would block any
+    concurrent reader/writer. Per-row commits surrender exclusivity between
+    iterations at the cost of slightly higher commit overhead — well worth
+    it for SQLite where writers are exclusive.
+
+    Does NOT raise on per-stock failure — logs and continues.
     """
     stocks = db.execute(select(Stock)).scalars().all()
     # Catalog has duplicate ticker rows (see CLAUDE.md). Dedupe by ticker so we
@@ -817,12 +830,6 @@ def recompute_all(db: Session) -> int:
     ok = 0
     failed = 0
 
-    # Pre-load existing scores to enable UPSERT semantics.
-    existing = {
-        s.stock_id: s
-        for s in db.execute(select(StockScore)).scalars().all()
-    }
-
     for stock in stocks:
         if stock.id in seen_ids:
             continue
@@ -833,27 +840,19 @@ def recompute_all(db: Session) -> int:
             logger.warning(f"[score] compute_score failed for {stock.ticker}: {exc}")
             failed += 1
             continue
-        prev = existing.get(stock.id)
-        if prev is None:
-            db.add(new_score)
-        else:
-            prev.composite = new_score.composite
-            prev.quality = new_score.quality
-            prev.growth = new_score.growth
-            prev.value = new_score.value
-            prev.momentum = new_score.momentum
-            prev.sentiment = new_score.sentiment
-            prev.risk_tier = new_score.risk_tier
-            prev.computed_at = new_score.computed_at
-            prev.breakdown = new_score.breakdown
-        ok += 1
+        try:
+            # merge() does the UPSERT at flush time: if a row with the same
+            # primary key (stock_id) exists, it gets updated; otherwise a new
+            # row is inserted. This is the canonical SQLAlchemy idiom for
+            # "save or update" without a stale-snapshot race.
+            db.merge(new_score)
+            db.commit()
+            ok += 1
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(f"[score] persist failed for {stock.ticker}: {exc}")
+            db.rollback()
+            failed += 1
 
-    try:
-        db.commit()
-    except Exception as exc:  # noqa: BLE001
-        logger.warning(f"[score] commit failed: {exc}")
-        db.rollback()
-        return 0
     if failed:
         logger.info(f"[score] recompute_all: ok={ok} failed={failed}")
     else:
