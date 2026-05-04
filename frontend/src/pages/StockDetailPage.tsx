@@ -94,44 +94,38 @@ export default function StockDetailPage() {
 
   return (
     <div className="space-y-3">
-      {/* Top hero row: 2/3 StockHeader (with faded price-trend sparkline as
-          background — the page-hero "ticker tape" feel) + 1/3 Analyst card
-          (price-target range bar + buy/hold/sell + per-analyst actions list).
-          The 4 KPI tiles that used to live in StockHeader (52w, market cap,
-          volume, vol×avg20) now sit in the Trading-snapshot strip at the
-          bottom of MicroDataCard — frees up vertical space here so the hero
-          can be shorter and feature-forward. */}
-      <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-3 items-stretch">
-        <StockHeader
-          stock={d.stock}
-          kpis={d.kpis}
-          ohlcv={d.ohlcv}
-          effectiveRules={d.effective_rules}
-        />
-        <AnalystTargetCard ticker={ticker} />
-      </div>
+      {/* Top hero — StockHeader spans full width now. The Analyst card was
+          relocated to the data-row below (4th column) so the hero stays
+          purely identity/price-trend focused. */}
+      <StockHeader
+        stock={d.stock}
+        kpis={d.kpis}
+        ohlcv={d.ohlcv}
+        effectiveRules={d.effective_rules}
+      />
 
-      {/* Three side-by-side cards: Fundamentals | Valuation+KPIs | News.
-          `items-stretch` (default) + `h-full` on each card → all three end
-          up at the same height = the tallest's natural height. Per user
-          constraint, FundamentalsCard never scrolls its tables, so it sets
-          the row's floor; the other two cards scroll internally if their
-          content exceeds that floor (News with 25 items will; Valuation
-          with ~30 rows might depending on viewport). */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+      {/* Four side-by-side cards: Fundamentals | Valuation+KPIs | News | Analyst.
+          Weighted columns `[1.5fr_1fr_1fr_1fr]` give Fundamentals ~33% (it has
+          a 7-column earnings table that needs the breathing room) and the
+          other three each ~22%. Per FundamentalsCard's no-scroll constraint,
+          it sets the row floor; the other three cards (Valuation, News,
+          Analyst) all have internal scrollers / max-h caps that absorb
+          extra vertical space gracefully. */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1.5fr_1fr_1fr_1fr] gap-3">
         <FundamentalsCard ticker={ticker} />
         <MicroDataCard ticker={ticker} stock={d.stock} kpis={d.kpis} />
         <NewsCard ticker={ticker} />
+        <AnalystTargetCard ticker={ticker} />
       </div>
 
-      {/* Triggered alerts for this ticker — full-width row promoted from the
-          right sidebar so the user sees alert history immediately after
-          fundamentals/valuation/news, not buried below the price chart. */}
-      <StockAlertsHistoryCard alerts={d.alerts_history} />
-
-      {/* Insiders & Analyst stays full-width below — its tables (analyst bars
-          + insider list) are wide and would get cramped in a third of a row. */}
-      <InsidersAnalystCard ticker={ticker} />
+      {/* Alerts history + Insiders/Analyst side-by-side. Equal-width so the
+          two list-style cards balance visually; `items-start` lets each size
+          to its content (alerts can be very short, insiders can be long).
+          Stacks vertically on narrow viewports. */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 items-start">
+        <StockAlertsHistoryCard alerts={d.alerts_history} />
+        <InsidersAnalystCard ticker={ticker} />
+      </div>
 
       <div className="grid lg:grid-cols-[1fr_400px] gap-3">
         <Card>
