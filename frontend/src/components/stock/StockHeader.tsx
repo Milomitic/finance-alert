@@ -1,10 +1,9 @@
 import { ListChecks, Radio } from "lucide-react";
 import { Link } from "react-router-dom";
 
-import type { EffectiveRule, Stock, StockKpis } from "@/api/types";
+import type { EffectiveRule, OhlcvBar, Stock, StockKpis } from "@/api/types";
 import { StockLogo } from "@/components/dashboard/StockLogo";
 import { Card, CardContent } from "@/components/ui/card";
-import { ACRONYM_HELP } from "@/lib/acronymHelp";
 import { useLiveQuote } from "@/hooks/useLiveQuote";
 import { getStockFlagCode } from "@/lib/stockMeta";
 import { cn } from "@/lib/utils";
@@ -12,29 +11,67 @@ import { cn } from "@/lib/utils";
 interface Props {
   stock: Stock;
   kpis: StockKpis;
+  /** Optional OHLCV history — drawn as a faded sparkline background. */
+  ohlcv?: OhlcvBar[];
   /** When the stock is in one or more watchlists with a Tier-2 rule override,
    *  surface those watchlist names inline so the user knows the alert behavior
    *  for this ticker isn't pure-global. */
   effectiveRules?: EffectiveRule[];
 }
 
-function fmtMc(v: number | null | undefined): string {
-  if (v == null) return "—";
-  if (v >= 1e12) return `$${(v / 1e12).toFixed(2)}T`;
-  if (v >= 1e9) return `$${(v / 1e9).toFixed(1)}B`;
-  if (v >= 1e6) return `$${(v / 1e6).toFixed(0)}M`;
-  return `$${v.toLocaleString()}`;
+/**
+ * Faded sparkline background. Renders absolute inset-0 behind the header
+ * content so the page hero feels like a "ticker tape" — the price-trend
+ * shape is always visible at a glance, but never competes with the foreground
+ * text. Color follows the day's % change (green up / red down).
+ */
+function HeaderSparkline({ closes, up }: { closes: number[]; up: boolean }) {
+  if (closes.length < 2) return null;
+  const min = Math.min(...closes);
+  const max = Math.max(...closes);
+  const range = max - min || 1;
+  const W = 100;
+  const H = 30;
+  const points = closes
+    .map((v, i) => {
+      const x = (i / (closes.length - 1)) * W;
+      const y = H - ((v - min) / range) * H;
+      return `${x.toFixed(2)},${y.toFixed(2)}`;
+    })
+    .join(" ");
+  // Fill area under the line for stronger background presence
+  const areaPath = `M0,${H} L${points} L${W},${H} Z`;
+  const stroke = up ? "#16a34a" : "#dc2626";
+  return (
+    <svg
+      className="absolute inset-0 w-full h-full pointer-events-none"
+      viewBox={`0 0 ${W} ${H}`}
+      preserveAspectRatio="none"
+      aria-hidden="true"
+    >
+      <defs>
+        <linearGradient id="hdr-spark-area" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={stroke} stopOpacity={0.18} />
+          <stop offset="100%" stopColor={stroke} stopOpacity={0} />
+        </linearGradient>
+        <linearGradient id="hdr-spark-line" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stopColor={stroke} stopOpacity={0.15} />
+          <stop offset="100%" stopColor={stroke} stopOpacity={0.55} />
+        </linearGradient>
+      </defs>
+      <path d={areaPath} fill="url(#hdr-spark-area)" />
+      <polyline
+        points={points}
+        fill="none"
+        stroke="url(#hdr-spark-line)"
+        strokeWidth={1.2}
+        vectorEffect="non-scaling-stroke"
+      />
+    </svg>
+  );
 }
 
-function fmtVolume(v: number | null | undefined): string {
-  if (v == null) return "—";
-  if (v >= 1e9) return `${(v / 1e9).toFixed(2)}B`;
-  if (v >= 1e6) return `${(v / 1e6).toFixed(1)}M`;
-  if (v >= 1e3) return `${(v / 1e3).toFixed(0)}K`;
-  return v.toLocaleString();
-}
-
-export function StockHeader({ stock, kpis, effectiveRules = [] }: Props) {
+export function StockHeader({ stock, kpis, ohlcv, effectiveRules = [] }: Props) {
   // Distinct watchlist names that override this stock's rules (Tier 2).
   const tier2 = Array.from(
     new Set(
@@ -52,9 +89,6 @@ export function StockHeader({ stock, kpis, effectiveRules = [] }: Props) {
   const live = useLiveQuote(stock.ticker);
   const liveOk = live.data && live.data.price != null && live.data.error == null;
   const isMarketOpen = liveOk && live.data!.market_state === "OPEN";
-  // The yfinance fast_info endpoint always returns yesterday's close when the
-  // market is shut, so we still want the live data when available — but the
-  // UI labels it differently (LIVE only when actually trading).
   const displayPrice = liveOk ? live.data!.price! : kpis.last_close;
   const change = liveOk ? (live.data!.change_pct ?? null) : kpis.change_pct;
   const changeAbs = liveOk ? live.data!.change_abs : null;
@@ -70,10 +104,16 @@ export function StockHeader({ stock, kpis, effectiveRules = [] }: Props) {
           ? { bg: "bg-rose-50/50 dark:bg-rose-950/15", stripe: "bg-rose-500", text: "text-rose-700 dark:text-rose-300", arrow: "▼" }
           : { bg: "bg-card", stripe: "bg-slate-300 dark:bg-slate-600", text: "text-muted-foreground", arrow: "" };
 
+  const closes = (ohlcv ?? []).map((b) => b.close).filter((c) => Number.isFinite(c));
+  const sparkUp = (change ?? 0) >= 0;
+
   return (
     <Card className={cn("relative overflow-hidden border-border/60", tone.bg)}>
-      <div className={cn("absolute left-0 top-0 bottom-0 w-1.5", tone.stripe)} aria-hidden />
-      <CardContent className="p-6 pl-7">
+      {/* Sparkline behind everything */}
+      <HeaderSparkline closes={closes} up={sparkUp} />
+      <div className={cn("absolute left-0 top-0 bottom-0 w-1.5 z-10", tone.stripe)} aria-hidden />
+      {/* Smaller padding now that the KPI strip is gone */}
+      <CardContent className="relative z-10 p-5 pl-7">
         <div className="flex items-start gap-6 flex-wrap">
           {/* Logo + flag */}
           <div className="flex flex-col items-center gap-2 shrink-0">
@@ -192,67 +232,7 @@ export function StockHeader({ stock, kpis, effectiveRules = [] }: Props) {
             </span>
           </div>
         )}
-
-        {/* KPI strip */}
-        <div className="mt-5 grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {kpis.high_52w != null && kpis.low_52w != null && (
-            <KpiTile
-              label="52w range"
-              tooltip="Range a 52 settimane"
-              value={
-                <span className="tabular-nums">
-                  ${kpis.low_52w.toFixed(2)} <span className="text-muted-foreground mx-1">→</span> ${kpis.high_52w.toFixed(2)}
-                </span>
-              }
-              valueClass="text-base font-semibold"
-            />
-          )}
-          <KpiTile
-            label="Mkt cap"
-            tooltip={ACRONYM_HELP.UNIVERSE}
-            value={fmtMc(stock.market_cap)}
-            valueClass="text-xl font-bold"
-          />
-          {kpis.vol_today != null && (
-            <KpiTile
-              label="Volume oggi"
-              tooltip="Volume scambiato oggi"
-              value={fmtVolume(kpis.vol_today)}
-              valueClass="text-xl font-bold"
-            />
-          )}
-          {kpis.vol_ratio != null && (
-            <KpiTile
-              label="Vol × avg20"
-              tooltip={ACRONYM_HELP.VOL_SPIKE}
-              value={`${kpis.vol_ratio.toFixed(2)}×`}
-              valueClass={cn(
-                "text-xl font-bold",
-                kpis.vol_ratio > 2 ? "text-amber-700 dark:text-amber-300" : "",
-              )}
-            />
-          )}
-        </div>
       </CardContent>
     </Card>
-  );
-}
-
-function KpiTile({
-  label, tooltip, value, valueClass,
-}: {
-  label: string;
-  tooltip?: string;
-  value: React.ReactNode;
-  valueClass?: string;
-}) {
-  return (
-    <div
-      className="rounded-lg bg-card/80 dark:bg-black/20 border border-border/50 p-3 text-center"
-      title={tooltip}
-    >
-      <div className="text-[13px] uppercase tracking-wider text-muted-foreground font-medium">{label}</div>
-      <div className={cn("mt-1 tabular-nums", valueClass)}>{value}</div>
-    </div>
   );
 }

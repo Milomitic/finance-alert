@@ -1,10 +1,18 @@
-import type { MicroData } from "@/api/types";
+import type { MicroData, Stock, StockKpis } from "@/api/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { useStockFundamentals } from "@/hooks/useStockFundamentals";
 import { cn } from "@/lib/utils";
 
 interface Props {
   ticker: string;
+  /** Anagrafica + market_cap. Optional for backward-compat with callers that
+   *  don't show the trading-snapshot strip at the bottom. */
+  stock?: Stock;
+  /** Daily-scan KPIs (52w hi/lo, today's volume, vol×avg20). When provided
+   *  with `stock`, renders a 4-tile "Trading snapshot" strip below the
+   *  valuation list — these used to live in StockHeader but were moved here
+   *  to free up vertical space in the page hero. */
+  kpis?: StockKpis;
 }
 
 interface Row {
@@ -192,6 +200,116 @@ function buildColumns(m: MicroData): { left: Row[]; right: Row[] } {
   return { left, right };
 }
 
+/* ─── Trading snapshot strip ────────────────────────────────────────────── */
+/* These 4 KPIs (52w range, market cap, today's volume, vol×avg20) used to
+ * live in the StockHeader but were moved here so the page hero can be more
+ * compact and feature the price-trend sparkline as its background.
+ *
+ * Render style is intentionally different from the valuation rows above:
+ * a 2×2 grid of tiles with a label on top and a tabular-nums value below,
+ * because these are "live trading" data points (snapshot of today/52w),
+ * not slow-moving fundamentals — visual separation reinforces the meaning. */
+
+function fmtCompactUsd(v: number | null | undefined): string {
+  if (v == null || !Number.isFinite(v)) return "—";
+  const abs = Math.abs(v);
+  const sign = v < 0 ? "-" : "";
+  if (abs >= 1e12) return `${sign}$${(abs / 1e12).toFixed(2)}T`;
+  if (abs >= 1e9) return `${sign}$${(abs / 1e9).toFixed(1)}B`;
+  if (abs >= 1e6) return `${sign}$${(abs / 1e6).toFixed(0)}M`;
+  return `${sign}$${abs.toLocaleString()}`;
+}
+
+function fmtCompactNum(v: number | null | undefined): string {
+  if (v == null || !Number.isFinite(v)) return "—";
+  const abs = Math.abs(v);
+  if (abs >= 1e9) return `${(v / 1e9).toFixed(2)}B`;
+  if (abs >= 1e6) return `${(v / 1e6).toFixed(2)}M`;
+  if (abs >= 1e3) return `${(v / 1e3).toFixed(1)}k`;
+  return v.toLocaleString();
+}
+
+function fmtPrice(v: number | null | undefined): string {
+  return v != null && Number.isFinite(v) ? `$${v.toFixed(2)}` : "—";
+}
+
+interface SnapshotTileProps {
+  label: string;
+  value: string;
+  /** Tooltip explaining the metric. */
+  tip: string;
+  /** Optional accent class for the value (e.g. green/red). */
+  valueClass?: string;
+}
+
+function SnapshotTile({ label, value, tip, valueClass }: SnapshotTileProps) {
+  return (
+    <div
+      className="rounded-md border border-border/50 bg-muted/30 dark:bg-muted/15 px-3 py-2"
+      title={tip}
+    >
+      <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
+        {label}
+      </div>
+      <div className={cn("text-sm font-bold tabular-nums mt-0.5 truncate", valueClass)}>
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function TradingSnapshot({ stock, kpis }: { stock: Stock; kpis: StockKpis }) {
+  // 52w range as "low – high", or em-dash if either side is missing.
+  const range52 =
+    kpis.low_52w != null && kpis.high_52w != null
+      ? `${fmtPrice(kpis.low_52w)} – ${fmtPrice(kpis.high_52w)}`
+      : "—";
+
+  // Volume ratio: green if >1.5× (unusual activity), red if <0.5× (very thin).
+  // Most rows will be ~1.0 and stay neutral.
+  const volRatio = kpis.vol_ratio;
+  let volRatioClass = "";
+  if (volRatio != null && Number.isFinite(volRatio)) {
+    if (volRatio >= 1.5) volRatioClass = "text-emerald-600 dark:text-emerald-400";
+    else if (volRatio < 0.5) volRatioClass = "text-rose-600 dark:text-rose-400";
+  }
+
+  return (
+    <div className="shrink-0 mt-3 pt-3 border-t border-border/50">
+      <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">
+        Trading snapshot
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <SnapshotTile
+          label="52w range"
+          value={range52}
+          tip="Prezzo minimo e massimo nelle ultime 52 settimane (basato sulle chiusure giornaliere)."
+        />
+        <SnapshotTile
+          label="Market cap"
+          value={fmtCompactUsd(stock.market_cap)}
+          tip="Capitalizzazione di mercato (prezzo × azioni in circolazione). T=trillion, B=billion, M=million."
+        />
+        <SnapshotTile
+          label="Volume oggi"
+          value={fmtCompactNum(kpis.vol_today)}
+          tip="Volume scambiato nella sessione corrente (n. azioni)."
+        />
+        <SnapshotTile
+          label="Vol × avg20"
+          value={
+            volRatio != null && Number.isFinite(volRatio)
+              ? `${volRatio.toFixed(2)}×`
+              : "—"
+          }
+          tip="Volume oggi diviso per la media dei 20 giorni precedenti. >1.5× = volume anomalo, <0.5× = sessione molto sottile."
+          valueClass={volRatioClass}
+        />
+      </div>
+    </div>
+  );
+}
+
 function RowItem({ row }: { row: Row }) {
   const isNum = row.raw != null && Number.isFinite(row.raw);
   const tone = isNum && row.toneFor ? row.toneFor(row.raw as number) : "";
@@ -208,7 +326,7 @@ function RowItem({ row }: { row: Row }) {
   );
 }
 
-export function MicroDataCard({ ticker }: Props) {
+export function MicroDataCard({ ticker, stock, kpis }: Props) {
   const q = useStockFundamentals(ticker);
 
   if (q.isLoading) {
@@ -219,6 +337,10 @@ export function MicroDataCard({ ticker }: Props) {
             Valuation & Quality
           </div>
           <div className="flex-1 animate-pulse bg-muted/40 rounded" />
+          {/* Snapshot rendered even during fundamentals loading — its data
+              comes from the parent (already resolved via /detail), no fetch
+              needed. Gives the user something useful while micro data warms. */}
+          {stock && kpis && <TradingSnapshot stock={stock} kpis={kpis} />}
         </CardContent>
       </Card>
     );
@@ -239,6 +361,9 @@ export function MicroDataCard({ ticker }: Props) {
             cache 24h
           </span>
         </div>
+        {/* Scroll area: only the valuation rows scroll. The Trading-snapshot
+            strip below stays pinned (shrink-0) so the 52w/Mkt cap/Volume
+            tiles are always visible without the user having to scroll. */}
         <div className="flex-1 min-h-0 overflow-y-auto">
           {!anyValue ? (
             <div className="text-sm text-muted-foreground">
@@ -255,6 +380,7 @@ export function MicroDataCard({ ticker }: Props) {
             </div>
           )}
         </div>
+        {stock && kpis && <TradingSnapshot stock={stock} kpis={kpis} />}
       </CardContent>
     </Card>
   );

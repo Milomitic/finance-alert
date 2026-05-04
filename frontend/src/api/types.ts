@@ -510,6 +510,14 @@ export interface AnalystPriceTarget {
   high: number | null;
 }
 
+export interface AnalystAction {
+  date: string;
+  firm: string;
+  to_grade: string;
+  from_grade: string;
+  action: string;
+}
+
 export interface Fundamentals {
   ticker: string;
   annual: FundamentalsAnnual[];
@@ -520,6 +528,7 @@ export interface Fundamentals {
   micro: MicroData;
   insiders: InsiderTransaction[];
   analyst_ratings: AnalystRating[];
+  analyst_actions: AnalystAction[];
   price_target: AnalystPriceTarget;
   error: string | null;
 }

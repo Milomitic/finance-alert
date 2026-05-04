@@ -93,23 +93,31 @@ export default function StockDetailPage() {
 
   return (
     <div className="space-y-3">
-      {/* Top hero row: big StockHeader on the left, Analyst price-target on
-          the right. The header naturally has more content (KPI strip etc.)
-          so it gets the larger column; the analyst card is sized to match
-          its height via h-full on both children. */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-3 items-stretch">
-        <StockHeader stock={d.stock} kpis={d.kpis} effectiveRules={d.effective_rules} />
+      {/* Top hero row: 2/3 StockHeader (with faded price-trend sparkline as
+          background — the page-hero "ticker tape" feel) + 1/3 Analyst card
+          (price-target range bar + buy/hold/sell + per-analyst actions list).
+          The 4 KPI tiles that used to live in StockHeader (52w, market cap,
+          volume, vol×avg20) now sit in the Trading-snapshot strip at the
+          bottom of MicroDataCard — frees up vertical space here so the hero
+          can be shorter and feature-forward. */}
+      <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-3 items-stretch">
+        <StockHeader
+          stock={d.stock}
+          kpis={d.kpis}
+          ohlcv={d.ohlcv}
+          effectiveRules={d.effective_rules}
+        />
         <AnalystTargetCard ticker={ticker} />
       </div>
 
-      {/* Three side-by-side cards: Fundamentals | Valuation | News.
+      {/* Three side-by-side cards: Fundamentals | Valuation+Snapshot | News.
           Row is taller (640px) so the Fundamentals table can show all rows
-          without scrolling, the Valuation card has room for both columns of
-          ratios, and News headlines aren't cut off. Cards still share the
-          same height via the grid. */}
+          without scrolling, the Valuation card has room for both ratio
+          columns + the new Trading-snapshot strip pinned at the bottom,
+          and News headlines aren't cut off. */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 lg:h-[640px]">
         <FundamentalsCard ticker={ticker} />
-        <MicroDataCard ticker={ticker} />
+        <MicroDataCard ticker={ticker} stock={d.stock} kpis={d.kpis} />
         <NewsCard ticker={ticker} />
       </div>
 
