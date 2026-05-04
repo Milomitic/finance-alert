@@ -1,0 +1,161 @@
+# Finance-Alert: Project notes for the agent
+
+Persistent notes accumulated across sessions so we don't waste time
+re-discovering recurring problems and patterns. **Read this before doing
+anything else in this repo.**
+
+---
+
+## ⚠️ Backend restart: ignore the OLD task's "failed" notification
+
+**The most common time-waster.** Every backend restart produces a misleading
+"Background command failed" notification. Internalize once and stop chasing it.
+
+### What happens
+1. I `taskkill //PID <old> //F` to kill the previous uvicorn
+2. I start a fresh uvicorn with `run_in_background: true` (new task id)
+3. ~10–30s later a notification arrives:
+   ```
+   <task-id>OLD_ID</task-id>
+   <status>failed</status>
+   <summary>Background command "Restart backend" failed with exit code 1</summary>
+   ```
+
+### What it actually means
+The notification's `task-id` is the **OLD** task — the one whose process I just
+killed. Uvicorn exiting because of `taskkill /F` returns a non-zero exit code,
+so the background-task wrapper marks the OLD task "failed". This is the kill
+ack, not a problem with the NEW backend.
+
+### What to do
+**Ignore the notification.** Verify the new backend is up via:
+```bash
+until curl -sf http://127.0.0.1:8000/api/health 2>nul | grep -q "ok"; do sleep 1; done
+```
+If health returns OK, everything is fine. The kill-and-restart sequence is
+working as intended.
+
+### What NOT to do
+- Don't read the failure output as if it's the new backend's startup error
+- Don't try to "fix" it
+- Don't restart again on the assumption that the start failed
+- Don't apologize to the user about the failure — it's expected
+
+### Canonical restart sequence
+```
+1. netstat -ano | findstr :8000 | findstr LISTENING   # get PID
+2. taskkill //PID <PID> //F                            # ignore old-task fail
+3. uvicorn ... (run_in_background: true)               # new task
+4. curl /api/health until 200                          # confirm new task up
+```
+
+---
+
+## Database migrations (alembic)
+
+- Migration files live in `backend/alembic/versions/`
+- Generate with: `./.venv/Scripts/alembic.exe revision -m "<name>"`
+  (the file is empty — fill in `upgrade()` and `downgrade()` manually)
+- Apply with: `./.venv/Scripts/alembic.exe upgrade head`
+- The DB engine is SQLite; use `op.batch_alter_table(...)` for column changes
+  (SQLite doesn't support `ALTER COLUMN` natively)
+
+---
+
+## Catalog has duplicate ticker rows
+
+59 tickers (AAPL, AMZN, UCG.MI, etc.) have **two rows** in the `stocks` table
+because two ingestion paths inserted the same logical ticker. Code that looks
+up a stock by ticker MUST tolerate this:
+
+```python
+# WRONG — will raise MultipleResultsFound
+stock = db.execute(select(Stock).where(Stock.ticker == ticker)).scalar_one_or_none()
+
+# RIGHT — picks any matching row, all are equivalent for read-only paths
+stock = db.execute(
+    select(Stock).where(Stock.ticker == ticker).limit(1)
+).scalars().first()
+```
+
+The dedup of these rows is queued as a separate background task. Until then,
+treat duplicates as a fact of life on read paths.
+
+---
+
+## Frontend tone classes (Tailwind purger)
+
+Tone-class maps in `lib/alertMeta.ts` and similar files MUST stay as plain
+string-literal `Record<Tone, string>` maps. **Do not refactor to template-
+string composition** — Tailwind's build-time class purger only sees literals,
+and a refactor will silently strip all the tone classes from the prod build.
+The bug is invisible in dev.
+
+---
+
+## Test commands
+
+- **Backend**: `cd backend && ./.venv/Scripts/python.exe -m pytest tests/ -x -q`
+  (281+ tests, runs in ~5s)
+- **Frontend build/typecheck**: `cd frontend && npm run build`
+  (also: `npx tsc -b` for type-only check)
+- **Single test file**: append the file path to the pytest command
+
+---
+
+## Stock detail card layout (the one that always tries to break)
+
+The 3-card row (Fundamentals · Valuation · News) uses:
+- Grid: `lg:grid-cols-3 gap-3` (default `items-stretch`, NOT `items-start`)
+- Each card: `h-full overflow-hidden flex flex-col`
+- FundamentalsCard sets the row's natural height (no internal scroll on its
+  tables — per user constraint)
+- MicroDataCard + NewsCard scroll internally via `flex-1 min-h-0 overflow-y-auto`
+- **NewsCard is wrapped in `<div className="relative h-full">` with the Card
+  positioned `absolute inset-0`** — so its 25-item content doesn't inflate
+  the row. Don't undo this.
+
+---
+
+## Indicator periods adapt to range
+
+The bundle keys in the API response (`sma20`/`sma50`/`sma200`, `rsi14`) are
+**slot names**, not literal periods. The actual periods are in
+`indicators.periods` (`sma_fast`, `sma_mid`, `sma_slow`, `rsi`, etc.) and
+adapt to the range_key:
+
+| Range | sma_fast/mid/slow | rsi | bb |
+|-------|-------------------|-----|-----|
+| 1m    | 5/10/20           | 7   | 10  |
+| 3m    | 10/20/50          | 14  | 20  |
+| 6m    | 20/50/100         | 14  | 20  |
+| 1y    | 20/50/200         | 14  | 20  |
+| all   | 50/100/200        | 21  | 50  |
+
+UI labels (IndicatorToggles, ResizableSection labels) read the live periods,
+not the static defaults. Don't hard-code "SMA 200" / "RSI(14)" in new code —
+read from `indicators.periods`.
+
+---
+
+## Alert dual-timestamp model
+
+Every alert has two dates (since commit `e22bec5`):
+- `signal_date` (Date): bar where the rule's condition matched
+- `triggered_at` (DateTime): wall-clock when the row was created
+
+The two diverge meaningfully on backfill / weekend / skipped scans. UI
+distinguishes them via `lib/alertDates.ts:isDelayedDetection` (≥ 1 calendar
+day delta → orange clock chip + "in ritardo" label).
+
+Legacy alerts predate the column → `signal_date = null`. UI falls back to
+`triggered_at` and shows "—" or "n/d · legacy" for the signal slot.
+
+---
+
+## Read/unread alert system was removed
+
+`Alert.read_at` still exists in the DB and API for back-compat, but the UI
+doesn't surface it anymore (no badges, no filters, no bulk actions). Don't
+re-add it without the user explicitly asking. The `archived_at` axis is
+still active.
