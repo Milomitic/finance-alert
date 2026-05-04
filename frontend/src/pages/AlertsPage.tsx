@@ -103,12 +103,12 @@ export default function AlertsPage() {
       </div>
 
       {/* Filters + Scan status side-by-side on wide viewports.
-          The scan-status card is sized smaller (right column) since it's
-          informational — most of the time it just shows "Ultimo scan
-          completato" + counters. The filters card carries the primary
-          interaction so it gets the larger left column. Stacks vertically
-          on narrow viewports. */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-3 items-start">
+          Right column at 480px (was 360px) gives the scan-status card
+          enough room for the title + Stop button on one line, plus a
+          comfortable progress bar when running. The filters card has
+          three short inputs and chip strip, so giving up that ~120px is
+          a net win on density. Stacks vertically on narrow viewports. */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_480px] gap-3 items-start">
         <AlertFilters value={filters} onChange={(v) => { setPage(0); setFilters(v); }} />
         <ScanStatusCard status={scanStatus.data} isFetching={scanStatus.isFetching} />
       </div>
