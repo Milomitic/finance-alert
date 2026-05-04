@@ -14,6 +14,16 @@ interface Props {
   kpis?: StockKpis;
 }
 
+/** When a numeric value crosses a benchmark threshold the row colors itself.
+ *  `cls` is the Tailwind class to apply to the value cell; `reason` is a
+ *  one-line explanation of WHY (the threshold and what it means in context).
+ *  Both are surfaced together in the row's tooltip so the user understands
+ *  the convention without having to memorize it. */
+interface ToneSignal {
+  cls: string;
+  reason: string;
+}
+
 interface Row {
   label: string;
   /** Pre-formatted display value. Bypasses the numeric raw → format pipeline
@@ -23,14 +33,88 @@ interface Row {
   preformatted?: string;
   raw?: number | null;
   format?: (v: number) => string;
-  /** Tooltip on hover */
+  /** Tooltip on hover — the metric DEFINITION. The tooltip also gets the
+   *  threshold REASON appended when toneFor matches. */
   tip: string;
-  /** Optional color rule. For preformatted rows pass a static class instead. */
-  toneFor?: (v: number) => string;
+  /** Optional benchmark rule: takes the raw value, returns either a tone
+   *  signal (cls + reason) when a threshold matches, or null when the value
+   *  is in the "neutral" range. */
+  toneFor?: (v: number) => ToneSignal | null;
+  /** Static tone class for preformatted rows (where the rule operates on the
+   *  pre-format value, like vol_ratio). No reason — used only by snapshot
+   *  rows where the tip already explains the threshold. */
   toneClass?: string;
   /** Visual emphasis: snapshot rows render with a subtle bg + bold value
    *  to set them apart from the valuation rows below. */
   emphasis?: boolean;
+}
+
+/* ─── Tone helpers ──────────────────────────────────────────────────────── */
+/* Static tones with embedded reasons. Defined once so the row definitions
+ * stay readable — `t.green20Plus("ROE")` instead of inlining 3 lines per row.
+ * Italian phrasing matches the rest of the UI. */
+
+const GREEN = "text-green-600";
+const RED = "text-red-600";
+const AMBER = "text-amber-600";
+
+function pctTone(opts: {
+  /** Threshold for the green branch (fraction, e.g. 0.20 = 20%). */
+  greenAbove: number;
+  /** Threshold for the red branch (default 0 — negative is bad). */
+  redBelow?: number;
+  /** Optional amber branch for "below this is concerning" (e.g. gross margin <10%). */
+  amberBelow?: number;
+  /** Human label for the metric used in the reason text. */
+  label: string;
+  /** Optional benchmark blurb appended to the green branch (e.g. "media mercato 12-15%"). */
+  greenContext?: string;
+}): (v: number) => ToneSignal | null {
+  const redBelow = opts.redBelow ?? 0;
+  return (v) => {
+    if (v < redBelow) {
+      return {
+        cls: RED,
+        reason: `${opts.label} ${(v * 100).toFixed(1)}% — sotto ${(redBelow * 100).toFixed(0)}%: valore negativo, segnala perdita o distruzione di valore.`,
+      };
+    }
+    if (opts.amberBelow != null && v < opts.amberBelow && v >= redBelow) {
+      return {
+        cls: AMBER,
+        reason: `${opts.label} ${(v * 100).toFixed(1)}% — sotto ${(opts.amberBelow * 100).toFixed(0)}%: valore basso rispetto alla soglia sana di riferimento.`,
+      };
+    }
+    if (v > opts.greenAbove) {
+      const ctx = opts.greenContext ? ` (${opts.greenContext})` : "";
+      return {
+        cls: GREEN,
+        reason: `${opts.label} ${(v * 100).toFixed(1)}% — sopra ${(opts.greenAbove * 100).toFixed(0)}%: valore eccellente${ctx}.`,
+      };
+    }
+    return null;
+  };
+}
+
+/** Tone that's purely sign-based (positive=green, negative=red). Used for
+ *  growth/change metrics where there's no "good number" — only direction. */
+function signTone(label: string, format: "pct" | "usd"): (v: number) => ToneSignal | null {
+  const fmt = (v: number) =>
+    format === "pct" ? `${(v * 100).toFixed(1)}%` : v.toLocaleString();
+  return (v) => {
+    if (v > 0) {
+      return {
+        cls: GREEN,
+        reason: `${label} ${fmt(v)} positivo: andamento favorevole.`,
+      };
+    }
+    if (v < 0) {
+      return {
+        cls: RED,
+        reason: `${label} ${fmt(v)} negativo: andamento sfavorevole.`,
+      };
+    }
+    return null;
+  };
 }
 
 /* ─── Formatters ────────────────────────────────────────────────────────── */
@@ -136,8 +220,13 @@ function buildColumns(m: MicroData): { left: Row[]; right: Row[] } {
       label: "P/E (TTM)",
       raw: m.trailing_pe,
       format: num,
-      tip: "Price/Earnings (trailing 12 mesi). Quanto stai pagando per ogni dollaro di utile dell'ultimo anno.",
-      toneFor: (v) => v < 0 ? "text-red-600" : v > 40 ? "text-amber-600" : "",
+      tip: "Price/Earnings (trailing 12 mesi). Quanto stai pagando per ogni dollaro di utile dell'ultimo anno. Mediana storica del mercato US: 15-20.",
+      toneFor: (v) =>
+        v < 0
+          ? { cls: RED, reason: `P/E ${v.toFixed(1)} negativo: utili negativi (azienda in perdita TTM).` }
+          : v > 40
+            ? { cls: AMBER, reason: `P/E ${v.toFixed(1)} sopra 40: valutazione molto alta vs media storica del mercato (~15-20). Implica grosse aspettative di crescita o sopravvalutazione.` }
+            : null,
     },
     {
       label: "Forward P/E",
@@ -149,8 +238,13 @@ function buildColumns(m: MicroData): { left: Row[]; right: Row[] } {
       label: "PEG",
       raw: m.peg_ratio,
       format: num,
-      tip: "P/E ÷ tasso di crescita atteso. <1 = sottovalutato rispetto alla crescita.",
-      toneFor: (v) => v < 1 && v > 0 ? "text-green-600" : v > 2 ? "text-amber-600" : "",
+      tip: "P/E ÷ tasso di crescita atteso. Convenzione: <1 = sottovalutato rispetto alla crescita, >2 = caro vs crescita.",
+      toneFor: (v) =>
+        v < 1 && v > 0
+          ? { cls: GREEN, reason: `PEG ${v.toFixed(2)} sotto 1: P/E inferiore al tasso di crescita atteso → potenzialmente sottovalutato.` }
+          : v > 2
+            ? { cls: AMBER, reason: `PEG ${v.toFixed(2)} sopra 2: prezzo elevato rispetto alla crescita prevista.` }
+            : null,
     },
     {
       label: "P/B",
@@ -194,90 +288,119 @@ function buildColumns(m: MicroData): { left: Row[]; right: Row[] } {
       label: "ROE",
       raw: m.return_on_equity,
       format: pct,
-      tip: "Return on Equity = Net Income / Equity.",
-      toneFor: (v) => v > 0.20 ? "text-green-600" : v < 0 ? "text-red-600" : "",
+      tip: "Return on Equity = Net Income / Equity. Misura quanto rende il capitale degli azionisti. Convenzione: >20% = eccellente; media mercato S&P500 ≈ 12-15%.",
+      toneFor: pctTone({
+        greenAbove: 0.20,
+        label: "ROE",
+        greenContext: "media S&P500 ~12-15%",
+      }),
     },
     {
       label: "ROA",
       raw: m.return_on_assets,
       format: pct,
-      tip: "Return on Assets = Net Income / Total Assets.",
-      toneFor: (v) => v > 0.10 ? "text-green-600" : v < 0 ? "text-red-600" : "",
+      tip: "Return on Assets = Net Income / Total Assets. Quanto è efficiente l'azienda nell'usare gli asset per generare utili. Convenzione: >10% = eccellente.",
+      toneFor: pctTone({ greenAbove: 0.10, label: "ROA" }),
     },
     {
       label: "Profit margin",
       raw: m.profit_margins,
       format: pct,
-      tip: "Net Income / Revenue. Margine netto.",
-      toneFor: (v) => v > 0.20 ? "text-green-600" : v < 0 ? "text-red-600" : "",
+      tip: "Net Income / Revenue. Margine netto: % di ogni $ di ricavi che resta come utile. Convenzione: >20% = molto profittevole; <0 = perdita.",
+      toneFor: pctTone({ greenAbove: 0.20, label: "Profit margin" }),
     },
     {
       label: "Operating margin",
       raw: m.operating_margins,
       format: pct,
-      tip: "Operating Income / Revenue. Margine operativo (escluso finanziario/tasse).",
-      toneFor: (v) => v > 0.20 ? "text-green-600" : v < 0 ? "text-red-600" : "",
+      tip: "Operating Income / Revenue. Margine operativo (escluso finanziario/tasse). >20% = ottima efficienza operativa.",
+      toneFor: pctTone({ greenAbove: 0.20, label: "Operating margin" }),
     },
     {
       label: "Gross margin",
       raw: m.gross_margins,
       format: pct,
-      tip: "Gross Profit / Revenue. Margine lordo.",
-      toneFor: (v) => v > 0.40 ? "text-green-600" : v < 0.10 && v > 0 ? "text-amber-600" : "",
+      tip: "Gross Profit / Revenue. Margine lordo: indica il pricing power vs i costi diretti. >40% = forte; <10% = business commodity-like.",
+      toneFor: (v) => {
+        if (v < 0) {
+          return { cls: RED, reason: `Gross margin ${(v * 100).toFixed(1)}% negativo: i costi diretti superano i ricavi.` };
+        }
+        if (v < 0.10) {
+          return { cls: AMBER, reason: `Gross margin ${(v * 100).toFixed(1)}% sotto 10%: pricing power debole o costi diretti alti — tipico di business commodity.` };
+        }
+        if (v > 0.40) {
+          return { cls: GREEN, reason: `Gross margin ${(v * 100).toFixed(1)}% sopra 40%: pricing power forte / costi diretti contenuti.` };
+        }
+        return null;
+      },
     },
     {
       label: "Debt/Equity",
       raw: m.debt_to_equity,
       format: num,
-      tip: "Total Debt / Total Equity. Indicatore di leva finanziaria.",
-      toneFor: (v) => v > 200 ? "text-amber-600" : "",
+      tip: "Total Debt / Total Equity. Leva finanziaria: quanto debito ha l'azienda relativamente al capitale proprio. Yahoo lo restituisce come %, quindi >200 = debito > 2× equity. Convenzione: <100 = leva moderata; >200 = leva elevata.",
+      toneFor: (v) =>
+        v > 200
+          ? { cls: AMBER, reason: `Debt/Equity ${v.toFixed(0)}% sopra 200%: il debito supera 2× l'equity → rischio finanziario elevato, sensibile a tassi e cicli.` }
+          : null,
     },
     {
       label: "Current ratio",
       raw: m.current_ratio,
       format: num,
-      tip: "Current Assets / Current Liabilities. >1 = liquidità di breve OK.",
-      toneFor: (v) => v < 1 ? "text-amber-600" : v > 2 ? "text-green-600" : "",
+      tip: "Current Assets / Current Liabilities. Indica se l'azienda può coprire le passività di breve termine. Convenzione: <1 = potenziali problemi di liquidità; >2 = ottima liquidità.",
+      toneFor: (v) => {
+        if (v < 1) {
+          return { cls: AMBER, reason: `Current ratio ${v.toFixed(2)} sotto 1: gli asset correnti non coprono completamente le passività di breve.` };
+        }
+        if (v > 2) {
+          return { cls: GREEN, reason: `Current ratio ${v.toFixed(2)} sopra 2: ottima liquidità di breve termine.` };
+        }
+        return null;
+      },
     },
     {
       label: "Free Cash Flow",
       raw: m.free_cashflow,
       format: bigUsd,
-      tip: "Flusso di cassa libero (TTM). Positivo = autofinanziamento.",
-      toneFor: (v) => v > 0 ? "text-green-600" : "text-red-600",
+      tip: "Flusso di cassa libero (TTM): cassa generata dopo capex. Positivo = l'azienda genera cassa autonomamente; negativo = brucia cassa, dipende da finanziamenti.",
+      toneFor: (v) =>
+        v > 0
+          ? { cls: GREEN, reason: `FCF positivo (${bigUsd(v)}): l'azienda genera cassa libera, può rimborsare debito o tornare valore agli azionisti.` }
+          : { cls: RED, reason: `FCF negativo (${bigUsd(v)}): l'azienda brucia cassa, dipende da debito/equity per finanziarsi.` },
     },
     {
       label: "Rev growth (YoY)",
       raw: m.revenue_growth,
       format: pct,
-      tip: "Crescita revenue YoY (ultimo trimestre).",
-      toneFor: (v) => v > 0 ? "text-green-600" : "text-red-600",
+      tip: "Crescita revenue YoY (ultimo trimestre vs stesso trimestre dell'anno precedente). Positivo = crescita; negativo = contrazione.",
+      toneFor: signTone("Revenue growth", "pct"),
     },
     {
       label: "EPS growth (YoY)",
       raw: m.earnings_growth,
       format: pct,
-      tip: "Crescita EPS YoY (ultimo trimestre).",
-      toneFor: (v) => v > 0 ? "text-green-600" : "text-red-600",
+      tip: "Crescita EPS YoY (ultimo trimestre vs stesso trimestre anno precedente).",
+      toneFor: signTone("EPS growth", "pct"),
     },
     {
       label: "52w change",
       raw: m.fifty_two_week_change,
       format: pct,
-      tip: "Performance prezzo nelle ultime 52 settimane.",
-      toneFor: (v) => v > 0 ? "text-green-600" : "text-red-600",
+      tip: "Performance prezzo nelle ultime 52 settimane. Verde sopra 0 = il titolo è salito; rosso sotto 0 = sceso.",
+      toneFor: signTone("52w change", "pct"),
     },
     {
       label: "Dividend yield",
       raw: m.dividend_yield,
       format: pctRaw,
-      tip: "Dividend yield annualizzato.",
+      tip: "Dividend yield annualizzato (ultimo dividendo × frequenza ÷ prezzo).",
     },
     {
       label: "Payout ratio",
       raw: m.payout_ratio,
       format: pct,
-      tip: "% di utili distribuiti come dividendi.",
+      tip: "% di utili distribuiti come dividendi. >100% = l'azienda paga più di quanto guadagna (insostenibile a lungo).",
     },
   ];
   return { left, right };
@@ -293,7 +416,23 @@ function RowItem({ row }: { row: Row }) {
     : isNum
       ? row.format!(row.raw as number)
       : "—";
-  const tone = isNum && row.toneFor ? row.toneFor(row.raw as number) : (row.toneClass ?? "");
+
+  // Tone resolution: toneFor returns a {cls, reason} signal when a threshold
+  // matches; null otherwise. Static toneClass (used by snapshot rows) has no
+  // reason — its tip already explains the threshold inline.
+  const toneSignal: ToneSignal | null =
+    isNum && row.toneFor ? row.toneFor(row.raw as number) : null;
+  const toneCls = toneSignal?.cls ?? row.toneClass ?? "";
+
+  // Tooltip composition: definition first, then the threshold reason on a
+  // new line so the user always sees WHAT the metric is + WHY it's colored.
+  // The double-newline visually separates the two pieces in the native
+  // tooltip across browsers (Chrome/Edge collapse single newlines, but
+  // both render \n\n as a real break).
+  const tooltipText = toneSignal?.reason
+    ? `${row.tip}\n\n→ ${toneSignal.reason}`
+    : row.tip;
+
   return (
     <div
       className={cn(
@@ -302,8 +441,12 @@ function RowItem({ row }: { row: Row }) {
         // separately from the valuation rows below — without losing the
         // unified row-list treatment the user asked for.
         row.emphasis && "bg-muted/40 dark:bg-muted/15 px-2 -mx-2 rounded",
+        // Cursor-help when there's a tone reason — signals the value is
+        // hover-explainable. Without this the user might not realize there's
+        // additional context beyond the metric definition.
+        toneSignal?.reason && "cursor-help",
       )}
-      title={row.tip}
+      title={tooltipText}
     >
       <span
         className={cn(
@@ -317,7 +460,7 @@ function RowItem({ row }: { row: Row }) {
         className={cn(
           "text-sm font-semibold tabular-nums shrink-0",
           row.emphasis && "font-bold",
-          tone,
+          toneCls,
         )}
       >
         {display}

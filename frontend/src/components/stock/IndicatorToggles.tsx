@@ -1,5 +1,6 @@
 import { Settings2 } from "lucide-react";
 
+import type { IndicatorPeriods } from "@/api/types";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
@@ -35,18 +36,70 @@ export const INDICATOR_CATALOG: IndicatorMeta[] = [
   { key: "macd",   label: "MACD",      group: "panel",   defaultColor: "#ef4444", description: "Pannello separato — MACD 12/26/9" },
 ];
 
+// Default-on indicators: SMA50 + SMA200 + Bollinger as overlays; RSI + MACD
+// as separate panels. Bollinger and MACD added to defaults since they're the
+// most-asked-for technical signals after the SMA pair — pre-enabling them
+// avoids a click for the common case. SMA20 stays off (chartists who want
+// it can toggle; default-on would visually crowd the price line).
 export const DEFAULT_INDICATOR_STATE: IndicatorState = {
   sma20:  { visible: false, color: "#a855f7", width: 1 },
   sma50:  { visible: true,  color: "#3b82f6", width: 1 },
   sma200: { visible: true,  color: "#f59e0b", width: 1 },
-  bb:     { visible: false, color: "#0ea5e9", width: 1 },
+  bb:     { visible: true,  color: "#0ea5e9", width: 1 },
   rsi:    { visible: true,  color: "#7c3aed", width: 1 },
-  macd:   { visible: false, color: "#ef4444", width: 1 },
+  macd:   { visible: true,  color: "#ef4444", width: 1 },
 };
 
 interface Props {
   state: IndicatorState;
   onChange: (key: IndicatorKey, next: IndicatorStyle) => void;
+  /** Real periods used to compute the visible indicator series. When provided,
+   *  toggle labels and tooltips reflect the actual numbers ("SMA 10" on a 1m
+   *  range, "SMA 200" on 1y) instead of the static defaults. */
+  periods?: IndicatorPeriods;
+}
+
+/** Compose the toggle label + descriptive tooltip from the live periods, with
+ *  graceful fallback to the catalog defaults when periods aren't available. */
+function describeIndicator(
+  meta: IndicatorMeta,
+  periods?: IndicatorPeriods,
+): { label: string; description: string } {
+  if (!periods) return { label: meta.label, description: meta.description };
+  switch (meta.key) {
+    case "sma20":
+      return {
+        label: `SMA ${periods.sma_fast}`,
+        description: `Media mobile semplice ${periods.sma_fast} barre (rapida)`,
+      };
+    case "sma50":
+      return {
+        label: `SMA ${periods.sma_mid}`,
+        description: `Media mobile semplice ${periods.sma_mid} barre (intermedia)`,
+      };
+    case "sma200":
+      return {
+        label: `SMA ${periods.sma_slow}`,
+        description: `Media mobile semplice ${periods.sma_slow} barre (trend lungo)`,
+      };
+    case "rsi":
+      return {
+        label: `RSI(${periods.rsi})`,
+        description: `Pannello separato — RSI ${periods.rsi} barre`,
+      };
+    case "macd":
+      return {
+        label: `MACD(${periods.macd_fast},${periods.macd_slow},${periods.macd_signal})`,
+        description: `Pannello separato — MACD ${periods.macd_fast}/${periods.macd_slow}/${periods.macd_signal}`,
+      };
+    case "bb":
+      return {
+        label: `BB(${periods.bb_period},${periods.bb_k}σ)`,
+        description: `Bande di Bollinger (${periods.bb_period} barre, ${periods.bb_k}σ)`,
+      };
+    default:
+      return { label: meta.label, description: meta.description };
+  }
 }
 
 const COLOR_PALETTE = [
@@ -109,12 +162,16 @@ function withAlpha(hex: string, a: number): string {
   return `${hex}${ah}`;
 }
 
-export function IndicatorToggles({ state, onChange }: Props) {
+export function IndicatorToggles({ state, onChange, periods }: Props) {
   return (
     <div className="inline-flex items-center gap-x-2 gap-y-1 flex-wrap">
       {INDICATOR_CATALOG.map((meta) => {
         const s = state[meta.key];
         const on = s.visible;
+        // Resolve the live label/description per indicator, then fall back to
+        // the catalog default when periods aren't available (e.g. older API
+        // response, initial render before /detail returns).
+        const live = describeIndicator(meta, periods);
         // Active: fill the whole pill with a tinted version of the indicator
         // color (~18% alpha), border in the same color at full opacity.
         // Inactive: neutral card background, muted border.
@@ -133,10 +190,10 @@ export function IndicatorToggles({ state, onChange }: Props) {
               type="button"
               onClick={() => onChange(meta.key, { ...s, visible: !on })}
               className="px-2.5 py-1 text-sm font-semibold transition-colors"
-              title={`${on ? "Nascondi" : "Mostra"} ${meta.label}`}
+              title={`${on ? "Nascondi" : "Mostra"} ${live.label} — ${live.description}`}
               style={{ color: on ? s.color : "var(--muted-foreground, #64748b)" }}
             >
-              {meta.label}
+              {live.label}
             </button>
             <Popover>
               <PopoverTrigger asChild>
@@ -150,7 +207,11 @@ export function IndicatorToggles({ state, onChange }: Props) {
                   <Settings2 className="h-3 w-3" />
                 </Button>
               </PopoverTrigger>
-              <StyleEditor meta={meta} style={s} onChange={(next) => onChange(meta.key, next)} />
+              <StyleEditor
+                meta={{ ...meta, label: live.label, description: live.description }}
+                style={s}
+                onChange={(next) => onChange(meta.key, next)}
+              />
             </Popover>
           </div>
         );

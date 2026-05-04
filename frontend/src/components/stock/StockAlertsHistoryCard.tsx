@@ -1,6 +1,4 @@
-import { Bell, History, TrendingDown, TrendingUp } from "lucide-react";
-// Bell is still used for the unread chip in the header strip; History/Trending
-// are used in the kind chip + bull/bear stat badges.
+import { History, TrendingDown, TrendingUp } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import type { Alert } from "@/api/types";
@@ -44,7 +42,6 @@ function formatRelative(iso: string): string {
 
 interface AlertStats {
   total: number;
-  unread: number;
   bullish: number;
   bearish: number;
   last30d: number;
@@ -52,18 +49,16 @@ interface AlertStats {
 
 function computeStats(alerts: Alert[]): AlertStats {
   const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
-  let unread = 0;
   let bullish = 0;
   let bearish = 0;
   let last30d = 0;
   for (const a of alerts) {
-    if (a.read_at == null) unread++;
     if (new Date(a.triggered_at).getTime() >= cutoff) last30d++;
     const tone = getAlertKindMeta(a.rule_kind).tone;
     if (tone === "bullish") bullish++;
     else if (tone === "bearish") bearish++;
   }
-  return { total: alerts.length, unread, bullish, bearish, last30d };
+  return { total: alerts.length, bullish, bearish, last30d };
 }
 
 /* ─── Single-row visual ─────────────────────────────────────────────────── */
@@ -71,7 +66,6 @@ function computeStats(alerts: Alert[]): AlertStats {
 function AlertRow({ alert, onClick }: { alert: Alert; onClick: () => void }) {
   const meta = getAlertKindMeta(alert.rule_kind);
   const Icon = meta.icon;
-  const isUnread = alert.read_at == null;
 
   return (
     <li>
@@ -82,7 +76,6 @@ function AlertRow({ alert, onClick }: { alert: Alert; onClick: () => void }) {
           "w-full text-left rounded-md border-l-2 px-3 py-2 transition-colors",
           "hover:bg-accent/40 cursor-pointer",
           TONE_BORDER_LEFT[meta.tone],
-          isUnread && "bg-primary/5",
         )}
       >
         <div className="flex items-center gap-3 flex-wrap">
@@ -101,14 +94,6 @@ function AlertRow({ alert, onClick }: { alert: Alert; onClick: () => void }) {
           <span className="text-sm tabular-nums font-semibold">
             ${alert.trigger_price.toFixed(2)}
           </span>
-
-          {/* Unread dot */}
-          {isUnread && (
-            <span
-              className="inline-block h-2 w-2 rounded-full bg-primary shrink-0"
-              title="Non letto"
-            />
-          )}
 
           {/* Date — right-aligned, shows both relative and absolute */}
           <span className="ml-auto text-xs text-muted-foreground tabular-nums shrink-0 flex flex-col items-end">
@@ -180,15 +165,6 @@ export function StockAlertsHistoryCard({ alerts }: Props) {
                   >
                     <TrendingDown className="h-3 w-3" />
                     <span className="font-bold tabular-nums">{stats.bearish}</span>
-                  </span>
-                )}
-                {stats.unread > 0 && (
-                  <span
-                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-primary/10 text-primary"
-                    title="Alert non ancora marcati come letti"
-                  >
-                    <Bell className="h-3 w-3" />
-                    <span className="font-bold tabular-nums">{stats.unread}</span>
                   </span>
                 )}
               </div>

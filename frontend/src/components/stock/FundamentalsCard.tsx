@@ -37,6 +37,18 @@ function fmtPctSurp(v: number | null | undefined): { text: string; color: string
   };
 }
 
+/** Compare a reported value vs its estimate and return a beat/miss tone class.
+ *  Returns "" when either side is missing — neutral, no coloring claim. Used
+ *  to color the EPS-reported and Revenue-reported cells alongside the
+ *  surprise-percent cell, so the user sees the beat/miss signal at a glance
+ *  without having to read across to the rightmost column. */
+function beatTone(reported: number | null | undefined, estimate: number | null | undefined): string {
+  if (reported == null || estimate == null) return "";
+  if (reported > estimate) return "text-green-600 dark:text-green-400";
+  if (reported < estimate) return "text-red-600 dark:text-red-400";
+  return "";
+}
+
 const shortYear = (iso: string) => `FY${iso.slice(2, 4)}`;
 const shortQuarter = (iso: string) => {
   const [y, m] = iso.split("-");
@@ -207,8 +219,16 @@ function AnnualTabBody({
   const annualEarnings = useMemo(() => aggregateAnnualEarnings(earnings), [earnings]);
   const hasEstimate = Array.from(annualEarnings.values()).some((v) => v.eps_est && v.eps_est > 0);
 
+  // Chart goes oldest → newest (left → right) for readability; the table
+  // below goes newest → oldest (most recent at the top) per user request.
+  const annualAsc = useMemo(
+    () => [...annual].sort((a, b) => a.fiscal_year_end.localeCompare(b.fiscal_year_end)),
+    [annual],
+  );
+  const annualDesc = useMemo(() => [...annualAsc].reverse(), [annualAsc]);
+
   // Chart points: actuals from `annual`, estimates from aggregated `earnings`
-  const chartData: ChartPoint[] = annual.map((a) => {
+  const chartData: ChartPoint[] = annualAsc.map((a) => {
     const year = a.fiscal_year_end.slice(0, 4);
     const agg = annualEarnings.get(year);
     return {
@@ -243,20 +263,25 @@ function AnnualTabBody({
             </tr>
           </thead>
           <tbody>
-            {annual.map((a, i) => {
+            {annualDesc.map((a) => {
               const year = a.fiscal_year_end.slice(0, 4);
               const agg = annualEarnings.get(year);
               const surp = fmtPctSurp(agg?.surprise_pct);
               const beat = agg?.surprise_pct != null && agg.surprise_pct > 0;
+              // YoY: compare against the year before (one position earlier
+              // in the ASC array, since DESC walks newest → oldest).
+              const ascIdx = annualAsc.findIndex((x) => x.fiscal_year_end === a.fiscal_year_end);
+              const prevYear = ascIdx > 0 ? annualAsc[ascIdx - 1] : null;
+              const epsTone = beatTone(a.eps, agg?.eps_est);
               return (
                 <tr key={a.fiscal_year_end} className="border-t border-border/40 hover:bg-muted/30">
                   <td className="px-1.5 py-1 font-mono">{shortYear(a.fiscal_year_end)}</td>
                   <td className="px-1.5 py-1 text-right">{fmtBig(a.revenue)}</td>
                   <td className="px-1.5 py-1 text-right text-muted-foreground">
-                    {i > 0 ? yoy(a.revenue, annual[i - 1].revenue) : "—"}
+                    {prevYear ? yoy(a.revenue, prevYear.revenue) : "—"}
                   </td>
                   <td className="px-1.5 py-1 text-right">{fmtBig(a.net_income)}</td>
-                  <td className="px-1.5 py-1 text-right font-semibold">
+                  <td className={cn("px-1.5 py-1 text-right font-semibold", epsTone)}>
                     {a.eps != null ? `$${a.eps.toFixed(2)}` : "—"}
                   </td>
                   <td className="px-1.5 py-1 text-right text-muted-foreground">
@@ -279,19 +304,31 @@ function AnnualTabBody({
 }
 
 function QuarterlyTabBody({
-  quarterly, earnings,
-}: { quarterly: FundamentalsQuarterly[]; earnings: FundamentalsEarnings[] }) {
-  // Chart points come from earnings (has est+real for both EPS and Revenue
-  // when yfinance includes it) — that's the most useful trend view.
+  quarterly, earnings, nextEarningsDate, nextEpsEstimate, nextRevenueEstimate,
+}: {
+  quarterly: FundamentalsQuarterly[];
+  earnings: FundamentalsEarnings[];
+  nextEarningsDate: string | null;
+  nextEpsEstimate: number | null;
+  nextRevenueEstimate: number | null;
+}) {
+  // Chart goes oldest → newest (left → right) so the trend reads naturally.
+  // The table below reverses to show newest → oldest at the top.
+  const earningsAsc = useMemo(
+    () => [...earnings].sort((a, b) => a.date.localeCompare(b.date)),
+    [earnings],
+  );
+  const earningsDesc = useMemo(() => [...earningsAsc].reverse(), [earningsAsc]);
+
   const chartData: ChartPoint[] = useMemo(() => {
-    return earnings.map((e) => ({
+    return earningsAsc.map((e) => ({
       label: shortDate(e.date),
       revenue: e.revenue_reported,
       revenue_est: e.revenue_estimate,
       eps: e.eps_reported,
       eps_est: e.eps_estimate,
     }));
-  }, [earnings]);
+  }, [earningsAsc]);
   const hasEstimate = earnings.some((e) => e.eps_estimate != null);
 
   // Pair up earnings with quarterly history by FISCAL QUARTER (YYYY-Q1..Q4),
@@ -302,6 +339,21 @@ function QuarterlyTabBody({
     revByQuarter.set(fiscalEndToQuarter(q.fiscal_quarter_end), q.revenue);
   }
   const earningsQuarters = new Set(earnings.map((e) => earningsDateToFiscalQuarter(e.date)));
+
+  // Historical-only quarters (no earnings row): sort desc too so newest first.
+  const historicalDesc = useMemo(
+    () =>
+      [...quarterly]
+        .filter((q) => !earningsQuarters.has(fiscalEndToQuarter(q.fiscal_quarter_end)))
+        .sort((a, b) => b.fiscal_quarter_end.localeCompare(a.fiscal_quarter_end))
+        .slice(0, 3),
+    [quarterly, earningsQuarters],
+  );
+
+  // Next-earnings row only renders when we have at least a date — without
+  // a date the whole row is meaningless. EPS/Revenue estimates may be null
+  // (yfinance hasn't published consensus yet) and we render "—" in that case.
+  const hasNextRow = !!nextEarningsDate;
 
   return (
     <>
@@ -321,22 +373,50 @@ function QuarterlyTabBody({
             </tr>
           </thead>
           <tbody>
-            {earnings.map((e) => {
+            {/* Forward-looking row: next earnings event. Date + estimates are
+                the only populated cells (no actuals yet — that's the point).
+                Subtle blue tint + italic to set it apart from confirmed rows. */}
+            {hasNextRow && (
+              <tr className="border-t border-border/40 bg-blue-50/60 dark:bg-blue-950/20">
+                <td className="px-1.5 py-1">
+                  <span className="inline-flex items-center gap-1 font-mono text-blue-700 dark:text-blue-300">
+                    {shortDate(nextEarningsDate!)}
+                  </span>
+                  <span className="ml-1 text-[10px] uppercase tracking-wider text-blue-700/80 dark:text-blue-300/80 font-semibold">
+                    prossima
+                  </span>
+                </td>
+                <td className="px-1.5 py-1 text-right text-muted-foreground italic">—</td>
+                <td className="px-1.5 py-1 text-right text-blue-700 dark:text-blue-300 font-semibold">
+                  {nextRevenueEstimate != null ? fmtBig(nextRevenueEstimate) : "—"}
+                </td>
+                <td className="px-1.5 py-1 text-right text-muted-foreground italic">—</td>
+                <td className="px-1.5 py-1 text-right text-blue-700 dark:text-blue-300 font-semibold">
+                  {nextEpsEstimate != null ? `$${nextEpsEstimate.toFixed(2)}` : "—"}
+                </td>
+                <td className="px-1.5 py-1 text-right text-muted-foreground italic">—</td>
+              </tr>
+            )}
+            {earningsDesc.map((e) => {
               const surp = fmtPctSurp(e.surprise_pct);
               const beat = e.surprise_pct != null && e.surprise_pct > 0;
               const fq = earningsDateToFiscalQuarter(e.date);
               const revActual = e.revenue_reported ?? revByQuarter.get(fq) ?? null;
+              const revTone = beatTone(revActual, e.revenue_estimate);
+              const epsTone = beatTone(e.eps_reported, e.eps_estimate);
               return (
                 <tr key={e.date} className="border-t border-border/40 hover:bg-muted/30">
                   <td className="px-1.5 py-1">
                     <span className="font-mono">{shortQuarter(`${fq.slice(0, 4)}-${(parseInt(fq.slice(6), 10) * 3).toString().padStart(2, "0")}-01`)}</span>
                     <span className="text-muted-foreground ml-1">({shortDate(e.date)})</span>
                   </td>
-                  <td className="px-1.5 py-1 text-right">{fmtBig(revActual)}</td>
+                  <td className={cn("px-1.5 py-1 text-right font-semibold", revTone)}>
+                    {fmtBig(revActual)}
+                  </td>
                   <td className="px-1.5 py-1 text-right text-muted-foreground">
                     {e.revenue_estimate != null ? fmtBig(e.revenue_estimate) : "—"}
                   </td>
-                  <td className="px-1.5 py-1 text-right font-semibold">
+                  <td className={cn("px-1.5 py-1 text-right font-semibold", epsTone)}>
                     {e.eps_reported != null ? `$${e.eps_reported.toFixed(2)}` : "—"}
                   </td>
                   <td className="px-1.5 py-1 text-right text-muted-foreground">
@@ -351,23 +431,22 @@ function QuarterlyTabBody({
                 </tr>
               );
             })}
-            {/* History: only quarters NOT already covered by an earnings row.
-                Dedup via the YYYY-Q identifier (release date − 45d → quarter).
-                Capped at 3 to avoid the table dwarfing the chart above and
-                spilling visually into the next card. */}
-            {quarterly
-              .filter((q) => !earningsQuarters.has(fiscalEndToQuarter(q.fiscal_quarter_end)))
-              .slice(0, 3)
-              .map((q) => (
-                <tr key={`hist-${q.fiscal_quarter_end}`} className="border-t border-border/40 text-muted-foreground italic">
-                  <td className="px-1.5 py-1 font-mono">{shortQuarter(q.fiscal_quarter_end)}<span className="ml-1 text-[10px] not-italic opacity-60">(storico)</span></td>
-                  <td className="px-1.5 py-1 text-right">{fmtBig(q.revenue)}</td>
-                  <td className="px-1.5 py-1 text-right">—</td>
-                  <td className="px-1.5 py-1 text-right">{q.eps != null ? `$${q.eps.toFixed(2)}` : "—"}</td>
-                  <td className="px-1.5 py-1 text-right">—</td>
-                  <td className="px-1.5 py-1 text-right">—</td>
-                </tr>
-              ))}
+            {/* Historical-only quarters (no earnings release yet captured):
+                show the revenue/EPS we DO have from quarterly fundamentals.
+                Capped at 3 so the table doesn't dwarf the chart above. */}
+            {historicalDesc.map((q) => (
+              <tr key={`hist-${q.fiscal_quarter_end}`} className="border-t border-border/40 text-muted-foreground italic">
+                <td className="px-1.5 py-1 font-mono">
+                  {shortQuarter(q.fiscal_quarter_end)}
+                  <span className="ml-1 text-[10px] not-italic opacity-60">(storico)</span>
+                </td>
+                <td className="px-1.5 py-1 text-right">{fmtBig(q.revenue)}</td>
+                <td className="px-1.5 py-1 text-right">—</td>
+                <td className="px-1.5 py-1 text-right">{q.eps != null ? `$${q.eps.toFixed(2)}` : "—"}</td>
+                <td className="px-1.5 py-1 text-right">—</td>
+                <td className="px-1.5 py-1 text-right">—</td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
@@ -381,7 +460,10 @@ type TabKey = "annual" | "quarterly";
 
 export function FundamentalsCard({ ticker }: Props) {
   const q = useStockFundamentals(ticker);
-  const [tab, setTab] = useState<TabKey>("annual");
+  // Default tab is now "quarterly" — the user reads quarterly results more
+  // frequently than annual (earnings season cadence is the dominant info
+  // flow), and the upcoming-earnings forecast row only renders here.
+  const [tab, setTab] = useState<TabKey>("quarterly");
 
   if (q.isLoading) {
     return (
@@ -502,7 +584,13 @@ export function FundamentalsCard({ ticker }: Props) {
             <AnnualTabBody annual={f.annual} earnings={f.earnings} />
           )}
           {effective === "quarterly" && hasQuarterly && (
-            <QuarterlyTabBody quarterly={f.quarterly} earnings={f.earnings} />
+            <QuarterlyTabBody
+              quarterly={f.quarterly}
+              earnings={f.earnings}
+              nextEarningsDate={f.next_earnings_date}
+              nextEpsEstimate={f.next_eps_estimate}
+              nextRevenueEstimate={f.next_revenue_estimate}
+            />
           )}
         </div>
       </CardContent>

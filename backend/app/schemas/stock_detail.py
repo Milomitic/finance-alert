@@ -135,6 +135,7 @@ class FundamentalsOut(BaseModel):
     earnings: list[FundamentalsEarningsOut] = []
     next_earnings_date: str | None = None
     next_eps_estimate: float | None = None
+    next_revenue_estimate: float | None = None
     micro: MicroDataOut = MicroDataOut()
     insiders: list[InsiderTransactionOut] = []
     analyst_ratings: list[AnalystRatingOut] = []
@@ -143,6 +144,22 @@ class FundamentalsOut(BaseModel):
         current=None, low=None, mean=None, median=None, high=None
     )
     error: str | None = None
+
+
+class IndicatorPeriodsOut(BaseModel):
+    """Actual periods used to compute the indicator series at the requested
+    range. The bundle keys (sma20, sma50, sma200, rsi14) are slot names; the
+    real periods adapt to the range so a 1-month chart uses fast windows
+    instead of an SMA200 that's almost entirely NaN."""
+    sma_fast: int
+    sma_mid: int
+    sma_slow: int
+    rsi: int
+    bb_period: int
+    bb_k: float
+    macd_fast: int
+    macd_slow: int
+    macd_signal: int
 
 
 class IndicatorSeriesOut(BaseModel):
@@ -156,6 +173,12 @@ class IndicatorSeriesOut(BaseModel):
     macd_line: list[IndicatorPointOut] = []
     macd_signal: list[IndicatorPointOut] = []
     macd_hist: list[IndicatorPointOut] = []
+    # Default for back-compat when older code paths construct IndicatorSeriesOut
+    # without specifying periods. Real responses always include it.
+    periods: IndicatorPeriodsOut = IndicatorPeriodsOut(
+        sma_fast=20, sma_mid=50, sma_slow=200, rsi=14,
+        bb_period=20, bb_k=2.0, macd_fast=12, macd_slow=26, macd_signal=9,
+    )
 
 
 class StockKpisOut(BaseModel):

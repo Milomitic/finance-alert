@@ -12,7 +12,7 @@ from app.schemas.stock import FilterOptionsOut, IndexOptionOut, StockOut, StockS
 from app.schemas.stock_detail import (
     AnalystActionOut, AnalystPriceTargetOut, AnalystRatingOut, EffectiveRuleOut,
     FundamentalsAnnualOut, FundamentalsEarningsOut, FundamentalsOut,
-    FundamentalsQuarterlyOut, IndicatorPointOut, IndicatorSeriesOut,
+    FundamentalsQuarterlyOut, IndicatorPeriodsOut, IndicatorPointOut, IndicatorSeriesOut,
     InsiderTransactionOut, LiveQuoteOut, LiveQuotesBatchOut, MicroDataOut,
     OhlcvBarOut, StockDetailOut, StockKpisOut, StockNewsItemOut, StockNewsOut,
 )
@@ -117,6 +117,7 @@ def get_stock_detail(
             macd_line=[IndicatorPointOut(date=p.date, value=p.value) for p in detail.macd_line],
             macd_signal=[IndicatorPointOut(date=p.date, value=p.value) for p in detail.macd_signal],
             macd_hist=[IndicatorPointOut(date=p.date, value=p.value) for p in detail.macd_hist],
+            periods=IndicatorPeriodsOut(**detail.indicator_periods.__dict__),
         ),
         kpis=StockKpisOut(
             last_close=detail.kpis.last_close, prev_close=detail.kpis.prev_close,
@@ -186,6 +187,7 @@ def get_stock_fundamentals(
         earnings=[FundamentalsEarningsOut(**e.__dict__) for e in f.earnings],
         next_earnings_date=f.next_earnings_date,
         next_eps_estimate=f.next_eps_estimate,
+        next_revenue_estimate=f.next_revenue_estimate,
         micro=MicroDataOut(**f.micro.__dict__),
         insiders=[InsiderTransactionOut(**i.__dict__) for i in f.insiders],
         analyst_ratings=[AnalystRatingOut(**r.__dict__) for r in f.analyst_ratings],

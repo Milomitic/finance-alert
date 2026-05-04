@@ -27,24 +27,17 @@ const RULE_KIND_OPTIONS: { value: RuleKind | "__all__"; label: string }[] = [
   { value: "death_cross", label: "Death Cross" },
 ];
 
+// Read/unread tracking was removed from the UI. The remaining axis is just
+// archived vs not — kept as a Select for visual consistency with the other
+// filters, but the option set is short.
 const STATUS_OPTIONS: { value: string; label: string }[] = [
   { value: "active", label: "Tutti (esclusi archiviati)" },
-  { value: "unread", label: "Solo non letti" },
-  { value: "read", label: "Solo letti" },
   { value: "archived", label: "Solo archiviati" },
 ];
 
-function statusToParams(status: string): Pick<AlertListParams, "read" | "archived"> {
-  switch (status) {
-    case "unread":
-      return { read: false, archived: false };
-    case "read":
-      return { read: true, archived: false };
-    case "archived":
-      return { archived: true };
-    default:
-      return { archived: false };
-  }
+function statusToParams(status: string): Pick<AlertListParams, "archived"> {
+  if (status === "archived") return { archived: true };
+  return { archived: false };
 }
 
 export function AlertFilters({ value, onChange }: Props) {

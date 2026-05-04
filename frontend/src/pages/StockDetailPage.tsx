@@ -154,7 +154,11 @@ export default function StockDetailPage() {
                   Indicatori
                 </span>
                 <div className="h-4 w-px bg-border" />
-                <IndicatorToggles state={indicators} onChange={onIndicatorChange} />
+                <IndicatorToggles
+                  state={indicators}
+                  onChange={onIndicatorChange}
+                  periods={d.indicators.periods}
+                />
               </div>
             </div>
 
@@ -181,19 +185,39 @@ export default function StockDetailPage() {
               </ResizableSection>
             )}
 
-            {/* RSI sub-panel — togglable + resizable */}
+            {/* RSI sub-panel — togglable + resizable.
+                Default height bumped 140→200 so the 30/70 reference lines
+                have room to breathe and the curve isn't squashed.
+                Label uses the live period from the API response (e.g.
+                "RSI(7)" on a 1m chart, "RSI(21)" on the all-time view). */}
             {indicators.rsi.visible && d.indicators.rsi14.length > 0 && (
               <div className="mt-3">
-                <ResizableSection defaultHeight={140} minHeight={80} label="RSI(14)">
+                <ResizableSection
+                  defaultHeight={200}
+                  minHeight={80}
+                  label={`RSI(${d.indicators.periods?.rsi ?? 14})`}
+                >
                   <RsiPanel rsi14={d.indicators.rsi14} color={indicators.rsi.color} width={indicators.rsi.width} />
                 </ResizableSection>
               </div>
             )}
 
-            {/* MACD sub-panel — togglable + resizable */}
+            {/* MACD sub-panel — togglable + resizable.
+                Default height bumped 160→220: MACD shows three series
+                (line, signal, histogram) that benefit from the extra
+                vertical room more than RSI.
+                Label reflects live (fast,slow,signal) periods. */}
             {indicators.macd.visible && hasMacd && (
               <div className="mt-3">
-                <ResizableSection defaultHeight={160} minHeight={80} label="MACD(12,26,9)">
+                <ResizableSection
+                  defaultHeight={220}
+                  minHeight={80}
+                  label={
+                    d.indicators.periods
+                      ? `MACD(${d.indicators.periods.macd_fast},${d.indicators.periods.macd_slow},${d.indicators.periods.macd_signal})`
+                      : "MACD(12,26,9)"
+                  }
+                >
                   <MacdPanel
                     line={d.indicators.macd_line ?? []}
                     signal={d.indicators.macd_signal ?? []}

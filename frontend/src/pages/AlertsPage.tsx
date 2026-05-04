@@ -51,7 +51,7 @@ export default function AlertsPage() {
     setSelectedIds(sel ? new Set(items.map((a) => a.id)) : new Set());
   };
 
-  const doBulk = async (action: "mark_read" | "mark_unread" | "archive" | "unarchive") => {
+  const doBulk = async (action: "archive" | "unarchive") => {
     if (selectedIds.size === 0) return;
     await bulk.mutateAsync({ ids: Array.from(selectedIds), action });
     setSelectedIds(new Set());
@@ -110,8 +110,6 @@ export default function AlertsPage() {
         <Card>
           <CardContent className="flex items-center gap-2 p-3">
             <span className="text-sm">{selectedIds.size} selezionati</span>
-            <Button size="sm" onClick={() => doBulk("mark_read")}>Marca letti</Button>
-            <Button size="sm" onClick={() => doBulk("mark_unread")}>Marca non letti</Button>
             <Button size="sm" onClick={() => doBulk("archive")}>Archivia</Button>
             <Button size="sm" onClick={() => doBulk("unarchive")}>Disarchivia</Button>
           </CardContent>

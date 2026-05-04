@@ -51,7 +51,7 @@ export function AlertsTable({
           <TableHead className="text-sm">Nome</TableHead>
           <TableHead className="text-sm">Regola</TableHead>
           <TableHead className="text-sm text-right">Prezzo</TableHead>
-          <TableHead className="text-sm">Stato</TableHead>
+          <TableHead className="text-sm">Archivio</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -97,11 +97,7 @@ export function AlertsTable({
               ${a.trigger_price}
             </TableCell>
             <TableCell className="text-sm">
-              {a.archived_at
-                ? "🗄 Archiviato"
-                : a.read_at
-                  ? "✅ Letto"
-                  : "📩 Non letto"}
+              {a.archived_at ? "🗄 Archiviato" : "—"}
             </TableCell>
           </TableRow>
         ))}

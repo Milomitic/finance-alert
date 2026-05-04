@@ -134,6 +134,7 @@ class Fundamentals:
     earnings: list[EarningsPoint] = field(default_factory=list)
     next_earnings_date: str | None = None
     next_eps_estimate: float | None = None
+    next_revenue_estimate: float | None = None
     micro: MicroData = field(default_factory=MicroData)
     insiders: list[InsiderTransaction] = field(default_factory=list)
     analyst_ratings: list[AnalystRating] = field(default_factory=list)
@@ -203,13 +204,24 @@ def _extract_quarterly(qinc_stmt: Any) -> list[QuarterlyPoint]:
     return rows[-8:]
 
 
-def _extract_earnings(ed: Any) -> tuple[list[EarningsPoint], str | None, float | None]:
+def _extract_earnings(
+    ed: Any,
+) -> tuple[list[EarningsPoint], str | None, float | None, float | None]:
+    """Parse yfinance's earnings_dates DataFrame into history + next-up.
+
+    Returns (historical, next_date, next_eps_estimate, next_revenue_estimate).
+    The next-up triplet describes the FIRST upcoming earnings event that
+    yfinance has on calendar (rep == None means it hasn't happened yet);
+    we capture date + EPS est + revenue est so the UI can render a
+    forward-looking row in the quarterly view.
+    """
     if ed is None or ed.empty:
-        return [], None, None
+        return [], None, None, None
 
     historical: list[EarningsPoint] = []
     next_date: str | None = None
     next_estimate: float | None = None
+    next_rev_estimate: float | None = None
 
     ed_sorted = ed.sort_index(ascending=True)
     for ts, row in ed_sorted.iterrows():
@@ -228,9 +240,10 @@ def _extract_earnings(ed: Any) -> tuple[list[EarningsPoint], str | None, float |
         elif next_date is None:
             next_date = d
             next_estimate = est
+            next_rev_estimate = rev_est
 
     historical = historical[-8:]
-    return historical, next_date, next_estimate
+    return historical, next_date, next_estimate, next_rev_estimate
 
 
 def _extract_micro(info: dict | None) -> MicroData:
@@ -369,10 +382,11 @@ def _fetch_fresh(ticker: str) -> Fundamentals:
             logger.debug(f"[fund] quarterly {ticker}: {e}")
             _maybe_record(e)
         try:
-            hist, nxt_date, nxt_est = _extract_earnings(t.earnings_dates)
+            hist, nxt_date, nxt_est, nxt_rev_est = _extract_earnings(t.earnings_dates)
             f.earnings = hist
             f.next_earnings_date = nxt_date
             f.next_eps_estimate = nxt_est
+            f.next_revenue_estimate = nxt_rev_est
             if hist or nxt_date: saw_success = True
         except Exception as e:
             logger.debug(f"[fund] earnings {ticker}: {e}")

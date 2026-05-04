@@ -357,6 +357,22 @@ export interface IndicatorPoint {
   value: number | null;
 }
 
+/** Actual periods used to compute the indicator series for the requested
+ *  range. The series-key names (sma20/sma50/sma200, rsi14) are SLOT names —
+ *  the real periods adapt per range. The UI reads this to label toggles
+ *  with the actual values used (e.g. "SMA 10" on a 1m chart). */
+export interface IndicatorPeriods {
+  sma_fast: number;
+  sma_mid: number;
+  sma_slow: number;
+  rsi: number;
+  bb_period: number;
+  bb_k: number;
+  macd_fast: number;
+  macd_slow: number;
+  macd_signal: number;
+}
+
 export interface IndicatorSeries {
   sma20?: IndicatorPoint[];
   sma50: IndicatorPoint[];
@@ -368,6 +384,9 @@ export interface IndicatorSeries {
   macd_line?: IndicatorPoint[];
   macd_signal?: IndicatorPoint[];
   macd_hist?: IndicatorPoint[];
+  /** Optional for back-compat with older API responses; new responses always
+   *  include it. UI falls back to default labels when missing. */
+  periods?: IndicatorPeriods;
 }
 
 export interface StockKpis {
@@ -543,6 +562,10 @@ export interface Fundamentals {
   earnings: FundamentalsEarnings[];
   next_earnings_date: string | null;
   next_eps_estimate: number | null;
+  /** Revenue forecast (analyst consensus) for the upcoming earnings event,
+   *  when yfinance exposes it. NULL when the field isn't in the
+   *  earnings_dates DataFrame (older yfinance versions or missing data). */
+  next_revenue_estimate: number | null;
   micro: MicroData;
   insiders: InsiderTransaction[];
   analyst_ratings: AnalystRating[];

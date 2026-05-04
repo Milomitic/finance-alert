@@ -59,6 +59,19 @@
 }
 
 @layer base {
+  /* Global readability bump: root font-size 16px → 17px (~6% larger).
+   * Every Tailwind size token is `rem`-based, so text, padding, gaps,
+   * border-radius, and icon sizes all scale together — no per-component
+   * audit needed and the visual rhythm is preserved.
+   *
+   * Why not bigger (e.g. 18px)? At 18px the dashboard tables start to
+   * wrap and shrink-0 chips overflow. 17px is the largest value that
+   * keeps the existing layout stable while still being noticeably more
+   * readable. Localized table-text bumps from previous commits stack
+   * on top of this. */
+  html {
+    font-size: 17px;
+  }
   * {
     @apply border-border;
   }

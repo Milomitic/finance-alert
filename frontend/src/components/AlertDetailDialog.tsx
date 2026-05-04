@@ -120,7 +120,6 @@ export function AlertDetailDialog({ alert, onClose }: Props) {
   const resolution = resolveSnapshot(alert.rule_kind, alert.snapshot ?? {});
   const hasResolvedRows = resolution.rows.length > 0;
   const hasRawData = Object.keys(alert.snapshot ?? {}).length > 0;
-  const isUnread = alert.read_at == null;
   const isArchived = alert.archived_at != null;
 
   return (
@@ -145,12 +144,6 @@ export function AlertDetailDialog({ alert, onClose }: Props) {
               <Icon className="h-3.5 w-3.5" />
               {meta.label}
             </span>
-            {isUnread && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold bg-primary/10 text-primary">
-                <span className="h-1.5 w-1.5 rounded-full bg-primary" />
-                Non letto
-              </span>
-            )}
             {isArchived && (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold bg-muted text-muted-foreground">
                 Archiviato
