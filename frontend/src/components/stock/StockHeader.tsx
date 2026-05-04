@@ -51,6 +51,10 @@ export function StockHeader({ stock, kpis, effectiveRules = [] }: Props) {
   // isn't available (e.g. delisted ticker).
   const live = useLiveQuote(stock.ticker);
   const liveOk = live.data && live.data.price != null && live.data.error == null;
+  const isMarketOpen = liveOk && live.data!.market_state === "OPEN";
+  // The yfinance fast_info endpoint always returns yesterday's close when the
+  // market is shut, so we still want the live data when available — but the
+  // UI labels it differently (LIVE only when actually trading).
   const displayPrice = liveOk ? live.data!.price! : kpis.last_close;
   const change = liveOk ? (live.data!.change_pct ?? null) : kpis.change_pct;
   const changeAbs = liveOk ? live.data!.change_abs : null;
@@ -118,11 +122,15 @@ export function StockHeader({ stock, kpis, effectiveRules = [] }: Props) {
           <div className="text-right tabular-nums shrink-0 flex flex-col gap-1 items-end">
             {displayPrice != null && (
               <>
-                <div className="flex items-center gap-1.5 text-sm uppercase tracking-wide text-muted-foreground">
-                  {liveOk ? (
+                <div className="flex items-center gap-1.5 text-sm uppercase tracking-wide">
+                  {isMarketOpen ? (
                     <span
                       className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-300 font-semibold"
-                      title={liveAge != null ? `Aggiornato ${Math.round(liveAge)}s fa · cache server 10s + polling 15s` : ""}
+                      title={
+                        liveAge != null
+                          ? `Mercato aperto · prezzo aggiornato ${Math.round(liveAge)}s fa (cache 10s + polling 15s)`
+                          : "Prezzo live"
+                      }
                     >
                       <span className="relative inline-flex h-2 w-2">
                         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
@@ -132,8 +140,15 @@ export function StockHeader({ stock, kpis, effectiveRules = [] }: Props) {
                       LIVE
                     </span>
                   ) : (
-                    <span title="Live quote non disponibile — mostra l'ultima chiusura giornaliera">
-                      Last close
+                    <span
+                      className="inline-flex items-center gap-1 text-muted-foreground font-semibold"
+                      title={
+                        liveOk
+                          ? "Mercato chiuso — il prezzo mostrato è l'ultima chiusura"
+                          : "Live quote non disponibile — mostra l'ultima chiusura giornaliera"
+                      }
+                    >
+                      Ultima chiusura
                     </span>
                   )}
                 </div>

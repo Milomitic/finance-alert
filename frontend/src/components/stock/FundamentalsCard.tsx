@@ -221,12 +221,16 @@ function AnnualTabBody({
     };
   });
 
+  // Explicit grid (chart fixed 140px / table scrollable rest) is more
+  // reliable than nested flex when the parent height changes between tabs —
+  // Recharts ResponsiveContainer was triggering layout glitches where the
+  // table headers ended up at the card bottom edge.
   return (
-    <div className="h-full flex flex-col gap-2 min-h-0">
-      <div className="h-[140px] shrink-0">
+    <div className="h-full grid grid-rows-[140px_1fr] gap-2 min-h-0">
+      <div className="min-h-0">
         <MiniTrendChart data={chartData} hasEstimate={hasEstimate} />
       </div>
-      <div className="flex-1 min-h-0 overflow-y-auto">
+      <div className="min-h-0 overflow-y-auto">
         <table className="w-full text-[13px] tabular-nums">
           <thead className="text-sm text-muted-foreground uppercase sticky top-0 bg-card">
             <tr>
@@ -300,12 +304,16 @@ function QuarterlyTabBody({
   }
   const earningsQuarters = new Set(earnings.map((e) => earningsDateToFiscalQuarter(e.date)));
 
+  // Explicit grid (chart fixed 140px / table scrollable rest) is more
+  // reliable than nested flex when the parent height changes between tabs —
+  // Recharts ResponsiveContainer was triggering layout glitches where the
+  // table headers ended up at the card bottom edge.
   return (
-    <div className="h-full flex flex-col gap-2 min-h-0">
-      <div className="h-[140px] shrink-0">
+    <div className="h-full grid grid-rows-[140px_1fr] gap-2 min-h-0">
+      <div className="min-h-0">
         <MiniTrendChart data={chartData} hasEstimate={hasEstimate} />
       </div>
-      <div className="flex-1 min-h-0 overflow-y-auto">
+      <div className="min-h-0 overflow-y-auto">
         <table className="w-full text-[13px] tabular-nums">
           <thead className="text-sm text-muted-foreground uppercase sticky top-0 bg-card">
             <tr>

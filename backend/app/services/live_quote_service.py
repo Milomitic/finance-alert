@@ -1,5 +1,12 @@
 """Live quote service — near-real-time price + day stats for one ticker.
 
+Includes a market-hours heuristic per exchange: the price returned during
+trading hours is "LIVE", otherwise it's the EOD close. We compute this
+server-side from the ticker suffix (`.L` → London, `.HK` → Hong Kong,
+bare → US, etc.) + current UTC weekday/time. This is approximate (no
+holiday calendar) but accurate enough to drive the UI's LIVE indicator.
+
+
 Why polling and not WebSockets:
 - yfinance has no WebSocket. A real-time provider (Finnhub, Polygon, Alpaca)
   would, but adds an external API key + rate limit per plan.
@@ -18,6 +25,7 @@ quote with `error` set instead of hitting Yahoo.
 import math
 import time
 from dataclasses import dataclass
+from datetime import datetime, time as dtime, timezone
 from threading import Lock
 from typing import Any
 
@@ -35,10 +43,59 @@ class LiveQuote:
     day_high: float | None = None
     day_low: float | None = None
     volume: int | None = None
-    market_state: str | None = None     # "REGULAR" | "PRE" | "POST" | "CLOSED"
+    market_state: str | None = None     # "OPEN" | "CLOSED" | "UNKNOWN"
     currency: str | None = None
     fetched_at: float = 0.0
     error: str | None = None
+
+
+# Market hours per exchange suffix, in UTC. Source: standard local hours
+# converted to UTC (no DST awareness — close enough to drive a LIVE badge).
+# Tuple is (open_hour_utc, open_min, close_hour_utc, close_min).
+_MARKET_HOURS_UTC: dict[str, tuple[int, int, int, int]] = {
+    # US: 9:30am-4:00pm ET → 14:30-21:00 UTC (winter) / 13:30-20:00 (summer DST).
+    # We pick the wider window (13:30-21:00) so we don't flag LIVE as CLOSED
+    # in the half-hour DST overlap.
+    "US": (13, 30, 21, 0),
+    # London (.L): 8:00-16:30 UK → 8:00-16:30 UTC (winter) / 7:00-15:30 (summer).
+    "UK": (7, 0, 16, 30),
+    # Continental EU (.MI/.DE/.PA/.AS/.MC/.SW/.BR/.HE/.CO/.IR): Xetra/EuroNext
+    # 9:00-17:30 local → 8:00-16:30 UTC (winter) / 7:00-15:30 (summer).
+    "EU": (7, 0, 16, 30),
+    # Hong Kong (.HK): 9:30-16:00 HKT (UTC+8) → 1:30-8:00 UTC. No DST.
+    "HK": (1, 30, 8, 0),
+    # Shanghai/Shenzhen (.SS/.SZ): 9:30-15:00 CST (UTC+8), lunch break ignored
+    # for simplicity → 1:30-7:00 UTC.
+    "CN": (1, 30, 7, 0),
+}
+
+
+def _exchange_region(ticker: str) -> str:
+    """Map a ticker to one of the regions in _MARKET_HOURS_UTC."""
+    suffix = ticker.split(".")[-1].upper() if "." in ticker else ""
+    if suffix == "L":
+        return "UK"
+    if suffix in ("MI", "DE", "PA", "AS", "MC", "SW", "BR", "HE", "CO", "IR"):
+        return "EU"
+    if suffix == "HK":
+        return "HK"
+    if suffix in ("SS", "SZ"):
+        return "CN"
+    return "US"
+
+
+def _is_market_open(ticker: str, now_utc: datetime | None = None) -> bool:
+    """True iff the exchange of `ticker` is currently in regular trading hours.
+    No holiday calendar — only weekday + time-of-day check."""
+    now = now_utc or datetime.now(timezone.utc)
+    if now.weekday() >= 5:   # Sat/Sun
+        return False
+    region = _exchange_region(ticker)
+    oh, om, ch, cm = _MARKET_HOURS_UTC[region]
+    open_t = dtime(oh, om)
+    close_t = dtime(ch, cm)
+    cur = now.time()
+    return open_t <= cur <= close_t
 
 
 _CACHE: dict[str, LiveQuote] = {}
@@ -114,14 +171,11 @@ def _fetch_fresh(ticker: str) -> LiveQuote:
         quote.day_high = day_high
         quote.day_low = day_low
         quote.volume = _safe_int(fi.get("lastVolume"))
-        # quoteType isn't a market state, but it's the cheapest "is the
-        # exchange awake?" indicator fast_info exposes. For a true REGULAR/
-        # PRE/POST signal we'd need t.info which is rate-limited.
-        try:
-            qtype = fi.get("quoteType")
-            quote.market_state = str(qtype) if qtype else None
-        except Exception:  # noqa: BLE001
-            pass
+        # Market state is computed locally from the ticker suffix + UTC time
+        # — yfinance fast_info doesn't expose it and t.info is rate-limited.
+        # Returns "OPEN" during exchange hours, "CLOSED" otherwise. The
+        # frontend uses this to decide whether to render the LIVE badge.
+        quote.market_state = "OPEN" if _is_market_open(ticker) else "CLOSED"
         quote.currency = "GBP" if currency in ("GBp", "GBX") else currency
 
         if last is not None:

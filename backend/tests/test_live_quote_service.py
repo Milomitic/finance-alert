@@ -1,5 +1,6 @@
 """Tests for live_quote_service."""
 import time
+from datetime import datetime, timezone
 
 import pytest
 
@@ -140,3 +141,41 @@ def test_batch_returns_one_quote_per_ticker(monkeypatch: pytest.MonkeyPatch) -> 
     batch = live_quote_service.get_quotes_batch(["AAPL", "MSFT", "GOOGL"])
     assert set(batch.keys()) == {"AAPL", "MSFT", "GOOGL"}
     assert all(q.price == 100.0 for q in batch.values())
+
+
+def test_is_market_open_us_during_session() -> None:
+    """Tuesday 18:00 UTC = 1pm ET = US market open."""
+    t = datetime(2026, 5, 5, 18, 0, tzinfo=timezone.utc)
+    assert live_quote_service._is_market_open("AAPL", t) is True
+
+
+def test_is_market_open_us_after_close() -> None:
+    """Tuesday 22:00 UTC = 5pm ET = US market closed."""
+    t = datetime(2026, 5, 5, 22, 0, tzinfo=timezone.utc)
+    assert live_quote_service._is_market_open("AAPL", t) is False
+
+
+def test_is_market_open_weekend_always_closed() -> None:
+    """Saturday 18:00 UTC — even within US hours, weekend = closed."""
+    t = datetime(2026, 5, 9, 18, 0, tzinfo=timezone.utc)
+    assert live_quote_service._is_market_open("AAPL", t) is False
+
+
+def test_is_market_open_lse_during_session() -> None:
+    """Tuesday 10:00 UTC = morning UK session."""
+    t = datetime(2026, 5, 5, 10, 0, tzinfo=timezone.utc)
+    assert live_quote_service._is_market_open("HSBA.L", t) is True
+
+
+def test_is_market_open_hk_during_session() -> None:
+    """Tuesday 03:00 UTC = 11am HKT (Hang Seng open)."""
+    t = datetime(2026, 5, 5, 3, 0, tzinfo=timezone.utc)
+    assert live_quote_service._is_market_open("0005.HK", t) is True
+
+
+def test_quote_includes_market_state(monkeypatch: pytest.MonkeyPatch) -> None:
+    """LiveQuote.market_state must be populated from the ticker's exchange."""
+    fi = _fake_fast_info({"lastPrice": 100.0, "previousClose": 99.0, "currency": "USD"})
+    _patch_yf(monkeypatch, fi)
+    q = live_quote_service.get_quote("AAPL")
+    assert q.market_state in ("OPEN", "CLOSED")
