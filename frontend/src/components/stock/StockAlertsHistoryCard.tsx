@@ -1,76 +1,20 @@
-import {
-  Activity,
-  ArrowDownToLine,
-  ArrowUpToLine,
-  Bell,
-  History,
-  TrendingDown,
-  TrendingUp,
-  Waves,
-  Zap,
-} from "lucide-react";
+import { Bell, History, TrendingDown, TrendingUp } from "lucide-react";
+// Bell is still used for the unread chip in the header strip; History/Trending
+// are used in the kind chip + bull/bear stat badges.
 import { useMemo, useState } from "react";
 
 import type { Alert } from "@/api/types";
 import { AlertDetailDialog } from "@/components/AlertDetailDialog";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  TONE_BG,
+  TONE_BORDER_LEFT,
+  getAlertKindMeta,
+} from "@/lib/alertMeta";
 import { cn } from "@/lib/utils";
 
 interface Props {
   alerts: Alert[];
-}
-
-/* ─── Rule-kind metadata: label, icon, tone ─────────────────────────────── */
-/* Each kind maps to a small visual identity so the user can scan a long
- * history and spot patterns at a glance — repeated RSI oversold = volatility,
- * frequent breakouts = strong momentum, etc. */
-
-type Tone = "bullish" | "bearish" | "neutral" | "warning";
-
-interface KindMeta {
-  label: string;
-  icon: React.ComponentType<{ className?: string }>;
-  tone: Tone;
-}
-
-const KIND_META: Record<string, KindMeta> = {
-  rsi_oversold: { label: "RSI Oversold", icon: ArrowDownToLine, tone: "bullish" },
-  rsi_overbought: { label: "RSI Overbought", icon: ArrowUpToLine, tone: "bearish" },
-  golden_cross: { label: "Golden Cross", icon: TrendingUp, tone: "bullish" },
-  death_cross: { label: "Death Cross", icon: TrendingDown, tone: "bearish" },
-  volume_spike: { label: "Volume Spike", icon: Activity, tone: "warning" },
-  breakout: { label: "Breakout", icon: Zap, tone: "bullish" },
-  macd_bullish_cross: { label: "MACD Bullish", icon: TrendingUp, tone: "bullish" },
-  macd_bearish_cross: { label: "MACD Bearish", icon: TrendingDown, tone: "bearish" },
-  bollinger_squeeze: { label: "BB Squeeze", icon: Waves, tone: "neutral" },
-  bollinger_breakout: { label: "BB Breakout", icon: Zap, tone: "warning" },
-};
-
-const TONE_BG: Record<Tone, string> = {
-  bullish: "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300",
-  bearish: "bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300",
-  warning: "bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300",
-  neutral: "bg-slate-100 dark:bg-slate-800/60 text-slate-700 dark:text-slate-300",
-};
-
-const TONE_BORDER: Record<Tone, string> = {
-  bullish: "border-l-emerald-400 dark:border-l-emerald-500",
-  bearish: "border-l-rose-400 dark:border-l-rose-500",
-  warning: "border-l-amber-400 dark:border-l-amber-500",
-  neutral: "border-l-slate-300 dark:border-l-slate-600",
-};
-
-function getKindMeta(rule_kind: string | null): KindMeta {
-  if (!rule_kind) {
-    return { label: "Price alert", icon: Bell, tone: "neutral" };
-  }
-  return (
-    KIND_META[rule_kind] ?? {
-      label: rule_kind,
-      icon: Bell,
-      tone: "neutral",
-    }
-  );
 }
 
 function formatDate(iso: string): string {
@@ -115,7 +59,7 @@ function computeStats(alerts: Alert[]): AlertStats {
   for (const a of alerts) {
     if (a.read_at == null) unread++;
     if (new Date(a.triggered_at).getTime() >= cutoff) last30d++;
-    const tone = getKindMeta(a.rule_kind).tone;
+    const tone = getAlertKindMeta(a.rule_kind).tone;
     if (tone === "bullish") bullish++;
     else if (tone === "bearish") bearish++;
   }
@@ -125,7 +69,7 @@ function computeStats(alerts: Alert[]): AlertStats {
 /* ─── Single-row visual ─────────────────────────────────────────────────── */
 
 function AlertRow({ alert, onClick }: { alert: Alert; onClick: () => void }) {
-  const meta = getKindMeta(alert.rule_kind);
+  const meta = getAlertKindMeta(alert.rule_kind);
   const Icon = meta.icon;
   const isUnread = alert.read_at == null;
 
@@ -137,7 +81,7 @@ function AlertRow({ alert, onClick }: { alert: Alert; onClick: () => void }) {
         className={cn(
           "w-full text-left rounded-md border-l-2 px-3 py-2 transition-colors",
           "hover:bg-accent/40 cursor-pointer",
-          TONE_BORDER[meta.tone],
+          TONE_BORDER_LEFT[meta.tone],
           isUnread && "bg-primary/5",
         )}
       >

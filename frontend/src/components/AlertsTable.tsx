@@ -1,3 +1,5 @@
+import { Link } from "react-router-dom";
+
 import type { Alert } from "@/api/types";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -9,6 +11,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { getAlertKindMeta } from "@/lib/alertMeta";
 
 interface Props {
   alerts: Alert[];
@@ -17,13 +20,6 @@ interface Props {
   onSelectAll: (selected: boolean) => void;
   onRowClick: (alert: Alert) => void;
 }
-
-const KIND_LABEL: Record<string, string> = {
-  rsi_oversold: "RSI Oversold",
-  rsi_overbought: "RSI Overbought",
-  golden_cross: "Golden Cross",
-  death_cross: "Death Cross",
-};
 
 export function AlertsTable({
   alerts,
@@ -64,12 +60,30 @@ export function AlertsTable({
             <TableCell className="text-muted-foreground text-xs">
               {new Date(a.triggered_at).toLocaleString("it-IT")}
             </TableCell>
-            <TableCell className="font-medium">{a.ticker ?? "—"}</TableCell>
+            {/* Ticker cell: stopPropagation so the click navigates to the
+                stock detail page instead of bubbling up to the row's onClick
+                (which opens the alert popup). The user's mental model is:
+                "ticker is always a deep link to that stock, no matter where
+                I see it." */}
+            <TableCell className="font-medium">
+              {a.ticker ? (
+                <Link
+                  to={`/stocks/${encodeURIComponent(a.ticker)}`}
+                  onClick={(e) => e.stopPropagation()}
+                  className="hover:underline"
+                  title={`Vai al dettaglio di ${a.ticker}`}
+                >
+                  {a.ticker}
+                </Link>
+              ) : (
+                "—"
+              )}
+            </TableCell>
             <TableCell className="text-xs text-muted-foreground truncate max-w-[200px]" title={a.name ?? ""}>
               {a.name ?? "—"}
             </TableCell>
             <TableCell>
-              <Badge variant="secondary">{KIND_LABEL[a.rule_kind ?? ""] ?? a.rule_kind}</Badge>
+              <Badge variant="secondary">{getAlertKindMeta(a.rule_kind).label}</Badge>
             </TableCell>
             <TableCell className="text-right tabular-nums">${a.trigger_price}</TableCell>
             <TableCell className="text-xs">

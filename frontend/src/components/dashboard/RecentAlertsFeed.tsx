@@ -3,31 +3,18 @@ import { Link } from "react-router-dom";
 
 import type { Alert } from "@/api/types";
 import { AlertDetailDialog } from "@/components/AlertDetailDialog";
-import { Badge } from "@/components/ui/badge";
 import {
   Card,
   CardContent,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { TONE_BG, getAlertKindMeta } from "@/lib/alertMeta";
+import { cn } from "@/lib/utils";
 
 interface Props {
   alerts: Alert[];
 }
-
-const KIND_LABEL: Record<string, string> = {
-  rsi_oversold: "RSI Oversold",
-  rsi_overbought: "RSI Overbought",
-  golden_cross: "Golden Cross",
-  death_cross: "Death Cross",
-};
-
-const KIND_EMOJI: Record<string, string> = {
-  rsi_oversold: "🟢",
-  rsi_overbought: "🔴",
-  golden_cross: "⚡",
-  death_cross: "⚠️",
-};
 
 export function RecentAlertsFeed({ alerts }: Props) {
   const [openDetail, setOpenDetail] = useState<Alert | null>(null);
@@ -46,43 +33,64 @@ export function RecentAlertsFeed({ alerts }: Props) {
             </div>
           ) : (
             <ul className="divide-y">
-              {alerts.map((a) => (
-                <li
-                  key={a.id}
-                  className="px-4 py-3 cursor-pointer hover:bg-accent transition-colors flex items-center gap-3"
-                  onClick={() => setOpenDetail(a)}
-                >
-                  <span className="text-lg" aria-hidden="true">
-                    {KIND_EMOJI[a.rule_kind ?? ""] ?? "•"}
-                  </span>
-                  {a.ticker ? (
-                    <Link
-                      to={`/stocks/${encodeURIComponent(a.ticker)}`}
-                      onClick={(e) => e.stopPropagation()}
-                      className="font-medium min-w-[60px] hover:underline"
+              {alerts.map((a) => {
+                const meta = getAlertKindMeta(a.rule_kind);
+                const Icon = meta.icon;
+                return (
+                  <li
+                    key={a.id}
+                    className="px-4 py-3 cursor-pointer hover:bg-accent transition-colors flex items-center gap-3"
+                    onClick={() => setOpenDetail(a)}
+                  >
+                    {/* Tone-colored kind chip with icon — replaces the
+                        previous emoji-only marker; consistent with the rest
+                        of the alert UI surfaces (table, history card, dialog) */}
+                    <span
+                      className={cn(
+                        "inline-flex items-center justify-center h-6 w-6 rounded shrink-0",
+                        TONE_BG[meta.tone],
+                      )}
+                      title={meta.label}
                     >
-                      {a.ticker}
-                    </Link>
-                  ) : (
-                    <span className="font-medium min-w-[60px]">—</span>
-                  )}
-                  <span className="text-xs text-muted-foreground truncate max-w-[160px]" title={a.name ?? ""}>
-                    {a.name ?? ""}
-                  </span>
-                  <Badge variant="secondary" className="text-xs">
-                    {KIND_LABEL[a.rule_kind ?? ""] ?? a.rule_kind ?? "—"}
-                  </Badge>
-                  <span className="text-sm tabular-nums">${a.trigger_price}</span>
-                  <span className="ml-auto text-xs text-muted-foreground">
-                    {new Date(a.triggered_at).toLocaleString("it-IT", {
-                      day: "2-digit",
-                      month: "2-digit",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </span>
-                </li>
-              ))}
+                      <Icon className="h-3.5 w-3.5" />
+                    </span>
+                    {a.ticker ? (
+                      <Link
+                        to={`/stocks/${encodeURIComponent(a.ticker)}`}
+                        onClick={(e) => e.stopPropagation()}
+                        className="font-medium min-w-[60px] hover:underline"
+                      >
+                        {a.ticker}
+                      </Link>
+                    ) : (
+                      <span className="font-medium min-w-[60px]">—</span>
+                    )}
+                    <span
+                      className="text-xs text-muted-foreground truncate max-w-[160px]"
+                      title={a.name ?? ""}
+                    >
+                      {a.name ?? ""}
+                    </span>
+                    <span
+                      className={cn(
+                        "px-2 py-0.5 rounded text-xs font-semibold",
+                        TONE_BG[meta.tone],
+                      )}
+                    >
+                      {meta.label}
+                    </span>
+                    <span className="text-sm tabular-nums">${a.trigger_price}</span>
+                    <span className="ml-auto text-xs text-muted-foreground">
+                      {new Date(a.triggered_at).toLocaleString("it-IT", {
+                        day: "2-digit",
+                        month: "2-digit",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </span>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </CardContent>
