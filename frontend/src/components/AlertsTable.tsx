@@ -30,8 +30,14 @@ export function AlertsTable({
 }: Props) {
   const allSelected = alerts.length > 0 && alerts.every((a) => selectedIds.has(a.id));
 
+  // Bumped one notch above the shared Table's default text-sm: the alert
+  // listing is the page's primary content, not auxiliary metadata, so it
+  // earns the larger reading size. Header stays text-sm to preserve the
+  // visual hierarchy (label-vs-value); meta cells (timestamp, name,
+  // status) move from text-xs to text-sm so they're still slightly
+  // smaller than the primary cells but more comfortable to read.
   return (
-    <Table>
+    <Table className="text-base">
       <TableHeader>
         <TableRow>
           <TableHead className="w-8">
@@ -40,12 +46,12 @@ export function AlertsTable({
               onCheckedChange={(checked) => onSelectAll(!!checked)}
             />
           </TableHead>
-          <TableHead>Timestamp</TableHead>
-          <TableHead>Ticker</TableHead>
-          <TableHead>Nome</TableHead>
-          <TableHead>Regola</TableHead>
-          <TableHead className="text-right">Prezzo</TableHead>
-          <TableHead>Stato</TableHead>
+          <TableHead className="text-sm">Timestamp</TableHead>
+          <TableHead className="text-sm">Ticker</TableHead>
+          <TableHead className="text-sm">Nome</TableHead>
+          <TableHead className="text-sm">Regola</TableHead>
+          <TableHead className="text-sm text-right">Prezzo</TableHead>
+          <TableHead className="text-sm">Stato</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -57,7 +63,7 @@ export function AlertsTable({
                 onCheckedChange={(c) => onSelect(a.id, !!c)}
               />
             </TableCell>
-            <TableCell className="text-muted-foreground text-xs">
+            <TableCell className="text-muted-foreground text-sm">
               {new Date(a.triggered_at).toLocaleString("it-IT")}
             </TableCell>
             {/* Ticker cell: stopPropagation so the click navigates to the
@@ -65,7 +71,7 @@ export function AlertsTable({
                 (which opens the alert popup). The user's mental model is:
                 "ticker is always a deep link to that stock, no matter where
                 I see it." */}
-            <TableCell className="font-medium">
+            <TableCell className="font-semibold">
               {a.ticker ? (
                 <Link
                   to={`/stocks/${encodeURIComponent(a.ticker)}`}
@@ -79,14 +85,18 @@ export function AlertsTable({
                 "—"
               )}
             </TableCell>
-            <TableCell className="text-xs text-muted-foreground truncate max-w-[200px]" title={a.name ?? ""}>
+            <TableCell className="text-sm text-muted-foreground truncate max-w-[240px]" title={a.name ?? ""}>
               {a.name ?? "—"}
             </TableCell>
             <TableCell>
-              <Badge variant="secondary">{getAlertKindMeta(a.rule_kind).label}</Badge>
+              <Badge variant="secondary" className="text-sm">
+                {getAlertKindMeta(a.rule_kind).label}
+              </Badge>
             </TableCell>
-            <TableCell className="text-right tabular-nums">${a.trigger_price}</TableCell>
-            <TableCell className="text-xs">
+            <TableCell className="text-right tabular-nums font-semibold">
+              ${a.trigger_price}
+            </TableCell>
+            <TableCell className="text-sm">
               {a.archived_at
                 ? "🗄 Archiviato"
                 : a.read_at

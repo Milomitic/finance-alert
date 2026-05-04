@@ -29,20 +29,23 @@ export function RulesTable({ rules, onEdit }: Props) {
     );
   }
 
+  // Same sizing pass as AlertsTable: text-base for primary cells, text-sm
+  // for header + condition meta. py-2.5 instead of py-2 gives the larger
+  // text room to breathe without the rows feeling cramped.
   return (
-    <table className="w-full text-sm border rounded-md">
-      <thead className="bg-muted/50 text-xs">
+    <table className="w-full text-base border rounded-md">
+      <thead className="bg-muted/50 text-sm">
         <tr>
-          <th className="px-3 py-2 text-left">Stato</th>
-          <th className="px-3 py-2 text-left">Tipo</th>
-          <th className="px-3 py-2 text-left">Condizioni</th>
-          <th className="px-3 py-2 text-right">Azioni</th>
+          <th className="px-3 py-2.5 text-left font-medium">Stato</th>
+          <th className="px-3 py-2.5 text-left font-medium">Tipo</th>
+          <th className="px-3 py-2.5 text-left font-medium">Condizioni</th>
+          <th className="px-3 py-2.5 text-right font-medium">Azioni</th>
         </tr>
       </thead>
       <tbody>
         {rules.map((r) => (
           <tr key={r.id} className="border-t">
-            <td className="px-3 py-2">
+            <td className="px-3 py-2.5">
               <Checkbox
                 checked={r.enabled}
                 onCheckedChange={(c) =>
@@ -50,11 +53,11 @@ export function RulesTable({ rules, onEdit }: Props) {
                 }
               />
             </td>
-            <td className="px-3 py-2">{r.kind}</td>
-            <td className="px-3 py-2 text-xs text-muted-foreground">
+            <td className="px-3 py-2.5 font-medium">{r.kind}</td>
+            <td className="px-3 py-2.5 text-sm text-muted-foreground">
               {describeExpression(r.expression, r.kind)}
             </td>
-            <td className="px-3 py-2 text-right">
+            <td className="px-3 py-2.5 text-right">
               <Button variant="ghost" size="sm" onClick={() => onEdit(r)}>
                 <Pencil className="h-4 w-4" />
               </Button>
