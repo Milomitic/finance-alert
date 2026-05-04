@@ -151,8 +151,15 @@ def get_stock_news(
     limit: int = 5,
     _user: User = Depends(get_current_user),
 ) -> StockNewsOut:
-    if limit < 1 or limit > 20:
-        raise HTTPException(status_code=422, detail="limit must be 1..20")
+    """Fetch up to `limit` news items, most-recent-first.
+
+    yfinance typically returns 10–20 items per ticker. Cap raised from 20 to 50
+    so a UI that wants to render a long scrollable list isn't artificially
+    truncated; the cache layer means the wider limit doesn't cost extra
+    upstream calls.
+    """
+    if limit < 1 or limit > 50:
+        raise HTTPException(status_code=422, detail="limit must be 1..50")
     items = stock_news_service.get_news(ticker, limit=limit)
     return StockNewsOut(items=[StockNewsItemOut(**n) for n in items])
 

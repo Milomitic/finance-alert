@@ -327,9 +327,9 @@ export function MicroDataCard({ ticker, stock, kpis }: Props) {
 
   if (q.isLoading) {
     return (
-      <Card className="overflow-hidden">
-        <CardContent className="p-4 flex flex-col gap-2">
-          <div className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+      <Card className="h-full overflow-hidden flex flex-col">
+        <CardContent className="p-4 h-full flex flex-col min-h-0">
+          <div className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-2">
             Valuation & Quality
           </div>
           {/* Snapshot rows render even during fundamentals loading — their data
@@ -340,7 +340,7 @@ export function MicroDataCard({ ticker, stock, kpis }: Props) {
               {snapshotRows.map((r) => <RowItem key={r.label} row={r} />)}
             </div>
           )}
-          <div className="h-32 animate-pulse bg-muted/40 rounded" />
+          <div className="flex-1 mt-2 animate-pulse bg-muted/40 rounded" />
         </CardContent>
       </Card>
     );
@@ -357,14 +357,15 @@ export function MicroDataCard({ ticker, stock, kpis }: Props) {
     (r) => r.preformatted != null || (r.raw != null && Number.isFinite(r.raw)),
   );
 
-  // No fixed height + no h-full: card is exactly as tall as its content.
-  // The 2-col grid below stays unscrolled — if the visible row count exceeds
-  // a sensible height we'd reintroduce flex-1+overflow-y-auto, but the
-  // current ~26 rows split across 2 columns is fine on any normal viewport.
+  // h-full so the card fills the grid row (height = tallest sibling, set by
+  // FundamentalsCard which can't scroll). Internal flex-1 + overflow-y-auto
+  // means the row list scrolls if the card ends up taller than its content
+  // (rare — usually content fits) or shorter (more common when a sibling
+  // pushes the row taller).
   return (
-    <Card className="overflow-hidden">
-      <CardContent className="p-4 flex flex-col gap-2">
-        <div className="flex items-center justify-between shrink-0">
+    <Card className="h-full overflow-hidden flex flex-col">
+      <CardContent className="p-4 h-full flex flex-col min-h-0">
+        <div className="flex items-center justify-between mb-2 shrink-0">
           <div className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
             Valuation & Quality
           </div>
@@ -372,20 +373,22 @@ export function MicroDataCard({ ticker, stock, kpis }: Props) {
             cache 24h
           </span>
         </div>
-        {!anyValue ? (
-          <div className="text-sm text-muted-foreground">
-            Dati non disponibili (Yahoo Finance non li espone per questo ticker o è temporaneamente rate-limited).
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6">
-            <div className="flex flex-col">
-              {left.map((r) => <RowItem key={r.label} row={r} />)}
+        <div className="flex-1 min-h-0 overflow-y-auto pr-1 -mr-1">
+          {!anyValue ? (
+            <div className="text-sm text-muted-foreground">
+              Dati non disponibili (Yahoo Finance non li espone per questo ticker o è temporaneamente rate-limited).
             </div>
-            <div className="flex flex-col">
-              {right.map((r) => <RowItem key={r.label} row={r} />)}
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6">
+              <div className="flex flex-col">
+                {left.map((r) => <RowItem key={r.label} row={r} />)}
+              </div>
+              <div className="flex flex-col">
+                {right.map((r) => <RowItem key={r.label} row={r} />)}
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </CardContent>
     </Card>
   );

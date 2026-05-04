@@ -385,8 +385,8 @@ export function FundamentalsCard({ ticker }: Props) {
 
   if (q.isLoading) {
     return (
-      <Card className="overflow-hidden">
-        <CardContent className="p-4 flex flex-col">
+      <Card className="h-full overflow-hidden">
+        <CardContent className="p-4 h-full flex flex-col">
           <div className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-2">
             Fundamentals
           </div>
@@ -401,8 +401,8 @@ export function FundamentalsCard({ ticker }: Props) {
   const f = q.data;
   if (!f || f.error || (f.annual.length === 0 && f.earnings.length === 0 && f.quarterly.length === 0)) {
     return (
-      <Card className="overflow-hidden">
-        <CardContent className="p-4 flex flex-col">
+      <Card className="h-full overflow-hidden">
+        <CardContent className="p-4 h-full flex flex-col">
           <div className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-2">
             Fundamentals
           </div>
@@ -443,13 +443,17 @@ export function FundamentalsCard({ ticker }: Props) {
    *      overflow can happen — and it's contained.
    */
 
-  // The card now sizes to content (no `h-full`) per user request: chart is
-  // a fixed 200px and the data table renders all rows inline (no internal
-  // scroll). `overflow-hidden` stays as a safety net so any rogue extra-wide
-  // row clips at the card edge instead of overflowing into siblings.
+  // h-full so the card fills the grid row (height set by `items-stretch` to
+  // match the tallest sibling). Chart is a fixed 200px and the data table
+  // renders ALL rows inline — per user constraint, Fundamentals never scrolls
+  // its tables. That makes Fundamentals the *natural floor* for the row
+  // height: News + Valuation cards scroll internally if they have more
+  // content than this floor allows.
+  // `overflow-hidden` stays as a safety net so any rogue extra-wide row
+  // clips at the card edge instead of overflowing into siblings.
   return (
-    <Card className="overflow-hidden">
-      <CardContent className="p-3 flex flex-col">
+    <Card className="h-full overflow-hidden">
+      <CardContent className="p-3 h-full flex flex-col">
         {/* Header */}
         <div className="flex items-center gap-2 mb-2 shrink-0">
           <span className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">

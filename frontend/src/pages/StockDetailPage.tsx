@@ -111,15 +111,22 @@ export default function StockDetailPage() {
       </div>
 
       {/* Three side-by-side cards: Fundamentals | Valuation+KPIs | News.
-          `items-start` lets each card size to its content height (per user
-          request — the previous fixed `lg:h-[640px]` made the Fundamentals
-          card stretch beyond its needs). Cards may end up at different
-          heights now; that's the trade-off for "alta quanto il contenuto". */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 items-start">
+          `items-stretch` (default) + `h-full` on each card → all three end
+          up at the same height = the tallest's natural height. Per user
+          constraint, FundamentalsCard never scrolls its tables, so it sets
+          the row's floor; the other two cards scroll internally if their
+          content exceeds that floor (News with 25 items will; Valuation
+          with ~30 rows might depending on viewport). */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
         <FundamentalsCard ticker={ticker} />
         <MicroDataCard ticker={ticker} stock={d.stock} kpis={d.kpis} />
         <NewsCard ticker={ticker} />
       </div>
+
+      {/* Triggered alerts for this ticker — full-width row promoted from the
+          right sidebar so the user sees alert history immediately after
+          fundamentals/valuation/news, not buried below the price chart. */}
+      <StockAlertsHistoryCard alerts={d.alerts_history} />
 
       {/* Insiders & Analyst stays full-width below — its tables (analyst bars
           + insider list) are wide and would get cramped in a third of a row. */}
@@ -203,7 +210,9 @@ export default function StockDetailPage() {
         <div className="space-y-3">
           <TechnicalKpiCard kpis={d.kpis} indicators={d.indicators} />
           <PriceAlertsCard ticker={ticker} />
-          <StockAlertsHistoryCard alerts={d.alerts_history} />
+          {/* StockAlertsHistoryCard moved to a full-width prominent row above
+              (right after the 3-card row). Kept the sidebar slot empty rather
+              than rendering twice. */}
         </div>
       </div>
 

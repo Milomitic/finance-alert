@@ -62,7 +62,12 @@ def _normalize_yf_item(raw: dict) -> dict[str, Any] | None:
 
 
 def get_news(ticker: str, limit: int = 5) -> list[dict[str, Any]]:
-    """Fetch news for a ticker. Cached for 1h. Returns [] on any error."""
+    """Fetch news for a ticker. Cached for 1h. Returns [] on any error.
+
+    Items are sorted **descending** by published_at (most recent first) so
+    the UI can render them in chronological order without doing a sort pass.
+    Items missing a published_at are pushed to the end (least useful).
+    """
     now = datetime.now(UTC)
     cached = _CACHE.get(ticker)
     if cached and (now - cached[0]) < NEWS_TTL:
@@ -76,6 +81,10 @@ def get_news(ticker: str, limit: int = 5) -> list[dict[str, Any]]:
         _CACHE[ticker] = (now, [])
         return []
     normalized = [n for raw in raw_items if (n := _normalize_yf_item(raw))]
+    # ISO 8601 strings (with the trailing Z that yfinance emits) sort
+    # lexicographically the same as chronologically — no parsing needed.
+    # Sentinel "" pushes items missing pubDate to the end of the list.
+    normalized.sort(key=lambda n: n.get("published_at") or "", reverse=True)
     _CACHE[ticker] = (now, normalized)
     return normalized[:limit]
 
