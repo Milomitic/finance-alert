@@ -1,3 +1,4 @@
+import { Clock } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import type { Alert } from "@/api/types";
@@ -11,6 +12,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  daysBetween,
+  formatDateTime,
+  formatShortDate,
+  isDelayedDetection,
+} from "@/lib/alertDates";
 import { getAlertKindMeta } from "@/lib/alertMeta";
 
 interface Props {
@@ -46,7 +53,12 @@ export function AlertsTable({
               onCheckedChange={(checked) => onSelectAll(!!checked)}
             />
           </TableHead>
-          <TableHead className="text-sm">Timestamp</TableHead>
+          <TableHead className="text-sm" title="Data della barra di mercato in cui la regola è scattata">
+            Data segnale
+          </TableHead>
+          <TableHead className="text-sm" title="Quando il sistema ha registrato l'alert">
+            Rilevato
+          </TableHead>
           <TableHead className="text-sm">Ticker</TableHead>
           <TableHead className="text-sm">Nome</TableHead>
           <TableHead className="text-sm">Regola</TableHead>
@@ -63,8 +75,47 @@ export function AlertsTable({
                 onCheckedChange={(c) => onSelect(a.id, !!c)}
               />
             </TableCell>
-            <TableCell className="text-muted-foreground text-sm">
-              {new Date(a.triggered_at).toLocaleString("it-IT")}
+            {/* Signal date: when the market actually crossed the rule's
+                threshold. Bold + tabular so it reads as the primary date —
+                this is the one that matters for "when did the indicator
+                fire". Backwards-compat: legacy rows have signal_date=null
+                and we fall back to "—" with a tip explaining why. */}
+            <TableCell className="text-sm font-semibold tabular-nums">
+              {a.signal_date ? (
+                formatShortDate(a.signal_date)
+              ) : (
+                <span
+                  className="text-muted-foreground italic font-normal"
+                  title="Alert legacy creato prima dell'introduzione della data segnale"
+                >
+                  —
+                </span>
+              )}
+            </TableCell>
+            {/* Detection timestamp: when the scan job created the row.
+                Highlighted with an orange clock when noticeably later than
+                the signal (≥1 calendar day) so the user sees at a glance
+                that the system noticed a backfilled signal. */}
+            <TableCell className="text-sm text-muted-foreground tabular-nums">
+              {(() => {
+                const delayed = isDelayedDetection(a.triggered_at, a.signal_date);
+                const delta = daysBetween(a.triggered_at, a.signal_date);
+                return (
+                  <span
+                    className="inline-flex items-center gap-1"
+                    title={
+                      delayed && delta != null
+                        ? `Il sistema ha rilevato il segnale ${delta}g dopo la barra di mercato. Possibile backfill o scan saltato.`
+                        : "Quando lo scan ha registrato l'alert"
+                    }
+                  >
+                    {delayed && (
+                      <Clock className="h-3 w-3 text-amber-600 dark:text-amber-400 shrink-0" />
+                    )}
+                    {formatDateTime(a.triggered_at)}
+                  </span>
+                );
+              })()}
             </TableCell>
             {/* Ticker cell: stopPropagation so the click navigates to the
                 stock detail page instead of bubbling up to the row's onClick

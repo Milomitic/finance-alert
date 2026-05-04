@@ -1,3 +1,4 @@
+import { Clock } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 
@@ -9,6 +10,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { isDelayedDetection } from "@/lib/alertDates";
 import { TONE_BG, getAlertKindMeta } from "@/lib/alertMeta";
 import { cn } from "@/lib/utils";
 
@@ -80,14 +82,37 @@ export function RecentAlertsFeed({ alerts }: Props) {
                       {meta.label}
                     </span>
                     <span className="text-sm tabular-nums">${a.trigger_price}</span>
-                    <span className="ml-auto text-xs text-muted-foreground">
-                      {new Date(a.triggered_at).toLocaleString("it-IT", {
-                        day: "2-digit",
-                        month: "2-digit",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </span>
+                    {/* Date cell: signal_date is the primary "when did the
+                        market do the thing"; detection time is secondary.
+                        Orange clock chip flags ≥1-day-delayed detection. */}
+                    {(() => {
+                      const delayed = isDelayedDetection(a.triggered_at, a.signal_date);
+                      return (
+                        <span
+                          className="ml-auto text-xs text-muted-foreground tabular-nums inline-flex items-center gap-1"
+                          title={
+                            a.signal_date
+                              ? `Segnale: ${a.signal_date} · Rilevato: ${new Date(a.triggered_at).toLocaleString("it-IT")}`
+                              : new Date(a.triggered_at).toLocaleString("it-IT")
+                          }
+                        >
+                          {delayed && (
+                            <Clock className="h-3 w-3 text-amber-600 dark:text-amber-400" />
+                          )}
+                          {a.signal_date
+                            ? new Date(a.signal_date).toLocaleDateString("it-IT", {
+                                day: "2-digit",
+                                month: "2-digit",
+                              })
+                            : new Date(a.triggered_at).toLocaleString("it-IT", {
+                                day: "2-digit",
+                                month: "2-digit",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}
+                        </span>
+                      );
+                    })()}
                   </li>
                 );
               })}

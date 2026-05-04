@@ -137,7 +137,8 @@ def get_stock_detail(
             AlertOut(
                 id=a.id, rule_id=a.rule_id, rule_kind=None,
                 stock_id=a.stock_id, ticker=detail.stock.ticker,
-                triggered_at=a.triggered_at, trigger_price=float(a.trigger_price),
+                triggered_at=a.triggered_at, signal_date=a.signal_date,
+                trigger_price=float(a.trigger_price),
                 snapshot=__import__("json").loads(a.snapshot or "{}"),
                 read_at=a.read_at, archived_at=a.archived_at,
             )

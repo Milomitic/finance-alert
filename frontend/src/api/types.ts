@@ -136,6 +136,12 @@ export interface Rule {
 export interface Alert {
   id: number;
   rule_id: number;
+  /** ISO date (YYYY-MM-DD) of the market-data bar where the rule's
+   *  condition matched. May differ from `triggered_at` (the wall-clock
+   *  moment the row was created): a scan run on Monday morning may detect
+   *  a signal whose underlying bar closed Friday. NULL only for legacy
+   *  rows from before this column existed. */
+  signal_date?: string | null;
   rule_kind: RuleKind | null;
   stock_id: number;
   ticker: string | null;

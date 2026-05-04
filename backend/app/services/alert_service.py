@@ -87,6 +87,7 @@ def list_alerts(
                 "ticker": ticker_val,
                 "name": name_val,
                 "triggered_at": alert.triggered_at,
+                "signal_date": alert.signal_date,
                 "trigger_price": float(alert.trigger_price),
                 "snapshot": alert.snapshot,
                 "read_at": alert.read_at,

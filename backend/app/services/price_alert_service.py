@@ -130,12 +130,16 @@ def evaluate_all(db: Session) -> int:
             "prev_close": prev_close,
             "last_close": last_close,
         }
+        # signal_date = the bar where the price crossed the target. bars[0]
+        # is the most recent (DESC ordering above) — that's the bar where
+        # `prev_close → last_close` straddled the target threshold.
         db.add(
             Alert(
                 rule_id=None,
                 stock_id=pa.stock_id,
                 trigger_price=last_close,
                 snapshot=json.dumps(snapshot),
+                signal_date=bars[0].date,
             )
         )
         pa.triggered_at = now

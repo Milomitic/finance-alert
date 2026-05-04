@@ -1,9 +1,10 @@
-import { History, TrendingDown, TrendingUp } from "lucide-react";
+import { Clock, History, TrendingDown, TrendingUp } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import type { Alert } from "@/api/types";
 import { AlertDetailDialog } from "@/components/AlertDetailDialog";
 import { Card, CardContent } from "@/components/ui/card";
+import { isDelayedDetection } from "@/lib/alertDates";
 import {
   TONE_BG,
   TONE_BORDER_LEFT,
@@ -22,6 +23,17 @@ function formatDate(iso: string): string {
     year: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
+  });
+}
+
+/** Format an ISO date "YYYY-MM-DD" as a Italian short date (day + month). */
+function formatSignalDate(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString("it-IT", {
+    day: "2-digit",
+    month: "short",
+    year: "2-digit",
   });
 }
 
@@ -66,6 +78,7 @@ function computeStats(alerts: Alert[]): AlertStats {
 function AlertRow({ alert, onClick }: { alert: Alert; onClick: () => void }) {
   const meta = getAlertKindMeta(alert.rule_kind);
   const Icon = meta.icon;
+  const delayed = isDelayedDetection(alert.triggered_at, alert.signal_date);
 
   return (
     <li>
@@ -95,10 +108,28 @@ function AlertRow({ alert, onClick }: { alert: Alert; onClick: () => void }) {
             ${alert.trigger_price.toFixed(2)}
           </span>
 
-          {/* Date — right-aligned, shows both relative and absolute */}
+          {/* Date column: signal_date as primary (when the indicator
+              fired), with the detection wall-clock + relative time as
+              secondary. Orange clock chip when the system detected the
+              signal ≥1 day late. Falls back to triggered_at as primary
+              for legacy rows that lack signal_date. */}
           <span className="ml-auto text-xs text-muted-foreground tabular-nums shrink-0 flex flex-col items-end">
-            <span className="font-medium">{formatRelative(alert.triggered_at)}</span>
-            <span className="opacity-70">{formatDate(alert.triggered_at)}</span>
+            <span className="font-semibold text-foreground/85 inline-flex items-center gap-1">
+              {delayed && (
+                <Clock
+                  className="h-3 w-3 text-amber-600 dark:text-amber-400"
+                  aria-label="Rilevazione in ritardo"
+                />
+              )}
+              {alert.signal_date
+                ? formatSignalDate(alert.signal_date)
+                : formatRelative(alert.triggered_at)}
+            </span>
+            <span className="opacity-70">
+              {alert.signal_date
+                ? `rilevato ${formatRelative(alert.triggered_at)}`
+                : formatDate(alert.triggered_at)}
+            </span>
           </span>
         </div>
       </button>

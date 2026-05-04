@@ -1,5 +1,5 @@
 """Alerts request/response schemas."""
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -17,6 +17,10 @@ class AlertOut(BaseModel):
     ticker: str | None = None  # joined
     name: str | None = None  # joined company name
     triggered_at: datetime
+    # Market-data bar date on which the rule's condition matched. May be NULL
+    # for rows created before this column existed; the UI falls back to
+    # showing only `triggered_at` in that case.
+    signal_date: date | None = None
     trigger_price: float
     snapshot: dict[str, Any]
     read_at: datetime | None

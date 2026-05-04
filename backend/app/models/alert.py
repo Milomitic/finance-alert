@@ -1,7 +1,8 @@
 """Alert events fired on rule edge-transition (False -> True)."""
-from datetime import datetime
+from datetime import date, datetime
 
 from sqlalchemy import (
+    Date,
     DateTime,
     ForeignKey,
     Integer,
@@ -37,6 +38,14 @@ class Alert(Base):
     triggered_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+    # The market-data bar date on which the rule's condition matched. This
+    # may differ from `triggered_at`: the scan runs daily/on-demand, so the
+    # bar with RSI=85 may have closed yesterday or last Friday while the
+    # alert row is created when the scan runs today. Storing both dates
+    # lets the UI distinguish "the indicator crossed threshold on Friday,
+    # the system noticed Monday" — useful when a scan is missed or when
+    # backfilling. Nullable for legacy rows from before this column existed.
+    signal_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     trigger_price: Mapped[float] = mapped_column(Numeric(12, 4), nullable=False)
     # JSON snapshot of indicator values at trigger time, e.g.
     # {"rsi": 28.4, "period": 14, "threshold": 30}

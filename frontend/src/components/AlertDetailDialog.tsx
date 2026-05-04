@@ -1,4 +1,12 @@
-import { ArrowRight, CalendarClock, ChevronDown, Code2, DollarSign } from "lucide-react";
+import {
+  ArrowRight,
+  CalendarClock,
+  CalendarRange,
+  ChevronDown,
+  Clock,
+  Code2,
+  DollarSign,
+} from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 
@@ -12,6 +20,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { daysBetween, isDelayedDetection } from "@/lib/alertDates";
 import {
   TONE_BG,
   TONE_BORDER_LEFT,
@@ -177,35 +186,105 @@ export function AlertDetailDialog({ alert, onClose }: Props) {
           </DialogDescription>
         </DialogHeader>
 
-        {/* HERO STRIP — the two metrics the user most wants when reading
-            an alert in isolation: how much was the price, and when did it
-            fire. Side-by-side so they can be compared at a glance. */}
-        <div className="px-5 grid grid-cols-2 gap-3">
-          <div className="rounded-lg border border-border/60 bg-muted/30 dark:bg-muted/15 p-3">
-            <div className="flex items-center gap-1 text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
-              <DollarSign className="h-3 w-3" />
-              Prezzo trigger
+        {/* HERO STRIP — three side-by-side tiles: trigger price + signal
+            date (when the market did the thing) + detection timestamp
+            (when the system noticed). Splitting "when" into two cells lets
+            the user spot delayed-detection cases (orange clock badge). */}
+        {(() => {
+          const delayed = isDelayedDetection(alert.triggered_at, alert.signal_date);
+          const delta = daysBetween(alert.triggered_at, alert.signal_date);
+          return (
+            <div className="px-5 grid grid-cols-3 gap-2">
+              {/* Trigger price */}
+              <div className="rounded-lg border border-border/60 bg-muted/30 dark:bg-muted/15 p-3">
+                <div className="flex items-center gap-1 text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
+                  <DollarSign className="h-3 w-3" />
+                  Prezzo trigger
+                </div>
+                <div className="text-2xl font-bold tabular-nums mt-1 leading-tight">
+                  ${alert.trigger_price.toFixed(2)}
+                </div>
+              </div>
+
+              {/* Signal date — when the rule's condition matched on the
+                  underlying market data. The "primary" date conceptually:
+                  it's the answer to "when did the indicator fire?". */}
+              <div className="rounded-lg border border-border/60 bg-muted/30 dark:bg-muted/15 p-3">
+                <div className="flex items-center gap-1 text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
+                  <CalendarRange className="h-3 w-3" />
+                  Data segnale
+                </div>
+                {alert.signal_date ? (
+                  <>
+                    <div className="text-base font-bold tabular-nums mt-1 leading-tight">
+                      {new Date(alert.signal_date).toLocaleDateString("it-IT", {
+                        weekday: "short",
+                        day: "numeric",
+                        month: "short",
+                      })}
+                    </div>
+                    <div className="text-xs text-muted-foreground tabular-nums mt-0.5">
+                      {alert.signal_date}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="text-base font-medium italic mt-1 leading-tight text-muted-foreground">
+                      n/d
+                    </div>
+                    <div
+                      className="text-xs text-muted-foreground italic mt-0.5"
+                      title="Alert legacy creato prima dell'introduzione della data segnale"
+                    >
+                      legacy
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Detection timestamp — when the scan job created the row.
+                  Orange clock + tinted background appear when the gap from
+                  signal_date is ≥ 1 calendar day, since that means the
+                  alert "looks fresh" but the underlying bar is older. */}
+              <div
+                className={cn(
+                  "rounded-lg border p-3",
+                  delayed
+                    ? "border-amber-300/70 bg-amber-50/60 dark:bg-amber-950/20"
+                    : "border-border/60 bg-muted/30 dark:bg-muted/15",
+                )}
+                title={
+                  delayed && delta != null
+                    ? `Il sistema ha rilevato il segnale ${delta}g dopo la barra di mercato. Possibile backfill o scan saltato.`
+                    : "Quando lo scan ha registrato l'alert"
+                }
+              >
+                <div
+                  className={cn(
+                    "flex items-center gap-1 text-[11px] uppercase tracking-wider font-semibold",
+                    delayed
+                      ? "text-amber-700 dark:text-amber-300"
+                      : "text-muted-foreground",
+                  )}
+                >
+                  {delayed ? <Clock className="h-3 w-3" /> : <CalendarClock className="h-3 w-3" />}
+                  {delayed ? "Rilevato (in ritardo)" : "Rilevato"}
+                </div>
+                <div className="text-base font-bold tabular-nums mt-1 leading-tight">
+                  {formatRelative(alert.triggered_at)}
+                </div>
+                <div className="text-xs text-muted-foreground tabular-nums mt-0.5">
+                  {formatAbsolute(alert.triggered_at)}
+                </div>
+                {delayed && delta != null && (
+                  <div className="text-[11px] text-amber-700 dark:text-amber-300 italic mt-1.5">
+                    +{delta}g vs segnale
+                  </div>
+                )}
+              </div>
             </div>
-            <div className="text-2xl font-bold tabular-nums mt-1 leading-tight">
-              ${alert.trigger_price.toFixed(2)}
-            </div>
-          </div>
-          <div className="rounded-lg border border-border/60 bg-muted/30 dark:bg-muted/15 p-3">
-            <div className="flex items-center gap-1 text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
-              <CalendarClock className="h-3 w-3" />
-              Triggerato
-            </div>
-            <div className="text-base font-bold tabular-nums mt-1 leading-tight">
-              {formatRelative(alert.triggered_at)}
-            </div>
-            <div
-              className="text-xs text-muted-foreground tabular-nums mt-0.5"
-              title={alert.triggered_at}
-            >
-              {formatAbsolute(alert.triggered_at)}
-            </div>
-          </div>
-        </div>
+          );
+        })()}
 
         {/* SNAPSHOT — labeled rows when we know the kind, raw JSON otherwise. */}
         <div className="px-5 pt-4 pb-1">

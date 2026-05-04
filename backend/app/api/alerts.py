@@ -352,6 +352,7 @@ def patch(
         ticker=ticker,
         name=name,
         triggered_at=a.triggered_at,
+        signal_date=a.signal_date,
         trigger_price=float(a.trigger_price),
         snapshot=a.snapshot,
         read_at=a.read_at,

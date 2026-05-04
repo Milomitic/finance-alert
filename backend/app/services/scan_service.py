@@ -174,6 +174,12 @@ def scan_universe(
             continue
         result.stocks_scanned += 1
         last_close = float(ohlcv["close"].iloc[-1])
+        # The market-data bar date on which the indicator condition matched.
+        # Stored on every Alert row created in this iteration so the UI can
+        # distinguish "signal occurred Friday" from "system recorded Monday".
+        # Falls back to None if the date column is missing (defensive — should
+        # never happen given _load_ohlcv always sets it).
+        signal_bar_date = ohlcv["date"].iloc[-1] if "date" in ohlcv.columns else None
 
         for kind, candidate_global in global_rules.items():
             global_rule = candidate_global
@@ -218,6 +224,7 @@ def scan_universe(
                             stock_id=stock.id,
                             trigger_price=last_close,
                             snapshot=json.dumps(snapshot),
+                            signal_date=signal_bar_date,
                         )
                     )
                     result.alerts_fired += 1
@@ -242,6 +249,7 @@ def scan_universe(
                             stock_id=stock.id,
                             trigger_price=last_close,
                             snapshot=json.dumps(snapshot),
+                            signal_date=signal_bar_date,
                         )
                     )
                     result.alerts_fired += 1
