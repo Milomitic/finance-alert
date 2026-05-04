@@ -124,6 +124,13 @@ function buildSnapshotRows(stock: Stock, kpis: StockKpis): Row[] {
 /* ─── Valuation rows (yfinance fundamentals → display) ──────────────────── */
 
 function buildColumns(m: MicroData): { left: Row[]; right: Row[] } {
+  // Goal: 13 rows in each column when the 4 trading-snapshot rows are
+  // prepended to the LEFT (so 9 valuation rows + 4 snapshot = 13 left,
+  // 13 right). Conceptual split:
+  //   LEFT: Valuation multiples + Beta (8 multiples + 1 risk = 9)
+  //   RIGHT: Profitability + Leverage + Cashflow + Growth + Income (13)
+  // Dividend yield + Payout ratio moved from left to right because they
+  // belong with the income/quality metrics conceptually, not the multiples.
   const left: Row[] = [
     {
       label: "P/E (TTM)",
@@ -180,18 +187,6 @@ function buildColumns(m: MicroData): { left: Row[]; right: Row[] } {
       raw: m.beta,
       format: num,
       tip: "Sensibilità del prezzo al mercato. >1 = più volatile del mercato, <1 = meno.",
-    },
-    {
-      label: "Dividend yield",
-      raw: m.dividend_yield,
-      format: pctRaw,
-      tip: "Dividend yield annualizzato.",
-    },
-    {
-      label: "Payout ratio",
-      raw: m.payout_ratio,
-      format: pct,
-      tip: "% di utili distribuiti come dividendi.",
     },
   ];
   const right: Row[] = [
@@ -271,6 +266,18 @@ function buildColumns(m: MicroData): { left: Row[]; right: Row[] } {
       format: pct,
       tip: "Performance prezzo nelle ultime 52 settimane.",
       toneFor: (v) => v > 0 ? "text-green-600" : "text-red-600",
+    },
+    {
+      label: "Dividend yield",
+      raw: m.dividend_yield,
+      format: pctRaw,
+      tip: "Dividend yield annualizzato.",
+    },
+    {
+      label: "Payout ratio",
+      raw: m.payout_ratio,
+      format: pct,
+      tip: "% di utili distribuiti come dividendi.",
     },
   ];
   return { left, right };

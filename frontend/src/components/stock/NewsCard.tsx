@@ -76,9 +76,25 @@ export function NewsCard({ ticker }: Props) {
     return tb - ta;
   });
 
+  // Layout trick: NewsCard's natural content (25 items × ~80px = ~2000px)
+  // would otherwise force the entire grid row to that height. We don't want
+  // that — per user spec, only Fundamentals + Valuations should "command"
+  // the row height. So we wrap the actual Card in a `relative` container
+  // with the Card positioned `absolute inset-0`. Effects:
+  //   1. The grid item (the wrapper div) has 0 intrinsic content height
+  //      because its only child is out-of-flow (absolute) → contributes
+  //      nothing to the grid row's max-content sizing.
+  //   2. The Card fills the wrapper, which fills the row's actual height
+  //      (set by Fundamentals or Valuations, whichever is taller).
+  //   3. Internal flex-1 + overflow-y-auto on the list contains the long
+  //      news list inside that bounded height.
+  // This is a standard CSS pattern for "child should fill parent but not
+  // contribute to its sizing" — same trick used for full-bleed images
+  // inside fixed-aspect containers.
   return (
-    <Card className="h-full overflow-hidden flex flex-col">
-      <CardContent className="p-4 h-full flex flex-col min-h-0">
+    <div className="relative h-full">
+      <Card className="absolute inset-0 overflow-hidden flex flex-col">
+        <CardContent className="p-4 h-full flex flex-col min-h-0">
         <div className="flex items-center gap-2 mb-3 shrink-0">
           <Newspaper className="h-4 w-4 text-muted-foreground" />
           <span className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
@@ -174,6 +190,7 @@ export function NewsCard({ ticker }: Props) {
           )}
         </div>
       </CardContent>
-    </Card>
+      </Card>
+    </div>
   );
 }
