@@ -1,5 +1,5 @@
 import { ArrowDownRight, ArrowUpRight, CalendarClock } from "lucide-react";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   Bar, CartesianGrid, ComposedChart, Legend, Line, ReferenceLine,
   ResponsiveContainer, Tooltip, XAxis, YAxis,
@@ -9,7 +9,6 @@ import type {
   FundamentalsAnnual, FundamentalsEarnings, FundamentalsQuarterly,
 } from "@/api/types";
 import { Card, CardContent } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useStockFundamentals } from "@/hooks/useStockFundamentals";
 import { cn } from "@/lib/utils";
 
@@ -221,18 +220,18 @@ function AnnualTabBody({
     };
   });
 
-  // Explicit grid (chart fixed 140px / table scrollable rest) is more
-  // reliable than nested flex when the parent height changes between tabs —
-  // Recharts ResponsiveContainer was triggering layout glitches where the
-  // table headers ended up at the card bottom edge.
+  // Two stacked sections — chart with EXPLICIT pixel height (no flex/grid
+  // height-calc dance), table fills remaining space and scrolls. This
+  // pattern is bulletproof inside a card with `overflow-hidden` on the
+  // outer Card: even if the table content is huge, scroll stays inside.
   return (
-    <div className="h-full grid grid-rows-[140px_1fr] gap-2 min-h-0">
-      <div className="min-h-0">
+    <>
+      <div style={{ height: 150 }} className="shrink-0">
         <MiniTrendChart data={chartData} hasEstimate={hasEstimate} />
       </div>
-      <div className="min-h-0 overflow-y-auto">
+      <div className="flex-1 min-h-0 overflow-y-auto mt-2">
         <table className="w-full text-[13px] tabular-nums">
-          <thead className="text-sm text-muted-foreground uppercase sticky top-0 bg-card">
+          <thead className="text-sm text-muted-foreground uppercase sticky top-0 bg-card z-10">
             <tr>
               <th className="px-1.5 py-1 text-left">FY</th>
               <th className="px-1.5 py-1 text-right">Rev</th>
@@ -275,7 +274,7 @@ function AnnualTabBody({
           </tbody>
         </table>
       </div>
-    </div>
+    </>
   );
 }
 
@@ -304,18 +303,14 @@ function QuarterlyTabBody({
   }
   const earningsQuarters = new Set(earnings.map((e) => earningsDateToFiscalQuarter(e.date)));
 
-  // Explicit grid (chart fixed 140px / table scrollable rest) is more
-  // reliable than nested flex when the parent height changes between tabs —
-  // Recharts ResponsiveContainer was triggering layout glitches where the
-  // table headers ended up at the card bottom edge.
   return (
-    <div className="h-full grid grid-rows-[140px_1fr] gap-2 min-h-0">
-      <div className="min-h-0">
+    <>
+      <div style={{ height: 150 }} className="shrink-0">
         <MiniTrendChart data={chartData} hasEstimate={hasEstimate} />
       </div>
-      <div className="min-h-0 overflow-y-auto">
+      <div className="flex-1 min-h-0 overflow-y-auto mt-2">
         <table className="w-full text-[13px] tabular-nums">
-          <thead className="text-sm text-muted-foreground uppercase sticky top-0 bg-card">
+          <thead className="text-sm text-muted-foreground uppercase sticky top-0 bg-card z-10">
             <tr>
               <th className="px-1.5 py-1 text-left">Data</th>
               <th className="px-1.5 py-1 text-right">Rev</th>
@@ -376,18 +371,21 @@ function QuarterlyTabBody({
           </tbody>
         </table>
       </div>
-    </div>
+    </>
   );
 }
 
 /* ─── Outer card ────────────────────────────────────────────────────────── */
 
+type TabKey = "annual" | "quarterly";
+
 export function FundamentalsCard({ ticker }: Props) {
   const q = useStockFundamentals(ticker);
+  const [tab, setTab] = useState<TabKey>("annual");
 
   if (q.isLoading) {
     return (
-      <Card className="h-full">
+      <Card className="h-full overflow-hidden">
         <CardContent className="p-4 h-full flex flex-col">
           <div className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-2">
             Fundamentals
@@ -401,7 +399,7 @@ export function FundamentalsCard({ ticker }: Props) {
   const f = q.data;
   if (!f || f.error || (f.annual.length === 0 && f.earnings.length === 0 && f.quarterly.length === 0)) {
     return (
-      <Card className="h-full">
+      <Card className="h-full overflow-hidden">
         <CardContent className="p-4 h-full flex flex-col">
           <div className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-2">
             Fundamentals
@@ -416,11 +414,37 @@ export function FundamentalsCard({ ticker }: Props) {
 
   const hasAnnual = f.annual.length > 0;
   const hasQuarterly = f.quarterly.length > 0 || f.earnings.length > 0;
-  const defaultTab = hasAnnual ? "annual" : "quarterly";
+  // Effective tab — fall back if user-selected tab has no data
+  const effective: TabKey =
+    tab === "annual" && !hasAnnual ? "quarterly" :
+    tab === "quarterly" && !hasQuarterly ? "annual" :
+    tab;
+
+  /*
+   * Layout chain — designed to make overflow IMPOSSIBLE:
+   *
+   *   Card (h-full + overflow-hidden)        ← clips anything outside 400px
+   *     CardContent (h-full flex flex-col)
+   *       Header (shrink-0)                  ← natural height, won't grow
+   *       Tab strip (shrink-0)               ← natural height
+   *       Body container (flex-1 min-h-0)    ← takes the rest, can shrink
+   *         Chart (style.height = 150px)     ← explicit pixel height
+   *         Table div (flex-1 min-h-0 overflow-y-auto)  ← scrolls
+   *
+   * Key wins vs the previous attempt:
+   *   1. `overflow-hidden` on Card — no escape regardless of inner bugs.
+   *   2. Native useState instead of Radix Tabs — no display:none / data-state
+   *      games that conflict with our flex chain.
+   *   3. Chart uses inline `style={{ height: 150 }}` — Recharts always sees
+   *      a concrete pixel value, no flex-track height calculation needed.
+   *   4. `flex-1 min-h-0 overflow-y-auto` on the table div is the ONE place
+   *      overflow can happen — and it's contained.
+   */
 
   return (
-    <Card className="h-full">
+    <Card className="h-full overflow-hidden">
       <CardContent className="p-3 h-full flex flex-col min-h-0">
+        {/* Header */}
         <div className="flex items-center gap-2 mb-2 shrink-0">
           <span className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
             Fundamentals
@@ -437,35 +461,41 @@ export function FundamentalsCard({ ticker }: Props) {
           )}
         </div>
 
-        <Tabs defaultValue={defaultTab} className="flex-1 flex flex-col min-h-0">
-          <TabsList className="h-7 p-0.5 shrink-0 self-start">
-            <TabsTrigger value="annual" className="h-6 text-sm px-3" disabled={!hasAnnual}>
-              Annuale
-            </TabsTrigger>
-            <TabsTrigger value="quarterly" className="h-6 text-sm px-3" disabled={!hasQuarterly}>
-              Trimestrale
-            </TabsTrigger>
-          </TabsList>
-          {/* `flex flex-col` on TabsContent is what stops the table from
-              spilling out of the card and overlapping InsidersAnalystCard
-              below — without it, h-full on the inner body has no parent
-              height to measure against and the table renders at natural
-              height. */}
-          <TabsContent value="annual" className="m-0 mt-2 flex-1 min-h-0 flex flex-col">
-            {hasAnnual ? (
-              <AnnualTabBody annual={f.annual} earnings={f.earnings} />
-            ) : (
-              <div className="text-sm text-muted-foreground text-center py-4">N/D</div>
-            )}
-          </TabsContent>
-          <TabsContent value="quarterly" className="m-0 mt-2 flex-1 min-h-0 flex flex-col">
-            {hasQuarterly ? (
-              <QuarterlyTabBody quarterly={f.quarterly} earnings={f.earnings} />
-            ) : (
-              <div className="text-sm text-muted-foreground text-center py-4">N/D</div>
-            )}
-          </TabsContent>
-        </Tabs>
+        {/* Tab strip — plain buttons, no Radix */}
+        <div className="inline-flex items-center gap-1 mb-2 shrink-0 self-start rounded-md bg-muted/50 p-0.5">
+          {([
+            { key: "annual" as const, label: "Annuale", enabled: hasAnnual },
+            { key: "quarterly" as const, label: "Trimestrale", enabled: hasQuarterly },
+          ]).map((t) => (
+            <button
+              key={t.key}
+              type="button"
+              disabled={!t.enabled}
+              onClick={() => setTab(t.key)}
+              className={cn(
+                "h-6 px-3 text-sm rounded font-medium transition-colors",
+                effective === t.key
+                  ? "bg-background shadow-sm"
+                  : "text-muted-foreground hover:text-foreground",
+                !t.enabled && "opacity-40 cursor-not-allowed",
+              )}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Body — chart + scrollable table.
+            flex-1 + min-h-0 lets this region shrink to fit the card height,
+            and the table inside is the only overflow point. */}
+        <div className="flex-1 min-h-0 flex flex-col">
+          {effective === "annual" && hasAnnual && (
+            <AnnualTabBody annual={f.annual} earnings={f.earnings} />
+          )}
+          {effective === "quarterly" && hasQuarterly && (
+            <QuarterlyTabBody quarterly={f.quarterly} earnings={f.earnings} />
+          )}
+        </div>
       </CardContent>
     </Card>
   );
