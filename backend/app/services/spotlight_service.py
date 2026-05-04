@@ -29,11 +29,10 @@ def _sparkline(db: Session, stock_id: int) -> list[float]:
 
 
 def _stock_id_by_ticker(db: Session, ticker: str) -> int | None:
-    # Catalog has duplicate rows for tickers in multiple indices; .first()
-    # avoids MultipleResultsFound for tickers like AAPL/AMZN.
+    # `ticker` è univoco — vedi nota in `services.stock_detail_service.get_detail`.
     s = db.execute(
-        select(Stock).where(Stock.ticker == ticker).limit(1)
-    ).scalars().first()
+        select(Stock).where(Stock.ticker == ticker)
+    ).scalar_one_or_none()
     return s.id if s else None
 
 

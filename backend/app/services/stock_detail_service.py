@@ -187,13 +187,15 @@ def resolve_effective_rules(db: Session, stock_id: int) -> list[EffectiveRule]:
 
 
 def get_detail(db: Session, ticker: str, range_key: str = "1y") -> StockDetail | None:
-    # Catalog has duplicate rows for tickers that appear in multiple indices
-    # (e.g. AAPL in both SP500 and NDX, UCG.MI from two different feeds), so
-    # scalar_one_or_none() would raise MultipleResultsFound. Pick any row —
-    # OHLCV/alerts/rules join via stock_id which is consistent for the chosen row.
+    # `ticker` è univoco a livello di catalogo: dopo `scripts/dedupe_stocks`
+    # e la canonicalizzazione in `services.exchange_codes` non possono più
+    # esistere righe duplicate per lo stesso ticker. `scalar_one_or_none()`
+    # è preferibile a `.first()` perché failuoresce se la prevenzione si
+    # rompe in futuro (vale a dire: bug visibile invece di dato silenziosamente
+    # arbitrario).
     stock = db.execute(
-        select(Stock).where(Stock.ticker == ticker).limit(1)
-    ).scalars().first()
+        select(Stock).where(Stock.ticker == ticker)
+    ).scalar_one_or_none()
     if stock is None:
         return None
 

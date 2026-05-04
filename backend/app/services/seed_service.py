@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import Index, Stock, StockIndex
+from app.services.exchange_codes import canonical_exchange
 
 
 @dataclass
@@ -16,13 +17,25 @@ class SeedResult:
 
 
 def _upsert_stock(db: Session, row: dict[str, str]) -> tuple[Stock, bool]:
-    """Return (stock, created)."""
-    stmt = select(Stock).where(Stock.ticker == row["ticker"], Stock.exchange == row["exchange"])
+    """Return (stock, created).
+
+    L'exchange del CSV viene canonicalizzato via `canonical_exchange`
+    prima di qualsiasi lookup/insert: se in passato (o in un riseed
+    futuro con dati legacy) il CSV contenesse "Borsa Italiana" anziché
+    "BIT", il valore viene normalizzato a "BIT" così da matchare
+    l'invariante DB `UNIQUE(ticker, exchange)` indipendentemente dalla
+    sorgente. Senza questo, il seed e il `catalog_refresh_service`
+    creavano due righe per lo stesso titolo (vedi
+    `scripts/dedupe_stocks.py` per il cleanup storico).
+    """
+    ticker = row["ticker"]
+    exchange = canonical_exchange(ticker, row["exchange"])
+    stmt = select(Stock).where(Stock.ticker == ticker, Stock.exchange == exchange)
     stock = db.execute(stmt).scalar_one_or_none()
     if stock is None:
         stock = Stock(
-            ticker=row["ticker"],
-            exchange=row["exchange"],
+            ticker=ticker,
+            exchange=exchange,
             name=row["name"],
             sector=row.get("sector") or None,
             industry=row.get("industry") or None,
@@ -69,12 +82,14 @@ def seed_index_from_csv(
     updated = 0
     reader = csv.DictReader(csv_source)
     for row in reader:
-        _, created = _upsert_stock(db, row)
+        stock, created = _upsert_stock(db, row)
         added += int(created)
         updated += int(not created)
-        # membership requires id; flush already done in _upsert_stock
-        stock_id = db.execute(
-            select(Stock.id).where(Stock.ticker == row["ticker"], Stock.exchange == row["exchange"])
-        ).scalar_one()
-        _ensure_membership(db, stock_id, idx.id)
+        # `_upsert_stock` ha già fatto flush(), quindi `stock.id` è valido.
+        # (Storicamente qui si rifaceva una `select(Stock.id) WHERE ticker=
+        # AND exchange=row["exchange"]` ma l'exchange grezzo del CSV ora
+        # viene canonicalizzato dentro `_upsert_stock`, quindi quella query
+        # avrebbe potuto fallire con `scalar_one()` su label legacy. Usare
+        # direttamente l'oggetto restituito è più semplice e corretto.)
+        _ensure_membership(db, stock.id, idx.id)
     return SeedResult(added=added, updated=updated)
