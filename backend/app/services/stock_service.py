@@ -6,6 +6,20 @@ from sqlalchemy.orm import Session
 
 from app.models import Index, Stock, StockIndex
 
+# Allowed sort columns; whitelist guards against SQL injection / typos.
+# `change_pct` is intentionally NOT here because it isn't a column on Stock —
+# it lives in the market-stats snapshot. The frontend sorts by Δ% client-side
+# (best effort) since adding a JOIN to a daily-recomputed view for browser
+# sort would be invasive and the data already lands in the page via the
+# market summary cache.
+SORTABLE_COLUMNS: dict[str, object] = {
+    "ticker": Stock.ticker,
+    "name": Stock.name,
+    "market_cap": Stock.market_cap,
+    "sector": Stock.sector,
+    "exchange": Stock.exchange,
+}
+
 
 @dataclass
 class StockFilter:
@@ -14,6 +28,8 @@ class StockFilter:
     sectors: list[str] = field(default_factory=list)
     countries: list[str] = field(default_factory=list)
     index_codes: list[str] = field(default_factory=list)
+    sort_by: str = "ticker"
+    sort_dir: str = "asc"
     limit: int = 50
     offset: int = 0
 
@@ -62,6 +78,26 @@ def _apply_filter(stmt, f: StockFilter):
     return stmt
 
 
+def _apply_sort(stmt, f: StockFilter):
+    """Apply ORDER BY using the whitelist, with `ticker ASC` as a stable tiebreaker.
+
+    The tiebreaker matters when sorting by a nullable / non-unique column
+    (sector, market_cap): without it pagination would walk a non-deterministic
+    order and rows could appear/skip across pages.
+    """
+    col = SORTABLE_COLUMNS.get(f.sort_by, Stock.ticker)
+    direction = (f.sort_dir or "asc").lower()
+    if direction not in ("asc", "desc"):
+        direction = "asc"
+    # NULLS-LAST behaviour is a nice-to-have; SQLite doesn't support
+    # `NULLS LAST` as a direct clause but its default for ASC is NULLS FIRST,
+    # for DESC NULLS LAST. We emulate consistent ordering by chaining:
+    primary = col.desc() if direction == "desc" else col.asc()
+    if f.sort_by == "ticker":
+        return stmt.order_by(primary)
+    return stmt.order_by(primary, Stock.ticker.asc())
+
+
 def search_stocks(db: Session, f: StockFilter) -> StockPage:
     limit = max(1, min(f.limit, 500))
     base = select(Stock)
@@ -70,7 +106,8 @@ def search_stocks(db: Session, f: StockFilter) -> StockPage:
     count_stmt = select(func.count()).select_from(base.subquery())
     total = db.execute(count_stmt).scalar_one()
 
-    rows = db.execute(base.order_by(Stock.ticker).limit(limit + 1).offset(f.offset)).scalars().all()
+    sorted_stmt = _apply_sort(base, f)
+    rows = db.execute(sorted_stmt.limit(limit + 1).offset(f.offset)).scalars().all()
     has_more = len(rows) > limit
     return StockPage(items=list(rows[:limit]), total=int(total), has_more=has_more)
 

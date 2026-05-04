@@ -20,7 +20,9 @@ from app.services import (
     live_quote_service, stock_detail_service, stock_fundamentals_service,
     stock_news_service,
 )
-from app.services.stock_service import StockFilter, get_filter_options, search_stocks
+from app.services.stock_service import (
+    SORTABLE_COLUMNS, StockFilter, get_filter_options, search_stocks,
+)
 
 router = APIRouter(prefix="/api/stocks", tags=["stocks"])
 
@@ -32,11 +34,20 @@ def search(
     sector: Annotated[list[str] | None, Query()] = None,
     country: Annotated[list[str] | None, Query()] = None,
     index: Annotated[list[str] | None, Query()] = None,
+    sort_by: str = "ticker",
+    sort_dir: str = "asc",
     limit: int = 50,
     offset: int = 0,
     db: Session = Depends(get_db),
     _user: User = Depends(get_current_user),
 ) -> StockSearchOut:
+    if sort_by not in SORTABLE_COLUMNS:
+        raise HTTPException(
+            status_code=422,
+            detail=f"sort_by must be one of {sorted(SORTABLE_COLUMNS.keys())}",
+        )
+    if sort_dir not in ("asc", "desc"):
+        raise HTTPException(status_code=422, detail="sort_dir must be 'asc' or 'desc'")
     page = search_stocks(
         db,
         StockFilter(
@@ -45,6 +56,8 @@ def search(
             sectors=sector or [],
             countries=country or [],
             index_codes=index or [],
+            sort_by=sort_by,
+            sort_dir=sort_dir,
             limit=limit,
             offset=offset,
         ),
