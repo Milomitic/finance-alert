@@ -27,6 +27,8 @@ export function useStockSearch(params: SearchParams) {
       (effective.sector ?? []).join(","),
       (effective.country ?? []).join(","),
       (effective.index ?? []).join(","),
+      effective.sort_by ?? "ticker",
+      effective.sort_dir ?? "asc",
       effective.limit ?? 50,
       effective.offset ?? 0,
     ],

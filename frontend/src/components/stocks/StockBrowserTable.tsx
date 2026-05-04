@@ -1,7 +1,8 @@
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { Link } from "react-router-dom";
 
+import type { StockSortBy, SortDir } from "@/api/stocks";
 import type { Stock } from "@/api/types";
 import { StockLogo } from "@/components/dashboard/StockLogo";
 import { Card, CardContent } from "@/components/ui/card";
@@ -9,12 +10,20 @@ import { useMarketSummary } from "@/hooks/useMarketSummary";
 import { getStockFlagCode } from "@/lib/stockMeta";
 import { cn } from "@/lib/utils";
 
+/** All sortable columns the table renders. `change_pct` is client-side only
+ *  (Δ% comes from the market-stats snapshot, not the Stock table) — the
+ *  others map to `StockSortBy` and are sorted server-side across the full
+ *  result set. */
+export type TableSortKey = StockSortBy | "change_pct";
+
 interface Props {
   items: Stock[];
+  sortBy: TableSortKey;
+  sortDir: SortDir;
+  /** Called when the user clicks a sortable header. The parent decides
+   *  whether to flip direction, switch column, or push to URL. */
+  onSortChange: (key: TableSortKey) => void;
 }
-
-type SortKey = "ticker" | "name" | "exchange" | "sector" | "market_cap" | "change_pct";
-type SortDir = "asc" | "desc" | null;
 
 function fmtMc(v: number | null | undefined): string {
   if (v == null) return "—";
@@ -25,36 +34,44 @@ function fmtMc(v: number | null | undefined): string {
 }
 
 interface HeaderProps {
-  column: SortKey;
+  column: TableSortKey;
   label: string;
   align?: "left" | "right";
-  sortKey: SortKey | null;
+  sortBy: TableSortKey;
   sortDir: SortDir;
-  onClick: (col: SortKey) => void;
+  onClick: (col: TableSortKey) => void;
+  /** Some columns (change_pct) only sort the current page. We surface this
+   *  in the title attribute so power users know why their Δ% sort doesn't
+   *  walk the universe. */
+  clientOnly?: boolean;
 }
 
-function SortableHeader({ column, label, align = "left", sortKey, sortDir, onClick }: HeaderProps) {
-  const active = sortKey === column;
+function SortableHeader({
+  column, label, align = "left", sortBy, sortDir, onClick, clientOnly,
+}: HeaderProps) {
+  const active = sortBy === column;
   return (
     <th className={cn("px-3 py-1.5", align === "right" ? "text-right" : "text-left")}>
       <button
         type="button"
         onClick={() => onClick(column)}
+        title={clientOnly ? "Ordina la pagina corrente (lato client)" : undefined}
         className={cn(
           "inline-flex items-center gap-1 hover:text-foreground transition-colors text-xs uppercase tracking-wide font-semibold",
+          active && "text-foreground",
           align === "right" && "ml-auto",
         )}
       >
         <span>{label}</span>
-        {active && sortDir === "desc" && <ArrowDown className="h-3 w-3 text-foreground" />}
-        {active && sortDir === "asc" && <ArrowUp className="h-3 w-3 text-foreground" />}
+        {active && sortDir === "desc" && <ArrowDown className="h-3 w-3" />}
+        {active && sortDir === "asc" && <ArrowUp className="h-3 w-3" />}
         {!active && <ArrowUpDown className="h-3 w-3 opacity-30" />}
       </button>
     </th>
   );
 }
 
-export function StockBrowserTable({ items }: Props) {
+export function StockBrowserTable({ items, sortBy, sortDir, onSortChange }: Props) {
   const market = useMarketSummary();
   // Build a ticker -> change_pct map from snapshot's treemap data
   const changeByTicker = useMemo(() => {
@@ -66,44 +83,19 @@ export function StockBrowserTable({ items }: Props) {
     return m;
   }, [market.data]);
 
-  const [sortKey, setSortKey] = useState<SortKey | null>(null);
-  const [sortDir, setSortDir] = useState<SortDir>(null);
-
-  const handleSort = (col: SortKey) => {
-    if (sortKey !== col) {
-      setSortKey(col);
-      setSortDir(col === "ticker" || col === "name" ? "asc" : "desc");
-    } else if (sortDir === "desc") {
-      setSortDir("asc");
-    } else if (sortDir === "asc") {
-      setSortKey(null); setSortDir(null);
-    } else {
-      setSortDir("desc");
-    }
-  };
-
-  const sortedItems = useMemo(() => {
-    if (!sortKey || !sortDir) return items;
+  // change_pct is sorted client-side over the current page. Server-sorted
+  // columns arrive already ordered, so we leave `items` untouched.
+  const displayItems = useMemo(() => {
+    if (sortBy !== "change_pct") return items;
     const dir = sortDir;
-    const key = sortKey;
     return [...items].sort((a, b) => {
-      let av: string | number = "";
-      let bv: string | number = "";
-      if (key === "change_pct") {
-        av = changeByTicker.get(a.ticker) ?? -Infinity;
-        bv = changeByTicker.get(b.ticker) ?? -Infinity;
-      } else if (key === "market_cap") {
-        av = a.market_cap ?? -Infinity;
-        bv = b.market_cap ?? -Infinity;
-      } else {
-        av = (a[key] ?? "") as string;
-        bv = (b[key] ?? "") as string;
-      }
+      const av = changeByTicker.get(a.ticker) ?? -Infinity;
+      const bv = changeByTicker.get(b.ticker) ?? -Infinity;
       if (av < bv) return dir === "asc" ? -1 : 1;
       if (av > bv) return dir === "asc" ? 1 : -1;
       return 0;
     });
-  }, [items, sortKey, sortDir, changeByTicker]);
+  }, [items, sortBy, sortDir, changeByTicker]);
 
   if (items.length === 0) {
     return (
@@ -122,16 +114,16 @@ export function StockBrowserTable({ items }: Props) {
           <table className="w-full text-sm tabular-nums">
             <thead className="bg-muted/30 text-muted-foreground border-b">
               <tr>
-                <SortableHeader column="ticker" label="Ticker" sortKey={sortKey} sortDir={sortDir} onClick={handleSort} />
-                <SortableHeader column="name" label="Nome" sortKey={sortKey} sortDir={sortDir} onClick={handleSort} />
-                <SortableHeader column="exchange" label="Exchange" sortKey={sortKey} sortDir={sortDir} onClick={handleSort} />
-                <SortableHeader column="sector" label="Settore" sortKey={sortKey} sortDir={sortDir} onClick={handleSort} />
-                <SortableHeader column="market_cap" label="Mkt Cap" align="right" sortKey={sortKey} sortDir={sortDir} onClick={handleSort} />
-                <SortableHeader column="change_pct" label="Δ%" align="right" sortKey={sortKey} sortDir={sortDir} onClick={handleSort} />
+                <SortableHeader column="ticker" label="Ticker" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} />
+                <SortableHeader column="name" label="Nome" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} />
+                <SortableHeader column="exchange" label="Exchange" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} />
+                <SortableHeader column="sector" label="Settore" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} />
+                <SortableHeader column="market_cap" label="Mkt Cap" align="right" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} />
+                <SortableHeader column="change_pct" label="Δ%" align="right" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} clientOnly />
               </tr>
             </thead>
             <tbody>
-              {sortedItems.map((s) => {
+              {displayItems.map((s) => {
                 const change = changeByTicker.get(s.ticker);
                 const flag = getStockFlagCode(s.country);
                 const changeColor = change == null
