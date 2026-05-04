@@ -9,6 +9,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.models import CatalogRefreshLog, Index, Stock, StockIndex
+from app.services.exchange_codes import canonical_exchange, has_known_suffix
 
 USER_AGENT = "FinanceAlert/0.1 (personal use)"
 
@@ -184,29 +185,15 @@ def _normalize_ticker(raw: str, default_exchange: str) -> tuple[str, str]:
         num = num.strip()
         if num.isdigit():
             return f"{int(num):04d}.HK", "HKEX"
-    suffix_to_exchange = {
-        ".MI": "BIT",      # Borsa Italiana
-        ".DE": "XETRA",    # Deutsche Boerse
-        ".PA": "EPA",      # Euronext Paris
-        ".AS": "AEX",      # Amsterdam
-        ".SW": "SIX",      # Swiss
-        ".CO": "CSE",      # Copenhagen
-        ".HE": "HEL",      # Helsinki
-        ".BR": "BRU",      # Brussels
-        ".MC": "BME",      # Madrid
-        ".IR": "ISE",      # Irish
-        ".SS": "SSE",      # Shanghai
-        ".SZ": "SZSE",     # Shenzhen
-        ".HK": "HKEX",     # Hong Kong
-        ".L":  "LSE",      # London Stock Exchange
-    }
-    for suffix, exchange in suffix_to_exchange.items():
-        if t.endswith(suffix):
-            return t, exchange
-    # LSE-default tickers without explicit suffix → append .L for yfinance
+    # LSE-default tickers without explicit suffix → append .L for yfinance.
+    # Done before canonical_exchange so the suffix-driven mapping kicks in.
     if default_exchange == "LSE" and "." not in t:
-        return f"{t}.L", "LSE"
-    return t, default_exchange
+        t = f"{t}.L"
+    # Mappa centralizzata in `exchange_codes`: per ticker con suffisso noto
+    # restituisce sempre il codice canonico (es. ".MI" -> "BIT") sopprimendo
+    # il `default_exchange` per-indice. Per ticker senza suffisso noto
+    # (US large-caps) restituisce il default invariato.
+    return t, canonical_exchange(t, default_exchange)
 
 
 def _start_log(db: Session, index_code: str) -> CatalogRefreshLog:
@@ -266,7 +253,19 @@ def refresh_index(db: Session, index_code: str) -> RefreshResult:
                 if industry_col and not pd.isna(row.get(industry_col))
                 else None
             )
-            stmt = select(Stock).where(Stock.ticker == ticker, Stock.exchange == exchange)
+            # Per ticker con suffisso noto (es. "ENEL.MI") la chiave
+            # `(ticker, exchange)` è autoritativa. Per ticker US senza
+            # suffisso noto (es. "AAPL") l'exchange è solo il
+            # `default_exchange` per-indice e può cambiare fra indici
+            # diversi (AAPL: SP500=NASDAQ vs DJI=NYSE). In quel caso
+            # cerchiamo per `ticker` soltanto: se la security esiste già
+            # la riusiamo invece di duplicarla.
+            if has_known_suffix(ticker):
+                stmt = select(Stock).where(
+                    Stock.ticker == ticker, Stock.exchange == exchange
+                )
+            else:
+                stmt = select(Stock).where(Stock.ticker == ticker)
             stock = db.execute(stmt).scalar_one_or_none()
             if stock is None:
                 stock = Stock(

@@ -22,9 +22,11 @@ export function NewsCard({ ticker }: Props) {
   const q = useStockNews(ticker, 5);
   const items = q.data?.items ?? [];
 
+  // Card sizes to content (no `h-full`) per the row-level `items-start`.
+  // News list is short (5 items) so an internal scroll is unnecessary.
   return (
-    <Card className="h-full">
-      <CardContent className="p-4 h-full flex flex-col min-h-0">
+    <Card>
+      <CardContent className="p-4 flex flex-col">
         <div className="flex items-center gap-2 mb-2 shrink-0">
           <Newspaper className="h-4 w-4 text-muted-foreground" />
           <span className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
@@ -34,7 +36,7 @@ export function NewsCard({ ticker }: Props) {
             Powered by yfinance
           </span>
         </div>
-        <div className="flex-1 min-h-0 overflow-y-auto">
+        <div>
           {q.isLoading ? (
             <div className="space-y-2">
               {[0,1,2].map((i) => <div key={i} className="h-4 bg-muted/40 animate-pulse rounded" />)}

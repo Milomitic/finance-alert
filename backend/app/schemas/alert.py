@@ -82,10 +82,29 @@ class ScanStatusOut(BaseModel):
     phase: str | None = None    # "fetching" | "evaluating" | None when finished
     started_at: datetime | None = None
     completed_at: datetime | None = None
+    # Heartbeat: last time the worker reported any progress. NULL only for very
+    # old runs created before the column existed (migration-back-compat).
+    last_progress_at: datetime | None = None
     progress_done: int = 0
     progress_total: int = 0
     stocks_scanned: int | None = None
     stocks_skipped: int | None = None
     alerts_fired: int | None = None
     error_message: str | None = None
+    # True when status == "running" but no heartbeat for >2min — strongly
+    # suggests the worker died and the row is now an orphan. UI surfaces a
+    # "Stuck — click Stop to clean up" warning when this is set.
+    is_stale: bool = False
+    # When stuck, the UI uses this to cap the displayed running-duration
+    # (so it doesn't grow to "120m" for a worker that died 2 min in).
+    seconds_since_last_progress: int | None = None
+
+
+class ScanStopResult(BaseModel):
+    """Response from POST /scan/stop."""
+
+    stopped_run_id: int | None = None
+    was_running: bool
+    was_stale: bool
+    message: str
 

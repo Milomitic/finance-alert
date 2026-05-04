@@ -53,6 +53,27 @@ export function useTriggerScan() {
   });
 }
 
+export function useStopScan() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => alerts.scanStop(),
+    onSuccess: (data) => {
+      if (!data.was_running) {
+        toast.info(data.message);
+      } else if (data.was_stale) {
+        // Orphan: row was force-closed inline. Refresh shows it as failed instantly.
+        toast.success(data.message);
+      } else {
+        // Live worker: cooperative cancel pending. The next poll (within 2s)
+        // will show the run as failed once the loop bails out.
+        toast.success(data.message);
+      }
+      qc.invalidateQueries({ queryKey: ["alerts", "scan-status"] });
+    },
+    onError: (err) => toast.error(describeError(err, "Errore terminazione scan")),
+  });
+}
+
 export function useSendDigest() {
   return useMutation({
     mutationFn: () => alerts.sendDigest(),

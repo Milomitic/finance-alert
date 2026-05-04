@@ -27,8 +27,53 @@ from app.scheduler import get_scheduler, start_scheduler, stop_scheduler
 configure_logging()
 
 
+def _cleanup_orphan_scans() -> None:
+    """Mark any ScanRun still in 'running' state at startup as failed.
+
+    Rationale: backend processes are uvicorn workers. If the previous instance
+    crashed mid-scan (or was killed by `taskkill`), the row stays 'running'
+    forever — the UI shows a phantom scan with a duration counter that grows
+    indefinitely and the user can't trigger a new scan. Sweeping at startup
+    closes the loop deterministically.
+
+    Uses last_progress_at (or started_at as fallback) for the message so the
+    user can tell how far the orphan got before dying.
+    """
+    from datetime import UTC, datetime
+
+    from app.core.db import SessionLocal
+    from app.models import ScanRun
+    from sqlalchemy import select
+
+    with SessionLocal() as db:
+        orphans = db.execute(
+            select(ScanRun).where(ScanRun.status == "running")
+        ).scalars().all()
+        if not orphans:
+            return
+        now = datetime.now(UTC)
+        for r in orphans:
+            ref = r.last_progress_at or r.started_at
+            if ref is not None and ref.tzinfo is None:
+                ref = ref.replace(tzinfo=UTC)
+            elapsed_min = int((now - ref).total_seconds() / 60) if ref else 0
+            r.status = "failed"
+            r.phase = None
+            r.error_message = (
+                f"Backend riavviato durante lo scan (ultimo heartbeat ~{elapsed_min}min fa). "
+                "Cleanup automatico all'avvio."
+            )
+            r.completed_at = now
+        db.commit()
+        logger.warning(
+            f"[startup] cleaned up {len(orphans)} orphan ScanRun row(s) "
+            f"(ids={[r.id for r in orphans]})"
+        )
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    _cleanup_orphan_scans()
     start_scheduler()
     try:
         yield

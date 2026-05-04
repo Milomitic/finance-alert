@@ -26,6 +26,11 @@ class ScanRun(Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Heartbeat: bumped every time the worker reports progress. The UI uses
+    # `now() - last_progress_at` to detect stuck/orphan scans (worker process
+    # crashed but the row still says 'running'). NULL until the first progress
+    # callback fires — pre-progress, fall back to started_at for staleness.
+    last_progress_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     progress_done: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     progress_total: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     stocks_scanned: Mapped[int | None] = mapped_column(Integer, nullable=True)

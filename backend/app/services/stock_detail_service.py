@@ -187,7 +187,15 @@ def resolve_effective_rules(db: Session, stock_id: int) -> list[EffectiveRule]:
 
 
 def get_detail(db: Session, ticker: str, range_key: str = "1y") -> StockDetail | None:
-    stock = db.execute(select(Stock).where(Stock.ticker == ticker)).scalar_one_or_none()
+    # `ticker` è univoco a livello di catalogo: dopo `scripts/dedupe_stocks`
+    # e la canonicalizzazione in `services.exchange_codes` non possono più
+    # esistere righe duplicate per lo stesso ticker. `scalar_one_or_none()`
+    # è preferibile a `.first()` perché failuoresce se la prevenzione si
+    # rompe in futuro (vale a dire: bug visibile invece di dato silenziosamente
+    # arbitrario).
+    stock = db.execute(
+        select(Stock).where(Stock.ticker == ticker)
+    ).scalar_one_or_none()
     if stock is None:
         return None
 

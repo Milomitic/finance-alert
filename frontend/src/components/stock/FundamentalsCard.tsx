@@ -229,7 +229,7 @@ function AnnualTabBody({
       <div style={{ height: 200 }} className="shrink-0">
         <MiniTrendChart data={chartData} hasEstimate={hasEstimate} />
       </div>
-      <div className="flex-1 min-h-0 overflow-y-auto mt-2">
+      <div className="mt-2">
         <table className="w-full text-[13px] tabular-nums">
           <thead className="text-sm text-muted-foreground uppercase sticky top-0 bg-card z-10">
             <tr>
@@ -308,7 +308,7 @@ function QuarterlyTabBody({
       <div style={{ height: 200 }} className="shrink-0">
         <MiniTrendChart data={chartData} hasEstimate={hasEstimate} />
       </div>
-      <div className="flex-1 min-h-0 overflow-y-auto mt-2">
+      <div className="mt-2">
         <table className="w-full text-[13px] tabular-nums">
           <thead className="text-sm text-muted-foreground uppercase sticky top-0 bg-card z-10">
             <tr>
@@ -385,12 +385,14 @@ export function FundamentalsCard({ ticker }: Props) {
 
   if (q.isLoading) {
     return (
-      <Card className="h-full overflow-hidden">
-        <CardContent className="p-4 h-full flex flex-col">
+      <Card className="overflow-hidden">
+        <CardContent className="p-4 flex flex-col">
           <div className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-2">
             Fundamentals
           </div>
-          <div className="flex-1 animate-pulse bg-muted/40 rounded" />
+          {/* Reserve enough height (chart 200 + table ~250) so the layout
+              doesn't jump when data lands. */}
+          <div className="h-[450px] animate-pulse bg-muted/40 rounded" />
         </CardContent>
       </Card>
     );
@@ -399,12 +401,12 @@ export function FundamentalsCard({ ticker }: Props) {
   const f = q.data;
   if (!f || f.error || (f.annual.length === 0 && f.earnings.length === 0 && f.quarterly.length === 0)) {
     return (
-      <Card className="h-full overflow-hidden">
-        <CardContent className="p-4 h-full flex flex-col">
+      <Card className="overflow-hidden">
+        <CardContent className="p-4 flex flex-col">
           <div className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-2">
             Fundamentals
           </div>
-          <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground text-center px-3">
+          <div className="py-12 flex items-center justify-center text-sm text-muted-foreground text-center px-3">
             {f?.error ? `Errore: ${f.error}` : "Dati non disponibili per questo ticker."}
           </div>
         </CardContent>
@@ -441,9 +443,13 @@ export function FundamentalsCard({ ticker }: Props) {
    *      overflow can happen — and it's contained.
    */
 
+  // The card now sizes to content (no `h-full`) per user request: chart is
+  // a fixed 200px and the data table renders all rows inline (no internal
+  // scroll). `overflow-hidden` stays as a safety net so any rogue extra-wide
+  // row clips at the card edge instead of overflowing into siblings.
   return (
-    <Card className="h-full overflow-hidden">
-      <CardContent className="p-3 h-full flex flex-col min-h-0">
+    <Card className="overflow-hidden">
+      <CardContent className="p-3 flex flex-col">
         {/* Header */}
         <div className="flex items-center gap-2 mb-2 shrink-0">
           <span className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
@@ -485,10 +491,9 @@ export function FundamentalsCard({ ticker }: Props) {
           ))}
         </div>
 
-        {/* Body — chart + scrollable table.
-            flex-1 + min-h-0 lets this region shrink to fit the card height,
-            and the table inside is the only overflow point. */}
-        <div className="flex-1 min-h-0 flex flex-col">
+        {/* Body — chart (fixed 200px) + table inline. No flex-1 / min-h-0
+            chain anymore: the card grows to fit content per user request. */}
+        <div className="flex flex-col">
           {effective === "annual" && hasAnnual && (
             <AnnualTabBody annual={f.annual} earnings={f.earnings} />
           )}

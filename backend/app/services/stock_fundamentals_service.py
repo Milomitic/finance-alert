@@ -75,6 +75,18 @@ class AnalystPriceTarget:
 
 
 @dataclass
+class AnalystAction:
+    """One historical analyst rating action (upgrade/downgrade/initiation).
+    Per-analyst price targets aren't exposed by yfinance — we surface what
+    IS available (firm, new grade, prior grade, action label, date)."""
+    date: str          # ISO date YYYY-MM-DD
+    firm: str
+    to_grade: str
+    from_grade: str
+    action: str        # e.g. "main", "up", "down", "init"
+
+
+@dataclass
 class MicroData:
     """Snapshot fundamentals from Ticker.info — slow endpoint, cached 24h."""
     # Valuation multiples
@@ -125,6 +137,7 @@ class Fundamentals:
     micro: MicroData = field(default_factory=MicroData)
     insiders: list[InsiderTransaction] = field(default_factory=list)
     analyst_ratings: list[AnalystRating] = field(default_factory=list)
+    analyst_actions: list[AnalystAction] = field(default_factory=list)
     price_target: AnalystPriceTarget = field(default_factory=AnalystPriceTarget)
     fetched_at: float = 0.0
     error: str | None = None
@@ -288,6 +301,27 @@ def _extract_ratings(rec_df: Any) -> list[AnalystRating]:
     return out
 
 
+def _extract_actions(df: Any, limit: int = 12) -> list[AnalystAction]:
+    """yfinance Ticker.upgrades_downgrades returns a DataFrame indexed by
+    GradeDate with columns Firm / ToGrade / FromGrade / Action. Most-recent
+    `limit` entries, newest first."""
+    if df is None or df.empty:
+        return []
+    out: list[AnalystAction] = []
+    # Sort descending by index (date) so newest first
+    df_sorted = df.sort_index(ascending=False)
+    for ts, row in df_sorted.head(limit).iterrows():
+        d = str(ts.date()) if hasattr(ts, "date") else str(ts)
+        out.append(AnalystAction(
+            date=d,
+            firm=str(row.get("Firm") or "").strip(),
+            to_grade=str(row.get("ToGrade") or "").strip(),
+            from_grade=str(row.get("FromGrade") or "").strip(),
+            action=str(row.get("Action") or "").strip(),
+        ))
+    return out
+
+
 def _extract_price_target(pt: Any) -> AnalystPriceTarget:
     if not pt or not isinstance(pt, dict):
         return AnalystPriceTarget(current=None, low=None, mean=None, median=None, high=None)
@@ -366,6 +400,12 @@ def _fetch_fresh(ticker: str) -> Fundamentals:
             if f.price_target.mean is not None: saw_success = True
         except Exception as e:
             logger.debug(f"[fund] price_target {ticker}: {e}")
+            _maybe_record(e)
+        try:
+            f.analyst_actions = _extract_actions(t.upgrades_downgrades)
+            if f.analyst_actions: saw_success = True
+        except Exception as e:
+            logger.debug(f"[fund] upgrades_downgrades {ticker}: {e}")
             _maybe_record(e)
     except Exception as e:  # noqa: BLE001
         logger.warning(f"[fundamentals] top-level failure for {ticker}: {e}")

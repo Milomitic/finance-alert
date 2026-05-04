@@ -175,12 +175,30 @@ export interface ScanStatusInfo {
   phase: ScanPhase | null;
   started_at: string | null;
   completed_at: string | null;
+  /** Last time the worker reported progress (heartbeat). NULL only for runs
+   *  created before the heartbeat column was added. UI uses this to detect
+   *  stuck/orphan scans without trusting the wall clock. */
+  last_progress_at: string | null;
   progress_done: number;
   progress_total: number;
   stocks_scanned: number | null;
   stocks_skipped: number | null;
   alerts_fired: number | null;
   error_message: string | null;
+  /** True when status === 'running' but no heartbeat for >2 min. The UI shows
+   *  a "Bloccato — clicca Termina" warning + Stop CTA when this is set. */
+  is_stale: boolean;
+  /** Computed by backend so client clocks don't drift. Used to cap the
+   *  displayed running-duration when the worker is stuck (otherwise the
+   *  counter would grow forever). */
+  seconds_since_last_progress: number | null;
+}
+
+export interface ScanStopResultInfo {
+  stopped_run_id: number | null;
+  was_running: boolean;
+  was_stale: boolean;
+  message: string;
 }
 
 export interface KpiSummary {
@@ -510,6 +528,14 @@ export interface AnalystPriceTarget {
   high: number | null;
 }
 
+export interface AnalystAction {
+  date: string;
+  firm: string;
+  to_grade: string;
+  from_grade: string;
+  action: string;
+}
+
 export interface Fundamentals {
   ticker: string;
   annual: FundamentalsAnnual[];
@@ -520,6 +546,7 @@ export interface Fundamentals {
   micro: MicroData;
   insiders: InsiderTransaction[];
   analyst_ratings: AnalystRating[];
+  analyst_actions: AnalystAction[];
   price_target: AnalystPriceTarget;
   error: string | null;
 }
