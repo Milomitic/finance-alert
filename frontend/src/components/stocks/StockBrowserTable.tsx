@@ -3,10 +3,11 @@ import { useMemo } from "react";
 import { Link } from "react-router-dom";
 
 import type { StockSortBy, SortDir } from "@/api/stocks";
-import type { Stock } from "@/api/types";
+import type { StockSearchItem } from "@/api/types";
 import { StockLogo } from "@/components/dashboard/StockLogo";
 import { Card, CardContent } from "@/components/ui/card";
 import { useMarketSummary } from "@/hooks/useMarketSummary";
+import { RISK_LABEL, RISK_TONE, scoreColor } from "@/lib/scoreMeta";
 import { getStockFlagCode } from "@/lib/stockMeta";
 import { cn } from "@/lib/utils";
 
@@ -17,7 +18,7 @@ import { cn } from "@/lib/utils";
 export type TableSortKey = StockSortBy | "change_pct";
 
 interface Props {
-  items: Stock[];
+  items: StockSearchItem[];
   sortBy: TableSortKey;
   sortDir: SortDir;
   /** Called when the user clicks a sortable header. The parent decides
@@ -89,8 +90,8 @@ export function StockBrowserTable({ items, sortBy, sortDir, onSortChange }: Prop
     if (sortBy !== "change_pct") return items;
     const dir = sortDir;
     return [...items].sort((a, b) => {
-      const av = changeByTicker.get(a.ticker) ?? -Infinity;
-      const bv = changeByTicker.get(b.ticker) ?? -Infinity;
+      const av = changeByTicker.get(a.stock.ticker) ?? -Infinity;
+      const bv = changeByTicker.get(b.stock.ticker) ?? -Infinity;
       if (av < bv) return dir === "asc" ? -1 : 1;
       if (av > bv) return dir === "asc" ? 1 : -1;
       return 0;
@@ -118,12 +119,16 @@ export function StockBrowserTable({ items, sortBy, sortDir, onSortChange }: Prop
                 <SortableHeader column="name" label="Nome" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} />
                 <SortableHeader column="exchange" label="Exchange" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} />
                 <SortableHeader column="sector" label="Settore" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} />
+                <SortableHeader column="industry" label="Industry" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} />
                 <SortableHeader column="market_cap" label="Mkt Cap" align="right" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} />
                 <SortableHeader column="change_pct" label="Δ%" align="right" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} clientOnly />
+                <SortableHeader column="composite" label="Score" align="right" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} />
+                <th className="px-3 py-1.5 text-xs uppercase tracking-wide font-semibold">Risk</th>
               </tr>
             </thead>
             <tbody>
-              {displayItems.map((s) => {
+              {displayItems.map((item) => {
+                const s = item.stock;
                 const change = changeByTicker.get(s.ticker);
                 const flag = getStockFlagCode(s.country);
                 const changeColor = change == null
@@ -131,6 +136,9 @@ export function StockBrowserTable({ items, sortBy, sortDir, onSortChange }: Prop
                   : change > 0 ? "text-green-600 dark:text-green-400"
                   : change < 0 ? "text-red-600 dark:text-red-400"
                   : "";
+                const compositeCls = item.score.composite != null
+                  ? scoreColor(item.score.composite)
+                  : "text-muted-foreground";
                 return (
                   <tr
                     key={s.id}
@@ -161,12 +169,32 @@ export function StockBrowserTable({ items, sortBy, sortDir, onSortChange }: Prop
                         <span className="text-xs text-muted-foreground">{s.exchange}</span>
                       </span>
                     </td>
-                    <td className="px-3 py-1.5 text-xs text-muted-foreground truncate max-w-[160px]">
+                    <td className="px-3 py-1.5 text-xs text-muted-foreground truncate max-w-[140px]">
                       {s.sector ?? "—"}
+                    </td>
+                    <td className="px-3 py-1.5 text-xs text-muted-foreground truncate max-w-[160px]" title={s.industry ?? ""}>
+                      {s.industry ?? "—"}
                     </td>
                     <td className="px-3 py-1.5 text-right">{fmtMc(s.market_cap)}</td>
                     <td className={cn("px-3 py-1.5 text-right", changeColor)}>
                       {change == null ? "—" : `${change >= 0 ? "+" : ""}${change.toFixed(2)}%`}
+                    </td>
+                    <td className={cn("px-3 py-1.5 text-right font-bold", compositeCls)}>
+                      {item.score.composite != null ? item.score.composite.toFixed(1) : "—"}
+                    </td>
+                    <td className="px-3 py-1.5">
+                      {item.score.risk_tier ? (
+                        <span
+                          className={cn(
+                            "inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider",
+                            RISK_TONE[item.score.risk_tier],
+                          )}
+                        >
+                          {RISK_LABEL[item.score.risk_tier]}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
                     </td>
                   </tr>
                 );

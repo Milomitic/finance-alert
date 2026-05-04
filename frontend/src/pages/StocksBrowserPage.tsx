@@ -4,6 +4,9 @@ import { useSearchParams } from "react-router-dom";
 import type { SortDir, StockSortBy } from "@/api/stocks";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import { useStockFilters, useStockSearch } from "@/hooks/useStockSearch";
 import { IndexPanoramaCard } from "@/components/stocks/IndexPanoramaCard";
 import {
@@ -16,14 +19,33 @@ import {
 } from "@/components/stocks/StockFiltersCard";
 import { useMarketSummary } from "@/hooks/useMarketSummary";
 
-const PAGE_SIZE = 50;
+/** Allowed page sizes shown in the dropdown. 25 / 50 / 100 / 200. */
+const PAGE_SIZES = [25, 50, 100, 200] as const;
+type PageSize = (typeof PAGE_SIZES)[number];
 
 const VALID_SORT_BY = new Set<StockSortBy>([
-  "ticker", "name", "market_cap", "sector", "exchange",
+  "ticker", "name", "market_cap", "sector", "industry", "exchange", "composite",
 ]);
+
+const VALID_RISK = new Set(["conservative", "moderate", "aggressive"] as const);
 
 function parseListParam(searchParams: URLSearchParams, name: string): string[] {
   return searchParams.getAll(name);
+}
+
+function parseRiskList(searchParams: URLSearchParams): FiltersState["riskTiers"] {
+  return searchParams
+    .getAll("risk")
+    .filter((v): v is FiltersState["riskTiers"][number] =>
+      VALID_RISK.has(v as FiltersState["riskTiers"][number]),
+    );
+}
+
+function parseMinScore(raw: string | null): number | null {
+  if (raw == null || raw === "") return null;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 0 || n > 100) return null;
+  return n;
 }
 
 function parseSortBy(raw: string | null): TableSortKey {
@@ -36,16 +58,73 @@ function parseSortDir(raw: string | null): SortDir {
   return raw === "desc" ? "desc" : "asc";
 }
 
+function parsePageSize(raw: string | null): PageSize {
+  const n = Number(raw);
+  if (PAGE_SIZES.includes(n as PageSize)) return n as PageSize;
+  return 50;
+}
+
+/** Inline pagination strip rendered above AND below the table. Same shape
+ *  in both spots so it feels symmetric. Hidden when there's only one page. */
+function PaginationStrip({
+  page, pageSize, total, hasMore, onPrev, onNext, showCount,
+}: {
+  page: number;
+  pageSize: number;
+  total: number;
+  hasMore: boolean;
+  onPrev: () => void;
+  onNext: () => void;
+  /** Whether to show the "X-Y di Z" range (omit on the bottom strip if you
+   *  prefer a cleaner footer; we show on both for clarity). */
+  showCount?: boolean;
+}) {
+  if (page === 0 && !hasMore) return null;
+  const showingFrom = total > 0 ? page * pageSize + 1 : 0;
+  const showingTo = Math.min(total, page * pageSize + pageSize);
+  return (
+    <div className="flex items-center justify-between gap-2 px-1">
+      {showCount ? (
+        <span className="text-xs text-muted-foreground tabular-nums">
+          {showingFrom}–{showingTo} di {total.toLocaleString()}
+        </span>
+      ) : (
+        <span />
+      )}
+      <div className="flex gap-2">
+        <Button
+          size="sm" variant="outline" disabled={page === 0}
+          onClick={onPrev}
+        >
+          ← Precedente
+        </Button>
+        <Button
+          size="sm" variant="outline" disabled={!hasMore}
+          onClick={onNext}
+        >
+          Successiva →
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export default function StocksBrowserPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState<PageSize>(() =>
+    parsePageSize(searchParams.get("page_size")),
+  );
 
   // Load initial state from URL once
   const [state, setState] = useState<FiltersState>(() => ({
     indexCodes: parseListParam(searchParams, "index"),
     sectors: parseListParam(searchParams, "sector"),
+    industries: parseListParam(searchParams, "industry"),
     exchanges: parseListParam(searchParams, "exchange"),
     countries: parseListParam(searchParams, "country"),
+    riskTiers: parseRiskList(searchParams),
+    minScore: parseMinScore(searchParams.get("min_score")),
   }));
   const [sortBy, setSortBy] = useState<TableSortKey>(() =>
     parseSortBy(searchParams.get("sort_by")),
@@ -54,19 +133,25 @@ export default function StocksBrowserPage() {
     parseSortDir(searchParams.get("sort_dir")),
   );
 
-  // Persist state to URL when it changes (for shareable links)
+  // Persist state to URL when it changes (for shareable links). Pagination
+  // resets on every filter / sort / page-size change since the new view
+  // would otherwise overshoot the result set.
   useEffect(() => {
     const sp = new URLSearchParams();
     state.indexCodes.forEach((v) => sp.append("index", v));
     state.sectors.forEach((v) => sp.append("sector", v));
+    state.industries.forEach((v) => sp.append("industry", v));
     state.exchanges.forEach((v) => sp.append("exchange", v));
     state.countries.forEach((v) => sp.append("country", v));
+    state.riskTiers.forEach((v) => sp.append("risk", v));
+    if (state.minScore != null) sp.set("min_score", String(state.minScore));
     if (sortBy !== "ticker") sp.set("sort_by", sortBy);
     if (sortDir !== "asc") sp.set("sort_dir", sortDir);
+    if (pageSize !== 50) sp.set("page_size", String(pageSize));
     setSearchParams(sp, { replace: true });
-    setPage(0); // reset pagination on filter / sort change
+    setPage(0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state, sortBy, sortDir]);
+  }, [state, sortBy, sortDir, pageSize]);
 
   // Click handler: same column flips direction; new column picks a sensible
   // default (asc for text columns, desc for numeric) and resets paging.
@@ -75,9 +160,10 @@ export default function StocksBrowserPage() {
       setSortDir((d) => (d === "asc" ? "desc" : "asc"));
     } else {
       setSortBy(col);
-      setSortDir(col === "ticker" || col === "name" || col === "sector" || col === "exchange"
-        ? "asc"
-        : "desc");
+      // Numeric/score columns default to descending (highest first); text
+      // columns default to ascending alphabetical.
+      const isText = col === "ticker" || col === "name" || col === "sector" || col === "industry" || col === "exchange";
+      setSortDir(isText ? "asc" : "desc");
     }
   };
 
@@ -96,31 +182,33 @@ export default function StocksBrowserPage() {
   const searchQ = useStockSearch({
     index: state.indexCodes.length > 0 ? state.indexCodes : undefined,
     sector: state.sectors.length > 0 ? state.sectors : undefined,
+    industry: state.industries.length > 0 ? state.industries : undefined,
     exchange: state.exchanges.length > 0 ? state.exchanges : undefined,
     country: state.countries.length > 0 ? state.countries : undefined,
+    risk: state.riskTiers.length > 0 ? state.riskTiers : undefined,
+    min_score: state.minScore ?? undefined,
     sort_by: serverSortBy,
     sort_dir: serverSortDir,
-    limit: PAGE_SIZE,
-    offset: page * PAGE_SIZE,
+    limit: pageSize,
+    offset: page * pageSize,
   });
 
   const items = searchQ.data?.items ?? [];
   const total = searchQ.data?.total ?? 0;
   const hasMore = searchQ.data?.has_more ?? false;
-  const showingFrom = items.length > 0 ? page * PAGE_SIZE + 1 : 0;
-  const showingTo = page * PAGE_SIZE + items.length;
   const totalIndices = filtersQ.data?.indices.length ?? 0;
   const totalCountries = filtersQ.data?.countries.length ?? 0;
 
   return (
     <div className="space-y-4">
-      {/* Header summary */}
+      {/* Header summary — "Screener" label per user request; the route
+          stays /stocks for URL stability + back-compat with shared links. */}
       <Card>
         <CardContent className="p-4 flex items-center gap-4">
           <div>
-            <h2 className="text-2xl font-bold">Universe browser</h2>
+            <h2 className="text-2xl font-bold">Screener</h2>
             <p className="text-sm text-muted-foreground">
-              {total > 0 ? `${total.toLocaleString()} stock` : "—"} monitorati ·{" "}
+              {total > 0 ? `${total.toLocaleString()} stock` : "—"} con i filtri attuali ·{" "}
               {totalIndices} indici · {totalCountries} paesi
             </p>
           </div>
@@ -139,6 +227,37 @@ export default function StocksBrowserPage() {
         <IndexPanoramaCard data={singleIndexBreadth} />
       )}
 
+      {/* Toolbar above the table: page-size + top pagination. The page-size
+          dropdown sits on the left so the user can choose density before
+          paging; prev/next on the right matches the bottom strip's layout. */}
+      <div className="flex items-center justify-between gap-2 px-1 flex-wrap">
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground">Righe per pagina</span>
+          <Select
+            value={String(pageSize)}
+            onValueChange={(v) => setPageSize(Number(v) as PageSize)}
+          >
+            <SelectTrigger className="h-8 w-[80px] text-sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {PAGE_SIZES.map((n) => (
+                <SelectItem key={n} value={String(n)}>{n}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <PaginationStrip
+          page={page}
+          pageSize={pageSize}
+          total={total}
+          hasMore={hasMore}
+          onPrev={() => setPage((p) => Math.max(0, p - 1))}
+          onNext={() => setPage((p) => p + 1)}
+          showCount
+        />
+      </div>
+
       {/* Results */}
       {searchQ.isLoading && !searchQ.data ? (
         <Card><CardContent className="p-8 text-center text-sm text-muted-foreground">Caricamento…</CardContent></Card>
@@ -152,28 +271,18 @@ export default function StocksBrowserPage() {
             sortDir={sortDir}
             onSortChange={handleSortChange}
           />
-          {/* Pagination */}
-          {(page > 0 || hasMore) && (
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-xs text-muted-foreground">
-                {showingFrom}–{showingTo} di {total.toLocaleString()}
-              </span>
-              <div className="flex gap-2">
-                <Button
-                  size="sm" variant="outline" disabled={page === 0}
-                  onClick={() => setPage((p) => Math.max(0, p - 1))}
-                >
-                  ← Precedente
-                </Button>
-                <Button
-                  size="sm" variant="outline" disabled={!hasMore}
-                  onClick={() => setPage((p) => p + 1)}
-                >
-                  Successiva →
-                </Button>
-              </div>
-            </div>
-          )}
+          {/* Bottom pagination — symmetric with the toolbar's. Shows count
+              again since this is what the user sees after scrolling through
+              the table. */}
+          <PaginationStrip
+            page={page}
+            pageSize={pageSize}
+            total={total}
+            hasMore={hasMore}
+            onPrev={() => setPage((p) => Math.max(0, p - 1))}
+            onNext={() => setPage((p) => p + 1)}
+            showCount
+          />
         </>
       )}
     </div>

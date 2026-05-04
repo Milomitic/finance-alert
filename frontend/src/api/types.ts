@@ -14,8 +14,19 @@ export interface Stock {
   market_cap: number | null;
 }
 
+/** A row in the screener result. Stock anagrafica plus a join to the
+ *  composite score (when computed). Score is null for stocks the score
+ *  service hasn't yet processed — the table renders "—" for those. */
+export interface StockSearchItem {
+  stock: Stock;
+  score: {
+    composite: number | null;
+    risk_tier: "conservative" | "moderate" | "aggressive" | null;
+  };
+}
+
 export interface StockSearch {
-  items: Stock[];
+  items: StockSearchItem[];
   total: number;
   has_more: boolean;
 }
@@ -28,6 +39,7 @@ export interface IndexOption {
 export interface FilterOptions {
   exchanges: string[];
   sectors: string[];
+  industries: string[];
   countries: string[];
   indices: IndexOption[];
 }

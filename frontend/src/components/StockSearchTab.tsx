@@ -16,7 +16,9 @@ export function StockSearchTab({ onAdd, excludeIds }: Props) {
   const debouncedQ = useDebouncedValue(q, 300);
   const search = useStockSearch({ q: debouncedQ, limit: 30 }, debouncedQ.length >= 1);
 
-  const items = search.data?.items ?? [];
+  // Search response items now wrap each Stock in {stock, score}; this tab
+  // doesn't surface scoring — unwrap to plain Stock[].
+  const items = (search.data?.items ?? []).map((it) => it.stock);
 
   return (
     <div className="space-y-3">

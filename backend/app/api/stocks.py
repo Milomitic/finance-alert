@@ -8,7 +8,10 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user, get_db
 from app.models import Stock, User
 from app.schemas.alert import AlertOut
-from app.schemas.stock import FilterOptionsOut, IndexOptionOut, StockOut, StockSearchOut
+from app.schemas.stock import (
+    FilterOptionsOut, IndexOptionOut, StockOut, StockScoreRefOut,
+    StockSearchItemOut, StockSearchOut,
+)
 from app.schemas.stock_detail import (
     AnalystActionOut, AnalystPriceTargetOut, AnalystRatingOut, EffectiveRuleOut,
     FundamentalsAnnualOut, FundamentalsEarningsOut, FundamentalsOut,
@@ -32,8 +35,11 @@ def search(
     q: str | None = None,
     exchange: Annotated[list[str] | None, Query()] = None,
     sector: Annotated[list[str] | None, Query()] = None,
+    industry: Annotated[list[str] | None, Query()] = None,
     country: Annotated[list[str] | None, Query()] = None,
     index: Annotated[list[str] | None, Query()] = None,
+    risk: Annotated[list[str] | None, Query()] = None,
+    min_score: float | None = None,
     sort_by: str = "ticker",
     sort_dir: str = "asc",
     limit: int = 50,
@@ -48,14 +54,27 @@ def search(
         )
     if sort_dir not in ("asc", "desc"):
         raise HTTPException(status_code=422, detail="sort_dir must be 'asc' or 'desc'")
+    if risk:
+        valid_risk = {"conservative", "moderate", "aggressive"}
+        bad = [r for r in risk if r not in valid_risk]
+        if bad:
+            raise HTTPException(
+                status_code=422,
+                detail=f"risk must be one of {sorted(valid_risk)}; got {bad}",
+            )
+    if min_score is not None and not (0.0 <= min_score <= 100.0):
+        raise HTTPException(status_code=422, detail="min_score must be in [0, 100]")
     page = search_stocks(
         db,
         StockFilter(
             q=q,
             exchanges=exchange or [],
             sectors=sector or [],
+            industries=industry or [],
             countries=country or [],
             index_codes=index or [],
+            risk_tiers=risk or [],
+            min_score=min_score,
             sort_by=sort_by,
             sort_dir=sort_dir,
             limit=limit,
@@ -63,7 +82,16 @@ def search(
         ),
     )
     return StockSearchOut(
-        items=[StockOut.model_validate(s) for s in page.items],
+        items=[
+            StockSearchItemOut(
+                stock=StockOut.model_validate(item.stock),
+                score=StockScoreRefOut(
+                    composite=item.score.composite,
+                    risk_tier=item.score.risk_tier,
+                ),
+            )
+            for item in page.items
+        ],
         total=page.total,
         has_more=page.has_more,
     )
@@ -77,6 +105,7 @@ def filters(
     return FilterOptionsOut(
         exchanges=opts.exchanges,
         sectors=opts.sectors,
+        industries=opts.industries,
         countries=opts.countries,
         indices=[IndexOptionOut(code=i.code, name=i.name) for i in opts.indices],
     )

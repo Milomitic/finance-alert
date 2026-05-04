@@ -15,8 +15,14 @@ import { cn } from "@/lib/utils";
 export interface FiltersState {
   indexCodes: string[];
   sectors: string[];
+  industries: string[];
   exchanges: string[];
   countries: string[];
+  /** Risk-tier filter from stock_scores. Empty = no filter. */
+  riskTiers: ("conservative" | "moderate" | "aggressive")[];
+  /** Min composite score 0–100, or null = no threshold. When set, unscored
+   *  stocks are excluded by the backend. */
+  minScore: number | null;
 }
 
 interface Props {
@@ -109,23 +115,51 @@ function MultiSelect({ label, options, selected, onChange }: MultiSelectProps) {
   );
 }
 
+// Risk-tier static options — short list, hardcoded so we don't need to
+// fetch enum values from the API. Kept as plain string-literal records
+// (Tailwind purger contract from CLAUDE.md). Tone classes mirror the
+// scoreMeta module's RISK_TONE map.
+const RISK_OPTIONS: { value: "conservative" | "moderate" | "aggressive"; label: string; tone: string }[] = [
+  { value: "conservative", label: "Conservative", tone: "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300" },
+  { value: "moderate",     label: "Moderate",     tone: "bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-300" },
+  { value: "aggressive",   label: "Aggressive",   tone: "bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300" },
+];
+
 export function StockFiltersCard({ state, onChange, filters }: Props) {
   const indexOptions = (filters?.indices ?? []).map((i) => ({
     value: i.code,
     label: `${i.code} — ${i.name}`,
   }));
   const sectorOptions = (filters?.sectors ?? []).map((s) => ({ value: s, label: s }));
+  const industryOptions = (filters?.industries ?? []).map((i) => ({ value: i, label: i }));
   const exchangeOptions = (filters?.exchanges ?? []).map((e) => ({ value: e, label: e }));
   const countryOptions = (filters?.countries ?? []).map((c) => ({ value: c, label: c }));
 
   const totalActive =
-    state.indexCodes.length + state.sectors.length + state.exchanges.length + state.countries.length;
+    state.indexCodes.length +
+    state.sectors.length +
+    state.industries.length +
+    state.exchanges.length +
+    state.countries.length +
+    state.riskTiers.length +
+    (state.minScore != null ? 1 : 0);
 
   const clearAll = () =>
-    onChange({ indexCodes: [], sectors: [], exchanges: [], countries: [] });
+    onChange({
+      indexCodes: [], sectors: [], industries: [], exchanges: [], countries: [],
+      riskTiers: [], minScore: null,
+    });
 
   const removeChip = (kind: keyof FiltersState, value: string) => {
-    onChange({ ...state, [kind]: state[kind].filter((v) => v !== value) });
+    if (kind === "minScore") {
+      onChange({ ...state, minScore: null });
+      return;
+    }
+    if (kind === "riskTiers") {
+      onChange({ ...state, riskTiers: state.riskTiers.filter((v) => v !== value) });
+      return;
+    }
+    onChange({ ...state, [kind]: (state[kind] as string[]).filter((v) => v !== value) });
   };
 
   return (
@@ -154,6 +188,12 @@ export function StockFiltersCard({ state, onChange, filters }: Props) {
             onChange={(v) => onChange({ ...state, sectors: v })}
           />
           <MultiSelect
+            label="Industry"
+            options={industryOptions}
+            selected={state.industries}
+            onChange={(v) => onChange({ ...state, industries: v })}
+          />
+          <MultiSelect
             label="Exchange"
             options={exchangeOptions}
             selected={state.exchanges}
@@ -165,6 +205,38 @@ export function StockFiltersCard({ state, onChange, filters }: Props) {
             selected={state.countries}
             onChange={(v) => onChange({ ...state, countries: v })}
           />
+          <MultiSelect
+            label="Rischio"
+            options={RISK_OPTIONS}
+            selected={state.riskTiers}
+            onChange={(v) => onChange({ ...state, riskTiers: v as FiltersState["riskTiers"] })}
+          />
+          {/* Score-min filter: single threshold input. Kept inline next to
+              the multi-selects rather than in a popover because it's just
+              one number; popover-overhead is unwarranted. */}
+          <div className="inline-flex items-center gap-1.5 h-9 px-2 rounded border border-input">
+            <span className="text-xs text-muted-foreground">Score ≥</span>
+            <input
+              type="number"
+              min={0}
+              max={100}
+              step={5}
+              placeholder="—"
+              value={state.minScore ?? ""}
+              onChange={(e) => {
+                const raw = e.target.value;
+                if (raw === "") {
+                  onChange({ ...state, minScore: null });
+                  return;
+                }
+                const n = Number(raw);
+                if (Number.isFinite(n) && n >= 0 && n <= 100) {
+                  onChange({ ...state, minScore: n });
+                }
+              }}
+              className="w-12 bg-transparent text-sm tabular-nums focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+            />
+          </div>
           {totalActive > 0 && (
             <Button
               variant="ghost"
@@ -203,6 +275,18 @@ export function StockFiltersCard({ state, onChange, filters }: Props) {
                 </button>
               </Badge>
             ))}
+            {state.industries.map((v) => (
+              <Badge key={`ind-${v}`} variant="secondary" className="text-xs gap-1 pr-1">
+                <span className="text-muted-foreground/80">Industry:</span> {v}
+                <button
+                  onClick={() => removeChip("industries", v)}
+                  className="ml-0.5 rounded hover:bg-background/60 p-0.5"
+                  aria-label={`Rimuovi industry ${v}`}
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </Badge>
+            ))}
             {state.exchanges.map((v) => (
               <Badge key={`e-${v}`} variant="secondary" className="text-xs gap-1 pr-1">
                 <span className="text-muted-foreground/80">Exchange:</span> {v}
@@ -227,6 +311,30 @@ export function StockFiltersCard({ state, onChange, filters }: Props) {
                 </button>
               </Badge>
             ))}
+            {state.riskTiers.map((v) => (
+              <Badge key={`r-${v}`} variant="secondary" className="text-xs gap-1 pr-1">
+                <span className="text-muted-foreground/80">Rischio:</span> {v}
+                <button
+                  onClick={() => removeChip("riskTiers", v)}
+                  className="ml-0.5 rounded hover:bg-background/60 p-0.5"
+                  aria-label={`Rimuovi rischio ${v}`}
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </Badge>
+            ))}
+            {state.minScore != null && (
+              <Badge variant="secondary" className="text-xs gap-1 pr-1">
+                <span className="text-muted-foreground/80">Score ≥</span> {state.minScore}
+                <button
+                  onClick={() => onChange({ ...state, minScore: null })}
+                  className="ml-0.5 rounded hover:bg-background/60 p-0.5"
+                  aria-label="Rimuovi soglia score"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </Badge>
+            )}
           </div>
         )}
       </CardContent>

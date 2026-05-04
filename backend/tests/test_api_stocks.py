@@ -32,7 +32,10 @@ def test_search_returns_page(client: TestClient) -> None:
     assert resp.status_code == 200
     data = resp.json()
     assert data["total"] == 1
-    assert data["items"][0]["ticker"] == "AAPL"
+    # New search response shape: each item is { stock: StockOut, score: StockScoreRefOut }.
+    # Score is None for unscored stocks (LEFT JOIN with no row in stock_scores).
+    assert data["items"][0]["stock"]["ticker"] == "AAPL"
+    assert data["items"][0]["score"]["composite"] is None
 
 
 def test_get_by_ticker(client: TestClient) -> None:
@@ -84,7 +87,7 @@ def test_search_global_sort_pagination(big_client: TestClient) -> None:
     )
     assert resp.status_code == 200
     data = resp.json()
-    assert [s["ticker"] for s in data["items"]] == ["T07", "T06", "T05", "T04", "T03"]
+    assert [s["stock"]["ticker"] for s in data["items"]] == ["T07", "T06", "T05", "T04", "T03"]
     assert data["total"] == 12
     assert data["has_more"] is True
 
@@ -97,3 +100,42 @@ def test_search_invalid_sort_by(client: TestClient) -> None:
 def test_search_invalid_sort_dir(client: TestClient) -> None:
     resp = client.get("/api/stocks/search?sort_by=ticker&sort_dir=sideways")
     assert resp.status_code == 422
+
+
+def test_search_invalid_risk(client: TestClient) -> None:
+    """422 on bad risk-tier value (typo, injection attempt)."""
+    resp = client.get("/api/stocks/search?risk=very-conservative")
+    assert resp.status_code == 422
+
+
+def test_search_invalid_min_score(client: TestClient) -> None:
+    """422 when min_score is outside [0, 100]."""
+    resp = client.get("/api/stocks/search?min_score=150")
+    assert resp.status_code == 422
+    resp = client.get("/api/stocks/search?min_score=-1")
+    assert resp.status_code == 422
+
+
+def test_search_score_filter_excludes_unscored(big_client: TestClient, db: Session) -> None:
+    """When min_score is set, stocks without a computed score must be excluded.
+    Verifies the LEFT JOIN + WHERE composite >= N semantics: unscored rows
+    have score=NULL, the WHERE filters them out."""
+    from app.models import StockScore
+    from datetime import datetime, UTC
+    # Seed only one of the 12 stocks with a score
+    db.add(
+        StockScore(
+            stock_id=12, composite=85.0, quality=80, growth=80, value=80,
+            momentum=80, sentiment=80, risk_tier="moderate",
+            computed_at=datetime.now(UTC), breakdown="{}",
+        )
+    )
+    db.commit()
+    # min_score=70 → only T12 (the one with composite=85) passes
+    resp = big_client.get("/api/stocks/search?min_score=70")
+    data = resp.json()
+    assert resp.status_code == 200
+    assert data["total"] == 1
+    assert data["items"][0]["stock"]["ticker"] == "T12"
+    assert data["items"][0]["score"]["composite"] == 85.0
+    assert data["items"][0]["score"]["risk_tier"] == "moderate"

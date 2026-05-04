@@ -1,4 +1,6 @@
 """Stock response schemas."""
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict
 
 
@@ -15,8 +17,25 @@ class StockOut(BaseModel):
     market_cap: int | None
 
 
+class StockScoreRefOut(BaseModel):
+    """Compact score data joined into the screener row. Either both fields
+    are populated (stock has a computed score) or both are None (unscored).
+    Mirrors `StockScoreRef` in the service layer."""
+    composite: float | None = None
+    risk_tier: Literal["conservative", "moderate", "aggressive"] | None = None
+
+
+class StockSearchItemOut(BaseModel):
+    """A row in the screener result. Carries the Stock anagrafica + the
+    optional score join. Splitting score into a sub-object (vs flattening
+    onto StockOut) keeps the bare `StockOut` lean for endpoints that don't
+    need scoring data (`GET /api/stocks/{ticker}` etc.)."""
+    stock: StockOut
+    score: StockScoreRefOut
+
+
 class StockSearchOut(BaseModel):
-    items: list[StockOut]
+    items: list[StockSearchItemOut]
     total: int
     has_more: bool
 
@@ -29,5 +48,6 @@ class IndexOptionOut(BaseModel):
 class FilterOptionsOut(BaseModel):
     exchanges: list[str]
     sectors: list[str]
+    industries: list[str]
     countries: list[str]
     indices: list[IndexOptionOut]

@@ -113,7 +113,9 @@ export function StockFiltersTab({ onAddBulk, excludeIds }: Props) {
   const search = useStockSearch(params, anyFilter);
 
   const total = search.data?.total ?? 0;
-  const items = search.data?.items ?? [];
+  // Unwrap the new {stock, score} envelope — this tab is for selecting
+  // stocks for a watchlist, the score data isn't relevant here.
+  const items = (search.data?.items ?? []).map((it) => it.stock);
 
   const onAddAll = () => {
     if (items.length === 0) return;
