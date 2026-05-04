@@ -112,6 +112,16 @@ def run_tracked_scan(
         except Exception as snap_exc:  # noqa: BLE001
             logger.warning(f"[scan_runner] snapshot recompute failed (non-fatal): {snap_exc}")
 
+        # Recompute composite stock scores — non-fatal, scan succeeded already.
+        # Same try/except pattern as the market-snapshot recompute above.
+        try:
+            from app.services import score_service
+
+            n_scored = score_service.recompute_all(db)
+            logger.info(f"[scan_runner] {n_scored} stock score(s) recomputed for ScanRun {run.id}")
+        except Exception as score_exc:  # noqa: BLE001
+            logger.warning(f"[scan_runner] score recompute failed (non-fatal): {score_exc}")
+
         # Evaluate price-target alerts — non-fatal, scan succeeded already.
         try:
             from app.services import price_alert_service

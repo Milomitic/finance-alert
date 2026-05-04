@@ -19,6 +19,7 @@ from app.api import spotlight as spotlight_router
 from app.api import rule_catalog as rule_catalog_router
 from app.api import rule_preview as rule_preview_router
 from app.api import rules as rules_router
+from app.api import scores as scores_router
 from app.api import stocks as stocks_router
 from app.api import watchlists as watchlists_router
 from app.core.logging import configure_logging
@@ -105,6 +106,7 @@ app.include_router(dashboard_router.router)
 app.include_router(market_router.router)
 app.include_router(price_alerts_router.router)
 app.include_router(spotlight_router.router)
+app.include_router(scores_router.router)
 
 
 @app.get("/api/health")
@@ -166,6 +168,16 @@ def warmup_fundamentals(
             except Exception:  # noqa: BLE001
                 err += 1
             time.sleep(0.3)
+        # Now that the fundamentals cache is warm, recompute scores so the
+        # values reflect the freshly-fetched data. Non-fatal — warmup itself
+        # has already reported its own success/failure counts.
+        scores_recomputed = 0
+        try:
+            from app.services import score_service
+            scores_recomputed = score_service.recompute_all(db)
+            logger.info(f"[warmup] recomputed {scores_recomputed} stock scores")
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(f"[warmup] score recompute failed (non-fatal): {exc}")
         return {
             "total_stocks": len(stocks),
             "succeeded": ok,
@@ -174,6 +186,7 @@ def warmup_fundamentals(
             "skipped_cached": cached_skip,
             "breaker_aborted_at": breaker_aborted_at,
             "yfinance_breaker": yfinance_health.status(),
+            "scores_recomputed": scores_recomputed,
         }
     finally:
         db.close()

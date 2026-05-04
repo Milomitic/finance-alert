@@ -8,12 +8,14 @@ from app.models.price_alert import PriceAlert
 from app.models.rule import Rule, RuleState
 from app.models.scan_run import ScanRun
 from app.models.stock import Stock
+from app.models.stock_score import StockScore
 from app.models.user import User
 from app.models.watchlist import Watchlist, WatchlistItem
 
 __all__ = [
     "User",
     "Stock",
+    "StockScore",
     "Index",
     "StockIndex",
     "Watchlist",
