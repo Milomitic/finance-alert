@@ -57,8 +57,10 @@ const TIER_BADGE: Record<ReturnType<typeof relativeTime>["tier"], string> = {
 /**
  * News list with relative-time tier coloring and a publisher chip.
  * The whole row is a clickable anchor so the click target is forgiving.
- * `line-clamp-3` instead of 2 so longer titles don't get aggressively
- * truncated on a wider card; the height is bounded by the parent scroller.
+ * Each row caps at 2 title lines + meta — chosen for density (a 25-item
+ * scrollable list reads better with shorter rows). Long titles get clipped
+ * with the standard ellipsis; full text is preserved on hover via the
+ * native title tooltip from the publisher chip + browser link preview.
  */
 export function NewsCard({ ticker }: Props) {
   // Bumped from 5 to 25 — the new scrollable layout (h-full + flex-1 +
@@ -136,7 +138,7 @@ export function NewsCard({ ticker }: Props) {
               </div>
             </div>
           ) : (
-            <ul className="space-y-2">
+            <ul className="space-y-1">
               {sorted.map((n) => {
                 const rel = relativeTime(n.published_at);
                 return (
@@ -146,7 +148,9 @@ export function NewsCard({ ticker }: Props) {
                       target="_blank"
                       rel="noopener noreferrer"
                       className={cn(
-                        "block rounded-md border border-transparent p-2 -mx-1",
+                        // Tighter padding (px-2 py-1.5 instead of p-2) trims
+                        // ~10px per row → noticeable on a 25-item list.
+                        "block rounded-md border border-transparent px-2 py-1.5 -mx-1",
                         // Subtle accent border-left in the relative-time tier
                         // color — gives the eye a vertical scan for freshness
                         // without being loud about it.
@@ -156,12 +160,14 @@ export function NewsCard({ ticker }: Props) {
                       )}
                     >
                       <div className="flex items-start gap-1.5">
-                        <span className="text-sm font-medium leading-snug line-clamp-3 flex-1 min-w-0">
+                        {/* line-clamp-2 (was 3) is the single biggest space
+                            saver — caps each row at title-2-lines + meta. */}
+                        <span className="text-sm font-medium leading-tight line-clamp-2 flex-1 min-w-0">
                           {n.title}
                         </span>
                         <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground mt-0.5 opacity-60" />
                       </div>
-                      <div className="flex items-center gap-2 mt-1.5 text-[11px]">
+                      <div className="flex items-center gap-2 mt-0.5 text-[11px]">
                         <span
                           className="font-semibold text-foreground/70 truncate"
                           title={n.publisher}
