@@ -5,8 +5,6 @@ import { BreadthMatrixTable } from "@/components/dashboard/BreadthMatrixTable";
 import { FiftyTwoWeekVolCard } from "@/components/dashboard/FiftyTwoWeekVolCard";
 import { HeroStrip } from "@/components/dashboard/HeroStrip";
 import { DataSourcesCard } from "@/components/dashboard/DataSourcesCard";
-import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { MarketTreemap } from "@/components/dashboard/MarketTreemap";
 import { TopMoversCard } from "@/components/dashboard/TopMoversCard";
 import { TopPicksCard } from "@/components/dashboard/TopPicksCard";
 import { RsiHistogramCard } from "@/components/dashboard/RsiHistogramCard";
@@ -103,9 +101,11 @@ export default function HomePage() {
     );
   }
 
-  // Happy path — destructure with defaults to satisfy TS (all fields are optional in API type)
+  // Happy path — destructure with defaults to satisfy TS (all fields are optional in API type).
+  // Note: `treemap` is no longer required (the treemap card was removed) but the API
+  // continues to populate it; we just don't render it.
   const m = market.data;
-  if (!m.global || !m.by_index || !m.movers || !m.rsi_distribution || !m.sectors || !m.treemap) {
+  if (!m.global || !m.by_index || !m.movers || !m.rsi_distribution || !m.sectors) {
     return <MarketError onRetry={() => market.refetch()} />;
   }
   const nextScanAt = summaryData?.kpis.next_scan_at ?? null;
@@ -139,23 +139,27 @@ export default function HomePage() {
         <div className="h-full min-h-0"><TopMoversCard movers={m.movers} /></div>
         <div className="h-full min-h-0"><FiftyTwoWeekVolCard movers={m.movers} /></div>
       </div>
-      {/* Treemap full-width — Spotlight rimossa, i suoi top movers / volume
-          spikes / most-alerted ora vivono nelle card del top row. */}
-      <ErrorBoundary>
-        <MarketTreemap treemap={m.treemap} indices={m.by_index} />
-      </ErrorBoundary>
-      {/* Top picks — composite score ranking, tier-filterable. Lives between
-          treemap and alerts so it sits at the bottom of the "explore" row
-          and just above the "act on it" alerts section. */}
-      <TopPicksCard />
-      {summaryData && (
-        <AlertsCompactPanel
-          topStocks={summaryData.top_stocks_30d}
-          recentAlerts={summaryData.recent_alerts}
-          alertsLast24h={summaryData.kpis.alerts_last_24h}
-          alertsPrev24h={summaryData.kpis.alerts_prev_24h}
-        />
-      )}
+      {/* Alerts (left) + Top Picks (right) on the same row. The two are
+          complementary: alerts is "what just happened that needs your
+          attention", top picks is "what looks great right now". Putting them
+          side-by-side gives the user a single decision surface — react vs
+          discover — instead of scrolling between them. `items-start` lets
+          each card size to its own content (alerts can be sparse while
+          picks always shows the same number of rows). Stacks vertically
+          on narrow viewports via the `lg:` breakpoint. */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 items-start">
+        {summaryData ? (
+          <AlertsCompactPanel
+            topStocks={summaryData.top_stocks_30d}
+            recentAlerts={summaryData.recent_alerts}
+            alertsLast24h={summaryData.kpis.alerts_last_24h}
+            alertsPrev24h={summaryData.kpis.alerts_prev_24h}
+          />
+        ) : (
+          <div />
+        )}
+        <TopPicksCard />
+      </div>
       <DataSourcesCard />
       {summaryData && <SystemStatusFooter status={summaryData.system_status} />}
     </div>

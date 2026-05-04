@@ -105,7 +105,7 @@ def get_stock_detail(
     db: Session = Depends(get_db),
     _user: User = Depends(get_current_user),
 ) -> StockDetailOut:
-    if range not in ("1m", "3m", "6m", "1y", "all"):
+    if range not in ("1w", "1m", "3m", "6m", "1y", "all"):
         raise HTTPException(status_code=422, detail="invalid range")
     detail = stock_detail_service.get_detail(db, ticker, range_key=range)
     if detail is None:

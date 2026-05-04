@@ -6,6 +6,7 @@ interface Props {
 }
 
 const OPTIONS = [
+  { key: "1w", label: "1W" },
   { key: "1m", label: "1M" },
   { key: "3m", label: "3M" },
   { key: "6m", label: "6M" },

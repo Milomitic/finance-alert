@@ -17,7 +17,7 @@ from app.models import Alert, OhlcvDaily, Rule, Stock, Watchlist, WatchlistItem
 
 
 RANGE_DAYS: dict[str, int | None] = {
-    "1m": 30, "3m": 90, "6m": 180, "1y": 365, "all": None,
+    "1w": 7, "1m": 30, "3m": 90, "6m": 180, "1y": 365, "all": None,
 }
 
 
@@ -112,6 +112,11 @@ class _IndicatorBundle:
 # 3m (~66): step up to standard fast/mid windows.
 # 6m, 1y, all: the original "long" defaults; SMA200 makes sense beyond 6m.
 _RANGE_PERIODS: dict[str, IndicatorPeriods] = {
+    # 1w (~5 trading days): minimum-viable windows so the chart shows SOMETHING
+    # for indicators (a 5-day SMA on 5 bars is exactly 1 valid point at the
+    # tail; 200-period SMA would be all NaN). Useful mainly for the price
+    # candles + Bollinger envelope, not for trend-following overlays.
+    "1w":  IndicatorPeriods(sma_fast=2,  sma_mid=3,  sma_slow=5,   rsi=3,  bb_period=5,  bb_k=2.0, macd_fast=3,  macd_slow=6,  macd_signal=2),
     "1m":  IndicatorPeriods(sma_fast=5,  sma_mid=10, sma_slow=20,  rsi=7,  bb_period=10, bb_k=2.0, macd_fast=6,  macd_slow=13, macd_signal=5),
     "3m":  IndicatorPeriods(sma_fast=10, sma_mid=20, sma_slow=50,  rsi=14, bb_period=20, bb_k=2.0, macd_fast=12, macd_slow=26, macd_signal=9),
     "6m":  IndicatorPeriods(sma_fast=20, sma_mid=50, sma_slow=100, rsi=14, bb_period=20, bb_k=2.0, macd_fast=12, macd_slow=26, macd_signal=9),
