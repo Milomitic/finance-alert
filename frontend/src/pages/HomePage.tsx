@@ -8,6 +8,7 @@ import { DataSourcesCard } from "@/components/dashboard/DataSourcesCard";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { MarketTreemap } from "@/components/dashboard/MarketTreemap";
 import { TopMoversCard } from "@/components/dashboard/TopMoversCard";
+import { TopPicksCard } from "@/components/dashboard/TopPicksCard";
 import { RsiHistogramCard } from "@/components/dashboard/RsiHistogramCard";
 import { SectorsHeatmapCard } from "@/components/dashboard/SectorsHeatmapCard";
 import { SystemStatusFooter } from "@/components/dashboard/SystemStatusFooter";
@@ -143,6 +144,10 @@ export default function HomePage() {
       <ErrorBoundary>
         <MarketTreemap treemap={m.treemap} indices={m.by_index} />
       </ErrorBoundary>
+      {/* Top picks — composite score ranking, tier-filterable. Lives between
+          treemap and alerts so it sits at the bottom of the "explore" row
+          and just above the "act on it" alerts section. */}
+      <TopPicksCard />
       {summaryData && (
         <AlertsCompactPanel
           topStocks={summaryData.top_stocks_30d}

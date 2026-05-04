@@ -27,6 +27,7 @@ import { ResizableSection } from "@/components/stock/ResizableSection";
 import { RsiPanel } from "@/components/stock/RsiPanel";
 import { StockAlertsHistoryCard } from "@/components/stock/StockAlertsHistoryCard";
 import { StockHeader } from "@/components/stock/StockHeader";
+import { StockScoreCard } from "@/components/stock/StockScoreCard";
 import { TechnicalKpiCard } from "@/components/stock/TechnicalKpiCard";
 
 export default function StockDetailPage() {
@@ -232,6 +233,7 @@ export default function StockDetailPage() {
         </Card>
 
         <div className="space-y-3">
+          <StockScoreCard ticker={ticker} />
           <TechnicalKpiCard kpis={d.kpis} indicators={d.indicators} />
           <PriceAlertsCard ticker={ticker} />
           {/* StockAlertsHistoryCard moved to a full-width prominent row above

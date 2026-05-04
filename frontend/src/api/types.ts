@@ -608,3 +608,68 @@ export interface LiveQuote {
   fetched_at: number;
   error: string | null;
 }
+
+// === Stock scoring ===
+
+export type RiskTier = "conservative" | "moderate" | "aggressive";
+
+export type ScoreCategory =
+  | "composite"
+  | "quality"
+  | "growth"
+  | "value"
+  | "momentum"
+  | "sentiment";
+
+export interface SubScores {
+  quality: number | null;
+  growth: number | null;
+  value: number | null;
+  momentum: number | null;
+  sentiment: number | null;
+}
+
+/** One component inside a sub-score breakdown.
+ *  `raw` is the input value from upstream (yfinance, technicals, ...);
+ *  may be null when the data is missing. `points` ≤ `max`; the ratio
+ *  drives the bar fill in the UI. */
+export interface ScoreBreakdownComponent {
+  raw: number | null;
+  points: number;
+  max: number;
+}
+
+/** Per-pillar breakdown — keys are component names (e.g. `roe`, `debt_equity`).
+ *  Loose-typed because each pillar has its own component layout. The UI just
+ *  iterates and renders bars, no static type needed. */
+export type ScoreBreakdown = Record<
+  string,
+  Record<string, ScoreBreakdownComponent>
+>;
+
+export interface StockScore {
+  stock_id: number;
+  ticker: string;
+  composite: number;
+  sub_scores: SubScores;
+  risk_tier: RiskTier;
+  computed_at: string;
+  breakdown: ScoreBreakdown;
+}
+
+export interface TopPickItem {
+  stock_id: number;
+  ticker: string;
+  name: string;
+  composite: number;
+  risk_tier: RiskTier;
+  sector: string | null;
+  market_cap: number | null;
+  change_pct: number | null;
+}
+
+export interface TopPicks {
+  category: ScoreCategory;
+  risk: RiskTier | null;
+  items: TopPickItem[];
+}
