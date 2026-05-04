@@ -73,11 +73,25 @@ class MicroDataOut(BaseModel):
     price_to_book: float | None = None
     price_to_sales: float | None = None
     enterprise_to_ebitda: float | None = None
+    enterprise_value: float | None = None
+    book_value: float | None = None
     return_on_equity: float | None = None
-    debt_to_equity: float | None = None
+    return_on_assets: float | None = None
     profit_margins: float | None = None
+    operating_margins: float | None = None
+    gross_margins: float | None = None
+    debt_to_equity: float | None = None
+    current_ratio: float | None = None
+    quick_ratio: float | None = None
     revenue_growth: float | None = None
     earnings_growth: float | None = None
+    free_cashflow: float | None = None
+    operating_cashflow: float | None = None
+    payout_ratio: float | None = None
+    held_percent_insiders: float | None = None
+    held_percent_institutions: float | None = None
+    fifty_two_week_change: float | None = None
+    sp500_fifty_two_week_change: float | None = None
 
 
 class InsiderTransactionOut(BaseModel):

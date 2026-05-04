@@ -103,10 +103,11 @@ export default function StockDetailPage() {
       </div>
 
       {/* Three side-by-side cards: Fundamentals | Valuation | News.
-          Fixed row height → all 3 cards share the same height; each one's
-          internal content scrolls if needed. The Fundamentals card uses
-          tabs (Annuali / Trimestrali / Earnings) to fit in the same box. */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 lg:h-[400px]">
+          Row is taller (640px) so the Fundamentals table can show all rows
+          without scrolling, the Valuation card has room for both columns of
+          ratios, and News headlines aren't cut off. Cards still share the
+          same height via the grid. */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 lg:h-[640px]">
         <FundamentalsCard ticker={ticker} />
         <MicroDataCard ticker={ticker} />
         <NewsCard ticker={ticker} />

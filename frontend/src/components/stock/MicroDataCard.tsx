@@ -7,7 +7,7 @@ interface Props {
   ticker: string;
 }
 
-interface Tile {
+interface Row {
   label: string;
   raw: number | null;
   format: (v: number) => string;
@@ -17,27 +17,39 @@ interface Tile {
   toneFor?: (v: number) => string;
 }
 
+/* ─── Formatters ────────────────────────────────────────────────────────── */
+
 function pct(v: number): string {
+  // yfinance returns most "*Margins"/"*Growth"/"return*" as fractions (0.27 = 27%)
   return `${(v * 100).toFixed(1)}%`;
 }
 function pctRaw(v: number): string {
-  return `${v.toFixed(1)}%`;
+  // dividendYield comes back as already-percent (0.39 means 0.39%)
+  return `${v.toFixed(2)}%`;
 }
 function num(v: number, digits = 2): string {
   return v.toFixed(digits);
 }
+function bigUsd(v: number): string {
+  const abs = Math.abs(v);
+  const sign = v < 0 ? "-" : "";
+  if (abs >= 1e12) return `${sign}$${(abs / 1e12).toFixed(2)}T`;
+  if (abs >= 1e9) return `${sign}$${(abs / 1e9).toFixed(1)}B`;
+  if (abs >= 1e6) return `${sign}$${(abs / 1e6).toFixed(0)}M`;
+  return `${sign}$${abs.toLocaleString()}`;
+}
 
-function buildTiles(m: MicroData): Tile[] {
-  return [
+function buildColumns(m: MicroData): { left: Row[]; right: Row[] } {
+  const left: Row[] = [
     {
-      label: "P/E",
+      label: "P/E (TTM)",
       raw: m.trailing_pe,
       format: num,
-      tip: "Price/Earnings (trailing 12m). Quanto stai pagando per ogni dollaro di utile dell'ultimo anno.",
+      tip: "Price/Earnings (trailing 12 mesi). Quanto stai pagando per ogni dollaro di utile dell'ultimo anno.",
       toneFor: (v) => v < 0 ? "text-red-600" : v > 40 ? "text-amber-600" : "",
     },
     {
-      label: "Fwd P/E",
+      label: "Forward P/E",
       raw: m.forward_pe,
       format: num,
       tip: "P/E basato sull'EPS atteso nei prossimi 12 mesi.",
@@ -46,26 +58,14 @@ function buildTiles(m: MicroData): Tile[] {
       label: "PEG",
       raw: m.peg_ratio,
       format: num,
-      tip: "P/E diviso il tasso di crescita atteso degli utili. <1 = sottovalutata rispetto alla crescita.",
+      tip: "P/E ÷ tasso di crescita atteso. <1 = sottovalutato rispetto alla crescita.",
       toneFor: (v) => v < 1 && v > 0 ? "text-green-600" : v > 2 ? "text-amber-600" : "",
-    },
-    {
-      label: "Beta",
-      raw: m.beta,
-      format: num,
-      tip: "Sensibilità del prezzo al mercato. >1 = più volatile del mercato.",
-    },
-    {
-      label: "Div yield",
-      raw: m.dividend_yield,
-      format: pctRaw,  // yfinance returns it as percentage (0.39 means 0.39% — Apple)
-      tip: "Dividend yield annualizzato.",
     },
     {
       label: "P/B",
       raw: m.price_to_book,
       format: num,
-      tip: "Price/Book — quanto vale l'equity rispetto al book value.",
+      tip: "Price/Book — quanto vale l'equity sul mercato vs book value.",
     },
     {
       label: "P/S",
@@ -77,60 +77,133 @@ function buildTiles(m: MicroData): Tile[] {
       label: "EV/EBITDA",
       raw: m.enterprise_to_ebitda,
       format: num,
-      tip: "Enterprise Value / EBITDA. Multiplo \"holistic\" che ignora struttura del capitale.",
+      tip: "Enterprise Value / EBITDA. Multiplo holistic che ignora la struttura del capitale.",
     },
+    {
+      label: "Enterprise Value",
+      raw: m.enterprise_value,
+      format: bigUsd,
+      tip: "Market cap + debiti − cassa. Il prezzo per acquisire l'intera azienda.",
+    },
+    {
+      label: "Book Value/share",
+      raw: m.book_value,
+      format: (v) => `$${v.toFixed(2)}`,
+      tip: "Book value per azione (equity netto / azioni in circolazione).",
+    },
+    {
+      label: "Beta (5y)",
+      raw: m.beta,
+      format: num,
+      tip: "Sensibilità del prezzo al mercato. >1 = più volatile del mercato, <1 = meno.",
+    },
+    {
+      label: "Dividend yield",
+      raw: m.dividend_yield,
+      format: pctRaw,
+      tip: "Dividend yield annualizzato.",
+    },
+    {
+      label: "Payout ratio",
+      raw: m.payout_ratio,
+      format: pct,
+      tip: "% di utili distribuiti come dividendi.",
+    },
+  ];
+  const right: Row[] = [
     {
       label: "ROE",
       raw: m.return_on_equity,
       format: pct,
-      tip: "Return on Equity = Net Income / Equity. Quanto rende l'equity ai shareholders.",
+      tip: "Return on Equity = Net Income / Equity.",
       toneFor: (v) => v > 0.20 ? "text-green-600" : v < 0 ? "text-red-600" : "",
     },
     {
-      label: "Debt/Eq",
+      label: "ROA",
+      raw: m.return_on_assets,
+      format: pct,
+      tip: "Return on Assets = Net Income / Total Assets.",
+      toneFor: (v) => v > 0.10 ? "text-green-600" : v < 0 ? "text-red-600" : "",
+    },
+    {
+      label: "Profit margin",
+      raw: m.profit_margins,
+      format: pct,
+      tip: "Net Income / Revenue. Margine netto.",
+      toneFor: (v) => v > 0.20 ? "text-green-600" : v < 0 ? "text-red-600" : "",
+    },
+    {
+      label: "Operating margin",
+      raw: m.operating_margins,
+      format: pct,
+      tip: "Operating Income / Revenue. Margine operativo (escluso finanziario/tasse).",
+      toneFor: (v) => v > 0.20 ? "text-green-600" : v < 0 ? "text-red-600" : "",
+    },
+    {
+      label: "Gross margin",
+      raw: m.gross_margins,
+      format: pct,
+      tip: "Gross Profit / Revenue. Margine lordo.",
+      toneFor: (v) => v > 0.40 ? "text-green-600" : v < 0.10 && v > 0 ? "text-amber-600" : "",
+    },
+    {
+      label: "Debt/Equity",
       raw: m.debt_to_equity,
       format: num,
       tip: "Total Debt / Total Equity. Indicatore di leva finanziaria.",
       toneFor: (v) => v > 200 ? "text-amber-600" : "",
     },
     {
-      label: "Profit margin",
-      raw: m.profit_margins,
-      format: pct,
-      tip: "Net income / Revenue. Margine netto.",
-      toneFor: (v) => v > 0.20 ? "text-green-600" : v < 0 ? "text-red-600" : "",
+      label: "Current ratio",
+      raw: m.current_ratio,
+      format: num,
+      tip: "Current Assets / Current Liabilities. >1 = liquidità di breve OK.",
+      toneFor: (v) => v < 1 ? "text-amber-600" : v > 2 ? "text-green-600" : "",
     },
     {
-      label: "Rev growth",
-      raw: m.revenue_growth,
-      format: pct,
-      tip: "Crescita revenue YoY.",
+      label: "Free Cash Flow",
+      raw: m.free_cashflow,
+      format: bigUsd,
+      tip: "Flusso di cassa libero (TTM). Positivo = autofinanziamento.",
       toneFor: (v) => v > 0 ? "text-green-600" : "text-red-600",
     },
     {
-      label: "EPS growth",
+      label: "Rev growth (YoY)",
+      raw: m.revenue_growth,
+      format: pct,
+      tip: "Crescita revenue YoY (ultimo trimestre).",
+      toneFor: (v) => v > 0 ? "text-green-600" : "text-red-600",
+    },
+    {
+      label: "EPS growth (YoY)",
       raw: m.earnings_growth,
       format: pct,
-      tip: "Crescita EPS YoY.",
+      tip: "Crescita EPS YoY (ultimo trimestre).",
+      toneFor: (v) => v > 0 ? "text-green-600" : "text-red-600",
+    },
+    {
+      label: "52w change",
+      raw: m.fifty_two_week_change,
+      format: pct,
+      tip: "Performance prezzo nelle ultime 52 settimane.",
       toneFor: (v) => v > 0 ? "text-green-600" : "text-red-600",
     },
   ];
+  return { left, right };
 }
 
-function TileBox({ t }: { t: Tile }) {
-  const isNum = t.raw != null && Number.isFinite(t.raw);
-  const tone = isNum && t.toneFor ? t.toneFor(t.raw as number) : "";
+function RowItem({ row }: { row: Row }) {
+  const isNum = row.raw != null && Number.isFinite(row.raw);
+  const tone = isNum && row.toneFor ? row.toneFor(row.raw as number) : "";
   return (
     <div
-      className="rounded-lg border border-border/50 bg-card/80 dark:bg-black/20 p-2.5 text-center min-w-0"
-      title={t.tip}
+      className="flex items-center justify-between gap-2 py-1 border-b border-border/40 last:border-b-0"
+      title={row.tip}
     >
-      <div className="text-[13px] uppercase tracking-wider text-muted-foreground font-medium truncate">
-        {t.label}
-      </div>
-      <div className={cn("mt-0.5 text-base font-bold tabular-nums", tone)}>
-        {isNum ? t.format(t.raw as number) : "—"}
-      </div>
+      <span className="text-sm text-muted-foreground truncate">{row.label}</span>
+      <span className={cn("text-sm font-semibold tabular-nums shrink-0", tone)}>
+        {isNum ? row.format(row.raw as number) : "—"}
+      </span>
     </div>
   );
 }
@@ -140,7 +213,7 @@ export function MicroDataCard({ ticker }: Props) {
 
   if (q.isLoading) {
     return (
-      <Card className="h-full">
+      <Card className="h-full overflow-hidden">
         <CardContent className="p-4 h-full flex flex-col">
           <div className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-2">
             Valuation & Quality
@@ -151,11 +224,12 @@ export function MicroDataCard({ ticker }: Props) {
     );
   }
 
-  const tiles = buildTiles(q.data?.micro ?? ({} as MicroData));
-  const anyValue = tiles.some((t) => t.raw != null && Number.isFinite(t.raw));
+  const cols = buildColumns(q.data?.micro ?? ({} as MicroData));
+  const allRows = [...cols.left, ...cols.right];
+  const anyValue = allRows.some((r) => r.raw != null && Number.isFinite(r.raw));
 
   return (
-    <Card className="h-full">
+    <Card className="h-full overflow-hidden">
       <CardContent className="p-4 h-full flex flex-col min-h-0">
         <div className="flex items-center justify-between mb-2 shrink-0">
           <div className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
@@ -171,10 +245,13 @@ export function MicroDataCard({ ticker }: Props) {
               Dati non disponibili (Yahoo Finance non li espone per questo ticker o è temporaneamente rate-limited).
             </div>
           ) : (
-            // Sized for a 1/3-width column: 2 cols on mobile, 3 cols thereafter.
-            // xl gets 4 cols once the card is wide enough.
-            <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2">
-              {tiles.map((t) => <TileBox key={t.label} t={t} />)}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6">
+              <div className="flex flex-col">
+                {cols.left.map((r) => <RowItem key={r.label} row={r} />)}
+              </div>
+              <div className="flex flex-col">
+                {cols.right.map((r) => <RowItem key={r.label} row={r} />)}
+              </div>
             </div>
           )}
         </div>

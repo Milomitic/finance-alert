@@ -463,11 +463,25 @@ export interface MicroData {
   price_to_book: number | null;
   price_to_sales: number | null;
   enterprise_to_ebitda: number | null;
+  enterprise_value: number | null;
+  book_value: number | null;
   return_on_equity: number | null;
-  debt_to_equity: number | null;
+  return_on_assets: number | null;
   profit_margins: number | null;
+  operating_margins: number | null;
+  gross_margins: number | null;
+  debt_to_equity: number | null;
+  current_ratio: number | null;
+  quick_ratio: number | null;
   revenue_growth: number | null;
   earnings_growth: number | null;
+  free_cashflow: number | null;
+  operating_cashflow: number | null;
+  payout_ratio: number | null;
+  held_percent_insiders: number | null;
+  held_percent_institutions: number | null;
+  fifty_two_week_change: number | null;
+  sp500_fifty_two_week_change: number | null;
 }
 
 export interface InsiderTransaction {

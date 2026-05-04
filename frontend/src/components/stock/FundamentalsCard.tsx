@@ -226,7 +226,7 @@ function AnnualTabBody({
   // outer Card: even if the table content is huge, scroll stays inside.
   return (
     <>
-      <div style={{ height: 150 }} className="shrink-0">
+      <div style={{ height: 200 }} className="shrink-0">
         <MiniTrendChart data={chartData} hasEstimate={hasEstimate} />
       </div>
       <div className="flex-1 min-h-0 overflow-y-auto mt-2">
@@ -305,7 +305,7 @@ function QuarterlyTabBody({
 
   return (
     <>
-      <div style={{ height: 150 }} className="shrink-0">
+      <div style={{ height: 200 }} className="shrink-0">
         <MiniTrendChart data={chartData} hasEstimate={hasEstimate} />
       </div>
       <div className="flex-1 min-h-0 overflow-y-auto mt-2">

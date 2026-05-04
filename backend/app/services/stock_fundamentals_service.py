@@ -77,6 +77,7 @@ class AnalystPriceTarget:
 @dataclass
 class MicroData:
     """Snapshot fundamentals from Ticker.info — slow endpoint, cached 24h."""
+    # Valuation multiples
     trailing_pe: float | None = None
     forward_pe: float | None = None
     peg_ratio: float | None = None
@@ -85,11 +86,32 @@ class MicroData:
     price_to_book: float | None = None
     price_to_sales: float | None = None
     enterprise_to_ebitda: float | None = None
+    enterprise_value: float | None = None
+    book_value: float | None = None       # per share
+    # Profitability / quality
     return_on_equity: float | None = None
-    debt_to_equity: float | None = None
+    return_on_assets: float | None = None
     profit_margins: float | None = None
+    operating_margins: float | None = None
+    gross_margins: float | None = None
+    # Leverage / liquidity
+    debt_to_equity: float | None = None
+    current_ratio: float | None = None
+    quick_ratio: float | None = None
+    # Growth
     revenue_growth: float | None = None
     earnings_growth: float | None = None
+    # Cash flow
+    free_cashflow: float | None = None
+    operating_cashflow: float | None = None
+    # Income / payout
+    payout_ratio: float | None = None
+    # Holdings & sentiment
+    held_percent_insiders: float | None = None
+    held_percent_institutions: float | None = None
+    # Performance vs market
+    fifty_two_week_change: float | None = None
+    sp500_fifty_two_week_change: float | None = None
 
 
 @dataclass
@@ -210,11 +232,25 @@ def _extract_micro(info: dict | None) -> MicroData:
         price_to_book=_safe_float(info.get("priceToBook")),
         price_to_sales=_safe_float(info.get("priceToSalesTrailing12Months")),
         enterprise_to_ebitda=_safe_float(info.get("enterpriseToEbitda")),
+        enterprise_value=_safe_float(info.get("enterpriseValue")),
+        book_value=_safe_float(info.get("bookValue")),
         return_on_equity=_safe_float(info.get("returnOnEquity")),
-        debt_to_equity=_safe_float(info.get("debtToEquity")),
+        return_on_assets=_safe_float(info.get("returnOnAssets")),
         profit_margins=_safe_float(info.get("profitMargins")),
+        operating_margins=_safe_float(info.get("operatingMargins")),
+        gross_margins=_safe_float(info.get("grossMargins")),
+        debt_to_equity=_safe_float(info.get("debtToEquity")),
+        current_ratio=_safe_float(info.get("currentRatio")),
+        quick_ratio=_safe_float(info.get("quickRatio")),
         revenue_growth=_safe_float(info.get("revenueGrowth")),
         earnings_growth=_safe_float(info.get("earningsGrowth")),
+        free_cashflow=_safe_float(info.get("freeCashflow")),
+        operating_cashflow=_safe_float(info.get("operatingCashflow")),
+        payout_ratio=_safe_float(info.get("payoutRatio")),
+        held_percent_insiders=_safe_float(info.get("heldPercentInsiders")),
+        held_percent_institutions=_safe_float(info.get("heldPercentInstitutions")),
+        fifty_two_week_change=_safe_float(info.get("52WeekChange")),
+        sp500_fifty_two_week_change=_safe_float(info.get("SandP52WeekChange")),
     )
 
 
