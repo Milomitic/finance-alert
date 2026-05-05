@@ -3,6 +3,7 @@ import { RefreshCw, Sparkles } from "lucide-react";
 
 import type {
   ScoreBreakdownComponent,
+  ScoreBreakdownMeta,
   StockScore,
 } from "@/api/types";
 import { Card, CardContent } from "@/components/ui/card";
@@ -23,6 +24,86 @@ import {
   scoreLabel,
 } from "@/lib/scoreMeta";
 import { cn } from "@/lib/utils";
+
+/* ─── Component label map ───────────────────────────────────────────────── */
+/* Pretty names + 1-line descriptions for the 43 components emitted by the
+ * backend score engine v2 (see `backend/app/services/score_service.py`).
+ * The component KEYS come from `_Component("name", ...)` calls — keep this
+ * map in sync when adding/removing pillar inputs. Unknown keys fall back
+ * to a humanized version of the snake-case name (`name.replace(/_/g," ")`),
+ * which keeps the UI working even if the backend introduces a key the
+ * frontend doesn't yet know about. */
+
+interface ComponentMeta {
+  label: string;
+  /** What this component measures, in one sentence — shown in the
+   *  tooltip-of-tooltip on the row's `title` attribute so a curious user
+   *  can hover the row and learn what the metric represents. */
+  hint: string;
+  /** Format hint for the raw value: how to render `comp.raw`. */
+  format: "pct" | "pct_raw" | "ratio" | "usd" | "num" | "score" | "count";
+}
+
+const COMPONENT_META: Record<string, ComponentMeta> = {
+  // ── Quality ─────────────────────────────────────────────────
+  roe: { label: "ROE", hint: "Return on Equity — utile / equity", format: "pct" },
+  roa: { label: "ROA", hint: "Return on Assets — utile / asset totali", format: "pct" },
+  profit_margin: { label: "Profit margin", hint: "Utile netto / ricavi", format: "pct" },
+  operating_margin: { label: "Operating margin", hint: "Utile operativo / ricavi", format: "pct" },
+  gross_margin: { label: "Gross margin", hint: "Profitto lordo / ricavi", format: "pct" },
+  fcf: { label: "Free cash flow", hint: "Flusso di cassa libero (TTM)", format: "usd" },
+  debt_equity: { label: "Debt / Equity", hint: "Leva finanziaria — debito totale / equity", format: "ratio" },
+  current_ratio: { label: "Current ratio", hint: "Liquidità a breve — attivo corrente / passivo corrente", format: "ratio" },
+  quick_ratio: { label: "Quick ratio", hint: "Liquidità stringente — esclude inventario", format: "ratio" },
+  overall_risk: { label: "Risk score (Yahoo)", hint: "Yahoo overall risk 1-10 — basso = governance solida", format: "num" },
+  insider_holdings: { label: "% insider", hint: "Quota detenuta da insider — allineamento incentivi", format: "pct" },
+  institutional_holdings: { label: "% istituzionali", hint: "Quota detenuta da fondi/ETF/banche", format: "pct" },
+  // ── Growth ──────────────────────────────────────────────────
+  revenue_growth: { label: "Revenue growth (YoY)", hint: "Crescita ricavi anno-su-anno", format: "pct" },
+  revenue_cagr_3y: { label: "Revenue CAGR 3y", hint: "Crescita media composta dei ricavi su 3 anni", format: "pct" },
+  earnings_growth: { label: "EPS growth (YoY)", hint: "Crescita EPS anno-su-anno", format: "pct" },
+  qoq_earnings_growth: { label: "EPS growth (QoQ)", hint: "Crescita EPS trimestre-su-trimestre", format: "pct" },
+  eps_forward_growth: { label: "EPS forward / TTM", hint: "EPS atteso prossimi 12m vs TTM — accelerazione attesa", format: "pct" },
+  earnings_beats: { label: "Earnings beats", hint: "Quota di trimestri recenti sopra le attese", format: "pct" },
+  // ── Value ───────────────────────────────────────────────────
+  pe: { label: "P/E (TTM)", hint: "Price/Earnings — valutazione vs utili realizzati", format: "ratio" },
+  forward_pe: { label: "Forward P/E", hint: "Price/Earnings sull'EPS atteso 12m", format: "ratio" },
+  peg: { label: "PEG", hint: "P/E ÷ growth — sotto 1 = sottovalutato vs crescita", format: "ratio" },
+  pb: { label: "P/B", hint: "Price/Book — valutazione vs equity", format: "ratio" },
+  ps: { label: "P/S", hint: "Price/Sales — valutazione vs ricavi", format: "ratio" },
+  ev_ebitda: { label: "EV/EBITDA", hint: "Valutazione capital-structure-agnostic", format: "ratio" },
+  ev_revenue: { label: "EV/Revenue", hint: "Variante EV-based del P/S", format: "ratio" },
+  dividend_yield: { label: "Dividend yield", hint: "Dividendo annualizzato / prezzo", format: "pct_raw" },
+  payout_ratio: { label: "Payout ratio", hint: "% utili distribuiti come dividendi", format: "pct" },
+  // ── Momentum ────────────────────────────────────────────────
+  change_52w: { label: "52w change", hint: "Performance prezzo nelle 52 settimane", format: "pct" },
+  momentum_30d: { label: "30d momentum", hint: "Variazione % ultimi 30 giorni", format: "pct" },
+  momentum_90d: { label: "90d momentum", hint: "Variazione % ultimi 90 giorni", format: "pct" },
+  relative_strength: { label: "Relative strength vs S&P", hint: "Sovra/sottoperformance vs S&P500 nelle 52w", format: "pct" },
+  rsi: { label: "RSI(14)", hint: "Oscillatore 0-100 — sopra 50 = momentum positivo", format: "num" },
+  macd: { label: "MACD", hint: "Sopra signal e zero = momentum confermato", format: "score" },
+  trend_stack: { label: "Trend stack (SMA)", hint: "Allineamento SMA 20/50/200 — pieno = uptrend confermato", format: "score" },
+  price_vs_sma200: { label: "Price vs SMA200", hint: "% sopra/sotto SMA 200 giorni", format: "pct" },
+  bb_position: { label: "BB position (%B)", hint: "Posizione del prezzo nelle Bande di Bollinger", format: "pct_raw" },
+  adx: { label: "ADX(14)", hint: "Forza del trend — sopra 25 = trend tradeabile", format: "num" },
+  short_percent_of_float: { label: "Short % of float", hint: "Pressione short — alto = sentiment ribassista", format: "pct" },
+  // ── Sentiment ───────────────────────────────────────────────
+  recommendation_mean: { label: "Analyst rating", hint: "Media analisti 1-5 — basso = Buy", format: "num" },
+  net_upgrades_90d: { label: "Net upgrades 90d", hint: "Upgrade − downgrade negli ultimi 90 giorni", format: "count" },
+  price_target_upside: { label: "Target upside", hint: "Differenza % tra target medio analisti e prezzo", format: "pct" },
+  news_polarity: { label: "News polarity", hint: "Mix bullish/bearish dei titoli recenti, scala -100 / +100", format: "num" },
+  news_volume: { label: "News volume 30d", hint: "Numero di articoli ultimi 30 giorni", format: "count" },
+};
+
+function metaFor(key: string): ComponentMeta {
+  return (
+    COMPONENT_META[key] ?? {
+      label: key.replace(/_/g, " "),
+      hint: "",
+      format: "num",
+    }
+  );
+}
 
 interface Props {
   ticker: string;
@@ -140,29 +221,61 @@ const PILLAR_ORDER: Array<keyof StockScore["sub_scores"]> = [
   "sentiment",
 ];
 
-/** Pretty-format a raw breakdown value. The shape is loose — values are
- *  raw inputs from upstream (yfinance fundamentals, technicals, ...) and
- *  vary in magnitude wildly. We pick the format from the rough scale:
- *    - |v| > 1e6 → big USD
- *    - 0–1 fractional → percent
- *    - else → 2-decimal float
- *  Imperfect but readable; the "max points / earned points" line carries
- *  the meaningful information regardless. */
-function fmtRaw(v: number | null | undefined): string {
-  if (v == null || !Number.isFinite(v)) return "n/d";
-  const abs = Math.abs(v);
-  if (abs >= 1e9) return `${(v / 1e9).toFixed(1)}B`;
-  if (abs >= 1e6) return `${(v / 1e6).toFixed(1)}M`;
-  if (abs >= 100) return v.toFixed(0);
-  if (abs >= 1) return v.toFixed(2);
-  if (abs > 0) return `${(v * 100).toFixed(1)}%`;
-  return "0";
+/** Render a raw component value per its declared format. None / NaN /
+ *  Infinity collapse to "n/d" so missing inputs are visually distinct
+ *  from real zero values. */
+function fmtRaw(v: ScoreBreakdownComponent["raw"], format: ComponentMeta["format"]): string {
+  if (v == null) return "n/d";
+  if (typeof v === "string") return v;
+  if (!Number.isFinite(v)) return "n/d";
+  const n = v as number;
+  switch (format) {
+    case "pct":
+      // Backend emits fractions for ratios (0.27 = 27%).
+      return `${(n * 100).toFixed(1)}%`;
+    case "pct_raw":
+      // Already-percent values (e.g. dividend_yield, bb_position).
+      return `${n.toFixed(2)}%`;
+    case "ratio":
+      return n.toFixed(2);
+    case "usd": {
+      const abs = Math.abs(n);
+      const sign = n < 0 ? "-" : "";
+      if (abs >= 1e12) return `${sign}$${(abs / 1e12).toFixed(2)}T`;
+      if (abs >= 1e9) return `${sign}$${(abs / 1e9).toFixed(1)}B`;
+      if (abs >= 1e6) return `${sign}$${(abs / 1e6).toFixed(0)}M`;
+      return `${sign}$${abs.toLocaleString()}`;
+    }
+    case "score":
+      // 0-100-ish helper score (e.g. trend_stack derived from SMA alignment).
+      return n.toFixed(0);
+    case "count":
+      return Math.round(n).toString();
+    case "num":
+    default:
+      return Math.abs(n) >= 100 ? n.toFixed(0) : n.toFixed(2);
+  }
+}
+
+/** Type-guard separating component entries from the optional `_meta` row. */
+function isComponent(
+  entry: ScoreBreakdownComponent | ScoreBreakdownMeta,
+): entry is ScoreBreakdownComponent {
+  return "score" in entry && "weight" in entry;
+}
+
+function isMeta(
+  entry: ScoreBreakdownComponent | ScoreBreakdownMeta,
+): entry is ScoreBreakdownMeta {
+  return "components_present" in entry;
 }
 
 interface SubScoreRowProps {
   pillar: keyof StockScore["sub_scores"];
   score: number | null;
-  components: Record<string, ScoreBreakdownComponent> | undefined;
+  components:
+    | Record<string, ScoreBreakdownComponent | ScoreBreakdownMeta>
+    | undefined;
 }
 
 function SubScoreRow({ pillar, score, components }: SubScoreRowProps) {
@@ -172,7 +285,31 @@ function SubScoreRow({ pillar, score, components }: SubScoreRowProps) {
   const valueCls = isMissing ? "text-muted-foreground" : scoreColor(score);
   const widthPct = isMissing ? 0 : Math.max(0, Math.min(100, score));
 
-  const componentEntries = components ? Object.entries(components) : [];
+  // Split the breakdown dict into the per-component entries and the
+  // optional `_meta` row. The components are sorted: present first
+  // (descending by weight × score so the biggest contributors lead),
+  // missing last so the user reads the active drivers first.
+  let presentList: Array<[string, ScoreBreakdownComponent]> = [];
+  let missingList: Array<[string, ScoreBreakdownComponent]> = [];
+  let meta: ScoreBreakdownMeta | null = null;
+  if (components) {
+    for (const [name, entry] of Object.entries(components)) {
+      if (isMeta(entry)) {
+        meta = entry;
+      } else if (isComponent(entry)) {
+        if (entry.present) presentList.push([name, entry]);
+        else missingList.push([name, entry]);
+      }
+    }
+    // Sort present components by their effective contribution (score × weight)
+    // descending. Heaviest signal drivers up top.
+    presentList = presentList.sort((a, b) => {
+      const sa = (a[1].score ?? 0) * a[1].weight;
+      const sb = (b[1].score ?? 0) * b[1].weight;
+      return sb - sa;
+    });
+    missingList = missingList.sort((a, b) => b[1].weight - a[1].weight);
+  }
 
   const trigger = (
     <div className="grid grid-cols-[80px_1fr_38px] items-center gap-2 py-1.5 cursor-help">
@@ -204,9 +341,10 @@ function SubScoreRow({ pillar, score, components }: SubScoreRowProps) {
         align="start"
         sideOffset={8}
         collisionPadding={12}
-        className="w-72 p-3"
+        className="w-[22rem] p-3"
       >
         <div className="space-y-2">
+          {/* Header — pillar name + final pillar score */}
           <div className="flex items-baseline justify-between gap-3 pb-1.5 border-b border-border/50">
             <span className="text-xs font-bold uppercase tracking-wider">
               {label}
@@ -220,36 +358,106 @@ function SubScoreRow({ pillar, score, components }: SubScoreRowProps) {
               {isMissing ? "n/d" : `${Math.round(score!)}/100`}
             </span>
           </div>
+
           {isMissing ? (
             <div className="text-xs text-muted-foreground">
               Dati insufficienti per questo pilastro — escluso dal calcolo,
-              i pesi vengono rinormalizzati sugli altri.
+              i pesi vengono rinormalizzati sugli altri pilastri.
             </div>
-          ) : componentEntries.length === 0 ? (
+          ) : presentList.length === 0 && missingList.length === 0 ? (
             <div className="text-xs text-muted-foreground">
               Dettaglio componenti non disponibile.
             </div>
           ) : (
-            <ul className="space-y-1 text-xs">
-              {componentEntries.map(([name, comp]) => (
-                <li
-                  key={name}
-                  className="flex items-baseline justify-between gap-2"
-                >
-                  <span className="text-muted-foreground capitalize">
-                    {name.replace(/_/g, " ")}
-                  </span>
-                  <span className="tabular-nums shrink-0">
-                    <span className="text-foreground/90">
-                      {fmtRaw(comp.raw)}
+            <>
+              {/* Active components — these contribute to the final pillar
+                  score. Sorted by effective contribution (score × weight)
+                  desc so the user sees the strongest drivers first. */}
+              {presentList.length > 0 && (
+                <ul className="space-y-1 text-[11px]">
+                  {presentList.map(([name, comp]) => {
+                    const m = metaFor(name);
+                    const compScore = comp.score ?? 0;
+                    return (
+                      <li
+                        key={name}
+                        className="grid grid-cols-[1fr_auto_auto_auto] items-baseline gap-2"
+                        title={m.hint}
+                      >
+                        <span className="text-foreground/85 truncate">
+                          {m.label}
+                        </span>
+                        <span className="tabular-nums text-muted-foreground/80 shrink-0">
+                          {fmtRaw(comp.raw, m.format)}
+                        </span>
+                        <span
+                          className={cn(
+                            "tabular-nums font-semibold shrink-0 px-1 rounded",
+                            scoreBgColor(compScore),
+                          )}
+                          title={`Score componente ${Math.round(compScore)}/100`}
+                        >
+                          {Math.round(compScore)}
+                        </span>
+                        <span
+                          className="tabular-nums text-muted-foreground/60 shrink-0 text-[10px]"
+                          title={`Peso ${(comp.weight * 100).toFixed(0)}% nel pilastro`}
+                        >
+                          ×{(comp.weight * 100).toFixed(0)}
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+
+              {/* Missing components — listed but visually de-emphasized
+                  to make clear they did NOT influence the pillar score
+                  (the aggregator excludes them from numerator AND
+                  denominator). The user can see at a glance "I'd score
+                  higher if I had this data, but the absence isn't
+                  hurting me right now". */}
+              {missingList.length > 0 && (
+                <details className="text-[11px]">
+                  <summary className="cursor-pointer text-muted-foreground/70 hover:text-muted-foreground italic select-none">
+                    {missingList.length} componente{missingList.length === 1 ? "" : "i"} senza dato
+                    <span className="ml-1 text-muted-foreground/50">
+                      (esclus{missingList.length === 1 ? "o" : "i"} dal calcolo)
                     </span>
-                    <span className="text-muted-foreground ml-2">
-                      {comp.points.toFixed(1)}/{comp.max} pt
-                    </span>
-                  </span>
-                </li>
-              ))}
-            </ul>
+                  </summary>
+                  <ul className="mt-1 space-y-0.5 text-muted-foreground/70">
+                    {missingList.map(([name, comp]) => {
+                      const m = metaFor(name);
+                      return (
+                        <li
+                          key={name}
+                          className="flex items-baseline justify-between gap-2 italic"
+                          title={m.hint}
+                        >
+                          <span className="truncate">{m.label}</span>
+                          <span className="tabular-nums text-[10px] shrink-0">
+                            ×{(comp.weight * 100).toFixed(0)} · n/d
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </details>
+              )}
+
+              {/* Footer — meta from the backend aggregator: how many
+                  components actually fed into the score, and the total
+                  weight that was active. Communicates the
+                  missing-data-neutralization invariant explicitly. */}
+              {meta && (
+                <div className="pt-1.5 border-t border-border/40 text-[10px] text-muted-foreground/80 italic">
+                  {meta.components_present} di {meta.components_total}{" "}
+                  componenti attivi
+                  {meta.components_present < meta.components_total &&
+                    " · pesi rinormalizzati"}
+                </div>
+              )}
+            </>
           )}
         </div>
       </TooltipContent>

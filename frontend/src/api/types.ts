@@ -716,22 +716,40 @@ export interface SubScores {
   sentiment: number | null;
 }
 
-/** One component inside a sub-score breakdown.
- *  `raw` is the input value from upstream (yfinance, technicals, ...);
- *  may be null when the data is missing. `points` ≤ `max`; the ratio
- *  drives the bar fill in the UI. */
+/** One component inside a sub-score breakdown (score engine v2 shape).
+ *
+ *  `raw` is the input value from upstream (yfinance, technicals, news,
+ *  analyst data, …); null when the data is missing. `score` is the
+ *  component's normalized contribution in [0, 100], or null when the
+ *  raw input wasn't available. `weight` is the relative weight of the
+ *  component within its pillar (the aggregator computes
+ *  `pillar = Σ score·weight / Σ weight` over the *present* components
+ *  only — missing ones contribute to NEITHER numerator nor denominator).
+ *  `present` is the redundant boolean flag for fast UI checks.
+ */
 export interface ScoreBreakdownComponent {
-  raw: number | null;
-  points: number;
-  max: number;
+  raw: number | string | null;
+  score: number | null;
+  weight: number;
+  present: boolean;
 }
 
-/** Per-pillar breakdown — keys are component names (e.g. `roe`, `debt_equity`).
- *  Loose-typed because each pillar has its own component layout. The UI just
- *  iterates and renders bars, no static type needed. */
+/** Optional per-pillar meta entry (key `_meta`). Carries the
+ *  active-component count + the sum of weights actually contributing,
+ *  so the UI can show "8 di 12 componenti attivi · pesi rinormalizzati"
+ *  in the breakdown tooltip. */
+export interface ScoreBreakdownMeta {
+  components_present: number;
+  components_total: number;
+  weight_sum_present: number;
+}
+
+/** Per-pillar breakdown — keys are component names plus the optional
+ *  `_meta`. Each pillar dict has the meta in addition to the components,
+ *  so the consumer must filter `_meta` out when iterating components. */
 export type ScoreBreakdown = Record<
   string,
-  Record<string, ScoreBreakdownComponent>
+  Record<string, ScoreBreakdownComponent | ScoreBreakdownMeta>
 >;
 
 export interface StockScore {
