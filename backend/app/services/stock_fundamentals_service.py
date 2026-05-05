@@ -104,42 +104,90 @@ class AnalystAction:
 
 @dataclass
 class MicroData:
-    """Snapshot fundamentals from Ticker.info — slow endpoint, cached 24h."""
-    # Valuation multiples
+    """Snapshot fundamentals from Ticker.info — slow endpoint, cached 24h.
+
+    Comprehensive coverage of every numeric field yfinance reliably exposes
+    on `Ticker.info` for valuation / quality / earnings / cash / share /
+    dividend / analyst / risk analysis. Each field is optional because:
+      - yfinance returns different subsets per ticker (foreign listings
+        skip US-specific governance scores; IPOs lack TTM rows; etc.).
+      - The frontend renders "—" gracefully when a field is None.
+    Bumping schema version in `fetch_cache_store` invalidates old payloads
+    so users naturally get the richer dataset on next visit.
+    """
+    # ── Valuation multiples ────────────────────────────────────────────
     trailing_pe: float | None = None
     forward_pe: float | None = None
     peg_ratio: float | None = None
-    beta: float | None = None
-    dividend_yield: float | None = None
+    trailing_peg_ratio: float | None = None  # newer "trailingPegRatio"
     price_to_book: float | None = None
     price_to_sales: float | None = None
     enterprise_to_ebitda: float | None = None
+    enterprise_to_revenue: float | None = None  # EV/Sales — capital-structure-agnostic
     enterprise_value: float | None = None
-    book_value: float | None = None       # per share
-    # Profitability / quality
+    book_value: float | None = None             # per share
+    price_eps_current_year: float | None = None # forward P/E using current-year EPS
+    # ── Profitability / margins ────────────────────────────────────────
     return_on_equity: float | None = None
     return_on_assets: float | None = None
     profit_margins: float | None = None
     operating_margins: float | None = None
     gross_margins: float | None = None
-    # Leverage / liquidity
+    ebitda_margins: float | None = None
+    ebitda: float | None = None
+    gross_profits: float | None = None
+    net_income_to_common: float | None = None    # net income to common shareholders
+    # ── Earnings / EPS ─────────────────────────────────────────────────
+    eps_trailing: float | None = None
+    eps_forward: float | None = None
+    eps_current_year: float | None = None        # current-year analyst estimate
+    earnings_quarterly_growth: float | None = None  # QoQ EPS growth (fraction)
+    # ── Revenue ────────────────────────────────────────────────────────
+    total_revenue: float | None = None
+    revenue_per_share: float | None = None
+    # ── Leverage / liquidity ───────────────────────────────────────────
     debt_to_equity: float | None = None
     current_ratio: float | None = None
     quick_ratio: float | None = None
-    # Growth
-    revenue_growth: float | None = None
-    earnings_growth: float | None = None
-    # Cash flow
+    total_cash: float | None = None
+    total_cash_per_share: float | None = None
+    total_debt: float | None = None
+    # ── Cash flow ──────────────────────────────────────────────────────
     free_cashflow: float | None = None
     operating_cashflow: float | None = None
-    # Income / payout
+    # ── Growth ─────────────────────────────────────────────────────────
+    revenue_growth: float | None = None
+    earnings_growth: float | None = None
+    # ── Dividend ───────────────────────────────────────────────────────
+    dividend_rate: float | None = None              # USD/share annual
+    dividend_yield: float | None = None             # %, yfinance returns 1.81 = 1.81%
+    five_year_avg_dividend_yield: float | None = None
+    trailing_annual_dividend_rate: float | None = None
+    trailing_annual_dividend_yield: float | None = None  # fraction
     payout_ratio: float | None = None
-    # Holdings & sentiment
+    # ── Beta / risk ────────────────────────────────────────────────────
+    beta: float | None = None
+    # ── Shares / float / short interest ────────────────────────────────
+    shares_outstanding: float | None = None
+    float_shares: float | None = None
+    shares_short: float | None = None
+    short_ratio: float | None = None
+    short_percent_of_float: float | None = None    # fraction, e.g. 0.0147
+    # ── Holdings ───────────────────────────────────────────────────────
     held_percent_insiders: float | None = None
     held_percent_institutions: float | None = None
-    # Performance vs market
+    # ── Analyst aggregate ──────────────────────────────────────────────
+    recommendation_mean: float | None = None       # 1.0 (strong buy) - 5.0 (sell)
+    number_of_analyst_opinions: float | None = None
+    # ── Performance vs market ──────────────────────────────────────────
     fifty_two_week_change: float | None = None
     sp500_fifty_two_week_change: float | None = None
+    # ── Governance / risk scores (Yahoo's 1-10 scales; lower = better) ─
+    audit_risk: float | None = None
+    board_risk: float | None = None
+    compensation_risk: float | None = None
+    share_holder_rights_risk: float | None = None
+    overall_risk: float | None = None
 
 
 @dataclass
@@ -295,33 +343,81 @@ def _extract_micro(info: dict | None) -> MicroData:
     if not info:
         return MicroData()
     return MicroData(
+        # Valuation multiples
         trailing_pe=_safe_float(info.get("trailingPE")),
         forward_pe=_safe_float(info.get("forwardPE")),
         peg_ratio=_safe_float(info.get("pegRatio")),
-        beta=_safe_float(info.get("beta")),
-        dividend_yield=_safe_float(info.get("dividendYield")),
+        trailing_peg_ratio=_safe_float(info.get("trailingPegRatio")),
         price_to_book=_safe_float(info.get("priceToBook")),
         price_to_sales=_safe_float(info.get("priceToSalesTrailing12Months")),
         enterprise_to_ebitda=_safe_float(info.get("enterpriseToEbitda")),
+        enterprise_to_revenue=_safe_float(info.get("enterpriseToRevenue")),
         enterprise_value=_safe_float(info.get("enterpriseValue")),
         book_value=_safe_float(info.get("bookValue")),
+        price_eps_current_year=_safe_float(info.get("priceEpsCurrentYear")),
+        # Profitability / margins
         return_on_equity=_safe_float(info.get("returnOnEquity")),
         return_on_assets=_safe_float(info.get("returnOnAssets")),
         profit_margins=_safe_float(info.get("profitMargins")),
         operating_margins=_safe_float(info.get("operatingMargins")),
         gross_margins=_safe_float(info.get("grossMargins")),
+        ebitda_margins=_safe_float(info.get("ebitdaMargins")),
+        ebitda=_safe_float(info.get("ebitda")),
+        gross_profits=_safe_float(info.get("grossProfits")),
+        net_income_to_common=_safe_float(info.get("netIncomeToCommon")),
+        # Earnings / EPS
+        eps_trailing=_safe_float(
+            info.get("trailingEps") or info.get("epsTrailingTwelveMonths")
+        ),
+        eps_forward=_safe_float(info.get("forwardEps") or info.get("epsForward")),
+        eps_current_year=_safe_float(info.get("epsCurrentYear")),
+        earnings_quarterly_growth=_safe_float(info.get("earningsQuarterlyGrowth")),
+        # Revenue
+        total_revenue=_safe_float(info.get("totalRevenue")),
+        revenue_per_share=_safe_float(info.get("revenuePerShare")),
+        # Leverage / liquidity
         debt_to_equity=_safe_float(info.get("debtToEquity")),
         current_ratio=_safe_float(info.get("currentRatio")),
         quick_ratio=_safe_float(info.get("quickRatio")),
-        revenue_growth=_safe_float(info.get("revenueGrowth")),
-        earnings_growth=_safe_float(info.get("earningsGrowth")),
+        total_cash=_safe_float(info.get("totalCash")),
+        total_cash_per_share=_safe_float(info.get("totalCashPerShare")),
+        total_debt=_safe_float(info.get("totalDebt")),
+        # Cash flow
         free_cashflow=_safe_float(info.get("freeCashflow")),
         operating_cashflow=_safe_float(info.get("operatingCashflow")),
+        # Growth
+        revenue_growth=_safe_float(info.get("revenueGrowth")),
+        earnings_growth=_safe_float(info.get("earningsGrowth")),
+        # Dividend
+        dividend_rate=_safe_float(info.get("dividendRate")),
+        dividend_yield=_safe_float(info.get("dividendYield")),
+        five_year_avg_dividend_yield=_safe_float(info.get("fiveYearAvgDividendYield")),
+        trailing_annual_dividend_rate=_safe_float(info.get("trailingAnnualDividendRate")),
+        trailing_annual_dividend_yield=_safe_float(info.get("trailingAnnualDividendYield")),
         payout_ratio=_safe_float(info.get("payoutRatio")),
+        # Beta / risk
+        beta=_safe_float(info.get("beta")),
+        # Shares / float / short interest
+        shares_outstanding=_safe_float(info.get("sharesOutstanding")),
+        float_shares=_safe_float(info.get("floatShares")),
+        shares_short=_safe_float(info.get("sharesShort")),
+        short_ratio=_safe_float(info.get("shortRatio")),
+        short_percent_of_float=_safe_float(info.get("shortPercentOfFloat")),
+        # Holdings
         held_percent_insiders=_safe_float(info.get("heldPercentInsiders")),
         held_percent_institutions=_safe_float(info.get("heldPercentInstitutions")),
+        # Analyst aggregate
+        recommendation_mean=_safe_float(info.get("recommendationMean")),
+        number_of_analyst_opinions=_safe_float(info.get("numberOfAnalystOpinions")),
+        # Performance vs market
         fifty_two_week_change=_safe_float(info.get("52WeekChange")),
         sp500_fifty_two_week_change=_safe_float(info.get("SandP52WeekChange")),
+        # Governance / risk scores (Yahoo's 1-10 scales, lower = better)
+        audit_risk=_safe_float(info.get("auditRisk")),
+        board_risk=_safe_float(info.get("boardRisk")),
+        compensation_risk=_safe_float(info.get("compensationRisk")),
+        share_holder_rights_risk=_safe_float(info.get("shareHolderRightsRisk")),
+        overall_risk=_safe_float(info.get("overallRisk")),
     )
 
 

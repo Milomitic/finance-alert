@@ -211,15 +211,61 @@ function buildSnapshotRows(stock: Stock, kpis: StockKpis): Row[] {
 
 /* ─── Valuation rows (yfinance fundamentals → display) ──────────────────── */
 
+/** Compact-magnitude formatter for share counts, EBITDA, total cash/debt
+ *  — same brackets as `bigUsd` but without the `$` (shares aren't dollars). */
+function bigCount(v: number): string {
+  const abs = Math.abs(v);
+  const sign = v < 0 ? "-" : "";
+  if (abs >= 1e12) return `${sign}${(abs / 1e12).toFixed(2)}T`;
+  if (abs >= 1e9) return `${sign}${(abs / 1e9).toFixed(2)}B`;
+  if (abs >= 1e6) return `${sign}${(abs / 1e6).toFixed(0)}M`;
+  if (abs >= 1e3) return `${sign}${(abs / 1e3).toFixed(0)}k`;
+  return `${sign}${abs.toLocaleString()}`;
+}
+
+/** Decimal count (e.g. analyst opinions). */
+function intCount(v: number): string {
+  return Math.round(v).toString();
+}
+
+/** Recommendation-mean tone: 1.0 strong-buy → 5.0 sell. */
+function recommendationTone(v: number): ToneSignal | null {
+  if (v <= 2.0) {
+    return { cls: GREEN, reason: `Recommendation mean ${v.toFixed(2)} ≤ 2: consenso analisti orientato a Buy / Strong Buy.` };
+  }
+  if (v >= 3.5) {
+    return { cls: RED, reason: `Recommendation mean ${v.toFixed(2)} ≥ 3.5: consenso analisti orientato a Sell / Underperform.` };
+  }
+  return null;
+}
+
+/** Yahoo's risk scores are 1 (low) to 10 (high). 1-3 green, 7-10 red. */
+function riskScoreTone(label: string): (v: number) => ToneSignal | null {
+  return (v) => {
+    if (v <= 3) {
+      return { cls: GREEN, reason: `${label} ${v.toFixed(0)} (scala 1-10, basso = buono).` };
+    }
+    if (v >= 7) {
+      return { cls: RED, reason: `${label} ${v.toFixed(0)} (scala 1-10, alto = preoccupante).` };
+    }
+    return null;
+  };
+}
+
 function buildColumns(m: MicroData): { left: Row[]; right: Row[] } {
-  // Goal: 13 rows in each column when the 4 trading-snapshot rows are
-  // prepended to the LEFT (so 9 valuation rows + 4 snapshot = 13 left,
-  // 13 right). Conceptual split:
-  //   LEFT: Valuation multiples + Beta (8 multiples + 1 risk = 9)
-  //   RIGHT: Profitability + Leverage + Cashflow + Growth + Income (13)
-  // Dividend yield + Payout ratio moved from left to right because they
-  // belong with the income/quality metrics conceptually, not the multiples.
+  // Two-column layout. The card scrolls internally, so column lengths
+  // can differ — picking a clean grouping wins over strict row parity.
+  //
+  //   LEFT  : valuation multiples + magnitudes (revenue, EBITDA, cash,
+  //           debt, FCF) + Beta — "what's the price level + scale"
+  //   RIGHT : quality (margins, ROE/A) + growth + dividend + shares /
+  //           short interest + analyst aggregate + risk scores —
+  //           "is the business healthy, who follows it, what's the risk"
+  //
+  // The 4 trading-snapshot rows (cap / 52w / vol / vol×) prepend to LEFT
+  // in the parent caller so the user sees market-state-first.
   const left: Row[] = [
+    // ── Valuation multiples ────────────────────────────────────────
     {
       label: "P/E (TTM)",
       raw: m.trailing_pe,
@@ -239,6 +285,12 @@ function buildColumns(m: MicroData): { left: Row[]; right: Row[] } {
       tip: "P/E basato sull'EPS atteso nei prossimi 12 mesi.",
     },
     {
+      label: "P/EPS curr. yr",
+      raw: m.price_eps_current_year ?? null,
+      format: num,
+      tip: "Prezzo / EPS atteso per l'anno fiscale corrente. Variante del Forward P/E che usa l'EPS dell'anno in corso invece dei prossimi 12 mesi.",
+    },
+    {
       label: "PEG",
       raw: m.peg_ratio,
       format: num,
@@ -249,6 +301,12 @@ function buildColumns(m: MicroData): { left: Row[]; right: Row[] } {
           : v > 2
             ? { cls: AMBER, reason: `PEG ${v.toFixed(2)} sopra 2: prezzo elevato rispetto alla crescita prevista.` }
             : null,
+    },
+    {
+      label: "PEG (trailing)",
+      raw: m.trailing_peg_ratio ?? null,
+      format: num,
+      tip: "PEG ratio basato sulla crescita TTM (più stabile vs il PEG forward, che dipende dalle stime analisti).",
     },
     {
       label: "P/B",
@@ -269,6 +327,12 @@ function buildColumns(m: MicroData): { left: Row[]; right: Row[] } {
       tip: "Enterprise Value / EBITDA. Multiplo holistic che ignora la struttura del capitale.",
     },
     {
+      label: "EV/Revenue",
+      raw: m.enterprise_to_revenue ?? null,
+      format: num,
+      tip: "Enterprise Value / Revenue. Variante capital-structure-agnostic del P/S — utile per aziende con leva finanziaria significativa.",
+    },
+    {
       label: "Enterprise Value",
       raw: m.enterprise_value,
       format: bigUsd,
@@ -280,6 +344,92 @@ function buildColumns(m: MicroData): { left: Row[]; right: Row[] } {
       format: (v) => `$${v.toFixed(2)}`,
       tip: "Book value per azione (equity netto / azioni in circolazione).",
     },
+    // ── EPS magnitudes (separate from growth which sits in RIGHT) ──
+    {
+      label: "EPS (TTM)",
+      raw: m.eps_trailing ?? null,
+      format: (v) => `$${v.toFixed(2)}`,
+      tip: "EPS trailing 12 mesi: utile per azione realizzato negli ultimi 4 trimestri.",
+    },
+    {
+      label: "EPS (Forward)",
+      raw: m.eps_forward ?? null,
+      format: (v) => `$${v.toFixed(2)}`,
+      tip: "EPS atteso nei prossimi 12 mesi (consenso analisti).",
+    },
+    {
+      label: "EPS (curr. yr)",
+      raw: m.eps_current_year ?? null,
+      format: (v) => `$${v.toFixed(2)}`,
+      tip: "EPS atteso per l'anno fiscale corrente.",
+    },
+    // ── Income / revenue magnitudes ─────────────────────────────────
+    {
+      label: "Total Revenue",
+      raw: m.total_revenue ?? null,
+      format: bigUsd,
+      tip: "Ricavi TTM (trailing 12 mesi).",
+    },
+    {
+      label: "Revenue/share",
+      raw: m.revenue_per_share ?? null,
+      format: (v) => `$${v.toFixed(2)}`,
+      tip: "Total revenue / azioni in circolazione. Utile per confrontare aziende con buyback aggressivi vs no.",
+    },
+    {
+      label: "Gross profits",
+      raw: m.gross_profits ?? null,
+      format: bigUsd,
+      tip: "Profitti lordi TTM (Revenue − COGS).",
+    },
+    {
+      label: "Net income",
+      raw: m.net_income_to_common ?? null,
+      format: bigUsd,
+      tip: "Utile netto attribuibile agli azionisti comuni (TTM).",
+    },
+    {
+      label: "EBITDA",
+      raw: m.ebitda ?? null,
+      format: bigUsd,
+      tip: "Earnings Before Interest, Taxes, Depreciation, Amortization (TTM). Misura di profittabilità operativa pre-spese non-cash.",
+    },
+    // ── Cash & debt magnitudes ─────────────────────────────────────
+    {
+      label: "Total cash",
+      raw: m.total_cash ?? null,
+      format: bigUsd,
+      tip: "Cassa + equivalenti (ultimo bilancio).",
+    },
+    {
+      label: "Cash/share",
+      raw: m.total_cash_per_share ?? null,
+      format: (v) => `$${v.toFixed(2)}`,
+      tip: "Cassa per azione. Spesso usato come confronto col prezzo (azioni a sconto vs cash).",
+    },
+    {
+      label: "Total debt",
+      raw: m.total_debt ?? null,
+      format: bigUsd,
+      tip: "Debito totale (short-term + long-term, ultimo bilancio).",
+    },
+    {
+      label: "Free Cash Flow",
+      raw: m.free_cashflow,
+      format: bigUsd,
+      tip: "Flusso di cassa libero (TTM): cassa generata dopo capex. Positivo = l'azienda genera cassa autonomamente; negativo = brucia cassa, dipende da finanziamenti.",
+      toneFor: (v) =>
+        v > 0
+          ? { cls: GREEN, reason: `FCF positivo (${bigUsd(v)}): l'azienda genera cassa libera, può rimborsare debito o tornare valore agli azionisti.` }
+          : { cls: RED, reason: `FCF negativo (${bigUsd(v)}): l'azienda brucia cassa, dipende da debito/equity per finanziarsi.` },
+    },
+    {
+      label: "Operating CF",
+      raw: m.operating_cashflow ?? null,
+      format: bigUsd,
+      tip: "Cassa generata dalle attività operative (TTM). Free Cash Flow = Operating CF − Capex.",
+      toneFor: signTone("Operating CF", "usd"),
+    },
     {
       label: "Beta (5y)",
       raw: m.beta,
@@ -287,7 +437,9 @@ function buildColumns(m: MicroData): { left: Row[]; right: Row[] } {
       tip: "Sensibilità del prezzo al mercato. >1 = più volatile del mercato, <1 = meno.",
     },
   ];
+
   const right: Row[] = [
+    // ── Profitability / margins ─────────────────────────────────────
     {
       label: "ROE",
       raw: m.return_on_equity,
@@ -339,6 +491,14 @@ function buildColumns(m: MicroData): { left: Row[]; right: Row[] } {
       },
     },
     {
+      label: "EBITDA margin",
+      raw: m.ebitda_margins ?? null,
+      format: pct,
+      tip: "EBITDA / Revenue. Margine pre-D&A e costi finanziari. Confrontabile fra aziende con strutture capital diverse.",
+      toneFor: pctTone({ greenAbove: 0.20, label: "EBITDA margin" }),
+    },
+    // ── Leverage / liquidity ratios ────────────────────────────────
+    {
       label: "Debt/Equity",
       raw: m.debt_to_equity,
       format: num,
@@ -364,15 +524,16 @@ function buildColumns(m: MicroData): { left: Row[]; right: Row[] } {
       },
     },
     {
-      label: "Free Cash Flow",
-      raw: m.free_cashflow,
-      format: bigUsd,
-      tip: "Flusso di cassa libero (TTM): cassa generata dopo capex. Positivo = l'azienda genera cassa autonomamente; negativo = brucia cassa, dipende da finanziamenti.",
+      label: "Quick ratio",
+      raw: m.quick_ratio,
+      format: num,
+      tip: "Liquidità più stringente del current ratio: esclude inventario. (Cash + Receivables) / Current Liabilities.",
       toneFor: (v) =>
-        v > 0
-          ? { cls: GREEN, reason: `FCF positivo (${bigUsd(v)}): l'azienda genera cassa libera, può rimborsare debito o tornare valore agli azionisti.` }
-          : { cls: RED, reason: `FCF negativo (${bigUsd(v)}): l'azienda brucia cassa, dipende da debito/equity per finanziarsi.` },
+        v < 1
+          ? { cls: AMBER, reason: `Quick ratio ${v.toFixed(2)} sotto 1: liquidità senza inventario insufficiente a coprire passività di breve.` }
+          : null,
     },
+    // ── Growth ─────────────────────────────────────────────────────
     {
       label: "Rev growth (YoY)",
       raw: m.revenue_growth,
@@ -388,11 +549,18 @@ function buildColumns(m: MicroData): { left: Row[]; right: Row[] } {
       toneFor: signTone("EPS growth", "pct"),
     },
     {
-      label: "52w change",
-      raw: m.fifty_two_week_change,
+      label: "EPS growth (QoQ)",
+      raw: m.earnings_quarterly_growth ?? null,
       format: pct,
-      tip: "Performance prezzo nelle ultime 52 settimane. Verde sopra 0 = il titolo è salito; rosso sotto 0 = sceso.",
-      toneFor: signTone("52w change", "pct"),
+      tip: "Crescita EPS QoQ (ultimo trimestre vs trimestre immediatamente precedente). Più rumoroso del YoY ma cattura cambi di trend più velocemente.",
+      toneFor: signTone("EPS quarterly growth", "pct"),
+    },
+    // ── Dividend ───────────────────────────────────────────────────
+    {
+      label: "Dividend rate",
+      raw: m.dividend_rate ?? null,
+      format: (v) => `$${v.toFixed(2)}`,
+      tip: "Dividendo annuo per azione (USD). 0 = l'azienda non distribuisce dividendi.",
     },
     {
       label: "Dividend yield",
@@ -401,10 +569,99 @@ function buildColumns(m: MicroData): { left: Row[]; right: Row[] } {
       tip: "Dividend yield annualizzato (ultimo dividendo × frequenza ÷ prezzo).",
     },
     {
+      label: "5y avg div yield",
+      raw: m.five_year_avg_dividend_yield ?? null,
+      format: pctRaw,
+      tip: "Yield medio dei dividendi negli ultimi 5 anni. Confrontalo con il yield corrente per vedere se il dividendo è anomalo.",
+    },
+    {
       label: "Payout ratio",
       raw: m.payout_ratio,
       format: pct,
       tip: "% di utili distribuiti come dividendi. >100% = l'azienda paga più di quanto guadagna (insostenibile a lungo).",
+    },
+    // ── Shares / float / short interest ────────────────────────────
+    {
+      label: "Shares out.",
+      raw: m.shares_outstanding ?? null,
+      format: bigCount,
+      tip: "Numero totale di azioni in circolazione.",
+    },
+    {
+      label: "Float shares",
+      raw: m.float_shares ?? null,
+      format: bigCount,
+      tip: "Azioni effettivamente liberamente scambiabili (escluse quelle detenute da insider/restricted).",
+    },
+    {
+      label: "Short ratio",
+      raw: m.short_ratio ?? null,
+      format: num,
+      tip: "Days-to-cover: giorni necessari per coprire tutte le posizioni short al volume medio. Alto = pressione short significativa.",
+      toneFor: (v) =>
+        v >= 5
+          ? { cls: AMBER, reason: `Short ratio ${v.toFixed(2)}: posizioni short consistenti rispetto al volume medio — possibile sentiment ribassista o squeeze potential.` }
+          : null,
+    },
+    {
+      label: "Short % of float",
+      raw: m.short_percent_of_float ?? null,
+      format: pct,
+      tip: "% del float venduto allo scoperto. >10% indica forte interesse short; >20% può preludere a uno short squeeze su catalyst positivi.",
+      toneFor: (v) =>
+        v >= 0.10
+          ? { cls: AMBER, reason: `Short ${(v * 100).toFixed(1)}% del float: interesse short significativo, attenzione a movimenti su catalyst.` }
+          : null,
+    },
+    // ── Holdings ───────────────────────────────────────────────────
+    {
+      label: "% insiders",
+      raw: m.held_percent_insiders ?? null,
+      format: pct,
+      tip: "% di azioni detenute da insider (management, board). Ownership alto = allineamento di incentivi.",
+    },
+    {
+      label: "% institutions",
+      raw: m.held_percent_institutions ?? null,
+      format: pct,
+      tip: "% di azioni detenute da istituzionali (fondi, ETF, ecc.).",
+    },
+    // ── Analyst aggregate ──────────────────────────────────────────
+    {
+      label: "Recommendation",
+      raw: m.recommendation_mean ?? null,
+      format: num,
+      tip: "Media delle raccomandazioni analisti su scala 1-5: 1=Strong Buy, 2=Buy, 3=Hold, 4=Underperform, 5=Sell.",
+      toneFor: recommendationTone,
+    },
+    {
+      label: "# analisti",
+      raw: m.number_of_analyst_opinions ?? null,
+      format: intCount,
+      tip: "Numero di analisti che coprono il titolo. Più alto = consenso più affidabile.",
+    },
+    // ── Performance vs market ──────────────────────────────────────
+    {
+      label: "52w change",
+      raw: m.fifty_two_week_change,
+      format: pct,
+      tip: "Performance prezzo nelle ultime 52 settimane. Verde sopra 0 = il titolo è salito; rosso sotto 0 = sceso.",
+      toneFor: signTone("52w change", "pct"),
+    },
+    {
+      label: "S&P 52w change",
+      raw: m.sp500_fifty_two_week_change,
+      format: pct,
+      tip: "Performance dell'S&P500 nello stesso periodo, per confronto. Battere l'S&P è il benchmark passivo.",
+      toneFor: signTone("S&P 52w", "pct"),
+    },
+    // ── Governance / risk score (1-10, lower = better per Yahoo) ──
+    {
+      label: "Risk overall",
+      raw: m.overall_risk ?? null,
+      format: intCount,
+      tip: "Yahoo overall risk score (1-10): aggregato di audit, board, compensation, shareholder rights. Basso = governance solida.",
+      toneFor: riskScoreTone("Risk overall"),
     },
   ];
   return { left, right };

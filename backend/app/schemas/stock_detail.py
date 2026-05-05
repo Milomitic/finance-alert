@@ -65,33 +65,82 @@ class FundamentalsEarningsOut(BaseModel):
 
 
 class MicroDataOut(BaseModel):
+    """Mirror of `services.stock_fundamentals_service.MicroData`.
+    Comprehensive coverage of yfinance Ticker.info numeric fields. All
+    optional — yfinance returns different subsets per ticker."""
+    # Valuation multiples
     trailing_pe: float | None = None
     forward_pe: float | None = None
     peg_ratio: float | None = None
-    beta: float | None = None
-    dividend_yield: float | None = None
+    trailing_peg_ratio: float | None = None
     price_to_book: float | None = None
     price_to_sales: float | None = None
     enterprise_to_ebitda: float | None = None
+    enterprise_to_revenue: float | None = None
     enterprise_value: float | None = None
     book_value: float | None = None
+    price_eps_current_year: float | None = None
+    # Profitability / margins
     return_on_equity: float | None = None
     return_on_assets: float | None = None
     profit_margins: float | None = None
     operating_margins: float | None = None
     gross_margins: float | None = None
+    ebitda_margins: float | None = None
+    ebitda: float | None = None
+    gross_profits: float | None = None
+    net_income_to_common: float | None = None
+    # Earnings / EPS
+    eps_trailing: float | None = None
+    eps_forward: float | None = None
+    eps_current_year: float | None = None
+    earnings_quarterly_growth: float | None = None
+    # Revenue
+    total_revenue: float | None = None
+    revenue_per_share: float | None = None
+    # Leverage / liquidity
     debt_to_equity: float | None = None
     current_ratio: float | None = None
     quick_ratio: float | None = None
-    revenue_growth: float | None = None
-    earnings_growth: float | None = None
+    total_cash: float | None = None
+    total_cash_per_share: float | None = None
+    total_debt: float | None = None
+    # Cash flow
     free_cashflow: float | None = None
     operating_cashflow: float | None = None
+    # Growth
+    revenue_growth: float | None = None
+    earnings_growth: float | None = None
+    # Dividend
+    dividend_rate: float | None = None
+    dividend_yield: float | None = None
+    five_year_avg_dividend_yield: float | None = None
+    trailing_annual_dividend_rate: float | None = None
+    trailing_annual_dividend_yield: float | None = None
     payout_ratio: float | None = None
+    # Beta / risk
+    beta: float | None = None
+    # Shares / float / short interest
+    shares_outstanding: float | None = None
+    float_shares: float | None = None
+    shares_short: float | None = None
+    short_ratio: float | None = None
+    short_percent_of_float: float | None = None
+    # Holdings
     held_percent_insiders: float | None = None
     held_percent_institutions: float | None = None
+    # Analyst aggregate
+    recommendation_mean: float | None = None
+    number_of_analyst_opinions: float | None = None
+    # Performance vs market
     fifty_two_week_change: float | None = None
     sp500_fifty_two_week_change: float | None = None
+    # Governance / risk scores (Yahoo's 1-10 scales)
+    audit_risk: float | None = None
+    board_risk: float | None = None
+    compensation_risk: float | None = None
+    share_holder_rights_risk: float | None = None
+    overall_risk: float | None = None
 
 
 class InsiderTransactionOut(BaseModel):

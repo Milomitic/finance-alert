@@ -55,7 +55,12 @@ KIND_NEWS = "news"
 # Versions:
 #   1: pre-CompanyProfile (annual/quarterly/earnings/micro/insiders/...)
 #   2: + CompanyProfile (long_business_summary, website, employees, ...)
-_FUNDAMENTALS_SCHEMA_VERSION = 2
+#   3: + comprehensive MicroData expansion (~25 new yfinance fields:
+#        ebitda, total_revenue, gross_profits, total_cash, total_debt,
+#        eps_trailing/forward/current_year, shares_outstanding/float/short,
+#        recommendation_mean, governance risks, etc.). Old payloads
+#        re-fetch on next access so users see the richer dataset.
+_FUNDAMENTALS_SCHEMA_VERSION = 3
 _SCHEMA_VERSION_KEY = "_schema_version"
 
 

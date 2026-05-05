@@ -510,33 +510,79 @@ export interface FundamentalsEarnings {
 }
 
 export interface MicroData {
+  // Valuation multiples
   trailing_pe: number | null;
   forward_pe: number | null;
   peg_ratio: number | null;
-  beta: number | null;
-  dividend_yield: number | null;
+  trailing_peg_ratio?: number | null;
   price_to_book: number | null;
   price_to_sales: number | null;
   enterprise_to_ebitda: number | null;
+  enterprise_to_revenue?: number | null;
   enterprise_value: number | null;
   book_value: number | null;
+  price_eps_current_year?: number | null;
+  // Profitability / margins
   return_on_equity: number | null;
   return_on_assets: number | null;
   profit_margins: number | null;
   operating_margins: number | null;
   gross_margins: number | null;
+  ebitda_margins?: number | null;
+  ebitda?: number | null;
+  gross_profits?: number | null;
+  net_income_to_common?: number | null;
+  // Earnings / EPS
+  eps_trailing?: number | null;
+  eps_forward?: number | null;
+  eps_current_year?: number | null;
+  earnings_quarterly_growth?: number | null;
+  // Revenue
+  total_revenue?: number | null;
+  revenue_per_share?: number | null;
+  // Leverage / liquidity
   debt_to_equity: number | null;
   current_ratio: number | null;
   quick_ratio: number | null;
-  revenue_growth: number | null;
-  earnings_growth: number | null;
+  total_cash?: number | null;
+  total_cash_per_share?: number | null;
+  total_debt?: number | null;
+  // Cash flow
   free_cashflow: number | null;
   operating_cashflow: number | null;
+  // Growth
+  revenue_growth: number | null;
+  earnings_growth: number | null;
+  // Dividend
+  dividend_rate?: number | null;
+  dividend_yield: number | null;
+  five_year_avg_dividend_yield?: number | null;
+  trailing_annual_dividend_rate?: number | null;
+  trailing_annual_dividend_yield?: number | null;
   payout_ratio: number | null;
+  // Beta / risk
+  beta: number | null;
+  // Shares / float / short interest
+  shares_outstanding?: number | null;
+  float_shares?: number | null;
+  shares_short?: number | null;
+  short_ratio?: number | null;
+  short_percent_of_float?: number | null;
+  // Holdings
   held_percent_insiders: number | null;
   held_percent_institutions: number | null;
+  // Analyst aggregate
+  recommendation_mean?: number | null;
+  number_of_analyst_opinions?: number | null;
+  // Performance vs market
   fifty_two_week_change: number | null;
   sp500_fifty_two_week_change: number | null;
+  // Governance / risk scores (Yahoo's 1-10)
+  audit_risk?: number | null;
+  board_risk?: number | null;
+  compensation_risk?: number | null;
+  share_holder_rights_risk?: number | null;
+  overall_risk?: number | null;
 }
 
 export interface InsiderTransaction {
