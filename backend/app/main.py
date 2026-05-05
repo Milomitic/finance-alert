@@ -216,6 +216,87 @@ def warmup_fundamentals(
         db.close()
 
 
+@app.post("/api/admin/redownload-ohlcv")
+def redownload_ohlcv(
+    limit: int | None = None,
+    period: str = "10y",
+) -> dict[str, object]:
+    """One-shot deep-backfill: wipe + re-fetch OHLCV for every stock at the
+    requested yfinance period.
+
+    Why this exists: the regular scan path uses `period="1mo"` for stocks
+    whose latest bar is < 30 days old. So when the chart range was extended
+    to 5Y, existing stocks (which already had 1Y of data) never qualified
+    for the new 10Y deep-backfill — `needs_backfill` was always False.
+    This endpoint forces the deep-backfill once across the catalog;
+    afterwards, normal scans stay cheap.
+
+    `limit`: cap how many stocks to process (None = all). Useful for
+    smoke-testing the path on a small subset before committing to the
+    full multi-minute run.
+    `period`: yfinance period string. "10y" gives plenty of headroom for
+    5Y views + long-window indicators; "max" pulls everything yfinance
+    has but is slower. "5y" is the practical floor for the new chart range.
+
+    Runs synchronously (blocks the request) — for ~1100 stocks at a
+    chunk-of-100 cadence with yfinance batch fetch, expect ~3-5 minutes.
+    """
+    from app.core.db import SessionLocal
+    from app.models import OhlcvDaily, Stock
+    from app.services import yfinance_health
+    from app.services.ohlcv_service import fetch_and_upsert
+    from sqlalchemy import delete, select
+
+    if period not in ("1y", "2y", "5y", "10y", "max"):
+        raise HTTPException(
+            status_code=422,
+            detail="period must be one of 1y/2y/5y/10y/max",
+        )
+
+    db = SessionLocal()
+    try:
+        stocks = db.execute(
+            select(Stock).order_by(Stock.market_cap.desc().nullslast())
+        ).scalars().all()
+        if limit:
+            stocks = stocks[:limit]
+
+        # Wipe existing OHLCV for the targeted stocks. The next fetch will
+        # rebuild with the new period.
+        stock_ids = [s.id for s in stocks]
+        if stock_ids:
+            db.execute(delete(OhlcvDaily).where(OhlcvDaily.stock_id.in_(stock_ids)))
+            db.commit()
+
+        # Re-fetch in chunks. Mirrors the scan-path chunk size + breaker check.
+        chunk_size = 100
+        ok = err = 0
+        breaker_aborted_at: int | None = None
+        for i in range(0, len(stocks), chunk_size):
+            if yfinance_health.is_open():
+                breaker_aborted_at = i
+                break
+            chunk = stocks[i : i + chunk_size]
+            try:
+                fetch_and_upsert(db, chunk, period=period)
+                db.commit()
+                ok += len(chunk)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(f"[redownload-ohlcv] chunk failed: {exc}")
+                db.rollback()
+                err += len(chunk)
+        return {
+            "total_stocks": len(stocks),
+            "succeeded": ok,
+            "errors": err,
+            "breaker_aborted_at": breaker_aborted_at,
+            "period_used": period,
+            "yfinance_breaker": yfinance_health.status(),
+        }
+    finally:
+        db.close()
+
+
 @app.get("/api/health/data-sources")
 def data_sources_health() -> dict[str, object]:
     """Per-source per-operation success/failure counters + breaker state +
