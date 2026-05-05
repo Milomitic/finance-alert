@@ -11,21 +11,30 @@ interface Props {
 }
 
 /* ─── HeroStrip — top of dashboard ──────────────────────────────────────── */
-/* Mood card on the LEFT (3fr) — the editorial, eye-catching hero.
- * Sidebar on the RIGHT (1.6fr): two stacked cards forming a slim control
- * rail — Global KPI list + Scan trigger. Used to be a 2fr column with the
- * KPI tiles in a 2×3 grid; the rework compresses that into a vertical
- * list and reclaims room for the scan controls. */
+/* Three columns side-by-side at the same row height (300px on lg+):
+ *
+ *   ┌────── MoodCard (3fr) ──────┐  ┌── Global KPI (1.5fr) ──┐  ┌─ Scan (1.2fr) ─┐
+ *   │ market mood hero            │  │ vertical KPI list     │  │ Esegui scan   │
+ *   │                             │  │ (Universe / A/D / ...) │  │ Invia digest  │
+ *   │                             │  │                       │  │ Ultimo / Prox │
+ *   └────────────────────────────┘  └───────────────────────┘  └───────────────┘
+ *
+ * Was a 2-column layout where the right column stacked Global KPI on top
+ * of Scan Trigger. The stack squashed Global KPI to ~150px (visible only
+ * 1 tile of the 6 list rows; rest scrolled), wasting horizontal space.
+ * Side-by-side gives Global KPI the full row height — all 6 tiles fit
+ * without scroll — and keeps Scan Trigger at a comfortable column width.
+ */
 export function HeroStrip({ global, byIndex, nextScanAt }: Props) {
   return (
-    <div className="grid gap-3 lg:grid-cols-[3fr_1.6fr] lg:h-[300px]">
+    <div className="grid gap-3 lg:grid-cols-[3fr_1.5fr_1.2fr] lg:h-[300px]">
       <div className="h-full min-h-0">
         <MoodCard global={global} byIndex={byIndex} />
       </div>
-      <div className="grid gap-3 grid-rows-[1fr_auto] h-full min-h-0">
-        <div className="min-h-0">
-          <GlobalKpiTiles global={global} />
-        </div>
+      <div className="h-full min-h-0">
+        <GlobalKpiTiles global={global} />
+      </div>
+      <div className="h-full min-h-0">
         <ScanTriggerCard nextScanAt={nextScanAt} />
       </div>
     </div>
