@@ -44,9 +44,14 @@ def test_catalog_returns_all_kinds(client: TestClient, auth_headers: dict[str, s
         "rsi_oversold", "rsi_overbought", "golden_cross", "death_cross",
         "volume_spike", "breakout",
         "macd_bullish_cross", "macd_bearish_cross",
-        "bollinger_squeeze", "bollinger_breakout",
+        "bollinger_breakout",
+        # Desk/trader signals (retire-and-replace pass for bollinger_squeeze):
+        "adx_bullish_trend", "adx_bearish_trend",
+        "gap_up", "gap_down",
+        "mean_reversion_long", "mean_reversion_short",
     }
     assert expected.issubset(kinds)
+    assert "bollinger_squeeze" not in kinds
 
 
 def test_catalog_entry_shape(client: TestClient, auth_headers: dict[str, str]) -> None:

@@ -16,8 +16,14 @@ _LABELS: dict[str, str] = {
     "breakout": "Breakout (close > prior N-day max)",
     "macd_bullish_cross": "MACD Bullish Cross",
     "macd_bearish_cross": "MACD Bearish Cross",
-    "bollinger_squeeze": "Bollinger Squeeze",
     "bollinger_breakout": "Bollinger Breakout",
+    # New desk/trader signals (replaced bollinger_squeeze)
+    "adx_bullish_trend": "ADX Trend Forte ↑",
+    "adx_bearish_trend": "ADX Trend Forte ↓",
+    "gap_up": "Gap Up",
+    "gap_down": "Gap Down",
+    "mean_reversion_long": "Mean Reversion (long)",
+    "mean_reversion_short": "Mean Reversion (short)",
 }
 
 _DESCRIPTIONS: dict[str, str] = {
@@ -29,8 +35,15 @@ _DESCRIPTIONS: dict[str, str] = {
     "breakout": "Today's close > max(close[-period:-1])",
     "macd_bullish_cross": "MACD line crosses above signal line",
     "macd_bearish_cross": "MACD line crosses below signal line",
-    "bollinger_squeeze": "Bollinger width in lowest percentile of recent lookback",
     "bollinger_breakout": "Close outside Bollinger band (upper/lower/either)",
+    "adx_bullish_trend": "ADX > threshold AND +DI > -DI (uptrend forte)",
+    "adx_bearish_trend": "ADX > threshold AND -DI > +DI (downtrend forte)",
+    "gap_up": "Open ≥ prev_close × (1 + threshold_pct) (gap rialzista)",
+    "gap_down": "Open ≤ prev_close × (1 − threshold_pct) (gap ribassista)",
+    "mean_reversion_long":
+        "Close ≥ N σ sotto SMA(period) (estensione anomala al ribasso → bounce atteso)",
+    "mean_reversion_short":
+        "Close ≥ N σ sopra SMA(period) (estensione anomala al rialzo → fade atteso)",
 }
 
 

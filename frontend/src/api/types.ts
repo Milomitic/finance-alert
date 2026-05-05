@@ -86,8 +86,14 @@ export type RuleKind =
   | "breakout"
   | "macd_bullish_cross"
   | "macd_bearish_cross"
-  | "bollinger_squeeze"
   | "bollinger_breakout"
+  // Desk/trader signals introduced when bollinger_squeeze was retired
+  | "adx_bullish_trend"
+  | "adx_bearish_trend"
+  | "gap_up"
+  | "gap_down"
+  | "mean_reversion_long"
+  | "mean_reversion_short"
   | "composite";
 
 export type RuleExpressionAtomic = {

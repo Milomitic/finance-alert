@@ -9,7 +9,12 @@ _VALID_KINDS = {
     "rsi_oversold", "rsi_overbought", "golden_cross", "death_cross",
     "volume_spike", "breakout",
     "macd_bullish_cross", "macd_bearish_cross",
-    "bollinger_squeeze", "bollinger_breakout",
+    "bollinger_breakout",
+    # Desk/trader signals (added when bollinger_squeeze was retired —
+    # see Alembic migration 47c2035665bd_drop_bollinger_squeeze_rules):
+    "adx_bullish_trend", "adx_bearish_trend",
+    "gap_up", "gap_down",
+    "mean_reversion_long", "mean_reversion_short",
     "composite",
 }
 

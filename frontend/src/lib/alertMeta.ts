@@ -1,11 +1,15 @@
 import {
   Activity,
+  ArrowDownFromLine,
   ArrowDownToLine,
+  ArrowUpFromLine,
   ArrowUpToLine,
   Bell,
+  ChevronsDown,
+  ChevronsUp,
+  Magnet,
   TrendingDown,
   TrendingUp,
-  Waves,
   Zap,
   type LucideIcon,
 } from "lucide-react";
@@ -38,8 +42,15 @@ const META_BY_KIND: Record<string, AlertKindMeta> = {
   breakout: { label: "Breakout", icon: Zap, tone: "bullish" },
   macd_bullish_cross: { label: "MACD Bullish", icon: TrendingUp, tone: "bullish" },
   macd_bearish_cross: { label: "MACD Bearish", icon: TrendingDown, tone: "bearish" },
-  bollinger_squeeze: { label: "BB Squeeze", icon: Waves, tone: "neutral" },
   bollinger_breakout: { label: "BB Breakout", icon: Zap, tone: "warning" },
+  // Desk/trader signals replacing bollinger_squeeze (retired in
+  // backend migration 47c2035665bd_drop_bollinger_squeeze_rules):
+  adx_bullish_trend: { label: "ADX Trend ↑", icon: ChevronsUp, tone: "bullish" },
+  adx_bearish_trend: { label: "ADX Trend ↓", icon: ChevronsDown, tone: "bearish" },
+  gap_up: { label: "Gap Up", icon: ArrowUpFromLine, tone: "bullish" },
+  gap_down: { label: "Gap Down", icon: ArrowDownFromLine, tone: "bearish" },
+  mean_reversion_long: { label: "Mean Rev. (long)", icon: Magnet, tone: "bullish" },
+  mean_reversion_short: { label: "Mean Rev. (short)", icon: Magnet, tone: "bearish" },
   composite: { label: "Composite", icon: Activity, tone: "neutral" },
 };
 
@@ -177,13 +188,39 @@ export function getSnapshotHeadline(
       return "MACD ↑ sopra signal line";
     case "macd_bearish_cross":
       return "MACD ↓ sotto signal line";
-    case "bollinger_squeeze":
-      return "Bande di Bollinger compresse";
     case "bollinger_breakout": {
       const close = get("close");
       return typeof close === "number"
         ? `Chiusura ${fmt(close)} fuori dalle bande`
         : "Chiusura fuori dalle bande";
+    }
+    case "adx_bullish_trend":
+    case "adx_bearish_trend": {
+      const adxV = get("adx");
+      const plus = get("plus_di");
+      const minus = get("minus_di");
+      const cmp = rule_kind === "adx_bullish_trend" ? "+DI > -DI" : "-DI > +DI";
+      return `ADX ${fmt(adxV, 1)} · ${cmp} (${fmt(plus, 1)} vs ${fmt(minus, 1)})`;
+    }
+    case "gap_up":
+    case "gap_down": {
+      const gap = get("gap_pct");
+      const open = get("open");
+      const prevClose = get("prev_close");
+      const sign = rule_kind === "gap_up" ? "+" : "";
+      const gapStr =
+        typeof gap === "number" ? `${sign}${(gap * 100).toFixed(2)}%` : "—";
+      return `Apertura ${fmt(open)} vs chiusura ${fmt(prevClose)} (gap ${gapStr})`;
+    }
+    case "mean_reversion_long":
+    case "mean_reversion_short": {
+      const z = get("z_score");
+      const period = get("period");
+      const periodTxt =
+        typeof period === "number" ? `SMA(${period})` : "SMA";
+      const dir =
+        rule_kind === "mean_reversion_long" ? "sotto" : "sopra";
+      return `Close a ${fmt(z, 2)}σ ${dir} ${periodTxt}`;
     }
     default:
       return null;
@@ -369,27 +406,6 @@ export function resolveSnapshot(
       };
     }
 
-    case "bollinger_squeeze": {
-      const width = get("width") as number | null;
-      const threshold = get("threshold") as number | null;
-      const period = get("period") as number | null;
-      const k = get("k") as number | null;
-      return {
-        rows: [
-          {
-            label: `Larghezza BB(${period ?? "?"},${k ?? "?"})`,
-            value: fmtNum(width, 4),
-            hint:
-              threshold != null
-                ? `≤ ${fmtNum(threshold, 4)} (compressione)`
-                : "compressione",
-            valueTone: "neutral",
-          },
-        ],
-        complete: true,
-      };
-    }
-
     case "bollinger_breakout": {
       const close = get("close") as number | null;
       const upper = get("upper") as number | null;
@@ -404,6 +420,93 @@ export function resolveSnapshot(
           },
           { label: "Banda superiore", value: fmtPrice(upper) },
           { label: "Banda inferiore", value: fmtPrice(lower) },
+        ],
+        complete: true,
+      };
+    }
+
+    case "adx_bullish_trend":
+    case "adx_bearish_trend": {
+      const adxV = get("adx") as number | null;
+      const plus = get("plus_di") as number | null;
+      const minus = get("minus_di") as number | null;
+      const period = get("period") as number | null;
+      const threshold = get("threshold") as number | null;
+      const valueTone: AlertTone =
+        rule_kind === "adx_bullish_trend" ? "bullish" : "bearish";
+      const dirHint =
+        rule_kind === "adx_bullish_trend"
+          ? "+DI > -DI (trend rialzista forte)"
+          : "-DI > +DI (trend ribassista forte)";
+      return {
+        rows: [
+          {
+            label: `ADX(${period ?? "?"})`,
+            value: fmtNum(adxV, 1),
+            hint: `≥ ${fmtNum(threshold, 1)} · ${dirHint}`,
+            valueTone,
+          },
+          { label: "+DI", value: fmtNum(plus, 1) },
+          { label: "-DI", value: fmtNum(minus, 1) },
+        ],
+        complete: true,
+      };
+    }
+
+    case "gap_up":
+    case "gap_down": {
+      const open = get("open") as number | null;
+      const prev = get("prev_close") as number | null;
+      const gap = get("gap_pct") as number | null;
+      const threshold = get("threshold_pct") as number | null;
+      const valueTone: AlertTone =
+        rule_kind === "gap_up" ? "bullish" : "bearish";
+      const sign = rule_kind === "gap_up" ? "+" : "";
+      const gapStr =
+        gap != null ? `${sign}${(gap * 100).toFixed(2)}%` : "—";
+      const thresholdStr =
+        threshold != null ? `${(threshold * 100).toFixed(1)}%` : "—";
+      return {
+        rows: [
+          {
+            label: "Gap (open vs prev close)",
+            value: gapStr,
+            hint: `soglia ${rule_kind === "gap_up" ? "≥" : "≤"} ${rule_kind === "gap_up" ? "" : "-"}${thresholdStr}`,
+            valueTone,
+          },
+          { label: "Open", value: fmtPrice(open) },
+          { label: "Prev close", value: fmtPrice(prev) },
+        ],
+        complete: true,
+      };
+    }
+
+    case "mean_reversion_long":
+    case "mean_reversion_short": {
+      const close = get("close") as number | null;
+      const sma = get("sma") as number | null;
+      const sigma = get("sigma") as number | null;
+      const z = get("z_score") as number | null;
+      const period = get("period") as number | null;
+      const threshold = get("threshold_sigma") as number | null;
+      const valueTone: AlertTone =
+        rule_kind === "mean_reversion_long" ? "bullish" : "bearish";
+      const sign = rule_kind === "mean_reversion_long" ? "≤ -" : "≥ +";
+      const dirCtx =
+        rule_kind === "mean_reversion_long"
+          ? "estensione anomala al ribasso → bounce atteso"
+          : "estensione anomala al rialzo → fade atteso";
+      return {
+        rows: [
+          {
+            label: "Z-score",
+            value: fmtNum(z, 2),
+            hint: `soglia ${sign}${fmtNum(threshold, 1)}σ · ${dirCtx}`,
+            valueTone,
+          },
+          { label: "Close", value: fmtPrice(close) },
+          { label: `SMA(${period ?? "?"})`, value: fmtPrice(sma) },
+          { label: "σ", value: fmtNum(sigma, 4) },
         ],
         complete: true,
       };
