@@ -154,28 +154,58 @@ function RatingBar({ r }: { r: AnalystRating }) {
         }
       />
       <div className="flex h-2.5 rounded-full overflow-hidden bg-muted">
-        <div
-          className="bg-emerald-500"
-          style={{ width: pct(buy) }}
-          title={`Buy: ${buy} (di cui ${r.strong_buy} Strong Buy)`}
-        />
-        <div className="bg-amber-400" style={{ width: pct(hold) }} title={`Hold: ${hold}`} />
-        <div
-          className="bg-rose-500"
-          style={{ width: pct(sell) }}
-          title={`Sell: ${sell} (di cui ${r.strong_sell} Strong Sell)`}
-        />
+        {buy > 0 && (
+          <div
+            className="bg-emerald-500"
+            style={{ width: pct(buy) }}
+            title={`Buy: ${buy} (di cui ${r.strong_buy} Strong Buy)`}
+          />
+        )}
+        {hold > 0 && (
+          <div
+            className="bg-amber-400"
+            style={{ width: pct(hold) }}
+            title={`Hold: ${hold}`}
+          />
+        )}
+        {sell > 0 && (
+          <div
+            className="bg-rose-500"
+            style={{ width: pct(sell) }}
+            title={`Sell: ${sell} (di cui ${r.strong_sell} Strong Sell)`}
+          />
+        )}
       </div>
-      <div className="flex items-center justify-between mt-1 text-[11px] tabular-nums">
-        <span className="text-emerald-700 dark:text-emerald-300 font-semibold">
-          {buy} buy
-        </span>
-        <span className="text-amber-700 dark:text-amber-300 font-semibold">
-          {hold} hold
-        </span>
-        <span className="text-rose-700 dark:text-rose-300 font-semibold">
-          {sell} sell
-        </span>
+      {/* Labels: each one matches the WIDTH of the bar segment above it
+          and centers itself within that width. Zero-count categories are
+          skipped entirely (no "0 sell" placeholder). The non-zero
+          segments naturally widen to fill the row, keeping their labels
+          aligned under the corresponding bar slice. */}
+      <div className="flex mt-1 text-[11px] tabular-nums">
+        {buy > 0 && (
+          <span
+            className="text-center text-emerald-700 dark:text-emerald-300 font-semibold"
+            style={{ width: pct(buy) }}
+          >
+            {buy} buy
+          </span>
+        )}
+        {hold > 0 && (
+          <span
+            className="text-center text-amber-700 dark:text-amber-300 font-semibold"
+            style={{ width: pct(hold) }}
+          >
+            {hold} hold
+          </span>
+        )}
+        {sell > 0 && (
+          <span
+            className="text-center text-rose-700 dark:text-rose-300 font-semibold"
+            style={{ width: pct(sell) }}
+          >
+            {sell} sell
+          </span>
+        )}
       </div>
     </div>
   );
