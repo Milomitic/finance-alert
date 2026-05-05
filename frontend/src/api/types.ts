@@ -586,6 +586,20 @@ export interface AnalystAction {
   price_target_action?: string | null;
 }
 
+/** Identity / "anagrafica" data extracted from yfinance Ticker.info.
+ *  All fields optional — the UI gracefully hides what's missing rather
+ *  than rendering placeholder rows. Returned on the new
+ *  CompanyOverviewCard. */
+export interface CompanyProfile {
+  long_business_summary: string | null;
+  website: string | null;
+  employees: number | null;
+  city: string | null;
+  country: string | null;
+  ceo: string | null;
+  founded: number | null;
+}
+
 export interface Fundamentals {
   ticker: string;
   annual: FundamentalsAnnual[];
@@ -598,6 +612,8 @@ export interface Fundamentals {
    *  earnings_dates DataFrame (older yfinance versions or missing data). */
   next_revenue_estimate: number | null;
   micro: MicroData;
+  /** Optional for back-compat with cached pre-V2 API responses. */
+  profile?: CompanyProfile;
   insiders: InsiderTransaction[];
   analyst_ratings: AnalystRating[];
   analyst_actions: AnalystAction[];

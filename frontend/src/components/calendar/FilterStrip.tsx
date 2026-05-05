@@ -1,8 +1,10 @@
-import { Building, Flame, Gauge, Globe, Landmark, LayoutGrid } from "lucide-react";
+import { Building, Landmark, LayoutGrid } from "lucide-react";
 
 import type { MacroImportance } from "@/api/types";
 import { IMPORTANCE_LABEL } from "@/lib/calendarMeta";
 import { cn } from "@/lib/utils";
+
+import { ImportanceDots } from "./ImportanceDots";
 
 /* ─── FilterStrip — the on/off pill rail ────────────────────────────────── */
 /* Two filter dimensions live here:
@@ -50,13 +52,10 @@ const KIND_OPTIONS: Array<{
   { value: "macro", label: "Solo macro", icon: Landmark, accent: "macro" },
 ];
 
-const IMPORTANCE_OPTIONS: Array<{
-  value: MacroImportance;
-  icon: typeof Flame;
-}> = [
-  { value: "high", icon: Flame },
-  { value: "medium", icon: Gauge },
-  { value: "low", icon: Globe },
+const IMPORTANCE_OPTIONS: ReadonlyArray<{ value: MacroImportance }> = [
+  { value: "high" },
+  { value: "medium" },
+  { value: "low" },
 ];
 
 /* Active-state classes per accent. Plain literals — no template
@@ -77,16 +76,10 @@ const KIND_ACTIVE_DOT: Record<"primary" | "sector" | "macro", string> = {
 };
 
 const IMPORTANCE_ACTIVE: Record<MacroImportance, string> = {
-  high: "bg-rose-100/60 dark:bg-rose-950/40 text-rose-900 dark:text-rose-100 border-rose-300/70 dark:border-rose-800/60 [&_svg]:text-rose-600 dark:[&_svg]:text-rose-400",
+  high: "bg-rose-100/60 dark:bg-rose-950/40 text-rose-900 dark:text-rose-100 border-rose-300/70 dark:border-rose-800/60",
   medium:
-    "bg-amber-100/60 dark:bg-amber-950/40 text-amber-900 dark:text-amber-100 border-amber-300/70 dark:border-amber-800/60 [&_svg]:text-amber-600 dark:[&_svg]:text-amber-400",
-  low: "bg-slate-100 dark:bg-slate-800/60 text-slate-900 dark:text-slate-100 border-slate-300/70 dark:border-slate-600/60 [&_svg]:text-slate-600 dark:[&_svg]:text-slate-300",
-};
-
-const IMPORTANCE_DOT: Record<MacroImportance, string> = {
-  high: "bg-rose-500 dark:bg-rose-400",
-  medium: "bg-amber-500 dark:bg-amber-400",
-  low: "bg-slate-400 dark:bg-slate-500",
+    "bg-amber-100/60 dark:bg-amber-950/40 text-amber-900 dark:text-amber-100 border-amber-300/70 dark:border-amber-800/60",
+  low: "bg-slate-100 dark:bg-slate-800/60 text-slate-900 dark:text-slate-100 border-slate-300/70 dark:border-slate-600/60",
 };
 
 export function FilterStrip({
@@ -148,7 +141,6 @@ export function FilterStrip({
         )}
       >
         {IMPORTANCE_OPTIONS.map((opt) => {
-          const Icon = opt.icon;
           const isActive = importance.has(opt.value);
           return (
             <button
@@ -166,14 +158,19 @@ export function FilterStrip({
                 importanceDisabled && "cursor-not-allowed",
               )}
             >
-              <span
+              {/* Same dot indicator used in chips, legend, and detail panel —
+                  one visual vocabulary for "macro importance" everywhere.
+                  Inactive state: desaturated via CSS filter so the dot
+                  count is still readable but the color "fades back". */}
+              <ImportanceDots
+                importance={opt.value}
+                size="h-1.5 w-1.5"
+                gap="gap-0.5"
                 className={cn(
-                  "inline-block h-1.5 w-1.5 rounded-full transition-colors",
-                  isActive ? IMPORTANCE_DOT[opt.value] : "bg-muted-foreground/30",
+                  "transition-[filter]",
+                  !isActive && "grayscale opacity-70",
                 )}
-                aria-hidden
               />
-              <Icon className="h-3 w-3" />
               <span>{IMPORTANCE_LABEL[opt.value]}</span>
             </button>
           );

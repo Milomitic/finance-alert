@@ -13,7 +13,8 @@ from app.schemas.stock import (
     StockSearchItemOut, StockSearchOut,
 )
 from app.schemas.stock_detail import (
-    AnalystActionOut, AnalystPriceTargetOut, AnalystRatingOut, EffectiveRuleOut,
+    AnalystActionOut, AnalystPriceTargetOut, AnalystRatingOut,
+    CompanyProfileOut, EffectiveRuleOut,
     FundamentalsAnnualOut, FundamentalsEarningsOut, FundamentalsOut,
     FundamentalsQuarterlyOut, IndicatorPeriodsOut, IndicatorPointOut, IndicatorSeriesOut,
     InsiderTransactionOut, LiveQuoteOut, LiveQuotesBatchOut, MicroDataOut,
@@ -232,6 +233,7 @@ def get_stock_fundamentals(
         next_eps_estimate=f.next_eps_estimate,
         next_revenue_estimate=f.next_revenue_estimate,
         micro=MicroDataOut(**f.micro.__dict__),
+        profile=CompanyProfileOut(**f.profile.__dict__),
         insiders=[InsiderTransactionOut(**i.__dict__) for i in f.insiders],
         analyst_ratings=[AnalystRatingOut(**r.__dict__) for r in f.analyst_ratings],
         analyst_actions=[AnalystActionOut(**a.__dict__) for a in f.analyst_actions],

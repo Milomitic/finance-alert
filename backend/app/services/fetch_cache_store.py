@@ -32,6 +32,7 @@ from app.services.stock_fundamentals_service import (
     AnalystPriceTarget,
     AnalystRating,
     AnnualPoint,
+    CompanyProfile,
     EarningsPoint,
     Fundamentals,
     InsiderTransaction,
@@ -90,6 +91,7 @@ def _read_row(
 # field-name → dataclass-type for the nested bits.
 _FUND_NESTED_FIELDS: dict[str, type] = {
     "micro": MicroData,
+    "profile": CompanyProfile,
     "price_target": AnalystPriceTarget,
 }
 _FUND_LIST_FIELDS: dict[str, type] = {

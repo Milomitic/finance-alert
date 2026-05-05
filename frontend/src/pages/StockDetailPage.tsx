@@ -8,6 +8,7 @@ import { useCreatePriceAlert, useStockPriceAlerts } from "@/hooks/useStockPriceA
 import { useStockDetail } from "@/hooks/useStockDetail";
 import { useStockDrawings } from "@/hooks/useStockDrawings";
 import { AnalystTargetCard } from "@/components/stock/AnalystTargetCard";
+import { CompanyOverviewCard } from "@/components/stock/CompanyOverviewCard";
 import { DrawingToolbar, type DrawingMode } from "@/components/stock/DrawingToolbar";
 import { FundamentalsCard } from "@/components/stock/FundamentalsCard";
 import { InsidersAnalystCard } from "@/components/stock/InsidersAnalystCard";
@@ -103,6 +104,14 @@ export default function StockDetailPage() {
         ohlcv={d.ohlcv}
         effectiveRules={d.effective_rules}
       />
+
+      {/* Company overview — short business summary + anagrafica.
+          Positioned prominently right under the price hero so the user
+          gets "what does this company do" before diving into numbers.
+          The card hides itself when yfinance has no profile data
+          (sparse small caps / foreign listings), so it doesn't always
+          take up vertical space. */}
+      <CompanyOverviewCard ticker={ticker} stock={d.stock} />
 
       {/* Four side-by-side cards: Fundamentals | Valuation+KPIs | News | Analyst.
           Weighted columns `[1.5fr_1fr_1fr_1fr]` give Fundamentals ~33% (it has

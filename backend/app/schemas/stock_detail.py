@@ -135,6 +135,18 @@ class AnalystActionOut(BaseModel):
     price_target_action: str | None = None
 
 
+class CompanyProfileOut(BaseModel):
+    """Identity / "anagrafica" extracted from yfinance Ticker.info — see
+    `services.stock_fundamentals_service.CompanyProfile` docstring."""
+    long_business_summary: str | None = None
+    website: str | None = None
+    employees: int | None = None
+    city: str | None = None
+    country: str | None = None
+    ceo: str | None = None
+    founded: int | None = None
+
+
 class FundamentalsOut(BaseModel):
     ticker: str
     annual: list[FundamentalsAnnualOut] = []
@@ -144,6 +156,7 @@ class FundamentalsOut(BaseModel):
     next_eps_estimate: float | None = None
     next_revenue_estimate: float | None = None
     micro: MicroDataOut = MicroDataOut()
+    profile: CompanyProfileOut = CompanyProfileOut()
     insiders: list[InsiderTransactionOut] = []
     analyst_ratings: list[AnalystRatingOut] = []
     analyst_actions: list[AnalystActionOut] = []

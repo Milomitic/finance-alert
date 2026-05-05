@@ -143,6 +143,29 @@ class MicroData:
 
 
 @dataclass
+class CompanyProfile:
+    """Identity / "anagrafica" data extracted from yfinance Ticker.info.
+
+    Separated from MicroData (which is purely numeric ratios) because these
+    are textual/descriptive fields with very different cache/render semantics
+    — the long_business_summary in particular is the only multi-paragraph
+    text in the payload. Optional everywhere; the UI gracefully hides
+    unavailable fields rather than showing "—".
+    """
+    long_business_summary: str | None = None
+    website: str | None = None
+    employees: int | None = None
+    city: str | None = None
+    country: str | None = None
+    # First named officer from yfinance's companyOfficers list, when present.
+    # Used as a "CEO / lead exec" hint — we don't try to parse the title
+    # string because yfinance is inconsistent (CEO / Chief Executive Officer / etc.).
+    ceo: str | None = None
+    # IPO / first-trade year, when yfinance exposes it. Most info dicts don't.
+    founded: int | None = None
+
+
+@dataclass
 class Fundamentals:
     ticker: str
     annual: list[AnnualPoint] = field(default_factory=list)
@@ -152,6 +175,7 @@ class Fundamentals:
     next_eps_estimate: float | None = None
     next_revenue_estimate: float | None = None
     micro: MicroData = field(default_factory=MicroData)
+    profile: CompanyProfile = field(default_factory=CompanyProfile)
     insiders: list[InsiderTransaction] = field(default_factory=list)
     analyst_ratings: list[AnalystRating] = field(default_factory=list)
     analyst_actions: list[AnalystAction] = field(default_factory=list)
@@ -301,6 +325,56 @@ def _extract_micro(info: dict | None) -> MicroData:
     )
 
 
+def _extract_profile(info: dict | None) -> CompanyProfile:
+    """Pull identity fields from `Ticker.info`. yfinance is inconsistent —
+    fields can be present, missing, or empty-string. We coerce empty-string
+    and whitespace-only to None so the frontend doesn't render empty UI
+    chrome around no content.
+    """
+    if not info:
+        return CompanyProfile()
+
+    def _str(v: Any) -> str | None:
+        if v is None:
+            return None
+        s = str(v).strip()
+        return s if s else None
+
+    # CEO: pick the first officer with a non-empty name. yfinance's
+    # `companyOfficers` is a list of dicts in officer-rank order.
+    ceo: str | None = None
+    officers = info.get("companyOfficers") or []
+    if isinstance(officers, list):
+        for o in officers:
+            if isinstance(o, dict):
+                name = _str(o.get("name"))
+                if name:
+                    ceo = name
+                    break
+
+    # Founded year: yfinance occasionally exposes `firstTradeDateEpochUtc`
+    # (seconds since epoch) — useful as a proxy for "when did this start
+    # trading". Most tickers don't have it, in which case we leave None.
+    founded: int | None = None
+    epoch = info.get("firstTradeDateEpochUtc")
+    if isinstance(epoch, int | float) and epoch > 0:
+        try:
+            from datetime import UTC, datetime
+            founded = datetime.fromtimestamp(float(epoch), tz=UTC).year
+        except (OSError, OverflowError, ValueError):
+            founded = None
+
+    return CompanyProfile(
+        long_business_summary=_str(info.get("longBusinessSummary")),
+        website=_str(info.get("website")),
+        employees=_safe_int(info.get("fullTimeEmployees")),
+        city=_str(info.get("city")),
+        country=_str(info.get("country")),
+        ceo=ceo,
+        founded=founded,
+    )
+
+
 def _extract_insiders(it_df: Any, limit: int = 10) -> list[InsiderTransaction]:
     if it_df is None or it_df.empty:
         return []
@@ -431,8 +505,15 @@ def _fetch_fresh(ticker: str) -> Fundamentals:
             logger.debug(f"[fund] earnings {ticker}: {e}")
             _maybe_record(e)
         try:
-            f.micro = _extract_micro(t.get_info())
+            # Single info() call — both micro fundamentals and the company
+            # profile come from the same dict, so pulling them together
+            # avoids a duplicate slow-endpoint roundtrip.
+            info = t.get_info()
+            f.micro = _extract_micro(info)
+            f.profile = _extract_profile(info)
             if any(getattr(f.micro, k) is not None for k in vars(f.micro)): saw_success = True
+            if f.profile.long_business_summary or f.profile.website:
+                saw_success = True
         except Exception as e:
             logger.debug(f"[fund] info {ticker}: {e}")
             _maybe_record(e)
