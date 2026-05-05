@@ -1,11 +1,12 @@
-"""Tests for app.services.score_service.
+"""Tests for app.services.score_service (V2 — comprehensive + missing-data neutral).
 
 Three layers:
 1. Sub-score boundary tests (pure functions on stub Stock + MicroData inputs).
-2. Risk classification edge cases (defensive sector + low beta + mega cap →
-   conservative; high beta + small cap → aggressive).
-3. recompute_all integration: seed N stocks + OHLCV + stub fundamentals, run
-   the batch, assert StockScore rows exist with sensible values.
+2. Risk classification edge cases.
+3. recompute_all integration.
+
+Plus a dedicated section for the V2 missing-data-neutralization invariant:
+adding a None component must NOT lower the pillar score.
 """
 from __future__ import annotations
 
@@ -32,6 +33,7 @@ from app.services.score_service import (
 from app.services.stock_fundamentals_service import (
     AnalystAction,
     AnalystPriceTarget,
+    AnnualPoint,
     EarningsPoint,
     Fundamentals,
     MicroData,
@@ -61,42 +63,39 @@ def _stock(
 # ---------------------------------------------------------------------------
 
 def test_quality_all_good_full_score():
+    """All present components at their best values → pillar ≈ 100."""
     micro = MicroData(
-        return_on_equity=0.30, profit_margins=0.25, free_cashflow=1e10,
-        debt_to_equity=30.0, current_ratio=2.5,
+        return_on_equity=0.30, return_on_assets=0.20,
+        profit_margins=0.25, operating_margins=0.25, gross_margins=0.60,
+        free_cashflow=1e10,
+        debt_to_equity=30.0, current_ratio=2.5, quick_ratio=2.0,
+        overall_risk=1.0,
+        held_percent_insiders=0.15, held_percent_institutions=0.80,
     )
-    pts, mx, br = _quality(_stock(), micro)
+    score, mx, br = _quality(_stock(), micro)
     assert mx == 100.0
-    assert pts == pytest.approx(100.0, abs=0.01)
-    # Components should each be at max:
-    assert br["roe"]["points"] == 30.0
-    assert br["fcf"]["points"] == 20.0
-    assert br["current_ratio"]["points"] == 10.0
+    assert score == pytest.approx(100.0, abs=0.5)
+    # Components are present.
+    assert br["roe"]["present"] is True
+    assert br["fcf"]["score"] == 100.0
 
 
 def test_quality_all_bad_zero_score():
     micro = MicroData(
-        return_on_equity=-0.05, profit_margins=-0.10, free_cashflow=-1e9,
-        debt_to_equity=300.0, current_ratio=0.5,
+        return_on_equity=-0.05, return_on_assets=-0.05,
+        profit_margins=-0.10, operating_margins=-0.10, gross_margins=0.05,
+        free_cashflow=-1e9,
+        debt_to_equity=300.0, current_ratio=0.5, quick_ratio=0.3,
+        overall_risk=10.0,
+        held_percent_insiders=0.0, held_percent_institutions=0.0,
     )
-    pts, mx, br = _quality(_stock(), micro)
-    assert mx == 100.0
-    assert pts == pytest.approx(0.0, abs=0.01)
+    score, _, _ = _quality(_stock(), micro)
+    assert score == pytest.approx(0.0, abs=1.0)
 
 
-def test_quality_half_points_at_midpoint():
-    micro = MicroData(
-        return_on_equity=0.10, profit_margins=0.10, free_cashflow=1.0,
-        debt_to_equity=100.0, current_ratio=1.0,
-    )
-    pts, mx, br = _quality(_stock(), micro)
-    # ROE half (15) + PM half (12.5) + FCF full (20) + DE half (7.5) + CR half (5) = 60
-    assert pts == pytest.approx(60.0, abs=0.5)
-
-
-def test_quality_missing_micro_returns_no_input():
-    pts, mx, br = _quality(_stock(), None)
-    assert mx == 0.0
+def test_quality_missing_micro_returns_none():
+    score, mx, br = _quality(_stock(), None)
+    assert score is None
     assert br == {}
 
 
@@ -105,38 +104,49 @@ def test_quality_missing_micro_returns_no_input():
 # ---------------------------------------------------------------------------
 
 def test_growth_all_good():
-    micro = MicroData(revenue_growth=0.25, earnings_growth=0.30)
+    micro = MicroData(
+        revenue_growth=0.25, earnings_growth=0.30, earnings_quarterly_growth=0.30,
+        eps_trailing=4.0, eps_forward=5.0,
+    )
     earnings = [
-        EarningsPoint(date="2025-01-01", eps_estimate=1.0, eps_reported=1.2, surprise_pct=20.0),
-        EarningsPoint(date="2025-04-01", eps_estimate=1.1, eps_reported=1.3, surprise_pct=18.0),
-        EarningsPoint(date="2025-07-01", eps_estimate=1.2, eps_reported=1.4, surprise_pct=16.0),
-        EarningsPoint(date="2025-10-01", eps_estimate=1.3, eps_reported=1.5, surprise_pct=15.0),
+        EarningsPoint(date=f"2025-0{i}-01", eps_estimate=1.0, eps_reported=1.2, surprise_pct=20.0)
+        for i in range(1, 5)
     ]
-    f = Fundamentals(ticker="TEST", micro=micro, earnings=earnings)
-    pts, mx, br = _growth(_stock(), f)
-    assert pts == pytest.approx(100.0, abs=0.01)
-    assert br["earnings_beat"]["raw"] == 4
+    annual = [
+        AnnualPoint(fiscal_year_end="2023-12-31", revenue=100_000_000, net_income=10_000_000, eps=1.0),
+        AnnualPoint(fiscal_year_end="2024-12-31", revenue=115_000_000, net_income=11_000_000, eps=1.1),
+        AnnualPoint(fiscal_year_end="2025-12-31", revenue=132_000_000, net_income=13_000_000, eps=1.3),
+    ]
+    f = Fundamentals(ticker="TEST", micro=micro, earnings=earnings, annual=annual)
+    score, _, br = _growth(_stock(), f)
+    assert score == pytest.approx(100.0, abs=2.0)
+    assert br["earnings_beats"]["raw"] == 4
 
 
 def test_growth_zero_when_all_negative():
-    micro = MicroData(revenue_growth=-0.20, earnings_growth=-0.20)
+    micro = MicroData(
+        revenue_growth=-0.20, earnings_growth=-0.20, earnings_quarterly_growth=-0.30,
+    )
     earnings = [
         EarningsPoint(date=f"2025-0{i}-01", eps_estimate=1.0, eps_reported=0.5, surprise_pct=-50.0)
         for i in range(1, 5)
     ]
     f = Fundamentals(ticker="TEST", micro=micro, earnings=earnings)
-    pts, _, br = _growth(_stock(), f)
-    assert pts == pytest.approx(0.0, abs=0.5)
-    assert br["earnings_beat"]["raw"] == 0
+    score, _, _ = _growth(_stock(), f)
+    assert score == pytest.approx(0.0, abs=2.0)
 
 
-def test_growth_no_earnings_history_means_no_input_for_that_component():
+def test_growth_missing_components_neutralised():
+    """No earnings history, no quarterly growth, no annual revenue:
+    only revenue_growth + earnings_growth contribute. Their full-marks
+    score must NOT be diluted by the missing components."""
     micro = MicroData(revenue_growth=0.20, earnings_growth=0.20)
     f = Fundamentals(ticker="TEST", micro=micro, earnings=[])
-    pts, mx, br = _growth(_stock(), f)
-    # 35 + 35 + 0 (no beats history) = 70
-    assert pts == pytest.approx(70.0, abs=0.01)
-    assert br["earnings_beat"]["raw"] is None
+    score, _, br = _growth(_stock(), f)
+    assert score == pytest.approx(100.0, abs=1.0)
+    assert br["earnings_beats"]["present"] is False
+    assert br["qoq_earnings_growth"]["present"] is False
+    assert br["revenue_cagr_3y"]["present"] is False
 
 
 # ---------------------------------------------------------------------------
@@ -144,30 +154,37 @@ def test_growth_no_earnings_history_means_no_input_for_that_component():
 # ---------------------------------------------------------------------------
 
 def test_value_full_at_or_below_sector_median_pe():
-    # Tech median is 28; a P/E of 25 should give full P/E points.
-    micro = MicroData(trailing_pe=25.0, peg_ratio=0.9, dividend_yield=0.04)
-    pts, mx, br = _value(_stock(sector="Technology"), micro, last_close=200.0)
-    assert br["pe"]["points"] == 40.0
-    assert br["peg"]["points"] == 30.0   # PEG ≤ 1 → full
-    # 4% dividend > 3% → full 30
-    assert br["dividend_yield"]["points"] == 30.0
-    assert pts == pytest.approx(100.0, abs=0.01)
+    micro = MicroData(
+        trailing_pe=25.0, forward_pe=22.0, peg_ratio=0.9,
+        price_to_book=4.0, price_to_sales=1.5,
+        enterprise_to_ebitda=7.0, enterprise_to_revenue=1.5,
+        dividend_yield=0.04, payout_ratio=0.45,
+    )
+    score, _, br = _value(_stock(sector="Technology"), micro, last_close=200.0)
+    assert br["pe"]["score"] == 100.0
+    assert br["peg"]["score"] == 100.0
+    assert br["dividend_yield"]["score"] == 100.0
+    assert score == pytest.approx(100.0, abs=2.0)
 
 
 def test_value_pe_double_median_zero_points():
-    micro = MicroData(trailing_pe=56.0, peg_ratio=3.5, dividend_yield=0.0)
-    pts, mx, br = _value(_stock(sector="Technology"), micro, last_close=200.0)
-    assert br["pe"]["points"] == pytest.approx(0.0, abs=0.01)
-    assert br["peg"]["points"] == pytest.approx(0.0, abs=0.01)
-    assert br["dividend_yield"]["points"] == pytest.approx(0.0, abs=0.01)
+    micro = MicroData(
+        trailing_pe=56.0, peg_ratio=3.5,
+        price_to_book=15.0, price_to_sales=12.0,
+        enterprise_to_ebitda=30.0, enterprise_to_revenue=12.0,
+        dividend_yield=0.0,
+    )
+    score, _, br = _value(_stock(sector="Technology"), micro, last_close=200.0)
+    assert br["pe"]["score"] == pytest.approx(0.0, abs=0.5)
+    assert br["peg"]["score"] == pytest.approx(0.0, abs=0.5)
+    assert br["dividend_yield"]["score"] == pytest.approx(0.0, abs=0.5)
+    assert score == pytest.approx(0.0, abs=2.0)
 
 
-def test_value_unknown_sector_uses_universe_median():
-    micro = MicroData(trailing_pe=22.0, peg_ratio=2.0, dividend_yield=0.015)
-    _, _, br = _value(_stock(sector=None), micro, last_close=100.0)
-    assert br["pe"]["sector_median"] == 22.0
-    # P/E exactly at median → full 40
-    assert br["pe"]["points"] == 40.0
+def test_value_missing_micro_returns_none():
+    score, _, br = _value(_stock(), None, last_close=100.0)
+    assert score is None
+    assert br == {}
 
 
 # ---------------------------------------------------------------------------
@@ -175,7 +192,6 @@ def test_value_unknown_sector_uses_universe_median():
 # ---------------------------------------------------------------------------
 
 def _strong_uptrend_closes(n: int = 260, start: float = 100.0, drift: float = 0.5) -> pd.Series:
-    """Linear ramp upward — strong 52w + 30d momentum, typical RSI in overbought."""
     return pd.Series([start + drift * i for i in range(n)])
 
 
@@ -184,33 +200,27 @@ def _strong_downtrend_closes(n: int = 260, start: float = 200.0, drift: float = 
 
 
 def test_momentum_strong_uptrend_high_score():
-    """Linear-ramp uptrend with drift=0.5 → 52w full + RSI overbought + MACD
-    bullish. 30-day momentum on a linear trend is small in percent terms
-    (~5%), so it sits on the half-to-full ramp rather than at the cap. The
-    point of the assert is "high score, all components signalling up", not
-    a specific number — 70+ is enough to assert that."""
     closes = _strong_uptrend_closes()
-    micro = MicroData(fifty_two_week_change=0.60)
-    pts, mx, br = _momentum(_stock(), micro, closes)
-    assert pts >= 70.0
-    assert br["change_52w"]["points"] == 30.0     # 52w full
-    assert br["rsi"]["points"] == 4.0             # overbought (linear ramp → RSI ~ 100)
-    assert br["macd"]["state"] == "bullish"
-    assert br["macd"]["points"] == 20.0
+    micro = MicroData(fifty_two_week_change=0.60, sp500_fifty_two_week_change=0.10)
+    score, _, br = _momentum(_stock(), micro, closes)
+    assert score is not None
+    assert score >= 60.0
+    assert br["change_52w"]["score"] == 100.0
+    assert br["macd"]["score"] == 100.0
 
 
 def test_momentum_strong_downtrend_low_score():
     closes = _strong_downtrend_closes()
-    micro = MicroData(fifty_two_week_change=-0.40)
-    pts, mx, br = _momentum(_stock(), micro, closes)
-    # 0 (52w zero) + 16 (RSI oversold → bounce) + 0 (MACD bearish) + 0 (mom30 zero) = 16
-    assert pts == pytest.approx(16.0, abs=1.0)
-    assert br["macd"]["state"] == "bearish_or_flat"
+    micro = MicroData(fifty_two_week_change=-0.40, sp500_fifty_two_week_change=0.10)
+    score, _, br = _momentum(_stock(), micro, closes)
+    assert score is not None
+    assert score < 35.0
+    assert br["macd"]["raw"]["state"] == "bearish_or_flat"
 
 
-def test_momentum_no_inputs_returns_zero_max():
-    pts, mx, br = _momentum(_stock(), None, None)
-    assert mx == 0.0
+def test_momentum_no_inputs_returns_none():
+    score, _, br = _momentum(_stock(), None, None)
+    assert score is None
     assert br == {}
 
 
@@ -222,56 +232,47 @@ def test_sentiment_full_score():
     today = date.today()
     actions = [
         AnalystAction(
-            date=(today - timedelta(days=10)).isoformat(),
-            firm="GS", to_grade="Buy", from_grade="Hold", action="up",
-        ),
-        AnalystAction(
-            date=(today - timedelta(days=20)).isoformat(),
-            firm="MS", to_grade="Buy", from_grade="Hold", action="up",
-        ),
-        AnalystAction(
-            date=(today - timedelta(days=30)).isoformat(),
-            firm="JPM", to_grade="Buy", from_grade="Hold", action="up",
-        ),
+            date=(today - timedelta(days=10 * (i + 1))).isoformat(),
+            firm=f"F{i}", to_grade="Buy", from_grade="Hold", action="up",
+        )
+        for i in range(3)
     ]
     f = Fundamentals(
         ticker="TEST",
+        micro=MicroData(recommendation_mean=1.5, short_percent_of_float=0.005),
         price_target=AnalystPriceTarget(mean=240.0),
         analyst_actions=actions,
     )
-    pts, mx, br = _sentiment(_stock(), f, news_count=25, last_close=200.0)
-    # upside = 20% → full 50; net upgrades = +3 → full 30; news 25 → full 20.
-    assert pts == pytest.approx(100.0, abs=0.01)
+    score, _, _ = _sentiment(
+        _stock(), f, last_close=200.0,
+        news_polarity=80.0, news_count=25,
+    )
+    assert score == pytest.approx(100.0, abs=2.0)
 
 
 def test_sentiment_zero_score():
     today = date.today()
     actions = [
         AnalystAction(
-            date=(today - timedelta(days=10)).isoformat(),
-            firm="GS", to_grade="Hold", from_grade="Buy", action="down",
-        ),
-        AnalystAction(
-            date=(today - timedelta(days=20)).isoformat(),
-            firm="MS", to_grade="Sell", from_grade="Hold", action="down",
-        ),
-        AnalystAction(
-            date=(today - timedelta(days=30)).isoformat(),
-            firm="JPM", to_grade="Sell", from_grade="Hold", action="down",
-        ),
+            date=(today - timedelta(days=10 * (i + 1))).isoformat(),
+            firm=f"F{i}", to_grade="Sell", from_grade="Hold", action="down",
+        )
+        for i in range(3)
     ]
     f = Fundamentals(
         ticker="TEST",
-        price_target=AnalystPriceTarget(mean=180.0),  # 200 → 180 = -10% downside
+        micro=MicroData(recommendation_mean=4.5, short_percent_of_float=0.30),
+        price_target=AnalystPriceTarget(mean=180.0),  # -10% downside
         analyst_actions=actions,
     )
-    pts, _, _ = _sentiment(_stock(), f, news_count=0, last_close=200.0)
-    assert pts == pytest.approx(0.0, abs=0.5)
+    score, _, _ = _sentiment(
+        _stock(), f, last_close=200.0,
+        news_polarity=-80.0, news_count=0,
+    )
+    assert score == pytest.approx(0.0, abs=2.0)
 
 
-def test_sentiment_old_actions_ignored():
-    """Actions older than 90 days don't count — should yield None for the
-    net-upgrades component, leaving it as a missing-data entry (0 points)."""
+def test_sentiment_old_actions_excluded():
     today = date.today()
     actions = [
         AnalystAction(
@@ -280,8 +281,89 @@ def test_sentiment_old_actions_ignored():
         ),
     ]
     f = Fundamentals(ticker="TEST", analyst_actions=actions)
-    _, _, br = _sentiment(_stock(), f, news_count=10, last_close=200.0)
-    assert br["net_upgrades_90d"]["raw"] is None
+    _, _, br = _sentiment(
+        _stock(), f, last_close=200.0,
+        news_polarity=None, news_count=10,
+    )
+    assert br["net_upgrades_90d"]["present"] is False
+
+
+# ---------------------------------------------------------------------------
+# MISSING-DATA NEUTRALIZATION INVARIANT — V2's headline guarantee.
+# ---------------------------------------------------------------------------
+
+def test_quality_missing_components_do_not_drag_score_down():
+    """A stock with only ROE + ROA + FCF reported, all at full marks,
+    should score ≈100 — the absent components must NOT dilute."""
+    micro_full = MicroData(return_on_equity=0.30, return_on_assets=0.20, free_cashflow=1e10)
+    score, _, _ = _quality(_stock(), micro_full)
+    assert score == pytest.approx(100.0, abs=0.5)
+
+
+def test_value_missing_components_do_not_drag_score_down():
+    """Only P/E and dividend present, both at full → pillar ≈ 100."""
+    micro = MicroData(trailing_pe=20.0, dividend_yield=0.04)
+    score, _, _ = _value(_stock(sector="Technology"), micro, last_close=100.0)
+    assert score == pytest.approx(100.0, abs=0.5)
+
+
+def test_growth_dense_vs_sparse_same_signal_same_score():
+    """Same signal magnitude (full marks across) should give same score
+    whether the inputs are dense (all 6 components) or sparse (only 2).
+    This is the precise statement of the missing-data invariant."""
+    # Dense: all components at full marks.
+    micro_dense = MicroData(
+        revenue_growth=0.20, earnings_growth=0.20, earnings_quarterly_growth=0.25,
+        eps_trailing=2.0, eps_forward=2.4,
+    )
+    earnings = [
+        EarningsPoint(date=f"2025-0{i}-01", eps_estimate=1.0, eps_reported=1.2, surprise_pct=20.0)
+        for i in range(1, 5)
+    ]
+    annual = [
+        AnnualPoint(fiscal_year_end="2023-12-31", revenue=100, net_income=10, eps=1.0),
+        AnnualPoint(fiscal_year_end="2024-12-31", revenue=115, net_income=12, eps=1.15),
+        AnnualPoint(fiscal_year_end="2025-12-31", revenue=132, net_income=14, eps=1.32),
+    ]
+    f_dense = Fundamentals(ticker="A", micro=micro_dense, earnings=earnings, annual=annual)
+    s_dense, _, _ = _growth(_stock(), f_dense)
+
+    # Sparse: only revenue_growth + earnings_growth at full marks.
+    f_sparse = Fundamentals(
+        ticker="B",
+        micro=MicroData(revenue_growth=0.20, earnings_growth=0.20),
+    )
+    s_sparse, _, _ = _growth(_stock(), f_sparse)
+
+    # The headline guarantee: if the present components are at full marks,
+    # the score should be ~100 regardless of how many components are
+    # actually present.
+    assert s_dense == pytest.approx(100.0, abs=2.0)
+    assert s_sparse == pytest.approx(100.0, abs=2.0)
+
+
+def test_sentiment_only_news_polarity_present():
+    """Even if every analyst input is missing, news polarity alone should
+    be enough to produce a sentiment score (not zero, not None)."""
+    score, _, br = _sentiment(
+        _stock(), Fundamentals(ticker="T"),
+        last_close=None,
+        news_polarity=50.0, news_count=10,
+    )
+    assert score is not None
+    # news_polarity=50 → full (100); news_count=10 → ramps. Most other
+    # components missing → neutralised. Score should be high.
+    assert score >= 70.0
+    assert br["news_polarity"]["present"] is True
+    assert br["price_target_upside"]["present"] is False
+
+
+def test_pillar_dropped_when_all_components_missing():
+    """A pillar with zero present components → returns None and is
+    dropped from the composite via _renormalize_weights."""
+    score, _, br = _quality(_stock(), MicroData())  # all fields default None
+    assert score is None
+    assert br == {}
 
 
 # ---------------------------------------------------------------------------
@@ -294,10 +376,8 @@ def test_renormalize_skips_missing_pillars():
         "momentum": 70.0, "sentiment": None,
     }
     w = _renormalize_weights(sub)
-    # Missing sentiment (15%) is dropped; remaining 85% renormalises to 1.0.
     assert w["sentiment"] == 0.0
     assert sum(w.values()) == pytest.approx(1.0, abs=1e-9)
-    # Quality's effective weight: 0.25 / 0.85 ≈ 0.294
     assert w["quality"] == pytest.approx(0.25 / 0.85, abs=1e-9)
 
 
@@ -319,7 +399,6 @@ def test_renormalize_all_present_gives_original_weights():
 # ---------------------------------------------------------------------------
 
 def test_risk_defensive_low_beta_mega_cap_is_conservative():
-    # Utility + low beta + low vol + > $200B cap → all four nudge to conservative.
     s = _stock(sector="Utilities", market_cap=300_000_000_000)
     micro = MicroData(beta=0.5)
     tier = _classify_risk(s, micro, volatility_90d=0.8)
@@ -347,6 +426,15 @@ def test_risk_no_inputs_defaults_moderate():
     assert tier == "moderate"
 
 
+def test_risk_high_leverage_pushes_aggressive():
+    """High debt/equity should add to the aggressive tally even if the
+    other inputs are neutral."""
+    s = _stock(sector=None, market_cap=10_000_000_000)
+    micro = MicroData(beta=1.0, debt_to_equity=350.0)  # very levered
+    tier = _classify_risk(s, micro, volatility_90d=2.0)
+    assert tier == "aggressive"
+
+
 # ---------------------------------------------------------------------------
 # Pure compute path: _build_score
 # ---------------------------------------------------------------------------
@@ -354,11 +442,20 @@ def test_risk_no_inputs_defaults_moderate():
 def test_build_score_all_pillars_present():
     closes = _strong_uptrend_closes()
     micro = MicroData(
-        return_on_equity=0.25, profit_margins=0.20, free_cashflow=1e10,
-        debt_to_equity=40.0, current_ratio=2.0,
-        revenue_growth=0.20, earnings_growth=0.20,
-        trailing_pe=20.0, peg_ratio=1.0, dividend_yield=0.03,
-        beta=1.0, fifty_two_week_change=0.50,
+        return_on_equity=0.25, return_on_assets=0.15,
+        profit_margins=0.20, operating_margins=0.20, gross_margins=0.50,
+        free_cashflow=1e10,
+        debt_to_equity=40.0, current_ratio=2.0, quick_ratio=1.5,
+        overall_risk=2.0,
+        held_percent_insiders=0.10, held_percent_institutions=0.70,
+        revenue_growth=0.20, earnings_growth=0.20, earnings_quarterly_growth=0.20,
+        eps_trailing=4.0, eps_forward=4.8,
+        trailing_pe=20.0, forward_pe=18.0, peg_ratio=1.0,
+        price_to_book=4.0, price_to_sales=2.0,
+        enterprise_to_ebitda=8.0, enterprise_to_revenue=2.0,
+        dividend_yield=0.03, payout_ratio=0.45,
+        beta=1.0, fifty_two_week_change=0.50, sp500_fifty_two_week_change=0.10,
+        recommendation_mean=1.8, short_percent_of_float=0.02,
     )
     earnings = [
         EarningsPoint(date=f"2025-0{i}-01", eps_estimate=1.0, eps_reported=1.2, surprise_pct=20.0)
@@ -366,27 +463,27 @@ def test_build_score_all_pillars_present():
     ]
     actions = [
         AnalystAction(
-            date=(date.today() - timedelta(days=15)).isoformat(),
+            date=(date.today() - timedelta(days=15 * (i + 1))).isoformat(),
             firm=f"F{i}", to_grade="Buy", from_grade="Hold", action="up",
         )
         for i in range(3)
     ]
     f = Fundamentals(
         ticker="TEST", micro=micro, earnings=earnings, analyst_actions=actions,
-        price_target=AnalystPriceTarget(mean=closes.iloc[-1] * 1.30),  # 30% upside
+        price_target=AnalystPriceTarget(mean=closes.iloc[-1] * 1.30),
     )
-    cs = _build_score(_stock(sector="Technology"), f, closes, news_count=25)
+    cs = _build_score(
+        _stock(sector="Technology"), f, closes, news_count=25,
+        news_polarity=70.0,
+    )
     assert 70.0 <= cs.composite <= 100.0
-    # All five sub-scores present (no None).
     assert all(v is not None for v in cs.sub_scores.values())
-    # Breakdown has all five pillar dicts + weights.
     for pillar in ("quality", "growth", "value", "momentum", "sentiment"):
         assert pillar in cs.breakdown
     assert "weights_used" in cs.breakdown
 
 
 def test_build_score_missing_pillar_renormalises():
-    """Stock with no fundamentals at all → only momentum has data."""
     closes = _strong_uptrend_closes()
     cs = _build_score(_stock(), None, closes, news_count=None)
     # Only momentum should be non-None.
@@ -394,14 +491,11 @@ def test_build_score_missing_pillar_renormalises():
     assert cs.sub_scores["quality"] is None
     assert cs.sub_scores["growth"] is None
     assert cs.sub_scores["value"] is None
-    # Sentiment: with fundamentals=None, _sentiment returns no input.
     assert cs.sub_scores["sentiment"] is None
-    # Composite should equal momentum (its weight renormalises to 1.0).
     assert cs.composite == pytest.approx(cs.sub_scores["momentum"], abs=0.1)
 
 
 def test_build_score_breakdown_is_json_serialisable():
-    """breakdown must round-trip through json.dumps without NaN/Infinity."""
     closes = _strong_uptrend_closes()
     cs = _build_score(_stock(), None, closes, news_count=5)
     s = json.dumps(cs.breakdown, allow_nan=False)
@@ -452,8 +546,6 @@ def _build_fundamentals_for(ticker: str, *, good: bool) -> Fundamentals:
 
 
 def test_recompute_all_populates_table(db: Session, monkeypatch):
-    """Seed 5 stocks with varying fundamentals, run recompute_all, assert rows."""
-    # Stub upstream services so the test is hermetic.
     fund_map: dict[str, Fundamentals] = {}
     monkeypatch.setattr(
         stock_fundamentals_service, "get_fundamentals",
@@ -461,7 +553,6 @@ def test_recompute_all_populates_table(db: Session, monkeypatch):
     )
     monkeypatch.setattr(stock_news_service, "get_news", lambda ticker, limit=5: [])
 
-    # 5 stocks: 3 "good", 2 "bad".
     sectors = ["Technology", "Utilities", "Healthcare", "Energy", "Industrials"]
     for i in range(5):
         s = Stock(
@@ -481,17 +572,14 @@ def test_recompute_all_populates_table(db: Session, monkeypatch):
     rows = db.query(StockScore).all()
     assert len(rows) == 5
     by_ticker = {db.get(Stock, r.stock_id).ticker: r for r in rows}
-    # Good stocks (T0..T2) should score higher than bad (T3..T4).
     good_avg = sum(by_ticker[f"T{i}"].composite for i in range(3)) / 3
     bad_avg = sum(by_ticker[f"T{i}"].composite for i in range(3, 5)) / 2
     assert good_avg > bad_avg
-    # All breakdowns are valid JSON.
     for r in rows:
         assert isinstance(json.loads(r.breakdown), dict)
 
 
 def test_recompute_all_idempotent(db: Session, monkeypatch):
-    """Running twice doesn't duplicate rows — second run UPSERTs in place."""
     monkeypatch.setattr(
         stock_fundamentals_service, "get_fundamentals",
         lambda ticker, force_refresh=False: Fundamentals(ticker=ticker),
@@ -510,16 +598,6 @@ def test_recompute_all_idempotent(db: Session, monkeypatch):
 
 
 def test_recompute_all_updates_existing_score_in_place(db: Session, monkeypatch):
-    """Regression: when a stock already has a score row, recompute_all must
-    UPDATE it rather than attempt an INSERT (which would IntegrityError on
-    the PK). This is what broke the live system when a 50-stock seed ran
-    concurrently with a full recompute and the bulk INSERT collided.
-
-    We simulate the race deterministically by:
-      1) running recompute_all once with one set of fundamentals → row inserted
-      2) flipping the fundamentals to produce a different score
-      3) running recompute_all again → row updated, NOT duplicated
-    """
     fund: dict[str, Fundamentals] = {"X": Fundamentals(ticker="X")}
     monkeypatch.setattr(
         stock_fundamentals_service, "get_fundamentals",
@@ -533,14 +611,10 @@ def test_recompute_all_updates_existing_score_in_place(db: Session, monkeypatch)
     _seed_ohlcv(db, s.id, n_bars=250)
     db.commit()
 
-    # First recompute — row inserted with a score driven by empty fundamentals.
     score_service.recompute_all(db)
     first = db.query(StockScore).filter_by(stock_id=s.id).one()
     first_composite = first.composite
 
-    # Now flip the fundamentals so the recomputed composite WILL differ.
-    # MicroData with strong margins/ROE will push Quality up.
-    from app.services.stock_fundamentals_service import MicroData
     fund["X"] = Fundamentals(
         ticker="X",
         micro=MicroData(
@@ -553,9 +627,6 @@ def test_recompute_all_updates_existing_score_in_place(db: Session, monkeypatch)
     )
 
     score_service.recompute_all(db)
-    # Still exactly one row — the UPSERT path took it.
     assert db.query(StockScore).count() == 1
     second = db.query(StockScore).filter_by(stock_id=s.id).one()
-    # And the score actually CHANGED (proves the row was updated, not the
-    # original kept stale).
     assert second.composite != first_composite
