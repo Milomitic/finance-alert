@@ -94,10 +94,28 @@ def _hydrate_fetch_caches() -> None:
         logger.warning(f"[startup] L1 hydration failed (non-fatal): {exc}")
 
 
+def _ensure_default_rules() -> None:
+    """Idempotent: create a global Rule row for every kind in the registry
+    that doesn't already have one. The bootstrap script (`scripts/bootstrap_rules`)
+    used to be the only call site, which meant new kinds added to the
+    registry never reached the user until someone re-ran the script
+    manually. Running on every backend boot fixes that — the call is a
+    no-op when all kinds already exist, so the cost is one SELECT per
+    registered kind on a process that just took ~2s to start up. */
+    """
+    try:
+        from app.scripts.bootstrap_rules import ensure_global_rules
+        ensure_global_rules()
+    except Exception as exc:  # noqa: BLE001
+        # Non-fatal — startup keeps going, just log.
+        logger.warning(f"[startup] ensure_global_rules failed (non-fatal): {exc}")
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     _cleanup_orphan_scans()
     _hydrate_fetch_caches()
+    _ensure_default_rules()
     start_scheduler()
     try:
         yield

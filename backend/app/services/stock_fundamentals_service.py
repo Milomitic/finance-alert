@@ -471,14 +471,63 @@ def _extract_profile(info: dict | None) -> CompanyProfile:
     )
 
 
+def _transaction_type(text: str) -> str:
+    """Coarse classifier for the transaction kind. Returns the leading
+    descriptor stripped of price / parenthetical clauses, so same-day
+    same-insider same-type rows can be coalesced even when yfinance
+    splits a single trading event into multiple sub-orders at slightly
+    different prices.
+
+    Examples:
+        "Sale at price 275.00 per share."       → "Sale"
+        "Purchase at price 100.00"              → "Purchase"
+        "Stock Award (Non Open Market)"         → "Stock Award"
+        "Conversion of Exercise of security"    → "Conversion"
+        "Sale"                                   → "Sale"
+    """
+    if not text:
+        return ""
+    s = text.strip()
+    # Cut at the first delimiter that introduces price / parenthetical /
+    # "of <details>" clauses. Anything before the cut is the type.
+    for sep in (" at price ", " (", " of "):
+        idx = s.find(sep)
+        if idx > 0:
+            return s[:idx].strip()
+    return s
+
+
 def _extract_insiders(it_df: Any, limit: int = 10) -> list[InsiderTransaction]:
+    """Read up to `limit` insider transactions, COALESCING multiple rows
+    on the same date by the same insider with the same transaction type
+    into a single line.
+
+    Why coalesce: brokers split one trading-day's intent into several
+    sub-orders (e.g. selling 50k shares as 5 × 10k partial fills at
+    slightly different prices). yfinance returns each fill as a row,
+    which clutters the UI and doesn't reflect the user-meaningful unit
+    of analysis (the *event*).
+
+    Coalesce key: (insider, date, transaction_type) — same person, same
+    day, same type. Shares and dollar value are summed; the transaction
+    label collapses to "<type> (<n> trades)" to make the merge visible.
+    """
     if it_df is None or it_df.empty:
         return []
-    out: list[InsiderTransaction] = []
-    for _, row in it_df.head(limit).iterrows():
+
+    # Step 1: parse rows from yfinance into our dataclass shape, no limit
+    # yet — we need the full set for proper coalescing before capping.
+    raw: list[InsiderTransaction] = []
+    for _, row in it_df.iterrows():
         date_v = row.get("Start Date")
-        date_s = str(date_v.date()) if hasattr(date_v, "date") else str(date_v) if date_v is not None else ""
-        out.append(InsiderTransaction(
+        date_s = (
+            str(date_v.date())
+            if hasattr(date_v, "date")
+            else str(date_v)
+            if date_v is not None
+            else ""
+        )
+        raw.append(InsiderTransaction(
             insider=str(row.get("Insider") or "").strip(),
             position=str(row.get("Position") or "").strip(),
             transaction=str(row.get("Text") or row.get("Transaction") or "").strip(),
@@ -486,7 +535,53 @@ def _extract_insiders(it_df: Any, limit: int = 10) -> list[InsiderTransaction]:
             shares=_safe_int(row.get("Shares")),
             value=_safe_float(row.get("Value")),
         ))
-    return out
+
+    # Step 2: group by (insider, date, type), preserving first-occurrence
+    # order so the most recent rows (yfinance returns DESC) stay first.
+    grouped: dict[tuple[str, str, str], list[InsiderTransaction]] = {}
+    order: list[tuple[str, str, str]] = []
+    for tx in raw:
+        ttype = _transaction_type(tx.transaction)
+        key = (tx.insider, tx.date, ttype)
+        if key not in grouped:
+            grouped[key] = []
+            order.append(key)
+        grouped[key].append(tx)
+
+    # Step 3: collapse each group into one entry. Single-entry groups
+    # pass through unchanged; multi-entry groups sum shares + value
+    # and rewrite the transaction label.
+    out: list[InsiderTransaction] = []
+    for key in order:
+        group = grouped[key]
+        if len(group) == 1:
+            out.append(group[0])
+            continue
+        insider, date, ttype = key
+        total_shares = sum((t.shares or 0) for t in group)
+        total_value = sum((t.value or 0.0) for t in group)
+        # Use the first non-empty position from the group (typically all
+        # match, but be defensive).
+        position = next((t.position for t in group if t.position), "")
+        # Merged label: "Sale (3 trades)" makes the aggregation visible
+        # so the user knows we're showing a sum, not a single fill.
+        merged_label = (
+            f"{ttype} ({len(group)} trades)"
+            if ttype
+            else group[0].transaction
+        )
+        out.append(InsiderTransaction(
+            insider=insider,
+            position=position,
+            transaction=merged_label,
+            date=date,
+            shares=total_shares if total_shares > 0 else None,
+            value=total_value if total_value > 0 else None,
+        ))
+
+    # Step 4: cap to limit AFTER coalescing so we return up to `limit`
+    # distinct events (not raw fills).
+    return out[:limit]
 
 
 def _extract_ratings(rec_df: Any) -> list[AnalystRating]:
