@@ -159,3 +159,41 @@ Legacy alerts predate the column → `signal_date = null`. UI falls back to
 doesn't surface it anymore (no badges, no filters, no bulk actions). Don't
 re-add it without the user explicitly asking. The `archived_at` axis is
 still active.
+
+---
+
+## Two-tier cache: in-memory L1 + persistent L2 (`fetch_cache` table)
+
+`stock_fundamentals_service` and `stock_news_service` use a two-layer cache:
+
+- **L1**: in-process dict (`_CACHE`) — microsecond hits.
+- **L2**: `fetch_cache` table (one row per `(ticker, kind)`, JSON payload) —
+  survives backend restarts. Read by service on L1 miss; written on every
+  successful upstream fetch. Hydrated into L1 at app startup (`lifespan`).
+
+The flow on every `get_fundamentals(ticker)` / `get_news(ticker)`:
+```
+L1 hit + fresh        → return immediately (microseconds)
+L1 miss / stale → L2 hit + fresh → hydrate L1 + return (single DB query)
+both miss / stale     → upstream fetch → UPSERT L2 + L1 → return
+```
+
+**Don't bypass L2.** If you write a new service that reads `_CACHE` directly
+(e.g. the calendar aggregator does this — see
+`backend/app/services/calendar_service.py`), document it explicitly and be
+aware that on a fresh process boot before any consumer has triggered
+hydration, `_CACHE` may still be empty for a few seconds — call
+`hydrate_l1_from_db()` if you need an immediate-read guarantee.
+
+**`clear_cache()` clears BOTH layers** (it used to clear only L1; that was
+test-isolation hostile). Calling it from production code wipes the persisted
+rows too. If you really want to discard only the in-memory cache (e.g. to
+simulate a process restart in a test), poke `_CACHE.clear()` directly.
+
+**Don't persist error rows.** Both services intentionally skip the L2 write
+when the upstream fetch returned an error — a transient yfinance failure
+shouldn't poison the cache for 24h across restarts.
+
+The third in-memory cache (`live_quote_service`) is **NOT** backed by L2
+because its TTL is 10 seconds — a 30s-old quote is worse than re-fetching,
+and the persistence overhead would dominate.

@@ -1,6 +1,7 @@
 """Aggregate model imports so Alembic sees them."""
 from app.models.alert import Alert
 from app.models.catalog_log import CatalogRefreshLog
+from app.models.fetch_cache import FetchCache
 from app.models.index import Index, StockIndex
 from app.models.market_snapshot import MarketSnapshot
 from app.models.ohlcv import OhlcvDaily
@@ -28,4 +29,5 @@ __all__ = [
     "Alert",
     "PriceAlert",
     "ScanRun",
+    "FetchCache",
 ]

@@ -474,18 +474,93 @@ def _fetch_fresh(ticker: str) -> Fundamentals:
 
 
 def get_fundamentals(ticker: str, *, force_refresh: bool = False) -> Fundamentals:
+    """Two-tier cache:
+      L1 = in-memory _CACHE (microseconds)
+      L2 = fetch_cache table (DB; survives restarts)
+    Network only fired when both miss / stale or `force_refresh=True`.
+
+    L2 access opens its own short-lived SessionLocal — `get_fundamentals`
+    is called from request handlers, background tasks, and scripts which
+    each manage their own sessions; coupling this function to a passed-in
+    Session would require updating every call site. The L2 read+write is
+    a single cheap query each, so the per-call session is fine.
+    """
     now = time.time()
     if not force_refresh:
+        # L1
         with _CACHE_LOCK:
             cached = _CACHE.get(ticker)
             if cached is not None and (now - cached.fetched_at) < _TTL_SECONDS:
                 return cached
+        # L2 — try DB. Imported lazily to avoid an import cycle (the
+        # store module imports the dataclasses defined above).
+        try:
+            from app.core.db import SessionLocal
+            from app.services import fetch_cache_store
+            with SessionLocal() as db:
+                from_db = fetch_cache_store.read_fundamentals(
+                    db, ticker, _TTL_SECONDS
+                )
+            if from_db is not None:
+                # Hydrate L1 so subsequent requests in this process skip
+                # the DB round-trip.
+                with _CACHE_LOCK:
+                    _CACHE[ticker] = from_db
+                return from_db
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(f"[fund] L2 read failed for {ticker}: {exc}")
+
+    # Both layers missed / stale → upstream fetch
     fresh = _fetch_fresh(ticker)
     with _CACHE_LOCK:
         _CACHE[ticker] = fresh
+    # UPSERT to L2. Non-fatal if the DB write blows up — L1 still serves
+    # the in-process consumers and we'll retry on the next refresh cycle.
+    # Don't persist error rows: a transient yfinance failure shouldn't
+    # poison the cache for 24h.
+    if not fresh.error:
+        try:
+            from app.core.db import SessionLocal
+            from app.services import fetch_cache_store
+            with SessionLocal() as db:
+                fetch_cache_store.write_fundamentals(db, fresh)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(f"[fund] L2 write failed for {ticker}: {exc}")
     return fresh
 
 
 def clear_cache() -> None:
+    """Clear BOTH layers (L1 in-memory + L2 DB rows). Used by tests to
+    isolate themselves; safe in production too — `clear_cache` is only
+    called by intentional refresh paths."""
     with _CACHE_LOCK:
         _CACHE.clear()
+    try:
+        from app.core.db import SessionLocal
+        from app.models import FetchCache
+        with SessionLocal() as db:
+            db.query(FetchCache).filter_by(kind="fundamentals").delete()
+            db.commit()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(f"[fund] L2 clear failed: {exc}")
+
+
+def hydrate_l1_from_db() -> int:
+    """Populate the in-memory L1 cache from the persistent L2 table. Call
+    once at app startup so the first request after a restart hits L1
+    instantly instead of round-tripping the DB per ticker.
+
+    Returns the number of fresh entries hydrated."""
+    try:
+        from app.core.db import SessionLocal
+        from app.services import fetch_cache_store
+        with SessionLocal() as db:
+            entries = fetch_cache_store.hydrate_all_fundamentals(db, _TTL_SECONDS)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(f"[fund] L1 hydration failed: {exc}")
+        return 0
+    with _CACHE_LOCK:
+        _CACHE.update(entries)
+    if entries:
+        logger.info(f"[fund] hydrated L1 with {len(entries)} entries from L2")
+    return len(entries)

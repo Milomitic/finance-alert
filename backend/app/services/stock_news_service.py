@@ -62,33 +62,88 @@ def _normalize_yf_item(raw: dict) -> dict[str, Any] | None:
 
 
 def get_news(ticker: str, limit: int = 5) -> list[dict[str, Any]]:
-    """Fetch news for a ticker. Cached for 1h. Returns [] on any error.
+    """Fetch news for a ticker. Two-tier cache (L1 in-memory, L2 fetch_cache).
+    Returns [] on any error.
 
     Items are sorted **descending** by published_at (most recent first) so
     the UI can render them in chronological order without doing a sort pass.
     Items missing a published_at are pushed to the end (least useful).
     """
     now = datetime.now(UTC)
+    # L1 — fast in-memory check
     cached = _CACHE.get(ticker)
     if cached and (now - cached[0]) < NEWS_TTL:
         return cached[1][:limit]
+
+    # L2 — DB cache (survives restart). Lazy import to keep this module
+    # importable without the SQLAlchemy machinery for unit tests.
+    try:
+        from app.core.db import SessionLocal
+        from app.services import fetch_cache_store
+        ttl_sec = int(NEWS_TTL.total_seconds())
+        with SessionLocal() as db:
+            l2 = fetch_cache_store.read_news(db, ticker, ttl_sec)
+        if l2 is not None:
+            _CACHE[ticker] = (now, l2)
+            return l2[:limit]
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(f"[news] L2 read failed for {ticker}: {exc}")
+
+    # Both layers missed → upstream fetch
     try:
         import yfinance as yf
         raw_items = yf.Ticker(ticker).news or []
     except Exception as exc:  # noqa: BLE001
         logger.warning(f"[news] yfinance fetch failed for {ticker}: {exc}")
-        # Cache empty result to avoid hammering on failure
+        # Cache empty result in L1 only to avoid hammering on failure.
+        # Don't persist failures to L2 — a transient yfinance outage shouldn't
+        # poison the cache for an hour across restarts.
         _CACHE[ticker] = (now, [])
         return []
     normalized = [n for raw in raw_items if (n := _normalize_yf_item(raw))]
-    # ISO 8601 strings (with the trailing Z that yfinance emits) sort
-    # lexicographically the same as chronologically — no parsing needed.
-    # Sentinel "" pushes items missing pubDate to the end of the list.
     normalized.sort(key=lambda n: n.get("published_at") or "", reverse=True)
     _CACHE[ticker] = (now, normalized)
+    # Persist to L2. Non-fatal — L1 still serves consumers if the DB write fails.
+    try:
+        from app.core.db import SessionLocal
+        from app.services import fetch_cache_store
+        with SessionLocal() as db:
+            fetch_cache_store.write_news(db, ticker, normalized)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(f"[news] L2 write failed for {ticker}: {exc}")
     return normalized[:limit]
 
 
 def clear_cache() -> None:
-    """For tests."""
+    """Clear BOTH layers (L1 in-memory + L2 DB rows). Used by tests to
+    isolate themselves; safe in production too — `clear_cache` is otherwise
+    only called by intentional refresh paths where dropping persisted
+    rows is the desired behavior."""
     _CACHE.clear()
+    try:
+        from app.core.db import SessionLocal
+        from app.models import FetchCache
+        with SessionLocal() as db:
+            db.query(FetchCache).filter_by(kind="news").delete()
+            db.commit()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(f"[news] L2 clear failed: {exc}")
+
+
+def hydrate_l1_from_db() -> int:
+    """Populate the in-memory L1 cache from the persistent L2 table at
+    startup. Mirrors stock_fundamentals_service.hydrate_l1_from_db.
+    Returns the number of fresh entries hydrated."""
+    try:
+        from app.core.db import SessionLocal
+        from app.services import fetch_cache_store
+        ttl_sec = int(NEWS_TTL.total_seconds())
+        with SessionLocal() as db:
+            entries = fetch_cache_store.hydrate_all_news(db, ttl_sec)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(f"[news] L1 hydration failed: {exc}")
+        return 0
+    _CACHE.update(entries)
+    if entries:
+        logger.info(f"[news] hydrated L1 with {len(entries)} entries from L2")
+    return len(entries)

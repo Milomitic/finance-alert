@@ -73,9 +73,31 @@ def _cleanup_orphan_scans() -> None:
         )
 
 
+def _hydrate_fetch_caches() -> None:
+    """Restore the in-memory L1 caches (fundamentals + news) from the
+    persistent L2 fetch_cache table. Without this, the first request after
+    every restart would round-trip the DB once per ticker; with it, L1 is
+    warm before any client connects.
+
+    Both calls are non-fatal — a corrupt L2 row should log + skip, not
+    crash startup.
+    """
+    from app.services import stock_fundamentals_service, stock_news_service
+    try:
+        n_fund = stock_fundamentals_service.hydrate_l1_from_db()
+        n_news = stock_news_service.hydrate_l1_from_db()
+        if n_fund or n_news:
+            logger.info(
+                f"[startup] L1 hydrated: fundamentals={n_fund} news={n_news}"
+            )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(f"[startup] L1 hydration failed (non-fatal): {exc}")
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     _cleanup_orphan_scans()
+    _hydrate_fetch_caches()
     start_scheduler()
     try:
         yield
