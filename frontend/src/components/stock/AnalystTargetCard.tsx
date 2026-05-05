@@ -44,7 +44,7 @@ function PriceTargetBar({ pt }: { pt: AnalystPriceTarget }) {
       <SectionTitle
         icon={Target}
         label="Price target consensus"
-        size="sm"
+
         className="mb-2"
         right={
           upside != null ? (
@@ -145,7 +145,7 @@ function RatingBar({ r }: { r: AnalystRating }) {
       <SectionTitle
         icon={TrendingUp}
         label="Recommendation"
-        size="sm"
+
         className="mb-1"
         right={
           <span className="tabular-nums text-[10px] text-muted-foreground">
@@ -447,7 +447,7 @@ export function AnalystTargetCard({ ticker }: Props) {
           <SectionTitle
             icon={ArrowRight}
             label="Azioni recenti"
-            size="sm"
+    
             className="mb-1 shrink-0"
             right={
               actions.length > 0 ? (

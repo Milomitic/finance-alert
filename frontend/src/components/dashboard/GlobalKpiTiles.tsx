@@ -104,7 +104,6 @@ export function GlobalKpiTiles({ global }: Props) {
         <SectionTitle
           icon={Gauge}
           label="Global KPI"
-          size="sm"
           className="mb-2 px-1 shrink-0"
         />
         <ul className="flex-1 min-h-0 overflow-y-auto divide-y divide-border/50">

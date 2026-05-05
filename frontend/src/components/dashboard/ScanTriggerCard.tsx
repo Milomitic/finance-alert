@@ -73,7 +73,7 @@ export function ScanTriggerCard({ nextScanAt }: Props) {
   return (
     <Card className="h-full overflow-hidden">
       <CardContent className="p-3 flex flex-col gap-2 h-full">
-        <SectionTitle icon={Zap} label="Scan mercati" size="sm" className="px-1" />
+        <SectionTitle icon={Zap} label="Scan mercati" className="px-1" />
 
         {/* Primary action — sized to dominate the card visually. The button
             is the reason this card exists. */}

@@ -286,7 +286,7 @@ export default function CalendarPage() {
 function Legend() {
   return (
     <div className="rounded-lg border bg-card/50 px-4 py-3">
-      <SectionTitle icon={Info} label="Legenda" size="sm" className="mb-2" />
+      <SectionTitle icon={Info} label="Legenda" className="mb-2" />
       <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-[11px]">
         <LegendItem
           swatch={

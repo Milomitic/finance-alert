@@ -29,53 +29,65 @@ export function RulesTable({ rules, onEdit }: Props) {
     );
   }
 
-  // Same sizing pass as AlertsTable: text-base for primary cells, text-sm
-  // for header + condition meta. py-2.5 instead of py-2 gives the larger
-  // text room to breathe without the rows feeling cramped.
+  // Compact density (`text-sm` rows, `py-1.5`) so the table fits in the
+  // ~260px viewport the AlertsPage RulesPanel grants — the previous
+  // `text-base` + `py-2.5` made each row ~48px which left only 4 rules
+  // visible before scroll. The narrower 480px sidebar slot also benefits
+  // from tighter horizontal padding.
   return (
-    <table className="w-full text-base border rounded-md">
-      <thead className="bg-muted/50 text-sm">
-        <tr>
-          <th className="px-3 py-2.5 text-left font-medium">Stato</th>
-          <th className="px-3 py-2.5 text-left font-medium">Tipo</th>
-          <th className="px-3 py-2.5 text-left font-medium">Condizioni</th>
-          <th className="px-3 py-2.5 text-right font-medium">Azioni</th>
-        </tr>
-      </thead>
-      <tbody>
-        {rules.map((r) => (
-          <tr key={r.id} className="border-t">
-            <td className="px-3 py-2.5">
-              <Checkbox
-                checked={r.enabled}
-                onCheckedChange={(c) =>
-                  updateMut.mutate({ id: r.id, payload: { enabled: !!c } })
-                }
-              />
-            </td>
-            <td className="px-3 py-2.5 font-medium">{r.kind}</td>
-            <td className="px-3 py-2.5 text-sm text-muted-foreground">
-              {describeExpression(r.expression, r.kind)}
-            </td>
-            <td className="px-3 py-2.5 text-right">
-              <Button variant="ghost" size="sm" onClick={() => onEdit(r)}>
-                <Pencil className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  if (confirm("Eliminare questa regola?")) {
-                    deleteMut.mutate(r.id);
-                  }
-                }}
-              >
-                <Trash2 className="h-4 w-4 text-red-600" />
-              </Button>
-            </td>
+    <div className="rounded-md border max-h-[260px] overflow-y-auto">
+      <table className="w-full text-sm">
+        <thead className="bg-muted/60 text-xs sticky top-0 z-10">
+          <tr>
+            <th className="px-2 py-1.5 text-left font-semibold w-8">On</th>
+            <th className="px-2 py-1.5 text-left font-semibold">Tipo</th>
+            <th className="px-2 py-1.5 text-left font-semibold">Condizioni</th>
+            <th className="px-2 py-1.5 text-right font-semibold w-20">Azioni</th>
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {rules.map((r) => (
+            <tr key={r.id} className="border-t hover:bg-muted/30 transition-colors">
+              <td className="px-2 py-1.5">
+                <Checkbox
+                  checked={r.enabled}
+                  onCheckedChange={(c) =>
+                    updateMut.mutate({ id: r.id, payload: { enabled: !!c } })
+                  }
+                />
+              </td>
+              <td className="px-2 py-1.5 font-medium truncate">{r.kind}</td>
+              <td className="px-2 py-1.5 text-xs text-muted-foreground truncate">
+                {describeExpression(r.expression, r.kind)}
+              </td>
+              <td className="px-2 py-1.5 text-right">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 w-7 p-0"
+                  onClick={() => onEdit(r)}
+                  title="Modifica"
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 w-7 p-0"
+                  onClick={() => {
+                    if (confirm("Eliminare questa regola?")) {
+                      deleteMut.mutate(r.id);
+                    }
+                  }}
+                  title="Elimina"
+                >
+                  <Trash2 className="h-3.5 w-3.5 text-rose-600" />
+                </Button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }

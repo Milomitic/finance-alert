@@ -1,7 +1,6 @@
 import { useState } from "react";
-import { Download } from "lucide-react";
 
-import { alerts as alertsApi, type AlertListParams } from "@/api/alerts";
+import { type AlertListParams } from "@/api/alerts";
 import type { Alert } from "@/api/types";
 import { AlertDetailDialog } from "@/components/AlertDetailDialog";
 import { AlertFilters } from "@/components/AlertFilters";
@@ -69,24 +68,13 @@ export default function AlertsPage() {
     setSelectedIds(new Set());
   };
 
-  const exportCsv = () => {
-    window.location.href = alertsApi.exportCsvUrl(filters);
-  };
-
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-semibold">Alerts</h2>
-          <p className="text-sm text-muted-foreground">
-            {total} alert totali con i filtri attuali
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={exportCsv}>
-            <Download className="h-4 w-4 mr-2" /> Esporta CSV
-          </Button>
-        </div>
+      <div>
+        <h2 className="text-2xl font-semibold">Alerts</h2>
+        <p className="text-sm text-muted-foreground">
+          {total} alert totali con i filtri attuali
+        </p>
       </div>
 
       {/* Filters (left) + Rules (right). Right-column 480px is the same

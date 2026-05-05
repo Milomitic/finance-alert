@@ -14,6 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { SectionTitle } from "@/components/ui/section-title";
 import { TONE_BG, getAlertKindMeta } from "@/lib/alertMeta";
 import { cn } from "@/lib/utils";
 
@@ -115,26 +116,25 @@ export function AlertFilters({ value, onChange }: Props) {
   return (
     <Card>
       <CardContent className="p-4 space-y-3">
-        {/* Header strip: title + active count + reset */}
-        <div className="flex items-center gap-2">
-          <Filter className="h-4 w-4 text-muted-foreground" />
-          <span className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-            Filtri
-          </span>
-          {activeCount > 0 && (
-            <span className="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-primary text-primary-foreground text-[11px] font-bold tabular-nums">
-              {activeCount}
-            </span>
-          )}
-          <div className="ml-auto">
-            {activeCount > 0 && (
-              <Button variant="ghost" size="sm" onClick={reset} className="h-7 text-xs">
-                <X className="h-3 w-3 mr-1" />
-                Reset
-              </Button>
-            )}
-          </div>
-        </div>
+        <SectionTitle
+          icon={Filter}
+          label="Filtri"
+          right={
+            <div className="flex items-center gap-2">
+              {activeCount > 0 && (
+                <span className="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-primary text-primary-foreground text-[11px] font-bold tabular-nums">
+                  {activeCount}
+                </span>
+              )}
+              {activeCount > 0 && (
+                <Button variant="ghost" size="sm" onClick={reset} className="h-7 text-xs">
+                  <X className="h-3 w-3 mr-1" />
+                  Reset
+                </Button>
+              )}
+            </div>
+          }
+        />
 
         {/* Three-column responsive grid — collapses to one column on
             narrow viewports. `items-end` aligns the inputs (which have
