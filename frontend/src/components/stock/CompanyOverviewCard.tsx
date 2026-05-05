@@ -8,7 +8,7 @@ import {
   User,
   Users,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 
 import type { Stock } from "@/api/types";
 import { Card, CardContent } from "@/components/ui/card";
@@ -57,7 +57,6 @@ interface Props {
 export function CompanyOverviewCard({ ticker, stock }: Props) {
   const q = useStockFundamentals(ticker);
   const profile = q.data?.profile ?? null;
-  const [expanded, setExpanded] = useState(false);
 
   // Identity fallbacks: prefer profile data, fall back to the catalog row
   // (which is always present, populated at ingestion).
@@ -100,56 +99,39 @@ export function CompanyOverviewCard({ ticker, stock }: Props) {
     return null;
   }
 
-  // Decide whether to show the "Mostra tutto" toggle. The clamp visually
-  // caps the description at ~5 short paragraphs; only show the toggle if
-  // there's enough text that we'd actually be hiding content.
-  const totalChars = description?.length ?? 0;
-  const showExpandToggle = totalChars > 320;
-
   return (
     <Card className="overflow-hidden">
       <CardContent className="p-4 sm:p-5">
         <SectionTitle icon={Building2} label="Profilo società" />
 
-        {/* Two-column body: description (left, wide) + anagrafica list (right). */}
+        {/* Two-column body. The card's max height is driven by the right
+            column (anagrafica) — the description on the left is wrapped
+            in an absolute-positioned inner div on lg+ so its content
+            doesn't contribute to the grid row's intrinsic height. The
+            grid sizes itself to the tallest non-absolute item (the
+            anagrafica `dl`), and the description scrolls internally
+            when its content exceeds the row height.
+            On mobile (<lg) the columns stack and the description flows
+            naturally — no absolute trick needed. */}
         <div className="mt-4 grid grid-cols-1 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)] gap-5 lg:gap-8">
           {/* ── Description ──────────────────────────────────────────── */}
-          <div className="min-w-0">
-            {description ? (
-              <>
-                <div
-                  className={cn(
-                    "space-y-3 text-sm leading-relaxed text-foreground/85",
-                    !expanded && "max-h-[16rem] overflow-hidden relative",
-                  )}
-                >
-                  {paragraphs.map((p, i) => (
-                    <p key={i}>{p}</p>
-                  ))}
-                  {/* Bottom fade overlay when clamped — softer than a hard
-                      crop, signals "more below" without an aggressive cutoff. */}
-                  {!expanded && showExpandToggle && (
-                    <span
-                      aria-hidden
-                      className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-card to-transparent pointer-events-none"
-                    />
-                  )}
-                </div>
-                {showExpandToggle && (
-                  <button
-                    type="button"
-                    onClick={() => setExpanded((e) => !e)}
-                    className="mt-2 text-xs font-semibold uppercase tracking-wider text-primary hover:underline"
-                  >
-                    {expanded ? "Comprimi" : "Mostra tutto"}
-                  </button>
-                )}
-              </>
-            ) : (
-              <p className="text-sm italic text-muted-foreground">
-                Descrizione non disponibile per questo titolo.
-              </p>
-            )}
+          <div className="min-w-0 lg:relative">
+            <div
+              className={cn(
+                "space-y-3 text-sm leading-relaxed text-foreground/85",
+                // Absolute container on lg+ → content doesn't push the
+                // grid-row height; instead it scrolls inside the row.
+                "lg:absolute lg:inset-0 lg:overflow-y-auto lg:pr-2",
+              )}
+            >
+              {description ? (
+                paragraphs.map((p, i) => <p key={i}>{p}</p>)
+              ) : (
+                <p className="italic text-muted-foreground">
+                  Descrizione non disponibile per questo titolo.
+                </p>
+              )}
+            </div>
           </div>
 
           {/* ── Anagrafica list ──────────────────────────────────────── */}
@@ -158,8 +140,11 @@ export function CompanyOverviewCard({ ticker, stock }: Props) {
               line up vertically into a clean column.
               Order: where → who → what (industria) → market → people →
               founded → website. This reads like a company card on a
-              business news site. */}
-          <dl className="self-start divide-y divide-border/40">
+              business news site.
+              No `self-start` here (was on the previous version): the dl
+              should drive the grid row's height, so let it stretch
+              naturally. */}
+          <dl className="divide-y divide-border/40">
             <Row icon={MapPin} label="Sede" value={headquarters} />
             {ceo && <CeoRow ceo={ceo} country={stock.country ?? country} />}
             <Row icon={Factory} label="Industria" value={stock.industry} />
