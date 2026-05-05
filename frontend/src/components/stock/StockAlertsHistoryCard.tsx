@@ -1,18 +1,16 @@
-import { Clock, History, Minus, TrendingDown, TrendingUp } from "lucide-react";
+import { Clock, History, TrendingDown, TrendingUp } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import type { Alert } from "@/api/types";
 import { AlertDetailDialog } from "@/components/AlertDetailDialog";
+import { AlertKindChip, AlertToneChip } from "@/components/AlertChips";
 import { Card, CardContent } from "@/components/ui/card";
 import { SectionTitle } from "@/components/ui/section-title";
 import { isDelayedDetection } from "@/lib/alertDates";
 import {
-  TONE_BG,
   TONE_BORDER_LEFT,
-  TONE_LABEL,
   getAlertMeta,
   getSnapshotHeadline,
-  type AlertTone,
 } from "@/lib/alertMeta";
 import { cn } from "@/lib/utils";
 
@@ -81,25 +79,13 @@ function computeStats(alerts: Alert[]): AlertStats {
 }
 
 /* ─── Single-row visual ─────────────────────────────────────────────────── */
-
-/* Tone-badge icon picker — bullish/bearish/warning/neutral get distinct
- * iconography so the indicator reads at a glance even before the user
- * processes the color. */
-const TONE_ICON: Record<AlertTone, typeof TrendingUp> = {
-  bullish: TrendingUp,
-  bearish: TrendingDown,
-  warning: TrendingUp, // not visually meaningful for warnings; use neutral arrow
-  neutral: Minus,
-};
+/* Layout mirrors a single AlertsTable row, just adapted to the narrower
+ * card width: kind chip + tone chip + price + date column, all from the
+ * shared `AlertChips` module so the visual exactly matches the alerts
+ * page. */
 
 function AlertRow({ alert, onClick }: { alert: Alert; onClick: () => void }) {
-  // Effective meta: rule kind → kind tone; price alert → direction-based
-  // tone (above=bullish, below=bearish). Lets the row show a real
-  // Bullish/Bearish chip for price-target alerts instead of a neutral
-  // "Price alert" with no direction.
   const meta = getAlertMeta(alert);
-  const KindIcon = meta.icon;
-  const ToneIcon = TONE_ICON[meta.tone];
   const delayed = isDelayedDetection(alert.triggered_at, alert.signal_date);
   const headline = getSnapshotHeadline(alert.rule_kind, alert.snapshot ?? null);
 
@@ -115,50 +101,18 @@ function AlertRow({ alert, onClick }: { alert: Alert; onClick: () => void }) {
         )}
       >
         <div className="flex items-start gap-3 flex-wrap">
-          {/* LEFT: identity stack — kind chip + tone badge on the first
-              line, snapshot headline as a subtle subtitle on the second. */}
+          {/* LEFT: identity stack — same chips the alerts page uses
+              (AlertKindChip + AlertToneChip) so the visual is identical
+              across surfaces. Snapshot headline below as a subtle
+              subtitle. */}
           <div className="flex flex-col gap-1 min-w-0 flex-1">
             <div className="flex items-center gap-1.5 flex-wrap">
-              {/* Kind chip with icon — what TYPE of alert this is. */}
-              <span
-                className={cn(
-                  "inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold shrink-0",
-                  TONE_BG[meta.tone],
-                )}
-              >
-                <KindIcon className="h-3 w-3" />
-                {meta.label}
-              </span>
-              {/* Tone badge — explicit Bullish / Bearish / Allerta / Neutro
-                  pill. Different shape (outline + smaller) than the kind
-                  chip so the eye groups them as "kind + direction" rather
-                  than two competing chips. Only render for tones with a
-                  directional read (bullish/bearish); warning/neutral
-                  already get their meaning across via the kind chip's
-                  color. */}
-              {(meta.tone === "bullish" || meta.tone === "bearish") && (
-                <span
-                  className={cn(
-                    "inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm border text-[10px] font-semibold uppercase tracking-wider",
-                    meta.tone === "bullish"
-                      ? "border-emerald-300/70 dark:border-emerald-700/60 text-emerald-700 dark:text-emerald-300 bg-emerald-50/60 dark:bg-emerald-950/30"
-                      : "border-rose-300/70 dark:border-rose-700/60 text-rose-700 dark:text-rose-300 bg-rose-50/60 dark:bg-rose-950/30",
-                  )}
-                  title={`Tono semantico: ${TONE_LABEL[meta.tone].toLowerCase()}`}
-                >
-                  <ToneIcon className="h-2.5 w-2.5" />
-                  {TONE_LABEL[meta.tone]}
-                </span>
-              )}
-              {/* Trigger price — kept here for at-a-glance "the bar where
-                  this fired closed at $X". */}
+              <AlertKindChip alert={alert} />
+              <AlertToneChip alert={alert} />
               <span className="text-sm tabular-nums font-semibold ml-1">
                 ${alert.trigger_price.toFixed(2)}
               </span>
             </div>
-            {/* Snapshot headline — one-line summary of the trigger's
-                "why" (e.g. "RSI(14) 28.50 ≤ 30"). Hidden when the rule
-                kind has no resolver or the snapshot is empty. */}
             {headline && (
               <span
                 className="text-[11px] text-muted-foreground tabular-nums truncate"

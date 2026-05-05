@@ -1,8 +1,8 @@
-import { Clock, Minus, TrendingDown, TrendingUp } from "lucide-react";
+import { Clock } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import type { Alert } from "@/api/types";
-import { Badge } from "@/components/ui/badge";
+import { AlertKindChip, AlertToneCell } from "@/components/AlertChips";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Table,
@@ -18,8 +18,6 @@ import {
   formatShortDate,
   isDelayedDetection,
 } from "@/lib/alertDates";
-import { TONE_LABEL, getAlertMeta } from "@/lib/alertMeta";
-import { cn } from "@/lib/utils";
 
 interface Props {
   alerts: Alert[];
@@ -144,12 +142,10 @@ export function AlertsTable({
               {a.name ?? "—"}
             </TableCell>
             <TableCell>
-              <Badge variant="secondary" className="text-sm">
-                {getAlertMeta(a).label}
-              </Badge>
+              <AlertKindChip alert={a} />
             </TableCell>
             <TableCell>
-              <ToneChip alert={a} />
+              <AlertToneCell alert={a} />
             </TableCell>
             <TableCell className="text-right tabular-nums font-semibold">
               ${a.trigger_price}
@@ -164,38 +160,6 @@ export function AlertsTable({
   );
 }
 
-/* ─── ToneChip — directional tone badge for the alerts table ────────────── */
-/* Compact pill: arrow icon + word ("Bullish" / "Bearish" / "Allerta" /
- * "Neutro"). Skips rendering for `tone === "neutral"` so legacy rows
- * without direction (e.g. a Composite without a tone-bearing kind, or a
- * pre-direction price alert) don't get a misleading "Neutro" chip in
- * what's otherwise a directional column. */
-function ToneChip({ alert }: { alert: Alert }) {
-  const meta = getAlertMeta(alert);
-  if (meta.tone === "neutral") {
-    return <span className="text-xs text-muted-foreground/60">—</span>;
-  }
-  const Icon =
-    meta.tone === "bullish"
-      ? TrendingUp
-      : meta.tone === "bearish"
-        ? TrendingDown
-        : Minus;
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm border text-[11px] font-semibold uppercase tracking-wider whitespace-nowrap",
-        meta.tone === "bullish" &&
-          "border-emerald-300/70 dark:border-emerald-700/60 text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40",
-        meta.tone === "bearish" &&
-          "border-rose-300/70 dark:border-rose-700/60 text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40",
-        meta.tone === "warning" &&
-          "border-amber-300/70 dark:border-amber-700/60 text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40",
-      )}
-      title={`Tono semantico: ${TONE_LABEL[meta.tone].toLowerCase()}`}
-    >
-      <Icon className="h-3 w-3" />
-      {TONE_LABEL[meta.tone]}
-    </span>
-  );
-}
+// ToneChip + Kind badge moved into the shared `AlertChips` module so
+// the alerts table, the stock-detail history card, and the popup all
+// render identical chips. See `frontend/src/components/AlertChips.tsx`.
