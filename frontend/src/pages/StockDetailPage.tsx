@@ -124,11 +124,15 @@ export default function StockDetailPage() {
       {/* Four side-by-side cards: Fundamentals | Valuation+KPIs | News | Analyst.
           Weighted columns `[1.5fr_1fr_1fr_1fr]` give Fundamentals ~33% (it has
           a 7-column earnings table that needs the breathing room) and the
-          other three each ~22%. Per FundamentalsCard's no-scroll constraint,
-          it sets the row floor; the other three cards (Valuation, News,
-          Analyst) all have internal scrollers / max-h caps that absorb
-          extra vertical space gracefully. */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1.5fr_1fr_1fr_1fr] gap-3">
+          other three each ~22%.
+          Fixed `lg:h-[640px]` row height: previously the row stretched to
+          fit FundamentalsCard's full earnings table (could be 25 rows ≈
+          1100px tall), dragging every sibling along and producing a wall
+          of cards. Capping the row at a reasonable height makes
+          Fundamentals scroll inside its body, lets News fit ~7 items
+          without scroll, and gives Analyst room for consensus + bar +
+          recent actions without leaving Valuation feeling under-filled. */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1.5fr_1fr_1fr_1fr] gap-3 lg:h-[640px]">
         <FundamentalsCard ticker={ticker} />
         <MicroDataCard ticker={ticker} stock={d.stock} kpis={d.kpis} />
         <NewsCard ticker={ticker} />

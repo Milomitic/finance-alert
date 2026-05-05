@@ -250,7 +250,7 @@ function AnnualTabBody({
       <div style={{ height: 200 }} className="shrink-0">
         <MiniTrendChart data={chartData} hasEstimate={hasEstimate} />
       </div>
-      <div className="mt-2">
+      <div className="mt-2 flex-1 min-h-0 overflow-y-auto pr-1 -mr-1">
         <table className="w-full text-[13px] tabular-nums">
           <thead className="text-sm text-muted-foreground uppercase sticky top-0 bg-card z-10">
             <tr>
@@ -376,7 +376,7 @@ function QuarterlyTabBody({
       <div style={{ height: 200 }} className="shrink-0">
         <MiniTrendChart data={chartData} hasEstimate={hasEstimate} />
       </div>
-      <div className="mt-2">
+      <div className="mt-2 flex-1 min-h-0 overflow-y-auto pr-1 -mr-1">
         <table className="w-full text-[13px] tabular-nums">
           <thead className="text-sm text-muted-foreground uppercase sticky top-0 bg-card z-10">
             <tr>
@@ -579,9 +579,11 @@ export function FundamentalsCard({ ticker }: Props) {
           ))}
         </div>
 
-        {/* Body — chart (fixed 200px) + table inline. No flex-1 / min-h-0
-            chain anymore: the card grows to fit content per user request. */}
-        <div className="flex flex-col">
+        {/* Body — chart (fixed 200px shrink-0) + table fills remaining row
+            space and scrolls internally. Required because the parent grid
+            now caps the row at `lg:h-[640px]` (StockDetailPage); without
+            this chain the table would overflow the card's bottom edge. */}
+        <div className="flex-1 min-h-0 flex flex-col">
           {effective === "annual" && hasAnnual && (
             <AnnualTabBody annual={f.annual} earnings={f.earnings} />
           )}
