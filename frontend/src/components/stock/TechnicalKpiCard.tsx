@@ -53,16 +53,18 @@ const GREEN = "text-emerald-600 dark:text-emerald-400";
 const RED = "text-rose-600 dark:text-rose-400";
 const AMBER = "text-amber-600 dark:text-amber-400";
 
-type SentimentScore = -3 | -2 | -1 | 0 | 1 | 2 | 3;
+// 5-step scale: bear / lieve bear / neutrale / lieve bull / bull. The middle
+// cell is the explicit "neutrale" indicator. Was 7 steps (±3); the tighter
+// scale reads better on the compact inline bar and better matches the user's
+// mental model where ±2 is "strong" and ±1 is "mild".
+type SentimentScore = -2 | -1 | 0 | 1 | 2;
 
 const SENTIMENT_LABEL: Record<SentimentScore, string> = {
-  [-3]: "Forte bearish",
-  [-2]: "Bearish",
-  [-1]: "Lieve bearish",
+  [-2]: "Forte bearish",
+  [-1]: "Bearish",
   [0]: "Neutrale",
-  [1]: "Lieve bullish",
-  [2]: "Bullish",
-  [3]: "Forte bullish",
+  [1]: "Bullish",
+  [2]: "Forte bullish",
 };
 
 interface KpiRow {
@@ -71,7 +73,7 @@ interface KpiRow {
   display: string;
   /** Static metric definition shown at the top of the tooltip. */
   tip: string;
-  /** Bull/bear sentiment in [-3, +3]. Undefined for non-directional rows
+  /** Bull/bear sentiment in [-2, +2]. Undefined for non-directional rows
    *  (Vol oggi, BB width). */
   score?: SentimentScore;
   /** Free-form context appended to the tooltip's reason block. Same scale
@@ -121,11 +123,10 @@ function classFromScore(score: SentimentScore | undefined): string {
 }
 
 /** SMA score — graduated by % gap between price and the moving average.
- *  The sma20 / sma50 / sma200 windows all use the same brackets:
- *   ±10%+   = ±3 (strong)
- *   ±3-10%  = ±2
- *   ±0.5-3% = ±1
- *   ±<0.5%  =  0 (effectively on the line)
+ *  All SMA windows share the same brackets:
+ *   ±5%+    = ±2 (strong)
+ *   ±1-5%   = ±1 (mild)
+ *   ±<1%    =  0 (effectively on the line)
  */
 function smaScore(
   sma: number | null,
@@ -134,105 +135,91 @@ function smaScore(
   if (sma == null || lastClose == null || sma <= 0) return 0;
   const gap = ((lastClose - sma) / sma) * 100;
   const abs = Math.abs(gap);
-  if (abs < 0.5) return 0;
+  if (abs < 1) return 0;
   const dir = gap > 0 ? 1 : -1;
-  if (abs >= 10) return (dir * 3) as SentimentScore;
-  if (abs >= 3) return (dir * 2) as SentimentScore;
+  if (abs >= 5) return (dir * 2) as SentimentScore;
   return (dir * 1) as SentimentScore;
 }
 
 /** RSI score — contrarian/reversal interpretation:
- *   <20  → +3  deep oversold (strong reversal-up potential)
- *   <30  → +2
- *   <40  → +1
- *   40-60 → 0
- *   60-70 → -1
- *   70-80 → -2
- *   >=80  → -3 deep overbought
+ *   <30   → +2  oversold (strong reversal-up potential)
+ *   30-45 → +1  approaching oversold
+ *   45-55 → 0   neutral
+ *   55-70 → -1  approaching overbought
+ *   ≥70   → -2  overbought
  */
 function rsiScore(rsi: number | null): SentimentScore {
   if (rsi == null || !Number.isFinite(rsi)) return 0;
-  if (rsi < 20) return 3;
   if (rsi < 30) return 2;
-  if (rsi < 40) return 1;
-  if (rsi <= 60) return 0;
+  if (rsi < 45) return 1;
+  if (rsi <= 55) return 0;
   if (rsi <= 70) return -1;
-  if (rsi <= 80) return -2;
-  return -3;
+  return -2;
 }
 
 /** MACD line score — combines line-vs-zero (trend regime) with the sign
- *  of the histogram (line vs signal cross). Same-sign = full strength,
- *  opposite sign = weakening cross (mild). */
+ *  of the histogram (line vs signal cross):
+ *    same-sign  → ±2  full strength (line and momentum agree)
+ *    opposite   → ±1  weakening cross (line still on the other side)
+ *    near-zero hist → 0
+ */
 function macdScore(
   line: number | null,
   hist: number | null,
-  lastClose: number | null,
 ): SentimentScore {
   if (line == null || hist == null) return 0;
   if (Math.abs(hist) < 1e-6) return 0;
   const histSign = hist > 0 ? 1 : -1;
   const lineSign = line > 0 ? 1 : line < 0 ? -1 : 0;
-
-  // Normalize histogram magnitude as % of price — different price levels
-  // produce wildly different absolute MACD values otherwise.
-  const histPct =
-    lastClose != null && lastClose > 0
-      ? (Math.abs(hist) / lastClose) * 100
-      : 0;
-
-  // Cross (hist sign != line sign): the line is still on the opposite
-  // side of zero from where the histogram pushes it — a weakening signal.
   if (histSign !== lineSign && lineSign !== 0) {
     return (histSign * 1) as SentimentScore;
   }
-  // Same direction (both above or both below zero) — full strength.
-  if (histPct >= 1.0) return (histSign * 3) as SentimentScore;
-  if (histPct >= 0.3) return (histSign * 2) as SentimentScore;
-  return (histSign * 1) as SentimentScore;
+  return (histSign * 2) as SentimentScore;
 }
 
-/** BB %B score — where price sits within the bands.
- *   >110%  → +3 strong breakout above upper
- *   100-110 → +2 above upper band
- *   80-100  → +1 upper half, near top
- *   20-80   →  0 mid-band (neutral)
- *   0-20    → -1 lower half, near bottom
- *   -10-0   → -2 below lower band
- *   <-10%   → -3 strong breakdown below lower
+/** BB %B score — where price sits within the bands:
+ *   >100%  → +2  breakout above upper band
+ *    80-100 → +1  upper half
+ *    20-80  →  0  mid-band
+ *     0-20  → -1  lower half
+ *    <0%    → -2  breakdown below lower band
  */
 function bbPctBScore(pctB: number | null): SentimentScore {
   if (pctB == null || !Number.isFinite(pctB)) return 0;
-  if (pctB > 110) return 3;
   if (pctB > 100) return 2;
   if (pctB > 80) return 1;
   if (pctB >= 20) return 0;
   if (pctB > 0) return -1;
-  if (pctB > -10) return -2;
-  return -3;
+  return -2;
 }
 
-/** 52w high proximity score — green-only (positive scores only). */
+/** 52w high proximity score — green-only:
+ *   <2% from high → +2
+ *   <5%           → +1
+ *   else          → 0
+ */
 function near52wHighScore(
   lastClose: number | null,
   high: number | null,
 ): SentimentScore {
   if (lastClose == null || high == null || high <= 0) return 0;
   const dist = ((high - lastClose) / high) * 100;
-  if (dist < 0.5) return 3;
   if (dist < 2) return 2;
   if (dist < 5) return 1;
   return 0;
 }
 
-/** 52w low proximity score — red-only (negative scores only). */
+/** 52w low proximity score — red-only:
+ *   <2% from low → -2
+ *   <5%          → -1
+ *   else         → 0
+ */
 function near52wLowScore(
   lastClose: number | null,
   low: number | null,
 ): SentimentScore {
   if (lastClose == null || low == null || low <= 0) return 0;
   const dist = ((lastClose - low) / low) * 100;
-  if (dist < 0.5) return -3;
   if (dist < 2) return -2;
   if (dist < 5) return -1;
   return 0;
@@ -346,7 +333,7 @@ export function TechnicalKpiCard({ kpis, indicators }: Props) {
       label: macdFmt,
       display: fmtSigned(macdLine, 3),
       tip: `Linea MACD: differenza tra EMA veloce e EMA lenta. Sopra zero = trend rialzista, sotto = ribassista. Valori grandi indicano forte divergenza tra le medie.`,
-      score: macdScore(macdLine, macdHist, lastClose),
+      score: macdScore(macdLine, macdHist),
       reason: (() => {
         if (macdLine == null || macdHist == null) return undefined;
         const above = macdLine > 0 ? "sopra" : "sotto";
@@ -359,16 +346,18 @@ export function TechnicalKpiCard({ kpis, indicators }: Props) {
       label: "MACD hist",
       display: fmtSigned(macdHist, 3),
       tip: "Istogramma MACD: differenza tra linea MACD e signal line. Positivo = MACD sopra il signal (bullish cross attivo); negativo = sotto (bearish cross).",
-      score:
-        macdHist != null
-          ? macdHist > 0
-            ? Math.abs(macdHist) / Math.max(lastClose ?? 1, 1) > 0.005
-              ? 2
-              : 1
-            : Math.abs(macdHist) / Math.max(lastClose ?? 1, 1) > 0.005
-              ? -2
-              : -1
-          : 0,
+      // ±2 when the divergence is meaningful relative to price (≥0.5%),
+      // ±1 for tiny non-zero values, 0 when essentially flat.
+      score: ((): SentimentScore => {
+        if (macdHist == null) return 0;
+        const denom = Math.max(lastClose ?? 1, 1);
+        const histPct = (Math.abs(macdHist) / denom) * 100;
+        if (histPct < 0.05) return 0;
+        const dir = macdHist > 0 ? 1 : -1;
+        return (histPct >= 0.5
+          ? dir * 2
+          : dir * 1) as SentimentScore;
+      })(),
       reason:
         macdHist != null
           ? `Istogramma ${macdHist > 0 ? "positivo" : macdHist < 0 ? "negativo" : "nullo"}: il MACD è ${
@@ -542,41 +531,44 @@ function KpiRowItem({ row }: { row: KpiRow }) {
   );
 }
 
-/* ─── SentimentBar — inline 6-cell scale ────────────────────────────────── */
-/* Six narrow cells with a center divider. Cells fill outward from center:
- *   - bear side (left half): cells 0,1,2 → scores -3,-2,-1
- *   - bull side (right half): cells 3,4,5 → scores +1,+2,+3
- * Filled cell color = rose for bear, emerald for bull. Empty cells are
- * muted so the bar reads even when sentiment is mild.
+/* ─── SentimentBar — 5-cell scale, bare squares ─────────────────────────── */
+/* Five small square cells in a row, filling outward from center:
+ *   cell -2 -1  0 +1 +2
+ *   bear ─┘ ─┘ neutral └─ └─ bull
  *
- * Width 36px — narrow enough to not crowd the row, wide enough to
- * distinguish the 3 levels per side.
+ * - Filled bear cells: rose (left of center).
+ * - Filled bull cells: emerald (right of center).
+ * - Center cell fills with a muted tone ONLY when score === 0 (acts as
+ *   the explicit "neutrale" indicator).
+ * - Empty cells are transparent. No outer background, no rounded corners
+ *   on the row — the user explicitly asked for "solo i quadratini".
+ *
+ * Each cell is `h-2 w-2` (8×8 px) with `gap-px` between, total ~44 px
+ * wide. Reads clearly without crowding the value cell on the row.
  */
 function SentimentBar({ score }: { score: SentimentScore }) {
   return (
     <div
-      className="inline-flex items-stretch gap-px h-2 w-9 rounded-sm overflow-hidden bg-muted/40 shrink-0"
+      className="inline-flex items-center gap-px shrink-0"
       role="img"
       aria-label={`Sentiment ${SENTIMENT_LABEL[score]}`}
     >
-      {[0, 1, 2, 3, 4, 5].map((i) => {
-        const isLeft = i < 3;
-        // Cell scores: bear half [-3,-2,-1], bull half [+1,+2,+3].
-        const cellScore = isLeft ? -(3 - i) : i - 2;
-        const filled =
-          (score < 0 && isLeft && cellScore >= score) ||
-          (score > 0 && !isLeft && cellScore <= score);
-        return (
-          <span
-            key={i}
-            className={cn(
-              "flex-1",
-              !filled && "bg-transparent",
-              filled && isLeft && "bg-rose-500 dark:bg-rose-400",
-              filled && !isLeft && "bg-emerald-500 dark:bg-emerald-400",
-            )}
-          />
-        );
+      {([-2, -1, 0, 1, 2] as const).map((cellScore) => {
+        // Fill rules:
+        //   - center cell: filled only when overall sentiment is neutral
+        //   - bear cell: filled when score < 0 and the cell sits between
+        //     zero and the score (e.g. score=-1 fills cell -1 only;
+        //     score=-2 fills cells -1 and -2)
+        //   - bull cell: mirror of the above on the right
+        let cls = "";
+        if (cellScore === 0 && score === 0) {
+          cls = "bg-muted-foreground/55 dark:bg-muted-foreground/45";
+        } else if (cellScore < 0 && score < 0 && cellScore >= score) {
+          cls = "bg-rose-500 dark:bg-rose-400";
+        } else if (cellScore > 0 && score > 0 && cellScore <= score) {
+          cls = "bg-emerald-500 dark:bg-emerald-400";
+        }
+        return <span key={cellScore} className={cn("h-2 w-2", cls)} />;
       })}
     </div>
   );
@@ -628,10 +620,6 @@ function KpiTooltipBody({ row }: { row: KpiRow }) {
             )}
           >
             {SENTIMENT_LABEL[row.score as SentimentScore]}
-          </span>
-          <span className="ml-auto tabular-nums text-muted-foreground/70">
-            {(row.score as number) > 0 ? "+" : ""}
-            {row.score} / ±3
           </span>
         </div>
       )}
