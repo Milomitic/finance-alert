@@ -181,7 +181,15 @@ export default function StockDetailPage() {
               </div>
             ) : (
               <ResizableSection defaultHeight={460} minHeight={240} label="Price">
+                {/* `key={range}` forces a clean remount on range switch
+                    (1m / 3m / 6m / 1y / 5y / all). Without it, the data
+                    effects of all three charts fire fitContent() in
+                    arbitrary order and cross-propagate stale logical
+                    ranges to each other, "shrinking" the visible window
+                    until it stabilizes. Remounting kills the race
+                    entirely — fresh chart, fresh data, fit once. */}
                 <PriceChart
+                  key={range}
                   ohlcv={d.ohlcv}
                   indicators={d.indicators}
                   styles={{
@@ -211,6 +219,7 @@ export default function StockDetailPage() {
                   label={`RSI(${d.indicators.periods?.rsi ?? 14})`}
                 >
                   <RsiPanel
+                    key={range}
                     rsi14={d.indicators.rsi14}
                     color={indicators.rsi.color}
                     width={indicators.rsi.width}
@@ -237,6 +246,7 @@ export default function StockDetailPage() {
                   }
                 >
                   <MacdPanel
+                    key={range}
                     line={d.indicators.macd_line ?? []}
                     signal={d.indicators.macd_signal ?? []}
                     hist={d.indicators.macd_hist ?? []}
