@@ -23,14 +23,18 @@ def run_scan_alerts() -> None:
         chunk_size = 100
         for i in range(0, len(all_stocks), chunk_size):
             chunk = all_stocks[i : i + chunk_size]
-            # Determine period per chunk: '1y' if any stock is empty/stale, else '1mo'
+            # Determine period per chunk: deep backfill ('10y' = ~2520 trading
+            # days) when any stock is empty/stale, otherwise cheap '1mo'
+            # incremental. Ten years lets the 5Y chart range work out of
+            # the box AND leaves headroom for long-window indicators
+            # (SMA200, MACD 26/52/18) at any view.
             cutoff = date.today() - timedelta(days=30)
             needs_backfill = any(
                 latest_ohlcv_date(db, s.id) is None
                 or latest_ohlcv_date(db, s.id) < cutoff
                 for s in chunk
             )
-            period = "1y" if needs_backfill else "1mo"
+            period = "10y" if needs_backfill else "1mo"
             try:
                 fetch_and_upsert(db, chunk, period=period)
                 db.commit()

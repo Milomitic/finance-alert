@@ -79,7 +79,12 @@ def _run_scan_in_background(stock_ids: list[int] | None) -> None:
                     latest_ohlcv_date(db, s.id) is None or latest_ohlcv_date(db, s.id) < cutoff
                     for s in chunk
                 )
-                period = "1y" if needs_backfill else "1mo"
+                # Initial backfill grabs 10 years of bars so the new 5Y chart
+                # range works out of the box and historical-analysis surfaces
+                # (5Y view + long-window indicators like SMA200) have enough
+                # data to compute. Incremental scans keep the cheap "1mo"
+                # fetch — they only need the last few bars for evaluation.
+                period = "10y" if needs_backfill else "1mo"
                 try:
                     fetch_and_upsert(db, chunk, period=period)
                     db.commit()

@@ -216,8 +216,9 @@ def _extract_quarterly(qinc_stmt: Any) -> list[QuarterlyPoint]:
             eps=_safe_float(_row_at(qinc_stmt, "Diluted EPS", col)),
         ))
     rows.reverse()
-    # Cap at 8 quarters
-    return rows[-8:]
+    # Cap at 20 quarters (~5y) to mirror the earnings_dates cap and give
+    # the FundamentalsCard longer-trend visibility.
+    return rows[-20:]
 
 
 def _extract_earnings(
@@ -258,7 +259,11 @@ def _extract_earnings(
             next_estimate = est
             next_rev_estimate = rev_est
 
-    historical = historical[-8:]
+    # 20 quarters ≈ 5 years of earnings history. Bumped from 8 (=2y) so the
+    # FundamentalsCard can show longer trends without re-fetching. yfinance
+    # typically returns 12-16 rows so this cap usually doesn't bite, but
+    # keeps the L2 payload bounded against pathological responses.
+    historical = historical[-20:]
     return historical, next_date, next_estimate, next_rev_estimate
 
 

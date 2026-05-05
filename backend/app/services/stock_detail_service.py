@@ -17,7 +17,7 @@ from app.models import Alert, OhlcvDaily, Rule, Stock, Watchlist, WatchlistItem
 
 
 RANGE_DAYS: dict[str, int | None] = {
-    "1w": 7, "1m": 30, "3m": 90, "6m": 180, "1y": 365, "all": None,
+    "1m": 30, "3m": 90, "6m": 180, "1y": 365, "5y": 5 * 365, "all": None,
 }
 
 
@@ -110,17 +110,18 @@ class _IndicatorBundle:
 # 1m (~22 trading days): aggressive short windows so the 30-day chart shows
 #   meaningful indicator movement (a 200-period SMA on 22 bars is all NaN).
 # 3m (~66): step up to standard fast/mid windows.
-# 6m, 1y, all: the original "long" defaults; SMA200 makes sense beyond 6m.
+# 6m, 1y: the standard "long" defaults; SMA200 makes sense beyond 6m.
+# 5y (~1260 trading days): same shape as `all` — both are "long-horizon"
+#   views, the only difference is whether the user wants to bound the
+#   visible window to a recent 5y or see everything stored. SMA200 sits
+#   roughly at the 16% mark of a 5y view, exactly where it should.
+# all: full history, longest windows.
 _RANGE_PERIODS: dict[str, IndicatorPeriods] = {
-    # 1w (~5 trading days): minimum-viable windows so the chart shows SOMETHING
-    # for indicators (a 5-day SMA on 5 bars is exactly 1 valid point at the
-    # tail; 200-period SMA would be all NaN). Useful mainly for the price
-    # candles + Bollinger envelope, not for trend-following overlays.
-    "1w":  IndicatorPeriods(sma_fast=2,  sma_mid=3,  sma_slow=5,   rsi=3,  bb_period=5,  bb_k=2.0, macd_fast=3,  macd_slow=6,  macd_signal=2),
     "1m":  IndicatorPeriods(sma_fast=5,  sma_mid=10, sma_slow=20,  rsi=7,  bb_period=10, bb_k=2.0, macd_fast=6,  macd_slow=13, macd_signal=5),
     "3m":  IndicatorPeriods(sma_fast=10, sma_mid=20, sma_slow=50,  rsi=14, bb_period=20, bb_k=2.0, macd_fast=12, macd_slow=26, macd_signal=9),
     "6m":  IndicatorPeriods(sma_fast=20, sma_mid=50, sma_slow=100, rsi=14, bb_period=20, bb_k=2.0, macd_fast=12, macd_slow=26, macd_signal=9),
     "1y":  IndicatorPeriods(sma_fast=20, sma_mid=50, sma_slow=200, rsi=14, bb_period=20, bb_k=2.0, macd_fast=12, macd_slow=26, macd_signal=9),
+    "5y":  IndicatorPeriods(sma_fast=50, sma_mid=100, sma_slow=200, rsi=21, bb_period=50, bb_k=2.0, macd_fast=26, macd_slow=52, macd_signal=18),
     "all": IndicatorPeriods(sma_fast=50, sma_mid=100, sma_slow=200, rsi=21, bb_period=50, bb_k=2.0, macd_fast=26, macd_slow=52, macd_signal=18),
 }
 

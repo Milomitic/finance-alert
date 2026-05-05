@@ -108,8 +108,13 @@ def fetch_and_upsert(
         return FetchResult()
     tickers = [s.ticker for s in stocks]
 
-    # Map yfinance period string to a days-back number for Stooq fallback
-    days_for_period = {"1mo": 35, "3mo": 100, "6mo": 200, "1y": 380, "2y": 760}.get(period, 380)
+    # Map yfinance period string to a days-back number for Stooq fallback.
+    # `10y` and `max` cover the deep-backfill paths added when we extended
+    # the chart range to 5Y (see api/alerts.py + scheduler/jobs/scan_alerts.py).
+    days_for_period = {
+        "1mo": 35, "3mo": 100, "6mo": 200,
+        "1y": 380, "2y": 760, "5y": 1900, "10y": 3800, "max": 6000,
+    }.get(period, 380)
 
     if yfinance_health.is_open():
         logger.info(f"[ohlcv] yfinance breaker OPEN — using Stooq fallback for {len(tickers)} tickers")
