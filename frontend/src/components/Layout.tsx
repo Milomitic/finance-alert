@@ -1,4 +1,13 @@
-import { ListChecks, LayoutDashboard, Filter, Bell, Sliders, Settings, LogOut } from "lucide-react";
+import {
+  Bell,
+  CalendarDays,
+  Filter,
+  LayoutDashboard,
+  ListChecks,
+  LogOut,
+  Settings,
+  Sliders,
+} from "lucide-react";
 import { NavbarSearch } from "@/components/NavbarSearch";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 
@@ -20,6 +29,7 @@ const NAV: NavEntry[] = [
   // /stocks route stays; the page is conceptually a screener (filters +
   // ranking) so that's the label. Filter icon to telegraph the function.
   { to: "/stocks", label: "Screener", icon: Filter, enabled: true },
+  { to: "/calendar", label: "Calendario", icon: CalendarDays, enabled: true },
   { to: "/alerts", label: "Alerts", icon: Bell, enabled: true },
   { to: "/rules", label: "Regole", icon: Sliders, enabled: true },
   { to: "/settings", label: "Impostazioni", icon: Settings, enabled: false },

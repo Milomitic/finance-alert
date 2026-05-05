@@ -685,3 +685,46 @@ export interface TopPicks {
   risk: RiskTier | null;
   items: TopPickItem[];
 }
+
+// === Economic calendar ===
+
+/** Macro-event importance tier. Drives chip color and the importance filter
+ *  pill set on the calendar page. Mirrors the backend Pydantic schema. */
+export type MacroImportance = "high" | "medium" | "low";
+
+export interface EarningsEvent {
+  /** ISO YYYY-MM-DD — the trading day of the release. */
+  date: string;
+  /** Discriminator. */
+  kind: "earnings";
+  ticker: string;
+  name: string;
+  eps_estimate: number | null;
+  revenue_estimate: number | null;
+  sector: string | null;
+  market_cap: number | null;
+}
+
+export interface MacroEvent {
+  date: string;
+  kind: "macro";
+  /** Human-readable label, e.g. "FOMC rate decision", "US CPI release". */
+  label: string;
+  importance: MacroImportance;
+  /** Two-letter region code: "US" | "EU" | "UK" | "JP" | etc. */
+  region: string;
+}
+
+/** Discriminated union over the `kind` tag — narrowing on `kind` gives full
+ *  field type safety in components without runtime checks. */
+export type CalendarEvent = EarningsEvent | MacroEvent;
+
+export interface Calendar {
+  /** ISO date — start of the requested range (inclusive). */
+  from: string;
+  /** ISO date — end of the requested range (inclusive). */
+  to: string;
+  /** Sorted ascending by date, then earnings-first within a date, then
+   *  macros by descending importance (per backend contract). */
+  events: CalendarEvent[];
+}

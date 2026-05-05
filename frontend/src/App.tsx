@@ -4,6 +4,7 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import Layout from "@/components/Layout";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import AlertsPage from "@/pages/AlertsPage";
+import CalendarPage from "@/pages/CalendarPage";
 import HomePage from "@/pages/HomePage";
 import LoginPage from "@/pages/LoginPage";
 import RulesPage from "@/pages/RulesPage";
@@ -28,6 +29,7 @@ export default function App() {
         <Route path="/watchlists/new" element={<WatchlistDetailPage />} />
         <Route path="/watchlists/:id" element={<WatchlistDetailPage />} />
         <Route path="/alerts" element={<AlertsPage />} />
+        <Route path="/calendar" element={<CalendarPage />} />
         <Route path="/stocks" element={<StocksBrowserPage />} />
         <Route path="/stocks/:ticker" element={<StockDetailPage />} />
         <Route
