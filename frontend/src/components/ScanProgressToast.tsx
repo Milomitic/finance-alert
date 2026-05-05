@@ -45,6 +45,17 @@ import { cn } from "@/lib/utils";
 const POST_COMPLETION_VISIBLE_MS = 30_000;
 const TICK_MS = 1_000;
 
+/* Empirical baseline rates for the initial ETA — measured across recent
+ * production scans on the dev box. Used as priors only: as soon as the
+ * actual run produces a few heartbeats, the live (done/elapsed) rate
+ * takes over. This means the user sees a credible ETA from second one,
+ * not a "—" or null. */
+const BASELINE_FETCHING_BARS_PER_SEC = 4.0;    // ~4 stocks/sec while fetching OHLCV from yfinance (with healthy rate)
+const BASELINE_EVALUATING_BARS_PER_SEC = 60.0; // ~60 stocks/sec while evaluating rules (CPU-bound, no I/O)
+/* When neither phase is reported (data not yet flowed), assume the slower
+ * fetching phase — better to overestimate than to under-promise. */
+const BASELINE_OVERALL_BARS_PER_SEC = BASELINE_FETCHING_BARS_PER_SEC;
+
 function formatSecs(sec: number): string {
   const s = Math.max(0, Math.round(sec));
   if (s < 60) return `${s}s`;
@@ -66,6 +77,44 @@ function elapsedSeconds(status: ScanStatusInfo, nowMs: number): number {
     );
   }
   return Math.max(0, (nowMs - startedMs) / 1000);
+}
+
+/** ETA in seconds remaining. Three tiers of estimate, picked in order:
+ *
+ *   1. Live rate from actual progress: `done / elapsed` — kicks in as soon
+ *      as the worker has reported ≥1 heartbeat AND ≥1 second of elapsed
+ *      time.
+ *   2. Baseline rate by phase: fixed prior (~4 stocks/sec for fetching,
+ *      ~60 for evaluating) using `progress_total` as the denominator.
+ *      Used during the first second or before the first heartbeat — the
+ *      previous version returned null here, leading to a confusing
+ *      "no ETA" state for the first few seconds of every scan.
+ *   3. null only when even `progress_total` isn't known yet (theoretical
+ *      edge case — backend reports total before the first stock is
+ *      processed).
+ */
+function estimateEtaSec(status: ScanStatusInfo, elapsed: number): number | null {
+  const total = status.progress_total;
+  const done = status.progress_done;
+  if (total <= 0) return null;
+  const remaining = Math.max(0, total - done);
+  if (remaining <= 0) return 0;
+
+  // Tier 1: live rate, only credible after ~1 second + ≥1 stock done.
+  if (done > 0 && elapsed >= 1) {
+    const rate = done / elapsed;
+    if (rate > 0) return remaining / rate;
+  }
+
+  // Tier 2: baseline rate by phase. The numerator (remaining) is the
+  // count of stocks still to process at the chosen baseline rate.
+  const baseline =
+    status.phase === "fetching"
+      ? BASELINE_FETCHING_BARS_PER_SEC
+      : status.phase === "evaluating"
+        ? BASELINE_EVALUATING_BARS_PER_SEC
+        : BASELINE_OVERALL_BARS_PER_SEC;
+  return remaining / baseline;
 }
 
 export function ScanProgressToast() {
@@ -125,6 +174,12 @@ export function ScanProgressToast() {
       ? Math.round((status.progress_done / status.progress_total) * 100)
       : 0;
   const isStale = status.is_stale;
+  // ETA shown to the user — credible from second one because we fall
+  // back to per-phase baseline rates while the live rate isn't computable
+  // yet. Only null in the rare window between scan-start and first
+  // progress_total report from the backend.
+  const etaSec =
+    isRunning && !isStale ? estimateEtaSec(status, elapsed) : null;
 
   // Visual state per condition. Border + accent color drive the at-a-glance
   // read; iconography reinforces.
@@ -154,11 +209,15 @@ export function ScanProgressToast() {
           ? CheckCircle2
           : AlertCircle;
 
+  // Solid backgrounds (no opacity, no backdrop-blur). The previous semi-
+  // transparent fills ("/95" / "/30" / "/5") let the page bleed through —
+  // the toast read as a faint tint, not a discrete surface. Per user:
+  // "sfondo del toast persistente per scan senza opacità".
   const accentClass: Record<typeof variant, string> = {
-    running: "border-primary/50 bg-primary/5",
-    stale: "border-amber-400/70 bg-amber-50/95 dark:bg-amber-950/30",
-    success: "border-emerald-400/60 bg-emerald-50/95 dark:bg-emerald-950/30",
-    failed: "border-rose-400/70 bg-rose-50/95 dark:bg-rose-950/30",
+    running: "border-primary/60 bg-card",
+    stale: "border-amber-400 bg-amber-50 dark:bg-amber-950",
+    success: "border-emerald-400 bg-emerald-50 dark:bg-emerald-950",
+    failed: "border-rose-400 bg-rose-50 dark:bg-rose-950",
   };
 
   const iconClass: Record<typeof variant, string> = {
@@ -203,7 +262,7 @@ export function ScanProgressToast() {
     >
       <div
         className={cn(
-          "rounded-lg border-2 shadow-xl backdrop-blur-sm cursor-pointer",
+          "rounded-lg border-2 shadow-xl cursor-pointer",
           "transition-shadow hover:shadow-2xl",
           accentClass[variant],
         )}
@@ -224,9 +283,20 @@ export function ScanProgressToast() {
               <span className="text-sm font-semibold leading-tight">
                 {headlineByVariant[variant]}
               </span>
-              <span className="text-[11px] text-muted-foreground tabular-nums">
+              <span
+                className="text-[11px] text-muted-foreground tabular-nums"
+                title="Tempo trascorso dall'avvio"
+              >
                 {formatSecs(elapsed)}
               </span>
+              {etaSec != null && etaSec > 0 && (
+                <span
+                  className="text-[11px] text-muted-foreground tabular-nums"
+                  title="Stima del tempo residuo. Calibrato sulla velocità misurata o, all'avvio, su un valore di riferimento per la fase corrente."
+                >
+                  · ETA ~{formatSecs(etaSec)}
+                </span>
+              )}
               {dismissCountdown != null && (
                 <span
                   className="ml-auto text-[10px] uppercase tracking-wider text-muted-foreground/70 tabular-nums"

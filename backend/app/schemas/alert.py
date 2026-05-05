@@ -1,10 +1,27 @@
 """Alerts request/response schemas."""
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 _VALID_KINDS = {"rsi_oversold", "rsi_overbought", "golden_cross", "death_cross"}
+
+
+def _ensure_utc(v: datetime | None) -> datetime | None:
+    """Tag naive datetimes as UTC so Pydantic emits the Z suffix on the wire.
+
+    SQLite's `func.now()` (used as `server_default` on `started_at`) returns
+    a naive UTC datetime — the value IS UTC but `tzinfo` is None. Without
+    this coercion Pydantic serializes "2026-05-05T15:43:41" with no
+    timezone marker, JS parses ISO strings without tz as LOCAL time, and
+    the frontend sees a 2-hour offset (CEST = UTC+2) for elapsed durations.
+    The classic "scan elapsed jumped to 120m the instant it started" bug.
+    """
+    if v is None:
+        return None
+    if v.tzinfo is None:
+        return v.replace(tzinfo=UTC)
+    return v
 
 
 class AlertOut(BaseModel):
@@ -89,6 +106,15 @@ class ScanStatusOut(BaseModel):
     # Heartbeat: last time the worker reported any progress. NULL only for very
     # old runs created before the column existed (migration-back-compat).
     last_progress_at: datetime | None = None
+
+    # Tag SQLite's naive UTC datetimes as aware UTC so Pydantic emits the
+    # Z suffix → JS Date.parse interprets correctly (without this the
+    # frontend sees a 120-min offset on CEST clocks the moment a scan
+    # starts, because naive ISO strings are parsed as local time).
+    @field_validator("started_at", "completed_at", "last_progress_at", mode="before")
+    @classmethod
+    def _tz_utc(cls, v: datetime | None) -> datetime | None:
+        return _ensure_utc(v)
     progress_done: int = 0
     progress_total: int = 0
     stocks_scanned: int | None = None
