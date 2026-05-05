@@ -2,12 +2,13 @@ import {
   Building2,
   CalendarDays,
   ExternalLink,
+  Factory,
   Globe,
   MapPin,
   User,
   Users,
 } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import type { Stock } from "@/api/types";
 import { Card, CardContent } from "@/components/ui/card";
@@ -21,28 +22,28 @@ import { cn } from "@/lib/utils";
  * row (fundamentals/valuation/news/analyst). The card has two halves on
  * desktop:
  *
- *   ┌──────────────────────────────────────────────────────────┐
- *   │  [Description block]                  │  [Anagrafica]    │
- *   │  Long-form company summary — clamped  │  Sede   Milano   │
- *   │  to 4 lines + "Mostra tutto" button   │  CEO    G. Doe   │
- *   │  on overflow.                         │  Dipend. 15.2k    │
- *   │                                       │  Sito  example.it │
- *   └──────────────────────────────────────────────────────────┘
+ *   ┌────────────────────────────────────────────────────────────┐
+ *   │  PROFILO SOCIETÀ                                            │
+ *   │                                                             │
+ *   │  Long-form summary in 2-3 paragraphs   │  SEDE  Seattle...  │
+ *   │  (split on segment / topic transitions │  CEO   🇺🇸 B. Diller│
+ *   │  for readability)                      │  IND.  Hotels, …   │
+ *   │  [Mostra tutto] when clamped           │  BORSA NASDAQ      │
+ *   │                                        │  DIP.  16k         │
+ *   │                                        │  WEB   expedia.com │
+ *   └────────────────────────────────────────────────────────────┘
  *
- * On narrow viewports the columns stack vertically. The whole card hides
- * itself when neither a description nor any anagrafica field is available
- * — preserving vertical space for stocks where yfinance's info dict is
- * sparse (small caps, foreign listings).
- *
- * Why a separate card from FundamentalsCard:
- *   - Different shape of data: this is identity / textual; Fundamentals is
- *     numerical time series.
- *   - Different scroll behavior: the description should EXPAND on demand
- *     (clamp + click-to-expand), not be tucked into a horizontally-scrollable
- *     stat strip.
- *   - Persistent context: the user reading the chart benefits from "what
- *     does this company actually do" being visible without clicking
- *     anything.
+ * V2 changes:
+ *   - Dropped the inline "sector + headquarters" pills from the title row —
+ *     redundant with the right column which already shows them in full.
+ *   - Right column is now a single-column ordered definition list (was a
+ *     2-col grid that split awkwardly when fields were missing). Order
+ *     follows a "where → who → what → year → link" reading sequence.
+ *   - Description splits into paragraphs on yfinance's typical segment-
+ *     transition phrases ("The company also...", "The B2B segment...",
+ *     "In addition...") so 6-sentence walls of text become 2-3 readable
+ *     groups.
+ *   - Font sizes bumped: description 13→14px, anagrafica values 13→14px.
  */
 
 interface Props {
@@ -52,8 +53,6 @@ interface Props {
    *  fall back when yfinance returns nothing for the profile fields. */
   stock: Stock;
 }
-
-const CLAMP_CLASS_4_LINES = "line-clamp-4";
 
 export function CompanyOverviewCard({ ticker, stock }: Props) {
   const q = useStockFundamentals(ticker);
@@ -70,6 +69,13 @@ export function CompanyOverviewCard({ ticker, stock }: Props) {
   const employees = profile?.employees ?? null;
   const ceo = profile?.ceo ?? null;
   const founded = profile?.founded ?? null;
+
+  // Pre-split the description into paragraphs once. Memoized so the heavy
+  // regex work doesn't run on every render (description doesn't change).
+  const paragraphs = useMemo(
+    () => (description ? splitIntoParagraphs(description) : []),
+    [description],
+  );
 
   // Hide the card entirely when yfinance gave us nothing AND the catalog
   // doesn't add value. The 5-card row above already shows ticker/sector.
@@ -94,113 +100,92 @@ export function CompanyOverviewCard({ ticker, stock }: Props) {
     return null;
   }
 
+  // Decide whether to show the "Mostra tutto" toggle. The clamp visually
+  // caps the description at ~5 short paragraphs; only show the toggle if
+  // there's enough text that we'd actually be hiding content.
+  const totalChars = description?.length ?? 0;
+  const showExpandToggle = totalChars > 320;
+
   return (
     <Card className="overflow-hidden">
       <CardContent className="p-4 sm:p-5">
-        {/* Quick anagrafica chips on the right edge of the title row. Show
-            the most-readable two facts inline at the top so even when the
-            user doesn't read the description, they see "what country" and
-            "how big" at a glance. */}
-        <SectionTitle
-          icon={Building2}
-          label="Profilo società"
-          right={
-            <div className="flex items-center gap-1.5 flex-wrap justify-end">
-              {stock.sector && (
-                <Pill icon={Building2} label={stock.sector} />
-              )}
-              {headquarters && <Pill icon={MapPin} label={headquarters} />}
-            </div>
-          }
-        />
+        <SectionTitle icon={Building2} label="Profilo società" />
 
-        {/* Two-column body: description (left, wide) + anagrafica grid (right). */}
-        <div className="mt-3 grid grid-cols-1 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] gap-4 lg:gap-6">
+        {/* Two-column body: description (left, wide) + anagrafica list (right). */}
+        <div className="mt-4 grid grid-cols-1 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)] gap-5 lg:gap-8">
           {/* ── Description ──────────────────────────────────────────── */}
           <div className="min-w-0">
             {description ? (
               <>
-                <p
+                <div
                   className={cn(
-                    "text-[13px] leading-relaxed text-foreground/85",
-                    !expanded && CLAMP_CLASS_4_LINES,
+                    "space-y-3 text-sm leading-relaxed text-foreground/85",
+                    !expanded && "max-h-[16rem] overflow-hidden relative",
                   )}
                 >
-                  {description}
-                </p>
-                {/* Show toggle only when the description is long enough to
-                    be clamped. We approximate with a character-count
-                    threshold — exact line counts are fiddly without
-                    measuring the DOM, and the cost of an unnecessary
-                    "Mostra tutto" on a borderline-short string is tiny. */}
-                {description.length > 280 && (
+                  {paragraphs.map((p, i) => (
+                    <p key={i}>{p}</p>
+                  ))}
+                  {/* Bottom fade overlay when clamped — softer than a hard
+                      crop, signals "more below" without an aggressive cutoff. */}
+                  {!expanded && showExpandToggle && (
+                    <span
+                      aria-hidden
+                      className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-card to-transparent pointer-events-none"
+                    />
+                  )}
+                </div>
+                {showExpandToggle && (
                   <button
                     type="button"
                     onClick={() => setExpanded((e) => !e)}
-                    className="mt-1 text-[11px] font-semibold uppercase tracking-wider text-primary hover:underline"
+                    className="mt-2 text-xs font-semibold uppercase tracking-wider text-primary hover:underline"
                   >
                     {expanded ? "Comprimi" : "Mostra tutto"}
                   </button>
                 )}
               </>
             ) : (
-              <p className="text-[13px] italic text-muted-foreground">
+              <p className="text-sm italic text-muted-foreground">
                 Descrizione non disponibile per questo titolo.
               </p>
             )}
           </div>
 
-          {/* ── Anagrafica grid ──────────────────────────────────────── */}
-          <dl className="grid grid-cols-2 gap-x-4 gap-y-2.5 self-start">
-            <Field
-              icon={MapPin}
-              label="Sede"
-              value={headquarters}
-              span={2}
-            />
-            {/* CEO row: show the named officer + a small country flag.
-                yfinance doesn't expose CEO nationality directly, so we use
-                the company HQ country (catalog ISO code wins, profile full
-                name is the fallback) as a sensible proxy — most CEOs are
-                citizens of the company's primary domicile. */}
-            {ceo && (
-              <CeoField
-                ceo={ceo}
-                country={stock.country ?? country}
-              />
-            )}
-            <Field
+          {/* ── Anagrafica list ──────────────────────────────────────── */}
+          {/* Single-column definition list. Each row is `[icon · LABEL] :
+              value` aligned on a fixed-width label column so the values
+              line up vertically into a clean column.
+              Order: where → who → what (industria) → market → people →
+              founded → website. This reads like a company card on a
+              business news site. */}
+          <dl className="self-start divide-y divide-border/40">
+            <Row icon={MapPin} label="Sede" value={headquarters} />
+            {ceo && <CeoRow ceo={ceo} country={stock.country ?? country} />}
+            <Row icon={Factory} label="Industria" value={stock.industry} />
+            <Row icon={Globe} label="Borsa" value={stock.exchange || null} />
+            <Row
               icon={Users}
               label="Dipendenti"
               value={formatEmployees(employees)}
             />
-            <Field
+            <Row
               icon={CalendarDays}
               label="Quotata dal"
               value={founded ? String(founded) : null}
             />
-            <Field
-              icon={Globe}
-              label="Borsa"
-              value={stock.exchange || null}
-            />
-            <Field
-              icon={Building2}
-              label="Industria"
-              value={stock.industry}
-            />
             {website && (
-              <div className="col-span-2">
-                <dt className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                  <ExternalLink className="h-3 w-3" />
+              <div className="grid grid-cols-[6.5rem_minmax(0,1fr)] items-baseline gap-3 py-2">
+                <dt className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  <ExternalLink className="h-3 w-3 shrink-0" />
                   Sito web
                 </dt>
-                <dd className="mt-0.5 truncate text-[13px]">
+                <dd className="text-sm truncate">
                   <a
                     href={normalizeUrl(website)}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-primary hover:underline tabular-nums"
+                    className="text-primary hover:underline"
                     title={website}
                   >
                     {prettyHostname(website)}
@@ -215,45 +200,26 @@ export function CompanyOverviewCard({ ticker, stock }: Props) {
   );
 }
 
-/* ─── Pill (compact label with icon) ────────────────────────────────────── */
+/* ─── Anagrafica row — label left (fixed col), value right ──────────────── */
 
-function Pill({
-  icon: Icon,
-  label,
-}: {
-  icon: React.ComponentType<{ className?: string }>;
-  label: string;
-}) {
-  return (
-    <span className="inline-flex items-center gap-1 rounded-md border bg-muted/40 px-1.5 py-0.5 text-[10.5px] font-semibold tracking-wide text-muted-foreground">
-      <Icon className="h-2.5 w-2.5" />
-      <span className="truncate max-w-[14ch]">{label}</span>
-    </span>
-  );
-}
-
-/* ─── Anagrafica field — dt/dd row with icon ────────────────────────────── */
-
-function Field({
+function Row({
   icon: Icon,
   label,
   value,
-  span = 1,
 }: {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   value: string | null;
-  span?: 1 | 2;
 }) {
   if (!value) return null;
   return (
-    <div className={cn(span === 2 ? "col-span-2" : "col-span-1", "min-w-0")}>
-      <dt className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-        <Icon className="h-3 w-3" />
+    <div className="grid grid-cols-[6.5rem_minmax(0,1fr)] items-baseline gap-3 py-2">
+      <dt className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+        <Icon className="h-3 w-3 shrink-0" />
         {label}
       </dt>
       <dd
-        className="mt-0.5 truncate text-[13px] font-medium text-foreground/85 tabular-nums"
+        className="text-sm font-medium text-foreground/90 truncate"
         title={value}
       >
         {value}
@@ -262,9 +228,9 @@ function Field({
   );
 }
 
-/* ─── CEO field with nationality flag ───────────────────────────────────── */
+/* ─── CEO row — same row layout but with a flag glyph next to the name ──── */
 
-function CeoField({
+function CeoRow({
   ceo,
   country,
 }: {
@@ -273,13 +239,13 @@ function CeoField({
 }) {
   const flag = getStockFlagCode(country);
   return (
-    <div className="col-span-2 min-w-0">
-      <dt className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-        <User className="h-3 w-3" />
+    <div className="grid grid-cols-[6.5rem_minmax(0,1fr)] items-baseline gap-3 py-2">
+      <dt className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+        <User className="h-3 w-3 shrink-0" />
         CEO
       </dt>
       <dd
-        className="mt-0.5 flex items-center gap-1.5 text-[13px] font-medium text-foreground/85"
+        className="flex items-center gap-2 text-sm font-medium text-foreground/90 min-w-0"
         title={ceo}
       >
         {flag && (
@@ -288,9 +254,8 @@ function CeoField({
             alt={country ?? ""}
             width={18}
             height={12}
-            // Tiny inline flag — same library used in the StockHeader hero.
-            // The caller already gracefully degrades when the country isn't
-            // known (no flag rendered).
+            // Tiny inline flag matching the StockHeader hero. Hidden when
+            // we don't recognize the country.
             style={{ width: "18px", height: "12px", objectFit: "cover" }}
             className="rounded-[2px] shadow-sm shrink-0"
             aria-hidden
@@ -300,6 +265,81 @@ function CeoField({
       </dd>
     </div>
   );
+}
+
+/* ─── Description paragraph splitter ────────────────────────────────────── */
+
+/* yfinance's `longBusinessSummary` is one continuous paragraph (no `\n\n`)
+ * but follows predictable narrative patterns: an opening "what they do",
+ * then segment-by-segment breakdowns, often closing with a corporate
+ * footer ("incorporated in 1995"). We split on those transitions to recover
+ * the implicit paragraph structure.
+ *
+ * Strategy:
+ *   1. Split into sentences on `. ` (preserving abbreviations is fuzzy but
+ *      OK — the worst case is a slightly awkward break).
+ *   2. Walk sentences and start a new paragraph when we hit a transition
+ *      phrase ("The company also...", "The B2B segment...", "In addition...",
+ *      "The company was founded..."). These are yfinance idioms.
+ *   3. Cap each paragraph at ~3 sentences so dense ones still break.
+ *   4. If after this pass we'd still output a single 6-sentence wall, force
+ *      a break at the midpoint.
+ */
+const TRANSITION_HINTS = [
+  /^the company also\b/i,
+  /^the company offers\b/i,
+  /^the company operates\b/i,
+  /^the company provides\b/i,
+  /^the company was founded\b/i,
+  /^the b2b segment\b/i,
+  /^the b2c segment\b/i,
+  /^the [a-z]+ segment\b/i,
+  /^in addition\b/i,
+  /^additionally\b/i,
+  /^founded in\b/i,
+  /^it (was|is) (incorporated|founded|headquartered)\b/i,
+  /^as of\b/i,
+];
+
+function splitIntoParagraphs(text: string): string[] {
+  // Sentence split — naive but adequate. We keep the period attached.
+  const sentences = text
+    .split(/(?<=[.?!])\s+(?=[A-Z])/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  if (sentences.length <= 2) return [text.trim()];
+
+  const paragraphs: string[] = [];
+  let current: string[] = [];
+  const flush = () => {
+    if (current.length) {
+      paragraphs.push(current.join(" "));
+      current = [];
+    }
+  };
+
+  for (const s of sentences) {
+    const isTransition =
+      current.length > 0 && TRANSITION_HINTS.some((rx) => rx.test(s));
+    if (isTransition || current.length >= 3) {
+      flush();
+    }
+    current.push(s);
+  }
+  flush();
+
+  // Force a break if everything ended up in one paragraph (no transitions
+  // matched + sentence count under 3 — uncommon since the cap above catches
+  // most of these).
+  if (paragraphs.length === 1 && sentences.length >= 4) {
+    const half = Math.ceil(sentences.length / 2);
+    return [
+      sentences.slice(0, half).join(" "),
+      sentences.slice(half).join(" "),
+    ];
+  }
+  return paragraphs;
 }
 
 /* ─── Format helpers ────────────────────────────────────────────────────── */
