@@ -446,6 +446,13 @@ export interface StockNewsItem {
   link: string;
   publisher: string;
   published_at: string | null;
+  /** Server-classified headline sentiment via the finance-keyword
+   *  scorer in `backend/app/services/news_sentiment.py`. The
+   *  classifier biases toward "neutral" — only emits "bullish" /
+   *  "bearish" when there's a decisive signal in the title. Defaults
+   *  to "neutral" for cached pre-sentiment items so the field is
+   *  always present on read. */
+  sentiment?: "bullish" | "neutral" | "bearish";
 }
 
 export interface StockNews {

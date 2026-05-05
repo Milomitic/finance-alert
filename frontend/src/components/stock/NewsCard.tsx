@@ -1,9 +1,37 @@
-import { ExternalLink, Newspaper } from "lucide-react";
+import { ExternalLink, Newspaper, TrendingDown, TrendingUp } from "lucide-react";
 
+import type { StockNewsItem } from "@/api/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { SectionTitle } from "@/components/ui/section-title";
 import { useStockNews } from "@/hooks/useStockNews";
 import { cn } from "@/lib/utils";
+
+/* ─── Sentiment chip rendering ──────────────────────────────────────────── *
+ * The backend classifier (`news_sentiment.py`) tags every headline as
+ * bullish / neutral / bearish via a finance-keyword scorer. The UI shows
+ * a tiny colored dot + arrow for directional sentiment so the user can
+ * scan a list of titles and spot bullish/bearish density at a glance.
+ * Neutral items render no chip — the absence of decoration IS the signal. */
+
+interface SentimentChipMeta {
+  cls: string;
+  Icon: typeof TrendingUp;
+  label: string;
+}
+
+const SENTIMENT_META: Record<NonNullable<StockNewsItem["sentiment"]>, SentimentChipMeta | null> = {
+  bullish: {
+    cls: "border-emerald-300/70 dark:border-emerald-700/60 text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40",
+    Icon: TrendingUp,
+    label: "bullish",
+  },
+  bearish: {
+    cls: "border-rose-300/70 dark:border-rose-700/60 text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40",
+    Icon: TrendingDown,
+    label: "bearish",
+  },
+  neutral: null, // no chip rendered
+};
 
 interface Props {
   ticker: string;
@@ -178,6 +206,28 @@ export function NewsCard({ ticker }: Props) {
                         >
                           {n.publisher}
                         </span>
+                        {/* Sentiment chip — only rendered for directional
+                            classifications (bullish / bearish). Neutral
+                            articles show no chip; the absence is itself the
+                            signal "no decisive sentiment". */}
+                        {n.sentiment && SENTIMENT_META[n.sentiment] && (
+                          (() => {
+                            const meta = SENTIMENT_META[n.sentiment]!;
+                            const SentimentIcon = meta.Icon;
+                            return (
+                              <span
+                                className={cn(
+                                  "inline-flex items-center gap-0.5 px-1 py-0.5 rounded-sm border text-[10px] font-semibold uppercase tracking-wider whitespace-nowrap shrink-0",
+                                  meta.cls,
+                                )}
+                                title={`Sentiment del titolo: ${meta.label} (classificato server-side dal motore parole-chiave finance)`}
+                              >
+                                <SentimentIcon className="h-2.5 w-2.5" />
+                                {meta.label}
+                              </span>
+                            );
+                          })()
+                        )}
                         <span
                           className={cn(
                             "ml-auto px-1.5 py-0.5 rounded font-semibold tabular-nums shrink-0",

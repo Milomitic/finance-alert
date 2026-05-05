@@ -4,6 +4,8 @@ from typing import Any
 
 from loguru import logger
 
+from app.services.news_sentiment import classify_title
+
 NEWS_TTL = timedelta(hours=1)
 _CACHE: dict[str, tuple[datetime, list[dict[str, Any]]]] = {}
 
@@ -53,11 +55,18 @@ def _normalize_yf_item(raw: dict) -> dict[str, Any] | None:
 
     if not title or not link:
         return None
+    title_str = str(title)
     return {
-        "title": str(title),
+        "title": title_str,
         "link": str(link),
         "publisher": str(publisher) if publisher else "Unknown",
         "published_at": published_at,
+        # Server-side keyword-based sentiment ("bullish" | "neutral" |
+        # "bearish") so the UI can render a colored chip without doing
+        # the classification client-side. Persisted into the L2 cache
+        # alongside the rest of the item — a re-fetch is the only way
+        # to update sentiment for a given headline.
+        "sentiment": classify_title(title_str),
     }
 
 

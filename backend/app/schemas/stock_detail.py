@@ -1,6 +1,6 @@
 """Pydantic schemas for /api/stocks/{ticker}/detail and /news."""
 from datetime import date, datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel
 
@@ -283,6 +283,11 @@ class StockNewsItemOut(BaseModel):
     link: str
     publisher: str
     published_at: str | None
+    # Server-classified headline sentiment. "neutral" when the
+    # classifier finds no decisive bull/bear signal in the title,
+    # OR for cached pre-sentiment items (the field defaults to
+    # neutral on missing input — old payloads still validate).
+    sentiment: Literal["bullish", "neutral", "bearish"] = "neutral"
 
 
 class StockNewsOut(BaseModel):
