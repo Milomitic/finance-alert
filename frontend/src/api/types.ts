@@ -703,6 +703,12 @@ export interface EarningsEvent {
   revenue_estimate: number | null;
   sector: string | null;
   market_cap: number | null;
+  // Extras used by the right-pane stock list (split-view detail panel).
+  // Optional — older API responses (pre-calendar-UX-rework) won't have them.
+  forward_pe?: number | null;
+  earnings_growth?: number | null;       // YoY EPS growth, fraction (0.27 = 27%)
+  composite_score?: number | null;       // 0-100
+  risk_tier?: "conservative" | "moderate" | "aggressive" | null;
 }
 
 export interface MacroEvent {

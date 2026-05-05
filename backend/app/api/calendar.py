@@ -111,6 +111,10 @@ def get_calendar(
                 revenue_estimate=e.revenue_estimate,
                 sector=e.sector,
                 market_cap=e.market_cap,
+                forward_pe=e.forward_pe,
+                earnings_growth=e.earnings_growth,
+                composite_score=e.composite_score,
+                risk_tier=e.risk_tier,  # type: ignore[arg-type]
             ))
         elif isinstance(e, MacroEventDC):
             out_events.append(MacroEventOut(

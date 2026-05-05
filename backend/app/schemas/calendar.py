@@ -21,6 +21,12 @@ class EarningsEventOut(BaseModel):
     revenue_estimate: float | None = None
     sector: str | None = None
     market_cap: int | None = None
+    # Extras used by the right-pane stock list. Optional so older clients /
+    # cached responses without these fields still validate.
+    forward_pe: float | None = None
+    earnings_growth: float | None = None       # YoY EPS growth, fraction
+    composite_score: float | None = None       # 0-100 composite score
+    risk_tier: Literal["conservative", "moderate", "aggressive"] | None = None
 
 
 class MacroEventOut(BaseModel):

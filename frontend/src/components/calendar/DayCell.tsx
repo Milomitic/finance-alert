@@ -13,20 +13,21 @@ import { EventChip } from "./EventChip";
 
 /* ─── DayCell — one square in the month grid ────────────────────────────── */
 /* Visual layers, top to bottom:
- *   1. Outer frame — square cell with hairline borders sharing edges with
- *      neighbors (we render the borders on the cell instead of the grid
- *      gap so the today-halo can sit on top of an existing border).
+ *   1. Outer frame — square cell with hairline borders.
  *   2. Today halo — radial gradient + glowing rim, only when this is today.
- *   3. Date number — top-left, monospaced tabular numerals; tracked-out
- *      and small to read like a print artifact.
- *   4. Event stack — vertical column of chips (max 3), then "+N altri"
- *      overflow indicator.
+ *   3. Date number — top-left, monospaced; tracked-out and small.
+ *   4. Event grid — 2-COLUMN grid of chips (max 6 visible) plus a tiny
+ *      "+N" overflow tag. Two columns lets each cell show 6 events
+ *      instead of 3, important once an earnings season clusters tens
+ *      of releases on the same day.
+ *   5. Macros come first in the event order (sorted server-side), so
+ *      the user sees the high-signal anchor (FOMC / CPI / NFP / etc.)
+ *      before the long tail of single-stock earnings.
  *
- * The cell wrapper is a div with role=button so keyboard users can focus
- * + activate it with Enter/Space → open day detail. We can't use an
- * actual <button> because that would create invalid HTML (nested links
- * + buttons inside the chip stack). Per-chip onClick handlers stop
- * propagation when they want to override (earnings chip → stock page).
+ * Out-of-month cells (leading/trailing days of adjacent months) USED to
+ * skip chip rendering — that's the bug where "37 EVENTI" displayed with
+ * no chip preview. Fixed: chips render on every cell that has events;
+ * `inMonth` only controls the cell's overall opacity.
  */
 
 interface DayCellProps {
@@ -37,7 +38,7 @@ interface DayCellProps {
   onSelect: (iso: string) => void;
 }
 
-const CHIP_LIMIT = 3;
+const CHIP_LIMIT = 6;
 
 export const DayCell = forwardRef<HTMLDivElement, DayCellProps>(
   function DayCell({ day, events, isToday, isSelected, onSelect }, ref) {
@@ -54,9 +55,6 @@ export const DayCell = forwardRef<HTMLDivElement, DayCellProps>(
         tabIndex={0}
         onClick={onActivate}
         onKeyDown={(e) => {
-          // Enter / Space activate, mirroring native <button> semantics.
-          // Arrow keys are intercepted by the parent grid for focus
-          // navigation — don't preventDefault here.
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();
             onActivate();
@@ -65,35 +63,30 @@ export const DayCell = forwardRef<HTMLDivElement, DayCellProps>(
         aria-label={`${day.iso}, ${events.length} eventi`}
         className={cn(
           // Base frame: relative for the halo, fixed minimum height so
-          // empty days don't collapse the grid into uneven rows
-          "group/cell relative flex min-h-[7.5rem] flex-col items-stretch gap-1.5 border-r border-b p-1.5 text-left",
+          // empty days don't collapse the grid into uneven rows. Slightly
+          // taller now (8.5rem) to fit two rows of chips comfortably.
+          "group/cell relative flex min-h-[8.5rem] flex-col items-stretch gap-1.5 border-r border-b p-1.5 text-left",
           // Subtle background: weekends get a faint tint so the work-week
           // rhythm is legible even on event-free months
           day.isWeekend && day.inMonth
             ? "bg-muted/30 dark:bg-muted/15"
             : "bg-card dark:bg-card",
-          // Out-of-month days are rendered for grid-stability but dialed
+          // Out-of-month days are rendered for grid stability but dialed
           // way down so the active month dominates visually
           !day.inMonth && "opacity-40",
           // Selected (clicked) state — different from today; uses a solid
           // ring so it's distinguishable when both apply at once
           isSelected &&
             "ring-2 ring-primary/70 ring-offset-1 ring-offset-background z-10",
-          // Today gets a stronger semantic highlight handled below
           isToday && !isSelected && "z-[1]",
-          // Hover only when in-month and clickable
-          day.inMonth && hasEvents
+          // Hover always (chips render on out-of-month too now)
+          hasEvents
             ? "cursor-pointer hover:bg-accent/30 transition-colors"
-            : day.inMonth
-              ? "cursor-pointer hover:bg-accent/15 transition-colors"
-              : "cursor-default",
-          // Focus ring (only when keyboard, mirrors button conventions)
+            : "cursor-pointer hover:bg-accent/15 transition-colors",
           "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:z-10",
         )}
       >
-        {/* Today halo — sits underneath everything, draws attention without
-            obstructing chips. Soft radial gradient + a thin glowing inner
-            border. We layer it so today + selected can co-exist visually. */}
+        {/* Today halo */}
         {isToday && (
           <span
             aria-hidden
@@ -107,8 +100,7 @@ export const DayCell = forwardRef<HTMLDivElement, DayCellProps>(
           />
         )}
 
-        {/* Date number — top-left, mono numeral. Today gets a pill behind
-            the number so it pops without being garish. */}
+        {/* Date number row */}
         <div className="relative flex items-baseline gap-1.5">
           <span
             className={cn(
@@ -122,10 +114,6 @@ export const DayCell = forwardRef<HTMLDivElement, DayCellProps>(
           >
             {day.day}
           </span>
-          {/* Event count micro-badge — only shown if there are MORE than
-              the chip-limit, otherwise the chips themselves communicate
-              the volume. Lives next to the date so it's the first thing
-              the eye lands on for crowded days. */}
           {events.length > CHIP_LIMIT && (
             <span
               className="text-[9px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70"
@@ -136,10 +124,13 @@ export const DayCell = forwardRef<HTMLDivElement, DayCellProps>(
           )}
         </div>
 
-        {/* Event chip stack. We hide chips on out-of-month cells per the
-            spec — keeps the leading/trailing greys as breathing room. */}
-        {day.inMonth && hasEvents && (
-          <div className="relative flex flex-col gap-1 min-h-0">
+        {/* Event chip grid — 2 columns. Renders on EVERY cell that has
+            events, including out-of-month days (was previously gated on
+            `inMonth` which silently hid chips on the leading/trailing
+            edges of the grid). The opacity on the cell wrapper already
+            visually de-emphasizes adjacent-month days. */}
+        {hasEvents && (
+          <div className="relative grid grid-cols-2 gap-x-1 gap-y-1 min-h-0">
             {visible.map((ev, i) => (
               <EventChip
                 key={
@@ -149,9 +140,6 @@ export const DayCell = forwardRef<HTMLDivElement, DayCellProps>(
                 }
                 event={ev}
                 onClick={(e) => {
-                  // Macro chip clicks bubble; earnings clicks navigate.
-                  // Either way, prevent the cell's own onClick from
-                  // duplicating selection if the chip handled it.
                   if (ev.kind === "earnings") e.stopPropagation();
                 }}
               />
@@ -160,13 +148,13 @@ export const DayCell = forwardRef<HTMLDivElement, DayCellProps>(
               <Tooltip>
                 <TooltipTrigger asChild>
                   <span
-                    className="self-start text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors px-1"
+                    className="col-span-2 self-start text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors px-1 cursor-help"
                     aria-label={`${overflowCount} altri eventi`}
                   >
                     +{overflowCount} altri
                   </span>
                 </TooltipTrigger>
-                <TooltipContent side="top" className="space-y-1 max-w-[280px]">
+                <TooltipContent side="top" className="space-y-1 max-w-[300px]">
                   <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                     Altri eventi
                   </div>
@@ -189,11 +177,7 @@ export const DayCell = forwardRef<HTMLDivElement, DayCellProps>(
           </div>
         )}
 
-        {/* Empty-day rhythm marker: a thin baseline rule that runs along
-            the bottom of the cell, only on in-month event-free days. Keeps
-            the grid feeling alive on quiet weeks (a key design move — an
-            empty-empty grid feels broken; a blank-with-rhythm feels
-            intentional). */}
+        {/* Empty-day rhythm marker */}
         {day.inMonth && !hasEvents && (
           <span
             aria-hidden

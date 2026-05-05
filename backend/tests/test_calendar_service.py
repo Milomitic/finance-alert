@@ -223,17 +223,28 @@ def test_events_sorted_by_date_ascending(db: Session):
     assert dates == sorted(dates)
 
 
-def test_within_a_day_earnings_come_before_macros(db: Session):
-    """May 14 has FOMC (macro). Plant an earnings on the same day → earnings first."""
+def test_within_a_day_macros_come_before_earnings(db: Session):
+    """May 14 has FOMC (macro). Plant an earnings on the same day → macro first.
+
+    Macros are scarcer + higher signal at a glance, so they anchor the cell
+    preview ahead of the long tail of per-stock earnings releases. (Previously
+    earnings came first; reversed in the calendar UX rework — see
+    docs/calendar-page.md V2 notes.)
+    """
+    from app.services.calendar_service import MacroEventDC
     _seed_stock_with_score(db, ticker="ZZZ", name="Z Co.")
     _put_in_cache("ZZZ", next_date="2026-05-14", next_eps=1.0)
 
     events = calendar_service.get_events(db, date(2026, 5, 14), date(2026, 5, 14))
     same_day = [e for e in events if e.date == date(2026, 5, 14)]
     assert len(same_day) >= 2  # at least the earnings + the FOMC macro
-    # First event for the day must be the earnings
-    assert isinstance(same_day[0], EarningsEvent)
-    assert same_day[0].ticker == "ZZZ"
+    # First event for the day must be the FOMC macro (high importance)
+    assert isinstance(same_day[0], MacroEventDC)
+    assert same_day[0].label.startswith("FOMC")
+    # And our earnings is somewhere later in the same-day cohort
+    assert any(
+        isinstance(e, EarningsEvent) and e.ticker == "ZZZ" for e in same_day
+    )
 
 
 # ---------------------------------------------------------------------------

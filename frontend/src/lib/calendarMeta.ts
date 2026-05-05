@@ -51,6 +51,33 @@ export const IMPORTANCE_ICON: Record<MacroImportance, LucideIcon> = {
   low: Globe,
 };
 
+/** How many of the 3 dots are "filled" for a given importance tier.
+ *  Three small dots in a row read as a star-rating-style importance scale
+ *  (1/3 = low, 2/3 = medium, 3/3 = high). The visual is more legible than
+ *  the previous shape+color code at the chip-preview scale (h-6) where
+ *  iconography becomes a blur.
+ *
+ *  Tailwind purger contract: keep these as plain literal class strings —
+ *  see CLAUDE.md notes on the tone-class purge bug. */
+export const IMPORTANCE_FILLED_COUNT: Record<MacroImportance, number> = {
+  high: 3,
+  medium: 2,
+  low: 1,
+};
+
+/** Filled-dot tone classes per importance — same hue family as
+ *  `IMPORTANCE_RIBBON` so the visual language stays cohesive across
+ *  the chip, the day-detail panel, and the legend. */
+export const IMPORTANCE_FILLED_DOT: Record<MacroImportance, string> = {
+  high: "bg-rose-500 dark:bg-rose-400",
+  medium: "bg-amber-500 dark:bg-amber-400",
+  low: "bg-slate-500 dark:bg-slate-400",
+};
+
+/** Empty-dot tone — same across all tiers (the "off" indicator). */
+export const IMPORTANCE_EMPTY_DOT =
+  "bg-muted-foreground/25 dark:bg-muted-foreground/30";
+
 /* ─── Region label/flag mapping ─────────────────────────────────────────── */
 /* Two-letter code → Italian label + emoji flag. Italian first because the
  * rest of the UI is Italian (the chip subtitle reads "Stati Uniti · CPI",

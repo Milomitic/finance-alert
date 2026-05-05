@@ -10,7 +10,6 @@ import {
 import {
   IMPORTANCE_BG,
   IMPORTANCE_LABEL,
-  IMPORTANCE_RIBBON,
   formatEps,
   formatMarketCap,
   regionFlag,
@@ -18,6 +17,8 @@ import {
 } from "@/lib/calendarMeta";
 import { getSectorRing, getSectorTone } from "@/lib/sectorMeta";
 import { cn } from "@/lib/utils";
+
+import { ImportanceDots } from "./ImportanceDots";
 
 /* ─── EventChip — discriminated dispatcher ──────────────────────────────── */
 /* The chip is the page's most-rendered element (potentially 100+ on a
@@ -138,7 +139,6 @@ function MacroChip({
   onClick?: (e: React.MouseEvent) => void;
 }) {
   const tone = IMPORTANCE_BG[event.importance];
-  const ribbon = IMPORTANCE_RIBBON[event.importance];
 
   return (
     <Tooltip>
@@ -153,21 +153,25 @@ function MacroChip({
           }}
           tabIndex={tabIndex}
           className={cn(
-            // Stamp silhouette: sharper corners (rounded-sm), fixed height,
-            // left ribbon hugged via overflow-hidden
-            "group/chip relative flex h-6 items-center gap-1.5 overflow-hidden rounded-sm border pl-0 pr-2 text-left",
+            // Stamp silhouette: sharper corners (rounded-sm), fixed height.
+            // The previous left-ribbon was replaced with leading importance
+            // dots — the dot count IS the importance signal now.
+            "group/chip relative flex h-6 items-center gap-1 overflow-hidden rounded-sm border pl-1.5 pr-1.5 text-left",
             tone,
             // Hover ring tinted by importance — keep subtle so the chip
             // doesn't compete with the today-cell halo
             "transition-shadow duration-150 hover:shadow-sm",
             "max-w-full",
           )}
-          aria-label={`${event.label} (${IMPORTANCE_LABEL[event.importance].toLowerCase()} importanza)`}
+          aria-label={`${event.label} (importanza ${IMPORTANCE_LABEL[event.importance].toLowerCase()})`}
         >
-          {/* Saturated left ribbon — the stamp signature */}
-          <span
-            className={cn("h-full w-1.5 shrink-0", ribbon)}
-            aria-hidden
+          {/* Importance dots — replaces the old saturated ribbon. 1/2/3 dots
+              filled tells the user the tier without color literacy. */}
+          <ImportanceDots
+            importance={event.importance}
+            size="h-1.5 w-1.5"
+            gap="gap-0.5"
+            className="shrink-0"
           />
           <span className="text-[11px] leading-none shrink-0" aria-hidden>
             {regionFlag(event.region)}
@@ -184,9 +188,17 @@ function MacroChip({
             <div className="text-sm font-semibold leading-tight">
               {event.label}
             </div>
-            <div className="text-[11px] text-muted-foreground tracking-wide uppercase">
-              {regionLabel(event.region)} · importanza{" "}
-              {IMPORTANCE_LABEL[event.importance].toLowerCase()}
+            <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground tracking-wide uppercase">
+              <span>{regionLabel(event.region)}</span>
+              <span className="opacity-30">·</span>
+              <ImportanceDots
+                importance={event.importance}
+                size="h-1.5 w-1.5"
+                gap="gap-0.5"
+              />
+              <span>
+                importanza {IMPORTANCE_LABEL[event.importance].toLowerCase()}
+              </span>
             </div>
           </div>
         </div>

@@ -6,11 +6,13 @@ import {
   DayDetailPanel,
   FilterStrip,
   type CalendarKindFilter,
+  ImportanceDots,
   MonthGrid,
   MonthNav,
 } from "@/components/calendar";
 import { useCalendar } from "@/hooks/useCalendar";
 import { buildMonthGrid, todayISO } from "@/lib/calendarMeta";
+import { cn } from "@/lib/utils";
 
 /* ─── CalendarPage — /calendar route ────────────────────────────────────── */
 /* Top-level layout (desktop):
@@ -140,8 +142,13 @@ export default function CalendarPage() {
     [events],
   );
 
+  const isPanelOpen = selectedDate !== null;
+
   return (
-    <div className="space-y-5 max-w-[80rem] mx-auto">
+    // Container widened from 80rem → 100rem so the calendar gets more room,
+    // especially with the new two-column event chips per cell. When the
+    // panel is open, the two-pane layout naturally splits this space.
+    <div className="space-y-5 max-w-[100rem] mx-auto">
       {/* ── Page header — typographic, editorial. ───────────────────── */}
       <header className="space-y-1">
         <div className="flex items-center gap-2 text-[10px] font-mono font-semibold uppercase tracking-[0.22em] text-muted-foreground">
@@ -210,32 +217,61 @@ export default function CalendarPage() {
         )}
       </div>
 
-      {/* ── Month grid — the centerpiece. ────────────────────────────── */}
-      <MonthGrid
-        cursor={cursor}
-        events={events}
-        selectedDate={selectedDate}
-        onSelectDate={onSelectDate}
-        isLoading={q.isLoading}
-      />
+      {/* ── Split layout: calendar grid (left) + day-detail panel (right).
+            The panel slides in by claiming a column when a date is
+            selected. We use CSS grid with two column templates so the
+            calendar shrinks gracefully and the panel mounts/unmounts
+            without disrupting the grid above.
 
-      {/* ── Empty-state banner ───────────────────────────────────────── */}
-      {!q.isLoading && !q.isError && events.length === 0 && (
-        <div className="rounded-xl border border-dashed bg-muted/20 px-6 py-10 text-center text-sm text-muted-foreground">
-          Nessun evento questo mese.
+            On mobile (md:): always single column — the panel renders
+            below the grid (acceptable since the calendar is also
+            scrollable vertically there). */}
+      <div
+        className={cn(
+          "grid gap-5 transition-[grid-template-columns] duration-300 ease-out",
+          isPanelOpen
+            ? // Two-column on lg+: 3fr / 2fr split (calendar 60% / panel 40%).
+              // On md, panel below at full width.
+              "grid-cols-1 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]"
+            : "grid-cols-1",
+        )}
+      >
+        {/* Calendar column — wraps the grid, empty-state, and the legend.
+            Wrapping into one column keeps these aligned with each other
+            when the panel is open. */}
+        <div className="space-y-5 min-w-0">
+          <MonthGrid
+            cursor={cursor}
+            events={events}
+            selectedDate={selectedDate}
+            onSelectDate={onSelectDate}
+            isLoading={q.isLoading}
+          />
+
+          {!q.isLoading && !q.isError && events.length === 0 && (
+            <div className="rounded-xl border border-dashed bg-muted/20 px-6 py-10 text-center text-sm text-muted-foreground">
+              Nessun evento questo mese.
+            </div>
+          )}
+
+          {/* Legenda stays under the calendar — but only when the panel is
+              closed, otherwise it'd compete for vertical space with the
+              richer detail surface. */}
+          {!isPanelOpen && <Legend />}
         </div>
-      )}
 
-      {/* ── Legenda — compact key sitting under the grid. Reinforces the
-            chip vocabulary at a glance for first-time visitors. ──────── */}
-      <Legend />
-
-      {/* ── Side drawer ─────────────────────────────────────────────── */}
-      <DayDetailPanel
-        date={selectedDate}
-        events={selectedDayEvents}
-        onClose={onCloseDetail}
-      />
+        {/* Detail-panel column — sticky on lg so it stays visible while the
+            calendar scrolls; gives the user a stable surface to read. */}
+        {isPanelOpen && (
+          <div className="lg:sticky lg:top-4 lg:self-start lg:max-h-[calc(100vh-5rem)] min-w-0">
+            <DayDetailPanel
+              date={selectedDate}
+              events={selectedDayEvents}
+              onClose={onCloseDetail}
+            />
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -266,31 +302,35 @@ function Legend() {
         />
         <LegendItem
           swatch={
-            <span className="inline-flex h-4 items-center overflow-hidden rounded-sm border border-rose-300/80 dark:border-rose-800/70 bg-rose-100 dark:bg-rose-950/60 pr-1.5">
-              <span className="inline-block h-full w-1 bg-rose-500 dark:bg-rose-400" />
-              <span className="ml-1 text-[9px] font-medium text-rose-800 dark:text-rose-200 leading-none">
+            <span className="inline-flex h-4 items-center gap-1 rounded-sm border border-rose-300/80 dark:border-rose-800/70 bg-rose-100 dark:bg-rose-950/60 px-1.5">
+              <ImportanceDots
+                importance="high"
+                size="h-1.5 w-1.5"
+                gap="gap-0.5"
+              />
+              <span className="text-[9px] font-medium text-rose-800 dark:text-rose-200 leading-none">
                 Macro
               </span>
             </span>
           }
-          label="Macro (timbro con striscia per importanza)"
+          label="Macro (timbro con pallini di importanza)"
         />
         <span className="opacity-30 hidden md:inline">·</span>
         <LegendItem
           swatch={
-            <span className="inline-block h-2.5 w-2.5 rounded-full bg-rose-500 dark:bg-rose-400" />
+            <ImportanceDots importance="high" size="h-2 w-2" gap="gap-0.5" />
           }
           label="Importanza alta"
         />
         <LegendItem
           swatch={
-            <span className="inline-block h-2.5 w-2.5 rounded-full bg-amber-500 dark:bg-amber-400" />
+            <ImportanceDots importance="medium" size="h-2 w-2" gap="gap-0.5" />
           }
           label="Media"
         />
         <LegendItem
           swatch={
-            <span className="inline-block h-2.5 w-2.5 rounded-full bg-slate-400 dark:bg-slate-500" />
+            <ImportanceDots importance="low" size="h-2 w-2" gap="gap-0.5" />
           }
           label="Bassa"
         />

@@ -29,6 +29,12 @@ from app.models import Stock, StockScore
 from app.services import calendar_macros, stock_fundamentals_service
 from app.services.calendar_macros import Importance, MacroEvent
 
+# Sort order — macros first per UX spec (V2): macros are scarcer + higher
+# signal at a glance than the long tail of earnings releases on any given
+# day, so they should anchor the cell preview. Within macros, importance
+# desc; within earnings, market_cap desc so the largest names show first
+# when chips are space-capped in the cell.
+
 
 # ---------------------------------------------------------------------------
 # Public dataclasses returned by `get_events`. The API layer maps these onto
@@ -46,6 +52,13 @@ class EarningsEvent:
     revenue_estimate: float | None
     sector: str | None
     market_cap: int | None
+    # Extras used by the right-pane stock list. These come from the
+    # fundamentals cache (`MicroData`) + the `StockScore` table joined on
+    # the catalog walk. None when not yet computed/scored — UI shows "—".
+    forward_pe: float | None = None
+    earnings_growth: float | None = None       # YoY EPS growth, fraction
+    composite_score: float | None = None       # 0-100 composite score
+    risk_tier: str | None = None               # "conservative"/"moderate"/"aggressive"
 
 
 @dataclass
@@ -82,22 +95,22 @@ def _parse_iso_date(s: str | None) -> date | None:
         return None
 
 
-def _scored_stocks(db: Session) -> list[Stock]:
-    """Stocks that have a corresponding StockScore row.
+def _scored_stocks(db: Session) -> list[tuple[Stock, StockScore]]:
+    """Stocks that have a corresponding StockScore row, paired with the score.
 
-    JOIN keeps the stock objects intact (we need name/sector/market_cap)
-    while filtering out the ~800 unscored ones. Catalog has duplicate
-    ticker rows (CLAUDE.md) — that's fine, the join naturally picks only
-    the row a score is attached to.
+    Returning the StockScore alongside lets `_earnings_for_stock` populate the
+    new composite_score / risk_tier fields on EarningsEvent without a second
+    query per stock. Catalog has duplicate ticker rows (CLAUDE.md) — the JOIN
+    naturally picks only the row a score is attached to.
     """
     rows = db.execute(
-        select(Stock).join(StockScore, StockScore.stock_id == Stock.id)
-    ).scalars().all()
-    return list(rows)
+        select(Stock, StockScore).join(StockScore, StockScore.stock_id == Stock.id)
+    ).all()
+    return [(stock, score) for stock, score in rows]
 
 
 def _earnings_for_stock(
-    stock: Stock, date_from: date, date_to: date,
+    stock: Stock, score: StockScore, date_from: date, date_to: date,
 ) -> list[EarningsEvent]:
     """Pull every earnings event for `stock` whose date falls in the window.
 
@@ -113,22 +126,33 @@ def _earnings_for_stock(
     if cached is None:
         return []
 
+    # These fields don't change per event date, so compute once at the top.
+    forward_pe = cached.micro.forward_pe if cached.micro else None
+    earnings_growth = cached.micro.earnings_growth if cached.micro else None
+
+    def _make(d: date, eps_est: float | None, rev_est: float | None) -> EarningsEvent:
+        return EarningsEvent(
+            date=d,
+            kind="earnings",
+            ticker=stock.ticker,
+            name=stock.name,
+            eps_estimate=eps_est,
+            revenue_estimate=rev_est,
+            sector=stock.sector,
+            market_cap=stock.market_cap,
+            forward_pe=forward_pe,
+            earnings_growth=earnings_growth,
+            composite_score=score.composite if score else None,
+            risk_tier=score.risk_tier if score else None,
+        )
+
     out: list[EarningsEvent] = []
     seen: set[date] = set()  # dedupe in case `next` overlaps with `earnings[]`
 
     # Forward-looking: next_earnings_date
     nxt_d = _parse_iso_date(cached.next_earnings_date)
     if nxt_d is not None and date_from <= nxt_d <= date_to:
-        out.append(EarningsEvent(
-            date=nxt_d,
-            kind="earnings",
-            ticker=stock.ticker,
-            name=stock.name,
-            eps_estimate=cached.next_eps_estimate,
-            revenue_estimate=cached.next_revenue_estimate,
-            sector=stock.sector,
-            market_cap=stock.market_cap,
-        ))
+        out.append(_make(nxt_d, cached.next_eps_estimate, cached.next_revenue_estimate))
         seen.add(nxt_d)
 
     # Historical (and any forward dates yfinance puts in earnings[] without
@@ -140,16 +164,7 @@ def _earnings_for_stock(
             continue
         if not (date_from <= d <= date_to):
             continue
-        out.append(EarningsEvent(
-            date=d,
-            kind="earnings",
-            ticker=stock.ticker,
-            name=stock.name,
-            eps_estimate=ep.eps_estimate,
-            revenue_estimate=ep.revenue_estimate,
-            sector=stock.sector,
-            market_cap=stock.market_cap,
-        ))
+        out.append(_make(d, ep.eps_estimate, ep.revenue_estimate))
         seen.add(d)
 
     return out
@@ -197,8 +212,8 @@ def get_events(
     events: list[CalendarEvent] = []
 
     if "earnings" in kinds:
-        for stock in _scored_stocks(db):
-            events.extend(_earnings_for_stock(stock, date_from, date_to))
+        for stock, score in _scored_stocks(db):
+            events.extend(_earnings_for_stock(stock, score, date_from, date_to))
 
     if "macro" in kinds:
         importance_filter: set[Importance] | None
@@ -214,14 +229,19 @@ def get_events(
 
     # Final sort:
     #   primary: date asc
-    #   secondary: kind — earnings (0) before macro (1)
-    #   tertiary (macros only): importance desc → high(0), medium(1), low(2)
+    #   secondary: kind — MACRO first (0) before earnings (1). Macros are
+    #     scarcer and more "anchoring" per UX spec — they should top the
+    #     cell preview so the user sees "FOMC, then earnings" hierarchy.
+    #   tertiary: within macros, importance desc → high(0), medium(1), low(2);
+    #             within earnings, market_cap desc so the largest names show
+    #             first when chips are space-capped in the cell preview.
     importance_rank = {"high": 0, "medium": 1, "low": 2}
     def _sort_key(e: CalendarEvent) -> tuple[date, int, int, str]:
         if isinstance(e, EarningsEvent):
-            # ticker as a final tiebreak so ordering is deterministic in tests
-            return (e.date, 0, 0, e.ticker)
-        return (e.date, 1, importance_rank.get(e.importance, 99), e.label)
+            # market_cap desc encoded as negative → smaller sort key for larger cap.
+            mc = -(e.market_cap or 0)
+            return (e.date, 1, mc, e.ticker)
+        return (e.date, 0, importance_rank.get(e.importance, 99), e.label)
 
     events.sort(key=_sort_key)
     return events
