@@ -184,7 +184,7 @@ export default function CalendarPage() {
       </div>
 
       {/* ── Status strip — running counts + load/error indicators. ──── */}
-      <div className="flex items-center gap-3 px-1 text-[11px] font-mono uppercase tracking-[0.16em] text-muted-foreground">
+      <div className="flex items-center gap-3 px-1 text-[12.5px] font-mono uppercase tracking-[0.16em] text-muted-foreground">
         {q.isLoading ? (
           <span className="inline-flex items-center gap-1.5">
             <Loader2 className="h-3 w-3 animate-spin" />
@@ -287,12 +287,12 @@ function Legend() {
   return (
     <div className="rounded-lg border bg-card/50 px-4 py-3">
       <SectionTitle icon={Info} label="Legenda" className="mb-2" />
-      <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-[11px]">
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-[12.5px]">
         <LegendItem
           swatch={
             <span className="inline-flex h-4 items-center gap-1 rounded-full border border-sky-300/80 dark:border-sky-800/60 bg-sky-100 dark:bg-sky-950/50 pl-0.5 pr-1.5">
               <span className="inline-block h-3 w-3 rounded-full bg-white shadow-sm" />
-              <span className="text-[9px] font-bold text-sky-800 dark:text-sky-200 leading-none">
+              <span className="text-[11px] font-bold text-sky-800 dark:text-sky-200 leading-none">
                 AAA
               </span>
             </span>
@@ -307,7 +307,7 @@ function Legend() {
                 size="h-1.5 w-1.5"
                 gap="gap-0.5"
               />
-              <span className="text-[9px] font-medium text-rose-800 dark:text-rose-200 leading-none">
+              <span className="text-[11px] font-medium text-rose-800 dark:text-rose-200 leading-none">
                 Macro
               </span>
             </span>

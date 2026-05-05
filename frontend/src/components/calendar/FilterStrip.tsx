@@ -104,7 +104,7 @@ export function FilterStrip({
               aria-pressed={isActive}
               className={cn(
                 // Outline pill — different shape language than the chips
-                "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[12.5px] font-semibold uppercase tracking-wider transition-all",
+                "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[14px] font-semibold uppercase tracking-wider transition-all",
                 isActive
                   ? cn(KIND_ACTIVE[opt.accent], "ring-1 shadow-sm")
                   : "border-transparent text-muted-foreground hover:text-foreground hover:bg-accent/40",
@@ -151,7 +151,7 @@ export function FilterStrip({
               aria-pressed={isActive}
               title={`Importanza ${IMPORTANCE_LABEL[opt.value].toLowerCase()}`}
               className={cn(
-                "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[12.5px] font-semibold uppercase tracking-wider transition-all",
+                "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[14px] font-semibold uppercase tracking-wider transition-all",
                 isActive
                   ? cn(IMPORTANCE_ACTIVE[opt.value], "ring-1 ring-current/20 shadow-sm")
                   : "border-transparent text-muted-foreground hover:text-foreground hover:bg-accent/40",

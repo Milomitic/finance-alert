@@ -104,7 +104,7 @@ export const DayCell = forwardRef<HTMLDivElement, DayCellProps>(
         <div className="relative flex items-baseline gap-1.5">
           <span
             className={cn(
-              "tabular-nums font-mono text-[12px] tracking-tight leading-none",
+              "tabular-nums font-mono text-[13.5px] tracking-tight leading-none",
               isToday
                 ? "inline-flex h-6 w-6 items-center justify-center rounded-full bg-sky-500 text-white font-bold shadow-sm dark:bg-sky-500/90"
                 : day.inMonth
@@ -116,7 +116,7 @@ export const DayCell = forwardRef<HTMLDivElement, DayCellProps>(
           </span>
           {events.length > CHIP_LIMIT && (
             <span
-              className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70"
+              className="text-[12.5px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70"
               aria-hidden
             >
               {events.length} eventi
@@ -148,21 +148,21 @@ export const DayCell = forwardRef<HTMLDivElement, DayCellProps>(
               <Tooltip>
                 <TooltipTrigger asChild>
                   <span
-                    className="col-span-2 self-start text-[11.5px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors px-1 cursor-help"
+                    className="col-span-2 self-start text-[13px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors px-1 cursor-help"
                     aria-label={`${overflowCount} altri eventi`}
                   >
                     +{overflowCount} altri
                   </span>
                 </TooltipTrigger>
                 <TooltipContent side="top" className="space-y-1 max-w-[300px]">
-                  <div className="text-[11.5px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  <div className="text-[13px] font-semibold uppercase tracking-wider text-muted-foreground">
                     Altri eventi
                   </div>
                   <ul className="space-y-0.5">
                     {events.slice(CHIP_LIMIT).map((ev, i) => (
                       <li
                         key={i}
-                        className="text-[13px] flex items-center gap-1.5"
+                        className="text-[14.5px] flex items-center gap-1.5"
                       >
                         <span className="inline-block h-1.5 w-1.5 rounded-full bg-muted-foreground/40" />
                         {ev.kind === "earnings"
