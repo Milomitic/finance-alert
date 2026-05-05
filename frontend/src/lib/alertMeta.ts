@@ -83,6 +83,80 @@ export const TONE_TEXT: Record<AlertTone, string> = {
   neutral: "text-slate-600 dark:text-slate-400",
 };
 
+/** Italian one-word label per tone, used by the explicit "tone badge" we
+ *  now show alongside the kind chip on the stock-detail alerts row.
+ *  Kind label says WHAT it is ("RSI Oversold"), tone label says what
+ *  DIRECTION it implies ("Bullish") — two complementary axes. */
+export const TONE_LABEL: Record<AlertTone, string> = {
+  bullish: "Bullish",
+  bearish: "Bearish",
+  warning: "Allerta",
+  neutral: "Neutro",
+};
+
+/** One-line "headline" summary for a snapshot — the single most
+ *  informative value the row can show (e.g. "RSI 28.5", "Volume 3.2×",
+ *  "MACD ↑ sopra signal"). Used as a subtitle in the stock-detail alert
+ *  row so the user sees the "why" without opening the dialog.
+ *
+ *  Returns null when the rule kind isn't known or the snapshot is empty
+ *  — caller renders nothing instead of an empty placeholder. */
+export function getSnapshotHeadline(
+  rule_kind: string | null | undefined,
+  snap: Record<string, unknown> | null | undefined,
+): string | null {
+  if (!snap) return null;
+  const get = (k: string): unknown => snap[k];
+  const fmt = (v: unknown, digits = 2): string =>
+    typeof v === "number" && Number.isFinite(v) ? v.toFixed(digits) : "—";
+
+  switch (rule_kind) {
+    case "rsi_oversold":
+    case "rsi_overbought": {
+      const rsi = get("rsi");
+      const period = get("period");
+      const cmp = rule_kind === "rsi_oversold" ? "≤" : "≥";
+      const threshold = get("threshold");
+      const periodTxt =
+        typeof period === "number" ? `RSI(${period})` : "RSI";
+      return `${periodTxt} ${fmt(rsi)} ${cmp} ${fmt(threshold)}`;
+    }
+    case "golden_cross":
+      return "SMA fast ↑ incrociata sopra SMA slow";
+    case "death_cross":
+      return "SMA fast ↓ incrociata sotto SMA slow";
+    case "breakout": {
+      const period = get("period");
+      const close = get("close");
+      const priorMax = get("prior_max");
+      return `Chiusura ${fmt(close)} > max ${period ?? "?"}d (${fmt(priorMax)})`;
+    }
+    case "volume_spike": {
+      const ratio = get("ratio");
+      const threshold = get("threshold");
+      const r =
+        typeof ratio === "number" ? `${ratio.toFixed(2)}×` : "—";
+      const t =
+        typeof threshold === "number" ? `≥ ${threshold}×` : "—";
+      return `Volume ${r} media · soglia ${t}`;
+    }
+    case "macd_bullish_cross":
+      return "MACD ↑ sopra signal line";
+    case "macd_bearish_cross":
+      return "MACD ↓ sotto signal line";
+    case "bollinger_squeeze":
+      return "Bande di Bollinger compresse";
+    case "bollinger_breakout": {
+      const close = get("close");
+      return typeof close === "number"
+        ? `Chiusura ${fmt(close)} fuori dalle bande`
+        : "Chiusura fuori dalle bande";
+    }
+    default:
+      return null;
+  }
+}
+
 /* ─── Snapshot rendering ────────────────────────────────────────────────── */
 /* The Alert.snapshot field is a free-form JSON dict whose shape depends on
  * the rule_kind that produced it. Rather than render raw JSON in the dialog,

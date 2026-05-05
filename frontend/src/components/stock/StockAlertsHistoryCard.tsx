@@ -1,4 +1,4 @@
-import { Clock, History, TrendingDown, TrendingUp } from "lucide-react";
+import { Clock, History, Minus, TrendingDown, TrendingUp } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import type { Alert } from "@/api/types";
@@ -8,7 +8,10 @@ import { isDelayedDetection } from "@/lib/alertDates";
 import {
   TONE_BG,
   TONE_BORDER_LEFT,
+  TONE_LABEL,
   getAlertKindMeta,
+  getSnapshotHeadline,
+  type AlertTone,
 } from "@/lib/alertMeta";
 import { cn } from "@/lib/utils";
 
@@ -75,10 +78,22 @@ function computeStats(alerts: Alert[]): AlertStats {
 
 /* ─── Single-row visual ─────────────────────────────────────────────────── */
 
+/* Tone-badge icon picker — bullish/bearish/warning/neutral get distinct
+ * iconography so the indicator reads at a glance even before the user
+ * processes the color. */
+const TONE_ICON: Record<AlertTone, typeof TrendingUp> = {
+  bullish: TrendingUp,
+  bearish: TrendingDown,
+  warning: TrendingUp, // not visually meaningful for warnings; use neutral arrow
+  neutral: Minus,
+};
+
 function AlertRow({ alert, onClick }: { alert: Alert; onClick: () => void }) {
   const meta = getAlertKindMeta(alert.rule_kind);
-  const Icon = meta.icon;
+  const KindIcon = meta.icon;
+  const ToneIcon = TONE_ICON[meta.tone];
   const delayed = isDelayedDetection(alert.triggered_at, alert.signal_date);
+  const headline = getSnapshotHeadline(alert.rule_kind, alert.snapshot ?? null);
 
   return (
     <li>
@@ -91,29 +106,66 @@ function AlertRow({ alert, onClick }: { alert: Alert; onClick: () => void }) {
           TONE_BORDER_LEFT[meta.tone],
         )}
       >
-        <div className="flex items-center gap-3 flex-wrap">
-          {/* Kind chip with icon */}
-          <span
-            className={cn(
-              "inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold shrink-0",
-              TONE_BG[meta.tone],
+        <div className="flex items-start gap-3 flex-wrap">
+          {/* LEFT: identity stack — kind chip + tone badge on the first
+              line, snapshot headline as a subtle subtitle on the second. */}
+          <div className="flex flex-col gap-1 min-w-0 flex-1">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {/* Kind chip with icon — what TYPE of alert this is. */}
+              <span
+                className={cn(
+                  "inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold shrink-0",
+                  TONE_BG[meta.tone],
+                )}
+              >
+                <KindIcon className="h-3 w-3" />
+                {meta.label}
+              </span>
+              {/* Tone badge — explicit Bullish / Bearish / Allerta / Neutro
+                  pill. Different shape (outline + smaller) than the kind
+                  chip so the eye groups them as "kind + direction" rather
+                  than two competing chips. Only render for tones with a
+                  directional read (bullish/bearish); warning/neutral
+                  already get their meaning across via the kind chip's
+                  color. */}
+              {(meta.tone === "bullish" || meta.tone === "bearish") && (
+                <span
+                  className={cn(
+                    "inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm border text-[10px] font-semibold uppercase tracking-wider",
+                    meta.tone === "bullish"
+                      ? "border-emerald-300/70 dark:border-emerald-700/60 text-emerald-700 dark:text-emerald-300 bg-emerald-50/60 dark:bg-emerald-950/30"
+                      : "border-rose-300/70 dark:border-rose-700/60 text-rose-700 dark:text-rose-300 bg-rose-50/60 dark:bg-rose-950/30",
+                  )}
+                  title={`Tono semantico: ${TONE_LABEL[meta.tone].toLowerCase()}`}
+                >
+                  <ToneIcon className="h-2.5 w-2.5" />
+                  {TONE_LABEL[meta.tone]}
+                </span>
+              )}
+              {/* Trigger price — kept here for at-a-glance "the bar where
+                  this fired closed at $X". */}
+              <span className="text-sm tabular-nums font-semibold ml-1">
+                ${alert.trigger_price.toFixed(2)}
+              </span>
+            </div>
+            {/* Snapshot headline — one-line summary of the trigger's
+                "why" (e.g. "RSI(14) 28.50 ≤ 30"). Hidden when the rule
+                kind has no resolver or the snapshot is empty. */}
+            {headline && (
+              <span
+                className="text-[11px] text-muted-foreground tabular-nums truncate"
+                title={headline}
+              >
+                {headline}
+              </span>
             )}
-          >
-            <Icon className="h-3 w-3" />
-            {meta.label}
-          </span>
+          </div>
 
-          {/* Trigger price */}
-          <span className="text-sm tabular-nums font-semibold">
-            ${alert.trigger_price.toFixed(2)}
-          </span>
-
-          {/* Date column: signal_date as primary (when the indicator
-              fired), with the detection wall-clock + relative time as
-              secondary. Orange clock chip when the system detected the
-              signal ≥1 day late. Falls back to triggered_at as primary
-              for legacy rows that lack signal_date. */}
-          <span className="ml-auto text-xs text-muted-foreground tabular-nums shrink-0 flex flex-col items-end">
+          {/* RIGHT: date column — signal_date primary, detection secondary.
+              Orange clock chip when the system detected the signal ≥1 day
+              late. Falls back to triggered_at as primary for legacy rows
+              that lack signal_date. */}
+          <span className="text-xs text-muted-foreground tabular-nums shrink-0 flex flex-col items-end pt-0.5">
             <span className="font-semibold text-foreground/85 inline-flex items-center gap-1">
               {delayed && (
                 <Clock

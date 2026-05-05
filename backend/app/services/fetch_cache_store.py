@@ -45,6 +45,19 @@ from app.services.stock_fundamentals_service import (
 KIND_FUNDAMENTALS = "fundamentals"
 KIND_NEWS = "news"
 
+# Bumps each time we add a non-trivial field to the Fundamentals dataclass
+# tree. Old payloads with a lower version are treated as stale on read so
+# the next access re-fetches from yfinance and writes the new shape — even
+# if the row is still within the 24h TTL. This avoids:
+#   - A bulk wipe that would force every stock to re-fetch at once.
+#   - Per-field heuristics ("if profile is empty, refetch") that conflate
+#     "missing data" with "old schema".
+# Versions:
+#   1: pre-CompanyProfile (annual/quarterly/earnings/micro/insiders/...)
+#   2: + CompanyProfile (long_business_summary, website, employees, ...)
+_FUNDAMENTALS_SCHEMA_VERSION = 2
+_SCHEMA_VERSION_KEY = "_schema_version"
+
 
 # ─── Generic UPSERT helper ──────────────────────────────────────────────────
 def _upsert(db: Session, ticker: str, kind: str, payload: str) -> None:
@@ -140,16 +153,30 @@ def _fundamentals_from_dict(d: dict[str, Any]) -> Fundamentals:
     return Fundamentals(**{k: v for k, v in payload.items() if k in valid_keys})
 
 
+def _is_payload_stale_schema(d: dict[str, Any]) -> bool:
+    """True if the parsed payload predates the current schema version.
+    Missing key → version 1 (the original shape, no `_schema_version`)."""
+    return int(d.get(_SCHEMA_VERSION_KEY, 1)) < _FUNDAMENTALS_SCHEMA_VERSION
+
+
 def write_fundamentals(db: Session, fundamentals: Fundamentals) -> None:
     """UPSERT this stock's Fundamentals into the L2 cache."""
-    payload = json.dumps(asdict(fundamentals), default=str)
+    obj = asdict(fundamentals)
+    obj[_SCHEMA_VERSION_KEY] = _FUNDAMENTALS_SCHEMA_VERSION
+    payload = json.dumps(obj, default=str)
     _upsert(db, fundamentals.ticker, KIND_FUNDAMENTALS, payload)
 
 
 def read_fundamentals(
     db: Session, ticker: str, max_age_seconds: int
 ) -> Fundamentals | None:
-    """Return a Fundamentals from L2 iff present AND fresh; None otherwise."""
+    """Return a Fundamentals from L2 iff present AND fresh; None otherwise.
+
+    Returns None for ANY of: missing row, expired row, schema-version
+    mismatch, or unparseable JSON. Schema-version mismatch is the trigger
+    for a graceful migration to a newer shape (e.g. when CompanyProfile
+    was added, all old rows naturally re-fetch as users access them).
+    """
     row = _read_row(db, ticker, KIND_FUNDAMENTALS, max_age_seconds)
     if row is None:
         return None
@@ -157,6 +184,8 @@ def read_fundamentals(
     try:
         d = json.loads(payload_json)
     except json.JSONDecodeError:
+        return None
+    if _is_payload_stale_schema(d):
         return None
     f = _fundamentals_from_dict(d)
     # Reset `fetched_at` to the L2 timestamp (epoch seconds) so the L1
@@ -195,7 +224,9 @@ def hydrate_all_fundamentals(
     dict suitable for assigning to the in-memory L1 cache.
 
     Called once during app startup so the first request after a restart
-    doesn't have to round-trip the DB per ticker."""
+    doesn't have to round-trip the DB per ticker. Skips rows that fail
+    schema validation (old version) — those will re-fetch on first
+    access via `get_fundamentals`."""
     rows = db.execute(
         select(FetchCache).where(FetchCache.kind == KIND_FUNDAMENTALS)
     ).scalars().all()
@@ -210,6 +241,8 @@ def hydrate_all_fundamentals(
         try:
             d = json.loads(r.payload)
         except json.JSONDecodeError:
+            continue
+        if _is_payload_stale_schema(d):
             continue
         f = _fundamentals_from_dict(d)
         f.fetched_at = fetched.timestamp()

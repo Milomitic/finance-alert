@@ -12,6 +12,7 @@ import { useState } from "react";
 import type { Stock } from "@/api/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { useStockFundamentals } from "@/hooks/useStockFundamentals";
+import { getStockFlagCode } from "@/lib/stockMeta";
 import { cn } from "@/lib/utils";
 
 /* ─── CompanyOverviewCard — identity + short business summary ────────────── */
@@ -158,7 +159,17 @@ export function CompanyOverviewCard({ ticker, stock }: Props) {
               value={headquarters}
               span={2}
             />
-            <Field icon={User} label="CEO" value={ceo} span={2} />
+            {/* CEO row: show the named officer + a small country flag.
+                yfinance doesn't expose CEO nationality directly, so we use
+                the company HQ country (catalog ISO code wins, profile full
+                name is the fallback) as a sensible proxy — most CEOs are
+                citizens of the company's primary domicile. */}
+            {ceo && (
+              <CeoField
+                ceo={ceo}
+                country={stock.country ?? country}
+              />
+            )}
             <Field
               icon={Users}
               label="Dipendenti"
@@ -247,6 +258,46 @@ function Field({
         title={value}
       >
         {value}
+      </dd>
+    </div>
+  );
+}
+
+/* ─── CEO field with nationality flag ───────────────────────────────────── */
+
+function CeoField({
+  ceo,
+  country,
+}: {
+  ceo: string;
+  country: string | null | undefined;
+}) {
+  const flag = getStockFlagCode(country);
+  return (
+    <div className="col-span-2 min-w-0">
+      <dt className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+        <User className="h-3 w-3" />
+        CEO
+      </dt>
+      <dd
+        className="mt-0.5 flex items-center gap-1.5 text-[13px] font-medium text-foreground/85"
+        title={ceo}
+      >
+        {flag && (
+          <img
+            src={`/flags/${flag}.svg`}
+            alt={country ?? ""}
+            width={18}
+            height={12}
+            // Tiny inline flag — same library used in the StockHeader hero.
+            // The caller already gracefully degrades when the country isn't
+            // known (no flag rendered).
+            style={{ width: "18px", height: "12px", objectFit: "cover" }}
+            className="rounded-[2px] shadow-sm shrink-0"
+            aria-hidden
+          />
+        )}
+        <span className="truncate">{ceo}</span>
       </dd>
     </div>
   );
