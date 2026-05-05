@@ -1,4 +1,4 @@
-import { ArrowDownRight, ArrowUpRight, CalendarClock } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, BarChart3, CalendarClock } from "lucide-react";
 import { useMemo, useState } from "react";
 import {
   Bar, CartesianGrid, ComposedChart, Legend, Line, ReferenceLine,
@@ -9,6 +9,7 @@ import type {
   FundamentalsAnnual, FundamentalsEarnings, FundamentalsQuarterly,
 } from "@/api/types";
 import { Card, CardContent } from "@/components/ui/card";
+import { SectionTitle } from "@/components/ui/section-title";
 import { useStockFundamentals } from "@/hooks/useStockFundamentals";
 import { cn } from "@/lib/utils";
 
@@ -536,21 +537,23 @@ export function FundamentalsCard({ ticker }: Props) {
     <Card className="h-full overflow-hidden">
       <CardContent className="p-3 h-full flex flex-col">
         {/* Header */}
-        <div className="flex items-center gap-2 mb-2 shrink-0">
-          <span className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-            Fundamentals
-          </span>
-          {f.next_earnings_date && (
-            <span
-              className="ml-auto inline-flex items-center gap-1 text-sm px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-950/30 border border-blue-200/60 dark:border-blue-900/40 text-blue-700 dark:text-blue-300"
-              title={`Prossima earnings — EPS atteso: ${f.next_eps_estimate != null ? `$${f.next_eps_estimate.toFixed(2)}` : "—"}`}
-            >
-              <CalendarClock className="h-3 w-3" />
-              {shortDate(f.next_earnings_date)}
-              {f.next_eps_estimate != null && <> · est ${f.next_eps_estimate.toFixed(2)}</>}
-            </span>
-          )}
-        </div>
+        <SectionTitle
+          icon={BarChart3}
+          label="Fundamentals"
+          className="mb-2 shrink-0"
+          right={
+            f.next_earnings_date ? (
+              <span
+                className="inline-flex items-center gap-1 text-sm px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-950/30 border border-blue-200/60 dark:border-blue-900/40 text-blue-700 dark:text-blue-300"
+                title={`Prossima earnings — EPS atteso: ${f.next_eps_estimate != null ? `$${f.next_eps_estimate.toFixed(2)}` : "—"}`}
+              >
+                <CalendarClock className="h-3 w-3" />
+                {shortDate(f.next_earnings_date)}
+                {f.next_eps_estimate != null && <> · est ${f.next_eps_estimate.toFixed(2)}</>}
+              </span>
+            ) : undefined
+          }
+        />
 
         {/* Tab strip — plain buttons, no Radix */}
         <div className="inline-flex items-center gap-1 mb-2 shrink-0 self-start rounded-md bg-muted/50 p-0.5">

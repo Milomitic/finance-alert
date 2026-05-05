@@ -1,11 +1,12 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, Sparkles } from "lucide-react";
 
 import type {
   ScoreBreakdownComponent,
   StockScore,
 } from "@/api/types";
 import { Card, CardContent } from "@/components/ui/card";
+import { SectionTitle } from "@/components/ui/section-title";
 import {
   Tooltip,
   TooltipContent,
@@ -270,30 +271,32 @@ function CardShell({
   return (
     <Card>
       <CardContent className="p-4">
-        <div className="flex items-center justify-between mb-3">
-          <div className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-            Score
-          </div>
-          {onRefresh && (
-            <button
-              type="button"
-              onClick={onRefresh}
-              disabled={isFetching}
-              className={cn(
-                "p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors disabled:opacity-50",
-              )}
-              title="Ricarica score"
-              aria-label="Ricarica score"
-            >
-              <RefreshCw
+        <SectionTitle
+          icon={Sparkles}
+          label="Stock score"
+          className="mb-3"
+          right={
+            onRefresh ? (
+              <button
+                type="button"
+                onClick={onRefresh}
+                disabled={isFetching}
                 className={cn(
-                  "h-3.5 w-3.5",
-                  isFetching && "animate-spin",
+                  "p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors disabled:opacity-50",
                 )}
-              />
-            </button>
-          )}
-        </div>
+                title="Ricarica score"
+                aria-label="Ricarica score"
+              >
+                <RefreshCw
+                  className={cn(
+                    "h-3.5 w-3.5",
+                    isFetching && "animate-spin",
+                  )}
+                />
+              </button>
+            ) : undefined
+          }
+        />
         {children}
       </CardContent>
     </Card>

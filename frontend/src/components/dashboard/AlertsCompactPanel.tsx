@@ -1,8 +1,11 @@
+import { Bell } from "lucide-react";
+
 import type { Alert, TopStock } from "@/api/types";
 import { AlertsByIndexBars } from "@/components/dashboard/AlertsByIndexBars";
 import { RecentAlertsFeed } from "@/components/dashboard/RecentAlertsFeed";
 import { TopStocksTable } from "@/components/dashboard/TopStocksTable";
 import { Card, CardContent } from "@/components/ui/card";
+import { SectionTitle } from "@/components/ui/section-title";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface Props {
@@ -19,15 +22,15 @@ export function AlertsCompactPanel({ topStocks, recentAlerts, alertsLast24h, ale
     <Card>
       <CardContent className="p-0">
         <Tabs defaultValue="top">
-          <div className="flex items-center border-b px-3 bg-muted/30">
-            <span className="text-sm font-semibold uppercase tracking-wide py-2 pl-1 pr-3">Alerts</span>
+          <div className="flex items-center border-b px-3 bg-muted/30 py-2 gap-3">
+            <SectionTitle icon={Bell} label="Alerts" />
             <span className="text-sm bg-amber-100 dark:bg-amber-900/40 text-amber-900 dark:text-amber-200 px-2.5 py-0.5 rounded-full font-semibold">
               {alertsLast24h} ult. 24h · {deltaLabel}
             </span>
-            <TabsList className="h-10 ml-4 bg-transparent rounded-none">
-              <TabsTrigger value="top" className="text-sm h-9 px-3">Top stocks</TabsTrigger>
-              <TabsTrigger value="feed" className="text-sm h-9 px-3">Feed</TabsTrigger>
-              <TabsTrigger value="byindex" className="text-sm h-9 px-3">Per indice</TabsTrigger>
+            <TabsList className="h-9 bg-transparent rounded-none">
+              <TabsTrigger value="top" className="text-sm h-8 px-3">Top stocks</TabsTrigger>
+              <TabsTrigger value="feed" className="text-sm h-8 px-3">Feed</TabsTrigger>
+              <TabsTrigger value="byindex" className="text-sm h-8 px-3">Per indice</TabsTrigger>
             </TabsList>
             <a href="/alerts" className="ml-auto text-sm text-blue-600 dark:text-blue-400 hover:underline pr-2">Vedi tutti →</a>
           </div>

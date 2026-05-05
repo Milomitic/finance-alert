@@ -1,8 +1,9 @@
-import { Check, X } from "lucide-react";
+import { Check, ShieldCheck, X } from "lucide-react";
 
 import type { EffectiveRule } from "@/api/types";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { SectionTitle } from "@/components/ui/section-title";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -20,9 +21,7 @@ export function EffectiveRulesCard({ rules }: Props) {
   return (
     <Card>
       <CardContent className="p-4">
-        <div className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-2">
-          Regole effettive
-        </div>
+        <SectionTitle icon={ShieldCheck} label="Regole effettive" className="mb-2" />
         {rules.length === 0 ? (
           <div className="text-sm text-muted-foreground text-center py-4">
             Nessuna regola configurata.

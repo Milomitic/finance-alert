@@ -1,6 +1,7 @@
 import { ExternalLink, Newspaper } from "lucide-react";
 
 import { Card, CardContent } from "@/components/ui/card";
+import { SectionTitle } from "@/components/ui/section-title";
 import { useStockNews } from "@/hooks/useStockNews";
 import { cn } from "@/lib/utils";
 
@@ -97,23 +98,26 @@ export function NewsCard({ ticker }: Props) {
     <div className="relative h-full">
       <Card className="absolute inset-0 overflow-hidden flex flex-col">
         <CardContent className="p-4 h-full flex flex-col min-h-0">
-        <div className="flex items-center gap-2 mb-3 shrink-0">
-          <Newspaper className="h-4 w-4 text-muted-foreground" />
-          <span className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-            News
-          </span>
-          {sorted.length > 0 && (
-            <span
-              className="text-xs text-muted-foreground tabular-nums"
-              title={`${sorted.length} articoli totali`}
-            >
-              ({sorted.length})
-            </span>
-          )}
-          <span className="ml-auto text-xs text-muted-foreground italic">
-            yfinance · cache 1h
-          </span>
-        </div>
+        <SectionTitle
+          icon={Newspaper}
+          label="News"
+          className="mb-3 shrink-0"
+          right={
+            <div className="flex items-center gap-2">
+              {sorted.length > 0 && (
+                <span
+                  className="text-xs text-muted-foreground tabular-nums"
+                  title={`${sorted.length} articoli totali`}
+                >
+                  ({sorted.length})
+                </span>
+              )}
+              <span className="text-xs text-muted-foreground italic">
+                yfinance · cache 1h
+              </span>
+            </div>
+          }
+        />
 
         {/* Scroller. flex-1 + min-h-0 lets the list shrink to fit the card
             height (set by the grid row), and overflow-y-auto contains the

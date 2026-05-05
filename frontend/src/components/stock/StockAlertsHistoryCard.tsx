@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import type { Alert } from "@/api/types";
 import { AlertDetailDialog } from "@/components/AlertDetailDialog";
 import { Card, CardContent } from "@/components/ui/card";
+import { SectionTitle } from "@/components/ui/section-title";
 import { isDelayedDetection } from "@/lib/alertDates";
 import {
   TONE_BG,
@@ -210,49 +211,44 @@ export function StockAlertsHistoryCard({ alerts }: Props) {
       <Card>
         <CardContent className="p-4">
           {/* Header strip: title + aggregate stats (bull/bear/last30d/unread) */}
-          <div className="flex items-center gap-3 flex-wrap mb-3">
-            <div className="flex items-center gap-2">
-              <History className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-                Alert storici per questo ticker
-              </span>
-              <span className="text-xs text-muted-foreground tabular-nums">
-                ({stats.total})
-              </span>
-            </div>
-
-            {stats.total > 0 && (
-              <div className="ml-auto flex items-center gap-2 flex-wrap text-xs">
-                {stats.last30d > 0 && (
-                  <span
-                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-muted/70"
-                    title="Alert generati negli ultimi 30 giorni"
-                  >
-                    <span className="text-muted-foreground">30d:</span>
-                    <span className="font-bold tabular-nums">{stats.last30d}</span>
-                  </span>
-                )}
-                {stats.bullish > 0 && (
-                  <span
-                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-200"
-                    title="Alert con tono bullish (RSI oversold, golden cross, breakout, ecc.)"
-                  >
-                    <TrendingUp className="h-3 w-3" />
-                    <span className="font-bold tabular-nums">{stats.bullish}</span>
-                  </span>
-                )}
-                {stats.bearish > 0 && (
-                  <span
-                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-rose-100 dark:bg-rose-900/40 text-rose-800 dark:text-rose-200"
-                    title="Alert con tono bearish (RSI overbought, death cross, ecc.)"
-                  >
-                    <TrendingDown className="h-3 w-3" />
-                    <span className="font-bold tabular-nums">{stats.bearish}</span>
-                  </span>
-                )}
-              </div>
-            )}
-          </div>
+          <SectionTitle
+            icon={History}
+            label={`Alert storici per questo ticker (${stats.total})`}
+            className="mb-3"
+            right={
+              stats.total > 0 ? (
+                <div className="flex items-center gap-2 flex-wrap text-xs">
+                  {stats.last30d > 0 && (
+                    <span
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-muted/70"
+                      title="Alert generati negli ultimi 30 giorni"
+                    >
+                      <span className="text-muted-foreground">30d:</span>
+                      <span className="font-bold tabular-nums">{stats.last30d}</span>
+                    </span>
+                  )}
+                  {stats.bullish > 0 && (
+                    <span
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-200"
+                      title="Alert con tono bullish (RSI oversold, golden cross, breakout, ecc.)"
+                    >
+                      <TrendingUp className="h-3 w-3" />
+                      <span className="font-bold tabular-nums">{stats.bullish}</span>
+                    </span>
+                  )}
+                  {stats.bearish > 0 && (
+                    <span
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-rose-100 dark:bg-rose-900/40 text-rose-800 dark:text-rose-200"
+                      title="Alert con tono bearish (RSI overbought, death cross, ecc.)"
+                    >
+                      <TrendingDown className="h-3 w-3" />
+                      <span className="font-bold tabular-nums">{stats.bearish}</span>
+                    </span>
+                  )}
+                </div>
+              ) : undefined
+            }
+          />
 
           {sorted.length === 0 ? (
             <div className="text-sm text-muted-foreground text-center py-8">

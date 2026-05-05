@@ -131,7 +131,7 @@ export default function HomePage() {
           )}
         </div>
       </div>
-      <HeroStrip global={m.global} byIndex={m.by_index} />
+      <HeroStrip global={m.global} byIndex={m.by_index} nextScanAt={nextScanAt} />
       <BreadthMatrixTable data={m.by_index} />
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 lg:h-[420px]">
         <div className="h-full min-h-0"><RsiHistogramCard rsi={m.rsi_distribution} indices={m.by_index} /></div>

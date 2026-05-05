@@ -11,6 +11,7 @@ import { useState } from "react";
 
 import type { Stock } from "@/api/types";
 import { Card, CardContent } from "@/components/ui/card";
+import { SectionTitle } from "@/components/ui/section-title";
 import { useStockFundamentals } from "@/hooks/useStockFundamentals";
 import { getStockFlagCode } from "@/lib/stockMeta";
 import { cn } from "@/lib/utils";
@@ -96,24 +97,22 @@ export function CompanyOverviewCard({ ticker, stock }: Props) {
   return (
     <Card className="overflow-hidden">
       <CardContent className="p-4 sm:p-5">
-        <div className="flex items-baseline justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <Building2 className="h-3.5 w-3.5 text-muted-foreground" />
-            <span className="text-[10px] font-mono font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-              Profilo società
-            </span>
-          </div>
-          {/* Quick anagrafica chips on the right edge of the title row. Show
-              the most-readable two facts inline at the top so even when the
-              user doesn't read the description, they see "what country" and
-              "how big" at a glance. */}
-          <div className="flex items-center gap-1.5 flex-wrap justify-end">
-            {stock.sector && (
-              <Pill icon={Building2} label={stock.sector} />
-            )}
-            {headquarters && <Pill icon={MapPin} label={headquarters} />}
-          </div>
-        </div>
+        {/* Quick anagrafica chips on the right edge of the title row. Show
+            the most-readable two facts inline at the top so even when the
+            user doesn't read the description, they see "what country" and
+            "how big" at a glance. */}
+        <SectionTitle
+          icon={Building2}
+          label="Profilo società"
+          right={
+            <div className="flex items-center gap-1.5 flex-wrap justify-end">
+              {stock.sector && (
+                <Pill icon={Building2} label={stock.sector} />
+              )}
+              {headquarters && <Pill icon={MapPin} label={headquarters} />}
+            </div>
+          }
+        />
 
         {/* Two-column body: description (left, wide) + anagrafica grid (right). */}
         <div className="mt-3 grid grid-cols-1 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] gap-4 lg:gap-6">

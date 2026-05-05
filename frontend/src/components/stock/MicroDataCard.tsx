@@ -1,7 +1,8 @@
-import { Info } from "lucide-react";
+import { Coins, Info } from "lucide-react";
 
 import type { MicroData, Stock, StockKpis } from "@/api/types";
 import { Card, CardContent } from "@/components/ui/card";
+import { SectionTitle } from "@/components/ui/section-title";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useStockFundamentals } from "@/hooks/useStockFundamentals";
 import { cn } from "@/lib/utils";
@@ -559,9 +560,11 @@ export function MicroDataCard({ ticker, stock, kpis }: Props) {
     return (
       <Card className="h-full overflow-hidden flex flex-col">
         <CardContent className="p-4 h-full flex flex-col min-h-0">
-          <div className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-2">
-            Valuation & Quality
-          </div>
+          <SectionTitle
+            icon={Coins}
+            label="Valuation & Quality"
+            className="mb-2"
+          />
           {/* Snapshot rows render even during fundamentals loading — their data
               comes from the parent (already resolved via /detail), no fetch
               needed. Gives the user something useful while micro data warms. */}
@@ -595,14 +598,16 @@ export function MicroDataCard({ ticker, stock, kpis }: Props) {
   return (
     <Card className="h-full overflow-hidden flex flex-col">
       <CardContent className="p-4 h-full flex flex-col min-h-0">
-        <div className="flex items-center justify-between mb-2 shrink-0">
-          <div className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-            Valuation & Quality
-          </div>
-          <span className="text-sm text-muted-foreground" title="Aggiornato ogni 24h">
-            cache 24h
-          </span>
-        </div>
+        <SectionTitle
+          icon={Coins}
+          label="Valuation & Quality"
+          className="mb-2 shrink-0"
+          right={
+            <span className="text-xs text-muted-foreground" title="Aggiornato ogni 24h">
+              cache 24h
+            </span>
+          }
+        />
         <div className="flex-1 min-h-0 overflow-y-auto pr-1 -mr-1">
           {!anyValue ? (
             <div className="text-sm text-muted-foreground">

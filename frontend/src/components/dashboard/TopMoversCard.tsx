@@ -1,10 +1,11 @@
-import { TrendingDown, TrendingUp } from "lucide-react";
+import { Flame } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useMemo, useState } from "react";
 
 import type { Mover, MoversBlock } from "@/api/types";
 import { StockLogo } from "@/components/dashboard/StockLogo";
 import { Card, CardContent } from "@/components/ui/card";
+import { SectionTitle } from "@/components/ui/section-title";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 
@@ -86,20 +87,20 @@ export function TopMoversCard({ movers }: Props) {
   return (
     <Card className="h-full overflow-hidden">
       <CardContent className="p-0 flex flex-col h-full min-h-0">
-        <div className="flex items-center gap-1.5 px-3 py-2 border-b bg-muted/30 shrink-0">
-          {side === "gainers" ? (
-            <TrendingUp className="h-3.5 w-3.5 text-green-600 dark:text-green-400" />
-          ) : (
-            <TrendingDown className="h-3.5 w-3.5 text-red-600 dark:text-red-400" />
-          )}
-          <span className="text-[10px] uppercase tracking-wider font-bold">Top movers</span>
-          <Tabs value={window} onValueChange={(v) => setWindow(v as Window)} className="ml-auto">
-            <TabsList className="h-6 p-0.5">
-              <TabsTrigger value="1d" className="h-5 text-[10px] px-1.5" title="Variazione giornaliera">1G</TabsTrigger>
-              <TabsTrigger value="1w" className="h-5 text-[10px] px-1.5" title="Variazione settimanale (~5 giorni)">1S</TabsTrigger>
-              <TabsTrigger value="1m" className="h-5 text-[10px] px-1.5" title="Variazione mensile (~20 giorni)">1M</TabsTrigger>
-            </TabsList>
-          </Tabs>
+        <div className="px-3 py-2 border-b bg-muted/30 shrink-0">
+          <SectionTitle
+            icon={Flame}
+            label="Top movers"
+            right={
+              <Tabs value={window} onValueChange={(v) => setWindow(v as Window)}>
+                <TabsList className="h-6 p-0.5">
+                  <TabsTrigger value="1d" className="h-5 text-[10px] px-1.5" title="Variazione giornaliera">1G</TabsTrigger>
+                  <TabsTrigger value="1w" className="h-5 text-[10px] px-1.5" title="Variazione settimanale (~5 giorni)">1S</TabsTrigger>
+                  <TabsTrigger value="1m" className="h-5 text-[10px] px-1.5" title="Variazione mensile (~20 giorni)">1M</TabsTrigger>
+                </TabsList>
+              </Tabs>
+            }
+          />
         </div>
 
         {/* Gainers/Losers side toggle */}

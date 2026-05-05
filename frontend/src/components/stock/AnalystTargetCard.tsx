@@ -1,7 +1,8 @@
-import { ArrowDown, ArrowRight, ArrowUp, Sparkles, Target } from "lucide-react";
+import { ArrowDown, ArrowRight, ArrowUp, Sparkles, Target, TrendingUp } from "lucide-react";
 
 import type { AnalystAction, AnalystPriceTarget, AnalystRating } from "@/api/types";
 import { Card, CardContent } from "@/components/ui/card";
+import { SectionTitle } from "@/components/ui/section-title";
 import { useStockFundamentals } from "@/hooks/useStockFundamentals";
 import { cn } from "@/lib/utils";
 
@@ -40,23 +41,28 @@ function PriceTargetBar({ pt }: { pt: AnalystPriceTarget }) {
 
   return (
     <div className="rounded-md bg-muted/40 p-3">
-      <div className="flex items-center justify-between text-[11px] uppercase tracking-wider text-muted-foreground mb-2">
-        <span>Price target consensus</span>
-        {upside != null && (
-          <span
-            className={cn(
-              "font-bold tabular-nums",
-              upside > 0
-                ? "text-emerald-700 dark:text-emerald-300"
-                : "text-rose-700 dark:text-rose-300",
-            )}
-            title={`Upside implicito: ${upside.toFixed(1)}% sul prezzo corrente`}
-          >
-            {upside >= 0 ? "+" : ""}
-            {upside.toFixed(1)}%
-          </span>
-        )}
-      </div>
+      <SectionTitle
+        icon={Target}
+        label="Price target consensus"
+        size="sm"
+        className="mb-2"
+        right={
+          upside != null ? (
+            <span
+              className={cn(
+                "font-bold tabular-nums text-[11px]",
+                upside > 0
+                  ? "text-emerald-700 dark:text-emerald-300"
+                  : "text-rose-700 dark:text-rose-300",
+              )}
+              title={`Upside implicito: ${upside.toFixed(1)}% sul prezzo corrente`}
+            >
+              {upside >= 0 ? "+" : ""}
+              {upside.toFixed(1)}%
+            </span>
+          ) : undefined
+        }
+      />
 
       {/* Mean target as the headline number */}
       <div className="flex items-baseline gap-2 mb-3 tabular-nums">
@@ -136,10 +142,17 @@ function RatingBar({ r }: { r: AnalystRating }) {
   const pct = (n: number) => `${(n / total) * 100}%`;
   return (
     <div>
-      <div className="flex items-center justify-between text-[11px] uppercase tracking-wider text-muted-foreground mb-1">
-        <span>Recommendation</span>
-        <span className="tabular-nums normal-case">{total} analisti</span>
-      </div>
+      <SectionTitle
+        icon={TrendingUp}
+        label="Recommendation"
+        size="sm"
+        className="mb-1"
+        right={
+          <span className="tabular-nums text-[10px] text-muted-foreground">
+            {total} analisti
+          </span>
+        }
+      />
       <div className="flex h-2.5 rounded-full overflow-hidden bg-muted">
         <div
           className="bg-emerald-500"
@@ -373,9 +386,7 @@ export function AnalystTargetCard({ ticker }: Props) {
     return (
       <Card className="h-full">
         <CardContent className="p-4 h-full flex flex-col">
-          <div className="flex items-center gap-1.5 text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-2">
-            <Target className="h-4 w-4" /> Analyst
-          </div>
+          <SectionTitle icon={Target} label="Analyst" className="mb-2" />
           <div className="flex-1 animate-pulse bg-muted/40 rounded" />
         </CardContent>
       </Card>
@@ -394,9 +405,7 @@ export function AnalystTargetCard({ ticker }: Props) {
     return (
       <Card className="h-full">
         <CardContent className="p-4 h-full flex flex-col">
-          <div className="flex items-center gap-1.5 text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-2">
-            <Target className="h-4 w-4" /> Analyst
-          </div>
+          <SectionTitle icon={Target} label="Analyst" className="mb-2" />
           <div className="flex-1 flex items-center justify-center text-[11px] text-muted-foreground text-center px-2">
             Nessuna stima analista disponibile.
           </div>
@@ -414,9 +423,7 @@ export function AnalystTargetCard({ ticker }: Props) {
           this card resilient: the price-target bar and ratings bar are fixed
           (shrink-0), only the actions list scrolls when there are many rows. */}
       <CardContent className="p-4 h-full flex flex-col gap-2 min-h-0">
-        <div className="flex items-center gap-1.5 text-sm font-semibold uppercase tracking-wide text-muted-foreground shrink-0">
-          <Target className="h-4 w-4" /> Analyst
-        </div>
+        <SectionTitle icon={Target} label="Analyst" className="shrink-0" />
 
         {hasPT && pt && (
           <div className="shrink-0">
@@ -437,14 +444,19 @@ export function AnalystTargetCard({ ticker }: Props) {
             cap (vs flex-1) keeps the card compact regardless of action
             count and gives the user a consistent visible window. */}
         <div className="flex flex-col min-h-0">
-          <div className="text-[11px] uppercase tracking-wider text-muted-foreground mb-1 shrink-0 flex items-center justify-between">
-            <span>Azioni recenti</span>
-            {actions.length > 0 && (
-              <span className="tabular-nums normal-case text-muted-foreground/70">
-                {actions.length} totali
-              </span>
-            )}
-          </div>
+          <SectionTitle
+            icon={ArrowRight}
+            label="Azioni recenti"
+            size="sm"
+            className="mb-1 shrink-0"
+            right={
+              actions.length > 0 ? (
+                <span className="tabular-nums text-[10px] text-muted-foreground/70">
+                  {actions.length} totali
+                </span>
+              ) : undefined
+            }
+          />
           <div className="overflow-y-auto pr-1 max-h-[180px]">
             <ActionsList actions={actions} />
           </div>

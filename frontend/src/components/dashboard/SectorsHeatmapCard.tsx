@@ -1,5 +1,8 @@
+import { LayoutGrid } from "lucide-react";
+
 import type { SectorBreadth } from "@/api/types";
 import { Card, CardContent } from "@/components/ui/card";
+import { SectionTitle } from "@/components/ui/section-title";
 import { getSectorIcon } from "@/lib/sectorMeta";
 
 interface Props {
@@ -19,7 +22,11 @@ export function SectorsHeatmapCard({ sectors }: Props) {
   return (
     <Card className="h-full overflow-hidden">
       <CardContent className="p-4 flex flex-col h-full min-h-0">
-        <div className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-2 shrink-0">Sectors (Avg Δ%)</div>
+        <SectionTitle
+          icon={LayoutGrid}
+          label="Sectors (Avg Δ%)"
+          className="mb-2 shrink-0"
+        />
         {sectors.length === 0 ? (
           <div className="text-sm text-muted-foreground text-center py-6">Nessun settore</div>
         ) : (

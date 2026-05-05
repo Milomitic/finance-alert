@@ -1,9 +1,10 @@
-import { ArrowDown, ArrowUp, Pencil, Power, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, BellRing, Pencil, Power, Trash2 } from "lucide-react";
 import { useState } from "react";
 
 import type { PriceAlert } from "@/api/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { SectionTitle } from "@/components/ui/section-title";
 import { PriceAlertDialog } from "@/components/stock/PriceAlertDialog";
 import {
   useCreatePriceAlert, useDeletePriceAlert, useStockPriceAlerts, useUpdatePriceAlert,
@@ -28,18 +29,20 @@ export function PriceAlertsCard({ ticker }: Props) {
     <>
       <Card>
         <CardContent className="p-4">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-              Price alerts
-            </span>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => { setEditing(null); setDialogOpen(true); }}
-            >
-              + Aggiungi
-            </Button>
-          </div>
+          <SectionTitle
+            icon={BellRing}
+            label="Price alerts"
+            className="mb-3"
+            right={
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => { setEditing(null); setDialogOpen(true); }}
+              >
+                + Aggiungi
+              </Button>
+            }
+          />
           {items.length === 0 ? (
             <div className="text-sm text-muted-foreground text-center py-4">
               Nessuna price alert. Click su "+ Aggiungi" o sul chart per crearne una.

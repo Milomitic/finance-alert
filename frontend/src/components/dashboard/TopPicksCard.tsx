@@ -1,9 +1,10 @@
-import { Sparkles } from "lucide-react";
+import { Trophy } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
 import type { RiskTier, TopPickItem } from "@/api/types";
 import { Card, CardContent } from "@/components/ui/card";
+import { SectionTitle } from "@/components/ui/section-title";
 import { useTopPicks } from "@/hooks/useTopPicks";
 import {
   RISK_LABEL,
@@ -181,14 +182,16 @@ export function TopPicksCard() {
     <Card className="overflow-hidden">
       <CardContent className="p-0">
         {/* Header */}
-        <div className="flex items-center gap-2 px-3 py-2 border-b bg-muted/30">
-          <Sparkles className="h-3.5 w-3.5 text-amber-500" />
-          <span className="text-sm font-semibold uppercase tracking-wide">
-            Top picks
-          </span>
-          <span className="text-xs text-muted-foreground">
-            classifica per score composito
-          </span>
+        <div className="px-3 py-2 border-b bg-muted/30">
+          <SectionTitle
+            icon={Trophy}
+            label="Top picks"
+            right={
+              <span className="text-xs text-muted-foreground">
+                classifica per score composito
+              </span>
+            }
+          />
         </div>
 
         {/* Tab strip — plain buttons (CLAUDE.md: don't bring back Radix Tabs) */}

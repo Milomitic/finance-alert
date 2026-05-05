@@ -6,9 +6,9 @@ import {
   ListChecks,
   LogOut,
   Settings,
-  Sliders,
 } from "lucide-react";
 import { NavbarSearch } from "@/components/NavbarSearch";
+import { ScanProgressToast } from "@/components/ScanProgressToast";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
@@ -30,8 +30,10 @@ const NAV: NavEntry[] = [
   // ranking) so that's the label. Filter icon to telegraph the function.
   { to: "/stocks", label: "Screener", icon: Filter, enabled: true },
   { to: "/calendar", label: "Calendario", icon: CalendarDays, enabled: true },
+  // Rules used to be a separate page; now lives in the AlertsPage right
+  // sidebar so the user composes rules + reviews their alerts in one
+  // surface. The /rules route was removed.
   { to: "/alerts", label: "Alerts", icon: Bell, enabled: true },
-  { to: "/rules", label: "Regole", icon: Sliders, enabled: true },
   { to: "/settings", label: "Impostazioni", icon: Settings, enabled: false },
 ];
 
@@ -104,6 +106,11 @@ export default function Layout() {
           <Outlet />
         </main>
       </div>
+      {/* Persistent scan-progress notification — mounted globally so it
+          survives route changes. The user can navigate around while a
+          scan runs and still see the live progress. Auto-dismisses 30s
+          after completion; click anywhere on the toast to dismiss. */}
+      <ScanProgressToast />
     </div>
   );
 }

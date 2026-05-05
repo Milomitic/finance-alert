@@ -1,3 +1,4 @@
+import { BarChart2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import {
   CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
@@ -5,6 +6,7 @@ import {
 
 import type { IndexBreadth, RsiDistribution } from "@/api/types";
 import { Card, CardContent } from "@/components/ui/card";
+import { SectionTitle } from "@/components/ui/section-title";
 import { getIndexMeta } from "@/lib/indexMeta";
 import { cn } from "@/lib/utils";
 
@@ -57,12 +59,16 @@ export function RsiHistogramCard({ rsi, indices }: Props) {
   return (
     <Card className="h-full overflow-hidden">
       <CardContent className="p-4 flex flex-col h-full min-h-0">
-        <div className="flex items-center justify-between mb-2 gap-2">
-          <span className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-            RSI distribution per indice
-          </span>
-          <span className="text-[10px] text-muted-foreground">click su legenda per nascondere/mostrare</span>
-        </div>
+        <SectionTitle
+          icon={BarChart2}
+          label="RSI distribution per indice"
+          right={
+            <span className="text-[10px] text-muted-foreground">
+              click su legenda per nascondere/mostrare
+            </span>
+          }
+          className="mb-2"
+        />
 
         {/* Custom checkbox legend (above chart) */}
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mb-2">

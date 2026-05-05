@@ -1,5 +1,8 @@
+import { Activity } from "lucide-react";
+
 import type { IndicatorSeries, StockKpis } from "@/api/types";
 import { Card, CardContent } from "@/components/ui/card";
+import { SectionTitle } from "@/components/ui/section-title";
 import { ACRONYM_HELP } from "@/lib/acronymHelp";
 
 interface Props {
@@ -26,9 +29,7 @@ export function TechnicalKpiCard({ kpis, indicators }: Props) {
   return (
     <Card>
       <CardContent className="p-4">
-        <div className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-2">
-          KPI tecnici
-        </div>
+        <SectionTitle icon={Activity} label="KPI tecnici" className="mb-2" />
         <table className="w-full text-sm tabular-nums">
           <tbody>
             <tr><td className="py-1 text-muted-foreground">SMA 50</td><td className="py-1 text-right font-semibold">${fmtNum(sma50)}</td></tr>

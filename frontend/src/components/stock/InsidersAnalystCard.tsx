@@ -1,7 +1,8 @@
-import { Briefcase, Users } from "lucide-react";
+import { Briefcase } from "lucide-react";
 
 import type { InsiderTransaction } from "@/api/types";
 import { Card, CardContent } from "@/components/ui/card";
+import { SectionTitle } from "@/components/ui/section-title";
 import { useStockFundamentals } from "@/hooks/useStockFundamentals";
 import { cn } from "@/lib/utils";
 
@@ -74,9 +75,11 @@ export function InsidersAnalystCard({ ticker }: Props) {
     return (
       <Card>
         <CardContent className="p-4">
-          <div className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-2">
-            Insider transactions
-          </div>
+          <SectionTitle
+            icon={Briefcase}
+            label="Insider transactions"
+            className="mb-2"
+          />
           <div className="h-32 animate-pulse bg-muted/40 rounded" />
         </CardContent>
       </Card>
@@ -88,17 +91,18 @@ export function InsidersAnalystCard({ ticker }: Props) {
   return (
     <Card>
       <CardContent className="p-4">
-        <div className="flex items-center gap-1.5 mb-2">
-          <Users className="h-4 w-4 text-muted-foreground" />
-          <span className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-            Insider transactions
-          </span>
-          {insiders.length > 0 && (
-            <span className="ml-auto text-sm text-muted-foreground tabular-nums">
-              ultime {Math.min(insiders.length, 12)}
-            </span>
-          )}
-        </div>
+        <SectionTitle
+          icon={Briefcase}
+          label="Insider transactions"
+          className="mb-2"
+          right={
+            insiders.length > 0 ? (
+              <span className="text-xs text-muted-foreground tabular-nums">
+                ultime {Math.min(insiders.length, 12)}
+              </span>
+            ) : undefined
+          }
+        />
         {insiders.length === 0 ? (
           <div className="text-sm text-muted-foreground text-center py-4">
             Nessuna transazione insider registrata.

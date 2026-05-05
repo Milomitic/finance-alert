@@ -1,24 +1,40 @@
 import { useState } from "react";
-import { Download, Loader2, PlayCircle, Send } from "lucide-react";
+import { Download } from "lucide-react";
 
 import { alerts as alertsApi, type AlertListParams } from "@/api/alerts";
 import type { Alert } from "@/api/types";
 import { AlertDetailDialog } from "@/components/AlertDetailDialog";
 import { AlertFilters } from "@/components/AlertFilters";
 import { AlertsTable } from "@/components/AlertsTable";
-import { ScanStatusCard } from "@/components/ScanStatusCard";
+import { RulesPanel } from "@/components/rules/RulesPanel";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useAlertsList } from "@/hooks/useAlerts";
-import {
-  useBulkAlerts,
-  useSendDigest,
-  useTriggerScan,
-} from "@/hooks/useAlertMutations";
-import { useScanStatus } from "@/hooks/useScanStatus";
+import { useBulkAlerts } from "@/hooks/useAlertMutations";
 
 const PAGE_SIZE = 50;
 
+/* ─── AlertsPage layout (V3) ─────────────────────────────────────────────
+ *
+ * Top: title + count + "Esporta CSV"
+ *
+ * Body: 2-column grid on lg+
+ *   ┌─────────────────────────┐  ┌──────────────────┐
+ *   │  AlertFilters           │  │  RulesPanel      │
+ *   │  (left, fluid 1fr)      │  │  (right, 480px)  │
+ *   └─────────────────────────┘  └──────────────────┘
+ *
+ * What CHANGED from V2:
+ *   - Manual scan trigger + ScanStatusCard moved to the dashboard
+ *     (HeroStrip → ScanTriggerCard); progress now lives in the persistent
+ *     ScanProgressToast (mounted in Layout, bottom-right).
+ *   - "Invia digest" button moved to ScanTriggerCard alongside the scan
+ *     trigger (both are admin-style on-demand jobs).
+ *   - The right-column slot is repurposed: was ScanStatusCard, now RulesPanel
+ *     (the standalone /rules page is gone — rules + alerts compose better
+ *     on the same screen, since you tune rules based on the alerts they
+ *     produce).
+ */
 export default function AlertsPage() {
   const [filters, setFilters] = useState<AlertListParams>({
     archived: false,
@@ -31,10 +47,6 @@ export default function AlertsPage() {
 
   const list = useAlertsList({ ...filters, offset: page * PAGE_SIZE });
   const bulk = useBulkAlerts();
-  const triggerScan = useTriggerScan();
-  const sendDigest = useSendDigest();
-  const scanStatus = useScanStatus();
-  const isScanning = scanStatus.data?.is_running ?? false;
 
   const items = list.data?.items ?? [];
   const total = list.data?.total ?? 0;
@@ -71,46 +83,18 @@ export default function AlertsPage() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button
-            variant="outline"
-            onClick={() => triggerScan.mutate()}
-            disabled={isScanning || triggerScan.isPending}
-            title={isScanning ? "Uno scan è già in corso" : "Avvia uno scan in background"}
-          >
-            {isScanning || triggerScan.isPending ? (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-            ) : (
-              <PlayCircle className="h-4 w-4 mr-2" />
-            )}
-            {isScanning ? "Scan in corso…" : "Esegui scan ora"}
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => sendDigest.mutate()}
-            disabled={sendDigest.isPending}
-          >
-            {sendDigest.isPending ? (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-            ) : (
-              <Send className="h-4 w-4 mr-2" />
-            )}
-            Invia digest ora
-          </Button>
           <Button variant="outline" onClick={exportCsv}>
             <Download className="h-4 w-4 mr-2" /> Esporta CSV
           </Button>
         </div>
       </div>
 
-      {/* Filters + Scan status side-by-side on wide viewports.
-          Right column at 480px (was 360px) gives the scan-status card
-          enough room for the title + Stop button on one line, plus a
-          comfortable progress bar when running. The filters card has
-          three short inputs and chip strip, so giving up that ~120px is
-          a net win on density. Stacks vertically on narrow viewports. */}
+      {/* Filters (left) + Rules (right). Right-column 480px is the same
+          size the old ScanStatusCard occupied — the rules panel inherits
+          that slot wholesale. Stacks vertically on narrow viewports. */}
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_480px] gap-3 items-start">
         <AlertFilters value={filters} onChange={(v) => { setPage(0); setFilters(v); }} />
-        <ScanStatusCard status={scanStatus.data} isFetching={scanStatus.isFetching} />
+        <RulesPanel />
       </div>
 
       {selectedIds.size > 0 && (

@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { api } from "@/api/client";
 import { Card, CardContent } from "@/components/ui/card";
+import { SectionTitle } from "@/components/ui/section-title";
 import { cn } from "@/lib/utils";
 
 interface SourceMetric {
@@ -110,9 +111,7 @@ export function DataSourcesCard() {
     return (
       <Card>
         <CardContent className="p-4">
-          <div className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-2">
-            Data Sources
-          </div>
+          <SectionTitle icon={Database} label="Data Sources" className="mb-2" />
           <div className="h-24 animate-pulse bg-muted/40 rounded" />
         </CardContent>
       </Card>
@@ -132,18 +131,19 @@ export function DataSourcesCard() {
   return (
     <Card>
       <CardContent className="p-4">
-        <div className="flex items-center gap-2 mb-3 pb-2 border-b border-border/50">
-          <Database className="h-4 w-4 text-muted-foreground" />
-          <span className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-            Data sources
-          </span>
-          <span className={cn("ml-auto text-[11px] px-2 py-0.5 rounded font-semibold", breakerColor)}>
-            yfinance breaker: {data.yfinance_breaker.state}
-            {data.yfinance_breaker.state === "open" && data.yfinance_breaker.seconds_until_probe != null && (
-              <> · probe tra {Math.round(data.yfinance_breaker.seconds_until_probe)}s</>
-            )}
-          </span>
-        </div>
+        <SectionTitle
+          icon={Database}
+          label="Data sources"
+          right={
+            <span className={cn("text-[11px] px-2 py-0.5 rounded font-semibold", breakerColor)}>
+              yfinance breaker: {data.yfinance_breaker.state}
+              {data.yfinance_breaker.state === "open" && data.yfinance_breaker.seconds_until_probe != null && (
+                <> · probe tra {Math.round(data.yfinance_breaker.seconds_until_probe)}s</>
+              )}
+            </span>
+          }
+          className="mb-3 pb-2 border-b border-border/50"
+        />
 
         {data.metrics.length === 0 ? (
           <div className="text-xs text-muted-foreground">

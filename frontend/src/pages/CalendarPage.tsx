@@ -1,4 +1,4 @@
-import { CalendarRange, AlertCircle, Loader2 } from "lucide-react";
+import { CalendarRange, AlertCircle, Info, Loader2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type { CalendarEvent, MacroImportance } from "@/api/types";
@@ -10,6 +10,7 @@ import {
   MonthGrid,
   MonthNav,
 } from "@/components/calendar";
+import { SectionTitle } from "@/components/ui/section-title";
 import { useCalendar } from "@/hooks/useCalendar";
 import { buildMonthGrid, todayISO } from "@/lib/calendarMeta";
 import { cn } from "@/lib/utils";
@@ -285,9 +286,7 @@ export default function CalendarPage() {
 function Legend() {
   return (
     <div className="rounded-lg border bg-card/50 px-4 py-3">
-      <div className="text-[10px] font-mono font-semibold uppercase tracking-[0.18em] text-muted-foreground mb-2">
-        Legenda
-      </div>
+      <SectionTitle icon={Info} label="Legenda" size="sm" className="mb-2" />
       <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-[11px]">
         <LegendItem
           swatch={

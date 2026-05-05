@@ -1,7 +1,9 @@
+import { LineChart } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import type { Mover, MoversBlock, VolumeSpike } from "@/api/types";
 import { Card, CardContent } from "@/components/ui/card";
+import { SectionTitle } from "@/components/ui/section-title";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { IndexBadge } from "@/components/dashboard/IndexBadge";
 import { StockLogo } from "@/components/dashboard/StockLogo";
@@ -111,6 +113,11 @@ export function FiftyTwoWeekVolCard({ movers }: Props) {
   return (
     <Card className="h-full overflow-hidden">
       <CardContent className="p-0 h-full flex flex-col min-h-0">
+        <SectionTitle
+          icon={LineChart}
+          label="52w & volume events"
+          className="px-3 pt-3 pb-1.5 shrink-0"
+        />
         <Tabs defaultValue="hilo" className="flex-1 flex flex-col min-h-0">
           <TabsList className="h-10 px-1 rounded-none border-b w-full justify-start bg-muted/30">
             <TabsTrigger value="hilo" className="text-sm h-9 px-3" title="Stock che oggi raggiungono nuovi massimi/minimi a 52 settimane">52w events</TabsTrigger>
