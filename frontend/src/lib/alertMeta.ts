@@ -10,6 +10,8 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
+import type { Alert } from "@/api/types";
+
 /* ─── Shared rule-kind metadata ─────────────────────────────────────────── */
 /* One source of truth for the per-rule label / icon / semantic tone used by
  * StockAlertsHistoryCard, AlertDetailDialog, RecentAlertsFeed, and AlertsTable.
@@ -55,6 +57,37 @@ export function getAlertKindMeta(rule_kind: string | null | undefined): AlertKin
       tone: "neutral",
     }
   );
+}
+
+/** Get metadata for an alert as a whole — same as `getAlertKindMeta` for
+ *  rule-based alerts, but for PRICE alerts it derives the directional tone
+ *  from `snapshot.direction`:
+ *
+ *    direction "above"  → price broke UP through target → bullish
+ *    direction "below"  → price broke DOWN through target → bearish
+ *
+ *  This gives every Alert (rule-based OR price-target) a usable directional
+ *  read, so the UI can show a Bullish/Bearish chip everywhere instead of
+ *  collapsing price alerts to a meaningless "neutral" tone.
+ *
+ *  Use THIS helper everywhere a UI needs the alert's effective meta —
+ *  list rows, table cells, dialog headers. Reserve `getAlertKindMeta`
+ *  for the few places that genuinely care about kind only (e.g. the
+ *  rule-name dropdown in AlertFilters). */
+export function getAlertMeta(alert: Alert): AlertKindMeta {
+  if (alert.rule_kind) return getAlertKindMeta(alert.rule_kind);
+  // Price alert — read direction from the snapshot dict the backend
+  // wrote (`backend/app/services/price_alert_service.py`).
+  const direction =
+    (alert.snapshot as Record<string, unknown> | undefined)?.direction;
+  if (direction === "above") {
+    return { label: "Price target ↑", icon: TrendingUp, tone: "bullish" };
+  }
+  if (direction === "below") {
+    return { label: "Price target ↓", icon: TrendingDown, tone: "bearish" };
+  }
+  // Truly unknown (legacy rows without snapshot): keep the generic label.
+  return { label: "Price alert", icon: Bell, tone: "neutral" };
 }
 
 /* ─── Tone → Tailwind class maps ────────────────────────────────────────── */

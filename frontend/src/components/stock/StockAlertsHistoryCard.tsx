@@ -10,7 +10,7 @@ import {
   TONE_BG,
   TONE_BORDER_LEFT,
   TONE_LABEL,
-  getAlertKindMeta,
+  getAlertMeta,
   getSnapshotHeadline,
   type AlertTone,
 } from "@/lib/alertMeta";
@@ -70,7 +70,10 @@ function computeStats(alerts: Alert[]): AlertStats {
   let last30d = 0;
   for (const a of alerts) {
     if (new Date(a.triggered_at).getTime() >= cutoff) last30d++;
-    const tone = getAlertKindMeta(a.rule_kind).tone;
+    // Effective tone: handles both rule-based alerts (kind tone) and
+    // price-target alerts (direction tone) so the aggregate counts
+    // include price targets that fired.
+    const tone = getAlertMeta(a).tone;
     if (tone === "bullish") bullish++;
     else if (tone === "bearish") bearish++;
   }
@@ -90,7 +93,11 @@ const TONE_ICON: Record<AlertTone, typeof TrendingUp> = {
 };
 
 function AlertRow({ alert, onClick }: { alert: Alert; onClick: () => void }) {
-  const meta = getAlertKindMeta(alert.rule_kind);
+  // Effective meta: rule kind → kind tone; price alert → direction-based
+  // tone (above=bullish, below=bearish). Lets the row show a real
+  // Bullish/Bearish chip for price-target alerts instead of a neutral
+  // "Price alert" with no direction.
+  const meta = getAlertMeta(alert);
   const KindIcon = meta.icon;
   const ToneIcon = TONE_ICON[meta.tone];
   const delayed = isDelayedDetection(alert.triggered_at, alert.signal_date);

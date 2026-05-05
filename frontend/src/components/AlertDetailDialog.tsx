@@ -6,6 +6,9 @@ import {
   Clock,
   Code2,
   DollarSign,
+  Minus,
+  TrendingDown,
+  TrendingUp,
 } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router-dom";
@@ -24,8 +27,9 @@ import { daysBetween, isDelayedDetection } from "@/lib/alertDates";
 import {
   TONE_BG,
   TONE_BORDER_LEFT,
+  TONE_LABEL,
   TONE_TEXT,
-  getAlertKindMeta,
+  getAlertMeta,
   resolveSnapshot,
   type AlertTone,
 } from "@/lib/alertMeta";
@@ -124,8 +128,17 @@ export function AlertDetailDialog({ alert, onClose }: Props) {
     return <Dialog open={false} onOpenChange={(open) => !open && onClose()} />;
   }
 
-  const meta = getAlertKindMeta(alert.rule_kind);
+  // Effective meta — same fall-back rules as the alerts table and stock-
+  // detail history card: rule_kind drives kind tone; price-target alerts
+  // derive their tone from `snapshot.direction` (above=bullish, below=bearish).
+  const meta = getAlertMeta(alert);
   const Icon = meta.icon;
+  const ToneIcon =
+    meta.tone === "bullish"
+      ? TrendingUp
+      : meta.tone === "bearish"
+        ? TrendingDown
+        : Minus;
   const resolution = resolveSnapshot(alert.rule_kind, alert.snapshot ?? {});
   const hasResolvedRows = resolution.rows.length > 0;
   const hasRawData = Object.keys(alert.snapshot ?? {}).length > 0;
@@ -153,6 +166,24 @@ export function AlertDetailDialog({ alert, onClose }: Props) {
               <Icon className="h-3.5 w-3.5" />
               {meta.label}
             </span>
+            {/* Tone badge — explicit Bullish / Bearish read alongside the
+                kind chip. Renders for directional tones only; warning
+                and neutral get their meaning across via the kind chip's
+                color alone. */}
+            {(meta.tone === "bullish" || meta.tone === "bearish") && (
+              <span
+                className={cn(
+                  "inline-flex items-center gap-1 px-2 py-0.5 rounded-sm border text-[11px] font-semibold uppercase tracking-wider",
+                  meta.tone === "bullish"
+                    ? "border-emerald-300/70 dark:border-emerald-700/60 text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40"
+                    : "border-rose-300/70 dark:border-rose-700/60 text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40",
+                )}
+                title={`Tono semantico: ${TONE_LABEL[meta.tone].toLowerCase()}`}
+              >
+                <ToneIcon className="h-3 w-3" />
+                {TONE_LABEL[meta.tone]}
+              </span>
+            )}
             {isArchived && (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold bg-muted text-muted-foreground">
                 Archiviato
