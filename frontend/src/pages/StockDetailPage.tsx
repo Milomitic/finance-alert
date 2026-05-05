@@ -4,6 +4,7 @@ import { useParams, useSearchParams } from "react-router-dom";
 
 import type { PriceAlert } from "@/api/types";
 import { Card, CardContent } from "@/components/ui/card";
+import { useChartSync } from "@/hooks/useChartSync";
 import { useCreatePriceAlert, useStockPriceAlerts } from "@/hooks/useStockPriceAlerts";
 import { useStockDetail } from "@/hooks/useStockDetail";
 import { useStockDrawings } from "@/hooks/useStockDrawings";
@@ -45,6 +46,13 @@ export default function StockDetailPage() {
   const [mode, setMode] = useState<DrawingMode>("none");
   const [pendingPrice, setPendingPrice] = useState<number | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+
+  // Chart-sync orchestrator: PriceChart + RsiPanel + MacdPanel each
+  // register with this on mount, the hook then forwards every pan/zoom
+  // event from any one chart to the others so the time axis stays
+  // anchored across the stack. Stable across renders — safe to pass as
+  // a prop without re-mounting the children.
+  const registerChart = useChartSync();
 
   const onIndicatorChange = (key: IndicatorKey, next: IndicatorStyle) =>
     setIndicators((prev) => ({ ...prev, [key]: next }));
@@ -185,6 +193,7 @@ export default function StockDetailPage() {
                   priceAlerts={priceAlerts}
                   horizontalDrawings={drawings.drawings.horizontal}
                   onChartClick={handleChartClick}
+                  onReady={registerChart}
                 />
               </ResizableSection>
             )}
@@ -201,7 +210,12 @@ export default function StockDetailPage() {
                   minHeight={80}
                   label={`RSI(${d.indicators.periods?.rsi ?? 14})`}
                 >
-                  <RsiPanel rsi14={d.indicators.rsi14} color={indicators.rsi.color} width={indicators.rsi.width} />
+                  <RsiPanel
+                    rsi14={d.indicators.rsi14}
+                    color={indicators.rsi.color}
+                    width={indicators.rsi.width}
+                    onReady={registerChart}
+                  />
                 </ResizableSection>
               </div>
             )}
@@ -228,6 +242,7 @@ export default function StockDetailPage() {
                     hist={d.indicators.macd_hist ?? []}
                     color={indicators.macd.color}
                     width={indicators.macd.width}
+                    onReady={registerChart}
                   />
                 </ResizableSection>
               </div>

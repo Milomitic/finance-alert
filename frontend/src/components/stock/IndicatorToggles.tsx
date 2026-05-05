@@ -36,13 +36,13 @@ export const INDICATOR_CATALOG: IndicatorMeta[] = [
   { key: "macd",   label: "MACD",      group: "panel",   defaultColor: "#ef4444", description: "Pannello separato — MACD 12/26/9" },
 ];
 
-// Default-on indicators: SMA50 + SMA200 + Bollinger as overlays; RSI + MACD
-// as separate panels. Bollinger and MACD added to defaults since they're the
-// most-asked-for technical signals after the SMA pair — pre-enabling them
-// avoids a click for the common case. SMA20 stays off (chartists who want
-// it can toggle; default-on would visually crowd the price line).
+// Default-on indicators: all three SMAs + Bollinger as overlays; RSI + MACD
+// as separate panels. SMA20 enabled by default (was off): users want a
+// short-term trend reference alongside the mid- and long-term ones, and
+// the now-relocated indicator badges (right price scale instead of inline)
+// mean an extra line doesn't visually crowd the candles.
 export const DEFAULT_INDICATOR_STATE: IndicatorState = {
-  sma20:  { visible: false, color: "#a855f7", width: 1 },
+  sma20:  { visible: true,  color: "#a855f7", width: 1 },
   sma50:  { visible: true,  color: "#3b82f6", width: 1 },
   sma200: { visible: true,  color: "#f59e0b", width: 1 },
   bb:     { visible: true,  color: "#0ea5e9", width: 1 },

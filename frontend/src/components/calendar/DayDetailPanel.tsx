@@ -231,13 +231,13 @@ function DayDetailContent({
         >
           <X className="h-4 w-4" />
         </button>
-        <div className="text-[10px] font-mono font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+        <div className="text-[11.5px] font-mono font-semibold uppercase tracking-[0.18em] text-muted-foreground">
           {isToday ? "Oggi" : "Giornata"}
         </div>
         <h2 className="mt-1 text-lg font-semibold leading-tight tabular-nums pr-10">
           {formatLongDate(date)}
         </h2>
-        <div className="mt-2 flex items-center gap-2 text-[11px] text-muted-foreground">
+        <div className="mt-2 flex items-center gap-2 text-[12.5px] text-muted-foreground">
           <CountChip count={macros.length} label="Macro" tone="macro" />
           <CountChip count={earnings.length} label="Earnings" tone="sector" />
         </div>
@@ -248,7 +248,7 @@ function DayDetailContent({
         {events.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center text-center px-6 py-14">
             <CalendarOff className="h-10 w-10 text-muted-foreground/40" />
-            <p className="mt-3 text-sm text-muted-foreground">
+            <p className="mt-3 text-[15px] text-muted-foreground">
               Nessun evento registrato per questa giornata.
             </p>
           </div>
@@ -284,7 +284,7 @@ function DayDetailContent({
                 />
                 <SearchBar query={query} onQueryChange={setQuery} />
                 {filteredEarnings.length === 0 ? (
-                  <div className="rounded-lg border border-dashed bg-muted/20 px-4 py-6 text-center text-xs text-muted-foreground">
+                  <div className="rounded-lg border border-dashed bg-muted/20 px-4 py-6 text-center text-[13px] text-muted-foreground">
                     Nessun risultato per "{query}".
                   </div>
                 ) : (
@@ -317,14 +317,14 @@ function SectionTitle({
   return (
     <div className="flex items-baseline justify-between">
       <div className="flex items-baseline gap-2">
-        <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-foreground/80">
+        <span className="text-[12.5px] font-semibold uppercase tracking-[0.16em] text-foreground/80">
           {label}
         </span>
-        <span className="rounded-full border bg-muted/40 px-1.5 py-0 text-[10px] font-mono tabular-nums text-muted-foreground">
+        <span className="rounded-full border bg-muted/40 px-1.5 py-0 text-[11.5px] font-mono tabular-nums text-muted-foreground">
           {count}
         </span>
       </div>
-      <span className="text-[10px] uppercase tracking-wider text-muted-foreground/70">
+      <span className="text-[11.5px] uppercase tracking-wider text-muted-foreground/70">
         {hint}
       </span>
     </div>
@@ -350,7 +350,7 @@ function SearchBar({
         placeholder="Cerca ticker, nome, settore…"
         className={cn(
           "w-full rounded-md border bg-background pl-7 pr-7 py-1.5",
-          "text-xs placeholder:text-muted-foreground/60",
+          "text-[13px] placeholder:text-muted-foreground/60",
           "focus:outline-none focus:ring-2 focus:ring-primary/40",
         )}
         aria-label="Filtra earnings"
@@ -403,7 +403,7 @@ function EarningsTable({
       <div
         className={cn(
           "sticky top-0 z-10 grid items-center border-b bg-muted/70 backdrop-blur-sm",
-          "px-2 py-1.5 text-[9.5px] font-semibold uppercase tracking-[0.08em] text-muted-foreground",
+          "px-2 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground",
           COL_TEMPLATE,
         )}
         role="row"
@@ -535,7 +535,7 @@ function EarningsTableRow({ event }: { event: EarningsEvent }) {
         <StockLogo ticker={event.ticker} size="xs" />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1">
-            <span className="text-[11.5px] font-bold tabular-nums truncate">
+            <span className="text-[13px] font-bold tabular-nums truncate">
               {event.ticker}
             </span>
             <ArrowUpRight
@@ -543,7 +543,7 @@ function EarningsTableRow({ event }: { event: EarningsEvent }) {
               aria-hidden
             />
           </div>
-          <div className="text-[10px] text-muted-foreground truncate leading-tight">
+          <div className="text-[11.5px] text-muted-foreground truncate leading-tight">
             {event.sector ? `${event.sector} · ` : ""}
             {event.name}
           </div>
@@ -572,7 +572,7 @@ function NumCell({
   return (
     <div
       className={cn(
-        "text-right text-[11px] font-semibold tabular-nums",
+        "text-right text-[12.5px] font-semibold tabular-nums",
         tone === "pos" && "text-emerald-700 dark:text-emerald-400",
         tone === "neg" && "text-rose-700 dark:text-rose-400",
       )}
@@ -585,13 +585,13 @@ function NumCell({
 function RiskCell({ tier }: { tier: RiskTier | null }) {
   if (!tier)
     return (
-      <div className="text-right text-[11px] text-muted-foreground/60">—</div>
+      <div className="text-right text-[12.5px] text-muted-foreground/60">—</div>
     );
   return (
     <div className="flex justify-end">
       <span
         className={cn(
-          "inline-block px-1 py-0.5 rounded-sm border text-[9px] font-semibold uppercase tracking-wider",
+          "inline-block px-1 py-0.5 rounded-sm border text-[11px] font-semibold uppercase tracking-wider",
           RISK_TONE[tier],
         )}
         title={`Risk tier: ${tier}`}
@@ -617,7 +617,7 @@ function CountChip({
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider",
+        "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11.5px] font-semibold uppercase tracking-wider",
         dim
           ? "border-border/60 text-muted-foreground/60"
           : tone === "sector"
@@ -648,11 +648,11 @@ function MacroRow({ event }: { event: MacroEvent }) {
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <Landmark className="h-3.5 w-3.5 opacity-70 shrink-0" />
-          <span className="text-sm font-semibold leading-tight">
+          <span className="text-[15px] font-semibold leading-tight">
             {event.label}
           </span>
         </div>
-        <div className="mt-1 flex items-center gap-2 text-[10px] uppercase tracking-wider opacity-80">
+        <div className="mt-1 flex items-center gap-2 text-[11.5px] uppercase tracking-wider opacity-80">
           <span>{regionLabel(event.region)}</span>
           <span className="opacity-30">·</span>
           <ImportanceDots

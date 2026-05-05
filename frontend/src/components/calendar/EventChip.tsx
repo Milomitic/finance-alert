@@ -98,7 +98,7 @@ function EarningsChip({
           <span className="shrink-0 -ml-px">
             <StockLogo ticker={event.ticker} size="xs" />
           </span>
-          <span className="text-[11px] font-bold tracking-tight tabular-nums leading-none truncate">
+          <span className="text-[12.5px] font-bold tracking-tight tabular-nums leading-none truncate">
             {event.ticker}
           </span>
         </Link>
@@ -107,16 +107,16 @@ function EarningsChip({
         <div className="flex items-center gap-2">
           <StockLogo ticker={event.ticker} size="xs" />
           <div>
-            <div className="text-sm font-semibold leading-tight">
+            <div className="text-[15px] font-semibold leading-tight">
               {event.name}
             </div>
-            <div className="text-[11px] text-muted-foreground tabular-nums tracking-wide">
+            <div className="text-[12.5px] text-muted-foreground tabular-nums tracking-wide">
               {event.ticker}
               {event.sector ? ` · ${event.sector}` : ""}
             </div>
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 pt-1 text-[11px] tabular-nums">
+        <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 pt-1 text-[12.5px] tabular-nums">
           <span className="text-muted-foreground">EPS est.</span>
           <span className="text-right font-semibold">{epsLabel}</span>
           <span className="text-muted-foreground">Cap. mercato</span>
@@ -173,10 +173,10 @@ function MacroChip({
             gap="gap-0.5"
             className="shrink-0"
           />
-          <span className="text-[11px] leading-none shrink-0" aria-hidden>
+          <span className="text-[12.5px] leading-none shrink-0" aria-hidden>
             {regionFlag(event.region)}
           </span>
-          <span className="text-[11px] font-medium leading-none truncate">
+          <span className="text-[12.5px] font-medium leading-none truncate">
             {event.label}
           </span>
         </button>
@@ -185,10 +185,10 @@ function MacroChip({
         <div className="flex items-baseline gap-2">
           <span className="text-base leading-none">{regionFlag(event.region)}</span>
           <div>
-            <div className="text-sm font-semibold leading-tight">
+            <div className="text-[15px] font-semibold leading-tight">
               {event.label}
             </div>
-            <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground tracking-wide uppercase">
+            <div className="mt-0.5 flex items-center gap-1.5 text-[12.5px] text-muted-foreground tracking-wide uppercase">
               <span>{regionLabel(event.region)}</span>
               <span className="opacity-30">·</span>
               <ImportanceDots

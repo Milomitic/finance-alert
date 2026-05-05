@@ -1,10 +1,11 @@
 import { useEffect, useRef } from "react";
 import {
-  ColorType, createChart,
+  ColorType, CrosshairMode, createChart,
   type IChartApi, type ISeriesApi, type UTCTimestamp,
 } from "lightweight-charts";
 
 import type { IndicatorPoint } from "@/api/types";
+import type { RegisterChart } from "@/hooks/useChartSync";
 
 interface Props {
   line: IndicatorPoint[];
@@ -12,6 +13,9 @@ interface Props {
   hist: IndicatorPoint[];
   color?: string;       // Color for the MACD line; signal stays sky-blue
   width?: number;
+  /** Register with the parent chart-sync orchestrator so panning/zooming
+   *  this panel propagates to PriceChart + RsiPanel. */
+  onReady?: RegisterChart;
 }
 
 function dateToTime(d: string): UTCTimestamp {
@@ -23,7 +27,7 @@ function dateToTime(d: string): UTCTimestamp {
  * volume-style series (green when ≥0, red when <0). Mirrors the look of
  * the RSI panel so the chart stack feels uniform.
  */
-export function MacdPanel({ line, signal, hist, color = "#ef4444", width = 2 }: Props) {
+export function MacdPanel({ line, signal, hist, color = "#ef4444", width = 2, onReady }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const lineRef = useRef<ISeriesApi<"Line"> | null>(null);
@@ -37,7 +41,8 @@ export function MacdPanel({ line, signal, hist, color = "#ef4444", width = 2 }: 
       grid: { vertLines: { color: "rgba(0,0,0,0.05)" }, horzLines: { color: "rgba(0,0,0,0.05)" } },
       rightPriceScale: { borderColor: "rgba(0,0,0,0.1)" },
       timeScale: { borderColor: "rgba(0,0,0,0.1)", timeVisible: false },
-      crosshair: { mode: 1 },
+      // Free crosshair — Y-axis badge follows the cursor, no snap.
+      crosshair: { mode: CrosshairMode.Normal },
       autoSize: true,
     });
     chartRef.current = chart;
@@ -45,20 +50,25 @@ export function MacdPanel({ line, signal, hist, color = "#ef4444", width = 2 }: 
       priceLineVisible: false,
       color: "rgba(100,116,139,0.5)",
     });
+    // Inline series titles dropped — the on-chart "MACD" / "Signal" badges
+    // overlapped the candles. The colored last-value badge on the price
+    // scale is enough to identify the line at a glance.
     lineRef.current = chart.addLineSeries({
-      color, lineWidth: width as 1 | 2 | 3 | 4, priceLineVisible: false, lastValueVisible: true, title: "MACD",
+      color, lineWidth: width as 1 | 2 | 3 | 4, priceLineVisible: false, lastValueVisible: true,
     });
     signalRef.current = chart.addLineSeries({
-      color: "#0ea5e9", lineWidth: width as 1 | 2 | 3 | 4, priceLineVisible: false, lastValueVisible: true, title: "Signal",
+      color: "#0ea5e9", lineWidth: width as 1 | 2 | 3 | 4, priceLineVisible: false, lastValueVisible: true,
     });
+    const unregister = onReady?.(chart);
     return () => {
+      unregister?.();
       chart.remove();
       chartRef.current = null;
       lineRef.current = null;
       signalRef.current = null;
       histRef.current = null;
     };
-  }, []);
+  }, [onReady]);
 
   // Apply style updates without recreating the chart
   useEffect(() => {

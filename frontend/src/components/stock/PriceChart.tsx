@@ -1,11 +1,12 @@
 import { useEffect, useRef } from "react";
 import {
-  ColorType, createChart,
+  ColorType, CrosshairMode, createChart,
   type IChartApi, type ISeriesApi, type UTCTimestamp,
 } from "lightweight-charts";
 
 import type { IndicatorPoint, IndicatorSeries, OhlcvBar, PriceAlert } from "@/api/types";
 import type { IndicatorStyle } from "@/components/stock/IndicatorToggles";
+import type { RegisterChart } from "@/hooks/useChartSync";
 
 interface Props {
   ohlcv: OhlcvBar[];
@@ -19,6 +20,10 @@ interface Props {
   priceAlerts: PriceAlert[];
   horizontalDrawings?: { id: string; price: number }[];
   onChartClick?: (price: number) => void;
+  /** Optional chart-sync registration. When the parent provides this,
+   *  the chart's pan/zoom propagates to the RSI / MACD sub-panels (and
+   *  vice-versa) so the time axis stays anchored across the stack. */
+  onReady?: RegisterChart;
 }
 
 function dateToTime(d: string): UTCTimestamp {
@@ -34,7 +39,7 @@ function pointsToChartData(points: IndicatorPoint[] | undefined) {
 
 export function PriceChart({
   ohlcv, indicators, styles,
-  priceAlerts, horizontalDrawings = [], onChartClick,
+  priceAlerts, horizontalDrawings = [], onChartClick, onReady,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -66,7 +71,10 @@ export function PriceChart({
       },
       rightPriceScale: { borderColor: "rgba(0,0,0,0.1)" },
       timeScale: { borderColor: "rgba(0,0,0,0.1)", timeVisible: false },
-      crosshair: { mode: 1 },
+      // Free crosshair (was Magnet=1) so the Y-value badge tracks the
+      // cursor's actual position rather than snapping to the candle close.
+      // Per user request: "lascialo libero a prescindere dalla curva".
+      crosshair: { mode: CrosshairMode.Normal },
       autoSize: true,
     });
     chartRef.current = chart;
@@ -76,23 +84,27 @@ export function PriceChart({
       borderUpColor: "#16a34a", borderDownColor: "#dc2626",
       wickUpColor: "#16a34a", wickDownColor: "#dc2626",
     });
+    // Indicator series: `lastValueVisible: true` shows a colored badge
+    // on the right price-scale with the latest value — replaces the
+    // previous on-chart `title` legend that overlapped the candles.
+    // No `title` is set so the only label is the price-scale badge.
     sma20Ref.current = chart.addLineSeries({
-      priceLineVisible: false, lastValueVisible: false, title: "SMA 20",
+      priceLineVisible: false, lastValueVisible: true,
     });
     sma50Ref.current = chart.addLineSeries({
-      priceLineVisible: false, lastValueVisible: false, title: "SMA 50",
+      priceLineVisible: false, lastValueVisible: true,
     });
     sma200Ref.current = chart.addLineSeries({
-      priceLineVisible: false, lastValueVisible: false, title: "SMA 200",
+      priceLineVisible: false, lastValueVisible: true,
     });
     bbUpperRef.current = chart.addLineSeries({
-      lineStyle: 2, priceLineVisible: false, lastValueVisible: false, title: "BB upper",
+      lineStyle: 2, priceLineVisible: false, lastValueVisible: true,
     });
     bbLowerRef.current = chart.addLineSeries({
-      lineStyle: 2, priceLineVisible: false, lastValueVisible: false, title: "BB lower",
+      lineStyle: 2, priceLineVisible: false, lastValueVisible: true,
     });
     bbMiddleRef.current = chart.addLineSeries({
-      priceLineVisible: false, lastValueVisible: false, title: "BB middle",
+      priceLineVisible: false, lastValueVisible: true,
     });
     volumeRef.current = chart.addHistogramSeries({
       priceFormat: { type: "volume" },
@@ -113,7 +125,13 @@ export function PriceChart({
     };
     chart.subscribeClick(clickHandler);
 
+    // Register with the chart-sync orchestrator so pan/zoom propagates
+    // to the RSI / MACD sub-panels. The cleanup the registrar returns
+    // is called on unmount to detach the listener cleanly.
+    const unregister = onReady?.(chart);
+
     return () => {
+      unregister?.();
       chart.unsubscribeClick(clickHandler);
       chart.remove();
       chartRef.current = null;
@@ -126,7 +144,7 @@ export function PriceChart({
       bbLowerRef.current = null;
       volumeRef.current = null;
     };
-  }, []);
+  }, [onReady]);
 
   // OHLCV data
   useEffect(() => {
