@@ -59,13 +59,13 @@ function SortableHeader({
 }: HeaderProps) {
   const active = sortBy === column;
   return (
-    <th className={cn("px-3 py-1.5", align === "right" ? "text-right" : "text-left")}>
+    <th className={cn("px-3 py-1.5 text-base", align === "right" ? "text-right" : "text-left")}>
       <button
         type="button"
         onClick={() => onClick(column)}
         title={clientOnly ? "Ordina la pagina corrente (lato client)" : undefined}
         className={cn(
-          "inline-flex items-center gap-1 hover:text-foreground transition-colors text-xs uppercase tracking-wide font-semibold",
+          "inline-flex items-center gap-1 hover:text-foreground transition-colors uppercase tracking-wide font-semibold",
           active && "text-foreground",
           align === "right" && "ml-auto",
         )}
@@ -115,6 +115,12 @@ export function StockBrowserTable({ items, sortBy, sortDir, onSortChange, q, onQ
     <Card>
       <CardContent className="p-0">
         <div className="overflow-x-auto">
+          {/* Per user spec: rows at 0.875rem (text-sm), headers at 1rem
+              (text-base via SortableHeader). Set the table root to
+              text-sm so every body cell inherits without per-cell
+              overrides; the per-cell `text-xs` on meta columns
+              (exchange/sector/industry/Risk-fallback) was bumped to
+              inherit too. */}
           <table className="w-full text-sm tabular-nums">
             <thead className="bg-muted/30 text-muted-foreground border-b">
               <tr>
@@ -122,13 +128,13 @@ export function StockBrowserTable({ items, sortBy, sortDir, onSortChange, q, onQ
                     search input. Replaces the previously-removed text
                     search field in the filters card. The input filters
                     server-side via the `q` URL param. */}
-                <th className="px-3 py-1.5 text-left">
+                <th className="px-3 py-1.5 text-left text-base">
                   <div className="flex items-center gap-2 min-w-0">
                     <button
                       type="button"
                       onClick={() => onSortChange("ticker")}
                       className={cn(
-                        "inline-flex items-center gap-1 hover:text-foreground transition-colors text-xs uppercase tracking-wide font-semibold",
+                        "inline-flex items-center gap-1 hover:text-foreground transition-colors uppercase tracking-wide font-semibold",
                         sortBy === "ticker" && "text-foreground",
                       )}
                     >
@@ -153,7 +159,7 @@ export function StockBrowserTable({ items, sortBy, sortDir, onSortChange, q, onQ
                 <SortableHeader column="market_cap" label="Mkt Cap" align="right" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} />
                 <SortableHeader column="change_pct" label="Δ%" align="right" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} clientOnly />
                 <SortableHeader column="composite" label="Score" align="right" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} />
-                <th className="px-3 py-1.5 text-xs uppercase tracking-wide font-semibold">Risk</th>
+                <th className="px-3 py-1.5 text-base uppercase tracking-wide font-semibold">Risk</th>
               </tr>
             </thead>
             <tbody>
@@ -161,7 +167,7 @@ export function StockBrowserTable({ items, sortBy, sortDir, onSortChange, q, onQ
                 <tr>
                   <td
                     colSpan={9}
-                    className="px-4 py-10 text-center text-sm text-muted-foreground"
+                    className="px-4 py-10 text-center text-muted-foreground"
                   >
                     Nessuno stock trovato.
                     {q.trim()
@@ -209,13 +215,13 @@ export function StockBrowserTable({ items, sortBy, sortDir, onSortChange, q, onQ
                             className="rounded-[1px] shadow-sm"
                           />
                         )}
-                        <span className="text-xs text-muted-foreground">{s.exchange}</span>
+                        <span className="text-muted-foreground">{s.exchange}</span>
                       </span>
                     </td>
-                    <td className="px-3 py-1.5 text-xs text-muted-foreground truncate max-w-[140px]">
+                    <td className="px-3 py-1.5 text-muted-foreground truncate max-w-[140px]">
                       {s.sector ?? "—"}
                     </td>
-                    <td className="px-3 py-1.5 text-xs text-muted-foreground truncate max-w-[160px]" title={s.industry ?? ""}>
+                    <td className="px-3 py-1.5 text-muted-foreground truncate max-w-[160px]" title={s.industry ?? ""}>
                       {s.industry ?? "—"}
                     </td>
                     <td className="px-3 py-1.5 text-right">{fmtMc(s.market_cap)}</td>
@@ -236,7 +242,7 @@ export function StockBrowserTable({ items, sortBy, sortDir, onSortChange, q, onQ
                           {RISK_LABEL[item.score.risk_tier]}
                         </span>
                       ) : (
-                        <span className="text-xs text-muted-foreground">—</span>
+                        <span className="text-muted-foreground">—</span>
                       )}
                     </td>
                   </tr>

@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.models import CatalogRefreshLog, Index, Stock, StockIndex
 from app.services.exchange_codes import canonical_exchange, has_known_suffix
+from app.services.industry_normalizer import canonical_industry
 from app.services.sector_normalizer import canonical_sector
 
 USER_AGENT = "FinanceAlert/0.1 (personal use)"
@@ -247,11 +248,16 @@ def refresh_index(db: Session, index_code: str) -> RefreshResult:
             # uniform regardless of source. See `sector_normalizer.py`.
             sector_val = canonical_sector(sector_raw)
             industry_col = src.get("industry_col")
-            industry_val = (
+            industry_raw = (
                 str(row.get(industry_col))
                 if industry_col and not pd.isna(row.get(industry_col))
                 else None
             )
+            # Same canonicalization story as sector — Wikipedia tables
+            # use 200+ sub-industries (Diversified Banks vs Banking
+            # Services vs Banks); we collapse to the GICS Industry
+            # Group level (~24 buckets). See `industry_normalizer.py`.
+            industry_val = canonical_industry(industry_raw)
             # Per ticker con suffisso noto (es. "ENEL.MI") la chiave
             # `(ticker, exchange)` è autoritativa. Per ticker US senza
             # suffisso noto (es. "AAPL") l'exchange è solo il

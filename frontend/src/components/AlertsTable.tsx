@@ -62,29 +62,27 @@ export function AlertsTable({
   // count.
   const colSpan = embedded ? 4 : 9;
 
-  // Bumped one notch above the shared Table's default text-sm: the alert
-  // listing is the page's primary content, not auxiliary metadata, so it
-  // earns the larger reading size. Header stays text-sm to preserve the
-  // visual hierarchy (label-vs-value); meta cells (timestamp, name,
-  // status) move from text-xs to text-sm so they're still slightly
-  // smaller than the primary cells but more comfortable to read.
+  // Per user spec: header cells at 1rem (text-base), body rows at
+  // 0.875rem (text-sm) — uniform across all cells. Table root sits at
+  // text-sm so every body cell inherits without per-cell overrides;
+  // each <TableHead> bumps to text-base for the header band only.
   return (
-    <Table className="text-base">
+    <Table className="text-sm">
       <TableHeader>
         <TableRow>
           {!embedded && (
-            <TableHead className="w-8">
+            <TableHead className="w-8 text-base">
               <Checkbox
                 checked={allSelected}
                 onCheckedChange={(checked) => onSelectAll(!!checked)}
               />
             </TableHead>
           )}
-          <TableHead className="text-sm" title="Data della barra di mercato in cui la regola è scattata">
+          <TableHead className="text-base" title="Data della barra di mercato in cui la regola è scattata">
             Data segnale
           </TableHead>
           {!embedded && (
-            <TableHead className="text-sm" title="Quando il sistema ha registrato l'alert">
+            <TableHead className="text-base" title="Quando il sistema ha registrato l'alert">
               Rilevato
             </TableHead>
           )}
@@ -93,7 +91,7 @@ export function AlertsTable({
               {/* Ticker column: sortable label is just text (this table
                   doesn't support sorting) + the inline ticker/name
                   search input. */}
-              <TableHead className="text-sm">
+              <TableHead className="text-base">
                 <div className="flex items-center gap-2 min-w-0">
                   <span className="shrink-0">Ticker</span>
                   <TableSearchInput
@@ -105,15 +103,15 @@ export function AlertsTable({
                   />
                 </div>
               </TableHead>
-              <TableHead className="text-sm">Nome</TableHead>
+              <TableHead className="text-base">Nome</TableHead>
             </>
           )}
-          <TableHead className="text-sm">Regola</TableHead>
-          <TableHead className="text-sm" title="Direzione semantica dell'alert (rialzista / ribassista / neutra)">
+          <TableHead className="text-base">Regola</TableHead>
+          <TableHead className="text-base" title="Direzione semantica dell'alert (rialzista / ribassista / neutra)">
             Tono
           </TableHead>
-          <TableHead className="text-sm text-right">Prezzo</TableHead>
-          {!embedded && <TableHead className="text-sm">Archivio</TableHead>}
+          <TableHead className="text-base text-right">Prezzo</TableHead>
+          {!embedded && <TableHead className="text-base">Archivio</TableHead>}
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -121,7 +119,7 @@ export function AlertsTable({
           <TableRow>
             <TableCell
               colSpan={colSpan}
-              className="text-center text-sm text-muted-foreground py-8"
+              className="text-center text-muted-foreground py-8"
             >
               {q.trim()
                 ? `Nessun risultato per "${q}".`
@@ -144,7 +142,7 @@ export function AlertsTable({
                 this is the one that matters for "when did the indicator
                 fire". Backwards-compat: legacy rows have signal_date=null
                 and we fall back to "—" with a tip explaining why. */}
-            <TableCell className="text-sm font-semibold tabular-nums">
+            <TableCell className="font-semibold tabular-nums">
               {a.signal_date ? (
                 formatShortDate(a.signal_date)
               ) : (
@@ -163,7 +161,7 @@ export function AlertsTable({
                 embedded mode (per-stock view) — the signal date alone
                 is enough context there. */}
             {!embedded && (
-              <TableCell className="text-sm text-muted-foreground tabular-nums">
+              <TableCell className="text-muted-foreground tabular-nums">
                 {(() => {
                   const delayed = isDelayedDetection(a.triggered_at, a.signal_date);
                   const delta = daysBetween(a.triggered_at, a.signal_date);
@@ -204,7 +202,7 @@ export function AlertsTable({
                     "—"
                   )}
                 </TableCell>
-                <TableCell className="text-sm text-muted-foreground truncate max-w-[240px]" title={a.name ?? ""}>
+                <TableCell className="text-muted-foreground truncate max-w-[240px]" title={a.name ?? ""}>
                   {a.name ?? "—"}
                 </TableCell>
               </>
@@ -215,16 +213,11 @@ export function AlertsTable({
             <TableCell>
               <AlertToneCell alert={a} />
             </TableCell>
-            {/* Price: explicit `text-sm` so it lines up with the
-                rest of the table cells. The Table root sets `text-base`
-                which made the price oversized vs the other meta
-                columns; per user feedback the price shouldn't dominate
-                the row visually. */}
-            <TableCell className="text-sm text-right tabular-nums font-semibold">
+            <TableCell className="text-right tabular-nums font-semibold">
               ${a.trigger_price}
             </TableCell>
             {!embedded && (
-              <TableCell className="text-sm">
+              <TableCell>
                 {a.archived_at ? "🗄 Archiviato" : "—"}
               </TableCell>
             )}

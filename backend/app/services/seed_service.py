@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.models import Index, Stock, StockIndex
 from app.services.exchange_codes import canonical_exchange
+from app.services.industry_normalizer import canonical_industry
 from app.services.sector_normalizer import canonical_sector
 
 
@@ -37,6 +38,9 @@ def _upsert_stock(db: Session, row: dict[str, str]) -> tuple[Stock, bool]:
     # `services/sector_normalizer.py`.
     sector_raw = row.get("sector") or None
     sector_canonical = canonical_sector(sector_raw)
+    # Industry similarly canonicalized — see `industry_normalizer.py`.
+    industry_raw = row.get("industry") or None
+    industry_canonical = canonical_industry(industry_raw)
     stmt = select(Stock).where(Stock.ticker == ticker, Stock.exchange == exchange)
     stock = db.execute(stmt).scalar_one_or_none()
     if stock is None:
@@ -45,7 +49,7 @@ def _upsert_stock(db: Session, row: dict[str, str]) -> tuple[Stock, bool]:
             exchange=exchange,
             name=row["name"],
             sector=sector_canonical,
-            industry=row.get("industry") or None,
+            industry=industry_canonical,
             country=row.get("country") or None,
             currency=row.get("currency") or None,
         )
@@ -53,10 +57,10 @@ def _upsert_stock(db: Session, row: dict[str, str]) -> tuple[Stock, bool]:
         db.flush()
         return stock, True
     stock.name = row["name"]
-    # Preserve old sector if CSV row has no sector data (unchanged semantics);
-    # otherwise apply the canonical version of the new value.
+    # Preserve old sector/industry if CSV row has no value (unchanged
+    # semantics); otherwise apply the canonical version of the new value.
     stock.sector = sector_canonical or stock.sector
-    stock.industry = row.get("industry") or stock.industry
+    stock.industry = industry_canonical or stock.industry
     stock.country = row.get("country") or stock.country
     stock.currency = row.get("currency") or stock.currency
     return stock, False
