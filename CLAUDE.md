@@ -49,6 +49,33 @@ working as intended.
 4. curl /api/health until 200                          # confirm new task up
 ```
 
+### Watch out: orphaned uvicorn workers (the "fix doesn't work" trap)
+
+`uvicorn --reload` forks two processes: the *reloader* (parent, listed
+by `tasklist`) and the *worker* (child, spawned via
+`multiprocessing.spawn`). Killing only the reloader's PID leaves the
+worker alive on Windows — it keeps the listening socket bound and
+serves requests with **stale code**. Symptoms:
+- You fix a bug, restart backend, request still returns the pre-fix
+  500 / wrong response.
+- `netstat -ano | findstr :8000` shows 2-3 LISTENING entries (Windows
+  allows multiple binders via `SO_REUSEADDR`).
+- `tasklist | findstr <old-pid>` says the PID doesn't exist (it's the
+  dead reloader).
+- TestClient via Python (in-process) works fine — proves the fixed
+  code is correct, but uvicorn isn't running it.
+
+If you suspect this, find orphan workers via:
+```bash
+wmic process where "Name='python.exe'" get ProcessId,ParentProcessId,CommandLine
+```
+The orphans look like `python.exe -c "from multiprocessing.spawn import
+spawn_main; spawn_main(parent_pid=<dead-reloader-pid>, ...)"`. Kill
+each by its `ProcessId` (the worker's, not the parent's).
+
+Then re-verify with `netstat`: a healthy state has exactly ONE LISTENING
+entry on 8000.
+
 ---
 
 ## Database migrations (alembic)
