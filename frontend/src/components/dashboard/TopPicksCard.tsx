@@ -81,7 +81,7 @@ function SparkBars({ composite }: SparkBarsProps) {
         <span
           key={p}
           className={cn("w-[6px] rounded-sm", bgCls)}
-          style={{ height: 9 }}
+          style={{ height: 7 }}
         />
       ))}
     </div>
@@ -93,9 +93,9 @@ function SparkBars({ composite }: SparkBarsProps) {
 function PickRow({ item }: { item: TopPickItem }) {
   const compTone = scoreColor(item.composite);
   return (
-    <li className="px-3 py-2 hover:bg-accent/30 transition-colors border-b border-border/40 last:border-b-0">
+    <li className="px-3 py-1 hover:bg-accent/30 transition-colors border-b border-border/40 last:border-b-0">
       {/* Top line: ticker (link) + name + composite score */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 leading-tight">
         <Link
           to={`/stocks/${encodeURIComponent(item.ticker)}`}
           onClick={(e) => e.stopPropagation()}
@@ -111,7 +111,7 @@ function PickRow({ item }: { item: TopPickItem }) {
         </span>
         <span
           className={cn(
-            "text-lg font-bold tabular-nums shrink-0",
+            "text-base font-bold tabular-nums shrink-0 leading-none",
             compTone,
           )}
           title={scoreLabel(item.composite)}
@@ -120,11 +120,11 @@ function PickRow({ item }: { item: TopPickItem }) {
         </span>
       </div>
       {/* Bottom line: spark bars + risk chip + change */}
-      <div className="flex items-center gap-2 mt-1">
+      <div className="flex items-center gap-2 mt-0.5 leading-none">
         <SparkBars composite={item.composite} />
         <span
           className={cn(
-            "px-1.5 py-0.5 rounded border text-[10px] uppercase tracking-wider font-semibold",
+            "px-1.5 py-px rounded border text-[10px] uppercase tracking-wider font-semibold",
             RISK_TONE[item.risk_tier],
           )}
         >
@@ -145,15 +145,15 @@ function PickRow({ item }: { item: TopPickItem }) {
 
 function RowSkeleton() {
   return (
-    <li className="px-3 py-2 border-b border-border/40 last:border-b-0">
+    <li className="px-3 py-1 border-b border-border/40 last:border-b-0">
       <div className="flex items-center gap-2">
         <div className="h-4 w-12 rounded bg-muted/60 animate-pulse" />
         <div className="h-3 flex-1 rounded bg-muted/40 animate-pulse" />
-        <div className="h-5 w-10 rounded bg-muted/60 animate-pulse" />
+        <div className="h-4 w-10 rounded bg-muted/60 animate-pulse" />
       </div>
-      <div className="flex items-center gap-2 mt-1.5">
+      <div className="flex items-center gap-2 mt-0.5">
         <div className="h-2 w-16 rounded bg-muted/40 animate-pulse" />
-        <div className="h-4 w-20 rounded bg-muted/40 animate-pulse" />
+        <div className="h-3.5 w-20 rounded bg-muted/40 animate-pulse" />
         <div className="ml-auto h-3 w-12 rounded bg-muted/40 animate-pulse" />
       </div>
     </li>
