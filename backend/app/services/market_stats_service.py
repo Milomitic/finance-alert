@@ -14,6 +14,7 @@ from app.indicators.rsi import rsi as rsi_indicator
 from app.indicators.sma import sma as sma_indicator
 from app.models import Index, MarketSnapshot, OhlcvDaily, Stock
 from app.models.index import StockIndex
+from app.services.fx_service import to_usd
 
 
 @dataclass
@@ -48,6 +49,11 @@ class StockMetrics:
     # the user-facing aggregates (movers/treemap/sectors/top-picks).
     # Default None for legacy callers / test fixtures.
     country: str | None = None
+    # ISO-3 currency (USD/EUR/JPY/...) — listing currency from yfinance.
+    # Used by `aggregate_by_index` to convert per-stock market caps to
+    # USD before summing, so the breadth row's `total_market_cap` is
+    # comparable across markets. Default None → assumed USD.
+    currency: str | None = None
 
 
 def compute_stock_metrics(
@@ -60,6 +66,7 @@ def compute_stock_metrics(
     ohlcv: pd.DataFrame,
     *,
     country: str | None = None,
+    currency: str | None = None,
 ) -> StockMetrics | None:
     """Compute all metrics for one stock from its OHLCV history.
 
@@ -115,6 +122,7 @@ def compute_stock_metrics(
         name=name,
         sector=sector,
         country=country,
+        currency=currency,
         index_codes=index_codes,
         market_cap=market_cap,
         bars_count=n,
@@ -230,9 +238,19 @@ def aggregate_by_index(
             continue
         full_data = [m for m in bucket if m.has_full_data]
         has_sma50 = [m for m in bucket if m.sma50 is not None]
-        # Sum of known market caps (fallback to None if zero coverage)
-        caps = [m.market_cap for m in bucket if m.market_cap is not None]
-        total_mc = float(sum(caps)) if caps else None
+        # Sum of known market caps, normalized to USD via the listing
+        # currency. Without this conversion the breadth row mixed
+        # currencies (KOSPI 20 in KRW, Nikkei in JPY, FTSE 100 in GBP,
+        # ...) and produced misleading multi-quadrillion totals when
+        # naively summed. Stocks with missing currency are assumed USD
+        # by `to_usd()`, so legacy / test rows still flow through.
+        caps_usd = [
+            to_usd(m.market_cap, m.currency)
+            for m in bucket
+            if m.market_cap is not None
+        ]
+        caps_usd = [c for c in caps_usd if c is not None]
+        total_mc = float(sum(caps_usd)) if caps_usd else None
         pct_sma200 = (
             round(100.0 * sum(1 for m in full_data if m.sma200 and m.last_close > m.sma200) / len(full_data), 1)
             if full_data else None
@@ -450,6 +468,7 @@ def _load_metrics(db: Session) -> tuple[list[StockMetrics], list[tuple[str, str]
             name=stock.name,
             sector=stock.sector,
             country=stock.country,
+            currency=stock.currency,
             index_codes=stock_to_indices.get(stock.id, []),
             market_cap=float(stock.market_cap) if stock.market_cap is not None else None,
             ohlcv=ohlcv,
