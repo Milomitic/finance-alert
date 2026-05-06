@@ -142,8 +142,15 @@ def get_stock_detail(
     db: Session = Depends(get_db),
     _user: User = Depends(get_current_user),
 ) -> StockDetailOut:
-    if range not in ("1m", "3m", "6m", "1y", "5y", "all"):
-        raise HTTPException(status_code=422, detail="invalid range")
+    # v2 timeframe vocabulary: 30m/1h/4h are intraday (yfinance live),
+    # 1d/1w/1m/all are daily-resolution (DB-backed for catalog stocks).
+    # Legacy keys (1y/3m/6m/5y) accepted for backward-compat URLs and
+    # mapped to nearest equivalent.
+    LEGACY_TF_MAP = {"1y": "1d", "3m": "1h", "6m": "4h", "5y": "1w"}
+    if range in LEGACY_TF_MAP:
+        range = LEGACY_TF_MAP[range]
+    if range not in ("30m", "1h", "4h", "1d", "1w", "1m", "all"):
+        raise HTTPException(status_code=422, detail="invalid timeframe")
     detail = stock_detail_service.get_detail(db, ticker, range_key=range)
     if detail is None:
         raise HTTPException(status_code=404, detail="Ticker not found")

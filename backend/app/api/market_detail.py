@@ -77,11 +77,15 @@ class MarketDetailOut(BaseModel):
 @router.get("/{symbol}/detail", response_model=MarketDetailOut)
 def get_market_detail(
     symbol: str,
-    range: Annotated[str, Query()] = "1y",
+    range: Annotated[str, Query()] = "1d",
     _user: User = Depends(get_current_user),
 ) -> MarketDetailOut:
-    if range not in ("1m", "3m", "6m", "1y", "5y", "all"):
-        raise HTTPException(status_code=422, detail="invalid range")
+    if range not in (
+        "30m", "1h", "4h", "1d", "1w", "1m", "all",
+        # legacy compat for old URLs/bookmarks
+        "1y", "3m", "6m", "5y",
+    ):
+        raise HTTPException(status_code=422, detail="invalid timeframe")
 
     meta = _LIVE_META.get(symbol)
     if meta is None:

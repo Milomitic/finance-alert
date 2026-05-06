@@ -39,11 +39,18 @@ def test_get_detail_full_payload(db):
 
 
 def test_get_detail_range_filter_1m(db):
+    """v2 timeframe semantics: '1m' now means monthly bars (resampled
+    from daily) at full history, NOT a 30-day slice. With ~250 daily
+    bars (~12 calendar months), the resampled monthly view has ~10-13
+    bars. The old 'last 30 days' semantics moved to '30m' (intraday)
+    or — in this test's spirit, "the last few weeks" — '4h'/'1h' which
+    rely on yfinance live and don't fit a unit-test scenario."""
     s = _seed_stock_full(db, n_bars=250)
     d = stock_detail_service.get_detail(db, s.ticker, range_key="1m")
     assert d is not None
-    # 1m = ~30 days, give some leeway
-    assert 28 <= len(d.ohlcv) <= 32
+    # 250 daily bars resample to ~10-13 monthly bars (varies by where
+    # the seed dates land relative to month boundaries).
+    assert 8 <= len(d.ohlcv) <= 15
 
 
 def test_resolve_effective_rules_tier1_only(db):

@@ -12,6 +12,7 @@ import { useParams, useSearchParams } from "react-router-dom";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { MarketChart } from "@/components/market/MarketChart";
+import { MultiTimeframeKpisCard } from "@/components/MultiTimeframeKpisCard";
 import { RangeSelector } from "@/components/stock/RangeSelector";
 import { useMarketDetail } from "@/hooks/useMarketDetail";
 import { cn } from "@/lib/utils";
@@ -69,7 +70,11 @@ function EthereumIcon({ className }: { className?: string }) {
 export default function MarketDetailPage() {
   const { symbol = "" } = useParams<{ symbol: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
-  const range = searchParams.get("range") ?? "1y";
+  // v2: default to "1d" timeframe (was "1y" range key — semantically
+  // similar at the daily-resolution level, but the new vocabulary is
+  // timeframe-based: 30m/1h/4h/1d/1w/1m/all instead of 1m/3m/.../all
+  // ranges. See `services/timeframe_service`.
+  const range = searchParams.get("range") ?? "1d";
   const decoded = decodeURIComponent(symbol);
   const q = useMarketDetail(decoded, range);
 
@@ -248,6 +253,12 @@ export default function MarketDetailPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Multi-timeframe KPI comparison — same indicators (RSI 14,
+          BB 20, SMA 20/50/200, MACD 12/26/9) computed across all 7
+          timeframes side-by-side so the user can spot
+          short-vs-long-term disagreements. */}
+      <MultiTimeframeKpisCard ticker={d.symbol} kind="market" />
     </div>
   );
 }

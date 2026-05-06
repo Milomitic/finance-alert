@@ -244,13 +244,7 @@ def resolve_effective_rules(db: Session, stock_id: int) -> list[EffectiveRule]:
     return out
 
 
-def get_detail(db: Session, ticker: str, range_key: str = "1y") -> StockDetail | None:
-    # `ticker` è univoco a livello di catalogo: dopo `scripts/dedupe_stocks`
-    # e la canonicalizzazione in `services.exchange_codes` non possono più
-    # esistere righe duplicate per lo stesso ticker. `scalar_one_or_none()`
-    # è preferibile a `.first()` perché failuoresce se la prevenzione si
-    # rompe in futuro (vale a dire: bug visibile invece di dato silenziosamente
-    # arbitrario).
+def get_detail(db: Session, ticker: str, range_key: str = "1d") -> StockDetail | None:
     # Filter hidden countries (CN/JP/KR) so the detail page treats
     # those rows as 404 — catalog-only, used for breadth/mood, not
     # for direct user navigation.
@@ -263,30 +257,77 @@ def get_detail(db: Session, ticker: str, range_key: str = "1y") -> StockDetail |
     if stock is None:
         return None
 
-    days = RANGE_DAYS.get(range_key, 365)
-    bars_q = (
-        select(OhlcvDaily)
-        .where(OhlcvDaily.stock_id == stock.id)
-        .order_by(OhlcvDaily.date.asc())
+    # v2 timeframe semantics: route through `timeframe_service.fetch_bars`
+    # which returns Bar dataclasses (intraday yfinance for 30m/1h/4h,
+    # DB-backed for 1d/1w/1m/all). Indicator periods are now fixed
+    # (RSI=14, BB=20, SMA 20/50/200, MACD 12/26/9) regardless of
+    # timeframe — see `timeframe_service.compute_bundle`.
+    from app.services.timeframe_service import (
+        FIXED_BB_K,
+        FIXED_BB_PERIOD,
+        FIXED_MACD_FAST,
+        FIXED_MACD_SIGNAL,
+        FIXED_MACD_SLOW,
+        FIXED_RSI_PERIOD,
+        FIXED_SMA_FAST,
+        FIXED_SMA_MID,
+        FIXED_SMA_SLOW,
+        compute_bundle as tf_compute_bundle,
+        fetch_bars as tf_fetch_bars,
     )
-    bars = list(db.execute(bars_q).scalars())
-    if days is not None:
-        cutoff = bars[-1].date - timedelta(days=days) if bars else None
-        ohlcv_view = [b for b in bars if cutoff is None or b.date >= cutoff]
-    else:
-        ohlcv_view = bars
 
-    bundle = _compute_indicator_series(bars, range_key=range_key)
-    if days is not None and bars:
-        cutoff_idx = len(bars) - len(ohlcv_view)
-        for f in (
-            "sma20", "sma50", "sma200", "rsi14",
-            "bb_upper", "bb_middle", "bb_lower",
-            "macd_line", "macd_signal", "macd_hist",
-        ):
-            setattr(bundle, f, getattr(bundle, f)[cutoff_idx:])
+    bars_dc = tf_fetch_bars(
+        ticker=ticker, timeframe=range_key, db=db, stock=stock,
+    )
+    # 52w KPIs always need the daily series — even if the user is
+    # viewing a 30m chart we still want "high_52w" reported. Pull
+    # daily bars separately for that.
+    daily_bars = list(
+        db.execute(
+            select(OhlcvDaily)
+            .where(OhlcvDaily.stock_id == stock.id)
+            .order_by(OhlcvDaily.date.asc())
+        ).scalars()
+    )
+    # Convert Bar dataclasses to OhlcvDaily-compatible shape for the
+    # ohlcv_view payload. The API serializer just reads .date/.open/etc
+    # on each item, so a duck-typed list works.
+    ohlcv_view = bars_dc
 
-    kpis = _compute_kpis(bars)
+    tf_bundle = tf_compute_bundle(bars_dc)
+    # Adapter: tf_compute_bundle returns
+    # `services.timeframe_service.IndicatorBundle`; this module's
+    # `_IndicatorBundle` dataclass (with periods + same shape) is what
+    # the legacy code expects. Build it.
+    fixed_periods = IndicatorPeriods(
+        sma_fast=FIXED_SMA_FAST,
+        sma_mid=FIXED_SMA_MID,
+        sma_slow=FIXED_SMA_SLOW,
+        rsi=FIXED_RSI_PERIOD,
+        bb_period=FIXED_BB_PERIOD,
+        bb_k=FIXED_BB_K,
+        macd_fast=FIXED_MACD_FAST,
+        macd_slow=FIXED_MACD_SLOW,
+        macd_signal=FIXED_MACD_SIGNAL,
+    )
+    bundle = _IndicatorBundle(
+        sma20=[IndicatorPoint(p.date, p.value) for p in tf_bundle.sma20],
+        sma50=[IndicatorPoint(p.date, p.value) for p in tf_bundle.sma50],
+        sma200=[IndicatorPoint(p.date, p.value) for p in tf_bundle.sma200],
+        rsi14=[IndicatorPoint(p.date, p.value) for p in tf_bundle.rsi14],
+        bb_upper=[IndicatorPoint(p.date, p.value) for p in tf_bundle.bb_upper],
+        bb_middle=[IndicatorPoint(p.date, p.value) for p in tf_bundle.bb_middle],
+        bb_lower=[IndicatorPoint(p.date, p.value) for p in tf_bundle.bb_lower],
+        macd_line=[IndicatorPoint(p.date, p.value) for p in tf_bundle.macd_line],
+        macd_signal=[IndicatorPoint(p.date, p.value) for p in tf_bundle.macd_signal],
+        macd_hist=[IndicatorPoint(p.date, p.value) for p in tf_bundle.macd_hist],
+        periods=fixed_periods,
+    )
+
+    # Daily-derived KPIs (52w hi/lo, 20-day avg vol) come from the
+    # daily series regardless of the active timeframe — they're
+    # "stock-level" metrics, not chart-window metrics.
+    kpis = _compute_kpis(daily_bars)
     effective_rules = resolve_effective_rules(db, stock.id)
     # JOIN Rule so each alert carries its rule.kind for the UI
     # (Regola + Tono chips on the stock-detail "Alert storici" card).

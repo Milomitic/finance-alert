@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 
 import type { PriceAlert } from "@/api/types";
+import { MultiTimeframeKpisCard } from "@/components/MultiTimeframeKpisCard";
 import { Card, CardContent } from "@/components/ui/card";
 import { useChartSync } from "@/hooks/useChartSync";
 import { useCreatePriceAlert, useStockPriceAlerts } from "@/hooks/useStockPriceAlerts";
@@ -38,7 +39,10 @@ import { TechnicalKpiCard } from "@/components/stock/TechnicalKpiCard";
 export default function StockDetailPage() {
   const { ticker = "" } = useParams<{ ticker: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
-  const range = searchParams.get("range") ?? "1y";
+  // v2 timeframe vocabulary: default to 1d (was "1y" range). Backend
+  // accepts 30m/1h/4h/1d/1w/1m/all, with legacy keys still mapped
+  // for bookmarked URLs. See `services/timeframe_service`.
+  const range = searchParams.get("range") ?? "1d";
 
   const detail = useStockDetail(ticker, range);
   const priceAlertsQuery = useStockPriceAlerts(ticker);
@@ -126,6 +130,12 @@ export default function StockDetailPage() {
         <CompanyOverviewCard ticker={ticker} stock={d.stock} />
         <StockAlertsHistoryCard alerts={d.alerts_history} />
       </div>
+
+      {/* Multi-timeframe KPI comparison — same indicator suite (RSI 14,
+          BB 20, SMA 20/50/200, MACD 12/26/9) computed across 30m / 1h
+          / 4h / 1d / 1w / 1m / all. Lets the user spot
+          short-vs-long-term disagreements at a glance. */}
+      <MultiTimeframeKpisCard ticker={ticker} kind="stock" />
 
       {/* Four side-by-side cards: Fundamentals | Valuation+KPIs | News | Analyst.
           Weighted columns `[1.5fr_1fr_1fr_1fr]` give Fundamentals ~33% (it has

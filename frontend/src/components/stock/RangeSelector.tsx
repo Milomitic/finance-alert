@@ -5,12 +5,22 @@ interface Props {
   onChange: (range: string) => void;
 }
 
+// Renamed semantics (v2): each key now maps to a true *timeframe* —
+// the bar interval the chart renders, not just a slice of trailing
+// daily bars. Periods stay locked across timeframes (RSI=14, BB=20,
+// SMA 20/50/200, MACD 12/26/9) so the same indicator definition
+// reads differently across granularities — that's the whole point.
+//
+// 30m/1h/4h are intraday (yfinance fetched live; cached 5min).
+// 1d/1w/1m read from DB ohlcv_daily (resampled in-memory for w/m).
+// `all` is an alias of 1d at full history.
 const OPTIONS = [
-  { key: "1m", label: "1M" },
-  { key: "3m", label: "3M" },
-  { key: "6m", label: "6M" },
-  { key: "1y", label: "1Y" },
-  { key: "5y", label: "5Y" },
+  { key: "30m", label: "30m" },
+  { key: "1h",  label: "1h" },
+  { key: "4h",  label: "4h" },
+  { key: "1d",  label: "1d" },
+  { key: "1w",  label: "1w" },
+  { key: "1m",  label: "1m" },
   { key: "all", label: "All" },
 ];
 
