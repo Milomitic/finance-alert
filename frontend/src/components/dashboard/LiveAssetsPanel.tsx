@@ -186,11 +186,14 @@ function AssetRow({ asset }: { asset: LiveAsset }) {
       </div>
 
       {/* Sparkline — fills the gap between name and price with the
-          recent trend, fading in from left. Hidden under sm: where
-          horizontal space is too tight. */}
-      <div className="flex-1 min-w-0 hidden sm:flex items-center justify-end pr-1">
+          recent trend, fading in from left. The SVG itself is
+          `width="100%"` so it stretches to whatever flex-grow gives
+          it; `min-w-[60px]` is a floor so very narrow viewports still
+          show a meaningful trend. Hidden under sm: where the row is
+          already busy enough. */}
+      <div className="flex-1 min-w-[60px] hidden sm:flex items-center pl-1 pr-2">
         {history.length >= 2 ? (
-          <Sparkline data={history} trend={trend} width={56} height={16} />
+          <Sparkline data={history} trend={trend} height={16} />
         ) : null}
       </div>
 

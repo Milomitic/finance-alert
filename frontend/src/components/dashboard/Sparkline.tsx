@@ -22,6 +22,11 @@ interface Props {
   /** "up" / "down" / "flat" — drives the line color via the parent's
    *  text color class. The component itself paints with `currentColor`. */
   trend?: "up" | "down" | "flat";
+  /** Internal viewBox width — drives path scaling, NOT the rendered
+   *  pixel width. The SVG itself is `width="100%"` so it stretches to
+   *  fill its flex container. With `preserveAspectRatio="none"` the
+   *  path is rescaled non-uniformly, which is what we want for a
+   *  full-width sparkline. */
   width?: number;
   height?: number;
   /** Stroke thickness. Default 1.4 keeps the line crisp at small sizes
@@ -33,7 +38,7 @@ interface Props {
 export function Sparkline({
   data,
   trend = "flat",
-  width = 60,
+  width = 100,
   height = 18,
   strokeWidth = 1.4,
   className,
@@ -59,7 +64,12 @@ export function Sparkline({
   }, [data, width, height, strokeWidth]);
 
   if (!path) {
-    return <span style={{ width, height, display: "inline-block" }} aria-hidden />;
+    return (
+      <span
+        style={{ width: "100%", height, display: "inline-block" }}
+        aria-hidden
+      />
+    );
   }
 
   // Trend → color via Tailwind class on the parent's `color` channel.
@@ -73,11 +83,11 @@ export function Sparkline({
 
   return (
     <svg
-      width={width}
+      width="100%"
       height={height}
       viewBox={`0 0 ${width} ${height}`}
       preserveAspectRatio="none"
-      className={`${trendColorClass} ${className ?? ""}`}
+      className={`block ${trendColorClass} ${className ?? ""}`}
       aria-hidden
     >
       <defs>
