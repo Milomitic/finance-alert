@@ -22,14 +22,21 @@ interface RegionDef {
   indexCodes: string[];
 }
 
-// Asia mood now blends Japan + Korea + Hong Kong + China. Japan ranks
-// first per user preference (Nikkei is the headline Asian benchmark in
-// most Italian financial press); SSE50 stays in the list to keep China
-// represented in the breadth/mood signal even though its individual
-// stocks are hidden from every user-facing surface.
+// EU mood drives off EUSTX50 alone: FTSEMIB constituents overlap
+// heavily with EUSTX50's universe (Italian blue-chips like ENI,
+// ENEL, ISP, UCG sit in both indices), so averaging the two
+// double-counts Italian breadth and biases the regional signal
+// toward Italy. EUSTX50's broader 50-name pan-Eurozone basket is
+// the cleaner mood proxy.
+//
+// Asia mood blends Japan + Korea + Hong Kong + China. Japan ranks
+// first per user preference (Nikkei is the headline Asian benchmark
+// in most Italian financial press); SSE50 stays in the list so
+// mainland China still feeds the breadth/mood signal even though
+// its individual stocks are hidden from every user-facing surface.
 const REGIONS: RegionDef[] = [
   { code: "US",   label: "USA",     flagSrc: "/flags/us.svg",   indexCodes: ["SP500", "NDX", "DJI"] },
-  { code: "EU",   label: "Europa",  flagSrc: "/flags/eu.svg",   indexCodes: ["EUSTX50", "FTSEMIB"] },
+  { code: "EU",   label: "Europa",  flagSrc: "/flags/eu.svg",   indexCodes: ["EUSTX50"] },
   { code: "ASIA", label: "Asia",    flagSrc: null, emoji: "🌏", indexCodes: ["N225", "KOSPI20", "HSI30", "SSE50"] },
 ];
 
