@@ -1,6 +1,6 @@
 """Mini-chart history for the dashboard live-assets panel.
 
-Returns ~252 trailing daily closes (one trading year) per yfinance
+Returns ~63 trailing daily closes (one trading quarter) per yfinance
 symbol so the frontend can render an inline sparkline next to each
 row.
 
@@ -15,15 +15,18 @@ Why a separate service from `live_quote_service`
 - Different failure mode: a sparkline that's a few hours stale is
   fine; a quote that's 15min stale is wrong.
 
-Why 1y daily
-------------
-- 1y at daily resolution gives ~252 closes — enough for the user to
-  see a full annual cycle (drawdowns, rallies, regime shifts) at a
-  glance. Monthly resolution would compress noise too aggressively;
-  weekly would land in the awkward middle.
-- 252 floats per symbol × 13 symbols ≈ 3.3k floats ≈ ~30 KB JSON.
-  Still trivially small over the wire, and the SVG path has plenty
-  of resolution at 100 viewBox units (~0.4 units per segment).
+Why 3mo daily
+-------------
+- 3mo at daily resolution gives ~63 closes — short enough that each
+  day's bar is visually resolvable on a ~180px-wide sparkline (~3px
+  per day, vs. the 1y version where 252 days compressed into the
+  same width gave ~0.7px per day, smearing the daily variation the
+  user actually wants to see).
+- 63 floats × 13 symbols ≈ 800 floats ≈ ~8 KB JSON, lighter still
+  than the 1y version.
+- We trade off the annual context (drawdowns, regime shifts a year
+  back) for richer recent-trend legibility — that's the right call
+  for a "what's this asset doing lately" dashboard panel.
 
 Falls back gracefully: if the batch download fails or a symbol has
 no data, the per-symbol entry is `None`. The frontend then just
@@ -64,13 +67,13 @@ def _fetch_batch(symbols: list[str]) -> dict[str, list[float] | None]:
     if not symbols:
         return out
     try:
-        # `period="1y"` gives ~252 trading days; `interval="1d"` keeps
-        # daily granularity (smoother visual trend than weekly).
-        # `group_by="ticker"` returns a multi-index DataFrame even for
-        # a single symbol so the access pattern is uniform.
+        # `period="3mo"` gives ~63 trading days; `interval="1d"` keeps
+        # daily granularity so each bar is visible at typical row
+        # widths. `group_by="ticker"` returns a multi-index DataFrame
+        # even for a single symbol so the access pattern is uniform.
         df = yf.download(
             tickers=" ".join(symbols),
-            period="1y",
+            period="3mo",
             interval="1d",
             progress=False,
             group_by="ticker",
