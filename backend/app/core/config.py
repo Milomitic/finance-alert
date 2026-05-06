@@ -24,6 +24,12 @@ class Settings(BaseSettings):
     digest_minute: int = 0
     scan_hour: int = 23
     scan_minute: int = 30
+    # FRED (Federal Reserve Economic Data) API key for the macro
+    # calendar. Free, gettable from https://fred.stlouisfed.org —
+    # rate-limited at 120 req/min. Empty string disables FRED-driven
+    # macro events; the calendar then renders only the hardcoded
+    # fallback list in `services/calendar_macros.py`.
+    fred_api_key: str = ""
 
     @property
     def is_dev(self) -> bool:

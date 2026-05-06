@@ -37,6 +37,15 @@ class TopStockOut(BaseModel):
     top_kind: str | None
 
 
+class AlertsByIndexPointOut(BaseModel):
+    """One bar in the dashboard's "Per indice" alert breakdown."""
+    model_config = ConfigDict(from_attributes=True)
+
+    index_code: str
+    index_name: str
+    alert_count: int
+
+
 class SystemStatusOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -52,5 +61,6 @@ class DashboardSummaryOut(BaseModel):
     kpis: KpiSummaryOut
     alerts_by_day: list[AlertsByDayPointOut]
     top_stocks_30d: list[TopStockOut]
+    alerts_by_index_30d: list[AlertsByIndexPointOut]
     recent_alerts: list[AlertOut]
     system_status: SystemStatusOut

@@ -77,6 +77,7 @@ export default function HomePage() {
           <AlertsCompactPanel
             topStocks={summaryData.top_stocks_30d}
             recentAlerts={summaryData.recent_alerts}
+            alertsByIndex={summaryData.alerts_by_index_30d}
             alertsLast24h={summaryData.kpis.alerts_last_24h}
             alertsPrev24h={summaryData.kpis.alerts_prev_24h}
           />
@@ -93,6 +94,7 @@ export default function HomePage() {
           <AlertsCompactPanel
             topStocks={summaryData.top_stocks_30d}
             recentAlerts={summaryData.recent_alerts}
+            alertsByIndex={summaryData.alerts_by_index_30d}
             alertsLast24h={summaryData.kpis.alerts_last_24h}
             alertsPrev24h={summaryData.kpis.alerts_prev_24h}
           />
@@ -162,6 +164,7 @@ export default function HomePage() {
           <AlertsCompactPanel
             topStocks={summaryData.top_stocks_30d}
             recentAlerts={summaryData.recent_alerts}
+            alertsByIndex={summaryData.alerts_by_index_30d}
             alertsLast24h={summaryData.kpis.alerts_last_24h}
             alertsPrev24h={summaryData.kpis.alerts_prev_24h}
           />

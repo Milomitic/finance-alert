@@ -629,48 +629,171 @@ function CountChip({
 function MacroRow({ event }: { event: MacroEvent }) {
   const tone = IMPORTANCE_BG[event.importance];
   const flagAsset = regionFlagAsset(event.region);
+  // Show the insight strip only when FRED data is attached (the
+  // hardcoded fallback events leave these fields null).
+  const hasInsight =
+    event.prev_value != null || (event.history?.length ?? 0) > 0;
   return (
-    // Was: p-3 with a 2xl emoji + two stacked text lines (label, then
-    // region · dots · importance). Compacted to a single padded row
-    // (py-1.5 px-3) with the flag as a small SVG image, the label
-    // inline, and the meta squeezed onto the same line — saves ~24px
-    // of vertical real estate per macro event without losing info.
     <div
       className={cn(
-        "relative flex items-center gap-2 rounded-lg border overflow-hidden py-1.5 px-3",
+        "relative rounded-lg border overflow-hidden py-1.5 px-3",
         tone,
       )}
     >
-      {flagAsset ? (
-        <img
-          src={`/flags/${flagAsset}.svg`}
-          alt={event.region ?? ""}
-          width={22}
-          height={16}
-          style={{ width: "22px", height: "16px", objectFit: "cover" }}
-          className="rounded-[2px] ring-1 ring-black/10 dark:ring-white/10 shrink-0"
-          aria-hidden
-        />
-      ) : (
-        <span className="text-base leading-none shrink-0" aria-hidden>
-          {regionFlag(event.region)}
+      <div className="flex items-center gap-2">
+        {flagAsset ? (
+          <img
+            src={`/flags/${flagAsset}.svg`}
+            alt={event.region ?? ""}
+            width={22}
+            height={16}
+            style={{ width: "22px", height: "16px", objectFit: "cover" }}
+            className="rounded-[2px] ring-1 ring-black/10 dark:ring-white/10 shrink-0"
+            aria-hidden
+          />
+        ) : (
+          <span className="text-base leading-none shrink-0" aria-hidden>
+            {regionFlag(event.region)}
+          </span>
+        )}
+        <Landmark className="h-3.5 w-3.5 opacity-70 shrink-0" />
+        <span className="text-[14px] font-semibold leading-tight truncate flex-1 min-w-0">
+          {event.label}
+        </span>
+        <div className="flex items-center gap-1.5 text-[11.5px] uppercase tracking-wider opacity-80 shrink-0">
+          <span>{regionLabel(event.region)}</span>
+          <span className="opacity-30">·</span>
+          <ImportanceDots
+            importance={event.importance}
+            size="h-1.5 w-1.5"
+            gap="gap-0.5"
+          />
+          <span>{IMPORTANCE_LABEL[event.importance].toLowerCase()}</span>
+        </div>
+      </div>
+      {hasInsight && <MacroInsightStrip event={event} />}
+    </div>
+  );
+}
+
+/* ─── FRED-driven insight strip ────────────────────────────────────────── *
+ *
+ * Shown only when the event carries prev_value / change_pct / history
+ * from the FRED join. Three-part layout:
+ *   - Prev value (e.g. "Prec. 3.2%")
+ *   - Change vs prior (colored arrow + pct, e.g. "▲ +0.4%")
+ *   - Mini sparkline of the last ~12 observations
+ *
+ * The "consensus" piece referenced in the user spec isn't yet sourced
+ * (FRED doesn't publish forecasts; we'd need TradingEconomics or a
+ * broker feed for that). Hidden until that integration ships rather
+ * than rendering an empty placeholder.
+ */
+function MacroInsightStrip({ event }: { event: MacroEvent }) {
+  const prev = event.prev_value;
+  const prior = event.prior_value;
+  const change = event.change_pct;
+  const unit = event.unit ?? "";
+  const history = event.history ?? [];
+
+  return (
+    <div className="mt-1.5 pt-1.5 border-t border-current/10 flex items-center gap-3 text-[11px]">
+      {prev != null && (
+        <span className="inline-flex items-baseline gap-1">
+          <span className="opacity-60 uppercase tracking-wider">Prec.</span>
+          <span className="font-semibold tabular-nums">
+            {formatMacroValue(prev, unit)}
+          </span>
         </span>
       )}
-      <Landmark className="h-3.5 w-3.5 opacity-70 shrink-0" />
-      <span className="text-[14px] font-semibold leading-tight truncate flex-1 min-w-0">
-        {event.label}
-      </span>
-      <div className="flex items-center gap-1.5 text-[11.5px] uppercase tracking-wider opacity-80 shrink-0">
-        <span>{regionLabel(event.region)}</span>
-        <span className="opacity-30">·</span>
-        <ImportanceDots
-          importance={event.importance}
-          size="h-1.5 w-1.5"
-          gap="gap-0.5"
-        />
-        <span>{IMPORTANCE_LABEL[event.importance].toLowerCase()}</span>
-      </div>
+      {change != null && (
+        <span
+          className={cn(
+            "inline-flex items-center gap-0.5 font-semibold tabular-nums",
+            change > 0
+              ? "text-emerald-700 dark:text-emerald-400"
+              : change < 0
+                ? "text-rose-700 dark:text-rose-400"
+                : "opacity-70",
+          )}
+          title={prior != null ? `Variazione vs ${formatMacroValue(prior, unit)}` : undefined}
+        >
+          {change > 0 ? "▲" : change < 0 ? "▼" : "·"}
+          {change >= 0 ? "+" : ""}
+          {change.toFixed(2)}%
+        </span>
+      )}
+      {history.length >= 2 && (
+        <span className="ml-auto opacity-90 shrink-0">
+          <MacroSparkline history={history} />
+        </span>
+      )}
     </div>
+  );
+}
+
+/** Format a macro observation value for display. `unit` switches the
+ *  suffix: "pct" / "yield" → "%", "level" → raw with K/M/B grouping,
+ *  "index" → 1 decimal, else default 2 decimals. */
+function formatMacroValue(v: number, unit: string): string {
+  if (!Number.isFinite(v)) return "—";
+  if (unit === "pct" || unit === "yield") {
+    return `${v.toFixed(2)}%`;
+  }
+  if (unit === "level") {
+    const abs = Math.abs(v);
+    if (abs >= 1e12) return `${(v / 1e12).toFixed(2)}T`;
+    if (abs >= 1e9) return `${(v / 1e9).toFixed(2)}B`;
+    if (abs >= 1e6) return `${(v / 1e6).toFixed(1)}M`;
+    if (abs >= 1e3) return `${(v / 1e3).toFixed(1)}K`;
+    return v.toFixed(0);
+  }
+  if (unit === "index") return v.toFixed(1);
+  return v.toFixed(2);
+}
+
+/** Inline 60×16 sparkline of recent observations. Filters out null
+ *  values (FRED's "." marker) so the line stays continuous. */
+function MacroSparkline({
+  history,
+}: {
+  history: { date: string; value: number | null }[];
+}) {
+  const pts = history.filter((p): p is { date: string; value: number } =>
+    p.value != null && Number.isFinite(p.value),
+  );
+  if (pts.length < 2) return null;
+  const W = 60;
+  const H = 16;
+  const min = Math.min(...pts.map((p) => p.value));
+  const max = Math.max(...pts.map((p) => p.value));
+  const range = max - min || 1;
+  const points = pts
+    .map((p, i) => {
+      const x = (i / (pts.length - 1)) * (W - 1);
+      const y = H - ((p.value - min) / range) * (H - 2) - 1;
+      return `${x.toFixed(2)},${y.toFixed(2)}`;
+    })
+    .join(" ");
+  return (
+    <svg
+      width={W}
+      height={H}
+      viewBox={`0 0 ${W} ${H}`}
+      preserveAspectRatio="none"
+      className="block"
+      aria-hidden
+    >
+      <polyline
+        points={points}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        vectorEffect="non-scaling-stroke"
+      />
+    </svg>
   );
 }
 

@@ -8,6 +8,7 @@ from app.models import ScanRun, User
 from app.schemas.alert import AlertOut, ScanStatusOut
 from app.schemas.dashboard import (
     AlertsByDayPointOut,
+    AlertsByIndexPointOut,
     DashboardSummaryOut,
     KpiSummaryOut,
     SystemStatusOut,
@@ -50,6 +51,7 @@ def get_summary(
     kpi = stats_service.get_kpi_summary(db)
     by_day = stats_service.get_alerts_by_day(db, days=30)
     top = stats_service.get_top_stocks(db, days=30, limit=10)
+    by_index = stats_service.get_alerts_by_index(db, days=30)
     sys_status = stats_service.get_system_status(db)
     last_scan = _latest_scan(db)
     recent_items, _, _ = alert_service.list_alerts(db, limit=10, offset=0, archived=False)
@@ -77,6 +79,14 @@ def get_summary(
                 top_kind=t.top_kind,
             )
             for t in top
+        ],
+        alerts_by_index_30d=[
+            AlertsByIndexPointOut(
+                index_code=p.index_code,
+                index_name=p.index_name,
+                alert_count=p.alert_count,
+            )
+            for p in by_index
         ],
         recent_alerts=[AlertOut(**i) for i in recent_items],
         system_status=SystemStatusOut(

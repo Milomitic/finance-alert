@@ -16,6 +16,7 @@ from app.schemas.calendar import (
     CalendarOut,
     EarningsEventOut,
     MacroEventOut,
+    MacroObservationOut,
 )
 from app.services import calendar_service
 from app.services.calendar_service import (
@@ -122,6 +123,14 @@ def get_calendar(
                 label=e.label,
                 importance=e.importance,  # type: ignore[arg-type]
                 region=e.region,  # type: ignore[arg-type]
+                prev_value=e.prev_value,
+                prior_value=e.prior_value,
+                change_pct=e.change_pct,
+                unit=e.unit,
+                history=[
+                    MacroObservationOut(date=d, value=v)
+                    for d, v in e.history
+                ],
             ))
 
     return CalendarOut(

@@ -10,6 +10,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models import Alert, Index, Rule, Stock
+from app.models.index import StockIndex
 
 
 @dataclass
@@ -19,6 +20,50 @@ class KpiSummary:
     alerts_unread: int
     stocks_monitored: int
     indices_count: int
+
+
+@dataclass
+class AlertsByIndexPoint:
+    """One bar of the AlertsByIndexBars dashboard panel."""
+    index_code: str
+    index_name: str
+    alert_count: int
+
+
+def get_alerts_by_index(
+    db: Session, *, days: int = 30
+) -> list[AlertsByIndexPoint]:
+    """Return per-index alert counts over the last `days` days.
+
+    Joins Alert -> Stock -> StockIndex -> Index. A stock that's a member
+    of multiple indices contributes to each (S&P 500 + Nasdaq-100 share
+    many tickers, so a single AAPL alert counts toward both rows). This
+    matches the breadth row's convention.
+
+    Archived alerts excluded; sorted DESC by count so the heaviest-fire
+    indices float to the top of the dashboard panel.
+    """
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    rows = db.execute(
+        select(
+            Index.code,
+            Index.name,
+            func.count(Alert.id).label("alert_count"),
+        )
+        .join(StockIndex, StockIndex.index_id == Index.id)
+        .join(Alert, Alert.stock_id == StockIndex.stock_id)
+        .where(Alert.triggered_at >= cutoff, Alert.archived_at.is_(None))
+        .group_by(Index.id)
+        .order_by(func.count(Alert.id).desc(), Index.code.asc())
+    ).all()
+    return [
+        AlertsByIndexPoint(
+            index_code=r.code,
+            index_name=r.name,
+            alert_count=int(r.alert_count),
+        )
+        for r in rows
+    ]
 
 
 def get_kpi_summary(db: Session) -> KpiSummary:

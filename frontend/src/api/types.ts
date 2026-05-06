@@ -250,6 +250,12 @@ export interface TopStock {
   top_kind: string | null;
 }
 
+export interface AlertsByIndexPoint {
+  index_code: string;
+  index_name: string;
+  alert_count: number;
+}
+
 export interface SystemStatus {
   scheduler_running: boolean;
   scan_alerts_next_run: string | null;
@@ -263,6 +269,7 @@ export interface DashboardSummary {
   kpis: KpiSummary;
   alerts_by_day: AlertsByDayPoint[];
   top_stocks_30d: TopStock[];
+  alerts_by_index_30d: AlertsByIndexPoint[];
   recent_alerts: Alert[];
   system_status: SystemStatus;
 }
@@ -804,6 +811,13 @@ export interface EarningsEvent {
   risk_tier?: "conservative" | "moderate" | "aggressive" | null;
 }
 
+export interface MacroObservationPoint {
+  /** ISO date of the reference period (e.g. "2026-04-01" for April CPI). */
+  date: string;
+  /** FRED-reported value. NULL when missing/withheld. */
+  value: number | null;
+}
+
 export interface MacroEvent {
   date: string;
   kind: "macro";
@@ -812,6 +826,15 @@ export interface MacroEvent {
   importance: MacroImportance;
   /** Two-letter region code: "US" | "EU" | "UK" | "JP" | etc. */
   region: string;
+  /** FRED-driven insight fields. Populated when the event came from
+   *  the macro_release_dates + macro_observations join; null when
+   *  it's from the hardcoded fallback list. The UI shows the prev /
+   *  change / sparkline only when present. */
+  prev_value?: number | null;
+  prior_value?: number | null;
+  change_pct?: number | null;
+  unit?: string | null;
+  history?: MacroObservationPoint[];
 }
 
 /** Discriminated union over the `kind` tag — narrowing on `kind` gives full

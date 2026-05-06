@@ -1,6 +1,6 @@
 import { Bell } from "lucide-react";
 
-import type { Alert, TopStock } from "@/api/types";
+import type { Alert, AlertsByIndexPoint, TopStock } from "@/api/types";
 import { AlertsByIndexBars } from "@/components/dashboard/AlertsByIndexBars";
 import { RecentAlertsFeed } from "@/components/dashboard/RecentAlertsFeed";
 import { TopStocksTable } from "@/components/dashboard/TopStocksTable";
@@ -10,6 +10,7 @@ import { SectionTitle } from "@/components/ui/section-title";
 interface Props {
   topStocks: TopStock[];
   recentAlerts: Alert[];
+  alertsByIndex: AlertsByIndexPoint[];
   alertsLast24h: number;
   alertsPrev24h: number;
 }
@@ -23,14 +24,14 @@ const COLUMNS: { key: string; label: string }[] = [
 /**
  * Was: a 3-tab card (Top stocks / Feed / Per indice). The user
  * preferred to see all three at once, so the tabs collapsed into
- * three side-by-side columns. The "Per indice" column is currently
- * a placeholder (Fase 3E), but it stays in the layout so the column
- * structure matches the original tab structure 1:1 and naturally
- * fills with content when the feature ships.
+ * three side-by-side columns. The "Per indice" column shipped in
+ * Fase 3E and now displays the real per-index alert breakdown
+ * (count of alerts in the last 30 days per index, descending).
  */
 export function AlertsCompactPanel({
   topStocks,
   recentAlerts,
+  alertsByIndex,
   alertsLast24h,
   alertsPrev24h,
 }: Props) {
@@ -73,7 +74,7 @@ export function AlertsCompactPanel({
               <div className="flex-1 min-h-0 overflow-y-auto">
                 {col.key === "top" && <TopStocksTable data={topStocks} />}
                 {col.key === "feed" && <RecentAlertsFeed alerts={recentAlerts} />}
-                {col.key === "byindex" && <AlertsByIndexBars />}
+                {col.key === "byindex" && <AlertsByIndexBars data={alertsByIndex} />}
               </div>
             </div>
           ))}

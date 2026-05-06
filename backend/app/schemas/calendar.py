@@ -29,6 +29,13 @@ class EarningsEventOut(BaseModel):
     risk_tier: Literal["conservative", "moderate", "aggressive"] | None = None
 
 
+class MacroObservationOut(BaseModel):
+    """One historical print, used for the small sparkline in the
+    calendar's macro detail panel."""
+    date: date
+    value: float | None
+
+
 class MacroEventOut(BaseModel):
     date: date
     kind: Literal["macro"] = "macro"
@@ -43,6 +50,15 @@ class MacroEventOut(BaseModel):
         "US", "EU", "EZ", "UK", "GB", "JP", "KR", "CN", "HK", "CH",
         "DE", "FR", "IT", "ES", "NL", "BE", "IE",
     ]
+    # FRED-driven insight fields. Populated when the event came from
+    # `macro_release_dates` joined with `macro_observations`; null
+    # when the event is from the hardcoded fallback list. The UI
+    # renders the prev/change/sparkline only when these are present.
+    prev_value: float | None = None
+    prior_value: float | None = None
+    change_pct: float | None = None
+    unit: str | None = None
+    history: list[MacroObservationOut] = []
 
 
 CalendarEvent = Annotated[

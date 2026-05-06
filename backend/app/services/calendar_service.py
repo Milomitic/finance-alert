@@ -18,7 +18,7 @@ earnings-before-macros, importance desc within a day).
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime
 from typing import Literal
 
@@ -26,7 +26,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import Stock, StockScore
-from app.services import calendar_macros, stock_fundamentals_service
+from app.services import calendar_macros, macro_events_service, stock_fundamentals_service
 from app.services.calendar_macros import Importance, MacroEvent
 
 # Sort order — macros first per UX spec (V2): macros are scarcer + higher
@@ -63,13 +63,21 @@ class EarningsEvent:
 
 @dataclass
 class MacroEventDC:
-    """Service-layer macro event. Mirrors `calendar_macros.MacroEvent` but
-    carries the `kind` discriminator so the API can serialize uniformly."""
+    """Service-layer macro event. Carries the `kind` discriminator +
+    optional FRED-driven insight fields (prev/prior/change_pct/history).
+    Hardcoded events from `calendar_macros._MACRO_EVENTS` leave the
+    insight fields as their defaults — the calendar UI then renders the
+    chip without the prev/change badges."""
     date: date
     kind: Literal["macro"]
     label: str
     importance: Importance
     region: str
+    prev_value: float | None = None
+    prior_value: float | None = None
+    change_pct: float | None = None
+    unit: str | None = None
+    history: list[tuple[date, float | None]] = field(default_factory=list)
 
 
 CalendarEvent = EarningsEvent | MacroEventDC
@@ -222,10 +230,44 @@ def get_events(
         else:
             # Already validated by the caller; cast to the Literal set.
             importance_filter = set(importance)  # type: ignore[arg-type]
+
+        # FRED-driven events first — they carry insight fields
+        # (prev/prior/change_pct/history). Each event is keyed by
+        # (label, date) so we can dedupe against the hardcoded list
+        # below without showing the same release twice.
+        fred_events = macro_events_service.get_fred_events(
+            db, date_from, date_to,
+        )
+        seen_keys: set[tuple[str, date]] = set()
+        for fe in fred_events:
+            if importance_filter is not None and fe.importance not in importance_filter:
+                continue
+            seen_keys.add((fe.label, fe.date))
+            events.append(
+                MacroEventDC(
+                    date=fe.date,
+                    kind="macro",
+                    label=fe.label,
+                    importance=fe.importance,  # type: ignore[arg-type]
+                    region=fe.region,
+                    prev_value=fe.prev_value,
+                    prior_value=fe.prior_value,
+                    change_pct=fe.change_pct,
+                    unit=fe.unit,
+                    history=fe.history,
+                )
+            )
+
+        # Hardcoded fallback fills regions FRED doesn't reliably cover
+        # (BoE, BoJ, BoK, PBoC, ZEW, IFO, …). Skip any (label, date)
+        # already produced by FRED above to avoid duplicates.
         macros = calendar_macros.get_macro_events(
             date_from, date_to, importance_filter,
         )
-        events.extend(_convert_macro(m) for m in macros)
+        for m in macros:
+            if (m.label, m.date) in seen_keys:
+                continue
+            events.append(_convert_macro(m))
 
     # Final sort:
     #   primary: date asc
