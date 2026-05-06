@@ -9,7 +9,7 @@ interface Props {
 
 /* ─── HeroStrip — top of dashboard ──────────────────────────────────────── *
  *
- * Two columns, side-by-side at 300px row height (lg+):
+ * Two columns, side-by-side at 340px row height (lg+):
  *
  *   ┌──── MoodCard (3fr) ────┐  ┌──── LiveAssetsPanel (2fr) ────┐
  *   │ market mood hero        │  │ vertical list of indices,    │
@@ -23,10 +23,14 @@ interface Props {
  *     market context: "what's gold doing today" beats "RSI<30 count")
  *   - ScanTriggerCard → moved to the page header as a small icon button
  *     (the scan flow is admin-on-demand; it doesn't need real estate)
+ *
+ * Height was 300px in earlier iterations; bumped to 340px so the
+ * 13 rows in the live-assets panel get bigger fonts + ~28px of
+ * vertical budget each (was ~24px) without re-introducing scroll.
  */
 export function HeroStrip({ global, byIndex }: Props) {
   return (
-    <div className="grid gap-3 lg:grid-cols-[3fr_2fr] lg:h-[300px]">
+    <div className="grid gap-3 lg:grid-cols-[3fr_2fr] lg:h-[340px]">
       <div className="h-full min-h-0">
         <MoodCard global={global} byIndex={byIndex} />
       </div>

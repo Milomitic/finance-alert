@@ -151,27 +151,27 @@ function AssetRow({ asset }: { asset: LiveAsset }) {
       )}
     >
       {/* Flag (indices) or per-symbol brand icon (commodities/crypto) */}
-      <span className="shrink-0 w-[20px] flex items-center justify-center">
+      <span className="shrink-0 w-[22px] flex items-center justify-center">
         {asset.flag ? (
           <img
             src={`/flags/${asset.flag}.svg`}
             alt={asset.flag}
-            width={20}
-            height={14}
-            style={{ width: "20px", height: "14px", objectFit: "cover" }}
+            width={22}
+            height={16}
+            style={{ width: "22px", height: "16px", objectFit: "cover" }}
             className="rounded-[2px] ring-1 ring-border/60"
             aria-hidden
           />
         ) : symbolIcon ? (
-          <symbolIcon.Component className={cn("h-4 w-4", symbolIcon.color)} />
+          <symbolIcon.Component className={cn("h-[18px] w-[18px]", symbolIcon.color)} />
         ) : (
-          <FallbackIcon className="h-4 w-4 text-muted-foreground/80" />
+          <FallbackIcon className="h-[18px] w-[18px] text-muted-foreground/80" />
         )}
       </span>
 
       {/* Identity: name + live dot */}
       <div className="shrink-0 min-w-0 flex items-center gap-1.5">
-        <span className="text-[13px] font-semibold truncate leading-tight">
+        <span className="text-[14px] font-semibold truncate leading-tight">
           {asset.name}
         </span>
         {isLive && (
@@ -193,13 +193,13 @@ function AssetRow({ asset }: { asset: LiveAsset }) {
           already busy enough. */}
       <div className="flex-1 min-w-[60px] hidden sm:flex items-center pl-1 pr-2">
         {history.length >= 2 ? (
-          <Sparkline data={history} trend={trend} height={16} />
+          <Sparkline data={history} trend={trend} height={22} />
         ) : null}
       </div>
 
       {/* Price + change inline */}
       <div className="text-right shrink-0 flex items-baseline gap-1.5 leading-tight">
-        <span className="text-[13px] font-bold tabular-nums">
+        <span className="text-[14px] font-bold tabular-nums">
           {hasError ? (
             <Tooltip>
               <TooltipTrigger asChild>
@@ -215,7 +215,7 @@ function AssetRow({ asset }: { asset: LiveAsset }) {
         </span>
         <span
           className={cn(
-            "text-[11px] font-semibold tabular-nums tracking-tight w-[48px] text-right",
+            "text-[12px] font-semibold tabular-nums tracking-tight w-[52px] text-right",
             changeColor(changePct),
           )}
         >
@@ -230,7 +230,7 @@ function AssetRow({ asset }: { asset: LiveAsset }) {
  *  the row component because both columns render multiple categories. */
 function CategoryHeader({ category }: { category: LiveAsset["category"] }) {
   return (
-    <div className="shrink-0 px-1.5 pt-1.5 pb-1 text-[10px] uppercase tracking-[0.16em] text-muted-foreground/70 font-semibold">
+    <div className="shrink-0 px-1.5 pt-2 pb-1 text-[11px] uppercase tracking-[0.16em] text-muted-foreground/70 font-semibold">
       {CATEGORY_LABEL[category]}
     </div>
   );

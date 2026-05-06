@@ -29,8 +29,10 @@ interface Props {
    *  full-width sparkline. */
   width?: number;
   height?: number;
-  /** Stroke thickness. Default 1.4 keeps the line crisp at small sizes
-   *  without looking heavy. */
+  /** Stroke thickness in viewBox units (so it's invariant to rendered
+   *  size). Default 0.9 — thin enough that 252 daily segments don't
+   *  visually merge into a thick smear, but still anti-alias clean
+   *  on hi-DPI displays. */
   strokeWidth?: number;
   className?: string;
 }
@@ -40,7 +42,7 @@ export function Sparkline({
   trend = "flat",
   width = 100,
   height = 18,
-  strokeWidth = 1.4,
+  strokeWidth = 0.9,
   className,
 }: Props) {
   const gradId = useId();
