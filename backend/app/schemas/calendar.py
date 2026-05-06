@@ -34,7 +34,15 @@ class MacroEventOut(BaseModel):
     kind: Literal["macro"] = "macro"
     label: str
     importance: Literal["high", "medium", "low"]
-    region: Literal["US", "EU", "UK", "JP"]
+    # Expanded from US/EU/UK/JP to cover every market the user tracks.
+    # Mirror of `services/calendar_macros.Region`. Frontend's
+    # `lib/calendarMeta.ts` REGION_LABEL/FLAG/REGION_FLAG_ASSET need
+    # to grow with this set or unmapped codes render as raw 2-letter
+    # codes with the generic 📅 fallback.
+    region: Literal[
+        "US", "EU", "EZ", "UK", "GB", "JP", "KR", "CN", "HK", "CH",
+        "DE", "FR", "IT", "ES", "NL", "BE", "IE",
+    ]
 
 
 CalendarEvent = Annotated[
