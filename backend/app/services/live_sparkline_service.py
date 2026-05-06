@@ -1,7 +1,8 @@
 """Mini-chart history for the dashboard live-assets panel.
 
-Returns ~30 trailing daily closes per yfinance symbol so the frontend
-can render an inline sparkline next to each row.
+Returns ~252 trailing daily closes (one trading year) per yfinance
+symbol so the frontend can render an inline sparkline next to each
+row.
 
 Why a separate service from `live_quote_service`
 ------------------------------------------------
@@ -13,6 +14,16 @@ Why a separate service from `live_quote_service`
   calls.
 - Different failure mode: a sparkline that's a few hours stale is
   fine; a quote that's 15min stale is wrong.
+
+Why 1y daily
+------------
+- 1y at daily resolution gives ~252 closes — enough for the user to
+  see a full annual cycle (drawdowns, rallies, regime shifts) at a
+  glance. Monthly resolution would compress noise too aggressively;
+  weekly would land in the awkward middle.
+- 252 floats per symbol × 13 symbols ≈ 3.3k floats ≈ ~30 KB JSON.
+  Still trivially small over the wire, and the SVG path has plenty
+  of resolution at 100 viewBox units (~0.4 units per segment).
 
 Falls back gracefully: if the batch download fails or a symbol has
 no data, the per-symbol entry is `None`. The frontend then just
@@ -53,13 +64,13 @@ def _fetch_batch(symbols: list[str]) -> dict[str, list[float] | None]:
     if not symbols:
         return out
     try:
-        # `period="1mo"` gives ~22 trading days; `interval="1d"` keeps
-        # the payload small. `group_by="ticker"` returns a multi-index
-        # DataFrame even for a single symbol so the access pattern is
-        # uniform.
+        # `period="1y"` gives ~252 trading days; `interval="1d"` keeps
+        # daily granularity (smoother visual trend than weekly).
+        # `group_by="ticker"` returns a multi-index DataFrame even for
+        # a single symbol so the access pattern is uniform.
         df = yf.download(
             tickers=" ".join(symbols),
-            period="1mo",
+            period="1y",
             interval="1d",
             progress=False,
             group_by="ticker",
