@@ -140,7 +140,7 @@ export default function HomePage() {
       </div>
       <HeroStrip global={m.global} byIndex={m.by_index} />
       <BreadthMatrixTable data={m.by_index} />
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 lg:h-[420px]">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 lg:h-[520px]">
         <div className="h-full min-h-0"><RsiHistogramCard rsi={m.rsi_distribution} indices={m.by_index} /></div>
         <div className="h-full min-h-0"><SectorsHeatmapCard sectors={m.sectors} /></div>
         <div className="h-full min-h-0"><TopMoversCard movers={m.movers} /></div>
@@ -151,12 +151,13 @@ export default function HomePage() {
           attention", top picks is "what looks great right now". Putting them
           side-by-side gives the user a single decision surface — react vs
           discover — instead of scrolling between them.
-          Equal-height row (`lg:h-[440px]`) so the two cards align — was
+          Equal-height row (`lg:h-[500px]`) so the two cards align — was
           `items-start` which let the Alerts card balloon past Top Picks
-          when its Feed had a lot of recent items. Each card's columns
-          scroll internally for overflow. Stacks vertically on narrow
-          viewports via the `lg:` breakpoint. */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 lg:h-[440px]">
+          when its Feed had a lot of recent items. Bumped a tier
+          (440->500) so the bigger row fonts have breathing room. Each
+          card's columns scroll internally for overflow. Stacks
+          vertically on narrow viewports via the `lg:` breakpoint. */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 lg:h-[500px]">
         {summaryData ? (
           <AlertsCompactPanel
             topStocks={summaryData.top_stocks_30d}

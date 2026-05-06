@@ -14,10 +14,13 @@ import {
 } from "@/lib/scoreMeta";
 import { cn } from "@/lib/utils";
 
-type ColumnKey = "all" | RiskTier;
+type ColumnKey = RiskTier;
 
+// "Tutti" was the leftmost column; user removed it (the per-tier columns
+// already cover the universe and the unfiltered list duplicated rows).
+// Three columns now share the available width, letting each one show the
+// full company name without the previous compact mode.
 const COLUMNS: { key: ColumnKey; label: string }[] = [
-  { key: "all", label: "Tutti" },
   { key: "conservative", label: "Conservative" },
   { key: "moderate", label: "Moderate" },
   { key: "aggressive", label: "Aggressive" },
@@ -64,37 +67,32 @@ function ScoreDots({ composite }: { composite: number }) {
 
 /**
  * Single-line row: ticker, name, score-dots, risk chip, composite, change%.
- * Was previously two stacked lines (top: ticker+name+score, bottom:
- * dots+risk+change). The user asked to bring the rate + visual
- * evaluation onto the same line as ticker and score, so we collapsed
- * the layout. Saves ~20px per row vs. the old two-line version.
+ * Was previously two stacked lines; collapsed to one line so the rate +
+ * visual eval live alongside ticker and score. Compact-mode (name
+ * hidden) was dropped when "Tutti" went away — three columns now have
+ * enough width that the full name fits everywhere.
  */
-function PickRow({ item, compact = false }: { item: TopPickItem; compact?: boolean }) {
+function PickRow({ item }: { item: TopPickItem }) {
   const compTone = scoreColor(item.composite);
   return (
     <li className="flex-1 min-h-0 flex border-b border-border/40 last:border-b-0">
       <Link
         to={`/stocks/${encodeURIComponent(item.ticker)}`}
-        className={cn(
-          "flex-1 flex items-center gap-1.5 px-2.5 py-1 hover:bg-accent/30 transition-colors leading-tight",
-        )}
+        className="flex-1 flex items-center gap-2 px-3 py-1 hover:bg-accent/30 transition-colors leading-tight"
       >
-        <span className="text-[12px] font-bold tabular-nums shrink-0">
+        <span className="text-[14px] font-bold tabular-nums shrink-0">
           {item.ticker}
         </span>
-        {!compact && (
-          <span
-            className="text-[10.5px] text-muted-foreground truncate flex-1 min-w-0"
-            title={item.name}
-          >
-            {item.name}
-          </span>
-        )}
-        {compact && <span className="flex-1 min-w-0" />}
+        <span
+          className="text-[12px] text-muted-foreground truncate flex-1 min-w-0"
+          title={item.name}
+        >
+          {item.name}
+        </span>
         <ScoreDots composite={item.composite} />
         <span
           className={cn(
-            "px-1 py-px rounded border text-[8.5px] uppercase tracking-wider font-semibold shrink-0",
+            "px-1.5 py-px rounded border text-[10px] uppercase tracking-wider font-semibold shrink-0",
             RISK_TONE[item.risk_tier],
           )}
         >
@@ -102,7 +100,7 @@ function PickRow({ item, compact = false }: { item: TopPickItem; compact?: boole
         </span>
         <span
           className={cn(
-            "text-[12px] font-bold tabular-nums shrink-0 w-[30px] text-right",
+            "text-[14px] font-bold tabular-nums shrink-0 w-[34px] text-right",
             compTone,
           )}
           title={scoreLabel(item.composite)}
@@ -111,7 +109,7 @@ function PickRow({ item, compact = false }: { item: TopPickItem; compact?: boole
         </span>
         <span
           className={cn(
-            "text-[10.5px] font-semibold tabular-nums shrink-0 w-[46px] text-right",
+            "text-[12px] font-semibold tabular-nums shrink-0 w-[52px] text-right",
             changeColor(item.change_pct),
           )}
         >
@@ -122,17 +120,16 @@ function PickRow({ item, compact = false }: { item: TopPickItem; compact?: boole
   );
 }
 
-function RowSkeleton({ compact = false }: { compact?: boolean }) {
+function RowSkeleton() {
   return (
-    <li className="border-b border-border/40 last:border-b-0 px-2.5 py-1">
-      <div className="flex items-center gap-1.5">
-        <div className="h-3 w-10 rounded bg-muted/60 animate-pulse" />
-        {!compact && <div className="h-2.5 flex-1 rounded bg-muted/40 animate-pulse" />}
-        {compact && <div className="flex-1" />}
-        <div className="h-2 w-7 rounded bg-muted/40 animate-pulse" />
-        <div className="h-3 w-14 rounded bg-muted/40 animate-pulse" />
-        <div className="h-3 w-8 rounded bg-muted/60 animate-pulse" />
-        <div className="h-3 w-10 rounded bg-muted/40 animate-pulse" />
+    <li className="border-b border-border/40 last:border-b-0 px-3 py-1.5">
+      <div className="flex items-center gap-2">
+        <div className="h-3.5 w-12 rounded bg-muted/60 animate-pulse" />
+        <div className="h-3 flex-1 rounded bg-muted/40 animate-pulse" />
+        <div className="h-2.5 w-8 rounded bg-muted/40 animate-pulse" />
+        <div className="h-3.5 w-16 rounded bg-muted/40 animate-pulse" />
+        <div className="h-3.5 w-9 rounded bg-muted/60 animate-pulse" />
+        <div className="h-3.5 w-12 rounded bg-muted/40 animate-pulse" />
       </div>
     </li>
   );
@@ -141,29 +138,23 @@ function RowSkeleton({ compact = false }: { compact?: boolean }) {
 /* ─── Column ──────────────────────────────────────────────────────────── */
 
 function PicksColumn({ col }: { col: { key: ColumnKey; label: string } }) {
-  // For "all" we drop the risk filter so the API returns the global
-  // top picks; otherwise we filter to the selected tier.
-  const params =
-    col.key === "all"
-      ? { category: "composite" as const, limit: ROW_LIMIT }
-      : { category: "composite" as const, risk: col.key, limit: ROW_LIMIT };
-  const q = useTopPicks(params);
+  const q = useTopPicks({
+    category: "composite",
+    risk: col.key,
+    limit: ROW_LIMIT,
+  });
   const items = q.data?.items ?? [];
   const isEmpty = !q.isLoading && items.length === 0;
-  // Per-tier columns are narrower than the "all" column at any
-  // realistic dashboard width, so we hide the company name there
-  // and rely on the ticker + score for identification.
-  const compact = col.key !== "all";
 
   return (
     <div className="flex flex-col min-h-0 min-w-0">
-      <div className="shrink-0 px-2.5 py-1 text-[10.5px] uppercase tracking-[0.16em] font-bold text-muted-foreground border-b bg-muted/40">
+      <div className="shrink-0 px-3 py-1.5 text-[11.5px] uppercase tracking-[0.16em] font-bold text-muted-foreground border-b bg-muted/40">
         {col.label}
       </div>
       {q.isLoading ? (
         <ul className="flex-1">
           {Array.from({ length: ROW_LIMIT }).map((_, i) => (
-            <RowSkeleton key={i} compact={compact} />
+            <RowSkeleton key={i} />
           ))}
         </ul>
       ) : isEmpty ? (
@@ -173,7 +164,7 @@ function PicksColumn({ col }: { col: { key: ColumnKey; label: string } }) {
       ) : (
         <ul className="flex-1 min-h-0 flex flex-col">
           {items.map((it) => (
-            <PickRow key={it.stock_id} item={it} compact={compact} />
+            <PickRow key={it.stock_id} item={it} />
           ))}
         </ul>
       )}
@@ -185,14 +176,14 @@ function PicksColumn({ col }: { col: { key: ColumnKey; label: string } }) {
 
 /**
  * Top picks card. Was a single-list card with four tabs (Tutti /
- * Conservative / Moderate / Aggressive); the user wanted all four
- * tier views visible simultaneously. Now four columns side-by-side,
- * each fetched independently via useTopPicks (the cache key is
- * already keyed by params so this multiplies request count by ~4 on
- * cold start, but TanStack Query dedups subsequent re-renders).
+ * Conservative / Moderate / Aggressive); the user wanted all tiers
+ * visible at once and later dropped the Tutti column (the per-tier
+ * columns already cover the universe and Tutti duplicated rows).
+ * Three columns now share the available width — each one shows the
+ * full company name without compact mode.
  *
- * Rows are now single-line: ticker, name (only in the "all" column),
- * score-dots, risk chip, composite, change%. Was two lines.
+ * Rows are single-line: ticker, name, score-dots, risk chip,
+ * composite, change%.
  */
 export function TopPicksCard() {
   return (
@@ -209,7 +200,7 @@ export function TopPicksCard() {
             }
           />
         </div>
-        <div className="flex-1 min-h-0 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 divide-y md:divide-y-0 md:divide-x divide-border/40">
+        <div className="flex-1 min-h-0 grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-border/40">
           {COLUMNS.map((col) => (
             <PicksColumn key={col.key} col={col} />
           ))}

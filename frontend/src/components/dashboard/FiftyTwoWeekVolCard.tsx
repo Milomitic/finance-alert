@@ -4,7 +4,6 @@ import { Link } from "react-router-dom";
 import type { Mover, MoversBlock, VolumeSpike } from "@/api/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { SectionTitle } from "@/components/ui/section-title";
-import { IndexBadge } from "@/components/dashboard/IndexBadge";
 import { StockLogo } from "@/components/dashboard/StockLogo";
 import { cn } from "@/lib/utils";
 
@@ -30,7 +29,6 @@ function SparkRow({
   rightLine1,
   rightLine2,
   rightTone,
-  index,
   pillar,
 }: {
   ticker: string;
@@ -41,7 +39,6 @@ function SparkRow({
   /** Smaller line below (e.g. "+1.20%" or "vol"). null = no second line. */
   rightLine2?: string | null;
   rightTone: "pos" | "neg" | "neutral";
-  index?: string | null;
   /** Tiny leading icon — 📈 or 📉 for 52w highs/lows, ⚡ for spikes. */
   pillar: string;
 }) {
@@ -113,11 +110,6 @@ function SparkRow({
             </div>
           )}
         </div>
-        {index && (
-          <span className="shrink-0">
-            <IndexBadge code={index} size="xs" />
-          </span>
-        )}
         <div className="text-right shrink-0 leading-tight">
           <div className={cn("text-[12.5px] font-bold tabular-nums", toneCls)}>
             {rightLine1}
@@ -185,7 +177,6 @@ export function FiftyTwoWeekVolCard({ movers }: Props) {
                     sparkline={m.sparkline}
                     rightLine1={`$${m.last_close.toFixed(2)}`}
                     rightTone="pos"
-                    index={m.index}
                     pillar="📈"
                   />
                 ))}
@@ -197,7 +188,6 @@ export function FiftyTwoWeekVolCard({ movers }: Props) {
                     sparkline={m.sparkline}
                     rightLine1={`$${m.last_close.toFixed(2)}`}
                     rightTone="neg"
-                    index={m.index}
                     pillar="📉"
                   />
                 ))}
@@ -226,7 +216,6 @@ export function FiftyTwoWeekVolCard({ movers }: Props) {
                       rightLine1={`${m.vol_ratio.toFixed(1)}× vol`}
                       rightLine2={`${change >= 0 ? "+" : ""}${change.toFixed(2)}%`}
                       rightTone={tone}
-                      index={m.index}
                       pillar="⚡"
                     />
                   );

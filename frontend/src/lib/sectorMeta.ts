@@ -2,18 +2,27 @@
  * Per-sector lucide icon + tone-class mapping. Covers both yfinance
  * canonical names and common variants. Returns sensible fallbacks for
  * unknown sectors.
+ *
+ * Icon picks lean on lucide's most semantically loaded options:
+ *   - `Building2` for real estate (replaces the generic Briefcase)
+ *   - `Pickaxe` for materials (replaces the abstract Boxes — materials
+ *     evokes mining/extraction more than packaging)
+ *   - `MessageSquare` for communication services (replaces dated Radio)
+ *   - `HeartPulse` for healthcare (more clinical than a plain Heart)
+ *   - `CircleDollarSign` for financials (more universal than Banknote
+ *     across fintech/insurance/banking)
  */
 import {
-  Banknote,
-  Boxes,
-  Briefcase,
+  Building2,
+  CircleDollarSign,
   Cpu,
   Factory,
-  Heart,
+  HeartPulse,
   Layers,
   Lightbulb,
+  MessageSquare,
+  Pickaxe,
   Pill,
-  Radio,
   ShoppingBag,
   ShoppingCart,
   Zap,
@@ -21,30 +30,67 @@ import {
 import type { LucideIcon } from "lucide-react";
 
 const ICONS: Record<string, LucideIcon> = {
+  "Information Technology": Cpu,
   "Technology": Cpu,
   "Energy": Zap,
-  "Financial Services": Banknote,
-  "Financials": Banknote,
-  "Healthcare": Heart,
-  "Health Care": Heart,
+  "Financial Services": CircleDollarSign,
+  "Financials": CircleDollarSign,
+  "Healthcare": HeartPulse,
+  "Health Care": HeartPulse,
   "Industrials": Factory,
   "Industrial": Factory,
   "Consumer Cyclical": ShoppingBag,
   "Consumer Discretionary": ShoppingBag,
   "Consumer Defensive": ShoppingCart,
   "Consumer Staples": ShoppingCart,
-  "Basic Materials": Boxes,
-  "Materials": Boxes,
+  "Basic Materials": Pickaxe,
+  "Materials": Pickaxe,
   "Utilities": Lightbulb,
-  "Communication Services": Radio,
-  "Communications": Radio,
-  "Real Estate": Briefcase,
+  "Communication Services": MessageSquare,
+  "Communications": MessageSquare,
+  "Real Estate": Building2,
   "Pharmaceuticals": Pill,
 };
 
 export function getSectorIcon(sector: string | null | undefined): LucideIcon {
   if (!sector) return Layers;
   return ICONS[sector] ?? Layers;
+}
+
+/* ─── Sector icon color (matches the chip tone hue) ─────────────────────── */
+/* Plain string literals — Tailwind purger needs them this way (CLAUDE.md).
+ * Each entry tints the icon to the sector's hue so the row gains a subtle
+ * color cue alongside the heatmap blob, without inflating the chip area. */
+const ICON_COLOR: Record<string, string> = {
+  "Information Technology": "text-sky-600 dark:text-sky-400",
+  "Technology": "text-sky-600 dark:text-sky-400",
+  "Energy": "text-amber-600 dark:text-amber-400",
+  "Financial Services": "text-violet-600 dark:text-violet-400",
+  "Financials": "text-violet-600 dark:text-violet-400",
+  "Healthcare": "text-emerald-600 dark:text-emerald-400",
+  "Health Care": "text-emerald-600 dark:text-emerald-400",
+  "Industrials": "text-stone-600 dark:text-stone-400",
+  "Industrial": "text-stone-600 dark:text-stone-400",
+  "Consumer Cyclical": "text-fuchsia-600 dark:text-fuchsia-400",
+  "Consumer Discretionary": "text-fuchsia-600 dark:text-fuchsia-400",
+  "Consumer Defensive": "text-teal-600 dark:text-teal-400",
+  "Consumer Staples": "text-teal-600 dark:text-teal-400",
+  "Basic Materials": "text-orange-600 dark:text-orange-400",
+  "Materials": "text-orange-600 dark:text-orange-400",
+  "Utilities": "text-yellow-600 dark:text-yellow-500",
+  "Communication Services": "text-indigo-600 dark:text-indigo-400",
+  "Communications": "text-indigo-600 dark:text-indigo-400",
+  "Real Estate": "text-rose-600 dark:text-rose-400",
+  "Pharmaceuticals": "text-lime-600 dark:text-lime-400",
+};
+
+const FALLBACK_ICON_COLOR = "text-zinc-500 dark:text-zinc-400";
+
+export function getSectorIconColor(
+  sector: string | null | undefined,
+): string {
+  if (!sector) return FALLBACK_ICON_COLOR;
+  return ICON_COLOR[sector] ?? FALLBACK_ICON_COLOR;
 }
 
 /* ─── Sector tone classes ───────────────────────────────────────────────── */

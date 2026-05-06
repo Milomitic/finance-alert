@@ -67,7 +67,7 @@ export function AlertsCompactPanel({
         <div className="flex-1 min-h-0 grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-border/40">
           {COLUMNS.map((col) => (
             <div key={col.key} className="flex flex-col min-h-0 min-w-0">
-              <div className="shrink-0 px-2.5 py-1 text-[10.5px] uppercase tracking-[0.16em] font-bold text-muted-foreground border-b bg-muted/40">
+              <div className="shrink-0 px-3 py-1.5 text-[11.5px] uppercase tracking-[0.16em] font-bold text-muted-foreground border-b bg-muted/40">
                 {col.label}
               </div>
               <div className="flex-1 min-h-0 overflow-y-auto">
