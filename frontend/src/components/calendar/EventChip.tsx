@@ -13,6 +13,7 @@ import {
   formatEps,
   formatMarketCap,
   regionFlag,
+  regionFlagAsset,
   regionLabel,
 } from "@/lib/calendarMeta";
 import { getSectorRing, getSectorTone } from "@/lib/sectorMeta";
@@ -139,6 +140,7 @@ function MacroChip({
   onClick?: (e: React.MouseEvent) => void;
 }) {
   const tone = IMPORTANCE_BG[event.importance];
+  const flagAsset = regionFlagAsset(event.region);
 
   return (
     <Tooltip>
@@ -173,9 +175,21 @@ function MacroChip({
             gap="gap-0.5"
             className="shrink-0"
           />
-          <span className="text-[14px] leading-none shrink-0" aria-hidden>
-            {regionFlag(event.region)}
-          </span>
+          {flagAsset ? (
+            <img
+              src={`/flags/${flagAsset}.svg`}
+              alt={event.region ?? ""}
+              width={14}
+              height={10}
+              style={{ width: "14px", height: "10px", objectFit: "cover" }}
+              className="rounded-[1px] ring-1 ring-black/10 dark:ring-white/10 shrink-0"
+              aria-hidden
+            />
+          ) : (
+            <span className="text-[14px] leading-none shrink-0" aria-hidden>
+              {regionFlag(event.region)}
+            </span>
+          )}
           <span className="text-[14px] font-medium leading-none truncate">
             {event.label}
           </span>
@@ -183,7 +197,19 @@ function MacroChip({
       </TooltipTrigger>
       <TooltipContent side="top" className="space-y-1">
         <div className="flex items-baseline gap-2">
-          <span className="text-base leading-none">{regionFlag(event.region)}</span>
+          {flagAsset ? (
+            <img
+              src={`/flags/${flagAsset}.svg`}
+              alt={event.region ?? ""}
+              width={20}
+              height={14}
+              style={{ width: "20px", height: "14px", objectFit: "cover" }}
+              className="rounded-[1px] ring-1 ring-black/10 dark:ring-white/10 shrink-0 self-center"
+              aria-hidden
+            />
+          ) : (
+            <span className="text-base leading-none">{regionFlag(event.region)}</span>
+          )}
           <div>
             <div className="text-base font-semibold leading-tight">
               {event.label}

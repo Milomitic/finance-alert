@@ -26,6 +26,7 @@ import {
   formatMarketCap,
   isSameISODay,
   regionFlag,
+  regionFlagAsset,
   regionLabel,
   todayISO,
 } from "@/lib/calendarMeta";
@@ -635,34 +636,47 @@ function CountChip({
 
 function MacroRow({ event }: { event: MacroEvent }) {
   const tone = IMPORTANCE_BG[event.importance];
+  const flagAsset = regionFlagAsset(event.region);
   return (
+    // Was: p-3 with a 2xl emoji + two stacked text lines (label, then
+    // region · dots · importance). Compacted to a single padded row
+    // (py-1.5 px-3) with the flag as a small SVG image, the label
+    // inline, and the meta squeezed onto the same line — saves ~24px
+    // of vertical real estate per macro event without losing info.
     <div
       className={cn(
-        "relative flex items-center gap-3 rounded-lg border overflow-hidden p-3",
+        "relative flex items-center gap-2 rounded-lg border overflow-hidden py-1.5 px-3",
         tone,
       )}
     >
-      <span className="text-2xl leading-none shrink-0" aria-hidden>
-        {regionFlag(event.region)}
+      {flagAsset ? (
+        <img
+          src={`/flags/${flagAsset}.svg`}
+          alt={event.region ?? ""}
+          width={22}
+          height={16}
+          style={{ width: "22px", height: "16px", objectFit: "cover" }}
+          className="rounded-[2px] ring-1 ring-black/10 dark:ring-white/10 shrink-0"
+          aria-hidden
+        />
+      ) : (
+        <span className="text-base leading-none shrink-0" aria-hidden>
+          {regionFlag(event.region)}
+        </span>
+      )}
+      <Landmark className="h-3.5 w-3.5 opacity-70 shrink-0" />
+      <span className="text-[14px] font-semibold leading-tight truncate flex-1 min-w-0">
+        {event.label}
       </span>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <Landmark className="h-3.5 w-3.5 opacity-70 shrink-0" />
-          <span className="text-base font-semibold leading-tight">
-            {event.label}
-          </span>
-        </div>
-        <div className="mt-1 flex items-center gap-2 text-[13px] uppercase tracking-wider opacity-80">
-          <span>{regionLabel(event.region)}</span>
-          <span className="opacity-30">·</span>
-          <ImportanceDots
-            importance={event.importance}
-            size="h-1.5 w-1.5"
-            gap="gap-0.5"
-            labelled
-          />
-          <span>{IMPORTANCE_LABEL[event.importance].toLowerCase()}</span>
-        </div>
+      <div className="flex items-center gap-1.5 text-[11.5px] uppercase tracking-wider opacity-80 shrink-0">
+        <span>{regionLabel(event.region)}</span>
+        <span className="opacity-30">·</span>
+        <ImportanceDots
+          importance={event.importance}
+          size="h-1.5 w-1.5"
+          gap="gap-0.5"
+        />
+        <span>{IMPORTANCE_LABEL[event.importance].toLowerCase()}</span>
       </div>
     </div>
   );

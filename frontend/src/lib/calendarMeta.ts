@@ -127,6 +127,36 @@ export function regionFlag(code: string | null | undefined): string {
   return REGION_FLAG[code.toUpperCase()] ?? "📅";
 }
 
+/**
+ * Map a calendar `region` code to a flag asset path (`/flags/{code}.svg`)
+ * — matches the SVG-asset approach used by the rest of the dashboard
+ * (live-assets panel, search bar, stock header). The emoji-based
+ * `regionFlag` was inconsistent with the rest of the UI; this helper
+ * lets callers render the same `<img src=/flags/...>` everywhere.
+ *
+ * Returns `null` when the region has no matching SVG (e.g. "GLOBAL"
+ * or unmapped codes); callers should fall back to the emoji or a
+ * generic icon in that case.
+ */
+const REGION_FLAG_ASSET: Record<string, string> = {
+  US: "us",
+  EU: "eu",
+  EZ: "eu",
+  UK: "gb",
+  GB: "gb",
+  JP: "jp",
+  CN: "cn",
+  CH: "ch",
+  IT: "it",
+  DE: "de",
+  FR: "fr",
+};
+
+export function regionFlagAsset(code: string | null | undefined): string | null {
+  if (!code) return null;
+  return REGION_FLAG_ASSET[code.toUpperCase()] ?? null;
+}
+
 /* ─── Date helpers ──────────────────────────────────────────────────────── */
 /* All work in local time on date-only strings (YYYY-MM-DD). The backend
  * sends ISO dates, never datetimes — there's no timezone ambiguity to
