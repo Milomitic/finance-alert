@@ -69,7 +69,12 @@ class StockDetail:
     indicator_periods: "IndicatorPeriods"
     kpis: StockKpis
     effective_rules: list[EffectiveRule]
-    alerts_history: list[Alert]
+    # Per-row tuple of (alert ORM, rule.kind) so the API layer can
+    # populate AlertOut.rule_kind without a second roundtrip. Was a
+    # plain list[Alert] which forced the endpoint to hard-code
+    # rule_kind=None — leaving the stock-detail "Alert storici" table
+    # without its Regola/Tono chips populated.
+    alerts_history: list[tuple[Alert, str | None]]
 
 
 @dataclass
@@ -283,14 +288,23 @@ def get_detail(db: Session, ticker: str, range_key: str = "1y") -> StockDetail |
 
     kpis = _compute_kpis(bars)
     effective_rules = resolve_effective_rules(db, stock.id)
-    alerts_history = list(
-        db.execute(
-            select(Alert)
-            .where(Alert.stock_id == stock.id)
+    # JOIN Rule so each alert carries its rule.kind for the UI
+    # (Regola + Tono chips on the stock-detail "Alert storici" card).
+    # Was `select(Alert)` only, which left the API endpoint to
+    # hard-code rule_kind=None.
+    # Also filter out archived alerts here — the stock-detail card
+    # doesn't surface an Archivio column anymore, and showing
+    # archived rows mixed with active ones would be misleading.
+    alerts_history = [
+        (alert, rule_kind)
+        for alert, rule_kind in db.execute(
+            select(Alert, Rule.kind)
+            .join(Rule, Rule.id == Alert.rule_id)
+            .where(Alert.stock_id == stock.id, Alert.archived_at.is_(None))
             .order_by(Alert.triggered_at.desc())
             .limit(50)
-        ).scalars()
-    )
+        ).all()
+    ]
     return StockDetail(
         stock=stock,
         ohlcv=ohlcv_view,

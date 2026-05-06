@@ -54,10 +54,11 @@ export function AlertsTable({
   embedded = false,
 }: Props) {
   const allSelected = alerts.length > 0 && alerts.every((a) => selectedIds.has(a.id));
-  // When embedded the "Ticker" column is dropped along with checkbox +
-  // Nome — the colSpan for the empty-state row needs to match the
-  // remaining column count or the message gets squeezed into one cell.
-  const colSpan = embedded ? 6 : 9;
+  // Embedded mode drops checkbox + Ticker + Nome + Archivio columns —
+  // backend pre-filters archived alerts on the stock-detail endpoint
+  // so the column adds zero info. The colSpan for the empty-state row
+  // tracks the remaining column count.
+  const colSpan = embedded ? 5 : 9;
 
   // Bumped one notch above the shared Table's default text-sm: the alert
   // listing is the page's primary content, not auxiliary metadata, so it
@@ -108,7 +109,7 @@ export function AlertsTable({
             Tono
           </TableHead>
           <TableHead className="text-sm text-right">Prezzo</TableHead>
-          <TableHead className="text-sm">Archivio</TableHead>
+          {!embedded && <TableHead className="text-sm">Archivio</TableHead>}
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -209,9 +210,11 @@ export function AlertsTable({
             <TableCell className="text-right tabular-nums font-semibold">
               ${a.trigger_price}
             </TableCell>
-            <TableCell className="text-sm">
-              {a.archived_at ? "🗄 Archiviato" : "—"}
-            </TableCell>
+            {!embedded && (
+              <TableCell className="text-sm">
+                {a.archived_at ? "🗄 Archiviato" : "—"}
+              </TableCell>
+            )}
           </TableRow>
         ))}
       </TableBody>

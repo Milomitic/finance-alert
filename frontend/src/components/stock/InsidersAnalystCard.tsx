@@ -41,32 +41,50 @@ function txnTone(text: string): string {
   return "text-muted-foreground";
 }
 
+/**
+ * Compact one-line row for the sidebar slot. Was a 3-line stacked
+ * layout (insider+position+date / transaction / shares+value); the
+ * sidebar real-estate is too narrow for that, so all the info fits
+ * on a single row with the date right-aligned. Hover-title preserves
+ * the full strings for the truncated cells.
+ */
 function InsiderRow({ t }: { t: InsiderTransaction }) {
+  const sub =
+    t.value != null
+      ? `${fmtShares(t.shares)} · ${fmtBig(t.value)}`
+      : `${fmtShares(t.shares)}`;
   return (
-    <li className="flex items-start gap-2 py-1.5 border-t border-border/40 first:border-t-0">
-      <Briefcase className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
-      <div className="min-w-0 flex-1">
-        <div className="flex items-baseline gap-2 flex-wrap">
-          <span className="text-sm font-semibold truncate">{t.insider || "—"}</span>
-          <span className="text-sm text-muted-foreground truncate">{t.position || ""}</span>
-          <span className="ml-auto text-sm text-muted-foreground tabular-nums shrink-0">{shortDate(t.date)}</span>
-        </div>
-        <div className={cn("text-[13px] truncate", txnTone(t.transaction))} title={t.transaction}>
-          {t.transaction || "—"}
-        </div>
-        <div className="text-sm text-muted-foreground tabular-nums">
-          {fmtShares(t.shares)} azioni
-          {t.value != null && <> · {fmtBig(t.value)}</>}
-        </div>
-      </div>
+    <li className="flex items-baseline gap-2 py-1 border-t border-border/40 first:border-t-0 leading-tight">
+      <span
+        className="text-[12.5px] font-semibold truncate"
+        title={t.insider || ""}
+      >
+        {t.insider || "—"}
+      </span>
+      <span
+        className={cn(
+          "text-[11px] truncate shrink-0 max-w-[90px]",
+          txnTone(t.transaction),
+        )}
+        title={t.transaction}
+      >
+        {t.transaction || "—"}
+      </span>
+      <span className="text-[11px] text-muted-foreground tabular-nums shrink-0">
+        {sub}
+      </span>
+      <span className="ml-auto text-[11px] text-muted-foreground tabular-nums shrink-0">
+        {shortDate(t.date)}
+      </span>
     </li>
   );
 }
 
 /**
- * Insider transactions card. The previous "Analyst" half (price target +
- * recommendation bars) is now its own AnalystTargetCard placed next to the
- * StockHeader at the top of the page.
+ * Insider transactions card. Lives in the stock-detail sidebar (slot
+ * formerly held by PriceAlertsCard). Compact single-line rows so the
+ * card fits 8-10 transactions in the same vertical real estate the
+ * old StockScoreCard footer area had.
  */
 export function InsidersAnalystCard({ ticker }: Props) {
   const q = useStockFundamentals(ticker);
@@ -74,13 +92,13 @@ export function InsidersAnalystCard({ ticker }: Props) {
   if (q.isLoading) {
     return (
       <Card>
-        <CardContent className="p-4">
+        <CardContent className="p-3">
           <SectionTitle
             icon={Briefcase}
             label="Insider transactions"
             className="mb-2"
           />
-          <div className="h-32 animate-pulse bg-muted/40 rounded" />
+          <div className="h-24 animate-pulse bg-muted/40 rounded" />
         </CardContent>
       </Card>
     );
@@ -90,7 +108,7 @@ export function InsidersAnalystCard({ ticker }: Props) {
 
   return (
     <Card>
-      <CardContent className="p-4">
+      <CardContent className="p-3">
         <SectionTitle
           icon={Briefcase}
           label="Insider transactions"
@@ -98,18 +116,18 @@ export function InsidersAnalystCard({ ticker }: Props) {
           right={
             insiders.length > 0 ? (
               <span className="text-xs text-muted-foreground tabular-nums">
-                ultime {Math.min(insiders.length, 12)}
+                ultime {Math.min(insiders.length, 10)}
               </span>
             ) : undefined
           }
         />
         {insiders.length === 0 ? (
-          <div className="text-sm text-muted-foreground text-center py-4">
+          <div className="text-sm text-muted-foreground text-center py-3">
             Nessuna transazione insider registrata.
           </div>
         ) : (
-          <ul className="grid grid-cols-1 md:grid-cols-2 gap-x-6">
-            {insiders.slice(0, 12).map((t, i) => (
+          <ul>
+            {insiders.slice(0, 10).map((t, i) => (
               <InsiderRow key={`${t.insider}-${t.date}-${i}`} t={t} />
             ))}
           </ul>

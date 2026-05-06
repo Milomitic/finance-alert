@@ -312,7 +312,7 @@ function SubScoreRow({ pillar, score, components }: SubScoreRowProps) {
   }
 
   const trigger = (
-    <div className="grid grid-cols-[80px_1fr_38px] items-center gap-2 py-1.5 cursor-help">
+    <div className="grid grid-cols-[80px_1fr_38px] items-center gap-2 py-1 cursor-help">
       <span className="text-xs font-medium text-muted-foreground truncate">
         {label}
       </span>
@@ -478,11 +478,11 @@ function CardShell({
 }) {
   return (
     <Card>
-      <CardContent className="p-4">
+      <CardContent className="p-3">
         <SectionTitle
           icon={Sparkles}
           label="Stock score"
-          className="mb-3"
+          className="mb-2"
           right={
             onRefresh ? (
               <button
@@ -568,38 +568,41 @@ export function StockScoreCard({ ticker }: Props) {
 
   return (
     <CardShell onRefresh={onRefresh}>
-      {/* Gauge + composite number */}
-      <div className="flex flex-col items-center">
-        <div className="relative">
-          <ScoreGauge score={composite} size={180} />
-          {/* Number overlaid in the center of the gauge */}
-          <div className="absolute inset-0 flex flex-col items-center justify-end pb-1">
+      {/* Gauge + composite number — gauge shrunk 180->130 to give the
+          card a much shorter footprint per user feedback. The label
+          ("Buono"/"Ottimo"/...) was moved next to the risk chip
+          horizontally so the gauge area stays vertically tight. */}
+      <div className="flex items-center justify-center gap-3">
+        <div className="relative shrink-0">
+          <ScoreGauge score={composite} size={130} />
+          <div className="absolute inset-0 flex flex-col items-center justify-end pb-0.5">
             <span
               className={cn(
-                "text-3xl font-bold tabular-nums leading-none",
+                "text-2xl font-bold tabular-nums leading-none",
                 compTone,
               )}
             >
               {composite.toFixed(1)}
             </span>
-            <span className="text-[11px] uppercase tracking-wider text-muted-foreground mt-1">
-              {scoreLabel(composite)}
-            </span>
           </div>
         </div>
-        {/* Risk-tier chip */}
-        <span
-          className={cn(
-            "mt-2 px-2 py-0.5 rounded border text-[11px] uppercase tracking-wider font-semibold",
-            RISK_TONE[data.risk_tier],
-          )}
-        >
-          {RISK_LABEL[data.risk_tier]}
-        </span>
+        <div className="flex flex-col items-start gap-1.5">
+          <span className="text-[11px] uppercase tracking-wider text-muted-foreground">
+            {scoreLabel(composite)}
+          </span>
+          <span
+            className={cn(
+              "px-2 py-0.5 rounded border text-[11px] uppercase tracking-wider font-semibold",
+              RISK_TONE[data.risk_tier],
+            )}
+          >
+            {RISK_LABEL[data.risk_tier]}
+          </span>
+        </div>
       </div>
 
-      {/* Sub-score bars */}
-      <div className="mt-4 border-t border-border/40 pt-2">
+      {/* Sub-score bars — top margin trimmed 4 -> 2 */}
+      <div className="mt-2 border-t border-border/40 pt-2">
         {PILLAR_ORDER.map((pillar) => (
           <SubScoreRow
             key={pillar}
@@ -611,7 +614,7 @@ export function StockScoreCard({ ticker }: Props) {
       </div>
 
       {/* Footer */}
-      <div className="mt-3 pt-2 border-t border-border/40 flex items-center justify-between text-[11px] text-muted-foreground">
+      <div className="mt-2 pt-2 border-t border-border/40 flex items-center justify-between text-[11px] text-muted-foreground">
         <span title={new Date(data.computed_at).toLocaleString("it-IT")}>
           Calcolato {formatRelative(data.computed_at)}
         </span>

@@ -185,14 +185,15 @@ def get_stock_detail(
         ],
         alerts_history=[
             AlertOut(
-                id=a.id, rule_id=a.rule_id, rule_kind=None,
+                id=a.id, rule_id=a.rule_id, rule_kind=rule_kind,
                 stock_id=a.stock_id, ticker=detail.stock.ticker,
+                name=detail.stock.name,
                 triggered_at=a.triggered_at, signal_date=a.signal_date,
                 trigger_price=float(a.trigger_price),
                 snapshot=__import__("json").loads(a.snapshot or "{}"),
                 read_at=a.read_at, archived_at=a.archived_at,
             )
-            for a in detail.alerts_history
+            for (a, rule_kind) in detail.alerts_history
         ],
     )
 

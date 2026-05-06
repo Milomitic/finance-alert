@@ -22,7 +22,10 @@ import {
 import { MacdPanel } from "@/components/stock/MacdPanel";
 import { NewsCard } from "@/components/stock/NewsCard";
 import { PriceAlertDialog } from "@/components/stock/PriceAlertDialog";
-import { PriceAlertsCard } from "@/components/stock/PriceAlertsCard";
+// PriceAlertsCard removed from the layout (per user feedback) — its
+// slot in the right sidebar now hosts InsidersAnalystCard. Price-alert
+// CRUD via dialog/chart-click still works (the import is no longer
+// needed here because nothing on this page lists existing alerts).
 import { PriceChart } from "@/components/stock/PriceChart";
 import { RangeSelector } from "@/components/stock/RangeSelector";
 import { ResizableSection } from "@/components/stock/ResizableSection";
@@ -113,13 +116,16 @@ export default function StockDetailPage() {
         effectiveRules={d.effective_rules}
       />
 
-      {/* Company overview — short business summary + anagrafica.
-          Positioned prominently right under the price hero so the user
-          gets "what does this company do" before diving into numbers.
-          The card hides itself when yfinance has no profile data
-          (sparse small caps / foreign listings), so it doesn't always
-          take up vertical space. */}
-      <CompanyOverviewCard ticker={ticker} stock={d.stock} />
+      {/* Company overview (left) + Alert storici (right). The user
+          wanted the alerts card next to the profile so the historical
+          rule-firing context sits alongside the company's identity —
+          you read what the company does, then immediately see what
+          signals it has produced. Both cards size to their content
+          (`items-start`); the layout stacks vertically below `lg`. */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 items-start">
+        <CompanyOverviewCard ticker={ticker} stock={d.stock} />
+        <StockAlertsHistoryCard alerts={d.alerts_history} />
+      </div>
 
       {/* Four side-by-side cards: Fundamentals | Valuation+KPIs | News | Analyst.
           Weighted columns `[1.5fr_1fr_1fr_1fr]` give Fundamentals ~33% (it has
@@ -138,14 +144,11 @@ export default function StockDetailPage() {
         <AnalystTargetCard ticker={ticker} />
       </div>
 
-      {/* Alerts history + Insiders/Analyst side-by-side. Equal-width so the
-          two list-style cards balance visually; `items-start` lets each size
-          to its content (alerts can be very short, insiders can be long).
-          Stacks vertically on narrow viewports. */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 items-start">
-        <StockAlertsHistoryCard alerts={d.alerts_history} />
-        <InsidersAnalystCard ticker={ticker} />
-      </div>
+      {/* The dedicated Alerts + Insiders row that used to live here was
+          decomposed: alerts moved next to the company profile (above),
+          insiders moved into the right-hand sidebar (below) so the
+          chart can dominate the vertical real estate that the row
+          used to consume. */}
 
       <div className="grid lg:grid-cols-[1fr_400px] gap-3">
         <Card>
@@ -266,10 +269,12 @@ export default function StockDetailPage() {
         <div className="space-y-3">
           <StockScoreCard ticker={ticker} />
           <TechnicalKpiCard kpis={d.kpis} indicators={d.indicators} />
-          <PriceAlertsCard ticker={ticker} />
-          {/* StockAlertsHistoryCard moved to a full-width prominent row above
-              (right after the 3-card row). Kept the sidebar slot empty rather
-              than rendering twice. */}
+          {/* InsidersAnalystCard now occupies the slot the PriceAlertsCard
+              used to hold. Per user feedback the price-alerts list isn't
+              worth a full sidebar card — alerts can still be created via
+              chart click, and the user prefers seeing the most-recent
+              insider transactions next to the score signal. */}
+          <InsidersAnalystCard ticker={ticker} />
         </div>
       </div>
 
