@@ -24,6 +24,7 @@ from app.api import rule_performance as rule_performance_router
 from app.api import rule_preview as rule_preview_router
 from app.api import rules as rules_router
 from app.api import scores as scores_router
+from app.api import sectors as sectors_router
 from app.api import stocks as stocks_router
 from app.api import watchlists as watchlists_router
 from app.core.logging import configure_logging
@@ -154,6 +155,7 @@ app.include_router(multi_tf_router.router)
 app.include_router(price_alerts_router.router)
 app.include_router(spotlight_router.router)
 app.include_router(scores_router.router)
+app.include_router(sectors_router.router)
 app.include_router(calendar_router.router)
 
 

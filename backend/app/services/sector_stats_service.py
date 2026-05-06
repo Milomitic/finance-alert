@@ -1,0 +1,194 @@
+"""Sector-level fundamental medians (P/E, P/B, ROE, growth, margins, etc).
+
+Computed once per `recompute_all` and injected into the per-stock
+scoring pipeline so each stock's value/quality/growth pillars can be
+benchmarked against its **actual** sector peers in our universe -
+rather than the static V1 hardcoded medians (`_SECTOR_PE_MEDIAN`,
+`_SECTOR_PB_MEDIAN`) which never adapt to market regime shifts.
+
+Why medians, not means?
+-----------------------
+A single ticker with P/E = 900 (loss-making turnaround story) would
+swing a sector mean wildly; the median is robust by construction.
+For consistency every aggregate here is a median.
+
+Why a min-N gate per sector?
+----------------------------
+A "sector" with 1-2 tickers (e.g. obscure GICS subset, or just thin
+catalog coverage of `Real Estate`) gives a degenerate "median" that's
+basically the single value itself - providing zero benchmarking
+signal. We require >=4 tickers with a present value before publishing
+a sector-level stat; otherwise the consumer falls back to the
+hardcoded baseline (V1 behavior).
+
+Why not persist to a DB table?
+------------------------------
+Sector stats live in process memory tied to one `recompute_all` call.
+The score breakdown JSON already records which median was used, so
+historical reproducibility doesn't need a separate table. The API
+endpoint `/api/sectors/{name}/detail` recomputes from current `Stock`
++ fundamentals on the fly - fast (~889 stocks * ~5 lookups < 50ms).
+"""
+from __future__ import annotations
+
+import math
+import statistics
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.services.stock_fundamentals_service import Fundamentals
+
+
+# Minimum number of tickers in a sector before we publish stats for it.
+# Below this we let consumers fall back to the universe-wide hardcoded
+# baseline - averaging 1-3 values produces a "median" that's basically
+# noise.
+_MIN_TICKERS_PER_SECTOR = 4
+
+
+def _is_finite(x: object) -> bool:
+    if x is None:
+        return False
+    try:
+        f = float(x)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return False
+    return not (math.isnan(f) or math.isinf(f))
+
+
+def _normalise_div_yield(v: float | None) -> float | None:
+    """yfinance dividend_yield is inconsistent: <1 -> fraction (0.0231),
+    >=1 -> percent (2.31). Normalise to PERCENT at intake."""
+    if v is None or not _is_finite(v) or v < 0:
+        return None
+    return v if v > 1 else v * 100.0
+
+
+def _safe_median(values: list[float]) -> float | None:
+    """Median of finite-positive values; None when fewer than the min."""
+    finite = [float(v) for v in values if _is_finite(v) and float(v) > 0]
+    if len(finite) < _MIN_TICKERS_PER_SECTOR:
+        return None
+    return statistics.median(finite)
+
+
+def _signed_median(values: list[float]) -> float | None:
+    """Median allowing negative values (growth, margins). Same N gate."""
+    finite = [float(v) for v in values if _is_finite(v)]
+    if len(finite) < _MIN_TICKERS_PER_SECTOR:
+        return None
+    return statistics.median(finite)
+
+
+@dataclass
+class SectorStats:
+    """Median snapshot of one sector's fundamentals.
+
+    Each field is `None` when fewer than `_MIN_TICKERS_PER_SECTOR`
+    members of the sector reported a finite value for it. The scoring
+    consumer falls back to the V1 hardcoded baseline in that case.
+    """
+    sector: str
+    n: int  # member count (regardless of which fields are populated)
+
+    # "Lower is better" multiples
+    pe_median: float | None = None
+    forward_pe_median: float | None = None
+    pb_median: float | None = None
+    ps_median: float | None = None
+    ev_ebitda_median: float | None = None
+
+    # "Higher is better" quality/growth
+    roe_median: float | None = None         # fraction (0.18 = 18%)
+    profit_margin_median: float | None = None  # fraction
+    revenue_growth_median: float | None = None  # signed fraction
+
+    # Income
+    dividend_yield_median: float | None = None  # PERCENT (normalised)
+
+
+@dataclass
+class SectorStatsBundle:
+    """Per-sector dict + the universe-wide medians as a fallback layer.
+
+    `.resolve(sector, "field")` returns the sector's median if present,
+    else the universe median if present, else None - so callers get a
+    single-line lookup with built-in two-tier fallback.
+    """
+    by_sector: dict[str, SectorStats] = field(default_factory=dict)
+    universe: SectorStats = field(default_factory=lambda: SectorStats(sector="_universe", n=0))
+
+    def for_sector(self, name: str | None) -> SectorStats | None:
+        """Return the sector's row if it exists, else the universe row."""
+        if name and name in self.by_sector:
+            return self.by_sector[name]
+        return self.universe if self.universe.n > 0 else None
+
+    def resolve(self, name: str | None, field_name: str) -> float | None:
+        """Look up `field_name` for sector `name`, falling through to
+        the universe row when the sector value is missing/None."""
+        sec = self.by_sector.get(name or "")
+        if sec is not None:
+            v = getattr(sec, field_name, None)
+            if v is not None:
+                return v
+        return getattr(self.universe, field_name, None)
+
+
+def compute(fundamentals_by_sector: dict[str, list["Fundamentals"]]) -> SectorStatsBundle:
+    """Aggregate medians over all sectors + the full universe.
+
+    Stocks with sector = None / empty are silently fed into the
+    universe row but skipped from the by-sector dict - they'd produce
+    a meaningless "(empty)" sector entry in UIs.
+    """
+    bundle = SectorStatsBundle()
+    all_funds: list["Fundamentals"] = []
+
+    for sector_name, funds in fundamentals_by_sector.items():
+        all_funds.extend(funds)
+        if not sector_name:
+            continue
+        bundle.by_sector[sector_name] = _compute_one(sector_name, funds)
+
+    bundle.universe = _compute_one("_universe", all_funds)
+    return bundle
+
+
+def _compute_one(sector: str, funds: list["Fundamentals"]) -> SectorStats:
+    """Build a SectorStats from a list of fundamentals."""
+    micros = [f.micro for f in funds if f and f.micro is not None]
+
+    return SectorStats(
+        sector=sector,
+        n=len(funds),
+        pe_median=_safe_median([m.trailing_pe for m in micros if m.trailing_pe is not None]),
+        forward_pe_median=_safe_median(
+            [m.forward_pe for m in micros if m.forward_pe is not None]
+        ),
+        pb_median=_safe_median([m.price_to_book for m in micros if m.price_to_book is not None]),
+        ps_median=_safe_median(
+            [m.price_to_sales for m in micros if m.price_to_sales is not None]
+        ),
+        ev_ebitda_median=_safe_median(
+            [m.enterprise_to_ebitda for m in micros if m.enterprise_to_ebitda is not None]
+        ),
+        roe_median=_signed_median(
+            [m.return_on_equity for m in micros if m.return_on_equity is not None]
+        ),
+        profit_margin_median=_signed_median(
+            [m.profit_margins for m in micros if m.profit_margins is not None]
+        ),
+        revenue_growth_median=_signed_median(
+            [m.revenue_growth for m in micros if m.revenue_growth is not None]
+        ),
+        dividend_yield_median=_safe_median(
+            [
+                normalised
+                for m in micros
+                for normalised in [_normalise_div_yield(m.dividend_yield)]
+                if normalised is not None
+            ]
+        ),
+    )

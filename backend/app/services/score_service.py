@@ -53,8 +53,9 @@ from app.indicators.macd import macd as macd_indicator
 from app.indicators.rsi import rsi as rsi_indicator
 from app.indicators.sma import sma as sma_indicator
 from app.models import OhlcvDaily, Stock, StockScore
-from app.services import stock_fundamentals_service, stock_news_service
+from app.services import sector_stats_service, stock_fundamentals_service, stock_news_service
 from app.services.news_sentiment import classify_title
+from app.services.sector_stats_service import SectorStatsBundle
 from app.services.stock_fundamentals_service import (
     Fundamentals,
     MicroData,
@@ -274,7 +275,7 @@ def _aggregate(components: list[_Component]) -> tuple[float | None, float, dict[
 # Quality pillar.
 # ---------------------------------------------------------------------------
 
-def _quality(stock: Stock, micro: MicroData | None) -> tuple[float | None, float, dict]:
+def _quality(stock: Stock, micro: MicroData | None, sector_stats: SectorStatsBundle | None = None) -> tuple[float | None, float, dict]:
     """Components (weights add to 1.0):
 
       - ROE                       (0.16)  full @ 20%, half @ 10%, zero @ 0%
@@ -379,6 +380,38 @@ def _quality(stock: Stock, micro: MicroData | None) -> tuple[float | None, float
         0.05,
     ))
 
+    # --- Sector-relative ROE ---------------------------------------------
+    # Same input as the absolute ROE lane above, but scored against the
+    # stock's *peers*. A 15% ROE in Tech (peer median ~22%) is mediocre;
+    # the same 15% in Utilities (peer median ~9%) is excellent. The
+    # absolute lane already captures "is this a good business in absolute
+    # terms"; this lane captures "is this a good business *for its
+    # peers*" — orthogonal information that catches sector-mean reversion
+    # opportunities. See `services/sector_stats_service.py`.
+    sector_roe_med = (
+        sector_stats.resolve(stock.sector, "roe_median")
+        if sector_stats is not None else None
+    )
+    roe_vs_sector_diff: float | None = None
+    if (
+        _is_finite(micro.return_on_equity)
+        and sector_roe_med is not None
+        and _is_finite(sector_roe_med)
+    ):
+        roe_vs_sector_diff = float(micro.return_on_equity) - float(sector_roe_med)
+    components.append(_Component(
+        "roe_vs_sector",
+        {
+            "roe": _safe_round(micro.return_on_equity, 4) if _is_finite(micro.return_on_equity) else None,
+            "sector_median": _safe_round(sector_roe_med, 4) if sector_roe_med is not None else None,
+            "diff": _safe_round(roe_vs_sector_diff, 4) if roe_vs_sector_diff is not None else None,
+        } if roe_vs_sector_diff is not None else None,
+        # ramp: +5pp above peer median = full, par = half, -5pp below = zero
+        _ramp3(roe_vs_sector_diff, full=0.05, half=0.0, zero=-0.05)
+        if roe_vs_sector_diff is not None else None,
+        0.05,
+    ))
+
     return _aggregate(components)
 
 
@@ -386,7 +419,7 @@ def _quality(stock: Stock, micro: MicroData | None) -> tuple[float | None, float
 # Growth pillar.
 # ---------------------------------------------------------------------------
 
-def _growth(stock: Stock, fundamentals: Fundamentals | None) -> tuple[float | None, float, dict]:
+def _growth(stock: Stock, fundamentals: Fundamentals | None, sector_stats: SectorStatsBundle | None = None) -> tuple[float | None, float, dict]:
     """Components:
 
       - Revenue growth (YoY)        (0.25)  full @ 20%, half @ 0%, zero @ -10%
@@ -464,6 +497,34 @@ def _growth(stock: Stock, fundamentals: Fundamentals | None) -> tuple[float | No
         0.10,
     ))
 
+    # --- Sector-relative revenue growth ----------------------------------
+    # Same logic as roe_vs_sector but on the YoY revenue-growth axis. A
+    # 12% grower in semis (peer median ~22%) is below par; the same 12%
+    # in utilities (peer median ~3%) is excellent. Catches sector-mean
+    # convergence trades.
+    sector_rev_med = (
+        sector_stats.resolve(stock.sector, "revenue_growth_median")
+        if sector_stats is not None else None
+    )
+    rev_vs_sector_diff: float | None = None
+    if (
+        rg is not None and _is_finite(rg)
+        and sector_rev_med is not None and _is_finite(sector_rev_med)
+    ):
+        rev_vs_sector_diff = float(rg) - float(sector_rev_med)
+    components.append(_Component(
+        "revenue_growth_vs_sector",
+        {
+            "revenue_growth": _safe_round(rg, 4) if _is_finite(rg) else None,
+            "sector_median": _safe_round(sector_rev_med, 4) if sector_rev_med is not None else None,
+            "diff": _safe_round(rev_vs_sector_diff, 4) if rev_vs_sector_diff is not None else None,
+        } if rev_vs_sector_diff is not None else None,
+        # ramp: +5pp above peer = full, par = half, -5pp below = zero
+        _ramp3(rev_vs_sector_diff, full=0.05, half=0.0, zero=-0.05)
+        if rev_vs_sector_diff is not None else None,
+        0.05,
+    ))
+
     return _aggregate(components)
 
 
@@ -475,6 +536,7 @@ def _value(
     stock: Stock,
     micro: MicroData | None,
     last_close: float | None,
+    sector_stats: SectorStatsBundle | None = None,
 ) -> tuple[float | None, float, dict]:
     """Components (weights sum to 1.0):
 
@@ -491,8 +553,20 @@ def _value(
     if micro is None:
         return None, 100.0, {}
 
-    sector_pe = _SECTOR_PE_MEDIAN.get(stock.sector or "", _UNIVERSE_PE_MEDIAN)
-    sector_pb = _SECTOR_PB_MEDIAN.get(stock.sector or "", _UNIVERSE_PB_MEDIAN)
+    # Prefer dynamic sector medians from the live universe (via
+    # sector_stats_service). When the bundle is missing or thin (sector
+    # below the min-N threshold), fall back to the V1 hardcoded baseline
+    # — that's the whole reason the static maps still live in this module.
+    sector_pe_dynamic = (
+        sector_stats.resolve(stock.sector, "pe_median")
+        if sector_stats is not None else None
+    )
+    sector_pb_dynamic = (
+        sector_stats.resolve(stock.sector, "pb_median")
+        if sector_stats is not None else None
+    )
+    sector_pe = sector_pe_dynamic if sector_pe_dynamic is not None else         _SECTOR_PE_MEDIAN.get(stock.sector or "", _UNIVERSE_PE_MEDIAN)
+    sector_pb = sector_pb_dynamic if sector_pb_dynamic is not None else         _SECTOR_PB_MEDIAN.get(stock.sector or "", _UNIVERSE_PB_MEDIAN)
     components: list[_Component] = []
 
     def _multiple_vs_median(val: float | None, median: float) -> float | None:
@@ -1163,6 +1237,7 @@ def _build_score(
     *,
     ohlcv_df: pd.DataFrame | None = None,
     news_polarity: float | None = None,
+    sector_stats: SectorStatsBundle | None = None,
 ) -> _ComputedScore:
     """Pure compute path — no DB writes, no fundamentals fetch.
 
@@ -1172,9 +1247,9 @@ def _build_score(
     micro = fundamentals.micro if fundamentals is not None else None
     last_close = float(closes.iloc[-1]) if closes is not None and len(closes) > 0 else None
 
-    q_score, _, q_break = _quality(stock, micro)
-    g_score, _, g_break = _growth(stock, fundamentals)
-    v_score, _, v_break = _value(stock, micro, last_close)
+    q_score, _, q_break = _quality(stock, micro, sector_stats)
+    g_score, _, g_break = _growth(stock, fundamentals, sector_stats)
+    v_score, _, v_break = _value(stock, micro, last_close, sector_stats)
     m_score, _, m_break = _momentum(stock, micro, closes, ohlcv_df)
     s_score, _, s_break = _sentiment(
         stock, fundamentals, last_close,
@@ -1224,7 +1299,7 @@ def _build_score(
     )
 
 
-def compute_score(db: Session, stock: Stock) -> StockScore:
+def compute_score(db: Session, stock: Stock, *, sector_stats: SectorStatsBundle | None = None) -> StockScore:
     """Compute a fresh StockScore for one stock. NOT persisted.
 
     Pulls fundamentals from the cache (no network if fresh), recent OHLCV from
@@ -1244,6 +1319,7 @@ def compute_score(db: Session, stock: Stock) -> StockScore:
     cs = _build_score(
         stock, fundamentals, closes, news_count,
         ohlcv_df=ohlcv_df, news_polarity=news_polarity,
+        sector_stats=sector_stats,
     )
     return StockScore(
         stock_id=cs.stock_id,
@@ -1259,16 +1335,65 @@ def compute_score(db: Session, stock: Stock) -> StockScore:
     )
 
 
+def _build_sector_stats(stocks: list[Stock]) -> SectorStatsBundle:
+    """Pre-pass: pull cached fundamentals once per ticker, group by
+    sector, hand off to sector_stats_service.compute().
+
+    Catalog has duplicate ticker rows (see CLAUDE.md) — we dedupe by
+    ticker so a stock with two rows doesn't double-weight in its
+    sector's median. Fundamentals fetch failures are silent: a stock
+    with no fundamentals just doesn't contribute to any aggregate.
+    """
+    by_sector: dict[str, list[Fundamentals]] = {}
+    seen_tickers: set[str] = set()
+    for stock in stocks:
+        if stock.ticker in seen_tickers:
+            continue
+        seen_tickers.add(stock.ticker)
+        try:
+            funds = stock_fundamentals_service.get_fundamentals(stock.ticker)
+        except Exception:  # noqa: BLE001
+            funds = None
+        if funds is None:
+            continue
+        by_sector.setdefault(stock.sector or "", []).append(funds)
+    bundle = sector_stats_service.compute(by_sector)
+    n_with_stats = sum(
+        1 for s in bundle.by_sector.values()
+        if any(getattr(s, f) is not None for f in (
+            "pe_median", "pb_median", "roe_median", "revenue_growth_median",
+        ))
+    )
+    logger.info(
+        f"[score] sector_stats: {len(bundle.by_sector)} sectors, "
+        f"{n_with_stats} with publishable medians, universe.n={bundle.universe.n}"
+    )
+    return bundle
+
+
 def recompute_all(db: Session) -> int:
     """Batch UPSERT scores for every stock. Returns count successfully scored.
 
+    Two-phase to use *real* sector medians instead of static V1 values:
+      1. Pre-pass: collect fundamentals (cache hit on the fast path) →
+         compute sector_stats bundle (medians of P/E, P/B, ROE, growth,
+         margins per sector + universe fallback).
+      2. Score loop: pass the bundle to each compute_score so the
+         value/quality/growth pillars benchmark each stock against its
+         peer median rather than the hardcoded baseline.
+
     Persists incrementally (commit after each successful score) and uses
-    `db.merge()` for true UPSERT semantics. Per-row commits avoid holding
-    a single transaction for ~5 minutes on a 1000+ stock recompute.
+    `db.merge()` for true UPSERT semantics.
 
     Does NOT raise on per-stock failure — logs and continues.
     """
     stocks = db.execute(select(Stock)).scalars().all()
+
+    # Pre-pass: build sector_stats once per recompute run. Cost is
+    # negligible (fundamentals come from L1/L2 cache for ~889 tickers,
+    # ~50ms total) and amortises across the entire score loop.
+    sector_stats = _build_sector_stats(list(stocks))
+
     seen_ids: set[int] = set()
     ok = 0
     failed = 0
@@ -1278,7 +1403,7 @@ def recompute_all(db: Session) -> int:
             continue
         seen_ids.add(stock.id)
         try:
-            new_score = compute_score(db, stock)
+            new_score = compute_score(db, stock, sector_stats=sector_stats)
         except Exception as exc:  # noqa: BLE001
             logger.warning(f"[score] compute_score failed for {stock.ticker}: {exc}")
             failed += 1

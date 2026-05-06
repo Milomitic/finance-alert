@@ -1,4 +1,5 @@
 import { LayoutGrid } from "lucide-react";
+import { Link } from "react-router-dom";
 
 import type { SectorBreadth } from "@/api/types";
 import { Card, CardContent } from "@/components/ui/card";
@@ -47,15 +48,22 @@ export function SectorsHeatmapCard({ sectors }: Props) {
                 const Icon = getSectorIcon(s.sector);
                 const iconColor = getSectorIconColor(s.sector);
                 return (
-                  <tr key={s.sector} className="hover:bg-muted/30 transition-colors">
+                  <tr
+                    key={s.sector}
+                    className="hover:bg-muted/40 transition-colors cursor-pointer"
+                  >
                     <td className="px-2 py-1.5">
-                      <span className="inline-flex items-center gap-2 min-w-0 w-full">
+                      <Link
+                        to={`/sectors/${encodeURIComponent(s.sector)}`}
+                        className="inline-flex items-center gap-2 min-w-0 w-full hover:underline"
+                        title={`Vedi dettaglio settore: ${s.sector}`}
+                      >
                         <Icon
                           className={cn("h-4 w-4 shrink-0", iconColor)}
                           strokeWidth={1.75}
                         />
-                        <span className="truncate" title={s.sector}>{s.sector}</span>
-                      </span>
+                        <span className="truncate">{s.sector}</span>
+                      </Link>
                     </td>
                     <td className={`px-2 py-1.5 text-right font-semibold ${bgFor(s.avg_change_pct)}`}>
                       {s.avg_change_pct >= 0 ? "+" : ""}{s.avg_change_pct.toFixed(2)}%

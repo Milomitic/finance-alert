@@ -7,6 +7,7 @@ import CalendarPage from "@/pages/CalendarPage";
 import HomePage from "@/pages/HomePage";
 import LoginPage from "@/pages/LoginPage";
 import MarketDetailPage from "@/pages/MarketDetailPage";
+import SectorDetailPage from "@/pages/SectorDetailPage";
 import SettingsPage from "@/pages/SettingsPage";
 import StockDetailPage from "@/pages/StockDetailPage";
 import StocksBrowserPage from "@/pages/StocksBrowserPage";
@@ -33,6 +34,7 @@ export default function App() {
         <Route path="/stocks" element={<StocksBrowserPage />} />
         <Route path="/stocks/:ticker" element={<StockDetailPage />} />
         <Route path="/markets/:symbol" element={<MarketDetailPage />} />
+        <Route path="/sectors/:name" element={<SectorDetailPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         {/* /rules removed: rules now live in the AlertsPage right sidebar
             (RulesPanel) since they're tightly coupled with the alerts they
