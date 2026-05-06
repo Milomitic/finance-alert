@@ -153,28 +153,56 @@ def test_growth_missing_components_neutralised():
 # Value
 # ---------------------------------------------------------------------------
 
-def test_value_full_at_or_below_sector_median_pe():
+def test_value_full_when_well_below_sector_median():
+    """V3: scoring is now blended (50% absolute + 50% sector-relative).
+    To get 100 a multiple needs to be in the absolute "full" zone AND
+    < 0.7x the sector median. Tests the full-score path explicitly."""
+    from app.services.sector_stats_service import SectorStats, SectorStatsBundle
+    bundle = SectorStatsBundle()
+    # Tech sector medians chosen so the stock multiples sit comfortably
+    # below the 0.7x threshold for full sector-relative score.
+    bundle.by_sector["Technology"] = SectorStats(
+        sector="Technology", n=20,
+        pe_median=30.0, forward_pe_median=28.0, peg_median=2.0,
+        pb_median=5.0, ps_median=4.0, ev_ebitda_median=15.0,
+        ev_revenue_median=4.0, dividend_yield_median=0.5,
+    )
     micro = MicroData(
-        trailing_pe=25.0, forward_pe=22.0, peg_ratio=0.9,
-        price_to_book=4.0, price_to_sales=1.5,
-        enterprise_to_ebitda=7.0, enterprise_to_revenue=1.5,
+        # All multiples deliberately well below the sector medians and
+        # below the absolute "full" thresholds (22 / 1.0 / 3.0 / 2.0 / 8 / 2).
+        trailing_pe=15.0, forward_pe=15.0, peg_ratio=0.5,
+        price_to_book=2.0, price_to_sales=1.0,
+        enterprise_to_ebitda=5.0, enterprise_to_revenue=1.0,
         dividend_yield=0.04, payout_ratio=0.45,
     )
-    score, _, br = _value(_stock(sector="Technology"), micro, last_close=200.0)
-    assert br["pe"]["score"] == 100.0
-    assert br["peg"]["score"] == 100.0
-    assert br["dividend_yield"]["score"] == 100.0
+    score, _, br = _value(_stock(sector="Technology"), micro, last_close=200.0,
+                          sector_stats=bundle)
+    assert br["pe"]["score"] == pytest.approx(100.0, abs=0.5)
+    assert br["peg"]["score"] == pytest.approx(100.0, abs=0.5)
+    assert br["dividend_yield"]["score"] == pytest.approx(100.0, abs=0.5)
     assert score == pytest.approx(100.0, abs=2.0)
 
 
-def test_value_pe_double_median_zero_points():
+def test_value_zero_when_well_above_sector_median():
+    """V3: zero score requires both absolute zone (>=44 P/E) AND >1.5x
+    sector median for sector-relative. Tests the zero-score path."""
+    from app.services.sector_stats_service import SectorStats, SectorStatsBundle
+    bundle = SectorStatsBundle()
+    bundle.by_sector["Technology"] = SectorStats(
+        sector="Technology", n=20,
+        pe_median=20.0, peg_median=1.5, pb_median=3.0, ps_median=3.0,
+        ev_ebitda_median=10.0, ev_revenue_median=3.0, dividend_yield_median=3.0,
+    )
     micro = MicroData(
+        # Multiples chosen well above absolute "zero" thresholds AND
+        # >1.5x sector medians for the LIB-multiple ratio test.
         trailing_pe=56.0, peg_ratio=3.5,
         price_to_book=15.0, price_to_sales=12.0,
         enterprise_to_ebitda=30.0, enterprise_to_revenue=12.0,
         dividend_yield=0.0,
     )
-    score, _, br = _value(_stock(sector="Technology"), micro, last_close=200.0)
+    score, _, br = _value(_stock(sector="Technology"), micro, last_close=200.0,
+                          sector_stats=bundle)
     assert br["pe"]["score"] == pytest.approx(0.0, abs=0.5)
     assert br["peg"]["score"] == pytest.approx(0.0, abs=0.5)
     assert br["dividend_yield"]["score"] == pytest.approx(0.0, abs=0.5)

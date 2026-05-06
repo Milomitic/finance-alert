@@ -92,17 +92,29 @@ class SectorStats:
     sector: str
     n: int  # member count (regardless of which fields are populated)
 
-    # "Lower is better" multiples
+    # "Lower is better" multiples (Value pillar)
     pe_median: float | None = None
     forward_pe_median: float | None = None
     pb_median: float | None = None
     ps_median: float | None = None
     ev_ebitda_median: float | None = None
+    ev_revenue_median: float | None = None
+    peg_median: float | None = None
 
-    # "Higher is better" quality/growth
-    roe_median: float | None = None         # fraction (0.18 = 18%)
-    profit_margin_median: float | None = None  # fraction
-    revenue_growth_median: float | None = None  # signed fraction
+    # "Higher is better" quality (fractions, e.g. 0.18 = 18%)
+    roe_median: float | None = None
+    roa_median: float | None = None
+    profit_margin_median: float | None = None
+    operating_margin_median: float | None = None
+    gross_margin_median: float | None = None
+    current_ratio_median: float | None = None  # ratio (higher is better)
+    quick_ratio_median: float | None = None    # ratio
+    debt_equity_median: float | None = None    # yfinance reports as percent
+
+    # "Higher is better" growth (signed fractions — can go negative)
+    revenue_growth_median: float | None = None
+    earnings_growth_median: float | None = None
+    earnings_quarterly_growth_median: float | None = None
 
     # Income
     dividend_yield_median: float | None = None  # PERCENT (normalised)
@@ -163,6 +175,7 @@ def _compute_one(sector: str, funds: list["Fundamentals"]) -> SectorStats:
     return SectorStats(
         sector=sector,
         n=len(funds),
+        # Multiples (lower better)
         pe_median=_safe_median([m.trailing_pe for m in micros if m.trailing_pe is not None]),
         forward_pe_median=_safe_median(
             [m.forward_pe for m in micros if m.forward_pe is not None]
@@ -174,15 +187,50 @@ def _compute_one(sector: str, funds: list["Fundamentals"]) -> SectorStats:
         ev_ebitda_median=_safe_median(
             [m.enterprise_to_ebitda for m in micros if m.enterprise_to_ebitda is not None]
         ),
+        ev_revenue_median=_safe_median(
+            [m.enterprise_to_revenue for m in micros if m.enterprise_to_revenue is not None]
+        ),
+        peg_median=_safe_median([
+            (m.trailing_peg_ratio if _is_finite(m.trailing_peg_ratio) else m.peg_ratio)
+            for m in micros
+            if (m.trailing_peg_ratio is not None or m.peg_ratio is not None)
+        ]),
+        # Quality (signed because some firms report negative ROE/margins)
         roe_median=_signed_median(
             [m.return_on_equity for m in micros if m.return_on_equity is not None]
+        ),
+        roa_median=_signed_median(
+            [m.return_on_assets for m in micros if m.return_on_assets is not None]
         ),
         profit_margin_median=_signed_median(
             [m.profit_margins for m in micros if m.profit_margins is not None]
         ),
+        operating_margin_median=_signed_median(
+            [m.operating_margins for m in micros if m.operating_margins is not None]
+        ),
+        gross_margin_median=_signed_median(
+            [m.gross_margins for m in micros if m.gross_margins is not None]
+        ),
+        current_ratio_median=_safe_median(
+            [m.current_ratio for m in micros if m.current_ratio is not None]
+        ),
+        quick_ratio_median=_safe_median(
+            [m.quick_ratio for m in micros if m.quick_ratio is not None]
+        ),
+        debt_equity_median=_safe_median(
+            [m.debt_to_equity for m in micros if m.debt_to_equity is not None]
+        ),
+        # Growth (signed)
         revenue_growth_median=_signed_median(
             [m.revenue_growth for m in micros if m.revenue_growth is not None]
         ),
+        earnings_growth_median=_signed_median(
+            [m.earnings_growth for m in micros if m.earnings_growth is not None]
+        ),
+        earnings_quarterly_growth_median=_signed_median(
+            [m.earnings_quarterly_growth for m in micros if m.earnings_quarterly_growth is not None]
+        ),
+        # Income
         dividend_yield_median=_safe_median(
             [
                 normalised

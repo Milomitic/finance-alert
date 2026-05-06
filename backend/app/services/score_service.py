@@ -272,66 +272,226 @@ def _aggregate(components: list[_Component]) -> tuple[float | None, float, dict[
 
 
 # ---------------------------------------------------------------------------
+# Sector-relative blending helpers.
+# ---------------------------------------------------------------------------
+#
+# Per-attribute scoring blends two signals 50/50 by default:
+#
+#   1. Absolute score: `_ramp3` against canonical thresholds (e.g. ROE
+#      ≥20% → full, 10% → half, 0% → zero). Captures "is this a good
+#      business in absolute terms?"
+#
+#   2. Sector-relative score: `_ramp3` against the diff/ratio between
+#      the stock's value and its sector's median peer. Captures "is
+#      this a good business *for its peer group*?"
+#
+# Why blend, not replace? An attribute with a peer-relative score of
+# 100 (massively above sector median) but absolute score of 0 (e.g.
+# ROE -2% in a sector with median -8%) gets a final ~50, not 100.
+# The absolute floor prevents "least sick patient in a hospice" from
+# scoring higher than it should.
+#
+# When the sector median is missing (`sector_stats=None` or thin
+# sector below the min-N gate), we fall back to absolute-only — same
+# behavior as V2 pre-sector-aware.
+
+_BLEND_ALPHA = 0.5  # weight on absolute score (1-alpha goes to relative)
+
+
+def _blended_hib(
+    value: Any,
+    sector_med: float | None,
+    *,
+    abs_full: float,
+    abs_half: float,
+    abs_zero: float,
+    rel_full_pp: float,
+    rel_half_pp: float = 0.0,
+    rel_zero_pp: float | None = None,
+) -> float | None:
+    """Higher-is-better blend.
+
+    rel_*_pp are signed diffs (stock_value − sector_median) measured in
+    the same units as the attribute. e.g. for ROE (a fraction), rel_full
+    of +0.05 means "scored full when ROE is at least 5pp above peer
+    median". rel_zero_pp defaults to -rel_full_pp (symmetric).
+    """
+    if not _is_finite(value):
+        return None
+    abs_s = _ramp3(float(value), full=abs_full, half=abs_half, zero=abs_zero)
+    if sector_med is None or not _is_finite(sector_med):
+        return abs_s
+    if rel_zero_pp is None:
+        rel_zero_pp = -rel_full_pp
+    diff = float(value) - float(sector_med)
+    rel_s = _ramp3(diff, full=rel_full_pp, half=rel_half_pp, zero=rel_zero_pp)
+    return _BLEND_ALPHA * abs_s + (1.0 - _BLEND_ALPHA) * rel_s
+
+
+def _blended_lib(
+    value: Any,
+    sector_med: float | None,
+    *,
+    abs_full: float,
+    abs_half: float,
+    abs_zero: float,
+    rel_full_pp: float,
+    rel_half_pp: float = 0.0,
+    rel_zero_pp: float | None = None,
+) -> float | None:
+    """Lower-is-better blend (e.g. debt/equity in pp scale).
+
+    Mirror of `_blended_hib` — `rel_full_pp` should be NEGATIVE (e.g.
+    -50 for debt/equity = "full when 50pp below sector"). Symmetric
+    default for `rel_zero_pp` is +abs(rel_full_pp).
+    """
+    if not _is_finite(value):
+        return None
+    abs_s = _ramp3(float(value), full=abs_full, half=abs_half, zero=abs_zero)
+    if sector_med is None or not _is_finite(sector_med):
+        return abs_s
+    if rel_zero_pp is None:
+        rel_zero_pp = -rel_full_pp
+    diff = float(value) - float(sector_med)
+    rel_s = _ramp3(diff, full=rel_full_pp, half=rel_half_pp, zero=rel_zero_pp)
+    return _BLEND_ALPHA * abs_s + (1.0 - _BLEND_ALPHA) * rel_s
+
+
+def _blended_lib_multiple(
+    value: Any,
+    sector_med: float | None,
+    *,
+    abs_full: float,
+    abs_half: float,
+    abs_zero: float,
+) -> float | None:
+    """Lower-is-better blend for multiples (P/E, P/B, P/S, EV/EBITDA, …).
+
+    Sector-relative scoring uses the ratio (stock / sector_med) rather
+    than a signed diff because multiples span orders of magnitude:
+        ratio ≤ 0.7  → 100 (significantly cheaper than peers)
+        ratio = 1.0  → 50  (par with peers)
+        ratio ≥ 1.5  → 0   (significantly more expensive)
+    Linear in between. Negative or zero values short-circuit to None
+    (the absolute lane already handles these).
+    """
+    if not _is_finite(value) or value is None or float(value) <= 0:
+        return None
+    val = float(value)
+    abs_s = _ramp3(val, full=abs_full, half=abs_half, zero=abs_zero)
+    if (
+        sector_med is None
+        or not _is_finite(sector_med)
+        or float(sector_med) <= 0
+    ):
+        return abs_s
+    ratio = val / float(sector_med)
+    if ratio <= 0.7:
+        rel_s = 100.0
+    elif ratio <= 1.0:
+        rel_s = 100.0 - (ratio - 0.7) / 0.3 * 50.0
+    elif ratio <= 1.5:
+        rel_s = 50.0 - (ratio - 1.0) / 0.5 * 50.0
+    else:
+        rel_s = 0.0
+    return _BLEND_ALPHA * abs_s + (1.0 - _BLEND_ALPHA) * rel_s
+
+
+def _resolve_med(sector_stats: SectorStatsBundle | None, sector: str | None, field: str) -> float | None:
+    """Tiny convenience wrapper for the resolve-or-None pattern used in
+    every Q/G/V lane. Keeps the call sites readable."""
+    if sector_stats is None:
+        return None
+    return sector_stats.resolve(sector, field)
+
+
+def _wrap_with_med(value, sector_med):
+    """Pack (raw_value, sector_median) into the breakdown JSON so the
+    UI can show both numbers. Returns None when the raw value is
+    None/NaN (so the breakdown reports the lane as missing rather
+    than as value=null but sector_median=23.5)."""
+    if not _is_finite(value):
+        return None
+    return {
+        "value": _safe_round(float(value), 4),
+        "sector_median": _safe_round(sector_med, 4) if sector_med is not None and _is_finite(sector_med) else None,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Quality pillar.
 # ---------------------------------------------------------------------------
 
 def _quality(stock: Stock, micro: MicroData | None, sector_stats: SectorStatsBundle | None = None) -> tuple[float | None, float, dict]:
-    """Components (weights add to 1.0):
+    """Quality pillar - sector-aware blended scoring.
 
-      - ROE                       (0.16)  full @ 20%, half @ 10%, zero @ 0%
-      - ROA                       (0.10)  full @ 10%, half @ 5%, zero @ 0%
-      - Profit margin             (0.12)  full @ 20%, half @ 10%, zero @ 0%
-      - Operating margin          (0.10)  full @ 20%, half @ 10%, zero @ 0%
-      - Gross margin              (0.06)  full @ 50%, half @ 30%, zero @ 10%
-      - Free cash flow positive   (0.10)  binary
-      - Debt / Equity             (0.10)  full @ ≤50%, half @ 100%, zero @ 200%
-      - Current ratio             (0.06)  full @ 2, half @ 1, zero @ 0.7
-      - Quick ratio               (0.05)  full @ 1.5, half @ 1, zero @ 0.5
-      - Yahoo overall_risk        (0.05)  1 (best) → full, 10 (worst) → zero
-      - Insider holdings          (0.05)  full @ 10%, half @ 3%, zero @ 0%
-      - Institutional holdings    (0.05)  full @ 70%, half @ 40%, zero @ 10%
+    Each profitability / leverage / liquidity attribute is scored as a
+    50/50 blend of the absolute ramp (canonical thresholds) AND the
+    diff/ratio vs the sector peer median. When no sector median is
+    available (thin sector / no bundle) the blend falls back to pure
+    absolute, matching V2 behavior.
 
-    Each component score is 0-100; pillar = weighted average over present
-    components. Missing inputs are SKIPPED rather than scored zero.
+    Components (weights add to 1.0):
+      - ROE                       (0.16)  HIB blend, abs full@20%/half@10%/zero@0%, rel +5pp vs sector
+      - ROA                       (0.10)  HIB blend, abs full@10%/half@5%/zero@0%, rel +2.5pp
+      - Profit margin             (0.12)  HIB blend, abs full@20%/half@10%/zero@0%, rel +5pp
+      - Operating margin          (0.10)  HIB blend, abs full@20%/half@10%/zero@0%, rel +5pp
+      - Gross margin              (0.06)  HIB blend, abs full@50%/half@30%/zero@10%, rel +10pp
+      - Free cash flow positive   (0.10)  binary (no sector signal)
+      - Debt / Equity             (0.10)  LIB blend, abs full@<=50/half@100/zero@200, rel -50pp
+      - Current ratio             (0.06)  HIB blend, abs full@2/half@1/zero@0.7, rel +0.5
+      - Quick ratio               (0.05)  HIB blend, abs full@1.5/half@1/zero@0.5, rel +0.5
+      - Yahoo overall_risk        (0.05)  1 (best) -> 10 (worst), no sector aggregate
+      - Insider holdings          (0.05)  HIB absolute (peer comparison not meaningful)
+      - Institutional holdings    (0.05)  HIB absolute (peer comparison not meaningful)
     """
     if micro is None:
         return None, 100.0, {}
 
     components: list[_Component] = []
+    sec = stock.sector
 
-    # --- Profitability ----------------------------------------------------
+    def _med(field: str) -> float | None:
+        return _resolve_med(sector_stats, sec, field)
+
+    # --- Profitability (sector-aware blend) ------------------------------
     components.append(_Component(
-        "roe", micro.return_on_equity,
-        _ramp3(micro.return_on_equity, full=0.20, half=0.10, zero=0.0)
-        if _is_finite(micro.return_on_equity) else None,
+        "roe", _wrap_with_med(micro.return_on_equity, _med("roe_median")),
+        _blended_hib(micro.return_on_equity, _med("roe_median"),
+                     abs_full=0.20, abs_half=0.10, abs_zero=0.0,
+                     rel_full_pp=0.05),
         0.16,
     ))
     components.append(_Component(
-        "roa", micro.return_on_assets,
-        _ramp3(micro.return_on_assets, full=0.10, half=0.05, zero=0.0)
-        if _is_finite(micro.return_on_assets) else None,
+        "roa", _wrap_with_med(micro.return_on_assets, _med("roa_median")),
+        _blended_hib(micro.return_on_assets, _med("roa_median"),
+                     abs_full=0.10, abs_half=0.05, abs_zero=0.0,
+                     rel_full_pp=0.025),
         0.10,
     ))
     components.append(_Component(
-        "profit_margin", micro.profit_margins,
-        _ramp3(micro.profit_margins, full=0.20, half=0.10, zero=0.0)
-        if _is_finite(micro.profit_margins) else None,
+        "profit_margin", _wrap_with_med(micro.profit_margins, _med("profit_margin_median")),
+        _blended_hib(micro.profit_margins, _med("profit_margin_median"),
+                     abs_full=0.20, abs_half=0.10, abs_zero=0.0,
+                     rel_full_pp=0.05),
         0.12,
     ))
     components.append(_Component(
-        "operating_margin", micro.operating_margins,
-        _ramp3(micro.operating_margins, full=0.20, half=0.10, zero=0.0)
-        if _is_finite(micro.operating_margins) else None,
+        "operating_margin", _wrap_with_med(micro.operating_margins, _med("operating_margin_median")),
+        _blended_hib(micro.operating_margins, _med("operating_margin_median"),
+                     abs_full=0.20, abs_half=0.10, abs_zero=0.0,
+                     rel_full_pp=0.05),
         0.10,
     ))
     components.append(_Component(
-        "gross_margin", micro.gross_margins,
-        _ramp3(micro.gross_margins, full=0.50, half=0.30, zero=0.10)
-        if _is_finite(micro.gross_margins) else None,
+        "gross_margin", _wrap_with_med(micro.gross_margins, _med("gross_margin_median")),
+        _blended_hib(micro.gross_margins, _med("gross_margin_median"),
+                     abs_full=0.50, abs_half=0.30, abs_zero=0.10,
+                     rel_full_pp=0.10),
         0.06,
     ))
 
-    # --- Cash flow --------------------------------------------------------
+    # --- Cash flow (binary, no peer comparison meaningful) ---------------
     fcf = micro.free_cashflow
     components.append(_Component(
         "fcf", fcf,
@@ -339,29 +499,31 @@ def _quality(stock: Stock, micro: MicroData | None, sector_stats: SectorStatsBun
         0.10,
     ))
 
-    # --- Leverage / liquidity --------------------------------------------
-    # yfinance returns debt_to_equity as a percent (145.2 == 1.45).
+    # --- Leverage / liquidity (sector-aware) -----------------------------
+    # debt_to_equity is a percent in yfinance (145.2 == 145.2%, not 1.45).
     components.append(_Component(
-        "debt_equity", micro.debt_to_equity,
-        _ramp3(micro.debt_to_equity, full=50.0, half=100.0, zero=200.0)
-        if _is_finite(micro.debt_to_equity) else None,
+        "debt_equity", _wrap_with_med(micro.debt_to_equity, _med("debt_equity_median")),
+        _blended_lib(micro.debt_to_equity, _med("debt_equity_median"),
+                     abs_full=50.0, abs_half=100.0, abs_zero=200.0,
+                     rel_full_pp=-50.0),
         0.10,
     ))
     components.append(_Component(
-        "current_ratio", micro.current_ratio,
-        _ramp3(micro.current_ratio, full=2.0, half=1.0, zero=0.7)
-        if _is_finite(micro.current_ratio) else None,
+        "current_ratio", _wrap_with_med(micro.current_ratio, _med("current_ratio_median")),
+        _blended_hib(micro.current_ratio, _med("current_ratio_median"),
+                     abs_full=2.0, abs_half=1.0, abs_zero=0.7,
+                     rel_full_pp=0.5),
         0.06,
     ))
     components.append(_Component(
-        "quick_ratio", micro.quick_ratio,
-        _ramp3(micro.quick_ratio, full=1.5, half=1.0, zero=0.5)
-        if _is_finite(micro.quick_ratio) else None,
+        "quick_ratio", _wrap_with_med(micro.quick_ratio, _med("quick_ratio_median")),
+        _blended_hib(micro.quick_ratio, _med("quick_ratio_median"),
+                     abs_full=1.5, abs_half=1.0, abs_zero=0.5,
+                     rel_full_pp=0.5),
         0.05,
     ))
 
-    # --- Governance / ownership ------------------------------------------
-    # Yahoo's overall_risk is on a 1 (best) – 10 (worst) scale.
+    # --- Governance / ownership (no sector aggregate) --------------------
     components.append(_Component(
         "overall_risk", micro.overall_risk,
         _ramp(micro.overall_risk, full=1.0, zero=10.0) if _is_finite(micro.overall_risk) else None,
@@ -380,39 +542,8 @@ def _quality(stock: Stock, micro: MicroData | None, sector_stats: SectorStatsBun
         0.05,
     ))
 
-    # --- Sector-relative ROE ---------------------------------------------
-    # Same input as the absolute ROE lane above, but scored against the
-    # stock's *peers*. A 15% ROE in Tech (peer median ~22%) is mediocre;
-    # the same 15% in Utilities (peer median ~9%) is excellent. The
-    # absolute lane already captures "is this a good business in absolute
-    # terms"; this lane captures "is this a good business *for its
-    # peers*" — orthogonal information that catches sector-mean reversion
-    # opportunities. See `services/sector_stats_service.py`.
-    sector_roe_med = (
-        sector_stats.resolve(stock.sector, "roe_median")
-        if sector_stats is not None else None
-    )
-    roe_vs_sector_diff: float | None = None
-    if (
-        _is_finite(micro.return_on_equity)
-        and sector_roe_med is not None
-        and _is_finite(sector_roe_med)
-    ):
-        roe_vs_sector_diff = float(micro.return_on_equity) - float(sector_roe_med)
-    components.append(_Component(
-        "roe_vs_sector",
-        {
-            "roe": _safe_round(micro.return_on_equity, 4) if _is_finite(micro.return_on_equity) else None,
-            "sector_median": _safe_round(sector_roe_med, 4) if sector_roe_med is not None else None,
-            "diff": _safe_round(roe_vs_sector_diff, 4) if roe_vs_sector_diff is not None else None,
-        } if roe_vs_sector_diff is not None else None,
-        # ramp: +5pp above peer median = full, par = half, -5pp below = zero
-        _ramp3(roe_vs_sector_diff, full=0.05, half=0.0, zero=-0.05)
-        if roe_vs_sector_diff is not None else None,
-        0.05,
-    ))
-
     return _aggregate(components)
+
 
 
 # ---------------------------------------------------------------------------
@@ -420,45 +551,61 @@ def _quality(stock: Stock, micro: MicroData | None, sector_stats: SectorStatsBun
 # ---------------------------------------------------------------------------
 
 def _growth(stock: Stock, fundamentals: Fundamentals | None, sector_stats: SectorStatsBundle | None = None) -> tuple[float | None, float, dict]:
-    """Components:
+    """Growth pillar - sector-aware blended scoring.
 
-      - Revenue growth (YoY)        (0.25)  full @ 20%, half @ 0%, zero @ -10%
-      - Earnings growth (YoY)       (0.25)  full @ 20%, half @ 0%, zero @ -10%
-      - Quarterly earnings growth   (0.15)  full @ 25%, half @ 0%, zero @ -15%
-      - EPS forward vs trailing     (0.10)  full @ +20%, half @ 0%, zero @ -10%
-      - Earnings beats (last 4 q)   (0.15)  full = 4/4, half = 2/4, zero = 0/4
-      - Revenue trend (3y CAGR)     (0.10)  full @ 15%, half @ 5%, zero @ -5%
+    YoY revenue / earnings growth + qoq earnings now blend each
+    stock's value with its sector's median peer growth (50/50). A
+    12% revenue grower in semis (sector median ~22%) is below par;
+    the same 12% in utilities (sector median ~3%) is excellent.
+
+    Components:
+      - Revenue growth (YoY)        (0.25)  HIB blend, abs full@20%/half@0/zero@-10%, rel +5pp
+      - Earnings growth (YoY)       (0.25)  HIB blend, abs full@20%/half@0/zero@-10%, rel +5pp
+      - Quarterly earnings growth   (0.15)  HIB blend, abs full@25%/half@0/zero@-15%, rel +10pp
+      - EPS forward vs trailing     (0.10)  HIB absolute (no sector aggregate)
+      - Earnings beats (last 4 q)   (0.15)  HIB absolute (no sector aggregate)
+      - Revenue trend (3y CAGR)     (0.10)  HIB absolute (no sector aggregate)
     """
     if fundamentals is None:
         return None, 100.0, {}
     micro = fundamentals.micro
+    sec = stock.sector
+
+    def _med(field):
+        return _resolve_med(sector_stats, sec, field)
 
     components: list[_Component] = []
 
-    # --- Revenue & earnings YoY ------------------------------------------
+    # --- Revenue & earnings YoY (sector-aware blend) ----------------------
     rg = micro.revenue_growth if micro else None
     components.append(_Component(
-        "revenue_growth", rg,
-        _ramp3(rg, full=0.20, half=0.0, zero=-0.10) if _is_finite(rg) else None,
+        "revenue_growth", _wrap_with_med(rg, _med("revenue_growth_median")),
+        _blended_hib(rg, _med("revenue_growth_median"),
+                     abs_full=0.20, abs_half=0.0, abs_zero=-0.10,
+                     rel_full_pp=0.05),
         0.25,
     ))
     eg = micro.earnings_growth if micro else None
     components.append(_Component(
-        "earnings_growth", eg,
-        _ramp3(eg, full=0.20, half=0.0, zero=-0.10) if _is_finite(eg) else None,
+        "earnings_growth", _wrap_with_med(eg, _med("earnings_growth_median")),
+        _blended_hib(eg, _med("earnings_growth_median"),
+                     abs_full=0.20, abs_half=0.0, abs_zero=-0.10,
+                     rel_full_pp=0.05),
         0.25,
     ))
     qeg = micro.earnings_quarterly_growth if micro else None
     components.append(_Component(
-        "qoq_earnings_growth", qeg,
-        _ramp3(qeg, full=0.25, half=0.0, zero=-0.15) if _is_finite(qeg) else None,
+        "qoq_earnings_growth", _wrap_with_med(qeg, _med("earnings_quarterly_growth_median")),
+        _blended_hib(qeg, _med("earnings_quarterly_growth_median"),
+                     abs_full=0.25, abs_half=0.0, abs_zero=-0.15,
+                     rel_full_pp=0.10),
         0.15,
     ))
 
-    # --- Forward EPS vs trailing EPS -------------------------------------
+    # --- Forward EPS vs trailing EPS (no sector aggregate) ---------------
     eps_t = micro.eps_trailing if micro else None
     eps_f = micro.eps_forward if micro else None
-    fwd_growth: float | None = None
+    fwd_growth = None
     if _is_finite(eps_t) and _is_finite(eps_f) and eps_t and eps_t > 0:
         fwd_growth = (float(eps_f) - float(eps_t)) / float(eps_t)
     components.append(_Component(
@@ -467,23 +614,21 @@ def _growth(stock: Stock, fundamentals: Fundamentals | None, sector_stats: Secto
         0.10,
     ))
 
-    # --- Earnings-beats history ------------------------------------------
+    # --- Earnings-beats history (no sector aggregate) --------------------
     earnings = fundamentals.earnings or []
     last4 = [e for e in earnings if e.eps_reported is not None and e.eps_estimate is not None][-4:]
     if last4:
         beats = sum(1 for e in last4 if e.eps_reported > e.eps_estimate)
-        # Linear-ish ramp through full=4/half=2/zero=0.
         beat_score = _ramp3(float(beats), full=4.0, half=2.0, zero=0.0)
         components.append(_Component("earnings_beats", beats, beat_score, 0.15))
     else:
         components.append(_Component("earnings_beats", None, None, 0.15))
 
-    # --- Multi-year revenue CAGR (from annual income statement) ----------
+    # --- Multi-year revenue CAGR (no sector aggregate) -------------------
     annual = fundamentals.annual or []
     revs = [a.revenue for a in annual if a.revenue is not None and a.revenue > 0]
-    cagr: float | None = None
+    cagr = None
     if len(revs) >= 3:
-        # Take the last 3 annual rows and compute CAGR over the 2-year span.
         first = float(revs[-3])
         last = float(revs[-1])
         if first > 0:
@@ -497,36 +642,7 @@ def _growth(stock: Stock, fundamentals: Fundamentals | None, sector_stats: Secto
         0.10,
     ))
 
-    # --- Sector-relative revenue growth ----------------------------------
-    # Same logic as roe_vs_sector but on the YoY revenue-growth axis. A
-    # 12% grower in semis (peer median ~22%) is below par; the same 12%
-    # in utilities (peer median ~3%) is excellent. Catches sector-mean
-    # convergence trades.
-    sector_rev_med = (
-        sector_stats.resolve(stock.sector, "revenue_growth_median")
-        if sector_stats is not None else None
-    )
-    rev_vs_sector_diff: float | None = None
-    if (
-        rg is not None and _is_finite(rg)
-        and sector_rev_med is not None and _is_finite(sector_rev_med)
-    ):
-        rev_vs_sector_diff = float(rg) - float(sector_rev_med)
-    components.append(_Component(
-        "revenue_growth_vs_sector",
-        {
-            "revenue_growth": _safe_round(rg, 4) if _is_finite(rg) else None,
-            "sector_median": _safe_round(sector_rev_med, 4) if sector_rev_med is not None else None,
-            "diff": _safe_round(rev_vs_sector_diff, 4) if rev_vs_sector_diff is not None else None,
-        } if rev_vs_sector_diff is not None else None,
-        # ramp: +5pp above peer = full, par = half, -5pp below = zero
-        _ramp3(rev_vs_sector_diff, full=0.05, half=0.0, zero=-0.05)
-        if rev_vs_sector_diff is not None else None,
-        0.05,
-    ))
-
     return _aggregate(components)
-
 
 # ---------------------------------------------------------------------------
 # Value pillar.
@@ -538,135 +654,123 @@ def _value(
     last_close: float | None,
     sector_stats: SectorStatsBundle | None = None,
 ) -> tuple[float | None, float, dict]:
-    """Components (weights sum to 1.0):
+    """Value pillar - sector-aware blended scoring.
 
-      - P/E (TTM) vs sector median  (0.22)  full @ ≤median, zero @ 2× median
-      - Forward P/E vs sector med   (0.10)  same shape, on forward earnings
-      - PEG (or trailing PEG)       (0.18)  full @ ≤1, half @ 2, zero @ ≥3
-      - P/B vs sector P/B median    (0.10)  full @ ≤median, zero @ 2× median
-      - P/S                         (0.08)  full @ ≤2, half @ 5, zero @ 10
-      - EV / EBITDA                 (0.10)  full @ ≤8, half @ 14, zero @ 25
-      - EV / Revenue                (0.05)  full @ ≤2, half @ 5, zero @ 10
-      - Dividend yield              (0.10)  full @ ≥3%, zero @ 0%
-      - Payout ratio sanity         (0.07)  best 30-60%, drops outside.
+    Each multiple is blended 50/50 between absolute (canonical
+    full/half/zero ramp) and sector-relative scoring (ratio of stock
+    multiple / sector median). A P/E of 28 in tech (sector median ~28)
+    sits at par; the same 28 in utilities (sector ~22) is meaningfully
+    expensive vs peers.
+
+    Components (weights add to 1.0):
+      - P/E (TTM)                   (0.22)  LIB-multiple blend, abs full@22/half@33/zero@44
+      - Forward P/E                 (0.10)  LIB-multiple blend, same shape
+      - PEG                         (0.18)  LIB-multiple blend, abs full@1.0/half@2.0/zero@3.0
+      - P/B                         (0.10)  LIB-multiple blend, abs full@3.0/half@4.5/zero@6.0
+      - P/S                         (0.08)  LIB-multiple blend, abs full@2.0/half@5.0/zero@10.0
+      - EV / EBITDA                 (0.10)  LIB-multiple blend, abs full@8/half@14/zero@25
+      - EV / Revenue                (0.05)  LIB-multiple blend, abs full@2/half@5/zero@10
+      - Dividend yield              (0.10)  HIB blend, abs full@>=3%/zero@0%, rel +1pp vs sector
+      - Payout ratio sanity         (0.07)  absolute (no sector aggregate; healthy band)
     """
     if micro is None:
         return None, 100.0, {}
 
-    # Prefer dynamic sector medians from the live universe (via
-    # sector_stats_service). When the bundle is missing or thin (sector
-    # below the min-N threshold), fall back to the V1 hardcoded baseline
-    # — that's the whole reason the static maps still live in this module.
-    sector_pe_dynamic = (
-        sector_stats.resolve(stock.sector, "pe_median")
-        if sector_stats is not None else None
-    )
-    sector_pb_dynamic = (
-        sector_stats.resolve(stock.sector, "pb_median")
-        if sector_stats is not None else None
-    )
-    sector_pe = sector_pe_dynamic if sector_pe_dynamic is not None else         _SECTOR_PE_MEDIAN.get(stock.sector or "", _UNIVERSE_PE_MEDIAN)
-    sector_pb = sector_pb_dynamic if sector_pb_dynamic is not None else         _SECTOR_PB_MEDIAN.get(stock.sector or "", _UNIVERSE_PB_MEDIAN)
+    sec = stock.sector
+
+    def _med(field):
+        return _resolve_med(sector_stats, sec, field)
+
     components: list[_Component] = []
 
-    def _multiple_vs_median(val: float | None, median: float) -> float | None:
-        """Map a positive multiple to a 0-100 score, full at-or-below median,
-        zero at 2× median, linear in between. Negative / non-finite → None."""
-        if not _is_finite(val) or val is None or val <= 0:
-            return None
-        if val <= median:
-            return 100.0
-        ratio = (val - median) / median
-        return max(0.0, 100.0 * (1.0 - ratio))
-
-    # --- Trailing P/E -----------------------------------------------------
+    # --- Trailing P/E (sector-aware blend) -------------------------------
     components.append(_Component(
-        "pe", micro.trailing_pe,
-        _multiple_vs_median(micro.trailing_pe, sector_pe),
+        "pe", _wrap_with_med(micro.trailing_pe, _med("pe_median")),
+        _blended_lib_multiple(micro.trailing_pe, _med("pe_median"),
+                              abs_full=22.0, abs_half=33.0, abs_zero=44.0),
         0.22,
     ))
 
-    # --- Forward P/E ------------------------------------------------------
+    # --- Forward P/E (sector-aware blend) --------------------------------
     components.append(_Component(
-        "forward_pe", micro.forward_pe,
-        _multiple_vs_median(micro.forward_pe, sector_pe),
+        "forward_pe", _wrap_with_med(micro.forward_pe, _med("forward_pe_median")),
+        _blended_lib_multiple(micro.forward_pe, _med("forward_pe_median"),
+                              abs_full=22.0, abs_half=33.0, abs_zero=44.0),
         0.10,
     ))
 
-    # --- PEG (prefer trailing if available; fallback to plain peg) -------
+    # --- PEG (prefer trailing if available; sector-aware) ----------------
     peg = micro.trailing_peg_ratio if _is_finite(micro.trailing_peg_ratio) else micro.peg_ratio
     components.append(_Component(
-        "peg", peg,
-        _ramp3(peg, full=1.0, half=2.0, zero=3.0)
-        if _is_finite(peg) and peg is not None and peg > 0 else None,
+        "peg", _wrap_with_med(peg, _med("peg_median")),
+        _blended_lib_multiple(peg, _med("peg_median"),
+                              abs_full=1.0, abs_half=2.0, abs_zero=3.0),
         0.18,
     ))
 
-    # --- P/B -------------------------------------------------------------
+    # --- P/B (sector-aware blend) ----------------------------------------
     components.append(_Component(
-        "pb", micro.price_to_book,
-        _multiple_vs_median(micro.price_to_book, sector_pb),
+        "pb", _wrap_with_med(micro.price_to_book, _med("pb_median")),
+        _blended_lib_multiple(micro.price_to_book, _med("pb_median"),
+                              abs_full=3.0, abs_half=4.5, abs_zero=6.0),
         0.10,
     ))
 
-    # --- P/S -------------------------------------------------------------
+    # --- P/S (sector-aware blend) ----------------------------------------
     components.append(_Component(
-        "ps", micro.price_to_sales,
-        _ramp3(micro.price_to_sales, full=2.0, half=5.0, zero=10.0)
-        if _is_finite(micro.price_to_sales) and micro.price_to_sales is not None
-        and micro.price_to_sales > 0 else None,
+        "ps", _wrap_with_med(micro.price_to_sales, _med("ps_median")),
+        _blended_lib_multiple(micro.price_to_sales, _med("ps_median"),
+                              abs_full=2.0, abs_half=5.0, abs_zero=10.0),
         0.08,
     ))
 
-    # --- EV/EBITDA -------------------------------------------------------
+    # --- EV/EBITDA (sector-aware blend) ----------------------------------
     components.append(_Component(
-        "ev_ebitda", micro.enterprise_to_ebitda,
-        _ramp3(micro.enterprise_to_ebitda, full=8.0, half=14.0, zero=25.0)
-        if _is_finite(micro.enterprise_to_ebitda) and micro.enterprise_to_ebitda is not None
-        and micro.enterprise_to_ebitda > 0 else None,
+        "ev_ebitda", _wrap_with_med(micro.enterprise_to_ebitda, _med("ev_ebitda_median")),
+        _blended_lib_multiple(micro.enterprise_to_ebitda, _med("ev_ebitda_median"),
+                              abs_full=8.0, abs_half=14.0, abs_zero=25.0),
         0.10,
     ))
 
-    # --- EV/Revenue ------------------------------------------------------
+    # --- EV/Revenue (sector-aware blend) ---------------------------------
     components.append(_Component(
-        "ev_revenue", micro.enterprise_to_revenue,
-        _ramp3(micro.enterprise_to_revenue, full=2.0, half=5.0, zero=10.0)
-        if _is_finite(micro.enterprise_to_revenue) and micro.enterprise_to_revenue is not None
-        and micro.enterprise_to_revenue > 0 else None,
+        "ev_revenue", _wrap_with_med(micro.enterprise_to_revenue, _med("ev_revenue_median")),
+        _blended_lib_multiple(micro.enterprise_to_revenue, _med("ev_revenue_median"),
+                              abs_full=2.0, abs_half=5.0, abs_zero=10.0),
         0.05,
     ))
 
-    # --- Dividend yield --------------------------------------------------
-    # yfinance is inconsistent: <1 → fraction, >=1 → percent.
+    # --- Dividend yield (sector-aware HIB blend) -------------------------
+    # yfinance is inconsistent: <1 -> fraction, >=1 -> percent.
     dy_raw = micro.dividend_yield
-    dy_score: float | None = None
-    dy_pct: float | None = None
+    dy_pct = None
     if _is_finite(dy_raw) and dy_raw is not None and dy_raw >= 0:
         dy_pct = dy_raw if dy_raw > 1 else dy_raw * 100.0
-        dy_score = _ramp(dy_pct, full=3.0, zero=0.0)
-    components.append(_Component("dividend_yield", dy_pct, dy_score, 0.10))
+    components.append(_Component(
+        "dividend_yield", _wrap_with_med(dy_pct, _med("dividend_yield_median")),
+        _blended_hib(dy_pct, _med("dividend_yield_median"),
+                     abs_full=3.0, abs_half=1.5, abs_zero=0.0,
+                     rel_full_pp=1.0) if dy_pct is not None else None,
+        0.10,
+    ))
 
-    # --- Payout ratio sanity ---------------------------------------------
-    # Healthy = 30-60%. Above 100% (over-paying earnings) → 0. 0% only
-    # informative for dividend stocks; for growth stocks the dividend_yield
-    # component already neutralises (None). Skip when there's no dividend.
+    # --- Payout ratio sanity (no sector aggregate; healthy 30-60% band) -
     pr = micro.payout_ratio
-    pr_score: float | None = None
+    pr_score = None
     if _is_finite(pr) and pr is not None and (dy_pct is not None and dy_pct > 0):
         if pr <= 0:
             pr_score = 0.0
         elif pr <= 0.30:
-            pr_score = 70.0   # low but healthy
+            pr_score = 70.0
         elif pr <= 0.60:
-            pr_score = 100.0  # sweet spot
+            pr_score = 100.0
         elif pr <= 1.0:
             pr_score = max(0.0, 100.0 * (1.0 - (pr - 0.60) / 0.40))
         else:
-            pr_score = 0.0    # paying out more than it earns
+            pr_score = 0.0
     components.append(_Component("payout_ratio", pr if dy_pct else None, pr_score, 0.07))
 
     return _aggregate(components)
-
 
 # ---------------------------------------------------------------------------
 # Momentum pillar.
