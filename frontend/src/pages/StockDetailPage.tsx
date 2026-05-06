@@ -116,19 +116,13 @@ export default function StockDetailPage() {
         effectiveRules={d.effective_rules}
       />
 
-      {/* Company overview (left, ~60%) + Alert storici (right, ~40%).
-          The user wanted the alerts card next to the profile so the
-          historical rule-firing context sits alongside the company's
-          identity. Profile gets the wider slot because its prose
-          summary is the page's "lead" content; alerts shrink to the
-          minimum that still fits the embedded AlertsTable's columns.
-          Both cards size to their content (`items-start`); stacks
-          vertically below `lg`. */}
-      {/* Wider profile (~67%) / narrower alerts (~33%) — was 3:2.
-          The alerts table is fixed-column-count and reads fine in a
-          tighter slot; the profile prose benefits from the extra
-          width per the user's iterative feedback. */}
-      <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-3 items-start">
+      {/* Company overview (left, 67%) + Alert storici (right, 33%).
+          Equal-height row (`items-stretch`, the grid default): the
+          alerts card fills the height set by the company-profile prose
+          and scrolls internally when there are more rows than fit.
+          The profile is the page's lead content and dictates the row
+          height; the alerts card adapts. Stacks vertically below `lg`. */}
+      <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-3">
         <CompanyOverviewCard ticker={ticker} stock={d.stock} />
         <StockAlertsHistoryCard alerts={d.alerts_history} />
       </div>

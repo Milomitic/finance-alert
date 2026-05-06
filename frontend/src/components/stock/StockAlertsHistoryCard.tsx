@@ -76,13 +76,19 @@ export function StockAlertsHistoryCard({ alerts }: Props) {
 
   return (
     <>
-      <Card>
-        <CardContent className="p-4">
+      {/* Card cascades flex-col so the body section can flex-1 +
+          overflow-y-auto. Without `h-full overflow-hidden flex
+          flex-col` here, the parent grid's stretch doesn't make the
+          inner table region scrollable — the cap was a `max-h-[460px]`
+          that ignored the actual row height. Now: card matches
+          sibling height, table region scrolls if rows exceed it. */}
+      <Card className="h-full overflow-hidden flex flex-col">
+        <CardContent className="p-4 flex-1 min-h-0 flex flex-col">
           {/* Header strip: title + aggregate stats (bull/bear/last30d) */}
           <SectionTitle
             icon={History}
             label={`Alert storici per questo ticker (${stats.total})`}
-            className="mb-3"
+            className="mb-3 shrink-0"
             right={
               stats.total > 0 ? (
                 <div className="flex items-center gap-2 flex-wrap text-xs">
@@ -119,18 +125,20 @@ export function StockAlertsHistoryCard({ alerts }: Props) {
           />
 
           {sorted.length === 0 ? (
-            <div className="text-sm text-muted-foreground text-center py-8">
-              Nessun alert mai generato per questo ticker.
-              <div className="text-xs mt-1 opacity-75">
-                Quando una regola si attiva sui dati di questo titolo, l'alert
-                comparirà qui in cima.
+            <div className="flex-1 flex items-center justify-center text-center text-sm text-muted-foreground">
+              <div>
+                Nessun alert mai generato per questo ticker.
+                <div className="text-xs mt-1 opacity-75">
+                  Quando una regola si attiva sui dati di questo titolo,
+                  l'alert comparirà qui in cima.
+                </div>
               </div>
             </div>
           ) : (
-            // Cap visible rows to a reasonable height; scroll for the rest.
-            // Full list preserved (no slice) since this is the canonical
-            // history view for the ticker.
-            <div className="max-h-[460px] overflow-y-auto -mx-4 px-4">
+            // Body grows to fill the row height set by the company-
+            // profile sibling and scrolls internally when the row
+            // count exceeds it. No more hardcoded max-h.
+            <div className="flex-1 min-h-0 overflow-y-auto -mx-4 px-4">
               <AlertsTable
                 embedded
                 alerts={sorted}
