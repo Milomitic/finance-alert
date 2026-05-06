@@ -150,11 +150,13 @@ export default function HomePage() {
           complementary: alerts is "what just happened that needs your
           attention", top picks is "what looks great right now". Putting them
           side-by-side gives the user a single decision surface — react vs
-          discover — instead of scrolling between them. `items-start` lets
-          each card size to its own content (alerts can be sparse while
-          picks always shows the same number of rows). Stacks vertically
-          on narrow viewports via the `lg:` breakpoint. */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 items-start">
+          discover — instead of scrolling between them.
+          Equal-height row (`lg:h-[440px]`) so the two cards align — was
+          `items-start` which let the Alerts card balloon past Top Picks
+          when its Feed had a lot of recent items. Each card's columns
+          scroll internally for overflow. Stacks vertically on narrow
+          viewports via the `lg:` breakpoint. */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 lg:h-[440px]">
         {summaryData ? (
           <AlertsCompactPanel
             topStocks={summaryData.top_stocks_30d}

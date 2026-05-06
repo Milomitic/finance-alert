@@ -39,10 +39,10 @@ export function AlertsCompactPanel({
     delta === 0 ? "= ieri" : `${delta > 0 ? "+" : ""}${delta} vs ieri`;
 
   return (
-    <Card className="overflow-hidden">
-      <CardContent className="p-0">
+    <Card className="h-full overflow-hidden flex flex-col">
+      <CardContent className="p-0 flex-1 min-h-0 flex flex-col">
         {/* Header — title + 24h badge + "Vedi tutti" link. */}
-        <div className="flex items-center gap-3 border-b px-3 bg-muted/30 py-2">
+        <div className="shrink-0 flex items-center gap-3 border-b px-3 bg-muted/30 py-2">
           <SectionTitle
             icon={Bell}
             label="Alerts"
@@ -60,17 +60,17 @@ export function AlertsCompactPanel({
           </a>
         </div>
 
-        {/* Three-column grid — one per former tab. `divide-x` paints
-            a 1px vertical separator between columns; rows inside each
-            column use the existing per-view component, scrollable
-            independently. */}
-        <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-border/40">
+        {/* Three-column grid — one per former tab. Each column is a
+            flex-col with a fixed header and a scrollable body so the
+            card height stays predictable (matches Top Picks beside it)
+            even when Feed has many items. */}
+        <div className="flex-1 min-h-0 grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-border/40">
           {COLUMNS.map((col) => (
-            <div key={col.key} className="flex flex-col min-w-0">
+            <div key={col.key} className="flex flex-col min-h-0 min-w-0">
               <div className="shrink-0 px-2.5 py-1 text-[10.5px] uppercase tracking-[0.16em] font-bold text-muted-foreground border-b bg-muted/40">
                 {col.label}
               </div>
-              <div className="min-h-0">
+              <div className="flex-1 min-h-0 overflow-y-auto">
                 {col.key === "top" && <TopStocksTable data={topStocks} />}
                 {col.key === "feed" && <RecentAlertsFeed alerts={recentAlerts} />}
                 {col.key === "byindex" && <AlertsByIndexBars />}

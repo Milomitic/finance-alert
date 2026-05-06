@@ -72,11 +72,11 @@ function ScoreDots({ composite }: { composite: number }) {
 function PickRow({ item, compact = false }: { item: TopPickItem; compact?: boolean }) {
   const compTone = scoreColor(item.composite);
   return (
-    <li className="border-b border-border/40 last:border-b-0">
+    <li className="flex-1 min-h-0 flex border-b border-border/40 last:border-b-0">
       <Link
         to={`/stocks/${encodeURIComponent(item.ticker)}`}
         className={cn(
-          "flex items-center gap-1.5 px-2.5 py-1 hover:bg-accent/30 transition-colors leading-tight",
+          "flex-1 flex items-center gap-1.5 px-2.5 py-1 hover:bg-accent/30 transition-colors leading-tight",
         )}
       >
         <span className="text-[12px] font-bold tabular-nums shrink-0">
@@ -171,7 +171,7 @@ function PicksColumn({ col }: { col: { key: ColumnKey; label: string } }) {
           Nessun dato
         </div>
       ) : (
-        <ul className="flex-1 overflow-y-auto">
+        <ul className="flex-1 min-h-0 flex flex-col">
           {items.map((it) => (
             <PickRow key={it.stock_id} item={it} compact={compact} />
           ))}
@@ -196,9 +196,9 @@ function PicksColumn({ col }: { col: { key: ColumnKey; label: string } }) {
  */
 export function TopPicksCard() {
   return (
-    <Card className="overflow-hidden">
-      <CardContent className="p-0">
-        <div className="px-3 py-2 border-b bg-muted/30">
+    <Card className="h-full overflow-hidden flex flex-col">
+      <CardContent className="p-0 flex-1 min-h-0 flex flex-col">
+        <div className="shrink-0 px-3 py-2 border-b bg-muted/30">
           <SectionTitle
             icon={Trophy}
             label="Top picks"
@@ -209,7 +209,7 @@ export function TopPicksCard() {
             }
           />
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 divide-y md:divide-y-0 md:divide-x divide-border/40">
+        <div className="flex-1 min-h-0 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 divide-y md:divide-y-0 md:divide-x divide-border/40">
           {COLUMNS.map((col) => (
             <PicksColumn key={col.key} col={col} />
           ))}
