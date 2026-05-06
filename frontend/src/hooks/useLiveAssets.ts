@@ -15,6 +15,10 @@ export interface LiveAsset {
   category: "index" | "commodity" | "crypto";
   flag: string | null;
   quote: LiveQuote | null;
+  /** ~22-30 trailing daily closes for the inline sparkline. `null` when
+   *  the upstream history fetch failed for this symbol. The frontend
+   *  just omits the sparkline in that case. */
+  history: number[] | null;
 }
 
 export interface LiveAssetsResponse {

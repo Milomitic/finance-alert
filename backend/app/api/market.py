@@ -13,7 +13,11 @@ from app.api.deps import get_current_user, get_db
 from app.models import User
 from app.schemas.market import MarketSummaryOut
 from app.schemas.stock_detail import LiveQuoteOut
-from app.services import live_quote_service, market_stats_service
+from app.services import (
+    live_quote_service,
+    live_sparkline_service,
+    market_stats_service,
+)
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
@@ -35,6 +39,7 @@ class LiveAsset(BaseModel):
     category: str         # "index" | "commodity" | "crypto"
     flag: str | None = None  # 2-letter region code, lowercase ("us", "jp", "it"); None for global assets
     quote: LiveQuoteOut | None = None  # null when fetch failed / breaker open
+    history: list[float] | None = None  # ~30 trailing daily closes for the sparkline; None on fetch failure
 
 
 class LiveAssetsOut(BaseModel):
@@ -75,6 +80,9 @@ def get_live_assets(_user: User = Depends(get_current_user)) -> LiveAssetsOut:
     """
     symbols = [d[0] for d in LIVE_ASSET_DEFINITIONS]
     quotes = live_quote_service.get_quotes_batch(symbols)
+    # Sparkline history has its own 15-min TTL cache; it returns
+    # already-cached arrays cheaply on most calls.
+    histories = live_sparkline_service.get_sparklines(symbols)
     out: list[LiveAsset] = []
     for symbol, name, category, flag in LIVE_ASSET_DEFINITIONS:
         q = quotes.get(symbol)
@@ -87,6 +95,7 @@ def get_live_assets(_user: User = Depends(get_current_user)) -> LiveAssetsOut:
             category=category,
             flag=flag,
             quote=LiveQuoteOut(**q.__dict__) if q else None,
+            history=histories.get(symbol),
         ))
     return LiveAssetsOut(assets=out)
 

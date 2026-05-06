@@ -1,11 +1,16 @@
+import type * as React from "react";
 import {
   Bitcoin,
   CircleDot,
+  Coins,
+  Droplet,
+  Flame,
   Globe,
   Loader2,
   type LucideIcon,
 } from "lucide-react";
 
+import { Sparkline } from "@/components/dashboard/Sparkline";
 import { Card, CardContent } from "@/components/ui/card";
 import { SectionTitle } from "@/components/ui/section-title";
 import {
@@ -15,6 +20,27 @@ import {
 } from "@/components/ui/tooltip";
 import { type LiveAsset, useLiveAssets } from "@/hooks/useLiveAssets";
 import { cn } from "@/lib/utils";
+
+/** Custom Ethereum diamond — lucide-react doesn't ship this brand mark.
+ *  Two stacked triangle pairs in the canonical ETH logo proportions.
+ *  Uses currentColor so caller controls hue via Tailwind text classes. */
+function EthereumIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 256 416"
+      className={className}
+      fill="currentColor"
+      aria-hidden
+    >
+      <path d="M127.961 0L125.166 9.5v275.668l2.795 2.79 127.962-75.638z" opacity="0.8" />
+      <path d="M127.962 0L0 212.32l127.962 75.639V154.158z" />
+      <path d="M127.961 312.187l-1.575 1.92v98.199l1.575 4.6L256 236.587z" opacity="0.8" />
+      <path d="M127.962 416.905v-104.72L0 236.587z" />
+      <path d="M127.961 287.958l127.96-75.637-127.96-58.162z" opacity="0.5" />
+      <path d="M0 212.32l127.96 75.638V154.159z" opacity="0.65" />
+    </svg>
+  );
+}
 
 /* ─── LiveAssetsPanel — replaces the old GlobalKpiTiles ────────────────── */
 /* A vertical list of curated live snapshots — major equity indices, the
@@ -33,6 +59,31 @@ const CATEGORY_ICON: Record<LiveAsset["category"], LucideIcon> = {
   index: Globe,
   commodity: CircleDot,
   crypto: Bitcoin,
+};
+
+/** Per-symbol icon override for commodities + crypto. Indices use the
+ *  country flag instead, so they don't appear here. Each entry is the
+ *  icon component plus a Tailwind text-color class — the icon paints
+ *  via `currentColor`, and we want gold to be amber, oil to be slate,
+ *  etc. */
+type IconRender = {
+  Component: React.ComponentType<{ className?: string }>;
+  color: string;
+};
+
+const SYMBOL_ICON: Record<string, IconRender> = {
+  // Commodities — `Coins` for the precious metals, `Droplet` for oil,
+  // `Flame` for gas. The colors mirror conventional finance-news
+  // chyrons (gold = amber, silver = zinc, oil = dark slate, gas =
+  // orange).
+  "GC=F": { Component: Coins, color: "text-amber-500" },
+  "SI=F": { Component: Coins, color: "text-zinc-400 dark:text-zinc-300" },
+  "CL=F": { Component: Droplet, color: "text-slate-700 dark:text-slate-200" },
+  "NG=F": { Component: Flame, color: "text-orange-500" },
+  // Crypto — Bitcoin from lucide; Ethereum is a custom inline SVG
+  // (see top of file) since lucide doesn't ship the brand mark.
+  "BTC-USD": { Component: Bitcoin, color: "text-orange-500" },
+  "ETH-USD": { Component: EthereumIcon, color: "text-indigo-500 dark:text-indigo-400" },
 };
 
 /** Small label above each category group when the list is rendered with
@@ -70,40 +121,57 @@ function changeColor(v: number | null | undefined): string {
 /* ─── Row ─────────────────────────────────────────────────────────────── */
 
 function AssetRow({ asset }: { asset: LiveAsset }) {
-  const Icon = CATEGORY_ICON[asset.category];
+  const FallbackIcon = CATEGORY_ICON[asset.category];
+  const symbolIcon = SYMBOL_ICON[asset.symbol];
   const q = asset.quote;
   const price = q?.price ?? null;
   const changePct = q?.change_pct ?? null;
   const isLive = q?.market_state === "OPEN" && q?.error == null;
   const hasError = q == null || q.error != null || q.price == null;
 
+  // Sparkline trend: based on the change vs. first historical close
+  // (so the visual matches the visible series, not just the last
+  // intraday tick).
+  const history = asset.history ?? [];
+  let trend: "up" | "down" | "flat" = "flat";
+  if (history.length >= 2) {
+    const first = history[0];
+    const last = history[history.length - 1];
+    if (first > 0) {
+      const dp = (last - first) / first;
+      trend = dp > 0.001 ? "up" : dp < -0.001 ? "down" : "flat";
+    }
+  }
+
   return (
     <li
       className={cn(
-        "flex items-center gap-1.5 px-1.5 py-1 rounded transition-colors",
+        "flex-1 flex items-center gap-2 px-1.5 rounded transition-colors min-h-0",
         "hover:bg-muted/50",
       )}
     >
-      {/* Flag (when known) or category icon */}
-      <span className="shrink-0 w-[18px] flex items-center justify-center">
+      {/* Flag (indices) or per-symbol brand icon (commodities/crypto) */}
+      <span className="shrink-0 w-[20px] flex items-center justify-center">
         {asset.flag ? (
           <img
             src={`/flags/${asset.flag}.svg`}
             alt={asset.flag}
-            width={18}
-            height={12}
-            style={{ width: "18px", height: "12px", objectFit: "cover" }}
+            width={20}
+            height={14}
+            style={{ width: "20px", height: "14px", objectFit: "cover" }}
             className="rounded-[2px] ring-1 ring-border/60"
             aria-hidden
           />
+        ) : symbolIcon ? (
+          <symbolIcon.Component className={cn("h-4 w-4", symbolIcon.color)} />
         ) : (
-          <Icon className="h-3.5 w-3.5 text-muted-foreground/80" />
+          <FallbackIcon className="h-4 w-4 text-muted-foreground/80" />
         )}
       </span>
 
       {/* Identity: name + live dot */}
-      <div className="flex-1 min-w-0 flex items-center gap-1">
-        <span className="text-[11.5px] font-semibold truncate leading-tight">
+      <div className="shrink-0 min-w-0 flex items-center gap-1.5">
+        <span className="text-[13px] font-semibold truncate leading-tight">
           {asset.name}
         </span>
         {isLive && (
@@ -117,10 +185,18 @@ function AssetRow({ asset }: { asset: LiveAsset }) {
         )}
       </div>
 
-      {/* Price + change inline (right-aligned, tighter than the old
-          two-row layout to fit two columns in the same vertical budget) */}
+      {/* Sparkline — fills the gap between name and price with the
+          recent trend, fading in from left. Hidden under sm: where
+          horizontal space is too tight. */}
+      <div className="flex-1 min-w-0 hidden sm:flex items-center justify-end pr-1">
+        {history.length >= 2 ? (
+          <Sparkline data={history} trend={trend} width={56} height={16} />
+        ) : null}
+      </div>
+
+      {/* Price + change inline */}
       <div className="text-right shrink-0 flex items-baseline gap-1.5 leading-tight">
-        <span className="text-[11.5px] font-bold tabular-nums">
+        <span className="text-[13px] font-bold tabular-nums">
           {hasError ? (
             <Tooltip>
               <TooltipTrigger asChild>
@@ -136,7 +212,7 @@ function AssetRow({ asset }: { asset: LiveAsset }) {
         </span>
         <span
           className={cn(
-            "text-[10px] font-semibold tabular-nums tracking-tight w-[44px] text-right",
+            "text-[11px] font-semibold tabular-nums tracking-tight w-[48px] text-right",
             changeColor(changePct),
           )}
         >
@@ -151,7 +227,7 @@ function AssetRow({ asset }: { asset: LiveAsset }) {
  *  the row component because both columns render multiple categories. */
 function CategoryHeader({ category }: { category: LiveAsset["category"] }) {
   return (
-    <div className="px-1.5 pt-1 pb-0.5 text-[9px] uppercase tracking-[0.16em] text-muted-foreground/60 font-semibold">
+    <div className="shrink-0 px-1.5 pt-1.5 pb-1 text-[10px] uppercase tracking-[0.16em] text-muted-foreground/70 font-semibold">
       {CATEGORY_LABEL[category]}
     </div>
   );
@@ -222,8 +298,12 @@ export function LiveAssetsPanel() {
 }
 
 /** One vertical column rendering ≥1 category sections back-to-back.
- *  The two columns share the SectionTitle above; any number of groups
- *  per column is supported. */
+ *  Each `<ul>` is `flex flex-col flex-1` and each `<li>` inside it is
+ *  `flex-1`, so rows distribute the available height evenly within
+ *  their group. With multiple groups per column, the groups themselves
+ *  flex proportionally to their row counts, which keeps both columns
+ *  visually balanced (left has 7 indices, right has 4 commodities + 2
+ *  crypto = 6 rows). */
 function Column({
   groups,
   className,
@@ -231,12 +311,19 @@ function Column({
   groups: Array<{ category: LiveAsset["category"]; rows: LiveAsset[] }>;
   className?: string;
 }) {
+  // Total row count drives the flex-grow weight so groups with more
+  // rows take proportionally more vertical space.
+  const totalRows = groups.reduce((acc, g) => acc + g.rows.length, 0) || 1;
   return (
-    <div className={cn("min-w-0", className)}>
+    <div className={cn("min-w-0 flex flex-col h-full", className)}>
       {groups.map((g) => (
-        <div key={g.category} className="mb-1 last:mb-0">
+        <div
+          key={g.category}
+          className="flex flex-col min-h-0"
+          style={{ flexGrow: g.rows.length / totalRows, flexBasis: 0 }}
+        >
           <CategoryHeader category={g.category} />
-          <ul className="space-y-0">
+          <ul className="flex flex-col flex-1 min-h-0">
             {g.rows.map((asset) => (
               <AssetRow key={asset.symbol} asset={asset} />
             ))}
