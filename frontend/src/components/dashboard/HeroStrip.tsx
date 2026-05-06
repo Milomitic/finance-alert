@@ -1,41 +1,37 @@
 import type { IndexBreadth, MarketGlobal } from "@/api/types";
-import { GlobalKpiTiles } from "@/components/dashboard/GlobalKpiTiles";
+import { LiveAssetsPanel } from "@/components/dashboard/LiveAssetsPanel";
 import { MoodCard } from "@/components/dashboard/MoodCard";
-import { ScanTriggerCard } from "@/components/dashboard/ScanTriggerCard";
 
 interface Props {
   global: MarketGlobal;
   byIndex: IndexBreadth[];
-  /** Forwarded to ScanTriggerCard for the "next scheduled scan" footer. */
-  nextScanAt?: string | null;
 }
 
-/* ─── HeroStrip — top of dashboard ──────────────────────────────────────── */
-/* Three columns side-by-side at the same row height (300px on lg+):
+/* ─── HeroStrip — top of dashboard ──────────────────────────────────────── *
  *
- *   ┌────── MoodCard (3fr) ──────┐  ┌── Global KPI (1.5fr) ──┐  ┌─ Scan (1.2fr) ─┐
- *   │ market mood hero            │  │ vertical KPI list     │  │ Esegui scan   │
- *   │                             │  │ (Universe / A/D / ...) │  │ Invia digest  │
- *   │                             │  │                       │  │ Ultimo / Prox │
- *   └────────────────────────────┘  └───────────────────────┘  └───────────────┘
+ * Two columns, side-by-side at 300px row height (lg+):
  *
- * Was a 2-column layout where the right column stacked Global KPI on top
- * of Scan Trigger. The stack squashed Global KPI to ~150px (visible only
- * 1 tile of the 6 list rows; rest scrolled), wasting horizontal space.
- * Side-by-side gives Global KPI the full row height — all 6 tiles fit
- * without scroll — and keeps Scan Trigger at a comfortable column width.
+ *   ┌──── MoodCard (3fr) ────┐  ┌──── LiveAssetsPanel (2fr) ────┐
+ *   │ market mood hero        │  │ vertical list of indices,    │
+ *   │ (S&P breadth, sentiment │  │ commodities, crypto with     │
+ *   │  arc, sector chips)     │  │ live prices + Δ%             │
+ *   └─────────────────────────┘  └──────────────────────────────┘
+ *
+ * Previous iterations had three columns (Mood + GlobalKpiTiles + Scan).
+ * Both side panels are gone:
+ *   - GlobalKpiTiles → replaced by LiveAssetsPanel (more useful at-a-glance
+ *     market context: "what's gold doing today" beats "RSI<30 count")
+ *   - ScanTriggerCard → moved to the page header as a small icon button
+ *     (the scan flow is admin-on-demand; it doesn't need real estate)
  */
-export function HeroStrip({ global, byIndex, nextScanAt }: Props) {
+export function HeroStrip({ global, byIndex }: Props) {
   return (
-    <div className="grid gap-3 lg:grid-cols-[3fr_1.5fr_1.2fr] lg:h-[300px]">
+    <div className="grid gap-3 lg:grid-cols-[3fr_2fr] lg:h-[300px]">
       <div className="h-full min-h-0">
         <MoodCard global={global} byIndex={byIndex} />
       </div>
       <div className="h-full min-h-0">
-        <GlobalKpiTiles global={global} />
-      </div>
-      <div className="h-full min-h-0">
-        <ScanTriggerCard nextScanAt={nextScanAt} />
+        <LiveAssetsPanel />
       </div>
     </div>
   );

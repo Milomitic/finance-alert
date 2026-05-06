@@ -5,6 +5,7 @@ import { BreadthMatrixTable } from "@/components/dashboard/BreadthMatrixTable";
 import { FiftyTwoWeekVolCard } from "@/components/dashboard/FiftyTwoWeekVolCard";
 import { HeroStrip } from "@/components/dashboard/HeroStrip";
 import { DataSourcesCard } from "@/components/dashboard/DataSourcesCard";
+import { ScanHeaderButton } from "@/components/dashboard/ScanHeaderButton";
 import { TopMoversCard } from "@/components/dashboard/TopMoversCard";
 import { TopPicksCard } from "@/components/dashboard/TopPicksCard";
 import { RsiHistogramCard } from "@/components/dashboard/RsiHistogramCard";
@@ -113,25 +114,31 @@ export default function HomePage() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3 px-1">
-        <h2 className="text-base font-semibold tracking-tight">Dashboard</h2>
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Clock className="h-3 w-3" />
-          {m.computed_at && (
-            <span className={m.is_stale ? "text-amber-600 dark:text-amber-400" : ""}>
-              Aggiornato {new Date(m.computed_at).toLocaleString("it-IT", { dateStyle: "short", timeStyle: "short" })}
-            </span>
-          )}
-          {nextScanAt && (
-            <>
-              <span className="opacity-50">·</span>
-              <span className="text-blue-600 dark:text-blue-400">
-                Prossimo scan: {new Date(nextScanAt).toLocaleString("it-IT", { dateStyle: "short", timeStyle: "short" })}
+        <div className="flex items-baseline gap-3">
+          <h2 className="text-base font-semibold tracking-tight">Dashboard</h2>
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Clock className="h-3 w-3" />
+            {m.computed_at && (
+              <span className={m.is_stale ? "text-amber-600 dark:text-amber-400" : ""}>
+                Aggiornato {new Date(m.computed_at).toLocaleString("it-IT", { dateStyle: "short", timeStyle: "short" })}
               </span>
-            </>
-          )}
+            )}
+            {nextScanAt && (
+              <>
+                <span className="opacity-50">·</span>
+                <span className="text-blue-600 dark:text-blue-400">
+                  Prossimo scan: {new Date(nextScanAt).toLocaleString("it-IT", { dateStyle: "short", timeStyle: "short" })}
+                </span>
+              </>
+            )}
+          </div>
         </div>
+        {/* Scan + digest controls — moved here from the hero strip so the
+            hero is all market context. The ScanProgressToast (mounted in
+            Layout) carries the in-flight progress UI. */}
+        <ScanHeaderButton nextScanAt={nextScanAt} />
       </div>
-      <HeroStrip global={m.global} byIndex={m.by_index} nextScanAt={nextScanAt} />
+      <HeroStrip global={m.global} byIndex={m.by_index} />
       <BreadthMatrixTable data={m.by_index} />
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 lg:h-[420px]">
         <div className="h-full min-h-0"><RsiHistogramCard rsi={m.rsi_distribution} indices={m.by_index} /></div>

@@ -209,15 +209,20 @@ export function ScanProgressToast() {
           ? CheckCircle2
           : AlertCircle;
 
-  // Solid backgrounds (no opacity, no backdrop-blur). The previous semi-
-  // transparent fills ("/95" / "/30" / "/5") let the page bleed through —
-  // the toast read as a faint tint, not a discrete surface. Per user:
-  // "sfondo del toast persistente per scan senza opacità".
+  // Fully opaque backgrounds (no `/N` modifiers, no backdrop-blur) so
+  // the toast reads as a discrete surface even over a busy dashboard.
+  // `bg-popover` instead of `bg-card` for the running variant: it's
+  // already designed for floating overlays in our shadcn theme and
+  // has stronger contrast against the page than `bg-card` (which can
+  // match the dashboard cards too closely). For success/stale/failed
+  // we use the same tinted-light fills paired with very dark dark-mode
+  // counterparts (-900 instead of -950) so the colored background
+  // reads cleanly against the foreground text in both color modes.
   const accentClass: Record<typeof variant, string> = {
-    running: "border-primary/60 bg-card",
-    stale: "border-amber-400 bg-amber-50 dark:bg-amber-950",
-    success: "border-emerald-400 bg-emerald-50 dark:bg-emerald-950",
-    failed: "border-rose-400 bg-rose-50 dark:bg-rose-950",
+    running: "border-primary bg-popover",
+    stale: "border-amber-500 bg-amber-100 dark:bg-amber-900",
+    success: "border-emerald-500 bg-emerald-100 dark:bg-emerald-900",
+    failed: "border-rose-500 bg-rose-100 dark:bg-rose-900",
   };
 
   const iconClass: Record<typeof variant, string> = {
