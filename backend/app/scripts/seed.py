@@ -14,6 +14,10 @@ SEEDS = [
     ("eustx50.csv", "EUSTX50", "EuroStoxx 50", "EU"),
     ("sse50.csv", "SSE50", "SSE 50", "CN"),
     ("hsi30.csv", "HSI30", "Hang Seng top 30", "HK"),
+    # Nikkei 225 — top ~40 most-traded constituents seeded; full 225
+    # would require a scraped feed. Yahoo tickers use the .T suffix
+    # (Tokyo) so the live quote service can fetch them directly.
+    ("nikkei225.csv", "N225", "Nikkei 225 (top constituents)", "JP"),
 ]
 
 SEED_DIR = Path(__file__).resolve().parent.parent / "data" / "seed"

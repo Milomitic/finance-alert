@@ -1,0 +1,41 @@
+ticker,name,exchange,sector,industry,country,currency
+7203.T,Toyota Motor Corporation,JPX,Consumer Discretionary,Automobile Manufacturers,JP,JPY
+6758.T,Sony Group Corporation,JPX,Consumer Discretionary,Consumer Electronics,JP,JPY
+9984.T,SoftBank Group Corp.,JPX,Communication Services,Wireless Telecommunication Services,JP,JPY
+6861.T,Keyence Corporation,JPX,Information Technology,Electronic Equipment & Instruments,JP,JPY
+8035.T,Tokyo Electron Limited,JPX,Information Technology,Semiconductor Equipment,JP,JPY
+6098.T,Recruit Holdings Co. Ltd.,JPX,Industrials,Human Resource & Employment Services,JP,JPY
+8306.T,Mitsubishi UFJ Financial Group,JPX,Financials,Diversified Banks,JP,JPY
+8316.T,Sumitomo Mitsui Financial Group,JPX,Financials,Diversified Banks,JP,JPY
+8411.T,Mizuho Financial Group,JPX,Financials,Diversified Banks,JP,JPY
+9432.T,Nippon Telegraph and Telephone,JPX,Communication Services,Integrated Telecommunication Services,JP,JPY
+9433.T,KDDI Corporation,JPX,Communication Services,Wireless Telecommunication Services,JP,JPY
+9434.T,SoftBank Corp.,JPX,Communication Services,Wireless Telecommunication Services,JP,JPY
+4063.T,Shin-Etsu Chemical Co.,JPX,Materials,Specialty Chemicals,JP,JPY
+4502.T,Takeda Pharmaceutical Company,JPX,Health Care,Pharmaceuticals,JP,JPY
+4519.T,Chugai Pharmaceutical Co.,JPX,Health Care,Pharmaceuticals,JP,JPY
+4568.T,Daiichi Sankyo Company,JPX,Health Care,Pharmaceuticals,JP,JPY
+4543.T,Terumo Corporation,JPX,Health Care,Health Care Equipment,JP,JPY
+6594.T,Nidec Corporation,JPX,Industrials,Electrical Components & Equipment,JP,JPY
+6501.T,Hitachi Ltd.,JPX,Industrials,Industrial Conglomerates,JP,JPY
+6503.T,Mitsubishi Electric Corporation,JPX,Industrials,Heavy Electrical Equipment,JP,JPY
+6701.T,NEC Corporation,JPX,Information Technology,IT Consulting & Other Services,JP,JPY
+6981.T,Murata Manufacturing Co.,JPX,Information Technology,Electronic Components,JP,JPY
+6902.T,DENSO Corporation,JPX,Consumer Discretionary,Auto Parts & Equipment,JP,JPY
+7267.T,Honda Motor Co.,JPX,Consumer Discretionary,Automobile Manufacturers,JP,JPY
+7269.T,Suzuki Motor Corporation,JPX,Consumer Discretionary,Automobile Manufacturers,JP,JPY
+7270.T,Subaru Corporation,JPX,Consumer Discretionary,Automobile Manufacturers,JP,JPY
+7733.T,Olympus Corporation,JPX,Health Care,Health Care Equipment,JP,JPY
+7974.T,Nintendo Co. Ltd.,JPX,Communication Services,Interactive Home Entertainment,JP,JPY
+9983.T,Fast Retailing Co. Ltd.,JPX,Consumer Discretionary,Apparel Retail,JP,JPY
+9020.T,East Japan Railway Company,JPX,Industrials,Passenger Ground Transportation,JP,JPY
+9022.T,Central Japan Railway Company,JPX,Industrials,Passenger Ground Transportation,JP,JPY
+8001.T,Itochu Corporation,JPX,Industrials,Trading Companies & Distributors,JP,JPY
+8058.T,Mitsubishi Corporation,JPX,Industrials,Trading Companies & Distributors,JP,JPY
+8053.T,Sumitomo Corporation,JPX,Industrials,Trading Companies & Distributors,JP,JPY
+8031.T,Mitsui & Co.,JPX,Industrials,Trading Companies & Distributors,JP,JPY
+8002.T,Marubeni Corporation,JPX,Industrials,Trading Companies & Distributors,JP,JPY
+4661.T,Oriental Land Co.,JPX,Consumer Discretionary,Leisure Facilities,JP,JPY
+4901.T,Fujifilm Holdings Corporation,JPX,Information Technology,Electronic Equipment & Instruments,JP,JPY
+6367.T,Daikin Industries,JPX,Industrials,Building Products,JP,JPY
+6273.T,SMC Corporation,JPX,Industrials,Industrial Machinery & Supplies,JP,JPY
