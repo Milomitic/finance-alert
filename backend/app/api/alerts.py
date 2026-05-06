@@ -109,6 +109,7 @@ def _run_scan_in_background(stock_ids: list[int] | None) -> None:
 @router.get("", response_model=AlertListOut)
 def list_alerts(
     ticker: str | None = None,
+    q: str | None = None,
     rule_kind: str | None = None,
     date_from: date | None = None,
     date_to: date | None = None,
@@ -122,6 +123,7 @@ def list_alerts(
     items, total, has_more = alert_service.list_alerts(
         db,
         ticker=ticker,
+        q=q,
         rule_kind=rule_kind,
         date_from=date_from,
         date_to=date_to,

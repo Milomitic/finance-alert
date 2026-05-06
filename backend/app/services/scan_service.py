@@ -8,9 +8,10 @@ from typing import Any
 
 import pandas as pd
 from loguru import logger
-from sqlalchemy import or_, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.visibility import visible_country_clause
 from app.models import (
     Alert,
     OhlcvDaily,
@@ -141,18 +142,11 @@ def scan_universe(
     so the overhead is negligible.
     """
     result = ScanResult()
-    # Skip Chinese-mainland stocks entirely from alert generation. They
-    # live in the catalog only to feed dashboard breadth + Asia mood
-    # aggregation; the user doesn't want alerts for them. Mirrors the
-    # filter in `services/stock_service._apply_filter`. NULL-tolerant
-    # (`!=` is false for NULL in SQL) so test fixtures and legacy rows
-    # without a country still scan normally.
+    # Skip catalog-only countries (CN/JP/KR) from alert generation —
+    # they live in DB only to feed dashboard breadth + Asia mood.
+    # Single source of truth: `app.core.visibility`.
     stocks = list(
-        db.execute(
-            select(Stock).where(
-                or_(Stock.country.is_(None), Stock.country != "CN")
-            )
-        )
+        db.execute(select(Stock).where(visible_country_clause()))
         .scalars()
         .all()
     )

@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from sqlalchemy import distinct, func, or_, select
 from sqlalchemy.orm import Session
 
+from app.core.visibility import visible_country_clause
 from app.models import Index, Stock, StockIndex, StockScore
 
 # Allowed sort columns; whitelist guards against SQL injection / typos.
@@ -78,16 +79,12 @@ class FilterOptions:
 
 
 def _apply_filter(stmt, f: StockFilter):
-    # Hide Chinese-mainland stocks from every user-facing query (screener,
-    # autocomplete, watchlist add). They're seeded into the catalog so
-    # they contribute to the dashboard breadth row + Asia market-mood
-    # aggregation in `market_stats_service._load_metrics`, but the user
-    # explicitly opted out of trading / tracking them individually.
-    # `_load_metrics` does NOT use `_apply_filter`, so the stats
-    # pipeline still sees them. Single point of truth for the cutoff.
-    # NULL-tolerant — test fixtures and legacy rows leave `country`
-    # unset; SQL `!=` is false for NULL so we explicitly allow nulls.
-    stmt = stmt.where(or_(Stock.country.is_(None), Stock.country != "CN"))
+    # Hide catalog-only countries (CN/JP/KR) from every user-facing
+    # query. They live in the catalog only to feed dashboard breadth
+    # + Asia market-mood; the screener, search, watchlist-add, and
+    # alert generation all need to skip them. See
+    # `app/core/visibility.py` for the single source of truth.
+    stmt = stmt.where(visible_country_clause())
     if f.q:
         like = f"{f.q.lower()}%"
         sub = f"%{f.q.lower()}%"

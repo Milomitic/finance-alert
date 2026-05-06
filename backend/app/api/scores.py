@@ -12,6 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
+from app.core.visibility import visible_country_clause
 from app.models import OhlcvDaily, Stock, StockScore, User
 from app.schemas.score import (
     RiskTier,
@@ -110,6 +111,10 @@ def get_top_picks(
     q = (
         select(StockScore, Stock)
         .join(Stock, Stock.id == StockScore.stock_id)
+        # Hidden-country stocks (CN/JP/KR) should never surface in
+        # top-picks — they're catalog-only for breadth/mood. Single
+        # source of truth: `app.core.visibility`.
+        .where(visible_country_clause())
     )
     if risk is not None:
         q = q.where(StockScore.risk_tier == risk)

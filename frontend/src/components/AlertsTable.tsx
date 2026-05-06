@@ -12,6 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { TableSearchInput } from "@/components/ui/table-search-input";
 import {
   daysBetween,
   formatDateTime,
@@ -25,6 +26,10 @@ interface Props {
   onSelect: (id: number, selected: boolean) => void;
   onSelectAll: (selected: boolean) => void;
   onRowClick: (alert: Alert) => void;
+  /** Inline ticker/name search folded into the Ticker column header.
+   *  Filters server-side via the AlertListParams `q` param. */
+  q: string;
+  onQueryChange: (v: string) => void;
 }
 
 export function AlertsTable({
@@ -33,6 +38,8 @@ export function AlertsTable({
   onSelect,
   onSelectAll,
   onRowClick,
+  q,
+  onQueryChange,
 }: Props) {
   const allSelected = alerts.length > 0 && alerts.every((a) => selectedIds.has(a.id));
 
@@ -58,7 +65,23 @@ export function AlertsTable({
           <TableHead className="text-sm" title="Quando il sistema ha registrato l'alert">
             Rilevato
           </TableHead>
-          <TableHead className="text-sm">Ticker</TableHead>
+          {/* Ticker column: sortable label is just text (this table doesn't
+              support sorting) + the inline ticker/name search input that
+              replaces the standalone Ticker filter formerly in
+              AlertFilters. The search runs against ticker OR name on the
+              server (`q` param). */}
+          <TableHead className="text-sm">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="shrink-0">Ticker</span>
+              <TableSearchInput
+                value={q}
+                onChange={onQueryChange}
+                placeholder="cerca ticker o nome…"
+                ariaLabel="Filtra per ticker o nome"
+                className="flex-1 max-w-[200px]"
+              />
+            </div>
+          </TableHead>
           <TableHead className="text-sm">Nome</TableHead>
           <TableHead className="text-sm">Regola</TableHead>
           <TableHead className="text-sm" title="Direzione semantica dell'alert (rialzista / ribassista / neutra)">
@@ -69,6 +92,18 @@ export function AlertsTable({
         </TableRow>
       </TableHeader>
       <TableBody>
+        {alerts.length === 0 && (
+          <TableRow>
+            <TableCell
+              colSpan={9}
+              className="text-center text-sm text-muted-foreground py-8"
+            >
+              {q.trim()
+                ? `Nessun risultato per "${q}".`
+                : "Nessun alert con questi filtri."}
+            </TableCell>
+          </TableRow>
+        )}
         {alerts.map((a) => (
           <TableRow key={a.id} className="cursor-pointer" onClick={() => onRowClick(a)}>
             <TableCell onClick={(e) => e.stopPropagation()}>

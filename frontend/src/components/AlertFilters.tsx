@@ -1,11 +1,9 @@
-import { useEffect, useState } from "react";
 import { Filter, Search, X } from "lucide-react";
 
 import type { AlertListParams } from "@/api/alerts";
 import type { RuleKind } from "@/api/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -92,21 +90,15 @@ function FilterChip({
 }
 
 export function AlertFilters({ value, onChange }: Props) {
-  // Local mirror of the ticker input so we can debounce on blur instead of
-  // refetching on every keystroke. The blur-to-commit pattern matches what
-  // the page already does for the global search box.
-  const [tickerInput, setTickerInput] = useState(value.ticker ?? "");
-  // Keep the local mirror in sync if the parent resets filters from the
-  // outside (e.g. clear-all button) — without this the input would show
-  // stale text after a reset.
-  useEffect(() => {
-    setTickerInput(value.ticker ?? "");
-  }, [value.ticker]);
+  // The standalone Ticker text-input lived here previously; it has been
+  // folded into the AlertsTable's Stock column header so the filter
+  // sits where the user is already looking. The Ticker filter chip
+  // logic is kept (counts toward activeCount, displays as a chip) so
+  // the existing `value.ticker` URL param + CSV export still work.
 
   const status = paramsToStatus(value);
 
   const reset = () => {
-    setTickerInput("");
     onChange({ archived: false });
   };
 
@@ -114,6 +106,7 @@ export function AlertFilters({ value, onChange }: Props) {
   // is the default and not counted; "archived" counts as 1.
   const activeCount =
     (value.ticker ? 1 : 0) +
+    (value.q ? 1 : 0) +
     (value.rule_kind ? 1 : 0) +
     (status === "archived" ? 1 : 0);
 
@@ -142,36 +135,11 @@ export function AlertFilters({ value, onChange }: Props) {
           }
         />
 
-        {/* Three-column responsive grid — collapses to one column on
-            narrow viewports. `items-end` aligns the inputs (which have
-            different label heights) along their bottom edge. */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
-          <div>
-            <Label htmlFor="filter-ticker" className="text-xs uppercase tracking-wider text-muted-foreground">
-              Ticker
-            </Label>
-            <div className="relative mt-1">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-              <Input
-                id="filter-ticker"
-                placeholder="es. AAPL"
-                value={tickerInput}
-                onChange={(e) => setTickerInput(e.target.value.toUpperCase())}
-                onBlur={() =>
-                  onChange({ ...value, ticker: tickerInput || undefined })
-                }
-                onKeyDown={(e) => {
-                  // Commit on Enter for keyboard users — feels more
-                  // responsive than waiting for blur.
-                  if (e.key === "Enter") {
-                    onChange({ ...value, ticker: tickerInput || undefined });
-                  }
-                }}
-                className="pl-8"
-              />
-            </div>
-          </div>
-
+        {/* Two-column responsive grid (was three before the Ticker
+            input moved into the table header). `items-end` aligns the
+            inputs (which have different label heights) along their
+            bottom edge. */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
           <div>
             <Label className="text-xs uppercase tracking-wider text-muted-foreground">
               Regola
@@ -242,10 +210,19 @@ export function AlertFilters({ value, onChange }: Props) {
                     {value.ticker}
                   </>
                 }
-                onClear={() => {
-                  setTickerInput("");
-                  onChange({ ...value, ticker: undefined });
-                }}
+                onClear={() => onChange({ ...value, ticker: undefined })}
+                className="bg-muted text-foreground border-border"
+              />
+            )}
+            {value.q && (
+              <FilterChip
+                label={
+                  <>
+                    <Search className="h-3 w-3" />
+                    "{value.q}"
+                  </>
+                }
+                onClear={() => onChange({ ...value, q: undefined })}
                 className="bg-muted text-foreground border-border"
               />
             )}

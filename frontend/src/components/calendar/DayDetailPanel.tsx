@@ -5,7 +5,6 @@ import {
   CalendarOff,
   ChevronsUpDown,
   Landmark,
-  Search,
   X,
 } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -18,6 +17,7 @@ import type {
   RiskTier,
 } from "@/api/types";
 import { StockLogo } from "@/components/dashboard/StockLogo";
+import { TableSearchInput } from "@/components/ui/table-search-input";
 import {
   IMPORTANCE_BG,
   IMPORTANCE_LABEL,
@@ -284,19 +284,22 @@ function DayDetailContent({
                   }
                 />
                 {/* SearchBar moved inline into the EarningsTable's Stock
-                    column header — see EarningsTable for the layout. */}
-                {filteredEarnings.length === 0 && query.trim() ? (
-                  <div className="rounded-lg border border-dashed bg-muted/20 px-4 py-6 text-center text-[14.5px] text-muted-foreground">
+                    column header. Always render the table so the input
+                    in the header stays visible — the empty-state for
+                    "no results matching <query>" lives inside the table
+                    body so the user can still adjust or clear the
+                    filter without the input vanishing. */}
+                <EarningsTable
+                  rows={filteredEarnings}
+                  sort={sort}
+                  onSort={onHeaderClick}
+                  query={query}
+                  onQueryChange={setQuery}
+                />
+                {filteredEarnings.length === 0 && query.trim() && (
+                  <div className="rounded-lg border border-dashed bg-muted/20 px-4 py-3 text-center text-[13px] text-muted-foreground">
                     Nessun risultato per "{query}".
                   </div>
-                ) : (
-                  <EarningsTable
-                    rows={filteredEarnings}
-                    sort={sort}
-                    onSort={onHeaderClick}
-                    query={query}
-                    onQueryChange={setQuery}
-                  />
                 )}
               </section>
             )}
@@ -386,7 +389,9 @@ function EarningsTable({
         {/* Stock cell: the sortable label + an inline search input.
             The cell is a flex row so the input fills the remaining
             width after the label. Tab order: sort button first, then
-            input — matches reading order. */}
+            input — matches reading order. The input itself comes
+            from `<TableSearchInput>` shared with the screener and
+            alerts page so all three surfaces look identical. */}
         <div className="flex items-center gap-2 min-w-0">
           <ColHeader
             label="Stock"
@@ -395,34 +400,13 @@ function EarningsTable({
             onClick={onSort}
             align="left"
           />
-          <label className="relative flex flex-1 items-center min-w-0">
-            <Search className="absolute left-1.5 h-3 w-3 text-muted-foreground/70 pointer-events-none" />
-            <input
-              type="search"
-              value={query}
-              onChange={(e) => onQueryChange(e.target.value)}
-              placeholder="cerca ticker, nome, settore…"
-              className={cn(
-                "w-full rounded border bg-background/60 pl-6 pr-6 py-0.5",
-                // Override the header cell's uppercase + wide tracking
-                // so the input reads as plain text, not screaming caps.
-                "text-[12px] font-normal normal-case tracking-normal",
-                "placeholder:text-muted-foreground/60",
-                "focus:outline-none focus:ring-1 focus:ring-primary/40 focus:bg-background",
-              )}
-              aria-label="Filtra earnings"
-            />
-            {query && (
-              <button
-                type="button"
-                onClick={() => onQueryChange("")}
-                aria-label="Cancella filtro"
-                className="absolute right-1 inline-flex h-4 w-4 items-center justify-center rounded text-muted-foreground hover:text-foreground"
-              >
-                <X className="h-2.5 w-2.5" />
-              </button>
-            )}
-          </label>
+          <TableSearchInput
+            value={query}
+            onChange={onQueryChange}
+            placeholder="cerca ticker, nome, settore…"
+            ariaLabel="Filtra earnings"
+            className="flex-1"
+          />
         </div>
         <ColHeader
           label="Cap"

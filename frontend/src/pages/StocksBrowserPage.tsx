@@ -116,6 +116,13 @@ export default function StocksBrowserPage() {
     parsePageSize(searchParams.get("page_size")),
   );
 
+  // Inline ticker/name search query. Lives separate from FiltersState
+  // because the FiltersState contract intentionally has no q field
+  // (the navbar global search used to cover this case). Now folded
+  // into the Ticker column header — shared shape with the calendar
+  // earnings table and the alerts page.
+  const [q, setQ] = useState<string>(() => searchParams.get("q") ?? "");
+
   // Load initial state from URL once
   const [state, setState] = useState<FiltersState>(() => ({
     indexCodes: parseListParam(searchParams, "index"),
@@ -138,6 +145,7 @@ export default function StocksBrowserPage() {
   // would otherwise overshoot the result set.
   useEffect(() => {
     const sp = new URLSearchParams();
+    if (q.trim()) sp.set("q", q.trim());
     state.indexCodes.forEach((v) => sp.append("index", v));
     state.sectors.forEach((v) => sp.append("sector", v));
     state.industries.forEach((v) => sp.append("industry", v));
@@ -151,7 +159,7 @@ export default function StocksBrowserPage() {
     setSearchParams(sp, { replace: true });
     setPage(0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state, sortBy, sortDir, pageSize]);
+  }, [q, state, sortBy, sortDir, pageSize]);
 
   // Click handler: same column flips direction; new column picks a sensible
   // default (asc for text columns, desc for numeric) and resets paging.
@@ -180,6 +188,7 @@ export default function StocksBrowserPage() {
   const serverSortBy: StockSortBy = sortBy === "change_pct" ? "ticker" : sortBy;
   const serverSortDir: SortDir = sortBy === "change_pct" ? "asc" : sortDir;
   const searchQ = useStockSearch({
+    q: q.trim() || undefined,
     index: state.indexCodes.length > 0 ? state.indexCodes : undefined,
     sector: state.sectors.length > 0 ? state.sectors : undefined,
     industry: state.industries.length > 0 ? state.industries : undefined,
@@ -270,6 +279,8 @@ export default function StocksBrowserPage() {
             sortBy={sortBy}
             sortDir={sortDir}
             onSortChange={handleSortChange}
+            q={q}
+            onQueryChange={setQ}
           />
           {/* Bottom pagination — symmetric with the toolbar's. Shows count
               again since this is what the user sees after scrolling through

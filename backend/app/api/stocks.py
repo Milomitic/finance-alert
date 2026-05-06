@@ -2,7 +2,9 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import or_, select
+from sqlalchemy import select
+
+from app.core.visibility import visible_country_clause
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
@@ -120,14 +122,12 @@ def get_one(
     # canonicalizzazione in seed/catalog refresh: usiamo
     # `scalar_one_or_none()` per fail-loud se qualcuno reintroduce
     # duplicati (più sicuro di `.first()` che li nasconderebbe).
-    # Filter `country='CN'` here too so a deep link like
-    # `/stocks/600519.SS` doesn't leak the row that's hidden everywhere
-    # else; the stocks live in DB only to feed breadth/mood metrics.
-    # NULL-tolerant for test fixtures.
+    # Hidden countries (CN/JP/KR) → 404 for deep links. Single source
+    # of truth: `app.core.visibility`.
     stock = db.execute(
         select(Stock).where(
             Stock.ticker == ticker,
-            or_(Stock.country.is_(None), Stock.country != "CN"),
+            visible_country_clause(),
         )
     ).scalar_one_or_none()
     if stock is None:

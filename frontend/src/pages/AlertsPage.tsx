@@ -97,19 +97,24 @@ export default function AlertsPage() {
 
       <Card>
         <CardContent className="p-0">
-          {list.isLoading && <div className="p-6 text-sm text-muted-foreground">Caricamento…</div>}
-          {!list.isLoading && items.length === 0 && (
-            <div className="p-6 text-sm text-muted-foreground text-center">
-              Nessun alert con questi filtri.
-            </div>
-          )}
-          {items.length > 0 && (
+          {/* Always render AlertsTable — even with 0 rows — so the
+              ticker/name search input in its header stays visible and
+              the user can adjust the query that's filtering things to
+              empty. The empty-state message renders inside the tbody. */}
+          {list.isLoading ? (
+            <div className="p-6 text-sm text-muted-foreground">Caricamento…</div>
+          ) : (
             <AlertsTable
               alerts={items}
               selectedIds={selectedIds}
               onSelect={onSelect}
               onSelectAll={onSelectAll}
               onRowClick={setOpenDetail}
+              q={filters.q ?? ""}
+              onQueryChange={(v) => {
+                setPage(0);
+                setFilters({ ...filters, q: v || undefined });
+              }}
             />
           )}
         </CardContent>

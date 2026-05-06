@@ -2,7 +2,14 @@ import { api } from "./client";
 import type { Alert, AlertList, DigestResult, ScanStatusInfo, ScanStopResultInfo, UnreadCount } from "./types";
 
 export interface AlertListParams {
+  /** Exact-match ticker filter (legacy — not used by the UI anymore;
+   *  superseded by `q` for the column-header search). Kept on the
+   *  type so existing callers and CSV exports still work. */
   ticker?: string;
+  /** Substring search across ticker OR name. Folded into the AlertsTable
+   *  Stock column header so the user filters from the same place that
+   *  labels the column. */
+  q?: string;
   rule_kind?: string;
   date_from?: string; // ISO date
   date_to?: string;
@@ -15,6 +22,7 @@ export interface AlertListParams {
 function toQuery(params: AlertListParams): string {
   const sp = new URLSearchParams();
   if (params.ticker) sp.set("ticker", params.ticker);
+  if (params.q) sp.set("q", params.q);
   if (params.rule_kind) sp.set("rule_kind", params.rule_kind);
   if (params.date_from) sp.set("date_from", params.date_from);
   if (params.date_to) sp.set("date_to", params.date_to);

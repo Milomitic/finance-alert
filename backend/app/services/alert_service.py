@@ -2,7 +2,7 @@
 from datetime import UTC, date, datetime
 from typing import Any
 
-from sqlalchemy import and_, func, select, update
+from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.orm import Session
 
 from app.models import Alert, Rule, Stock
@@ -12,6 +12,7 @@ def _apply_filters(
     stmt,
     *,
     ticker: str | None = None,
+    q: str | None = None,
     rule_kind: str | None = None,
     date_from: date | None = None,
     date_to: date | None = None,
@@ -20,6 +21,17 @@ def _apply_filters(
 ):
     if ticker:
         stmt = stmt.where(func.lower(Stock.ticker) == ticker.lower())
+    # `q` is the new column-header search field — substring match on
+    # either ticker or name. Replaces the standalone Ticker filter
+    # input that the AlertFilters card used to host.
+    if q:
+        like = f"%{q.lower()}%"
+        stmt = stmt.where(
+            or_(
+                func.lower(Stock.ticker).like(like),
+                func.lower(Stock.name).like(like),
+            )
+        )
     if rule_kind:
         stmt = stmt.where(Rule.kind == rule_kind)
     if date_from:
@@ -41,6 +53,7 @@ def list_alerts(
     db: Session,
     *,
     ticker: str | None = None,
+    q: str | None = None,
     rule_kind: str | None = None,
     date_from: date | None = None,
     date_to: date | None = None,
@@ -64,6 +77,7 @@ def list_alerts(
     base = _apply_filters(
         base,
         ticker=ticker,
+        q=q,
         rule_kind=rule_kind,
         date_from=date_from,
         date_to=date_to,

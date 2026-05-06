@@ -9,6 +9,7 @@ import pandas as pd
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.visibility import is_visible_country
 from app.indicators.rsi import rsi as rsi_indicator
 from app.indicators.sma import sma as sma_indicator
 from app.models import Index, MarketSnapshot, OhlcvDaily, Stock
@@ -43,6 +44,10 @@ class StockMetrics:
     sparkline: list[float] = field(default_factory=list)  # last 30 closes for per-row UI sparklines
     change_pct_5d: float | None = None    # ~1 week (5 trading days)
     change_pct_20d: float | None = None   # ~1 month (20 trading days)
+    # ISO-2 country, used to exclude hidden countries (CN/JP/KR) from
+    # the user-facing aggregates (movers/treemap/sectors/top-picks).
+    # Default None for legacy callers / test fixtures.
+    country: str | None = None
 
 
 def compute_stock_metrics(
@@ -53,6 +58,8 @@ def compute_stock_metrics(
     index_codes: list[str],
     market_cap: float | None,
     ohlcv: pd.DataFrame,
+    *,
+    country: str | None = None,
 ) -> StockMetrics | None:
     """Compute all metrics for one stock from its OHLCV history.
 
@@ -107,6 +114,7 @@ def compute_stock_metrics(
         ticker=ticker,
         name=name,
         sector=sector,
+        country=country,
         index_codes=index_codes,
         market_cap=market_cap,
         bars_count=n,
@@ -431,6 +439,7 @@ def _load_metrics(db: Session) -> tuple[list[StockMetrics], list[tuple[str, str]
             ticker=stock.ticker,
             name=stock.name,
             sector=stock.sector,
+            country=stock.country,
             index_codes=stock_to_indices.get(stock.id, []),
             market_cap=float(stock.market_cap) if stock.market_cap is not None else None,
             ohlcv=ohlcv,
@@ -441,8 +450,19 @@ def _load_metrics(db: Session) -> tuple[list[StockMetrics], list[tuple[str, str]
 
 
 def recompute_snapshot(db: Session, *, scan_run_id: int | None = None) -> MarketSnapshot:
-    """Compute the full market snapshot and UPSERT it as id=1."""
+    """Compute the full market snapshot and UPSERT it as id=1.
+
+    Visibility split between the aggregates:
+      - `global`, `by_index`, `rsi_distribution` see ALL metrics
+        (CN/JP/KR stocks contribute to breadth + market-mood — that's
+        the whole reason they're in the catalog).
+      - `sectors`, `movers`, `treemap` filter to visible countries —
+        these aggregates produce per-stock chips/rows visible to the
+        user, so hidden countries shouldn't bubble up there.
+    See `app/core/visibility.py` for the country set.
+    """
     metrics, indices = _load_metrics(db)
+    visible_metrics = [m for m in metrics if is_visible_country(m.country)]
 
     payload = {
         "computed_at": datetime.now(UTC).isoformat(),
@@ -450,9 +470,9 @@ def recompute_snapshot(db: Session, *, scan_run_id: int | None = None) -> Market
         "global": aggregate_global(metrics),
         "by_index": aggregate_by_index(metrics, indices),
         "rsi_distribution": build_rsi_distribution(metrics, indices),
-        "sectors": aggregate_by_sector(metrics),
-        "movers": build_movers(metrics),
-        "treemap": build_treemap(metrics),
+        "sectors": aggregate_by_sector(visible_metrics),
+        "movers": build_movers(visible_metrics),
+        "treemap": build_treemap(visible_metrics),
     }
 
     snap = MarketSnapshot(

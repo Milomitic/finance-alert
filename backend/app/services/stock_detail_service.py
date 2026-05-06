@@ -6,7 +6,9 @@ from datetime import date, timedelta
 from typing import Any
 
 import pandas as pd
-from sqlalchemy import or_, select
+from sqlalchemy import select
+
+from app.core.visibility import visible_country_clause
 from sqlalchemy.orm import Session
 
 from app.indicators.bb import bollinger
@@ -244,15 +246,13 @@ def get_detail(db: Session, ticker: str, range_key: str = "1y") -> StockDetail |
     # è preferibile a `.first()` perché failuoresce se la prevenzione si
     # rompe in futuro (vale a dire: bug visibile invece di dato silenziosamente
     # arbitrario).
-    # Filter `country='CN'` so the detail page treats hidden stocks as
-    # 404 — they're catalog-only, used for breadth/mood aggregation,
-    # not for direct user navigation. Mirrors the screener filter in
-    # `services/stock_service._apply_filter`. NULL-tolerant for test
-    # fixtures and legacy rows.
+    # Filter hidden countries (CN/JP/KR) so the detail page treats
+    # those rows as 404 — catalog-only, used for breadth/mood, not
+    # for direct user navigation.
     stock = db.execute(
         select(Stock).where(
             Stock.ticker == ticker,
-            or_(Stock.country.is_(None), Stock.country != "CN"),
+            visible_country_clause(),
         )
     ).scalar_one_or_none()
     if stock is None:
