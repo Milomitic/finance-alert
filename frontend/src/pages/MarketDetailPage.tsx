@@ -72,7 +72,7 @@ export default function MarketDetailPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   // v2: default to "1d" timeframe (was "1y" range key — semantically
   // similar at the daily-resolution level, but the new vocabulary is
-  // timeframe-based: 30m/1h/4h/1d/1w/1m/all instead of 1m/3m/.../all
+  // timeframe-based: 30m/1h/1d/1w/1m/all instead of 1m/3m/.../all
   // ranges. See `services/timeframe_service`.
   const range = searchParams.get("range") ?? "1d";
   const decoded = decodeURIComponent(symbol);
@@ -248,6 +248,7 @@ export default function MarketDetailPage() {
                 key={range}
                 bars={d.bars}
                 showVolume={hasVolume}
+                timeframe={range}
               />
             </div>
           )}
@@ -255,7 +256,7 @@ export default function MarketDetailPage() {
       </Card>
 
       {/* Multi-timeframe KPI comparison — same indicators (RSI 14,
-          BB 20, SMA 20/50/200, MACD 12/26/9) computed across all 7
+          BB 20, SMA 20/50/200, MACD 12/26/9) computed across all 6
           timeframes side-by-side so the user can spot
           short-vs-long-term disagreements. */}
       <MultiTimeframeKpisCard ticker={d.symbol} kind="market" />

@@ -7,6 +7,7 @@ import {
 import type { IndicatorPoint, IndicatorSeries, OhlcvBar, PriceAlert } from "@/api/types";
 import type { IndicatorStyle } from "@/components/stock/IndicatorToggles";
 import type { RegisterChart } from "@/hooks/useChartSync";
+import { defaultVisibleBars } from "@/lib/timeframeZoom";
 
 interface Props {
   ohlcv: OhlcvBar[];
@@ -24,6 +25,9 @@ interface Props {
    *  the chart's pan/zoom propagates to the RSI / MACD sub-panels (and
    *  vice-versa) so the time axis stays anchored across the stack. */
   onReady?: RegisterChart;
+  /** Active timeframe key (30m/1h/1d/...) — drives the initial visible
+   *  range so e.g. 30m doesn't render 60 days of 30-min bars at once. */
+  timeframe?: string;
 }
 
 function dateToTime(d: string): UTCTimestamp {
@@ -39,7 +43,7 @@ function pointsToChartData(points: IndicatorPoint[] | undefined) {
 
 export function PriceChart({
   ohlcv, indicators, styles,
-  priceAlerts, horizontalDrawings = [], onChartClick, onReady,
+  priceAlerts, horizontalDrawings = [], onChartClick, onReady, timeframe,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -162,8 +166,21 @@ export function PriceChart({
         color: b.close >= b.open ? "rgba(22,163,74,0.4)" : "rgba(220,38,38,0.4)",
       })),
     );
-    chartRef.current?.timeScale().fitContent();
-  }, [ohlcv]);
+    // Initial visible window: clamp to the most recent N bars based on
+    // timeframe so the user sees a sensible "default zoom" instead of
+    // the full upstream history. `null` (e.g. timeframe=all) → fitContent.
+    const ts = chartRef.current?.timeScale();
+    if (!ts) return;
+    const n = defaultVisibleBars(timeframe);
+    if (n !== null && ohlcv.length > n) {
+      ts.setVisibleLogicalRange({
+        from: ohlcv.length - n,
+        to: ohlcv.length - 1,
+      });
+    } else {
+      ts.fitContent();
+    }
+  }, [ohlcv, timeframe]);
 
   // SMA20
   useEffect(() => {

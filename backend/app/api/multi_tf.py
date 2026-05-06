@@ -1,8 +1,8 @@
 """Multi-timeframe KPI comparison endpoints.
 
 Backs the `<MultiTimeframeKpisCard>` panel on the stock-detail and
-market-detail pages: one row per timeframe (30m / 1h / 4h / 1d / 1w
-/ 1m / all) showing the latest indicator readings + composite
+market-detail pages: one row per timeframe (30m / 1h / 1d / 1w / 1m
+/ all) showing the latest indicator readings + composite
 bullish/bearish score for that timeframe.
 
 Two endpoints share the same payload shape:

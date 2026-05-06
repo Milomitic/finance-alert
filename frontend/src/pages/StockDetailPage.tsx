@@ -40,8 +40,8 @@ export default function StockDetailPage() {
   const { ticker = "" } = useParams<{ ticker: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
   // v2 timeframe vocabulary: default to 1d (was "1y" range). Backend
-  // accepts 30m/1h/4h/1d/1w/1m/all, with legacy keys still mapped
-  // for bookmarked URLs. See `services/timeframe_service`.
+  // accepts 30m/1h/1d/1w/1m/all, with legacy keys (incl. 4h) still
+  // mapped for bookmarked URLs. See `services/timeframe_service`.
   const range = searchParams.get("range") ?? "1d";
 
   const detail = useStockDetail(ticker, range);
@@ -133,8 +133,8 @@ export default function StockDetailPage() {
 
       {/* Multi-timeframe KPI comparison — same indicator suite (RSI 14,
           BB 20, SMA 20/50/200, MACD 12/26/9) computed across 30m / 1h
-          / 4h / 1d / 1w / 1m / all. Lets the user spot
-          short-vs-long-term disagreements at a glance. */}
+          / 1d / 1w / 1m / all. Lets the user spot short-vs-long-term
+          disagreements at a glance. */}
       <MultiTimeframeKpisCard ticker={ticker} kind="stock" />
 
       {/* Four side-by-side cards: Fundamentals | Valuation+KPIs | News | Analyst.
@@ -218,6 +218,7 @@ export default function StockDetailPage() {
                   horizontalDrawings={drawings.drawings.horizontal}
                   onChartClick={handleChartClick}
                   onReady={registerChart}
+                  timeframe={range}
                 />
               </ResizableSection>
             )}

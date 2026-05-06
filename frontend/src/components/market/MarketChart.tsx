@@ -9,12 +9,16 @@ import {
 } from "lightweight-charts";
 
 import type { MarketDetailBar } from "@/hooks/useMarketDetail";
+import { defaultVisibleBars } from "@/lib/timeframeZoom";
 
 interface Props {
   bars: MarketDetailBar[];
   /** Indices/FX have no meaningful volume — pass `false` to hide
    *  the histogram. Default true. */
   showVolume?: boolean;
+  /** Active timeframe key (30m/1h/1d/...) — drives the initial visible
+   *  range so e.g. 30m doesn't render 60 days of 30-min bars at once. */
+  timeframe?: string;
 }
 
 function dateToTime(d: string): UTCTimestamp {
@@ -34,7 +38,7 @@ function dateToTime(d: string): UTCTimestamp {
  * remounts via `key={range}` to avoid the stale-fitContent dance the
  * stock chart had to work around.
  */
-export function MarketChart({ bars, showVolume = true }: Props) {
+export function MarketChart({ bars, showVolume = true, timeframe }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const candleRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
@@ -126,8 +130,21 @@ export function MarketChart({ bars, showVolume = true }: Props) {
           })),
       );
     }
-    chartRef.current?.timeScale().fitContent();
-  }, [bars, showVolume]);
+    // Initial visible window: clamp to the most recent N bars based on
+    // timeframe so the user sees a sensible "default zoom" instead of
+    // the full upstream history. `null` (e.g. timeframe=all) → fitContent.
+    const ts = chartRef.current?.timeScale();
+    if (!ts) return;
+    const n = defaultVisibleBars(timeframe);
+    if (n !== null && bars.length > n) {
+      ts.setVisibleLogicalRange({
+        from: bars.length - n,
+        to: bars.length - 1,
+      });
+    } else {
+      ts.fitContent();
+    }
+  }, [bars, showVolume, timeframe]);
 
   return <div ref={containerRef} className="h-full w-full" />;
 }

@@ -33,13 +33,17 @@ from threading import Lock
 from loguru import logger
 
 # v2 timeframe vocabulary (matches `services/timeframe_service`):
-# 30m/1h/4h are intraday (4h is 1h resampled), 1d/1w/1m are
-# daily-resolution at increasing aggregation, `all` = full history
-# at daily. Legacy keys map to the closest equivalent for old URLs.
+# 30m/1h are intraday, 1d/1w/1m are daily-resolution at increasing
+# aggregation, `all` = full history at daily. Legacy keys map to the
+# closest equivalent for old URLs.
+#
+# 4h was dropped — yfinance hourly bars start at the trading-session
+# open which doesn't divide cleanly into 4h boundaries (00/04/08/...);
+# sequential 4-bar grouping produced candles misaligned with what other
+# tools show. Use 1h for sub-daily granularity instead.
 _RANGE_TO_YF: dict[str, tuple[str, str]] = {
     "30m": ("60d",  "30m"),
     "1h":  ("730d", "1h"),
-    "4h":  ("730d", "1h"),    # post-fetch resample to 4h
     "1d":  ("max",  "1d"),
     "1w":  ("max",  "1wk"),
     "1m":  ("max",  "1mo"),
@@ -127,34 +131,6 @@ def _fetch_fresh(symbol: str, range_key: str) -> MarketDetailDC | None:
                 volume=_safe_int(row.get("Volume")),
             )
         )
-    if not bars:
-        return None
-
-    # 4h timeframe: aggregate every 4 hourly bars into one. Sequential
-    # grouping (not clock-aligned) since yfinance hourly bars start at
-    # the trading-session open which doesn't divide cleanly into
-    # 00/04/08/12/16/20.
-    if range_key == "4h":
-        out: list[OhlcvBar] = []
-        for i in range(0, len(bars), 4):
-            chunk = bars[i : i + 4]
-            if not chunk:
-                break
-            out.append(
-                OhlcvBar(
-                    date=chunk[0].date,
-                    open=chunk[0].open,
-                    high=max(b.high for b in chunk),
-                    low=min(b.low for b in chunk),
-                    close=chunk[-1].close,
-                    volume=(
-                        sum(b.volume for b in chunk if b.volume)
-                        if any(b.volume for b in chunk)
-                        else None
-                    ),
-                )
-            )
-        bars = out
     if not bars:
         return None
 

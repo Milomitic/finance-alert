@@ -20,7 +20,7 @@ interface Props {
 /* ─── MultiTimeframeKpisCard ─────────────────────────────────────────────
  *
  * Shows the same indicator suite (RSI 14, BB 20, SMA 20/50/200, MACD
- * 12/26/9) computed across 30m/1h/4h/1d/1w/1m/all timeframes. Each
+ * 12/26/9) computed across 30m/1h/1d/1w/1m/all timeframes. Each
  * timeframe is a row in a comparison table; each column is one
  * indicator's latest reading. The right-most column is a composite
  * bullish/bearish score (-3..+3) with a tinted label.

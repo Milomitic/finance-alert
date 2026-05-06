@@ -10,11 +10,13 @@ Supported timeframes:
     Key   yfinance period yfinance interval  Notes
     30m   60d             30m                yfinance hard cap = 60d
     1h    730d            1h                 ~2y of hourly bars
-    4h    730d            1h (resampled)     4-bar grouping → 4h candles
     1d    max             1d                 full history at daily
     1w    max             1wk                full history at weekly
     1m    max             1mo                full history at monthly
     all   max             1d                 alias for 1d (longest daily)
+
+(4h was dropped — yfinance hourly bars start at the trading-session
+open and don't align with 4h candle boundaries; see _INTRADAY below.)
 
 Indicator periods are intentionally **fixed** across all timeframes
 (RSI=14, BB=20, SMA 20/50/200, MACD 12/26/9). The user gets different
@@ -26,7 +28,7 @@ Fetch strategy:
 - Daily timeframes (1d, 1w, 1m, all) for catalog stocks: read from
   DB `ohlcv_daily` table, resample weekly/monthly in-memory. This
   is the fast path — no yfinance roundtrip.
-- Intraday timeframes (30m, 1h, 4h): yfinance live, with a 5-minute
+- Intraday timeframes (30m, 1h): yfinance live, with a 5-minute
   cache. Yahoo's intraday endpoint has a ~15min delay anyway, so
   cache staleness is invisible.
 - Non-catalog symbols (BTC-USD, ^GSPC, GC=F): yfinance for ALL
@@ -69,14 +71,13 @@ FIXED_MACD_SLOW = 26
 FIXED_MACD_SIGNAL = 9
 
 VALID_TIMEFRAMES: tuple[str, ...] = (
-    "30m", "1h", "4h", "1d", "1w", "1m", "all",
+    "30m", "1h", "1d", "1w", "1m", "all",
 )
 
 # yfinance (period, interval) per timeframe.
 _YF_TIMEFRAME: dict[str, tuple[str, str]] = {
     "30m": ("60d",  "30m"),
     "1h":  ("730d", "1h"),
-    "4h":  ("730d", "1h"),     # interval=1h, then resample to 4h
     "1d":  ("max",  "1d"),
     "1w":  ("max",  "1wk"),
     "1m":  ("max",  "1mo"),
@@ -85,7 +86,11 @@ _YF_TIMEFRAME: dict[str, tuple[str, str]] = {
 
 # Intraday timeframes need yfinance — DB only stores daily. Daily and
 # longer can be DB-served (with weekly/monthly resampled in-memory).
-_INTRADAY = frozenset({"30m", "1h", "4h"})
+# 4h was dropped: yfinance hourly bars start at the trading-session
+# open and don't align with traditional 4h candle boundaries, so
+# sequential 4-bar grouping produced misaligned candles vs. other
+# charting tools.
+_INTRADAY = frozenset({"30m", "1h"})
 
 # 5-min cache for intraday fetches (Yahoo intraday delay is already
 # ~15min; staleness within 5 min is invisible to the user).
@@ -201,41 +206,7 @@ def _fetch_yfinance(ticker: str, tf: str) -> list[Bar]:
             )
         )
 
-    if tf == "4h":
-        bars = _resample_to_4h(bars)
     return bars
-
-
-def _resample_to_4h(bars: list[Bar]) -> list[Bar]:
-    """Group every 4 hourly bars into one 4h bar. Doesn't try to
-    align with traditional clock-hour boundaries (00/04/08/...) —
-    the bars from yfinance start at the trading-session open
-    (US: 09:30, then 10:30, 11:30, ..., 15:30) which doesn't divide
-    cleanly. Sequential grouping is simple and produces consistent
-    candle counts — accepts the slight alignment quirk."""
-    if not bars:
-        return []
-    out: list[Bar] = []
-    i = 0
-    while i < len(bars):
-        chunk = bars[i : i + 4]
-        if not chunk:
-            break
-        agg = Bar(
-            date=chunk[0].date,
-            open=chunk[0].open,
-            high=max(b.high for b in chunk),
-            low=min(b.low for b in chunk),
-            close=chunk[-1].close,
-            volume=(
-                sum(b.volume for b in chunk if b.volume)
-                if any(b.volume for b in chunk)
-                else None
-            ),
-        )
-        out.append(agg)
-        i += 4
-    return out
 
 
 def _fetch_db_daily(db: Session, stock: Stock) -> list[Bar]:
@@ -312,7 +283,7 @@ def fetch_bars(
     """Resolve bars for `(ticker, timeframe)`.
 
     Source selection:
-      - intraday (30m/1h/4h): always yfinance, cached 5 min.
+      - intraday (30m/1h): always yfinance, cached 5 min.
       - 1d / all on a catalog stock: DB (fast).
       - 1w / 1m on a catalog stock: DB daily resampled.
       - any timeframe on a non-catalog symbol (^GSPC / BTC-USD / etc.):
@@ -418,7 +389,7 @@ def compute_bundle(bars: list[Bar]) -> IndicatorBundle:
 class TimeframeKpis:
     """Snapshot of the latest indicator readings for one timeframe.
     Used by the multi-timeframe comparison table to show RSI, MACD,
-    BB position, etc. side-by-side across 30m / 1h / 4h / 1d / 1w / 1m / all.
+    BB position, etc. side-by-side across 30m / 1h / 1d / 1w / 1m / all.
     """
     timeframe: str
     bars: int

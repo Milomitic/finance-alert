@@ -81,11 +81,17 @@ def get_market_detail(
     _user: User = Depends(get_current_user),
 ) -> MarketDetailOut:
     if range not in (
-        "30m", "1h", "4h", "1d", "1w", "1m", "all",
-        # legacy compat for old URLs/bookmarks
-        "1y", "3m", "6m", "5y",
+        "30m", "1h", "1d", "1w", "1m", "all",
+        # legacy compat for old URLs/bookmarks (4h dropped — see
+        # services/timeframe_service.py for rationale)
+        "1y", "3m", "6m", "5y", "4h",
     ):
         raise HTTPException(status_code=422, detail="invalid timeframe")
+    # Legacy 4h URL → fall through to "1h" inside market_detail_service
+    # (its _RANGE_TO_YF doesn't have 4h anymore but the service maps
+    # unknown keys to 1y; remap explicitly to keep intent).
+    if range == "4h":
+        range = "1h"
 
     meta = _LIVE_META.get(symbol)
     if meta is None:
