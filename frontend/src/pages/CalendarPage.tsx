@@ -1,4 +1,4 @@
-import { CalendarRange, AlertCircle, Info, Loader2 } from "lucide-react";
+import { CalendarRange, AlertCircle, Loader2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type { CalendarEvent, MacroImportance } from "@/api/types";
@@ -6,11 +6,9 @@ import {
   DayDetailPanel,
   FilterStrip,
   type CalendarKindFilter,
-  ImportanceDots,
   MonthGrid,
   MonthNav,
 } from "@/components/calendar";
-import { SectionTitle } from "@/components/ui/section-title";
 import { useCalendar } from "@/hooks/useCalendar";
 import { buildMonthGrid, todayISO } from "@/lib/calendarMeta";
 import { cn } from "@/lib/utils";
@@ -256,11 +254,6 @@ export default function CalendarPage() {
               Nessun evento questo mese.
             </div>
           )}
-
-          {/* Legenda stays under the calendar — but only when the panel is
-              closed, otherwise it'd compete for vertical space with the
-              richer detail surface. */}
-          {!isPanelOpen && <Legend />}
         </div>
 
         {/* Detail-panel column — sticky on lg so it stays visible while the
@@ -276,82 +269,6 @@ export default function CalendarPage() {
         )}
       </div>
     </div>
-  );
-}
-
-/* ─── Legend ────────────────────────────────────────────────────────────── */
-/* Compact reference key. Two columns (kinds + importance), each with a
- * miniature exemplar chip. Stays at the bottom of the page rather than
- * in a tooltip because the chip vocabulary is the foundation of reading
- * the grid — making it persistent reduces cognitive cost. */
-
-function Legend() {
-  return (
-    <div className="rounded-lg border bg-card/50 px-4 py-3">
-      <SectionTitle icon={Info} label="Legenda" className="mb-2" />
-      <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-[12.5px]">
-        <LegendItem
-          swatch={
-            <span className="inline-flex h-4 items-center gap-1 rounded-full border border-sky-300/80 dark:border-sky-800/60 bg-sky-100 dark:bg-sky-950/50 pl-0.5 pr-1.5">
-              <span className="inline-block h-3 w-3 rounded-full bg-white shadow-sm" />
-              <span className="text-[11px] font-bold text-sky-800 dark:text-sky-200 leading-none">
-                AAA
-              </span>
-            </span>
-          }
-          label="Earnings (pillola colorata per settore)"
-        />
-        <LegendItem
-          swatch={
-            <span className="inline-flex h-4 items-center gap-1 rounded-sm border border-rose-300/80 dark:border-rose-800/70 bg-rose-100 dark:bg-rose-950/60 px-1.5">
-              <ImportanceDots
-                importance="high"
-                size="h-1.5 w-1.5"
-                gap="gap-0.5"
-              />
-              <span className="text-[11px] font-medium text-rose-800 dark:text-rose-200 leading-none">
-                Macro
-              </span>
-            </span>
-          }
-          label="Macro (timbro con pallini di importanza)"
-        />
-        <span className="opacity-30 hidden md:inline">·</span>
-        <LegendItem
-          swatch={
-            <ImportanceDots importance="high" size="h-2 w-2" gap="gap-0.5" />
-          }
-          label="Importanza alta"
-        />
-        <LegendItem
-          swatch={
-            <ImportanceDots importance="medium" size="h-2 w-2" gap="gap-0.5" />
-          }
-          label="Media"
-        />
-        <LegendItem
-          swatch={
-            <ImportanceDots importance="low" size="h-2 w-2" gap="gap-0.5" />
-          }
-          label="Bassa"
-        />
-      </div>
-    </div>
-  );
-}
-
-function LegendItem({
-  swatch,
-  label,
-}: {
-  swatch: React.ReactNode;
-  label: string;
-}) {
-  return (
-    <span className="inline-flex items-center gap-1.5 text-muted-foreground">
-      {swatch}
-      <span>{label}</span>
-    </span>
   );
 }
 
