@@ -30,6 +30,17 @@ interface Props {
    *  Filters server-side via the AlertListParams `q` param. */
   q: string;
   onQueryChange: (v: string) => void;
+  /** Embedded mode for surfaces that show the alerts of a single
+   *  stock (e.g. the StockAlertsHistoryCard on the stock-detail page).
+   *  When true:
+   *    - The select-all + per-row checkboxes are hidden (no bulk
+   *      operations on a per-stock view).
+   *    - The Ticker column header omits the search input and renders
+   *      a plain "Ticker" label.
+   *    - The Ticker + Nome columns are dropped entirely — they would
+   *      repeat the same value on every row in this mode.
+   *  Default false (the canonical alerts-page layout). */
+  embedded?: boolean;
 }
 
 export function AlertsTable({
@@ -40,8 +51,13 @@ export function AlertsTable({
   onRowClick,
   q,
   onQueryChange,
+  embedded = false,
 }: Props) {
   const allSelected = alerts.length > 0 && alerts.every((a) => selectedIds.has(a.id));
+  // When embedded the "Ticker" column is dropped along with checkbox +
+  // Nome — the colSpan for the empty-state row needs to match the
+  // remaining column count or the message gets squeezed into one cell.
+  const colSpan = embedded ? 6 : 9;
 
   // Bumped one notch above the shared Table's default text-sm: the alert
   // listing is the page's primary content, not auxiliary metadata, so it
@@ -53,36 +69,40 @@ export function AlertsTable({
     <Table className="text-base">
       <TableHeader>
         <TableRow>
-          <TableHead className="w-8">
-            <Checkbox
-              checked={allSelected}
-              onCheckedChange={(checked) => onSelectAll(!!checked)}
-            />
-          </TableHead>
+          {!embedded && (
+            <TableHead className="w-8">
+              <Checkbox
+                checked={allSelected}
+                onCheckedChange={(checked) => onSelectAll(!!checked)}
+              />
+            </TableHead>
+          )}
           <TableHead className="text-sm" title="Data della barra di mercato in cui la regola è scattata">
             Data segnale
           </TableHead>
           <TableHead className="text-sm" title="Quando il sistema ha registrato l'alert">
             Rilevato
           </TableHead>
-          {/* Ticker column: sortable label is just text (this table doesn't
-              support sorting) + the inline ticker/name search input that
-              replaces the standalone Ticker filter formerly in
-              AlertFilters. The search runs against ticker OR name on the
-              server (`q` param). */}
-          <TableHead className="text-sm">
-            <div className="flex items-center gap-2 min-w-0">
-              <span className="shrink-0">Ticker</span>
-              <TableSearchInput
-                value={q}
-                onChange={onQueryChange}
-                placeholder="cerca ticker o nome…"
-                ariaLabel="Filtra per ticker o nome"
-                className="flex-1 max-w-[200px]"
-              />
-            </div>
-          </TableHead>
-          <TableHead className="text-sm">Nome</TableHead>
+          {!embedded && (
+            <>
+              {/* Ticker column: sortable label is just text (this table
+                  doesn't support sorting) + the inline ticker/name
+                  search input. */}
+              <TableHead className="text-sm">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="shrink-0">Ticker</span>
+                  <TableSearchInput
+                    value={q}
+                    onChange={onQueryChange}
+                    placeholder="cerca ticker o nome…"
+                    ariaLabel="Filtra per ticker o nome"
+                    className="flex-1 max-w-[200px]"
+                  />
+                </div>
+              </TableHead>
+              <TableHead className="text-sm">Nome</TableHead>
+            </>
+          )}
           <TableHead className="text-sm">Regola</TableHead>
           <TableHead className="text-sm" title="Direzione semantica dell'alert (rialzista / ribassista / neutra)">
             Tono
@@ -95,7 +115,7 @@ export function AlertsTable({
         {alerts.length === 0 && (
           <TableRow>
             <TableCell
-              colSpan={9}
+              colSpan={colSpan}
               className="text-center text-sm text-muted-foreground py-8"
             >
               {q.trim()
@@ -106,12 +126,14 @@ export function AlertsTable({
         )}
         {alerts.map((a) => (
           <TableRow key={a.id} className="cursor-pointer" onClick={() => onRowClick(a)}>
-            <TableCell onClick={(e) => e.stopPropagation()}>
-              <Checkbox
-                checked={selectedIds.has(a.id)}
-                onCheckedChange={(c) => onSelect(a.id, !!c)}
-              />
-            </TableCell>
+            {!embedded && (
+              <TableCell onClick={(e) => e.stopPropagation()}>
+                <Checkbox
+                  checked={selectedIds.has(a.id)}
+                  onCheckedChange={(c) => onSelect(a.id, !!c)}
+                />
+              </TableCell>
+            )}
             {/* Signal date: when the market actually crossed the rule's
                 threshold. Bold + tabular so it reads as the primary date —
                 this is the one that matters for "when did the indicator
@@ -154,28 +176,30 @@ export function AlertsTable({
                 );
               })()}
             </TableCell>
-            {/* Ticker cell: stopPropagation so the click navigates to the
-                stock detail page instead of bubbling up to the row's onClick
-                (which opens the alert popup). The user's mental model is:
-                "ticker is always a deep link to that stock, no matter where
-                I see it." */}
-            <TableCell className="font-semibold">
-              {a.ticker ? (
-                <Link
-                  to={`/stocks/${encodeURIComponent(a.ticker)}`}
-                  onClick={(e) => e.stopPropagation()}
-                  className="hover:underline"
-                  title={`Vai al dettaglio di ${a.ticker}`}
-                >
-                  {a.ticker}
-                </Link>
-              ) : (
-                "—"
-              )}
-            </TableCell>
-            <TableCell className="text-sm text-muted-foreground truncate max-w-[240px]" title={a.name ?? ""}>
-              {a.name ?? "—"}
-            </TableCell>
+            {!embedded && (
+              <>
+                {/* Ticker cell: stopPropagation so the click navigates to
+                    the stock detail page instead of bubbling up to the
+                    row's onClick (which opens the alert popup). */}
+                <TableCell className="font-semibold">
+                  {a.ticker ? (
+                    <Link
+                      to={`/stocks/${encodeURIComponent(a.ticker)}`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="hover:underline"
+                      title={`Vai al dettaglio di ${a.ticker}`}
+                    >
+                      {a.ticker}
+                    </Link>
+                  ) : (
+                    "—"
+                  )}
+                </TableCell>
+                <TableCell className="text-sm text-muted-foreground truncate max-w-[240px]" title={a.name ?? ""}>
+                  {a.name ?? "—"}
+                </TableCell>
+              </>
+            )}
             <TableCell>
               <AlertKindChip alert={a} />
             </TableCell>

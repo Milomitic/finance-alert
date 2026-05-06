@@ -1,55 +1,15 @@
-import { Clock, History, TrendingDown, TrendingUp } from "lucide-react";
+import { History, TrendingDown, TrendingUp } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import type { Alert } from "@/api/types";
 import { AlertDetailDialog } from "@/components/AlertDetailDialog";
-import { AlertKindChip, AlertToneChip } from "@/components/AlertChips";
+import { AlertsTable } from "@/components/AlertsTable";
 import { Card, CardContent } from "@/components/ui/card";
 import { SectionTitle } from "@/components/ui/section-title";
-import { isDelayedDetection } from "@/lib/alertDates";
-import {
-  TONE_BORDER_LEFT,
-  getAlertMeta,
-  getSnapshotHeadline,
-} from "@/lib/alertMeta";
-import { cn } from "@/lib/utils";
+import { getAlertMeta } from "@/lib/alertMeta";
 
 interface Props {
   alerts: Alert[];
-}
-
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleString("it-IT", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-/** Format an ISO date "YYYY-MM-DD" as a Italian short date (day + month). */
-function formatSignalDate(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString("it-IT", {
-    day: "2-digit",
-    month: "short",
-    year: "2-digit",
-  });
-}
-
-function formatRelative(iso: string): string {
-  const ts = new Date(iso).getTime();
-  const diffMin = (Date.now() - ts) / (1000 * 60);
-  if (diffMin < 60) return `${Math.max(1, Math.round(diffMin))}m fa`;
-  const diffH = diffMin / 60;
-  if (diffH < 24) return `${Math.round(diffH)}h fa`;
-  const diffD = diffH / 24;
-  if (diffD < 30) return `${Math.round(diffD)}g fa`;
-  const diffMo = diffD / 30;
-  if (diffMo < 12) return `${Math.round(diffMo)}mes fa`;
-  return `${Math.round(diffMo / 12)}a fa`;
 }
 
 /* ─── Aggregate stats (header strip) ────────────────────────────────────── */
@@ -78,81 +38,24 @@ function computeStats(alerts: Alert[]): AlertStats {
   return { total: alerts.length, bullish, bearish, last30d };
 }
 
-/* ─── Single-row visual ─────────────────────────────────────────────────── */
-/* Layout mirrors a single AlertsTable row, just adapted to the narrower
- * card width: kind chip + tone chip + price + date column, all from the
- * shared `AlertChips` module so the visual exactly matches the alerts
- * page. */
-
-function AlertRow({ alert, onClick }: { alert: Alert; onClick: () => void }) {
-  const meta = getAlertMeta(alert);
-  const delayed = isDelayedDetection(alert.triggered_at, alert.signal_date);
-  const headline = getSnapshotHeadline(alert.rule_kind, alert.snapshot ?? null);
-
-  return (
-    <li>
-      <button
-        type="button"
-        onClick={onClick}
-        className={cn(
-          "w-full text-left rounded-md border-l-2 px-3 py-2 transition-colors",
-          "hover:bg-accent/40 cursor-pointer",
-          TONE_BORDER_LEFT[meta.tone],
-        )}
-      >
-        <div className="flex items-start gap-3 flex-wrap">
-          {/* LEFT: identity stack — same chips the alerts page uses
-              (AlertKindChip + AlertToneChip) so the visual is identical
-              across surfaces. Snapshot headline below as a subtle
-              subtitle. */}
-          <div className="flex flex-col gap-1 min-w-0 flex-1">
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <AlertKindChip alert={alert} />
-              <AlertToneChip alert={alert} />
-              <span className="text-sm tabular-nums font-semibold ml-1">
-                ${alert.trigger_price.toFixed(2)}
-              </span>
-            </div>
-            {headline && (
-              <span
-                className="text-[11px] text-muted-foreground tabular-nums truncate"
-                title={headline}
-              >
-                {headline}
-              </span>
-            )}
-          </div>
-
-          {/* RIGHT: date column — signal_date primary, detection secondary.
-              Orange clock chip when the system detected the signal ≥1 day
-              late. Falls back to triggered_at as primary for legacy rows
-              that lack signal_date. */}
-          <span className="text-xs text-muted-foreground tabular-nums shrink-0 flex flex-col items-end pt-0.5">
-            <span className="font-semibold text-foreground/85 inline-flex items-center gap-1">
-              {delayed && (
-                <Clock
-                  className="h-3 w-3 text-amber-600 dark:text-amber-400"
-                  aria-label="Rilevazione in ritardo"
-                />
-              )}
-              {alert.signal_date
-                ? formatSignalDate(alert.signal_date)
-                : formatRelative(alert.triggered_at)}
-            </span>
-            <span className="opacity-70">
-              {alert.signal_date
-                ? `rilevato ${formatRelative(alert.triggered_at)}`
-                : formatDate(alert.triggered_at)}
-            </span>
-          </span>
-        </div>
-      </button>
-    </li>
-  );
-}
-
-/* ─── Card root ─────────────────────────────────────────────────────────── */
-
+/* ─── Card root ─────────────────────────────────────────────────────────── *
+ *
+ * Per user feedback, this card now renders the canonical AlertsTable
+ * (in `embedded` mode) instead of a custom button-card-per-alert
+ * layout. That gives the stock-detail page the same column structure,
+ * date columns, kind/tone chips, archive flag, and price formatting
+ * as the alerts page — identical info, identical visuals.
+ *
+ * Embedded-mode adjustments (see AlertsTable):
+ *   - No checkbox column (no bulk archive on a per-stock view).
+ *   - No search input in the Ticker column header (one stock = one
+ *     possible value).
+ *   - Ticker + Nome columns dropped — they'd just repeat the same
+ *     value on every row.
+ *
+ * The aggregate stats strip (bull/bear/30d counts) stays at the top
+ * since it's distinct context that the alerts page doesn't show.
+ */
 export function StockAlertsHistoryCard({ alerts }: Props) {
   const [open, setOpen] = useState<Alert | null>(null);
 
@@ -167,11 +70,15 @@ export function StockAlertsHistoryCard({ alerts }: Props) {
   );
   const stats = useMemo(() => computeStats(sorted), [sorted]);
 
+  // No-op handlers for the bulk-action props — embedded mode hides
+  // the checkbox column, so these are never invoked in practice.
+  const noopSelect = () => {};
+
   return (
     <>
       <Card>
         <CardContent className="p-4">
-          {/* Header strip: title + aggregate stats (bull/bear/last30d/unread) */}
+          {/* Header strip: title + aggregate stats (bull/bear/last30d) */}
           <SectionTitle
             icon={History}
             label={`Alert storici per questo ticker (${stats.total})`}
@@ -220,14 +127,21 @@ export function StockAlertsHistoryCard({ alerts }: Props) {
               </div>
             </div>
           ) : (
-            // Cap at ~14 rows visible (≈ 60px each); scroll for the rest.
-            // Full list is preserved (no slice/+N truncation) since this
-            // is the canonical history view for the ticker.
-            <ul className="space-y-1 max-h-[420px] overflow-y-auto pr-1 -mr-1">
-              {sorted.map((a) => (
-                <AlertRow key={a.id} alert={a} onClick={() => setOpen(a)} />
-              ))}
-            </ul>
+            // Cap visible rows to a reasonable height; scroll for the rest.
+            // Full list preserved (no slice) since this is the canonical
+            // history view for the ticker.
+            <div className="max-h-[460px] overflow-y-auto -mx-4 px-4">
+              <AlertsTable
+                embedded
+                alerts={sorted}
+                selectedIds={new Set()}
+                onSelect={noopSelect}
+                onSelectAll={noopSelect}
+                onRowClick={setOpen}
+                q=""
+                onQueryChange={noopSelect}
+              />
+            </div>
           )}
         </CardContent>
       </Card>
