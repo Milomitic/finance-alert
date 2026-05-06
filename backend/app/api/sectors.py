@@ -129,7 +129,7 @@ def _build_stock_row(stock, score):
         dy = _normalise_div_yield(m.dividend_yield)
     return SectorStockRow(
         ticker=stock.ticker,
-        name=stock.company_name,
+        name=stock.name,
         country=stock.country,
         market_cap=float(stock.market_cap) if stock.market_cap else None,
         composite=score.composite if score else None,
