@@ -107,7 +107,13 @@ def test_alerts_by_day_groups_by_date_and_kind(db: Session) -> None:
     _make_alert(db, stock, rule, age_hours=26)
     points = get_alerts_by_day(db, days=30)
     assert all(isinstance(p, AlertsByDayPoint) for p in points)
-    today_iso = (date.today())
+    # Use UTC date — alerts are seeded with UTC triggered_at and the
+    # service buckets by UTC. Using date.today() (local) makes this
+    # test flaky between local midnight and UTC midnight (e.g. when
+    # local is 00:30 but UTC is still 22:30 of the previous day, the
+    # alerts seeded "2-4 hours ago" sit on UTC yesterday, not local
+    # today).
+    today_iso = datetime.now(timezone.utc).date()
     yesterday_iso = today_iso - timedelta(days=1)
     by_date = {p.date: p for p in points}
     assert by_date[today_iso].count == 3
@@ -130,7 +136,9 @@ def test_alerts_by_day_excludes_archived(db: Session) -> None:
     _make_alert(db, stock, rule, age_hours=2)
     _make_alert(db, stock, rule, age_hours=2, archived=True)
     points = get_alerts_by_day(db, days=1)
-    today_pt = next(p for p in points if p.date == date.today())
+    # UTC date for parity with how triggered_at + the service bucket.
+    # See the comment in test_alerts_by_day_groups_by_date_and_kind.
+    today_pt = next(p for p in points if p.date == datetime.now(timezone.utc).date())
     assert today_pt.count == 1
 
 

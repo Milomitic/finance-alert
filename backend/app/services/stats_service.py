@@ -117,8 +117,14 @@ def get_alerts_by_day(db: Session, days: int = 30) -> list[AlertsByDayPoint]:
 
     Days with no alerts are included with count=0 and by_kind={}, so the chart
     is continuous (no gaps).
+
+    Date semantics: UTC throughout. We group by `func.date(triggered_at)`
+    which SQLite/Postgres compute on the stored UTC timestamp, so the
+    "today" bucket must also be UTC. Mixing UTC bucketing with a local
+    `date.today()` boundary causes the chart to drop alerts during the
+    1-2h window after local midnight (when UTC is still "yesterday").
     """
-    today = date.today()
+    today = datetime.now(timezone.utc).date()
     start_day = today - timedelta(days=days - 1)
     cutoff_dt = datetime.combine(start_day, datetime.min.time(), tzinfo=timezone.utc)
 
