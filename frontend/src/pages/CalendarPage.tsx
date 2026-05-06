@@ -146,10 +146,12 @@ export default function CalendarPage() {
   const isPanelOpen = selectedDate !== null;
 
   return (
-    // Container widened from 80rem → 100rem so the calendar gets more room,
-    // especially with the new two-column event chips per cell. When the
-    // panel is open, the two-pane layout naturally splits this space.
-    <div className="space-y-5 max-w-[100rem] mx-auto">
+    // Full-bleed: the calendar fills the entire available width of
+    // <main>, both single-column and split (calendar + day-detail
+    // panel). Was capped at 100rem (1600px) which left visible empty
+    // gutters on wider monitors and made the split layout feel
+    // cramped. Layout's `<main>` already supplies the page padding.
+    <div className="space-y-5 w-full">
       {/* ── Page header — typographic, editorial. ───────────────────── */}
       <header className="space-y-1">
         <div className="flex items-center gap-2 text-[10px] font-mono font-semibold uppercase tracking-[0.22em] text-muted-foreground">
