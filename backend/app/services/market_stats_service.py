@@ -404,8 +404,18 @@ def _load_metrics(db: Session) -> tuple[list[StockMetrics], list[tuple[str, str]
     for sid, code in si_rows:
         stock_to_indices[sid].append(code)
 
+    # Only include indices that actually have stock memberships. Without
+    # this filter, an Index row whose stocks were deleted (e.g. CSI300
+    # after the Chinese-stocks cleanup) still produces an empty breadth
+    # row with all-zero / null cells. Filtering at the SQL boundary
+    # keeps the breadth payload clean — and also aligns with what the
+    # user expects to see on the dashboard ("breadth per indice" =
+    # "breadth where there are stocks to compute breadth for").
     indices_rows = db.execute(
-        select(Index.code, Index.name).order_by(Index.code)
+        select(Index.code, Index.name)
+        .join(StockIndex, StockIndex.index_id == Index.id)
+        .group_by(Index.id)
+        .order_by(Index.code)
     ).all()
     indices = [(c, n) for c, n in indices_rows]
 

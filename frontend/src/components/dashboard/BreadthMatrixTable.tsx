@@ -121,7 +121,14 @@ function SortableHeader({ column, label, align = "right", help, state, onClick }
 }
 
 export function BreadthMatrixTable({ data }: Props) {
-  const [sort, setSort] = useState<SortState>({ key: null, dir: null });
+  // Default: sort by total market cap desc — so the headline indices
+  // (S&P 500, Nasdaq, etc.) sit at the top regardless of alphabetical
+  // code order. Click any header to override; clicking the same
+  // header twice cycles through desc -> asc -> default.
+  const [sort, setSort] = useState<SortState>({
+    key: "total_market_cap",
+    dir: "desc",
+  });
 
   const handleSort = (col: SortKey) => {
     if (sort.key !== col) {
