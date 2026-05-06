@@ -126,3 +126,33 @@ export function getStockFlagCode(
   if (trimmed.toUpperCase() === "EU") return "eu";
   return "";
 }
+
+/**
+ * Ticker-only flag lookup — for callsites where we don't have an
+ * accompanying `country` field (search bar's "Visti di recente" / "Top
+ * movers" lists, both of which carry only the ticker string).
+ *
+ * Behaviour:
+ *  - Recognized exchange suffix (`.MI`, `.T`, `.L`, `.SS`, …) → the
+ *    suffix's flag.
+ *  - Caret-prefixed (`^GSPC`) or dash-form (`BTC-USD`) tickers → "" so
+ *    the caller skips the flag rather than picking a misleading one.
+ *  - Plain alphanumeric tickers with no suffix → "us". 99%+ of the
+ *    catalog's bare tickers are US listings (NASDAQ/NYSE), and the
+ *    user explicitly wants US flags here too — assuming-US is the
+ *    correct default and the rare miss (a non-US bare ticker we don't
+ *    seed) is innocuous.
+ */
+export function getFlagFromTicker(ticker: string | null | undefined): string {
+  if (!ticker) return "";
+  const t = ticker.trim();
+  if (!t) return "";
+  // Index/crypto-style symbols — neither carry a clear country signal.
+  if (t.startsWith("^") || t.includes("-")) return "";
+  if (t.includes(".")) {
+    const suffix = t.split(".").pop()?.toUpperCase() ?? "";
+    return SUFFIX_TO_FLAG[suffix] ?? "";
+  }
+  // Bare alphanumeric → US assumption (see docstring).
+  return "us";
+}

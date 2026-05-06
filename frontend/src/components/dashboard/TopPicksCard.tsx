@@ -75,10 +75,15 @@ function ScoreDots({ composite }: { composite: number }) {
 function PickRow({ item }: { item: TopPickItem }) {
   const compTone = scoreColor(item.composite);
   return (
-    <li className="flex-1 min-h-0 flex border-b border-border/40 last:border-b-0">
+    // `min-w-0` on both the <li> and the inner <Link> is load-bearing
+    // — without them, flexbox's default `min-width: auto` lets the
+    // (long) name span override its own truncate and overflow into
+    // the next column. CLAUDE.md: same pattern as the LiveAssetsPanel
+    // row guard.
+    <li className="flex-1 min-h-0 min-w-0 flex border-b border-border/40 last:border-b-0">
       <Link
         to={`/stocks/${encodeURIComponent(item.ticker)}`}
-        className="flex-1 flex items-center gap-2 px-3 py-1 hover:bg-accent/30 transition-colors leading-tight"
+        className="flex-1 min-w-0 flex items-center gap-2 px-3 py-1 hover:bg-accent/30 transition-colors leading-tight"
       >
         <span className="text-[14px] font-bold tabular-nums shrink-0">
           {item.ticker}
@@ -89,10 +94,18 @@ function PickRow({ item }: { item: TopPickItem }) {
         >
           {item.name}
         </span>
-        <ScoreDots composite={item.composite} />
+        {/* Right-side meta cluster — fixed widths so dots / chip /
+            score / change line up vertically across rows in the same
+            column. The chip's "CONSERVATIVE" was the longest variant
+            and used to dictate the row's right edge by itself; the
+            fixed `w-[28px]` for dots + `w-[92px]` for the chip
+            decouples row alignment from the per-row text width. */}
+        <span className="shrink-0 w-[34px] flex justify-center">
+          <ScoreDots composite={item.composite} />
+        </span>
         <span
           className={cn(
-            "px-1.5 py-px rounded border text-[10px] uppercase tracking-wider font-semibold shrink-0",
+            "shrink-0 w-[92px] text-center px-1 py-px rounded border text-[10px] uppercase tracking-wider font-semibold",
             RISK_TONE[item.risk_tier],
           )}
         >
@@ -100,7 +113,7 @@ function PickRow({ item }: { item: TopPickItem }) {
         </span>
         <span
           className={cn(
-            "text-[14px] font-bold tabular-nums shrink-0 w-[34px] text-right",
+            "text-[14px] font-bold tabular-nums shrink-0 w-[36px] text-right",
             compTone,
           )}
           title={scoreLabel(item.composite)}

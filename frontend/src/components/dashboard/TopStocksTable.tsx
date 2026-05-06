@@ -51,9 +51,10 @@ export function TopStocksTable({ data }: Props) {
 
   return (
     <div>
-      <div className="px-4 pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-        Top 10 stock (30 giorni)
-      </div>
+      {/* Was: a "Top 10 stock (30 giorni)" caption above the table —
+          dropped per user feedback. The parent column header
+          ("TOP STOCKS") in AlertsCompactPanel already conveys this,
+          and a second subtitle just stole vertical space. */}
       <Table>
         <TableHeader>
           <TableRow>

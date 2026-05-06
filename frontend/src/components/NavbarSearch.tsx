@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { useMarketSummary } from "@/hooks/useMarketSummary";
 import { useStockSearch } from "@/hooks/useStockSearch";
 import { getIndexMeta } from "@/lib/indexMeta";
-import { getStockFlagCode } from "@/lib/stockMeta";
+import { getFlagFromTicker, getStockFlagCode } from "@/lib/stockMeta";
 import { cn } from "@/lib/utils";
 
 // ── localStorage recent searches ──────────────────────────
@@ -293,6 +293,10 @@ export function NavbarSearch() {
       change > 0 ? "text-green-600 dark:text-green-400" :
       change < 0 ? "text-red-600 dark:text-red-400" : "";
     const Icon = kind === "recent" ? History : TrendingUp;
+    // Recent + top-movers don't carry a Stock object (only the ticker
+    // string), so country comes from the ticker suffix. Bare tickers
+    // default to "us" — see `getFlagFromTicker` docstring.
+    const flag = getFlagFromTicker(ticker);
     return (
       <button
         type="button"
@@ -306,6 +310,17 @@ export function NavbarSearch() {
         <Icon className="h-3.5 w-3.5 text-muted-foreground/60 shrink-0" />
         <StockLogo ticker={ticker} size="sm" />
         <span className="font-bold text-sm tabular-nums">{ticker}</span>
+        {flag && (
+          <img
+            src={`/flags/${flag}.svg`}
+            alt={flag}
+            width={16}
+            height={11}
+            style={{ width: "16px", height: "11px", objectFit: "cover" }}
+            className="rounded-[1px] shadow-sm shrink-0"
+            aria-hidden
+          />
+        )}
         {change != null && (
           <span className={cn("ml-auto text-sm tabular-nums font-semibold", changeColor)}>
             {change >= 0 ? "+" : ""}{change.toFixed(2)}%

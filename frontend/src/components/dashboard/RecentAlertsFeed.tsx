@@ -4,12 +4,6 @@ import { Link } from "react-router-dom";
 
 import type { Alert } from "@/api/types";
 import { AlertDetailDialog } from "@/components/AlertDetailDialog";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { isDelayedDetection } from "@/lib/alertDates";
 import { TONE_BG, getAlertKindMeta } from "@/lib/alertMeta";
 import { cn } from "@/lib/utils";
@@ -18,22 +12,25 @@ interface Props {
   alerts: Alert[];
 }
 
+/**
+ * Was: wrapped in a Card with an "Alert recenti" CardHeader. The
+ * surrounding AlertsCompactPanel column already has its own "FEED"
+ * header so the inner Card produced a redundant double-frame and a
+ * duplicated subtitle. Now renders raw — caller's column header is
+ * the only label.
+ */
 export function RecentAlertsFeed({ alerts }: Props) {
   const [openDetail, setOpenDetail] = useState<Alert | null>(null);
 
   return (
     <>
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Alert recenti</CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          {alerts.length === 0 ? (
-            <div className="p-6 text-center text-sm text-muted-foreground">
-              Nessun alert recente. Esegui uno scan da{" "}
-              <span className="underline">/alerts</span> per generarli.
-            </div>
-          ) : (
+      <div>
+        {alerts.length === 0 ? (
+          <div className="p-6 text-center text-sm text-muted-foreground">
+            Nessun alert recente. Esegui uno scan da{" "}
+            <span className="underline">/alerts</span> per generarli.
+          </div>
+        ) : (
             <ul className="divide-y">
               {alerts.map((a) => {
                 const meta = getAlertKindMeta(a.rule_kind);
@@ -118,8 +115,7 @@ export function RecentAlertsFeed({ alerts }: Props) {
               })}
             </ul>
           )}
-        </CardContent>
-      </Card>
+      </div>
       <AlertDetailDialog alert={openDetail} onClose={() => setOpenDetail(null)} />
     </>
   );
