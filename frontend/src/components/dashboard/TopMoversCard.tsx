@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { useMemo, useState } from "react";
 
 import type { Mover, MoversBlock } from "@/api/types";
-import { StockLogo } from "@/components/dashboard/StockLogo";
+import { StockIdentity } from "@/components/dashboard/StockIdentity";
 import { Card, CardContent } from "@/components/ui/card";
 import { SectionTitle } from "@/components/ui/section-title";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -54,15 +54,9 @@ function MoverRow({ m, field, kind }: {
     <li className="border-b border-border/40 last:border-b-0">
       <Link
         to={`/stocks/${encodeURIComponent(m.ticker)}`}
-        className="flex items-center gap-2 px-3 py-1.5 hover:bg-accent/30 transition-colors"
+        className="flex items-center gap-2 px-3 py-1.5 hover:bg-accent/30 transition-colors min-w-0"
       >
-        <StockLogo ticker={m.ticker} size="xs" />
-        <div className="min-w-0 flex-1">
-          <div className="text-sm font-bold tabular-nums leading-tight">{m.ticker}</div>
-          {m.name && (
-            <div className="text-[10px] text-muted-foreground truncate leading-tight" title={m.name}>{m.name}</div>
-          )}
-        </div>
+        <StockIdentity ticker={m.ticker} name={m.name} />
         <span className={cn("text-sm font-semibold tabular-nums shrink-0", color)}>
           {v != null ? `${v >= 0 ? "+" : ""}${v.toFixed(2)}%` : "—"}
         </span>

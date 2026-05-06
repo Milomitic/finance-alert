@@ -2,6 +2,7 @@ import { Trophy } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import type { RiskTier, TopPickItem } from "@/api/types";
+import { StockIdentity } from "@/components/dashboard/StockIdentity";
 import { Card, CardContent } from "@/components/ui/card";
 import { SectionTitle } from "@/components/ui/section-title";
 import { useTopPicks } from "@/hooks/useTopPicks";
@@ -28,21 +29,6 @@ const COLUMNS: { key: ColumnKey; label: string }[] = [
 
 const ROW_LIMIT = 8;
 
-/* ─── Helpers ───────────────────────────────────────────────────────────── */
-
-function fmtChange(v: number | null | undefined): string {
-  if (v == null || !Number.isFinite(v)) return "—";
-  const sign = v >= 0 ? "+" : "";
-  return `${sign}${v.toFixed(2)}%`;
-}
-
-function changeColor(v: number | null | undefined): string {
-  if (v == null || !Number.isFinite(v)) return "text-muted-foreground";
-  if (v > 0) return "text-emerald-600 dark:text-emerald-400";
-  if (v < 0) return "text-rose-600 dark:text-rose-400";
-  return "text-muted-foreground";
-}
-
 /* ─── Inline score-strength dots ────────────────────────────────────────── */
 /* Five dots tinted by composite tone. Replaces the previous SparkBars
  * (5 thin bars on a separate line) with a single-line element so
@@ -66,40 +52,31 @@ function ScoreDots({ composite }: { composite: number }) {
 /* ─── Row + skeleton ────────────────────────────────────────────────────── */
 
 /**
- * Single-line row: ticker, name, score-dots, risk chip, composite, change%.
- * Was previously two stacked lines; collapsed to one line so the rate +
- * visual eval live alongside ticker and score. Compact-mode (name
- * hidden) was dropped when "Tutti" went away — three columns now have
- * enough width that the full name fits everywhere.
+ * Single-line row: identity (logo + ticker + name) + score dots + risk
+ * chip + composite. The change% column was dropped — the user wants
+ * Top Picks to focus on the score signal, not today's price drift.
+ *
+ * Identity block uses the shared `<StockIdentity>` so it matches Top
+ * Movers / 52w & Volume / Alerts (Top stocks + Feed) exactly.
  */
 function PickRow({ item }: { item: TopPickItem }) {
   const compTone = scoreColor(item.composite);
   return (
     // `min-w-0` on both the <li> and the inner <Link> is load-bearing
     // — without them, flexbox's default `min-width: auto` lets the
-    // (long) name span override its own truncate and overflow into
-    // the next column. CLAUDE.md: same pattern as the LiveAssetsPanel
-    // row guard.
+    // long name override its truncate and overflow into the next
+    // column. CLAUDE.md: same pattern as the LiveAssetsPanel row guard.
     <li className="flex-1 min-h-0 min-w-0 flex border-b border-border/40 last:border-b-0">
       <Link
         to={`/stocks/${encodeURIComponent(item.ticker)}`}
-        className="flex-1 min-w-0 flex items-center gap-2 px-3 py-1 hover:bg-accent/30 transition-colors leading-tight"
+        className="flex-1 min-w-0 flex items-center gap-2 px-3 py-1.5 hover:bg-accent/30 transition-colors"
       >
-        <span className="text-[14px] font-bold tabular-nums shrink-0">
-          {item.ticker}
-        </span>
-        <span
-          className="text-[12px] text-muted-foreground truncate flex-1 min-w-0"
-          title={item.name}
-        >
-          {item.name}
-        </span>
+        <StockIdentity ticker={item.ticker} name={item.name} />
         {/* Right-side meta cluster — fixed widths so dots / chip /
-            score / change line up vertically across rows in the same
-            column. The chip's "CONSERVATIVE" was the longest variant
-            and used to dictate the row's right edge by itself; the
-            fixed `w-[28px]` for dots + `w-[92px]` for the chip
-            decouples row alignment from the per-row text width. */}
+            score line up vertically across rows in the same column.
+            "CONSERVATIVE" used to dictate the row's right edge with
+            its variable text width; fixed slots decouple alignment
+            from per-row text length. */}
         <span className="shrink-0 w-[34px] flex justify-center">
           <ScoreDots composite={item.composite} />
         </span>
@@ -120,14 +97,6 @@ function PickRow({ item }: { item: TopPickItem }) {
         >
           {item.composite.toFixed(1)}
         </span>
-        <span
-          className={cn(
-            "text-[12px] font-semibold tabular-nums shrink-0 w-[52px] text-right",
-            changeColor(item.change_pct),
-          )}
-        >
-          {fmtChange(item.change_pct)}
-        </span>
       </Link>
     </li>
   );
@@ -137,12 +106,14 @@ function RowSkeleton() {
   return (
     <li className="border-b border-border/40 last:border-b-0 px-3 py-1.5">
       <div className="flex items-center gap-2">
-        <div className="h-3.5 w-12 rounded bg-muted/60 animate-pulse" />
-        <div className="h-3 flex-1 rounded bg-muted/40 animate-pulse" />
+        <div className="h-7 w-7 rounded-full bg-muted/60 animate-pulse" />
+        <div className="flex-1 space-y-1">
+          <div className="h-3.5 w-14 rounded bg-muted/60 animate-pulse" />
+          <div className="h-2.5 w-24 rounded bg-muted/40 animate-pulse" />
+        </div>
         <div className="h-2.5 w-8 rounded bg-muted/40 animate-pulse" />
         <div className="h-3.5 w-16 rounded bg-muted/40 animate-pulse" />
         <div className="h-3.5 w-9 rounded bg-muted/60 animate-pulse" />
-        <div className="h-3.5 w-12 rounded bg-muted/40 animate-pulse" />
       </div>
     </li>
   );

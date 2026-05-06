@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 import type { Mover, MoversBlock, VolumeSpike } from "@/api/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { SectionTitle } from "@/components/ui/section-title";
-import { StockLogo } from "@/components/dashboard/StockLogo";
+import { StockIdentity } from "@/components/dashboard/StockIdentity";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -91,25 +91,12 @@ function SparkRow({
       )}
       <Link
         to={`/stocks/${encodeURIComponent(ticker)}`}
-        className="relative z-10 flex items-center gap-2 px-3 py-1 hover:bg-accent/30 transition-colors leading-tight"
+        className="relative z-10 flex items-center gap-2 px-3 py-1 hover:bg-accent/30 transition-colors leading-tight min-w-0"
       >
         <span className="shrink-0 w-4 text-center text-[12px]" aria-hidden>
           {pillar}
         </span>
-        <StockLogo ticker={ticker} size="xs" />
-        <div className="min-w-0 flex-1">
-          <div className="text-[13px] font-bold tabular-nums leading-tight">
-            {ticker}
-          </div>
-          {name && (
-            <div
-              className="text-[10px] text-muted-foreground truncate leading-tight"
-              title={name}
-            >
-              {name}
-            </div>
-          )}
-        </div>
+        <StockIdentity ticker={ticker} name={name} />
         <div className="text-right shrink-0 leading-tight">
           <div className={cn("text-[12.5px] font-bold tabular-nums", toneCls)}>
             {rightLine1}

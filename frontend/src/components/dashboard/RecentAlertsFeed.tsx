@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 
 import type { Alert } from "@/api/types";
 import { AlertDetailDialog } from "@/components/AlertDetailDialog";
+import { StockIdentity } from "@/components/dashboard/StockIdentity";
 import { isDelayedDetection } from "@/lib/alertDates";
 import { TONE_BG, getAlertKindMeta } from "@/lib/alertMeta";
 import { cn } from "@/lib/utils";
@@ -38,7 +39,7 @@ export function RecentAlertsFeed({ alerts }: Props) {
                 return (
                   <li
                     key={a.id}
-                    className="px-4 py-3 cursor-pointer hover:bg-accent transition-colors flex items-center gap-3"
+                    className="px-3 py-2 cursor-pointer hover:bg-accent transition-colors flex items-center gap-2 min-w-0"
                     onClick={() => setOpenDetail(a)}
                   >
                     {/* Tone-colored kind chip with icon — replaces the
@@ -53,32 +54,31 @@ export function RecentAlertsFeed({ alerts }: Props) {
                     >
                       <Icon className="h-3.5 w-3.5" />
                     </span>
+                    {/* Identity block matches Top Movers / 52w / Top Stocks /
+                        Top Picks: logo + ticker bold + name muted truncated.
+                        The Link wraps the identity so the row stays clickable
+                        for the detail dialog while ticker click navigates to
+                        the stock page. */}
                     {a.ticker ? (
                       <Link
                         to={`/stocks/${encodeURIComponent(a.ticker)}`}
                         onClick={(e) => e.stopPropagation()}
-                        className="font-medium min-w-[60px] hover:underline"
+                        className="flex items-center gap-2 hover:underline min-w-0 flex-1"
                       >
-                        {a.ticker}
+                        <StockIdentity ticker={a.ticker} name={a.name} />
                       </Link>
                     ) : (
                       <span className="font-medium min-w-[60px]">—</span>
                     )}
                     <span
-                      className="text-xs text-muted-foreground truncate max-w-[160px]"
-                      title={a.name ?? ""}
-                    >
-                      {a.name ?? ""}
-                    </span>
-                    <span
                       className={cn(
-                        "px-2 py-0.5 rounded text-xs font-semibold",
+                        "px-2 py-0.5 rounded text-xs font-semibold shrink-0",
                         TONE_BG[meta.tone],
                       )}
                     >
                       {meta.label}
                     </span>
-                    <span className="text-sm tabular-nums">${a.trigger_price}</span>
+                    <span className="text-sm tabular-nums shrink-0">${a.trigger_price}</span>
                     {/* Date cell: signal_date is the primary "when did the
                         market do the thing"; detection time is secondary.
                         Orange clock chip flags ≥1-day-delayed detection. */}

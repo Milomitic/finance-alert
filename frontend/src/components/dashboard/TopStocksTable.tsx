@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 
 import type { TopStock } from "@/api/types";
-import { StockLogo } from "@/components/dashboard/StockLogo";
+import { StockIdentity } from "@/components/dashboard/StockIdentity";
 import {
   Table,
   TableBody,
@@ -74,22 +74,9 @@ export function TopStocksTable({ data }: Props) {
                 <TableCell className="py-2">
                   <Link
                     to={`/stocks/${encodeURIComponent(s.ticker)}`}
-                    className="flex items-center gap-2 group/row hover:underline"
+                    className="flex items-center gap-2 group/row hover:underline min-w-0"
                   >
-                    <StockLogo ticker={s.ticker} size="xs" />
-                    <div className="min-w-0">
-                      <div className="text-sm font-bold tabular-nums leading-tight">
-                        {s.ticker}
-                      </div>
-                      {s.name && (
-                        <div
-                          className="text-[11px] text-muted-foreground truncate leading-tight max-w-[220px]"
-                          title={s.name}
-                        >
-                          {s.name}
-                        </div>
-                      )}
-                    </div>
+                    <StockIdentity ticker={s.ticker} name={s.name} />
                   </Link>
                 </TableCell>
                 {/* Top rule cell: canonical chip with icon + tone (matches
