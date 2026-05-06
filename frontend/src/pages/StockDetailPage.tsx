@@ -116,13 +116,15 @@ export default function StockDetailPage() {
         effectiveRules={d.effective_rules}
       />
 
-      {/* Company overview (left) + Alert storici (right). The user
-          wanted the alerts card next to the profile so the historical
-          rule-firing context sits alongside the company's identity —
-          you read what the company does, then immediately see what
-          signals it has produced. Both cards size to their content
-          (`items-start`); the layout stacks vertically below `lg`. */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 items-start">
+      {/* Company overview (left, ~60%) + Alert storici (right, ~40%).
+          The user wanted the alerts card next to the profile so the
+          historical rule-firing context sits alongside the company's
+          identity. Profile gets the wider slot because its prose
+          summary is the page's "lead" content; alerts shrink to the
+          minimum that still fits the embedded AlertsTable's columns.
+          Both cards size to their content (`items-start`); stacks
+          vertically below `lg`. */}
+      <div className="grid grid-cols-1 lg:grid-cols-[3fr_2fr] gap-3 items-start">
         <CompanyOverviewCard ticker={ticker} stock={d.stock} />
         <StockAlertsHistoryCard alerts={d.alerts_history} />
       </div>

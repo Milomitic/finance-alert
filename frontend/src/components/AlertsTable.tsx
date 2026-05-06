@@ -54,11 +54,13 @@ export function AlertsTable({
   embedded = false,
 }: Props) {
   const allSelected = alerts.length > 0 && alerts.every((a) => selectedIds.has(a.id));
-  // Embedded mode drops checkbox + Ticker + Nome + Archivio columns —
-  // backend pre-filters archived alerts on the stock-detail endpoint
-  // so the column adds zero info. The colSpan for the empty-state row
-  // tracks the remaining column count.
-  const colSpan = embedded ? 5 : 9;
+  // Embedded mode drops checkbox + Ticker + Nome + Rilevato + Archivio
+  // columns. Backend pre-filters archived alerts on the stock-detail
+  // endpoint, and on a per-stock view the Rilevato (detection
+  // timestamp) column adds noise — Data segnale alone is the relevant
+  // "when did this fire" date. colSpan tracks the remaining column
+  // count.
+  const colSpan = embedded ? 4 : 9;
 
   // Bumped one notch above the shared Table's default text-sm: the alert
   // listing is the page's primary content, not auxiliary metadata, so it
@@ -81,9 +83,11 @@ export function AlertsTable({
           <TableHead className="text-sm" title="Data della barra di mercato in cui la regola è scattata">
             Data segnale
           </TableHead>
-          <TableHead className="text-sm" title="Quando il sistema ha registrato l'alert">
-            Rilevato
-          </TableHead>
+          {!embedded && (
+            <TableHead className="text-sm" title="Quando il sistema ha registrato l'alert">
+              Rilevato
+            </TableHead>
+          )}
           {!embedded && (
             <>
               {/* Ticker column: sortable label is just text (this table
@@ -155,28 +159,32 @@ export function AlertsTable({
             {/* Detection timestamp: when the scan job created the row.
                 Highlighted with an orange clock when noticeably later than
                 the signal (≥1 calendar day) so the user sees at a glance
-                that the system noticed a backfilled signal. */}
-            <TableCell className="text-sm text-muted-foreground tabular-nums">
-              {(() => {
-                const delayed = isDelayedDetection(a.triggered_at, a.signal_date);
-                const delta = daysBetween(a.triggered_at, a.signal_date);
-                return (
-                  <span
-                    className="inline-flex items-center gap-1"
-                    title={
-                      delayed && delta != null
-                        ? `Il sistema ha rilevato il segnale ${delta}g dopo la barra di mercato. Possibile backfill o scan saltato.`
-                        : "Quando lo scan ha registrato l'alert"
-                    }
-                  >
-                    {delayed && (
-                      <Clock className="h-3 w-3 text-amber-600 dark:text-amber-400 shrink-0" />
-                    )}
-                    {formatDateTime(a.triggered_at)}
-                  </span>
-                );
-              })()}
-            </TableCell>
+                that the system noticed a backfilled signal. Hidden in
+                embedded mode (per-stock view) — the signal date alone
+                is enough context there. */}
+            {!embedded && (
+              <TableCell className="text-sm text-muted-foreground tabular-nums">
+                {(() => {
+                  const delayed = isDelayedDetection(a.triggered_at, a.signal_date);
+                  const delta = daysBetween(a.triggered_at, a.signal_date);
+                  return (
+                    <span
+                      className="inline-flex items-center gap-1"
+                      title={
+                        delayed && delta != null
+                          ? `Il sistema ha rilevato il segnale ${delta}g dopo la barra di mercato. Possibile backfill o scan saltato.`
+                          : "Quando lo scan ha registrato l'alert"
+                      }
+                    >
+                      {delayed && (
+                        <Clock className="h-3 w-3 text-amber-600 dark:text-amber-400 shrink-0" />
+                      )}
+                      {formatDateTime(a.triggered_at)}
+                    </span>
+                  );
+                })()}
+              </TableCell>
+            )}
             {!embedded && (
               <>
                 {/* Ticker cell: stopPropagation so the click navigates to
@@ -207,7 +215,12 @@ export function AlertsTable({
             <TableCell>
               <AlertToneCell alert={a} />
             </TableCell>
-            <TableCell className="text-right tabular-nums font-semibold">
+            {/* Price: explicit `text-sm` so it lines up with the
+                rest of the table cells. The Table root sets `text-base`
+                which made the price oversized vs the other meta
+                columns; per user feedback the price shouldn't dominate
+                the row visually. */}
+            <TableCell className="text-sm text-right tabular-nums font-semibold">
               ${a.trigger_price}
             </TableCell>
             {!embedded && (

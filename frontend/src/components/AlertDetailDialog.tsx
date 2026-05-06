@@ -1,5 +1,4 @@
 import {
-  ArrowRight,
   CalendarClock,
   CalendarRange,
   ChevronDown,
@@ -12,12 +11,10 @@ import { Link } from "react-router-dom";
 
 import type { Alert } from "@/api/types";
 import { AlertKindChip, AlertToneChip } from "@/components/AlertChips";
-import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -331,24 +328,12 @@ export function AlertDetailDialog({ alert, onClose }: Props) {
           )}
         </div>
 
-        {/* FOOTER — primary CTA goes to the stock detail (the most likely
-            next user action: "interesting alert, let me see the chart"). */}
-        <DialogFooter className="px-5 py-4 bg-muted/30 dark:bg-muted/10 border-t border-border/60 sm:justify-between gap-2">
-          <Button variant="ghost" onClick={onClose} className="sm:order-1">
-            Chiudi
-          </Button>
-          {alert.ticker && (
-            <Button asChild className="sm:order-2">
-              <Link
-                to={`/stocks/${encodeURIComponent(alert.ticker)}`}
-                onClick={onClose}
-              >
-                Apri dettaglio stock
-                <ArrowRight className="h-4 w-4 ml-1" />
-              </Link>
-            </Button>
-          )}
-        </DialogFooter>
+        {/* Footer ("Chiudi" + "Apri dettaglio stock") removed per user
+            feedback: shadcn's Dialog already provides a top-right
+            close button + Esc-to-close, and the user accesses stock
+            detail via the ticker link inside the dialog body — the
+            footer was redundant on both surfaces (alerts page +
+            stock-detail). */}
       </DialogContent>
     </Dialog>
   );
