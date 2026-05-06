@@ -283,8 +283,9 @@ function DayDetailContent({
                       : "Pubblicazione utili"
                   }
                 />
-                <SearchBar query={query} onQueryChange={setQuery} />
-                {filteredEarnings.length === 0 ? (
+                {/* SearchBar moved inline into the EarningsTable's Stock
+                    column header — see EarningsTable for the layout. */}
+                {filteredEarnings.length === 0 && query.trim() ? (
                   <div className="rounded-lg border border-dashed bg-muted/20 px-4 py-6 text-center text-[14.5px] text-muted-foreground">
                     Nessun risultato per "{query}".
                   </div>
@@ -293,6 +294,8 @@ function DayDetailContent({
                     rows={filteredEarnings}
                     sort={sort}
                     onSort={onHeaderClick}
+                    query={query}
+                    onQueryChange={setQuery}
                   />
                 )}
               </section>
@@ -332,44 +335,6 @@ function SectionTitle({
   );
 }
 
-/* ─── Search bar (filter only — sort moved to column headers) ───────────── */
-
-function SearchBar({
-  query,
-  onQueryChange,
-}: {
-  query: string;
-  onQueryChange: (v: string) => void;
-}) {
-  return (
-    <label className="relative flex w-full items-center">
-      <Search className="absolute left-2 h-3.5 w-3.5 text-muted-foreground/70 pointer-events-none" />
-      <input
-        type="search"
-        value={query}
-        onChange={(e) => onQueryChange(e.target.value)}
-        placeholder="Cerca ticker, nome, settore…"
-        className={cn(
-          "w-full rounded-md border bg-background pl-7 pr-7 py-1.5",
-          "text-[14.5px] placeholder:text-muted-foreground/60",
-          "focus:outline-none focus:ring-2 focus:ring-primary/40",
-        )}
-        aria-label="Filtra earnings"
-      />
-      {query && (
-        <button
-          type="button"
-          onClick={() => onQueryChange("")}
-          aria-label="Cancella filtro"
-          className="absolute right-1 inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:text-foreground"
-        >
-          <X className="h-3 w-3" />
-        </button>
-      )}
-    </label>
-  );
-}
-
 /* ─── Earnings table ────────────────────────────────────────────────────── */
 /* CSS-grid implementation rather than <table> so we get sticky header,
  * nicer hover affordances on full rows (the entire row is a Link), and
@@ -379,21 +344,30 @@ function SearchBar({
  * width but never collapse below readable minimums. The Stock column
  * takes any remaining space.
  *
- * Grid columns:
- *   [Stock 1fr] [Cap 64px] [P/E 50px] [Cresc 64px] [Score 48px] [Risk 56px]
+ * Grid columns (post-rebalance: numeric cols widened so the figures
+ * have more breathing room, Stock proportionally tighter to make room):
+ *   [Stock 1fr] [Cap 80px] [P/E 60px] [Cresc 76px] [Score 60px] [Risk 70px]
+ *
+ * The Stock column header now embeds the search input inline (right
+ * of the sortable "Stock" label) rather than the separate SearchBar
+ * row that used to sit above the table.
  */
 
 const COL_TEMPLATE =
-  "grid-cols-[minmax(0,1fr)_64px_50px_64px_48px_56px]";
+  "grid-cols-[minmax(0,1fr)_80px_60px_76px_60px_70px]";
 
 function EarningsTable({
   rows,
   sort,
   onSort,
+  query,
+  onQueryChange,
 }: {
   rows: EarningsEvent[];
   sort: SortState;
   onSort: (key: SortKey) => void;
+  query: string;
+  onQueryChange: (v: string) => void;
 }) {
   return (
     <div className="overflow-hidden rounded-lg border bg-card">
@@ -404,18 +378,52 @@ function EarningsTable({
       <div
         className={cn(
           "sticky top-0 z-10 grid items-center border-b bg-muted/70 backdrop-blur-sm",
-          "px-2 py-1.5 text-[12.5px] font-semibold uppercase tracking-[0.08em] text-muted-foreground",
+          "px-2 py-1 text-[12.5px] font-semibold uppercase tracking-[0.08em] text-muted-foreground",
           COL_TEMPLATE,
         )}
         role="row"
       >
-        <ColHeader
-          label="Stock"
-          sortKey="ticker"
-          state={sort}
-          onClick={onSort}
-          align="left"
-        />
+        {/* Stock cell: the sortable label + an inline search input.
+            The cell is a flex row so the input fills the remaining
+            width after the label. Tab order: sort button first, then
+            input — matches reading order. */}
+        <div className="flex items-center gap-2 min-w-0">
+          <ColHeader
+            label="Stock"
+            sortKey="ticker"
+            state={sort}
+            onClick={onSort}
+            align="left"
+          />
+          <label className="relative flex flex-1 items-center min-w-0">
+            <Search className="absolute left-1.5 h-3 w-3 text-muted-foreground/70 pointer-events-none" />
+            <input
+              type="search"
+              value={query}
+              onChange={(e) => onQueryChange(e.target.value)}
+              placeholder="cerca ticker, nome, settore…"
+              className={cn(
+                "w-full rounded border bg-background/60 pl-6 pr-6 py-0.5",
+                // Override the header cell's uppercase + wide tracking
+                // so the input reads as plain text, not screaming caps.
+                "text-[12px] font-normal normal-case tracking-normal",
+                "placeholder:text-muted-foreground/60",
+                "focus:outline-none focus:ring-1 focus:ring-primary/40 focus:bg-background",
+              )}
+              aria-label="Filtra earnings"
+            />
+            {query && (
+              <button
+                type="button"
+                onClick={() => onQueryChange("")}
+                aria-label="Cancella filtro"
+                className="absolute right-1 inline-flex h-4 w-4 items-center justify-center rounded text-muted-foreground hover:text-foreground"
+              >
+                <X className="h-2.5 w-2.5" />
+              </button>
+            )}
+          </label>
+        </div>
         <ColHeader
           label="Cap"
           sortKey="marketcap"
