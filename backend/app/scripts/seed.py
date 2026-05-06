@@ -12,7 +12,10 @@ SEEDS = [
     ("djia.csv", "DJI", "Dow Jones Industrial Average", "US"),
     ("ftsemib.csv", "FTSEMIB", "FTSE MIB", "IT"),
     ("eustx50.csv", "EUSTX50", "EuroStoxx 50", "EU"),
-    ("sse50.csv", "SSE50", "SSE 50", "CN"),
+    # SSE 50 / CSI 300 stocks no longer seeded — the user tracks the
+    # Chinese index via the dashboard live-assets panel (000300.SS),
+    # not individual Chinese equities. The Index rows for SSE50 stay
+    # in DB so historical alerts/scores referencing them still resolve.
     ("hsi30.csv", "HSI30", "Hang Seng top 30", "HK"),
     # Nikkei 225 — top ~40 most-traded constituents seeded; full 225
     # would require a scraped feed. Yahoo tickers use the .T suffix

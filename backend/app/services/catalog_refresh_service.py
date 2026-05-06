@@ -78,18 +78,11 @@ INDEX_SOURCES: dict[str, dict[str, object]] = {
         "default_exchange": "XETRA",
         "currency": "EUR",
     },
-    "SSE50": {
-        "url": "https://en.wikipedia.org/wiki/SSE_50_Index",
-        "name": "SSE 50",
-        "country": "CN",
-        "table_index": 1,
-        "ticker_col": "Ticker symbol",
-        "name_col": "Name",
-        "sector_col": "Industry",
-        "industry_col": None,
-        "default_exchange": "SSE",
-        "currency": "CNY",
-    },
+    # SSE 50 / CSI 300 removed from refresh sources — the user tracks
+    # the Chinese market via the dashboard live-assets panel
+    # (000300.SS in `app/api/market.py`), not individual constituents.
+    # The Index rows themselves stay in DB so historical alert/score
+    # references continue to resolve, but no new stocks get re-pulled.
     "HSI30": {
         # Code kept as HSI30 for backward-compat with snapshots/alerts; display
         # name now reflects the wider top-50 cut. Constituents table is at
@@ -106,18 +99,7 @@ INDEX_SOURCES: dict[str, dict[str, object]] = {
         "currency": "HKD",
         "slice_n": 50,
     },
-    "CSI300": {
-        "url": "https://en.wikipedia.org/wiki/CSI_300_Index",
-        "name": "CSI 300 (Shanghai + Shenzhen)",
-        "country": "CN",
-        "table_index": 3,
-        "ticker_col": "Ticker",
-        "name_col": "Company",
-        "sector_col": "Segment",
-        "industry_col": None,
-        "default_exchange": "SSE",
-        "currency": "CNY",
-    },
+    # CSI 300 also removed from refresh sources (see SSE 50 note above).
     "FTSE100": {
         "url": "https://en.wikipedia.org/wiki/FTSE_100_Index",
         "name": "FTSE 100 (London)",

@@ -226,7 +226,7 @@ export function NavbarSearch() {
   }
 
   function StockRow({ s, idx }: { s: Stock; idx: number }) {
-    const flag = getStockFlagCode(s.country);
+    const flag = getStockFlagCode(s.country, s.ticker);
     const enriched = enrichByTicker.get(s.ticker);
     const change = enriched?.change_pct;
     const mc = s.market_cap ?? enriched?.market_cap ?? null;

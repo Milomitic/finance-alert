@@ -130,7 +130,7 @@ export function StockBrowserTable({ items, sortBy, sortDir, onSortChange }: Prop
               {displayItems.map((item) => {
                 const s = item.stock;
                 const change = changeByTicker.get(s.ticker);
-                const flag = getStockFlagCode(s.country);
+                const flag = getStockFlagCode(s.country, s.ticker);
                 const changeColor = change == null
                   ? "text-muted-foreground"
                   : change > 0 ? "text-green-600 dark:text-green-400"

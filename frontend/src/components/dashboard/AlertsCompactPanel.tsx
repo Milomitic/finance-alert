@@ -1,5 +1,4 @@
 import { Bell } from "lucide-react";
-import { useState } from "react";
 
 import type { Alert, TopStock } from "@/api/types";
 import { AlertsByIndexBars } from "@/components/dashboard/AlertsByIndexBars";
@@ -7,7 +6,6 @@ import { RecentAlertsFeed } from "@/components/dashboard/RecentAlertsFeed";
 import { TopStocksTable } from "@/components/dashboard/TopStocksTable";
 import { Card, CardContent } from "@/components/ui/card";
 import { SectionTitle } from "@/components/ui/section-title";
-import { cn } from "@/lib/utils";
 
 interface Props {
   topStocks: TopStock[];
@@ -16,21 +14,26 @@ interface Props {
   alertsPrev24h: number;
 }
 
-type TabKey = "top" | "feed" | "byindex";
-
-const TABS: { key: TabKey; label: string }[] = [
+const COLUMNS: { key: string; label: string }[] = [
   { key: "top", label: "Top stocks" },
   { key: "feed", label: "Feed" },
   { key: "byindex", label: "Per indice" },
 ];
 
+/**
+ * Was: a 3-tab card (Top stocks / Feed / Per indice). The user
+ * preferred to see all three at once, so the tabs collapsed into
+ * three side-by-side columns. The "Per indice" column is currently
+ * a placeholder (Fase 3E), but it stays in the layout so the column
+ * structure matches the original tab structure 1:1 and naturally
+ * fills with content when the feature ships.
+ */
 export function AlertsCompactPanel({
   topStocks,
   recentAlerts,
   alertsLast24h,
   alertsPrev24h,
 }: Props) {
-  const [tab, setTab] = useState<TabKey>("top");
   const delta = alertsLast24h - alertsPrev24h;
   const deltaLabel =
     delta === 0 ? "= ieri" : `${delta > 0 ? "+" : ""}${delta} vs ieri`;
@@ -38,9 +41,7 @@ export function AlertsCompactPanel({
   return (
     <Card className="overflow-hidden">
       <CardContent className="p-0">
-        {/* Header — title + 24h badge + "Vedi tutti" link.
-            Was a single row with the tabs inline; tabs moved to their own
-            row below to match the TopMovers / TopPicks layout. */}
+        {/* Header — title + 24h badge + "Vedi tutti" link. */}
         <div className="flex items-center gap-3 border-b px-3 bg-muted/30 py-2">
           <SectionTitle
             icon={Bell}
@@ -59,30 +60,24 @@ export function AlertsCompactPanel({
           </a>
         </div>
 
-        {/* Canonical button-strip tabs — same pattern as TopMovers / TopPicks /
-            (the just-refactored) FiftyTwoWeekVolCard. */}
-        <div className="flex shrink-0 border-b">
-          {TABS.map((t) => (
-            <button
-              key={t.key}
-              type="button"
-              onClick={() => setTab(t.key)}
-              className={cn(
-                "flex-1 text-[11px] font-bold uppercase tracking-wider py-1.5 transition-colors border-r last:border-r-0",
-                tab === t.key
-                  ? "bg-background shadow-inner text-foreground"
-                  : "text-muted-foreground hover:bg-muted/30",
-              )}
-            >
-              {t.label}
-            </button>
+        {/* Three-column grid — one per former tab. `divide-x` paints
+            a 1px vertical separator between columns; rows inside each
+            column use the existing per-view component, scrollable
+            independently. */}
+        <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-border/40">
+          {COLUMNS.map((col) => (
+            <div key={col.key} className="flex flex-col min-w-0">
+              <div className="shrink-0 px-2.5 py-1 text-[10.5px] uppercase tracking-[0.16em] font-bold text-muted-foreground border-b bg-muted/40">
+                {col.label}
+              </div>
+              <div className="min-h-0">
+                {col.key === "top" && <TopStocksTable data={topStocks} />}
+                {col.key === "feed" && <RecentAlertsFeed alerts={recentAlerts} />}
+                {col.key === "byindex" && <AlertsByIndexBars />}
+              </div>
+            </div>
           ))}
         </div>
-
-        {/* Body */}
-        {tab === "top" && <TopStocksTable data={topStocks} />}
-        {tab === "feed" && <RecentAlertsFeed alerts={recentAlerts} />}
-        {tab === "byindex" && <AlertsByIndexBars />}
       </CardContent>
     </Card>
   );

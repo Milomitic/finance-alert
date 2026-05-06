@@ -80,7 +80,7 @@ export function StockHeader({ stock, kpis, ohlcv, effectiveRules = [] }: Props) 
         .map((r) => r.watchlist_name as string),
     ),
   );
-  const flag = getStockFlagCode(stock.country);
+  const flag = getStockFlagCode(stock.country, stock.ticker);
 
   // Live quote — polls every 15s. Falls back to the kpis snapshot (last
   // close from the daily scan) when the live fetch hasn't returned yet,

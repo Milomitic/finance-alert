@@ -1,5 +1,4 @@
 import { LineChart } from "lucide-react";
-import { useState } from "react";
 import { Link } from "react-router-dom";
 
 import type { Mover, MoversBlock, VolumeSpike } from "@/api/types";
@@ -13,88 +12,64 @@ interface Props {
   movers: MoversBlock;
 }
 
-type TabKey = "hilo" | "vol" | "vol-spark";
-
-const TABS: { key: TabKey; label: string; title: string }[] = [
-  {
-    key: "hilo",
-    label: "52w events",
-    title: "Stock che oggi raggiungono nuovi massimi/minimi a 52 settimane",
-  },
-  {
-    key: "vol",
-    label: "Volume spikes",
-    title: "Stock con volume oggi maggiore di 2× la media a 20 giorni",
-  },
-  {
-    key: "vol-spark",
-    label: "Spikes ⚡",
-    title: "Stesso elenco con grafico in dissolvenza per riga",
-  },
-];
-
-function ListRow({ m, kind }: { m: Mover; kind: "high" | "low" }) {
-  const arrow = kind === "high" ? "📈" : "📉";
-  const color = kind === "high" ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400";
-  return (
-    <tr className="border-b border-border/50 hover:bg-muted/40 transition-colors">
-      <td className="px-2 py-1.5">{arrow}</td>
-      <td className="px-3 py-1.5 font-semibold">
-        <Link to={`/stocks/${encodeURIComponent(m.ticker)}`} className="inline-flex items-start gap-2 hover:underline">
-          <StockLogo ticker={m.ticker} size="xs" />
-          <div className="min-w-0">
-            <div>{m.ticker}</div>
-            <div className="text-[10px] text-muted-foreground font-normal truncate max-w-[120px]" title={m.name}>{m.name}</div>
-          </div>
-        </Link>
-      </td>
-      <td className="px-2 py-1.5"><IndexBadge code={m.index} size="xs" /></td>
-      <td className={`px-3 py-1.5 text-right tabular-nums ${color}`}>${m.last_close.toFixed(2)}</td>
-    </tr>
-  );
-}
-
-function VolRow({ m }: { m: VolumeSpike }) {
-  const change = m.change_pct ?? 0;
-  const positive = change >= 0;
-  return (
-    <tr className="border-b border-border/50 hover:bg-muted/40 transition-colors">
-      <td className="px-3 py-1.5 font-semibold">
-        <Link to={`/stocks/${encodeURIComponent(m.ticker)}`} className="inline-flex items-start gap-2 hover:underline">
-          <StockLogo ticker={m.ticker} size="xs" />
-          <div className="min-w-0">
-            <div>{m.ticker}</div>
-            <div className="text-[10px] text-muted-foreground font-normal truncate max-w-[120px]" title={m.name}>{m.name}</div>
-          </div>
-        </Link>
-      </td>
-      <td className="px-2 py-1.5"><IndexBadge code={m.index} size="xs" /></td>
-      <td className="px-3 py-1.5 text-right tabular-nums">{m.vol_ratio.toFixed(1)}×</td>
-      <td className={`px-3 py-1.5 text-right tabular-nums ${positive ? "text-green-600" : "text-red-600"}`}>
-        {change >= 0 ? "+" : ""}{change.toFixed(2)}%
-      </td>
-    </tr>
-  );
-}
-
-/**
- * Compact sparkline-rich row for the 3rd tab. Each row shows the per-stock
- * 30-day price sparkline as a faded background, in the style of the (now
- * removed) SpotlightCards Volume Spikes column.
+/* ─── Sparkline-bg row primitive ────────────────────────────────────────── *
+ *
+ * A compact row that paints the stock's recent price sparkline as a
+ * fading background. The user preferred this Spikes-style row over
+ * the previous plain-table layout for both 52w events and volume
+ * spikes — same visual language across the card.
+ *
+ * Row height: ~30px (px-3 py-1 + leading-tight). The "Spikes" tab
+ * was the third (now-removed) view of this card; we adopted its row
+ * shape here, hence the "spark" in the function name.
  */
-function VolSparkRow({ m }: { m: VolumeSpike }) {
-  const sl = m.sparkline ?? [];
+function SparkRow({
+  ticker,
+  name,
+  sparkline,
+  rightLine1,
+  rightLine2,
+  rightTone,
+  index,
+  pillar,
+}: {
+  ticker: string;
+  name?: string | null;
+  sparkline: number[] | null | undefined;
+  /** Big right-aligned value (e.g. "$387.08", "2.5×"). */
+  rightLine1: string;
+  /** Smaller line below (e.g. "+1.20%" or "vol"). null = no second line. */
+  rightLine2?: string | null;
+  rightTone: "pos" | "neg" | "neutral";
+  index?: string | null;
+  /** Tiny leading icon — 📈 or 📉 for 52w highs/lows, ⚡ for spikes. */
+  pillar: string;
+}) {
+  const sl = sparkline ?? [];
   const min = sl.length ? Math.min(...sl) : 0;
   const max = sl.length ? Math.max(...sl) : 1;
   const range = max - min || 1;
   const W = 100, H = 30;
   const points = sl
-    .map((v, i) => `${((i / Math.max(1, sl.length - 1)) * W).toFixed(2)},${(H - ((v - min) / range) * H).toFixed(2)}`)
+    .map(
+      (v, i) =>
+        `${((i / Math.max(1, sl.length - 1)) * W).toFixed(2)},${(H - ((v - min) / range) * H).toFixed(2)}`,
+    )
     .join(" ");
-  const change = m.change_pct ?? 0;
-  const trend = change >= 0 ? "#16a34a" : "#dc2626";
+  const trendStroke =
+    rightTone === "pos" ? "#16a34a" : rightTone === "neg" ? "#dc2626" : "#737373";
+  const toneCls =
+    rightTone === "pos"
+      ? "text-emerald-600 dark:text-emerald-400"
+      : rightTone === "neg"
+        ? "text-rose-600 dark:text-rose-400"
+        : "text-muted-foreground";
+
+  // Unique-enough id for the gradient stop.
+  const gradId = `sp-${pillar}-${ticker}`.replace(/[^a-zA-Z0-9_-]/g, "_");
+
   return (
-    <li className="border-b border-border/50 last:border-b-0 relative">
+    <li className="border-b border-border/40 last:border-b-0 relative">
       {sl.length > 1 && (
         <svg
           className="absolute inset-0 w-full h-full pointer-events-none"
@@ -103,40 +78,85 @@ function VolSparkRow({ m }: { m: VolumeSpike }) {
           aria-hidden="true"
         >
           <defs>
-            <linearGradient id={`sp-vol-${m.ticker}`} x1="0" y1="0" x2="1" y2="0">
-              <stop offset="0%" stopColor={trend} stopOpacity={0} />
-              <stop offset="100%" stopColor={trend} stopOpacity={0.45} />
+            <linearGradient id={gradId} x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stopColor={trendStroke} stopOpacity={0} />
+              <stop offset="100%" stopColor={trendStroke} stopOpacity={0.4} />
             </linearGradient>
           </defs>
-          <polyline points={points} fill="none" stroke={`url(#sp-vol-${m.ticker})`} strokeWidth={1.4} vectorEffect="non-scaling-stroke" />
+          <polyline
+            points={points}
+            fill="none"
+            stroke={`url(#${gradId})`}
+            strokeWidth={1.2}
+            vectorEffect="non-scaling-stroke"
+          />
         </svg>
       )}
       <Link
-        to={`/stocks/${encodeURIComponent(m.ticker)}`}
-        className="relative z-10 flex items-center gap-2 px-3 py-2 hover:bg-accent/30 transition-colors"
+        to={`/stocks/${encodeURIComponent(ticker)}`}
+        className="relative z-10 flex items-center gap-2 px-3 py-1 hover:bg-accent/30 transition-colors leading-tight"
       >
-        <StockLogo ticker={m.ticker} size="xs" />
+        <span className="shrink-0 w-4 text-center text-[12px]" aria-hidden>
+          {pillar}
+        </span>
+        <StockLogo ticker={ticker} size="xs" />
         <div className="min-w-0 flex-1">
-          <div className="text-sm font-bold tabular-nums leading-tight">{m.ticker}</div>
-          {m.name && (
-            <div className="text-[10px] text-muted-foreground truncate leading-tight" title={m.name}>{m.name}</div>
+          <div className="text-[13px] font-bold tabular-nums leading-tight">
+            {ticker}
+          </div>
+          {name && (
+            <div
+              className="text-[10px] text-muted-foreground truncate leading-tight"
+              title={name}
+            >
+              {name}
+            </div>
           )}
         </div>
-        <span className="text-sm font-semibold tabular-nums shrink-0 text-blue-600 dark:text-blue-400">
-          {m.vol_ratio.toFixed(1)}× vol
-        </span>
+        {index && (
+          <span className="shrink-0">
+            <IndexBadge code={index} size="xs" />
+          </span>
+        )}
+        <div className="text-right shrink-0 leading-tight">
+          <div className={cn("text-[12.5px] font-bold tabular-nums", toneCls)}>
+            {rightLine1}
+          </div>
+          {rightLine2 && (
+            <div className={cn("text-[10px] font-semibold tabular-nums", toneCls)}>
+              {rightLine2}
+            </div>
+          )}
+        </div>
       </Link>
     </li>
   );
 }
 
+/* ─── Empty-state helper ────────────────────────────────────────────────── */
+
+function ColumnHeader({ label }: { label: string }) {
+  return (
+    <div className="shrink-0 px-2.5 py-1 text-[10.5px] uppercase tracking-[0.16em] font-bold text-muted-foreground border-b bg-muted/40">
+      {label}
+    </div>
+  );
+}
+
+/* ─── Card ──────────────────────────────────────────────────────────────── *
+ *
+ * Was: 3-tab card (52w events / Volume spikes / Spikes ⚡). User
+ * dropped the "Spikes ⚡" tab and asked for the remaining two views
+ * to render as side-by-side columns with the same compact
+ * sparkline-bg row styling that the Spikes tab used.
+ *
+ * 52w events column: shows a mix of new highs (📈) and lows (📉).
+ * Volume spikes column: shows volume ratio + change %.
+ */
 export function FiftyTwoWeekVolCard({ movers }: Props) {
-  // Was: Radix Tabs with horizontal triggers — different visual language than
-  // the rest of the dashboard, which uses a plain button strip with equal-
-  // width tabs and the active state highlighted by a solid background.
-  // Switched to the canonical pattern so this card matches TopMovers and
-  // TopPicks side-by-side.
-  const [tab, setTab] = useState<TabKey>("hilo");
+  const highs = movers.new_52w_high.slice(0, 6);
+  const lows = movers.new_52w_low.slice(0, 4);
+  const spikes = movers.volume_spikes.slice(0, 10);
 
   return (
     <Card className="h-full overflow-hidden">
@@ -145,63 +165,75 @@ export function FiftyTwoWeekVolCard({ movers }: Props) {
           <SectionTitle icon={LineChart} label="52w & volume events" />
         </div>
 
-        {/* Canonical button-strip tabs (matches TopMovers / TopPicks). */}
-        <div className="flex shrink-0 border-b">
-          {TABS.map((t) => (
-            <button
-              key={t.key}
-              type="button"
-              onClick={() => setTab(t.key)}
-              title={t.title}
-              className={cn(
-                "flex-1 text-[11px] font-bold uppercase tracking-wider py-1.5 transition-colors border-r last:border-r-0",
-                tab === t.key
-                  ? "bg-background shadow-inner text-foreground"
-                  : "text-muted-foreground hover:bg-muted/30",
-              )}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Body — single content slot per active tab */}
-        <div className="flex-1 min-h-0 overflow-y-auto">
-          {tab === "hilo" && (
-            <>
-              <div className="px-3 py-2 text-sm text-muted-foreground">
-                📈 {movers.new_52w_high.length} highs · 📉 {movers.new_52w_low.length} lows
+        <div className="flex-1 min-h-0 grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-border/40">
+          {/* Column 1: 52w events */}
+          <div className="flex flex-col min-h-0 min-w-0">
+            <ColumnHeader
+              label={`52w events · ${movers.new_52w_high.length} highs · ${movers.new_52w_low.length} lows`}
+            />
+            {highs.length === 0 && lows.length === 0 ? (
+              <div className="flex-1 flex items-center justify-center p-4 text-xs text-muted-foreground">
+                Nessun evento
               </div>
-              <table className="w-full text-sm">
-                <tbody>
-                  {movers.new_52w_high.map((m) => <ListRow key={`h-${m.ticker}`} m={m} kind="high" />)}
-                  {movers.new_52w_low.map((m) => <ListRow key={`l-${m.ticker}`} m={m} kind="low" />)}
-                  {movers.new_52w_high.length === 0 && movers.new_52w_low.length === 0 && (
-                    <tr><td colSpan={4} className="text-sm text-muted-foreground text-center py-6">Nessun evento</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </>
-          )}
-          {tab === "vol" && (
-            <table className="w-full text-sm">
-              <tbody>
-                {movers.volume_spikes.map((m) => <VolRow key={m.ticker} m={m} />)}
-                {movers.volume_spikes.length === 0 && (
-                  <tr><td colSpan={4} className="text-sm text-muted-foreground text-center py-6">Nessuno spike</td></tr>
-                )}
-              </tbody>
-            </table>
-          )}
-          {tab === "vol-spark" && (
-            movers.volume_spikes.length === 0 ? (
-              <div className="text-sm text-muted-foreground text-center py-6">Nessuno spike</div>
             ) : (
-              <ul>
-                {movers.volume_spikes.slice(0, 8).map((m) => <VolSparkRow key={m.ticker} m={m} />)}
+              <ul className="flex-1 overflow-y-auto">
+                {highs.map((m: Mover) => (
+                  <SparkRow
+                    key={`h-${m.ticker}`}
+                    ticker={m.ticker}
+                    name={m.name}
+                    sparkline={m.sparkline}
+                    rightLine1={`$${m.last_close.toFixed(2)}`}
+                    rightTone="pos"
+                    index={m.index}
+                    pillar="📈"
+                  />
+                ))}
+                {lows.map((m: Mover) => (
+                  <SparkRow
+                    key={`l-${m.ticker}`}
+                    ticker={m.ticker}
+                    name={m.name}
+                    sparkline={m.sparkline}
+                    rightLine1={`$${m.last_close.toFixed(2)}`}
+                    rightTone="neg"
+                    index={m.index}
+                    pillar="📉"
+                  />
+                ))}
               </ul>
-            )
-          )}
+            )}
+          </div>
+
+          {/* Column 2: Volume spikes */}
+          <div className="flex flex-col min-h-0 min-w-0">
+            <ColumnHeader label={`Volume spikes · ${movers.volume_spikes.length}`} />
+            {spikes.length === 0 ? (
+              <div className="flex-1 flex items-center justify-center p-4 text-xs text-muted-foreground">
+                Nessuno spike
+              </div>
+            ) : (
+              <ul className="flex-1 overflow-y-auto">
+                {spikes.map((m: VolumeSpike) => {
+                  const change = m.change_pct ?? 0;
+                  const tone = change > 0 ? "pos" : change < 0 ? "neg" : "neutral";
+                  return (
+                    <SparkRow
+                      key={m.ticker}
+                      ticker={m.ticker}
+                      name={m.name}
+                      sparkline={m.sparkline}
+                      rightLine1={`${m.vol_ratio.toFixed(1)}× vol`}
+                      rightLine2={`${change >= 0 ? "+" : ""}${change.toFixed(2)}%`}
+                      rightTone={tone}
+                      index={m.index}
+                      pillar="⚡"
+                    />
+                  );
+                })}
+              </ul>
+            )}
+          </div>
         </div>
       </CardContent>
     </Card>

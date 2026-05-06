@@ -58,6 +58,10 @@ LIVE_ASSET_DEFINITIONS: list[tuple[str, str, str, str | None]] = [
     ("^STOXX50E",    "Euro Stoxx 50",      "index",     "eu"),
     ("FTSEMIB.MI",   "FTSE MIB",           "index",     "it"),
     ("^HSI",         "Hang Seng",          "index",     "hk"),
+    # CSI 300 stays in the dashboard even though Chinese-mainland
+    # stocks were removed from the catalog (per user) — they still
+    # want to track the headline Chinese index's daily move.
+    ("000300.SS",    "CSI 300",            "index",     "cn"),
     ("GC=F",         "Oro (futures)",      "commodity", None),
     ("SI=F",         "Argento (futures)",  "commodity", None),
     ("CL=F",         "Petrolio WTI",       "commodity", None),

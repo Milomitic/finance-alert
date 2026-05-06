@@ -71,18 +71,34 @@ function MoverRow({ m, field, kind }: {
   );
 }
 
+/** One column header — small uppercase pill matching the rest of the
+ *  dashboard's section dividers. Replaces the old Gainers/Losers tab
+ *  toggle: now both lists are on screen at once. */
+function ColumnHeader({ side }: { side: Side }) {
+  return (
+    <div
+      className={cn(
+        "shrink-0 px-3 py-1 text-[10.5px] uppercase tracking-[0.16em] font-bold border-b",
+        side === "gainers"
+          ? "bg-green-50/70 dark:bg-green-950/30 text-green-700 dark:text-green-300"
+          : "bg-red-50/70 dark:bg-red-950/30 text-red-700 dark:text-red-300",
+      )}
+    >
+      {side === "gainers" ? "Gainers" : "Losers"}
+    </div>
+  );
+}
+
 /**
- * Compact top-movers card sized for a 4-column dashboard row.
- *
- * Has two pickers: time window (1d/1w/1m) and side (gainers/losers). Showing
- * both lists side-by-side would be too cramped at this width, so the user
- * toggles between them with a small Top Gainers / Top Losers tab.
+ * Top-movers card. Was a single-list card with a Gainers/Losers tab;
+ * the user wanted both visible at once, so we now render the two
+ * lists side-by-side. The window picker (1G/1S/1M) stays in the
+ * header — same data, different period.
  */
 export function TopMoversCard({ movers }: Props) {
   const [window, setWindow] = useState<Window>("1d");
-  const [side, setSide] = useState<Side>("gainers");
   const data = useMemo(() => getWindowed(movers, window), [movers, window]);
-  const list = side === "gainers" ? data.gainers : data.losers;
+  const ROWS_PER_COL = 8;
 
   return (
     <Card className="h-full overflow-hidden">
@@ -103,52 +119,31 @@ export function TopMoversCard({ movers }: Props) {
           />
         </div>
 
-        {/* Gainers/Losers side toggle */}
-        <div className="flex shrink-0 border-b">
-          <button
-            type="button"
-            onClick={() => setSide("gainers")}
-            className={cn(
-              "flex-1 text-[11px] font-bold uppercase tracking-wider py-1.5 transition-colors",
-              side === "gainers"
-                ? "bg-green-50/70 dark:bg-green-950/30 text-green-700 dark:text-green-300"
-                : "text-muted-foreground hover:bg-muted/30",
-            )}
-          >
-            Gainers
-          </button>
-          <button
-            type="button"
-            onClick={() => setSide("losers")}
-            className={cn(
-              "flex-1 text-[11px] font-bold uppercase tracking-wider py-1.5 border-l transition-colors",
-              side === "losers"
-                ? "bg-red-50/70 dark:bg-red-950/30 text-red-700 dark:text-red-300"
-                : "text-muted-foreground hover:bg-muted/30",
-            )}
-          >
-            Losers
-          </button>
+        {/* Two columns side-by-side. `divide-x` paints a 1px vertical
+            border between them; each column flexes its rows
+            independently. */}
+        <div className="flex-1 min-h-0 grid grid-cols-2 divide-x divide-border/40">
+          {(["gainers", "losers"] as const).map((side) => {
+            const list = side === "gainers" ? data.gainers : data.losers;
+            return (
+              <div key={side} className="flex flex-col min-h-0 min-w-0">
+                <ColumnHeader side={side} />
+                {list.length === 0 ? (
+                  <div className="flex-1 flex items-center justify-center p-4 text-xs text-muted-foreground">
+                    Nessun dato
+                  </div>
+                ) : (
+                  <ul className="flex-1 overflow-y-auto">
+                    {list.slice(0, ROWS_PER_COL).map((m) => (
+                      <MoverRow key={m.ticker} m={m} field={data.field} kind={side} />
+                    ))}
+                  </ul>
+                )}
+              </div>
+            );
+          })}
         </div>
-
-        <TabsContentArea>
-          {list.length === 0 ? (
-            <div className="flex-1 flex items-center justify-center p-4 text-xs text-muted-foreground">
-              Nessun dato
-            </div>
-          ) : (
-            <ul className="flex-1 overflow-y-auto">
-              {list.slice(0, 8).map((m) => (
-                <MoverRow key={m.ticker} m={m} field={data.field} kind={side} />
-              ))}
-            </ul>
-          )}
-        </TabsContentArea>
       </CardContent>
     </Card>
   );
-}
-
-function TabsContentArea({ children }: { children: React.ReactNode }) {
-  return <div className="flex-1 min-h-0 flex flex-col">{children}</div>;
 }
