@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.models import Index, Stock, StockIndex
 from app.services.exchange_codes import canonical_exchange
+from app.services.sector_normalizer import canonical_sector
 
 
 @dataclass
@@ -30,6 +31,12 @@ def _upsert_stock(db: Session, row: dict[str, str]) -> tuple[Stock, bool]:
     """
     ticker = row["ticker"]
     exchange = canonical_exchange(ticker, row["exchange"])
+    # Sector è normalizzato qui (boundary di ingestion) così le righe
+    # nuove non finiscono mai nel DB con labels grezze tipo "Technology"
+    # o "Banks" — collassano sempre sui 12 bucket GICS+Other. Vedi
+    # `services/sector_normalizer.py`.
+    sector_raw = row.get("sector") or None
+    sector_canonical = canonical_sector(sector_raw)
     stmt = select(Stock).where(Stock.ticker == ticker, Stock.exchange == exchange)
     stock = db.execute(stmt).scalar_one_or_none()
     if stock is None:
@@ -37,7 +44,7 @@ def _upsert_stock(db: Session, row: dict[str, str]) -> tuple[Stock, bool]:
             ticker=ticker,
             exchange=exchange,
             name=row["name"],
-            sector=row.get("sector") or None,
+            sector=sector_canonical,
             industry=row.get("industry") or None,
             country=row.get("country") or None,
             currency=row.get("currency") or None,
@@ -46,7 +53,9 @@ def _upsert_stock(db: Session, row: dict[str, str]) -> tuple[Stock, bool]:
         db.flush()
         return stock, True
     stock.name = row["name"]
-    stock.sector = row.get("sector") or stock.sector
+    # Preserve old sector if CSV row has no sector data (unchanged semantics);
+    # otherwise apply the canonical version of the new value.
+    stock.sector = sector_canonical or stock.sector
     stock.industry = row.get("industry") or stock.industry
     stock.country = row.get("country") or stock.country
     stock.currency = row.get("currency") or stock.currency

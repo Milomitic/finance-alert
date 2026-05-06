@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.models import CatalogRefreshLog, Index, Stock, StockIndex
 from app.services.exchange_codes import canonical_exchange, has_known_suffix
+from app.services.sector_normalizer import canonical_sector
 
 USER_AGENT = "FinanceAlert/0.1 (personal use)"
 
@@ -242,11 +243,15 @@ def refresh_index(db: Session, index_code: str) -> RefreshResult:
                 continue
             ticker, exchange = _normalize_ticker(ticker_raw, str(src["default_exchange"]))
             name_val = str(row.get(src["name_col"]) or ticker)
-            sector_val = (
+            sector_raw = (
                 str(row.get(src["sector_col"]))
                 if src["sector_col"] and not pd.isna(row.get(src["sector_col"]))
                 else None
             )
+            # Wikipedia tables use a mix of GICS/ICB/FTSE labels — fold them
+            # to the canonical taxonomy at ingestion so the catalog stays
+            # uniform regardless of source. See `sector_normalizer.py`.
+            sector_val = canonical_sector(sector_raw)
             industry_col = src.get("industry_col")
             industry_val = (
                 str(row.get(industry_col))
