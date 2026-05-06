@@ -18,6 +18,7 @@ from app.api import market as market_router
 from app.api import price_alerts as price_alerts_router
 from app.api import spotlight as spotlight_router
 from app.api import rule_catalog as rule_catalog_router
+from app.api import rule_performance as rule_performance_router
 from app.api import rule_preview as rule_preview_router
 from app.api import rules as rules_router
 from app.api import scores as scores_router
@@ -141,6 +142,7 @@ app.include_router(watchlists_router.router)
 app.include_router(catalog_router.router)
 app.include_router(rules_router.router)
 app.include_router(rule_catalog_router.router)
+app.include_router(rule_performance_router.router)
 app.include_router(rule_preview_router.router)
 app.include_router(alerts_router.router)
 app.include_router(dashboard_router.router)

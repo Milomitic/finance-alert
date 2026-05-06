@@ -34,7 +34,7 @@ const NAV: NavEntry[] = [
   // sidebar so the user composes rules + reviews their alerts in one
   // surface. The /rules route was removed.
   { to: "/alerts", label: "Alerts", icon: Bell, enabled: true },
-  { to: "/settings", label: "Impostazioni", icon: Settings, enabled: false },
+  { to: "/settings", label: "Impostazioni", icon: Settings, enabled: true },
 ];
 
 export default function Layout() {
