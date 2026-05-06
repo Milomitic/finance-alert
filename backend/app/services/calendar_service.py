@@ -74,7 +74,9 @@ class MacroEventDC:
     importance: Importance
     region: str
     prev_value: float | None = None
+    prev_date: date | None = None
     prior_value: float | None = None
+    prior_date: date | None = None
     change_pct: float | None = None
     unit: str | None = None
     history: list[tuple[date, float | None]] = field(default_factory=list)
@@ -110,9 +112,17 @@ def _scored_stocks(db: Session) -> list[tuple[Stock, StockScore]]:
     new composite_score / risk_tier fields on EarningsEvent without a second
     query per stock. Catalog has duplicate ticker rows (CLAUDE.md) — the JOIN
     naturally picks only the row a score is attached to.
+
+    Filters hidden countries (CN/JP/KR) — those stocks live in DB only
+    to feed dashboard breadth + Asia mood, not to surface as individual
+    earnings rows. Single source of truth: `app.core.visibility`.
     """
+    from app.core.visibility import visible_country_clause
+
     rows = db.execute(
-        select(Stock, StockScore).join(StockScore, StockScore.stock_id == Stock.id)
+        select(Stock, StockScore)
+        .join(StockScore, StockScore.stock_id == Stock.id)
+        .where(visible_country_clause())
     ).all()
     return [(stock, score) for stock, score in rows]
 
@@ -251,7 +261,9 @@ def get_events(
                     importance=fe.importance,  # type: ignore[arg-type]
                     region=fe.region,
                     prev_value=fe.prev_value,
+                    prev_date=fe.prev_date,
                     prior_value=fe.prior_value,
+                    prior_date=fe.prior_date,
                     change_pct=fe.change_pct,
                     unit=fe.unit,
                     history=fe.history,

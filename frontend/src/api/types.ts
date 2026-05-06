@@ -831,7 +831,12 @@ export interface MacroEvent {
    *  it's from the hardcoded fallback list. The UI shows the prev /
    *  change / sparkline only when present. */
   prev_value?: number | null;
+  /** ISO date of the most-recent prior reading (when the indicator
+   *  last published). Lets the UI render "Precedente: 3.2% (1 mar 2026)"
+   *  so the user knows which period the prev value covers. */
+  prev_date?: string | null;
   prior_value?: number | null;
+  prior_date?: string | null;
   change_pct?: number | null;
   unit?: string | null;
   history?: MacroObservationPoint[];

@@ -40,7 +40,9 @@ class MacroEventEnriched:
     # Insight fields — None for hardcoded events or when history is
     # too short to compute the comparison.
     prev_value: float | None = None
+    prev_date: date | None = None        # date of `prev_value`'s observation
     prior_value: float | None = None
+    prior_date: date | None = None       # date of `prior_value`'s observation
     change_pct: float | None = None
     unit: str | None = None
     series_id: int | None = None
@@ -69,12 +71,12 @@ def _latest_value_before(
 
 def _value_before_date(
     db: Session, series_id: int, before_date: date
-) -> float | None:
-    """Helper: latest value strictly before `before_date`. Returns
-    just the value (None if missing). Used to find the `prior_value`
-    given a `prev_value`'s observation date."""
+) -> tuple[float | None, date | None]:
+    """Helper: latest (value, date) strictly before `before_date`.
+    Returns (None, None) if no such row. Used to find the
+    `prior_value` given a `prev_value`'s observation date."""
     row = db.execute(
-        select(MacroObservation.value)
+        select(MacroObservation.value, MacroObservation.date)
         .where(
             MacroObservation.series_id == series_id,
             MacroObservation.date < before_date,
@@ -82,7 +84,9 @@ def _value_before_date(
         .order_by(MacroObservation.date.desc())
         .limit(1)
     ).first()
-    return row[0] if row else None
+    if row is None:
+        return None, None
+    return row.value, row.date
 
 
 def _recent_history(
@@ -118,15 +122,21 @@ def get_fred_events(
     for release_date, series in rows:
         prev_v, prev_d = _latest_value_before(db, series.id, release_date)
         prior_v: float | None = None
+        prior_d: date | None = None
         change_pct: float | None = None
         if prev_v is not None and prev_d is not None:
-            prior_v = _value_before_date(db, series.id, prev_d)
+            prior_v, prior_d = _value_before_date(db, series.id, prev_d)
             if (
                 prior_v is not None
                 and prior_v != 0
                 and prev_v is not None
             ):
                 change_pct = (prev_v - prior_v) / abs(prior_v) * 100.0
+        # Extended history window: 36 observations (~3y monthly /
+        # ~9mo weekly / ~36w daily). The compact sparkline takes the
+        # last 12 of these; the expandable detail chart uses the full
+        # set so the user can see longer trends without a second
+        # roundtrip.
         out.append(
             MacroEventEnriched(
                 date=release_date,
@@ -134,11 +144,13 @@ def get_fred_events(
                 importance=series.importance,
                 region=series.region,
                 prev_value=prev_v,
+                prev_date=prev_d,
                 prior_value=prior_v,
+                prior_date=prior_d,
                 change_pct=change_pct,
                 unit=series.unit,
                 series_id=series.id,
-                history=_recent_history(db, series.id, n=12),
+                history=_recent_history(db, series.id, n=36),
             )
         )
     return out

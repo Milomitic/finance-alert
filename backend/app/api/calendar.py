@@ -124,7 +124,9 @@ def get_calendar(
                 importance=e.importance,  # type: ignore[arg-type]
                 region=e.region,  # type: ignore[arg-type]
                 prev_value=e.prev_value,
+                prev_date=e.prev_date,
                 prior_value=e.prior_value,
+                prior_date=e.prior_date,
                 change_pct=e.change_pct,
                 unit=e.unit,
                 history=[

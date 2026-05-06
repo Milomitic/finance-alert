@@ -9,7 +9,6 @@ import { useTopPicks } from "@/hooks/useTopPicks";
 import {
   RISK_LABEL,
   RISK_TONE,
-  scoreBgColor,
   scoreColor,
   scoreLabel,
 } from "@/lib/scoreMeta";
@@ -29,32 +28,13 @@ const COLUMNS: { key: ColumnKey; label: string }[] = [
 
 const ROW_LIMIT = 8;
 
-/* ─── Inline score-strength dots ────────────────────────────────────────── */
-/* Five dots tinted by composite tone. Replaces the previous SparkBars
- * (5 thin bars on a separate line) with a single-line element so
- * ticker + dots + score + change can all live on one row.
- */
-function ScoreDots({ composite }: { composite: number }) {
-  const bgCls = scoreBgColor(composite);
-  return (
-    <span className="flex items-center gap-[2px]" aria-hidden>
-      {Array.from({ length: 5 }).map((_, i) => (
-        <span
-          key={i}
-          className={cn("rounded-full", bgCls)}
-          style={{ width: 5, height: 5 }}
-        />
-      ))}
-    </span>
-  );
-}
-
 /* ─── Row + skeleton ────────────────────────────────────────────────────── */
 
 /**
- * Single-line row: identity (logo + ticker + name) + score dots + risk
- * chip + composite. The change% column was dropped — the user wants
- * Top Picks to focus on the score signal, not today's price drift.
+ * Single-line row: identity (logo + ticker + name) + risk chip +
+ * composite. The score-dots column was dropped per user feedback —
+ * the composite number itself + the risk chip already convey the
+ * signal; the dots were decorative noise.
  *
  * Identity block uses the shared `<StockIdentity>` so it matches Top
  * Movers / 52w & Volume / Alerts (Top stocks + Feed) exactly.
@@ -72,14 +52,11 @@ function PickRow({ item }: { item: TopPickItem }) {
         className="flex-1 min-w-0 flex items-center gap-2 px-3 py-1.5 hover:bg-accent/30 transition-colors"
       >
         <StockIdentity ticker={item.ticker} name={item.name} />
-        {/* Right-side meta cluster — fixed widths so dots / chip /
-            score line up vertically across rows in the same column.
+        {/* Right-side meta cluster — fixed widths so chip + score
+            line up vertically across rows in the same column.
             "CONSERVATIVE" used to dictate the row's right edge with
             its variable text width; fixed slots decouple alignment
             from per-row text length. */}
-        <span className="shrink-0 w-[34px] flex justify-center">
-          <ScoreDots composite={item.composite} />
-        </span>
         <span
           className={cn(
             "shrink-0 w-[92px] text-center px-1 py-px rounded border text-[10px] uppercase tracking-wider font-semibold",
@@ -111,7 +88,6 @@ function RowSkeleton() {
           <div className="h-3.5 w-14 rounded bg-muted/60 animate-pulse" />
           <div className="h-2.5 w-24 rounded bg-muted/40 animate-pulse" />
         </div>
-        <div className="h-2.5 w-8 rounded bg-muted/40 animate-pulse" />
         <div className="h-3.5 w-16 rounded bg-muted/40 animate-pulse" />
         <div className="h-3.5 w-9 rounded bg-muted/60 animate-pulse" />
       </div>

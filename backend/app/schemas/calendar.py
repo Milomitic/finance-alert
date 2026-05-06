@@ -55,7 +55,9 @@ class MacroEventOut(BaseModel):
     # when the event is from the hardcoded fallback list. The UI
     # renders the prev/change/sparkline only when these are present.
     prev_value: float | None = None
+    prev_date: date | None = None     # date of the most-recent prior reading
     prior_value: float | None = None
+    prior_date: date | None = None    # date of the reading before that
     change_pct: float | None = None
     unit: str | None = None
     history: list[MacroObservationOut] = []

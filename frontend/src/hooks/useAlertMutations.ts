@@ -46,8 +46,50 @@ export function useTriggerScan() {
         "Scan avviato in background — la card sotto mostrerà il progresso live",
         { duration: 5000 },
       );
-      // Force-refresh scan-status immediately so the running card appears within ~1s
-      qc.invalidateQueries({ queryKey: ["alerts", "scan-status"] });
+      // The original implementation only called `invalidateQueries`
+      // once, which caused a "needs two clicks to see the toast" race:
+      // the scan endpoint returns 202 before the worker actually
+      // writes the ScanRun row, so the immediate refetch frequently
+      // came back with `is_running=false`, the toast condition stayed
+      // false, and the user had to wait ~30s for the next poll (or
+      // click again to force another refetch).
+      //
+      // Two fixes layered together:
+      //   1. Optimistic patch — set `is_running=true` on the cached
+      //      scan-status immediately so the toast pops up the moment
+      //      the click resolves, with no roundtrip dependency.
+      //   2. Fast-poll burst — invalidate again at 500/1500/3000ms.
+      //      As soon as the worker has written its first heartbeat,
+      //      one of these refreshes pulls the real row + run_id and
+      //      replaces the optimistic stub. Any of them returning
+      //      `is_running=true` is fine; the optimistic state stays
+      //      until then so the toast doesn't flicker off.
+      qc.setQueryData(["alerts", "scan-status"], (prev: Record<string, unknown> | undefined) => ({
+        // Sensible defaults for fields the toast reads when the
+        // backend hasn't reported anything yet.
+        last_run_id: prev?.last_run_id ?? -1,
+        trigger: "manual",
+        status: "running",
+        phase: "fetching",
+        started_at: new Date().toISOString(),
+        completed_at: null,
+        last_progress_at: null,
+        progress_done: 0,
+        progress_total: 0,
+        stocks_scanned: null,
+        stocks_skipped: null,
+        alerts_fired: null,
+        error_message: null,
+        is_running: true,
+        is_stale: false,
+        seconds_since_last_progress: null,
+      }));
+      [500, 1500, 3000].forEach((ms) => {
+        window.setTimeout(
+          () => qc.invalidateQueries({ queryKey: ["alerts", "scan-status"] }),
+          ms,
+        );
+      });
     },
     onError: (err) => toast.error(describeError(err, "Errore avvio scan")),
   });

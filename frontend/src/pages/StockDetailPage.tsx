@@ -124,7 +124,11 @@ export default function StockDetailPage() {
           minimum that still fits the embedded AlertsTable's columns.
           Both cards size to their content (`items-start`); stacks
           vertically below `lg`. */}
-      <div className="grid grid-cols-1 lg:grid-cols-[3fr_2fr] gap-3 items-start">
+      {/* Wider profile (~67%) / narrower alerts (~33%) — was 3:2.
+          The alerts table is fixed-column-count and reads fine in a
+          tighter slot; the profile prose benefits from the extra
+          width per the user's iterative feedback. */}
+      <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-3 items-start">
         <CompanyOverviewCard ticker={ticker} stock={d.stock} />
         <StockAlertsHistoryCard alerts={d.alerts_history} />
       </div>

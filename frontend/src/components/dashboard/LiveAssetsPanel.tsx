@@ -9,6 +9,7 @@ import {
   Loader2,
   type LucideIcon,
 } from "lucide-react";
+import { Link } from "react-router-dom";
 
 import { Sparkline } from "@/components/dashboard/Sparkline";
 import { Card, CardContent } from "@/components/ui/card";
@@ -144,12 +145,15 @@ function AssetRow({ asset }: { asset: LiveAsset }) {
   }
 
   return (
-    <li
-      className={cn(
-        "flex-1 flex items-center gap-2 px-1.5 rounded transition-colors min-h-0",
-        "hover:bg-muted/50",
-      )}
-    >
+    <li className="flex-1 flex min-h-0">
+      <Link
+        to={`/markets/${encodeURIComponent(asset.symbol)}`}
+        className={cn(
+          "flex-1 flex items-center gap-2 px-1.5 rounded transition-colors min-h-0",
+          "hover:bg-muted/50",
+        )}
+        title={`Apri dettaglio ${asset.name}`}
+      >
       {/* Flag (indices) or per-symbol brand icon (commodities/crypto) */}
       <span className="shrink-0 w-[22px] flex items-center justify-center">
         {asset.flag ? (
@@ -222,6 +226,7 @@ function AssetRow({ asset }: { asset: LiveAsset }) {
           {fmtPct(changePct)}
         </span>
       </div>
+      </Link>
     </li>
   );
 }

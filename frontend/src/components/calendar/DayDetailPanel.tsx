@@ -690,46 +690,190 @@ function MacroRow({ event }: { event: MacroEvent }) {
  * than rendering an empty placeholder.
  */
 function MacroInsightStrip({ event }: { event: MacroEvent }) {
+  const [expanded, setExpanded] = useState(false);
   const prev = event.prev_value;
+  const prevDate = event.prev_date;
   const prior = event.prior_value;
   const change = event.change_pct;
   const unit = event.unit ?? "";
   const history = event.history ?? [];
 
   return (
-    <div className="mt-1.5 pt-1.5 border-t border-current/10 flex items-center gap-3 text-[11px]">
-      {prev != null && (
-        <span className="inline-flex items-baseline gap-1">
-          <span className="opacity-60 uppercase tracking-wider">Prec.</span>
-          <span className="font-semibold tabular-nums">
-            {formatMacroValue(prev, unit)}
+    <div className="mt-1.5 pt-1.5 border-t border-current/10 space-y-1.5">
+      {/* Row 1 — compact summary always visible. The user's spec
+          asked for clearer separation of "previous value" vs "next
+          release expectation": labeled chips ("Ultimo" / "Δ" /
+          "Atteso") make each role explicit instead of inferring
+          from position. */}
+      <div className="flex items-center gap-3 text-[11px] flex-wrap">
+        {prev != null && (
+          <span className="inline-flex items-baseline gap-1.5">
+            <span className="opacity-60 uppercase tracking-wider">
+              Ultimo
+            </span>
+            <span className="font-bold tabular-nums">
+              {formatMacroValue(prev, unit)}
+            </span>
+            {prevDate && (
+              <span
+                className="opacity-50 text-[10px] tabular-nums"
+                title={`Periodo di riferimento: ${formatMacroDate(prevDate)}`}
+              >
+                ({formatMacroDate(prevDate)})
+              </span>
+            )}
           </span>
-        </span>
-      )}
-      {change != null && (
+        )}
+        {change != null && (
+          <span
+            className={cn(
+              "inline-flex items-baseline gap-1 font-semibold tabular-nums",
+              change > 0
+                ? "text-emerald-700 dark:text-emerald-400"
+                : change < 0
+                  ? "text-rose-700 dark:text-rose-400"
+                  : "opacity-70",
+            )}
+            title={
+              prior != null
+                ? `Variazione vs lettura precedente (${formatMacroValue(prior, unit)})`
+                : undefined
+            }
+          >
+            <span className="opacity-60 uppercase tracking-wider font-normal">
+              Δ
+            </span>
+            {change > 0 ? "▲" : change < 0 ? "▼" : "·"}
+            {change >= 0 ? "+" : ""}
+            {change.toFixed(2)}%
+          </span>
+        )}
+        {/* "Atteso" placeholder — the user wanted to see "expected for
+            next release". FRED doesn't publish forecasts, so we make
+            the gap explicit (n/d + tooltip) instead of hiding it.
+            When a TradingEconomics / broker feed lands, this slot
+            fills in without a layout shift. */}
         <span
-          className={cn(
-            "inline-flex items-center gap-0.5 font-semibold tabular-nums",
-            change > 0
-              ? "text-emerald-700 dark:text-emerald-400"
-              : change < 0
-                ? "text-rose-700 dark:text-rose-400"
-                : "opacity-70",
-          )}
-          title={prior != null ? `Variazione vs ${formatMacroValue(prior, unit)}` : undefined}
+          className="inline-flex items-baseline gap-1 opacity-60"
+          title="Consensus forecast non disponibile — FRED non pubblica previsioni. Slot riservato per integrazione futura (TradingEconomics o broker feed)."
         >
-          {change > 0 ? "▲" : change < 0 ? "▼" : "·"}
-          {change >= 0 ? "+" : ""}
-          {change.toFixed(2)}%
+          <span className="uppercase tracking-wider">Atteso</span>
+          <span className="italic">n/d</span>
         </span>
-      )}
-      {history.length >= 2 && (
-        <span className="ml-auto opacity-90 shrink-0">
-          <MacroSparkline history={history} />
-        </span>
+        {history.length >= 2 && (
+          <>
+            <span className="ml-auto opacity-90 shrink-0">
+              <MacroSparkline history={history.slice(-12)} />
+            </span>
+            <button
+              type="button"
+              onClick={() => setExpanded((v) => !v)}
+              className="text-[10px] uppercase tracking-wider opacity-70 hover:opacity-100 transition-opacity inline-flex items-center gap-0.5"
+              aria-expanded={expanded}
+              aria-label={expanded ? "Riduci storico" : "Vedi storico esteso"}
+            >
+              {expanded ? "Riduci ▴" : "Storico ▾"}
+            </button>
+          </>
+        )}
+      </div>
+
+      {/* Row 2 — extended history, lazy-mounted on expand. ~36
+          observations with min/max labels + first/last date axis +
+          highlighted last point. */}
+      {expanded && history.length >= 2 && (
+        <ExtendedHistoryChart history={history} unit={unit} />
       )}
     </div>
   );
+}
+
+/** Taller chart of the last ~36 observations. Used when the user
+ *  expands the macro insight strip in the detail panel. */
+function ExtendedHistoryChart({
+  history,
+  unit,
+}: {
+  history: { date: string; value: number | null }[];
+  unit: string;
+}) {
+  const pts = history.filter(
+    (p): p is { date: string; value: number } =>
+      p.value != null && Number.isFinite(p.value),
+  );
+  if (pts.length < 2) return null;
+  const W = 360;
+  const H = 80;
+  const pad = 4;
+  const min = Math.min(...pts.map((p) => p.value));
+  const max = Math.max(...pts.map((p) => p.value));
+  const range = max - min || 1;
+  const points = pts.map((p, i) => {
+    const x = pad + (i / (pts.length - 1)) * (W - pad * 2);
+    const y = H - pad - ((p.value - min) / range) * (H - pad * 2);
+    return { x, y, value: p.value, date: p.date };
+  });
+  const path = points
+    .map((p, i) => `${i === 0 ? "M" : "L"}${p.x.toFixed(1)},${p.y.toFixed(1)}`)
+    .join(" ");
+  const last = points[points.length - 1];
+  return (
+    <div className="rounded border border-current/15 bg-current/5 p-2">
+      <div className="flex items-baseline justify-between text-[10px] opacity-70 tabular-nums mb-1">
+        <span>{formatMacroDate(pts[0].date)}</span>
+        <span className="opacity-90 italic">
+          {pts.length} osservazioni · max {formatMacroValue(max, unit)} · min{" "}
+          {formatMacroValue(min, unit)}
+        </span>
+        <span>{formatMacroDate(pts[pts.length - 1].date)}</span>
+      </div>
+      <svg
+        width="100%"
+        height={H}
+        viewBox={`0 0 ${W} ${H}`}
+        preserveAspectRatio="none"
+        className="block"
+        aria-hidden
+      >
+        <path
+          d={path}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.4"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          vectorEffect="non-scaling-stroke"
+        />
+        <circle
+          cx={last.x}
+          cy={last.y}
+          r="3"
+          fill="currentColor"
+          stroke="white"
+          strokeWidth="1"
+        />
+      </svg>
+      <div className="text-[10px] opacity-70 mt-1 text-right tabular-nums">
+        Ultimo:{" "}
+        <span className="font-semibold">
+          {formatMacroValue(last.value, unit)}
+        </span>
+        {" · "}
+        {formatMacroDate(last.date)}
+      </div>
+    </div>
+  );
+}
+
+/** Format a YYYY-MM-DD ISO date as Italian short ("15 mar 2026"). */
+function formatMacroDate(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString("it-IT", {
+    day: "numeric",
+    month: "short",
+    year: "2-digit",
+  });
 }
 
 /** Format a macro observation value for display. `unit` switches the
