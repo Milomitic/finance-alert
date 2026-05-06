@@ -28,13 +28,15 @@ def test_status_returns_entry_per_index(client: TestClient) -> None:
     assert resp.status_code == 200
     data = resp.json()
     codes = {i["index_code"] for i in data["indices"]}
-    # SSE50 / CSI300 were removed from refresh sources when the user
-    # opted out of Chinese-mainland constituents — only HSI30 (Hang
-    # Seng, HK) remains for Asia-ex-Japan coverage.
+    # SSE50 was restored as a refresh source (CN stocks live in DB to
+    # feed the dashboard breadth/mood metrics, hidden everywhere else).
+    # CSI300 stays out — SSE50 alone is enough for the breadth signal.
+    # KOSPI20 isn't here because it's seed-only (no Wikipedia refresh
+    # entry); the test enumerates `INDEX_SOURCES`, not all `Index` rows.
     assert codes == {
         "SP500", "NDX", "DJI",
         "FTSEMIB", "EUSTX50", "FTSE100",
-        "HSI30",
+        "SSE50", "HSI30",
     }
     # Each entry is null-shaped initially
     for entry in data["indices"]:

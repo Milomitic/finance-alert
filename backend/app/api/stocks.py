@@ -2,7 +2,7 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
@@ -120,8 +120,15 @@ def get_one(
     # canonicalizzazione in seed/catalog refresh: usiamo
     # `scalar_one_or_none()` per fail-loud se qualcuno reintroduce
     # duplicati (più sicuro di `.first()` che li nasconderebbe).
+    # Filter `country='CN'` here too so a deep link like
+    # `/stocks/600519.SS` doesn't leak the row that's hidden everywhere
+    # else; the stocks live in DB only to feed breadth/mood metrics.
+    # NULL-tolerant for test fixtures.
     stock = db.execute(
-        select(Stock).where(Stock.ticker == ticker)
+        select(Stock).where(
+            Stock.ticker == ticker,
+            or_(Stock.country.is_(None), Stock.country != "CN"),
+        )
     ).scalar_one_or_none()
     if stock is None:
         raise HTTPException(status_code=404, detail="Stock not found")

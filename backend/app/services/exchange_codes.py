@@ -31,6 +31,8 @@ SUFFIX_TO_EXCHANGE: dict[str, str] = {
     ".SS": "SSE",      # Shanghai Stock Exchange
     ".SZ": "SZSE",     # Shenzhen Stock Exchange
     ".HK": "HKEX",     # Hong Kong
+    ".T":  "JPX",      # Japan Exchange Group (Tokyo)
+    ".KS": "KRX",      # Korea Exchange (KOSPI)
     ".L":  "LSE",      # London Stock Exchange
 }
 

@@ -22,10 +22,15 @@ interface RegionDef {
   indexCodes: string[];
 }
 
+// Asia mood now blends Japan + Korea + Hong Kong + China. Japan ranks
+// first per user preference (Nikkei is the headline Asian benchmark in
+// most Italian financial press); SSE50 stays in the list to keep China
+// represented in the breadth/mood signal even though its individual
+// stocks are hidden from every user-facing surface.
 const REGIONS: RegionDef[] = [
   { code: "US",   label: "USA",     flagSrc: "/flags/us.svg",   indexCodes: ["SP500", "NDX", "DJI"] },
   { code: "EU",   label: "Europa",  flagSrc: "/flags/eu.svg",   indexCodes: ["EUSTX50", "FTSEMIB"] },
-  { code: "ASIA", label: "Asia",    flagSrc: null, emoji: "🌏", indexCodes: ["SSE50", "HSI30"] },
+  { code: "ASIA", label: "Asia",    flagSrc: null, emoji: "🌏", indexCodes: ["N225", "KOSPI20", "HSI30", "SSE50"] },
 ];
 
 const MOOD_CONFIG: Record<MoodKey, {

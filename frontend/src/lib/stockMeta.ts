@@ -16,6 +16,7 @@ const COUNTRY_TO_FLAG: Record<string, string> = {
   GB: "gb",
   UK: "gb",
   JP: "jp",
+  KR: "kr",
   // European member states — each has its own SVG now
   DE: "de",
   FR: "fr",
@@ -51,6 +52,9 @@ const COUNTRY_NAME_TO_FLAG: Record<string, string> = {
   "great britain": "gb",
   "england": "gb",
   "japan": "jp",
+  "south korea": "kr",
+  "korea": "kr",
+  "republic of korea": "kr",
   "switzerland": "ch",
   "canada": "ca",
   "australia": "au",
@@ -90,6 +94,7 @@ const SUFFIX_TO_FLAG: Record<string, string> = {
   SS: "cn",   // Shanghai
   SZ: "cn",   // Shenzhen
   T: "jp",    // Tokyo
+  KS: "kr",   // KOSPI (Seoul)
 };
 
 /**

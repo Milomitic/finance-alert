@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 30 20" preserveAspectRatio="none">
+  <rect width="30" height="20" fill="#fff"/>
+  <!-- Simplified Taegukgi: red+blue yin-yang circle in the centre.
+       Full flag has four black trigrams in the corners; at our small
+       render size (~22x16px) those would be illegible — drop them. -->
+  <circle cx="15" cy="10" r="5" fill="#cd2e3a"/>
+  <path d="M15 5 a2.5 2.5 0 0 1 0 5 a2.5 2.5 0 0 0 0 5 a5 5 0 0 0 0 -10 z" fill="#0047a0"/>
+</svg>

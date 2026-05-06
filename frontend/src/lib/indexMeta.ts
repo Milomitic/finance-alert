@@ -24,6 +24,7 @@ const META: Record<string, IndexMeta> = {
   CSI300:  { countryCode: "cn", country: "China",     fullName: "CSI 300 (Shanghai + Shenzhen)",    displayCode: "CSI300" },
   HSI30:   { countryCode: "hk", country: "Hong Kong", fullName: "Hang Seng top 50",                 displayCode: "HSI50" },
   N225:    { countryCode: "jp", country: "Japan",     fullName: "Nikkei 225 (top constituents)",   displayCode: "NIKKEI" },
+  KOSPI20: { countryCode: "kr", country: "Korea",     fullName: "KOSPI top 20",                     displayCode: "KOSPI20" },
 };
 
 const FALLBACK: IndexMeta = { countryCode: "", country: "—", fullName: "—", displayCode: "—" };

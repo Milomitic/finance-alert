@@ -8,7 +8,7 @@ from typing import Any
 
 import pandas as pd
 from loguru import logger
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.models import (
@@ -141,7 +141,21 @@ def scan_universe(
     so the overhead is negligible.
     """
     result = ScanResult()
-    stocks = list(db.execute(select(Stock)).scalars().all())
+    # Skip Chinese-mainland stocks entirely from alert generation. They
+    # live in the catalog only to feed dashboard breadth + Asia mood
+    # aggregation; the user doesn't want alerts for them. Mirrors the
+    # filter in `services/stock_service._apply_filter`. NULL-tolerant
+    # (`!=` is false for NULL in SQL) so test fixtures and legacy rows
+    # without a country still scan normally.
+    stocks = list(
+        db.execute(
+            select(Stock).where(
+                or_(Stock.country.is_(None), Stock.country != "CN")
+            )
+        )
+        .scalars()
+        .all()
+    )
     total = len(stocks)
     global_rules = _load_global_rules(db)
     tier2 = _load_tier2_overrides_by_stock(db)
