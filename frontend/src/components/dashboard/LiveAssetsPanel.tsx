@@ -80,12 +80,12 @@ function AssetRow({ asset }: { asset: LiveAsset }) {
   return (
     <li
       className={cn(
-        "flex items-center gap-2 px-2 py-1.5 -mx-1 rounded transition-colors",
-        "hover:bg-muted/40",
+        "flex items-center gap-1.5 px-1.5 py-1 rounded transition-colors",
+        "hover:bg-muted/50",
       )}
     >
       {/* Flag (when known) or category icon */}
-      <span className="shrink-0 w-5 flex items-center justify-center">
+      <span className="shrink-0 w-[18px] flex items-center justify-center">
         {asset.flag ? (
           <img
             src={`/flags/${asset.flag}.svg`}
@@ -93,38 +93,34 @@ function AssetRow({ asset }: { asset: LiveAsset }) {
             width={18}
             height={12}
             style={{ width: "18px", height: "12px", objectFit: "cover" }}
-            className="rounded-[2px] shadow-sm"
+            className="rounded-[2px] ring-1 ring-border/60"
             aria-hidden
           />
         ) : (
-          <Icon className="h-3.5 w-3.5 text-muted-foreground" />
+          <Icon className="h-3.5 w-3.5 text-muted-foreground/80" />
         )}
       </span>
 
-      {/* Identity: symbol + name */}
-      <div className="flex-1 min-w-0">
-        <div className="flex items-baseline gap-1.5">
-          <span className="text-[12.5px] font-bold tabular-nums truncate">
-            {asset.name}
+      {/* Identity: name + live dot */}
+      <div className="flex-1 min-w-0 flex items-center gap-1">
+        <span className="text-[11.5px] font-semibold truncate leading-tight">
+          {asset.name}
+        </span>
+        {isLive && (
+          <span
+            className="relative inline-flex h-1.5 w-1.5 shrink-0"
+            title="Mercato aperto · prezzo live"
+          >
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60" />
+            <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500" />
           </span>
-          {isLive && (
-            <span
-              className="relative inline-flex h-1.5 w-1.5 shrink-0"
-              title="Mercato aperto · prezzo live"
-            >
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60" />
-              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500" />
-            </span>
-          )}
-        </div>
-        <div className="text-[10px] text-muted-foreground/70 tabular-nums truncate">
-          {asset.symbol}
-        </div>
+        )}
       </div>
 
-      {/* Price + change */}
-      <div className="text-right shrink-0">
-        <div className="text-[13px] font-bold tabular-nums leading-tight">
+      {/* Price + change inline (right-aligned, tighter than the old
+          two-row layout to fit two columns in the same vertical budget) */}
+      <div className="text-right shrink-0 flex items-baseline gap-1.5 leading-tight">
+        <span className="text-[11.5px] font-bold tabular-nums">
           {hasError ? (
             <Tooltip>
               <TooltipTrigger asChild>
@@ -137,17 +133,27 @@ function AssetRow({ asset }: { asset: LiveAsset }) {
           ) : (
             fmtPrice(price)
           )}
-        </div>
-        <div
+        </span>
+        <span
           className={cn(
-            "text-[10.5px] font-semibold tabular-nums leading-tight",
+            "text-[10px] font-semibold tabular-nums tracking-tight w-[44px] text-right",
             changeColor(changePct),
           )}
         >
           {fmtPct(changePct)}
-        </div>
+        </span>
       </div>
     </li>
+  );
+}
+
+/** Subtle uppercase divider above each category section. Separated from
+ *  the row component because both columns render multiple categories. */
+function CategoryHeader({ category }: { category: LiveAsset["category"] }) {
+  return (
+    <div className="px-1.5 pt-1 pb-0.5 text-[9px] uppercase tracking-[0.16em] text-muted-foreground/60 font-semibold">
+      {CATEGORY_LABEL[category]}
+    </div>
   );
 }
 
@@ -170,6 +176,14 @@ export function LiveAssetsPanel() {
     }
   }
 
+  // Two-column layout: indices on the left (the dominant group, ~7
+  // rows), commodities + crypto on the right. Splitting at index 1 is
+  // robust to backend reordering as long as the canonical 3 categories
+  // remain — if a fourth category lands one day, it'll just append to
+  // the right column.
+  const leftGroups = groups.slice(0, 1);
+  const rightGroups = groups.slice(1);
+
   return (
     <Card className="h-full overflow-hidden">
       <CardContent className="p-3 flex flex-col h-full min-h-0">
@@ -183,43 +197,52 @@ export function LiveAssetsPanel() {
             ) : undefined
           }
         />
-        <div className="flex-1 min-h-0 overflow-y-auto">
-          {q.isLoading ? (
-            <div className="space-y-2 p-2">
-              {Array.from({ length: 8 }).map((_, i) => (
-                <div
-                  key={i}
-                  className="h-8 rounded bg-muted/40 animate-pulse"
-                />
-              ))}
-            </div>
-          ) : groups.length === 0 ? (
-            <div className="text-xs text-muted-foreground text-center py-6">
-              Asset non disponibili.
-            </div>
-          ) : (
-            <ul className="space-y-0">
-              {groups.map((g, gi) => (
-                <li key={g.category}>
-                  {/* Category divider — subtle uppercase label between
-                      sections (Indici / Materie prime / Crypto) */}
-                  {gi > 0 && (
-                    <div className="my-1 mx-2 border-t border-border/40" />
-                  )}
-                  <div className="px-2 pt-1 pb-0.5 text-[9.5px] uppercase tracking-[0.14em] text-muted-foreground/60 font-semibold">
-                    {CATEGORY_LABEL[g.category]}
-                  </div>
-                  <ul>
-                    {g.rows.map((asset) => (
-                      <AssetRow key={asset.symbol} asset={asset} />
-                    ))}
-                  </ul>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+        {q.isLoading ? (
+          <div className="grid grid-cols-2 gap-x-3 gap-y-1 flex-1 min-h-0 px-1">
+            {Array.from({ length: 12 }).map((_, i) => (
+              <div
+                key={i}
+                className="h-7 rounded bg-muted/40 animate-pulse"
+              />
+            ))}
+          </div>
+        ) : groups.length === 0 ? (
+          <div className="text-xs text-muted-foreground text-center py-6 flex-1">
+            Asset non disponibili.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-3 sm:divide-x sm:divide-border/40 flex-1 min-h-0">
+            <Column groups={leftGroups} />
+            <Column groups={rightGroups} className="sm:pl-3" />
+          </div>
+        )}
       </CardContent>
     </Card>
+  );
+}
+
+/** One vertical column rendering ≥1 category sections back-to-back.
+ *  The two columns share the SectionTitle above; any number of groups
+ *  per column is supported. */
+function Column({
+  groups,
+  className,
+}: {
+  groups: Array<{ category: LiveAsset["category"]; rows: LiveAsset[] }>;
+  className?: string;
+}) {
+  return (
+    <div className={cn("min-w-0", className)}>
+      {groups.map((g) => (
+        <div key={g.category} className="mb-1 last:mb-0">
+          <CategoryHeader category={g.category} />
+          <ul className="space-y-0">
+            {g.rows.map((asset) => (
+              <AssetRow key={asset.symbol} asset={asset} />
+            ))}
+          </ul>
+        </div>
+      ))}
+    </div>
   );
 }
