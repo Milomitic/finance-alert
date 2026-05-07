@@ -54,6 +54,9 @@ class MacroEvent:
     label: str
     importance: Importance
     region: Region
+    # ISO time-of-day in UTC, e.g. "12:30" for 8:30 ET. Optional - left
+    # None for events without a precisely scheduled release window.
+    release_time: str | None = None
 
 
 # Static seed: ~80 events covering ~May 2026 through Aug 2026.
@@ -206,3 +209,55 @@ def get_macro_events(
     ]
     out.sort(key=lambda e: (e.date, importance_rank.get(e.importance, 99)))
     return out
+
+
+
+# ---------------------------------------------------------------------------
+# Release time UTC (HH:MM) per well-known macro event label.
+# ---------------------------------------------------------------------------
+# Hardcoded because each macroeconomic indicator follows a fixed monthly /
+# quarterly schedule with a stable release window (e.g. US CPI is ALWAYS
+# 8:30 ET on its print day, FOMC ALWAYS 14:00 ET). The user just needs the
+# UTC HH:MM to know "when do I watch the print"; we don't need a generic
+# scheduler. Times are UTC year-round (no DST adjustment) — close enough
+# for the calendar's "watch this slot" use case.
+
+_RELEASE_TIMES_UTC: dict[str, str] = {
+    # US (ET ~ UTC-5/-4 depending on DST; we use the winter-time UTC anchor)
+    "US NFP / Non-Farm Payrolls":         "12:30",
+    "US CPI release":                     "12:30",
+    "US PPI release":                     "12:30",
+    "US Retail Sales":                    "12:30",
+    "US GDP (advance, Q1)":               "12:30",
+    "US GDP (final, Q1)":                 "12:30",
+    "US PCE Price Index (April)":         "12:30",
+    "FOMC rate decision":                 "18:00",
+    "ISM Manufacturing PMI":              "14:00",
+    "ISM Services PMI":                   "14:00",
+    # ECB / EU
+    "ECB rate decision":                  "12:15",
+    "Eurozone HICP flash (April)":        "09:00",
+    "Eurozone HICP flash (May)":          "09:00",
+    "Eurozone HICP flash (June)":         "09:00",
+    "Eurozone PMI flash":                 "08:00",
+    # UK
+    "BoE rate decision":                  "11:00",
+    "UK CPI release":                     "06:00",
+    "UK GDP (Q1, prelim)":                "06:00",
+    # JP
+    "Japan CPI release":                  "23:30",
+    # KR
+    "BoK rate decision":                  "01:00",
+    # CN
+    "China CPI release":                  "01:30",
+    "China NBS Manufacturing PMI":        "01:30",
+    "PBoC LPR fixing":                    "01:30",
+    # DE
+    "ZEW Economic Sentiment (DE)":        "10:00",
+    "IFO Business Climate (DE)":          "09:00",
+}
+
+
+def release_time_for(label: str) -> str | None:
+    """UTC HH:MM for a known macro event label, or None."""
+    return _RELEASE_TIMES_UTC.get(label)

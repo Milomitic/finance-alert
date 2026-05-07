@@ -59,6 +59,9 @@ class EarningsEvent:
     earnings_growth: float | None = None       # YoY EPS growth, fraction
     composite_score: float | None = None       # 0-100 composite score
     risk_tier: str | None = None               # "conservative"/"moderate"/"aggressive"
+    # Inferred timing relative to the trading session: "pre" (before
+    # market open), "after" (after close), or None when we cant infer.
+    earnings_when: str | None = None
 
 
 @dataclass
@@ -80,6 +83,7 @@ class MacroEventDC:
     change_pct: float | None = None
     unit: str | None = None
     history: list[tuple[date, float | None]] = field(default_factory=list)
+    release_time: str | None = None
 
 
 CalendarEvent = EarningsEvent | MacroEventDC
@@ -148,7 +152,7 @@ def _earnings_for_stock(
     forward_pe = cached.micro.forward_pe if cached.micro else None
     earnings_growth = cached.micro.earnings_growth if cached.micro else None
 
-    def _make(d: date, eps_est: float | None, rev_est: float | None) -> EarningsEvent:
+    def _make(d: date, eps_est: float | None, rev_est: float | None, time_utc: str | None) -> EarningsEvent:
         return EarningsEvent(
             date=d,
             kind="earnings",
@@ -162,6 +166,7 @@ def _earnings_for_stock(
             earnings_growth=earnings_growth,
             composite_score=score.composite if score else None,
             risk_tier=score.risk_tier if score else None,
+            earnings_when=_classify_session_timing(time_utc, stock.country),
         )
 
     out: list[EarningsEvent] = []
@@ -170,7 +175,7 @@ def _earnings_for_stock(
     # Forward-looking: next_earnings_date
     nxt_d = _parse_iso_date(cached.next_earnings_date)
     if nxt_d is not None and date_from <= nxt_d <= date_to:
-        out.append(_make(nxt_d, cached.next_eps_estimate, cached.next_revenue_estimate))
+        out.append(_make(nxt_d, cached.next_eps_estimate, cached.next_revenue_estimate, getattr(cached, "next_earnings_time_utc", None)))
         seen.add(nxt_d)
 
     # Historical (and any forward dates yfinance puts in earnings[] without
@@ -182,19 +187,51 @@ def _earnings_for_stock(
             continue
         if not (date_from <= d <= date_to):
             continue
-        out.append(_make(d, ep.eps_estimate, ep.revenue_estimate))
+        out.append(_make(d, ep.eps_estimate, ep.revenue_estimate, getattr(ep, "time_utc", None)))
         seen.add(d)
 
     return out
 
 
+def _classify_session_timing(time_utc: str | None, country: str | None) -> str | None:
+    """Return "pre" | "after" | None given a UTC HH:MM string and the
+    listing country.
+
+    For US tickers we use the standard NYSE/NASDAQ session boundaries
+    in UTC (winter offsets — close enough for the icon hint):
+      - 14:30 UTC = 9:30 ET = market open
+      - 21:00 UTC = 16:00 ET = market close
+    Times before 14:30 = pre-market; on/after 21:00 = after-market.
+    Mid-session prints (rare) and tickers outside US fall through to
+    None (no icon shown rather than wrong icon).
+    """
+    if not time_utc or not country:
+        return None
+    try:
+        h, m = time_utc.split(":")
+        minutes = int(h) * 60 + int(m)
+    except (ValueError, AttributeError):
+        return None
+    if country == "US":
+        # 14:30 UTC = 870 minutes; 21:00 UTC = 1260 minutes
+        if minutes < 14 * 60 + 30:
+            return "pre"
+        if minutes >= 21 * 60:
+            return "after"
+        return None
+    # Other markets: heuristic only — we dont track their sessions yet.
+    return None
+
+
 def _convert_macro(m: MacroEvent) -> MacroEventDC:
+    from app.services.calendar_macros import release_time_for
     return MacroEventDC(
         date=m.date,
         kind="macro",
         label=m.label,
         importance=m.importance,
         region=m.region,
+        release_time=m.release_time or release_time_for(m.label),
     )
 
 
@@ -253,6 +290,7 @@ def get_events(
             if importance_filter is not None and fe.importance not in importance_filter:
                 continue
             seen_keys.add((fe.label, fe.date))
+            from app.services.calendar_macros import release_time_for
             events.append(
                 MacroEventDC(
                     date=fe.date,
@@ -267,6 +305,7 @@ def get_events(
                     change_pct=fe.change_pct,
                     unit=fe.unit,
                     history=fe.history,
+                    release_time=release_time_for(fe.label),
                 )
             )
 

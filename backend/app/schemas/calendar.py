@@ -27,6 +27,7 @@ class EarningsEventOut(BaseModel):
     earnings_growth: float | None = None       # YoY EPS growth, fraction
     composite_score: float | None = None       # 0-100 composite score
     risk_tier: Literal["conservative", "moderate", "aggressive"] | None = None
+    earnings_when: Literal["pre", "after"] | None = None
 
 
 class MacroObservationOut(BaseModel):
@@ -61,6 +62,11 @@ class MacroEventOut(BaseModel):
     change_pct: float | None = None
     unit: str | None = None
     history: list[MacroObservationOut] = []
+    # Release time UTC HH:MM ("12:30" = 12:30 UTC = 8:30 ET for US events
+    # / 14:30 CET for EU events). None when the schedule is daily without
+    # a specific window. The frontend renders it next to the date so the
+    # user knows when to watch the print.
+    release_time: str | None = None
 
 
 CalendarEvent = Annotated[

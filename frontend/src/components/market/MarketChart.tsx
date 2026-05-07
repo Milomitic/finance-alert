@@ -77,7 +77,11 @@ export function MarketChart({
       },
       crosshair: { mode: CrosshairMode.Normal },
       rightPriceScale: { borderColor: "rgba(115, 115, 115, 0.2)" },
-      timeScale: { borderColor: "rgba(115, 115, 115, 0.2)", timeVisible: false },
+      timeScale: {
+        borderColor: "rgba(115, 115, 115, 0.2)",
+        timeVisible: timeframe === "30m" || timeframe === "1h",
+        secondsVisible: false,
+      },
     });
     chartRef.current = chart;
     candleRef.current = chart.addCandlestickSeries({

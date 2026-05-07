@@ -43,6 +43,7 @@ class EarningsPoint:
     surprise_pct: float | None
     revenue_estimate: float | None = None
     revenue_reported: float | None = None
+    time_utc: str | None = None  # HH:MM UTC, used for pre/after-market classification
 
 
 @dataclass
@@ -222,6 +223,7 @@ class Fundamentals:
     quarterly: list[QuarterlyPoint] = field(default_factory=list)
     earnings: list[EarningsPoint] = field(default_factory=list)
     next_earnings_date: str | None = None
+    next_earnings_time_utc: str | None = None  # UTC HH:MM
     next_eps_estimate: float | None = None
     next_revenue_estimate: float | None = None
     micro: MicroData = field(default_factory=MicroData)
@@ -297,7 +299,7 @@ def _extract_quarterly(qinc_stmt: Any) -> list[QuarterlyPoint]:
 
 def _extract_earnings(
     ed: Any,
-) -> tuple[list[EarningsPoint], str | None, float | None, float | None]:
+) -> tuple[list[EarningsPoint], str | None, float | None, float | None, str | None]:
     """Parse yfinance's earnings_dates DataFrame into history + next-up.
 
     Returns (historical, next_date, next_eps_estimate, next_revenue_estimate).
@@ -313,32 +315,44 @@ def _extract_earnings(
     next_date: str | None = None
     next_estimate: float | None = None
     next_rev_estimate: float | None = None
+    next_time_utc: str | None = None
 
     ed_sorted = ed.sort_index(ascending=True)
     for ts, row in ed_sorted.iterrows():
         d = str(ts.date()) if hasattr(ts, "date") else str(ts)
+        # yfinance earnings_dates returns tz-aware Timestamps. Convert
+        # to UTC and pluck HH:MM so the calendar can later infer
+        # pre/after-market based on the US session boundaries.
+        time_utc: str | None = None
+        try:
+            if hasattr(ts, "tz_convert") and ts.tzinfo is not None:
+                ts_utc = ts.tz_convert("UTC")
+                time_utc = f"{ts_utc.hour:02d}:{ts_utc.minute:02d}"
+        except Exception:
+            time_utc = None
         est = _safe_float(row.get("EPS Estimate"))
         rep = _safe_float(row.get("Reported EPS"))
         surp = _safe_float(row.get("Surprise(%)"))
-        # Some yfinance versions also expose Revenue Estimate / Revenue Reported
         rev_est = _safe_float(row.get("Revenue Estimate")) if "Revenue Estimate" in row.index else None
         rev_rep = _safe_float(row.get("Revenue Reported")) if "Revenue Reported" in row.index else None
         if rep is not None:
             historical.append(EarningsPoint(
                 date=d, eps_estimate=est, eps_reported=rep, surprise_pct=surp,
                 revenue_estimate=rev_est, revenue_reported=rev_rep,
+                time_utc=time_utc,
             ))
         elif next_date is None:
             next_date = d
             next_estimate = est
             next_rev_estimate = rev_est
+            next_time_utc = time_utc
 
     # 20 quarters ≈ 5 years of earnings history. Bumped from 8 (=2y) so the
     # FundamentalsCard can show longer trends without re-fetching. yfinance
     # typically returns 12-16 rows so this cap usually doesn't bite, but
     # keeps the L2 payload bounded against pathological responses.
     historical = historical[-20:]
-    return historical, next_date, next_estimate, next_rev_estimate
+    return historical, next_date, next_estimate, next_rev_estimate, next_time_utc
 
 
 def _extract_micro(info: dict | None) -> MicroData:
@@ -709,9 +723,10 @@ def _fetch_fresh(ticker: str) -> Fundamentals:
             logger.debug(f"[fund] quarterly {ticker}: {e}")
             _maybe_record(e)
         try:
-            hist, nxt_date, nxt_est, nxt_rev_est = _extract_earnings(t.earnings_dates)
+            hist, nxt_date, nxt_est, nxt_rev_est, nxt_time = _extract_earnings(t.earnings_dates)
             f.earnings = hist
             f.next_earnings_date = nxt_date
+            f.next_earnings_time_utc = nxt_time
             f.next_eps_estimate = nxt_est
             f.next_revenue_estimate = nxt_rev_est
             if hist or nxt_date: saw_success = True

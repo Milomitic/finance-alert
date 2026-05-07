@@ -47,6 +47,7 @@ class MacroEventEnriched:
     unit: str | None = None
     series_id: int | None = None
     history: list[tuple[date, float | None]] = field(default_factory=list)
+    release_time: str | None = None  # UTC HH:MM, hardcoded per-label
 
 
 def _latest_value_before(

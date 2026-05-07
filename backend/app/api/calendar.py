@@ -116,6 +116,7 @@ def get_calendar(
                 earnings_growth=e.earnings_growth,
                 composite_score=e.composite_score,
                 risk_tier=e.risk_tier,  # type: ignore[arg-type]
+                earnings_when=e.earnings_when,  # type: ignore[arg-type]
             ))
         elif isinstance(e, MacroEventDC):
             out_events.append(MacroEventOut(
@@ -133,6 +134,7 @@ def get_calendar(
                     MacroObservationOut(date=d, value=v)
                     for d, v in e.history
                 ],
+                release_time=e.release_time,
             ))
 
     return CalendarOut(

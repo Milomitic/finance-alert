@@ -102,6 +102,28 @@ function EarningsChip({
           <span className="text-[14px] font-bold tracking-tight tabular-nums leading-none truncate">
             {event.ticker}
           </span>
+          {/* V3.4: pre/after-market icon. ☀ before market open (the
+              earnings was reported in pre-market window),
+              ☾ after-market close. Backend infers from yfinance UTC
+              timestamps vs the US session boundaries. */}
+          {event.earnings_when === "pre" && (
+            <span
+              className="text-[11px] leading-none shrink-0"
+              title="Pre-market: earnings rilasciati prima dell'apertura della sessione"
+              aria-label="pre-market"
+            >
+              ☀
+            </span>
+          )}
+          {event.earnings_when === "after" && (
+            <span
+              className="text-[11px] leading-none shrink-0 opacity-80"
+              title="After-market: earnings rilasciati dopo la chiusura della sessione"
+              aria-label="after-market"
+            >
+              ☾
+            </span>
+          )}
         </Link>
       </TooltipTrigger>
       <TooltipContent side="top" className="space-y-1">

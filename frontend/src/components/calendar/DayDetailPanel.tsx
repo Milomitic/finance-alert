@@ -627,20 +627,17 @@ function CountChip({
 /* ─── Macro row (kept as card — different shape than tabular earnings) ──── */
 
 function MacroRow({ event }: { event: MacroEvent }) {
-  const tone = IMPORTANCE_BG[event.importance];
   const flagAsset = regionFlagAsset(event.region);
-  // Show the insight strip only when FRED data is attached (the
-  // hardcoded fallback events leave these fields null).
+  // V3.4: card background neutral; importance hue moves to a small
+  // chip on the right. The previous full-card rose tint for high-
+  // importance events screamed too loud and didn't leave a visual
+  // budget for the actual data — that's the user's main complaint.
+  const importanceChipTone = IMPORTANCE_BG[event.importance];
   const hasInsight =
     event.prev_value != null || (event.history?.length ?? 0) > 0;
   return (
-    <div
-      className={cn(
-        "relative rounded-lg border overflow-hidden py-1.5 px-3",
-        tone,
-      )}
-    >
-      <div className="flex items-center gap-2">
+    <div className="relative rounded-lg border border-border/60 bg-card overflow-hidden py-2 px-3">
+      <div className="flex items-center gap-2 flex-wrap">
         {flagAsset ? (
           <img
             src={`/flags/${flagAsset}.svg`}
@@ -656,20 +653,36 @@ function MacroRow({ event }: { event: MacroEvent }) {
             {regionFlag(event.region)}
           </span>
         )}
-        <Landmark className="h-3.5 w-3.5 opacity-70 shrink-0" />
+        <Landmark className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
         <span className="text-[14px] font-semibold leading-tight truncate flex-1 min-w-0">
           {event.label}
         </span>
-        <div className="flex items-center gap-1.5 text-[11.5px] uppercase tracking-wider opacity-80 shrink-0">
-          <span>{regionLabel(event.region)}</span>
-          <span className="opacity-30">·</span>
+        {event.release_time && (
+          <span
+            className="inline-flex items-center gap-0.5 text-[11px] tabular-nums text-muted-foreground shrink-0"
+            title={`Orario di rilascio: ${event.release_time} UTC. Convertilo nel tuo fuso aggiungendo / sottraendo l'offset locale.`}
+          >
+            ⏱ {event.release_time} UTC
+          </span>
+        )}
+        <span className="text-[11px] uppercase tracking-wider text-muted-foreground shrink-0">
+          {regionLabel(event.region)}
+        </span>
+        {/* Importance label — the ONLY surface that carries the rose/amber
+            tint. Compact chip on the right, not a full card flood. */}
+        <span
+          className={cn(
+            "inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] uppercase tracking-wider font-semibold shrink-0",
+            importanceChipTone,
+          )}
+        >
           <ImportanceDots
             importance={event.importance}
             size="h-1.5 w-1.5"
             gap="gap-0.5"
           />
-          <span>{IMPORTANCE_LABEL[event.importance].toLowerCase()}</span>
-        </div>
+          {IMPORTANCE_LABEL[event.importance]}
+        </span>
       </div>
       {hasInsight && <MacroInsightStrip event={event} />}
     </div>
@@ -698,92 +711,108 @@ function MacroInsightStrip({ event }: { event: MacroEvent }) {
   const unit = event.unit ?? "";
   const history = event.history ?? [];
 
+  // V3.4: tabular layout with explicit Ultimo / Δ vs precedente /
+  // Atteso / Sorpresa rows so each value has a clear role. The
+  // "Atteso" and "Sorpresa" slots stay as placeholders until the
+  // forecast feed integration lands; making the gap explicit beats
+  // hiding the field (the user wanted to know what's missing).
+  const surprise =
+    prev != null && prior != null
+      ? null /* Atteso non disponibile -> nessuna sorpresa calcolabile */
+      : null;
+
   return (
-    <div className="mt-1.5 pt-1.5 border-t border-current/10 space-y-1.5">
-      {/* Row 1 — compact summary always visible. The user's spec
-          asked for clearer separation of "previous value" vs "next
-          release expectation": labeled chips ("Ultimo" / "Δ" /
-          "Atteso") make each role explicit instead of inferring
-          from position. */}
-      <div className="flex items-center gap-3 text-[11px] flex-wrap">
-        {prev != null && (
-          <span className="inline-flex items-baseline gap-1.5">
-            <span className="opacity-60 uppercase tracking-wider">
-              Ultimo
-            </span>
-            <span className="font-bold tabular-nums">
-              {formatMacroValue(prev, unit)}
-            </span>
-            {prevDate && (
-              <span
-                className="opacity-50 text-[10px] tabular-nums"
-                title={`Periodo di riferimento: ${formatMacroDate(prevDate)}`}
-              >
-                ({formatMacroDate(prevDate)})
-              </span>
-            )}
+    <div className="mt-2 pt-2 border-t border-border/40 space-y-2 text-[12px]">
+      {/* 4-column grid: Ultimo | Δ vs precedente | Atteso | Sorpresa */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-2">
+        <Slot label="Ultimo" hint="Valore della lettura piu recente disponibile su FRED.">
+          <span className="font-bold tabular-nums text-foreground">
+            {prev != null ? formatMacroValue(prev, unit) : "—"}
           </span>
-        )}
-        {change != null && (
-          <span
-            className={cn(
-              "inline-flex items-baseline gap-1 font-semibold tabular-nums",
-              change > 0
-                ? "text-emerald-700 dark:text-emerald-400"
-                : change < 0
-                  ? "text-rose-700 dark:text-rose-400"
-                  : "opacity-70",
-            )}
-            title={
-              prior != null
-                ? `Variazione vs lettura precedente (${formatMacroValue(prior, unit)})`
-                : undefined
-            }
-          >
-            <span className="opacity-60 uppercase tracking-wider font-normal">
-              Δ
+          {prevDate && (
+            <span className="text-[10px] text-muted-foreground tabular-nums ml-1">
+              ({formatMacroDate(prevDate)})
             </span>
-            {change > 0 ? "▲" : change < 0 ? "▼" : "·"}
-            {change >= 0 ? "+" : ""}
-            {change.toFixed(2)}%
-          </span>
-        )}
-        {/* "Atteso" placeholder — the user wanted to see "expected for
-            next release". FRED doesn't publish forecasts, so we make
-            the gap explicit (n/d + tooltip) instead of hiding it.
-            When a TradingEconomics / broker feed lands, this slot
-            fills in without a layout shift. */}
-        <span
-          className="inline-flex items-baseline gap-1 opacity-60"
-          title="Consensus forecast non disponibile — FRED non pubblica previsioni. Slot riservato per integrazione futura (TradingEconomics o broker feed)."
-        >
-          <span className="uppercase tracking-wider">Atteso</span>
-          <span className="italic">n/d</span>
-        </span>
-        {history.length >= 2 && (
-          <>
-            <span className="ml-auto opacity-90 shrink-0">
-              <MacroSparkline history={history.slice(-12)} />
-            </span>
-            <button
-              type="button"
-              onClick={() => setExpanded((v) => !v)}
-              className="text-[10px] uppercase tracking-wider opacity-70 hover:opacity-100 transition-opacity inline-flex items-center gap-0.5"
-              aria-expanded={expanded}
-              aria-label={expanded ? "Riduci storico" : "Vedi storico esteso"}
+          )}
+        </Slot>
+        <Slot label="Δ vs prec." hint="Variazione percentuale rispetto al valore subito precedente.">
+          {change != null ? (
+            <span
+              className={cn(
+                "font-semibold tabular-nums",
+                change > 0
+                  ? "text-emerald-600 dark:text-emerald-400"
+                  : change < 0
+                    ? "text-rose-600 dark:text-rose-400"
+                    : "text-muted-foreground",
+              )}
+              title={
+                prior != null
+                  ? `Variazione vs lettura precedente (${formatMacroValue(prior, unit)})`
+                  : undefined
+              }
             >
-              {expanded ? "Riduci ▴" : "Storico ▾"}
-            </button>
-          </>
-        )}
+              {change > 0 ? "▲" : change < 0 ? "▼" : "·"} {change >= 0 ? "+" : ""}
+              {change.toFixed(2)}%
+            </span>
+          ) : (
+            <span className="italic text-muted-foreground">—</span>
+          )}
+        </Slot>
+        <Slot
+          label="Atteso"
+          hint="Consensus forecast pre-rilascio. Slot riservato per l'integrazione di una sorgente di previsioni (FRED non li pubblica, serve TradingEconomics o un broker feed)."
+        >
+          <span className="italic text-muted-foreground">n/d</span>
+        </Slot>
+        <Slot
+          label="Sorpresa"
+          hint="Differenza tra valore uscito e atteso. Si popola automaticamente quando entrambi i campi sono disponibili — placeholder finché il feed di consensus non è collegato."
+        >
+          <span className="italic text-muted-foreground">
+            {surprise === null ? "—" : surprise}
+          </span>
+        </Slot>
       </div>
 
-      {/* Row 2 — extended history, lazy-mounted on expand. ~36
-          observations with min/max labels + first/last date axis +
-          highlighted last point. */}
+      {history.length >= 2 && (
+        <div className="flex items-center gap-2">
+          <MacroSparkline history={history.slice(-12)} />
+          <button
+            type="button"
+            onClick={() => setExpanded((v) => !v)}
+            className="text-[10px] uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-0.5"
+            aria-expanded={expanded}
+          >
+            {expanded ? "Riduci ▴" : "Storico ▾"}
+          </button>
+        </div>
+      )}
+
       {expanded && history.length >= 2 && (
         <ExtendedHistoryChart history={history} unit={unit} />
       )}
+    </div>
+  );
+}
+
+/* ─── Inline slot helper (Ultimo / Atteso / Sorpresa cells) ────────────── */
+
+function Slot({
+  label,
+  hint,
+  children,
+}: {
+  label: string;
+  hint: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-0.5 min-w-0" title={hint}>
+      <span className="text-[10px] uppercase tracking-wider text-muted-foreground/80">
+        {label}
+      </span>
+      <span className="leading-tight truncate">{children}</span>
     </div>
   );
 }
@@ -860,6 +889,61 @@ function ExtendedHistoryChart({
         </span>
         {" · "}
         {formatMacroDate(last.date)}
+      </div>
+
+      {/* V3.4 — tabular view of recent observations. The user wanted
+          to see the actual numbers and not just a chart line, plus
+          the surprise vs expected when forecasts come in. The
+          "Sorpresa" column is a placeholder until consensus feed
+          lands; the value/Δ-vs-prev columns are populated now. */}
+      <div className="mt-2 pt-2 border-t border-current/15 overflow-x-auto">
+        <table className="w-full text-[11px] tabular-nums">
+          <thead>
+            <tr className="text-[10px] uppercase tracking-wider opacity-60">
+              <th className="text-left font-semibold pb-1">Periodo</th>
+              <th className="text-right font-semibold pb-1">Valore</th>
+              <th className="text-right font-semibold pb-1">Δ vs prec.</th>
+              <th className="text-right font-semibold pb-1">Atteso</th>
+              <th className="text-right font-semibold pb-1">Sorpresa</th>
+            </tr>
+          </thead>
+          <tbody>
+            {pts
+              .slice(-8)
+              .map((p, idx, arr) => {
+                const prev = idx > 0 ? arr[idx - 1].value : null;
+                const delta =
+                  prev != null && prev !== 0 ? ((p.value - prev) / prev) * 100 : null;
+                return (
+                  <tr key={p.date} className="border-t border-current/10">
+                    <td className="py-1 text-left">{formatMacroDate(p.date)}</td>
+                    <td className="py-1 text-right font-semibold">
+                      {formatMacroValue(p.value, unit)}
+                    </td>
+                    <td
+                      className={cn(
+                        "py-1 text-right",
+                        delta == null
+                          ? "opacity-50"
+                          : delta > 0
+                            ? "text-emerald-600 dark:text-emerald-400"
+                            : delta < 0
+                              ? "text-rose-600 dark:text-rose-400"
+                              : "opacity-70",
+                      )}
+                    >
+                      {delta == null
+                        ? "—"
+                        : `${delta > 0 ? "▲ +" : delta < 0 ? "▼ " : "· "}${delta.toFixed(2)}%`}
+                    </td>
+                    <td className="py-1 text-right opacity-50 italic">n/d</td>
+                    <td className="py-1 text-right opacity-50 italic">—</td>
+                  </tr>
+                );
+              })
+              .reverse()}
+          </tbody>
+        </table>
       </div>
     </div>
   );

@@ -74,7 +74,16 @@ export function PriceChart({
         horzLines: { color: "rgba(0,0,0,0.05)" },
       },
       rightPriceScale: { borderColor: "rgba(0,0,0,0.1)" },
-      timeScale: { borderColor: "rgba(0,0,0,0.1)", timeVisible: false },
+      timeScale: {
+        borderColor: "rgba(0,0,0,0.1)",
+        // Intraday (30m / 1h) — show wall-clock time on the axis so
+        // the user reads "14:30" instead of just the date. Daily+
+        // timeframes keep the date-only axis. Toggled via the
+        // `timeframe` prop and re-applied at chart creation (the
+        // outer key={range} forces a fresh mount when this flips).
+        timeVisible: timeframe === "30m" || timeframe === "1h",
+        secondsVisible: false,
+      },
       // Free crosshair (was Magnet=1) so the Y-value badge tracks the
       // cursor's actual position rather than snapping to the candle close.
       // Per user request: "lascialo libero a prescindere dalla curva".

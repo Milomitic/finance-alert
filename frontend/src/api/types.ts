@@ -822,6 +822,13 @@ export interface EarningsEvent {
   earnings_growth?: number | null;       // YoY EPS growth, fraction (0.27 = 27%)
   composite_score?: number | null;       // 0-100
   risk_tier?: "conservative" | "moderate" | "aggressive" | null;
+  /** Inferred release timing relative to the trading session:
+   *   - "pre"   → before market open (the day-icon ☀ goes BEFORE the close)
+   *   - "after" → after market close (☾ moon icon)
+   *   - null    → no signal available
+   *  Inferred from yfinance earnings_dates timestamp UTC hour vs
+   *  the typical US session (US: pre = before 14:00 UTC, after = on/after 20:00). */
+  earnings_when?: "pre" | "after" | null;
 }
 
 export interface MacroObservationPoint {
@@ -853,6 +860,8 @@ export interface MacroEvent {
   change_pct?: number | null;
   unit?: string | null;
   history?: MacroObservationPoint[];
+  /** UTC HH:MM of the scheduled release ("12:30" = 8:30 ET). */
+  release_time?: string | null;
 }
 
 /** Discriminated union over the `kind` tag — narrowing on `kind` gives full

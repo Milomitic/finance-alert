@@ -60,7 +60,7 @@ KIND_NEWS = "news"
 #        eps_trailing/forward/current_year, shares_outstanding/float/short,
 #        recommendation_mean, governance risks, etc.). Old payloads
 #        re-fetch on next access so users see the richer dataset.
-_FUNDAMENTALS_SCHEMA_VERSION = 4
+_FUNDAMENTALS_SCHEMA_VERSION = 5
 _SCHEMA_VERSION_KEY = "_schema_version"
 
 
