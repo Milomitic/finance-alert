@@ -55,12 +55,24 @@ function InsiderRow({ t }: { t: InsiderTransaction }) {
       : `${fmtShares(t.shares)}`;
   return (
     <li className="flex items-baseline gap-2 py-1 border-t border-border/40 first:border-t-0 leading-tight">
+      {/* V3.5: insider name + position. The position (es. "CFO",
+          "Director", "Chief Executive Officer") sits right after the
+          name in muted/italic so the user identifies the role without
+          mistaking it for the transaction text. */}
       <span
         className="text-[12.5px] font-semibold truncate"
         title={t.insider || ""}
       >
         {t.insider || "—"}
       </span>
+      {t.position && (
+        <span
+          className="text-[11px] italic text-muted-foreground/80 truncate max-w-[110px]"
+          title={t.position}
+        >
+          {t.position}
+        </span>
+      )}
       <span
         className={cn(
           "text-[11px] truncate shrink-0 max-w-[90px]",

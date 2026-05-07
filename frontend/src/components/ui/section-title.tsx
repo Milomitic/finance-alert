@@ -63,12 +63,17 @@ export function SectionTitle({
     >
       <div
         className={cn(
-          "flex items-center min-w-0 gap-2 text-xs tracking-[0.18em]",
+          // V3.5: bumped 12px → 14px (text-xs → text-sm) + icon 14 → 18px
+          // (h-3.5 → h-4.5). The small mono caps were too quiet for the
+          // density of cards on the detail pages — bumping a single size
+          // here cascades to every SectionTitle uniformly per the
+          // single-source-of-truth contract above.
+          "flex items-center min-w-0 gap-2 text-sm tracking-[0.16em]",
           tone,
           "font-mono font-semibold uppercase",
         )}
       >
-        <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden />
+        <Icon className="h-[18px] w-[18px] shrink-0" aria-hidden />
         <span className="truncate">{label}</span>
       </div>
       {right && <div className="shrink-0">{right}</div>}
