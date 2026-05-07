@@ -99,13 +99,27 @@ function qoqColor(v: number | null | undefined): string {
 
 function HoldingRow({ row }: { row: HoldingDetail }) {
   const a = actionMeta(row.action);
-  // Logo + ticker side-by-side. Same xs sizing + monogram fallback as
-  // the InstitutionalsPage tables — visually unifies the holdings
-  // detail with the aggregate views the user came from.
+  // Logo + (ticker on top, name muted underneath). Replaces the
+  // separate "Nome" column — visually matches the dashboard's
+  // TopPicksCard / TopMoversCard pattern. The ticker stays at
+  // text-sm (the "ticker font" the user asked to keep unchanged
+  // when bumping the rest of the page); name is text-[11px] muted.
   const tickerInner = (
-    <span className="inline-flex items-center gap-1.5 font-semibold">
+    <span className="inline-flex items-center gap-2 min-w-0">
       <StockLogo ticker={row.ticker} size="xs" />
-      <span>{row.ticker}</span>
+      <span className="min-w-0">
+        <span className="block text-sm font-bold tabular-nums leading-tight">
+          {row.ticker}
+        </span>
+        {row.company_name && (
+          <span
+            className="block text-[11px] text-muted-foreground truncate leading-tight max-w-[260px]"
+            title={row.company_name}
+          >
+            {row.company_name}
+          </span>
+        )}
+      </span>
     </span>
   );
   const tickerCell = row.stock_id ? (
@@ -121,26 +135,20 @@ function HoldingRow({ row }: { row: HoldingDetail }) {
 
   return (
     <tr className="hover:bg-muted/30 border-t border-border/40">
-      <td className="px-2 py-1.5">{tickerCell}</td>
-      <td
-        className="px-2 py-1.5 text-xs text-muted-foreground truncate max-w-[200px]"
-        title={row.company_name ?? ""}
-      >
-        {row.company_name ?? "—"}
-      </td>
-      <td className="px-2 py-1.5 text-right tabular-nums font-semibold">
+      <td className="px-2 py-2">{tickerCell}</td>
+      <td className="px-2 py-2 text-right tabular-nums font-semibold">
         {fmtPct(row.portfolio_pct)}
       </td>
-      <td className="px-2 py-1.5 text-right tabular-nums">
+      <td className="px-2 py-2 text-right tabular-nums">
         {fmtBig(row.value_usd)}
       </td>
-      <td className="px-2 py-1.5 text-right tabular-nums text-xs">
+      <td className="px-2 py-2 text-right tabular-nums text-sm">
         {fmtShares(row.shares)}
       </td>
-      <td className="px-2 py-1.5">
+      <td className="px-2 py-2">
         <span
           className={cn(
-            "inline-block rounded px-1.5 py-0.5 text-[11px] font-medium",
+            "inline-block rounded px-2 py-0.5 text-[12px] font-medium",
             a.tone,
             a.bg,
           )}
@@ -148,12 +156,12 @@ function HoldingRow({ row }: { row: HoldingDetail }) {
           {a.label}
         </span>
       </td>
-      <td className={cn("px-2 py-1.5 text-right tabular-nums text-xs", qoqColor(row.qoq_change_pct))}>
+      <td className={cn("px-2 py-2 text-right tabular-nums text-sm", qoqColor(row.qoq_change_pct))}>
         {row.qoq_change_pct != null
           ? `${row.qoq_change_pct > 0 ? "+" : ""}${row.qoq_change_pct.toFixed(1)}%`
           : "—"}
       </td>
-      <td className="px-2 py-1.5 text-xs text-muted-foreground">
+      <td className="px-2 py-2 text-sm text-muted-foreground">
         {row.stock_sector ?? "—"}
       </td>
     </tr>
@@ -197,19 +205,19 @@ export default function InstitutionalDetailPage() {
         <div>
           <Link
             to="/institutionals"
-            className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:underline"
+            className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:underline"
           >
-            <ArrowLeft className="h-3 w-3" />
+            <ArrowLeft className="h-4 w-4" />
             Tutti i portafogli
           </Link>
           <div className="mt-2 flex items-center gap-3">
-            <Building2 className="h-6 w-6 text-foreground/80" />
+            <Building2 className="h-7 w-7 text-foreground/80" />
             <div>
-              <h1 className="text-xl font-semibold leading-tight">
+              <h1 className="text-2xl font-semibold leading-tight">
                 {institutional.name}
               </h1>
               {institutional.manager_name && (
-                <p className="text-xs text-muted-foreground">
+                <p className="text-sm text-muted-foreground">
                   {institutional.manager_name} · {institutional.type} ·{" "}
                   fonte: {institutional.source}
                 </p>
@@ -217,7 +225,7 @@ export default function InstitutionalDetailPage() {
             </div>
           </div>
           {institutional.description && (
-            <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
+            <p className="mt-2 max-w-2xl text-base text-muted-foreground">
               {institutional.description}
             </p>
           )}
@@ -227,9 +235,9 @@ export default function InstitutionalDetailPage() {
             href={institutional.source_url}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:underline"
+            className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:underline"
           >
-            <ExternalLink className="h-3 w-3" />
+            <ExternalLink className="h-4 w-4" />
             Apri fonte
           </a>
         )}
@@ -239,7 +247,7 @@ export default function InstitutionalDetailPage() {
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Card>
           <CardContent className="p-3">
-            <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
+            <div className="text-[13px] uppercase tracking-wide text-muted-foreground">
               Posizioni
             </div>
             <div className="text-2xl font-semibold tabular-nums">
@@ -249,7 +257,7 @@ export default function InstitutionalDetailPage() {
         </Card>
         <Card>
           <CardContent className="p-3">
-            <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
+            <div className="text-[13px] uppercase tracking-wide text-muted-foreground">
               Valore totale
             </div>
             <div className="text-2xl font-semibold tabular-nums">
@@ -259,7 +267,7 @@ export default function InstitutionalDetailPage() {
         </Card>
         <Card>
           <CardContent className="p-3">
-            <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
+            <div className="text-[13px] uppercase tracking-wide text-muted-foreground">
               Top-10 weight
             </div>
             <div className="text-2xl font-semibold tabular-nums">
@@ -269,12 +277,12 @@ export default function InstitutionalDetailPage() {
         </Card>
         <Card>
           <CardContent className="p-3">
-            <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
+            <div className="text-[13px] uppercase tracking-wide text-muted-foreground">
               Periodo (Q-end)
             </div>
             <div className="flex items-center gap-2">
               <select
-                className="rounded border bg-background px-2 py-1 text-sm"
+                className="rounded border bg-background px-2 py-1 text-base"
                 value={periodParam ?? institutional.latest_period_end ?? ""}
                 onChange={(e) => {
                   const v = e.target.value;
@@ -307,23 +315,26 @@ export default function InstitutionalDetailPage() {
             label="Holdings"
             className="mb-2"
             right={
-              <span className="text-xs text-muted-foreground tabular-nums">
+              <span className="text-sm text-muted-foreground tabular-nums">
                 {holdings.length}
               </span>
             }
           />
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="text-[11px] uppercase tracking-wide text-muted-foreground border-b">
+            {/* Body bumped from text-sm → text-base; the ticker cell
+                explicitly resets to text-sm inside HoldingRow so the
+                ticker font keeps its current size. "Nome" header is
+                gone — name now lives stacked under the ticker. */}
+            <table className="w-full text-base">
+              <thead className="text-[13px] uppercase tracking-wide text-muted-foreground border-b">
                 <tr>
-                  <th className="px-2 py-1 text-left">Ticker</th>
-                  <th className="px-2 py-1 text-left">Nome</th>
-                  <th className="px-2 py-1 text-right">% port.</th>
-                  <th className="px-2 py-1 text-right">Valore</th>
-                  <th className="px-2 py-1 text-right">Shares</th>
-                  <th className="px-2 py-1 text-left">Azione</th>
-                  <th className="px-2 py-1 text-right">Q/Q</th>
-                  <th className="px-2 py-1 text-left">Settore</th>
+                  <th className="px-2 py-1.5 text-left">Ticker</th>
+                  <th className="px-2 py-1.5 text-right">% port.</th>
+                  <th className="px-2 py-1.5 text-right">Valore</th>
+                  <th className="px-2 py-1.5 text-right">Shares</th>
+                  <th className="px-2 py-1.5 text-left">Azione</th>
+                  <th className="px-2 py-1.5 text-right">Q/Q</th>
+                  <th className="px-2 py-1.5 text-left">Settore</th>
                 </tr>
               </thead>
               <tbody>
@@ -333,8 +344,8 @@ export default function InstitutionalDetailPage() {
                 {holdings.length === 0 && (
                   <tr>
                     <td
-                      colSpan={8}
-                      className="px-2 py-4 text-center text-muted-foreground text-xs"
+                      colSpan={7}
+                      className="px-2 py-4 text-center text-muted-foreground text-sm"
                     >
                       Nessuna posizione registrata per questo periodo.
                     </td>

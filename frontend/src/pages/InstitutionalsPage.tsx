@@ -10,6 +10,64 @@ import type {
 import { StockLogo } from "@/components/dashboard/StockLogo";
 import { Card, CardContent } from "@/components/ui/card";
 import { SectionTitle } from "@/components/ui/section-title";
+
+/* ─── TickerNameCell — local copy of dashboard's StockIdentity ────────── *
+ *
+ * "Logo + ticker on top, full company name muted underneath" stack —
+ * the same pattern dashboard's TopPicksCard / TopMoversCard / 52w panel
+ * use via `StockIdentity`. Inlined here (not imported) because table
+ * cells need an `inline-flex` wrapper rather than the bare flex children
+ * that StockIdentity emits — `<td>` content has different overflow
+ * semantics than the row-level flex layout in dashboard cards.
+ *
+ * Sizes are explicit and intentional: `text-sm font-bold` on the ticker
+ * (the user asked to keep ticker font size unchanged when bumping the
+ * rest of the page), `text-[11px]` on the name (small enough not to
+ * compete with the ticker, big enough to read at scan-distance).
+ *
+ * Wrapped in a Link only when the ticker matches a catalog row
+ * (`stockId != null`); off-catalog tickers (CN ADRs, OTC, CUSIP-
+ * placeholder rows from SEC 13F) render as plain text.
+ */
+function TickerNameCell({
+  ticker,
+  name,
+  stockId,
+}: {
+  ticker: string;
+  name: string | null | undefined;
+  stockId: number | null;
+}) {
+  const inner = (
+    <span className="inline-flex items-center gap-2 min-w-0">
+      <StockLogo ticker={ticker} size="xs" />
+      <span className="min-w-0">
+        <span className="block text-sm font-bold tabular-nums leading-tight">
+          {ticker}
+        </span>
+        {name && (
+          <span
+            className="block text-[11px] text-muted-foreground truncate leading-tight max-w-[180px]"
+            title={name}
+          >
+            {name}
+          </span>
+        )}
+      </span>
+    </span>
+  );
+  if (stockId) {
+    return (
+      <Link
+        to={`/stocks/${encodeURIComponent(ticker)}`}
+        className="hover:underline"
+      >
+        {inner}
+      </Link>
+    );
+  }
+  return inner;
+}
 import {
   useInstitutionalsAggregate,
   useInstitutionalsList,
@@ -53,43 +111,27 @@ function shortDate(s: string | null): string {
 }
 
 function MostPickedRow({ row }: { row: TickerAggregate }) {
-  // Logo + ticker, side-by-side. Logo size is `xs` (28px) for table
-  // density; the StockLogo component auto-falls back to a colored
-  // monogram pill when the CDN doesn't have the ticker (HK/JP/EU
-  // listings, ETFs, etc.) so EVERY row gets a visual badge.
-  const tickerInner = (
-    <span className="inline-flex items-center gap-1.5 font-semibold">
-      <StockLogo ticker={row.ticker} size="xs" />
-      <span>{row.ticker}</span>
-    </span>
-  );
-  const TickerCell = row.stock_id ? (
-    <Link
-      to={`/stocks/${encodeURIComponent(row.ticker)}`}
-      className="hover:underline"
-    >
-      {tickerInner}
-    </Link>
-  ) : (
-    tickerInner
-  );
+  // Ticker cell now stacks logo+ticker+name (no separate Nome column).
+  // Density tradeoff: each row is ~10px taller but the user gets the
+  // company name without horizontal scroll, matching the dashboard's
+  // TopPicksCard pattern.
   return (
     <tr className="hover:bg-muted/30">
-      <td className="px-2 py-1.5">{TickerCell}</td>
-      <td
-        className="px-2 py-1.5 truncate max-w-[160px] text-xs text-muted-foreground"
-        title={row.company_name ?? ""}
-      >
-        {row.company_name ?? "—"}
+      <td className="px-2 py-2">
+        <TickerNameCell
+          ticker={row.ticker}
+          name={row.company_name}
+          stockId={row.stock_id}
+        />
       </td>
-      <td className="px-2 py-1.5 text-right tabular-nums font-semibold">
+      <td className="px-2 py-2 text-right tabular-nums font-semibold">
         {row.holder_count}
       </td>
-      <td className="px-2 py-1.5 text-right tabular-nums text-muted-foreground">
+      <td className="px-2 py-2 text-right tabular-nums text-muted-foreground">
         {fmtBig(row.total_value_usd)}
       </td>
       <td
-        className="px-2 py-1.5 text-xs text-muted-foreground truncate max-w-[200px]"
+        className="px-2 py-2 text-sm text-muted-foreground truncate max-w-[260px]"
         title={row.holders.join(", ")}
       >
         {row.holders.slice(0, 3).join(", ")}
@@ -104,42 +146,30 @@ function ActionRow({ row, kind }: { row: ActionAggregate; kind: "buy" | "sell" }
     kind === "buy"
       ? "text-emerald-700 dark:text-emerald-300"
       : "text-red-700 dark:text-red-300";
-  // Same logo+ticker treatment as the most-picked table — same cell
-  // shape across all three tables, only the trailing columns change.
-  const tickerInner = (
-    <span className="inline-flex items-center gap-1.5 font-semibold">
-      <StockLogo ticker={row.ticker} size="xs" />
-      <span>{row.ticker}</span>
-    </span>
-  );
-  const TickerCell = row.stock_id ? (
-    <Link
-      to={`/stocks/${encodeURIComponent(row.ticker)}`}
-      className="hover:underline"
-    >
-      {tickerInner}
-    </Link>
-  ) : (
-    tickerInner
-  );
   return (
     <tr className="hover:bg-muted/30">
-      <td className="px-2 py-1.5">{TickerCell}</td>
-      <td className={cn("px-2 py-1.5 text-xs", tone)}>{row.action}</td>
-      <td className="px-2 py-1.5 text-right tabular-nums text-xs">
+      <td className="px-2 py-2">
+        <TickerNameCell
+          ticker={row.ticker}
+          name={row.company_name}
+          stockId={row.stock_id}
+        />
+      </td>
+      <td className={cn("px-2 py-2 text-sm", tone)}>{row.action}</td>
+      <td className="px-2 py-2 text-right tabular-nums text-sm">
         {fmtPct(row.qoq_change_pct)}
       </td>
       {/* Valore column: absolute $ context for the % delta. A "+12% Q/Q"
           at a $1B fund (= ~$120M move) tells a different story than the
           same delta at a $50B fund. Sourced from
           ActionAggregate.value_usd (Phase 3D-add). */}
-      <td className="px-2 py-1.5 text-right tabular-nums text-xs">
+      <td className="px-2 py-2 text-right tabular-nums text-sm">
         {fmtBig(row.value_usd)}
       </td>
-      <td className="px-2 py-1.5 text-right tabular-nums text-xs text-muted-foreground">
+      <td className="px-2 py-2 text-right tabular-nums text-sm text-muted-foreground">
         {fmtPct(row.portfolio_pct)}
       </td>
-      <td className="px-2 py-1.5 text-xs">
+      <td className="px-2 py-2 text-sm">
         <Link
           to={`/institutionals/${row.institutional_slug}`}
           className="hover:underline"
@@ -147,7 +177,7 @@ function ActionRow({ row, kind }: { row: ActionAggregate; kind: "buy" | "sell" }
           {row.institutional_name}
         </Link>
       </td>
-      <td className="px-2 py-1.5 text-xs text-muted-foreground tabular-nums">
+      <td className="px-2 py-2 text-sm text-muted-foreground tabular-nums">
         {shortDate(row.period_end_date)}
       </td>
     </tr>
@@ -193,11 +223,11 @@ function SectorTiltBar({ tilt }: { tilt: Record<string, number> }) {
             );
           })}
         </div>
-        <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+        <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-sm text-muted-foreground">
           {entries.slice(0, 12).map(([sector, value], idx) => (
             <span key={sector} className="flex items-center gap-1.5">
               <span
-                className={cn("inline-block h-2 w-2 rounded-sm", palette[idx % palette.length])}
+                className={cn("inline-block h-2.5 w-2.5 rounded-sm", palette[idx % palette.length])}
               />
               <span>{sector}</span>
               <span className="tabular-nums">
@@ -214,7 +244,7 @@ function SectorTiltBar({ tilt }: { tilt: Record<string, number> }) {
 function InstitutionalRow({ row }: { row: InstitutionalSummary }) {
   return (
     <tr className="hover:bg-muted/30">
-      <td className="px-2 py-1.5">
+      <td className="px-2 py-2">
         <Link
           to={`/institutionals/${row.slug}`}
           className="font-semibold hover:underline"
@@ -222,17 +252,17 @@ function InstitutionalRow({ row }: { row: InstitutionalSummary }) {
           {row.name}
         </Link>
       </td>
-      <td className="px-2 py-1.5 text-xs text-muted-foreground truncate max-w-[180px]">
+      <td className="px-2 py-2 text-sm text-muted-foreground truncate max-w-[220px]">
         {row.manager_name ?? "—"}
       </td>
-      <td className="px-2 py-1.5 text-xs text-muted-foreground">{row.type}</td>
-      <td className="px-2 py-1.5 text-right tabular-nums">
+      <td className="px-2 py-2 text-sm text-muted-foreground">{row.type}</td>
+      <td className="px-2 py-2 text-right tabular-nums">
         {row.total_positions ?? "—"}
       </td>
-      <td className="px-2 py-1.5 text-right tabular-nums text-muted-foreground">
+      <td className="px-2 py-2 text-right tabular-nums text-muted-foreground">
         {fmtBig(row.total_value_usd)}
       </td>
-      <td className="px-2 py-1.5 text-xs text-muted-foreground tabular-nums">
+      <td className="px-2 py-2 text-sm text-muted-foreground tabular-nums">
         {shortDate(row.latest_period_end)}
       </td>
     </tr>
@@ -254,19 +284,19 @@ export default function InstitutionalsPage() {
     <div className="flex flex-col gap-4">
       <header className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Building2 className="h-6 w-6 text-foreground/80" />
+          <Building2 className="h-7 w-7 text-foreground/80" />
           <div>
-            <h1 className="text-xl font-semibold">Superinvestor &amp; istituzionali</h1>
-            <p className="text-xs text-muted-foreground">
+            <h1 className="text-2xl font-semibold">Superinvestor &amp; istituzionali</h1>
+            <p className="text-sm text-muted-foreground">
               Portafogli 13F-equivalenti tracciati. {counts} fondi disponibili.
             </p>
           </div>
         </div>
-        <div className="flex gap-1 text-xs">
+        <div className="flex gap-1 text-sm">
           <button
             type="button"
             className={cn(
-              "rounded border px-2 py-1",
+              "rounded border px-3 py-1.5",
               typeFilter === undefined
                 ? "bg-primary text-primary-foreground border-primary"
                 : "bg-background hover:bg-muted",
@@ -278,7 +308,7 @@ export default function InstitutionalsPage() {
           <button
             type="button"
             className={cn(
-              "rounded border px-2 py-1",
+              "rounded border px-3 py-1.5",
               typeFilter === "superinvestor"
                 ? "bg-primary text-primary-foreground border-primary"
                 : "bg-background hover:bg-muted",
@@ -290,7 +320,7 @@ export default function InstitutionalsPage() {
           <button
             type="button"
             className={cn(
-              "rounded border px-2 py-1",
+              "rounded border px-3 py-1.5",
               typeFilter === "institutional"
                 ? "bg-primary text-primary-foreground border-primary"
                 : "bg-background hover:bg-muted",
@@ -312,21 +342,25 @@ export default function InstitutionalsPage() {
               className="mb-2"
               right={
                 agg.data ? (
-                  <span className="text-xs text-muted-foreground tabular-nums">
+                  <span className="text-sm text-muted-foreground tabular-nums">
                     top {agg.data.most_picked.length}
                   </span>
                 ) : undefined
               }
             />
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="text-[11px] uppercase tracking-wide text-muted-foreground">
+              {/* Body bumped from text-sm → text-base per user request,
+                  but the ticker cell explicitly resets to text-sm
+                  inside TickerNameCell so the ticker font keeps its
+                  current size. The "Nome" column is gone — name is
+                  now stacked under the ticker à la TopPicksCard. */}
+              <table className="w-full text-base">
+                <thead className="text-[13px] uppercase tracking-wide text-muted-foreground">
                   <tr>
-                    <th className="px-2 py-1 text-left">Ticker</th>
-                    <th className="px-2 py-1 text-left">Nome</th>
-                    <th className="px-2 py-1 text-right">N° fondi</th>
-                    <th className="px-2 py-1 text-right">Tot $</th>
-                    <th className="px-2 py-1 text-left">Holders</th>
+                    <th className="px-2 py-1.5 text-left">Ticker</th>
+                    <th className="px-2 py-1.5 text-right">N° fondi</th>
+                    <th className="px-2 py-1.5 text-right">Tot $</th>
+                    <th className="px-2 py-1.5 text-left">Holders</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -336,8 +370,8 @@ export default function InstitutionalsPage() {
                   {!agg.isLoading && agg.data && agg.data.most_picked.length === 0 && (
                     <tr>
                       <td
-                        colSpan={5}
-                        className="px-2 py-3 text-center text-muted-foreground text-xs"
+                        colSpan={4}
+                        className="px-2 py-3 text-center text-muted-foreground text-sm"
                       >
                         Nessun dato — esegui un seed dei portafogli.
                       </td>
@@ -358,16 +392,16 @@ export default function InstitutionalsPage() {
               className="mb-2"
             />
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="text-[11px] uppercase tracking-wide text-muted-foreground">
+              <table className="w-full text-base">
+                <thead className="text-[13px] uppercase tracking-wide text-muted-foreground">
                   <tr>
-                    <th className="px-2 py-1 text-left">Ticker</th>
-                    <th className="px-2 py-1 text-left">Action</th>
-                    <th className="px-2 py-1 text-right">Q/Q</th>
-                    <th className="px-2 py-1 text-right">Valore</th>
-                    <th className="px-2 py-1 text-right">% port</th>
-                    <th className="px-2 py-1 text-left">Fondo</th>
-                    <th className="px-2 py-1 text-left">Q-end</th>
+                    <th className="px-2 py-1.5 text-left">Ticker</th>
+                    <th className="px-2 py-1.5 text-left">Action</th>
+                    <th className="px-2 py-1.5 text-right">Q/Q</th>
+                    <th className="px-2 py-1.5 text-right">Valore</th>
+                    <th className="px-2 py-1.5 text-right">% port</th>
+                    <th className="px-2 py-1.5 text-left">Fondo</th>
+                    <th className="px-2 py-1.5 text-left">Q-end</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -393,16 +427,16 @@ export default function InstitutionalsPage() {
               className="mb-2"
             />
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="text-[11px] uppercase tracking-wide text-muted-foreground">
+              <table className="w-full text-base">
+                <thead className="text-[13px] uppercase tracking-wide text-muted-foreground">
                   <tr>
-                    <th className="px-2 py-1 text-left">Ticker</th>
-                    <th className="px-2 py-1 text-left">Action</th>
-                    <th className="px-2 py-1 text-right">Q/Q</th>
-                    <th className="px-2 py-1 text-right">Valore</th>
-                    <th className="px-2 py-1 text-right">% port</th>
-                    <th className="px-2 py-1 text-left">Fondo</th>
-                    <th className="px-2 py-1 text-left">Q-end</th>
+                    <th className="px-2 py-1.5 text-left">Ticker</th>
+                    <th className="px-2 py-1.5 text-left">Action</th>
+                    <th className="px-2 py-1.5 text-right">Q/Q</th>
+                    <th className="px-2 py-1.5 text-right">Valore</th>
+                    <th className="px-2 py-1.5 text-right">% port</th>
+                    <th className="px-2 py-1.5 text-left">Fondo</th>
+                    <th className="px-2 py-1.5 text-left">Q-end</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -431,21 +465,21 @@ export default function InstitutionalsPage() {
             label="Tutti i portafogli tracciati"
             className="mb-2"
             right={
-              <span className="text-xs text-muted-foreground tabular-nums">
+              <span className="text-sm text-muted-foreground tabular-nums">
                 {counts}
               </span>
             }
           />
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="text-[11px] uppercase tracking-wide text-muted-foreground border-b">
+            <table className="w-full text-base">
+              <thead className="text-[13px] uppercase tracking-wide text-muted-foreground border-b">
                 <tr>
-                  <th className="px-2 py-1 text-left">Portfolio</th>
-                  <th className="px-2 py-1 text-left">Manager</th>
-                  <th className="px-2 py-1 text-left">Tipo</th>
-                  <th className="px-2 py-1 text-right">N° pos.</th>
-                  <th className="px-2 py-1 text-right">Tot $</th>
-                  <th className="px-2 py-1 text-left">Q-end</th>
+                  <th className="px-2 py-1.5 text-left">Portfolio</th>
+                  <th className="px-2 py-1.5 text-left">Manager</th>
+                  <th className="px-2 py-1.5 text-left">Tipo</th>
+                  <th className="px-2 py-1.5 text-right">N° pos.</th>
+                  <th className="px-2 py-1.5 text-right">Tot $</th>
+                  <th className="px-2 py-1.5 text-left">Q-end</th>
                 </tr>
               </thead>
               <tbody>
@@ -456,7 +490,7 @@ export default function InstitutionalsPage() {
                   <tr>
                     <td
                       colSpan={6}
-                      className="px-2 py-4 text-center text-muted-foreground text-xs"
+                      className="px-2 py-4 text-center text-muted-foreground text-sm"
                     >
                       Nessun portafoglio. Avvia il seed dal terminale:&nbsp;
                       <code>python -m app.scripts.seed_institutionals</code>
