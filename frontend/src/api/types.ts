@@ -356,6 +356,14 @@ export interface TreemapLeaf {
   sector: string | null;
   market_cap: number;
   change_pct: number;
+  /** Listing-currency last close. Null when the snapshot is from an
+   *  older schema version (pre-Phase 3D). */
+  last_close?: number | null;
+  /** ISO-3 currency, e.g. "USD"/"EUR"/"HKD". Used by the screener's
+   *  Prezzo column to format the close with the right symbol. */
+  currency?: string | null;
+  /** Volume on the day the snapshot was taken. */
+  vol_today?: number | null;
 }
 
 export interface MarketSummary {

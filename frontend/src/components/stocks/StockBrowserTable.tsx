@@ -41,6 +41,23 @@ function fmtMc(v: number | null | undefined): string {
   return `$${v.toLocaleString()}`;
 }
 
+// Currency symbols for the "Prezzo" column. Falls back to the ISO code
+// when a symbol isn't widely recognized — better to show "HKD 18.40"
+// than "? 18.40" or just a number.
+const CURRENCY_SYMBOL: Record<string, string> = {
+  USD: "$", EUR: "€", GBP: "£", JPY: "¥", CHF: "CHF",
+  CAD: "C$", AUD: "A$", HKD: "HK$", CNY: "¥", KRW: "₩",
+};
+
+function fmtClose(v: number | null | undefined, currency: string | undefined): string {
+  if (v == null) return "—";
+  const sym = currency ? CURRENCY_SYMBOL[currency] ?? `${currency} ` : "";
+  // Penny stocks need 4 decimals, the rest 2. Avoids hiding a 0.0234
+  // close behind a "0.02" rounding.
+  const digits = v < 1 ? 4 : 2;
+  return `${sym}${v.toFixed(digits)}`;
+}
+
 interface HeaderProps {
   column: TableSortKey;
   label: string;
@@ -81,14 +98,20 @@ function SortableHeader({
 
 export function StockBrowserTable({ items, sortBy, sortDir, onSortChange, q, onQueryChange }: Props) {
   const market = useMarketSummary();
-  // Build a ticker -> change_pct map from snapshot's treemap data
-  const changeByTicker = useMemo(() => {
-    const m = new Map<string, number>();
+  // Build ticker -> {change_pct, last_close, currency} maps from the
+  // snapshot's treemap data. Single iteration produces all three so
+  // every row's Prezzo + Δ% cells render without a per-ticker lookup.
+  const { changeByTicker, closeByTicker, currencyByTicker } = useMemo(() => {
+    const ch = new Map<string, number>();
+    const cl = new Map<string, number>();
+    const cc = new Map<string, string>();
     const treemap = market.data?.treemap ?? [];
     for (const leaf of treemap) {
-      m.set(leaf.ticker, leaf.change_pct);
+      ch.set(leaf.ticker, leaf.change_pct);
+      if (leaf.last_close != null) cl.set(leaf.ticker, leaf.last_close);
+      if (leaf.currency) cc.set(leaf.ticker, leaf.currency);
     }
-    return m;
+    return { changeByTicker: ch, closeByTicker: cl, currencyByTicker: cc };
   }, [market.data]);
 
   // change_pct is sorted client-side over the current page. Server-sorted
@@ -156,6 +179,13 @@ export function StockBrowserTable({ items, sortBy, sortDir, onSortChange, q, onQ
                 <SortableHeader column="exchange" label="Exchange" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} />
                 <SortableHeader column="sector" label="Settore" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} />
                 <SortableHeader column="industry" label="Industry" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} />
+                {/* Prezzo column: last close in listing currency, sourced
+                    from the market snapshot (treemap.last_close). Not
+                    sortable — the snapshot doesn't ship absolute prices
+                    in a comparable way (USD 200 vs JPY 18000). */}
+                <th className="px-3 py-1.5 text-right text-base">
+                  <span className="uppercase tracking-wide font-semibold">Prezzo</span>
+                </th>
                 <SortableHeader column="market_cap" label="Mkt Cap" align="right" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} />
                 <SortableHeader column="change_pct" label="Δ%" align="right" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} clientOnly />
                 <SortableHeader column="composite" label="Score" align="right" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} />
@@ -166,7 +196,7 @@ export function StockBrowserTable({ items, sortBy, sortDir, onSortChange, q, onQ
               {items.length === 0 && (
                 <tr>
                   <td
-                    colSpan={9}
+                    colSpan={10}
                     className="px-4 py-10 text-center text-muted-foreground"
                   >
                     Nessuno stock trovato.
@@ -194,8 +224,13 @@ export function StockBrowserTable({ items, sortBy, sortDir, onSortChange, q, onQ
                     className="border-b border-border/50 hover:bg-muted/40 transition-colors"
                   >
                     <td className="px-3 py-1.5">
+                      {/* Logo size bumped from xs (28px) → sm (36px) per
+                          user feedback ("aggiungi le icone delle stock")
+                          + monogram fallback (in StockLogo) for HK/JP/KR
+                          tickers the CDN doesn't carry, so EVERY row now
+                          shows a logo. */}
                       <Link to={`/stocks/${encodeURIComponent(s.ticker)}`} className="inline-flex items-center gap-2 font-semibold hover:underline">
-                        <StockLogo ticker={s.ticker} size="xs" />
+                        <StockLogo ticker={s.ticker} size="sm" />
                         <span>{s.ticker}</span>
                       </Link>
                     </td>
@@ -223,6 +258,9 @@ export function StockBrowserTable({ items, sortBy, sortDir, onSortChange, q, onQ
                     </td>
                     <td className="px-3 py-1.5 text-muted-foreground truncate max-w-[160px]" title={s.industry ?? ""}>
                       {s.industry ?? "—"}
+                    </td>
+                    <td className="px-3 py-1.5 text-right font-semibold">
+                      {fmtClose(closeByTicker.get(s.ticker), currencyByTicker.get(s.ticker) ?? s.currency ?? undefined)}
                     </td>
                     <td className="px-3 py-1.5 text-right">{fmtMc(s.market_cap)}</td>
                     <td className={cn("px-3 py-1.5 text-right", changeColor)}>

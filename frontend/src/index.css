@@ -79,3 +79,55 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* ─── MarketTickerTape animations ──────────────────────────────────────────
+ * The ticker tape (top of dashboard) uses a CSS-only horizontal scroll
+ * via translateX. The track is duplicated in the DOM, so animating
+ * from 0 → -50% lands the second copy exactly where the first started
+ * — invisibly seamless loop.
+ *
+ * Speed: 60s per full cycle is fast enough to feel "alive" without
+ * being unreadable. 90s slowed to a crawl in user-tests (felt static),
+ * 30s was too fast to read individual symbols.
+ *
+ * Hover pauses the animation so the user can lock onto a flying
+ * ticker. `prefers-reduced-motion` respect: when the user's OS asks
+ * for reduced motion (vestibular sensitivity, etc.) we stop the
+ * animation entirely — the values are still visible, just static.
+ */
+@keyframes ticker-marquee {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+.ticker-rail {
+  animation: ticker-marquee 60s linear infinite;
+  will-change: transform;
+}
+.group:hover .ticker-rail {
+  animation-play-state: paused;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ticker-rail {
+    animation: none;
+  }
+}
+
+/* ─── HomePage ambient pulse ──────────────────────────────────────────────
+ * Soft slow pulse used on hero cards so the dashboard feels alive
+ * even when no values are flashing. Subtle: opacity oscillates
+ * between 100% and 92% — visible peripheral motion without competing
+ * with content. Used by `LiveAssetsPanel` wrapper and the new
+ * SuperinvestorPicksCard.
+ */
+@keyframes ambient-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.92; }
+}
+.ambient-pulse {
+  animation: ambient-pulse 4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ambient-pulse {
+    animation: none;
+  }
+}

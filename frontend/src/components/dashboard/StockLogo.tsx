@@ -1,4 +1,3 @@
-import { Building2 } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { cn } from "@/lib/utils";
@@ -13,6 +12,27 @@ const SIZE_PX: Record<NonNullable<Props["size"]>, number> = {
   sm: 36,
   md: 48,
 };
+
+// 8-color rotation for the fallback pill. Hash the ticker so a given
+// stock always lands in the same color across renders — visually
+// stable in scrolling lists. NB: the literals must be present in code
+// for Tailwind's purger to keep them.
+const FALLBACK_TONES = [
+  "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-200",
+  "bg-sky-100 text-sky-800 dark:bg-sky-900/60 dark:text-sky-200",
+  "bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-200",
+  "bg-violet-100 text-violet-800 dark:bg-violet-900/60 dark:text-violet-200",
+  "bg-rose-100 text-rose-800 dark:bg-rose-900/60 dark:text-rose-200",
+  "bg-teal-100 text-teal-800 dark:bg-teal-900/60 dark:text-teal-200",
+  "bg-orange-100 text-orange-800 dark:bg-orange-900/60 dark:text-orange-200",
+  "bg-indigo-100 text-indigo-800 dark:bg-indigo-900/60 dark:text-indigo-200",
+];
+
+function hashTicker(t: string): number {
+  let h = 0;
+  for (let i = 0; i < t.length; i++) h = (h * 31 + t.charCodeAt(i)) | 0;
+  return Math.abs(h);
+}
 
 /**
  * CDN chain for stock logos. Tries each in order, falling through on 404.
@@ -48,14 +68,25 @@ export function StockLogo({ ticker, size = "sm" }: Props) {
   const sources = logoSources(ticker);
 
   if (exhausted) {
+    // CDN didn't have the logo (common for HK/JP/KR/EU exotic listings).
+    // Render a colored monogram pill instead of a generic Building2 icon
+    // — keeps the row visually distinguishable and confirms to the user
+    // that a logo *would* be there if available. The first 1-2 chars of
+    // the ticker (sans the exchange suffix) drive the monogram.
+    const base = ticker.split(".")[0].toUpperCase();
+    const monogram = base.slice(0, base.length >= 3 ? 2 : 1);
+    const tone = FALLBACK_TONES[hashTicker(base) % FALLBACK_TONES.length];
     return (
       <span
-        className="inline-flex items-center justify-center rounded-full bg-muted/60 text-muted-foreground shrink-0"
-        style={{ width: px, height: px }}
+        className={cn(
+          "inline-flex items-center justify-center rounded-full font-bold shrink-0 select-none",
+          tone,
+        )}
+        style={{ width: px, height: px, fontSize: Math.round(px * 0.42) }}
         title={ticker}
         aria-label={`${ticker} logo unavailable`}
       >
-        <Building2 style={{ width: px * 0.55, height: px * 0.55 }} />
+        {monogram}
       </span>
     );
   }

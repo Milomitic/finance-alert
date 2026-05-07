@@ -394,7 +394,14 @@ def build_rsi_distribution(
 
 
 def build_treemap(metrics: list[StockMetrics]) -> list[dict]:
-    """Treemap leaves: stocks with known market_cap and change_pct."""
+    """Treemap leaves: stocks with known market_cap and change_pct.
+
+    Also exposes `last_close` + `currency` + `vol_today` per leaf so
+    the screener can render a "Prezzo" column (latest close in listing
+    currency) and a volume cell without an extra round-trip per row.
+    Backwards compatible — existing consumers of `change_pct`/`sector`
+    are unaffected.
+    """
     return [
         {
             "ticker": m.ticker,
@@ -402,6 +409,9 @@ def build_treemap(metrics: list[StockMetrics]) -> list[dict]:
             "sector": m.sector,
             "market_cap": m.market_cap,
             "change_pct": m.change_pct,
+            "last_close": m.last_close,
+            "currency": m.currency,
+            "vol_today": m.vol_today,
         }
         for m in metrics
         if m.market_cap is not None and m.change_pct is not None

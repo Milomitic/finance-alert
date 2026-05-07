@@ -84,6 +84,11 @@ class TreemapLeafOut(BaseModel):
     sector: str | None
     market_cap: float
     change_pct: float
+    # Listing-currency close and volume for the screener's Prezzo column.
+    # Optional for back-compat with snapshots that pre-date this schema.
+    last_close: float | None = None
+    currency: str | None = None
+    vol_today: int | None = None
 
 
 class MarketSummaryOut(BaseModel):

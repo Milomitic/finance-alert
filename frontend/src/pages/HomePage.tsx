@@ -4,12 +4,14 @@ import { AlertsCompactPanel } from "@/components/dashboard/AlertsCompactPanel";
 import { BreadthMatrixTable } from "@/components/dashboard/BreadthMatrixTable";
 import { FiftyTwoWeekVolCard } from "@/components/dashboard/FiftyTwoWeekVolCard";
 import { HeroStrip } from "@/components/dashboard/HeroStrip";
+import { MarketTickerTape } from "@/components/dashboard/MarketTickerTape";
 import { DataSourcesCard } from "@/components/dashboard/DataSourcesCard";
 import { ScanHeaderButton } from "@/components/dashboard/ScanHeaderButton";
 import { TopMoversCard } from "@/components/dashboard/TopMoversCard";
 import { TopPicksCard } from "@/components/dashboard/TopPicksCard";
 import { RsiHistogramCard } from "@/components/dashboard/RsiHistogramCard";
 import { SectorsHeatmapCard } from "@/components/dashboard/SectorsHeatmapCard";
+import { SuperinvestorPicksCard } from "@/components/dashboard/SuperinvestorPicksCard";
 import { SystemStatusFooter } from "@/components/dashboard/SystemStatusFooter";
 import { Card, CardContent } from "@/components/ui/card";
 import { useDashboardSummary } from "@/hooks/useDashboardSummary";
@@ -115,6 +117,11 @@ export default function HomePage() {
 
   return (
     <div className="space-y-4">
+      {/* Ticker tape: top-of-page horizontal scroll with live indices,
+          commodities, crypto. Runs always (not just during loading).
+          Sets the "trading floor" tone for the page — the rest of the
+          UI feels static without it. */}
+      <MarketTickerTape />
       <div className="flex items-center justify-between gap-3 px-1">
         <div className="flex items-baseline gap-3">
           <h2 className="text-base font-semibold tracking-tight">Dashboard</h2>
@@ -159,19 +166,30 @@ export default function HomePage() {
           (440->500) so the bigger row fonts have breathing room. Each
           card's columns scroll internally for overflow. Stacks
           vertically on narrow viewports via the `lg:` breakpoint. */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 lg:h-[500px]">
-        {summaryData ? (
-          <AlertsCompactPanel
-            topStocks={summaryData.top_stocks_30d}
-            recentAlerts={summaryData.recent_alerts}
-            alertsByIndex={summaryData.alerts_by_index_30d}
-            alertsLast24h={summaryData.kpis.alerts_last_24h}
-            alertsPrev24h={summaryData.kpis.alerts_prev_24h}
-          />
-        ) : (
-          <div />
-        )}
-        <TopPicksCard />
+      {/* Three decision lenses side-by-side: react (alerts) ·
+          discover via score (TopPicks) · discover via consensus
+          (Superinvestor picks). 3-col on lg+, 2-col on md (Alerts
+          spans the row above the two pick cards), single-col on
+          narrow viewports. The grid stays at 500px tall on lg+ so
+          the cards align — each is independently scrollable. */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 lg:h-[500px]">
+        <div className="md:col-span-2 lg:col-span-1 lg:h-full lg:min-h-0">
+          {summaryData ? (
+            <AlertsCompactPanel
+              topStocks={summaryData.top_stocks_30d}
+              recentAlerts={summaryData.recent_alerts}
+              alertsByIndex={summaryData.alerts_by_index_30d}
+              alertsLast24h={summaryData.kpis.alerts_last_24h}
+              alertsPrev24h={summaryData.kpis.alerts_prev_24h}
+            />
+          ) : null}
+        </div>
+        <div className="lg:h-full lg:min-h-0">
+          <TopPicksCard />
+        </div>
+        <div className="lg:h-full lg:min-h-0">
+          <SuperinvestorPicksCard />
+        </div>
       </div>
       <DataSourcesCard />
       {summaryData && <SystemStatusFooter status={summaryData.system_status} />}
