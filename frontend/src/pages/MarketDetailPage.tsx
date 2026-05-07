@@ -14,9 +14,9 @@ import { useParams, useSearchParams } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { FlashValue } from "@/components/ui/FlashValue";
 import { MarketChart } from "@/components/market/MarketChart";
-import { MultiTimeframeKpisCard } from "@/components/MultiTimeframeKpisCard";
 import { MacdPanel } from "@/components/stock/MacdPanel";
 import { RsiPanel } from "@/components/stock/RsiPanel";
+import { MultiTfStrip } from "@/components/stock/StockScoreCard";
 import { RangeSelector } from "@/components/stock/RangeSelector";
 import {
   DEFAULT_INDICATOR_STATE,
@@ -221,29 +221,12 @@ export default function MarketDetailPage() {
         </CardContent>
       </Card>
 
-      {/* KPI strip — 52w high/low + range high/low.
-          The 52w numbers stay constant across range changes, the
-          range numbers reflect what's on the chart at the moment. */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <KpiCell
-          label="52W high"
-          value={d.high_52w != null ? formatMarketPrice(d.high_52w, d.category) : "—"}
-        />
-        <KpiCell
-          label="52W low"
-          value={d.low_52w != null ? formatMarketPrice(d.low_52w, d.category) : "—"}
-        />
-        <KpiCell
-          label="Range high"
-          value={d.high_window != null ? formatMarketPrice(d.high_window, d.category) : "—"}
-        />
-        <KpiCell
-          label="Range low"
-          value={d.low_window != null ? formatMarketPrice(d.low_window, d.category) : "—"}
-        />
-      </div>
-
-      {/* Chart */}
+      {/* Chart (left) + sidebar with TF strip + KPI summary (right).
+          Mirrors the stock-detail layout: 1fr chart + 540px sidebar.
+          KPI cells (52w hi/lo, range hi/lo) and the multi-timeframe
+          technical outlook are stacked in the sidebar so the chart
+          dominates horizontally like in the stock page. */}
+      <div className="grid lg:grid-cols-[1fr_540px] gap-3">
       <Card>
         <CardContent className="p-4">
           <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
@@ -316,11 +299,88 @@ export default function MarketDetailPage() {
         </CardContent>
       </Card>
 
-      {/* Multi-timeframe KPI comparison — same indicators (RSI 14,
-          BB 20, SMA 20/50/200, MACD 12/26/9) computed across all 6
-          timeframes side-by-side so the user can spot
-          short-vs-long-term disagreements. */}
-      <MultiTimeframeKpisCard ticker={d.symbol} kind="market" />
+      {/* Sidebar: technical strip + KPI summary + meta info. Same
+          width as the stock-detail right column for visual continuity. */}
+      <div className="space-y-3">
+        <Card>
+          <CardContent className="p-4">
+            <div className="text-[11px] uppercase tracking-wider font-semibold text-muted-foreground/70 mb-2">
+              Technical outlook per timeframe
+            </div>
+            <MultiTfStrip ticker={d.symbol} kind="market" />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="text-[11px] uppercase tracking-wider font-semibold text-muted-foreground/70 mb-2">
+              KPI di prezzo
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <KpiCell
+                label="52W high"
+                value={d.high_52w != null ? formatMarketPrice(d.high_52w, d.category) : "—"}
+              />
+              <KpiCell
+                label="52W low"
+                value={d.low_52w != null ? formatMarketPrice(d.low_52w, d.category) : "—"}
+              />
+              <KpiCell
+                label="Range high"
+                value={d.high_window != null ? formatMarketPrice(d.high_window, d.category) : "—"}
+              />
+              <KpiCell
+                label="Range low"
+                value={d.low_window != null ? formatMarketPrice(d.low_window, d.category) : "—"}
+              />
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="text-[11px] uppercase tracking-wider font-semibold text-muted-foreground/70 mb-2">
+              Meta
+            </div>
+            <dl className="space-y-1 text-sm">
+              <div className="flex justify-between">
+                <dt className="text-muted-foreground">Simbolo</dt>
+                <dd className="font-mono">{d.symbol}</dd>
+              </div>
+              <div className="flex justify-between">
+                <dt className="text-muted-foreground">Categoria</dt>
+                <dd className="capitalize">{d.category}</dd>
+              </div>
+              {d.quote?.currency && (
+                <div className="flex justify-between">
+                  <dt className="text-muted-foreground">Valuta</dt>
+                  <dd className="font-semibold">{d.quote.currency}</dd>
+                </div>
+              )}
+              {d.quote?.market_state && (
+                <div className="flex justify-between">
+                  <dt className="text-muted-foreground">Stato mercato</dt>
+                  <dd className={cn(
+                    "font-semibold",
+                    d.quote.market_state === "OPEN"
+                      ? "text-emerald-600 dark:text-emerald-400"
+                      : "text-muted-foreground",
+                  )}>
+                    {d.quote.market_state}
+                  </dd>
+                </div>
+              )}
+              <div className="flex justify-between">
+                <dt className="text-muted-foreground">Range attivo</dt>
+                <dd className="font-semibold">{d.range_key}</dd>
+              </div>
+              <div className="flex justify-between">
+                <dt className="text-muted-foreground">Bar nel chart</dt>
+                <dd className="tabular-nums">{d.bars.length.toLocaleString("it-IT")}</dd>
+              </div>
+            </dl>
+          </CardContent>
+        </Card>
+      </div>
+      </div>
     </div>
   );
 }

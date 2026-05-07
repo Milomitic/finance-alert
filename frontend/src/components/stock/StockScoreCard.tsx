@@ -13,7 +13,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { useStockMultiTfKpis } from "@/hooks/useMultiTfKpis";
+import { useMarketMultiTfKpis, useStockMultiTfKpis } from "@/hooks/useMultiTfKpis";
 import { useStockScore } from "@/hooks/useStockScore";
 import {
   CATEGORY_LABEL,
@@ -139,14 +139,15 @@ function compositeTone(score: number): string {
   return "bg-rose-500/25 text-rose-700 dark:text-rose-300 border-rose-300/50";
 }
 
-function MultiTfStrip({ ticker, kind }: { ticker: string; kind: "stock" | "market" }) {
+export function MultiTfStrip({ ticker, kind }: { ticker: string; kind: "stock" | "market" }) {
+  // Both hooks always run; the unused one is gated on its ticker arg
+  // being empty so the request never fires. This avoids hook-order
+  // issues from conditional useQuery calls.
   const stockQ = useStockMultiTfKpis(kind === "stock" ? ticker : "");
-  // For now we only mount the stock variant; the kind="market" hook will
-  // be consumed by MarketDetailPage in a sibling change. The hook is
-  // gated on the ticker prop being non-empty so the unused branch never
-  // triggers a request.
-  const data = stockQ.data;
-  if (stockQ.isLoading || !data || data.items.length === 0) {
+  const marketQ = useMarketMultiTfKpis(kind === "market" ? ticker : "");
+  const q = kind === "stock" ? stockQ : marketQ;
+  const data = q.data;
+  if (q.isLoading || !data || data.items.length === 0) {
     return (
       <div className="grid grid-cols-6 gap-1 text-center">
         {["30m", "1h", "1d", "1w", "1m", "All"].map((tf) => (
