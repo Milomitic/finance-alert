@@ -16,7 +16,8 @@ import { FlashValue } from "@/components/ui/FlashValue";
 import { MarketChart } from "@/components/market/MarketChart";
 import { MacdPanel } from "@/components/stock/MacdPanel";
 import { RsiPanel } from "@/components/stock/RsiPanel";
-import { MultiTfStrip } from "@/components/stock/StockScoreCard";
+import { HeaderSparkline } from "@/components/stock/StockHeader";
+import { TechnicalKpiCard } from "@/components/stock/TechnicalKpiCard";
 import { RangeSelector } from "@/components/stock/RangeSelector";
 import {
   DEFAULT_INDICATOR_STATE,
@@ -138,78 +139,126 @@ export default function MarketDetailPage() {
   // `=F` futures — show volume only when at least one bar reports it.
   const hasVolume = d.bars.some((b) => (b.volume ?? 0) > 0);
 
+  // V3.5 alignment with stock-detail StockHeader: derive subtle tone
+  // from the day's change for the card's bg + left stripe + arrow,
+  // and feed the candlestick history into the area-gradient sparkline.
+  const tone =
+    changePct == null
+      ? { bg: "bg-card", stripe: "bg-slate-300 dark:bg-slate-600", text: "text-muted-foreground", arrow: "" }
+      : changePct > 0
+        ? { bg: "bg-emerald-50/50 dark:bg-emerald-950/15", stripe: "bg-emerald-500", text: "text-emerald-700 dark:text-emerald-300", arrow: "▲" }
+        : changePct < 0
+          ? { bg: "bg-rose-50/50 dark:bg-rose-950/15", stripe: "bg-rose-500", text: "text-rose-700 dark:text-rose-300", arrow: "▼" }
+          : { bg: "bg-card", stripe: "bg-slate-300 dark:bg-slate-600", text: "text-muted-foreground", arrow: "" };
+  const headerCloses = d.bars
+    .map((b) => b.close)
+    .filter((c) => Number.isFinite(c));
+  const headerSparkUp = (changePct ?? 0) >= 0;
+  const categoryLabel =
+    d.category === "index"
+      ? "Indice di mercato"
+      : d.category === "commodity"
+        ? "Materia prima"
+        : "Criptovaluta";
+
   return (
     <div className="space-y-3">
-      {/* Header — identity + live price */}
-      <Card>
-        <CardContent className="p-4 flex items-center gap-4 flex-wrap">
-          <span className="shrink-0 inline-flex items-center justify-center h-12 w-12 rounded-full bg-muted/50">
-            {d.flag ? (
-              <img
-                src={`/flags/${d.flag}.svg`}
-                alt={d.flag}
-                width={40}
-                height={28}
-                style={{ width: "40px", height: "28px", objectFit: "cover" }}
-                className="rounded-sm ring-1 ring-border/60"
-                aria-hidden
-              />
-            ) : symbolIcon ? (
-              <symbolIcon.Component
-                className={cn("h-7 w-7", symbolIcon.color)}
-              />
+      {/* Header — full StockHeader-style hero with gradient sparkline +
+          prev close + tone-tinted bg + left accent stripe. Same visual
+          language as /stocks/:ticker so the user feels at home no matter
+          which detail page they land on. */}
+      <Card className={cn("relative overflow-hidden border-border/60", tone.bg)}>
+        <HeaderSparkline closes={headerCloses} up={headerSparkUp} />
+        <div className={cn("absolute left-0 top-0 bottom-0 w-1.5 z-10", tone.stripe)} aria-hidden />
+        <CardContent className="relative z-10 p-5 pl-7 flex items-start gap-6 flex-wrap">
+          <span className="shrink-0 inline-flex items-center justify-center h-14 w-14 rounded-2xl bg-white dark:bg-zinc-900 border border-border/60 shadow-sm">
+            {symbolIcon ? (
+              <symbolIcon.Component className={cn("h-8 w-8", symbolIcon.color)} />
             ) : (
-              <FallbackIcon className="h-7 w-7 text-muted-foreground" />
+              <FallbackIcon className="h-8 w-8 text-muted-foreground" />
             )}
           </span>
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-2xl font-semibold tracking-tight leading-tight truncate">
-                {d.name}
-              </h1>
-              <span className="text-xs text-muted-foreground tabular-nums">
+            <div className="flex items-baseline gap-3 flex-wrap">
+              <span className="text-4xl sm:text-5xl font-bold tracking-tight tabular-nums leading-none">
                 {d.symbol}
               </span>
-              <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+              <span
+                className="text-xl text-foreground/80 font-medium truncate"
+                title={d.name}
+              >
+                {d.name}
+              </span>
+            </div>
+            <div className="flex items-center gap-2 mt-3 flex-wrap">
+              {/* Category tag now hosts the country flag (when known) so
+                  the listing geography is anchored to the asset class
+                  chip — same pattern as the stock-detail exchange tag. */}
+              <span className="inline-flex items-center gap-1.5 rounded-md bg-muted/70 dark:bg-muted/40 px-2.5 py-1 text-sm font-medium uppercase tracking-wider">
+                {d.flag && (
+                  <img
+                    src={`/flags/${d.flag}.svg`}
+                    alt={d.flag}
+                    width={18}
+                    height={12}
+                    style={{ width: "18px", height: "12px", objectFit: "cover" }}
+                    className="rounded-sm shadow-sm"
+                    aria-hidden
+                  />
+                )}
                 {d.category}
               </span>
-              {isLive && (
+              <span className="text-sm text-muted-foreground">{categoryLabel}</span>
+            </div>
+          </div>
+          <div className="text-right tabular-nums shrink-0 flex flex-col gap-1 items-end">
+            <div className="flex items-center gap-1.5 text-sm uppercase tracking-wide">
+              {isLive ? (
                 <span
-                  className="relative inline-flex h-2 w-2 ml-1"
+                  className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-300 font-semibold"
                   title="Mercato aperto · prezzo live"
                 >
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60" />
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                  <span className="relative inline-flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                  </span>
+                  LIVE
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 text-muted-foreground font-semibold">
+                  Ultima chiusura
                 </span>
               )}
             </div>
-            <p className="text-sm text-muted-foreground">
-              {d.category === "index"
-                ? "Indice di mercato"
-                : d.category === "commodity"
-                  ? "Materia prima"
-                  : "Criptovaluta"}
-            </p>
-          </div>
-          <div className="text-right">
             <FlashValue
               value={livePrice}
               format={(v) => formatMarketPrice(v, d.category)}
-              className="text-3xl font-bold tabular-nums leading-none"
+              className="text-5xl font-bold leading-none"
             />
             {changePct != null && (
               <div
                 className={cn(
-                  "text-sm font-semibold tabular-nums mt-1",
-                  changePct > 0
-                    ? "text-emerald-600 dark:text-emerald-400"
-                    : changePct < 0
-                      ? "text-rose-600 dark:text-rose-400"
-                      : "text-muted-foreground",
+                  "inline-flex items-baseline gap-1.5 text-2xl font-bold mt-1",
+                  tone.text,
                 )}
               >
-                {changePct >= 0 ? "+" : ""}
-                {changePct.toFixed(2)}%
+                <span className="text-lg">{tone.arrow}</span>
+                <span>
+                  {changePct >= 0 ? "+" : ""}
+                  {changePct.toFixed(2)}%
+                </span>
+              </div>
+            )}
+            {/* Prev close caption when live — same UX as stock detail. */}
+            {isLive && d.quote?.prev_close != null && (
+              <div
+                className="text-[11px] uppercase tracking-wider text-muted-foreground/80 mt-0.5"
+                title="Chiusura della sessione precedente"
+              >
+                Prev close:{" "}
+                <span className="text-foreground/80 font-semibold tabular-nums">
+                  {formatMarketPrice(d.quote.prev_close, d.category)}
+                </span>
               </div>
             )}
             {d.quote?.currency && (
@@ -221,12 +270,9 @@ export default function MarketDetailPage() {
         </CardContent>
       </Card>
 
-      {/* Chart (left) + sidebar with TF strip + KPI summary (right).
-          Mirrors the stock-detail layout: 1fr chart + 540px sidebar.
-          KPI cells (52w hi/lo, range hi/lo) and the multi-timeframe
-          technical outlook are stacked in the sidebar so the chart
-          dominates horizontally like in the stock page. */}
-      <div className="grid lg:grid-cols-[1fr_540px] gap-3">
+      {/* Chart (left) + sidebar (right). Same 1fr+480px split as
+          /stocks/:ticker so the visual rhythm aligns. */}
+      <div className="grid lg:grid-cols-[1fr_480px] gap-3">
       <Card>
         <CardContent className="p-4">
           <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
@@ -299,17 +345,12 @@ export default function MarketDetailPage() {
         </CardContent>
       </Card>
 
-      {/* Sidebar: technical strip + KPI summary + meta info. Same
-          width as the stock-detail right column for visual continuity. */}
+      {/* Sidebar: technical KPI matrix + KPI summary + meta info.
+          V3.5 alignment with stock-detail layout: the cross-timeframe
+          matrix lives in TechnicalKpiCard (same component used by
+          StockDetailPage) instead of the deprecated -3..+3 strip. */}
       <div className="space-y-3">
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-[11px] uppercase tracking-wider font-semibold text-muted-foreground/70 mb-2">
-              Technical outlook per timeframe
-            </div>
-            <MultiTfStrip ticker={d.symbol} kind="market" />
-          </CardContent>
-        </Card>
+        <TechnicalKpiCard ticker={d.symbol} kind="market" />
         <Card>
           <CardContent className="p-4">
             <div className="text-[11px] uppercase tracking-wider font-semibold text-muted-foreground/70 mb-2">

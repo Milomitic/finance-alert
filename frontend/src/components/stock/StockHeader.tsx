@@ -26,7 +26,7 @@ interface Props {
  * shape is always visible at a glance, but never competes with the foreground
  * text. Color follows the day's % change (green up / red down).
  */
-function HeaderSparkline({ closes, up }: { closes: number[]; up: boolean }) {
+export function HeaderSparkline({ closes, up }: { closes: number[]; up: boolean }) {
   if (closes.length < 2) return null;
   const min = Math.min(...closes);
   const max = Math.max(...closes);

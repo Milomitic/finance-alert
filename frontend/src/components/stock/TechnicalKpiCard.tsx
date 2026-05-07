@@ -8,12 +8,21 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { useStockMultiTfKpis, type TimeframeKpis } from "@/hooks/useMultiTfKpis";
+import {
+  useMarketMultiTfKpis,
+  useStockMultiTfKpis,
+  type TimeframeKpis,
+} from "@/hooks/useMultiTfKpis";
 import { cn } from "@/lib/utils";
 
 interface Props {
+  /** Catalog ticker (stock) OR live-asset symbol (^GSPC, BTC-USD, …). */
   ticker: string;
-  // Kept for API compat with the parent's existing prop wiring; not
+  /** "stock" → uses /api/stocks/.../multi-tf-kpis (catalog-aware path)
+   *  "market" → uses /api/markets/.../multi-tf-kpis (yfinance direct).
+   *  Default "stock" preserves the original call sites without changes. */
+  kind?: "stock" | "market";
+  // Kept for API compat with parents' existing prop wiring; not
   // currently rendered. Future revisions may surface 52w / volume info
   // here too, but the V3.2 redesign focuses on the multi-TF matrix.
   kpis?: StockKpis;
@@ -221,8 +230,13 @@ function MatrixRowComponent({
   );
 }
 
-export function TechnicalKpiCard({ ticker }: Props) {
-  const q = useStockMultiTfKpis(ticker);
+export function TechnicalKpiCard({ ticker, kind = "stock" }: Props) {
+  // Both hooks always run; the unused one is gated on its ticker arg
+  // being empty so the request never fires. This avoids hook-order
+  // issues from conditional useQuery calls.
+  const stockQ = useStockMultiTfKpis(kind === "stock" ? ticker : "");
+  const marketQ = useMarketMultiTfKpis(kind === "market" ? ticker : "");
+  const q = kind === "stock" ? stockQ : marketQ;
 
   if (q.isLoading) {
     return (
