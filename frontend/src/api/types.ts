@@ -958,6 +958,11 @@ export interface ActionAggregate {
   action: string;
   qoq_change_pct: number | null;
   portfolio_pct: number | null;
+  /** Position value at the filing's report date — absolute $ context
+   *  for the +/- % delta. Null when the filing didn't expose it. */
+  value_usd: number | null;
+  /** Catalog hit (drives ticker linking + StockLogo CDN lookup). */
+  stock_id: number | null;
 }
 
 export interface AggregateStats {

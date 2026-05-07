@@ -574,6 +574,15 @@ class ActionAggregate:
     action: str
     qoq_change_pct: float | None
     portfolio_pct: float | None
+    # Position value at the filing's report date — the absolute $
+    # amount the fund holds. Without this the UI can only show "+12%
+    # of portfolio" without the dollar context (a 12% buy at a $100M
+    # AUM fund is trivial; at Berkshire it's $200B).
+    value_usd: int | None
+    # Catalog enrichment for the row's ticker — drives the StockLogo
+    # CDN lookup in the UI and the Link-vs-text decision (off-catalog
+    # tickers render as static text). Same pattern as HoldingDetail.
+    stock_id: int | None
 
 
 @dataclass
@@ -720,12 +729,26 @@ def get_aggregate_stats(
                 InstitutionalHolding.action,
                 InstitutionalHolding.qoq_change_pct,
                 InstitutionalHolding.portfolio_pct,
+                InstitutionalHolding.value_usd,
+                # LEFT JOIN to Stock so off-catalog tickers (CN ADRs,
+                # OTC, ETFs the catalog skips) still surface in the
+                # leaderboard with `stock_id=None`. Picking just the
+                # min(id) deduplicates the catalog's known double rows
+                # (see CLAUDE.md) without affecting visible behavior.
+                func.min(Stock.id).label("stock_id"),
             )
             .join(InstitutionalFiling, InstitutionalFiling.id == InstitutionalHolding.filing_id)
             .join(Institutional, Institutional.id == InstitutionalFiling.institutional_id)
+            .outerjoin(Stock, Stock.ticker == InstitutionalHolding.ticker)
             .where(
                 InstitutionalHolding.filing_id.in_(latest_filing_ids),
                 InstitutionalHolding.action.in_(list(action_set)),
+            )
+            .group_by(
+                InstitutionalHolding.id,
+                Institutional.slug,
+                Institutional.name,
+                InstitutionalFiling.period_end_date,
             )
             .order_by(
                 InstitutionalFiling.period_end_date.desc(),
@@ -742,8 +765,10 @@ def get_aggregate_stats(
                 institutional_slug=slug, institutional_name=name,
                 period_end_date=period_end, action=action,
                 qoq_change_pct=qoq, portfolio_pct=pct,
+                value_usd=value_usd, stock_id=stock_id,
             )
-            for ticker, company_name, slug, name, period_end, action, qoq, pct in rows
+            for ticker, company_name, slug, name, period_end, action,
+                qoq, pct, value_usd, stock_id in rows
         ]
 
     recent_buys = _actions({"new", "add"}, recent_actions_limit)

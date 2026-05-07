@@ -79,6 +79,8 @@ class ActionAggregateOut(BaseModel):
     action: str
     qoq_change_pct: float | None = None
     portfolio_pct: float | None = None
+    value_usd: int | None = None
+    stock_id: int | None = None
 
 
 class AggregateStatsOut(BaseModel):

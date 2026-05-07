@@ -7,6 +7,7 @@ import type {
   InstitutionalSummary,
   TickerAggregate,
 } from "@/api/types";
+import { StockLogo } from "@/components/dashboard/StockLogo";
 import { Card, CardContent } from "@/components/ui/card";
 import { SectionTitle } from "@/components/ui/section-title";
 import {
@@ -52,16 +53,25 @@ function shortDate(s: string | null): string {
 }
 
 function MostPickedRow({ row }: { row: TickerAggregate }) {
-  // Catalog hit -> link to /stocks/:ticker; otherwise plain text.
+  // Logo + ticker, side-by-side. Logo size is `xs` (28px) for table
+  // density; the StockLogo component auto-falls back to a colored
+  // monogram pill when the CDN doesn't have the ticker (HK/JP/EU
+  // listings, ETFs, etc.) so EVERY row gets a visual badge.
+  const tickerInner = (
+    <span className="inline-flex items-center gap-1.5 font-semibold">
+      <StockLogo ticker={row.ticker} size="xs" />
+      <span>{row.ticker}</span>
+    </span>
+  );
   const TickerCell = row.stock_id ? (
     <Link
       to={`/stocks/${encodeURIComponent(row.ticker)}`}
-      className="font-semibold hover:underline"
+      className="hover:underline"
     >
-      {row.ticker}
+      {tickerInner}
     </Link>
   ) : (
-    <span className="font-semibold">{row.ticker}</span>
+    tickerInner
   );
   return (
     <tr className="hover:bg-muted/30">
@@ -94,19 +104,37 @@ function ActionRow({ row, kind }: { row: ActionAggregate; kind: "buy" | "sell" }
     kind === "buy"
       ? "text-emerald-700 dark:text-emerald-300"
       : "text-red-700 dark:text-red-300";
+  // Same logo+ticker treatment as the most-picked table — same cell
+  // shape across all three tables, only the trailing columns change.
+  const tickerInner = (
+    <span className="inline-flex items-center gap-1.5 font-semibold">
+      <StockLogo ticker={row.ticker} size="xs" />
+      <span>{row.ticker}</span>
+    </span>
+  );
+  const TickerCell = row.stock_id ? (
+    <Link
+      to={`/stocks/${encodeURIComponent(row.ticker)}`}
+      className="hover:underline"
+    >
+      {tickerInner}
+    </Link>
+  ) : (
+    tickerInner
+  );
   return (
     <tr className="hover:bg-muted/30">
-      <td className="px-2 py-1.5">
-        <Link
-          to={`/stocks/${encodeURIComponent(row.ticker)}`}
-          className="font-semibold hover:underline"
-        >
-          {row.ticker}
-        </Link>
-      </td>
+      <td className="px-2 py-1.5">{TickerCell}</td>
       <td className={cn("px-2 py-1.5 text-xs", tone)}>{row.action}</td>
       <td className="px-2 py-1.5 text-right tabular-nums text-xs">
         {fmtPct(row.qoq_change_pct)}
+      </td>
+      {/* Valore column: absolute $ context for the % delta. A "+12% Q/Q"
+          at a $1B fund (= ~$120M move) tells a different story than the
+          same delta at a $50B fund. Sourced from
+          ActionAggregate.value_usd (Phase 3D-add). */}
+      <td className="px-2 py-1.5 text-right tabular-nums text-xs">
+        {fmtBig(row.value_usd)}
       </td>
       <td className="px-2 py-1.5 text-right tabular-nums text-xs text-muted-foreground">
         {fmtPct(row.portfolio_pct)}
@@ -336,6 +364,7 @@ export default function InstitutionalsPage() {
                     <th className="px-2 py-1 text-left">Ticker</th>
                     <th className="px-2 py-1 text-left">Action</th>
                     <th className="px-2 py-1 text-right">Q/Q</th>
+                    <th className="px-2 py-1 text-right">Valore</th>
                     <th className="px-2 py-1 text-right">% port</th>
                     <th className="px-2 py-1 text-left">Fondo</th>
                     <th className="px-2 py-1 text-left">Q-end</th>
@@ -370,6 +399,7 @@ export default function InstitutionalsPage() {
                     <th className="px-2 py-1 text-left">Ticker</th>
                     <th className="px-2 py-1 text-left">Action</th>
                     <th className="px-2 py-1 text-right">Q/Q</th>
+                    <th className="px-2 py-1 text-right">Valore</th>
                     <th className="px-2 py-1 text-right">% port</th>
                     <th className="px-2 py-1 text-left">Fondo</th>
                     <th className="px-2 py-1 text-left">Q-end</th>

@@ -2,6 +2,7 @@ import { ArrowLeft, Building2, ExternalLink } from "lucide-react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 
 import type { HoldingDetail } from "@/api/types";
+import { StockLogo } from "@/components/dashboard/StockLogo";
 import { Card, CardContent } from "@/components/ui/card";
 import { SectionTitle } from "@/components/ui/section-title";
 import { useInstitutionalDetail } from "@/hooks/useInstitutionals";
@@ -98,17 +99,24 @@ function qoqColor(v: number | null | undefined): string {
 
 function HoldingRow({ row }: { row: HoldingDetail }) {
   const a = actionMeta(row.action);
+  // Logo + ticker side-by-side. Same xs sizing + monogram fallback as
+  // the InstitutionalsPage tables — visually unifies the holdings
+  // detail with the aggregate views the user came from.
+  const tickerInner = (
+    <span className="inline-flex items-center gap-1.5 font-semibold">
+      <StockLogo ticker={row.ticker} size="xs" />
+      <span>{row.ticker}</span>
+    </span>
+  );
   const tickerCell = row.stock_id ? (
     <Link
       to={`/stocks/${encodeURIComponent(row.ticker)}`}
-      className="font-semibold hover:underline"
+      className="hover:underline"
     >
-      {row.ticker}
+      {tickerInner}
     </Link>
   ) : (
-    <span className="font-semibold" title="Ticker fuori dal catalogo">
-      {row.ticker}
-    </span>
+    <span title="Ticker fuori dal catalogo">{tickerInner}</span>
   );
 
   return (
