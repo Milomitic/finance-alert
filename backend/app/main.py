@@ -14,6 +14,7 @@ from app.api import auth as auth_router
 from app.api import calendar as calendar_router
 from app.api import catalog as catalog_router
 from app.api import dashboard as dashboard_router
+from app.api import institutionals as institutionals_router
 from app.api import market as market_router
 from app.api import market_detail as market_detail_router
 from app.api import multi_tf as multi_tf_router
@@ -157,6 +158,7 @@ app.include_router(spotlight_router.router)
 app.include_router(scores_router.router)
 app.include_router(sectors_router.router)
 app.include_router(calendar_router.router)
+app.include_router(institutionals_router.router)
 
 
 @app.get("/api/health")

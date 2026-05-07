@@ -3,6 +3,11 @@ from app.models.alert import Alert
 from app.models.catalog_log import CatalogRefreshLog
 from app.models.fetch_cache import FetchCache
 from app.models.index import Index, StockIndex
+from app.models.institutional import (
+    Institutional,
+    InstitutionalFiling,
+    InstitutionalHolding,
+)
 from app.models.macro import MacroObservation, MacroReleaseDate, MacroSeries
 from app.models.market_snapshot import MarketSnapshot
 from app.models.ohlcv import OhlcvDaily
@@ -34,4 +39,7 @@ __all__ = [
     "MacroSeries",
     "MacroObservation",
     "MacroReleaseDate",
+    "Institutional",
+    "InstitutionalFiling",
+    "InstitutionalHolding",
 ]
