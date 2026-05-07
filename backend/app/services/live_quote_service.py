@@ -128,6 +128,59 @@ def _scale_pence_to_pounds(currency: str | None, value: float | None) -> float |
     return value
 
 
+def _override_prev_close_from_ohlcv(ticker: str, live_price: float | None) -> float | None:
+    """Compute the correct day-over-day reference close from our OHLCV
+    table, overriding yfinance's `previousClose` when it disagrees.
+
+    Why this exists: yfinance's `fast_info["previousClose"]` is sometimes
+    wrong, especially after a sharp move or near market open/close —
+    observed case for ARM 2026-05-08 returned `previousClose=222.12`
+    when the actual prior trading day's close was 237.30 (a -10.11%
+    move misread as -3.97%). Our daily OHLCV scan stores the truth;
+    rely on it.
+
+    Logic:
+      - Take the two most recent OHLCV bars by date.
+      - If live_price ≈ most-recent close (within $0.01), the market
+        is closed and yfinance's "live price" IS today's close → the
+        prev close is the bar BEFORE that (bars[1].close).
+      - Otherwise live_price is intraday today's price → most recent
+        bar's close IS yesterday's close → use bars[0].close.
+
+    Returns None when we can't infer (no Stock row, no bars, only one
+    bar, or live_price unknown). Caller falls back to yfinance's value.
+    """
+    if live_price is None:
+        return None
+    try:
+        from app.core.db import SessionLocal
+        from app.models import OhlcvDaily, Stock
+        from sqlalchemy import desc, select
+
+        with SessionLocal() as db:
+            stock = db.execute(
+                select(Stock).where(Stock.ticker == ticker).limit(1)
+            ).scalars().first()
+            if stock is None:
+                return None
+            bars = db.execute(
+                select(OhlcvDaily)
+                .where(OhlcvDaily.stock_id == stock.id)
+                .order_by(desc(OhlcvDaily.date))
+                .limit(2)
+            ).scalars().all()
+            if len(bars) < 2:
+                return None
+            most_recent_close = float(bars[0].close)
+            prior_close = float(bars[1].close)
+            if abs(live_price - most_recent_close) < 0.01:
+                return prior_close
+            return most_recent_close
+    except Exception as e:  # noqa: BLE001
+        logger.debug(f"[live_quote] _override_prev_close failed for {ticker}: {e}")
+        return None
+
+
 def _fetch_fresh(ticker: str) -> LiveQuote:
     """Hit yfinance fast_info for one ticker. Wrapped for monkeypatching."""
     from app.services import yfinance_health
@@ -160,11 +213,20 @@ def _fetch_fresh(ticker: str) -> LiveQuote:
         day_high = _scale_pence_to_pounds(currency, _safe_float(fi.get("dayHigh")))
         day_low = _scale_pence_to_pounds(currency, _safe_float(fi.get("dayLow")))
 
-        change_abs = (last - prev) if (last is not None and prev is not None) else None
-        change_pct = ((change_abs / prev * 100.0) if (change_abs is not None and prev) else None)
+        # Override yfinance's `previousClose` with the value derived
+        # from our OHLCV table when available — yfinance returns wrong
+        # values during sharp moves (observed -3.97% reported when the
+        # real D/D was -10.11% for ARM on 2026-05-08). The OHLCV table
+        # is the source of truth: our daily scan stores actual closes.
+        # Fallback chain: DB-derived → yfinance's prev → None.
+        prev_overridden = _override_prev_close_from_ohlcv(ticker, last)
+        prev_effective = prev_overridden if prev_overridden is not None else prev
+
+        change_abs = (last - prev_effective) if (last is not None and prev_effective is not None) else None
+        change_pct = ((change_abs / prev_effective * 100.0) if (change_abs is not None and prev_effective) else None)
 
         quote.price = last
-        quote.prev_close = prev
+        quote.prev_close = prev_effective
         quote.change_abs = change_abs
         quote.change_pct = change_pct
         quote.day_open = day_open

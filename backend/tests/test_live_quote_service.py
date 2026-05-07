@@ -25,6 +25,17 @@ def _patch_yf(monkeypatch: pytest.MonkeyPatch, fi: object) -> None:
         def __init__(self, _t: str) -> None:
             self.fast_info = fi
     monkeypatch.setattr("yfinance.Ticker", FakeTicker)
+    # Also disable the OHLCV-based prev_close override — these tests assert
+    # that yfinance's `previousClose` flows through unchanged. Without this
+    # patch the override would hit the real DB (test runs against the dev
+    # DB) and replace yfinance's mocked value with whatever the latest
+    # OHLCV bars say, breaking the assertions. Production callers still
+    # benefit from the override; only this isolated unit test path
+    # bypasses it.
+    monkeypatch.setattr(
+        "app.services.live_quote_service._override_prev_close_from_ohlcv",
+        lambda _ticker, _live: None,
+    )
 
 
 def test_quote_returns_price_change_and_pct(monkeypatch: pytest.MonkeyPatch) -> None:
