@@ -1,5 +1,6 @@
 import {
   Bell,
+  Building2,
   CalendarDays,
   Filter,
   LayoutDashboard,
@@ -30,6 +31,7 @@ const NAV: NavEntry[] = [
   // ranking) so that's the label. Filter icon to telegraph the function.
   { to: "/stocks", label: "Screener", icon: Filter, enabled: true },
   { to: "/calendar", label: "Calendario", icon: CalendarDays, enabled: true },
+  { to: "/institutionals", label: "Superinvestor", icon: Building2, enabled: true },
   // Rules used to be a separate page; now lives in the AlertsPage right
   // sidebar so the user composes rules + reviews their alerts in one
   // surface. The /rules route was removed.

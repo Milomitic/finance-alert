@@ -13,6 +13,7 @@ import { CompanyOverviewCard } from "@/components/stock/CompanyOverviewCard";
 import { DrawingToolbar, type DrawingMode } from "@/components/stock/DrawingToolbar";
 import { FundamentalsCard } from "@/components/stock/FundamentalsCard";
 import { InsidersAnalystCard } from "@/components/stock/InsidersAnalystCard";
+import { InstitutionalHoldersCard } from "@/components/stock/InstitutionalHoldersCard";
 import { MicroDataCard } from "@/components/stock/MicroDataCard";
 import {
   DEFAULT_INDICATOR_STATE,
@@ -273,6 +274,12 @@ export default function StockDetailPage() {
         <div className="space-y-3">
           <StockScoreCard ticker={ticker} />
           <TechnicalKpiCard ticker={ticker} />
+          {/* Institutional / superinvestor holders sit ABOVE insiders
+              (per user spec): the conviction signal from a 13F-tracked
+              fund is more decisive than the insider buy/sell rhythm.
+              Empty list still renders a 1-line "no fund holds this"
+              note so the sidebar shape doesn't shift between stocks. */}
+          <InstitutionalHoldersCard ticker={ticker} />
           {/* InsidersAnalystCard now occupies the slot the PriceAlertsCard
               used to hold. Per user feedback the price-alerts list isn't
               worth a full sidebar card — alerts can still be created via

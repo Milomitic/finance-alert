@@ -877,3 +877,105 @@ export interface Calendar {
    *  macros by descending importance (per backend contract). */
   events: CalendarEvent[];
 }
+
+// ---------------------------------------------------------------------------
+// Institutional / superinvestor portfolios
+// ---------------------------------------------------------------------------
+
+/** Open string — backend uses "superinvestor" | "institutional" | "hedge_fund"
+ *  but Phase 2/3 sources may add more, and the UI doesn't care. */
+export type InstitutionalType = string;
+
+export interface InstitutionalSummary {
+  id: number;
+  slug: string;
+  name: string;
+  manager_name: string | null;
+  type: InstitutionalType;
+  source: string;
+  source_url: string | null;
+  description: string | null;
+  aum_usd: number | null;
+  /** ISO date — null if no filing yet. */
+  latest_period_end: string | null;
+  total_value_usd: number | null;
+  total_positions: number | null;
+}
+
+export interface HoldingDetail {
+  ticker: string;
+  company_name: string | null;
+  shares: number | null;
+  value_usd: number | null;
+  portfolio_pct: number | null;
+  qoq_change_pct: number | null;
+  qoq_change_shares: number | null;
+  /** "new" | "add" | "reduce" | "sold_out" | "hold" — kept open for forward-compat. */
+  action: string | null;
+  /** Catalog enrichment: present when ticker matches a row in `stocks`. */
+  stock_id: number | null;
+  stock_country: string | null;
+  stock_sector: string | null;
+}
+
+export interface InstitutionalDetail {
+  institutional: InstitutionalSummary;
+  holdings: HoldingDetail[];
+  filed_date: string | null;
+  /** All quarter-end dates for which we have a snapshot, newest first. */
+  available_periods: string[];
+}
+
+export interface TickerAggregate {
+  ticker: string;
+  company_name: string | null;
+  /** How many tracked institutionals hold this ticker in their latest filing. */
+  holder_count: number;
+  total_value_usd: number;
+  /** Sum of portfolio_pct across holders — proxy for collective conviction. */
+  total_pct_sum: number;
+  /** Up to 5 holder names for display. */
+  holders: string[];
+  stock_id: number | null;
+  stock_country: string | null;
+  stock_sector: string | null;
+}
+
+export interface ActionAggregate {
+  ticker: string;
+  company_name: string | null;
+  institutional_slug: string;
+  institutional_name: string;
+  period_end_date: string;
+  action: string;
+  qoq_change_pct: number | null;
+  portfolio_pct: number | null;
+}
+
+export interface AggregateStats {
+  most_picked: TickerAggregate[];
+  recent_buys: ActionAggregate[];
+  recent_sells: ActionAggregate[];
+  /** Sector -> total $ across latest filings. Sorted descending in the
+   *  backend response. */
+  sector_tilt: Record<string, number>;
+}
+
+export interface TickerHolder {
+  institutional_id: number;
+  institutional_slug: string;
+  institutional_name: string;
+  institutional_manager: string | null;
+  institutional_type: InstitutionalType;
+  period_end_date: string;
+  shares: number | null;
+  value_usd: number | null;
+  portfolio_pct: number | null;
+  qoq_change_pct: number | null;
+  action: string | null;
+}
+
+export interface TickerHolders {
+  ticker: string;
+  holders: TickerHolder[];
+}
