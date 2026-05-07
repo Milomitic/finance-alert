@@ -362,11 +362,18 @@ function ActionsList({ actions }: { actions: AnalystAction[] }) {
           }
         }
 
+        // News-extracted rows get a small "news" badge after the firm
+        // name + clickable wrapping when a source link is available.
+        // The original headline lives on hover-title for transparency.
+        const isFromNews = a.from_news === true;
+        const newsTitle = a.source_title
+          ? `${tooltipParts.join("\n")}\n\nDa news: "${a.source_title}"`
+          : tooltipParts.join("\n");
         return (
           <li
             key={`${a.date}-${a.firm}-${i}`}
             className="flex items-center gap-1.5 text-[11px] py-1 border-b border-border/40 last:border-b-0"
-            title={tooltipParts.join("\n")}
+            title={newsTitle}
           >
             {actionIcon(a.action)}
             {/* Firm: shrinks first when the row gets tight. min-w-0 is
@@ -374,6 +381,26 @@ function ActionsList({ actions }: { actions: AnalystAction[] }) {
             <span className="font-semibold truncate flex-1 min-w-0" title={a.firm}>
               {a.firm}
             </span>
+            {isFromNews && (
+              a.source_link ? (
+                <a
+                  href={a.source_link}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="shrink-0 px-1 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-200 hover:bg-amber-200 dark:hover:bg-amber-800/70"
+                  title="Apri articolo originale"
+                >
+                  news
+                </a>
+              ) : (
+                <span
+                  className="shrink-0 px-1 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-200"
+                  title="Estratto da news"
+                >
+                  news
+                </span>
+              )
+            )}
             {/* Grade chip — buy/hold/sell tone */}
             <span
               className={cn(

@@ -658,6 +658,14 @@ export interface AnalystAction {
    *  Distinct from `action` — a Maintain on the rating can pair with a
    *  target raise/lower. */
   price_target_action?: string | null;
+  /** True when this row was extracted from a news headline (regex parse)
+   *  rather than yfinance's structured upgrades_downgrades table. Drives
+   *  the "from news" badge + click-through link in the UI. */
+  from_news?: boolean;
+  /** When `from_news`, the article URL the user clicks through to. */
+  source_link?: string | null;
+  /** When `from_news`, the original headline (rendered as hover-title). */
+  source_title?: string | null;
 }
 
 /** Identity / "anagrafica" data extracted from yfinance Ticker.info.

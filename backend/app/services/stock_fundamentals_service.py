@@ -86,6 +86,13 @@ class AnalystAction:
     the actual dollar number alongside the grade change. Older yfinance
     versions don't include these columns — the optional fields stay None
     and the UI gracefully shows "—".
+
+    Source attribution: actions can come from EITHER yfinance's structured
+    `upgrades_downgrades` table OR from regex extraction of news headlines
+    (`news_analyst_extractor`). The `from_news` flag distinguishes them so
+    the UI can render a "from news" badge with click-through to the article.
+    Dedup at merge time (same firm, same calendar week) ensures we don't
+    double-count when both sources surface the same action.
     """
     date: str          # ISO date YYYY-MM-DD
     firm: str
@@ -103,6 +110,15 @@ class AnalystAction:
     # captured separately because a Maintain on the rating can still pair
     # with a target raise/lower.
     price_target_action: str | None = None
+    # True when this row was extracted from a news headline rather than
+    # yfinance's structured upgrades_downgrades. Drives the "news" badge
+    # in the UI. False (default) preserves backwards compatibility.
+    from_news: bool = False
+    # When `from_news`, the article URL the user clicks through to.
+    source_link: str | None = None
+    # When `from_news`, the original headline text (the UI may show it
+    # as a hover-title on the firm cell).
+    source_title: str | None = None
 
 
 @dataclass

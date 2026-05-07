@@ -189,6 +189,12 @@ class AnalystActionOut(BaseModel):
     current_price_target: float | None = None
     prior_price_target: float | None = None
     price_target_action: str | None = None
+    # News-extracted attribution (Phase 3F). True when the row was parsed
+    # from a news headline via regex, False/missing when it came from
+    # yfinance's structured upgrades_downgrades table.
+    from_news: bool = False
+    source_link: str | None = None
+    source_title: str | None = None
 
 
 class CompanyProfileOut(BaseModel):

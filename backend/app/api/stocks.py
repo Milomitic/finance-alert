@@ -23,7 +23,8 @@ from app.schemas.stock_detail import (
     OhlcvBarOut, StockDetailOut, StockKpisOut, StockNewsItemOut, StockNewsOut,
 )
 from app.services import (
-    live_quote_service, stock_detail_service, stock_fundamentals_service,
+    live_quote_service, news_analyst_extractor,
+    stock_detail_service, stock_fundamentals_service,
     stock_news_service,
 )
 from app.services.stock_service import (
@@ -264,6 +265,12 @@ def get_stock_fundamentals(
     if stock is None:
         raise HTTPException(status_code=404, detail=f"Ticker not found: {ticker}")
     f = stock_fundamentals_service.get_fundamentals(ticker)
+    # Augment yfinance's structured analyst actions with mentions parsed
+    # from news headlines — yfinance's upgrades_downgrades feed lags the
+    # news cycle for many tickers. The merger dedupes by (firm, ±3-day
+    # window), so the same action reported by both sources counts once.
+    # See `news_analyst_extractor` for the regex/firm-list rationale.
+    merged_actions = _merge_news_analyst_actions(ticker, f.analyst_actions)
     return FundamentalsOut(
         ticker=f.ticker,
         annual=[FundamentalsAnnualOut(**a.__dict__) for a in f.annual],
@@ -276,10 +283,75 @@ def get_stock_fundamentals(
         profile=CompanyProfileOut(**f.profile.__dict__),
         insiders=[InsiderTransactionOut(**i.__dict__) for i in f.insiders],
         analyst_ratings=[AnalystRatingOut(**r.__dict__) for r in f.analyst_ratings],
-        analyst_actions=[AnalystActionOut(**a.__dict__) for a in f.analyst_actions],
+        analyst_actions=[AnalystActionOut(**a.__dict__) for a in merged_actions],
         price_target=AnalystPriceTargetOut(**f.price_target.__dict__),
         error=f.error,
     )
+
+
+def _merge_news_analyst_actions(ticker: str, structured_actions: list) -> list:
+    """Build the unified analyst-actions list: structured (yfinance) +
+    news-derived (regex). Returns a NEW list — never mutates the cached
+    `f.analyst_actions` so the L1+L2 fundamentals payload stays untouched.
+
+    Sort order: by date DESC so the freshest action (likely the news one)
+    appears at the top of the AnalystTargetCard. Within the same date,
+    structured rows go first because they have richer data (from_grade,
+    prior_price_target). News-derived rows use the AnalystAction dataclass
+    so the API serialization works without code changes downstream.
+    """
+    from app.services.stock_fundamentals_service import AnalystAction
+    try:
+        news = stock_news_service.get_news(ticker)
+    except Exception:  # noqa: BLE001
+        # News service offline → return structured actions unchanged.
+        return list(structured_actions)
+    if not news:
+        return list(structured_actions)
+
+    # Walk every news item and turn analyst-flavored headlines into
+    # AnalystAction dataclasses. Skip duplicates of existing rows.
+    extras: list = []
+    for item in news:
+        title = (item.get("title") if isinstance(item, dict) else None) or ""
+        published = (item.get("published_at") if isinstance(item, dict) else None) or ""
+        link = (item.get("link") if isinstance(item, dict) else None) or None
+        mention = news_analyst_extractor.extract_from_title(
+            title, published_at_iso=published, link=link,
+        )
+        if mention is None:
+            continue
+        if news_analyst_extractor.is_duplicate_of_existing(mention, structured_actions):
+            continue
+        # Internal de-dup across multiple news outlets reporting the same
+        # action — merge against the in-progress `extras` list too.
+        if news_analyst_extractor.is_duplicate_of_existing(mention, extras):
+            continue
+        extras.append(AnalystAction(
+            date=mention.date,
+            firm=mention.firm,
+            to_grade=mention.to_grade,
+            from_grade=mention.from_grade,
+            action=mention.action,
+            current_price_target=mention.current_price_target,
+            prior_price_target=mention.prior_price_target,
+            price_target_action=mention.price_target_action,
+            from_news=True,
+            source_link=mention.source_link,
+            source_title=mention.source_title,
+        ))
+
+    if not extras:
+        return list(structured_actions)
+
+    merged = list(structured_actions) + extras
+    # Sort: most recent first; structured-source ties beat news-derived
+    # ties (richer data first). `date` is YYYY-MM-DD so string sort works.
+    merged.sort(
+        key=lambda a: (a.date or "", 0 if not getattr(a, "from_news", False) else 1),
+        reverse=True,
+    )
+    return merged
 
 
 @router.get("/quotes", response_model=LiveQuotesBatchOut)

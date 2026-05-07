@@ -44,12 +44,20 @@ function formatBarDate(iso: string, timeframe: string | undefined): string {
   const isIntraday = timeframe === "30m" || timeframe === "1h";
   const d = new Date(iso);
   if (isNaN(d.getTime())) return iso;
+  // Force UTC formatting so the tooltip matches the X-axis ticks.
+  // Lightweight-charts renders the time scale in UTC by default
+  // (it doesn't auto-convert to the user's locale tz). Without
+  // `timeZone: "UTC"` the tooltip showed Europe/Rome time (e.g.
+  // "21:30") while the axis below showed UTC (e.g. "19:30"), so
+  // hovering a candle gave a 2h-shifted date — the user's report.
   const dateStr = d.toLocaleDateString("it-IT", {
     day: "2-digit", month: "2-digit", year: "2-digit",
+    timeZone: "UTC",
   });
   if (!isIntraday) return dateStr;
   const timeStr = d.toLocaleTimeString("it-IT", {
     hour: "2-digit", minute: "2-digit",
+    timeZone: "UTC",
   });
   return `${dateStr} ${timeStr}`;
 }
@@ -413,10 +421,12 @@ export function PriceChart({
 
   // Tooltip positioning: hug the cursor with a 14px offset, but flip
   // to the OPPOSITE side when we'd otherwise clip the right edge.
-  // Width 220 / height 150 is a generous estimate; if the actual
+  // Width 240 / height 180 is a generous estimate; if the actual
   // tooltip is smaller the offset just leaves a tiny gap (acceptable).
-  const TT_W = 220;
-  const TT_H = 150;
+  // Bumped from 220/150 to fit the slightly larger fonts (text-xs →
+  // text-sm body) per user request.
+  const TT_W = 240;
+  const TT_H = 180;
   const TT_OFFSET = 14;
   const containerWidth = containerRef.current?.clientWidth ?? 0;
   const containerHeight = containerRef.current?.clientHeight ?? 0;
@@ -443,15 +453,17 @@ export function PriceChart({
         <div
           className={cn(
             "absolute z-10 pointer-events-none rounded border bg-card/95 backdrop-blur-sm",
-            "shadow-md text-xs leading-tight font-mono tabular-nums",
-            "px-2.5 py-2 min-w-[200px]",
+            // text-xs → text-sm: a "leggero" bump per user feedback.
+            // Body cells, header date, all flow from this base size.
+            "shadow-md text-sm leading-snug font-mono tabular-nums",
+            "px-3 py-2.5 min-w-[220px]",
           )}
           style={{ left: ttLeft, top: ttTop }}
         >
-          <div className="text-[11px] font-semibold text-muted-foreground border-b border-border/40 pb-1 mb-1.5">
+          <div className="text-[13px] font-semibold text-muted-foreground border-b border-border/40 pb-1 mb-1.5">
             {tooltip.date}
           </div>
-          <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
+          <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">
             <div className="text-muted-foreground">Open</div>
             <div className="text-right">{fmtPrice(tooltip.open)}</div>
             <div className="text-muted-foreground">High</div>
