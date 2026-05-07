@@ -179,19 +179,41 @@ def insert_holdings(
 def persist_scrape_results(
     db: Session,
     results: Iterable[tuple[ScrapedManager, ScrapedFiling | None]],
+    *,
+    type_: str = "superinvestor",
+    source: str = "dataroma",
+    compute_qoq: bool = False,
+    type_resolver: "callable | None" = None,
 ) -> UpsertResult:
     """End-to-end persistence of a full scrape pass.
 
+    Args:
+        type_: default `Institutional.type` for newly-upserted rows.
+            Phase 1 (Dataroma) uses "superinvestor"; Phase 2 (SEC) uses
+            "institutional" or "hedge_fund" (per-fund, via type_resolver);
+            Phase 3 (HedgeFollow) uses "hedge_fund".
+        source: discriminator for `Institutional.source`. Lets us keep
+            Dataroma + SEC + HedgeFollow rows side by side without
+            collisions (slugs are unique-prefixed per source).
+        compute_qoq: when True, after persisting holdings we look at
+            the previous filing for the same fund and compute Q/Q delta
+            + action labels. Required for SEC 13F (which doesn't ship
+            those values); skipped for Dataroma (which precomputes them).
+        type_resolver: optional `(slug) -> str` to override `type_`
+            per-fund. SEC's curated list mixes "institutional" and
+            "hedge_fund" — the resolver lets the caller assign each.
+
     Commits at the end. On any partial failure we still commit what
     succeeded so the UI shows the partial set rather than nothing.
-    Per-manager exceptions are caught and swallowed (logged via the
-    scraper layer).
     """
     summary = UpsertResult(0, 0, 0, 0, 0)
     for manager, filing in results:
         if filing is None:
             continue
-        inst, created = upsert_institutional(db, manager)
+        eff_type = type_resolver(manager.slug) if type_resolver else type_
+        inst, created = upsert_institutional(
+            db, manager, type_=eff_type, source=source,
+        )
         if created:
             summary.institutionals_added += 1
         else:
@@ -202,8 +224,117 @@ def persist_scrape_results(
         else:
             summary.filings_replaced += 1
         summary.holdings_inserted += insert_holdings(db, f_row, filing.holdings)
+        if compute_qoq:
+            compute_qoq_deltas(db, inst, f_row)
     db.commit()
     return summary
+
+
+def compute_qoq_deltas(
+    db: Session,
+    institutional: Institutional,
+    filing: InstitutionalFiling,
+) -> int:
+    """Backfill `qoq_change_pct` + `action` on the holdings of `filing`
+    by joining against the previous quarter's filing for the same
+    institutional.
+
+    Used by SEC 13F (which doesn't include Q/Q deltas in the XML).
+    Idempotent: re-running on the same filing recomputes from scratch.
+
+    Action mapping:
+      - shares went 0 → N        : "new"
+      - shares grew (>2% delta)  : "add"
+      - shares shrank (>2% delta): "reduce"
+      - shares went N → 0        : "sold_out"
+      - within ±2% no change     : "hold"
+
+    The 2% noise threshold avoids tagging rebalance dust as "add".
+    Returns the number of holdings updated.
+    """
+    prev = db.execute(
+        select(InstitutionalFiling)
+        .where(
+            InstitutionalFiling.institutional_id == institutional.id,
+            InstitutionalFiling.period_end_date < filing.period_end_date,
+        )
+        .order_by(InstitutionalFiling.period_end_date.desc())
+        .limit(1)
+    ).scalar_one_or_none()
+
+    cur_holdings = db.execute(
+        select(InstitutionalHolding)
+        .where(InstitutionalHolding.filing_id == filing.id)
+    ).scalars().all()
+
+    if prev is None:
+        # First filing: no Q/Q to compute. Mark all positions as "new"
+        # if shares > 0, and "hold" otherwise (defensive).
+        for h in cur_holdings:
+            h.action = "new" if (h.shares or 0) > 0 else "hold"
+        db.flush()
+        return len(cur_holdings)
+
+    prev_by_ticker = {
+        h.ticker: h
+        for h in db.execute(
+            select(InstitutionalHolding)
+            .where(InstitutionalHolding.filing_id == prev.id)
+        ).scalars().all()
+    }
+
+    cur_tickers: set[str] = set()
+    for h in cur_holdings:
+        cur_tickers.add(h.ticker)
+        prev_h = prev_by_ticker.get(h.ticker)
+        cur_shares = h.shares or 0
+        prev_shares = (prev_h.shares if prev_h else 0) or 0
+
+        if prev_h is None or prev_shares == 0:
+            h.action = "new" if cur_shares > 0 else "hold"
+            h.qoq_change_pct = None
+            h.qoq_change_shares = cur_shares if cur_shares else None
+            continue
+
+        delta_shares = cur_shares - prev_shares
+        delta_pct = (delta_shares / prev_shares) * 100 if prev_shares else 0.0
+        h.qoq_change_shares = delta_shares
+        h.qoq_change_pct = round(delta_pct, 2)
+        if abs(delta_pct) < 2.0:
+            h.action = "hold"
+        elif delta_pct > 0:
+            h.action = "add"
+        else:
+            h.action = "reduce"
+
+    # "Sold out" positions: in prev but not in current. We don't write
+    # phantom rows for them — the position is gone from the latest
+    # filing — but the editorial signal IS valuable. Re-introduce them
+    # as zero-share holdings with action="sold_out" so the UI surfaces
+    # the exit. This pattern matches Dataroma's behavior.
+    sold_out_count = 0
+    for ticker, prev_h in prev_by_ticker.items():
+        if ticker in cur_tickers:
+            continue
+        if (prev_h.shares or 0) <= 0:
+            continue
+        db.add(
+            InstitutionalHolding(
+                filing_id=filing.id,
+                ticker=ticker,
+                company_name=prev_h.company_name,
+                shares=0,
+                value_usd=0,
+                portfolio_pct=0.0,
+                qoq_change_pct=-100.0,
+                qoq_change_shares=-(prev_h.shares or 0),
+                action="sold_out",
+            )
+        )
+        sold_out_count += 1
+
+    db.flush()
+    return len(cur_holdings) + sold_out_count
 
 
 # ---------------------------------------------------------------------------
