@@ -102,14 +102,19 @@ export function StockHeader({ stock, kpis, ohlcv, effectiveRules = [] }: Props) 
   const changeAbs = liveOk ? live.data!.change_abs : null;
   const liveAge = liveOk ? Date.now() / 1000 - live.data!.fetched_at : null;
 
-  // Tone: subtle tinted card + accent stripe on left, no aggressive gradient
+  // Tone: stripe on left + text accent. Card background stays neutral
+  // (`bg-card`) so only the SVG sparkline's area gradient colors the
+  // pixels UNDER the chart line — the area ABOVE the line (where the
+  // ticker / name / price text sits) stays clean white. The previous
+  // `bg-emerald-50/50` tint covered the whole card uniformly,
+  // contradicting the gradient's "fade only beneath the line" intent.
   const tone =
     change == null
       ? { bg: "bg-card", stripe: "bg-slate-300 dark:bg-slate-600", text: "text-muted-foreground", arrow: "" }
       : change > 0
-        ? { bg: "bg-emerald-50/50 dark:bg-emerald-950/15", stripe: "bg-emerald-500", text: "text-emerald-700 dark:text-emerald-300", arrow: "▲" }
+        ? { bg: "bg-card", stripe: "bg-emerald-500", text: "text-emerald-700 dark:text-emerald-300", arrow: "▲" }
         : change < 0
-          ? { bg: "bg-rose-50/50 dark:bg-rose-950/15", stripe: "bg-rose-500", text: "text-rose-700 dark:text-rose-300", arrow: "▼" }
+          ? { bg: "bg-card", stripe: "bg-rose-500", text: "text-rose-700 dark:text-rose-300", arrow: "▼" }
           : { bg: "bg-card", stripe: "bg-slate-300 dark:bg-slate-600", text: "text-muted-foreground", arrow: "" };
 
   const closes = (ohlcv ?? []).map((b) => b.close).filter((c) => Number.isFinite(c));
