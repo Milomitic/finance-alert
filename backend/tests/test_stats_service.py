@@ -94,32 +94,50 @@ def test_kpi_stocks_and_indices_counts(db: Session) -> None:
 
 
 def test_alerts_by_day_groups_by_date_and_kind(db: Session) -> None:
+    """Tests bucketing of alerts by UTC date.
+
+    To stay deterministic at any wall-clock time (including the few
+    minutes around UTC midnight where 2-4h-ago alerts straddle the
+    day boundary), we DERIVE the expected target date for each alert
+    from a reference UTC timestamp captured before seeding rather
+    than hardcoding "today + yesterday". This way the assertion
+    always matches whichever day the seeded triggered_at actually
+    lands on, regardless of clock position.
+    """
     stock, rule = _seed_baseline(db)
     rule2 = Rule(watchlist_id=None, kind="golden_cross", params="{}", enabled=True)
     db.add(rule2)
     db.commit()
     db.refresh(rule2)
-    # Today: 2 oversold + 1 cross
+    # Capture the reference UTC moment first; _make_alert uses
+    # datetime.now(UTC) internally so the dates derived here will
+    # match (within the few-millisecond gap between calls).
+    ref = datetime.now(timezone.utc)
+
+    def _date_at(hours: float) -> "date":
+        return (ref - timedelta(hours=hours)).date()
+
     _make_alert(db, stock, rule, age_hours=2)
     _make_alert(db, stock, rule, age_hours=3)
     _make_alert(db, stock, rule2, age_hours=4)
-    # Yesterday: 1 oversold
     _make_alert(db, stock, rule, age_hours=26)
+
     points = get_alerts_by_day(db, days=30)
     assert all(isinstance(p, AlertsByDayPoint) for p in points)
-    # Use UTC date — alerts are seeded with UTC triggered_at and the
-    # service buckets by UTC. Using date.today() (local) makes this
-    # test flaky between local midnight and UTC midnight (e.g. when
-    # local is 00:30 but UTC is still 22:30 of the previous day, the
-    # alerts seeded "2-4 hours ago" sit on UTC yesterday, not local
-    # today).
-    today_iso = datetime.now(timezone.utc).date()
-    yesterday_iso = today_iso - timedelta(days=1)
     by_date = {p.date: p for p in points}
-    assert by_date[today_iso].count == 3
-    assert by_date[today_iso].by_kind == {"rsi_oversold": 2, "golden_cross": 1}
-    assert by_date[yesterday_iso].count == 1
-    assert by_date[yesterday_iso].by_kind == {"rsi_oversold": 1}
+
+    # Aggregate expected counts by deriving each alert's date.
+    expected: dict = {}
+    for hours, kind in [(2, "rsi_oversold"), (3, "rsi_oversold"),
+                        (4, "golden_cross"), (26, "rsi_oversold")]:
+        d = _date_at(hours)
+        bucket = expected.setdefault(d, {"count": 0, "by_kind": {}})
+        bucket["count"] += 1
+        bucket["by_kind"][kind] = bucket["by_kind"].get(kind, 0) + 1
+
+    for d, exp in expected.items():
+        assert by_date[d].count == exp["count"], f"day {d}: count"
+        assert by_date[d].by_kind == exp["by_kind"], f"day {d}: by_kind"
 
 
 def test_alerts_by_day_includes_zero_days_in_range(db: Session) -> None:
@@ -132,14 +150,24 @@ def test_alerts_by_day_includes_zero_days_in_range(db: Session) -> None:
 
 
 def test_alerts_by_day_excludes_archived(db: Session) -> None:
+    """Same time-derivation trick as
+    test_alerts_by_day_groups_by_date_and_kind — captures the UTC
+    reference moment before seeding so the expected date matches
+    whichever UTC day the 2h-ago alert actually lands on. Robust
+    even when running at UTC 00:00-02:00."""
     stock, rule = _seed_baseline(db)
+    ref = datetime.now(timezone.utc)
+    target_date = (ref - timedelta(hours=2)).date()
+
     _make_alert(db, stock, rule, age_hours=2)
     _make_alert(db, stock, rule, age_hours=2, archived=True)
-    points = get_alerts_by_day(db, days=1)
-    # UTC date for parity with how triggered_at + the service bucket.
-    # See the comment in test_alerts_by_day_groups_by_date_and_kind.
-    today_pt = next(p for p in points if p.date == datetime.now(timezone.utc).date())
-    assert today_pt.count == 1
+
+    # days=2 covers the case where the 2h-ago alert lands on UTC
+    # yesterday (clock just rolled past midnight). days=1 would only
+    # return today's point and miss the alert.
+    points = get_alerts_by_day(db, days=2)
+    target_pt = next(p for p in points if p.date == target_date)
+    assert target_pt.count == 1
 
 
 def test_top_stocks_orders_by_count_desc_limit_10(db: Session) -> None:

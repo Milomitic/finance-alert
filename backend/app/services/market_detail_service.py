@@ -75,6 +75,32 @@ class OhlcvBar:
 
 
 @dataclass
+class IndicatorPoint:
+    """One (date, value) pair for a series. value=None on warmup days."""
+    date: date
+    value: float | None
+
+
+@dataclass
+class IndicatorBundle:
+    """Per-series indicators aligned to the bars timeline. Same shape as
+    the stock-detail bundle so the frontend can reuse the existing
+    PriceChart rendering primitives. Indicator periods are fixed
+    (RSI=14, BB=20, SMA 20/50/200, MACD 12/26/9) - same convention
+    timeframe_service uses."""
+    sma20: list[IndicatorPoint] = field(default_factory=list)
+    sma50: list[IndicatorPoint] = field(default_factory=list)
+    sma200: list[IndicatorPoint] = field(default_factory=list)
+    bb_upper: list[IndicatorPoint] = field(default_factory=list)
+    bb_middle: list[IndicatorPoint] = field(default_factory=list)
+    bb_lower: list[IndicatorPoint] = field(default_factory=list)
+    rsi14: list[IndicatorPoint] = field(default_factory=list)
+    macd_line: list[IndicatorPoint] = field(default_factory=list)
+    macd_signal: list[IndicatorPoint] = field(default_factory=list)
+    macd_hist: list[IndicatorPoint] = field(default_factory=list)
+
+
+@dataclass
 class MarketDetailDC:
     symbol: str
     range_key: str
@@ -88,6 +114,9 @@ class MarketDetailDC:
     low_window: float | None = None
     high_52w: float | None = None  # always 52w regardless of range
     low_52w: float | None = None
+    # Indicator overlays - computed on the fetched bars with the same
+    # canonical periods stocks use. Empty when bars is empty.
+    indicators: IndicatorBundle = field(default_factory=lambda: IndicatorBundle())
 
 
 def _now() -> float:
@@ -169,6 +198,8 @@ def _fetch_fresh(symbol: str, range_key: str) -> MarketDetailDC | None:
         high_52w = high_window
         low_52w = low_window
 
+    indicators = _compute_indicators(bars)
+
     return MarketDetailDC(
         symbol=symbol,
         range_key=range_key,
@@ -180,6 +211,7 @@ def _fetch_fresh(symbol: str, range_key: str) -> MarketDetailDC | None:
         low_window=low_window,
         high_52w=high_52w,
         low_52w=low_52w,
+        indicators=indicators,
     )
 
 
@@ -227,3 +259,79 @@ def _safe_int(v: object) -> int | None:
         return i if i > 0 else None
     except (TypeError, ValueError):
         return None
+
+
+# ---------------------------------------------------------------------------
+# Indicator computation
+# ---------------------------------------------------------------------------
+
+def _compute_indicators(bars: list[OhlcvBar]) -> IndicatorBundle:
+    """Run SMA(20/50/200), Bollinger(20,2), RSI(14), MACD(12/26/9)
+    against the bar series. Same canonical periods as the stock-detail
+    pipeline so users see consistent values across stock and market
+    charts.
+
+    Pure CPU, no network. Pandas-backed via the indicator helpers in
+    `app.indicators` (already used by score_service and timeframe_service).
+    Empty bundle when bars is empty or too short for any indicator."""
+    if not bars:
+        return IndicatorBundle()
+
+    import pandas as pd
+
+    from app.indicators.bb import bollinger
+    from app.indicators.macd import macd as macd_indicator
+    from app.indicators.rsi import rsi as rsi_indicator
+    from app.indicators.sma import sma as sma_indicator
+
+    closes = pd.Series([b.close for b in bars])
+    dates = [b.date for b in bars]
+
+    def _series_to_points(series):
+        out = []
+        for d, v in zip(dates, series.tolist()):
+            try:
+                fv = float(v) if v == v and v is not None else None  # NaN check
+                if fv is not None and (fv == float("inf") or fv == float("-inf")):
+                    fv = None
+            except (TypeError, ValueError):
+                fv = None
+            out.append(IndicatorPoint(date=d, value=fv))
+        return out
+
+    bundle = IndicatorBundle()
+    try:
+        if len(closes) >= 20:
+            bundle.sma20 = _series_to_points(sma_indicator(closes, 20))
+        if len(closes) >= 50:
+            bundle.sma50 = _series_to_points(sma_indicator(closes, 50))
+        if len(closes) >= 200:
+            bundle.sma200 = _series_to_points(sma_indicator(closes, 200))
+    except Exception as e:
+        logger.debug(f"[market_detail] SMA compute failed: {e}")
+
+    try:
+        if len(closes) >= 20:
+            up, mid, lo = bollinger(closes, period=20, k=2.0)
+            bundle.bb_upper = _series_to_points(up)
+            bundle.bb_middle = _series_to_points(mid)
+            bundle.bb_lower = _series_to_points(lo)
+    except Exception as e:
+        logger.debug(f"[market_detail] Bollinger compute failed: {e}")
+
+    try:
+        if len(closes) >= 15:
+            bundle.rsi14 = _series_to_points(rsi_indicator(closes, 14))
+    except Exception as e:
+        logger.debug(f"[market_detail] RSI compute failed: {e}")
+
+    try:
+        if len(closes) >= 35:
+            line, sig, hist = macd_indicator(closes, fast=12, slow=26, signal=9)
+            bundle.macd_line = _series_to_points(line)
+            bundle.macd_signal = _series_to_points(sig)
+            bundle.macd_hist = _series_to_points(hist)
+    except Exception as e:
+        logger.debug(f"[market_detail] MACD compute failed: {e}")
+
+    return bundle

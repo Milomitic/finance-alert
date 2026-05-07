@@ -8,43 +8,58 @@ import {
   type UTCTimestamp,
 } from "lightweight-charts";
 
-import type { MarketDetailBar } from "@/hooks/useMarketDetail";
+import type { IndicatorStyle } from "@/components/stock/IndicatorToggles";
+import type { RegisterChart } from "@/hooks/useChartSync";
+import type { MarketDetailBar, MarketIndicatorPoint, MarketIndicators } from "@/hooks/useMarketDetail";
 import { defaultVisibleBars } from "@/lib/timeframeZoom";
 
 interface Props {
   bars: MarketDetailBar[];
-  /** Indices/FX have no meaningful volume — pass `false` to hide
-   *  the histogram. Default true. */
+  indicators?: MarketIndicators;
+  styles?: {
+    sma20: IndicatorStyle;
+    sma50: IndicatorStyle;
+    sma200: IndicatorStyle;
+    bb: IndicatorStyle;
+  };
   showVolume?: boolean;
-  /** Active timeframe key (30m/1h/1d/...) — drives the initial visible
-   *  range so e.g. 30m doesn't render 60 days of 30-min bars at once. */
   timeframe?: string;
+  onReady?: RegisterChart;
 }
 
 function dateToTime(d: string): UTCTimestamp {
   return (Date.parse(d) / 1000) as UTCTimestamp;
 }
 
-/**
- * Minimal candlestick + volume chart for the MarketDetailPage. Keeps
- * the rendering primitives (lightweight-charts) consistent with the
- * stock-detail PriceChart but drops everything that doesn't apply to
- * non-stock instruments — indicator overlays, price-alert horizontal
- * lines, drawing tools, on-click handlers.
- *
- * The bars come straight from the backend's
- * `/api/markets/{symbol}/detail` payload (already date-sorted asc by
- * yfinance). One chart instance per (symbol, range) — the parent
- * remounts via `key={range}` to avoid the stale-fitContent dance the
- * stock chart had to work around.
- */
-export function MarketChart({ bars, showVolume = true, timeframe }: Props) {
+function pointsToChartData(points: MarketIndicatorPoint[] | undefined) {
+  if (!points) return [];
+  return points
+    .filter((p) => p.value !== null)
+    .map((p) => ({ time: dateToTime(p.date), value: p.value as number }));
+}
+
+// Candlestick + indicator overlay chart for the MarketDetailPage.
+// Same indicator capability as PriceChart: SMA20/50/200, Bollinger
+// Bands, optional volume, plus chart-sync hooks for RSI/MACD subpanels.
+export function MarketChart({
+  bars,
+  indicators,
+  styles,
+  showVolume = true,
+  timeframe,
+  onReady,
+}: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const candleRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
+  const sma20Ref = useRef<ISeriesApi<"Line"> | null>(null);
+  const sma50Ref = useRef<ISeriesApi<"Line"> | null>(null);
+  const sma200Ref = useRef<ISeriesApi<"Line"> | null>(null);
+  const bbUpperRef = useRef<ISeriesApi<"Line"> | null>(null);
+  const bbMiddleRef = useRef<ISeriesApi<"Line"> | null>(null);
+  const bbLowerRef = useRef<ISeriesApi<"Line"> | null>(null);
   const volumeRef = useRef<ISeriesApi<"Histogram"> | null>(null);
 
-  // Create the chart once on mount.
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
@@ -61,13 +76,8 @@ export function MarketChart({ bars, showVolume = true, timeframe }: Props) {
         horzLines: { color: "rgba(115, 115, 115, 0.08)" },
       },
       crosshair: { mode: CrosshairMode.Normal },
-      rightPriceScale: {
-        borderColor: "rgba(115, 115, 115, 0.2)",
-      },
-      timeScale: {
-        borderColor: "rgba(115, 115, 115, 0.2)",
-        timeVisible: false,
-      },
+      rightPriceScale: { borderColor: "rgba(115, 115, 115, 0.2)" },
+      timeScale: { borderColor: "rgba(115, 115, 115, 0.2)", timeVisible: false },
     });
     chartRef.current = chart;
     candleRef.current = chart.addCandlestickSeries({
@@ -78,17 +88,24 @@ export function MarketChart({ bars, showVolume = true, timeframe }: Props) {
       wickUpColor: "#16a34a",
       wickDownColor: "#dc2626",
     });
+    sma20Ref.current = chart.addLineSeries({ priceLineVisible: false, lastValueVisible: true });
+    sma50Ref.current = chart.addLineSeries({ priceLineVisible: false, lastValueVisible: true });
+    sma200Ref.current = chart.addLineSeries({ priceLineVisible: false, lastValueVisible: true });
+    bbUpperRef.current = chart.addLineSeries({ lineStyle: 2, priceLineVisible: false, lastValueVisible: true });
+    bbLowerRef.current = chart.addLineSeries({ lineStyle: 2, priceLineVisible: false, lastValueVisible: true });
+    bbMiddleRef.current = chart.addLineSeries({ priceLineVisible: false, lastValueVisible: true });
+
     if (showVolume) {
       volumeRef.current = chart.addHistogramSeries({
         priceFormat: { type: "volume" },
-        priceScaleId: "",
+        priceScaleId: "vol",
         color: "rgba(115, 115, 115, 0.4)",
       });
-      chart.priceScale("").applyOptions({
+      chart.priceScale("vol").applyOptions({
         scaleMargins: { top: 0.85, bottom: 0 },
       });
     }
-    // Resize the chart with its container.
+
     const ro = new ResizeObserver(() => {
       if (!chartRef.current || !containerRef.current) return;
       chartRef.current.resize(
@@ -97,16 +114,25 @@ export function MarketChart({ bars, showVolume = true, timeframe }: Props) {
       );
     });
     ro.observe(el);
+
+    const unregister = onReady?.(chart);
+
     return () => {
+      unregister?.();
       ro.disconnect();
       chart.remove();
       chartRef.current = null;
       candleRef.current = null;
+      sma20Ref.current = null;
+      sma50Ref.current = null;
+      sma200Ref.current = null;
+      bbUpperRef.current = null;
+      bbMiddleRef.current = null;
+      bbLowerRef.current = null;
       volumeRef.current = null;
     };
-  }, [showVolume]);
+  }, [showVolume, onReady]);
 
-  // Push bars whenever they change.
   useEffect(() => {
     const candle = candleRef.current;
     if (!candle) return;
@@ -130,21 +156,64 @@ export function MarketChart({ bars, showVolume = true, timeframe }: Props) {
           })),
       );
     }
-    // Initial visible window: clamp to the most recent N bars based on
-    // timeframe so the user sees a sensible "default zoom" instead of
-    // the full upstream history. `null` (e.g. timeframe=all) → fitContent.
     const ts = chartRef.current?.timeScale();
     if (!ts) return;
     const n = defaultVisibleBars(timeframe);
     if (n !== null && bars.length > n) {
-      ts.setVisibleLogicalRange({
-        from: bars.length - n,
-        to: bars.length - 1,
-      });
+      ts.setVisibleLogicalRange({ from: bars.length - n, to: bars.length - 1 });
     } else {
       ts.fitContent();
     }
   }, [bars, showVolume, timeframe]);
+
+  useEffect(() => {
+    if (!sma20Ref.current || !indicators) return;
+    if (styles) {
+      sma20Ref.current.applyOptions({
+        visible: styles.sma20.visible,
+        color: styles.sma20.color,
+        lineWidth: styles.sma20.width as 1 | 2 | 3 | 4,
+      });
+    }
+    sma20Ref.current.setData(pointsToChartData(indicators.sma20));
+  }, [indicators?.sma20, styles?.sma20]);
+
+  useEffect(() => {
+    if (!sma50Ref.current || !indicators) return;
+    if (styles) {
+      sma50Ref.current.applyOptions({
+        visible: styles.sma50.visible,
+        color: styles.sma50.color,
+        lineWidth: styles.sma50.width as 1 | 2 | 3 | 4,
+      });
+    }
+    sma50Ref.current.setData(pointsToChartData(indicators.sma50));
+  }, [indicators?.sma50, styles?.sma50]);
+
+  useEffect(() => {
+    if (!sma200Ref.current || !indicators) return;
+    if (styles) {
+      sma200Ref.current.applyOptions({
+        visible: styles.sma200.visible,
+        color: styles.sma200.color,
+        lineWidth: styles.sma200.width as 1 | 2 | 3 | 4,
+      });
+    }
+    sma200Ref.current.setData(pointsToChartData(indicators.sma200));
+  }, [indicators?.sma200, styles?.sma200]);
+
+  useEffect(() => {
+    if (!bbUpperRef.current || !bbMiddleRef.current || !bbLowerRef.current || !indicators) return;
+    if (styles) {
+      const w = styles.bb.width as 1 | 2 | 3 | 4;
+      bbUpperRef.current.applyOptions({ visible: styles.bb.visible, color: styles.bb.color, lineWidth: w });
+      bbMiddleRef.current.applyOptions({ visible: styles.bb.visible, color: styles.bb.color, lineWidth: w });
+      bbLowerRef.current.applyOptions({ visible: styles.bb.visible, color: styles.bb.color, lineWidth: w });
+    }
+    bbUpperRef.current.setData(pointsToChartData(indicators.bb_upper));
+    bbMiddleRef.current.setData(pointsToChartData(indicators.bb_middle));
+    bbLowerRef.current.setData(pointsToChartData(indicators.bb_lower));
+  }, [indicators?.bb_upper, indicators?.bb_middle, indicators?.bb_lower, styles?.bb]);
 
   return <div ref={containerRef} className="h-full w-full" />;
 }

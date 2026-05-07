@@ -55,6 +55,29 @@ class LiveQuoteOut(BaseModel):
     error: str | None
 
 
+class IndicatorPointOut(BaseModel):
+    """One (date, value) pair for an indicator series."""
+    date: date_t
+    value: float | None
+
+
+class IndicatorBundleOut(BaseModel):
+    """All indicator overlays for the chart - same shape as the stock
+    detail response so the frontend can reuse the rendering primitives.
+    Each list is empty when the bar series is too short for the
+    indicator (e.g. SMA200 needs 200 bars)."""
+    sma20: list[IndicatorPointOut] = []
+    sma50: list[IndicatorPointOut] = []
+    sma200: list[IndicatorPointOut] = []
+    bb_upper: list[IndicatorPointOut] = []
+    bb_middle: list[IndicatorPointOut] = []
+    bb_lower: list[IndicatorPointOut] = []
+    rsi14: list[IndicatorPointOut] = []
+    macd_line: list[IndicatorPointOut] = []
+    macd_signal: list[IndicatorPointOut] = []
+    macd_hist: list[IndicatorPointOut] = []
+
+
 class MarketDetailOut(BaseModel):
     symbol: str
     name: str
@@ -71,6 +94,7 @@ class MarketDetailOut(BaseModel):
     low_52w: float | None
 
     bars: list[OhlcvBarOut]
+    indicators: IndicatorBundleOut
     quote: LiveQuoteOut | None
 
 
@@ -123,6 +147,24 @@ def get_market_detail(
         # Quote is best-effort; the chart still renders without it.
         quote_out = None
 
+    ind = detail.indicators
+
+    def _pts(series):
+        return [IndicatorPointOut(date=p.date, value=p.value) for p in series]
+
+    indicators_out = IndicatorBundleOut(
+        sma20=_pts(ind.sma20),
+        sma50=_pts(ind.sma50),
+        sma200=_pts(ind.sma200),
+        bb_upper=_pts(ind.bb_upper),
+        bb_middle=_pts(ind.bb_middle),
+        bb_lower=_pts(ind.bb_lower),
+        rsi14=_pts(ind.rsi14),
+        macd_line=_pts(ind.macd_line),
+        macd_signal=_pts(ind.macd_signal),
+        macd_hist=_pts(ind.macd_hist),
+    )
+
     return MarketDetailOut(
         symbol=symbol,
         name=name,
@@ -136,6 +178,7 @@ def get_market_detail(
         low_window=detail.low_window,
         high_52w=detail.high_52w,
         low_52w=detail.low_52w,
+        indicators=indicators_out,
         bars=[
             OhlcvBarOut(
                 date=b.date,

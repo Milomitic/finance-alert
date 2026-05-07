@@ -29,6 +29,12 @@ SEEDS = [
     # for KOSPI listings on Yahoo Finance. Visible to user (not hidden
     # like SSE50). Contributes to Asia breadth + mood.
     ("kospi20.csv", "KOSPI20", "KOSPI top 20", "KR"),
+    # Direxion Daily leveraged ETFs (3x bull/bear on indices and sectors)
+    # + ProShares UltraPro QQQ for the NASDAQ-100 leverage pair. These
+    # are not stocks per se but live in the catalog so the same engine
+    # (price fetch, alerts, scoring) can act on them. Country=US since
+    # all are NYSE Arca / NASDAQ listings.
+    ("direxion_daily.csv", "DIREXION", "Direxion Daily Leveraged ETFs", "US"),
 ]
 
 SEED_DIR = Path(__file__).resolve().parent.parent / "data" / "seed"

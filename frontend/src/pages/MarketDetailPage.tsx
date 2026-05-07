@@ -8,12 +8,22 @@ import {
   Globe,
   type LucideIcon,
 } from "lucide-react";
+import { useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { MarketChart } from "@/components/market/MarketChart";
 import { MultiTimeframeKpisCard } from "@/components/MultiTimeframeKpisCard";
+import { MacdPanel } from "@/components/stock/MacdPanel";
+import { RsiPanel } from "@/components/stock/RsiPanel";
 import { RangeSelector } from "@/components/stock/RangeSelector";
+import {
+  DEFAULT_INDICATOR_STATE,
+  IndicatorToggles,
+  type IndicatorKey,
+  type IndicatorStyle,
+} from "@/components/stock/IndicatorToggles";
+import { useChartSync } from "@/hooks/useChartSync";
 import { useMarketDetail } from "@/hooks/useMarketDetail";
 import { cn } from "@/lib/utils";
 
@@ -77,6 +87,15 @@ export default function MarketDetailPage() {
   const range = searchParams.get("range") ?? "1d";
   const decoded = decodeURIComponent(symbol);
   const q = useMarketDetail(decoded, range);
+
+  // Same convention as StockDetailPage: indicator visibility/style is
+  // user-controllable via IndicatorToggles, and the price/RSI/MACD
+  // charts share a chart-sync registrar so pan/zoom on any one
+  // propagates to the others.
+  const [indicators, setIndicators] = useState(DEFAULT_INDICATOR_STATE);
+  const onIndicatorChange = (key: IndicatorKey, next: IndicatorStyle) =>
+    setIndicators((prev) => ({ ...prev, [key]: next }));
+  const registerChart = useChartSync();
 
   if (q.isError || (!q.isLoading && !q.data)) {
     return (
@@ -231,9 +250,16 @@ export default function MarketDetailPage() {
               value={range}
               onChange={(r) => setSearchParams({ range: r })}
             />
-            <span className="text-xs text-muted-foreground">
-              {d.bars.length} bar · range {d.range_key}
-            </span>
+            <div className="flex items-center gap-2 px-2 py-1.5 rounded-md bg-muted/30 border border-border/50">
+              <span className="text-[13px] uppercase tracking-wider font-bold text-muted-foreground shrink-0">
+                Indicatori
+              </span>
+              <div className="h-4 w-px bg-border" />
+              <IndicatorToggles
+                state={indicators}
+                onChange={onIndicatorChange}
+              />
+            </div>
           </div>
           {d.bars.length < 2 ? (
             <div className="h-[460px] flex items-center justify-center text-sm text-muted-foreground border border-border/50 rounded-md">
@@ -241,14 +267,48 @@ export default function MarketDetailPage() {
             </div>
           ) : (
             <div className="h-[460px]">
-              {/* `key={range}` forces a clean remount on range switch
-                  — same dance as the stock-detail PriceChart to avoid
-                  stale fitContent races. */}
+              {/* `key={range}` forces a clean remount on range switch */}
               <MarketChart
                 key={range}
                 bars={d.bars}
+                indicators={d.indicators}
+                styles={{
+                  sma20: indicators.sma20,
+                  sma50: indicators.sma50,
+                  sma200: indicators.sma200,
+                  bb: indicators.bb,
+                }}
                 showVolume={hasVolume}
                 timeframe={range}
+                onReady={registerChart}
+              />
+            </div>
+          )}
+
+          {/* RSI subpanel — same convention as StockDetailPage. */}
+          {indicators.rsi.visible && d.indicators.rsi14.length > 0 && (
+            <div className="mt-3 h-[200px]">
+              <RsiPanel
+                key={range}
+                rsi14={d.indicators.rsi14}
+                color={indicators.rsi.color}
+                width={indicators.rsi.width}
+                onReady={registerChart}
+              />
+            </div>
+          )}
+
+          {/* MACD subpanel — togglable. */}
+          {indicators.macd.visible && d.indicators.macd_line.length > 0 && (
+            <div className="mt-3 h-[220px]">
+              <MacdPanel
+                key={range}
+                line={d.indicators.macd_line}
+                signal={d.indicators.macd_signal}
+                hist={d.indicators.macd_hist}
+                color={indicators.macd.color}
+                width={indicators.macd.width}
+                onReady={registerChart}
               />
             </div>
           )}

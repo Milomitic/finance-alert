@@ -11,6 +11,24 @@ export interface MarketDetailBar {
   volume: number | null;
 }
 
+export interface MarketIndicatorPoint {
+  date: string;
+  value: number | null;
+}
+
+export interface MarketIndicators {
+  sma20: MarketIndicatorPoint[];
+  sma50: MarketIndicatorPoint[];
+  sma200: MarketIndicatorPoint[];
+  bb_upper: MarketIndicatorPoint[];
+  bb_middle: MarketIndicatorPoint[];
+  bb_lower: MarketIndicatorPoint[];
+  rsi14: MarketIndicatorPoint[];
+  macd_line: MarketIndicatorPoint[];
+  macd_signal: MarketIndicatorPoint[];
+  macd_hist: MarketIndicatorPoint[];
+}
+
 export interface MarketDetailQuote {
   price: number | null;
   prev_close: number | null;
@@ -35,6 +53,7 @@ export interface MarketDetail {
   high_52w: number | null;
   low_52w: number | null;
   bars: MarketDetailBar[];
+  indicators: MarketIndicators;
   quote: MarketDetailQuote | null;
 }
 
