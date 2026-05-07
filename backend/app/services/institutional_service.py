@@ -718,7 +718,20 @@ def get_aggregate_stats(
     ]
 
     # ---- Recent buys / sells: per-row action filter on latest filings ----
-    def _actions(action_set: set[str], limit: int) -> list[ActionAggregate]:
+    # 13F-HR is long-only — these aren't long-vs-short cards.
+    # "buys"  = bullish actions: {"new", "add"}    (open or grow a long)
+    # "sells" = bearish actions: {"reduce", "sold_out"}    (trim or exit a long)
+    #
+    # Per-action allocation: a single ORDER BY can't surface a mix of
+    # action types because the data is unbalanced — SEC 13F's first
+    # filings produce 60k "new" rows that swamp Dataroma's 1.2k "add"
+    # rows by absolute $ value, while Dataroma's reduces dominate sells
+    # because SEC funds (first filings) never produce reduce/sold_out.
+    # We work around that by splitting the limit across action types
+    # and concatenating the results — half "new" + half "add" for buys,
+    # similar for sells. Within each action type the same value-DESC
+    # ordering applies.
+    def _per_action(action: str, limit: int) -> list[ActionAggregate]:
         rows = db.execute(
             select(
                 InstitutionalHolding.ticker,
@@ -742,7 +755,7 @@ def get_aggregate_stats(
             .outerjoin(Stock, Stock.ticker == InstitutionalHolding.ticker)
             .where(
                 InstitutionalHolding.filing_id.in_(latest_filing_ids),
-                InstitutionalHolding.action.in_(list(action_set)),
+                InstitutionalHolding.action == action,
             )
             .group_by(
                 InstitutionalHolding.id,
@@ -751,11 +764,27 @@ def get_aggregate_stats(
                 InstitutionalFiling.period_end_date,
             )
             .order_by(
+                # Primary signal: absolute dollar magnitude. A $400B
+                # "new" Vanguard NVDA position deserves to outrank a
+                # $1B "add" with eye-popping Q/Q% from a smaller fund —
+                # otherwise the cards are 100% "add" rows because the
+                # latest-filing-by-period sort buried any SEC fund
+                # whose latest 13F dropped before the latest Dataroma
+                # refresh. value-DESC is what makes the action mix
+                # actually appear in the top-N.
+                func.coalesce(InstitutionalHolding.value_usd, 0).desc(),
+                # Tiebreaker 1: most recent period when values tie —
+                # we still prefer "recent" for the editorial label
+                # but it's no longer dominant.
                 InstitutionalFiling.period_end_date.desc(),
+                # Tiebreaker 2: portfolio weight. A $50M position at a
+                # $200M fund is more meaningful than the same $50M at
+                # a $5T mega-cap mutual fund.
+                InstitutionalHolding.portfolio_pct.desc().nullslast(),
+                # Tiebreaker 3: |Q/Q| magnitude — last-resort sort.
                 func.coalesce(
                     func.abs(InstitutionalHolding.qoq_change_pct), 0.0
                 ).desc(),
-                InstitutionalHolding.portfolio_pct.desc().nullslast(),
             )
             .limit(limit)
         ).all()
@@ -771,8 +800,23 @@ def get_aggregate_stats(
                 qoq, pct, value_usd, stock_id in rows
         ]
 
-    recent_buys = _actions({"new", "add"}, recent_actions_limit)
-    recent_sells = _actions({"reduce", "sold_out"}, recent_actions_limit)
+    # Allocate the limit across action types, then merge by value DESC
+    # so the visible top-N has a representative mix instead of being
+    # dominated by whichever action type happens to have the largest
+    # absolute $ values in the dataset.
+    def _mixed(actions: list[str], limit: int) -> list[ActionAggregate]:
+        # Each action gets a half-share of the limit (rounded up so
+        # we don't lose slots on odd numbers). After fetching, we
+        # merge-sort by value_usd DESC and trim to limit.
+        per = max(1, (limit + len(actions) - 1) // len(actions))
+        merged: list[ActionAggregate] = []
+        for a in actions:
+            merged.extend(_per_action(a, per))
+        merged.sort(key=lambda r: r.value_usd or 0, reverse=True)
+        return merged[:limit]
+
+    recent_buys = _mixed(["new", "add"], recent_actions_limit)
+    recent_sells = _mixed(["reduce", "sold_out"], recent_actions_limit)
 
     # ---- Sector tilt: sum of value_usd by sector across latest filings ----
     sector_rows = db.execute(

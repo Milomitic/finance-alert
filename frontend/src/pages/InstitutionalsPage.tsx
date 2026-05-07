@@ -32,12 +32,20 @@ import { SectionTitle } from "@/components/ui/section-title";
 function TickerNameCell({
   ticker,
   name,
-  stockId,
 }: {
   ticker: string;
   name: string | null | undefined;
-  stockId: number | null;
 }) {
+  // CUSIP placeholders ("CUSIP:78462F103") aren't real tickers — they
+  // come from SEC 13F rows where the issuer-name match against our
+  // catalog didn't resolve. Linking these to /stocks/CUSIP:... would
+  // 404 every time, so they stay non-clickable.
+  // Real tickers are linked even when `stock_id` is null in our
+  // catalog (e.g. ETFs we don't track, foreign listings) — the user
+  // explicitly asked for click-through; if the StockDetailPage 404s
+  // for that ticker the user gets a graceful error there, which is
+  // better than dead text in the table.
+  const isPlaceholder = ticker.startsWith("CUSIP:");
   const inner = (
     <span className="inline-flex items-center gap-2 min-w-0">
       <StockLogo ticker={ticker} size="xs" />
@@ -56,17 +64,15 @@ function TickerNameCell({
       </span>
     </span>
   );
-  if (stockId) {
-    return (
-      <Link
-        to={`/stocks/${encodeURIComponent(ticker)}`}
-        className="hover:underline"
-      >
-        {inner}
-      </Link>
-    );
-  }
-  return inner;
+  if (isPlaceholder) return inner;
+  return (
+    <Link
+      to={`/stocks/${encodeURIComponent(ticker)}`}
+      className="hover:underline"
+    >
+      {inner}
+    </Link>
+  );
 }
 import {
   useInstitutionalsAggregate,
@@ -118,11 +124,7 @@ function MostPickedRow({ row }: { row: TickerAggregate }) {
   return (
     <tr className="hover:bg-muted/30">
       <td className="px-2 py-2">
-        <TickerNameCell
-          ticker={row.ticker}
-          name={row.company_name}
-          stockId={row.stock_id}
-        />
+        <TickerNameCell ticker={row.ticker} name={row.company_name} />
       </td>
       <td className="px-2 py-2 text-right tabular-nums font-semibold">
         {row.holder_count}
@@ -149,11 +151,7 @@ function ActionRow({ row, kind }: { row: ActionAggregate; kind: "buy" | "sell" }
   return (
     <tr className="hover:bg-muted/30">
       <td className="px-2 py-2">
-        <TickerNameCell
-          ticker={row.ticker}
-          name={row.company_name}
-          stockId={row.stock_id}
-        />
+        <TickerNameCell ticker={row.ticker} name={row.company_name} />
       </td>
       <td className={cn("px-2 py-2 text-sm", tone)}>{row.action}</td>
       <td className="px-2 py-2 text-right tabular-nums text-sm">
@@ -387,10 +385,16 @@ export default function InstitutionalsPage() {
           <CardContent className="p-3">
             <SectionTitle
               icon={TrendingUp}
-              label="Recent buys"
+              label="Acquisti recenti"
               tone="text-emerald-700 dark:text-emerald-300"
-              className="mb-2"
+              className="mb-1"
             />
+            {/* Sub-line clarifies the editorial model: 13F-HR is
+                long-only — "buys" doesn't mean "long" vs "short", it
+                means bullish actions on long positions (open OR grow). */}
+            <p className="text-xs text-muted-foreground mb-2">
+              Azioni rialziste: <span className="font-semibold">nuove posizioni</span> (new) + <span className="font-semibold">aumenti</span> (add)
+            </p>
             <div className="overflow-x-auto">
               <table className="w-full text-base">
                 <thead className="text-[13px] uppercase tracking-wide text-muted-foreground">
@@ -422,10 +426,13 @@ export default function InstitutionalsPage() {
           <CardContent className="p-3">
             <SectionTitle
               icon={TrendingDown}
-              label="Recent sells"
+              label="Vendite recenti"
               tone="text-red-700 dark:text-red-300"
-              className="mb-2"
+              className="mb-1"
             />
+            <p className="text-xs text-muted-foreground mb-2">
+              Azioni ribassiste: <span className="font-semibold">riduzioni</span> (reduce) + <span className="font-semibold">uscite complete</span> (sold out)
+            </p>
             <div className="overflow-x-auto">
               <table className="w-full text-base">
                 <thead className="text-[13px] uppercase tracking-wide text-muted-foreground">

@@ -122,15 +122,20 @@ function HoldingRow({ row }: { row: HoldingDetail }) {
       </span>
     </span>
   );
-  const tickerCell = row.stock_id ? (
+  // Click-through rule: every real ticker links to /stocks/:ticker
+  // (even off-catalog ones — the StockDetailPage gracefully handles
+  // not-found). Only CUSIP:* placeholders stay non-clickable since
+  // they don't represent a real ticker symbol.
+  const isPlaceholder = row.ticker.startsWith("CUSIP:");
+  const tickerCell = isPlaceholder ? (
+    <span title="Ticker non risolto (CUSIP da SEC 13F)">{tickerInner}</span>
+  ) : (
     <Link
       to={`/stocks/${encodeURIComponent(row.ticker)}`}
       className="hover:underline"
     >
       {tickerInner}
     </Link>
-  ) : (
-    <span title="Ticker fuori dal catalogo">{tickerInner}</span>
   );
 
   return (
