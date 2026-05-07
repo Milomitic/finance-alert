@@ -3,7 +3,6 @@ import { useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 
 import type { PriceAlert } from "@/api/types";
-import { MultiTimeframeKpisCard } from "@/components/MultiTimeframeKpisCard";
 import { Card, CardContent } from "@/components/ui/card";
 import { useChartSync } from "@/hooks/useChartSync";
 import { useCreatePriceAlert, useStockPriceAlerts } from "@/hooks/useStockPriceAlerts";
@@ -131,12 +130,6 @@ export default function StockDetailPage() {
         <StockAlertsHistoryCard alerts={d.alerts_history} />
       </div>
 
-      {/* Multi-timeframe KPI comparison — same indicator suite (RSI 14,
-          BB 20, SMA 20/50/200, MACD 12/26/9) computed across 30m / 1h
-          / 1d / 1w / 1m / all. Lets the user spot short-vs-long-term
-          disagreements at a glance. */}
-      <MultiTimeframeKpisCard ticker={ticker} kind="stock" />
-
       {/* Four side-by-side cards: Fundamentals | Valuation+KPIs | News | Analyst.
           Weighted columns `[1.5fr_1fr_1fr_1fr]` give Fundamentals ~33% (it has
           a 7-column earnings table that needs the breathing room) and the
@@ -160,7 +153,7 @@ export default function StockDetailPage() {
           chart can dominate the vertical real estate that the row
           used to consume. */}
 
-      <div className="grid lg:grid-cols-[1fr_400px] gap-3">
+      <div className="grid lg:grid-cols-[1fr_540px] gap-3">
         <Card>
           <CardContent className="p-4">
             {/* Toolbar: range on the left, indicators row, drawing tools on the right.

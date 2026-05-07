@@ -13,6 +13,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { useStockMultiTfKpis } from "@/hooks/useMultiTfKpis";
 import { useStockScore } from "@/hooks/useStockScore";
 import {
   CATEGORY_LABEL,
@@ -110,9 +111,106 @@ function metaFor(key: string): ComponentMeta {
   );
 }
 
+
+/* ─── Multi-timeframe technical strip ───────────────────────────────────── */
+/* Compact 6-column header that shows the composite technical score per
+ * timeframe (30m/1h/1d/1w/1m/all). Replaces the standalone
+ * MultiTimeframeKpisCard at the top of the detail page — same data,
+ * but inline in the score card so the user sees Profittabilità/
+ * Sostenibilità (fundamentals-driven) and the multi-TF technical
+ * outlook (chart-driven) side by side without scrolling. */
+
+const TF_PRIORITY: Record<string, "primary" | "secondary"> = {
+  "30m": "secondary",
+  "1h": "primary",
+  "1d": "primary",
+  "1w": "secondary",
+  "1m": "primary",
+  "all": "primary",
+};
+
+function compositeTone(score: number): string {
+  // Backend emits -3..+3 composite. Tinted so the user reads bullishness
+  // at a glance without parsing the number.
+  if (score >= 2) return "bg-emerald-500/25 text-emerald-700 dark:text-emerald-300 border-emerald-300/50";
+  if (score === 1) return "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-300/30";
+  if (score === 0) return "bg-muted/40 text-muted-foreground border-border/40";
+  if (score === -1) return "bg-rose-500/15 text-rose-700 dark:text-rose-400 border-rose-300/30";
+  return "bg-rose-500/25 text-rose-700 dark:text-rose-300 border-rose-300/50";
+}
+
+function MultiTfStrip({ ticker, kind }: { ticker: string; kind: "stock" | "market" }) {
+  const stockQ = useStockMultiTfKpis(kind === "stock" ? ticker : "");
+  // For now we only mount the stock variant; the kind="market" hook will
+  // be consumed by MarketDetailPage in a sibling change. The hook is
+  // gated on the ticker prop being non-empty so the unused branch never
+  // triggers a request.
+  const data = stockQ.data;
+  if (stockQ.isLoading || !data || data.items.length === 0) {
+    return (
+      <div className="grid grid-cols-6 gap-1 text-center">
+        {["30m", "1h", "1d", "1w", "1m", "All"].map((tf) => (
+          <div
+            key={tf}
+            className="h-9 rounded bg-muted/20 border border-border/30 animate-pulse"
+          />
+        ))}
+      </div>
+    );
+  }
+  return (
+    <div className="grid grid-cols-6 gap-1">
+      {data.items.map((it) => {
+        const prio = TF_PRIORITY[it.timeframe] ?? "secondary";
+        const tone = compositeTone(it.composite_score);
+        return (
+          <Tooltip key={it.timeframe}>
+            <TooltipTrigger asChild>
+              <div
+                className={cn(
+                  "px-1.5 py-1 rounded border text-center cursor-help transition-opacity",
+                  tone,
+                  prio === "secondary" && "opacity-70",
+                )}
+              >
+                <div className="text-[10px] uppercase tracking-wider font-bold leading-none">
+                  {it.timeframe === "all" ? "All" : it.timeframe}
+                </div>
+                <div className="text-sm font-bold tabular-nums leading-none mt-0.5">
+                  {it.composite_score >= 0 ? "+" : ""}
+                  {it.composite_score}
+                </div>
+              </div>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="text-[11px] space-y-0.5">
+              <div className="font-bold uppercase tracking-wider">
+                Timeframe {it.timeframe}
+              </div>
+              <div>RSI(14): {it.rsi != null ? it.rsi.toFixed(1) : "—"}</div>
+              <div>
+                SMA20/50/200:{" "}
+                {it.sma20_above ? "✓" : "✗"} /{" "}
+                {it.sma50_above ? "✓" : "✗"} /{" "}
+                {it.sma200_above ? "✓" : "✗"}
+              </div>
+              <div>BB pos: {it.bb_position != null ? `${it.bb_position.toFixed(0)}%` : "—"}</div>
+              <div>MACD: {it.macd_tone}</div>
+              <div className="pt-1 mt-1 border-t border-border/40 font-semibold">
+                Outlook: {it.composite_label.replace("_", " ")}
+              </div>
+            </TooltipContent>
+          </Tooltip>
+        );
+      })}
+    </div>
+  );
+}
+
+
 interface Props {
   ticker: string;
 }
+
 
 /* ─── Time helpers ──────────────────────────────────────────────────────── */
 
@@ -618,8 +716,20 @@ export function StockScoreCard({ ticker }: Props) {
         </div>
       </div>
 
-      {/* Sub-score bars — top margin trimmed 4 -> 2 */}
+      {/* Multi-timeframe technical strip - integrated from the old
+          standalone MultiTimeframeKpisCard. Compact -3..+3 composite
+          per TF with hover tooltip that drills into RSI/SMA/BB/MACD. */}
       <div className="mt-2 border-t border-border/40 pt-2">
+        <div className="text-[11px] uppercase tracking-wider font-semibold text-muted-foreground/70 mb-1.5">
+          Technical outlook per timeframe
+        </div>
+        <MultiTfStrip ticker={ticker} kind="stock" />
+      </div>
+
+      {/* 6 pillar bars in a 2-column grid - splits Profittabilità +
+          Sostenibilità from the V3.2 refactor onto the left, leaves
+          Growth + Value + Momentum + Sentiment on a balanced layout. */}
+      <div className="mt-2 border-t border-border/40 pt-2 grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-0.5">
         {PILLAR_ORDER.map((pillar) => (
           <SubScoreRow
             key={pillar}
