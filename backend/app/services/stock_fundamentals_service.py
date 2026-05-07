@@ -513,6 +513,15 @@ def _transaction_type(text: str) -> str:
     return s
 
 
+# Below this share count an insider transaction is considered noise:
+# stock gifts to family members, director admin transfers, fractional
+# share grants. The user explicitly asked to filter out "poche
+# centinaia di azioni" — 500 is a generous floor that keeps any
+# meaningful trade while pruning the editorial clutter (a CEO's
+# 5-share split-adjusted dust transaction isn't market-relevant).
+_INSIDER_MIN_SHARES = 500
+
+
 def _extract_insiders(it_df: Any, limit: int = 10) -> list[InsiderTransaction]:
     """Read up to `limit` insider transactions, COALESCING multiple rows
     on the same date by the same insider with the same transaction type
@@ -527,6 +536,13 @@ def _extract_insiders(it_df: Any, limit: int = 10) -> list[InsiderTransaction]:
     Coalesce key: (insider, date, transaction_type) — same person, same
     day, same type. Shares and dollar value are summed; the transaction
     label collapses to "<type> (<n> trades)" to make the merge visible.
+
+    Significance filter: post-coalesce we drop entries with fewer than
+    `_INSIDER_MIN_SHARES` total shares — at that scale the transaction
+    is almost always a director admin move or a stock gift, not a
+    market-relevant signal. This applies AFTER coalescing so the
+    threshold is checked against the merged (summed) total, not the
+    individual fills.
     """
     if it_df is None or it_df.empty:
         return []
@@ -616,8 +632,15 @@ def _extract_insiders(it_df: Any, limit: int = 10) -> list[InsiderTransaction]:
             value=total_value if total_value > 0 else None,
         ))
 
-    # Step 4: cap to limit AFTER coalescing so we return up to `limit`
-    # distinct events (not raw fills).
+    # Step 4: significance filter. Drop transactions where the
+    # post-coalesce share count is under the noise threshold. NB: we
+    # check shares (not value) because stock-gift transactions have
+    # value=0 by yfinance convention but are still editorially
+    # meaningless when shares are tiny.
+    out = [t for t in out if (t.shares or 0) >= _INSIDER_MIN_SHARES]
+
+    # Step 5: cap to limit AFTER coalescing + filtering so we return up
+    # to `limit` *significant* events (not raw fills, not noise dust).
     return out[:limit]
 
 
@@ -747,7 +770,11 @@ def _fetch_fresh(ticker: str) -> Fundamentals:
             logger.debug(f"[fund] info {ticker}: {e}")
             _maybe_record(e)
         try:
-            f.insiders = _extract_insiders(t.insider_transactions)
+            # Pull more candidates upstream than the UI shows because the
+            # significance filter can drop a chunk of rows (gifts, admin
+            # micro-transfers). 25 in → after filter the UI's slice(0,10)
+            # still has 10 real events for most tickers.
+            f.insiders = _extract_insiders(t.insider_transactions, limit=25)
             if f.insiders: saw_success = True
         except Exception as e:
             logger.debug(f"[fund] insiders {ticker}: {e}")

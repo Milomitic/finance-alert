@@ -866,16 +866,30 @@ def holders_for_ticker(
     ticker: str,
     *,
     limit: int = 25,
+    max_age_months: int = 18,
 ) -> list[TickerHolder]:
     """Return the list of institutionals holding `ticker` in their
     latest filing. Used by the InstitutionalHoldersCard above the
     InsidersCard on stock detail pages.
 
-    Sorted by `portfolio_pct DESC` (conviction first), with `value_usd`
-    as tiebreaker. Limit is 25 by default — beyond that the card would
-    bleed into a full-page table; UI shows a "view all" link.
+    Stale filings (latest period_end_date older than `max_age_months`)
+    are filtered out — see the user-reported case where Olstein's 2014
+    filing and Cunniff LP's 2018 filing surfaced as "latest" because
+    those funds simply hadn't published since then in our snapshot,
+    and showed up in /stocks/AAPL alongside 2025-Q4 and 2026-Q1 rows.
+    18 months catches "the latest two quarters of activity" while
+    keeping a fund that just missed a deadline visible.
+
+    Ordered by `period_end_date DESC` first (most recent activity on
+    top — what the user asked to see), then `portfolio_pct DESC` as
+    tiebreaker (conviction wins within the same period). Limit is 25
+    by default — beyond that the card would bleed into a full-page
+    table; UI shows a "view all" link.
     """
+    from datetime import date, timedelta
+
     rank, latest = _latest_filings_subq(db)
+    cutoff = date.today() - timedelta(days=int(30.4 * max_age_months))
     rows = db.execute(
         select(
             Institutional.id,
@@ -903,8 +917,12 @@ def holders_for_ticker(
             (latest.c.institutional_id == Institutional.id)
             & (latest.c.max_period == InstitutionalFiling.period_end_date),
         )
-        .where(InstitutionalHolding.ticker == ticker)
+        .where(
+            InstitutionalHolding.ticker == ticker,
+            InstitutionalFiling.period_end_date >= cutoff,
+        )
         .order_by(
+            InstitutionalFiling.period_end_date.desc(),
             InstitutionalHolding.portfolio_pct.desc().nullslast(),
             InstitutionalHolding.value_usd.desc().nullslast(),
         )

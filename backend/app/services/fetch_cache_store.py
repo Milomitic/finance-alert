@@ -60,7 +60,11 @@ KIND_NEWS = "news"
 #        eps_trailing/forward/current_year, shares_outstanding/float/short,
 #        recommendation_mean, governance risks, etc.). Old payloads
 #        re-fetch on next access so users see the richer dataset.
-_FUNDAMENTALS_SCHEMA_VERSION = 5
+# v6 — insiders extraction now drops transactions <500 shares post-coalesce
+#       (noise floor for stock gifts / director admin transfers). Old payloads
+#       cached with no filter must be re-fetched so the UI doesn't keep
+#       surfacing the stale unfiltered list.
+_FUNDAMENTALS_SCHEMA_VERSION = 6
 _SCHEMA_VERSION_KEY = "_schema_version"
 
 
