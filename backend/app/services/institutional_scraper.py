@@ -274,24 +274,50 @@ def _parse_holdings_rows(soup: BeautifulSoup) -> Iterable[ScrapedHolding]:
     """Walk the largest <table> on the page (Dataroma puts holdings in
     one big table) and extract one ScrapedHolding per <tr>.
 
-    Column layout observed:
-        # | Stock (Ticker - Name) | History | Recent activity | Shares | %Port | $ Recent Price | Reported Price | Value | %Change
+    Real Dataroma column layout (observed 2026-Q1):
+        [0] History (≡ icon)
+        [1] Stock (Ticker - Name)
+        [2] % of Portfolio
+        [3] Recent Activity ("Reduce 0.34%" / "Add 12.5%" / "New" / etc.)
+        [4] Shares
+        [5] Reported Price
+        [6] Value ($USD)
+        [7] (empty)
+        [8] Current Price
+        [9] +/- Reported Price (PRICE delta — NOT position delta)
+        [10] 52 Week Low
+        [11] 52 Week High
 
-    Different views may shift column indices. We discover columns by
-    matching the <th> labels; if labels don't match the expected
-    keywords we fall back to fixed offsets that work for the common
-    "Holdings" view.
+    Headers live in the FIRST <tr> as <td> cells (no <thead> / <th>).
+    We detect this and skip the first row when iterating data rows.
+
+    Q/Q position change is encoded inside the Recent Activity cell:
+    "Reduce 0.34%" → -0.34, "Add 12.5%" → +12.5, "New" → null,
+    "Sold out" → null. Column 9 is the PRICE delta, not the
+    position delta — don't confuse them.
     """
     table = _largest_table(soup)
     if table is None:
         return
-    headers = [
-        th.get_text(" ", strip=True).lower()
-        for th in table.find_all("th")
+    rows = table.find_all("tr")
+    if not rows:
+        return
+
+    # Try <th> first; fall back to first <tr>'s <td> as headers (Dataroma layout).
+    th_headers = [
+        th.get_text(" ", strip=True).lower() for th in table.find_all("th")
     ]
+    if th_headers:
+        headers = th_headers
+        data_rows_start = 0
+    else:
+        first_cells = rows[0].find_all("td")
+        headers = [c.get_text(" ", strip=True).lower() for c in first_cells]
+        # First row IS the header — skip it for data iteration.
+        data_rows_start = 1
     col_idx = _resolve_columns(headers)
 
-    for tr in table.find_all("tr"):
+    for tr in rows[data_rows_start:]:
         cells = tr.find_all("td")
         if not cells:
             continue
@@ -313,31 +339,37 @@ def _largest_table(soup: BeautifulSoup) -> BeautifulSoup | None:
 
 def _resolve_columns(headers: list[str]) -> dict[str, int]:
     """Build a label → column-index map. Falls back to canonical
-    Dataroma offsets when label matching fails."""
+    Dataroma offsets when label matching fails.
+
+    Real headers (lowercased): ['history', 'stock', '% of portfolio',
+    'recent activity', 'shares', 'reported price*', 'value', '',
+    'current price', '+/- reported price', '52 week low', '52 week high']
+    """
     idx: dict[str, int] = {}
     for i, h in enumerate(headers):
-        h = h.lower()
-        if "stock" in h and "ticker" not in idx:
-            idx["stock"] = i
-        elif "ticker" in h:
-            idx["ticker"] = i
-        elif "share" in h:
-            idx["shares"] = i
-        elif "%port" in h or "% of port" in h or "%" in h and "port" in h:
-            idx["pct_portfolio"] = i
-        elif h == "value" or "value" in h and "$" in h:
-            idx["value"] = i
-        elif "%change" in h or "% change" in h or "change" in h:
-            idx["pct_change"] = i
-        elif "activity" in h or "recent" in h:
-            idx["activity"] = i
-    # Defaults if a key is missing — Dataroma "Holdings" canonical layout.
+        h = h.lower().strip()
+        if not h:
+            continue
+        # Order matters: more specific labels first.
+        if "portfolio" in h and "%" in h:
+            idx.setdefault("pct_portfolio", i)
+        elif "recent" in h and "activity" in h:
+            idx.setdefault("activity", i)
+        elif "share" in h and "report" not in h:
+            idx.setdefault("shares", i)
+        elif h == "stock" or (h.startswith("stock") and "share" not in h):
+            idx.setdefault("stock", i)
+        elif h == "value" or (h.startswith("value") or "$ value" in h):
+            idx.setdefault("value", i)
+    # Canonical Dataroma "Holdings" layout — used when label matching
+    # missed a key. These are the indices observed at 2026-Q1; if
+    # Dataroma rebrands and labels stop matching, the dynamic resolution
+    # above kicks in and these become irrelevant.
     idx.setdefault("stock", 1)
+    idx.setdefault("pct_portfolio", 2)
     idx.setdefault("activity", 3)
     idx.setdefault("shares", 4)
-    idx.setdefault("pct_portfolio", 5)
-    idx.setdefault("value", 8)
-    idx.setdefault("pct_change", 9)
+    idx.setdefault("value", 6)
     return idx
 
 
@@ -364,9 +396,12 @@ def _parse_one_row(
     shares = _parse_int(_cell_text(cells, idx.get("shares")))
     pct_port = _parse_pct(_cell_text(cells, idx.get("pct_portfolio")))
     value = _parse_money(_cell_text(cells, idx.get("value")))
-    pct_change = _parse_pct(_cell_text(cells, idx.get("pct_change")))
     activity = _cell_text(cells, idx.get("activity")) or ""
     action = _classify_action(activity)
+    # Q/Q POSITION change is encoded inside the Recent Activity cell:
+    # "Reduce 0.34%" → -0.34, "Add 12.5%" → +12.5, "New" / "Sold out" → null.
+    # Sign is inferred from the verb (reduce/sell → negative).
+    pct_change = _qoq_from_activity(activity, action)
 
     yield ScrapedHolding(
         ticker=ticker.upper(),
@@ -378,6 +413,30 @@ def _parse_one_row(
         qoq_change_shares=None,  # Dataroma doesn't expose absolute Δshares directly
         action=action,
     )
+
+
+def _qoq_from_activity(activity: str, action: str | None) -> float | None:
+    """Extract Q/Q position change from a "Recent Activity" cell.
+
+    Examples:
+      "Add 12.5%"      → +12.5
+      "Reduce 0.34%"   → -0.34
+      "New"            → None (no prior baseline to compare against)
+      "Sold Out"       → None (Dataroma doesn't quote a specific %)
+      ""               → None
+    """
+    if not activity or action in (None, "new", "sold_out", "hold"):
+        return None
+    m = re.search(r"(-?\d+(?:\.\d+)?)\s*%", activity)
+    if not m:
+        return None
+    try:
+        val = float(m.group(1))
+    except ValueError:
+        return None
+    if action == "reduce":
+        return -val
+    return val
 
 
 def _cell_text(cells: list, i: int | None) -> str:
