@@ -96,8 +96,12 @@ interface TooltipState {
   low: number;
   close: number;
   volume: number;
-  changePct: number | null;  // close vs open
-  prevChangePct: number | null;  // close vs previous bar's close (Q/Q-style)
+  // Intra-candle variation (close vs open of the same bar). The
+  // bar-over-bar variation (close vs previous close) used to live here
+  // as `prevChangePct` but was removed per user feedback — the single
+  // intra-candle delta is enough; the inter-bar one was redundant with
+  // the page-header `+X.YZ%` chip.
+  changePct: number | null;
   isUp: boolean;
 }
 
@@ -112,18 +116,16 @@ export function PriceChart({
   // time, but to look up O/H/L/C/V we need a Map<time, bar>. Built
   // once per data update; cheap O(1) hit per crosshair event.
   const barsByTimeRef = useRef<Map<number, OhlcvBar & { idx: number }>>(new Map());
-  const ohlcvRef = useRef<OhlcvBar[]>([]);
   const timeframeRef = useRef<string | undefined>(timeframe);
   const [tooltip, setTooltip] = useState<TooltipState | null>(null);
 
-  // Keep the latest props available to the crosshair handler closure
-  // (which is registered once at chart mount, then survives across
-  // many data/timeframe changes). Without these refs the handler
-  // would freeze on the FIRST `ohlcv`/`timeframe` it ever saw.
+  // Keep the latest timeframe available to the crosshair handler closure
+  // (which is registered once at chart mount and survives across
+  // data/timeframe changes). Without this ref the formatter would
+  // freeze on the timeframe at chart-mount time.
   useEffect(() => {
-    ohlcvRef.current = ohlcv;
     timeframeRef.current = timeframe;
-  }, [ohlcv, timeframe]);
+  }, [timeframe]);
   const sma20Ref = useRef<ISeriesApi<"Line"> | null>(null);
   const sma50Ref = useRef<ISeriesApi<"Line"> | null>(null);
   const sma200Ref = useRef<ISeriesApi<"Line"> | null>(null);
@@ -236,16 +238,12 @@ export function PriceChart({
         setTooltip(null);
         return;
       }
-      // Δ% intra-candle (close vs open) — what the candle "did" today.
+      // Δ% intra-candle (close vs open) — what the candle "did".
+      // The bar-over-bar version (close vs previous close) was removed
+      // here because the page-header chip already shows that number;
+      // having two deltas in the tooltip cluttered the read.
       const changePct = bar.open !== 0
         ? ((bar.close - bar.open) / bar.open) * 100
-        : null;
-      // Δ% session-over-session (close vs previous close) — matches the
-      // % shown on the stock detail header. Read from the latest
-      // ohlcv via ref so this stays correct across data updates.
-      const prevBar = bar.idx > 0 ? ohlcvRef.current[bar.idx - 1] : null;
-      const prevChangePct = prevBar && prevBar.close !== 0
-        ? ((bar.close - prevBar.close) / prevBar.close) * 100
         : null;
       setTooltip({
         visible: true,
@@ -258,7 +256,6 @@ export function PriceChart({
         close: bar.close,
         volume: bar.volume,
         changePct,
-        prevChangePct,
         isUp: bar.close >= bar.open,
       });
     };
@@ -488,40 +485,20 @@ export function PriceChart({
             <div className="text-muted-foreground">Volume</div>
             <div className="text-right">{fmtVolume(tooltip.volume)}</div>
           </div>
-          {(tooltip.changePct !== null || tooltip.prevChangePct !== null) && (
-            <div className="border-t border-border/40 pt-1.5 mt-1.5 grid grid-cols-2 gap-x-3 gap-y-0.5">
-              {tooltip.changePct !== null && (
-                <>
-                  <div className="text-muted-foreground">Δ candela</div>
-                  <div
-                    className={cn(
-                      "text-right font-semibold",
-                      tooltip.changePct >= 0
-                        ? "text-emerald-700 dark:text-emerald-300"
-                        : "text-red-700 dark:text-red-300",
-                    )}
-                  >
-                    {tooltip.changePct >= 0 ? "+" : ""}
-                    {tooltip.changePct.toFixed(2)}%
-                  </div>
-                </>
-              )}
-              {tooltip.prevChangePct !== null && (
-                <>
-                  <div className="text-muted-foreground">Δ vs prec.</div>
-                  <div
-                    className={cn(
-                      "text-right font-semibold",
-                      tooltip.prevChangePct >= 0
-                        ? "text-emerald-700 dark:text-emerald-300"
-                        : "text-red-700 dark:text-red-300",
-                    )}
-                  >
-                    {tooltip.prevChangePct >= 0 ? "+" : ""}
-                    {tooltip.prevChangePct.toFixed(2)}%
-                  </div>
-                </>
-              )}
+          {tooltip.changePct !== null && (
+            <div className="border-t border-border/40 pt-1.5 mt-1.5 grid grid-cols-2 gap-x-4 gap-y-0.5">
+              <div className="text-muted-foreground">Variazione</div>
+              <div
+                className={cn(
+                  "text-right font-semibold",
+                  tooltip.changePct >= 0
+                    ? "text-emerald-700 dark:text-emerald-300"
+                    : "text-red-700 dark:text-red-300",
+                )}
+              >
+                {tooltip.changePct >= 0 ? "+" : ""}
+                {tooltip.changePct.toFixed(2)}%
+              </div>
             </div>
           )}
         </div>
