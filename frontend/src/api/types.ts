@@ -709,14 +709,21 @@ export type RiskTier = "conservative" | "moderate" | "aggressive";
 
 export type ScoreCategory =
   | "composite"
-  | "quality"
+  | "quality"        // legacy V3.1 alias = avg(profitability, sustainability)
+  | "profitability"
+  | "sustainability"
   | "growth"
   | "value"
   | "momentum"
   | "sentiment";
 
 export interface SubScores {
+  /** Legacy V3.1 alias; = avg(profitability, sustainability) on the
+   *  backend so old screener queries keep working. New UI surfaces
+   *  should read profitability + sustainability directly. */
   quality: number | null;
+  profitability: number | null;
+  sustainability: number | null;
   growth: number | null;
   value: number | null;
   momentum: number | null;

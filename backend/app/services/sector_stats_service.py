@@ -119,6 +119,10 @@ class SectorStats:
     # Income
     dividend_yield_median: float | None = None  # PERCENT (normalised)
 
+    # Sustainability extras (V3.2)
+    fcf_to_ni_median: float | None = None        # FCF / Net Income ratio
+    dividend_coverage_median: float | None = None  # EPS / DPS multiple
+
 
 @dataclass
 class SectorStatsBundle:
@@ -239,4 +243,59 @@ def _compute_one(sector: str, funds: list["Fundamentals"]) -> SectorStats:
                 if normalised is not None
             ]
         ),
+        # FCF / Net Income median: pull NI from MicroData.net_income_to_common
+        # (Yahoo info dict, TTM). When that's missing, fall back to the
+        # latest annual net_income from the AnnualPoint history.
+        fcf_to_ni_median=_safe_median([
+            ratio for ratio in (
+                _fcf_to_ni_for_funds(f) for f in funds if f is not None
+            ) if ratio is not None
+        ]),
+        # Dividend coverage = EPS_TTM / annual DPS
+        dividend_coverage_median=_safe_median([
+            cov for cov in (
+                _dividend_coverage_for_micro(f.micro) for f in funds
+                if f is not None and f.micro is not None
+            ) if cov is not None
+        ]),
     )
+
+
+
+def _fcf_to_ni_for_funds(fundamentals) -> float | None:
+    """Mirror of score_service._fcf_to_ni_ratio for sector aggregation.
+    Kept as a private helper here to avoid a circular import (score_service
+    imports sector_stats_service, not the other way around)."""
+    if fundamentals is None or fundamentals.micro is None:
+        return None
+    micro = fundamentals.micro
+    fcf = getattr(micro, "free_cashflow", None)
+    if not _is_finite(fcf):
+        return None
+    ni = None
+    candidate = getattr(micro, "net_income_to_common", None)
+    if _is_finite(candidate) and candidate is not None and float(candidate) > 0:
+        ni = float(candidate)
+    else:
+        annual = getattr(fundamentals, "annual", None) or []
+        for ap in reversed(annual):
+            v = getattr(ap, "net_income", None)
+            if _is_finite(v) and v is not None and float(v) > 0:
+                ni = float(v)
+                break
+    if ni is None or ni <= 0:
+        return None
+    return float(fcf) / ni
+
+
+def _dividend_coverage_for_micro(micro) -> float | None:
+    """Mirror of score_service._dividend_coverage."""
+    eps = getattr(micro, "eps_trailing", None)
+    div_rate = getattr(micro, "dividend_rate", None)
+    if not _is_finite(eps) or not _is_finite(div_rate):
+        return None
+    if div_rate is None or float(div_rate) <= 0:
+        return None
+    if eps is None or float(eps) <= 0:
+        return 0.0
+    return float(eps) / float(div_rate)

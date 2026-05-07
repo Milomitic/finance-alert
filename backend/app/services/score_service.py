@@ -66,12 +66,24 @@ from app.services.stock_fundamentals_service import (
 # Pillar weights (composite-level) and risk tier set.
 # ---------------------------------------------------------------------------
 
+# V3.2 6-pillar framework: Quality has been split into Profitability
+# (magnitude — ROE/ROA/margins) and Sustainability (durability — debt,
+# liquidity, cash quality, earnings stability, dividend safety). Pesi
+# riequilibrati sopra il 100% per dare più voce al "regge nel tempo?":
+#   - Profitability: 0.15 (era 0.25 fuso con Sustainability)
+#   - Sustainability: 0.15 (nuovo pilastro durability)
+#   - Growth: 0.23 (era 0.25, lieve sgonfiamento per fare spazio)
+#   - Value: 0.13 (era 0.15)
+#   - Momentum: 0.20 (invariato)
+#   - Sentiment: 0.14 (era 0.15)
+# Total = 1.00.
 PILLAR_WEIGHTS: dict[str, float] = {
-    "quality": 0.25,
-    "growth": 0.25,
-    "value": 0.15,
+    "profitability": 0.15,
+    "sustainability": 0.15,
+    "growth": 0.23,
+    "value": 0.13,
     "momentum": 0.20,
-    "sentiment": 0.15,
+    "sentiment": 0.14,
 }
 
 RISK_TIERS: tuple[str, ...] = ("conservative", "moderate", "aggressive")
@@ -419,31 +431,27 @@ def _resolve_med(sector_stats: SectorStatsBundle | None, sector: str | None, fie
 
 
 # ---------------------------------------------------------------------------
-# Quality pillar.
+# Profitability pillar (V3.2 - was the magnitude side of Quality).
 # ---------------------------------------------------------------------------
 
-def _quality(stock: Stock, micro: MicroData | None, sector_stats: SectorStatsBundle | None = None) -> tuple[float | None, float, dict]:
-    """Quality pillar - sector-aware blended scoring.
-
-    Each profitability / leverage / liquidity attribute is scored as a
-    50/50 blend of the absolute ramp (canonical thresholds) AND the
-    diff/ratio vs the sector peer median. When no sector median is
-    available (thin sector / no bundle) the blend falls back to pure
-    absolute, matching V2 behavior.
+def _profitability(
+    stock: Stock,
+    micro: MicroData | None,
+    sector_stats: SectorStatsBundle | None = None,
+) -> tuple[float | None, float, dict]:
+    """Profitability pillar - sector-aware blended scoring of return /
+    margin metrics. Captures whether this is a money-making business
+    in absolute terms AND vs its peers. Magnitude only - durability
+    is in the sibling Sustainability pillar.
 
     Components (weights add to 1.0):
-      - ROE                       (0.16)  HIB blend, abs full@20%/half@10%/zero@0%, rel +5pp vs sector
-      - ROA                       (0.10)  HIB blend, abs full@10%/half@5%/zero@0%, rel +2.5pp
-      - Profit margin             (0.12)  HIB blend, abs full@20%/half@10%/zero@0%, rel +5pp
-      - Operating margin          (0.10)  HIB blend, abs full@20%/half@10%/zero@0%, rel +5pp
-      - Gross margin              (0.06)  HIB blend, abs full@50%/half@30%/zero@10%, rel +10pp
-      - Free cash flow positive   (0.10)  binary (no sector signal)
-      - Debt / Equity             (0.10)  LIB blend, abs full@<=50/half@100/zero@200, rel -50pp
-      - Current ratio             (0.06)  HIB blend, abs full@2/half@1/zero@0.7, rel +0.5
-      - Quick ratio               (0.05)  HIB blend, abs full@1.5/half@1/zero@0.5, rel +0.5
-      - Yahoo overall_risk        (0.05)  1 (best) -> 10 (worst), no sector aggregate
-      - Insider holdings          (0.05)  HIB absolute (peer comparison not meaningful)
-      - Institutional holdings    (0.05)  HIB absolute (peer comparison not meaningful)
+      - ROE                       (0.22)  HIB blend abs full@20%/half@10%/zero@0%, rel +5pp vs sector
+      - ROA                       (0.15)  HIB blend abs full@10%/half@5%/zero@0%, rel +2.5pp
+      - Profit margin             (0.20)  HIB blend abs full@20%/half@10%/zero@0%, rel +5pp
+      - Operating margin          (0.15)  HIB blend abs full@20%/half@10%/zero@0%, rel +5pp
+      - Gross margin              (0.13)  HIB blend abs full@50%/half@30%/zero@10%, rel +10pp
+      - Insider holdings          (0.07)  HIB absolute (no peer aggregate)
+      - Institutional holdings    (0.08)  HIB absolute (no peer aggregate)
     """
     if micro is None:
         return None, 100.0, {}
@@ -454,105 +462,350 @@ def _quality(stock: Stock, micro: MicroData | None, sector_stats: SectorStatsBun
     def _med(field: str) -> float | None:
         return _resolve_med(sector_stats, sec, field)
 
-    # --- Profitability (sector-aware blend) ------------------------------
     components.append(_Component(
         "roe", micro.return_on_equity,
         _blended_hib(micro.return_on_equity, _med("roe_median"),
                      abs_full=0.20, abs_half=0.10, abs_zero=0.0,
                      rel_full_pp=0.05),
-        0.16,
-    sector_median=_med("roe_median"),
+        0.22,
+        sector_median=_med("roe_median"),
     ))
     components.append(_Component(
         "roa", micro.return_on_assets,
         _blended_hib(micro.return_on_assets, _med("roa_median"),
                      abs_full=0.10, abs_half=0.05, abs_zero=0.0,
                      rel_full_pp=0.025),
-        0.10,
-    sector_median=_med("roa_median"),
+        0.15,
+        sector_median=_med("roa_median"),
     ))
     components.append(_Component(
         "profit_margin", micro.profit_margins,
         _blended_hib(micro.profit_margins, _med("profit_margin_median"),
                      abs_full=0.20, abs_half=0.10, abs_zero=0.0,
                      rel_full_pp=0.05),
-        0.12,
-    sector_median=_med("profit_margin_median"),
+        0.20,
+        sector_median=_med("profit_margin_median"),
     ))
     components.append(_Component(
         "operating_margin", micro.operating_margins,
         _blended_hib(micro.operating_margins, _med("operating_margin_median"),
                      abs_full=0.20, abs_half=0.10, abs_zero=0.0,
                      rel_full_pp=0.05),
-        0.10,
-    sector_median=_med("operating_margin_median"),
+        0.15,
+        sector_median=_med("operating_margin_median"),
     ))
     components.append(_Component(
         "gross_margin", micro.gross_margins,
         _blended_hib(micro.gross_margins, _med("gross_margin_median"),
                      abs_full=0.50, abs_half=0.30, abs_zero=0.10,
                      rel_full_pp=0.10),
-        0.06,
-    sector_median=_med("gross_margin_median"),
+        0.13,
+        sector_median=_med("gross_margin_median"),
     ))
-
-    # --- Cash flow (binary, no peer comparison meaningful) ---------------
-    fcf = micro.free_cashflow
     components.append(_Component(
-        "fcf", fcf,
-        (100.0 if fcf > 0 else 0.0) if _is_finite(fcf) else None,
-        0.10,
+        "insider_holdings", micro.held_percent_insiders,
+        _ramp3(micro.held_percent_insiders, full=0.10, half=0.03, zero=0.0)
+        if _is_finite(micro.held_percent_insiders) else None,
+        0.07,
+    ))
+    components.append(_Component(
+        "institutional_holdings", micro.held_percent_institutions,
+        _ramp3(micro.held_percent_institutions, full=0.70, half=0.40, zero=0.10)
+        if _is_finite(micro.held_percent_institutions) else None,
+        0.08,
     ))
 
-    # --- Leverage / liquidity (sector-aware) -----------------------------
-    # debt_to_equity is a percent in yfinance (145.2 == 145.2%, not 1.45).
+    return _aggregate(components)
+
+
+# ---------------------------------------------------------------------------
+# Sustainability pillar (V3.2 - durability of the business).
+# ---------------------------------------------------------------------------
+
+def _sustainability(
+    stock: Stock,
+    fundamentals,
+    sector_stats: SectorStatsBundle | None = None,
+) -> tuple[float | None, float, dict]:
+    """Sustainability pillar - answers whether this business will keep
+    working over time.
+
+    Combines balance-sheet solidity (D/E, liquidity ratios) with
+    cash-flow quality (FCF positive, FCF/Net-Income ratio), earnings
+    stability over time, margin durability, dividend safety, and
+    Yahoo overall_risk.
+
+    Components (weights add to 1.0):
+      - Debt / Equity             (0.13)  LIB blend abs full@<=50/half@100/zero@200, rel -50pp
+      - Current ratio             (0.10)  HIB blend abs full@2/half@1/zero@0.7, rel +0.5
+      - Quick ratio               (0.08)  HIB blend abs full@1.5/half@1/zero@0.5, rel +0.5
+      - FCF positive              (0.15)  binary
+      - FCF / Net Income          (0.12)  HIB abs full@1.0/half@0.5/zero@0.0
+      - Earnings stability 5y     (0.10)  inverse coefficient of variation of net_income
+      - Margin trend 3y           (0.10)  signed slope of profit_margins
+      - Dividend coverage         (0.10)  EPS / DPS - score=None when no dividend
+      - Payout ratio sanity       (0.07)  healthy 30-60% band
+      - Yahoo overall_risk        (0.05)  1 (best) -> 10 (worst)
+    """
+    if fundamentals is None:
+        return None, 100.0, {}
+    micro = fundamentals.micro
+    if micro is None:
+        return None, 100.0, {}
+
+    components: list[_Component] = []
+    sec = stock.sector
+
+    def _med(field: str) -> float | None:
+        return _resolve_med(sector_stats, sec, field)
+
     components.append(_Component(
         "debt_equity", micro.debt_to_equity,
         _blended_lib(micro.debt_to_equity, _med("debt_equity_median"),
                      abs_full=50.0, abs_half=100.0, abs_zero=200.0,
                      rel_full_pp=-50.0),
-        0.10,
-    sector_median=_med("debt_equity_median"),
+        0.13,
+        sector_median=_med("debt_equity_median"),
     ))
     components.append(_Component(
         "current_ratio", micro.current_ratio,
         _blended_hib(micro.current_ratio, _med("current_ratio_median"),
                      abs_full=2.0, abs_half=1.0, abs_zero=0.7,
                      rel_full_pp=0.5),
-        0.06,
-    sector_median=_med("current_ratio_median"),
+        0.10,
+        sector_median=_med("current_ratio_median"),
     ))
     components.append(_Component(
         "quick_ratio", micro.quick_ratio,
         _blended_hib(micro.quick_ratio, _med("quick_ratio_median"),
                      abs_full=1.5, abs_half=1.0, abs_zero=0.5,
                      rel_full_pp=0.5),
-        0.05,
-    sector_median=_med("quick_ratio_median"),
+        0.08,
+        sector_median=_med("quick_ratio_median"),
     ))
 
-    # --- Governance / ownership (no sector aggregate) --------------------
+    fcf = micro.free_cashflow
+    components.append(_Component(
+        "fcf", fcf,
+        (100.0 if fcf > 0 else 0.0) if _is_finite(fcf) else None,
+        0.15,
+    ))
+
+    fcf_to_ni = _fcf_to_ni_ratio(fundamentals)
+    components.append(_Component(
+        "fcf_to_ni", fcf_to_ni,
+        _ramp3(fcf_to_ni, full=1.0, half=0.5, zero=0.0)
+        if fcf_to_ni is not None else None,
+        0.12,
+        sector_median=_med("fcf_to_ni_median"),
+    ))
+
+    earn_stab = _earnings_stability_5y(fundamentals)
+    components.append(_Component(
+        "earnings_stability", earn_stab,
+        _ramp3(earn_stab, full=0.85, half=0.5, zero=0.15)
+        if earn_stab is not None else None,
+        0.10,
+    ))
+
+    margin_slope = _margin_trend_3y(fundamentals)
+    components.append(_Component(
+        "margin_trend", margin_slope,
+        _ramp3(margin_slope, full=0.02, half=0.0, zero=-0.02)
+        if margin_slope is not None else None,
+        0.10,
+    ))
+
+    div_cov = _dividend_coverage(micro)
+    components.append(_Component(
+        "dividend_coverage", div_cov,
+        _ramp3(div_cov, full=3.0, half=1.5, zero=1.0)
+        if div_cov is not None else None,
+        0.10,
+        sector_median=_med("dividend_coverage_median"),
+    ))
+
+    pr = micro.payout_ratio
+    pr_score = None
+    has_dividend = (
+        _is_finite(micro.dividend_yield) and micro.dividend_yield is not None
+        and micro.dividend_yield > 0
+    )
+    if _is_finite(pr) and pr is not None and has_dividend:
+        if pr <= 0:
+            pr_score = 0.0
+        elif pr <= 0.30:
+            pr_score = 70.0
+        elif pr <= 0.60:
+            pr_score = 100.0
+        elif pr <= 1.0:
+            pr_score = max(0.0, 100.0 * (1.0 - (pr - 0.60) / 0.40))
+        else:
+            pr_score = 0.0
+    components.append(_Component("payout_ratio", pr if has_dividend else None, pr_score, 0.07))
+
     components.append(_Component(
         "overall_risk", micro.overall_risk,
         _ramp(micro.overall_risk, full=1.0, zero=10.0) if _is_finite(micro.overall_risk) else None,
-        0.05,
-    ))
-    components.append(_Component(
-        "insider_holdings", micro.held_percent_insiders,
-        _ramp3(micro.held_percent_insiders, full=0.10, half=0.03, zero=0.0)
-        if _is_finite(micro.held_percent_insiders) else None,
-        0.05,
-    ))
-    components.append(_Component(
-        "institutional_holdings", micro.held_percent_institutions,
-        _ramp3(micro.held_percent_institutions, full=0.70, half=0.40, zero=0.10)
-        if _is_finite(micro.held_percent_institutions) else None,
         0.05,
     ))
 
     return _aggregate(components)
 
 
+# ---------------------------------------------------------------------------
+# Sustainability lane helpers (V3.2 new metrics).
+# ---------------------------------------------------------------------------
+
+def _fcf_to_ni_ratio(fundamentals) -> float | None:
+    """FCF / Net Income ratio. >1 means earnings backed by cash, <1
+    means accruals, <0 means cash burn despite reported profit.
+
+    Net income source priority:
+      1. micro.net_income_to_common (Yahoo info dict, TTM)
+      2. Latest fundamentals.annual entry net_income
+      3. Sum of latest 4 quarterlies (TTM rebuild)
+
+    Returns None when no net_income source yields a finite, positive
+    value (ratio undefined or meaningless), or when FCF is unavailable.
+    """
+    micro = fundamentals.micro if fundamentals is not None else None
+    if micro is None:
+        return None
+    fcf = micro.free_cashflow
+    if not _is_finite(fcf):
+        return None
+    ni: float | None = None
+    candidate = getattr(micro, "net_income_to_common", None)
+    if _is_finite(candidate) and candidate is not None and float(candidate) > 0:
+        ni = float(candidate)
+    else:
+        annual = getattr(fundamentals, "annual", None) or []
+        for ap in reversed(annual):
+            v = getattr(ap, "net_income", None)
+            if _is_finite(v) and v is not None and float(v) > 0:
+                ni = float(v)
+                break
+    if ni is None or ni <= 0:
+        return None
+    return float(fcf) / ni
+
+
+def _earnings_stability_5y(fundamentals) -> float | None:
+    """Inverse coefficient of variation of net_income over up to 5
+    annual reports. Returns 1 - CV clipped to [0, 1] so the consumer
+    ramp gets a higher-is-better signal.
+
+    Returns None with fewer than 3 data points or non-positive mean.
+    """
+    annual = getattr(fundamentals, "annual", None) or []
+    nis = [
+        float(a.net_income) for a in annual
+        if getattr(a, "net_income", None) is not None
+        and _is_finite(a.net_income)
+    ][-5:]
+    if len(nis) < 3:
+        return None
+    import statistics
+    mean = sum(nis) / len(nis)
+    if mean <= 0:
+        return None
+    try:
+        stdev = statistics.stdev(nis)
+    except statistics.StatisticsError:
+        return None
+    cv = stdev / mean
+    return max(0.0, 1.0 - cv)
+
+
+def _margin_trend_3y(fundamentals) -> float | None:
+    """Linear regression slope of profit_margin over the last 3 annual
+    reports. Returns slope in fraction-per-year units; +0.02 is a
+    +2pp/year improvement. Returns None below 3 data points.
+    """
+    annual = getattr(fundamentals, "annual", None) or []
+    margins: list[float] = []
+    for a in annual[-3:]:
+        rev = getattr(a, "revenue", None)
+        ni = getattr(a, "net_income", None)
+        if not _is_finite(rev) or not _is_finite(ni) or rev is None or float(rev) <= 0:
+            continue
+        margins.append(float(ni) / float(rev))
+    if len(margins) < 3:
+        return None
+    n = len(margins)
+    xs = list(range(n))
+    x_mean = sum(xs) / n
+    y_mean = sum(margins) / n
+    num = sum((xs[i] - x_mean) * (margins[i] - y_mean) for i in range(n))
+    den = sum((xs[i] - x_mean) ** 2 for i in range(n))
+    if den == 0:
+        return 0.0
+    return num / den
+
+
+def _dividend_coverage(micro) -> float | None:
+    """EPS (TTM) / annual dividend per share. >=3x is very safe,
+    1-1.5x is tight, <1x means paying out of debt or reserves.
+    Returns None for non-dividend-paying stocks (the lane drops out).
+    """
+    eps = getattr(micro, "eps_trailing", None)
+    div_rate = getattr(micro, "dividend_rate", None)
+    if not _is_finite(eps) or not _is_finite(div_rate):
+        return None
+    if div_rate is None or float(div_rate) <= 0:
+        return None
+    if eps is None or float(eps) <= 0:
+        return 0.0
+    return float(eps) / float(div_rate)
+
+
+
+
+# ---------------------------------------------------------------------------
+# Back-compat shim: _quality() returns a merged breakdown so V3.1-era
+# callers (and the existing test suite) keep working without changes.
+# New code should call _profitability and _sustainability directly.
+# ---------------------------------------------------------------------------
+
+def _quality(
+    stock: Stock,
+    micro: MicroData | None,
+    sector_stats: SectorStatsBundle | None = None,
+) -> tuple[float | None, float, dict]:
+    """V3.1 back-compat alias. Computes profitability and sustainability,
+    merges their breakdowns, and returns avg(p, s) as the "quality" score.
+
+    Sustainability normally needs a Fundamentals wrapper (for the
+    earnings-stability and margin-trend lanes that read annual reports).
+    When the caller only has a MicroData (e.g. unit tests), we wrap it
+    in a minimal stand-in with an empty annual list so the lane simply
+    drops out of the aggregate.
+    """
+    from dataclasses import dataclass, field as _field
+
+    @dataclass
+    class _FundShim:
+        micro: MicroData | None
+        annual: list = _field(default_factory=list)
+        quarterly: list = _field(default_factory=list)
+        earnings: list = _field(default_factory=list)
+
+    fund = _FundShim(micro=micro) if micro is not None else None
+    p_score, _, p_br = _profitability(stock, micro, sector_stats)
+    s_score, _, s_br = _sustainability(stock, fund, sector_stats)
+
+    merged: dict[str, Any] = {}
+    merged.update(p_br)
+    merged.update(s_br)
+
+    if p_score is None and s_score is None:
+        return None, 100.0, merged
+    if p_score is None:
+        return s_score, 100.0, merged
+    if s_score is None:
+        return p_score, 100.0, merged
+    return (p_score + s_score) / 2.0, 100.0, merged
 
 # ---------------------------------------------------------------------------
 # Growth pillar.
@@ -1370,7 +1623,8 @@ def _build_score(
     micro = fundamentals.micro if fundamentals is not None else None
     last_close = float(closes.iloc[-1]) if closes is not None and len(closes) > 0 else None
 
-    q_score, _, q_break = _quality(stock, micro, sector_stats)
+    p_score, _, p_break = _profitability(stock, micro, sector_stats)
+    su_score, _, su_break = _sustainability(stock, fundamentals, sector_stats)
     g_score, _, g_break = _growth(stock, fundamentals, sector_stats)
     v_score, _, v_break = _value(stock, micro, last_close, sector_stats)
     m_score, _, m_break = _momentum(stock, micro, closes, ohlcv_df)
@@ -1380,7 +1634,8 @@ def _build_score(
     )
 
     sub: dict[str, float | None] = {
-        "quality": q_score,
+        "profitability": p_score,
+        "sustainability": su_score,
         "growth": g_score,
         "value": v_score,
         "momentum": m_score,
@@ -1394,7 +1649,8 @@ def _build_score(
     risk_tier = _classify_risk(stock, micro, vol_90d)
 
     breakdown: dict[str, Any] = {
-        "quality": q_break,
+        "profitability": p_break,
+        "sustainability": su_break,
         "growth": g_break,
         "value": v_break,
         "momentum": m_break,
@@ -1447,7 +1703,18 @@ def compute_score(db: Session, stock: Stock, *, sector_stats: SectorStatsBundle 
     return StockScore(
         stock_id=cs.stock_id,
         composite=cs.composite,
-        quality=cs.sub_scores["quality"],
+        # quality kept for backward compat: average of profitability +
+        # sustainability (the two pillars that replaced it). Lets old
+        # consumers still read a "Quality" number with the same
+        # semantics as V3.1 (Q == avg(P, S) is a reasonable proxy).
+        quality=(
+            (cs.sub_scores["profitability"] + cs.sub_scores["sustainability"]) / 2
+            if cs.sub_scores["profitability"] is not None
+            and cs.sub_scores["sustainability"] is not None
+            else (cs.sub_scores["profitability"] or cs.sub_scores["sustainability"])
+        ),
+        profitability=cs.sub_scores["profitability"],
+        sustainability=cs.sub_scores["sustainability"],
         growth=cs.sub_scores["growth"],
         value=cs.sub_scores["value"],
         momentum=cs.sub_scores["momentum"],

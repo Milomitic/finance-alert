@@ -45,19 +45,24 @@ interface ComponentMeta {
 }
 
 const COMPONENT_META: Record<string, ComponentMeta> = {
-  // ── Quality ─────────────────────────────────────────────────
+  // ── Profitability (V3.2 — magnitude side of old Quality) ────
   roe: { label: "ROE", hint: "Return on Equity — utile / equity", format: "pct" },
   roa: { label: "ROA", hint: "Return on Assets — utile / asset totali", format: "pct" },
   profit_margin: { label: "Profit margin", hint: "Utile netto / ricavi", format: "pct" },
   operating_margin: { label: "Operating margin", hint: "Utile operativo / ricavi", format: "pct" },
   gross_margin: { label: "Gross margin", hint: "Profitto lordo / ricavi", format: "pct" },
-  fcf: { label: "Free cash flow", hint: "Flusso di cassa libero (TTM)", format: "usd" },
+  insider_holdings: { label: "% insider", hint: "Quota detenuta da insider — allineamento incentivi", format: "pct" },
+  institutional_holdings: { label: "% istituzionali", hint: "Quota detenuta da fondi/ETF/banche", format: "pct" },
+  // ── Sustainability (V3.2 — durability side of old Quality) ──
+  fcf: { label: "Free cash flow", hint: "Flusso di cassa libero (TTM) — positivo = genera cassa", format: "usd" },
+  fcf_to_ni: { label: "FCF / Net Income", hint: "Earnings quality — sopra 1 = utili supportati da cassa vera", format: "ratio" },
+  earnings_stability: { label: "Stabilità utili 5y", hint: "1 − coefficiente di variazione del net_income negli ultimi 5 anni — alto = utili regolari", format: "ratio" },
+  margin_trend: { label: "Trend margini 3y", hint: "Pendenza regressiva del profit margin — positivo = margini in miglioramento", format: "pct_raw" },
+  dividend_coverage: { label: "Dividend coverage", hint: "EPS / DPS — sopra 3x = dividendo molto sicuro, sotto 1x = pagato a debito", format: "ratio" },
   debt_equity: { label: "Debt / Equity", hint: "Leva finanziaria — debito totale / equity", format: "ratio" },
   current_ratio: { label: "Current ratio", hint: "Liquidità a breve — attivo corrente / passivo corrente", format: "ratio" },
   quick_ratio: { label: "Quick ratio", hint: "Liquidità stringente — esclude inventario", format: "ratio" },
   overall_risk: { label: "Risk score (Yahoo)", hint: "Yahoo overall risk 1-10 — basso = governance solida", format: "num" },
-  insider_holdings: { label: "% insider", hint: "Quota detenuta da insider — allineamento incentivi", format: "pct" },
-  institutional_holdings: { label: "% istituzionali", hint: "Quota detenuta da fondi/ETF/banche", format: "pct" },
   // ── Growth ──────────────────────────────────────────────────
   revenue_growth: { label: "Revenue growth (YoY)", hint: "Crescita ricavi anno-su-anno", format: "pct" },
   revenue_cagr_3y: { label: "Revenue CAGR 3y", hint: "Crescita media composta dei ricavi su 3 anni", format: "pct" },
@@ -214,7 +219,8 @@ function ScoreGauge({ score, size = 180 }: GaugeProps) {
 /* ─── Sub-score row with breakdown tooltip ──────────────────────────────── */
 
 const PILLAR_ORDER: Array<keyof StockScore["sub_scores"]> = [
-  "quality",
+  "profitability",
+  "sustainability",
   "growth",
   "value",
   "momentum",

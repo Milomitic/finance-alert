@@ -23,7 +23,9 @@ export const RISK_LABEL: Record<RiskTier, string> = {
 
 export const CATEGORY_LABEL: Record<ScoreCategory, string> = {
   composite: "Composito",
-  quality: "Qualità",
+  quality: "Qualità",        // legacy V3.1 alias
+  profitability: "Profittabilità",
+  sustainability: "Sostenibilità",
   growth: "Crescita",
   value: "Valore",
   momentum: "Momentum",

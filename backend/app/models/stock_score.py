@@ -25,7 +25,11 @@ class StockScore(Base):
         Integer, ForeignKey("stocks.id", ondelete="CASCADE"), primary_key=True
     )
     composite: Mapped[float] = mapped_column(Float, nullable=False)
+    # quality kept for backward-compat during the V3.2 transition; new
+    # consumers should read profitability + sustainability instead.
     quality: Mapped[float | None] = mapped_column(Float, nullable=True)
+    profitability: Mapped[float | None] = mapped_column(Float, nullable=True)
+    sustainability: Mapped[float | None] = mapped_column(Float, nullable=True)
     growth: Mapped[float | None] = mapped_column(Float, nullable=True)
     value: Mapped[float | None] = mapped_column(Float, nullable=True)
     momentum: Mapped[float | None] = mapped_column(Float, nullable=True)

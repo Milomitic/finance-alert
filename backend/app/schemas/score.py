@@ -13,11 +13,27 @@ from pydantic import BaseModel
 
 
 RiskTier = Literal["conservative", "moderate", "aggressive"]
-ScoreCategory = Literal["composite", "quality", "growth", "value", "momentum", "sentiment"]
+# V3.2 splits Quality into Profitability + Sustainability. The legacy
+# `quality` slot is preserved (computed as the average of the two new
+# pillars) so old top-picks queries and saved bookmarks keep working.
+ScoreCategory = Literal[
+    "composite",
+    "quality",  # legacy, = avg(profitability, sustainability)
+    "profitability",
+    "sustainability",
+    "growth",
+    "value",
+    "momentum",
+    "sentiment",
+]
 
 
 class SubScoresOut(BaseModel):
-    quality: float | None
+    """Per-pillar 0-100 scores. V3.2 has 6 pillars; `quality` is kept as
+    a back-compat alias = avg(profitability, sustainability)."""
+    quality: float | None  # legacy
+    profitability: float | None
+    sustainability: float | None
     growth: float | None
     value: float | None
     momentum: float | None

@@ -75,6 +75,8 @@ def get_stock_score(
         composite=score.composite,
         sub_scores=SubScoresOut(
             quality=score.quality,
+            profitability=score.profitability,
+            sustainability=score.sustainability,
             growth=score.growth,
             value=score.value,
             momentum=score.momentum,

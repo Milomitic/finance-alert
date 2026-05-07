@@ -399,14 +399,29 @@ def test_pillar_dropped_when_all_components_missing():
 # ---------------------------------------------------------------------------
 
 def test_renormalize_skips_missing_pillars():
+    """V3.2 has 6 pillars: profitability, sustainability, growth,
+    value, momentum, sentiment. PILLAR_WEIGHTS sum to 1.0. When one
+    pillar is None, renormalisation rescales the rest proportionally."""
     sub = {
-        "quality": 80.0, "growth": 60.0, "value": 50.0,
-        "momentum": 70.0, "sentiment": None,
+        "profitability": 80.0,
+        "sustainability": 70.0,
+        "growth": 60.0,
+        "value": 50.0,
+        "momentum": 70.0,
+        "sentiment": None,
     }
     w = _renormalize_weights(sub)
     assert w["sentiment"] == 0.0
     assert sum(w.values()) == pytest.approx(1.0, abs=1e-9)
-    assert w["quality"] == pytest.approx(0.25 / 0.85, abs=1e-9)
+    # profitability weight 0.15 / sum-of-present-weights
+    present_total = (
+        PILLAR_WEIGHTS["profitability"] + PILLAR_WEIGHTS["sustainability"]
+        + PILLAR_WEIGHTS["growth"] + PILLAR_WEIGHTS["value"]
+        + PILLAR_WEIGHTS["momentum"]
+    )
+    assert w["profitability"] == pytest.approx(
+        PILLAR_WEIGHTS["profitability"] / present_total, abs=1e-9
+    )
 
 
 def test_renormalize_all_missing_returns_zero_weights():
@@ -506,7 +521,7 @@ def test_build_score_all_pillars_present():
     )
     assert 70.0 <= cs.composite <= 100.0
     assert all(v is not None for v in cs.sub_scores.values())
-    for pillar in ("quality", "growth", "value", "momentum", "sentiment"):
+    for pillar in ("profitability", "sustainability", "growth", "value", "momentum", "sentiment"):
         assert pillar in cs.breakdown
     assert "weights_used" in cs.breakdown
 
@@ -516,7 +531,8 @@ def test_build_score_missing_pillar_renormalises():
     cs = _build_score(_stock(), None, closes, news_count=None)
     # Only momentum should be non-None.
     assert cs.sub_scores["momentum"] is not None
-    assert cs.sub_scores["quality"] is None
+    assert cs.sub_scores["profitability"] is None
+    assert cs.sub_scores["sustainability"] is None
     assert cs.sub_scores["growth"] is None
     assert cs.sub_scores["value"] is None
     assert cs.sub_scores["sentiment"] is None
