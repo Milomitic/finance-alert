@@ -60,14 +60,14 @@ function InsiderRow({ t }: { t: InsiderTransaction }) {
           name in muted/italic so the user identifies the role without
           mistaking it for the transaction text. */}
       <span
-        className="text-[12.5px] font-semibold truncate"
+        className="text-[13.5px] font-semibold truncate"
         title={t.insider || ""}
       >
         {t.insider || "—"}
       </span>
       {t.position && (
         <span
-          className="text-[11px] italic text-muted-foreground/80 truncate max-w-[110px]"
+          className="text-[12px] italic text-muted-foreground/80 truncate max-w-[110px]"
           title={t.position}
         >
           {t.position}
@@ -75,17 +75,17 @@ function InsiderRow({ t }: { t: InsiderTransaction }) {
       )}
       <span
         className={cn(
-          "text-[11px] truncate shrink-0 max-w-[90px]",
+          "text-[12px] truncate shrink-0 max-w-[90px]",
           txnTone(t.transaction),
         )}
         title={t.transaction}
       >
         {t.transaction || "—"}
       </span>
-      <span className="text-[11px] text-muted-foreground tabular-nums shrink-0">
+      <span className="text-[12px] text-muted-foreground tabular-nums shrink-0">
         {sub}
       </span>
-      <span className="ml-auto text-[11px] text-muted-foreground tabular-nums shrink-0">
+      <span className="ml-auto text-[12px] text-muted-foreground tabular-nums shrink-0">
         {shortDate(t.date)}
       </span>
     </li>

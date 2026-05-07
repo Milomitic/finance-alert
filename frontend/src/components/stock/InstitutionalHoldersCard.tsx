@@ -72,18 +72,18 @@ function HolderRow({ h }: { h: TickerHolder }) {
     <li className="flex items-baseline gap-2 py-1 border-t border-border/40 first:border-t-0 leading-tight">
       <Link
         to={`/institutionals/${h.institutional_slug}`}
-        className="text-[12.5px] font-semibold truncate hover:underline"
+        className="text-[13.5px] font-semibold truncate hover:underline"
         title={displayName}
       >
         {displayName}
       </Link>
-      <span className={cn("text-[11px] truncate shrink-0", a.tone)} title={a.label}>
+      <span className={cn("text-[12px] truncate shrink-0", a.tone)} title={a.label}>
         {a.label}
       </span>
-      <span className="text-[11px] text-muted-foreground tabular-nums shrink-0">
+      <span className="text-[12px] text-muted-foreground tabular-nums shrink-0">
         {fmtPct(h.portfolio_pct)} · {fmtBig(h.value_usd)}
       </span>
-      <span className="ml-auto text-[11px] text-muted-foreground tabular-nums shrink-0">
+      <span className="ml-auto text-[12px] text-muted-foreground tabular-nums shrink-0">
         {shortDate(h.period_end_date)}
       </span>
     </li>

@@ -91,7 +91,7 @@ export function StockAlertsHistoryCard({ alerts }: Props) {
             className="mb-3 shrink-0"
             right={
               stats.total > 0 ? (
-                <div className="flex items-center gap-2 flex-wrap text-xs">
+                <div className="flex items-center gap-2 flex-wrap text-[13px]">
                   {stats.last30d > 0 && (
                     <span
                       className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-muted/70"

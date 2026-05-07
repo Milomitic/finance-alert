@@ -174,7 +174,7 @@ export function MultiTfStrip({ ticker, kind }: { ticker: string; kind: "stock" |
                   prio === "secondary" && "opacity-70",
                 )}
               >
-                <div className="text-[10px] uppercase tracking-wider font-bold leading-none">
+                <div className="text-[11px] uppercase tracking-wider font-bold leading-none">
                   {it.timeframe === "all" ? "All" : it.timeframe}
                 </div>
                 <div className="text-sm font-bold tabular-nums leading-none mt-0.5">
@@ -183,7 +183,7 @@ export function MultiTfStrip({ ticker, kind }: { ticker: string; kind: "stock" |
                 </div>
               </div>
             </TooltipTrigger>
-            <TooltipContent side="bottom" className="text-[11px] space-y-0.5">
+            <TooltipContent side="bottom" className="text-[12px] space-y-0.5">
               <div className="font-bold uppercase tracking-wider">
                 Timeframe {it.timeframe}
               </div>
@@ -479,7 +479,7 @@ function SubScoreRow({ pillar, score, components }: SubScoreRowProps) {
                   score. Sorted by effective contribution (score × weight)
                   desc so the user sees the strongest drivers first. */}
               {presentList.length > 0 && (
-                <ul className="space-y-1 text-[11px]">
+                <ul className="space-y-1 text-[12px]">
                   {presentList.map(([name, comp]) => {
                     const m = metaFor(name);
                     const compScore = comp.score ?? 0;
@@ -501,7 +501,7 @@ Vs settore: mediana ${fmtRaw(comp.sector_median, m.format)}`
                         <span className="tabular-nums text-muted-foreground/80 shrink-0">
                           {fmtRaw(comp.raw, m.format)}
                           {comp.sector_median != null && (
-                            <span className="text-[10px] text-muted-foreground/50 ml-1">
+                            <span className="text-[11px] text-muted-foreground/50 ml-1">
                               ({fmtRaw(comp.sector_median, m.format)})
                             </span>
                           )}
@@ -516,7 +516,7 @@ Vs settore: mediana ${fmtRaw(comp.sector_median, m.format)}`
                           {Math.round(compScore)}
                         </span>
                         <span
-                          className="tabular-nums text-muted-foreground/60 shrink-0 text-[10px]"
+                          className="tabular-nums text-muted-foreground/60 shrink-0 text-[11px]"
                           title={`Peso ${(comp.weight * 100).toFixed(0)}% nel pilastro`}
                         >
                           ×{(comp.weight * 100).toFixed(0)}
@@ -534,7 +534,7 @@ Vs settore: mediana ${fmtRaw(comp.sector_median, m.format)}`
                   higher if I had this data, but the absence isn't
                   hurting me right now". */}
               {missingList.length > 0 && (
-                <details className="text-[11px]">
+                <details className="text-[12px]">
                   <summary className="cursor-pointer text-muted-foreground/70 hover:text-muted-foreground italic select-none">
                     {missingList.length} componente{missingList.length === 1 ? "" : "i"} senza dato
                     <span className="ml-1 text-muted-foreground/50">
@@ -551,7 +551,7 @@ Vs settore: mediana ${fmtRaw(comp.sector_median, m.format)}`
                           title={m.hint}
                         >
                           <span className="truncate">{m.label}</span>
-                          <span className="tabular-nums text-[10px] shrink-0">
+                          <span className="tabular-nums text-[11px] shrink-0">
                             ×{(comp.weight * 100).toFixed(0)} · n/d
                           </span>
                         </li>
@@ -566,7 +566,7 @@ Vs settore: mediana ${fmtRaw(comp.sector_median, m.format)}`
                   weight that was active. Communicates the
                   missing-data-neutralization invariant explicitly. */}
               {meta && (
-                <div className="pt-1.5 border-t border-border/40 text-[10px] text-muted-foreground/80 italic">
+                <div className="pt-1.5 border-t border-border/40 text-[11px] text-muted-foreground/80 italic">
                   {meta.components_present} di {meta.components_total}{" "}
                   componenti attivi
                   {meta.components_present < meta.components_total &&
@@ -703,12 +703,12 @@ export function StockScoreCard({ ticker }: Props) {
           </div>
         </div>
         <div className="flex flex-col items-start gap-1.5">
-          <span className="text-[11px] uppercase tracking-wider text-muted-foreground">
+          <span className="text-[12px] uppercase tracking-wider text-muted-foreground">
             {scoreLabel(composite)}
           </span>
           <span
             className={cn(
-              "px-2 py-0.5 rounded border text-[11px] uppercase tracking-wider font-semibold",
+              "px-2 py-0.5 rounded border text-[12px] uppercase tracking-wider font-semibold",
               RISK_TONE[data.risk_tier],
             )}
           >
@@ -732,7 +732,7 @@ export function StockScoreCard({ ticker }: Props) {
       </div>
 
       {/* Footer */}
-      <div className="mt-2 pt-2 border-t border-border/40 flex items-center justify-between text-[11px] text-muted-foreground">
+      <div className="mt-2 pt-2 border-t border-border/40 flex items-center justify-between text-[12px] text-muted-foreground">
         <span title={new Date(data.computed_at).toLocaleString("it-IT")}>
           Calcolato {formatRelative(data.computed_at)}
         </span>
