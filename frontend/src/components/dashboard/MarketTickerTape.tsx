@@ -94,7 +94,7 @@ export function MarketTickerTape() {
   // guarantees the user has the data) but defensive.
   if (q.isLoading || assets.length === 0) {
     return (
-      <div className="relative overflow-hidden rounded-md border bg-card/40 h-7">
+      <div className="relative w-full overflow-hidden rounded-md border bg-card/40 h-7">
         <div className="absolute inset-0 animate-pulse bg-muted/30" />
       </div>
     );
@@ -111,16 +111,24 @@ export function MarketTickerTape() {
     </div>
   );
 
+  // CRITICAL: every ancestor of the scrolling track must be width-
+  // constrained, or the inline-flex content (which is wider than the
+  // viewport) propagates upward and turns the WHOLE PAGE into a
+  // horizontally scrollable box. Both `w-full` (responds to the parent
+  // width) and `max-w-full` (clamp at the parent's width even if a
+  // grandchild tries to grow) are needed; one without the other still
+  // leaks. `min-w-0` on the inner flex row is the standard escape
+  // hatch for letting overflow:hidden actually clip.
   return (
     <div
       className={cn(
-        "relative overflow-hidden rounded-md border bg-card",
+        "relative w-full max-w-full overflow-hidden rounded-md border bg-card",
         // Hover-pause: applied via CSS (group hover) so the user can
         // read a flying ticker without aborting the animation.
         "group",
       )}
     >
-      <div className="flex items-center h-7 ticker-rail">
+      <div className="flex items-center h-7 ticker-rail min-w-0">
         {rail}
         <div aria-hidden>{rail}</div>
       </div>

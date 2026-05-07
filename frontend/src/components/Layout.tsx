@@ -93,7 +93,14 @@ export default function Layout() {
           })}
         </nav>
       </aside>
-      <div className="flex flex-1 flex-col">
+      {/* `min-w-0` is essential: flex children default to
+          `min-width: auto` which means "fit content". When a child
+          (e.g. the dashboard's MarketTickerTape with its duplicated
+          scrolling track) has intrinsic content wider than the
+          viewport, the WHOLE page becomes horizontally scrollable
+          unless this column allows itself to shrink below its
+          content. Same trick applied on `<main>`. */}
+      <div className="flex flex-1 flex-col min-w-0">
         <header className="flex h-14 items-center gap-4 border-b px-6">
           <NavbarSearch />
           <span className="ml-auto text-sm text-muted-foreground">
@@ -104,7 +111,7 @@ export default function Layout() {
             Esci
           </Button>
         </header>
-        <main className="flex-1 overflow-y-auto p-6">
+        <main className="flex-1 min-w-0 overflow-y-auto p-6">
           <Outlet />
         </main>
       </div>

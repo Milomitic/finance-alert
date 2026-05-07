@@ -166,24 +166,26 @@ export default function HomePage() {
           (440->500) so the bigger row fonts have breathing room. Each
           card's columns scroll internally for overflow. Stacks
           vertically on narrow viewports via the `lg:` breakpoint. */}
-      {/* Three decision lenses side-by-side: react (alerts) ·
-          discover via score (TopPicks) · discover via consensus
-          (Superinvestor picks). 3-col on lg+, 2-col on md (Alerts
-          spans the row above the two pick cards), single-col on
-          narrow viewports. The grid stays at 500px tall on lg+ so
-          the cards align — each is independently scrollable. */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 lg:h-[500px]">
-        <div className="md:col-span-2 lg:col-span-1 lg:h-full lg:min-h-0">
-          {summaryData ? (
-            <AlertsCompactPanel
-              topStocks={summaryData.top_stocks_30d}
-              recentAlerts={summaryData.recent_alerts}
-              alertsByIndex={summaryData.alerts_by_index_30d}
-              alertsLast24h={summaryData.kpis.alerts_last_24h}
-              alertsPrev24h={summaryData.kpis.alerts_prev_24h}
-            />
-          ) : null}
+      {/* Two decision rows:
+          1. Alerts (full width, TopStocks+Feed+PerIndice side-by-side
+             internally — earlier "react" pane).
+          2. Discovery row: TopPicks (score-based) + SuperinvestorPicks
+             (consensus-based). 2 columns at lg+, stacked below.
+          AlertsCompactPanel has 3 internal sub-columns that overflow
+          when squeezed to 1/3 of the viewport, so giving it the full
+          row keeps it readable. */}
+      {summaryData && (
+        <div className="lg:h-[420px]">
+          <AlertsCompactPanel
+            topStocks={summaryData.top_stocks_30d}
+            recentAlerts={summaryData.recent_alerts}
+            alertsByIndex={summaryData.alerts_by_index_30d}
+            alertsLast24h={summaryData.kpis.alerts_last_24h}
+            alertsPrev24h={summaryData.kpis.alerts_prev_24h}
+          />
         </div>
+      )}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 lg:h-[420px]">
         <div className="lg:h-full lg:min-h-0">
           <TopPicksCard />
         </div>
