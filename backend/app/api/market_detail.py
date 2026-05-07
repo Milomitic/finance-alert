@@ -12,7 +12,7 @@ Why a separate router from `/api/stocks/...`
   straight to yfinance with a 15-min cache, no DB roundtrip for
   the OHLCV.
 """
-from datetime import date as date_t
+from datetime import date as date_t, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -36,7 +36,9 @@ _LIVE_META: dict[str, tuple[str, str, str | None]] = {
 
 
 class OhlcvBarOut(BaseModel):
-    date: date_t
+    # `date | datetime` so intraday (30m/1h) bars keep their wall-clock
+    # time and don't collide on the chart. Daily+ stays as YYYY-MM-DD.
+    date: date_t | datetime
     open: float
     high: float
     low: float
@@ -57,7 +59,7 @@ class LiveQuoteOut(BaseModel):
 
 class IndicatorPointOut(BaseModel):
     """One (date, value) pair for an indicator series."""
-    date: date_t
+    date: date_t | datetime
     value: float | None
 
 

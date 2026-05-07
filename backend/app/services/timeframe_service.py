@@ -43,7 +43,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from threading import Lock
 
 import pandas as pd
@@ -179,14 +179,28 @@ def _fetch_yfinance(ticker: str, tf: str) -> list[Bar]:
     if hist is None or hist.empty:
         return []
 
+    is_intraday = tf in _INTRADAY
     bars: list[Bar] = []
     for ts, row in hist.iterrows():
         try:
-            d = (
-                ts.date()
-                if isinstance(ts, datetime)
-                else date.fromisoformat(str(ts)[:10])
-            )
+            # Daily+ bars: ts is a date already (or convertible) - drop the
+            # time component for chart-time stability across DST shifts and
+            # to match the DB ohlcv_daily shape.
+            # Intraday bars (30m/1h): MUST keep the wall-clock time so the
+            # chart sees one unique UTCTimestamp per bar. yfinance returns
+            # tz-aware timestamps (US/Eastern); we keep them as UTC datetime
+            # for the chart and let the frontend localize at render.
+            if is_intraday and hasattr(ts, "to_pydatetime"):
+                # pandas Timestamp -> aware datetime, then to UTC
+                d = ts.to_pydatetime()
+                if d.tzinfo is None:
+                    d = d.replace(tzinfo=timezone.utc)
+                else:
+                    d = d.astimezone(timezone.utc)
+            elif isinstance(ts, datetime):
+                d = ts if is_intraday else ts.date()
+            else:
+                d = date.fromisoformat(str(ts)[:10])
         except (TypeError, ValueError):
             continue
         try:

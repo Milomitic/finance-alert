@@ -9,7 +9,12 @@ from app.schemas.stock import StockOut
 
 
 class OhlcvBarOut(BaseModel):
-    date: date
+    # `date | datetime` — daily bars carry a date-only YYYY-MM-DD;
+    # intraday (30m/1h) carry full datetime so each bar gets a unique
+    # timestamp on the chart. Without the datetime variant for intraday,
+    # all 13 30-min bars of a single trading day collapsed onto the
+    # same time and the chart blanked out (see commit history).
+    date: date | datetime
     open: float
     high: float
     low: float
@@ -18,7 +23,9 @@ class OhlcvBarOut(BaseModel):
 
 
 class IndicatorPointOut(BaseModel):
-    date: date
+    # Same as OhlcvBarOut.date — intraday timestamps preserve hour:min so
+    # indicator overlays align with the bars on the chart.
+    date: date | datetime
     value: float | None
 
 

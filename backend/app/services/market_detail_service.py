@@ -27,7 +27,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from threading import Lock
 
 from loguru import logger
@@ -66,7 +66,7 @@ _CACHE_LOCK = Lock()
 
 @dataclass
 class OhlcvBar:
-    date: date
+    date: date  # may also be datetime for intraday timeframes (30m/1h)
     open: float
     high: float
     low: float
@@ -76,8 +76,12 @@ class OhlcvBar:
 
 @dataclass
 class IndicatorPoint:
-    """One (date, value) pair for a series. value=None on warmup days."""
-    date: date
+    """One (date, value) pair for a series. value=None on warmup days.
+
+    For intraday timeframes the date carries a full datetime so chart
+    timestamps stay unique across the multiple bars per trading day.
+    """
+    date: date  # may also be datetime
     value: float | None
 
 
@@ -138,10 +142,22 @@ def _fetch_fresh(symbol: str, range_key: str) -> MarketDetailDC | None:
     if hist is None or hist.empty:
         return None
 
+    # Intraday timeframes (30m/1h) need full datetime so each bar gets
+    # a unique chart timestamp; daily+ keeps date-only YYYY-MM-DD.
+    is_intraday = range_key in ("30m", "1h")
     bars: list[OhlcvBar] = []
     for ts, row in hist.iterrows():
         try:
-            d = ts.date() if isinstance(ts, datetime) else date.fromisoformat(str(ts)[:10])
+            if is_intraday and hasattr(ts, "to_pydatetime"):
+                d = ts.to_pydatetime()
+                if d.tzinfo is None:
+                    d = d.replace(tzinfo=timezone.utc)
+                else:
+                    d = d.astimezone(timezone.utc)
+            elif isinstance(ts, datetime):
+                d = ts if is_intraday else ts.date()
+            else:
+                d = date.fromisoformat(str(ts)[:10])
         except (TypeError, ValueError):
             continue
         try:
