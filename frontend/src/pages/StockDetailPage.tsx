@@ -272,7 +272,7 @@ export default function StockDetailPage() {
 
         <div className="space-y-3">
           <StockScoreCard ticker={ticker} />
-          <TechnicalKpiCard kpis={d.kpis} indicators={d.indicators} />
+          <TechnicalKpiCard ticker={ticker} />
           {/* InsidersAnalystCard now occupies the slot the PriceAlertsCard
               used to hold. Per user feedback the price-alerts list isn't
               worth a full sidebar card — alerts can still be created via

@@ -717,16 +717,6 @@ export function StockScoreCard({ ticker }: Props) {
         </div>
       </div>
 
-      {/* Multi-timeframe technical strip - integrated from the old
-          standalone MultiTimeframeKpisCard. Compact -3..+3 composite
-          per TF with hover tooltip that drills into RSI/SMA/BB/MACD. */}
-      <div className="mt-2 border-t border-border/40 pt-2">
-        <div className="text-[11px] uppercase tracking-wider font-semibold text-muted-foreground/70 mb-1.5">
-          Technical outlook per timeframe
-        </div>
-        <MultiTfStrip ticker={ticker} kind="stock" />
-      </div>
-
       {/* 6 pillar bars in a 2-column grid - splits Profittabilità +
           Sostenibilità from the V3.2 refactor onto the left, leaves
           Growth + Value + Momentum + Sentiment on a balanced layout. */}
