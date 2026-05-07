@@ -132,6 +132,30 @@ CURATED_FUNDS: tuple[CuratedFund, ...] = (
                 "Multi-strategy / multi-PM platform."),
     CuratedFund(1603466, "sec-point72", "Point72 Asset Management", "Steven A. Cohen", "hedge_fund",
                 "Successor to SAC Capital; long/short equity."),
+    # ── Phase 3: additional discretionary / activist / sovereign funds ──
+    # The original spec called for HedgeFollow as Phase 3, but their
+    # holdings data is gated behind a paid subscription (the public
+    # pages only expose fund-level metadata: AUM, manager name,
+    # # of holdings — the per-position table requires login). We
+    # pivoted to extending the SEC 13F coverage with additional funds
+    # NOT on Dataroma. Same end-user value (more institutional data
+    # tracked), no scraping fragility.
+    CuratedFund(1029160, "sec-soros", "Soros Fund Management", "George Soros / Robert Soros", "hedge_fund",
+                "Macro-focused family office (formerly Quantum Fund)."),
+    CuratedFund(1517137, "sec-starboard", "Starboard Value LP", "Jeff Smith", "hedge_fund",
+                "Activist hedge fund focused on operational turnarounds."),
+    CuratedFund(1135730, "sec-coatue", "Coatue Management", "Philippe Laffont", "hedge_fund",
+                "Tiger Cub focused on technology / consumer growth."),
+    CuratedFund(1318757, "sec-marshall-wace", "Marshall Wace LLP", "Paul Marshall / Ian Wace", "hedge_fund",
+                "London-based long/short equity multi-manager."),
+    CuratedFund(1422848, "sec-capital-research", "Capital Research Global Investors", None, "institutional",
+                "Capital Group global equity team (American Funds)."),
+    CuratedFund(1562230, "sec-capital-international", "Capital International Investors", None, "institutional",
+                "Capital Group international equity team."),
+    CuratedFund(1374170, "sec-norges-bank", "Norges Bank Investment Management", None, "institutional",
+                "Norway sovereign wealth fund (~$1.5T AUM)."),
+    CuratedFund(1666335, "sec-rokos", "Rokos Capital Management LLP", "Chris Rokos", "hedge_fund",
+                "Macro-focused hedge fund (Brevan Howard alum)."),
 )
 
 
