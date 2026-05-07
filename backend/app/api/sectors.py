@@ -39,9 +39,12 @@ class SectorStockRow(BaseModel):
     ticker: str
     name: str | None
     country: str | None
+    industry: str | None
     market_cap: float | None
     composite: float | None
-    quality: float | None
+    quality: float | None  # legacy V3.1 alias
+    profitability: float | None
+    sustainability: float | None
     growth: float | None
     value: float | None
     momentum: float | None
@@ -53,6 +56,20 @@ class SectorStockRow(BaseModel):
     revenue_growth: float | None
     profit_margin: float | None
     dividend_yield: float | None
+
+
+class CountBucket(BaseModel):
+    label: str
+    count: int
+
+
+class PillarAverages(BaseModel):
+    profitability: float | None
+    sustainability: float | None
+    growth: float | None
+    value: float | None
+    momentum: float | None
+    sentiment: float | None
 
 
 class SectorKpis(BaseModel):
@@ -67,6 +84,11 @@ class SectorKpis(BaseModel):
     median_dividend_yield: float | None
     median_market_cap: float | None
     score_distribution: list[int]
+    pillar_averages: PillarAverages
+    industry_breakdown: list[CountBucket]
+    country_distribution: list[CountBucket]
+    risk_distribution: list[CountBucket]
+    market_cap_distribution: list[CountBucket]
 
 
 class SectorDetailOut(BaseModel):
@@ -131,9 +153,12 @@ def _build_stock_row(stock, score):
         ticker=stock.ticker,
         name=stock.name,
         country=stock.country,
+        industry=stock.industry,
         market_cap=float(stock.market_cap) if stock.market_cap else None,
         composite=score.composite if score else None,
         quality=score.quality if score else None,
+        profitability=score.profitability if score else None,
+        sustainability=score.sustainability if score else None,
         growth=score.growth if score else None,
         value=score.value if score else None,
         momentum=score.momentum if score else None,
@@ -156,6 +181,50 @@ def _bucket_score(s):
     if s < 80:
         return 3
     return 4
+
+
+def _bucketize(values, *, top_n=10, order=None):
+    """Count occurrences per label, return top-N as CountBucket list.
+
+    `order` (optional): preserve a specific label order in the result
+    (used for risk_tier where conservative/moderate/aggressive has
+    inherent ordering). Values not in `order` get appended afterwards
+    sorted by count desc.
+    """
+    from collections import Counter
+    counts = Counter(values)
+    if order is not None:
+        ordered = [(lbl, counts.get(lbl, 0)) for lbl in order if counts.get(lbl, 0) > 0]
+        rest = sorted(
+            ((lbl, c) for lbl, c in counts.items() if lbl not in order),
+            key=lambda x: -x[1],
+        )
+        all_pairs = ordered + rest
+    else:
+        all_pairs = sorted(counts.items(), key=lambda x: -x[1])
+    return [CountBucket(label=lbl, count=c) for lbl, c in all_pairs[:top_n]]
+
+
+def _market_cap_buckets(caps):
+    """Bucket market caps into mega/large/mid/small/micro per S&P
+    convention. Returns ordered CountBucket list (so the chart axis
+    is monotonic from largest to smallest)."""
+    thresholds = [
+        ("Mega cap (>$200B)", 200_000_000_000),
+        ("Large cap ($10-200B)", 10_000_000_000),
+        ("Mid cap ($2-10B)", 2_000_000_000),
+        ("Small cap ($300M-2B)", 300_000_000),
+        ("Micro cap (<$300M)", 0),
+    ]
+    counts = {label: 0 for label, _ in thresholds}
+    for c in caps:
+        if c is None or not _is_finite(c):
+            continue
+        for label, lo in thresholds:
+            if c >= lo:
+                counts[label] += 1
+                break
+    return [CountBucket(label=label, count=counts[label]) for label, _ in thresholds]
 
 
 @router.get("", response_model=list[SectorSummary])
@@ -274,6 +343,26 @@ def get_sector_detail(
     roes = [r.roe for r in rows if r.roe is not None]
     dys = [r.dividend_yield for r in rows if r.dividend_yield is not None]
 
+    # V3.2 enrichments: distributions across industry / country / risk
+    # / market_cap, plus per-pillar averages. All computed in-loop on
+    # the already-built `rows` list — no additional fetches.
+    pillar_avgs = PillarAverages(
+        profitability=_safe_mean([r.profitability for r in rows if r.profitability is not None]),
+        sustainability=_safe_mean([r.sustainability for r in rows if r.sustainability is not None]),
+        growth=_safe_mean([r.growth for r in rows if r.growth is not None]),
+        value=_safe_mean([r.value for r in rows if r.value is not None]),
+        momentum=_safe_mean([r.momentum for r in rows if r.momentum is not None]),
+        sentiment=_safe_mean([r.sentiment for r in rows if r.sentiment is not None]),
+    )
+    industry_breakdown = _bucketize([r.industry or "(no industry)" for r in rows], top_n=12)
+    country_distribution = _bucketize([r.country or "(no country)" for r in rows], top_n=15)
+    risk_distribution = _bucketize(
+        [r.risk_tier or "(unknown)" for r in rows],
+        top_n=4,
+        order=["conservative", "moderate", "aggressive"],
+    )
+    market_cap_distribution = _market_cap_buckets([r.market_cap for r in rows])
+
     kpis = SectorKpis(
         stock_count=len(rows),
         avg_composite=_safe_mean(composites) if composites else None,
@@ -286,6 +375,11 @@ def get_sector_detail(
         median_dividend_yield=_safe_median(dys) if dys else None,
         median_market_cap=_safe_median(market_caps) if market_caps else None,
         score_distribution=buckets,
+        pillar_averages=pillar_avgs,
+        industry_breakdown=industry_breakdown,
+        country_distribution=country_distribution,
+        risk_distribution=risk_distribution,
+        market_cap_distribution=market_cap_distribution,
     )
 
     scored = [r for r in rows if r.composite is not None]

@@ -167,6 +167,40 @@ export default function SectorDetailPage() {
         </CardContent>
       </Card>
 
+      {/* V3.2 enrichments: 4 distribution panels in a 2x2 grid.
+          - Pillar averages (radar-style horizontal bars)
+          - Industry sub-breakdown (top sub-sectors)
+          - Country distribution
+          - Risk tier + Market cap distributions stacked vertically
+          Densità informativa alta in poco spazio: ogni card è
+          autocontenuta e legge un sottoinsieme di kpis. */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <PillarAveragesCard pa={d.kpis.pillar_averages} />
+        <IndustryBreakdownCard buckets={d.kpis.industry_breakdown} total={d.kpis.stock_count} />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <DistributionCard
+          title="Distribuzione paesi"
+          buckets={d.kpis.country_distribution}
+          total={d.kpis.stock_count}
+          palette="blue"
+        />
+        <DistributionCard
+          title="Risk tier"
+          buckets={d.kpis.risk_distribution}
+          total={d.kpis.stock_count}
+          palette="risk"
+        />
+        <DistributionCard
+          title="Capitalizzazione"
+          buckets={d.kpis.market_cap_distribution}
+          total={d.kpis.stock_count}
+          palette="amber"
+          preserveOrder
+        />
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <PicksCard title="Top 5 per score composito" rows={d.top_picks} accent="green" />
         <PicksCard
@@ -265,6 +299,177 @@ function PicksCard({
               ))}
             </tbody>
           </table>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+/* ─── V3.2 Sector enrichment cards ─────────────────────────────────────── */
+
+import type { CountBucket, PillarAverages } from "@/hooks/useSectorDetail";
+
+const PILLAR_LABELS: Array<[keyof PillarAverages, string]> = [
+  ["profitability", "Profittabilità"],
+  ["sustainability", "Sostenibilità"],
+  ["growth", "Crescita"],
+  ["value", "Valore"],
+  ["momentum", "Momentum"],
+  ["sentiment", "Sentiment"],
+];
+
+function pillarBarTone(score: number | null): string {
+  if (score === null) return "bg-muted";
+  if (score >= 70) return "bg-emerald-500";
+  if (score >= 50) return "bg-sky-500";
+  if (score >= 30) return "bg-amber-500";
+  return "bg-rose-500";
+}
+
+function PillarAveragesCard({ pa }: { pa: PillarAverages }) {
+  return (
+    <Card>
+      <CardContent className="p-4">
+        <div className="text-sm font-semibold mb-3">
+          Punteggio medio per pilastro
+        </div>
+        <div className="space-y-2">
+          {PILLAR_LABELS.map(([key, label]) => {
+            const v = pa[key];
+            const pct = v === null ? 0 : Math.max(0, Math.min(100, v));
+            return (
+              <div key={key} className="grid grid-cols-[110px_1fr_44px] items-center gap-2">
+                <span className="text-xs text-muted-foreground truncate">{label}</span>
+                <div className="h-2 rounded-full bg-muted/50 overflow-hidden">
+                  <div
+                    className={cn("h-full rounded-full", pillarBarTone(v))}
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
+                <span className="text-xs tabular-nums font-semibold text-right">
+                  {v === null ? "—" : v.toFixed(0)}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function IndustryBreakdownCard({
+  buckets,
+  total,
+}: {
+  buckets: CountBucket[];
+  total: number;
+}) {
+  const max = Math.max(...buckets.map((b) => b.count), 1);
+  return (
+    <Card>
+      <CardContent className="p-4">
+        <div className="text-sm font-semibold mb-3">
+          Sotto-industrie ({buckets.length})
+        </div>
+        {buckets.length === 0 ? (
+          <div className="text-sm text-muted-foreground py-3">Nessun dato</div>
+        ) : (
+          <div className="space-y-1.5">
+            {buckets.map((b) => {
+              const pct = (b.count / max) * 100;
+              const sharePct = total > 0 ? (b.count / total) * 100 : 0;
+              return (
+                <div
+                  key={b.label}
+                  className="grid grid-cols-[1fr_60px_36px] items-center gap-2"
+                >
+                  <span className="text-xs truncate" title={b.label}>
+                    {b.label}
+                  </span>
+                  <div className="h-2 rounded-full bg-muted/40 overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-indigo-500/70"
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                  <span className="text-xs tabular-nums text-right text-muted-foreground">
+                    {b.count} · {sharePct.toFixed(0)}%
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+const RISK_PALETTE: Record<string, string> = {
+  conservative: "bg-emerald-500",
+  moderate: "bg-sky-500",
+  aggressive: "bg-rose-500",
+};
+
+function DistributionCard({
+  title,
+  buckets,
+  total,
+  palette,
+  preserveOrder = false,
+}: {
+  title: string;
+  buckets: CountBucket[];
+  total: number;
+  palette: "blue" | "amber" | "risk";
+  preserveOrder?: boolean;
+}) {
+  const max = Math.max(...buckets.map((b) => b.count), 1);
+  const ordered = preserveOrder ? buckets : [...buckets].sort((a, b) => b.count - a.count);
+
+  function barClass(label: string, idx: number): string {
+    if (palette === "risk") return RISK_PALETTE[label] ?? "bg-muted";
+    if (palette === "amber") {
+      // Mega → emerald, descending → progressively warmer
+      const tones = ["bg-emerald-500", "bg-sky-500", "bg-amber-500", "bg-orange-500", "bg-rose-500"];
+      return tones[idx] ?? "bg-muted";
+    }
+    return "bg-blue-500/70";
+  }
+
+  return (
+    <Card>
+      <CardContent className="p-4">
+        <div className="text-sm font-semibold mb-3">{title}</div>
+        {ordered.length === 0 ? (
+          <div className="text-sm text-muted-foreground py-3">Nessun dato</div>
+        ) : (
+          <div className="space-y-1.5">
+            {ordered.map((b, i) => {
+              const pct = (b.count / max) * 100;
+              const sharePct = total > 0 ? (b.count / total) * 100 : 0;
+              return (
+                <div
+                  key={b.label}
+                  className="grid grid-cols-[1fr_50px_36px] items-center gap-2"
+                >
+                  <span className="text-xs truncate capitalize" title={b.label}>
+                    {b.label}
+                  </span>
+                  <div className="h-2 rounded-full bg-muted/40 overflow-hidden">
+                    <div
+                      className={cn("h-full rounded-full", barClass(b.label, i))}
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                  <span className="text-xs tabular-nums text-right text-muted-foreground">
+                    {b.count} · {sharePct.toFixed(0)}%
+                  </span>
+                </div>
+              );
+            })}
+          </div>
         )}
       </CardContent>
     </Card>

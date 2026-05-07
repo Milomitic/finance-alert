@@ -17,9 +17,12 @@ export interface SectorStockRow {
   ticker: string;
   name: string | null;
   country: string | null;
+  industry: string | null;
   market_cap: number | null;
   composite: number | null;
   quality: number | null;
+  profitability: number | null;
+  sustainability: number | null;
   growth: number | null;
   value: number | null;
   momentum: number | null;
@@ -31,6 +34,20 @@ export interface SectorStockRow {
   revenue_growth: number | null;
   profit_margin: number | null;
   dividend_yield: number | null;
+}
+
+export interface CountBucket {
+  label: string;
+  count: number;
+}
+
+export interface PillarAverages {
+  profitability: number | null;
+  sustainability: number | null;
+  growth: number | null;
+  value: number | null;
+  momentum: number | null;
+  sentiment: number | null;
 }
 
 export interface SectorKpis {
@@ -45,6 +62,11 @@ export interface SectorKpis {
   median_dividend_yield: number | null;
   median_market_cap: number | null;
   score_distribution: number[];
+  pillar_averages: PillarAverages;
+  industry_breakdown: CountBucket[];
+  country_distribution: CountBucket[];
+  risk_distribution: CountBucket[];
+  market_cap_distribution: CountBucket[];
 }
 
 export interface SectorDetail {
