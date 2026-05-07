@@ -135,6 +135,28 @@ def get_one(
     return StockOut.model_validate(stock)
 
 
+
+
+def _safe_volume(v) -> int:
+    """Coerce a possibly-None / NaN / float volume into a safe int.
+
+    Intraday yfinance bars (30m/1h) sometimes report volume as None or NaN
+    for pre/post-market sessions or in-flight bars. Daily bars from DB are
+    always integers. The OhlcvBarOut schema is non-nullable int, so we
+    map None/NaN to 0 to keep the schema honest without dropping the bar.
+    """
+    import math
+    if v is None:
+        return 0
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return 0
+    if math.isnan(f) or math.isinf(f):
+        return 0
+    return int(f) if f > 0 else 0
+
+
 @router.get("/{ticker}/detail", response_model=StockDetailOut)
 def get_stock_detail(
     ticker: str,
@@ -161,7 +183,8 @@ def get_stock_detail(
         ohlcv=[
             OhlcvBarOut(
                 date=b.date, open=float(b.open), high=float(b.high),
-                low=float(b.low), close=float(b.close), volume=int(b.volume),
+                low=float(b.low), close=float(b.close),
+                volume=_safe_volume(b.volume),
             )
             for b in detail.ohlcv
         ],
