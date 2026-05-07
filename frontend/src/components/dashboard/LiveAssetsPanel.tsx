@@ -13,6 +13,7 @@ import { Link } from "react-router-dom";
 
 import { Sparkline } from "@/components/dashboard/Sparkline";
 import { Card, CardContent } from "@/components/ui/card";
+import { FlashValue } from "@/components/ui/FlashValue";
 import { SectionTitle } from "@/components/ui/section-title";
 import {
   Tooltip,
@@ -203,8 +204,8 @@ function AssetRow({ asset }: { asset: LiveAsset }) {
 
       {/* Price + change inline */}
       <div className="text-right shrink-0 flex items-baseline gap-1.5 leading-tight">
-        <span className="text-[14px] font-bold tabular-nums">
-          {hasError ? (
+        {hasError ? (
+          <span className="text-[14px] font-bold tabular-nums">
             <Tooltip>
               <TooltipTrigger asChild>
                 <span className="text-muted-foreground/60 cursor-help">—</span>
@@ -213,10 +214,16 @@ function AssetRow({ asset }: { asset: LiveAsset }) {
                 {q?.error ?? "Quotazione non disponibile"}
               </TooltipContent>
             </Tooltip>
-          ) : (
-            fmtPrice(price)
-          )}
-        </span>
+          </span>
+        ) : (
+          <FlashValue
+            value={price}
+            format={fmtPrice}
+            className="text-[14px] font-bold tabular-nums"
+            noTween
+            showArrow
+          />
+        )}
         <span
           className={cn(
             "text-[12px] font-semibold tabular-nums tracking-tight w-[52px] text-right",

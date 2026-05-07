@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import type { EffectiveRule, OhlcvBar, Stock, StockKpis } from "@/api/types";
 import { StockLogo } from "@/components/dashboard/StockLogo";
 import { Card, CardContent } from "@/components/ui/card";
+import { FlashValue } from "@/components/ui/FlashValue";
 import { useLiveQuote } from "@/hooks/useLiveQuote";
 import { getStockFlagCode } from "@/lib/stockMeta";
 import { cn } from "@/lib/utils";
@@ -192,7 +193,7 @@ export function StockHeader({ stock, kpis, ohlcv, effectiveRules = [] }: Props) 
                     </span>
                   )}
                 </div>
-                <div className="text-5xl font-bold leading-none">${displayPrice.toFixed(2)}</div>
+                <FlashValue value={displayPrice} format={(v) => `$${v.toFixed(2)}`} className="text-5xl font-bold leading-none" />
               </>
             )}
             {change != null && (

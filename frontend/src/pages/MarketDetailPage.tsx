@@ -12,6 +12,7 @@ import { useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 
 import { Card, CardContent } from "@/components/ui/card";
+import { FlashValue } from "@/components/ui/FlashValue";
 import { MarketChart } from "@/components/market/MarketChart";
 import { MultiTimeframeKpisCard } from "@/components/MultiTimeframeKpisCard";
 import { MacdPanel } from "@/components/stock/MacdPanel";
@@ -191,11 +192,11 @@ export default function MarketDetailPage() {
             </p>
           </div>
           <div className="text-right">
-            <div className="text-3xl font-bold tabular-nums leading-none">
-              {livePrice != null
-                ? formatMarketPrice(livePrice, d.category)
-                : "—"}
-            </div>
+            <FlashValue
+              value={livePrice}
+              format={(v) => formatMarketPrice(v, d.category)}
+              className="text-3xl font-bold tabular-nums leading-none"
+            />
             {changePct != null && (
               <div
                 className={cn(
