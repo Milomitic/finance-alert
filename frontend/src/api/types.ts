@@ -739,6 +739,12 @@ export interface ScoreBreakdownComponent {
   score: number | null;
   weight: number;
   present: boolean;
+  /** Sector peer median used by the sector-aware blended scoring
+   *  (V3.1+). Null when no benchmark was available — the lane fell
+   *  back to pure absolute scoring. The UI can surface this as
+   *  "vs peer median 19.6%" tooltip without altering the main raw
+   *  value display. */
+  sector_median?: number | null;
 }
 
 /** Optional per-pillar meta entry (key `_meta`). Carries the

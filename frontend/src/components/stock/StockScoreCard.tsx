@@ -382,13 +382,24 @@ function SubScoreRow({ pillar, score, components }: SubScoreRowProps) {
                       <li
                         key={name}
                         className="grid grid-cols-[1fr_auto_auto_auto] items-baseline gap-2"
-                        title={m.hint}
+                        title={
+                          comp.sector_median != null
+                            ? `${m.hint}
+
+Vs settore: mediana ${fmtRaw(comp.sector_median, m.format)}`
+                            : m.hint
+                        }
                       >
                         <span className="text-foreground/85 truncate">
                           {m.label}
                         </span>
                         <span className="tabular-nums text-muted-foreground/80 shrink-0">
                           {fmtRaw(comp.raw, m.format)}
+                          {comp.sector_median != null && (
+                            <span className="text-[10px] text-muted-foreground/50 ml-1">
+                              ({fmtRaw(comp.sector_median, m.format)})
+                            </span>
+                          )}
                         </span>
                         <span
                           className={cn(

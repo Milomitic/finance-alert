@@ -211,13 +211,21 @@ class _Component:
 
     `score` is the 0-100 score for this signal (None when input was
     unavailable). `weight` is the relative weight WITHIN the pillar.
-    `raw` is the original input value, retained for the breakdown JSON
-    so the UI can render the actual number alongside the score.
+    `raw` is the original numeric input value (or string for special
+    formats like "moderate"), retained for the breakdown JSON so the
+    UI can render the actual number alongside the score.
+
+    `sector_median` is the peer-group median used by the sector-aware
+    blended scoring. None when no sector benchmark was available
+    (thin sector, missing data, or non-aggregatable attribute like
+    overall_risk). Surfaced in the breakdown so the UI can show a
+    "vs peers" tooltip without breaking the scalar `raw` shape.
     """
     name: str
     raw: Any
     score: float | None
     weight: float
+    sector_median: float | None = None
 
 
 def _aggregate(components: list[_Component]) -> tuple[float | None, float, dict[str, Any]]:
@@ -259,6 +267,11 @@ def _aggregate(components: list[_Component]) -> tuple[float | None, float, dict[
             "score": _safe_round(c.score, 2) if c.score is not None else None,
             "weight": _safe_round(c.weight, 4),
             "present": present,
+            "sector_median": (
+                _safe_round(c.sector_median, 4)
+                if c.sector_median is not None and _is_finite(c.sector_median)
+                else None
+            ),
         }
     if n_present == 0 or den <= 0:
         return None, 100.0, {}
@@ -405,19 +418,6 @@ def _resolve_med(sector_stats: SectorStatsBundle | None, sector: str | None, fie
     return sector_stats.resolve(sector, field)
 
 
-def _wrap_with_med(value, sector_med):
-    """Pack (raw_value, sector_median) into the breakdown JSON so the
-    UI can show both numbers. Returns None when the raw value is
-    None/NaN (so the breakdown reports the lane as missing rather
-    than as value=null but sector_median=23.5)."""
-    if not _is_finite(value):
-        return None
-    return {
-        "value": _safe_round(float(value), 4),
-        "sector_median": _safe_round(sector_med, 4) if sector_med is not None and _is_finite(sector_med) else None,
-    }
-
-
 # ---------------------------------------------------------------------------
 # Quality pillar.
 # ---------------------------------------------------------------------------
@@ -456,39 +456,44 @@ def _quality(stock: Stock, micro: MicroData | None, sector_stats: SectorStatsBun
 
     # --- Profitability (sector-aware blend) ------------------------------
     components.append(_Component(
-        "roe", _wrap_with_med(micro.return_on_equity, _med("roe_median")),
+        "roe", micro.return_on_equity,
         _blended_hib(micro.return_on_equity, _med("roe_median"),
                      abs_full=0.20, abs_half=0.10, abs_zero=0.0,
                      rel_full_pp=0.05),
         0.16,
+    sector_median=_med("roe_median"),
     ))
     components.append(_Component(
-        "roa", _wrap_with_med(micro.return_on_assets, _med("roa_median")),
+        "roa", micro.return_on_assets,
         _blended_hib(micro.return_on_assets, _med("roa_median"),
                      abs_full=0.10, abs_half=0.05, abs_zero=0.0,
                      rel_full_pp=0.025),
         0.10,
+    sector_median=_med("roa_median"),
     ))
     components.append(_Component(
-        "profit_margin", _wrap_with_med(micro.profit_margins, _med("profit_margin_median")),
+        "profit_margin", micro.profit_margins,
         _blended_hib(micro.profit_margins, _med("profit_margin_median"),
                      abs_full=0.20, abs_half=0.10, abs_zero=0.0,
                      rel_full_pp=0.05),
         0.12,
+    sector_median=_med("profit_margin_median"),
     ))
     components.append(_Component(
-        "operating_margin", _wrap_with_med(micro.operating_margins, _med("operating_margin_median")),
+        "operating_margin", micro.operating_margins,
         _blended_hib(micro.operating_margins, _med("operating_margin_median"),
                      abs_full=0.20, abs_half=0.10, abs_zero=0.0,
                      rel_full_pp=0.05),
         0.10,
+    sector_median=_med("operating_margin_median"),
     ))
     components.append(_Component(
-        "gross_margin", _wrap_with_med(micro.gross_margins, _med("gross_margin_median")),
+        "gross_margin", micro.gross_margins,
         _blended_hib(micro.gross_margins, _med("gross_margin_median"),
                      abs_full=0.50, abs_half=0.30, abs_zero=0.10,
                      rel_full_pp=0.10),
         0.06,
+    sector_median=_med("gross_margin_median"),
     ))
 
     # --- Cash flow (binary, no peer comparison meaningful) ---------------
@@ -502,25 +507,28 @@ def _quality(stock: Stock, micro: MicroData | None, sector_stats: SectorStatsBun
     # --- Leverage / liquidity (sector-aware) -----------------------------
     # debt_to_equity is a percent in yfinance (145.2 == 145.2%, not 1.45).
     components.append(_Component(
-        "debt_equity", _wrap_with_med(micro.debt_to_equity, _med("debt_equity_median")),
+        "debt_equity", micro.debt_to_equity,
         _blended_lib(micro.debt_to_equity, _med("debt_equity_median"),
                      abs_full=50.0, abs_half=100.0, abs_zero=200.0,
                      rel_full_pp=-50.0),
         0.10,
+    sector_median=_med("debt_equity_median"),
     ))
     components.append(_Component(
-        "current_ratio", _wrap_with_med(micro.current_ratio, _med("current_ratio_median")),
+        "current_ratio", micro.current_ratio,
         _blended_hib(micro.current_ratio, _med("current_ratio_median"),
                      abs_full=2.0, abs_half=1.0, abs_zero=0.7,
                      rel_full_pp=0.5),
         0.06,
+    sector_median=_med("current_ratio_median"),
     ))
     components.append(_Component(
-        "quick_ratio", _wrap_with_med(micro.quick_ratio, _med("quick_ratio_median")),
+        "quick_ratio", micro.quick_ratio,
         _blended_hib(micro.quick_ratio, _med("quick_ratio_median"),
                      abs_full=1.5, abs_half=1.0, abs_zero=0.5,
                      rel_full_pp=0.5),
         0.05,
+    sector_median=_med("quick_ratio_median"),
     ))
 
     # --- Governance / ownership (no sector aggregate) --------------------
@@ -579,27 +587,30 @@ def _growth(stock: Stock, fundamentals: Fundamentals | None, sector_stats: Secto
     # --- Revenue & earnings YoY (sector-aware blend) ----------------------
     rg = micro.revenue_growth if micro else None
     components.append(_Component(
-        "revenue_growth", _wrap_with_med(rg, _med("revenue_growth_median")),
+        "revenue_growth", rg,
         _blended_hib(rg, _med("revenue_growth_median"),
                      abs_full=0.20, abs_half=0.0, abs_zero=-0.10,
                      rel_full_pp=0.05),
         0.25,
+    sector_median=_med("revenue_growth_median"),
     ))
     eg = micro.earnings_growth if micro else None
     components.append(_Component(
-        "earnings_growth", _wrap_with_med(eg, _med("earnings_growth_median")),
+        "earnings_growth", eg,
         _blended_hib(eg, _med("earnings_growth_median"),
                      abs_full=0.20, abs_half=0.0, abs_zero=-0.10,
                      rel_full_pp=0.05),
         0.25,
+    sector_median=_med("earnings_growth_median"),
     ))
     qeg = micro.earnings_quarterly_growth if micro else None
     components.append(_Component(
-        "qoq_earnings_growth", _wrap_with_med(qeg, _med("earnings_quarterly_growth_median")),
+        "qoq_earnings_growth", qeg,
         _blended_hib(qeg, _med("earnings_quarterly_growth_median"),
                      abs_full=0.25, abs_half=0.0, abs_zero=-0.15,
                      rel_full_pp=0.10),
         0.15,
+    sector_median=_med("earnings_quarterly_growth_median"),
     ))
 
     # --- Forward EPS vs trailing EPS (no sector aggregate) ---------------
@@ -685,59 +696,66 @@ def _value(
 
     # --- Trailing P/E (sector-aware blend) -------------------------------
     components.append(_Component(
-        "pe", _wrap_with_med(micro.trailing_pe, _med("pe_median")),
+        "pe", micro.trailing_pe,
         _blended_lib_multiple(micro.trailing_pe, _med("pe_median"),
                               abs_full=22.0, abs_half=33.0, abs_zero=44.0),
         0.22,
+    sector_median=_med("pe_median"),
     ))
 
     # --- Forward P/E (sector-aware blend) --------------------------------
     components.append(_Component(
-        "forward_pe", _wrap_with_med(micro.forward_pe, _med("forward_pe_median")),
+        "forward_pe", micro.forward_pe,
         _blended_lib_multiple(micro.forward_pe, _med("forward_pe_median"),
                               abs_full=22.0, abs_half=33.0, abs_zero=44.0),
         0.10,
+    sector_median=_med("forward_pe_median"),
     ))
 
     # --- PEG (prefer trailing if available; sector-aware) ----------------
     peg = micro.trailing_peg_ratio if _is_finite(micro.trailing_peg_ratio) else micro.peg_ratio
     components.append(_Component(
-        "peg", _wrap_with_med(peg, _med("peg_median")),
+        "peg", peg,
         _blended_lib_multiple(peg, _med("peg_median"),
                               abs_full=1.0, abs_half=2.0, abs_zero=3.0),
         0.18,
+    sector_median=_med("peg_median"),
     ))
 
     # --- P/B (sector-aware blend) ----------------------------------------
     components.append(_Component(
-        "pb", _wrap_with_med(micro.price_to_book, _med("pb_median")),
+        "pb", micro.price_to_book,
         _blended_lib_multiple(micro.price_to_book, _med("pb_median"),
                               abs_full=3.0, abs_half=4.5, abs_zero=6.0),
         0.10,
+    sector_median=_med("pb_median"),
     ))
 
     # --- P/S (sector-aware blend) ----------------------------------------
     components.append(_Component(
-        "ps", _wrap_with_med(micro.price_to_sales, _med("ps_median")),
+        "ps", micro.price_to_sales,
         _blended_lib_multiple(micro.price_to_sales, _med("ps_median"),
                               abs_full=2.0, abs_half=5.0, abs_zero=10.0),
         0.08,
+    sector_median=_med("ps_median"),
     ))
 
     # --- EV/EBITDA (sector-aware blend) ----------------------------------
     components.append(_Component(
-        "ev_ebitda", _wrap_with_med(micro.enterprise_to_ebitda, _med("ev_ebitda_median")),
+        "ev_ebitda", micro.enterprise_to_ebitda,
         _blended_lib_multiple(micro.enterprise_to_ebitda, _med("ev_ebitda_median"),
                               abs_full=8.0, abs_half=14.0, abs_zero=25.0),
         0.10,
+    sector_median=_med("ev_ebitda_median"),
     ))
 
     # --- EV/Revenue (sector-aware blend) ---------------------------------
     components.append(_Component(
-        "ev_revenue", _wrap_with_med(micro.enterprise_to_revenue, _med("ev_revenue_median")),
+        "ev_revenue", micro.enterprise_to_revenue,
         _blended_lib_multiple(micro.enterprise_to_revenue, _med("ev_revenue_median"),
                               abs_full=2.0, abs_half=5.0, abs_zero=10.0),
         0.05,
+    sector_median=_med("ev_revenue_median"),
     ))
 
     # --- Dividend yield (sector-aware HIB blend) -------------------------
@@ -747,11 +765,12 @@ def _value(
     if _is_finite(dy_raw) and dy_raw is not None and dy_raw >= 0:
         dy_pct = dy_raw if dy_raw > 1 else dy_raw * 100.0
     components.append(_Component(
-        "dividend_yield", _wrap_with_med(dy_pct, _med("dividend_yield_median")),
+        "dividend_yield", dy_pct,
         _blended_hib(dy_pct, _med("dividend_yield_median"),
                      abs_full=3.0, abs_half=1.5, abs_zero=0.0,
                      rel_full_pp=1.0) if dy_pct is not None else None,
         0.10,
+    sector_median=_med("dividend_yield_median"),
     ))
 
     # --- Payout ratio sanity (no sector aggregate; healthy 30-60% band) -
