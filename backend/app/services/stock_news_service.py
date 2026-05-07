@@ -56,6 +56,15 @@ def _normalize_yf_item(raw: dict) -> dict[str, Any] | None:
     if not title or not link:
         return None
     title_str = str(title)
+    # `summary` is the plain-text article preview yfinance ≥0.2.40 ships
+    # alongside the title. Cheaper signal source for the analyst-action
+    # extractor than HTTP-scraping the article URL, and the body often
+    # spells out what the headline truncates ("Goldman raised its target
+    # from $245 to $260, citing Q4 strength" vs the title's bare "Apple
+    # gets target hike"). Stored as raw text — the consumer is server-
+    # side regex, not the UI.
+    summary_v = inner.get("summary")
+    summary_str = str(summary_v) if summary_v else None
     return {
         "title": title_str,
         "link": str(link),
@@ -67,6 +76,10 @@ def _normalize_yf_item(raw: dict) -> dict[str, Any] | None:
         # alongside the rest of the item — a re-fetch is the only way
         # to update sentiment for a given headline.
         "sentiment": classify_title(title_str),
+        # Plain-text article preview. Used by the analyst-action
+        # extractor (server-side); not currently surfaced to the UI.
+        # Optional — older cached payloads have None.
+        "summary": summary_str,
     }
 
 

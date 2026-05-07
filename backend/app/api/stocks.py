@@ -314,10 +314,16 @@ def _merge_news_analyst_actions(ticker: str, structured_actions: list) -> list:
     extras: list = []
     for item in news:
         title = (item.get("title") if isinstance(item, dict) else None) or ""
+        # `summary` is yfinance's plain-text article preview — exposed
+        # via `_normalize_yf_item`. The extractor falls back to the
+        # body summary when the title alone doesn't carry firm+action+
+        # target. Older cached news payloads may lack this field; the
+        # extractor handles None gracefully.
+        summary = (item.get("summary") if isinstance(item, dict) else None) or None
         published = (item.get("published_at") if isinstance(item, dict) else None) or ""
         link = (item.get("link") if isinstance(item, dict) else None) or None
-        mention = news_analyst_extractor.extract_from_title(
-            title, published_at_iso=published, link=link,
+        mention = news_analyst_extractor.extract_from_news_item(
+            title, summary=summary, published_at_iso=published, link=link,
         )
         if mention is None:
             continue

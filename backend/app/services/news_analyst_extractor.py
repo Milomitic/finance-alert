@@ -122,6 +122,16 @@ _TARGET_GATE_RE = re.compile(
 _DOLLAR_NUMBER_RE = re.compile(
     r"\$\s*([0-9]{1,4}(?:,[0-9]{3})?(?:\.[0-9]{1,2})?)\b"
 )
+# "to $X" — the conventional way English-language analyst notes name the
+# NEW target ("raised target to $260", "from $245 to $260"). When both
+# patterns appear in one sentence the "to $X" is the target the user
+# cares about; the "from $X" is just historical context. Matching this
+# explicitly prevents the naive first-$-wins logic from picking the
+# prior target.
+_DOLLAR_TO_RE = re.compile(
+    r"\bto\s+\$\s*([0-9]{1,4}(?:,[0-9]{3})?(?:\.[0-9]{1,2})?)\b",
+    re.IGNORECASE,
+)
 
 
 # Grade keywords: "Buy", "Hold", "Sell", "Outperform", "Neutral", etc. Used
@@ -164,53 +174,124 @@ class ExtractedAnalystMention:
     source_title: str
 
 
-def extract_from_title(
+def extract_from_news_item(
     title: str,
     *,
+    summary: str | None = None,
     published_at_iso: str | None = None,
     link: str | None = None,
 ) -> ExtractedAnalystMention | None:
-    """Parse one news title. Returns None if the title doesn't look like
-    an analyst action (no firm match, or no action verb).
+    """Parse one news item (title + optional body summary).
 
-    The published_at_iso is parsed for the `YYYY-MM-DD` date. We accept
-    full ISO timestamps and bare dates; parse failures fall through to
-    today's date so the row still surfaces (with fuzzy date dedup the
-    1-day skew won't matter)."""
-    if not title:
+    Returns None if neither title nor body looks like an analyst action.
+
+    Strategy:
+    1. Try the title first. Headlines have the highest signal-to-noise
+       ratio (every word is curated for impact) so a title match wins
+       and we skip the body.
+    2. If title didn't match, fall back to the summary. Headlines often
+       truncate ("Apple gets target hike") while the body spells out the
+       firm + target ("Goldman raised its target from $245 to $260").
+    3. Even when title matches, if it lacks a price target but the body
+       has one, lift the target from the body. Price targets are the
+       most useful field for the user, so we squeeze it out of whichever
+       text source has it.
+
+    Body-text caveat: summaries can mention historical analyst actions
+    that aren't the current article's subject (e.g. "On Tuesday Goldman
+    had raised the target..."). We accept that risk — false positives
+    surface as a "news" badge with click-through to the article, so the
+    user can verify on the source.
+
+    The published_at_iso is parsed for the `YYYY-MM-DD` date. Parse
+    failures fall through to empty date.
+    """
+    if not title and not summary:
         return None
 
-    firm = _match_firm(title)
-    if firm is None:
-        return None
-
-    action_match = _match_action(title)
-    if action_match is None:
-        return None
-    action_code, pt_action_label = action_match
-
-    target = _match_target(title)
-    grade = _match_grade(title)
-
-    # Date: take the YYYY-MM-DD prefix off the ISO timestamp. If we can't,
-    # leave empty — the merger will fall back to dedup-by-firm-only.
+    # Date once, used by both branches below.
     date_str = ""
     if published_at_iso:
         m = re.match(r"(\d{4}-\d{2}-\d{2})", published_at_iso)
         if m:
             date_str = m.group(1)
 
+    # First pass: title alone.
+    title_mention = _try_extract(title, date_str=date_str, link=link, source_title=title)
+    if title_mention is not None and title_mention.current_price_target is not None:
+        # Best case — title matched AND has a price target. Done.
+        return title_mention
+
+    # Second pass: body. Either the title didn't match at all, or it
+    # matched but didn't yield a price target — we'll use the body to
+    # try to fill in the missing target.
+    body_mention = (
+        _try_extract(summary, date_str=date_str, link=link, source_title=title)
+        if summary
+        else None
+    )
+
+    if title_mention is not None and body_mention is not None:
+        # Title matched (firm + action) but had no target; body matched
+        # too. Prefer the title's firm classification (the article subject
+        # is the firm in the headline) but lift the target from the body.
+        if body_mention.current_price_target is not None:
+            title_mention.current_price_target = body_mention.current_price_target
+        return title_mention
+
+    # Either title-only-match (no body match), or body-only-match,
+    # or no match at all. Whichever is non-None wins.
+    return title_mention or body_mention
+
+
+def _try_extract(
+    text: str | None,
+    *,
+    date_str: str,
+    link: str | None,
+    source_title: str,
+) -> ExtractedAnalystMention | None:
+    """Run the firm + action + target + grade pipeline against `text`.
+    Shared by both the title and body passes in `extract_from_news_item`.
+    """
+    if not text:
+        return None
+    firm = _match_firm(text)
+    if firm is None:
+        return None
+    action_match = _match_action(text)
+    if action_match is None:
+        return None
+    action_code, pt_action_label = action_match
     return ExtractedAnalystMention(
         date=date_str,
         firm=firm,
         action=action_code,
-        to_grade=grade or "",
+        to_grade=_match_grade(text) or "",
         from_grade="",
         price_target_action=pt_action_label,
-        current_price_target=target,
+        current_price_target=_match_target(text),
         prior_price_target=None,
         source_link=link,
-        source_title=title,
+        source_title=source_title,
+    )
+
+
+# Back-compat alias — the old API took only a title. Existing callers
+# that haven't been migrated to the news-item shape still work, just
+# without the body-text fallback. New code should use
+# `extract_from_news_item` directly.
+def extract_from_title(
+    title: str,
+    *,
+    published_at_iso: str | None = None,
+    link: str | None = None,
+) -> ExtractedAnalystMention | None:
+    return extract_from_news_item(
+        title,
+        summary=None,
+        published_at_iso=published_at_iso,
+        link=link,
     )
 
 
@@ -234,25 +315,42 @@ def _match_action(text: str) -> tuple[str, str] | None:
 
 
 def _match_target(text: str) -> float | None:
-    """Pull the first plausible $ price target out of the headline.
+    """Pull the most plausible $ price target out of the text.
 
-    Two-gate approach:
-    1. Headline must mention "target"/"PT"/"price target" — without that
-       gate, a $-figure could be revenue or market cap rather than a
-       per-share target.
-    2. THEN find any $-prefixed number, sanity-clamped to [5, 9999] —
-       below $5 is a percentage misparse, above $9999 a market-cap
-       misparse.
+    Three-step preference:
+    1. Headline/body must mention "target"/"PT"/"price target" — without
+       that gate, a $-figure could be revenue or market cap rather than
+       a per-share target.
+    2. PREFER "to $X" matches (`_DOLLAR_TO_RE`). Analyst notes using
+       "from $245 to $260" or "raised target to $260" — the "to" target
+       is the new one; without this preference the naive first-$-wins
+       logic returns the historical prior target.
+    3. Fall back to the first plausible $-prefixed number anywhere.
+
+    Sanity-clamped to [5, 9999] — below $5 is almost always a percentage
+    misparse, above $9999 a market-cap misparse.
     """
     if _TARGET_GATE_RE.search(text) is None:
         return None
-    for m in _DOLLAR_NUMBER_RE.finditer(text):
-        raw = m.group(1).replace(",", "")
+
+    def _valid(raw: str) -> float | None:
         try:
-            v = float(raw)
+            v = float(raw.replace(",", ""))
         except ValueError:
-            continue
-        if 5.0 <= v <= 9999.0:
+            return None
+        return v if 5.0 <= v <= 9999.0 else None
+
+    # Step 2: prefer the "to $X" form. Walk all matches (sentences may
+    # have multiple "to $X" — pick the one closest to a target keyword).
+    for m in _DOLLAR_TO_RE.finditer(text):
+        v = _valid(m.group(1))
+        if v is not None:
+            return v
+
+    # Step 3: fall back to first $-figure of any kind.
+    for m in _DOLLAR_NUMBER_RE.finditer(text):
+        v = _valid(m.group(1))
+        if v is not None:
             return v
     return None
 
