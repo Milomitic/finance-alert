@@ -12,6 +12,8 @@ from dataclasses import dataclass, field
 from threading import Lock
 from typing import Any
 
+import pandas as pd
+
 from loguru import logger
 
 
@@ -515,10 +517,31 @@ def _extract_insiders(it_df: Any, limit: int = 10) -> list[InsiderTransaction]:
     if it_df is None or it_df.empty:
         return []
 
-    # Step 1: parse rows from yfinance into our dataclass shape, no limit
-    # yet — we need the full set for proper coalescing before capping.
+    # Step 0: drop "ghost" rows. yfinance for some tickers (notably DDOG)
+    # returns each insider transaction TWICE: once primary with full
+    # Text + Value populated, once ghost with Text=NaN/empty + Value=NaN.
+    # The ghost row has no incremental information and pollutes the UI
+    # as a duplicate "AGARWAL AMIT — 20K" beneath the real "AGARWAL AMIT
+    # Sale at price ... 20K · $2.6M". Drop them at parse time so the
+    # rest of the pipeline only sees real events.
     raw: list[InsiderTransaction] = []
     for _, row in it_df.iterrows():
+        text_v = row.get("Text")
+        text_s = "" if text_v is None or (isinstance(text_v, float) and pd.isna(text_v)) else str(text_v).strip()
+        txn_v = row.get("Transaction")
+        txn_s = "" if txn_v is None or (isinstance(txn_v, float) and pd.isna(txn_v)) else str(txn_v).strip()
+        value_raw = row.get("Value")
+        value_is_missing = (
+            value_raw is None
+            or (isinstance(value_raw, float) and pd.isna(value_raw))
+            or _safe_float(value_raw) in (None, 0.0)
+        )
+        # Ghost-row condition: no human-readable description AND no dollar
+        # value. Real "Stock Gift at price 0.00" rows have Text populated
+        # so they survive (Value=0 is fine when Text is meaningful).
+        if not text_s and not txn_s and value_is_missing:
+            continue
+
         date_v = row.get("Start Date")
         date_s = (
             str(date_v.date())
@@ -530,7 +553,7 @@ def _extract_insiders(it_df: Any, limit: int = 10) -> list[InsiderTransaction]:
         raw.append(InsiderTransaction(
             insider=str(row.get("Insider") or "").strip(),
             position=str(row.get("Position") or "").strip(),
-            transaction=str(row.get("Text") or row.get("Transaction") or "").strip(),
+            transaction=text_s or txn_s,
             date=date_s,
             shares=_safe_int(row.get("Shares")),
             value=_safe_float(row.get("Value")),
