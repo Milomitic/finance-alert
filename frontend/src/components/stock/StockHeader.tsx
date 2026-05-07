@@ -51,13 +51,20 @@ function HeaderSparkline({ closes, up }: { closes: number[]; up: boolean }) {
       aria-hidden="true"
     >
       <defs>
+        {/* V3.3 area gradient: la zona sopra la linea resta totalmente
+            trasparente (non disegnata); la zona sotto la linea (il
+            "fill di integrale") parte dalla linea con opacità medio-
+            alta e dissolve verso il basso del grafico. Effetto
+            classico delle dashboard finanziarie tipo Robinhood/eToro:
+            la linea ha una scia colorata che si fonde col background. */}
         <linearGradient id="hdr-spark-area" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={stroke} stopOpacity={0.18} />
+          <stop offset="0%" stopColor={stroke} stopOpacity={0.40} />
+          <stop offset="60%" stopColor={stroke} stopOpacity={0.12} />
           <stop offset="100%" stopColor={stroke} stopOpacity={0} />
         </linearGradient>
         <linearGradient id="hdr-spark-line" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0%" stopColor={stroke} stopOpacity={0.15} />
-          <stop offset="100%" stopColor={stroke} stopOpacity={0.55} />
+          <stop offset="0%" stopColor={stroke} stopOpacity={0.25} />
+          <stop offset="100%" stopColor={stroke} stopOpacity={0.85} />
         </linearGradient>
       </defs>
       <path d={areaPath} fill="url(#hdr-spark-area)" />
@@ -116,20 +123,11 @@ export function StockHeader({ stock, kpis, ohlcv, effectiveRules = [] }: Props) 
       {/* Smaller padding now that the KPI strip is gone */}
       <CardContent className="relative z-10 p-5 pl-7">
         <div className="flex items-start gap-6 flex-wrap">
-          {/* Logo + flag */}
+          {/* Logo (V3.3: flag spostata dentro il tag exchange) */}
           <div className="flex flex-col items-center gap-2 shrink-0">
             <div className="rounded-2xl bg-white dark:bg-zinc-900 border border-border/60 p-2 shadow-sm">
               <StockLogo ticker={stock.ticker} size="md" />
             </div>
-            {flag && (
-              <img
-                src={`/flags/${flag}.svg`}
-                alt={stock.country ?? ""}
-                width={36} height={24}
-                style={{ width: "36px", height: "24px", objectFit: "cover" }}
-                className="rounded shadow-sm"
-              />
-            )}
           </div>
 
           {/* Identity */}
@@ -143,7 +141,22 @@ export function StockHeader({ stock, kpis, ohlcv, effectiveRules = [] }: Props) 
               </span>
             </div>
             <div className="flex items-center gap-2 mt-3 flex-wrap">
-              <span className="inline-flex items-center rounded-md bg-muted/70 dark:bg-muted/40 px-2.5 py-1 text-sm font-medium">
+              {/* V3.3: bandiera del paese ora dentro il tag exchange.
+                  Compatto verticalmente (non più riga sotto il logo) e
+                  semanticamente corretto: la bandiera identifica il
+                  listing, che è proprietà dell'exchange. */}
+              <span className="inline-flex items-center gap-1.5 rounded-md bg-muted/70 dark:bg-muted/40 px-2.5 py-1 text-sm font-medium">
+                {flag && (
+                  <img
+                    src={`/flags/${flag}.svg`}
+                    alt={stock.country ?? ""}
+                    width={18}
+                    height={12}
+                    style={{ width: "18px", height: "12px", objectFit: "cover" }}
+                    className="rounded-sm shadow-sm"
+                    aria-hidden
+                  />
+                )}
                 {stock.exchange}
               </span>
               {stock.sector && (
@@ -205,6 +218,24 @@ export function StockHeader({ stock, kpis, ohlcv, effectiveRules = [] }: Props) 
                   </span>
                 )}
                 <span>{change >= 0 ? "+" : ""}{change.toFixed(2)}%</span>
+              </div>
+            )}
+            {/* V3.3: quando il mercato è aperto e il prezzo "live"
+                differisce dalla chiusura precedente, mostra la previous
+                close come contesto. La variazione % è già coperta
+                sopra; questa caption fornisce il prezzo di partenza
+                della giornata, utile per leggere la dimensione del
+                movimento intraday. Nascosto a mercato chiuso (in quel
+                caso il prezzo mostrato È già la chiusura). */}
+            {isMarketOpen && live.data?.prev_close != null && (
+              <div
+                className="text-[11px] uppercase tracking-wider text-muted-foreground/80 mt-0.5"
+                title="Chiusura della sessione di trading precedente — riferimento da cui calcolare la variazione intraday"
+              >
+                Prev close:{" "}
+                <span className="text-foreground/80 font-semibold tabular-nums">
+                  ${live.data.prev_close.toFixed(2)}
+                </span>
               </div>
             )}
           </div>

@@ -125,7 +125,7 @@ export default function StockDetailPage() {
           and scrolls internally when there are more rows than fit.
           The profile is the page's lead content and dictates the row
           height; the alerts card adapts. Stacks vertically below `lg`. */}
-      <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-3">
+      <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-3 lg:h-[340px]">
         <CompanyOverviewCard ticker={ticker} stock={d.stock} />
         <StockAlertsHistoryCard alerts={d.alerts_history} />
       </div>
@@ -153,7 +153,7 @@ export default function StockDetailPage() {
           chart can dominate the vertical real estate that the row
           used to consume. */}
 
-      <div className="grid lg:grid-cols-[1fr_540px] gap-3">
+      <div className="grid lg:grid-cols-[1fr_480px] gap-3">
         <Card>
           <CardContent className="p-4">
             {/* Toolbar: range on the left, indicators row, drawing tools on the right.

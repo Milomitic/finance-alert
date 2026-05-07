@@ -67,7 +67,7 @@ export function AlertsTable({
   // text-sm so every body cell inherits without per-cell overrides;
   // each <TableHead> bumps to text-base for the header band only.
   return (
-    <Table className="text-sm">
+    <Table className={embedded ? "text-xs [&_td]:py-1 [&_td]:px-2 [&_th]:h-8 [&_th]:px-2 [&_th]:text-xs" : "text-sm"}>
       <TableHeader>
         <TableRow>
           {!embedded && (

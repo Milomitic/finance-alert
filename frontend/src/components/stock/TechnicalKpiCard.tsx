@@ -22,128 +22,145 @@ interface Props {
 
 /* ─── TechnicalKpiCard — multi-timeframe indicator matrix ──────────────────
  *
- * V3.2 — table of indicators (rows) x timeframes (columns).
+ * V3.3 — table of indicators (rows) x timeframes (columns), no Price row,
+ * no 30m column, with values + 1-5 bullish/bearish color scale.
  *
- * Layout:
- *   - Columns: 30m / 1h / 1d / 1w / 1m / All
- *   - Rows: Price, RSI(14), vs SMA20, vs SMA50, vs SMA200, BB pos, MACD
- *   - Cells: raw value with bullish/bearish bg tint or neutral. No
- *     bonus score, no progress bar — the user reads the technical
- *     state per TF at a glance and spots when signals diverge across
- *     time horizons.
+ * Why no Price row: the spot price is the same regardless of timeframe.
+ * The previous "last_close per TF" was confusing — it varied only by
+ * intraday drift, not by anything timeframe-specific. Removed.
  *
- * Color conventions (binary green/red, no intermediate shades):
- *   - vs SMA above: green     vs SMA below: red
- *   - MACD bullish: green     bearish: red     neutral: gray
- *   - RSI: oversold (<30) green (buy reversal hint)
- *          overbought (>70) red (sell hint)
- *          neutral (30-70) gray
- *   - BB position: <20% green (near lower band)
- *                  >80% red (near upper band)
- *                  20-80% gray
- *   - Price: neutral (no inherent direction)
+ * Why no 30m: too noisy for the snapshot table, kept in the chart for
+ * intraday browsing but excluded from the cross-TF comparison view.
+ *
+ * Color scale (1 = strong bearish → 5 = strong bullish):
+ *   1: bg-rose-600/30   text-rose-700/-300
+ *   2: bg-rose-500/15   text-rose-700/-400
+ *   3: (transparent — neutral)
+ *   4: bg-emerald-500/15 text-emerald-700/-400
+ *   5: bg-emerald-600/30 text-emerald-700/-300
+ *
+ * Per-indicator scoring rules (encoded in the row's `score` callback):
+ *   - RSI(14): >70 = 5 strong, 60-70 = 4, 40-60 = 3, 30-40 = 2, <30 = 1
+ *   - vs SMA{N}: shows % delta (price - sma) / sma * 100
+ *       ≥ +5%: 5 strong bullish (price well above)
+ *       0..+5%: 4 mildly bullish
+ *       0% (≈ ±0.5%): 3 neutral
+ *       -5..0%: 2 mildly bearish
+ *       ≤ -5%: 1 strong bearish
+ *   - BB position: >80%: 5, 60-80: 4, 40-60: 3, 20-40: 2, <20: 1
+ *   - MACD: bullish = 4, neutral = 3, bearish = 2 (backend tone is binary)
  */
 
-type Tone = "bull" | "bear" | "neutral" | "missing";
+type ScaleScore = 1 | 2 | 3 | 4 | 5;
 
-const TONE_BG: Record<Tone, string> = {
-  bull: "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300",
-  bear: "bg-rose-500/20 text-rose-700 dark:text-rose-300",
-  neutral: "text-muted-foreground",
-  missing: "text-muted-foreground/40",
+const SCALE_BG: Record<ScaleScore, string> = {
+  1: "bg-rose-600/30 text-rose-700 dark:text-rose-300",
+  2: "bg-rose-500/15 text-rose-700 dark:text-rose-400",
+  3: "text-foreground/70",
+  4: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
+  5: "bg-emerald-600/30 text-emerald-700 dark:text-emerald-300",
 };
-
-function fmtPrice(v: number | null): string {
-  if (v === null || !Number.isFinite(v)) return "—";
-  if (Math.abs(v) >= 1000) return v.toFixed(0);
-  return v.toFixed(2);
-}
 
 function fmtNum(v: number | null, digits = 1, suffix = ""): string {
   if (v === null || !Number.isFinite(v)) return "—";
   return `${v.toFixed(digits)}${suffix}`;
 }
 
-function rsiTone(it: TimeframeKpis): Tone {
-  if (it.rsi === null) return "missing";
-  if (it.rsi_tone === "oversold") return "bull";
-  if (it.rsi_tone === "overbought") return "bear";
-  return "neutral";
+function fmtPct(v: number | null, digits = 1): string {
+  if (v === null || !Number.isFinite(v)) return "—";
+  const sign = v >= 0 ? "+" : "";
+  return `${sign}${v.toFixed(digits)}%`;
 }
 
-function smaTone(above: boolean | null): Tone {
-  if (above === null) return "missing";
-  return above ? "bull" : "bear";
+function rsiScore(v: number | null): ScaleScore {
+  if (v === null) return 3;
+  if (v >= 70) return 5;
+  if (v >= 60) return 4;
+  if (v >= 40) return 3;
+  if (v >= 30) return 2;
+  return 1;
 }
 
-function bbTone(pos: number | null): Tone {
-  if (pos === null) return "missing";
-  if (pos < 20) return "bull";
-  if (pos > 80) return "bear";
-  return "neutral";
+function smaDeltaScore(deltaPct: number | null): ScaleScore {
+  if (deltaPct === null) return 3;
+  if (deltaPct >= 5) return 5;
+  if (deltaPct > 0.5) return 4;
+  if (deltaPct >= -0.5) return 3;
+  if (deltaPct >= -5) return 2;
+  return 1;
 }
 
-function macdTone(it: TimeframeKpis): Tone {
-  if (it.macd_tone === "bullish") return "bull";
-  if (it.macd_tone === "bearish") return "bear";
-  return "neutral";
+function bbScore(pos: number | null): ScaleScore {
+  if (pos === null) return 3;
+  if (pos >= 80) return 5;
+  if (pos >= 60) return 4;
+  if (pos >= 40) return 3;
+  if (pos >= 20) return 2;
+  return 1;
+}
+
+function macdScore(tone: TimeframeKpis["macd_tone"]): ScaleScore {
+  if (tone === "bullish") return 4;
+  if (tone === "bearish") return 2;
+  return 3;
+}
+
+function smaDelta(price: number | null, sma: number | null): number | null {
+  if (price === null || sma === null || sma === 0 || !Number.isFinite(sma))
+    return null;
+  return ((price - sma) / sma) * 100;
 }
 
 interface MatrixRowDef {
   label: string;
   hint: string;
-  cell: (it: TimeframeKpis) => { text: string; tone: Tone };
+  cell: (it: TimeframeKpis) => { text: string; score: ScaleScore };
 }
 
 const ROWS: MatrixRowDef[] = [
   {
-    label: "Prezzo",
-    hint: "Ultimo close del timeframe (per intraday la candela 30m/1h piu recente).",
-    cell: (it) => ({ text: fmtPrice(it.last_close), tone: "neutral" }),
-  },
-  {
     label: "RSI(14)",
-    hint: "Sotto 30 = oversold (verde, segnale di acquisto). Sopra 70 = overbought (rosso, segnale di vendita). 30-70 = neutrale.",
+    hint: "Forza del momentum 0-100. >70 strong bullish, 60-70 bullish, 40-60 neutrale, 30-40 bearish, <30 strong bearish (oversold).",
     cell: (it) => ({
-      text: it.rsi === null ? "—" : it.rsi.toFixed(1),
-      tone: rsiTone(it),
+      text: fmtNum(it.rsi, 1),
+      score: rsiScore(it.rsi),
     }),
   },
   {
     label: "vs SMA20",
-    hint: "Verde se prezzo sopra la media a 20 periodi (uptrend di breve), rosso se sotto.",
-    cell: (it) => ({
-      text: it.sma20 === null ? "—" : it.sma20_above ? "▲" : "▼",
-      tone: smaTone(it.sma20_above),
-    }),
+    hint: "Distanza % del prezzo dalla SMA a 20 periodi. >+5% strong bullish, 0..+5% bullish, 0% neutrale, -5..0% bearish, <-5% strong bearish.",
+    cell: (it) => {
+      const d = smaDelta(it.last_close, it.sma20);
+      return { text: fmtPct(d, 1), score: smaDeltaScore(d) };
+    },
   },
   {
     label: "vs SMA50",
-    hint: "Verde se prezzo sopra la media a 50 periodi (uptrend di medio), rosso se sotto.",
-    cell: (it) => ({
-      text: it.sma50 === null ? "—" : it.sma50_above ? "▲" : "▼",
-      tone: smaTone(it.sma50_above),
-    }),
+    hint: "Distanza % dalla SMA a 50 periodi (uptrend di medio). Stessa scala 1-5 della SMA20.",
+    cell: (it) => {
+      const d = smaDelta(it.last_close, it.sma50);
+      return { text: fmtPct(d, 1), score: smaDeltaScore(d) };
+    },
   },
   {
     label: "vs SMA200",
-    hint: "Verde se prezzo sopra la media a 200 periodi (uptrend di lungo), rosso se sotto.",
-    cell: (it) => ({
-      text: it.sma200 === null ? "—" : it.sma200_above ? "▲" : "▼",
-      tone: smaTone(it.sma200_above),
-    }),
+    hint: "Distanza % dalla SMA a 200 periodi (uptrend di lungo). Stessa scala 1-5.",
+    cell: (it) => {
+      const d = smaDelta(it.last_close, it.sma200);
+      return { text: fmtPct(d, 1), score: smaDeltaScore(d) };
+    },
   },
   {
     label: "BB pos",
-    hint: "Posizione del prezzo nelle Bande di Bollinger (20, 2). <20% vicino al lower band (verde, possibile reversal up). >80% vicino al upper band (rosso, possibile reversal down).",
+    hint: "Posizione del prezzo nelle Bande di Bollinger (20, 2). >80% strong bullish (top band), 60-80 bullish, 40-60 neutrale, 20-40 bearish, <20% strong bearish (bottom band).",
     cell: (it) => ({
       text: fmtNum(it.bb_position, 0, "%"),
-      tone: bbTone(it.bb_position),
+      score: bbScore(it.bb_position),
     }),
   },
   {
     label: "MACD",
-    hint: "Verde se la linea MACD sta sopra il signal e l istogramma e positivo (momentum bullish). Rosso se sotto (bearish). Grigio = neutrale.",
+    hint: "Linea MACD vs signal: sopra = bullish, sotto = bearish. Backend espone solo il tono binario (no intensità).",
     cell: (it) => ({
       text:
         it.macd_tone === "bullish"
@@ -151,13 +168,15 @@ const ROWS: MatrixRowDef[] = [
           : it.macd_tone === "bearish"
             ? "bear"
             : "—",
-      tone: macdTone(it),
+      score: macdScore(it.macd_tone),
     }),
   },
 ];
 
+// V3.3: 30m column dropped — too noisy for the cross-TF snapshot view.
+const VISIBLE_TIMEFRAMES = ["1h", "1d", "1w", "1m", "all"];
+
 const TF_DISPLAY: Record<string, string> = {
-  "30m": "30m",
   "1h": "1h",
   "1d": "1d",
   "1w": "1w",
@@ -191,7 +210,7 @@ function MatrixRowComponent({
             key={it.timeframe}
             className={cn(
               "py-1 px-1 text-center text-xs tabular-nums font-semibold rounded",
-              TONE_BG[c.tone],
+              SCALE_BG[c.score],
             )}
           >
             {c.text}
@@ -211,7 +230,7 @@ export function TechnicalKpiCard({ ticker }: Props) {
         <CardContent className="p-4">
           <SectionTitle icon={Activity} label="KPI tecnici per timeframe" />
           <div className="space-y-1.5 mt-3">
-            {[0, 1, 2, 3, 4, 5, 6].map((i) => (
+            {[0, 1, 2, 3, 4, 5].map((i) => (
               <div
                 key={i}
                 className="h-5 w-full rounded bg-muted/30 animate-pulse"
@@ -236,7 +255,8 @@ export function TechnicalKpiCard({ ticker }: Props) {
     );
   }
 
-  const items = q.data.items;
+  // Filter out the 30m timeframe per V3.3 redesign
+  const items = q.data.items.filter((it) => VISIBLE_TIMEFRAMES.includes(it.timeframe));
 
   return (
     <Card>
