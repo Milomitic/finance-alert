@@ -40,7 +40,7 @@ backend/app/services/earnings_session_timing.py
 
 ### §4.2 Schema API
 
-In `backend/app/schemas/stock_detail.py`, aggiungere a `FundamentalsBundleOut`:
+In `backend/app/schemas/stock_detail.py`, aggiungere a `FundamentalsOut` (L212):
 
 ```python
 next_earnings_when: Literal["pre", "after"] | None = None
@@ -50,7 +50,7 @@ Posizionato vicino a `next_earnings_date`, `next_eps_estimate`, `next_revenue_es
 
 ### §4.3 Endpoint
 
-In `backend/app/api/stocks.py` (al sito di assembly del bundle, attualmente intorno a L279):
+In `backend/app/api/stocks.py`, dentro `get_stock_fundamentals` (L253), al sito di assembly di `FundamentalsOut` (L274):
 
 ```python
 from app.services.earnings_session_timing import classify_session_timing
@@ -65,10 +65,10 @@ E aggiungerlo a `FundamentalsBundleOut(...)`.
 
 ### §4.4 Frontend types
 
-In `frontend/src/api/types.ts`:
+In `frontend/src/api/types.ts`, interfaccia `Fundamentals` (L685):
 
 ```typescript
-export interface FundamentalsBundle {
+export interface Fundamentals {
   // ... campi esistenti
   next_earnings_date: string | null;
   next_earnings_when?: "pre" | "after" | null;
