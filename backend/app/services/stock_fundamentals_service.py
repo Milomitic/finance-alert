@@ -318,14 +318,14 @@ def _extract_earnings(
 ) -> tuple[list[EarningsPoint], str | None, float | None, float | None, str | None]:
     """Parse yfinance's earnings_dates DataFrame into history + next-up.
 
-    Returns (historical, next_date, next_eps_estimate, next_revenue_estimate).
-    The next-up triplet describes the FIRST upcoming earnings event that
-    yfinance has on calendar (rep == None means it hasn't happened yet);
-    we capture date + EPS est + revenue est so the UI can render a
-    forward-looking row in the quarterly view.
+    Returns (historical, next_date, next_eps_estimate, next_revenue_estimate,
+    next_time_utc). The next-up tuple describes the FIRST upcoming earnings
+    event that yfinance has on calendar (rep == None means it hasn't happened
+    yet); we capture date + EPS est + revenue est + UTC release time so the
+    UI can render a forward-looking row + sun/moon pre/after-market icon.
     """
     if ed is None or ed.empty:
-        return [], None, None, None
+        return [], None, None, None, None
 
     historical: list[EarningsPoint] = []
     next_date: str | None = None
