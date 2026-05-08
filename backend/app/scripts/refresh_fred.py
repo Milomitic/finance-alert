@@ -60,7 +60,22 @@ CURATED_SERIES: tuple[CuratedSeries, ...] = (
     CuratedSeries("PPIACO",   46,  "US PPI release",                "US", "medium", "index", "Producer Price Index All Commodities"),
     CuratedSeries("PAYEMS",   50,  "US NFP / Non-Farm Payrolls",    "US", "high",   "level", "Total Non-Farm Payrolls (thousands)"),
     CuratedSeries("UNRATE",   50,  "US Unemployment Rate",          "US", "medium", "pct",   "Civilian Unemployment Rate"),
-    CuratedSeries("FEDFUNDS", 101, "FOMC rate decision",            "US", "high",   "pct",   "Effective Federal Funds Rate"),
+    # Why DFEDTARU (Daily Fed Funds Target Rate, Upper Bound) and not
+    # FEDFUNDS: FEDFUNDS is the MONTHLY-AVERAGED effective rate, published
+    # with ~1 month delay, so on FOMC decision day the panel would still
+    # show the prior-month average. DFEDTARU updates daily and reflects
+    # the new target the same day the FOMC announces it.
+    #
+    # Why fred_release_id=None: FRED release_id=101 is "H.15 Selected
+    # Interest Rates" published every business day → using it as the
+    # FOMC release schedule produces ~30 spurious "FOMC rate decision"
+    # events per month. The FOMC actually meets ~8 times/year and those
+    # dates are hardcoded in `calendar_macros._MACRO_EVENTS`. By setting
+    # release_id=None we keep the daily OBSERVATION values (so the
+    # current target is fresh) without polluting the calendar; the value
+    # is attached to the hardcoded FOMC events at calendar-build time
+    # (see `_convert_macro` in `calendar_service`).
+    CuratedSeries("DFEDTARU", None, "FOMC rate decision",            "US", "high",   "pct",   "Federal Funds Target Rate (upper bound) — set by the FOMC, daily."),
     CuratedSeries("GDPC1",    53,  "US GDP (real)",                 "US", "high",   "level", "Real GDP, chained 2017 dollars"),
     CuratedSeries("RSAFS",    9,   "US Retail Sales",               "US", "medium", "level", "Retail Sales (Advance)"),
     CuratedSeries("DGS10",    None, "US 10y Treasury yield",        "US", "low",    "pct",   "10-Year Treasury Constant Maturity Rate"),

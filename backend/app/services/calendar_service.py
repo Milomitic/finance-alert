@@ -25,7 +25,7 @@ from typing import Literal
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import Stock, StockScore
+from app.models import MacroObservation, MacroSeries, Stock, StockScore
 from app.services import calendar_macros, macro_events_service, stock_fundamentals_service
 from app.services.calendar_macros import Importance, MacroEvent
 
@@ -62,12 +62,22 @@ class EarningsEvent:
     # Inferred timing relative to the trading session: "pre" (before
     # market open), "after" (after close), or None when we cant infer.
     earnings_when: str | None = None
+    # Phase 3G: post-release earnings (mirror of MacroEventDC's
+    # actual_value / surprise_pct). Populated when the quarter has
+    # already reported; None for upcoming quarters. Sourced from
+    # `FundamentalsEarnings` rows in the cached fundamentals payload.
+    # Mirrors yfinance's `Ticker.earnings_history`:
+    #   eps_reported = the actual EPS reported
+    #   surprise_pct = (reported - estimate) / |estimate| * 100
+    eps_reported: float | None = None
+    surprise_pct: float | None = None
 
 
 @dataclass
 class MacroEventDC:
     """Service-layer macro event. Carries the `kind` discriminator +
-    optional FRED-driven insight fields (prev/prior/change_pct/history).
+    optional FRED-driven insight fields (prev/prior/change_pct/history)
+    and Forexfactory-driven consensus fields (expected/actual/surprise).
     Hardcoded events from `calendar_macros._MACRO_EVENTS` leave the
     insight fields as their defaults — the calendar UI then renders the
     chip without the prev/change badges."""
@@ -84,6 +94,16 @@ class MacroEventDC:
     unit: str | None = None
     history: list[tuple[date, float | None]] = field(default_factory=list)
     release_time: str | None = None
+    # Phase 3G: consensus / actual / surprise (sourced via
+    # `forexfactory_consensus.consensus_for_label` post-build).
+    # `expected_value` is the median analyst forecast as parsed from
+    # Forexfactory's free weekly XML; `actual_value` is the post-release
+    # value from the same feed (faster than waiting for FRED to publish).
+    # `surprise_pct` = (actual - expected) / |expected| * 100, computed
+    # at calendar-build time when both inputs are available.
+    expected_value: float | None = None
+    actual_value: float | None = None
+    surprise_pct: float | None = None
 
 
 CalendarEvent = EarningsEvent | MacroEventDC
@@ -152,7 +172,14 @@ def _earnings_for_stock(
     forward_pe = cached.micro.forward_pe if cached.micro else None
     earnings_growth = cached.micro.earnings_growth if cached.micro else None
 
-    def _make(d: date, eps_est: float | None, rev_est: float | None, time_utc: str | None) -> EarningsEvent:
+    def _make(
+        d: date,
+        eps_est: float | None,
+        rev_est: float | None,
+        time_utc: str | None,
+        eps_reported: float | None = None,
+        surprise_pct: float | None = None,
+    ) -> EarningsEvent:
         return EarningsEvent(
             date=d,
             kind="earnings",
@@ -167,12 +194,15 @@ def _earnings_for_stock(
             composite_score=score.composite if score else None,
             risk_tier=score.risk_tier if score else None,
             earnings_when=_classify_session_timing(time_utc, stock.country),
+            eps_reported=eps_reported,
+            surprise_pct=surprise_pct,
         )
 
     out: list[EarningsEvent] = []
     seen: set[date] = set()  # dedupe in case `next` overlaps with `earnings[]`
 
-    # Forward-looking: next_earnings_date
+    # Forward-looking: next_earnings_date — by definition not yet reported
+    # so eps_reported / surprise_pct stay None.
     nxt_d = _parse_iso_date(cached.next_earnings_date)
     if nxt_d is not None and date_from <= nxt_d <= date_to:
         out.append(_make(nxt_d, cached.next_eps_estimate, cached.next_revenue_estimate, getattr(cached, "next_earnings_time_utc", None)))
@@ -187,7 +217,18 @@ def _earnings_for_stock(
             continue
         if not (date_from <= d <= date_to):
             continue
-        out.append(_make(d, ep.eps_estimate, ep.revenue_estimate, getattr(ep, "time_utc", None)))
+        # Past quarters: yfinance gives us eps_reported + surprise_pct.
+        # `surprise_pct` is the user-facing field the calendar shows
+        # under "Sorpresa" — same axis as macro events. Some legacy
+        # rows might lack these (yfinance schema drift) → optional.
+        out.append(_make(
+            d,
+            ep.eps_estimate,
+            ep.revenue_estimate,
+            getattr(ep, "time_utc", None),
+            eps_reported=getattr(ep, "eps_reported", None),
+            surprise_pct=getattr(ep, "surprise_pct", None),
+        ))
         seen.add(d)
 
     return out
@@ -233,6 +274,97 @@ def _convert_macro(m: MacroEvent) -> MacroEventDC:
         region=m.region,
         release_time=m.release_time or release_time_for(m.label),
     )
+
+
+def _enrich_with_fred_value(db: Session, ev: MacroEventDC) -> None:
+    """Mutate `ev` in place: when the hardcoded event's `label` matches a
+    curated FRED series, attach the latest observation as prev_value and
+    populate prior/change_pct/history.
+
+    Called for HARDCODED macros (`calendar_macros._MACRO_EVENTS`) which
+    don't have these fields populated by `get_fred_events` (since they
+    aren't on a FRED release schedule). Without this, the FOMC rate
+    decision card would show "ULTIMO —" even though we have the value
+    in DFEDTARU.
+
+    No-op when no matching series exists.
+    """
+    series = db.execute(
+        select(MacroSeries).where(MacroSeries.label == ev.label).limit(1)
+    ).scalar_one_or_none()
+    if series is None:
+        return
+    # Find the latest observation up to (and including) the event's date.
+    # Using <= here so a same-day observation (e.g. DFEDTARU updated on
+    # FOMC day) IS attached.
+    row = db.execute(
+        select(MacroObservation.value, MacroObservation.date)
+        .where(
+            MacroObservation.series_id == series.id,
+            MacroObservation.date <= ev.date,
+        )
+        .order_by(MacroObservation.date.desc())
+        .limit(1)
+    ).first()
+    if row is None:
+        return
+    ev.prev_value = row.value
+    ev.prev_date = row.date
+    ev.unit = series.unit
+    # Also attach the observation BEFORE that one as prior_value, +
+    # compute Δ% so the existing "Δ vs prec." badge still has data
+    # (the UI may still show it for non-FOMC events).
+    prior_row = db.execute(
+        select(MacroObservation.value, MacroObservation.date)
+        .where(
+            MacroObservation.series_id == series.id,
+            MacroObservation.date < row.date,
+        )
+        .order_by(MacroObservation.date.desc())
+        .limit(1)
+    ).first()
+    if prior_row is not None:
+        ev.prior_value = prior_row.value
+        ev.prior_date = prior_row.date
+        if prior_row.value not in (None, 0):
+            ev.change_pct = ((row.value - prior_row.value) / prior_row.value) * 100
+    # Recent history for the inline sparkline.
+    history_rows = db.execute(
+        select(MacroObservation.date, MacroObservation.value)
+        .where(MacroObservation.series_id == series.id)
+        .order_by(MacroObservation.date.desc())
+        .limit(12)
+    ).all()
+    ev.history = [(r.date, r.value) for r in reversed(history_rows)]
+
+
+def _enrich_with_forexfactory(ev: MacroEventDC) -> None:
+    """Mutate `ev` in place: attach `expected_value`, `actual_value`,
+    `surprise_pct` from Forexfactory's free weekly XML feed when a
+    consensus is available for this label/date pair.
+
+    No-op when:
+    - The label isn't in `forexfactory_consensus._FF_LABEL_MAP` (we
+      don't try to map every label — only the major US/EU events
+      where the feed reliably publishes consensus).
+    - No matching event in this week's XML.
+    - Both forecast and actual are empty in the feed.
+    """
+    from app.services import forexfactory_consensus as ff
+    ff_event = ff.consensus_for_label(ev.label, ev.date)
+    if ff_event is None:
+        return
+    expected = ff.parse_numeric(ff_event.forecast)
+    actual = ff.parse_numeric(ff_event.actual)
+    if expected is not None:
+        ev.expected_value = expected
+    if actual is not None:
+        ev.actual_value = actual
+    if expected is not None and actual is not None and expected != 0:
+        # Sign-preserving relative surprise. Magnitudes work cleanly
+        # for non-zero expected; "expected=0" cases (rare) get null
+        # because dividing by zero would fly to ±∞.
+        ev.surprise_pct = ((actual - expected) / abs(expected)) * 100
 
 
 # ---------------------------------------------------------------------------
@@ -310,15 +442,29 @@ def get_events(
             )
 
         # Hardcoded fallback fills regions FRED doesn't reliably cover
-        # (BoE, BoJ, BoK, PBoC, ZEW, IFO, …). Skip any (label, date)
-        # already produced by FRED above to avoid duplicates.
+        # (BoE, BoJ, BoK, PBoC, ZEW, IFO, …) AND series whose curated
+        # release_id is None (FOMC: pulled daily, scheduled hardcoded).
+        # Skip any (label, date) already produced by FRED above to avoid
+        # duplicates. Each hardcoded event gets a FRED-value lookup so
+        # the card shows ULTIMO even though no FRED release row exists.
         macros = calendar_macros.get_macro_events(
             date_from, date_to, importance_filter,
         )
         for m in macros:
             if (m.label, m.date) in seen_keys:
                 continue
-            events.append(_convert_macro(m))
+            ev = _convert_macro(m)
+            _enrich_with_fred_value(db, ev)
+            events.append(ev)
+
+        # Forexfactory consensus / actual / surprise post-pass — applied
+        # to BOTH FRED-driven and hardcoded macros so every macro event
+        # has expected/surprise when a free consensus is available.
+        # The lookup is in-memory cached for 30 min so this is cheap
+        # even for a 2-week window with ~50 macro events.
+        for ev in events:
+            if isinstance(ev, MacroEventDC):
+                _enrich_with_forexfactory(ev)
 
     # Final sort:
     #   primary: date asc

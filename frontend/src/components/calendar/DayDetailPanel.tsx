@@ -60,10 +60,19 @@ interface DayDetailPanelProps {
   onClose: () => void;
 }
 
-/** Sort dimensions surfaced as table columns. `eps` is hidden from headers
- *  but kept as a sort key in case we re-add it; `ticker` sorts the Stock
- *  column alphabetically. */
-type SortKey = "ticker" | "marketcap" | "fwd_pe" | "growth" | "score" | "risk";
+/** Sort dimensions surfaced as table columns. Phase 3G: dropped the
+ *  forward-P/E and YoY-growth columns (those live on the stock detail
+ *  page) and added Ultimo (eps_reported) / Atteso (eps_estimate) /
+ *  Sorpresa (surprise_pct) so the earnings table mirrors the macro
+ *  insight strip's columns. */
+type SortKey =
+  | "ticker"
+  | "marketcap"
+  | "ultimo"        // eps_reported — null for upcoming
+  | "atteso"        // eps_estimate
+  | "sorpresa"      // surprise_pct — null for upcoming
+  | "score"
+  | "risk";
 type SortDir = "asc" | "desc";
 
 interface SortState {
@@ -76,8 +85,9 @@ interface SortState {
 const DEFAULT_DIR: Record<SortKey, SortDir> = {
   ticker: "asc",
   marketcap: "desc",
-  fwd_pe: "asc", // lower forward P/E = cheaper = "more interesting" first
-  growth: "desc",
+  ultimo: "desc",
+  atteso: "desc",
+  sorpresa: "desc",
   score: "desc",
   risk: "asc",
 };
@@ -161,10 +171,12 @@ function DayDetailContent({
           return e.ticker;
         case "marketcap":
           return e.market_cap;
-        case "fwd_pe":
-          return e.forward_pe ?? null;
-        case "growth":
-          return e.earnings_growth ?? null;
+        case "ultimo":
+          return e.eps_reported ?? null;
+        case "atteso":
+          return e.eps_estimate ?? null;
+        case "sorpresa":
+          return e.surprise_pct ?? null;
         case "score":
           return e.composite_score ?? null;
         case "risk":
@@ -356,8 +368,11 @@ function SectionTitle({
  * row that used to sit above the table.
  */
 
+// Stock | Cap | Ultimo | Atteso | Sorpresa | Score | Risk = 7 cols.
+// Stock cell is flex-1 (minmax 0 / 1fr); the rest are fixed widths
+// chosen so EPS values like "-0.34" / "+1.23" fit at text-[14px].
 const COL_TEMPLATE =
-  "grid-cols-[minmax(0,1fr)_80px_60px_76px_60px_70px]";
+  "grid-cols-[minmax(0,1fr)_72px_64px_64px_72px_56px_64px]";
 
 function EarningsTable({
   rows,
@@ -414,19 +429,31 @@ function EarningsTable({
           state={sort}
           onClick={onSort}
         />
+        {/* Phase 3G — earnings table mirrors the macro insight strip's
+            Ultimo / Atteso / Sorpresa columns. "Ultimo" = reported EPS
+            for past quarters (null for upcoming). "Atteso" = consensus
+            EPS estimate. "Sorpresa" = (reported - estimate) / |estimate|
+            * 100 — populated only after the quarter prints. */}
         <ColHeader
-          label="P/E"
-          sortKey="fwd_pe"
+          label="Ultimo"
+          sortKey="ultimo"
           state={sort}
           onClick={onSort}
-          title="Forward P/E"
+          title="EPS reported (per i trimestri già pubblicati)"
         />
         <ColHeader
-          label="EPS Δ"
-          sortKey="growth"
+          label="Atteso"
+          sortKey="atteso"
           state={sort}
           onClick={onSort}
-          title="Crescita utili (YoY)"
+          title="EPS atteso dal consensus analisti"
+        />
+        <ColHeader
+          label="Sorpresa"
+          sortKey="sorpresa"
+          state={sort}
+          onClick={onSort}
+          title="Sorpresa = (Ultimo − Atteso) / |Atteso| × 100. Si popola dopo il rilascio."
         />
         <ColHeader
           label="Score"
@@ -542,12 +569,17 @@ function EarningsTableRow({ event }: { event: EarningsEvent }) {
           </div>
         </div>
       </div>
-      {/* Numeric cells — right-aligned tabular numerals */}
+      {/* Numeric cells — right-aligned tabular numerals.
+          Ultimo (reported EPS) shows "—" for upcoming quarters where
+          we only have an estimate. Atteso always shows the analyst
+          consensus EPS. Sorpresa is sign-tinted (green/red) and only
+          appears post-release. */}
       <NumCell value={formatMarketCap(event.market_cap)} />
-      <NumCell value={formatRatio(event.forward_pe)} />
+      <NumCell value={formatEps(event.eps_reported)} />
+      <NumCell value={formatEps(event.eps_estimate)} />
       <NumCell
-        value={formatPercent(event.earnings_growth)}
-        tone={signedTone(event.earnings_growth)}
+        value={formatPercent(event.surprise_pct == null ? null : event.surprise_pct / 100)}
+        tone={signedTone(event.surprise_pct)}
       />
       <NumCell value={formatScore(event.composite_score)} />
       <RiskCell tier={event.risk_tier ?? null} />
@@ -706,72 +738,71 @@ function MacroInsightStrip({ event }: { event: MacroEvent }) {
   const [expanded, setExpanded] = useState(false);
   const prev = event.prev_value;
   const prevDate = event.prev_date;
-  const prior = event.prior_value;
-  const change = event.change_pct;
   const unit = event.unit ?? "";
   const history = event.history ?? [];
-
-  // V3.4: tabular layout with explicit Ultimo / Δ vs precedente /
-  // Atteso / Sorpresa rows so each value has a clear role. The
-  // "Atteso" and "Sorpresa" slots stay as placeholders until the
-  // forecast feed integration lands; making the gap explicit beats
-  // hiding the field (the user wanted to know what's missing).
-  const surprise =
-    prev != null && prior != null
-      ? null /* Atteso non disponibile -> nessuna sorpresa calcolabile */
-      : null;
+  // Phase 3G: consensus + actual + surprise from Forexfactory weekly XML.
+  // The "Δ vs prec." slot was removed per user feedback — it was
+  // misleading on rate decisions (a percent-change reading on a 3.75%
+  // rate is meaningless) and noisy elsewhere. Only the "Sorpresa vs
+  // atteso" axis is editorially useful pre/post release.
+  const expected = event.expected_value;
+  const actual = event.actual_value;
+  const surprise = event.surprise_pct;
 
   return (
     <div className="mt-2 pt-2 border-t border-border/40 space-y-2 text-[12px]">
-      {/* 4-column grid: Ultimo | Δ vs precedente | Atteso | Sorpresa */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-2">
-        <Slot label="Ultimo" hint="Valore della lettura piu recente disponibile su FRED.">
+      {/* 3-column grid: Ultimo | Atteso | Sorpresa */}
+      <div className="grid grid-cols-3 gap-x-4 gap-y-2">
+        <Slot label="Ultimo" hint="Valore più recente — pubblicato (FRED) o appena uscito (Forexfactory).">
           <span className="font-bold tabular-nums text-foreground">
-            {prev != null ? formatMacroValue(prev, unit) : "—"}
+            {actual != null
+              ? formatMacroValue(actual, unit)
+              : prev != null ? formatMacroValue(prev, unit) : "—"}
           </span>
-          {prevDate && (
+          {(actual != null ? null : prevDate) && (
             <span className="text-[10px] text-muted-foreground tabular-nums ml-1">
-              ({formatMacroDate(prevDate)})
+              ({formatMacroDate(prevDate as string)})
             </span>
-          )}
-        </Slot>
-        <Slot label="Δ vs prec." hint="Variazione percentuale rispetto al valore subito precedente.">
-          {change != null ? (
-            <span
-              className={cn(
-                "font-semibold tabular-nums",
-                change > 0
-                  ? "text-emerald-600 dark:text-emerald-400"
-                  : change < 0
-                    ? "text-rose-600 dark:text-rose-400"
-                    : "text-muted-foreground",
-              )}
-              title={
-                prior != null
-                  ? `Variazione vs lettura precedente (${formatMacroValue(prior, unit)})`
-                  : undefined
-              }
-            >
-              {change > 0 ? "▲" : change < 0 ? "▼" : "·"} {change >= 0 ? "+" : ""}
-              {change.toFixed(2)}%
-            </span>
-          ) : (
-            <span className="italic text-muted-foreground">—</span>
           )}
         </Slot>
         <Slot
           label="Atteso"
-          hint="Consensus forecast pre-rilascio. Slot riservato per l'integrazione di una sorgente di previsioni (FRED non li pubblica, serve TradingEconomics o un broker feed)."
+          hint="Consensus forecast (mediana analisti) dal feed Forexfactory. Si popola per gli indicatori principali US/EU/UK; per i restanti resta n/d."
         >
-          <span className="italic text-muted-foreground">n/d</span>
+          {expected != null ? (
+            <span className="font-semibold tabular-nums">
+              {formatMacroValue(expected, unit)}
+            </span>
+          ) : (
+            <span className="italic text-muted-foreground">n/d</span>
+          )}
         </Slot>
         <Slot
           label="Sorpresa"
-          hint="Differenza tra valore uscito e atteso. Si popola automaticamente quando entrambi i campi sono disponibili — placeholder finché il feed di consensus non è collegato."
+          hint="Differenza tra valore uscito e atteso, in %. Si popola dopo il rilascio quando sia atteso che attuale sono disponibili."
         >
-          <span className="italic text-muted-foreground">
-            {surprise === null ? "—" : surprise}
-          </span>
+          {surprise != null ? (
+            <span
+              className={cn(
+                "font-semibold tabular-nums",
+                surprise > 0
+                  ? "text-emerald-600 dark:text-emerald-400"
+                  : surprise < 0
+                    ? "text-rose-600 dark:text-rose-400"
+                    : "text-muted-foreground",
+              )}
+              title={
+                expected != null && actual != null
+                  ? `Atteso ${formatMacroValue(expected, unit)} → Uscito ${formatMacroValue(actual, unit)}`
+                  : undefined
+              }
+            >
+              {surprise > 0 ? "▲" : surprise < 0 ? "▼" : "·"} {surprise >= 0 ? "+" : ""}
+              {surprise.toFixed(2)}%
+            </span>
+          ) : (
+            <span className="italic text-muted-foreground">—</span>
+          )}
         </Slot>
       </div>
 
@@ -891,56 +922,33 @@ function ExtendedHistoryChart({
         {formatMacroDate(last.date)}
       </div>
 
-      {/* V3.4 — tabular view of recent observations. The user wanted
-          to see the actual numbers and not just a chart line, plus
-          the surprise vs expected when forecasts come in. The
-          "Sorpresa" column is a placeholder until consensus feed
-          lands; the value/Δ-vs-prev columns are populated now. */}
+      {/* Tabular history. Per user feedback (Phase 3G), the "Δ vs prec."
+          column was dropped — comparing raw observations of e.g. CPI
+          index numbers via percent-change is structurally noisy and
+          not the editorially useful number. We keep "Periodo" + "Valore"
+          and leave Atteso/Sorpresa as placeholders for past observations
+          since Forexfactory's consensus is only published the week of
+          the release; historical consensus values aren't free to
+          backfill (would need TradingEconomics). */}
       <div className="mt-2 pt-2 border-t border-current/15 overflow-x-auto">
         <table className="w-full text-[11px] tabular-nums">
           <thead>
             <tr className="text-[10px] uppercase tracking-wider opacity-60">
               <th className="text-left font-semibold pb-1">Periodo</th>
               <th className="text-right font-semibold pb-1">Valore</th>
-              <th className="text-right font-semibold pb-1">Δ vs prec.</th>
-              <th className="text-right font-semibold pb-1">Atteso</th>
-              <th className="text-right font-semibold pb-1">Sorpresa</th>
             </tr>
           </thead>
           <tbody>
             {pts
               .slice(-8)
-              .map((p, idx, arr) => {
-                const prev = idx > 0 ? arr[idx - 1].value : null;
-                const delta =
-                  prev != null && prev !== 0 ? ((p.value - prev) / prev) * 100 : null;
-                return (
-                  <tr key={p.date} className="border-t border-current/10">
-                    <td className="py-1 text-left">{formatMacroDate(p.date)}</td>
-                    <td className="py-1 text-right font-semibold">
-                      {formatMacroValue(p.value, unit)}
-                    </td>
-                    <td
-                      className={cn(
-                        "py-1 text-right",
-                        delta == null
-                          ? "opacity-50"
-                          : delta > 0
-                            ? "text-emerald-600 dark:text-emerald-400"
-                            : delta < 0
-                              ? "text-rose-600 dark:text-rose-400"
-                              : "opacity-70",
-                      )}
-                    >
-                      {delta == null
-                        ? "—"
-                        : `${delta > 0 ? "▲ +" : delta < 0 ? "▼ " : "· "}${delta.toFixed(2)}%`}
-                    </td>
-                    <td className="py-1 text-right opacity-50 italic">n/d</td>
-                    <td className="py-1 text-right opacity-50 italic">—</td>
-                  </tr>
-                );
-              })
+              .map((p) => (
+                <tr key={p.date} className="border-t border-current/10">
+                  <td className="py-1 text-left">{formatMacroDate(p.date)}</td>
+                  <td className="py-1 text-right font-semibold">
+                    {formatMacroValue(p.value, unit)}
+                  </td>
+                </tr>
+              ))
               .reverse()}
           </tbody>
         </table>
@@ -1027,10 +1035,10 @@ function MacroSparkline({
 
 /* ─── Number/format helpers ─────────────────────────────────────────────── */
 
-function formatRatio(v: number | null | undefined): string {
-  if (v == null || !Number.isFinite(v)) return "—";
-  return v.toFixed(1);
-}
+// formatRatio() removed in Phase 3G when the Forward-P/E earnings
+// column was dropped in favor of Ultimo / Atteso / Sorpresa. Kept the
+// signature of formatPercent + formatScore + formatEps which the new
+// columns still use.
 
 function formatPercent(v: number | null | undefined): string {
   if (v == null || !Number.isFinite(v)) return "—";

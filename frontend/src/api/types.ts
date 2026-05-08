@@ -845,6 +845,11 @@ export interface EarningsEvent {
    *  Inferred from yfinance earnings_dates timestamp UTC hour vs
    *  the typical US session (US: pre = before 14:00 UTC, after = on/after 20:00). */
   earnings_when?: "pre" | "after" | null;
+  /** Phase 3G: actual EPS reported. Null for upcoming quarters. */
+  eps_reported?: number | null;
+  /** Surprise = (reported - estimate) / |estimate| * 100. Null when
+   *  the quarter hasn't reported yet or estimate was missing. */
+  surprise_pct?: number | null;
 }
 
 export interface MacroObservationPoint {
@@ -878,6 +883,17 @@ export interface MacroEvent {
   history?: MacroObservationPoint[];
   /** UTC HH:MM of the scheduled release ("12:30" = 8:30 ET). */
   release_time?: string | null;
+  /** Phase 3G: median analyst forecast for this release, sourced from
+   *  Forexfactory's free weekly XML feed. Null when the event isn't in
+   *  the consensus mapping or the forecast hasn't yet been published. */
+  expected_value?: number | null;
+  /** Post-release actual, also from Forexfactory. Often arrives faster
+   *  than FRED's official observation update — use this to show the
+   *  number on the calendar moments after release. */
+  actual_value?: number | null;
+  /** Surprise = (actual - expected) / |expected| * 100. Null when either
+   *  side is missing or expected is zero (rare). */
+  surprise_pct?: number | null;
 }
 
 /** Discriminated union over the `kind` tag — narrowing on `kind` gives full

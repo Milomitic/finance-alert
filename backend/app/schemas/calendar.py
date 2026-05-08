@@ -28,6 +28,12 @@ class EarningsEventOut(BaseModel):
     composite_score: float | None = None       # 0-100 composite score
     risk_tier: Literal["conservative", "moderate", "aggressive"] | None = None
     earnings_when: Literal["pre", "after"] | None = None
+    # Phase 3G: post-release reported EPS + surprise vs estimate. Mirrors
+    # the MacroEvent's actual_value / surprise_pct so the calendar UI
+    # can render a unified "Ultimo / Atteso / Sorpresa" row across both
+    # event types.
+    eps_reported: float | None = None
+    surprise_pct: float | None = None
 
 
 class MacroObservationOut(BaseModel):
@@ -67,6 +73,13 @@ class MacroEventOut(BaseModel):
     # a specific window. The frontend renders it next to the date so the
     # user knows when to watch the print.
     release_time: str | None = None
+    # Phase 3G: consensus / actual / surprise (sourced from Forexfactory's
+    # free weekly XML feed via `forexfactory_consensus`). None when the
+    # event isn't covered by the consensus mapping or the weekly XML
+    # doesn't yet have the forecast/actual.
+    expected_value: float | None = None
+    actual_value: float | None = None
+    surprise_pct: float | None = None
 
 
 CalendarEvent = Annotated[
