@@ -19,6 +19,51 @@ class FetchResult:
     failed_tickers: list[str] | None = None
 
 
+def _normalize_minor_unit_value(currency: str | None, value: float | None) -> float | None:
+    """Scale pence to pounds for LSE quotes.
+
+    yfinance returns LSE-listed stocks (.L) with currency='GBp' or 'GBX'
+    and prices in pence. ohlcv_daily must store pounds so that downstream
+    consumers (chart, indicators, prev_close override, score, alerts)
+    are unit-consistent with live_quote_service.
+
+    Mirror of live_quote_service._scale_pence_to_pounds. Documented in
+    docs/superpowers/specs/2026-05-08-price-units-data-integrity-design.md
+    Phase 2.
+
+    Returns None unchanged. USD / EUR / GBP (already-pounds -- e.g. CPG.L,
+    IHG.L, MTLN.L on the LSE) pass through.
+    """
+    if value is None:
+        return None
+    if currency in ("GBp", "GBX"):
+        return value / 100.0
+    return value
+
+
+def _get_yfinance_native_currency(ticker: str) -> str | None:
+    """Return yfinance's raw `fast_info["currency"]` for a ticker, or None
+    on any error (rate-limit, network, ticker not found, etc.).
+
+    Why query yfinance instead of `Stock.currency`: the catalog normalizes
+    Stock.currency uniformly to 'GBP' for both GBp-priced and GBP-priced
+    LSE stocks. Only the raw yfinance currency keeps the distinction we
+    need for the pence/pounds scaling decision.
+
+    Wrapped in a try/except so any failure returns None and the caller
+    can fail-safe (don't scale -- pass-through). Better unscaled than
+    incorrectly scaled.
+    """
+    try:
+        import yfinance as yf
+        t = yf.Ticker(ticker)
+        fi: Any = t.fast_info
+        return fi.get("currency")
+    except Exception as e:  # noqa: BLE001
+        logger.debug(f"[ohlcv] _get_yfinance_native_currency({ticker}): {e}")
+        return None
+
+
 def _yf_download(tickers: list[str], **kwargs: Any) -> pd.DataFrame:
     """Wrap yfinance.download for monkeypatching in tests."""
     import yfinance as yf
@@ -53,11 +98,28 @@ def _extract_ticker_frame(df: pd.DataFrame, ticker: str) -> pd.DataFrame | None:
 
 
 def _upsert_one_stock(db: Session, stock: Stock, frame: pd.DataFrame) -> tuple[int, int]:
-    """Upsert OHLCV rows for one stock. Returns (inserted, updated)."""
+    """Upsert OHLCV rows for one stock. Returns (inserted, updated).
+
+    For LSE-listed stocks where yfinance reports currency='GBp' (or 'GBX'),
+    O/H/L/C are scaled pence->pounds before INSERT so the table is uniformly
+    in pounds. See docs/superpowers/specs/2026-05-08-price-units-data-integrity-design.md.
+
+    The currency check uses yfinance's raw `fast_info["currency"]` rather
+    than `Stock.currency` because the catalog normalizes Stock.currency
+    to 'GBP' uniformly for both GBp-priced and GBP-priced LSE stocks.
+    """
     inserted = 0
     updated = 0
+    # Look up yfinance's native currency once per stock. Fails to None on
+    # any error -> caller passes through (no scaling, fail-safe).
+    native_currency = _get_yfinance_native_currency(stock.ticker)
     for ts, row in frame.iterrows():
         d = ts.date() if isinstance(ts, pd.Timestamp) else ts
+        # Scale pence->pounds for LSE before INSERT. Pass-through for everything else.
+        open_v = _normalize_minor_unit_value(native_currency, float(row["Open"]))
+        high_v = _normalize_minor_unit_value(native_currency, float(row["High"]))
+        low_v = _normalize_minor_unit_value(native_currency, float(row["Low"]))
+        close_v = _normalize_minor_unit_value(native_currency, float(row["Close"]))
         # SQLite upsert via INSERT ... ON CONFLICT
         stmt = text(
             """
@@ -76,10 +138,10 @@ def _upsert_one_stock(db: Session, stock: Stock, frame: pd.DataFrame) -> tuple[i
             {
                 "stock_id": stock.id,
                 "date": d,
-                "open": float(row["Open"]),
-                "high": float(row["High"]),
-                "low": float(row["Low"]),
-                "close": float(row["Close"]),
+                "open": open_v,
+                "high": high_v,
+                "low": low_v,
+                "close": close_v,
                 "volume": int(row["Volume"]) if not pd.isna(row["Volume"]) else 0,
             },
         )
