@@ -27,6 +27,7 @@ from app.services import (
     stock_detail_service, stock_fundamentals_service,
     stock_news_service,
 )
+from app.services.earnings_session_timing import classify_session_timing
 from app.services.stock_service import (
     SORTABLE_COLUMNS, StockFilter, get_filter_options, search_stocks,
 )
@@ -271,12 +272,18 @@ def get_stock_fundamentals(
     # window), so the same action reported by both sources counts once.
     # See `news_analyst_extractor` for the regex/firm-list rationale.
     merged_actions = _merge_news_analyst_actions(ticker, f.analyst_actions)
+    # Sun/moon icon hint: classify the next earnings release timing relative
+    # to the listing-country session. Country fed from `Stock.country`.
+    next_earnings_when = classify_session_timing(
+        f.next_earnings_time_utc, stock.country
+    )
     return FundamentalsOut(
         ticker=f.ticker,
         annual=[FundamentalsAnnualOut(**a.__dict__) for a in f.annual],
         quarterly=[FundamentalsQuarterlyOut(**q.__dict__) for q in f.quarterly],
         earnings=[FundamentalsEarningsOut(**e.__dict__) for e in f.earnings],
         next_earnings_date=f.next_earnings_date,
+        next_earnings_when=next_earnings_when,
         next_eps_estimate=f.next_eps_estimate,
         next_revenue_estimate=f.next_revenue_estimate,
         micro=MicroDataOut(**f.micro.__dict__),

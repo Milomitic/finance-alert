@@ -215,6 +215,12 @@ class FundamentalsOut(BaseModel):
     quarterly: list[FundamentalsQuarterlyOut] = []
     earnings: list[FundamentalsEarningsOut] = []
     next_earnings_date: str | None = None
+    # When the next earnings is released relative to the trading session.
+    # "pre" -> sole icon (released before market open),
+    # "after" -> luna icon (released after market close),
+    # None -> no icon (mid-session release, non-US country, or unknown).
+    # Computed via earnings_session_timing.classify_session_timing.
+    next_earnings_when: Literal["pre", "after"] | None = None
     next_eps_estimate: float | None = None
     next_revenue_estimate: float | None = None
     micro: MicroDataOut = MicroDataOut()
