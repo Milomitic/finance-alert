@@ -28,6 +28,7 @@ from sqlalchemy.orm import Session
 from app.models import MacroObservation, MacroSeries, Stock, StockScore
 from app.services import calendar_macros, macro_events_service, stock_fundamentals_service
 from app.services.calendar_macros import Importance, MacroEvent
+from app.services.earnings_session_timing import classify_session_timing
 
 # Sort order — macros first per UX spec (V2): macros are scarcer + higher
 # signal at a glance than the long tail of earnings releases on any given
@@ -193,7 +194,7 @@ def _earnings_for_stock(
             earnings_growth=earnings_growth,
             composite_score=score.composite if score else None,
             risk_tier=score.risk_tier if score else None,
-            earnings_when=_classify_session_timing(time_utc, stock.country),
+            earnings_when=classify_session_timing(time_utc, stock.country),
             eps_reported=eps_reported,
             surprise_pct=surprise_pct,
         )
@@ -232,36 +233,6 @@ def _earnings_for_stock(
         seen.add(d)
 
     return out
-
-
-def _classify_session_timing(time_utc: str | None, country: str | None) -> str | None:
-    """Return "pre" | "after" | None given a UTC HH:MM string and the
-    listing country.
-
-    For US tickers we use the standard NYSE/NASDAQ session boundaries
-    in UTC (winter offsets — close enough for the icon hint):
-      - 14:30 UTC = 9:30 ET = market open
-      - 21:00 UTC = 16:00 ET = market close
-    Times before 14:30 = pre-market; on/after 21:00 = after-market.
-    Mid-session prints (rare) and tickers outside US fall through to
-    None (no icon shown rather than wrong icon).
-    """
-    if not time_utc or not country:
-        return None
-    try:
-        h, m = time_utc.split(":")
-        minutes = int(h) * 60 + int(m)
-    except (ValueError, AttributeError):
-        return None
-    if country == "US":
-        # 14:30 UTC = 870 minutes; 21:00 UTC = 1260 minutes
-        if minutes < 14 * 60 + 30:
-            return "pre"
-        if minutes >= 21 * 60:
-            return "after"
-        return None
-    # Other markets: heuristic only — we dont track their sessions yet.
-    return None
 
 
 def _convert_macro(m: MacroEvent) -> MacroEventDC:
