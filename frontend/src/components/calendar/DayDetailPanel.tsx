@@ -571,11 +571,20 @@ function EarningsTableRow({ event }: { event: EarningsEvent }) {
       </div>
       {/* Numeric cells — right-aligned tabular numerals.
           Ultimo (reported EPS) shows "—" for upcoming quarters where
-          we only have an estimate. Atteso always shows the analyst
-          consensus EPS. Sorpresa is sign-tinted (green/red) and only
-          appears post-release. */}
+          we only have an estimate. Post-release the value is sign-tinted
+          (green if Ultimo > Atteso, red if Ultimo < Atteso) so the user
+          can read the surprise sign from the value itself. Atteso always
+          shows the analyst consensus EPS. Sorpresa is also sign-tinted
+          and shows the magnitude — same axis as Ultimo. */}
       <NumCell value={formatMarketCap(event.market_cap)} />
-      <NumCell value={formatEps(event.eps_reported)} />
+      <NumCell
+        value={formatEps(event.eps_reported)}
+        tone={
+          event.eps_reported != null && event.eps_estimate != null
+            ? signedTone(event.eps_reported - event.eps_estimate)
+            : undefined
+        }
+      />
       <NumCell value={formatEps(event.eps_estimate)} />
       <NumCell
         value={formatPercent(event.surprise_pct == null ? null : event.surprise_pct / 100)}
@@ -753,8 +762,23 @@ function MacroInsightStrip({ event }: { event: MacroEvent }) {
     <div className="mt-2 pt-2 border-t border-border/40 space-y-2 text-[12px]">
       {/* 3-column grid: Ultimo | Atteso | Sorpresa */}
       <div className="grid grid-cols-3 gap-x-4 gap-y-2">
-        <Slot label="Ultimo" hint="Valore più recente — pubblicato (FRED) o appena uscito (Forexfactory).">
-          <span className="font-bold tabular-nums text-foreground">
+        <Slot label="Ultimo" hint="Valore più recente — pubblicato (FRED) o appena uscito (Forexfactory). Quando è il dato post-release vs un consensus disponibile, il colore segue il segno della sorpresa (verde = sopra le attese, rosso = sotto).">
+          <span
+            className={cn(
+              "font-bold tabular-nums",
+              // Tint only when this is the post-release actual AND we have
+              // an expected to compare. Pre-release fallback (showing prev
+              // with "(prec.)" label) stays neutral — there's no surprise
+              // axis to represent yet.
+              actual != null && expected != null
+                ? actual > expected
+                  ? "text-emerald-600 dark:text-emerald-400"
+                  : actual < expected
+                    ? "text-rose-600 dark:text-rose-400"
+                    : "text-foreground"
+                : "text-foreground",
+            )}
+          >
             {actual != null
               ? formatMacroValue(actual, unit)
               : prev != null ? formatMacroValue(prev, unit) : "—"}
