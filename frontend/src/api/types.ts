@@ -688,6 +688,13 @@ export interface Fundamentals {
   quarterly: FundamentalsQuarterly[];
   earnings: FundamentalsEarnings[];
   next_earnings_date: string | null;
+  /** When the next earnings is released relative to the session.
+   *  "pre"   -> render sun glyph;
+   *  "after" -> moon glyph;
+   *  null    -> no glyph.
+   *  Computed server-side from yfinance UTC time + listing country.
+   *  Currently populated only for US stocks; non-US returns null. */
+  next_earnings_when?: "pre" | "after" | null;
   next_eps_estimate: number | null;
   /** Revenue forecast (analyst consensus) for the upcoming earnings event,
    *  when yfinance exposes it. NULL when the field isn't in the

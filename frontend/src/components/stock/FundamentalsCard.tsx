@@ -305,11 +305,13 @@ function AnnualTabBody({
 }
 
 function QuarterlyTabBody({
-  quarterly, earnings, nextEarningsDate, nextEpsEstimate, nextRevenueEstimate,
+  quarterly, earnings, nextEarningsDate, nextEarningsWhen, nextEpsEstimate, nextRevenueEstimate,
 }: {
   quarterly: FundamentalsQuarterly[];
   earnings: FundamentalsEarnings[];
   nextEarningsDate: string | null;
+  /** Pre/after-market hint for the upcoming earnings — drives sun/moon glyph. */
+  nextEarningsWhen: "pre" | "after" | null;
   nextEpsEstimate: number | null;
   nextRevenueEstimate: number | null;
 }) {
@@ -398,6 +400,26 @@ function QuarterlyTabBody({
                   <span className="inline-flex items-center gap-1 font-mono text-blue-700 dark:text-blue-300">
                     {shortDate(nextEarningsDate!)}
                   </span>
+                  {/* Pre/after-market icon — same glyphs as the calendar's
+                      EventChip. Sun = pre-open release, moon = after-close. */}
+                  {nextEarningsWhen === "pre" && (
+                    <span
+                      className="ml-1 text-[11px] leading-none shrink-0 text-amber-500"
+                      title="Pre-market: earnings rilasciati prima dell'apertura della sessione"
+                      aria-label="pre-market"
+                    >
+                      ☀
+                    </span>
+                  )}
+                  {nextEarningsWhen === "after" && (
+                    <span
+                      className="ml-1 text-[11px] leading-none shrink-0 opacity-80"
+                      title="After-market: earnings rilasciati dopo la chiusura della sessione"
+                      aria-label="after-market"
+                    >
+                      ☾
+                    </span>
+                  )}
                   <span className="ml-1 text-[10px] uppercase tracking-wider text-blue-700/80 dark:text-blue-300/80 font-semibold">
                     prossima
                   </span>
@@ -592,6 +614,7 @@ export function FundamentalsCard({ ticker }: Props) {
               quarterly={f.quarterly}
               earnings={f.earnings}
               nextEarningsDate={f.next_earnings_date}
+              nextEarningsWhen={f.next_earnings_when ?? null}
               nextEpsEstimate={f.next_eps_estimate}
               nextRevenueEstimate={f.next_revenue_estimate}
             />
