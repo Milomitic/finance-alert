@@ -28,10 +28,12 @@ router = APIRouter(prefix="/api/markets", tags=["markets"])
 
 # Build a quick lookup of the curated symbols + their UI metadata so
 # the detail endpoint can return name/category/flag without the
-# frontend hard-coding it.
+# frontend hard-coding it. Tuple in LIVE_ASSET_DEFINITIONS is now
+# (symbol, name, category, flag, futures_symbol) — the 5th element
+# is unused here so we discard it with `_`.
 _LIVE_META: dict[str, tuple[str, str, str | None]] = {
     symbol: (name, category, flag)
-    for (symbol, name, category, flag) in LIVE_ASSET_DEFINITIONS
+    for (symbol, name, category, flag, _) in LIVE_ASSET_DEFINITIONS
 }
 
 

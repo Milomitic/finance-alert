@@ -19,6 +19,12 @@ export interface LiveAsset {
    *  the upstream history fetch failed for this symbol. The frontend
    *  just omits the sparkline in that case. */
   history: number[] | null;
+  /** When true, the `quote.price` is sourced from the index's E-mini
+   *  futures contract (cash market closed → fallback). UI renders a
+   *  small "FUT" badge so the user knows the price isn't the cash
+   *  close. Default false / undefined for cash quotes and rows
+   *  without a futures pair. */
+  using_futures?: boolean;
 }
 
 export interface LiveAssetsResponse {

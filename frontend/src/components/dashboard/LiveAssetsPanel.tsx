@@ -174,7 +174,12 @@ function AssetRow({ asset }: { asset: LiveAsset }) {
         )}
       </span>
 
-      {/* Identity: name + live dot */}
+      {/* Identity: name + live dot + futures badge.
+          - The pulsing emerald dot fires when the cash market is OPEN.
+          - The "FUT" amber badge fires when the cash market is CLOSED
+            and the price comes from the E-mini futures contract instead
+            (e.g. ES=F at 22:00 UTC for ^GSPC). The two are mutually
+            exclusive — `using_futures` only sets when cash isn't OPEN. */}
       <div className="shrink-0 min-w-0 flex items-center gap-1.5">
         <span className="text-[14px] font-semibold truncate leading-tight">
           {asset.name}
@@ -186,6 +191,14 @@ function AssetRow({ asset }: { asset: LiveAsset }) {
           >
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60" />
             <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500" />
+          </span>
+        )}
+        {asset.using_futures && (
+          <span
+            className="shrink-0 px-1 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-200"
+            title="Cash market chiuso · prezzo dal contratto futures"
+          >
+            FUT
           </span>
         )}
       </div>

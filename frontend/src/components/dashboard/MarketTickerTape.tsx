@@ -59,13 +59,23 @@ function TickerItem({ asset }: { asset: LiveAsset }) {
 
   return (
     <span className="inline-flex items-center gap-1.5 px-3.5 py-0.5 border-r border-border/40 whitespace-nowrap shrink-0">
-      {/* Pulsing green dot for OPEN markets — the "live" tell. */}
-      {isLive && (
+      {/* Pulsing green dot for OPEN markets — the "live" tell.
+          When cash is closed but futures price is being shown, an
+          amber "FUT" badge replaces the dot so the user understands
+          the source. The two are mutually exclusive. */}
+      {isLive ? (
         <span className="relative inline-flex h-1.5 w-1.5 shrink-0">
           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60" />
           <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500" />
         </span>
-      )}
+      ) : asset.using_futures ? (
+        <span
+          className="shrink-0 px-0.5 py-0 rounded text-[8px] font-bold uppercase tracking-wider bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-200"
+          title="Cash market chiuso · prezzo dal contratto futures"
+        >
+          FUT
+        </span>
+      ) : null}
       <span className="font-mono font-semibold text-[12px] tracking-tight">
         {asset.name}
       </span>

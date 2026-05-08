@@ -40,6 +40,15 @@ class LiveAsset(BaseModel):
     flag: str | None = None  # 2-letter region code, lowercase ("us", "jp", "it"); None for global assets
     quote: LiveQuoteOut | None = None  # null when fetch failed / breaker open
     history: list[float] | None = None  # ~30 trailing daily closes for the sparkline; None on fetch failure
+    # When True, the `quote` field is sourced from the index's E-mini
+    # futures contract (e.g. ES=F for ^GSPC) because the cash market
+    # was closed at request time. Futures trade nearly 24h on CME
+    # Globex so they're our after-hours signal. Frontend renders a
+    # small "FUT" badge so the user knows the price isn't the cash
+    # close anymore. Default False = the row shows the cash quote
+    # (most rows: commodities, crypto, indices during regular hours,
+    # and indices without a paired futures symbol).
+    using_futures: bool = False
 
 
 class LiveAssetsOut(BaseModel):
@@ -49,25 +58,36 @@ class LiveAssetsOut(BaseModel):
 # Curated panel composition. Order matters — it's the rendering order.
 # Mix of US, EU, Asia indices + the half-dozen commodities and crypto
 # pairs a finance-news headline references on a typical morning.
-LIVE_ASSET_DEFINITIONS: list[tuple[str, str, str, str | None]] = [
-    # symbol,         name,                 category,    flag
-    ("^GSPC",        "S&P 500",            "index",     "us"),
-    ("^IXIC",        "Nasdaq Composite",   "index",     "us"),
-    ("^DJI",         "Dow Jones",          "index",     "us"),
-    ("^N225",        "Nikkei 225",         "index",     "jp"),
-    ("^STOXX50E",    "Euro Stoxx 50",      "index",     "eu"),
-    ("FTSEMIB.MI",   "FTSE MIB",           "index",     "it"),
-    ("^HSI",         "Hang Seng",          "index",     "hk"),
+#
+# Tuple shape: (symbol, name, category, flag, futures_symbol)
+#
+# `futures_symbol` is the yfinance ticker for the index's E-mini
+# futures contract — used as a fallback price source when the cash
+# market is closed. CME Globex futures trade ~23h/day (Sun 23:00 UTC
+# - Fri 22:00 UTC with a 1h pause), giving us continuous after-hours
+# coverage. Set to None when no liquid futures contract exists on
+# yfinance (FTSE MIB, CSI 300, Hang Seng cash quotes have no
+# yfinance-accessible futures pair) or when the row IS itself a
+# futures contract (commodities) or 24h asset (crypto).
+LIVE_ASSET_DEFINITIONS: list[tuple[str, str, str, str | None, str | None]] = [
+    # symbol,         name,                 category,    flag, futures_symbol
+    ("^GSPC",        "S&P 500",            "index",     "us", "ES=F"),
+    ("^IXIC",        "Nasdaq Composite",   "index",     "us", "NQ=F"),
+    ("^DJI",         "Dow Jones",          "index",     "us", "YM=F"),
+    ("^N225",        "Nikkei 225",         "index",     "jp", "NKD=F"),
+    ("^STOXX50E",    "Euro Stoxx 50",      "index",     "eu", None),
+    ("FTSEMIB.MI",   "FTSE MIB",           "index",     "it", None),
+    ("^HSI",         "Hang Seng",          "index",     "hk", None),
     # CSI 300 stays in the dashboard even though Chinese-mainland
     # stocks were removed from the catalog (per user) — they still
     # want to track the headline Chinese index's daily move.
-    ("000300.SS",    "CSI 300",            "index",     "cn"),
-    ("GC=F",         "Oro (futures)",      "commodity", None),
-    ("SI=F",         "Argento (futures)",  "commodity", None),
-    ("CL=F",         "Petrolio WTI",       "commodity", None),
-    ("NG=F",         "Gas naturale",       "commodity", None),
-    ("BTC-USD",      "Bitcoin",            "crypto",    None),
-    ("ETH-USD",      "Ethereum",           "crypto",    None),
+    ("000300.SS",    "CSI 300",            "index",     "cn", None),
+    ("GC=F",         "Oro (futures)",      "commodity", None, None),
+    ("SI=F",         "Argento (futures)",  "commodity", None, None),
+    ("CL=F",         "Petrolio WTI",       "commodity", None, None),
+    ("NG=F",         "Gas naturale",       "commodity", None, None),
+    ("BTC-USD",      "Bitcoin",            "crypto",    None, None),
+    ("ETH-USD",      "Ethereum",           "crypto",    None, None),
 ]
 
 
@@ -78,28 +98,55 @@ def get_live_assets(_user: User = Depends(get_current_user)) -> LiveAssetsOut:
     quote service caches each symbol for 10s so concurrent tabs share
     a single yfinance call.
 
+    After-hours futures fallback: rows that have a paired futures
+    symbol (ES=F for ^GSPC, NQ=F for ^IXIC, etc.) get a SECOND quote
+    fetched in the same batch. When the cash market is CLOSED at
+    request time AND the futures quote has a valid price, we swap the
+    `quote` field with the futures one and set `using_futures=True`.
+    The frontend uses the flag to render a small "FUT" badge so the
+    user understands the price source changed.
+
     Bypasses the `Stock` catalog membership filter that
     `/api/stocks/quotes` applies — these symbols are intentionally NOT
     in the catalog (they aren't tradeable equities the user follows).
     """
-    symbols = [d[0] for d in LIVE_ASSET_DEFINITIONS]
-    quotes = live_quote_service.get_quotes_batch(symbols)
+    # Single batch call for cash + futures symbols — minimizes the
+    # roundtrip to live_quote_service.get_quotes_batch which itself
+    # fans out to yfinance.
+    cash_symbols = [d[0] for d in LIVE_ASSET_DEFINITIONS]
+    futures_symbols = [d[4] for d in LIVE_ASSET_DEFINITIONS if d[4]]
+    all_symbols = cash_symbols + futures_symbols
+    quotes = live_quote_service.get_quotes_batch(all_symbols)
     # Sparkline history has its own 15-min TTL cache; it returns
-    # already-cached arrays cheaply on most calls.
-    histories = live_sparkline_service.get_sparklines(symbols)
+    # already-cached arrays cheaply on most calls. We only render the
+    # cash sparkline (the futures' history would have a tiny basis
+    # offset from cash so mixing them in one chart would show
+    # phantom jumps at the cash↔futures swap-over).
+    histories = live_sparkline_service.get_sparklines(cash_symbols)
     out: list[LiveAsset] = []
-    for symbol, name, category, flag in LIVE_ASSET_DEFINITIONS:
-        q = quotes.get(symbol)
-        # `get_quote` always returns a LiveQuote, but `error` may be set
-        # and `price` may be None. We pass it through; the frontend
-        # renders "—" gracefully in those cases.
+    for symbol, name, category, flag, futures_symbol in LIVE_ASSET_DEFINITIONS:
+        cash_q = quotes.get(symbol)
+        # Decide: use cash or futures?
+        # - If cash market is OPEN (or the row is a 24h commodity / crypto
+        #   row that we don't have a futures pair for) → use cash.
+        # - If cash market is CLOSED AND futures quote has a price →
+        #   swap to futures, set using_futures.
+        use_futures = False
+        effective_q = cash_q
+        if futures_symbol and cash_q and cash_q.market_state != "OPEN":
+            futures_q = quotes.get(futures_symbol)
+            if futures_q and futures_q.price is not None and futures_q.error is None:
+                effective_q = futures_q
+                use_futures = True
+
         out.append(LiveAsset(
             symbol=symbol,
             name=name,
             category=category,
             flag=flag,
-            quote=LiveQuoteOut(**q.__dict__) if q else None,
+            quote=LiveQuoteOut(**effective_q.__dict__) if effective_q else None,
             history=histories.get(symbol),
+            using_futures=use_futures,
         ))
     return LiveAssetsOut(assets=out)
 
