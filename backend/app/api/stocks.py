@@ -259,10 +259,12 @@ def get_stock_fundamentals(
 ) -> FundamentalsOut:
     """Annual revenue/net income/EPS + earnings history with surprise %.
     Cached 24h; non-fatal on yfinance failure (returns empty payload)."""
-    # `ticker` è univoco — vedi nota in `get_one()`.
+    # Catalog has duplicate ticker rows for ~tens of names (see CLAUDE.md).
+    # `.limit(1).scalars().first()` is the safe pattern; `scalar_one_or_none`
+    # raises MultipleResultsFound on those duplicates.
     stock = db.execute(
-        select(Stock).where(Stock.ticker == ticker)
-    ).scalar_one_or_none()
+        select(Stock).where(Stock.ticker == ticker).limit(1)
+    ).scalars().first()
     if stock is None:
         raise HTTPException(status_code=404, detail=f"Ticker not found: {ticker}")
     f = stock_fundamentals_service.get_fundamentals(ticker)
@@ -405,10 +407,11 @@ def get_stock_quote(
     """Live (10s-cached) quote for a single ticker. Honors the yfinance
     circuit breaker — returns the cached quote (with `error` set) when
     Yahoo is rate-limited rather than blocking the request."""
-    # `ticker` è univoco — vedi nota in `get_one()`.
+    # Catalog has duplicate ticker rows (see CLAUDE.md). Use `.first()`
+    # — `scalar_one_or_none` raises MultipleResultsFound on duplicates.
     exists = db.execute(
-        select(Stock.id).where(Stock.ticker == ticker)
-    ).scalar_one_or_none()
+        select(Stock.id).where(Stock.ticker == ticker).limit(1)
+    ).scalars().first()
     if exists is None:
         raise HTTPException(status_code=404, detail=f"Ticker not found: {ticker}")
     q = live_quote_service.get_quote(ticker)
