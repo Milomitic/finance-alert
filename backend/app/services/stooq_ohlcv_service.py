@@ -1,4 +1,4 @@
-"""Stooq OHLCV fallback (no API key required, CSV over HTTPS).
+"""Stooq OHLCV fallback (CSV over HTTPS).
 
 Used when the yfinance circuit breaker is OPEN. Stooq covers most US/EU/UK
 tickers, with a slightly different naming convention (lowercase, dot suffix
@@ -7,7 +7,20 @@ miss is non-fatal: caller will skip the stock for this scan cycle.
 
 Endpoint shape:
     https://stooq.com/q/d/l/?s=aapl.us&d1=20240101&d2=20251231&i=d
-returns CSV: Date,Open,High,Low,Close,Volume (header + N rows, ascending).
+returned CSV: Date,Open,High,Low,Close,Volume (header + N rows, ascending).
+
+⚠ KNOWN ISSUE (empirically verified 2026-05-08): Stooq now requires an
+`apikey` query parameter. Without it, the endpoint returns HTTP 200 with
+plain-text instructions ("Get your apikey: ...") instead of CSV, which
+makes _parse_csv() fail with "Error tokenizing data". This means the
+fallback is effectively non-functional today. Tracked as a separate task
+(see "Restore Stooq OHLCV fallback" spawned during the Plan #2 sweep).
+
+Currency / unit handling: this path delegates to ohlcv_service._upsert_one_stock
+which calls _get_yfinance_native_currency(ticker) to decide whether to
+scale pence->pounds. yfinance fast_info is reachable independently of
+the data path (it's a separate endpoint), so even when Stooq is the data
+source, the scaling decision is correct.
 """
 import io
 from dataclasses import dataclass, field
