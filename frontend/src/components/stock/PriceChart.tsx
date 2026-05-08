@@ -96,12 +96,19 @@ interface TooltipState {
   low: number;
   close: number;
   volume: number;
-  // Intra-candle variation (close vs open of the same bar). The
-  // bar-over-bar variation (close vs previous close) used to live here
-  // as `prevChangePct` but was removed per user feedback — the single
-  // intra-candle delta is enough; the inter-bar one was redundant with
-  // the page-header `+X.YZ%` chip.
+  // Bar-over-bar variation: this bar's close vs the PREVIOUS bar's
+  // close. This is the canonical D/D return on daily bars, the
+  // 30m-over-30m return on intraday. Reverted from the previous
+  // intra-candle (close-vs-open) interpretation per user feedback —
+  // they want the same "vs previous close" reading as the page-header
+  // chip, not a redundant view of the candle's body.
   changePct: number | null;
+  // True when this bar's close is at-or-above its OWN open (= visually
+  // green candle body). Drives the close-cell color in the tooltip;
+  // independent from `changePct` since the new `changePct` could be
+  // positive even on a bar that closed below its open (e.g. the bar
+  // gapped UP at open and faded back, but still ended above the
+  // previous day's close).
   isUp: boolean;
 }
 
@@ -116,16 +123,23 @@ export function PriceChart({
   // time, but to look up O/H/L/C/V we need a Map<time, bar>. Built
   // once per data update; cheap O(1) hit per crosshair event.
   const barsByTimeRef = useRef<Map<number, OhlcvBar & { idx: number }>>(new Map());
+  // The full ohlcv array, refreshed on every data update. Used by the
+  // crosshair handler to look up the bar BEFORE the hovered one (for
+  // computing close-over-prev-close variation). A ref is needed
+  // because the handler is registered once at chart mount and
+  // would otherwise close over the initial `ohlcv` snapshot.
+  const ohlcvRef = useRef<OhlcvBar[]>([]);
   const timeframeRef = useRef<string | undefined>(timeframe);
   const [tooltip, setTooltip] = useState<TooltipState | null>(null);
 
-  // Keep the latest timeframe available to the crosshair handler closure
+  // Keep the latest props available to the crosshair handler closure
   // (which is registered once at chart mount and survives across
-  // data/timeframe changes). Without this ref the formatter would
-  // freeze on the timeframe at chart-mount time.
+  // data/timeframe changes). Without these refs the formatter and
+  // prev-bar lookup would freeze on the values at mount time.
   useEffect(() => {
     timeframeRef.current = timeframe;
-  }, [timeframe]);
+    ohlcvRef.current = ohlcv;
+  }, [timeframe, ohlcv]);
   const sma20Ref = useRef<ISeriesApi<"Line"> | null>(null);
   const sma50Ref = useRef<ISeriesApi<"Line"> | null>(null);
   const sma200Ref = useRef<ISeriesApi<"Line"> | null>(null);
@@ -238,12 +252,16 @@ export function PriceChart({
         setTooltip(null);
         return;
       }
-      // Δ% intra-candle (close vs open) — what the candle "did".
-      // The bar-over-bar version (close vs previous close) was removed
-      // here because the page-header chip already shows that number;
-      // having two deltas in the tooltip cluttered the read.
-      const changePct = bar.open !== 0
-        ? ((bar.close - bar.open) / bar.open) * 100
+      // Δ% bar-over-bar (this close vs PREVIOUS close). On daily bars
+      // this is the canonical D/D return; on 30m/1h it's the period-
+      // over-period return. Reverted from the previous intra-candle
+      // (close-vs-open) semantics per user feedback — the prev-close
+      // baseline is the standard finance reading and matches the
+      // page-header chip's logic.
+      // First bar in the window has no predecessor → null.
+      const prevBar = bar.idx > 0 ? ohlcvRef.current[bar.idx - 1] : null;
+      const changePct = prevBar && prevBar.close !== 0
+        ? ((bar.close - prevBar.close) / prevBar.close) * 100
         : null;
       setTooltip({
         visible: true,

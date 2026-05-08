@@ -34,11 +34,100 @@ function shortDate(s: string): string {
   return `${d}/${m}/${y.slice(2)}`;
 }
 
+/* Insider-transaction tone classifier.
+ *
+ * yfinance's `Transaction` text is unstructured and a few patterns
+ * deserve different colors:
+ *
+ *  - "Sale" / "Sell"            → RED (open-market divestiture)
+ *  - "Purchase" / "Buy"         → GREEN (open-market accumulation,
+ *                                 the strongest signal in the dataset)
+ *  - "Acquisition" / "Award" / "Conversion" / "Gift" → MUTED
+ *    These represent NON-cash events: RSU vesting, option conversion,
+ *    stock awards, gifts. Tagging them green misleads the reader into
+ *    thinking the insider voluntarily put money in — they didn't.
+ *
+ * The user reasonably asked "why are green buys so rare?" — the answer
+ * is structural: insider open-market PURCHASES are genuinely rare
+ * compared to RSU-driven sales (every executive sells vested grants
+ * to diversify and pay taxes; very few executives buy more of their
+ * employer's stock with cash). When you DO see green, it's a
+ * meaningful signal — the insider chose to put their own capital in.
+ *
+ * "Non Open Market" disclaimer in the text → automatically not green
+ * (RSU vesting often shows up as "Acquisition (Non Open Market)").
+ */
 function txnTone(text: string): string {
   const lc = text.toLowerCase();
-  if (lc.includes("sale") || lc.includes("sell")) return "text-red-700 dark:text-red-300";
-  if (lc.includes("buy") || lc.includes("purchase") || lc.includes("acquisition")) return "text-green-700 dark:text-green-300";
+  // Hard-block: anything labeled "non open market" is by definition
+  // a non-cash event, regardless of which verb the row uses.
+  const isNonOpenMarket = lc.includes("non open market");
+
+  if (lc.includes("sale") || lc.includes("sell")) {
+    return "text-red-700 dark:text-red-300";
+  }
+  if (!isNonOpenMarket && (lc.includes("purchase") || lc.includes("buy"))) {
+    return "text-green-700 dark:text-green-300";
+  }
+  // Acquisitions, gifts, conversions, awards, statements, dispositions,
+  // and any other "neutral" disclosures stay muted — they don't reflect
+  // the insider's directional conviction.
   return "text-muted-foreground";
+}
+
+/* Position-name abbreviation map.
+ *
+ * yfinance returns the verbose SEC filing position string ("Chief
+ * Executive Officer", "Senior Vice President of Finance"). The
+ * sidebar slot has limited horizontal space so the long forms
+ * truncate to "..." losing the actual role. Map the common forms to
+ * conventional abbreviations BEFORE the truncate kicks in.
+ *
+ * Order matters: longer / more specific patterns first so
+ * "Senior Vice President" wins over "Vice President".
+ */
+const POSITION_ABBREVIATIONS: Array<[RegExp, string]> = [
+  // Compound titles first
+  [/\bPresident\s+(?:and|&|,)\s+Chief\s+Executive\s+Officer\b/i, "President & CEO"],
+  [/\bChief\s+Executive\s+Officer\s+(?:and|&|,)\s+Director\b/i, "CEO & Director"],
+  [/\bChairman\s+(?:and|&|,)\s+Chief\s+Executive\s+Officer\b/i, "Chairman & CEO"],
+  // C-suite singletons
+  [/\bChief\s+Executive\s+Officer\b/i, "CEO"],
+  [/\bChief\s+Financial\s+Officer\b/i, "CFO"],
+  [/\bChief\s+Operating\s+Officer\b/i, "COO"],
+  [/\bChief\s+Technology\s+Officer\b/i, "CTO"],
+  [/\bChief\s+Marketing\s+Officer\b/i, "CMO"],
+  [/\bChief\s+Investment\s+Officer\b/i, "CIO"],
+  [/\bChief\s+Information\s+Officer\b/i, "CIO"],
+  [/\bChief\s+Strategy\s+Officer\b/i, "CSO"],
+  [/\bChief\s+Legal\s+Officer\b/i, "CLO"],
+  [/\bChief\s+Compliance\s+Officer\b/i, "CCO"],
+  [/\bChief\s+Accounting\s+Officer\b/i, "CAO"],
+  [/\bChief\s+People\s+Officer\b/i, "CPO"],
+  [/\bChief\s+Product\s+Officer\b/i, "CPO"],
+  [/\bChief\s+Business\s+Officer\b/i, "CBO"],
+  [/\bChief\s+Revenue\s+Officer\b/i, "CRO"],
+  [/\bChief\s+Risk\s+Officer\b/i, "CRO"],
+  [/\bChief\s+Security\s+Officer\b/i, "CSO"],
+  [/\bChief\s+Human\s+Resources\s+Officer\b/i, "CHRO"],
+  // VP tiers (more specific first)
+  [/\bSenior\s+Executive\s+Vice\s+President\b/i, "SEVP"],
+  [/\bExecutive\s+Vice\s+President\b/i, "EVP"],
+  [/\bSenior\s+Vice\s+President\b/i, "SVP"],
+  [/\bVice\s+President\b/i, "VP"],
+  // Other long titles
+  [/\bGeneral\s+Counsel\b/i, "Gen. Counsel"],
+  [/\bChairman\s+of\s+the\s+Board\b/i, "Chairman"],
+  [/\b10%\s+Owner\b/i, "10% Owner"],
+];
+
+function abbreviatePosition(raw: string | null | undefined): string {
+  if (!raw) return "";
+  let out = raw;
+  for (const [re, abbr] of POSITION_ABBREVIATIONS) {
+    out = out.replace(re, abbr);
+  }
+  return out;
 }
 
 /**
@@ -67,10 +156,14 @@ function InsiderRow({ t }: { t: InsiderTransaction }) {
       </span>
       {t.position && (
         <span
+          // Hover-title preserves the full verbose role for users who
+          // need it; the visible label uses the canonical abbreviation
+          // (CEO / CFO / EVP / etc.) so it doesn't truncate to "..."
+          // in the cramped sidebar slot.
           className="text-[12px] italic text-muted-foreground/80 truncate max-w-[110px]"
           title={t.position}
         >
-          {t.position}
+          {abbreviatePosition(t.position)}
         </span>
       )}
       <span
