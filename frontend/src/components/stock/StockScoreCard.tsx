@@ -1,4 +1,3 @@
-import { useQueryClient } from "@tanstack/react-query";
 import { RefreshCw, Sparkles } from "lucide-react";
 
 import type {
@@ -630,14 +629,15 @@ function CardShell({
 /* ─── Main component ────────────────────────────────────────────────────── */
 
 export function StockScoreCard({ ticker }: Props) {
-  const qc = useQueryClient();
-  const { data, isLoading, isError, noScoreYet, refetch } =
+  const { data, isLoading, isError, noScoreYet, recompute, isRecomputing } =
     useStockScore(ticker);
 
-  const onRefresh = () => {
-    qc.invalidateQueries({ queryKey: ["stock-score", ticker] });
-    refetch();
-  };
+  // The refresh button forces a backend recompute (POST /score/recompute)
+  // rather than just invalidating the React-Query cache. The GET endpoint
+  // reads the persisted score from `stock_scores`, so a cache-only refresh
+  // would return the same stale value — see useStockScore for the full
+  // mutation wiring.
+  const onRefresh = () => recompute();
 
   if (isLoading) {
     return (
@@ -660,7 +660,7 @@ export function StockScoreCard({ ticker }: Props) {
 
   if (noScoreYet) {
     return (
-      <CardShell onRefresh={onRefresh} isFetching={false}>
+      <CardShell onRefresh={onRefresh} isFetching={isRecomputing}>
         <div className="py-6 text-center text-xs text-muted-foreground leading-relaxed">
           Score non ancora calcolato per questo ticker — sarà disponibile al
           prossimo scan.
@@ -671,7 +671,7 @@ export function StockScoreCard({ ticker }: Props) {
 
   if (isError || !data) {
     return (
-      <CardShell onRefresh={onRefresh} isFetching={false}>
+      <CardShell onRefresh={onRefresh} isFetching={isRecomputing}>
         <div className="py-6 text-center text-xs text-muted-foreground">
           Errore nel caricamento dello score.
         </div>
@@ -683,7 +683,7 @@ export function StockScoreCard({ ticker }: Props) {
   const compTone = scoreColor(composite);
 
   return (
-    <CardShell onRefresh={onRefresh}>
+    <CardShell onRefresh={onRefresh} isFetching={isRecomputing}>
       {/* Gauge + composite number — gauge shrunk 180->130 to give the
           card a much shorter footprint per user feedback. The label
           ("Buono"/"Ottimo"/...) was moved next to the risk chip

@@ -122,6 +122,149 @@ def test_get_stock_score_unauthenticated_returns_401(db: Session):
 
 
 # ---------------------------------------------------------------------------
+# POST /api/stocks/{ticker}/score/recompute
+# ---------------------------------------------------------------------------
+
+def test_recompute_returns_fresh_score_and_persists(
+    seeded_client: TestClient, db: Session, monkeypatch: pytest.MonkeyPatch
+):
+    """Regression for the "two pillars wrong" + "refresh button doesn't
+    work" pair (see CLAUDE.md / scores PR). Original symptom on MU:
+    the persisted score had `profitability=None` + `value=None` because
+    fundamentals were partial (yfinance info call failed) at scan time.
+    The GET endpoint reads the persisted row, so refreshing the React
+    Query cache returned the same broken value; only a real recompute
+    can update the pillars."""
+    # Stub the upstream recompute path. Returning a StockScore with all
+    # six pillars populated mimics a successful recompute after the
+    # fundamentals cache has been repopulated by force_refresh.
+    fresh = _make_score(
+        stock_id=1,  # AAA is seeded with id auto-assigned, fixed up below
+        composite=92.5,
+        risk="moderate",
+        quality=85.0,
+        growth=88.0,
+        value=75.0,  # was None pre-recompute
+        momentum=95.0,
+        sentiment=80.0,
+    )
+    fresh.profitability = 90.0  # was None pre-recompute
+    fresh.sustainability = 85.0
+
+    aaa = db.query(Stock).filter_by(ticker="AAA").one()
+    fresh.stock_id = aaa.id
+
+    def stub_compute_score(_db, stock, *, sector_stats=None):
+        return fresh
+
+    def stub_force_refresh(*_args, **_kw):
+        # No-op — emulates a fundamentals cache refill so compute_score
+        # has up-to-date data. The endpoint MUST tolerate exceptions
+        # here (it's wrapped in try/except), so this stub just succeeds.
+        return None
+
+    monkeypatch.setattr(
+        "app.api.scores.score_service.compute_score", stub_compute_score
+    )
+    monkeypatch.setattr(
+        "app.api.scores.stock_fundamentals_service.get_fundamentals",
+        stub_force_refresh,
+    )
+
+    resp = seeded_client.post("/api/stocks/AAA/score/recompute")
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert data["ticker"] == "AAA"
+    assert data["composite"] == 92.5
+    # Both regression-target pillars must now be populated, not None.
+    assert data["sub_scores"]["profitability"] == 90.0
+    assert data["sub_scores"]["value"] == 75.0
+    # Persistence: the row in `stock_scores` is updated (UPSERT semantics).
+    persisted = db.query(StockScore).filter_by(stock_id=aaa.id).one()
+    assert persisted.composite == 92.5
+    assert persisted.profitability == 90.0
+    assert persisted.value == 75.0
+
+
+def test_recompute_forces_fundamentals_refresh(
+    seeded_client: TestClient, db: Session, monkeypatch: pytest.MonkeyPatch
+):
+    """The endpoint MUST call get_fundamentals with force_refresh=True so a
+    stale partial L1 entry doesn't slip through and yield the same broken
+    score the user is trying to fix."""
+    refresh_calls: list[tuple[str, bool]] = []
+
+    def stub_force_refresh(ticker: str, *, force_refresh: bool = False):
+        refresh_calls.append((ticker, force_refresh))
+        return None
+
+    aaa = db.query(Stock).filter_by(ticker="AAA").one()
+    fresh = _make_score(stock_id=aaa.id, composite=80.0)
+    fresh.profitability = 70.0
+    fresh.sustainability = 70.0
+
+    monkeypatch.setattr(
+        "app.api.scores.stock_fundamentals_service.get_fundamentals",
+        stub_force_refresh,
+    )
+    monkeypatch.setattr(
+        "app.api.scores.score_service.compute_score",
+        lambda _db, _s, *, sector_stats=None: fresh,
+    )
+
+    resp = seeded_client.post("/api/stocks/AAA/score/recompute")
+    assert resp.status_code == 200
+    assert refresh_calls == [("AAA", True)], (
+        f"Expected force_refresh=True for AAA; got {refresh_calls}"
+    )
+
+
+def test_recompute_unknown_ticker_returns_404(seeded_client: TestClient):
+    resp = seeded_client.post("/api/stocks/NOPE/score/recompute")
+    assert resp.status_code == 404
+
+
+def test_recompute_unauthenticated_returns_401(db: Session):
+    db.add(Stock(ticker="X", exchange="NMS", name="X"))
+    db.commit()
+    app.dependency_overrides[get_db] = lambda: db
+    try:
+        client = TestClient(app)
+        resp = client.post("/api/stocks/X/score/recompute")
+        assert resp.status_code == 401
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_recompute_tolerates_fundamentals_refresh_failure(
+    seeded_client: TestClient, db: Session, monkeypatch: pytest.MonkeyPatch
+):
+    """Network blip on the fundamentals fetch must NOT 500 the endpoint —
+    compute_score still runs with whatever the cache holds. This is the
+    'circuit breaker open' scenario in production."""
+    def boom(*_a, **_kw):
+        raise RuntimeError("yfinance circuit breaker open")
+
+    aaa = db.query(Stock).filter_by(ticker="AAA").one()
+    fresh = _make_score(stock_id=aaa.id, composite=70.0)
+    fresh.profitability = 60.0
+    fresh.sustainability = 60.0
+
+    monkeypatch.setattr(
+        "app.api.scores.stock_fundamentals_service.get_fundamentals",
+        boom,
+    )
+    monkeypatch.setattr(
+        "app.api.scores.score_service.compute_score",
+        lambda _db, _s, *, sector_stats=None: fresh,
+    )
+
+    resp = seeded_client.post("/api/stocks/AAA/score/recompute")
+    assert resp.status_code == 200
+    assert resp.json()["composite"] == 70.0
+
+
+# ---------------------------------------------------------------------------
 # /api/scores/top
 # ---------------------------------------------------------------------------
 

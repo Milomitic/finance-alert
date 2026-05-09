@@ -8,6 +8,7 @@ import json
 from typing import Annotated, get_args
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -22,6 +23,7 @@ from app.schemas.score import (
     TopPickItemOut,
     TopPicksOut,
 )
+from app.services import score_service, stock_fundamentals_service
 
 router = APIRouter(prefix="/api", tags=["scores"])
 
@@ -84,6 +86,82 @@ def get_stock_score(
         ),
         risk_tier=score.risk_tier,  # type: ignore[arg-type]
         computed_at=score.computed_at,
+        breakdown=breakdown,
+    )
+
+
+@router.post("/stocks/{ticker}/score/recompute", response_model=StockScoreOut)
+def recompute_stock_score(
+    ticker: str,
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+) -> StockScoreOut:
+    """Force a single-stock score recomputation, persist it, and return the
+    fresh result.
+
+    Why this endpoint exists: the GET endpoint reads the persisted score from
+    `stock_scores` (last refreshed by the periodic `scan_runner` recompute_all
+    pass). When fundamentals were partial at scan time (rate-limited yfinance
+    `Ticker.info` failure), pillars derived entirely from `Ticker.info` —
+    profitability and value — get persisted as None. Once the partial
+    detection (PR #4) refreshes the fundamentals cache, the persisted score
+    stays stale until the next scheduled scan. This endpoint is the user-
+    visible escape hatch: clicking the "refresh score" button on the detail
+    page hits this, and the user immediately sees the recomputed pillars.
+
+    The fundamentals fetch is forced (`force_refresh=True`) so even an L1
+    entry that was hydrated from a pre-fix partial L2 row still gets
+    re-fetched upstream. yfinance circuit breaker still applies — if it's
+    open the fundamentals call returns the partial sentinel and the
+    recompute proceeds with whatever it gets (some pillars may still be
+    None, but the user gets immediate feedback rather than silent failure).
+    """
+    # Catalog has duplicate ticker rows (CLAUDE.md) — pick any.
+    stock = db.execute(
+        select(Stock).where(Stock.ticker == ticker).limit(1)
+    ).scalars().first()
+    if stock is None:
+        raise HTTPException(status_code=404, detail=f"Ticker not found: {ticker}")
+
+    # Force a fresh fundamentals fetch BEFORE compute_score so it picks up
+    # the latest payload. Without this, the L1 might still hold a partial
+    # entry from a pre-fix hydration, and the recompute would just produce
+    # the same broken score the user already sees.
+    try:
+        stock_fundamentals_service.get_fundamentals(stock.ticker, force_refresh=True)
+    except Exception as exc:  # noqa: BLE001
+        # Non-fatal: compute_score will still try with whatever cache holds.
+        logger.warning(
+            f"[score-recompute] fundamentals refresh failed for {stock.ticker}: {exc}"
+        )
+
+    new_score = score_service.compute_score(db, stock)
+    # UPSERT semantics: a row already exists for this stock_id (the GET would
+    # have 404'd otherwise, but we still merge defensively for the case where
+    # the user hits POST first on a brand-new ticker before any scan ran).
+    db.merge(new_score)
+    db.commit()
+
+    try:
+        breakdown = json.loads(new_score.breakdown or "{}")
+    except json.JSONDecodeError:
+        breakdown = {}
+
+    return StockScoreOut(
+        stock_id=new_score.stock_id,
+        ticker=stock.ticker,
+        composite=new_score.composite,
+        sub_scores=SubScoresOut(
+            quality=new_score.quality,
+            profitability=new_score.profitability,
+            sustainability=new_score.sustainability,
+            growth=new_score.growth,
+            value=new_score.value,
+            momentum=new_score.momentum,
+            sentiment=new_score.sentiment,
+        ),
+        risk_tier=new_score.risk_tier,  # type: ignore[arg-type]
+        computed_at=new_score.computed_at,
         breakdown=breakdown,
     )
 
