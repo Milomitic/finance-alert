@@ -99,6 +99,37 @@ auto-reload missed the event. Solution: run the canonical restart
 sequence above. Do NOT trust `--reload` after a pull — it's not free
 to verify and the failure is silent.
 
+### Agent operating rule: restart both servers after every code change
+
+**The user has explicitly asked the agent to take responsibility for
+keeping the running servers in sync with the code on disk.** This
+means:
+
+1. After ANY backend Python file edit (`backend/app/**`), restart
+   uvicorn with the canonical kill-tree + spawn sequence above.
+   Don't wait for `--reload` — it's unreliable on Windows.
+2. After ANY frontend file edit (`frontend/src/**`,
+   `frontend/index.html`, `frontend/vite.config.ts`), restart the
+   Vite dev server (port 5173).
+3. After both: verify a fresh worker exists (PID changed, creation
+   time > file mtime).
+
+Frontend restart sequence:
+```bash
+# Find PID listening on 5173
+netstat -ano | findstr :5173 | findstr LISTENING
+# Kill the tree
+taskkill //PID <PID> //T //F
+# Restart from frontend/ in background
+cd frontend && npm run dev   # run_in_background: true
+# Wait for dev server up (Vite prints "Local: http://localhost:5173")
+```
+
+The cost is one ~2s restart per edit; the value is that "I edited
+a file" never quietly means "the server still serves the old code."
+Watchfiles silently dropping events is the most common
+hours-of-debugging trap in this codebase — see preceding sections.
+
 ---
 
 ## Database migrations (alembic)
