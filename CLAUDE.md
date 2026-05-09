@@ -76,6 +76,29 @@ each by its `ProcessId` (the worker's, not the parent's).
 Then re-verify with `netstat`: a healthy state has exactly ONE LISTENING
 entry on 8000.
 
+### `git pull` does NOT trigger `uvicorn --reload` on Windows
+
+`uvicorn --reload` uses `watchfiles` (inotify-equivalent). On Windows
+when files are touched by an external process — `git pull`, `git
+checkout`, an editor like VSCode swapping the file via temp+rename —
+the change events are **frequently missed**. The file mtime updates
+on disk but the worker keeps serving the old in-memory bytecode.
+Symptom that just bit us: pull lands a fix, browser polls /quote,
+flashes the right value once (cached layer), then reverts to the
+pre-fix value (worker's stale code).
+
+**Quick check:**
+```bash
+# File mtime
+stat -c '%y' backend/app/services/<file>.py
+# Worker creation time
+wmic process where "Name='python.exe'" get ProcessId,CreationDate,CommandLine
+```
+If the worker (the `spawn_main` row) is OLDER than the file, the
+auto-reload missed the event. Solution: run the canonical restart
+sequence above. Do NOT trust `--reload` after a pull — it's not free
+to verify and the failure is silent.
+
 ---
 
 ## Database migrations (alembic)
