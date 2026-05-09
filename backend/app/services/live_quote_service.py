@@ -128,6 +128,54 @@ def _scale_pence_to_pounds(currency: str | None, value: float | None) -> float |
     return value
 
 
+def _eod_pair_from_ohlcv(ticker: str) -> tuple[float, float] | None:
+    """Return (most_recent_close, prior_close) from our OHLCV daily bars.
+
+    Used when the market is CLOSED: the displayed price + prev_close
+    should both be the actual EOD close-to-close pair, not yfinance's
+    fast_info `lastPrice` + `previousClose`. yfinance during off-hours
+    returns post-market drift quotes for `lastPrice` (a trade that
+    happened after the close), which is misleading under the UI label
+    "ULTIMA CHIUSURA" — the user expects to see the actual closing
+    price, and the day-over-day variation should reflect the close-to-
+    close move (the move the market actually delivered today), not the
+    extra few basis points of after-hours noise.
+
+    Concrete case that motivated this: MU on 2026-05-09 (Saturday).
+    Bars: 5/8 close=$743.82, 5/7 close=$646.63 → real D/D move
+    +15.03%. yfinance returned lastPrice=$746.81 (post-market) +
+    previousClose=$743.82 → reported variation +0.40%, hiding the
+    real move from the user.
+
+    Returns None if the stock isn't in our catalog or we have fewer
+    than 2 bars (in which case the caller falls back to the yfinance
+    pair + the existing `_override_prev_close_from_ohlcv` heuristic).
+    """
+    try:
+        from app.core.db import SessionLocal
+        from app.models import OhlcvDaily, Stock
+        from sqlalchemy import desc, select
+
+        with SessionLocal() as db:
+            stock = db.execute(
+                select(Stock).where(Stock.ticker == ticker).limit(1)
+            ).scalars().first()
+            if stock is None:
+                return None
+            bars = db.execute(
+                select(OhlcvDaily)
+                .where(OhlcvDaily.stock_id == stock.id)
+                .order_by(desc(OhlcvDaily.date))
+                .limit(2)
+            ).scalars().all()
+            if len(bars) < 2:
+                return None
+            return float(bars[0].close), float(bars[1].close)
+    except Exception as e:  # noqa: BLE001
+        logger.debug(f"[live_quote] _eod_pair_from_ohlcv failed for {ticker}: {e}")
+        return None
+
+
 def _override_prev_close_from_ohlcv(ticker: str, live_price: float | None) -> float | None:
     """Compute the correct day-over-day reference close from our OHLCV
     table, overriding yfinance's `previousClose` when it disagrees.
@@ -213,19 +261,34 @@ def _fetch_fresh(ticker: str) -> LiveQuote:
         day_high = _scale_pence_to_pounds(currency, _safe_float(fi.get("dayHigh")))
         day_low = _scale_pence_to_pounds(currency, _safe_float(fi.get("dayLow")))
 
-        # Override yfinance's `previousClose` with the value derived
-        # from our OHLCV table when available — yfinance returns wrong
-        # values during sharp moves (observed -3.97% reported when the
-        # real D/D was -10.11% for ARM on 2026-05-08). The OHLCV table
-        # is the source of truth: our daily scan stores actual closes.
-        # Fallback chain: DB-derived → yfinance's prev → None.
-        prev_overridden = _override_prev_close_from_ohlcv(ticker, last)
-        prev_effective = prev_overridden if prev_overridden is not None else prev
+        # When the market is CLOSED the price under "ULTIMA CHIUSURA"
+        # MUST be the actual EOD close (not a post-market drift quote
+        # from fast_info.lastPrice), and the variation MUST be the true
+        # day-over-day close-to-close move. Source both from OHLCV when
+        # we have at least 2 bars. See `_eod_pair_from_ohlcv` for the
+        # full rationale + concrete MU case study.
+        # When the market is OPEN we keep the existing behavior: live
+        # yfinance lastPrice + DB-derived prev_close (which fixes the
+        # "yfinance returned wrong previousClose during sharp moves"
+        # case observed for ARM on 2026-05-08 → see
+        # `_override_prev_close_from_ohlcv` docstring).
+        market_open = _is_market_open(ticker)
+        last_eff: float | None = last
+        if not market_open:
+            eod = _eod_pair_from_ohlcv(ticker)
+            if eod is not None:
+                last_eff, prev_effective = eod
+            else:
+                prev_overridden = _override_prev_close_from_ohlcv(ticker, last_eff)
+                prev_effective = prev_overridden if prev_overridden is not None else prev
+        else:
+            prev_overridden = _override_prev_close_from_ohlcv(ticker, last_eff)
+            prev_effective = prev_overridden if prev_overridden is not None else prev
 
-        change_abs = (last - prev_effective) if (last is not None and prev_effective is not None) else None
+        change_abs = (last_eff - prev_effective) if (last_eff is not None and prev_effective is not None) else None
         change_pct = ((change_abs / prev_effective * 100.0) if (change_abs is not None and prev_effective) else None)
 
-        quote.price = last
+        quote.price = last_eff
         quote.prev_close = prev_effective
         quote.change_abs = change_abs
         quote.change_pct = change_pct
@@ -237,7 +300,7 @@ def _fetch_fresh(ticker: str) -> LiveQuote:
         # — yfinance fast_info doesn't expose it and t.info is rate-limited.
         # Returns "OPEN" during exchange hours, "CLOSED" otherwise. The
         # frontend uses this to decide whether to render the LIVE badge.
-        quote.market_state = "OPEN" if _is_market_open(ticker) else "CLOSED"
+        quote.market_state = "OPEN" if market_open else "CLOSED"
         quote.currency = "GBP" if currency in ("GBp", "GBX") else currency
 
         if last is not None:
