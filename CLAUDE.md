@@ -139,6 +139,33 @@ restart cost is the same ~1-3s either way, but the COST OF NOT RESTARTING
 is asymmetric — silent stale-code on backend, visible-stale-page on
 frontend (user notices instantly, F5s, problem solved).
 
+### Don't forget: FastAPI also serves a pre-built frontend bundle on :8000
+
+`backend/app/main.py` mounts `frontend/dist/` and serves it as the SPA shell
+when present. So the same app exists at TWO URLs simultaneously:
+
+| URL | Source | Picks up source edits? |
+|---|---|---|
+| http://localhost:**5173**/ | Vite dev server (`npm run dev`) | ✅ via HMR |
+| http://localhost:**8000**/ | FastAPI serving `frontend/dist/` static files | ❌ NEVER — needs `npm run build` |
+
+Symptom that just bit us: the user said "the score refresh button doesn't
+work on backend" — they meant they were testing on :8000, the dist bundle
+hadn't been rebuilt since yesterday afternoon, so the old code (without the
+recompute mutation) was being served. The button on :5173 worked fine
+because Vite HMR'd the new code in.
+
+**Operational rule when frontend code changes:** if the user is using :8000,
+run `cd frontend && npm run build` and have them hard-reload. If they're
+on :5173 only, no rebuild needed.
+
+Quick check: the dist's `index.html` mtime tells you when it was last
+built; compare against the source files you just edited.
+```bash
+stat -c '%y' frontend/dist/index.html
+stat -c '%y' frontend/src/components/<file-you-edited>
+```
+
 ---
 
 ## Database migrations (alembic)
