@@ -99,36 +99,45 @@ auto-reload missed the event. Solution: run the canonical restart
 sequence above. Do NOT trust `--reload` after a pull — it's not free
 to verify and the failure is silent.
 
-### Agent operating rule: restart both servers after every code change
+### Agent operating rule: restart backend always, frontend only if stale after F5
 
-**The user has explicitly asked the agent to take responsibility for
-keeping the running servers in sync with the code on disk.** This
-means:
+**The asymmetry is real.** Both `uvicorn --reload` (watchfiles) and Vite
+(chokidar) can drop file-change events on Windows — but the failure
+modes are nothing alike:
 
-1. After ANY backend Python file edit (`backend/app/**`), restart
-   uvicorn with the canonical kill-tree + spawn sequence above.
-   Don't wait for `--reload` — it's unreliable on Windows.
-2. After ANY frontend file edit (`frontend/src/**`,
-   `frontend/index.html`, `frontend/vite.config.ts`), restart the
-   Vite dev server (port 5173).
-3. After both: verify a fresh worker exists (PID changed, creation
-   time > file mtime).
+| | Detection on miss | Recovery |
+|---|---|---|
+| Vite | User notices stale page | **F5 → fresh bundle from disk, free** |
+| uvicorn | API still returns stale data, user thinks "fix didn't work" | None — module bytecode is in worker memory, MUST kill the worker |
 
-Frontend restart sequence:
+So the agent's restart discipline is asymmetric:
+
+1. **Backend Python edit (`backend/app/**`)** — ALWAYS restart uvicorn
+   with the canonical kill-tree + spawn sequence above, immediately
+   after the edit. There is no F5 for the backend; a missed reload
+   means hours of debugging a phantom.
+
+2. **Frontend file edit (`frontend/src/**`, `vite.config.ts`, etc.)** —
+   trust Vite HMR by default. If the user reports the change not
+   showing AFTER an F5, then restart Vite (port 5173). HMR + F5
+   covers ~99% of cases; the explicit restart is the rare fallback.
+
+Backend restart sequence (already documented above; applies verbatim
+to in-session Edit tool changes, not just `git pull`).
+
+Frontend restart sequence (only when F5 doesn't cut it):
 ```bash
-# Find PID listening on 5173
 netstat -ano | findstr :5173 | findstr LISTENING
-# Kill the tree
 taskkill //PID <PID> //T //F
-# Restart from frontend/ in background
 cd frontend && npm run dev   # run_in_background: true
-# Wait for dev server up (Vite prints "Local: http://localhost:5173")
+# Vite prints "Local: http://localhost:5173" + binds to ::1 (IPv6)
+# Smoke-test via http://localhost:5173/ NOT http://127.0.0.1:5173/
 ```
 
-The cost is one ~2s restart per edit; the value is that "I edited
-a file" never quietly means "the server still serves the old code."
-Watchfiles silently dropping events is the most common
-hours-of-debugging trap in this codebase — see preceding sections.
+Why this rule is conservative on the backend, relaxed on the frontend:
+restart cost is the same ~1-3s either way, but the COST OF NOT RESTARTING
+is asymmetric — silent stale-code on backend, visible-stale-page on
+frontend (user notices instantly, F5s, problem solved).
 
 ---
 
