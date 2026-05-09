@@ -168,6 +168,35 @@ def _is_payload_stale_schema(d: dict[str, Any]) -> bool:
     return int(d.get(_SCHEMA_VERSION_KEY, 1)) < _FUNDAMENTALS_SCHEMA_VERSION
 
 
+def _is_payload_too_partial(d: dict[str, Any]) -> bool:
+    """True iff the parsed fundamentals payload is missing the data that
+    comes from the slow `Ticker.info` call — micro is all None AND
+    profile has no business-summary or website.
+
+    Why force a re-fetch on these: yfinance occasionally rate-limits or
+    fails the slow info call mid-batch while OTHER endpoints in the
+    fetch (income_stmt, quarterly_income_stmt, etc.) succeed. The result
+    is a payload that looks like a successful fetch (no top-level
+    exception, error=None) but is missing the most user-visible bits —
+    company profile text, P/E, ROE, margins, market cap, etc. That
+    payload then sits in L2 for the full 24h TTL with no error
+    indication, and the user sees an empty 'Profilo Società' card and
+    empty 'Valutazione' card every time.
+
+    Treating these as stale on read forces a re-fetch on next access.
+    Combined with the symmetric write-side check in
+    `stock_fundamentals_service._fetch_fresh`, this prevents new
+    partials from entering L2 going forward."""
+    micro = d.get("micro") if isinstance(d.get("micro"), dict) else {}
+    profile = d.get("profile") if isinstance(d.get("profile"), dict) else {}
+    has_micro = any(v is not None for v in (micro or {}).values())
+    has_profile = bool(
+        (profile or {}).get("long_business_summary")
+        or (profile or {}).get("website")
+    )
+    return not (has_micro or has_profile)
+
+
 def write_fundamentals(db: Session, fundamentals: Fundamentals) -> None:
     """UPSERT this stock's Fundamentals into the L2 cache."""
     obj = asdict(fundamentals)
@@ -195,6 +224,10 @@ def read_fundamentals(
     except json.JSONDecodeError:
         return None
     if _is_payload_stale_schema(d):
+        return None
+    if _is_payload_too_partial(d):
+        # Treat as stale: forces an upstream re-fetch on next access.
+        # See _is_payload_too_partial for the rationale.
         return None
     f = _fundamentals_from_dict(d)
     # Reset `fetched_at` to the L2 timestamp (epoch seconds) so the L1
@@ -252,6 +285,10 @@ def hydrate_all_fundamentals(
         except json.JSONDecodeError:
             continue
         if _is_payload_stale_schema(d):
+            continue
+        if _is_payload_too_partial(d):
+            # Skip; the next `get_fundamentals` for this ticker will
+            # see L1 miss + L2 read-skip and re-fetch upstream.
             continue
         f = _fundamentals_from_dict(d)
         f.fetched_at = fetched.timestamp()

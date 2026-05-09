@@ -68,10 +68,15 @@ def test_read_returns_none_when_stale(db: Session):
 def test_write_is_upsert_not_insert(db: Session):
     """Writing the same ticker twice must update the existing row, not
     raise IntegrityError on the composite (ticker, kind) PK."""
-    f1 = Fundamentals(ticker="AAPL", next_earnings_date="2026-05-01")
+    # Both payloads carry at least one populated micro field so the new
+    # `_is_payload_too_partial` gate doesn't classify them as stale on
+    # read. The test's purpose is the UPSERT semantic, not data quality.
+    f1 = Fundamentals(ticker="AAPL", next_earnings_date="2026-05-01",
+                      micro=MicroData(trailing_pe=27.5))
     fetch_cache_store.write_fundamentals(db, f1)
 
-    f2 = Fundamentals(ticker="AAPL", next_earnings_date="2026-08-07")
+    f2 = Fundamentals(ticker="AAPL", next_earnings_date="2026-08-07",
+                      micro=MicroData(trailing_pe=28.0))
     fetch_cache_store.write_fundamentals(db, f2)
 
     rows = db.query(FetchCache).filter_by(ticker="AAPL").all()
@@ -96,8 +101,15 @@ def test_news_roundtrips(db: Session):
 def test_hydrate_skips_stale_rows(db: Session):
     """Hydration filters out past-TTL rows — a stale row in L2 must NOT
     pollute L1 after a restart."""
-    fetch_cache_store.write_fundamentals(db, Fundamentals(ticker="FRESH"))
-    fetch_cache_store.write_fundamentals(db, Fundamentals(ticker="STALE"))
+    # Both payloads carry a non-empty micro so the new
+    # `_is_payload_too_partial` gate doesn't classify them stale-on-read.
+    # Tested separately in test_stock_detail_partial_fetch_and_eod_regression.
+    fetch_cache_store.write_fundamentals(
+        db, Fundamentals(ticker="FRESH", micro=MicroData(trailing_pe=20.0))
+    )
+    fetch_cache_store.write_fundamentals(
+        db, Fundamentals(ticker="STALE", micro=MicroData(trailing_pe=18.0))
+    )
 
     # Backdate STALE's row past TTL
     row = db.query(FetchCache).filter_by(ticker="STALE", kind="fundamentals").one()
@@ -117,10 +129,18 @@ def test_get_fundamentals_uses_l2_after_l1_clear(db: Session, monkeypatch):
     from app.services import stock_fundamentals_service as svc
 
     # Stub the upstream fetch so we can detect any call to it.
+    # The stub returns a non-partial payload (one populated micro field)
+    # so the new `_is_payload_too_partial` gate doesn't reject it on
+    # read and force a re-fetch — that gate is exercised separately in
+    # test_stock_detail_partial_fetch_and_eod_regression.
     upstream_calls = []
     def stub_fetch(ticker: str) -> Fundamentals:
         upstream_calls.append(ticker)
-        return Fundamentals(ticker=ticker, next_earnings_date="2026-08-07")
+        return Fundamentals(
+            ticker=ticker,
+            next_earnings_date="2026-08-07",
+            micro=MicroData(trailing_pe=27.5),
+        )
     monkeypatch.setattr(svc, "_fetch_fresh", stub_fetch)
 
     # Make get_fundamentals open sessions against the test DB. The simplest

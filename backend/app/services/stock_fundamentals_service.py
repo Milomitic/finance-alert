@@ -818,12 +818,30 @@ def _fetch_fresh(ticker: str) -> Fundamentals:
         f.error = str(e)
         if yfinance_health.is_rate_limit_error(e):
             yfinance_health.record_failure(f"fundamentals top-level {ticker}: {e}")
+    # Partial-fetch detection: when the slow `Ticker.info` call fails
+    # (rate-limited / yfinance backoff) the payload survives without a
+    # top-level exception — annual/quarterly may be populated, but micro
+    # and profile are completely empty. Persisting that to L2 would mask
+    # a UI-visible failure for 24h ("Profilo Società" + "Valutazione"
+    # cards both blank). Mark it as a recoverable error so the L2 write
+    # in `get_fundamentals` is skipped and the next request retries.
+    info_seen = (
+        any(getattr(f.micro, k) is not None for k in vars(f.micro))
+        or bool(f.profile.long_business_summary)
+        or bool(f.profile.website)
+    )
+    if not info_seen and not f.error:
+        f.error = "info endpoint returned no data — partial fetch"
+        logger.info(
+            f"[fundamentals] {ticker}: partial fetch (info empty) — "
+            "skipping L2 persist; next request will retry"
+        )
     # Per-source metrics: count this fetch attempt
     from app.services import data_source_metrics
-    if saw_success:
+    if saw_success and not f.error:
         yfinance_health.record_success()
         data_source_metrics.record_success("yfinance", "fundamentals")
-    elif f.error or not saw_success:
+    else:
         data_source_metrics.record_failure(
             "yfinance", "fundamentals",
             reason=f.error or f"empty payload for {ticker}",

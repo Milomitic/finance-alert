@@ -66,6 +66,17 @@ def test_iag_l_prev_close_uses_ohlcv_in_pounds(db: Session, monkeypatch) -> None
     _seed_iag_in_pounds(db)
     live_quote_service.clear_cache()
 
+    # Force the open-market branch deterministically: this test simulates
+    # an INTRADAY scenario, but pytest may run at wall-clock times when
+    # LSE is closed — and the closed-market EOD-pair logic would then
+    # source the price directly from OHLCV bars and bypass the yfinance
+    # mock entirely. Pinning `_is_market_open` to True keeps the test
+    # focused on the prev_close override semantics it actually guards.
+    monkeypatch.setattr(
+        "app.services.live_quote_service._is_market_open",
+        lambda *_args, **_kw: True,
+    )
+
     fake_ticker = _make_fake_yf_ticker(
         currency="GBp",
         last=332.0,            # pence -> 3.32 pounds after scaler
