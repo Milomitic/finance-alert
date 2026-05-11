@@ -87,6 +87,18 @@ TRULY_DELISTED = [
 ]
 
 
+# Intra-DB duplicate-ticker collapses. Some tickers ended up in two rows on
+# different exchanges as a side effect of corporate relocations + index
+# seed re-runs. We keep ONE row (the one whose exchange matches yfinance's
+# primary listing today) and drop the stale row + its FK chain.
+INTRA_DUPLICATES_TO_RESOLVE = {
+    # ticker: keep_exchange (the canonical/yfinance-resolvable one)
+    "CRH": "NYSE",   # CRH plc primary listing moved Dublin -> NYSE in 2023.
+                      # The NASDAQ row was a vestigial entry; NYSE is the
+                      # current truth (eustx50.csv was patched to NYSE).
+}
+
+
 def run() -> None:
     db = SessionLocal()
     n_renamed = 0
@@ -156,6 +168,29 @@ def run() -> None:
             # loop. Without the flush, a second rename that would touch the
             # same target ticker could race the un-flushed delete.
             db.flush()
+        # Resolve intra-DB duplicates (same ticker on different exchanges
+        # where one is stale).
+        for ticker, keep_exchange in INTRA_DUPLICATES_TO_RESOLVE.items():
+            rows = db.execute(
+                select(Stock).where(Stock.ticker == ticker)
+            ).scalars().all()
+            if len(rows) <= 1:
+                continue
+            keepers = [r for r in rows if r.exchange == keep_exchange]
+            droppers = [r for r in rows if r.exchange != keep_exchange]
+            if not keepers:
+                logger.warning(
+                    f"intra-duplicate cleanup skipped for {ticker}: "
+                    f"no row matches keep_exchange={keep_exchange!r}"
+                )
+                continue
+            for stock in droppers:
+                logger.info(
+                    f"dropping intra-duplicate {ticker} stock_id={stock.id} "
+                    f"exchange={stock.exchange!r} (keeping "
+                    f"stock_id={keepers[0].id} exchange={keep_exchange!r})"
+                )
+                db.delete(stock)
         for ticker in TRULY_DELISTED:
             rows = db.execute(
                 select(Stock).where(Stock.ticker == ticker)

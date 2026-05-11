@@ -15,7 +15,7 @@ SU.PA,Schneider Electric SE,Euronext Paris,Industrials,Electrical Components & E
 RMS.PA,Hermes International SCA,Euronext Paris,Consumer Discretionary,Apparel Accessories & Luxury Goods,FR,EUR
 BNP.PA,BNP Paribas SA,Euronext Paris,Financials,Diversified Banks,FR,EUR
 BAS.DE,BASF SE,XETRA,Materials,Diversified Chemicals,DE,EUR
-DPW.DE,DHL Group,XETRA,Industrials,Air Freight & Logistics,DE,EUR
+DHL.DE,DHL Group,XETRA,Industrials,Air Freight & Logistics,DE,EUR
 DB1.DE,Deutsche Boerse AG,XETRA,Financials,Financial Exchanges & Data,DE,EUR
 MUV2.DE,Muenchener Rueckversicherungs-Gesellschaft AG,XETRA,Financials,Reinsurance,DE,EUR
 IFX.DE,Infineon Technologies AG,XETRA,Information Technology,Semiconductors,DE,EUR
@@ -42,8 +42,8 @@ AD.AS,Koninklijke Ahold Delhaize NV,Euronext Amsterdam,Consumer Staples,Food Ret
 PHIA.AS,Koninklijke Philips NV,Euronext Amsterdam,Health Care,Health Care Equipment,NL,EUR
 NDA-FI.HE,Nordea Bank Abp,Nasdaq Helsinki,Financials,Diversified Banks,FI,EUR
 KNEBV.HE,Kone Oyj Class B,Nasdaq Helsinki,Industrials,Industrial Machinery,FI,EUR
-CRG.IR,CRH plc,Euronext Dublin,Materials,Construction Materials,IE,EUR
-FLTR.IR,Flutter Entertainment plc,Euronext Dublin,Consumer Discretionary,Casinos & Gaming,IE,EUR
+CRH,CRH plc,NYSE,Materials,Construction Materials,IE,USD
+FLUT,Flutter Entertainment plc,NYSE,Consumer Discretionary,Casinos & Gaming,IE,USD
 SAF.PA,Safran SA,Euronext Paris,Industrials,Aerospace & Defense,FR,EUR
 EL.PA,EssilorLuxottica SA,Euronext Paris,Health Care,Health Care Supplies,FR,EUR
 KER.PA,Kering SA,Euronext Paris,Consumer Discretionary,Apparel Accessories & Luxury Goods,FR,EUR

@@ -3,7 +3,6 @@ ENI.MI,Eni S.p.A.,BIT,Energy,Integrated Oil & Gas,IT,EUR
 ENEL.MI,Enel S.p.A.,BIT,Utilities,Electric Utilities,IT,EUR
 ISP.MI,Intesa Sanpaolo S.p.A.,BIT,Financials,Diversified Banks,IT,EUR
 UCG.MI,UniCredit S.p.A.,BIT,Financials,Diversified Banks,IT,EUR
-STM.MI,STMicroelectronics N.V.,BIT,Information Technology,Semiconductors,IT,EUR
 STLAM.MI,Stellantis N.V.,BIT,Consumer Discretionary,Automobile Manufacturers,IT,EUR
 RACE.MI,Ferrari N.V.,BIT,Consumer Discretionary,Automobile Manufacturers,IT,EUR
 LDO.MI,Leonardo S.p.A.,BIT,Industrials,Aerospace & Defense,IT,EUR
@@ -27,5 +26,5 @@ PST.MI,Poste Italiane S.p.A.,BIT,Financials,Diversified Financial Services,IT,EU
 PRY.MI,Prysmian S.p.A.,BIT,Industrials,Electrical Components & Equipment,IT,EUR
 REC.MI,Recordati Industria Chimica e Farmaceutica S.p.A.,BIT,Health Care,Pharmaceuticals,IT,EUR
 TIT.MI,Telecom Italia S.p.A.,BIT,Communication Services,Integrated Telecommunication Services,IT,EUR
-US.MI,Unipol Assicurazioni S.p.A.,BIT,Financials,Multi-line Insurance,IT,EUR
+UNI.MI,Unipol Assicurazioni S.p.A.,BIT,Financials,Multi-line Insurance,IT,EUR
 AMP.MI,Amplifon S.p.A.,BIT,Health Care,Health Care Distributors,IT,EUR
