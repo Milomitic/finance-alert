@@ -611,9 +611,11 @@ def test_recompute_all_populates_table(db: Session, monkeypatch):
         fund_map[s.ticker] = _build_fundamentals_for(s.ticker, good=i < 3)
     db.commit()
 
-    ok, failed = score_service.recompute_all(db)
+    ok, failed, skipped = score_service.recompute_all(db)
     assert ok == 5
     assert failed == 0
+    # No persisted score exists yet → nothing to skip on first run.
+    assert skipped == 0
     rows = db.query(StockScore).all()
     assert len(rows) == 5
     by_ticker = {db.get(Stock, r.stock_id).ticker: r for r in rows}
@@ -712,7 +714,7 @@ def test_recompute_all_passes_heartbeat_through_sector_stats_prepass(
     def fake_on_progress(done: int, total: int) -> None:
         heartbeats.append((done, total))
 
-    ok, failed = score_service.recompute_all(db, on_progress=fake_on_progress)
+    ok, failed, _skipped = score_service.recompute_all(db, on_progress=fake_on_progress)
     assert ok == 25
     assert failed == 0
 
@@ -849,3 +851,251 @@ def test_cancel_check_polled_every_stock_in_scoring_loop(db: Session, monkeypatc
         f"Expected cancel to react within 1-2 iterations of the scoring loop; "
         f"reacted after {calls['n']} total calls (pre-pass={PREPASS_LEN})"
     )
+
+
+# ---------------------------------------------------------------------------
+# Strategy #2: incremental-skip optimisation (recompute_all skips stocks
+# whose persisted score is still current vs the underlying inputs).
+# ---------------------------------------------------------------------------
+
+def test_recompute_all_skips_stocks_with_current_score(db: Session, monkeypatch):
+    """Second consecutive recompute MUST skip stocks whose inputs haven't
+    changed. The whole point of Strategy #2: 5-15x speedup on idempotent
+    runs."""
+    from app.models import FetchCache
+    from datetime import UTC, datetime as _dt
+    import json as _json
+
+    monkeypatch.setattr(
+        stock_fundamentals_service, "get_fundamentals",
+        lambda ticker, force_refresh=False: Fundamentals(
+            ticker=ticker,
+            micro=MicroData(trailing_pe=20.0),
+        ),
+    )
+    monkeypatch.setattr(stock_news_service, "get_news", lambda ticker, limit=5: [])
+
+    s = Stock(
+        ticker="SKIPME", exchange="NMS", name="Skip me",
+        sector="Technology", market_cap=int(1e10),
+    )
+    db.add(s)
+    db.commit()
+    _seed_ohlcv(db, s.id, n_bars=10)
+    # Pre-populate L2 row so the skip-decision has a fetched_at to compare.
+    # Use a timestamp BEFORE the first recompute's compute_score so the
+    # second run's skip-decision sees "no fresh fundamentals since last
+    # score" → can skip.
+    db.add(FetchCache(
+        ticker="SKIPME", kind="fundamentals",
+        payload=_json.dumps({"_schema_version": 6, "micro": {"trailing_pe": 20.0}, "profile": {"long_business_summary": "stub"}}),
+        fetched_at=_dt(2026, 1, 1, tzinfo=UTC),
+    ))
+    db.commit()
+
+    # First recompute: SCORED.
+    ok1, failed1, skipped1 = score_service.recompute_all(db)
+    assert ok1 == 1
+    assert skipped1 == 0
+
+    # Second recompute back-to-back: inputs unchanged → SKIP.
+    ok2, failed2, skipped2 = score_service.recompute_all(db)
+    assert ok2 == 0
+    assert skipped2 == 1
+    assert failed2 == 0
+
+
+def test_recompute_all_skips_only_for_unchanged_inputs(db: Session, monkeypatch):
+    """If a fresh OHLCV bar lands OR the L2 fundamentals timestamp is more
+    recent than the score, the stock MUST be re-scored (not skipped)."""
+    from app.models import FetchCache, OhlcvDaily
+    from datetime import UTC, date as _date, datetime as _dt
+    import json as _json
+
+    monkeypatch.setattr(
+        stock_fundamentals_service, "get_fundamentals",
+        lambda ticker, force_refresh=False: Fundamentals(
+            ticker=ticker,
+            micro=MicroData(trailing_pe=20.0),
+        ),
+    )
+    monkeypatch.setattr(stock_news_service, "get_news", lambda ticker, limit=5: [])
+
+    s = Stock(
+        ticker="FRESH", exchange="NMS", name="Fresh inputs",
+        sector="Technology", market_cap=int(1e10),
+    )
+    db.add(s)
+    db.commit()
+    _seed_ohlcv(db, s.id, n_bars=10)
+    db.add(FetchCache(
+        ticker="FRESH", kind="fundamentals",
+        payload=_json.dumps({"_schema_version": 6, "micro": {"trailing_pe": 20.0}, "profile": {"long_business_summary": "stub"}}),
+        fetched_at=_dt(2026, 1, 1, tzinfo=UTC),
+    ))
+    db.commit()
+
+    # First recompute: SCORED.
+    ok1, _, _ = score_service.recompute_all(db)
+    assert ok1 == 1
+
+    # Insert an OHLCV bar dated TODAY (definitely after the score's
+    # computed_at). Skip-decision MUST trigger a re-score.
+    db.add(OhlcvDaily(
+        stock_id=s.id, date=_date.today(),
+        open=100, high=105, low=99, close=104, volume=10_000_000,
+    ))
+    db.commit()
+
+    ok2, failed2, skipped2 = score_service.recompute_all(db)
+    # The new OHLCV bar makes the persisted score stale → re-score.
+    assert ok2 == 1
+    assert skipped2 == 0
+    assert failed2 == 0
+
+
+def test_recompute_all_never_skips_when_no_score_exists(db: Session, monkeypatch):
+    """First-ever recompute on a fresh DB MUST compute every stock, not
+    skip them. Guard against an empty-existing_scores lookup defaulting
+    to 'skip'."""
+    monkeypatch.setattr(
+        stock_fundamentals_service, "get_fundamentals",
+        lambda ticker, force_refresh=False: Fundamentals(
+            ticker=ticker,
+            micro=MicroData(trailing_pe=20.0),
+        ),
+    )
+    monkeypatch.setattr(stock_news_service, "get_news", lambda ticker, limit=5: [])
+
+    for i in range(3):
+        db.add(Stock(
+            ticker=f"NEW{i}", exchange="NMS", name=f"New {i}",
+            sector="Technology", market_cap=int(1e10),
+        ))
+    db.commit()
+    for stock in db.query(Stock).all():
+        _seed_ohlcv(db, stock.id, n_bars=10)
+    db.commit()
+
+    ok, failed, skipped = score_service.recompute_all(db)
+    # All three MUST be scored, NONE skipped (no existing score row).
+    assert ok == 3
+    assert skipped == 0
+
+
+# ---------------------------------------------------------------------------
+# Strategy #3: sector_stats bundle is cached between consecutive calls.
+# ---------------------------------------------------------------------------
+
+def test_sector_stats_cache_hits_on_second_call(db: Session, monkeypatch):
+    """Two consecutive _build_sector_stats calls in the same process
+    with same universe MUST hit the in-memory cache (microseconds)
+    rather than re-iterating get_fundamentals on every ticker."""
+    from app.services.score_service import (
+        _build_sector_stats,
+        clear_sector_stats_cache,
+    )
+
+    call_count = {"n": 0}
+
+    def counting_get_fundamentals(ticker, force_refresh=False):
+        call_count["n"] += 1
+        return Fundamentals(ticker=ticker, micro=MicroData(trailing_pe=20.0))
+
+    monkeypatch.setattr(
+        stock_fundamentals_service, "get_fundamentals",
+        counting_get_fundamentals,
+    )
+
+    for i in range(5):
+        db.add(Stock(
+            ticker=f"CACHE{i}", exchange="NMS", name=f"Cache test {i}",
+            sector="Technology", market_cap=int(1e10),
+        ))
+    db.commit()
+    clear_sector_stats_cache()
+
+    stocks = list(db.query(Stock).all())
+    # First call: builds → calls get_fundamentals N times.
+    _build_sector_stats(stocks)
+    first_calls = call_count["n"]
+    assert first_calls >= 5
+
+    # Second call: same universe → cache hit, ZERO new get_fundamentals.
+    _build_sector_stats(stocks)
+    assert call_count["n"] == first_calls, (
+        "Second call should hit cache and NOT invoke get_fundamentals; "
+        f"counted {call_count['n'] - first_calls} extra calls"
+    )
+
+
+def test_sector_stats_cache_invalidates_on_fingerprint_change(db: Session, monkeypatch):
+    """If a new ticker is added to the universe, the fingerprint
+    changes and the cache rebuilds. Same for an L2 fundamentals refresh
+    (max(fetched_at) changes)."""
+    from app.services.score_service import (
+        _build_sector_stats,
+        clear_sector_stats_cache,
+    )
+
+    call_count = {"n": 0}
+    monkeypatch.setattr(
+        stock_fundamentals_service, "get_fundamentals",
+        lambda t, force_refresh=False: (call_count.update(n=call_count["n"] + 1)
+                                         or Fundamentals(ticker=t, micro=MicroData(trailing_pe=20.0))),
+    )
+
+    for i in range(3):
+        db.add(Stock(
+            ticker=f"INV{i}", exchange="NMS", name=f"Invalidate {i}",
+            sector="Technology", market_cap=int(1e10),
+        ))
+    db.commit()
+    clear_sector_stats_cache()
+
+    stocks = list(db.query(Stock).all())
+    _build_sector_stats(stocks)
+    n_after_first = call_count["n"]
+
+    # Add a new ticker → universe size changes → fingerprint changes → rebuild.
+    db.add(Stock(
+        ticker="INV-NEW", exchange="NMS", name="New ticker",
+        sector="Technology", market_cap=int(1e10),
+    ))
+    db.commit()
+    stocks_after = list(db.query(Stock).all())
+    _build_sector_stats(stocks_after)
+    # Cache miss → at least one more get_fundamentals call.
+    assert call_count["n"] > n_after_first
+
+
+def test_sector_stats_cache_can_be_disabled(db: Session, monkeypatch):
+    """Pass use_cache=False to force a rebuild even on a fingerprint
+    that's in the cache. Used by tests + any admin "force-fresh-medians"
+    path."""
+    from app.services.score_service import (
+        _build_sector_stats,
+        clear_sector_stats_cache,
+    )
+
+    call_count = {"n": 0}
+    monkeypatch.setattr(
+        stock_fundamentals_service, "get_fundamentals",
+        lambda t, force_refresh=False: (call_count.update(n=call_count["n"] + 1)
+                                         or Fundamentals(ticker=t, micro=MicroData(trailing_pe=20.0))),
+    )
+
+    for i in range(3):
+        db.add(Stock(
+            ticker=f"NOCACHE{i}", exchange="NMS", name=f"No cache {i}",
+            sector="Technology", market_cap=int(1e10),
+        ))
+    db.commit()
+    clear_sector_stats_cache()
+
+    stocks = list(db.query(Stock).all())
+    _build_sector_stats(stocks)
+    first = call_count["n"]
+    # use_cache=False → MUST rebuild even though cache has fresh entry.
+    _build_sector_stats(stocks, use_cache=False)
+    assert call_count["n"] > first

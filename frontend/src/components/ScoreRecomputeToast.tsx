@@ -44,10 +44,12 @@ const RECOMPUTE_LABELS: RunToastLabels = {
       highlightWhenPositive: true,
     },
     { label: "Falliti", value: (s) => s.stocks_skipped },
-    // Third cell intentionally empty (no third metric for recompute):
-    // returning null makes the cell hide. Keeping the slot so the grid
-    // alignment stays consistent with the scan toast's three columns.
-    { label: "—", value: () => null },
+    // Third cell repurposes the `alerts_fired` column for the count of
+    // stocks SKIPPED by Strategy #2 (incremental-skip optimisation). The
+    // backend's score_runner stores: stocks_scanned=ok, stocks_skipped=
+    // failed, alerts_fired=skipped. See score_runner.py for the mapping
+    // rationale (avoiding a schema migration for one new counter).
+    { label: "Saltati", value: (s) => s.alerts_fired },
   ],
   baselineRatePerSec: (phase) =>
     phase === "sector_stats"

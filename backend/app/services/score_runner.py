@@ -100,7 +100,7 @@ def run_tracked_recompute(
         return scan_cancel.is_cancel_requested(run_id_for_cancel)
 
     try:
-        ok, failed = recompute_all(
+        ok, failed, skipped = recompute_all(
             db,
             on_progress=on_progress,
             progress_every=1,
@@ -108,15 +108,22 @@ def run_tracked_recompute(
         )
         run.status = "success"
         run.phase = None
-        # Surface counts in the existing columns so the toast renders them
-        # without schema changes. See docstring at the top of this module.
+        # Surface counts in the existing ScanRun columns:
+        #   stocks_scanned = ok (those whose score was actually re-computed)
+        #   stocks_skipped = failed (true compute_score errors)
+        #   alerts_fired   = skipped (REPURPOSED for "stocks whose inputs
+        #                   were unchanged — skipped by incremental-skip
+        #                   optimisation from Strategy #2). The frontend
+        #                   ScoreRecomputeToast maps these per the labels
+        #                   in `frontend/src/components/ScoreRecomputeToast.tsx`.
         run.stocks_scanned = ok
         run.stocks_skipped = failed
-        run.alerts_fired = None
+        run.alerts_fired = skipped
         run.completed_at = datetime.now(UTC)
         db.commit()
         logger.info(
-            f"[score_runner] ScanRun {run.id} success: scored={ok} failed={failed}"
+            f"[score_runner] ScanRun {run.id} success: "
+            f"scored={ok} failed={failed} skipped={skipped}"
         )
     except RecomputeCancelled:
         # Cooperative cancel — distinct from a crash. Mark as 'failed' with
