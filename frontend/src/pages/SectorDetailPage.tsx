@@ -1,9 +1,22 @@
-import { ArrowLeft } from "lucide-react";
+import {
+  ArrowLeft,
+  BarChart3,
+  Building2,
+  Factory,
+  Globe2,
+  Layers,
+  Shield,
+  TrendingDown,
+  TrendingUp,
+} from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 
+import { StockIdentity } from "@/components/dashboard/StockIdentity";
 import { Card, CardContent } from "@/components/ui/card";
+import { SectionTitle } from "@/components/ui/section-title";
 import { useSectorDetail, type SectorStockRow } from "@/hooks/useSectorDetail";
 import { getSectorIcon, getSectorIconColor } from "@/lib/sectorMeta";
+import { getStockFlagCode } from "@/lib/stockMeta";
 import { cn } from "@/lib/utils";
 
 /* Sector recap page.
@@ -38,22 +51,50 @@ function scoreColor(score: number | null): string {
   return "text-red-600 dark:text-red-400";
 }
 
+function CountryFlag({ country, ticker }: { country: string | null; ticker: string }) {
+  // Best-effort flag rendering — mirrors StockHeader's pattern. If the
+  // helper can't resolve a code (e.g. exotic suffix), render a short
+  // country-code chip instead of a missing image.
+  const code = getStockFlagCode(country ?? null, ticker);
+  if (!code) {
+    return country ? (
+      <span className="text-[10px] text-muted-foreground uppercase tracking-wider tabular-nums">
+        {country}
+      </span>
+    ) : (
+      <span className="text-muted-foreground/60">—</span>
+    );
+  }
+  return (
+    <img
+      src={`/flags/${code}.svg`}
+      alt={country ?? ""}
+      width={18}
+      height={12}
+      style={{ width: "18px", height: "12px", objectFit: "cover" }}
+      className="rounded-sm shadow-sm shrink-0"
+      title={country ?? code.toUpperCase()}
+      aria-hidden
+    />
+  );
+}
+
 function StockRow({ row }: { row: SectorStockRow }) {
   return (
     <tr className="hover:bg-muted/30 transition-colors">
-      <td className="px-2 py-1.5">
+      {/* Identity = logo + ticker (link) + name muted underneath. Same
+          treatment as the dashboard's TopStocksTable so a user moving
+          between the two surfaces sees identical row chrome. */}
+      <td className="px-2 py-1.5 min-w-0">
         <Link
           to={`/stocks/${encodeURIComponent(row.ticker)}`}
-          className="font-semibold hover:underline"
+          className="flex items-center gap-2 hover:underline min-w-0"
         >
-          {row.ticker}
+          <StockIdentity ticker={row.ticker} name={row.name} />
         </Link>
       </td>
-      <td className="px-2 py-1.5 truncate max-w-[200px]" title={row.name ?? ""}>
-        {row.name ?? "—"}
-      </td>
-      <td className="px-2 py-1.5 text-xs text-muted-foreground">
-        {row.country ?? "—"}
+      <td className="px-2 py-1.5 whitespace-nowrap">
+        <CountryFlag country={row.country} ticker={row.ticker} />
       </td>
       <td className={cn("px-2 py-1.5 text-right tabular-nums", scoreColor(row.composite))}>
         {fmtNum(row.composite, 0)}
@@ -141,7 +182,11 @@ export default function SectorDetailPage() {
 
       <Card>
         <CardContent className="p-4">
-          <div className="text-sm font-semibold mb-3">Distribuzione score composito</div>
+          <SectionTitle
+            icon={BarChart3}
+            label="Distribuzione score composito"
+            className="mb-3"
+          />
           <div className="grid grid-cols-5 gap-2 items-end h-32">
             {d.kpis.score_distribution.map((count, i) => {
               const pct = (count / maxBucket) * 100;
@@ -185,12 +230,14 @@ export default function SectorDetailPage() {
           buckets={d.kpis.country_distribution}
           total={d.kpis.stock_count}
           palette="blue"
+          icon={Globe2}
         />
         <DistributionCard
           title="Risk tier"
           buckets={d.kpis.risk_distribution}
           total={d.kpis.stock_count}
           palette="risk"
+          icon={Shield}
         />
         <DistributionCard
           title="Capitalizzazione"
@@ -198,6 +245,7 @@ export default function SectorDetailPage() {
           total={d.kpis.stock_count}
           palette="amber"
           preserveOrder
+          icon={Building2}
         />
       </div>
 
@@ -212,23 +260,24 @@ export default function SectorDetailPage() {
 
       <Card>
         <CardContent className="p-4">
-          <div className="text-sm font-semibold mb-3">
-            Tutte le aziende del settore ({d.stocks.length})
-          </div>
+          <SectionTitle
+            icon={Building2}
+            label={`Tutte le aziende (${d.stocks.length})`}
+            className="mb-3"
+          />
           <div className="overflow-x-auto">
             <table className="w-full text-sm tabular-nums">
               <thead>
-                <tr className="text-xs text-muted-foreground border-b">
-                  <th className="px-2 py-2 text-left">Ticker</th>
-                  <th className="px-2 py-2 text-left">Nome</th>
-                  <th className="px-2 py-2 text-left">Paese</th>
-                  <th className="px-2 py-2 text-right">Score</th>
-                  <th className="px-2 py-2 text-right">P/E</th>
-                  <th className="px-2 py-2 text-right">P/B</th>
-                  <th className="px-2 py-2 text-right">ROE</th>
-                  <th className="px-2 py-2 text-right">Cresc. ric.</th>
-                  <th className="px-2 py-2 text-right">Div. Y</th>
-                  <th className="px-2 py-2 text-right">Mkt cap</th>
+                <tr className="text-[10px] uppercase tracking-wider text-muted-foreground/80 border-b border-border/60">
+                  <th className="px-2 py-2 text-left font-mono">Stock</th>
+                  <th className="px-2 py-2 text-left font-mono">Paese</th>
+                  <th className="px-2 py-2 text-right font-mono">Score</th>
+                  <th className="px-2 py-2 text-right font-mono">P/E</th>
+                  <th className="px-2 py-2 text-right font-mono">P/B</th>
+                  <th className="px-2 py-2 text-right font-mono">ROE</th>
+                  <th className="px-2 py-2 text-right font-mono">Cresc. ric.</th>
+                  <th className="px-2 py-2 text-right font-mono">Div. Y</th>
+                  <th className="px-2 py-2 text-right font-mono">Mkt cap</th>
                 </tr>
               </thead>
               <tbody>
@@ -264,14 +313,20 @@ function PicksCard({
   rows: SectorStockRow[];
   accent: "green" | "red";
 }) {
-  const accentClass =
+  const accentTone =
     accent === "green"
-      ? "text-green-600 dark:text-green-400"
-      : "text-red-600 dark:text-red-400";
+      ? "text-emerald-700 dark:text-emerald-300"
+      : "text-rose-700 dark:text-rose-300";
+  const Icon = accent === "green" ? TrendingUp : TrendingDown;
   return (
     <Card>
       <CardContent className="p-4">
-        <div className={cn("text-sm font-semibold mb-3", accentClass)}>{title}</div>
+        <SectionTitle
+          icon={Icon}
+          label={title}
+          tone={accentTone}
+          className="mb-3"
+        />
         {rows.length === 0 ? (
           <div className="text-sm text-muted-foreground py-3">
             Dati insufficienti
@@ -281,18 +336,23 @@ function PicksCard({
             <tbody>
               {rows.map((r) => (
                 <tr key={r.ticker} className="hover:bg-muted/30">
-                  <td className="px-2 py-1.5">
+                  {/* Same Identity treatment as the main table → logo +
+                      ticker + name muted under it. Visual rhythm matches
+                      the dashboard's TopMovers/TopPicks list rows. */}
+                  <td className="px-2 py-1.5 min-w-0">
                     <Link
                       to={`/stocks/${encodeURIComponent(r.ticker)}`}
-                      className="font-semibold hover:underline"
+                      className="flex items-center gap-2 hover:underline min-w-0"
                     >
-                      {r.ticker}
+                      <StockIdentity ticker={r.ticker} name={r.name} />
                     </Link>
                   </td>
-                  <td className="px-2 py-1.5 truncate max-w-[180px]" title={r.name ?? ""}>
-                    {r.name ?? "—"}
-                  </td>
-                  <td className={cn("px-2 py-1.5 text-right", scoreColor(r.composite))}>
+                  <td
+                    className={cn(
+                      "px-2 py-1.5 text-right tabular-nums font-semibold whitespace-nowrap",
+                      scoreColor(r.composite),
+                    )}
+                  >
                     {fmtNum(r.composite, 0)}
                   </td>
                 </tr>
@@ -330,9 +390,12 @@ function PillarAveragesCard({ pa }: { pa: PillarAverages }) {
   return (
     <Card>
       <CardContent className="p-4">
-        <div className="text-sm font-semibold mb-3">
-          Punteggio medio per pilastro
-        </div>
+        <SectionTitle
+          icon={Layers}
+          label="Punteggio medio per pilastro"
+          className="mb-3"
+        />
+
         <div className="space-y-2">
           {PILLAR_LABELS.map(([key, label]) => {
             const v = pa[key];
@@ -369,9 +432,11 @@ function IndustryBreakdownCard({
   return (
     <Card>
       <CardContent className="p-4">
-        <div className="text-sm font-semibold mb-3">
-          Sotto-industrie ({buckets.length})
-        </div>
+        <SectionTitle
+          icon={Factory}
+          label={`Sotto-industrie (${buckets.length})`}
+          className="mb-3"
+        />
         {buckets.length === 0 ? (
           <div className="text-sm text-muted-foreground py-3">Nessun dato</div>
         ) : (
@@ -382,7 +447,12 @@ function IndustryBreakdownCard({
               return (
                 <div
                   key={b.label}
-                  className="grid grid-cols-[1fr_60px_36px] items-center gap-2"
+                  // V3.6: right column widened 36px → 72px and explicitly
+                  // `whitespace-nowrap` because counts >9 paired with
+                  // percentages ≥10% (e.g. "25 · 63%") used to wrap onto
+                  // two lines inside the original 36px cell, doubling the
+                  // row height and breaking the rhythm.
+                  className="grid grid-cols-[1fr_60px_72px] items-center gap-2"
                 >
                   <span className="text-xs truncate" title={b.label}>
                     {b.label}
@@ -393,7 +463,7 @@ function IndustryBreakdownCard({
                       style={{ width: `${pct}%` }}
                     />
                   </div>
-                  <span className="text-xs tabular-nums text-right text-muted-foreground">
+                  <span className="text-xs tabular-nums text-right text-muted-foreground whitespace-nowrap">
                     {b.count} · {sharePct.toFixed(0)}%
                   </span>
                 </div>
@@ -418,12 +488,17 @@ function DistributionCard({
   total,
   palette,
   preserveOrder = false,
+  icon,
 }: {
   title: string;
   buckets: CountBucket[];
   total: number;
   palette: "blue" | "amber" | "risk";
   preserveOrder?: boolean;
+  /** Icon shown in the SectionTitle. Defaults to BarChart3 when not
+   *  supplied so callers that just need a generic histogram look don't
+   *  have to import an icon. */
+  icon?: typeof BarChart3;
 }) {
   const max = Math.max(...buckets.map((b) => b.count), 1);
   const ordered = preserveOrder ? buckets : [...buckets].sort((a, b) => b.count - a.count);
@@ -438,10 +513,11 @@ function DistributionCard({
     return "bg-blue-500/70";
   }
 
+  const Icon = icon ?? BarChart3;
   return (
     <Card>
       <CardContent className="p-4">
-        <div className="text-sm font-semibold mb-3">{title}</div>
+        <SectionTitle icon={Icon} label={title} className="mb-3" />
         {ordered.length === 0 ? (
           <div className="text-sm text-muted-foreground py-3">Nessun dato</div>
         ) : (
@@ -452,7 +528,10 @@ function DistributionCard({
               return (
                 <div
                   key={b.label}
-                  className="grid grid-cols-[1fr_50px_36px] items-center gap-2"
+                  // V3.6: right column widened 36px → 72px + nowrap
+                  // (see IndustryBreakdownCard for the rationale —
+                  // same "25 · 63%" two-line bug).
+                  className="grid grid-cols-[1fr_50px_72px] items-center gap-2"
                 >
                   <span className="text-xs truncate capitalize" title={b.label}>
                     {b.label}
@@ -463,7 +542,7 @@ function DistributionCard({
                       style={{ width: `${pct}%` }}
                     />
                   </div>
-                  <span className="text-xs tabular-nums text-right text-muted-foreground">
+                  <span className="text-xs tabular-nums text-right text-muted-foreground whitespace-nowrap">
                     {b.count} · {sharePct.toFixed(0)}%
                   </span>
                 </div>
