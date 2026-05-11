@@ -6,10 +6,10 @@ component layout — and the UI doesn't need a static type for it (it just
 iterates components and renders bars). The strict shapes on composite +
 sub_scores + risk_tier are what frontend code depends on.
 """
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_serializer
 
 
 RiskTier = Literal["conservative", "moderate", "aggressive"]
@@ -48,6 +48,22 @@ class StockScoreOut(BaseModel):
     risk_tier: RiskTier
     computed_at: datetime
     breakdown: dict[str, Any]
+
+    @field_serializer("computed_at")
+    def _serialize_computed_at(self, value: datetime) -> str:
+        """SQLite stores DateTime(timezone=True) as naive ISO strings (no
+        TZ suffix). When Pydantic serializes a naive datetime via
+        `.isoformat()` the result also lacks a TZ marker, and the frontend
+        `new Date(iso)` then reads it as LOCAL time — for a user in UTC+2
+        that shifts a fresh "now" timestamp ~2 hours into the past, leading
+        to the user-reported "Calcolato 2h fa" right after a recompute.
+
+        Backend convention is "all stored datetimes are UTC", so we attach
+        UTC explicitly here. Result: `2026-05-11T14:34:01.836551+00:00`
+        which `new Date()` parses correctly across browsers."""
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=UTC)
+        return value.isoformat()
 
 
 class TopPickItemOut(BaseModel):

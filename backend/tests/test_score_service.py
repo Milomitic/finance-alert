@@ -675,3 +675,90 @@ def test_recompute_all_updates_existing_score_in_place(db: Session, monkeypatch)
     assert db.query(StockScore).count() == 1
     second = db.query(StockScore).filter_by(stock_id=s.id).one()
     assert second.composite != first_composite
+
+
+# ---------------------------------------------------------------------------
+# Regression: sector_stats pre-pass MUST emit heartbeats while it runs.
+# Before this fix, two consecutive recomputes failed at +0.7s heartbeat
+# because the slow yfinance retries on delisted tickers caused 30s+ of
+# silence before _build_sector_stats returned. The stop endpoint's
+# stale detector (>120s) then force-closed the row.
+# ---------------------------------------------------------------------------
+
+def test_recompute_all_passes_heartbeat_through_sector_stats_prepass(
+    db: Session, monkeypatch
+):
+    """recompute_all MUST invoke on_progress at least once during the
+    sector_stats pre-pass (i.e. BEFORE the per-stock scoring loop starts),
+    so the runner's heartbeat keeps refreshing while _build_sector_stats
+    is slow on yfinance retries."""
+    monkeypatch.setattr(
+        stock_fundamentals_service, "get_fundamentals",
+        lambda ticker, force_refresh=False: Fundamentals(ticker=ticker),
+    )
+    monkeypatch.setattr(stock_news_service, "get_news", lambda ticker, limit=5: [])
+
+    # Seed > heartbeat_every (default 20) stocks so the pre-pass triggers
+    # the in-loop heartbeat at least once.
+    for i in range(25):
+        db.add(Stock(
+            ticker=f"H{i}", exchange="NMS", name=f"Heartbeat test {i}",
+            sector="Technology", market_cap=int(1e10),
+        ))
+    db.commit()
+
+    heartbeats: list[tuple[int, int]] = []
+
+    def fake_on_progress(done: int, total: int) -> None:
+        heartbeats.append((done, total))
+
+    ok, failed = score_service.recompute_all(db, on_progress=fake_on_progress)
+    assert ok == 25
+    assert failed == 0
+
+    # MUST have multiple heartbeats. The first one is from the seed at the
+    # very start of recompute_all (done=0). The pre-pass adds at least one
+    # more (every 20 stocks → 1 for 25 stocks at the start + 1 final).
+    # The scoring loop adds more (every 10 stocks → 2-3 more heartbeats).
+    assert len(heartbeats) >= 3, (
+        f"Expected >=3 heartbeats (1 seed + >=1 pre-pass + >=1 scoring), "
+        f"got {len(heartbeats)}: {heartbeats}"
+    )
+    # First heartbeat MUST be done=0 (seed before pre-pass), regression
+    # guard against the runner accidentally flipping phase too early.
+    assert heartbeats[0] == (0, 25)
+
+
+def test_recompute_all_cancellable_during_sector_stats(db: Session, monkeypatch):
+    """The pre-pass MUST honour cancel_check too, not just the scoring
+    loop. Otherwise a user clicking Stop during the slow yfinance retries
+    waits for the pre-pass to complete (potentially minutes) before the
+    runner reacts."""
+    monkeypatch.setattr(
+        stock_fundamentals_service, "get_fundamentals",
+        lambda ticker, force_refresh=False: Fundamentals(ticker=ticker),
+    )
+    monkeypatch.setattr(stock_news_service, "get_news", lambda ticker, limit=5: [])
+
+    for i in range(40):
+        db.add(Stock(
+            ticker=f"C{i}", exchange="NMS", name=f"Cancel test {i}",
+            sector="Technology", market_cap=int(1e10),
+        ))
+    db.commit()
+
+    # Cancel request fires on the very first check (i=0).
+    cancel_calls = {"n": 0}
+
+    def always_cancelled() -> bool:
+        cancel_calls["n"] += 1
+        return True
+
+    with pytest.raises(score_service.RecomputeCancelled):
+        score_service.recompute_all(db, cancel_check=always_cancelled)
+
+    # The cancel MUST have been polled at least once (from inside the
+    # pre-pass). Without the pre-pass cancel hook this assertion would fail
+    # because the cancel_check was previously only consulted in the scoring
+    # loop, never reached when the pre-pass raised.
+    assert cancel_calls["n"] >= 1

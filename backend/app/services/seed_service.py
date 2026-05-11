@@ -86,6 +86,29 @@ def _ensure_membership(db: Session, stock_id: int, index_id: int) -> None:
         db.add(StockIndex(stock_id=stock_id, index_id=index_id))
 
 
+def seed_stocks_no_index_from_csv(
+    db: Session, csv_source: IO[str]
+) -> SeedResult:
+    """Upsert stocks from CSV WITHOUT attaching them to any Index.
+
+    Used for groups that are conceptually products from an issuer rather
+    than membership in an index — e.g. the Direxion Daily leveraged-ETF
+    family. Adding them under a fake "DIREXION" index would pollute the
+    Indices dropdown and misrepresent what an Index means in this app;
+    leaving them as orphan stocks lets them surface in the search bar
+    and screener (which both work fine without index membership) while
+    keeping the Indices semantic clean.
+    """
+    added = 0
+    updated = 0
+    reader = csv.DictReader(csv_source)
+    for row in reader:
+        _, created = _upsert_stock(db, row)
+        added += int(created)
+        updated += int(not created)
+    return SeedResult(added=added, updated=updated)
+
+
 def seed_index_from_csv(
     db: Session, csv_source: IO[str], *, index_code: str, index_name: str, country: str | None
 ) -> SeedResult:

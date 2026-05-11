@@ -4,7 +4,10 @@ from pathlib import Path
 from loguru import logger
 
 from app.core.db import SessionLocal
-from app.services.seed_service import seed_index_from_csv
+from app.services.seed_service import (
+    seed_index_from_csv,
+    seed_stocks_no_index_from_csv,
+)
 
 SEEDS = [
     ("sp500.csv", "SP500", "S&P 500", "US"),
@@ -29,12 +32,16 @@ SEEDS = [
     # for KOSPI listings on Yahoo Finance. Visible to user (not hidden
     # like SSE50). Contributes to Asia breadth + mood.
     ("kospi20.csv", "KOSPI20", "KOSPI top 20", "KR"),
-    # NB: the Direxion Daily leveraged ETF group used to be seeded here
-    # as an "index" called DIREXION — that was a misnomer. Direxion is
-    # an ETF *issuer*, not an index or sector. The leveraged ETFs are
-    # individual products that anyone can find via the screener
-    # (filtered by ticker if needed). Removed from the seed set so
-    # the indices dropdown stays semantically clean.
+]
+
+# Leveraged-ETF groups seeded WITHOUT index membership. Direxion is an
+# ETF issuer (not an index), so adding a "DIREXION" Index would muddle
+# the indices dropdown — these products are best surfaced via the
+# search bar / screener which work fine on plain orphan stocks. Includes
+# a handful of widely-traded ProShares 3x products (TQQQ/SQQQ) in the
+# same file because users group them together mentally.
+NO_INDEX_SEEDS = [
+    "direxion_etfs.csv",
 ]
 
 SEED_DIR = Path(__file__).resolve().parent.parent / "data" / "seed"
@@ -53,6 +60,16 @@ def run() -> None:
                     db, f, index_code=code, index_name=name, country=country
                 )
             logger.info(f"{code}: added={result.added} updated={result.updated}")
+        for filename in NO_INDEX_SEEDS:
+            path = SEED_DIR / filename
+            if not path.exists():
+                logger.warning(f"No-index seed file missing: {path}")
+                continue
+            with path.open(encoding="utf-8") as f:
+                result = seed_stocks_no_index_from_csv(db, f)
+            logger.info(
+                f"{filename} (no index): added={result.added} updated={result.updated}"
+            )
         db.commit()
     finally:
         db.close()

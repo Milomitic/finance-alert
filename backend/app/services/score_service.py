@@ -1725,7 +1725,13 @@ def compute_score(db: Session, stock: Stock, *, sector_stats: SectorStatsBundle 
     )
 
 
-def _build_sector_stats(stocks: list[Stock]) -> SectorStatsBundle:
+def _build_sector_stats(
+    stocks: list[Stock],
+    *,
+    on_heartbeat=None,
+    heartbeat_every: int = 20,
+    cancel_check=None,
+) -> SectorStatsBundle:
     """Pre-pass: pull cached fundamentals once per ticker, group by
     sector, hand off to sector_stats_service.compute().
 
@@ -1733,10 +1739,22 @@ def _build_sector_stats(stocks: list[Stock]) -> SectorStatsBundle:
     ticker so a stock with two rows doesn't double-weight in its
     sector's median. Fundamentals fetch failures are silent: a stock
     with no fundamentals just doesn't contribute to any aggregate.
+
+    `on_heartbeat` + `cancel_check` (both optional) let the runner keep
+    the persistent toast alive while this loop runs. Crucial: for ~10
+    delisted tickers yfinance retries each call ~5x before giving up,
+    so without heartbeats the toast's stale detector (>120s without
+    progress) force-closes the run during the pre-pass — even though
+    the worker is alive and progressing. See issue caught 2026-05-11
+    where two consecutive recomputes failed at +0.7s heartbeat.
     """
     by_sector: dict[str, list[Fundamentals]] = {}
     seen_tickers: set[str] = set()
-    for stock in stocks:
+    for i, stock in enumerate(stocks):
+        if cancel_check is not None and i % heartbeat_every == 0 and cancel_check():
+            raise RecomputeCancelled()
+        if on_heartbeat is not None and i % heartbeat_every == 0:
+            on_heartbeat()
         if stock.ticker in seen_tickers:
             continue
         seen_tickers.add(stock.ticker)
@@ -1747,6 +1765,10 @@ def _build_sector_stats(stocks: list[Stock]) -> SectorStatsBundle:
         if funds is None:
             continue
         by_sector.setdefault(stock.sector or "", []).append(funds)
+    # Final heartbeat at the end of the loop so the runner has fresh
+    # data before sector_stats_service.compute() runs (~10ms but still).
+    if on_heartbeat is not None:
+        on_heartbeat()
     bundle = sector_stats_service.compute(by_sector)
     n_with_stats = sum(
         1 for s in bundle.by_sector.values()
@@ -1804,16 +1826,29 @@ def recompute_all(
     stocks = db.execute(select(Stock)).scalars().all()
     total = len(stocks)
 
-    # Seed total before the (sub-second but non-zero) sector_stats pre-pass
-    # so the UI shows the correct denominator immediately. `done=0` until
-    # the score loop actually starts touching stocks.
+    # Seed total before the sector_stats pre-pass so the UI shows the
+    # correct denominator immediately. `done=0` until the score loop
+    # actually starts touching stocks.
     if on_progress is not None:
         on_progress(0, total)
 
-    # Pre-pass: build sector_stats once per recompute run. Cost is
-    # negligible (fundamentals come from L1/L2 cache for ~889 tickers,
-    # ~50ms total) and amortises across the entire score loop.
-    sector_stats = _build_sector_stats(list(stocks))
+    # Pre-pass: build sector_stats. Cost is usually negligible (L1/L2
+    # cache for ~889 tickers, ~50ms) BUT can spike to 30s+ when delisted
+    # tickers force yfinance retries. Thread `on_heartbeat` + `cancel_check`
+    # through so the runner can keep its ScanRun row's heartbeat fresh
+    # during the slow loop — without it the stale detector (>120s)
+    # force-closes the row before the score loop ever starts.
+    def _prepass_heartbeat() -> None:
+        # The runner's on_progress treats done=0/total=N as "still in
+        # sector_stats phase, bump heartbeat only". See score_runner.
+        if on_progress is not None:
+            on_progress(0, total)
+
+    sector_stats = _build_sector_stats(
+        list(stocks),
+        on_heartbeat=_prepass_heartbeat,
+        cancel_check=cancel_check,
+    )
 
     seen_ids: set[int] = set()
     ok = 0

@@ -57,6 +57,45 @@ def test_filters_endpoint(client: TestClient) -> None:
     assert {"code": "NDX", "name": "Nasdaq-100"} in data["indices"]
 
 
+def test_search_finds_stocks_without_index_membership(
+    db: Session,
+) -> None:
+    """Regression: leveraged-ETF products (Direxion Daily family) are
+    seeded WITHOUT index membership because Direxion is an issuer, not
+    an index. They MUST still surface via the search bar and screener
+    (which only require index membership when the user explicitly
+    filters by `index_codes`).
+
+    See seed_stocks_no_index_from_csv + backend/app/data/seed/direxion_etfs.csv."""
+    user = User(username="admin", password_hash="x")
+    db.add(user)
+    db.flush()
+    # Insert an orphan stock — no Index, no StockIndex row.
+    db.add(Stock(
+        ticker="TQQQ", exchange="NYSE Arca",
+        name="ProShares UltraPro QQQ (3x Nasdaq-100)",
+        sector="Financial Services", industry="Leveraged ETF",
+        country="US", currency="USD",
+    ))
+    db.commit()
+    app.dependency_overrides[get_db] = lambda: db
+    app.dependency_overrides[get_current_user] = lambda: user
+    try:
+        client = TestClient(app)
+        # By ticker prefix
+        r = client.get("/api/stocks/search?q=tqqq")
+        assert r.status_code == 200
+        data = r.json()
+        assert data["total"] == 1
+        assert data["items"][0]["stock"]["ticker"] == "TQQQ"
+        # By name substring (no prefix on name)
+        r = client.get("/api/stocks/search?q=ultrapro")
+        assert r.status_code == 200
+        assert r.json()["total"] == 1
+    finally:
+        app.dependency_overrides.clear()
+
+
 @pytest.fixture
 def big_client(db: Session) -> TestClient:
     """Client seeded with 12 stocks of monotonically increasing market cap,

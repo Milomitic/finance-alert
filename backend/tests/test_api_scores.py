@@ -94,6 +94,29 @@ def test_get_stock_score_returns_full_payload(seeded_client: TestClient):
     assert "breakdown" in data and isinstance(data["breakdown"], dict)
 
 
+def test_get_stock_score_computed_at_has_utc_timezone(seeded_client: TestClient):
+    """Regression: SQLite returns naive datetimes for DateTime(timezone=True)
+    columns. Without the field_serializer the JSON is `2026-05-11T14:34:01.836551`
+    (no TZ marker), and the frontend's `new Date(iso)` reads it as LOCAL time
+    — so for a user in UTC+2 a fresh "now" timestamp shifts ~2h into the past
+    and the score card shows "Calcolato 2h fa" right after a recompute.
+
+    Backend convention is "all stored datetimes are UTC", so the serializer
+    attaches +00:00 explicitly."""
+    resp = seeded_client.get("/api/stocks/AAA/score")
+    assert resp.status_code == 200
+    computed_at = resp.json()["computed_at"]
+    # Either Z or +00:00 / +HH:MM offset is acceptable
+    assert (
+        computed_at.endswith("Z")
+        or computed_at.endswith("+00:00")
+        or computed_at[-6] in ("+", "-")
+    ), (
+        f"computed_at must carry a TZ marker so JS Date() parses it as UTC; "
+        f"got {computed_at!r}"
+    )
+
+
 def test_get_stock_score_unknown_ticker_404(seeded_client: TestClient):
     resp = seeded_client.get("/api/stocks/NOPE/score")
     assert resp.status_code == 404

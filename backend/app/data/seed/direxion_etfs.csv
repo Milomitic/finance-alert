@@ -1,0 +1,37 @@
+ticker,name,exchange,sector,industry,country,currency
+TQQQ,ProShares UltraPro QQQ (3x Nasdaq-100),NYSE Arca,Financial Services,Leveraged ETF,US,USD
+SQQQ,ProShares UltraPro Short QQQ (-3x Nasdaq-100),NYSE Arca,Financial Services,Leveraged ETF,US,USD
+SPXL,Direxion Daily S&P 500 Bull 3X Shares,NYSE Arca,Financial Services,Leveraged ETF,US,USD
+SPXS,Direxion Daily S&P 500 Bear 3X Shares,NYSE Arca,Financial Services,Leveraged ETF,US,USD
+TNA,Direxion Daily Small Cap Bull 3X Shares,NYSE Arca,Financial Services,Leveraged ETF,US,USD
+TZA,Direxion Daily Small Cap Bear 3X Shares,NYSE Arca,Financial Services,Leveraged ETF,US,USD
+FAS,Direxion Daily Financial Bull 3X Shares,NYSE Arca,Financial Services,Leveraged ETF,US,USD
+FAZ,Direxion Daily Financial Bear 3X Shares,NYSE Arca,Financial Services,Leveraged ETF,US,USD
+SOXL,Direxion Daily Semiconductor Bull 3X Shares,NYSE Arca,Financial Services,Leveraged ETF,US,USD
+SOXS,Direxion Daily Semiconductor Bear 3X Shares,NYSE Arca,Financial Services,Leveraged ETF,US,USD
+LABU,Direxion Daily S&P Biotech Bull 3X Shares,NYSE Arca,Financial Services,Leveraged ETF,US,USD
+LABD,Direxion Daily S&P Biotech Bear 3X Shares,NYSE Arca,Financial Services,Leveraged ETF,US,USD
+TECL,Direxion Daily Technology Bull 3X Shares,NYSE Arca,Financial Services,Leveraged ETF,US,USD
+TECS,Direxion Daily Technology Bear 3X Shares,NYSE Arca,Financial Services,Leveraged ETF,US,USD
+TMF,Direxion Daily 20+ Year Treasury Bull 3X Shares,NYSE Arca,Financial Services,Leveraged ETF,US,USD
+TMV,Direxion Daily 20+ Year Treasury Bear 3X Shares,NYSE Arca,Financial Services,Leveraged ETF,US,USD
+NUGT,Direxion Daily Gold Miners Bull 2X Shares,NYSE Arca,Financial Services,Leveraged ETF,US,USD
+DUST,Direxion Daily Gold Miners Bear 2X Shares,NYSE Arca,Financial Services,Leveraged ETF,US,USD
+JNUG,Direxion Daily Junior Gold Miners Bull 2X Shares,NYSE Arca,Financial Services,Leveraged ETF,US,USD
+JDST,Direxion Daily Junior Gold Miners Bear 2X Shares,NYSE Arca,Financial Services,Leveraged ETF,US,USD
+YINN,Direxion Daily FTSE China Bull 3X Shares,NYSE Arca,Financial Services,Leveraged ETF,US,USD
+YANG,Direxion Daily FTSE China Bear 3X Shares,NYSE Arca,Financial Services,Leveraged ETF,US,USD
+EDC,Direxion Daily MSCI Emerging Markets Bull 3X Shares,NYSE Arca,Financial Services,Leveraged ETF,US,USD
+EDZ,Direxion Daily MSCI Emerging Markets Bear 3X Shares,NYSE Arca,Financial Services,Leveraged ETF,US,USD
+ERX,Direxion Daily Energy Bull 2X Shares,NYSE Arca,Financial Services,Leveraged ETF,US,USD
+ERY,Direxion Daily Energy Bear 2X Shares,NYSE Arca,Financial Services,Leveraged ETF,US,USD
+DRN,Direxion Daily Real Estate Bull 3X Shares,NYSE Arca,Financial Services,Leveraged ETF,US,USD
+DRV,Direxion Daily Real Estate Bear 3X Shares,NYSE Arca,Financial Services,Leveraged ETF,US,USD
+GUSH,Direxion Daily S&P Oil & Gas E&P Bull 2X Shares,NYSE Arca,Financial Services,Leveraged ETF,US,USD
+DRIP,Direxion Daily S&P Oil & Gas E&P Bear 2X Shares,NYSE Arca,Financial Services,Leveraged ETF,US,USD
+DPST,Direxion Daily Regional Banks Bull 3X Shares,NYSE Arca,Financial Services,Leveraged ETF,US,USD
+WANT,Direxion Daily Consumer Discretionary Bull 3X Shares,NYSE Arca,Financial Services,Leveraged ETF,US,USD
+PILL,Direxion Daily Pharmaceutical & Medical Bull 3X Shares,NYSE Arca,Financial Services,Leveraged ETF,US,USD
+WEBL,Direxion Daily Dow Jones Internet Bull 3X Shares,NYSE Arca,Financial Services,Leveraged ETF,US,USD
+WEBS,Direxion Daily Dow Jones Internet Bear 3X Shares,NYSE Arca,Financial Services,Leveraged ETF,US,USD
+RETL,Direxion Daily Retail Bull 3X Shares,NYSE Arca,Financial Services,Leveraged ETF,US,USD
