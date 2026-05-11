@@ -762,3 +762,90 @@ def test_recompute_all_cancellable_during_sector_stats(db: Session, monkeypatch)
     # because the cancel_check was previously only consulted in the scoring
     # loop, never reached when the pre-pass raised.
     assert cancel_calls["n"] >= 1
+
+
+# ---------------------------------------------------------------------------
+# Regression: cancel must react WITHIN ONE STOCK of the request, not after
+# a multi-stock window.
+# ---------------------------------------------------------------------------
+
+def test_cancel_check_polled_every_stock_in_prepass(db: Session, monkeypatch):
+    """User-reported issue: clicking Stop during the sector_stats pre-pass
+    took ~80s to react because cancel_check was tied to heartbeat_every=20
+    and individual yfinance fetches could stall the loop for seconds. The
+    fix decouples the two — cancel is now polled every stock (cheap set
+    lookup), heartbeat stays at every 20 (DB commit).
+
+    Guard: when cancel becomes true on the 3rd iteration, the runner must
+    raise RecomputeCancelled before reaching iteration 4 — NOT wait until
+    the next heartbeat boundary (which would be iteration 20)."""
+    monkeypatch.setattr(
+        stock_fundamentals_service, "get_fundamentals",
+        lambda ticker, force_refresh=False: Fundamentals(ticker=ticker),
+    )
+    monkeypatch.setattr(stock_news_service, "get_news", lambda ticker, limit=5: [])
+
+    for i in range(50):
+        db.add(Stock(
+            ticker=f"PC{i}", exchange="NMS", name=f"Pre-cancel test {i}",
+            sector="Technology", market_cap=int(1e10),
+        ))
+    db.commit()
+
+    calls_before_cancel = {"n": 0}
+
+    def cancel_on_third() -> bool:
+        calls_before_cancel["n"] += 1
+        # Return True on the 3rd call (=== 3rd stock in the loop)
+        return calls_before_cancel["n"] >= 3
+
+    with pytest.raises(score_service.RecomputeCancelled):
+        score_service.recompute_all(db, cancel_check=cancel_on_third)
+
+    # MUST react on the 3rd call. Before the fix, with cancel checks only
+    # at i % 20 == 0, the runner would have looped through all 20 stocks
+    # before noticing — calls_before_cancel would be way higher than 3.
+    # Now: i=0 (first check) ok, i=1 (second) ok, i=2 (third) → True → raise.
+    assert calls_before_cancel["n"] == 3, (
+        f"cancel_check should fire on every stock; only {calls_before_cancel['n']} "
+        f"calls before cancel was honoured"
+    )
+
+
+def test_cancel_check_polled_every_stock_in_scoring_loop(db: Session, monkeypatch):
+    """Same guarantee in the scoring loop. Even if the pre-pass passes
+    quickly, the long phase is scoring (~940 stocks × DB I/O). User Stop
+    during scoring must also react within one stock."""
+    monkeypatch.setattr(
+        stock_fundamentals_service, "get_fundamentals",
+        lambda ticker, force_refresh=False: Fundamentals(ticker=ticker),
+    )
+    monkeypatch.setattr(stock_news_service, "get_news", lambda ticker, limit=5: [])
+
+    for i in range(30):
+        db.add(Stock(
+            ticker=f"SC{i}", exchange="NMS", name=f"Scoring cancel test {i}",
+            sector="Technology", market_cap=int(1e10),
+        ))
+    db.commit()
+
+    # The pre-pass calls cancel_check 30 times (once per stock). Then the
+    # scoring loop calls it 30 more times. We want to verify the cancel
+    # fires within the scoring loop too, so we delay the True signal until
+    # AFTER the pre-pass completes (call #31, first iteration of scoring).
+    calls = {"n": 0}
+    PREPASS_LEN = 30
+
+    def cancel_first_scoring_iter() -> bool:
+        calls["n"] += 1
+        return calls["n"] > PREPASS_LEN  # Fire on iteration 31 (first scoring)
+
+    with pytest.raises(score_service.RecomputeCancelled):
+        score_service.recompute_all(db, cancel_check=cancel_first_scoring_iter)
+
+    # Scoring loop reacts within the same iteration the cancel was requested.
+    # Allow ±1 for the boundary between pre-pass last call and scoring first call.
+    assert PREPASS_LEN < calls["n"] <= PREPASS_LEN + 2, (
+        f"Expected cancel to react within 1-2 iterations of the scoring loop; "
+        f"reacted after {calls['n']} total calls (pre-pass={PREPASS_LEN})"
+    )

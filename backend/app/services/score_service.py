@@ -1741,18 +1741,30 @@ def _build_sector_stats(
     with no fundamentals just doesn't contribute to any aggregate.
 
     `on_heartbeat` + `cancel_check` (both optional) let the runner keep
-    the persistent toast alive while this loop runs. Crucial: for ~10
-    delisted tickers yfinance retries each call ~5x before giving up,
-    so without heartbeats the toast's stale detector (>120s without
-    progress) force-closes the run during the pre-pass — even though
-    the worker is alive and progressing. See issue caught 2026-05-11
-    where two consecutive recomputes failed at +0.7s heartbeat.
+    the persistent toast alive AND react to user cancels while this loop
+    runs. Crucial detail: cancel_check is polled EVERY stock (it's a
+    cheap set lookup, microseconds), whereas heartbeat fires every
+    `heartbeat_every` stocks (each call does a DB commit, milliseconds).
+    Decoupling these matters when individual `get_fundamentals` calls
+    take seconds (yfinance retries on delisted tickers): without the
+    per-stock cancel poll, hitting Stop during the pre-pass takes ~80s
+    on average to react. See issue caught 2026-05-11 where the user
+    reported "lo stop non funziona" with an 80s gap between last
+    heartbeat and the row being marked failed.
     """
     by_sector: dict[str, list[Fundamentals]] = {}
     seen_tickers: set[str] = set()
     for i, stock in enumerate(stocks):
-        if cancel_check is not None and i % heartbeat_every == 0 and cancel_check():
+        # Cancel: polled EVERY stock (microseconds — Python set lookup).
+        # Lower latency on Stop than the heartbeat-tied check we used
+        # before, especially in the pre-pass where individual fetches
+        # can stall for seconds on yfinance retries.
+        if cancel_check is not None and cancel_check():
             raise RecomputeCancelled()
+        # Heartbeat: every `heartbeat_every` stocks (each call commits
+        # the DB, more expensive). 20 means ~1 heartbeat per 5-10s of
+        # pre-pass wall time on a warm cache — well within the 120s
+        # stale threshold.
         if on_heartbeat is not None and i % heartbeat_every == 0:
             on_heartbeat()
         if stock.ticker in seen_tickers:
@@ -1855,9 +1867,12 @@ def recompute_all(
     failed = 0
 
     for i, stock in enumerate(stocks):
-        # Cooperative cancel: polled every `progress_every` stocks so a
-        # long score loop can still bail within a fraction of a second.
-        if cancel_check is not None and i % progress_every == 0 and cancel_check():
+        # Cooperative cancel: polled EVERY stock (cheap set lookup) so
+        # Stop reacts within one stock of the user click — even when
+        # individual compute_score calls are slow (e.g. fundamentals
+        # cache miss triggering a yfinance retry chain). The cost of
+        # the check itself is negligible vs the per-stock work.
+        if cancel_check is not None and cancel_check():
             raise RecomputeCancelled()
         if stock.id in seen_ids:
             continue
