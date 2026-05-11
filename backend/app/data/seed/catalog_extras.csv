@@ -1,0 +1,71 @@
+ticker,name,exchange,sector,industry,country,currency
+CEG,Constellation Energy Corp,NASDAQ,Utilities,Independent Power Producers,US,USD
+FLNC,Fluence Energy Inc,NASDAQ,Industrials,Electrical Equipment,US,USD
+AES,The AES Corporation,NYSE,Utilities,Electric Utilities,US,USD
+TLN,Talen Energy Corporation,NASDAQ,Utilities,Independent Power Producers,US,USD
+QS,QuantumScape Corporation,NYSE,Consumer Cyclical,Auto Parts,US,USD
+BWXT,BWX Technologies Inc,NYSE,Industrials,Aerospace & Defense,US,USD
+NNE,Nano Nuclear Energy Inc,NASDAQ,Industrials,Specialty Industrial Machinery,US,USD
+UEC,Uranium Energy Corp,NYSE,Energy,Uranium,US,USD
+CCJ,Cameco Corporation,NYSE,Energy,Uranium,CA,USD
+IREN,Iris Energy Limited,NASDAQ,Technology,Capital Markets,AU,USD
+MVST,Microvast Holdings Inc,NASDAQ,Industrials,Electrical Equipment,US,USD
+OKLO,Oklo Inc,NYSE,Utilities,Independent Power Producers,US,USD
+SMR,NuScale Power Corporation,NYSE,Industrials,Specialty Industrial Machinery,US,USD
+CHRD,Chord Energy Corporation,NASDAQ,Energy,Oil & Gas E&P,US,USD
+RUN,Sunrun Inc,NASDAQ,Industrials,Solar,US,USD
+FSLR,First Solar Inc,NASDAQ,Technology,Solar,US,USD
+SEDG,SolarEdge Technologies Inc,NASDAQ,Technology,Solar,US,USD
+JKS,JinkoSolar Holding Co Ltd,NYSE,Technology,Solar,CN,USD
+PLUG,Plug Power Inc,NASDAQ,Industrials,Electrical Equipment,US,USD
+BE,Bloom Energy Corporation,NYSE,Industrials,Electrical Equipment,US,USD
+ORSTED.CO,Orsted A/S,CSE,Utilities,Renewable Utilities,DK,DKK
+RWE.DE,RWE AG,XETRA,Utilities,Electric Utilities,DE,EUR
+0257.HK,China Everbright Environment Group Ltd,HKG,Utilities,Waste Management,HK,HKD
+0968.HK,Xinyi Solar Holdings Ltd,HKG,Technology,Solar,HK,HKD
+3800.HK,GCL Technology Holdings Ltd,HKG,Technology,Solar,HK,HKD
+RACE,Ferrari NV,NYSE,Consumer Cyclical,Auto Manufacturers,IT,USD
+AML.L,Aston Martin Lagonda Global Holdings PLC,LSE,Consumer Cyclical,Auto Manufacturers,GB,GBp
+BRBY.L,Burberry Group plc,LSE,Consumer Cyclical,Luxury Goods,GB,GBp
+DAL,Delta Air Lines Inc,NYSE,Industrials,Airlines,US,USD
+ZIM,ZIM Integrated Shipping Services Ltd,NYSE,Industrials,Marine Shipping,IL,USD
+MAERSK-B.CO,A P Moller Maersk A/S,CSE,Industrials,Marine Shipping,DK,DKK
+HLAG.DE,Hapag-Lloyd AG,XETRA,Industrials,Marine Shipping,DE,EUR
+9866.HK,NIO Inc,HKG,Consumer Cyclical,Auto Manufacturers,CN,HKD
+XPEV,XPeng Inc,NYSE,Consumer Cyclical,Auto Manufacturers,CN,USD
+UAL,United Airlines Holdings Inc,NASDAQ,Industrials,Airlines,US,USD
+ALK,Alaska Air Group Inc,NYSE,Industrials,Airlines,US,USD
+0753.HK,Air China Limited,HKG,Industrials,Airlines,CN,HKD
+AF.PA,Air France-KLM SA,EPA,Industrials,Airlines,FR,EUR
+AAL,American Airlines Group Inc,NASDAQ,Industrials,Airlines,US,USD
+RYAAY,Ryanair Holdings plc,NASDAQ,Industrials,Airlines,IE,USD
+WIZZ.L,Wizz Air Holdings Plc,LSE,Industrials,Airlines,HU,GBp
+EZJ.L,easyJet plc,LSE,Industrials,Airlines,GB,GBp
+NIO,NIO Inc,NYSE,Consumer Cyclical,Auto Manufacturers,CN,USD
+NIU,Niu Technologies,NASDAQ,Consumer Cyclical,Auto Manufacturers,CN,USD
+LHA.DE,Deutsche Lufthansa AG,XETRA,Industrials,Airlines,DE,EUR
+NAS.OL,Norwegian Air Shuttle ASA,OSL,Industrials,Airlines,NO,NOK
+CRMD,CorMedix Inc,NASDAQ,Healthcare,Drug Manufacturers - Specialty,US,USD
+VRTX,Vertex Pharmaceuticals Inc,NASDAQ,Healthcare,Drug Manufacturers - General,US,USD
+REGN,Regeneron Pharmaceuticals Inc,NASDAQ,Healthcare,Biotechnology,US,USD
+EXEL,Exelixis Inc,NASDAQ,Healthcare,Biotechnology,US,USD
+BMRN,BioMarin Pharmaceutical Inc,NASDAQ,Healthcare,Biotechnology,US,USD
+THC,Tenet Healthcare Corporation,NYSE,Healthcare,Medical Care Facilities,US,USD
+3759.HK,Pharmaron Beijing Co Ltd,HKG,Healthcare,Diagnostics & Research,CN,HKD
+1873.HK,Viva Biotech Holdings,HKG,Healthcare,Biotechnology,CN,HKD
+2607.HK,Shanghai Pharmaceuticals Holding Co Ltd,HKG,Healthcare,Drug Manufacturers - General,CN,HKD
+HIMS,Hims & Hers Health Inc,NYSE,Healthcare,Health Information Services,US,USD
+TLRY,Tilray Brands Inc,NASDAQ,Healthcare,Drug Manufacturers - Specialty,CA,USD
+CGC,Canopy Growth Corporation,NASDAQ,Healthcare,Drug Manufacturers - Specialty,CA,USD
+ACB,Aurora Cannabis Inc,NASDAQ,Healthcare,Drug Manufacturers - Specialty,CA,USD
+CRON,Cronos Group Inc,NASDAQ,Healthcare,Drug Manufacturers - Specialty,CA,USD
+NVO,Novo Nordisk A/S,NYSE,Healthcare,Drug Manufacturers - General,DK,USD
+NTLA,Intellia Therapeutics Inc,NASDAQ,Healthcare,Biotechnology,US,USD
+ILMN,Illumina Inc,NASDAQ,Healthcare,Diagnostics & Research,US,USD
+RXRX,Recursion Pharmaceuticals Inc,NASDAQ,Healthcare,Biotechnology,US,USD
+OCGN,Ocugen Inc,NASDAQ,Healthcare,Biotechnology,US,USD
+BAYN.DE,Bayer AG,XETRA,Healthcare,Drug Manufacturers - General,DE,EUR
+BNTX,BioNTech SE,NASDAQ,Healthcare,Biotechnology,DE,USD
+TDOC,Teladoc Health Inc,NYSE,Healthcare,Health Information Services,US,USD
+BNGO,Bionano Genomics Inc,NASDAQ,Healthcare,Diagnostics & Research,US,USD
+NVAX,Novavax Inc,NASDAQ,Healthcare,Biotechnology,US,USD

@@ -42,6 +42,16 @@ SEEDS = [
 # same file because users group them together mentally.
 NO_INDEX_SEEDS = [
     "direxion_etfs.csv",
+    # catalog_extras: thematic top-of-mind picks the user requested (banks,
+    # energy/utilities, luxury, travel, healthcare/pharma) that weren't
+    # already captured by the index seeds. Things like NIO/XPEV (Chinese
+    # auto ADRs), Aston Martin & Burberry (UK), Maersk (Denmark), Lufthansa
+    # & Wizz (EU airlines), cannabis names, and a long biotech tail. Added
+    # without index membership because membership in the user's
+    # screenshots is by SECTOR (Bank/Energy/Healthcare/...), not by index
+    # — and the existing sector field plus search bar already make them
+    # findable. See backend/app/data/seed/catalog_extras.csv.
+    "catalog_extras.csv",
 ]
 
 SEED_DIR = Path(__file__).resolve().parent.parent / "data" / "seed"
