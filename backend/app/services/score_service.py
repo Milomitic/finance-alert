@@ -1761,8 +1761,22 @@ def _build_sector_stats(stocks: list[Stock]) -> SectorStatsBundle:
     return bundle
 
 
-def recompute_all(db: Session) -> int:
-    """Batch UPSERT scores for every stock. Returns count successfully scored.
+class RecomputeCancelled(Exception):
+    """Raised by recompute_all when the cancel_check callback returns True.
+
+    The runner (score_runner.run_tracked_recompute) catches it and marks
+    the associated ScanRun as failed with a user-friendly message — same
+    pattern as ScanCancelled in scan_service."""
+
+
+def recompute_all(
+    db: Session,
+    *,
+    on_progress=None,
+    progress_every: int = 10,
+    cancel_check=None,
+) -> tuple[int, int]:
+    """Batch UPSERT scores for every stock. Returns (ok, failed) counts.
 
     Two-phase to use *real* sector medians instead of static V1 values:
       1. Pre-pass: collect fundamentals (cache hit on the fast path) →
@@ -1776,8 +1790,25 @@ def recompute_all(db: Session) -> int:
     `db.merge()` for true UPSERT semantics.
 
     Does NOT raise on per-stock failure — logs and continues.
+
+    Progress + cancel hooks (added so the user-triggered "Ricalcola score"
+    flow can drive the same persistent-toast UX as a scan):
+      - `on_progress(done, total)` fires every `progress_every` stocks
+        and once at the very start to seed `progress_total`.
+      - `cancel_check()` is polled every `progress_every` stocks; returning
+        True raises `RecomputeCancelled` from inside the loop.
+    Both default to no-op when omitted — keeps the cron-call sites
+    untouched. Returns (ok, failed) as a tuple now (was scalar `ok`)
+    so the runner can surface both in the ScanRun summary.
     """
     stocks = db.execute(select(Stock)).scalars().all()
+    total = len(stocks)
+
+    # Seed total before the (sub-second but non-zero) sector_stats pre-pass
+    # so the UI shows the correct denominator immediately. `done=0` until
+    # the score loop actually starts touching stocks.
+    if on_progress is not None:
+        on_progress(0, total)
 
     # Pre-pass: build sector_stats once per recompute run. Cost is
     # negligible (fundamentals come from L1/L2 cache for ~889 tickers,
@@ -1788,7 +1819,11 @@ def recompute_all(db: Session) -> int:
     ok = 0
     failed = 0
 
-    for stock in stocks:
+    for i, stock in enumerate(stocks):
+        # Cooperative cancel: polled every `progress_every` stocks so a
+        # long score loop can still bail within a fraction of a second.
+        if cancel_check is not None and i % progress_every == 0 and cancel_check():
+            raise RecomputeCancelled()
         if stock.id in seen_ids:
             continue
         seen_ids.add(stock.id)
@@ -1806,9 +1841,12 @@ def recompute_all(db: Session) -> int:
             logger.warning(f"[score] persist failed for {stock.ticker}: {exc}")
             db.rollback()
             failed += 1
+        # Heartbeat every `progress_every` stocks (and once at the end).
+        if on_progress is not None and (i % progress_every == 0 or i == total - 1):
+            on_progress(i + 1, total)
 
     if failed:
         logger.info(f"[score] recompute_all: ok={ok} failed={failed}")
     else:
         logger.info(f"[score] recompute_all: ok={ok}")
-    return ok
+    return ok, failed

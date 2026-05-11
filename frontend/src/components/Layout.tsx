@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { NavbarSearch } from "@/components/NavbarSearch";
 import { ScanProgressToast } from "@/components/ScanProgressToast";
+import { ScoreRecomputeToast } from "@/components/ScoreRecomputeToast";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
@@ -115,11 +116,16 @@ export default function Layout() {
           <Outlet />
         </main>
       </div>
-      {/* Persistent scan-progress notification — mounted globally so it
-          survives route changes. The user can navigate around while a
-          scan runs and still see the live progress. Auto-dismisses 30s
-          after completion; click anywhere on the toast to dismiss. */}
+      {/* Persistent progress notifications — mounted globally so they
+          survive route changes. The user can navigate around while a
+          background job runs and still see live progress. Both toasts
+          float bottom-right; in practice only one shows at a time
+          (concurrent scan + recompute is server-blocked by the 409
+          guard, and the post-completion windows rarely overlap). Each
+          auto-dismisses 30s after completion; click anywhere on the
+          toast body to dismiss earlier. */}
       <ScanProgressToast />
+      <ScoreRecomputeToast />
     </div>
   );
 }

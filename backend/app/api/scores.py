@@ -7,14 +7,17 @@ dict to render component bars without re-fetching upstream data.
 import json
 from typing import Annotated, get_args
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
+from app.core.db import SessionLocal
 from app.core.visibility import visible_country_clause
-from app.models import OhlcvDaily, Stock, StockScore, User
+from app.models import OhlcvDaily, ScanRun, Stock, StockScore, User
+from app.models.scan_run import KIND_SCORE_RECOMPUTE
+from app.schemas.alert import ScanAccepted, ScanStatusOut, ScanStopResult
 from app.schemas.score import (
     RiskTier,
     ScoreCategory,
@@ -24,6 +27,7 @@ from app.schemas.score import (
     TopPicksOut,
 )
 from app.services import score_service, stock_fundamentals_service
+from app.services.scan_status import build_scan_status_out
 
 router = APIRouter(prefix="/api", tags=["scores"])
 
@@ -163,6 +167,170 @@ def recompute_stock_score(
         risk_tier=new_score.risk_tier,  # type: ignore[arg-type]
         computed_at=new_score.computed_at,
         breakdown=breakdown,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Bulk recompute — user-triggered "Ricalcola tutti gli score" from the
+# homepage. Same persistent-toast UX as the alert scan (`/api/alerts/scan`)
+# powered by the shared ScanRun-with-kind tracking introduced in 6ed5a4d41b17.
+# ---------------------------------------------------------------------------
+
+
+def _run_recompute_in_background() -> None:
+    """BackgroundTask body. Opens its own SessionLocal because FastAPI's
+    request-scoped session has already been closed by the time this fires.
+    Errors are caught + logged + persisted on the ScanRun row by the runner
+    itself, so we don't re-raise here."""
+    from app.services.score_runner import run_tracked_recompute
+
+    db = SessionLocal()
+    try:
+        run_tracked_recompute(db, trigger="manual")
+    finally:
+        db.close()
+
+
+@router.post(
+    "/scores/recompute-all",
+    response_model=ScanAccepted,
+    status_code=202,
+)
+def trigger_recompute_all(
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+) -> ScanAccepted:
+    """Kick off a background recompute of every stock's composite score.
+
+    Returns 202 immediately; the actual work runs via FastAPI's
+    BackgroundTask. Live status is polled by the frontend via
+    `GET /api/scores/recompute-status`, which feeds the persistent toast.
+
+    Guards against piling up jobs: if a score_recompute run is already
+    in 'running' state we return 409 with a clear message rather than
+    spawning a parallel one (the model.merge() collision wouldn't crash
+    things, but two concurrent runs would scribble over each other's
+    progress heartbeats and confuse the UI).
+    """
+    already_running = (
+        db.execute(
+            select(ScanRun)
+            .where(
+                ScanRun.kind == KIND_SCORE_RECOMPUTE,
+                ScanRun.status == "running",
+            )
+            .limit(1)
+        )
+        .scalar_one_or_none()
+    )
+    if already_running is not None:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Ricalcolo già in corso — vedi il toast in basso a destra. "
+                "Premi Stop per annullarlo prima di lanciarne un altro."
+            ),
+        )
+    background_tasks.add_task(_run_recompute_in_background)
+    return ScanAccepted()
+
+
+@router.get("/scores/recompute-status", response_model=ScanStatusOut)
+def recompute_status(
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+) -> ScanStatusOut:
+    """Most recent score-recompute ScanRun. Empty payload if none has run.
+
+    Mirror of `/api/alerts/scan-status` but filtered to
+    `kind='score_recompute'` so the alert-scan toast doesn't pick up
+    score-recompute rows and vice versa. Same DTO shape, same staleness
+    detection (>2min without heartbeat → `is_stale=True`)."""
+    latest = (
+        db.execute(
+            select(ScanRun)
+            .where(ScanRun.kind == KIND_SCORE_RECOMPUTE)
+            .order_by(ScanRun.started_at.desc())
+            .limit(1)
+        )
+        .scalar_one_or_none()
+    )
+    if latest is None:
+        return ScanStatusOut(is_running=False)
+    return build_scan_status_out(latest)
+
+
+@router.post("/scores/recompute-stop", response_model=ScanStopResult)
+def stop_recompute(
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+) -> ScanStopResult:
+    """Stop the latest running score-recompute.
+
+    Mirror of `/api/alerts/scan/stop` filtered by kind:
+    - Live worker: cooperative cancel via `scan_cancel.request_cancel`.
+      The score_service.recompute_all loop polls this every 10 stocks
+      and raises RecomputeCancelled, which run_tracked_recompute catches
+      and finalizes the row as 'failed' with 'Cancellato dall'utente'.
+    - Orphan row (>2min stale heartbeat): force-close inline since the
+      cancel flag would never be checked by a dead worker.
+    Idempotent: returns `was_running=False` if there's nothing to stop."""
+    from datetime import UTC, datetime
+
+    from app.services import scan_cancel
+
+    latest = (
+        db.execute(
+            select(ScanRun)
+            .where(ScanRun.kind == KIND_SCORE_RECOMPUTE)
+            .order_by(ScanRun.started_at.desc())
+            .limit(1)
+        )
+        .scalar_one_or_none()
+    )
+    if latest is None:
+        return ScanStopResult(
+            stopped_run_id=None,
+            was_running=False,
+            was_stale=False,
+            message="Nessun ricalcolo da fermare.",
+        )
+    if latest.status != "running":
+        return ScanStopResult(
+            stopped_run_id=latest.id,
+            was_running=False,
+            was_stale=False,
+            message=f"Ultimo ricalcolo già in stato '{latest.status}'.",
+        )
+
+    status = build_scan_status_out(latest)
+    is_stale = status.is_stale
+
+    if is_stale:
+        latest.status = "failed"
+        latest.phase = None
+        latest.error_message = (
+            "Worker non risponde da oltre "
+            f"{status.seconds_since_last_progress}s — chiusura forzata. "
+            "Probabile crash del processo backend."
+        )
+        latest.completed_at = datetime.now(UTC)
+        db.commit()
+        scan_cancel.clear(latest.id)
+        return ScanStopResult(
+            stopped_run_id=latest.id,
+            was_running=True,
+            was_stale=True,
+            message="Ricalcolo bloccato terminato (cleanup forzato).",
+        )
+
+    scan_cancel.request_cancel(latest.id)
+    return ScanStopResult(
+        stopped_run_id=latest.id,
+        was_running=True,
+        was_stale=False,
+        message="Cancellazione richiesta. Il worker si fermerà entro pochi secondi.",
     )
 
 

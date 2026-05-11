@@ -226,8 +226,11 @@ def warmup_fundamentals(
         scores_recomputed = 0
         try:
             from app.services import score_service
-            scores_recomputed = score_service.recompute_all(db)
-            logger.info(f"[warmup] recomputed {scores_recomputed} stock scores")
+            scores_recomputed, scores_failed = score_service.recompute_all(db)
+            logger.info(
+                f"[warmup] recomputed {scores_recomputed} stock scores "
+                f"({scores_failed} failed)"
+            )
         except Exception as exc:  # noqa: BLE001
             logger.warning(f"[warmup] score recompute failed (non-fatal): {exc}")
         return {

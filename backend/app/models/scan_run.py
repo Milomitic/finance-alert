@@ -7,10 +7,20 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.core.db import Base
 
 
-class ScanRun(Base):
-    """One row per scan_universe invocation (cron or manual).
+# `kind` discriminator values. The schema is shared between alert-scan and
+# score-recompute jobs since both fit the same progress-tracking shape
+# (status / phase / heartbeat / progress / counters / error_message).
+# Filtering on read keeps each job's UI surface independent.
+KIND_ALERTS_SCAN = "alerts_scan"
+KIND_SCORE_RECOMPUTE = "score_recompute"
 
-    Status transitions:
+
+class ScanRun(Base):
+    """One row per tracked background job (alert scan OR score recompute).
+
+    The `kind` column discriminates: 'alerts_scan' rows feed
+    /api/alerts/scan-status, 'score_recompute' rows feed
+    /api/scores/recompute-status. Status transitions are the same:
         running -> success | failed
     """
 
@@ -18,9 +28,15 @@ class ScanRun(Base):
     __table_args__ = (SAIndex("ix_scan_runs_started_at", "started_at"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    # 'alerts_scan' | 'score_recompute'. Defaults at the DB level so legacy
+    # rows backfill cleanly via the migration. See KIND_* constants above.
+    kind: Mapped[str] = mapped_column(
+        String(20), nullable=False, default=KIND_ALERTS_SCAN, server_default=KIND_ALERTS_SCAN
+    )
     trigger: Mapped[str] = mapped_column(String(16), nullable=False)  # "cron" | "manual"
     status: Mapped[str] = mapped_column(String(16), nullable=False)  # "running" | "success" | "failed"
-    # Sub-phase while running: "fetching" (downloading OHLCV) | "evaluating" (running rules) | NULL when finished
+    # Sub-phase while running: alert-scan emits "fetching" / "evaluating";
+    # score-recompute emits "sector_stats" / "scoring". NULL when finished.
     phase: Mapped[str | None] = mapped_column(String(16), nullable=True)
     started_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

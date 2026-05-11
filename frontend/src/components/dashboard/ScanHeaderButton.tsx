@@ -1,4 +1,4 @@
-import { Loader2, PlayCircle, Send } from "lucide-react";
+import { Calculator, Loader2, PlayCircle, Send } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -11,6 +11,10 @@ import {
   useSendDigest,
   useTriggerScan,
 } from "@/hooks/useAlertMutations";
+import {
+  useScoreRecomputeStatus,
+  useTriggerScoreRecompute,
+} from "@/hooks/useScoreRecompute";
 
 /* ─── ScanHeaderButton — compact scan + digest controls ─────────────────── */
 /* The scan-trigger card used to occupy a column of the dashboard hero.
@@ -33,11 +37,15 @@ interface Props {
 
 export function ScanHeaderButton(_: Props) {
   const status = useScanStatus().data;
+  const recomputeStatus = useScoreRecomputeStatus().data;
   const triggerScan = useTriggerScan();
+  const triggerRecompute = useTriggerScoreRecompute();
   const sendDigest = useSendDigest();
 
   const isRunning = status?.is_running ?? false;
   const isStarting = triggerScan.isPending;
+  const isRecomputeRunning = recomputeStatus?.is_running ?? false;
+  const isRecomputeStarting = triggerRecompute.isPending;
 
   return (
     <div className="flex items-center gap-1">
@@ -65,6 +73,37 @@ export function ScanHeaderButton(_: Props) {
           {isRunning
             ? "Uno scan è già in corso — vedi il toast in basso a destra"
             : "Avvia uno scan in background. La notifica seguirà l'avanzamento."}
+        </TooltipContent>
+      </Tooltip>
+
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => triggerRecompute.mutate()}
+            disabled={isRecomputeRunning || isRecomputeStarting}
+            className="h-8 px-2.5 text-xs"
+            aria-label={
+              isRecomputeRunning
+                ? "Ricalcolo già in corso"
+                : "Ricalcola tutti gli score"
+            }
+          >
+            {isRecomputeRunning || isRecomputeStarting ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Calculator className="h-3.5 w-3.5" />
+            )}
+            <span className="ml-1.5 hidden sm:inline">
+              {isRecomputeRunning ? "Ricalcolo in corso" : "Ricalcola score"}
+            </span>
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" className="text-[11px]">
+          {isRecomputeRunning
+            ? "Ricalcolo già in corso — vedi il toast in basso a destra"
+            : "Forza il ricalcolo del composite score per tutte le stock (~30-60s). La notifica seguirà l'avanzamento."}
         </TooltipContent>
       </Tooltip>
 

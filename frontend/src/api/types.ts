@@ -189,7 +189,12 @@ export interface DigestResult {
 
 export type ScanStatus = "running" | "success" | "failed";
 export type ScanTrigger = "cron" | "manual";
-export type ScanPhase = "fetching" | "evaluating";
+/** Backend emits one of these strings on the `phase` field while a job
+ *  is running. The first two are alert-scan phases; the last two are
+ *  score-recompute phases (since 6ed5a4d41b17 added kind discrimination
+ *  but reused the same row schema). Pickable by either toast variant —
+ *  see ScanProgressToast / ScoreRecomputeToast for the per-kind labels. */
+export type ScanPhase = "fetching" | "evaluating" | "sector_stats" | "scoring";
 
 export interface ScanStatusInfo {
   is_running: boolean;

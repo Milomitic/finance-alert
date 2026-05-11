@@ -117,8 +117,11 @@ def run_tracked_scan(
         try:
             from app.services import score_service
 
-            n_scored = score_service.recompute_all(db)
-            logger.info(f"[scan_runner] {n_scored} stock score(s) recomputed for ScanRun {run.id}")
+            n_ok, n_failed = score_service.recompute_all(db)
+            logger.info(
+                f"[scan_runner] {n_ok} stock score(s) recomputed "
+                f"({n_failed} failed) for ScanRun {run.id}"
+            )
         except Exception as score_exc:  # noqa: BLE001
             logger.warning(f"[scan_runner] score recompute failed (non-fatal): {score_exc}")
 

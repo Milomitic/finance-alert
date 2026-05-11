@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user, get_db, require_json
 from app.core.db import SessionLocal
 from app.models import ScanRun, Stock, User
+from app.models.scan_run import KIND_ALERTS_SCAN
 from app.schemas.alert import (
     AlertListOut,
     AlertOut,
@@ -150,42 +151,10 @@ def get_unread_count(
 # many seconds. Tuned to 120s = 2× the worst-case time between fetch chunks
 # (a slow yfinance call) — anything longer almost certainly means the worker
 # died, not that it's just chewing on a particularly slow chunk.
-SCAN_STALE_THRESHOLD_SEC = 120
-
-
-def _build_scan_status(latest: ScanRun) -> ScanStatusOut:
-    """Helper that derives stale/seconds-since-heartbeat from a ScanRun row."""
-    from datetime import datetime, UTC
-
-    is_running = latest.status == "running"
-    seconds_since_progress: int | None = None
-    is_stale = False
-    if is_running:
-        ref = latest.last_progress_at or latest.started_at
-        if ref is not None:
-            # SQLite returns naive datetimes — coerce to UTC for the diff to work
-            if ref.tzinfo is None:
-                ref = ref.replace(tzinfo=UTC)
-            seconds_since_progress = int((datetime.now(UTC) - ref).total_seconds())
-            is_stale = seconds_since_progress > SCAN_STALE_THRESHOLD_SEC
-    return ScanStatusOut(
-        is_running=is_running,
-        last_run_id=latest.id,
-        trigger=latest.trigger,
-        status=latest.status,
-        phase=latest.phase,
-        started_at=latest.started_at,
-        completed_at=latest.completed_at,
-        last_progress_at=latest.last_progress_at,
-        progress_done=latest.progress_done,
-        progress_total=latest.progress_total,
-        stocks_scanned=latest.stocks_scanned,
-        stocks_skipped=latest.stocks_skipped,
-        alerts_fired=latest.alerts_fired,
-        error_message=latest.error_message,
-        is_stale=is_stale,
-        seconds_since_last_progress=seconds_since_progress,
-    )
+# Re-exported for backwards compatibility with anything that still imports
+# them from this module (test_api_alerts.py, etc.). Source of truth lives
+# in app.services.scan_status now.
+from app.services.scan_status import SCAN_STALE_THRESHOLD_SEC, build_scan_status_out as _build_scan_status  # noqa: E402, F401
 
 
 @router.get("/scan-status", response_model=ScanStatusOut)
@@ -199,8 +168,16 @@ def scan_status(
     Includes `is_stale=True` when the row says 'running' but no heartbeat for
     >2min — the UI uses that to surface a "Stuck — Stop" warning.
     """
+    # Filter by kind so the alert-scan toast doesn't pick up rows belonging
+    # to score-recompute runs (they live in the same table since
+    # 6ed5a4d41b17). See `app/api/scores.py:recompute_status` for the mirror.
     latest = (
-        db.execute(select(ScanRun).order_by(ScanRun.started_at.desc()).limit(1))
+        db.execute(
+            select(ScanRun)
+            .where(ScanRun.kind == KIND_ALERTS_SCAN)
+            .order_by(ScanRun.started_at.desc())
+            .limit(1)
+        )
         .scalar_one_or_none()
     )
     if latest is None:
@@ -229,8 +206,16 @@ def stop_scan(
 
     from app.services import scan_cancel
 
+    # Filter by kind: stopping the latest "scan" must not accidentally
+    # abort a concurrent score-recompute run. The mirror endpoint
+    # /api/scores/recompute-stop owns the score_recompute side.
     latest = (
-        db.execute(select(ScanRun).order_by(ScanRun.started_at.desc()).limit(1))
+        db.execute(
+            select(ScanRun)
+            .where(ScanRun.kind == KIND_ALERTS_SCAN)
+            .order_by(ScanRun.started_at.desc())
+            .limit(1)
+        )
         .scalar_one_or_none()
     )
     if latest is None:

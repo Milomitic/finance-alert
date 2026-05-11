@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
 from app.main import app
-from app.models import OhlcvDaily, Stock, StockScore, User
+from app.models import OhlcvDaily, ScanRun, Stock, StockScore, User
 
 
 def _make_score(
@@ -262,6 +262,176 @@ def test_recompute_tolerates_fundamentals_refresh_failure(
     resp = seeded_client.post("/api/stocks/AAA/score/recompute")
     assert resp.status_code == 200
     assert resp.json()["composite"] == 70.0
+
+
+# ---------------------------------------------------------------------------
+# POST /api/scores/recompute-all  +  GET /api/scores/recompute-status
+# (bulk recompute flow — mirror of /api/alerts/scan UX)
+# ---------------------------------------------------------------------------
+
+from datetime import UTC, datetime as _dt
+
+from app.models.scan_run import KIND_ALERTS_SCAN, KIND_SCORE_RECOMPUTE
+
+
+def test_recompute_all_returns_202_when_idle(
+    seeded_client: TestClient, db: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Endpoint MUST return 202 immediately (BackgroundTasks dispatch)."""
+    # Stub the actual runner so the test doesn't hit yfinance and we keep
+    # the TestClient call instant. The endpoint contract is "accepts +
+    # schedules"; the runner's correctness is exercised in test_score_service.
+    monkeypatch.setattr(
+        "app.api.scores._run_recompute_in_background",
+        lambda: None,
+    )
+    resp = seeded_client.post("/api/scores/recompute-all")
+    assert resp.status_code == 202, resp.text
+    assert resp.json() == {"accepted": True}
+
+
+def test_recompute_all_rejects_when_already_running(
+    seeded_client: TestClient, db: Session
+) -> None:
+    """409 if a score_recompute ScanRun is already in 'running' state.
+
+    Guard against piling up concurrent runs: two parallel runners would
+    scribble over each other's heartbeats and corrupt the UI's progress
+    bar."""
+    db.add(
+        ScanRun(
+            kind=KIND_SCORE_RECOMPUTE,
+            trigger="manual",
+            status="running",
+            phase="scoring",
+            started_at=_dt.now(UTC),
+            last_progress_at=_dt.now(UTC),
+            progress_done=42,
+            progress_total=100,
+        )
+    )
+    db.commit()
+    resp = seeded_client.post("/api/scores/recompute-all")
+    assert resp.status_code == 409
+    assert "in corso" in resp.json()["detail"]
+
+
+def test_recompute_status_returns_empty_when_no_run(
+    seeded_client: TestClient,
+) -> None:
+    resp = seeded_client.get("/api/scores/recompute-status")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["is_running"] is False
+    assert data["last_run_id"] is None
+
+
+def test_recompute_status_returns_latest_score_recompute_row(
+    seeded_client: TestClient, db: Session
+) -> None:
+    """The endpoint MUST filter by kind so an alert-scan row doesn't
+    leak into the score-recompute toast (regression for the
+    pre-discriminator schema where the two flows would have collided)."""
+    # Seed: one alert-scan run AFTER a score-recompute run. Without the
+    # kind filter, the alert-scan would win the ORDER BY started_at DESC.
+    older = ScanRun(
+        kind=KIND_SCORE_RECOMPUTE,
+        trigger="manual",
+        status="success",
+        started_at=_dt(2026, 5, 1, tzinfo=UTC),
+        completed_at=_dt(2026, 5, 1, 0, 1, tzinfo=UTC),
+        progress_done=900,
+        progress_total=900,
+        stocks_scanned=895,
+        stocks_skipped=5,
+    )
+    newer = ScanRun(
+        kind=KIND_ALERTS_SCAN,
+        trigger="manual",
+        status="success",
+        started_at=_dt(2026, 5, 2, tzinfo=UTC),
+        completed_at=_dt(2026, 5, 2, 0, 1, tzinfo=UTC),
+        progress_done=900,
+        progress_total=900,
+        alerts_fired=7,
+    )
+    db.add_all([older, newer])
+    db.commit()
+    resp = seeded_client.get("/api/scores/recompute-status")
+    assert resp.status_code == 200
+    data = resp.json()
+    # Must surface the older score_recompute row, NOT the newer alert-scan.
+    assert data["last_run_id"] == older.id
+    assert data["stocks_scanned"] == 895
+    assert data["stocks_skipped"] == 5
+    assert data["alerts_fired"] is None
+
+
+def test_scan_status_filters_out_score_recompute_rows(
+    seeded_client: TestClient, db: Session
+) -> None:
+    """Symmetric guard: a score_recompute row MUST NOT be returned by
+    the alert-scan endpoint, otherwise the scan toast would render
+    "Ricalcolo score" content."""
+    db.add(
+        ScanRun(
+            kind=KIND_SCORE_RECOMPUTE,
+            trigger="manual",
+            status="running",
+            phase="scoring",
+            started_at=_dt.now(UTC),
+            last_progress_at=_dt.now(UTC),
+            progress_done=10,
+            progress_total=100,
+        )
+    )
+    db.commit()
+    resp = seeded_client.get("/api/alerts/scan-status")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["is_running"] is False
+    assert data["last_run_id"] is None
+
+
+def test_recompute_stop_is_idempotent_when_nothing_running(
+    seeded_client: TestClient,
+) -> None:
+    resp = seeded_client.post("/api/scores/recompute-stop")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["was_running"] is False
+    assert "Nessun ricalcolo" in data["message"]
+
+
+def test_recompute_stop_requests_cancel_for_running_row(
+    seeded_client: TestClient, db: Session
+) -> None:
+    from app.services import scan_cancel
+
+    row = ScanRun(
+        kind=KIND_SCORE_RECOMPUTE,
+        trigger="manual",
+        status="running",
+        phase="scoring",
+        started_at=_dt.now(UTC),
+        last_progress_at=_dt.now(UTC),
+        progress_done=10,
+        progress_total=100,
+    )
+    db.add(row)
+    db.commit()
+    try:
+        resp = seeded_client.post("/api/scores/recompute-stop")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["was_running"] is True
+        assert data["was_stale"] is False
+        assert data["stopped_run_id"] == row.id
+        # The cancel flag MUST be set so the runner bails out at the next
+        # iteration boundary (raises RecomputeCancelled inside the loop).
+        assert scan_cancel.is_cancel_requested(row.id)
+    finally:
+        scan_cancel.clear(row.id)
 
 
 # ---------------------------------------------------------------------------

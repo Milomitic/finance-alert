@@ -611,8 +611,9 @@ def test_recompute_all_populates_table(db: Session, monkeypatch):
         fund_map[s.ticker] = _build_fundamentals_for(s.ticker, good=i < 3)
     db.commit()
 
-    n = score_service.recompute_all(db)
-    assert n == 5
+    ok, failed = score_service.recompute_all(db)
+    assert ok == 5
+    assert failed == 0
     rows = db.query(StockScore).all()
     assert len(rows) == 5
     by_ticker = {db.get(Stock, r.stock_id).ticker: r for r in rows}

@@ -1,6 +1,8 @@
 import { api } from "./client";
 import type {
   RiskTier,
+  ScanStatusInfo,
+  ScanStopResultInfo,
   ScoreCategory,
   StockScore,
   TopPicks,
@@ -39,6 +41,21 @@ export const scores = {
       `/api/stocks/${encodeURIComponent(ticker)}/score/recompute`,
       { method: "POST" },
     ),
+  /**
+   * Trigger a background recompute of every stock's composite score. Returns
+   * 202 immediately; live progress is exposed by `recomputeStatus()` and
+   * rendered in the persistent toast (mirror of the alert-scan flow).
+   *
+   * Backend dedupes: if a recompute is already running, returns 409 with
+   * an explanatory message — caller surfaces it via toast.error.
+   */
+  recomputeAll: () =>
+    api<{ accepted: true }>(`/api/scores/recompute-all`, { method: "POST" }),
+  /** Latest ScanRun row where kind='score_recompute'. Polled by the toast hook. */
+  recomputeStatus: () => api<ScanStatusInfo>(`/api/scores/recompute-status`),
+  /** Cooperative cancel (or force-close on stale) of the running recompute. */
+  recomputeStop: () =>
+    api<ScanStopResultInfo>(`/api/scores/recompute-stop`, { method: "POST" }),
   top: (opts: TopPicksParams = {}) =>
     api<TopPicks>(`/api/scores/top${toQuery(opts)}`),
 };
