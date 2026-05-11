@@ -75,13 +75,22 @@ VALID_TIMEFRAMES: tuple[str, ...] = (
 )
 
 # yfinance (period, interval) per timeframe.
+#
+# "all" intentionally uses the same MONTHLY interval as "1m". Rationale
+# (per user request 2026-05-12): showing every daily bar across 20+ years
+# crushes the chart into one dense black smear with daily ticks on the
+# x-axis. Aggregating to monthly bars gives readable trend visibility and
+# matches the natural "I want the long-term shape" mental model. The
+# difference vs "1m" is purely the default zoom: "1m" caps to ~240 bars
+# (~20y) via defaultVisibleBars, while "all" returns every monthly bar
+# the symbol has (useful for tickers older than 20y like KO, JNJ).
 _YF_TIMEFRAME: dict[str, tuple[str, str]] = {
     "30m": ("60d",  "30m"),
     "1h":  ("730d", "1h"),
     "1d":  ("max",  "1d"),
     "1w":  ("max",  "1wk"),
     "1m":  ("max",  "1mo"),
-    "all": ("max",  "1d"),
+    "all": ("max",  "1mo"),
 }
 
 # Intraday timeframes need yfinance — DB only stores daily. Daily and
@@ -331,10 +340,15 @@ def fetch_bars(
 
     if stock is not None and db is not None:
         daily = _fetch_db_daily(db, stock)
-        if timeframe in ("1d", "all"):
+        if timeframe == "1d":
             bars = daily
         else:
-            bars = _resample_daily_to(daily, timeframe)
+            # "all" is monthly now (see _YF_TIMEFRAME doc above). For the
+            # DB-served path we resample daily → monthly using the same
+            # rule as "1m" so both timeframes render at identical bar
+            # resolution. "1w" / "1m" go through their own resample rules.
+            tf_for_resample = "1m" if timeframe == "all" else timeframe
+            bars = _resample_daily_to(daily, tf_for_resample)
         _cache_put(ticker, timeframe, bars)
         return bars
 
