@@ -62,9 +62,15 @@ def run_tracked_recompute(
     `recompute_all` seeds total with done=0 BEFORE the sector_stats pass
     so the UI shows the right denominator from second one.
 
-    Cooperative cancel: polled inside `recompute_all` every 10 stocks via
-    `cancel_check`. On cancel we raise RecomputeCancelled, which we catch
-    here and finalize the row as 'failed' with a friendly message.
+    Cooperative cancel: polled inside `recompute_all` every stock via
+    `cancel_check` (cheap set lookup). On cancel we raise RecomputeCancelled,
+    which we catch here and finalize the row as 'failed' with a friendly
+    message.
+
+    Progress granularity: `progress_every=1` so the UI's progress bar
+    advances one stock at a time (per user request 2026-05-12). The cost
+    is one DB commit per stock × ~1100 stocks = ~3s extra over a full
+    recompute, negligible vs the per-stock score computation (~30-50ms).
     """
     if existing_run is None:
         run = create_recompute_run(db, trigger=trigger)
@@ -97,7 +103,7 @@ def run_tracked_recompute(
         ok, failed = recompute_all(
             db,
             on_progress=on_progress,
-            progress_every=10,
+            progress_every=1,
             cancel_check=cancel_check,
         )
         run.status = "success"
