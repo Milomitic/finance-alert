@@ -162,10 +162,23 @@ const ROWS: MatrixRowDef[] = [
   {
     label: "BB pos",
     hint: "Posizione del prezzo nelle Bande di Bollinger (20, 2). >80% strong bullish (top band), 60-80 bullish, 40-60 neutrale, 20-40 bearish, <20% strong bearish (bottom band).",
-    cell: (it) => ({
-      text: fmtNum(it.bb_position, 0, "%"),
-      score: bbScore(it.bb_position),
-    }),
+    cell: (it) => {
+      // Backend API contract: `bb_position` is a FRACTION in [0..1] when
+      // the price is inside the band (0 = lower band, 0.5 = middle, 1 = upper),
+      // and outside [0..1] when the price is beyond a band. The display and
+      // the `bbScore` threshold table both use the PERCENT scale (>80, 60-80,
+      // ...), so scale the fraction up before passing it through.
+      // Pre-fix bug: fmtNum(0.5, 0, "%") -> "1%" because toFixed(0) rounds
+      // any value in [0.5, 1.5] to 1; bbScore(0.5) -> 1 (strong bearish)
+      // because every fraction < 20 falls into the lowest bucket. Result:
+      // every cell across every stock showed a pink "1%". See user report
+      // screenshot 2026-05-12.
+      const pos =
+        it.bb_position == null || !Number.isFinite(it.bb_position)
+          ? null
+          : it.bb_position * 100;
+      return { text: fmtNum(pos, 0, "%"), score: bbScore(pos) };
+    },
   },
   {
     label: "MACD",

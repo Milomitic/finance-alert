@@ -89,7 +89,7 @@ const COMPONENT_META: Record<string, ComponentMeta> = {
   macd: { label: "MACD", hint: "Sopra signal e zero = momentum confermato", format: "score" },
   trend_stack: { label: "Trend stack (SMA)", hint: "Allineamento SMA 20/50/200 — pieno = uptrend confermato", format: "score" },
   price_vs_sma200: { label: "Price vs SMA200", hint: "% sopra/sotto SMA 200 giorni", format: "pct" },
-  bb_position: { label: "BB position (%B)", hint: "Posizione del prezzo nelle Bande di Bollinger", format: "pct_raw" },
+  bb_position: { label: "BB position (%B)", hint: "Posizione del prezzo nelle Bande di Bollinger (0 = banda inferiore, 0.5 = mediana, 1 = banda superiore)", format: "pct" },
   adx: { label: "ADX(14)", hint: "Forza del trend — sopra 25 = trend tradeabile", format: "num" },
   short_percent_of_float: { label: "Short % of float", hint: "Pressione short — alto = sentiment ribassista", format: "pct" },
   // ── Sentiment ───────────────────────────────────────────────
@@ -193,7 +193,7 @@ export function MultiTfStrip({ ticker, kind }: { ticker: string; kind: "stock" |
                 {it.sma50_above ? "✓" : "✗"} /{" "}
                 {it.sma200_above ? "✓" : "✗"}
               </div>
-              <div>BB pos: {it.bb_position != null ? `${it.bb_position.toFixed(0)}%` : "—"}</div>
+              <div>BB pos: {it.bb_position != null ? `${(it.bb_position * 100).toFixed(0)}%` : "—"}</div>
               <div>MACD: {it.macd_tone}</div>
               <div className="pt-1 mt-1 border-t border-border/40 font-semibold">
                 Outlook: {it.composite_label.replace("_", " ")}
@@ -338,7 +338,10 @@ function fmtRaw(v: ScoreBreakdownComponent["raw"], format: ComponentMeta["format
       // Backend emits fractions for ratios (0.27 = 27%).
       return `${(n * 100).toFixed(1)}%`;
     case "pct_raw":
-      // Already-percent values (e.g. dividend_yield, bb_position).
+      // Already-percent values (e.g. dividend_yield emitted by backend in
+      // the "X.YY%" scale directly). NOTE: bb_position was previously here
+      // but the backend emits it as a 0..1 fraction (see score_service.py
+      // _momentum), so it now uses format="pct" which scales × 100.
       return `${n.toFixed(2)}%`;
     case "ratio":
       return n.toFixed(2);
