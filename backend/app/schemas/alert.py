@@ -120,6 +120,11 @@ class ScanStatusOut(BaseModel):
     stocks_scanned: int | None = None
     stocks_skipped: int | None = None
     alerts_fired: int | None = None
+    # "What we're touching right now" — usually a ticker, optionally annotated
+    # ("AAPL · chunk 3/12"). NULL when the phase has no per-item focus or the
+    # row is from before the column existed. UI shows it as a small chip under
+    # the phase label.
+    current_target: str | None = None
     error_message: str | None = None
     # True when status == "running" but no heartbeat for >2min — strongly
     # suggests the worker died and the row is now an orphan. UI surfaces a

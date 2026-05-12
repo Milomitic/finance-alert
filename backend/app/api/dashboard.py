@@ -39,6 +39,7 @@ def _latest_scan(db: Session) -> ScanStatusOut | None:
         stocks_scanned=latest.stocks_scanned,
         stocks_skipped=latest.stocks_skipped,
         alerts_fired=latest.alerts_fired,
+        current_target=latest.current_target,
         error_message=latest.error_message,
     )
 

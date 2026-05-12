@@ -10,7 +10,8 @@ import type { ScanStatusInfo } from "@/api/types";
  *
  * Mirror of `useScanStatus` for the score-recompute flow. Polls
  * /api/scores/recompute-status:
- *   - 2s while a recompute is running (live progress)
+ *   - 1s while a recompute is running (live progress — matches the backend's
+ *     per-stock heartbeat cadence so the bar advances smoothly)
  *   - 30s when idle (catch externally-triggered runs, e.g. scheduler)
  *
  * Side effect: when the latest run transitions running -> success/failed,
@@ -27,7 +28,7 @@ export function useScoreRecomputeStatus() {
     queryFn: () => scores.recomputeStatus(),
     refetchInterval: (query) => {
       const data = query.state.data;
-      return data?.is_running ? 2_000 : 30_000;
+      return data?.is_running ? 1_000 : 30_000;
     },
     refetchIntervalInBackground: true,
   });
@@ -102,6 +103,7 @@ export function useTriggerScoreRecompute() {
           stocks_scanned: null,
           stocks_skipped: null,
           alerts_fired: null,
+          current_target: null,
           error_message: null,
           is_running: true,
           is_stale: false,

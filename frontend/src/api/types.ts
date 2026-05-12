@@ -171,11 +171,24 @@ export interface DigestResult {
 export type ScanStatus = "running" | "success" | "failed";
 export type ScanTrigger = "cron" | "manual";
 /** Backend emits one of these strings on the `phase` field while a job
- *  is running. The first two are alert-scan phases; the last two are
- *  score-recompute phases (since 6ed5a4d41b17 added kind discrimination
- *  but reused the same row schema). Pickable by either toast variant —
- *  see ScanProgressToast / ScoreRecomputeToast for the per-kind labels. */
-export type ScanPhase = "fetching" | "evaluating" | "sector_stats" | "scoring";
+ *  is running. Sub-phases are colon-delimited ("fetching:backfill") —
+ *  the union below enumerates every value currently emitted but the type
+ *  is `string` at runtime so the UI parses prefix-before-`:` when adding
+ *  new sub-phases doesn't require a frontend redeploy in lockstep.
+ *
+ *  Bare values ("fetching", "evaluating") are kept for back-compat with
+ *  rows written before sub-phases existed. */
+export type ScanPhase =
+  | "fetching"
+  | "fetching:planning"
+  | "fetching:backfill"
+  | "fetching:incremental"
+  | "evaluating"
+  | "evaluating:loading_rules"
+  | "evaluating:scoring"
+  | "evaluating:persisting"
+  | "sector_stats"
+  | "scoring";
 
 export interface ScanStatusInfo {
   is_running: boolean;
@@ -194,6 +207,11 @@ export interface ScanStatusInfo {
   stocks_scanned: number | null;
   stocks_skipped: number | null;
   alerts_fired: number | null;
+  /** "What we're touching right now" — a ticker, optionally annotated
+   *  ("AAPL · chunk 3/12"). NULL when the phase has no per-item focus
+   *  (start/end bookends, or terminal states). Rendered as a small chip
+   *  under the phase label in RunProgressToast. */
+  current_target: string | null;
   error_message: string | null;
   /** True when status === 'running' but no heartbeat for >2 min. The UI shows
    *  a "Bloccato — clicca Termina" warning + Stop CTA when this is set. */
