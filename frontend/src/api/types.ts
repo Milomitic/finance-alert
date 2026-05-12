@@ -44,24 +44,6 @@ export interface FilterOptions {
   indices: IndexOption[];
 }
 
-export interface WatchlistSummary {
-  id: number;
-  name: string;
-  description: string | null;
-  item_count: number;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface WatchlistDetail {
-  id: number;
-  name: string;
-  description: string | null;
-  stocks: Stock[];
-  created_at: string;
-  updated_at: string;
-}
-
 export interface IndexStatus {
   index_code: string;
   last_started_at: string | null;
@@ -142,7 +124,6 @@ export interface RulePreviewResponse {
 
 export interface Rule {
   id: number;
-  watchlist_id: number | null;
   kind: RuleKind;
   params: Record<string, unknown>;
   enabled: boolean;
@@ -448,8 +429,9 @@ export interface EffectiveRule {
   kind: string;
   enabled: boolean;
   params: Record<string, unknown>;
-  source: "tier1" | "tier2";
-  watchlist_name: string | null;
+  /** Always "tier1" after watchlists were removed. Field kept for
+   *  forward-compat with any new override mechanism. */
+  source: "tier1";
 }
 
 export interface StockDetail {

@@ -213,7 +213,7 @@ def get_stock_detail(
         effective_rules=[
             EffectiveRuleOut(
                 kind=r.kind, enabled=r.enabled, params=r.params,
-                source=r.source, watchlist_name=r.watchlist_name,
+                source=r.source,
             )
             for r in detail.effective_rules
         ],

@@ -35,6 +35,39 @@ class SectorSummary(BaseModel):
     median_dividend_yield: float | None
 
 
+class IndustryRow(BaseModel):
+    """One row in the overview's industry table.
+
+    Cheap to compute: a single SQL aggregate over `stock_scores` + `stocks`
+    gives stock_count + avg_composite without any per-ticker yfinance
+    cache hits. The richer fundamentals medians are deliberately omitted
+    here — they require the slow per-ticker loop and the hub page only
+    needs the score breadth.
+    """
+    name: str
+    sector: str | None
+    stock_count: int
+    avg_score: float | None
+
+
+class SectorsOverviewOut(BaseModel):
+    """Aggregated payload for the /sectors hub page.
+
+    Returns everything the page needs in one request: summary counts,
+    per-sector rollups (reusing the existing SectorSummary shape so the
+    detail-page tile cards stay consistent), and a flat industries
+    table for the secondary breakdown.
+
+    The fundamentals medians (PE/PB/ROE/dividend yield) come from the
+    per-ticker loop in `/api/sectors`, which is reused — see `_sector_rollup`.
+    """
+    total_stocks: int
+    total_sectors: int
+    total_industries: int
+    sectors: list[SectorSummary]
+    industries: list[IndustryRow]
+
+
 class SectorStockRow(BaseModel):
     ticker: str
     name: str | None
@@ -227,8 +260,10 @@ def _market_cap_buckets(caps):
     return [CountBucket(label=label, count=counts[label]) for label, _ in thresholds]
 
 
-@router.get("", response_model=list[SectorSummary])
-def list_sectors(db: Session = Depends(get_db), _user: User = Depends(get_current_user)):
+def _sector_rollup(db: Session) -> list[SectorSummary]:
+    """Compute the per-sector SectorSummary list. Pulled out of the
+    /api/sectors handler so the new overview endpoint can reuse it
+    without a duplicated implementation."""
     rows = db.execute(
         select(Stock.sector, func.count(func.distinct(Stock.ticker)))
         .where(visible_country_clause())
@@ -237,7 +272,7 @@ def list_sectors(db: Session = Depends(get_db), _user: User = Depends(get_curren
         .order_by(Stock.sector.asc())
     ).all()
 
-    out = []
+    out: list[SectorSummary] = []
     for sector_name, _count in rows:
         if not sector_name:
             continue
@@ -254,7 +289,7 @@ def list_sectors(db: Session = Depends(get_db), _user: User = Depends(get_curren
             seen.add(st.ticker)
             unique_stocks.append(st)
 
-        composites = []
+        composites: list[float] = []
         pes, pbs, roes, dys = [], [], [], []
         for st in unique_stocks:
             score = db.execute(
@@ -288,6 +323,109 @@ def list_sectors(db: Session = Depends(get_db), _user: User = Depends(get_curren
             median_dividend_yield=_safe_median(dys) if dys else None,
         ))
     return out
+
+
+def _industry_rollup(db: Session) -> list[IndustryRow]:
+    """Per-industry stock count + avg composite via a single SQL aggregate.
+
+    Cheap path: SQL GROUP BY over stock_scores joined to stocks, plus a
+    second pass to map each industry to its parent sector (so the FE can
+    group industries under their sector heading without a second query).
+    No yfinance hits — keeps the overview endpoint fast even when the
+    fundamentals cache is cold.
+    """
+    # Stocks per (industry, sector) — one row per unique ticker via DISTINCT
+    # to defeat the legacy duplicate-row issue documented in CLAUDE.md.
+    rows = db.execute(
+        select(
+            Stock.industry,
+            Stock.sector,
+            func.count(func.distinct(Stock.ticker)),
+            func.avg(StockScore.composite),
+        )
+        .outerjoin(StockScore, StockScore.stock_id == Stock.id)
+        .where(visible_country_clause())
+        .where(Stock.industry.is_not(None))
+        .group_by(Stock.industry, Stock.sector)
+    ).all()
+
+    # An industry can appear under multiple sectors (rare but possible for
+    # cross-sector buckets like "Other"). We collapse by industry, picking
+    # the SECTOR that holds the most stocks for that industry as the
+    # "primary" sector for display.
+    by_industry: dict[str, dict] = {}
+    for industry, sector, cnt, avg_score in rows:
+        if not industry:
+            continue
+        entry = by_industry.setdefault(industry, {
+            "stock_count": 0,
+            "score_weighted_sum": 0.0,
+            "score_weight": 0.0,
+            "sector_counts": {},
+        })
+        entry["stock_count"] += int(cnt or 0)
+        if avg_score is not None:
+            entry["score_weighted_sum"] += float(avg_score) * int(cnt or 0)
+            entry["score_weight"] += int(cnt or 0)
+        entry["sector_counts"][sector] = entry["sector_counts"].get(sector, 0) + int(cnt or 0)
+
+    out: list[IndustryRow] = []
+    for name, agg in by_industry.items():
+        # Pick the dominant parent sector for this industry — the one
+        # with the most stocks. Ties broken alphabetically for stability.
+        sector_counts = agg["sector_counts"]
+        primary_sector = (
+            sorted(sector_counts.items(), key=lambda kv: (-kv[1], kv[0] or ""))[0][0]
+            if sector_counts else None
+        )
+        avg = (
+            agg["score_weighted_sum"] / agg["score_weight"]
+            if agg["score_weight"] > 0 else None
+        )
+        out.append(IndustryRow(
+            name=name,
+            sector=primary_sector,
+            stock_count=agg["stock_count"],
+            avg_score=avg,
+        ))
+    # Sort by sector ASC, then stock_count DESC inside sector — gives the
+    # FE a natural rendering order for "group by sector + sort by size".
+    out.sort(key=lambda r: (r.sector or "~", -r.stock_count))
+    return out
+
+
+@router.get("", response_model=list[SectorSummary])
+def list_sectors(db: Session = Depends(get_db), _user: User = Depends(get_current_user)):
+    return _sector_rollup(db)
+
+
+@router.get("/overview", response_model=SectorsOverviewOut)
+def sectors_overview(db: Session = Depends(get_db), _user: User = Depends(get_current_user)):
+    """One-shot payload for the /sectors hub page.
+
+    Combines:
+      - Top-level counts (total stocks / sectors / industries).
+      - Per-sector rollups (reuses `_sector_rollup` — the same data
+        `/api/sectors` returns, kept consistent on purpose).
+      - Per-industry table (cheap SQL aggregate via `_industry_rollup`).
+
+    The expensive bit is the sector rollup's yfinance loop; that lives
+    behind the two-tier cache (`fetch_cache` table) so warm responses
+    are <100ms.
+    """
+    sectors = _sector_rollup(db)
+    industries = _industry_rollup(db)
+    total_stocks = db.execute(
+        select(func.count(func.distinct(Stock.ticker)))
+        .where(visible_country_clause())
+    ).scalar() or 0
+    return SectorsOverviewOut(
+        total_stocks=int(total_stocks),
+        total_sectors=len(sectors),
+        total_industries=len(industries),
+        sectors=sectors,
+        industries=industries,
+    )
 
 
 @router.get("/{name}/detail", response_model=SectorDetailOut)

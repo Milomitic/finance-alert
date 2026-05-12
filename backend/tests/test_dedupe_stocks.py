@@ -23,8 +23,6 @@ from app.models import (
     Stock,
     StockIndex,
     User,
-    Watchlist,
-    WatchlistItem,
 )
 from app.scripts.dedupe_stocks import (
     canonical_exchange_for,
@@ -260,35 +258,6 @@ def test_dedupe_reassigns_rule_states(db: Session) -> None:
         (rule_a.id, False),  # canonical's original state preserved
         (rule_b.id, True),   # moved over from dup
     ])
-
-
-def test_dedupe_reassigns_watchlist_items(db: Session) -> None:
-    canon, dup = _seed_dup_pair(
-        db, "ENEL.MI", canon_exchange="BIT", dup_exchange="Borsa Italiana"
-    )
-    user = User(username="alice", password_hash="x")
-    db.add(user)
-    db.flush()
-    wl_a = Watchlist(name="WL A", user_id=user.id)
-    wl_b = Watchlist(name="WL B", user_id=user.id)
-    db.add_all([wl_a, wl_b])
-    db.flush()
-    db.add_all([
-        WatchlistItem(watchlist_id=wl_a.id, stock_id=canon.id),
-        WatchlistItem(watchlist_id=wl_a.id, stock_id=dup.id),  # collision
-        WatchlistItem(watchlist_id=wl_b.id, stock_id=dup.id),  # unique
-    ])
-    db.flush()
-
-    dedupe_on_connection(db.connection())
-
-    items = sorted(
-        r[0] for r in db.execute(
-            text("SELECT watchlist_id FROM watchlist_items WHERE stock_id = :id"),
-            {"id": canon.id},
-        )
-    )
-    assert items == sorted([wl_a.id, wl_b.id])
 
 
 def test_dedupe_is_idempotent(db: Session) -> None:

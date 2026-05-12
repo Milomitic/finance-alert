@@ -1,8 +1,12 @@
-"""Tests for stock_detail_service."""
-import json
+"""Tests for stock_detail_service.
+
+The Tier 2 (per-watchlist override) layer was removed in May 2026 —
+the tier-2 test cases that lived here are gone. `source` on
+`EffectiveRule` is always "tier1" now.
+"""
 from datetime import date, timedelta
 
-from app.models import OhlcvDaily, Rule, Stock, Watchlist, WatchlistItem
+from app.models import OhlcvDaily, Rule, Stock
 from app.services import stock_detail_service
 
 
@@ -40,23 +44,17 @@ def test_get_detail_full_payload(db):
 
 def test_get_detail_range_filter_1m(db):
     """v2 timeframe semantics: '1m' now means monthly bars (resampled
-    from daily) at full history, NOT a 30-day slice. With ~250 daily
-    bars (~12 calendar months), the resampled monthly view has ~10-13
-    bars. The old 'last 30 days' semantics moved to '30m' (intraday)
-    or — in this test's spirit, "the last few weeks" — '4h'/'1h' which
-    rely on yfinance live and don't fit a unit-test scenario."""
+    from daily) at full history, NOT a 30-day slice."""
     s = _seed_stock_full(db, n_bars=250)
     d = stock_detail_service.get_detail(db, s.ticker, range_key="1m")
     assert d is not None
-    # 250 daily bars resample to ~10-13 monthly bars (varies by where
-    # the seed dates land relative to month boundaries).
     assert 8 <= len(d.ohlcv) <= 15
 
 
-def test_resolve_effective_rules_tier1_only(db):
+def test_resolve_effective_rules_returns_globals(db):
     s = _seed_stock_full(db, n_bars=10)
-    db.add(Rule(watchlist_id=None, kind="rsi_oversold", params='{"threshold":30}', enabled=True))
-    db.add(Rule(watchlist_id=None, kind="death_cross", params='{}', enabled=True))
+    db.add(Rule(kind="rsi_oversold", params='{"threshold":30}', enabled=True))
+    db.add(Rule(kind="death_cross", params='{}', enabled=True))
     db.commit()
 
     rules = stock_detail_service.resolve_effective_rules(db, s.id)
@@ -64,22 +62,4 @@ def test_resolve_effective_rules_tier1_only(db):
     kinds = {r.kind: r for r in rules}
     assert kinds["rsi_oversold"].source == "tier1"
     assert kinds["rsi_oversold"].enabled is True
-
-
-def test_resolve_effective_rules_tier2_override(db):
-    s = _seed_stock_full(db, n_bars=10)
-    from app.models import User
-    u = User(username="admin", password_hash="x")
-    db.add(u); db.commit()
-    wl = Watchlist(name="Tech", user_id=u.id)
-    db.add(wl); db.commit()
-    db.add(WatchlistItem(watchlist_id=wl.id, stock_id=s.id))
-    db.add(Rule(watchlist_id=None, kind="rsi_oversold", params='{}', enabled=True))
-    db.add(Rule(watchlist_id=wl.id, kind="rsi_oversold", params='{}', enabled=False))
-    db.commit()
-
-    rules = stock_detail_service.resolve_effective_rules(db, s.id)
-    rsi = next(r for r in rules if r.kind == "rsi_oversold")
-    assert rsi.source == "tier2"
-    assert rsi.enabled is False
-    assert rsi.watchlist_name == "Tech"
+    assert kinds["death_cross"].source == "tier1"

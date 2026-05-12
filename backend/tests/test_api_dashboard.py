@@ -34,7 +34,7 @@ def test_dashboard_summary_payload_shape(client: TestClient, db: Session) -> Non
     stock = Stock(ticker="AAPL", exchange="NASDAQ", name="Apple")
     db.add(stock)
     db.commit()
-    rule = Rule(watchlist_id=None, kind="rsi_oversold", params="{}", enabled=True)
+    rule = Rule(kind="rsi_oversold", params="{}", enabled=True)
     db.add(rule)
     db.commit()
     db.refresh(stock)

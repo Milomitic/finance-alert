@@ -8,7 +8,7 @@ from sqlalchemy import select
 from app.core.config import ensure_data_dir, settings
 from app.core.db import SessionLocal
 from app.models import User
-from app.scripts import bootstrap_rules, bootstrap_watchlists
+from app.scripts import bootstrap_rules
 from app.scripts import seed as seed_module
 
 
@@ -82,10 +82,6 @@ def main() -> None:
     seed_module.run()
     bootstrap_rules.ensure_global_rules()
     ensure_admin_user()
-    # Curated watchlists must run AFTER admin user is ensured (the lists
-    # need an owner) and AFTER seeds are applied (otherwise tickers
-    # resolve as missing).
-    bootstrap_watchlists.ensure_curated_watchlists()
     logger.info("Bootstrap complete.")
 
 

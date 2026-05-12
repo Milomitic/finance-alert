@@ -1,5 +1,9 @@
-"""Daily alert scan: fetch OHLCV, evaluate rules with Tier 1/Tier 2 resolution,
-fire alerts on edge transitions (False -> True)."""
+"""Daily alert scan: fetch OHLCV, evaluate every global rule,
+fire alerts on edge transitions (False -> True).
+
+The Tier 1 / Tier 2 (watchlist override) layer was removed in May 2026
+— see CLAUDE.md. The scan is now a straight pass over the rules table.
+"""
 import json
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -12,14 +16,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.visibility import visible_country_clause
-from app.models import (
-    Alert,
-    OhlcvDaily,
-    Rule,
-    RuleState,
-    Stock,
-    WatchlistItem,
-)
+from app.models import Alert, OhlcvDaily, Rule, RuleState, Stock
 from app.rules.composite import evaluate_expression, snapshot_expression
 from app.rules.registry import RULES
 
@@ -33,32 +30,13 @@ class ScanResult:
 
 
 def _load_global_rules(db: Session) -> dict[str, Rule]:
-    """Return {kind: Rule} for all Tier 1 (watchlist_id IS NULL) rules."""
-    rows = db.execute(select(Rule).where(Rule.watchlist_id.is_(None))).scalars().all()
+    """Return {kind: Rule} for every rule in the registry. Atomic kinds
+    are unique by construction (enforced at create time). Composite
+    rules share kind="composite" and would collide on the dict key —
+    this preserves the pre-watchlist behaviour where only the
+    last-inserted composite is evaluated."""
+    rows = db.execute(select(Rule)).scalars().all()
     return {r.kind: r for r in rows}
-
-
-def _load_tier2_overrides_by_stock(db: Session) -> dict[int, dict[str, Rule]]:
-    """Build {stock_id: {kind: Rule}} for all Tier 2 rules across all watchlists.
-
-    If a stock is in multiple watchlists with conflicting overrides for the same kind,
-    the most-restrictive wins: disabled > enabled-with-params > (no override).
-    """
-    rows = db.execute(
-        select(Rule, WatchlistItem.stock_id)
-        .join(WatchlistItem, WatchlistItem.watchlist_id == Rule.watchlist_id)
-        .where(Rule.watchlist_id.isnot(None))
-    ).all()
-    out: dict[int, dict[str, Rule]] = {}
-    for rule, stock_id in rows:
-        existing = out.setdefault(stock_id, {}).get(rule.kind)
-        if existing is None:
-            out[stock_id][rule.kind] = rule
-            continue
-        # Conflict resolution: disabled > enabled
-        if not rule.enabled and existing.enabled:
-            out[stock_id][rule.kind] = rule
-    return out
 
 
 def _load_ohlcv(db: Session, stock_id: int, limit: int = 260) -> pd.DataFrame | None:
@@ -87,26 +65,17 @@ def _load_ohlcv(db: Session, stock_id: int, limit: int = 260) -> pd.DataFrame | 
 
 
 def _resolve_effective_rule(
-    stock_id: int,
     kind: str,
     global_rules: dict[str, Rule],
-    tier2: dict[int, dict[str, Rule]],
 ) -> tuple[Rule, dict[str, Any]] | None:
-    """Resolve which rule (and which params) to apply for (stock, kind).
-
-    Returns (global_rule, effective_params) — the global Rule object is always
-    returned for state indexing, but params may come from Tier 2 override.
-    Returns None if the rule should be skipped.
+    """Pick the rule + params to apply for (kind). Returns None when the
+    rule is missing or disabled. Pre-watchlist removal this also merged
+    Tier 2 overrides — now it's a straight global lookup.
     """
     global_rule = global_rules.get(kind)
     if global_rule is None or not global_rule.enabled:
         return None
-    override = tier2.get(stock_id, {}).get(kind)
-    if override is None:
-        return global_rule, json.loads(global_rule.params or "{}")
-    if not override.enabled:
-        return None
-    return global_rule, json.loads(override.params or global_rule.params or "{}")
+    return global_rule, json.loads(global_rule.params or "{}")
 
 
 def _get_or_create_state(db: Session, rule_id: int, stock_id: int) -> RuleState | None:
@@ -130,7 +99,7 @@ def scan_universe(
     progress_every: int = 10,
     cancel_check: Callable[[], bool] | None = None,
 ) -> ScanResult:
-    """Scan all stocks, evaluate global rules with Tier 2 overrides, fire edge alerts.
+    """Scan all stocks, evaluate every global rule, fire edge alerts.
 
     on_progress, if provided, is called every `progress_every` stocks AND at start/end
     with (stocks_done, stocks_total, result_so_far). Use this to surface live progress
@@ -152,9 +121,8 @@ def scan_universe(
     )
     total = len(stocks)
     global_rules = _load_global_rules(db)
-    tier2 = _load_tier2_overrides_by_stock(db)
     if not global_rules:
-        logger.warning("[scan] no Tier 1 rules configured; skipping scan")
+        logger.warning("[scan] no rules configured; skipping scan")
         if on_progress:
             on_progress(0, total, result)
         return result
@@ -205,7 +173,7 @@ def scan_universe(
                 eff_params: dict[str, Any] = {}
                 rule_obj = None  # signals "use composite snapshot below"
             else:
-                resolved = _resolve_effective_rule(stock.id, kind, global_rules, tier2)
+                resolved = _resolve_effective_rule(kind, global_rules)
                 if resolved is None:
                     continue
                 global_rule, eff_params = resolved

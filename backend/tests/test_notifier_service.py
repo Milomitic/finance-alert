@@ -17,7 +17,7 @@ def _seed_for_digest(db: Session) -> tuple[Stock, Rule, Alert]:
     stock = Stock(ticker="AAPL", exchange="NASDAQ", name="Apple Inc.")
     db.add(stock)
     db.commit()
-    rule = Rule(watchlist_id=None, kind="rsi_oversold", params="{}", enabled=True)
+    rule = Rule(kind="rsi_oversold", params="{}", enabled=True)
     db.add(rule)
     db.commit()
     alert = Alert(

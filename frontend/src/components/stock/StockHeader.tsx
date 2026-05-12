@@ -1,7 +1,6 @@
-import { ListChecks, Radio } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Radio } from "lucide-react";
 
-import type { EffectiveRule, OhlcvBar, Stock, StockKpis } from "@/api/types";
+import type { OhlcvBar, Stock, StockKpis } from "@/api/types";
 import { StockLogo } from "@/components/dashboard/StockLogo";
 import { Card, CardContent } from "@/components/ui/card";
 import { FlashValue } from "@/components/ui/FlashValue";
@@ -14,10 +13,6 @@ interface Props {
   kpis: StockKpis;
   /** Optional OHLCV history — drawn as a faded sparkline background. */
   ohlcv?: OhlcvBar[];
-  /** When the stock is in one or more watchlists with a Tier-2 rule override,
-   *  surface those watchlist names inline so the user knows the alert behavior
-   *  for this ticker isn't pure-global. */
-  effectiveRules?: EffectiveRule[];
 }
 
 /**
@@ -79,15 +74,7 @@ export function HeaderSparkline({ closes, up }: { closes: number[]; up: boolean 
   );
 }
 
-export function StockHeader({ stock, kpis, ohlcv, effectiveRules = [] }: Props) {
-  // Distinct watchlist names that override this stock's rules (Tier 2).
-  const tier2 = Array.from(
-    new Set(
-      effectiveRules
-        .filter((r) => r.source === "tier2" && !!r.watchlist_name)
-        .map((r) => r.watchlist_name as string),
-    ),
-  );
+export function StockHeader({ stock, kpis, ohlcv }: Props) {
   const flag = getStockFlagCode(stock.country, stock.ticker);
 
   // Live quote — polls every 15s. Falls back to the kpis snapshot (last
@@ -246,29 +233,6 @@ export function StockHeader({ stock, kpis, ohlcv, effectiveRules = [] }: Props) 
           </div>
         </div>
 
-        {/* Tier-2 watchlist banner: shown only when at least one watchlist
-            applies a custom rule override to this stock. Tells the user the
-            alert behavior here is not pure-global. */}
-        {tier2.length > 0 && (
-          <div className="mt-4 px-3 py-2 rounded-md border border-amber-300/60 dark:border-amber-700/40 bg-amber-50/70 dark:bg-amber-950/20 flex items-center gap-2 flex-wrap">
-            <ListChecks className="h-4 w-4 text-amber-700 dark:text-amber-300 shrink-0" />
-            <span className="text-sm text-amber-900 dark:text-amber-100">
-              <strong>Regole custom attive</strong> dalla watchlist{tier2.length > 1 ? "s" : ""}:
-            </span>
-            <span className="flex items-center gap-1.5 flex-wrap">
-              {tier2.map((wl) => (
-                <Link
-                  key={wl}
-                  to="/watchlists"
-                  className="inline-flex items-center rounded-md px-2 py-0.5 text-sm font-semibold bg-amber-100 dark:bg-amber-900/40 text-amber-900 dark:text-amber-100 hover:bg-amber-200 dark:hover:bg-amber-900/60 transition-colors"
-                  title={`Apri /watchlists per modificare gli override di "${wl}"`}
-                >
-                  {wl}
-                </Link>
-              ))}
-            </span>
-          </div>
-        )}
       </CardContent>
     </Card>
   );

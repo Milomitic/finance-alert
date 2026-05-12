@@ -10,11 +10,10 @@ import InstitutionalsPage from "@/pages/InstitutionalsPage";
 import LoginPage from "@/pages/LoginPage";
 import MarketDetailPage from "@/pages/MarketDetailPage";
 import SectorDetailPage from "@/pages/SectorDetailPage";
+import SectorsOverviewPage from "@/pages/SectorsOverviewPage";
 import SettingsPage from "@/pages/SettingsPage";
 import StockDetailPage from "@/pages/StockDetailPage";
 import StocksBrowserPage from "@/pages/StocksBrowserPage";
-import WatchlistDetailPage from "@/pages/WatchlistDetailPage";
-import WatchlistListPage from "@/pages/WatchlistListPage";
 
 export default function App() {
   return (
@@ -28,9 +27,13 @@ export default function App() {
         }
       >
         <Route path="/" element={<HomePage />} />
-        <Route path="/watchlists" element={<WatchlistListPage />} />
-        <Route path="/watchlists/new" element={<WatchlistDetailPage />} />
-        <Route path="/watchlists/:id" element={<WatchlistDetailPage />} />
+        {/* /sectors took the slot previously held by /watchlists.
+            The watchlist feature (custom rule overrides on user-curated
+            stock lists) was removed in May 2026 — see CLAUDE.md. The
+            slot is now a hub page listing every sector + sub-sector
+            with aggregate data, and each sector tile drills down into
+            the existing /sectors/:name detail page. */}
+        <Route path="/sectors" element={<SectorsOverviewPage />} />
         <Route path="/alerts" element={<AlertsPage />} />
         <Route path="/calendar" element={<CalendarPage />} />
         <Route path="/stocks" element={<StocksBrowserPage />} />

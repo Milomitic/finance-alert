@@ -3,6 +3,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { rules, type RuleCreatePayload, type RuleUpdatePayload } from "@/api/rules";
 import type { RuleExpressionNode } from "@/api/types";
 
+// All rules are global since the watchlist override layer was removed.
+// The hook list is correspondingly slimmer — no more `useRulesForWatchlist`.
 export function useGlobalRules() {
   return useQuery({
     queryKey: ["rules", "global"],
@@ -11,24 +13,12 @@ export function useGlobalRules() {
   });
 }
 
-export function useRulesForWatchlist(watchlistId: number | null) {
-  return useQuery({
-    queryKey: ["rules", "watchlist", watchlistId],
-    queryFn: () => rules.list(watchlistId as number),
-    enabled: watchlistId !== null,
-  });
-}
-
 export function useCreateRule() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (payload: RuleCreatePayload) => rules.create(payload),
-    onSuccess: (_data, vars) => {
-      if (vars.watchlist_id !== null) {
-        qc.invalidateQueries({ queryKey: ["rules", "watchlist", vars.watchlist_id] });
-      } else {
-        qc.invalidateQueries({ queryKey: ["rules", "global"] });
-      }
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["rules", "global"] });
     },
   });
 }

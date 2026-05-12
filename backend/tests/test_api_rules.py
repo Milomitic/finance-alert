@@ -1,11 +1,17 @@
-"""Tests for Rules API."""
+"""Tests for the Rules API.
+
+The watchlist override layer (Tier 1 globals + Tier 2 per-watchlist
+overrides) was retired in May 2026 — every rule is now global. The
+test surface dropped the Tier-2 specific cases and the `watchlist_id`
+arguments from create/update payloads.
+"""
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
 from app.main import app
-from app.models import Rule, User, Watchlist
+from app.models import Rule, User
 
 
 @pytest.fixture
@@ -25,9 +31,9 @@ def auth_headers() -> dict:
     return {}
 
 
-def test_list_globals_when_no_watchlist_id(client: TestClient, db: Session) -> None:
-    db.add(Rule(watchlist_id=None, kind="rsi_oversold", params="{}", enabled=True))
-    db.add(Rule(watchlist_id=None, kind="golden_cross", params="{}", enabled=True))
+def test_list_returns_all_global_rules(client: TestClient, db: Session) -> None:
+    db.add(Rule(kind="rsi_oversold", params="{}", enabled=True))
+    db.add(Rule(kind="golden_cross", params="{}", enabled=True))
     db.commit()
     resp = client.get("/api/rules")
     assert resp.status_code == 200
@@ -36,31 +42,10 @@ def test_list_globals_when_no_watchlist_id(client: TestClient, db: Session) -> N
     assert {r["kind"] for r in data} == {"rsi_oversold", "golden_cross"}
 
 
-def test_list_tier2_filtered_by_watchlist(client: TestClient, db: Session) -> None:
-    user = db.query(User).first()
-    wl = Watchlist(name="Tech", user_id=user.id)
-    db.add(wl)
-    db.commit()
-    db.add(Rule(watchlist_id=wl.id, kind="rsi_oversold", params="{}", enabled=False))
-    db.add(Rule(watchlist_id=None, kind="rsi_oversold", params="{}", enabled=True))
-    db.commit()
-    resp = client.get(f"/api/rules?watchlist_id={wl.id}")
-    assert resp.status_code == 200
-    data = resp.json()
-    assert len(data) == 1
-    assert data[0]["watchlist_id"] == wl.id
-    assert data[0]["enabled"] is False
-
-
-def test_create_tier2_override(client: TestClient, db: Session) -> None:
-    user = db.query(User).first()
-    wl = Watchlist(name="A", user_id=user.id)
-    db.add(wl)
-    db.commit()
+def test_create_global_rule(client: TestClient) -> None:
     resp = client.post(
         "/api/rules",
         json={
-            "watchlist_id": wl.id,
             "kind": "rsi_oversold",
             "params": {"period": 14, "threshold": 25},
             "enabled": True,
@@ -68,31 +53,20 @@ def test_create_tier2_override(client: TestClient, db: Session) -> None:
     )
     assert resp.status_code == 201
     body = resp.json()
-    assert body["watchlist_id"] == wl.id
+    assert body["kind"] == "rsi_oversold"
     assert body["params"] == {"period": 14, "threshold": 25}
-
-
-def test_create_duplicate_returns_409(client: TestClient, db: Session) -> None:
-    user = db.query(User).first()
-    wl = Watchlist(name="A", user_id=user.id)
-    db.add(wl)
-    db.commit()
-    payload = {"watchlist_id": wl.id, "kind": "rsi_oversold", "params": {}, "enabled": True}
-    client.post("/api/rules", json=payload)
-    resp = client.post("/api/rules", json=payload)
-    assert resp.status_code == 409
 
 
 def test_create_unknown_kind_returns_422(client: TestClient) -> None:
     resp = client.post(
         "/api/rules",
-        json={"watchlist_id": None, "kind": "foo", "params": {}, "enabled": True},
+        json={"kind": "foo", "params": {}, "enabled": True},
     )
     assert resp.status_code == 422
 
 
 def test_patch_rule_updates_enabled(client: TestClient, db: Session) -> None:
-    rule = Rule(watchlist_id=None, kind="rsi_oversold", params="{}", enabled=True)
+    rule = Rule(kind="rsi_oversold", params="{}", enabled=True)
     db.add(rule)
     db.commit()
     db.refresh(rule)
@@ -102,7 +76,7 @@ def test_patch_rule_updates_enabled(client: TestClient, db: Session) -> None:
 
 
 def test_patch_rule_updates_params(client: TestClient, db: Session) -> None:
-    rule = Rule(watchlist_id=None, kind="rsi_oversold", params='{"period":14,"threshold":30}')
+    rule = Rule(kind="rsi_oversold", params='{"period":14,"threshold":30}')
     db.add(rule)
     db.commit()
     db.refresh(rule)
@@ -114,7 +88,7 @@ def test_patch_rule_updates_params(client: TestClient, db: Session) -> None:
 
 
 def test_delete_rule(client: TestClient, db: Session) -> None:
-    rule = Rule(watchlist_id=None, kind="death_cross", params="{}", enabled=True)
+    rule = Rule(kind="death_cross", params="{}", enabled=True)
     db.add(rule)
     db.commit()
     db.refresh(rule)
@@ -164,10 +138,9 @@ def test_create_rule_with_too_deep_expression_returns_422(client, auth_headers):
     assert resp.status_code == 422
 
 
-def test_create_multiple_composite_rules_in_same_scope_allowed(client, auth_headers):
-    """Composite rules are exempt from the (watchlist, kind) uniqueness check —
-    you can have several composites in the same scope, distinguished by their
-    expressions."""
+def test_create_multiple_composite_rules_allowed(client, auth_headers):
+    """Composite rules are exempt from the per-kind uniqueness check —
+    several composites can coexist, distinguished by their expressions."""
     expr1 = {
         "op": "atomic", "kind": "rsi_oversold",
         "params": {"period": 14, "threshold": 30},
@@ -187,8 +160,8 @@ def test_create_multiple_composite_rules_in_same_scope_allowed(client, auth_head
     assert r1.json()["id"] != r2.json()["id"]
 
 
-def test_create_duplicate_atomic_rule_still_409(client, auth_headers):
-    """The legacy atomic-kind uniqueness check is preserved."""
+def test_create_duplicate_atomic_rule_returns_409(client, auth_headers):
+    """At most one rule per atomic kind."""
     r1 = client.post("/api/rules", headers=auth_headers, json={
         "kind": "rsi_oversold", "params": {"period": 14, "threshold": 30}, "enabled": True,
     })

@@ -8,7 +8,6 @@ import type {
 } from "./types";
 
 export interface RuleCreatePayload {
-  watchlist_id: number | null;
   kind: RuleKind;
   params?: Record<string, unknown>;
   enabled?: boolean;
@@ -22,13 +21,12 @@ export interface RuleUpdatePayload {
   expression?: RuleExpressionNode | null;
 }
 
+// All rules are global now (the watchlist override layer was removed —
+// see CLAUDE.md for the migration rationale). The API still accepts an
+// optional `watchlist_id` query param for back-compat but the FE never
+// sends it.
 export const rules = {
-  list: (watchlistId?: number) =>
-    api<Rule[]>(
-      watchlistId !== undefined
-        ? `/api/rules?watchlist_id=${watchlistId}`
-        : "/api/rules"
-    ),
+  list: () => api<Rule[]>("/api/rules"),
   create: (payload: RuleCreatePayload) =>
     api<Rule>("/api/rules", { method: "POST", body: JSON.stringify(payload) }),
   patch: (id: number, payload: RuleUpdatePayload) =>

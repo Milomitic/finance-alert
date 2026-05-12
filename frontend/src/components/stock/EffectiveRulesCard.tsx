@@ -17,6 +17,9 @@ const KIND_LABEL: Record<string, string> = {
   death_cross: "Death Cross",
 };
 
+// Post-watchlist-removal: every rule is a global one. The card kept
+// the per-row badge so the layout/spacing stays consistent with the
+// pre-removal version — only the label changed.
 export function EffectiveRulesCard({ rules }: Props) {
   return (
     <Card>
@@ -37,19 +40,16 @@ export function EffectiveRulesCard({ rules }: Props) {
                   {KIND_LABEL[r.kind] ?? r.kind}
                 </span>
                 <Badge
-                  variant={r.source === "tier2" ? "secondary" : "outline"}
+                  variant="outline"
                   className="ml-auto text-sm h-5"
-                  title={r.source === "tier2" ? `Override da watchlist "${r.watchlist_name}"` : "Regola globale"}
+                  title="Regola globale (applicata all'intero catalogo)"
                 >
-                  {r.source === "tier2" ? `WL: ${r.watchlist_name}` : "Globale"}
+                  Globale
                 </Badge>
               </li>
             ))}
           </ul>
         )}
-        <div className="text-sm text-muted-foreground mt-3 italic">
-          Override per-stock disponibili in fasi future.
-        </div>
       </CardContent>
     </Card>
   );

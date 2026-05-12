@@ -281,11 +281,13 @@ class StockKpisOut(BaseModel):
 
 
 class EffectiveRuleOut(BaseModel):
+    """Snapshot of a rule as it'll fire for this stock at scan time.
+    Post-watchlist-removal `source` is always "tier1" but kept on the
+    wire so the FE schema doesn't churn."""
     kind: str
     enabled: bool
     params: dict[str, Any]
-    source: str
-    watchlist_name: str | None
+    source: str = "tier1"
 
 
 class StockDetailOut(BaseModel):

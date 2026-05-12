@@ -86,3 +86,45 @@ export function useSectorDetail(name: string) {
     staleTime: 5 * 60 * 1000,
   });
 }
+
+/* ─── Sectors overview hub ────────────────────────────────────────────
+ *
+ * Aggregated payload for the /sectors page: top-level counts +
+ * per-sector summary cards + per-industry table. Mirrors what the
+ * dashboard's market-mood tape does for indices.
+ */
+
+export interface SectorSummary {
+  name: string;
+  stock_count: number;
+  avg_score: number | null;
+  median_pe: number | null;
+  median_pb: number | null;
+  median_roe: number | null;
+  median_dividend_yield: number | null;
+}
+
+export interface IndustryRow {
+  name: string;
+  sector: string | null;
+  stock_count: number;
+  avg_score: number | null;
+}
+
+export interface SectorsOverview {
+  total_stocks: number;
+  total_sectors: number;
+  total_industries: number;
+  sectors: SectorSummary[];
+  industries: IndustryRow[];
+}
+
+export function useSectorsOverview() {
+  return useQuery({
+    queryKey: ["sectors-overview"],
+    queryFn: () => api<SectorsOverview>("/api/sectors/overview"),
+    // Same staleness window as the detail page — the underlying scores
+    // refresh after each `recompute_all`, ~minutes-old data is fine.
+    staleTime: 5 * 60 * 1000,
+  });
+}

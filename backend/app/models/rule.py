@@ -1,4 +1,11 @@
-"""Alert rules (Tier 1 globals + Tier 2 watchlist overrides) and per-(rule, stock) edge state."""
+"""Alert rules + per-(rule, stock) edge state.
+
+Pre-May-2026 the table carried a `watchlist_id` FK so a rule could be
+either Tier 1 (global, watchlist_id IS NULL) or Tier 2 (override
+scoped to a single watchlist). The watchlist feature was removed —
+every rule is now global. The migration `*_drop_watchlist.py` drops
+the column and the FK; the model just owns the global subset.
+"""
 from datetime import datetime
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, func
@@ -9,15 +16,11 @@ from app.core.db import Base
 
 class Rule(Base):
     __tablename__ = "rules"
-    # Note: no DB-level UNIQUE on (watchlist_id, kind) — Fase 3C composite rules
-    # share kind="composite" (or kind="composite_*") and the same scope can hold
-    # several. Uniqueness for atomic kinds is enforced API-side in `create_rule`.
+    # Uniqueness of (kind) for atomic kinds is enforced API-side in
+    # `create_rule` — composite rules share the kind ("composite") and
+    # several can coexist.
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    # NULL => Tier 1 (global). Non-null => Tier 2 (override for that watchlist).
-    watchlist_id: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("watchlists.id", ondelete="CASCADE"), nullable=True
-    )
     kind: Mapped[str] = mapped_column(String(32), nullable=False)
     # JSON-serialized parameters (e.g. {"period": 14, "threshold": 30}).
     params: Mapped[str] = mapped_column(Text, nullable=False, default="{}")

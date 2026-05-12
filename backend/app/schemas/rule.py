@@ -1,4 +1,9 @@
-"""Rules request/response schemas."""
+"""Rules request/response schemas.
+
+The watchlist feature (Tier 2 per-watchlist rule overrides) was
+removed in May 2026 — every rule is now global. The `watchlist_id`
+field is gone from create/update/out schemas.
+"""
 import json
 from datetime import datetime
 from typing import Any
@@ -45,7 +50,7 @@ class RuleBase(BaseModel):
 
 
 class RuleCreate(RuleBase):
-    watchlist_id: int | None = None
+    pass
 
 
 class RuleUpdate(BaseModel):
@@ -79,7 +84,6 @@ class RuleOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    watchlist_id: int | None
     kind: str
     params: dict[str, Any]
     enabled: bool

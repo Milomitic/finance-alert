@@ -3,8 +3,8 @@ import {
   Building2,
   CalendarDays,
   Filter,
+  Grid3x3,
   LayoutDashboard,
-  ListChecks,
   LogOut,
   Settings,
 } from "lucide-react";
@@ -27,7 +27,12 @@ interface NavEntry {
 
 const NAV: NavEntry[] = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, enabled: true },
-  { to: "/watchlists", label: "Watchlists", icon: ListChecks, enabled: true },
+  // /sectors is the post-watchlist hub: cross-sector overview with
+  // breadth, score medians, top-movers, and tile drill-downs into
+  // the per-sector detail page. Grid icon to telegraph the
+  // "everything at a glance" function (vs ListChecks' to-do flavor
+  // that the old Watchlists entry carried).
+  { to: "/sectors", label: "Settori", icon: Grid3x3, enabled: true },
   // /stocks route stays; the page is conceptually a screener (filters +
   // ranking) so that's the label. Filter icon to telegraph the function.
   { to: "/stocks", label: "Screener", icon: Filter, enabled: true },

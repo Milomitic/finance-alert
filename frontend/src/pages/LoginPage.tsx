@@ -30,13 +30,13 @@ export default function LoginPage() {
   });
 
   useEffect(() => {
-    if (me.data) navigate("/watchlists", { replace: true });
+    if (me.data) navigate("/", { replace: true });
   }, [me.data, navigate]);
 
   const onSubmit = async (values: FormValues) => {
     try {
       await login.mutateAsync(values);
-      navigate("/watchlists", { replace: true });
+      navigate("/", { replace: true });
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
         toast.error("Credenziali non valide");

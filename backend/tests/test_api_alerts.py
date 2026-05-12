@@ -27,7 +27,7 @@ def _seed_alerts(db: Session, n: int = 3) -> list[Alert]:
     stock = Stock(ticker="AAPL", exchange="NASDAQ", name="Apple")
     db.add(stock)
     db.commit()
-    rule = Rule(watchlist_id=None, kind="rsi_oversold", params="{}", enabled=True)
+    rule = Rule(kind="rsi_oversold", params="{}", enabled=True)
     db.add(rule)
     db.commit()
     alerts = []

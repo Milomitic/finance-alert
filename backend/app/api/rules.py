@@ -1,4 +1,9 @@
-"""Rules API: CRUD on Tier 1 globals and Tier 2 overrides."""
+"""Rules API: CRUD on the global rules registry.
+
+Pre-May-2026 the listing filtered by `watchlist_id` to surface Tier 2
+overrides per-watchlist. Watchlist feature was retired — every rule
+is now global and the endpoint returns the full registry every time.
+"""
 import json
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
@@ -15,7 +20,6 @@ router = APIRouter(prefix="/api/rules", tags=["rules"])
 def _to_out(r: Rule) -> RuleOut:
     return RuleOut(
         id=r.id,
-        watchlist_id=r.watchlist_id,
         kind=r.kind,
         params=json.loads(r.params or "{}"),
         enabled=r.enabled,
@@ -27,26 +31,11 @@ def _to_out(r: Rule) -> RuleOut:
 
 @router.get("", response_model=list[RuleOut])
 def list_rules(
-    watchlist_id: int | None = None,
     db: Session = Depends(get_db),
     _user: User = Depends(get_current_user),
 ) -> list[RuleOut]:
-    """No query: Tier 1 globals (watchlist_id IS NULL).
-    With watchlist_id: Tier 2 overrides for that watchlist."""
-    if watchlist_id is None:
-        rows = (
-            db.execute(select(Rule).where(Rule.watchlist_id.is_(None)).order_by(Rule.kind))
-            .scalars()
-            .all()
-        )
-    else:
-        rows = (
-            db.execute(
-                select(Rule).where(Rule.watchlist_id == watchlist_id).order_by(Rule.kind)
-            )
-            .scalars()
-            .all()
-        )
+    """Return every global rule, ordered by kind."""
+    rows = db.execute(select(Rule).order_by(Rule.kind)).scalars().all()
     return [_to_out(r) for r in rows]
 
 
@@ -61,27 +50,18 @@ def create_rule(
     db: Session = Depends(get_db),
     _user: User = Depends(get_current_user),
 ) -> RuleOut:
-    # Uniqueness check is enforced API-side only for atomic kinds: a watchlist
-    # can hold at most one rsi_oversold, golden_cross, etc. Composite rules are
-    # exempt — multiple composites with different expressions can coexist in the
-    # same scope.
+    # Uniqueness constraint: at most one rule per atomic kind. Composite
+    # rules share the kind label ("composite") and several with different
+    # expressions can coexist.
     if payload.kind != "composite":
-        if payload.watchlist_id is None:
-            existing = db.execute(
-                select(Rule).where(Rule.watchlist_id.is_(None), Rule.kind == payload.kind)
-            ).scalar_one_or_none()
-        else:
-            existing = db.execute(
-                select(Rule).where(
-                    Rule.watchlist_id == payload.watchlist_id, Rule.kind == payload.kind
-                )
-            ).scalar_one_or_none()
+        existing = db.execute(
+            select(Rule).where(Rule.kind == payload.kind)
+        ).scalar_one_or_none()
         if existing is not None:
             raise HTTPException(
-                status_code=409, detail="Rule already exists for this (watchlist, kind)"
+                status_code=409, detail="Rule already exists for this kind"
             )
     r = Rule(
-        watchlist_id=payload.watchlist_id,
         kind=payload.kind,
         params=json.dumps(payload.params),
         enabled=payload.enabled,

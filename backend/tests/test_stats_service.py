@@ -17,7 +17,7 @@ from app.services.stats_service import (
 def _seed_baseline(db: Session) -> tuple[Stock, Rule]:
     stock = Stock(ticker="AAPL", exchange="NASDAQ", name="Apple Inc.")
     db.add(stock)
-    rule = Rule(watchlist_id=None, kind="rsi_oversold", params="{}", enabled=True)
+    rule = Rule(kind="rsi_oversold", params="{}", enabled=True)
     db.add(rule)
     db.commit()
     db.refresh(stock)
@@ -105,7 +105,7 @@ def test_alerts_by_day_groups_by_date_and_kind(db: Session) -> None:
     lands on, regardless of clock position.
     """
     stock, rule = _seed_baseline(db)
-    rule2 = Rule(watchlist_id=None, kind="golden_cross", params="{}", enabled=True)
+    rule2 = Rule(kind="golden_cross", params="{}", enabled=True)
     db.add(rule2)
     db.commit()
     db.refresh(rule2)
@@ -171,7 +171,7 @@ def test_alerts_by_day_excludes_archived(db: Session) -> None:
 
 
 def test_top_stocks_orders_by_count_desc_limit_10(db: Session) -> None:
-    rule = Rule(watchlist_id=None, kind="rsi_oversold", params="{}", enabled=True)
+    rule = Rule(kind="rsi_oversold", params="{}", enabled=True)
     db.add(rule)
     db.commit()
     db.refresh(rule)
@@ -195,8 +195,8 @@ def test_top_stocks_orders_by_count_desc_limit_10(db: Session) -> None:
 def test_top_stocks_top_kind_is_most_frequent(db: Session) -> None:
     stock = Stock(ticker="AAPL", exchange="NASDAQ", name="Apple")
     db.add(stock)
-    rule_oversold = Rule(watchlist_id=None, kind="rsi_oversold", params="{}", enabled=True)
-    rule_cross = Rule(watchlist_id=None, kind="golden_cross", params="{}", enabled=True)
+    rule_oversold = Rule(kind="rsi_oversold", params="{}", enabled=True)
+    rule_cross = Rule(kind="golden_cross", params="{}", enabled=True)
     db.add(rule_oversold)
     db.add(rule_cross)
     db.commit()

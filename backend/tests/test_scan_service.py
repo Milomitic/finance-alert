@@ -1,18 +1,13 @@
-"""Tests for scan_service: rule resolution + edge-triggered alert firing."""
+"""Tests for scan_service: rule resolution + edge-triggered alert firing.
+
+The Tier 2 (per-watchlist override) layer was removed in May 2026.
+The two tier2-specific scenarios that lived here are gone.
+"""
 from datetime import UTC, date, datetime, timedelta
 
 from sqlalchemy.orm import Session
 
-from app.models import (
-    Alert,
-    OhlcvDaily,
-    Rule,
-    RuleState,
-    Stock,
-    User,
-    Watchlist,
-    WatchlistItem,
-)
+from app.models import Alert, OhlcvDaily, Rule, RuleState, Stock, User
 from app.services.scan_service import ScanResult, scan_universe
 
 
@@ -50,7 +45,7 @@ def _seed_stock_with_ohlcv(db: Session, ticker: str, closes: list[float]) -> Sto
 
 
 def _create_global_rule(db: Session, kind: str, params: str = "{}", enabled: bool = True) -> Rule:
-    r = Rule(watchlist_id=None, kind=kind, params=params, enabled=enabled)
+    r = Rule(kind=kind, params=params, enabled=enabled)
     db.add(r)
     db.commit()
     db.refresh(r)
@@ -119,61 +114,6 @@ def test_scan_respects_disabled_global_rule(db: Session) -> None:
     result = scan_universe(db)
     db.commit()
     assert result.alerts_fired == 0
-
-
-def test_scan_tier2_disable_overrides_global(db: Session) -> None:
-    """If a watchlist contains the stock with a Tier 2 disabled override, no alert."""
-    user = _create_admin(db)
-    closes = [100.0 - 0.5 * i for i in range(30)]
-    stock = _seed_stock_with_ohlcv(db, "AAPL", closes)
-    _create_global_rule(db, "rsi_oversold", params='{"period": 14, "threshold": 30}')
-
-    wl = Watchlist(name="Test", user_id=user.id)
-    db.add(wl)
-    db.commit()
-    db.add(WatchlistItem(watchlist_id=wl.id, stock_id=stock.id))
-    db.add(
-        Rule(
-            watchlist_id=wl.id,
-            kind="rsi_oversold",
-            params="{}",
-            enabled=False,  # Tier 2 disable
-        )
-    )
-    db.commit()
-
-    result = scan_universe(db)
-    db.commit()
-
-    assert result.alerts_fired == 0  # Tier 2 disable wins
-
-
-def test_scan_tier2_custom_params_used_in_evaluation(db: Session) -> None:
-    """Tier 2 custom threshold should be used (state recorded under global rule_id)."""
-    user = _create_admin(db)
-    closes = [100.0 - 0.4 * i for i in range(30)]
-    stock = _seed_stock_with_ohlcv(db, "AAPL", closes)
-    _create_global_rule(db, "rsi_oversold", params='{"period": 14, "threshold": 30}')
-
-    wl = Watchlist(name="Strict", user_id=user.id)
-    db.add(wl)
-    db.commit()
-    db.add(WatchlistItem(watchlist_id=wl.id, stock_id=stock.id))
-    db.add(
-        Rule(
-            watchlist_id=wl.id,
-            kind="rsi_oversold",
-            params='{"period": 14, "threshold": 20}',  # stricter
-            enabled=True,
-        )
-    )
-    db.commit()
-
-    scan_universe(db)
-    db.commit()
-    # Check state was created under the global rule_id (not the Tier 2 one)
-    states = db.query(RuleState).filter_by(stock_id=stock.id).all()
-    assert len(states) == 1
 
 
 def test_scan_uses_expression_when_present(db) -> None:

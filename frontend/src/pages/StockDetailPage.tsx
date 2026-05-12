@@ -117,7 +117,6 @@ export default function StockDetailPage() {
         stock={d.stock}
         kpis={d.kpis}
         ohlcv={d.ohlcv}
-        effectiveRules={d.effective_rules}
       />
 
       {/* Company overview (left, 67%) + Alert storici (right, 33%).

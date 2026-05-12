@@ -1,5 +1,11 @@
 """Aggregate stock detail: anagrafica + OHLCV (range-filtered) + indicators
-+ KPIs + effective rules (resolved from Tier 1/Tier 2) + alerts history."""
++ KPIs + effective rules + alerts history.
+
+The watchlist override layer (Tier 2 per-watchlist rule customization)
+was removed in May 2026. All rules are now global. The `EffectiveRule`
+dataclass is preserved (with a constant `source="tier1"`) so the API
+shape and FE consumers don't break.
+"""
 import json
 from dataclasses import dataclass
 from datetime import date, timedelta
@@ -15,7 +21,7 @@ from app.indicators.bb import bollinger
 from app.indicators.macd import macd
 from app.indicators.rsi import rsi as rsi_indicator
 from app.indicators.sma import sma as sma_indicator
-from app.models import Alert, OhlcvDaily, Rule, Stock, Watchlist, WatchlistItem
+from app.models import Alert, OhlcvDaily, Rule, Stock
 
 
 RANGE_DAYS: dict[str, int | None] = {
@@ -31,11 +37,15 @@ class IndicatorPoint:
 
 @dataclass
 class EffectiveRule:
+    """Snapshot of a rule as it'll be applied at scan-time. Post-watchlist
+    removal there's no longer a tier2/tier1 distinction — every rule is
+    global — but the FE schema kept the `source` field for forward-compat
+    with any future override mechanism. It is always "tier1" today.
+    """
     kind: str
     enabled: bool
     params: dict[str, Any]
-    source: str   # "tier1" | "tier2"
-    watchlist_name: str | None
+    source: str = "tier1"
 
 
 @dataclass
@@ -200,48 +210,25 @@ def _compute_kpis(bars: list[OhlcvDaily]) -> StockKpis:
 
 
 def resolve_effective_rules(db: Session, stock_id: int) -> list[EffectiveRule]:
-    """For each rule kind: find global Tier 1 rule, then check if any watchlist
-    containing this stock has a Tier 2 override for that kind. Tier 2 wins.
-    If multiple Tier 2 conflict (rare), most-restrictive wins (disabled > enabled)."""
-    global_rules = list(
-        db.execute(select(Rule).where(Rule.watchlist_id.is_(None))).scalars()
-    )
-    tier2 = list(
-        db.execute(
-            select(Rule, Watchlist.name)
-            .join(WatchlistItem, WatchlistItem.watchlist_id == Rule.watchlist_id)
-            .join(Watchlist, Watchlist.id == Rule.watchlist_id)
-            .where(WatchlistItem.stock_id == stock_id)
-            .where(Rule.watchlist_id.isnot(None))
-        ).all()
-    )
-    overrides: dict[str, tuple[Rule, str]] = {}
-    for rule, wl_name in tier2:
-        existing = overrides.get(rule.kind)
-        if existing is None:
-            overrides[rule.kind] = (rule, wl_name)
-        else:
-            existing_rule = existing[0]
-            if not rule.enabled and existing_rule.enabled:
-                overrides[rule.kind] = (rule, wl_name)
+    """Return every global rule as it will fire at scan-time for this stock.
 
-    out: list[EffectiveRule] = []
-    for g in global_rules:
-        ov = overrides.get(g.kind)
-        if ov is not None:
-            r, wl_name = ov
-            out.append(EffectiveRule(
-                kind=r.kind, enabled=r.enabled,
-                params=json.loads(r.params or "{}"),
-                source="tier2", watchlist_name=wl_name,
-            ))
-        else:
-            out.append(EffectiveRule(
-                kind=g.kind, enabled=g.enabled,
-                params=json.loads(g.params or "{}"),
-                source="tier1", watchlist_name=None,
-            ))
-    return out
+    Pre-May-2026 this resolved Tier 1 (global) ↓ Tier 2 (per-watchlist
+    override) and surfaced which watchlist contributed each row. After
+    the watchlist removal it's a straight pass-through over the global
+    rules table — `stock_id` is unused but kept in the signature so the
+    API + tests don't have to change.
+    """
+    _ = stock_id  # reserved for a future per-stock override mechanism
+    global_rules = list(db.execute(select(Rule)).scalars())
+    return [
+        EffectiveRule(
+            kind=g.kind,
+            enabled=g.enabled,
+            params=json.loads(g.params or "{}"),
+            source="tier1",
+        )
+        for g in global_rules
+    ]
 
 
 def get_detail(db: Session, ticker: str, range_key: str = "1d") -> StockDetail | None:

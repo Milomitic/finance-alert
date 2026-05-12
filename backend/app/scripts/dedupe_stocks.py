@@ -20,11 +20,11 @@ What this script does
 For every ticker with >1 row:
 1. Pick the canonical row: most non-null fields, tiebreak by lowest id.
 2. Migrate every FK reference (`alerts`, `price_alerts`, `stock_indices`,
-   `ohlcv_daily`, `rule_states`, `watchlist_items`) from each duplicate
-   onto the canonical id. Composite-PK tables use INSERT-OR-IGNORE to
-   avoid PK collisions; the leftover rows on the duplicate id are then
-   deleted explicitly (otherwise the trailing `DELETE FROM stocks` would
-   `ON DELETE CASCADE` real data away).
+   `ohlcv_daily`, `rule_states`) from each duplicate onto the canonical
+   id. Composite-PK tables use INSERT-OR-IGNORE to avoid PK collisions;
+   the leftover rows on the duplicate id are then deleted explicitly
+   (otherwise the trailing `DELETE FROM stocks` would `ON DELETE CASCADE`
+   real data away).
 3. Delete the duplicate stock rows.
 4. Relabel the canonical row's `exchange` to the catalog-refresh code
    derived from the ticker suffix (".MI" -> "BIT", ".AS" -> "AEX", …).
@@ -57,7 +57,6 @@ FK_TABLES: list[tuple[str, str, bool]] = [
     ("stock_indices",   "stock_id", True),
     ("ohlcv_daily",     "stock_id", True),
     ("rule_states",     "stock_id", True),
-    ("watchlist_items", "stock_id", True),
 ]
 
 # Stock columns counted toward the "completeness" score when picking the

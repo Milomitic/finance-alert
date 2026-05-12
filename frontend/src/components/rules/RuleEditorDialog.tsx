@@ -75,7 +75,6 @@ export function RuleEditorDialog({ open, onOpenChange, rule }: Props) {
         });
       } else {
         await createMut.mutateAsync({
-          watchlist_id: null,
           kind: compact.kind as RuleKind,
           params: compact.params,
           enabled,
