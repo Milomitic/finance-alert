@@ -173,33 +173,36 @@ def run_tracked_scan(
             from app.services import score_service
             from app.services.score_service import RecomputeCancelled
 
-            # First heartbeat will arrive from the score_service pre-pass.
-            # We flip into the per-stock sub-phase the first time the
-            # heartbeat reports a non-zero `done` — same gating logic as
-            # scan_universe's loading_rules → scoring flip above.
-            flipped_to_scoring = False
-
-            # Bump the parent ScanRun's heartbeat from inside the score loop so
-            # the stale detector (120s without heartbeat → "Scan bloccato") doesn't
-            # trip during the long recompute path. The on_progress fires every
-            # `progress_every` stocks during scoring AND periodically during the
-            # sector_stats pre-pass, well within the 120s window. We don't touch
-            # progress_done/total here — they correctly reflect the scan_universe
-            # result so the bar stays at 100% during persisting.
+            # Bump the parent ScanRun's heartbeat from inside the score
+            # loop so the stale detector (120s without heartbeat → "Scan
+            # bloccato") doesn't trip during the long recompute path.
+            # The on_progress fires every `progress_every` stocks during
+            # scoring AND periodically during the sector_stats pre-pass,
+            # well within the 120s window. We don't touch progress_done/
+            # total here — they correctly reflect the scan_universe
+            # result so the post-scan bar stays at 100% during persisting.
             def _persisting_heartbeat(_done: int, _total: int) -> None:
-                nonlocal flipped_to_scoring
                 run.last_progress_at = datetime.now(UTC)
-                if not flipped_to_scoring and _done > 0:
+                # No explicit commit — score_service commits per stock
+                # and our heartbeat update piggybacks on those commits.
+
+            # Sub-phase signal arrives explicitly from recompute_all (post
+            # the May 2026 refactor): "sector_stats" then "scoring".
+            # Translated 1:1 to the sub-phase labels the toast shows.
+            def _persisting_phase_change(phase: str) -> None:
+                if phase == "sector_stats":
+                    run.phase = "evaluating:sector_stats"
+                    run.current_target = "Pre-calcolo statistiche settoriali…"
+                else:  # phase == "scoring"
                     run.phase = "evaluating:scoring_recompute"
                     run.current_target = "Ricalcolo score composito per stock…"
-                    flipped_to_scoring = True
-                # No explicit commit — score_service commits per stock and our
-                # heartbeat update piggybacks on those commits.
+                db.commit()
 
             try:
                 n_ok, n_failed = score_service.recompute_all(
                     db,
                     on_progress=_persisting_heartbeat,
+                    on_phase_change=_persisting_phase_change,
                     cancel_check=cancel_check,
                 )
                 logger.info(

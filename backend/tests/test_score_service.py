@@ -716,17 +716,29 @@ def test_recompute_all_passes_heartbeat_through_sector_stats_prepass(
     assert ok == 25
     assert failed == 0
 
-    # MUST have multiple heartbeats. The first one is from the seed at the
-    # very start of recompute_all (done=0). The pre-pass adds at least one
-    # more (every 20 stocks → 1 for 25 stocks at the start + 1 final).
-    # The scoring loop adds more (every 10 stocks → 2-3 more heartbeats).
+    # MUST have multiple heartbeats spanning BOTH phases. Layout (post the
+    # May 2026 phase-callback refactor):
+    #   - 1+ heartbeats during pre-pass with total = sector_count (the
+    #     unique-sectors count, here 1 since all 25 stocks are "Technology").
+    #   - 1 heartbeat seeding the scoring phase with (0, 25).
+    #   - 2-3 heartbeats during the scoring loop.
     assert len(heartbeats) >= 3, (
-        f"Expected >=3 heartbeats (1 seed + >=1 pre-pass + >=1 scoring), "
+        f"Expected >=3 heartbeats (>=1 pre-pass + seed-scoring + >=1 scoring), "
         f"got {len(heartbeats)}: {heartbeats}"
     )
-    # First heartbeat MUST be done=0 (seed before pre-pass), regression
-    # guard against the runner accidentally flipping phase too early.
-    assert heartbeats[0] == (0, 25)
+    # Pre-pass heartbeats use sector_count denominator (=1 in this fixture).
+    # First emitted heartbeat = (0, sector_count) seeded at the start of
+    # recompute_all immediately after on_phase_change("sector_stats").
+    assert heartbeats[0] == (0, 1)
+    # The pre-pass → scoring transition shows up as a switch to total=25
+    # (the stock count). Find it explicitly.
+    scoring_heartbeats = [h for h in heartbeats if h[1] == 25]
+    assert len(scoring_heartbeats) >= 1, (
+        f"Expected at least one scoring-phase heartbeat with total=25, "
+        f"got {heartbeats}"
+    )
+    # First scoring heartbeat is the (0, 25) seed before the loop.
+    assert scoring_heartbeats[0] == (0, 25)
 
 
 def test_recompute_all_cancellable_during_sector_stats(db: Session, monkeypatch):

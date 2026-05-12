@@ -85,15 +85,31 @@ def run_tracked_recompute(
     )
 
     def on_progress(done: int, total: int) -> None:
-        """Cheap UPDATE — small payload, single commit per heartbeat."""
+        """Cheap UPDATE — small payload, single commit per heartbeat.
+
+        Bar progress only; phase transitions arrive via the separate
+        on_phase_change callback below. The `done/total` semantics
+        depend on the active phase: during sector_stats `total` is
+        the unique-sectors count, during scoring it's the stock count.
+        Both surfaces (progress bar + counters) are scoped per-phase so
+        the toast renders the right "K/N" line whichever phase is
+        active.
+        """
         run.progress_done = done
         run.progress_total = total
         run.last_progress_at = datetime.now(UTC)
-        # Flip phase to 'scoring' when the actual loop starts. The first
-        # heartbeat from recompute_all is done=0 (seed before the sector
-        # stats pre-pass); subsequent heartbeats are inside the loop.
-        if done > 0 and run.phase != "scoring":
-            run.phase = "scoring"
+        db.commit()
+
+    def on_phase_change(phase: str) -> None:
+        """Explicit phase transition signal from recompute_all.
+
+        Sets `run.phase` to whichever phase recompute_all just entered.
+        Pre-2026 we inferred phase from `done > 0` (since pre-pass kept
+        done=0), but that broke when we started moving the bar during
+        the pre-pass too — needed an out-of-band signal.
+        """
+        run.phase = phase
+        run.last_progress_at = datetime.now(UTC)
         db.commit()
 
     run_id_for_cancel = run.id
@@ -105,6 +121,7 @@ def run_tracked_recompute(
         ok, failed = recompute_all(
             db,
             on_progress=on_progress,
+            on_phase_change=on_phase_change,
             progress_every=1,
             cancel_check=cancel_check,
         )

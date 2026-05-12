@@ -1820,13 +1820,17 @@ def _build_sector_stats(
                 )
                 # Heartbeat once so the runner's stale detector doesn't
                 # trip if the pre-pass returns instantly (the caller
-                # expects to see at least one heartbeat-tick).
+                # expects to see at least one heartbeat-tick). Emit
+                # (n, n) to signal "100% done" — useful for the toast
+                # which renders this as a full bar before the scoring
+                # phase begins.
                 if on_heartbeat is not None:
-                    on_heartbeat()
+                    on_heartbeat(len(stocks), len(stocks))
                 return cached_bundle
 
     by_sector: dict[str, list[Fundamentals]] = {}
     seen_tickers: set[str] = set()
+    total_stocks = len(stocks)
     for i, stock in enumerate(stocks):
         # Cancel: polled EVERY stock (microseconds — Python set lookup).
         # Lower latency on Stop than the heartbeat-tied check we used
@@ -1837,9 +1841,12 @@ def _build_sector_stats(
         # Heartbeat: every `heartbeat_every` stocks (each call commits
         # the DB, more expensive). 20 means ~1 heartbeat per 5-10s of
         # pre-pass wall time on a warm cache — well within the 120s
-        # stale threshold.
+        # stale threshold. The callback receives (stocks_done,
+        # stocks_total) so the runner can translate this into the
+        # appropriate UI denominator (e.g. linear-interpolate to a
+        # "sectors processed" count for the toast).
         if on_heartbeat is not None and i % heartbeat_every == 0:
-            on_heartbeat()
+            on_heartbeat(i, total_stocks)
         if stock.ticker in seen_tickers:
             continue
         seen_tickers.add(stock.ticker)
@@ -1853,7 +1860,7 @@ def _build_sector_stats(
     # Final heartbeat at the end of the loop so the runner has fresh
     # data before sector_stats_service.compute() runs (~10ms but still).
     if on_heartbeat is not None:
-        on_heartbeat()
+        on_heartbeat(total_stocks, total_stocks)
     bundle = sector_stats_service.compute(by_sector)
     n_with_stats = sum(
         1 for s in bundle.by_sector.values()
@@ -1892,6 +1899,7 @@ def recompute_all(
     db: Session,
     *,
     on_progress=None,
+    on_phase_change=None,
     progress_every: int = 10,
     cancel_check=None,
 ) -> tuple[int, int]:
@@ -1935,21 +1943,42 @@ def recompute_all(
 
     Progress + cancel hooks (added so the user-triggered "Ricalcola score"
     flow can drive the same persistent-toast UX as a scan):
-      - `on_progress(done, total)` fires every `progress_every` stocks
-        and once at the very start to seed `progress_total`.
-      - `cancel_check()` is polled every `progress_every` stocks; returning
-        True raises `RecomputeCancelled` from inside the loop.
-    Both default to no-op when omitted — keeps the cron-call sites
+      - `on_progress(done, total)` fires per heartbeat with the appropriate
+        denominator for the active phase. During the sector_stats pre-pass
+        `total` is the unique-sectors count and `done` advances from 0→N
+        proportional to the per-stock aggregation progress (so the bar
+        actually moves during the pre-pass — pre-May-2026 it sat at 0/N
+        which was confusing). During the scoring loop `total` is the
+        stock count and `done` is stocks scored.
+      - `on_phase_change(phase)` fires once per phase transition with
+        either "sector_stats" or "scoring". Runners use this to drive
+        the toast's phase label + reset its per-phase ETA timer. Without
+        this callback the runner used to flip phase based on `done > 0`,
+        but that conflicts with the new "done moves during pre-pass too"
+        behaviour.
+      - `cancel_check()` is polled every stock during pre-pass + every
+        `progress_every` stocks during scoring; returning True raises
+        `RecomputeCancelled` from inside the loop.
+    All three default to no-op when omitted — keeps the cron call-sites
     untouched.
     """
     stocks = db.execute(select(Stock)).scalars().all()
     total = len(stocks)
 
-    # Seed total before the sector_stats pre-pass so the UI shows the
-    # correct denominator immediately. `done=0` until the score loop
-    # actually starts touching stocks.
+    # Count unique sectors so the pre-pass progress bar can render
+    # "K/N sectors" with N = real-world denominator the user expects
+    # (~12 GICS top-level sectors). Without this the bar would either
+    # sit at 0/total_stocks (pre-2026) or 0/0 (no useful denominator).
+    sector_count = len({s.sector for s in stocks if s.sector}) or 1
+
+    # Phase transition: pre-pass begins.
+    if on_phase_change is not None:
+        on_phase_change("sector_stats")
+    # Seed total = sector_count so the toast immediately renders the
+    # right denominator. `done=0` at start; the pre-pass heartbeat
+    # below interpolates the stock-level progress onto sector units.
     if on_progress is not None:
-        on_progress(0, total)
+        on_progress(0, sector_count)
 
     # Pre-pass: build sector_stats. Cost is usually negligible (L1/L2
     # cache for ~889 tickers, ~50ms) BUT can spike to 30s+ when delisted
@@ -1957,17 +1986,32 @@ def recompute_all(
     # through so the runner can keep its ScanRun row's heartbeat fresh
     # during the slow loop — without it the stale detector (>120s)
     # force-closes the row before the score loop ever starts.
-    def _prepass_heartbeat() -> None:
-        # The runner's on_progress treats done=0/total=N as "still in
-        # sector_stats phase, bump heartbeat only". See score_runner.
-        if on_progress is not None:
-            on_progress(0, total)
+    def _prepass_heartbeat(done_stocks: int, total_stocks: int) -> None:
+        if on_progress is None:
+            return
+        # Linear interpolate the per-stock progress onto the sector
+        # denominator. The actual sector_stats compute() runs all-at-
+        # once at the very end of the pre-pass, but the user reads
+        # "calcolo mediane settoriali" as "N sectors being processed"
+        # — the interpolation matches that mental model and lets the
+        # bar actually move during the ~5-30s pre-pass wall time.
+        denom = max(1, total_stocks)
+        sectors_done = min(sector_count, int(done_stocks / denom * sector_count))
+        on_progress(sectors_done, sector_count)
 
     sector_stats = _build_sector_stats(
         list(stocks),
         on_heartbeat=_prepass_heartbeat,
         cancel_check=cancel_check,
     )
+
+    # Phase transition: scoring begins. Total flips from sector_count
+    # to total_stocks (the bar visually resets from 100% pre-pass to
+    # 0% of scoring — same UX as a multi-step installer).
+    if on_phase_change is not None:
+        on_phase_change("scoring")
+    if on_progress is not None:
+        on_progress(0, total)
 
     seen_ids: set[int] = set()
     ok = 0
