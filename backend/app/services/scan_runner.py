@@ -120,10 +120,11 @@ def run_tracked_scan(
         )
         # scan_universe done — but the run is NOT complete yet. The downstream
         # tasks (market snapshot, score recompute, price alerts) can take
-        # seconds to minutes and the user wants the toast to stay visible
-        # showing what's happening. Hence: keep status="running", switch to
-        # the "evaluating:persisting" sub-phase, and commit so the UI picks
-        # it up on the next poll.
+        # seconds to minutes each and the user wants the toast to stay
+        # visible showing WHICH of them is currently running. Hence: keep
+        # status="running", and emit a distinct sub-phase per task as we
+        # progress through them. The umbrella `evaluating:persisting` is
+        # retained as a fallback label for older code paths.
         run.phase = "evaluating:persisting"
         run.current_target = None
         run.stocks_scanned = result.stocks_scanned
@@ -138,7 +139,12 @@ def run_tracked_scan(
         if cancel_check():
             raise ScanCancelled("Cancellato dall'utente")
 
-        # Recompute market dashboard snapshot — non-fatal, alert pipeline succeeded already.
+        # Sub-phase A: market snapshot refresh — breadth + leaders aggregate
+        # over the freshly-evaluated alerts. Non-fatal: the alert pipeline
+        # already committed its rows.
+        run.phase = "evaluating:market_snapshot"
+        run.current_target = "Aggiornamento breadth + leaders di mercato…"
+        db.commit()
         try:
             from app.services import market_stats_service
 
@@ -150,14 +156,28 @@ def run_tracked_scan(
         if cancel_check():
             raise ScanCancelled("Cancellato dall'utente")
 
-        # Recompute composite stock scores — non-fatal, scan succeeded already.
-        # Same try/except pattern as the market-snapshot recompute above.
-        # Threading the cancel_check through so a Stop click during the long
-        # score loop bails within one stock (instead of waiting up to ~90s
-        # for the loop to finish naturally).
+        # Sub-phase B: composite-score recompute. score_service runs a
+        # sector_stats pre-pass first (cheap on the cache, slow on cold) and
+        # then a per-stock recompute. We split the surface into two
+        # sub-phases so the user sees the distinction:
+        #   evaluating:sector_stats   — pre-pass (no per-stock progress)
+        #   evaluating:scoring_recompute — per-stock loop (progress_done
+        #                                 reflects the current stock)
+        # Non-fatal, scan succeeded already. cancel_check is threaded
+        # through so a Stop during the long recompute bails within one
+        # stock instead of waiting ~90s for natural completion.
+        run.phase = "evaluating:sector_stats"
+        run.current_target = "Pre-calcolo statistiche settoriali…"
+        db.commit()
         try:
             from app.services import score_service
             from app.services.score_service import RecomputeCancelled
+
+            # First heartbeat will arrive from the score_service pre-pass.
+            # We flip into the per-stock sub-phase the first time the
+            # heartbeat reports a non-zero `done` — same gating logic as
+            # scan_universe's loading_rules → scoring flip above.
+            flipped_to_scoring = False
 
             # Bump the parent ScanRun's heartbeat from inside the score loop so
             # the stale detector (120s without heartbeat → "Scan bloccato") doesn't
@@ -167,7 +187,12 @@ def run_tracked_scan(
             # progress_done/total here — they correctly reflect the scan_universe
             # result so the bar stays at 100% during persisting.
             def _persisting_heartbeat(_done: int, _total: int) -> None:
+                nonlocal flipped_to_scoring
                 run.last_progress_at = datetime.now(UTC)
+                if not flipped_to_scoring and _done > 0:
+                    run.phase = "evaluating:scoring_recompute"
+                    run.current_target = "Ricalcolo score composito per stock…"
+                    flipped_to_scoring = True
                 # No explicit commit — score_service commits per stock and our
                 # heartbeat update piggybacks on those commits.
 
@@ -195,7 +220,11 @@ def run_tracked_scan(
         if cancel_check():
             raise ScanCancelled("Cancellato dall'utente")
 
-        # Evaluate price-target alerts — non-fatal, scan succeeded already.
+        # Sub-phase C: price-target alerts evaluation. Non-fatal, scan
+        # succeeded already.
+        run.phase = "evaluating:price_alerts"
+        run.current_target = "Valutazione price-target alert…"
+        db.commit()
         try:
             from app.services import price_alert_service
 

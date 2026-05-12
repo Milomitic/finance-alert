@@ -39,21 +39,37 @@ def _run_scan_in_background(stock_ids: list[int] | None) -> None:
     Phase taxonomy (colon-delimited so existing frontend parsing extends
     naturally; the prefix before `:` keeps the broad-stroke meaning):
 
-      fetching:planning      — load stocks, compute per-stock latest-bar
-                                in one bulk query, decide chunk strategy
-      fetching:backfill      — chunk loop with period="10y" (slow path:
-                                stocks with no data or >30-day-stale data)
-      fetching:incremental   — chunk loop with period="1mo" (fast path:
-                                stocks with fresh data; usually 95%+ of the
-                                universe on consecutive scans)
-      evaluating:loading_rules — between fetch end and the first scan_universe
-                                iteration; covers _load_global_rules + setup
-      evaluating:scoring     — main per-stock rule-evaluation loop
+      fetching:loading_catalog    — SELECT the universe of stocks
+      fetching:checking_staleness — single bulk GROUP BY to compute, per
+                                     stock, the latest OHLCV bar date
+                                     (drives the backfill-vs-incremental
+                                     decision per chunk)
+      fetching:backfill           — chunk loop with period="10y" (slow path:
+                                     stocks with no data or >30-day-stale)
+      fetching:incremental        — chunk loop with period="1mo" (fast path:
+                                     stocks with fresh data; usually 95%+
+                                     of the universe on consecutive scans)
+      evaluating:loading_rules    — between fetch end and the first
+                                     scan_universe iteration; covers
+                                     _load_global_rules + setup
+      evaluating:scoring          — main per-stock rule-evaluation loop
+      evaluating:market_snapshot  — refresh of breadth + leaders snapshot
+      evaluating:scoring_recompute — sector_stats pre-pass + per-stock
+                                     composite recompute
+      evaluating:price_alerts     — price-target alert evaluation pass
 
-    The current_target column carries "what we're touching right now":
-    ticker of the first stock in the current chunk during fetch, ticker of
-    the current stock during evaluate. The UI surfaces it as a small chip
-    below the phase label.
+    The two prep sub-phases (`fetching:loading_catalog`,
+    `fetching:checking_staleness`) used to be lumped into one
+    `fetching:planning` umbrella, but it flashed by too fast for the user
+    to read; splitting + setting an explicit `current_target` lets the
+    toast announce what the system is doing before the chunk counter
+    starts moving. See May 2026 UX note in CLAUDE.md.
+
+    The `current_target` column carries "what we're touching right now":
+    a human-readable description during prep sub-phases, ticker of the
+    first stock in the current chunk during fetch, ticker of the current
+    stock during evaluate. The UI surfaces it as a small chip below the
+    phase label.
     """
     from datetime import date, timedelta
 
@@ -63,22 +79,53 @@ def _run_scan_in_background(stock_ids: list[int] | None) -> None:
 
     db = SessionLocal()
     try:
-        # Sub-phase 0 (sets up the row before the heavy work).
-        run = create_scan_run(db, trigger="manual", phase="fetching:planning")
+        # Sub-phase 0a: announce "loading universe" BEFORE the SELECT so the
+        # toast shows that text even on a slow first DB query.
+        run = create_scan_run(
+            db, trigger="manual", phase="fetching:loading_catalog"
+        )
+        run.current_target = "Caricamento elenco stock dal catalogo…"
+        db.commit()
+
         if stock_ids:
             stocks = list(db.execute(select(Stock).where(Stock.id.in_(stock_ids))).scalars().all())
         else:
             stocks = list(db.execute(select(Stock)).scalars().all())
         run.progress_total = len(stocks)
+        run.current_target = f"{len(stocks)} stock caricati"
         db.commit()
 
         if stocks:
             chunk_size = 100
             cutoff = date.today() - timedelta(days=30)
+
+            # Sub-phase 0b: bulk staleness check. Single GROUP BY query —
+            # cheap, but announced explicitly so the user knows what's
+            # happening before the chunk loop's first tick.
+            run.phase = "fetching:checking_staleness"
+            run.current_target = (
+                f"Verifica freschezza barre per {len(stocks)} stock…"
+            )
+            db.commit()
             # B2 — one bulk SELECT replaces N×chunk_size point lookups. For
             # 1132 stocks × 12 chunks that was ~13k indexed queries; now it's
             # a single GROUP BY scan + in-memory dict reads.
             latest_dates = latest_ohlcv_dates_bulk(db, [s.id for s in stocks])
+            # Count how many stocks fall on each side of the staleness cutoff
+            # — surface it in the toast so the user knows whether the chunk
+            # loop is mostly the cheap incremental path or the slow backfill
+            # path before the first chunk even commits.
+            need_backfill_n = sum(
+                1
+                for s in stocks
+                if latest_dates.get(s.id) is None or latest_dates[s.id] < cutoff
+            )
+            need_incremental_n = len(stocks) - need_backfill_n
+            run.current_target = (
+                f"{need_incremental_n} stock incrementali · "
+                f"{need_backfill_n} backfill 10y"
+            )
+            db.commit()
             bump_heartbeat(db, run)
 
             for i in range(0, len(stocks), chunk_size):
