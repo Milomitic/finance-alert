@@ -4,11 +4,20 @@ Powers the SectorDetailPage UI: when a user clicks a sector tile in
 the dashboard heatmap (or the sector badge on a stock card), they
 land on a page showing peer stocks + aggregate stats for that
 sector. Mirrors the role indices play via /stocks?index=CODE.
+
+The /overview endpoint (added May 2026 for the Sectors hub at /sectors)
+is the FAST sibling — SQL aggregates + a TTL-cached payload, with the
+fundamentals medians coming from the already-warm L1 cache only
+(never a fresh fetch). Cold tickers contribute nothing to the median
+rather than triggering a network call. The detail endpoint
+(`{name}/detail`) keeps the full slow path for the per-sector page
+where the user already paid the navigation cost.
 """
 from __future__ import annotations
 
 import math
 import statistics
+import time
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Path
@@ -261,62 +270,83 @@ def _market_cap_buckets(caps):
 
 
 def _sector_rollup(db: Session) -> list[SectorSummary]:
-    """Compute the per-sector SectorSummary list. Pulled out of the
-    /api/sectors handler so the new overview endpoint can reuse it
-    without a duplicated implementation."""
-    rows = db.execute(
-        select(Stock.sector, func.count(func.distinct(Stock.ticker)))
+    """Compute the per-sector SectorSummary list — fast path, ~50-200ms.
+
+    Two design rules keep this cheap enough to call on every hub-page
+    landing without choking under a cold (or open-circuit) yfinance:
+
+      1. Composite-score aggregates come from SQL: a single
+         GROUP BY sector over the stock_scores table gives the avg
+         composite in one query.
+      2. Fundamentals medians (P/E, P/B, ROE, dividend yield) read
+         ONLY the in-memory L1 cache (`_CACHE`). Cold tickers
+         contribute nothing — they don't trigger a network call.
+         L1 is hydrated from L2 at startup (~848 entries on this
+         catalog), so warm-tickers coverage is typically >75%, plenty
+         for a stable median.
+
+    The slow per-stock-detail loop that this function used to do
+    (`get_fundamentals(ticker)` per ticker) was responsible for the
+    hub-page hang during the May 2026 audit — 1097 stocks × ~120ms
+    per fundamentals call = 2+ minutes wall time, plus a long tail of
+    breaker-open empties when yfinance was throttled. The L1-only
+    pattern collapses that to a microsecond dict lookup per ticker.
+    """
+    # 1. SQL aggregate: per-sector (stock_count, avg_composite).
+    # The DISTINCT on ticker defeats the legacy duplicate-row issue
+    # documented in CLAUDE.md.
+    score_rows = db.execute(
+        select(
+            Stock.sector,
+            func.count(func.distinct(Stock.ticker)).label("stock_count"),
+            func.avg(StockScore.composite).label("avg_score"),
+        )
+        .outerjoin(StockScore, StockScore.stock_id == Stock.id)
         .where(visible_country_clause())
         .where(Stock.sector.is_not(None))
         .group_by(Stock.sector)
         .order_by(Stock.sector.asc())
     ).all()
 
+    # 2. Collect tickers per sector for the L1-only fundamentals pass.
+    # One SELECT for the entire universe, then bucket in Python — beats
+    # N+1 queries (one per sector) on this read path.
+    ticker_rows = db.execute(
+        select(Stock.sector, Stock.ticker)
+        .where(visible_country_clause())
+        .where(Stock.sector.is_not(None))
+    ).all()
+    tickers_by_sector: dict[str, set[str]] = {}
+    for sector, ticker in ticker_rows:
+        if sector:
+            tickers_by_sector.setdefault(sector, set()).add(ticker)
+
+    # 3. For each sector, pull warm fundamentals from L1 only. Cold or
+    # missing entries are skipped (no fetch). This is the speed win.
+    cache = stock_fundamentals_service._CACHE  # noqa: SLF001
     out: list[SectorSummary] = []
-    for sector_name, _count in rows:
+    for sector_name, stock_count, avg_score in score_rows:
         if not sector_name:
             continue
-        stocks = db.execute(
-            select(Stock)
-            .where(visible_country_clause())
-            .where(Stock.sector == sector_name)
-        ).scalars().all()
-        seen = set()
-        unique_stocks = []
-        for st in stocks:
-            if st.ticker in seen:
-                continue
-            seen.add(st.ticker)
-            unique_stocks.append(st)
-
-        composites: list[float] = []
         pes, pbs, roes, dys = [], [], [], []
-        for st in unique_stocks:
-            score = db.execute(
-                select(StockScore).where(StockScore.stock_id == st.id)
-            ).scalar_one_or_none()
-            if score is not None:
-                composites.append(score.composite)
-            try:
-                funds = stock_fundamentals_service.get_fundamentals(st.ticker)
-            except Exception:
-                funds = None
-            if funds is not None and funds.micro is not None:
-                m = funds.micro
-                if _is_finite(m.trailing_pe) and m.trailing_pe is not None and m.trailing_pe > 0:
-                    pes.append(float(m.trailing_pe))
-                if _is_finite(m.price_to_book) and m.price_to_book is not None and m.price_to_book > 0:
-                    pbs.append(float(m.price_to_book))
-                if _is_finite(m.return_on_equity):
-                    roes.append(float(m.return_on_equity) * 100.0)
-                normd = _normalise_div_yield(m.dividend_yield)
-                if normd is not None:
-                    dys.append(normd)
-
+        for ticker in tickers_by_sector.get(sector_name, ()):
+            funds = cache.get(ticker)
+            if funds is None or funds.micro is None:
+                continue
+            m = funds.micro
+            if _is_finite(m.trailing_pe) and m.trailing_pe is not None and m.trailing_pe > 0:
+                pes.append(float(m.trailing_pe))
+            if _is_finite(m.price_to_book) and m.price_to_book is not None and m.price_to_book > 0:
+                pbs.append(float(m.price_to_book))
+            if _is_finite(m.return_on_equity):
+                roes.append(float(m.return_on_equity) * 100.0)
+            normd = _normalise_div_yield(m.dividend_yield)
+            if normd is not None:
+                dys.append(normd)
         out.append(SectorSummary(
             name=sector_name,
-            stock_count=len(unique_stocks),
-            avg_score=_safe_mean(composites),
+            stock_count=int(stock_count or 0),
+            avg_score=float(avg_score) if avg_score is not None else None,
             median_pe=_safe_median(pes) if pes else None,
             median_pb=_safe_median(pbs) if pbs else None,
             median_roe=_safe_median(roes) if roes else None,
@@ -399,33 +429,59 @@ def list_sectors(db: Session = Depends(get_db), _user: User = Depends(get_curren
     return _sector_rollup(db)
 
 
+# Module-level TTL cache for the overview payload. The data is cheap to
+# compute now (SQL-only + L1-only fundamentals) — typical wall time is
+# ~50-150ms on a warm process — but the hub page is the first stop after
+# login for many sessions, so memoizing it for 60s collapses the dozens
+# of duplicate hits during a single browsing burst (multiple tabs, F5,
+# navigating in-and-out) to a single SQL pass.
+_OVERVIEW_CACHE: dict[str, tuple[float, SectorsOverviewOut]] = {}
+_OVERVIEW_TTL_SECONDS = 60.0
+
+
 @router.get("/overview", response_model=SectorsOverviewOut)
 def sectors_overview(db: Session = Depends(get_db), _user: User = Depends(get_current_user)):
     """One-shot payload for the /sectors hub page.
 
     Combines:
       - Top-level counts (total stocks / sectors / industries).
-      - Per-sector rollups (reuses `_sector_rollup` — the same data
-        `/api/sectors` returns, kept consistent on purpose).
-      - Per-industry table (cheap SQL aggregate via `_industry_rollup`).
+      - Per-sector rollups (reuses `_sector_rollup` — SQL aggregates +
+        L1-only fundamentals, no network).
+      - Per-industry table (single SQL GROUP BY via `_industry_rollup`).
 
-    The expensive bit is the sector rollup's yfinance loop; that lives
-    behind the two-tier cache (`fetch_cache` table) so warm responses
-    are <100ms.
+    Memoized at the module level with a 60s TTL so the hub-page burst
+    pattern (multiple tabs, F5, in-and-out navigation) doesn't replay
+    the SQL aggregates on every hit. The TTL is intentionally short
+    enough that a fresh `recompute_all` shows up within a minute.
     """
+    now = time.time()
+    cached = _OVERVIEW_CACHE.get("default")
+    if cached is not None:
+        ts, payload = cached
+        if now - ts < _OVERVIEW_TTL_SECONDS:
+            return payload
+
     sectors = _sector_rollup(db)
     industries = _industry_rollup(db)
     total_stocks = db.execute(
         select(func.count(func.distinct(Stock.ticker)))
         .where(visible_country_clause())
     ).scalar() or 0
-    return SectorsOverviewOut(
+    payload = SectorsOverviewOut(
         total_stocks=int(total_stocks),
         total_sectors=len(sectors),
         total_industries=len(industries),
         sectors=sectors,
         industries=industries,
     )
+    _OVERVIEW_CACHE["default"] = (now, payload)
+    return payload
+
+
+def clear_overview_cache() -> None:
+    """For tests + the post-recompute hook. Drops the memoized payload so
+    the next hit recomputes from scratch."""
+    _OVERVIEW_CACHE.clear()
 
 
 @router.get("/{name}/detail", response_model=SectorDetailOut)
