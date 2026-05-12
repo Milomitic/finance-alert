@@ -19,31 +19,46 @@ interface Props {
  * the HeroStrip's two-column pattern (`[3fr_2fr]`): breadth table left,
  * this live-volume card right.
  *
- * Surfaces the stocks the market is paying attention to RIGHT NOW —
- * ranked by `vol_ratio` (today's volume vs 20-day average), polled with
- * live prices so the row ticks as the user watches.
+ * Ranks the most actively-traded stocks of the day by ABSOLUTE share
+ * volume (e.g. "112M shares"), with live prices polled at 15s cadence.
+ * Each row carries five things in tight columns:
  *
- *   ┌──────────────────────────────────────────────────────────────┐
- *   │  ▼ Volumi alti oggi                                  LIVE   │
- *   ├──────────────────────────────────────────────────────────────┤
- *   │  ◇ NVDA  Nvidia              3.2×    $142.30   +2.18%       │
- *   │  ◇ TSLA  Tesla               2.8×    $245.10   −1.04%       │
- *   │  ◇ ...                                                       │
- *   └──────────────────────────────────────────────────────────────┘
+ *   ┌──────────────────────────────────────────────────────────────────┐
+ *   │  ◇ NVDA  Nvidia        +2.18%   $142.30   112M  3.2×    78  ✓   │
+ *   │  ◇ TSLA  Tesla         −1.04%   $245.10    87M  2.8×    62      │
+ *   │  ◇ AAPL  Apple         +0.30%   $234.50    76M  1.4×    71      │
+ *   │   ticker+name + %chg   price    vol    ratio  score          │
+ *   └──────────────────────────────────────────────────────────────────┘
  *
- * Data: `movers.volume_spikes` from /api/dashboard/market-summary —
- *   already sorted by vol_ratio desc, scan-time snapshot. We then
- *   overlay live prices via `useLiveQuotes` (batch call, 15s poll).
- *   On poll-miss / API error / breaker-open, falls back to the
- *   snapshot's `last_close` + `change_pct` so the card stays useful.
+ * Data:
+ *   - `movers.top_volume`: from /api/dashboard/market-summary, sorted by
+ *     vol_today desc, scan-time snapshot. Carries vol_today,
+ *     vol_ratio, and the latest persisted composite score.
+ *   - Live overlay: `useLiveQuotes` batch poll refreshes price +
+ *     change_pct every 15s. Falls back to the snapshot's last_close +
+ *     change_pct when live is unavailable.
  *
- * Sizing: matches BreadthMatrixTable's row height when paired in the
- * 2-col layout. List scrolls internally if there are more than 10
- * entries (the backend caps at ~25 already).
+ * Layout rationale (per user request):
+ *   - % change RIGHT NEXT TO the ticker/name — it's the headline
+ *     "how is this thing moving" signal.
+ *   - Score on the RIGHT-MOST column — the "is this hot or junk?"
+ *     verdict. Color-coded by tier.
+ *   - Multiplier (vol_ratio) kept but demoted to a small chip between
+ *     volume and score — secondary context ("how unusual is this
+ *     volume vs typical?").
+ *   - Absolute volume is the actual ranking criterion — sits where
+ *     the eye scans naturally between price and score.
  */
 export function LiveVolumeMoversCard({ movers }: Props) {
   const ROWS_VISIBLE = 10;
-  const rows = (movers.volume_spikes ?? []).slice(0, ROWS_VISIBLE);
+  // Use the new `top_volume` list (ranked by absolute share-volume).
+  // Falls back to the legacy `volume_spikes` (ranked by ratio) when
+  // the snapshot pre-dates the field, so older snapshots still
+  // render something useful instead of an empty card.
+  const sourceRows = (movers.top_volume?.length ?? 0) > 0
+    ? movers.top_volume!
+    : (movers.volume_spikes ?? []);
+  const rows = sourceRows.slice(0, ROWS_VISIBLE);
   const tickers = useMemo(() => rows.map((r) => r.ticker), [rows]);
   const liveQ = useLiveQuotes(tickers, tickers.length > 0);
   const liveByTicker = useMemo(() => {
@@ -58,8 +73,6 @@ export function LiveVolumeMoversCard({ movers }: Props) {
     return m;
   }, [liveQ.data]);
 
-  // Any market state open across the visible set tells us we're in a
-  // "live trading" moment — drives the LIVE pulse in the header.
   const anyMarketOpen = useMemo(
     () => Array.from(liveByTicker.values()).some((v) => v.is_open),
     [liveByTicker],
@@ -71,7 +84,7 @@ export function LiveVolumeMoversCard({ movers }: Props) {
         <div className="px-3 py-2 border-b bg-muted/30 shrink-0">
           <SectionTitle
             icon={Activity}
-            label="Volumi alti oggi"
+            label="Volumi maggiori oggi"
             right={
               anyMarketOpen ? (
                 <span
@@ -99,72 +112,101 @@ export function LiveVolumeMoversCard({ movers }: Props) {
 
         {rows.length === 0 ? (
           <div className="flex-1 flex items-center justify-center p-4 text-xs text-muted-foreground">
-            Nessuna stock con volume anomalo oggi.
+            Nessun dato di volume per oggi.
           </div>
         ) : (
           <ul className="flex-1 overflow-y-auto divide-y divide-border/40">
             {rows.map((r) => {
               const live = liveByTicker.get(r.ticker);
-              // Live price takes priority; fall back to scan-snapshot
-              // close. The `change_pct` is the daily figure either way.
               const displayPrice = live?.price ?? r.last_close ?? null;
               const displayChange = live?.change_pct ?? r.change_pct ?? null;
               const livePulse = !!live?.is_open && live?.price != null;
+              // Both `top_volume` and `volume_spikes` rows carry these
+              // (when using the new list). `volume_spikes` fallback has
+              // vol_ratio but no vol_today — handle both shapes.
+              const volToday =
+                "vol_today" in r ? (r as { vol_today?: number }).vol_today ?? null : null;
+              const volRatio =
+                "vol_ratio" in r ? (r as { vol_ratio?: number | null }).vol_ratio ?? null : null;
+              const composite =
+                "composite" in r
+                  ? (r as { composite?: number | null }).composite ?? null
+                  : null;
               return (
                 <li key={r.ticker}>
                   <Link
                     to={`/stocks/${encodeURIComponent(r.ticker)}`}
-                    className="flex items-center gap-2 px-3 py-1.5 hover:bg-accent/30 transition-colors min-w-0"
+                    className="grid grid-cols-[minmax(0,1fr)_auto_auto_auto_auto_auto] items-center gap-2 px-3 py-1.5 hover:bg-accent/30 transition-colors"
                   >
-                    <StockIdentity ticker={r.ticker} name={r.name} />
-                    {/* Volume ratio chip — main feature of this card.
-                        Tone: orange when ≥3× (intense), neutral chip
-                        for 2-3× (the threshold for inclusion). */}
-                    <span
-                      className={cn(
-                        "shrink-0 text-[11px] font-mono font-semibold tabular-nums rounded px-1.5 py-0.5",
-                        r.vol_ratio >= 3
-                          ? "bg-orange-100 dark:bg-orange-950/40 text-orange-800 dark:text-orange-200"
-                          : "bg-muted/70 text-foreground/80",
-                      )}
-                      title={`Volume oggi ${r.vol_ratio.toFixed(1)}× la media a 20 giorni`}
-                    >
-                      {r.vol_ratio.toFixed(1)}×
-                    </span>
-                    {/* Live price + Δ% — tight column on the right.
-                        The dotted underline on the price signals "live"
-                        when polling is active. */}
-                    <div className="shrink-0 text-right tabular-nums min-w-[110px]">
-                      <div
+                    {/* Col 1: identity + inline %change ("how is it moving") */}
+                    <div className="flex items-center gap-2 min-w-0">
+                      <StockIdentity ticker={r.ticker} name={r.name} />
+                      <span
                         className={cn(
-                          "text-sm font-semibold leading-tight",
-                          livePulse && "underline decoration-dotted decoration-emerald-500/60 underline-offset-2",
-                        )}
-                        title={
-                          livePulse
-                            ? "Prezzo live (polling 15s)"
-                            : "Ultima chiusura disponibile"
-                        }
-                      >
-                        {displayPrice != null
-                          ? `$${displayPrice.toFixed(2)}`
-                          : "—"}
-                      </div>
-                      <div
-                        className={cn(
-                          "text-[11px] font-semibold leading-tight",
+                          "shrink-0 text-[11px] font-semibold tabular-nums",
                           displayChange != null && displayChange >= 0
                             ? "text-emerald-600 dark:text-emerald-400"
                             : displayChange != null
                               ? "text-rose-600 dark:text-rose-400"
                               : "text-muted-foreground",
                         )}
+                        title="Variazione % giornaliera (live)"
                       >
                         {displayChange != null
                           ? `${displayChange >= 0 ? "+" : ""}${displayChange.toFixed(2)}%`
                           : "—"}
-                      </div>
+                      </span>
                     </div>
+
+                    {/* Col 2: live price */}
+                    <div
+                      className={cn(
+                        "shrink-0 text-sm font-semibold tabular-nums",
+                        livePulse && "underline decoration-dotted decoration-emerald-500/60 underline-offset-2",
+                      )}
+                      title={
+                        livePulse ? "Prezzo live (polling 15s)" : "Ultima chiusura disponibile"
+                      }
+                    >
+                      {displayPrice != null ? `$${displayPrice.toFixed(2)}` : "—"}
+                    </div>
+
+                    {/* Col 3: absolute volume — the actual ranking
+                        criterion. Formatted as compact 12.4M / 1.2B. */}
+                    <div
+                      className="shrink-0 text-[11px] tabular-nums text-muted-foreground min-w-[44px] text-right"
+                      title={
+                        volToday != null
+                          ? `${volToday.toLocaleString("it-IT")} share scambiate oggi`
+                          : undefined
+                      }
+                    >
+                      {fmtVolume(volToday)}
+                    </div>
+
+                    {/* Col 4: vol multiplier (vs 20-day avg). Orange
+                        tint at ≥3× signals "really unusual". */}
+                    <div
+                      className={cn(
+                        "shrink-0 text-[10px] font-mono font-semibold tabular-nums rounded px-1.5 py-0.5 min-w-[38px] text-center",
+                        volRatio != null && volRatio >= 3
+                          ? "bg-orange-100 dark:bg-orange-950/40 text-orange-800 dark:text-orange-200"
+                          : volRatio != null && volRatio >= 2
+                            ? "bg-muted/70 text-foreground/80"
+                            : "text-muted-foreground/70",
+                      )}
+                      title={
+                        volRatio != null
+                          ? `Volume oggi ${volRatio.toFixed(2)}× la media a 20 giorni`
+                          : "Multiplo vs media a 20 giorni non disponibile"
+                      }
+                    >
+                      {volRatio != null ? `${volRatio.toFixed(1)}×` : "—"}
+                    </div>
+
+                    {/* Col 5: composite score (latest persisted). Color
+                        tier matches the rest of the dashboard. */}
+                    <ScoreChip score={composite} />
                   </Link>
                 </li>
               );
@@ -173,5 +215,52 @@ export function LiveVolumeMoversCard({ movers }: Props) {
         )}
       </CardContent>
     </Card>
+  );
+}
+
+/** Render absolute share volume as compact "12.4M" / "1.2B" — keeps
+ *  the column narrow while still readable. Below 1k shows the raw
+ *  number; null is rendered as em-dash. */
+function fmtVolume(v: number | null): string {
+  if (v == null || !Number.isFinite(v)) return "—";
+  if (v >= 1e9) return `${(v / 1e9).toFixed(1)}B`;
+  if (v >= 1e6) return `${(v / 1e6).toFixed(1)}M`;
+  if (v >= 1e3) return `${(v / 1e3).toFixed(0)}k`;
+  return v.toString();
+}
+
+/** Composite score chip — color-coded by tier so the card shows
+ *  "high-volume + high-score" at a glance.
+ *  Tailwind purger needs literal class strings; keep this as a switch,
+ *  not a template. */
+function ScoreChip({ score }: { score: number | null | undefined }) {
+  if (score == null || !Number.isFinite(score)) {
+    return (
+      <span
+        className="shrink-0 text-[10px] font-mono tabular-nums rounded px-1.5 py-0.5 min-w-[28px] text-center text-muted-foreground/60"
+        title="Score non ancora calcolato"
+      >
+        —
+      </span>
+    );
+  }
+  const cls =
+    score >= 70
+      ? "bg-emerald-100 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-200"
+      : score >= 50
+        ? "bg-sky-100 dark:bg-sky-950/40 text-sky-800 dark:text-sky-200"
+        : score >= 30
+          ? "bg-amber-100 dark:bg-amber-950/40 text-amber-800 dark:text-amber-200"
+          : "bg-rose-100 dark:bg-rose-950/40 text-rose-800 dark:text-rose-200";
+  return (
+    <span
+      className={cn(
+        "shrink-0 text-[11px] font-semibold tabular-nums rounded px-1.5 py-0.5 min-w-[28px] text-center",
+        cls,
+      )}
+      title={`Score composito ${score.toFixed(0)}/100`}
+    >
+      {score.toFixed(0)}
+    </span>
   );
 }

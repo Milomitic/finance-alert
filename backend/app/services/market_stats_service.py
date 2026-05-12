@@ -322,17 +322,37 @@ def _dedupe_by_ticker(items: list[StockMetrics]) -> list[StockMetrics]:
     return out
 
 
-def build_movers(metrics: list[StockMetrics], *, top_n: int = 10) -> dict:
-    """Build the 'movers' block: gainers, losers, volume_spikes, new_52w_high/low.
+def build_movers(
+    metrics: list[StockMetrics],
+    *,
+    top_n: int = 10,
+    composite_by_stock_id: dict[int, float] | None = None,
+) -> dict:
+    """Build the 'movers' block: gainers, losers, volume_spikes,
+    top_volume, new_52w_high/low.
 
     Deduplicates by ticker (first occurrence wins) to avoid the catalog
     duplicates from showing up twice in the same list.
+
+    `composite_by_stock_id` (optional): when provided, the top_volume
+    rows get a `composite` field with the latest persisted score. Lets
+    the dashboard's "Volumi maggiori" card surface the score next to
+    the live price without a second API call. Passed by
+    `recompute_snapshot`; tests + callers that don't care can omit it.
     """
+    scores = composite_by_stock_id or {}
     with_change = [m for m in metrics if m.change_pct is not None]
     gainers = _dedupe_by_ticker(sorted(with_change, key=lambda m: m.change_pct, reverse=True))[:top_n]
     losers = _dedupe_by_ticker(sorted(with_change, key=lambda m: m.change_pct))[:top_n]
     with_vol = [m for m in metrics if m.vol_ratio is not None]
     vol_spikes = _dedupe_by_ticker(sorted(with_vol, key=lambda m: m.vol_ratio, reverse=True))[:top_n]
+    # Top by ABSOLUTE share-volume today (the user-facing card on the
+    # dashboard shows raw share count — "12.4M shares traded" — rather
+    # than the multiplier vs 20-day avg that volume_spikes uses).
+    with_abs_vol = [m for m in metrics if m.vol_today is not None]
+    top_volume = _dedupe_by_ticker(
+        sorted(with_abs_vol, key=lambda m: m.vol_today, reverse=True)
+    )[:top_n]
     new_highs = _dedupe_by_ticker([m for m in metrics if m.new_52w_high])
     new_lows = _dedupe_by_ticker([m for m in metrics if m.new_52w_low])
 
@@ -367,6 +387,15 @@ def build_movers(metrics: list[StockMetrics], *, top_n: int = 10) -> dict:
         "losers_20d": [_row(m) for m in losers_20d],
         "volume_spikes": [
             {**_row(m), "vol_ratio": round(m.vol_ratio, 2)} for m in vol_spikes
+        ],
+        "top_volume": [
+            {
+                **_row(m),
+                "vol_today": m.vol_today,
+                "vol_ratio": round(m.vol_ratio, 2) if m.vol_ratio is not None else None,
+                "composite": scores.get(m.stock_id),
+            }
+            for m in top_volume
         ],
         "new_52w_high": [_row(m) for m in new_highs],
         "new_52w_low": [_row(m) for m in new_lows],
@@ -508,6 +537,19 @@ def recompute_snapshot(db: Session, *, scan_run_id: int | None = None) -> Market
     metrics, indices = _load_metrics(db)
     visible_metrics = [m for m in metrics if is_visible_country(m.country)]
 
+    # Pre-load composite scores in one SELECT so build_movers can stitch
+    # the score next to the volume figures on the dashboard's
+    # "Volumi maggiori" card. Cheap — single table scan, ~1-3ms on a
+    # 1100-stock catalog.
+    from app.models import StockScore as _StockScore
+
+    score_rows = db.execute(
+        select(_StockScore.stock_id, _StockScore.composite)
+    ).all()
+    composite_by_stock_id: dict[int, float] = {
+        sid: float(c) for sid, c in score_rows if c is not None
+    }
+
     payload = {
         "computed_at": datetime.now(UTC).isoformat(),
         "scan_run_id": scan_run_id,
@@ -515,7 +557,9 @@ def recompute_snapshot(db: Session, *, scan_run_id: int | None = None) -> Market
         "by_index": aggregate_by_index(metrics, indices),
         "rsi_distribution": build_rsi_distribution(metrics, indices),
         "sectors": aggregate_by_sector(visible_metrics),
-        "movers": build_movers(visible_metrics),
+        "movers": build_movers(
+            visible_metrics, composite_by_stock_id=composite_by_stock_id
+        ),
         "treemap": build_treemap(visible_metrics),
     }
 

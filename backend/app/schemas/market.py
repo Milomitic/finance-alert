@@ -66,6 +66,17 @@ class VolumeSpikeOut(MoverOut):
     vol_ratio: float
 
 
+class TopVolumeOut(MoverOut):
+    """Stocks ranked by ABSOLUTE share-volume today (vs `VolumeSpikeOut`
+    which ranks by the vol_today/vol_avg_20 multiplier). Powers the
+    "Volumi maggiori" dashboard card — the row also carries the
+    multiplier (for secondary context) and the latest composite score
+    (so the card shows "what's hot + how it's scoring", live)."""
+    vol_today: int
+    vol_ratio: float | None = None
+    composite: float | None = None
+
+
 class MoversBlockOut(BaseModel):
     gainers: list[MoverOut]
     losers: list[MoverOut]
@@ -74,6 +85,10 @@ class MoversBlockOut(BaseModel):
     gainers_20d: list[MoverOut] = []
     losers_20d: list[MoverOut] = []
     volume_spikes: list[VolumeSpikeOut]
+    # Optional for back-compat with snapshots persisted before the field
+    # existed; the lazy migration in `api/market.py` keeps older rows
+    # readable, and the next scan repopulates this list.
+    top_volume: list[TopVolumeOut] = []
     new_52w_high: list[MoverOut]
     new_52w_low: list[MoverOut]
 

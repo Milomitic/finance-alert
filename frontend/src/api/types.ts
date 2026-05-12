@@ -342,6 +342,18 @@ export interface VolumeSpike extends Mover {
   vol_ratio: number;
 }
 
+export interface TopVolume extends Mover {
+  /** Absolute share count traded today (raw count, not millions). */
+  vol_today: number;
+  /** vol_today / vol_avg_20 — kept alongside the absolute count so the
+   *  card can show both "X shares" + "Y× normal" context. */
+  vol_ratio?: number | null;
+  /** Latest persisted composite score (0-100) — None when not yet
+   *  recomputed for the stock. Surfaced as the right-most chip on the
+   *  dashboard's "Volumi maggiori" row. */
+  composite?: number | null;
+}
+
 export interface MoversBlock {
   gainers: Mover[];
   losers: Mover[];
@@ -350,6 +362,9 @@ export interface MoversBlock {
   gainers_20d?: Mover[];
   losers_20d?: Mover[];
   volume_spikes: VolumeSpike[];
+  /** Optional — older market_snapshot rows didn't include this list.
+   *  Falls back to empty when missing. */
+  top_volume?: TopVolume[];
   new_52w_high: Mover[];
   new_52w_low: Mover[];
 }
