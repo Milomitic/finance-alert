@@ -365,7 +365,16 @@ export function RunProgressToast({ status, labels, onStop, isStopping }: Props) 
 
         {hasCounters && (
           <div
-            className="grid grid-cols-3 gap-1.5 px-3 pb-3 text-[11px]"
+            // Auto-sized grid: one column per counter cell. Inline style
+            // bypasses the Tailwind purger (CLAUDE.md note about
+            // string-literal class maps); without it a 2-counter
+            // consumer would leave the 3rd grid slot empty after
+            // ScoreRecomputeToast dropped its "Saltati" cell in
+            // May 2026.
+            style={{
+              gridTemplateColumns: `repeat(${counterValues.length}, minmax(0, 1fr))`,
+            }}
+            className="grid gap-1.5 px-3 pb-3 text-[11px]"
             onClick={(e) => e.stopPropagation()}
           >
             {counterValues.map((c, idx) => (

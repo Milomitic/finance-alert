@@ -44,12 +44,12 @@ const RECOMPUTE_LABELS: RunToastLabels = {
       highlightWhenPositive: true,
     },
     { label: "Falliti", value: (s) => s.stocks_skipped },
-    // Third cell repurposes the `alerts_fired` column for the count of
-    // stocks SKIPPED by Strategy #2 (incremental-skip optimisation). The
-    // backend's score_runner stores: stocks_scanned=ok, stocks_skipped=
-    // failed, alerts_fired=skipped. See score_runner.py for the mapping
-    // rationale (avoiding a schema migration for one new counter).
-    { label: "Saltati", value: (s) => s.alerts_fired },
+    // Third cell intentionally absent: it used to surface the
+    // incremental-skip count (mapped via alerts_fired), but the skip
+    // optimisation was retired in May 2026 and every recompute now
+    // touches every stock. The RunProgressToast grid is 3-cols so the
+    // remaining two cells get more breathing room — better than a
+    // dead "Saltati: 0" cell.
   ],
   baselineRatePerSec: (phase) =>
     phase === "sector_stats"

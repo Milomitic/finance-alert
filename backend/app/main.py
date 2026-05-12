@@ -224,12 +224,10 @@ def warmup_fundamentals(
         scores_recomputed = 0
         try:
             from app.services import score_service
-            scores_recomputed, scores_failed, scores_skipped = (
-                score_service.recompute_all(db)
-            )
+            scores_recomputed, scores_failed = score_service.recompute_all(db)
             logger.info(
                 f"[warmup] recomputed {scores_recomputed} stock scores "
-                f"({scores_failed} failed, {scores_skipped} skipped)"
+                f"({scores_failed} failed)"
             )
         except Exception as exc:  # noqa: BLE001
             logger.warning(f"[warmup] score recompute failed (non-fatal): {exc}")

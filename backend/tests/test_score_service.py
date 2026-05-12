@@ -611,11 +611,9 @@ def test_recompute_all_populates_table(db: Session, monkeypatch):
         fund_map[s.ticker] = _build_fundamentals_for(s.ticker, good=i < 3)
     db.commit()
 
-    ok, failed, skipped = score_service.recompute_all(db)
+    ok, failed = score_service.recompute_all(db)
     assert ok == 5
     assert failed == 0
-    # No persisted score exists yet → nothing to skip on first run.
-    assert skipped == 0
     rows = db.query(StockScore).all()
     assert len(rows) == 5
     by_ticker = {db.get(Stock, r.stock_id).ticker: r for r in rows}
@@ -714,7 +712,7 @@ def test_recompute_all_passes_heartbeat_through_sector_stats_prepass(
     def fake_on_progress(done: int, total: int) -> None:
         heartbeats.append((done, total))
 
-    ok, failed, _skipped = score_service.recompute_all(db, on_progress=fake_on_progress)
+    ok, failed = score_service.recompute_all(db, on_progress=fake_on_progress)
     assert ok == 25
     assert failed == 0
 
@@ -854,110 +852,18 @@ def test_cancel_check_polled_every_stock_in_scoring_loop(db: Session, monkeypatc
 
 
 # ---------------------------------------------------------------------------
-# Strategy #2: incremental-skip optimisation (recompute_all skips stocks
-# whose persisted score is still current vs the underlying inputs).
+# Consecutive recompute_all calls produce stable results.
+# (The incremental-skip optimisation that USED to live here was removed in
+# May 2026 — see score_service.recompute_all docstring. Every call now
+# re-scores every stock; we keep an idempotency guard so a back-to-back
+# call doesn't, say, double-write StockScore rows.)
 # ---------------------------------------------------------------------------
 
-def test_recompute_all_skips_stocks_with_current_score(db: Session, monkeypatch):
-    """Second consecutive recompute MUST skip stocks whose inputs haven't
-    changed. The whole point of Strategy #2: 5-15x speedup on idempotent
-    runs."""
-    from app.models import FetchCache
-    from datetime import UTC, datetime as _dt
-    import json as _json
-
-    monkeypatch.setattr(
-        stock_fundamentals_service, "get_fundamentals",
-        lambda ticker, force_refresh=False: Fundamentals(
-            ticker=ticker,
-            micro=MicroData(trailing_pe=20.0),
-        ),
-    )
-    monkeypatch.setattr(stock_news_service, "get_news", lambda ticker, limit=5: [])
-
-    s = Stock(
-        ticker="SKIPME", exchange="NMS", name="Skip me",
-        sector="Technology", market_cap=int(1e10),
-    )
-    db.add(s)
-    db.commit()
-    _seed_ohlcv(db, s.id, n_bars=10)
-    # Pre-populate L2 row so the skip-decision has a fetched_at to compare.
-    # Use a timestamp BEFORE the first recompute's compute_score so the
-    # second run's skip-decision sees "no fresh fundamentals since last
-    # score" → can skip.
-    db.add(FetchCache(
-        ticker="SKIPME", kind="fundamentals",
-        payload=_json.dumps({"_schema_version": 6, "micro": {"trailing_pe": 20.0}, "profile": {"long_business_summary": "stub"}}),
-        fetched_at=_dt(2026, 1, 1, tzinfo=UTC),
-    ))
-    db.commit()
-
-    # First recompute: SCORED.
-    ok1, failed1, skipped1 = score_service.recompute_all(db)
-    assert ok1 == 1
-    assert skipped1 == 0
-
-    # Second recompute back-to-back: inputs unchanged → SKIP.
-    ok2, failed2, skipped2 = score_service.recompute_all(db)
-    assert ok2 == 0
-    assert skipped2 == 1
-    assert failed2 == 0
-
-
-def test_recompute_all_skips_only_for_unchanged_inputs(db: Session, monkeypatch):
-    """If a fresh OHLCV bar lands OR the L2 fundamentals timestamp is more
-    recent than the score, the stock MUST be re-scored (not skipped)."""
-    from app.models import FetchCache, OhlcvDaily
-    from datetime import UTC, date as _date, datetime as _dt
-    import json as _json
-
-    monkeypatch.setattr(
-        stock_fundamentals_service, "get_fundamentals",
-        lambda ticker, force_refresh=False: Fundamentals(
-            ticker=ticker,
-            micro=MicroData(trailing_pe=20.0),
-        ),
-    )
-    monkeypatch.setattr(stock_news_service, "get_news", lambda ticker, limit=5: [])
-
-    s = Stock(
-        ticker="FRESH", exchange="NMS", name="Fresh inputs",
-        sector="Technology", market_cap=int(1e10),
-    )
-    db.add(s)
-    db.commit()
-    _seed_ohlcv(db, s.id, n_bars=10)
-    db.add(FetchCache(
-        ticker="FRESH", kind="fundamentals",
-        payload=_json.dumps({"_schema_version": 6, "micro": {"trailing_pe": 20.0}, "profile": {"long_business_summary": "stub"}}),
-        fetched_at=_dt(2026, 1, 1, tzinfo=UTC),
-    ))
-    db.commit()
-
-    # First recompute: SCORED.
-    ok1, _, _ = score_service.recompute_all(db)
-    assert ok1 == 1
-
-    # Insert an OHLCV bar dated TODAY (definitely after the score's
-    # computed_at). Skip-decision MUST trigger a re-score.
-    db.add(OhlcvDaily(
-        stock_id=s.id, date=_date.today(),
-        open=100, high=105, low=99, close=104, volume=10_000_000,
-    ))
-    db.commit()
-
-    ok2, failed2, skipped2 = score_service.recompute_all(db)
-    # The new OHLCV bar makes the persisted score stale → re-score.
-    assert ok2 == 1
-    assert skipped2 == 0
-    assert failed2 == 0
-
-
-def test_recompute_all_never_skips_when_no_score_exists(db: Session, monkeypatch):
-    """First-ever recompute on a fresh DB MUST compute every stock, not
-    skip them. Guard against an empty-existing_scores lookup defaulting
-    to 'skip'."""
+def test_recompute_all_idempotent_on_back_to_back_calls(db: Session, monkeypatch):
+    """Two consecutive recompute_all calls produce the same number of rows
+    and the same composites (modulo persistence timestamp). Guards against
+    a future refactor accidentally duplicating StockScore rows or
+    short-circuiting on the second call."""
     monkeypatch.setattr(
         stock_fundamentals_service, "get_fundamentals",
         lambda ticker, force_refresh=False: Fundamentals(
@@ -977,10 +883,24 @@ def test_recompute_all_never_skips_when_no_score_exists(db: Session, monkeypatch
         _seed_ohlcv(db, stock.id, n_bars=10)
     db.commit()
 
-    ok, failed, skipped = score_service.recompute_all(db)
-    # All three MUST be scored, NONE skipped (no existing score row).
-    assert ok == 3
-    assert skipped == 0
+    ok1, failed1 = score_service.recompute_all(db)
+    assert ok1 == 3
+    assert failed1 == 0
+    composites_after_first = {
+        r.stock_id: r.composite for r in db.query(StockScore).all()
+    }
+
+    ok2, failed2 = score_service.recompute_all(db)
+    # Same number of stocks re-scored on the second run — no skip path.
+    assert ok2 == 3
+    assert failed2 == 0
+    # Still exactly N rows (UPSERT via db.merge — not append).
+    assert db.query(StockScore).count() == 3
+    # Composites stable across the back-to-back call.
+    composites_after_second = {
+        r.stock_id: r.composite for r in db.query(StockScore).all()
+    }
+    assert composites_after_first == composites_after_second
 
 
 # ---------------------------------------------------------------------------

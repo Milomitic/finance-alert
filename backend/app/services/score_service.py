@@ -1888,135 +1888,37 @@ class RecomputeCancelled(Exception):
     pattern as ScanCancelled in scan_service."""
 
 
-@dataclass
-class _SkipDecisionInputs:
-    """Pre-loaded data needed for the O(1) per-stock skip decision in
-    recompute_all. We gather all three time signals in 3 single-pass DB
-    queries BEFORE the scoring loop — without this, the skip check would
-    add 3 round-trips per stock (~3000 extra round-trips on a 1097-stock
-    run), wiping out the speedup we're trying to deliver."""
-
-    # stock_id -> StockScore.computed_at (UTC-aware after normalisation).
-    # None means "no score row yet" — caller MUST recompute.
-    existing_scores: dict[int, datetime]
-    # ticker -> FetchCache.fetched_at for kind='fundamentals' (UTC-aware).
-    # None means "no L2 cache yet for this ticker" — conservative: recompute
-    # so a fresh fetch can populate.
-    fundamentals_fetched_at: dict[str, datetime]
-    # stock_id -> max(OhlcvDaily.date) (Python `date`, not datetime).
-    # The latest daily bar's calendar date. Compared with score.computed_at
-    # by converting to UTC midnight.
-    latest_ohlcv_date: dict[int, "date"]  # noqa: F821 (forward ref to datetime.date)
-
-
-def _load_skip_inputs(db: Session) -> _SkipDecisionInputs:
-    """Three aggregate queries to feed the skip-decision. Cost: ~50-100ms
-    total on a 1097-stock catalog, paid once per recompute_all call. Returns
-    a snapshot — the loop then makes purely-in-memory decisions per stock.
-    """
-    from datetime import date as _date  # local import to keep top-level tidy
-    from sqlalchemy import func
-
-    from app.models import FetchCache
-
-    scores_rows = db.execute(
-        select(StockScore.stock_id, StockScore.computed_at)
-    ).all()
-    existing_scores: dict[int, datetime] = {}
-    for sid, dt in scores_rows:
-        # SQLite returns naive datetimes — coerce to UTC for comparison
-        # with the other timestamps (FetchCache.fetched_at uses the same
-        # SQLite convention, OHLCV date is normalised separately below).
-        if dt is not None and dt.tzinfo is None:
-            dt = dt.replace(tzinfo=UTC)
-        existing_scores[sid] = dt
-
-    funds_rows = db.execute(
-        select(FetchCache.ticker, FetchCache.fetched_at)
-        .where(FetchCache.kind == "fundamentals")
-    ).all()
-    fundamentals_fetched_at: dict[str, datetime] = {}
-    for ticker, dt in funds_rows:
-        if dt is not None and dt.tzinfo is None:
-            dt = dt.replace(tzinfo=UTC)
-        fundamentals_fetched_at[ticker] = dt
-
-    bars_rows = db.execute(
-        select(OhlcvDaily.stock_id, func.max(OhlcvDaily.date))
-        .group_by(OhlcvDaily.stock_id)
-    ).all()
-    latest_ohlcv_date: dict[int, _date] = {sid: dt for sid, dt in bars_rows}
-
-    return _SkipDecisionInputs(
-        existing_scores=existing_scores,
-        fundamentals_fetched_at=fundamentals_fetched_at,
-        latest_ohlcv_date=latest_ohlcv_date,
-    )
-
-
-def _can_skip_recompute(stock: Stock, inputs: _SkipDecisionInputs) -> bool:
-    """True iff the persisted score is still current — no fresh fundamentals
-    AND no new OHLCV bar since the score was computed.
-
-    NOT consulted: sector medians. The sector_stats bundle is rebuilt
-    every recompute_all call, so technically any L2 refresh on a peer
-    could shift this stock's blended scores. In practice the shift is
-    sub-noise (medians move <1% on a single-ticker refresh), so we accept
-    the tiny staleness in exchange for the 5-15× speedup on typical
-    consecutive-run scenarios where most stocks have no fresh inputs.
-    Users who want a hard recompute can clear `stock_scores` or wait for
-    the next scheduled scan."""
-    from datetime import datetime as _dt
-
-    existing_dt = inputs.existing_scores.get(stock.id)
-    if existing_dt is None:
-        return False  # no score yet → must compute
-
-    # Fundamentals L2 freshness: if refreshed after the last score, recompute.
-    fund_dt = inputs.fundamentals_fetched_at.get(stock.ticker)
-    if fund_dt is None:
-        # No L2 row — this happens for tickers whose info call always
-        # returns empty (delisted-ish), or for very new catalog entries.
-        # Conservative: recompute so compute_score can attempt a fetch.
-        return False
-    if fund_dt > existing_dt:
-        return False  # fundamentals refreshed since last score
-
-    # OHLCV freshness: convert bar.date (Python date) to UTC midnight
-    # datetime for comparison with computed_at (timezone-aware datetime).
-    bar_date = inputs.latest_ohlcv_date.get(stock.id)
-    if bar_date is not None:
-        bar_dt = _dt.combine(bar_date, _dt.min.time(), tzinfo=UTC)
-        if bar_dt > existing_dt:
-            return False  # new price bar landed after last score
-
-    return True  # all inputs unchanged → skip
-
-
 def recompute_all(
     db: Session,
     *,
     on_progress=None,
     progress_every: int = 10,
     cancel_check=None,
-    force: bool = False,
-) -> tuple[int, int, int]:
-    """Batch UPSERT scores for every stock. Returns (ok, failed, skipped).
+) -> tuple[int, int]:
+    """Batch UPSERT scores for every stock. Returns (ok, failed).
 
-    `skipped` counts stocks whose persisted score is still current vs the
-    underlying inputs (no fresh fundamentals, no new OHLCV bar). On a
-    typical consecutive recompute most stocks fall here, so the loop
-    runs in seconds instead of minutes. See `_can_skip_recompute` for
-    the per-stock condition.
+    Earlier versions (yesterday, May 2026 morning) carried an
+    incremental-skip optimisation that compared `score.computed_at`
+    against `fundamentals.fetched_at` + `max(ohlcv.date)` and skipped
+    stocks whose inputs hadn't moved. We removed it because:
 
-    `force=True` bypasses the skip-decision and re-computes every stock
-    unconditionally. Use this for explicit user-triggered "Ricalcola
-    score" actions where the user expects a hard refresh — without it
-    the loop typically skips 90%+ of stocks on a consecutive call and
-    the user sees "1097 saltati, 0 processati" which feels broken.
-    The automatic post-scan recompute (inside scan_runner) leaves
-    `force` at its default False so the skip optimisation keeps the
-    scan pipeline fast.
+      1. Manual user trigger ("Ricalcola score" on the homepage) was
+         the painful case — consecutive clicks reported "1097 saltati,
+         0 processati" because the inputs hadn't budged since the
+         previous run. Felt broken even though it was technically
+         correct.
+      2. The automatic post-scan path didn't actually benefit much:
+         every scan adds new OHLCV bars before triggering this, so on
+         a fresh scan the skip-decision returns False for ~everyone
+         anyway. The savings only materialised on consecutive same-
+         day re-scans with no new bars — a real but narrow case.
+      3. The supporting code (3 aggregate SQL queries + a 35-line
+         decision function + a class to thread the state) was ~100
+         LOC of cognitive overhead for the ~3s saving in the narrow
+         case.
+
+    Going forward every call re-scores every stock. The sector_stats
+    pre-pass + per-stock compute_score remain unchanged.
 
     Two-phase to use *real* sector medians instead of static V1 values:
       1. Pre-pass: collect fundamentals (cache hit on the fast path) →
@@ -2038,8 +1940,7 @@ def recompute_all(
       - `cancel_check()` is polled every `progress_every` stocks; returning
         True raises `RecomputeCancelled` from inside the loop.
     Both default to no-op when omitted — keeps the cron-call sites
-    untouched. Returns (ok, failed) as a tuple now (was scalar `ok`)
-    so the runner can surface both in the ScanRun summary.
+    untouched.
     """
     stocks = db.execute(select(Stock)).scalars().all()
     total = len(stocks)
@@ -2068,15 +1969,9 @@ def recompute_all(
         cancel_check=cancel_check,
     )
 
-    # Skip-inputs snapshot: pre-load existing scores + L2 fundamentals
-    # timestamps + latest OHLCV dates so the per-stock skip decision is
-    # O(1). Cost ~50-100ms total, paid once. See _SkipDecisionInputs.
-    skip_inputs = _load_skip_inputs(db)
-
     seen_ids: set[int] = set()
     ok = 0
     failed = 0
-    skipped = 0
 
     for i, stock in enumerate(stocks):
         # Cooperative cancel: polled EVERY stock (cheap set lookup) so
@@ -2089,18 +1984,6 @@ def recompute_all(
         if stock.id in seen_ids:
             continue
         seen_ids.add(stock.id)
-
-        # Incremental-skip: if the persisted score is still current (no
-        # new fundamentals, no new OHLCV bar), do not re-run compute_score.
-        # On a typical consecutive recompute this filters out 80-95% of
-        # stocks → seconds instead of minutes. See _can_skip_recompute.
-        # `force=True` overrides this so a manual "Ricalcola score" action
-        # always returns a hard refresh.
-        if not force and _can_skip_recompute(stock, skip_inputs):
-            skipped += 1
-            if on_progress is not None and (i % progress_every == 0 or i == total - 1):
-                on_progress(i + 1, total)
-            continue
 
         try:
             new_score = compute_score(db, stock, sector_stats=sector_stats)
@@ -2121,7 +2004,6 @@ def recompute_all(
             on_progress(i + 1, total)
 
     logger.info(
-        f"[score] recompute_all: ok={ok} failed={failed} skipped={skipped} "
-        f"(skip rate {100*skipped//max(1,total)}% — {ok+failed} processed)"
+        f"[score] recompute_all: ok={ok} failed={failed} (of {total} stocks)"
     )
-    return ok, failed, skipped
+    return ok, failed

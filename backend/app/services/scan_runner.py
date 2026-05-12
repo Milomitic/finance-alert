@@ -197,15 +197,14 @@ def run_tracked_scan(
                 # heartbeat update piggybacks on those commits.
 
             try:
-                n_ok, n_failed, n_skipped = score_service.recompute_all(
+                n_ok, n_failed = score_service.recompute_all(
                     db,
                     on_progress=_persisting_heartbeat,
                     cancel_check=cancel_check,
                 )
                 logger.info(
                     f"[scan_runner] {n_ok} stock score(s) recomputed "
-                    f"({n_failed} failed, {n_skipped} skipped) "
-                    f"for ScanRun {run.id}"
+                    f"({n_failed} failed) for ScanRun {run.id}"
                 )
             except RecomputeCancelled:
                 # Propagate as the scan-level cancel so the outer handler can

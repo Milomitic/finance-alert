@@ -11,7 +11,9 @@ Status transitions are the same:
 Counters: `progress_done`/`progress_total` = stocks processed; we reuse
 `stocks_scanned` as "scored OK" and `stocks_skipped` as "failed" so the
 existing toast counter cells render meaningfully without renaming columns.
-`alerts_fired` stays None (this isn't a scan that generates alerts).
+`alerts_fired` stays None (this isn't a scan that generates alerts; the
+column USED to be repurposed for the incremental-skip count, but the
+skip optimisation was removed in May 2026 — see score_service docstring).
 """
 from datetime import UTC, datetime
 
@@ -51,7 +53,6 @@ def run_tracked_recompute(
     *,
     trigger: str = "manual",
     existing_run: ScanRun | None = None,
-    force: bool = True,
 ) -> ScanRun:
     """Run score_service.recompute_all under a tracked ScanRun row.
 
@@ -72,14 +73,6 @@ def run_tracked_recompute(
     advances one stock at a time (per user request 2026-05-12). The cost
     is one DB commit per stock × ~1100 stocks = ~3s extra over a full
     recompute, negligible vs the per-stock score computation (~30-50ms).
-
-    `force` defaults to True here because this entry-point is what the
-    user's "Ricalcola score" button calls — they expect every stock to
-    be refreshed, not the optimised path where most rows are skipped
-    because their inputs haven't changed. The optimised path is still
-    used by the automatic post-scan recompute (see
-    `app.services.scan_runner` which leaves `force=False` on its
-    `recompute_all` call).
     """
     if existing_run is None:
         run = create_recompute_run(db, trigger=trigger)
@@ -109,31 +102,30 @@ def run_tracked_recompute(
         return scan_cancel.is_cancel_requested(run_id_for_cancel)
 
     try:
-        ok, failed, skipped = recompute_all(
+        ok, failed = recompute_all(
             db,
             on_progress=on_progress,
             progress_every=1,
             cancel_check=cancel_check,
-            force=force,
         )
         run.status = "success"
         run.phase = None
         # Surface counts in the existing ScanRun columns:
         #   stocks_scanned = ok (those whose score was actually re-computed)
         #   stocks_skipped = failed (true compute_score errors)
-        #   alerts_fired   = skipped (REPURPOSED for "stocks whose inputs
-        #                   were unchanged — skipped by incremental-skip
-        #                   optimisation from Strategy #2). The frontend
-        #                   ScoreRecomputeToast maps these per the labels
-        #                   in `frontend/src/components/ScoreRecomputeToast.tsx`.
+        #   alerts_fired   = None (the column was previously repurposed
+        #                   for the incremental-skip count; the skip
+        #                   optimisation was removed in May 2026 — every
+        #                   call now re-scores every stock, see
+        #                   score_service.recompute_all docstring)
         run.stocks_scanned = ok
         run.stocks_skipped = failed
-        run.alerts_fired = skipped
+        run.alerts_fired = None
         run.completed_at = datetime.now(UTC)
         db.commit()
         logger.info(
             f"[score_runner] ScanRun {run.id} success: "
-            f"scored={ok} failed={failed} skipped={skipped}"
+            f"scored={ok} failed={failed}"
         )
     except RecomputeCancelled:
         # Cooperative cancel — distinct from a crash. Mark as 'failed' with
