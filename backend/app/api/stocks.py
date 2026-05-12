@@ -116,6 +116,41 @@ def filters(
     )
 
 
+@router.get("/quotes", response_model=LiveQuotesBatchOut)
+def get_quotes_batch(
+    tickers: str,    # comma-separated
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+) -> LiveQuotesBatchOut:
+    """Live (10s-cached) quotes for up to 50 tickers in one request.
+
+    Format: ?tickers=AAPL,MSFT,GOOGL — comma-separated. Order in the
+    response matches the request order. Unknown tickers (not in catalog)
+    are skipped silently rather than 404'ing the whole batch.
+
+    Route position: MUST stay above `/{ticker}` below — without that,
+    FastAPI matches `/quotes` against the path-param handler with
+    ticker="quotes" and returns 404 "Stock not found". The dashboard's
+    LiveVolumeMoversCard relies on this batch endpoint for live prices
+    (see useLiveQuotes FE hook).
+    """
+    requested = [t.strip().upper() for t in tickers.split(",") if t.strip()]
+    if not requested:
+        raise HTTPException(status_code=422, detail="tickers query param required")
+    if len(requested) > 50:
+        raise HTTPException(status_code=422, detail="max 50 tickers per request")
+    # Filter to tickers we know about (avoid hitting Yahoo for typos)
+    known = set(
+        db.execute(select(Stock.ticker).where(Stock.ticker.in_(requested)))
+        .scalars().all()
+    )
+    valid = [t for t in requested if t in known]
+    quotes_map = live_quote_service.get_quotes_batch(valid)
+    return LiveQuotesBatchOut(
+        quotes=[LiveQuoteOut(**quotes_map[t].__dict__) for t in valid if t in quotes_map],
+    )
+
+
 @router.get("/{ticker}", response_model=StockOut)
 def get_one(
     ticker: str, db: Session = Depends(get_db), _user: User = Depends(get_current_user)
@@ -367,35 +402,6 @@ def _merge_news_analyst_actions(ticker: str, structured_actions: list) -> list:
         reverse=True,
     )
     return merged
-
-
-@router.get("/quotes", response_model=LiveQuotesBatchOut)
-def get_quotes_batch(
-    tickers: str,    # comma-separated
-    db: Session = Depends(get_db),
-    _user: User = Depends(get_current_user),
-) -> LiveQuotesBatchOut:
-    """Live (10s-cached) quotes for up to 50 tickers in one request.
-
-    Format: ?tickers=AAPL,MSFT,GOOGL — comma-separated. Order in the
-    response matches the request order. Unknown tickers (not in catalog)
-    are skipped silently rather than 404'ing the whole batch.
-    """
-    requested = [t.strip().upper() for t in tickers.split(",") if t.strip()]
-    if not requested:
-        raise HTTPException(status_code=422, detail="tickers query param required")
-    if len(requested) > 50:
-        raise HTTPException(status_code=422, detail="max 50 tickers per request")
-    # Filter to tickers we know about (avoid hitting Yahoo for typos)
-    known = set(
-        db.execute(select(Stock.ticker).where(Stock.ticker.in_(requested)))
-        .scalars().all()
-    )
-    valid = [t for t in requested if t in known]
-    quotes_map = live_quote_service.get_quotes_batch(valid)
-    return LiveQuotesBatchOut(
-        quotes=[LiveQuoteOut(**quotes_map[t].__dict__) for t in valid if t in quotes_map],
-    )
 
 
 @router.get("/{ticker}/quote", response_model=LiveQuoteOut)

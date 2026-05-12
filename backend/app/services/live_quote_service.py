@@ -187,13 +187,25 @@ def _override_prev_close_from_ohlcv(ticker: str, live_price: float | None) -> fl
     move misread as -3.97%). Our daily OHLCV scan stores the truth;
     rely on it.
 
-    Logic:
-      - Take the two most recent OHLCV bars by date.
-      - If live_price ≈ most-recent close (within $0.01), the market
-        is closed and yfinance's "live price" IS today's close → the
-        prev close is the bar BEFORE that (bars[1].close).
-      - Otherwise live_price is intraday today's price → most recent
-        bar's close IS yesterday's close → use bars[0].close.
+    Logic (revised May 2026 after the SOXS bug — user reported
+    prev_close=$9.56 when the actual prior-session close was $8.20):
+
+    yfinance's intraday `history()` call sometimes returns a bar dated
+    TODAY with `close=<current intraday price>`. When `fetch_and_upsert`
+    persists that row, the OhlcvDaily table ends up with a "today" bar
+    whose close is an intraday snapshot, NOT a session close. If we
+    treated that as "prev_close", we'd report a wildly wrong day-over-
+    day move (SOXS: real prev=$8.20, intraday-stored "close"=$9.56 →
+    misreported change=−2.7% when reality was +13.4%).
+
+    The fix is to recognise when bars[0] is TODAY's still-open snapshot:
+    if `bars[0].date == today (server UTC)` and live_price differs
+    meaningfully from `bars[0].close` (>0.5% delta), then bars[0] is an
+    intraday snapshot — skip it and use `bars[1].close` as the proper
+    prev_close. Caveat: server-UTC-date is an approximation of
+    "today in the market's tz"; for the major listings (US, EU, UK)
+    the UTC date is within a few hours of the local market date for
+    most of the trading session, which is enough for this heuristic.
 
     Returns None when we can't infer (no Stock row, no bars, only one
     bar, or live_price unknown). Caller falls back to yfinance's value.
@@ -201,6 +213,7 @@ def _override_prev_close_from_ohlcv(ticker: str, live_price: float | None) -> fl
     if live_price is None:
         return None
     try:
+        from datetime import UTC as _UTC, date as _date, datetime as _dt
         from app.core.db import SessionLocal
         from app.models import OhlcvDaily, Stock
         from sqlalchemy import desc, select
@@ -215,12 +228,36 @@ def _override_prev_close_from_ohlcv(ticker: str, live_price: float | None) -> fl
                 select(OhlcvDaily)
                 .where(OhlcvDaily.stock_id == stock.id)
                 .order_by(desc(OhlcvDaily.date))
-                .limit(2)
+                .limit(3)
             ).scalars().all()
             if len(bars) < 2:
                 return None
             most_recent_close = float(bars[0].close)
             prior_close = float(bars[1].close)
+
+            today_utc: _date = _dt.now(_UTC).date()
+            # Heuristic: if the most-recent bar is dated today AND the
+            # live price disagrees materially with its stored close,
+            # the bar is an intraday snapshot. Use the prior bar's
+            # close as the legitimate prev_close. Threshold: >0.5%
+            # delta. Below that we accept the stored close as the
+            # session value (markets routinely close within tenths of
+            # their last intraday tick, especially during quiet
+            # sessions, so a tighter threshold would over-correct).
+            if bars[0].date >= today_utc:
+                delta_pct = abs(live_price - most_recent_close) / max(
+                    abs(most_recent_close), 1e-6
+                )
+                if delta_pct > 0.005:
+                    return prior_close
+                # bars[0] is today AND live ≈ stored → looks like a
+                # quiet day or post-close write; either way bars[1]
+                # is the true prev-session close.
+                return prior_close
+
+            # bars[0].date < today: that bar IS a finalised session
+            # close. Use the existing "close-of-day vs intraday"
+            # disambiguation against the live price.
             if abs(live_price - most_recent_close) < 0.01:
                 return prior_close
             return most_recent_close

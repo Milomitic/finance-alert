@@ -172,9 +172,12 @@ export function LiveVolumeMoversCard({ movers }: Props) {
                     </div>
 
                     {/* Col 3: absolute volume — the actual ranking
-                        criterion. Formatted as compact 12.4M / 1.2B. */}
+                        criterion. Formatted as compact 12.4M / 1.2B.
+                        Bumped from text-[11px] to text-sm with a wider
+                        column so the figure stays comfortably readable
+                        at typical viewport widths. */}
                     <div
-                      className="shrink-0 text-[11px] tabular-nums text-muted-foreground min-w-[44px] text-right"
+                      className="shrink-0 text-sm font-semibold tabular-nums text-foreground/80 min-w-[68px] text-right"
                       title={
                         volToday != null
                           ? `${volToday.toLocaleString("it-IT")} share scambiate oggi`
@@ -185,10 +188,13 @@ export function LiveVolumeMoversCard({ movers }: Props) {
                     </div>
 
                     {/* Col 4: vol multiplier (vs 20-day avg). Orange
-                        tint at ≥3× signals "really unusual". */}
+                        tint at ≥3× signals "really unusual". Bumped
+                        text-[10px] → text-xs and wider min-w so the
+                        chip reads at a glance like the score on its
+                        right. */}
                     <div
                       className={cn(
-                        "shrink-0 text-[10px] font-mono font-semibold tabular-nums rounded px-1.5 py-0.5 min-w-[38px] text-center",
+                        "shrink-0 text-xs font-mono font-semibold tabular-nums rounded px-2 py-0.5 min-w-[52px] text-center",
                         volRatio != null && volRatio >= 3
                           ? "bg-orange-100 dark:bg-orange-950/40 text-orange-800 dark:text-orange-200"
                           : volRatio != null && volRatio >= 2
@@ -237,7 +243,7 @@ function ScoreChip({ score }: { score: number | null | undefined }) {
   if (score == null || !Number.isFinite(score)) {
     return (
       <span
-        className="shrink-0 text-[10px] font-mono tabular-nums rounded px-1.5 py-0.5 min-w-[28px] text-center text-muted-foreground/60"
+        className="shrink-0 text-xs tabular-nums rounded px-2 py-0.5 min-w-[44px] text-center text-muted-foreground/60"
         title="Score non ancora calcolato"
       >
         —
@@ -255,7 +261,11 @@ function ScoreChip({ score }: { score: number | null | undefined }) {
   return (
     <span
       className={cn(
-        "shrink-0 text-[11px] font-semibold tabular-nums rounded px-1.5 py-0.5 min-w-[28px] text-center",
+        // Bumped from text-[11px] / px-1.5 / min-w-28 to text-sm /
+        // px-2 / min-w-44 so the score chip reads at the same weight
+        // as the price column to its left. Same visual treatment as
+        // the BreadthMatrixTable's score column.
+        "shrink-0 text-sm font-semibold tabular-nums rounded px-2 py-0.5 min-w-[44px] text-center",
         cls,
       )}
       title={`Score composito ${score.toFixed(0)}/100`}
