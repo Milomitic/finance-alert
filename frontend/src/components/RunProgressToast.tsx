@@ -197,6 +197,11 @@ export function RunProgressToast({ status, labels, onStop, isStopping }: Props) 
 
   const phaseLabel =
     variant === "running" ? labels.phaseLabel(status.phase) : null;
+  // Live "what we're touching" chip — only meaningful while running and only
+  // when the backend has populated the field. Stays hidden in the terminal
+  // and stale variants so the row doesn't show a stale ticker from minutes ago.
+  const currentTarget =
+    variant === "running" && status.current_target ? status.current_target : null;
 
   const dismiss = () => setDismissedRunId(status.last_run_id);
 
@@ -266,6 +271,14 @@ export function RunProgressToast({ status, labels, onStop, isStopping }: Props) 
             {phaseLabel && (
               <div className="text-[11px] text-muted-foreground mt-0.5">
                 {phaseLabel}
+              </div>
+            )}
+            {currentTarget && (
+              <div
+                className="text-[10px] font-mono text-foreground/80 mt-0.5 truncate"
+                title={currentTarget}
+              >
+                {currentTarget}
               </div>
             )}
           </div>

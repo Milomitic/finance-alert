@@ -95,15 +95,18 @@ class ScanCancelled(RuntimeError):
 def scan_universe(
     db: Session,
     *,
-    on_progress: Callable[[int, int, "ScanResult"], None] | None = None,
+    on_progress: Callable[[int, int, "ScanResult", str | None], None] | None = None,
     progress_every: int = 10,
     cancel_check: Callable[[], bool] | None = None,
 ) -> ScanResult:
     """Scan all stocks, evaluate every global rule, fire edge alerts.
 
     on_progress, if provided, is called every `progress_every` stocks AND at start/end
-    with (stocks_done, stocks_total, result_so_far). Use this to surface live progress
-    to a UI (e.g. by updating a `scan_runs` row).
+    with (stocks_done, stocks_total, result_so_far, current_ticker). Use this to
+    surface live progress to a UI (e.g. by updating a `scan_runs` row). The
+    `current_ticker` arg is the ticker most recently processed (or about to be
+    processed at the start tick); None at the bookend calls when no specific
+    stock is in focus.
 
     cancel_check, if provided, is called at the same cadence as on_progress.
     When it returns True the loop raises ScanCancelled so the caller can mark
@@ -124,11 +127,11 @@ def scan_universe(
     if not global_rules:
         logger.warning("[scan] no rules configured; skipping scan")
         if on_progress:
-            on_progress(0, total, result)
+            on_progress(0, total, result, None)
         return result
 
     if on_progress:
-        on_progress(0, total, result)
+        on_progress(0, total, result, None)
 
     for idx, stock in enumerate(stocks, start=1):
         # Cooperative cancel: bail out cleanly between iterations. We check at
@@ -146,7 +149,7 @@ def scan_universe(
         if ohlcv is None or len(ohlcv) < 2:
             result.stocks_skipped += 1
             if on_progress and (idx % progress_every == 0 or idx == total):
-                on_progress(idx, total, result)
+                on_progress(idx, total, result, stock.ticker)
             continue
         result.stocks_scanned += 1
         last_close = float(ohlcv["close"].iloc[-1])
@@ -234,10 +237,10 @@ def scan_universe(
                 result.states_updated += 1
 
         if on_progress and (idx % progress_every == 0 or idx == total):
-            on_progress(idx, total, result)
+            on_progress(idx, total, result, stock.ticker)
 
     if on_progress:
-        on_progress(total, total, result)
+        on_progress(total, total, result, None)
 
     logger.info(
         f"[scan] complete: scanned={result.stocks_scanned} skipped={result.stocks_skipped} "

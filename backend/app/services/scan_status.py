@@ -58,6 +58,7 @@ def build_scan_status_out(latest: ScanRun) -> ScanStatusOut:
         stocks_scanned=latest.stocks_scanned,
         stocks_skipped=latest.stocks_skipped,
         alerts_fired=latest.alerts_fired,
+        current_target=latest.current_target,
         error_message=latest.error_message,
         is_stale=is_stale,
         seconds_since_last_progress=seconds_since_progress,

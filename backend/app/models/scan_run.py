@@ -35,9 +35,12 @@ class ScanRun(Base):
     )
     trigger: Mapped[str] = mapped_column(String(16), nullable=False)  # "cron" | "manual"
     status: Mapped[str] = mapped_column(String(16), nullable=False)  # "running" | "success" | "failed"
-    # Sub-phase while running: alert-scan emits "fetching" / "evaluating";
-    # score-recompute emits "sector_stats" / "scoring". NULL when finished.
-    phase: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    # Sub-phase while running. Alert-scan emits values like "fetching:planning",
+    # "fetching:backfill", "fetching:incremental", "evaluating:loading_rules",
+    # "evaluating:scoring"; score-recompute emits "sector_stats" / "scoring".
+    # NULL when finished. Widened to 32 chars when sub-phases were introduced
+    # — older values ("fetching", "evaluating") still parse fine.
+    phase: Mapped[str | None] = mapped_column(String(32), nullable=True)
     started_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -52,4 +55,9 @@ class ScanRun(Base):
     stocks_scanned: Mapped[int | None] = mapped_column(Integer, nullable=True)
     stocks_skipped: Mapped[int | None] = mapped_column(Integer, nullable=True)
     alerts_fired: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Free-form "what we're touching RIGHT NOW" — typically a ticker, optionally
+    # decorated (e.g. "AAPL · chunk 3/12"). Updated alongside the heartbeat so
+    # the UI can show a live target instead of just a percentage. NULL when the
+    # phase doesn't have a meaningful per-item focus.
+    current_target: Mapped[str | None] = mapped_column(String(64), nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)

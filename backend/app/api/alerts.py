@@ -34,34 +34,53 @@ router = APIRouter(prefix="/api/alerts", tags=["alerts"])
 
 
 def _run_scan_in_background(stock_ids: list[int] | None) -> None:
-    """Manual-trigger scan: track via ScanRun (fetch then evaluate phases).
+    """Manual-trigger scan: track via ScanRun with sub-phased fetch + evaluate.
 
-    Creates the ScanRun row upfront with phase="fetching" so the UI's
-    scan-status polling immediately shows "Scaricamento dati di mercato in corso"
-    instead of an opaque silence during the (potentially long) yfinance backfill.
-    Switches phase to "evaluating" before running the rules.
+    Phase taxonomy (colon-delimited so existing frontend parsing extends
+    naturally; the prefix before `:` keeps the broad-stroke meaning):
+
+      fetching:planning      — load stocks, compute per-stock latest-bar
+                                in one bulk query, decide chunk strategy
+      fetching:backfill      — chunk loop with period="10y" (slow path:
+                                stocks with no data or >30-day-stale data)
+      fetching:incremental   — chunk loop with period="1mo" (fast path:
+                                stocks with fresh data; usually 95%+ of the
+                                universe on consecutive scans)
+      evaluating:loading_rules — between fetch end and the first scan_universe
+                                iteration; covers _load_global_rules + setup
+      evaluating:scoring     — main per-stock rule-evaluation loop
+
+    The current_target column carries "what we're touching right now":
+    ticker of the first stock in the current chunk during fetch, ticker of
+    the current stock during evaluate. The UI surfaces it as a small chip
+    below the phase label.
     """
     from datetime import date, timedelta
 
     from app.services import scan_cancel
-    from app.services.ohlcv_service import latest_ohlcv_date
+    from app.services.ohlcv_service import latest_ohlcv_dates_bulk
     from app.services.scan_runner import bump_heartbeat, create_scan_run, update_phase
 
     db = SessionLocal()
     try:
+        # Sub-phase 0 (sets up the row before the heavy work).
+        run = create_scan_run(db, trigger="manual", phase="fetching:planning")
         if stock_ids:
             stocks = list(db.execute(select(Stock).where(Stock.id.in_(stock_ids))).scalars().all())
         else:
             stocks = list(db.execute(select(Stock)).scalars().all())
-
-        # Phase 1: fetch — create the ScanRun row so the UI shows progress.
-        run = create_scan_run(db, trigger="manual", phase="fetching")
         run.progress_total = len(stocks)
         db.commit()
 
         if stocks:
             chunk_size = 100
             cutoff = date.today() - timedelta(days=30)
+            # B2 — one bulk SELECT replaces N×chunk_size point lookups. For
+            # 1132 stocks × 12 chunks that was ~13k indexed queries; now it's
+            # a single GROUP BY scan + in-memory dict reads.
+            latest_dates = latest_ohlcv_dates_bulk(db, [s.id for s in stocks])
+            bump_heartbeat(db, run)
+
             for i in range(0, len(stocks), chunk_size):
                 # Cooperative cancel during fetch phase too — the fetch can take
                 # several minutes for a fresh DB and the user shouldn't have to
@@ -70,6 +89,7 @@ def _run_scan_in_background(stock_ids: list[int] | None) -> None:
                     from datetime import datetime, UTC
                     run.status = "failed"
                     run.phase = None
+                    run.current_target = None
                     run.error_message = "Cancellato dall'utente"
                     run.completed_at = datetime.now(UTC)
                     db.commit()
@@ -77,7 +97,7 @@ def _run_scan_in_background(stock_ids: list[int] | None) -> None:
                     return
                 chunk = stocks[i : i + chunk_size]
                 needs_backfill = any(
-                    latest_ohlcv_date(db, s.id) is None or latest_ohlcv_date(db, s.id) < cutoff
+                    latest_dates.get(s.id) is None or latest_dates[s.id] < cutoff
                     for s in chunk
                 )
                 # Initial backfill grabs 10 years of bars so the new 5Y chart
@@ -86,6 +106,13 @@ def _run_scan_in_background(stock_ids: list[int] | None) -> None:
                 # data to compute. Incremental scans keep the cheap "1mo"
                 # fetch — they only need the last few bars for evaluation.
                 period = "10y" if needs_backfill else "1mo"
+                chunk_num = (i // chunk_size) + 1
+                total_chunks = (len(stocks) + chunk_size - 1) // chunk_size
+                run.phase = (
+                    "fetching:backfill" if needs_backfill else "fetching:incremental"
+                )
+                run.current_target = f"{chunk[0].ticker} · chunk {chunk_num}/{total_chunks}"
+                db.commit()
                 try:
                     fetch_and_upsert(db, chunk, period=period)
                     db.commit()
@@ -96,10 +123,12 @@ def _run_scan_in_background(stock_ids: list[int] | None) -> None:
                 run.progress_done = min(i + chunk_size, len(stocks))
                 bump_heartbeat(db, run)
 
-        # Phase 2: evaluate (reuse the same row; run_tracked_scan switches phase)
-        update_phase(db, run, "evaluating")
-        # Reset the progress counter for the evaluation phase
+        # Phase 2: evaluate. Start in "loading_rules" — scan_universe flips
+        # to "evaluating:scoring" on the first on_progress tick (done=0) so
+        # the UI shows the rule-load sub-phase even when it's fast.
+        update_phase(db, run, "evaluating:loading_rules")
         run.progress_done = 0
+        run.current_target = None
         bump_heartbeat(db, run)
         run_tracked_scan(db, trigger="manual", existing_run=run)
     finally:

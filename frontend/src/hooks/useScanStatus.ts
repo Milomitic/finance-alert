@@ -6,7 +6,9 @@ import { alerts } from "@/api/alerts";
 
 /**
  * Polls /api/alerts/scan-status with adaptive cadence:
- * - 2s when a scan is running (live progress)
+ * - 1s when a scan is running (live progress — chosen alongside the backend's
+ *   progress_every=5 heartbeats so sub-phase + current_target updates feel
+ *   continuous rather than choppy)
  * - 30s when idle (catch externally-triggered scans, e.g. cron)
  *
  * Side effect: when the latest run transitions running -> success/failed,
@@ -22,7 +24,7 @@ export function useScanStatus() {
     queryFn: () => alerts.scanStatus(),
     refetchInterval: (query) => {
       const data = query.state.data;
-      return data?.is_running ? 2_000 : 30_000;
+      return data?.is_running ? 1_000 : 30_000;
     },
     refetchIntervalInBackground: true,
   });

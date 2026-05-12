@@ -64,22 +64,38 @@ def run_tracked_scan(
     Returns the persisted ScanRun row.
     """
     if existing_run is None:
-        run = create_scan_run(db, trigger=trigger, phase="evaluating")
+        # New row: start in the loading_rules sub-phase. scan_universe flips
+        # us to "evaluating:scoring" on the first on_progress tick.
+        run = create_scan_run(db, trigger=trigger, phase="evaluating:loading_rules")
     else:
         run = existing_run
-        run.phase = "evaluating"
-        db.commit()
+        # Caller (api/alerts.py) has already set "evaluating:loading_rules" on
+        # the row before delegating to us; preserve that for the brief window
+        # before scan_universe's first heartbeat. Only fall through to set the
+        # sub-phase here if the caller left it on a stale value.
+        if run.phase not in ("evaluating:loading_rules", "evaluating:scoring"):
+            run.phase = "evaluating:loading_rules"
+            db.commit()
     logger.info(f"[scan_runner] started ScanRun id={run.id} trigger={trigger}")
 
-    def on_progress(done: int, total: int, partial: ScanResult) -> None:
+    def on_progress(done: int, total: int, partial: ScanResult, current: str | None) -> None:
         """Called every N stocks by scan_universe. Keep it cheap: small UPDATE only.
 
         Updates `last_progress_at` heartbeat so the UI can detect stuck scans
         (worker crashed but row still says 'running' → no heartbeat for >2min).
+        Flips the phase to "evaluating:scoring" on the first non-zero tick —
+        the loading_rules sub-phase is the brief setup window before then.
         """
         run.progress_done = done
         run.progress_total = total
         run.last_progress_at = datetime.now(UTC)
+        if current is not None:
+            run.current_target = current
+        # Flip phase the moment we see the first iteration. `done == 0 and
+        # current is None` is the start-of-scan bookend tick; the scoring
+        # phase only really begins when we start touching stocks.
+        if (done > 0 or current is not None) and run.phase != "evaluating:scoring":
+            run.phase = "evaluating:scoring"
         # Snapshot in-flight counters so the UI can show partial values
         run.stocks_scanned = partial.stocks_scanned
         run.stocks_skipped = partial.stocks_skipped
@@ -94,11 +110,17 @@ def run_tracked_scan(
         return scan_cancel.is_cancel_requested(run_id_for_cancel)
 
     try:
+        # B4: progress_every dropped from 10 → 5 (May 2026). At 1132 stocks
+        # that's 226 heartbeats instead of 113 — ~2× DB writes, but each is a
+        # single-row UPDATE on a warm sqlite file (<1ms). The win is UI
+        # fluidity: the progress bar moves twice as often, so the user sees
+        # the scan is alive without raising the toast's poll rate.
         result = scan_universe(
-            db, on_progress=on_progress, progress_every=10, cancel_check=cancel_check
+            db, on_progress=on_progress, progress_every=5, cancel_check=cancel_check
         )
         run.status = "success"
         run.phase = None
+        run.current_target = None
         run.stocks_scanned = result.stocks_scanned
         run.stocks_skipped = result.stocks_skipped
         run.alerts_fired = result.alerts_fired
@@ -159,6 +181,7 @@ def run_tracked_scan(
             if cancelled_run is not None:
                 cancelled_run.status = "failed"
                 cancelled_run.phase = None
+                cancelled_run.current_target = None
                 cancelled_run.error_message = str(exc)
                 cancelled_run.completed_at = datetime.now(UTC)
                 db2.commit()
@@ -181,6 +204,7 @@ def run_tracked_scan(
             if failed_run is not None:
                 failed_run.status = "failed"
                 failed_run.phase = None
+                failed_run.current_target = None
                 failed_run.error_message = str(exc)[:1000]
                 failed_run.completed_at = datetime.now(UTC)
                 db2.commit()

@@ -254,3 +254,29 @@ def latest_ohlcv_date(db: Session, stock_id: int) -> Any | None:
         .one_or_none()
     )
     return row[0] if row else None
+
+
+def latest_ohlcv_dates_bulk(
+    db: Session, stock_ids: list[int]
+) -> dict[int, Any]:
+    """Return {stock_id: most_recent_date} for the given stock_ids.
+
+    Bulk variant of `latest_ohlcv_date` — one GROUP BY scan instead of N
+    indexed lookups. Stocks with no rows are absent from the result dict
+    (the caller should treat that as "needs full backfill").
+
+    Used by the manual-scan endpoint to decide 10y backfill vs 1mo
+    incremental for every chunk upfront, replacing the per-chunk loop
+    that issued one SELECT per stock × chunk-size.
+    """
+    if not stock_ids:
+        return {}
+    from sqlalchemy import func
+
+    rows = (
+        db.query(OhlcvDaily.stock_id, func.max(OhlcvDaily.date))
+        .filter(OhlcvDaily.stock_id.in_(stock_ids))
+        .group_by(OhlcvDaily.stock_id)
+        .all()
+    )
+    return {sid: d for sid, d in rows}
