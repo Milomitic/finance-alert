@@ -18,6 +18,9 @@ backend/data/*.db-journal
 backend/data/*.db-wal
 backend/data/*.db-shm
 backend/data/logs/
+# Stray repo-root /data — sometimes created by scripts run from the wrong
+# cwd (worktree edge case). Belongs nowhere in git, ever.
+/data/
 
 # Env
 .env
