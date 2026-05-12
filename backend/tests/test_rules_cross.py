@@ -60,8 +60,11 @@ def test_cross_rule_kind_and_default_params() -> None:
     assert DeathCrossRule().default_params == {"fast": 50, "slow": 200}
 
 
-def test_cross_snapshot_includes_sma_values() -> None:
+def test_cross_snapshot_includes_ma_values() -> None:
+    """May 2026: SMA → EMA. The snapshot's field names switched from
+    `fast_sma`/`slow_sma` to `fast_ma`/`slow_ma` (kind-agnostic) so the
+    same shape works after a future MA-flavour change too."""
     df = _build_cross_data(transition=True, fast_above_slow=True)
     snap = GoldenCrossRule().snapshot(df, {"fast": 50, "slow": 200})
-    assert "fast_sma" in snap and "slow_sma" in snap
+    assert "fast_ma" in snap and "slow_ma" in snap
     assert snap["fast_period"] == 50 and snap["slow_period"] == 200

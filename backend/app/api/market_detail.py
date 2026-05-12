@@ -68,11 +68,13 @@ class IndicatorPointOut(BaseModel):
 class IndicatorBundleOut(BaseModel):
     """All indicator overlays for the chart - same shape as the stock
     detail response so the frontend can reuse the rendering primitives.
-    Each list is empty when the bar series is too short for the
-    indicator (e.g. SMA200 needs 200 bars)."""
-    sma20: list[IndicatorPointOut] = []
-    sma50: list[IndicatorPointOut] = []
-    sma200: list[IndicatorPointOut] = []
+    May 2026: SMA → EMA. Lists empty when the bar series is too short
+    for the indicator (e.g. EMA200 is only emitted at >=200 bars to
+    avoid drawing a near-flat line on short histories — EMA itself
+    has no warmup NaN since it initialises to the first close)."""
+    ema20: list[IndicatorPointOut] = []
+    ema50: list[IndicatorPointOut] = []
+    ema200: list[IndicatorPointOut] = []
     bb_upper: list[IndicatorPointOut] = []
     bb_middle: list[IndicatorPointOut] = []
     bb_lower: list[IndicatorPointOut] = []
@@ -157,9 +159,9 @@ def get_market_detail(
         return [IndicatorPointOut(date=p.date, value=p.value) for p in series]
 
     indicators_out = IndicatorBundleOut(
-        sma20=_pts(ind.sma20),
-        sma50=_pts(ind.sma50),
-        sma200=_pts(ind.sma200),
+        ema20=_pts(ind.ema20),
+        ema50=_pts(ind.ema50),
+        ema200=_pts(ind.ema200),
         bb_upper=_pts(ind.bb_upper),
         bb_middle=_pts(ind.bb_middle),
         bb_lower=_pts(ind.bb_lower),

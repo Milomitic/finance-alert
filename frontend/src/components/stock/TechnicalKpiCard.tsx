@@ -50,7 +50,7 @@ interface Props {
  *
  * Per-indicator scoring rules (encoded in the row's `score` callback):
  *   - RSI(14): >70 = 5 strong, 60-70 = 4, 40-60 = 3, 30-40 = 2, <30 = 1
- *   - vs SMA{N}: shows % delta (price - sma) / sma * 100
+ *   - vs EMA{N}: shows % delta (price - ema) / ema * 100
  *       ≥ +5%: 5 strong bullish (price well above)
  *       0..+5%: 4 mildly bullish
  *       0% (≈ ±0.5%): 3 neutral
@@ -90,7 +90,7 @@ function rsiScore(v: number | null): ScaleScore {
   return 1;
 }
 
-function smaDeltaScore(deltaPct: number | null): ScaleScore {
+function emaDeltaScore(deltaPct: number | null): ScaleScore {
   if (deltaPct === null) return 3;
   if (deltaPct >= 5) return 5;
   if (deltaPct > 0.5) return 4;
@@ -114,10 +114,10 @@ function macdScore(tone: TimeframeKpis["macd_tone"]): ScaleScore {
   return 3;
 }
 
-function smaDelta(price: number | null, sma: number | null): number | null {
-  if (price === null || sma === null || sma === 0 || !Number.isFinite(sma))
+function emaDelta(price: number | null, ema: number | null): number | null {
+  if (price === null || ema === null || ema === 0 || !Number.isFinite(ema))
     return null;
-  return ((price - sma) / sma) * 100;
+  return ((price - ema) / ema) * 100;
 }
 
 interface MatrixRowDef {
@@ -136,27 +136,27 @@ const ROWS: MatrixRowDef[] = [
     }),
   },
   {
-    label: "vs SMA20",
-    hint: "Distanza % del prezzo dalla SMA a 20 periodi. >+5% strong bullish, 0..+5% bullish, 0% neutrale, -5..0% bearish, <-5% strong bearish.",
+    label: "vs EMA20",
+    hint: "Distanza % del prezzo dalla EMA a 20 periodi. >+5% strong bullish, 0..+5% bullish, 0% neutrale, -5..0% bearish, <-5% strong bearish.",
     cell: (it) => {
-      const d = smaDelta(it.last_close, it.sma20);
-      return { text: fmtPct(d, 1), score: smaDeltaScore(d) };
+      const d = emaDelta(it.last_close, it.ema20);
+      return { text: fmtPct(d, 1), score: emaDeltaScore(d) };
     },
   },
   {
-    label: "vs SMA50",
-    hint: "Distanza % dalla SMA a 50 periodi (uptrend di medio). Stessa scala 1-5 della SMA20.",
+    label: "vs EMA50",
+    hint: "Distanza % dalla EMA a 50 periodi (uptrend di medio). Stessa scala 1-5 della EMA20.",
     cell: (it) => {
-      const d = smaDelta(it.last_close, it.sma50);
-      return { text: fmtPct(d, 1), score: smaDeltaScore(d) };
+      const d = emaDelta(it.last_close, it.ema50);
+      return { text: fmtPct(d, 1), score: emaDeltaScore(d) };
     },
   },
   {
-    label: "vs SMA200",
-    hint: "Distanza % dalla SMA a 200 periodi (uptrend di lungo). Stessa scala 1-5.",
+    label: "vs EMA200",
+    hint: "Distanza % dalla EMA a 200 periodi (uptrend di lungo). Stessa scala 1-5.",
     cell: (it) => {
-      const d = smaDelta(it.last_close, it.sma200);
-      return { text: fmtPct(d, 1), score: smaDeltaScore(d) };
+      const d = emaDelta(it.last_close, it.ema200);
+      return { text: fmtPct(d, 1), score: emaDeltaScore(d) };
     },
   },
   {

@@ -90,11 +90,11 @@ class IndicatorBundle:
     """Per-series indicators aligned to the bars timeline. Same shape as
     the stock-detail bundle so the frontend can reuse the existing
     PriceChart rendering primitives. Indicator periods are fixed
-    (RSI=14, BB=20, SMA 20/50/200, MACD 12/26/9) - same convention
+    (RSI=14, BB=20, EMA 20/50/200, MACD 12/26/9) - same convention
     timeframe_service uses."""
-    sma20: list[IndicatorPoint] = field(default_factory=list)
-    sma50: list[IndicatorPoint] = field(default_factory=list)
-    sma200: list[IndicatorPoint] = field(default_factory=list)
+    ema20: list[IndicatorPoint] = field(default_factory=list)
+    ema50: list[IndicatorPoint] = field(default_factory=list)
+    ema200: list[IndicatorPoint] = field(default_factory=list)
     bb_upper: list[IndicatorPoint] = field(default_factory=list)
     bb_middle: list[IndicatorPoint] = field(default_factory=list)
     bb_lower: list[IndicatorPoint] = field(default_factory=list)
@@ -282,23 +282,25 @@ def _safe_int(v: object) -> int | None:
 # ---------------------------------------------------------------------------
 
 def _compute_indicators(bars: list[OhlcvBar]) -> IndicatorBundle:
-    """Run SMA(20/50/200), Bollinger(20,2), RSI(14), MACD(12/26/9)
+    """Run EMA(20/50/200), Bollinger(20,2), RSI(14), MACD(12/26/9)
     against the bar series. Same canonical periods as the stock-detail
     pipeline so users see consistent values across stock and market
     charts.
 
     Pure CPU, no network. Pandas-backed via the indicator helpers in
     `app.indicators` (already used by score_service and timeframe_service).
-    Empty bundle when bars is empty or too short for any indicator."""
+    Empty bundle when bars is empty or too short for any indicator.
+
+    May 2026: switched from SMA to EMA across charts + KPIs."""
     if not bars:
         return IndicatorBundle()
 
     import pandas as pd
 
     from app.indicators.bb import bollinger
+    from app.indicators.ema import ema as ema_indicator
     from app.indicators.macd import macd as macd_indicator
     from app.indicators.rsi import rsi as rsi_indicator
-    from app.indicators.sma import sma as sma_indicator
 
     closes = pd.Series([b.close for b in bars])
     dates = [b.date for b in bars]
@@ -317,14 +319,18 @@ def _compute_indicators(bars: list[OhlcvBar]) -> IndicatorBundle:
 
     bundle = IndicatorBundle()
     try:
+        # EMA has no warmup NaN — converges from the first bar — so we
+        # don't need the per-window length guard the SMA path required.
+        # We keep the >=N guard anyway so a 5-bar series doesn't show a
+        # near-meaningless EMA200 line on the chart.
         if len(closes) >= 20:
-            bundle.sma20 = _series_to_points(sma_indicator(closes, 20))
+            bundle.ema20 = _series_to_points(ema_indicator(closes, 20))
         if len(closes) >= 50:
-            bundle.sma50 = _series_to_points(sma_indicator(closes, 50))
+            bundle.ema50 = _series_to_points(ema_indicator(closes, 50))
         if len(closes) >= 200:
-            bundle.sma200 = _series_to_points(sma_indicator(closes, 200))
+            bundle.ema200 = _series_to_points(ema_indicator(closes, 200))
     except Exception as e:
-        logger.debug(f"[market_detail] SMA compute failed: {e}")
+        logger.debug(f"[market_detail] EMA compute failed: {e}")
 
     try:
         if len(closes) >= 20:

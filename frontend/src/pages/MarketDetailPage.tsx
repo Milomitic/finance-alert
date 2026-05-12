@@ -303,9 +303,9 @@ export default function MarketDetailPage() {
                 bars={d.bars}
                 indicators={d.indicators}
                 styles={{
-                  sma20: indicators.sma20,
-                  sma50: indicators.sma50,
-                  sma200: indicators.sma200,
+                  ema20: indicators.ema20,
+                  ema50: indicators.ema50,
+                  ema200: indicators.ema200,
                   bb: indicators.bb,
                 }}
                 showVolume={hasVolume}

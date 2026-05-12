@@ -10,8 +10,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.visibility import is_visible_country
+from app.indicators.ema import ema as ema_indicator
 from app.indicators.rsi import rsi as rsi_indicator
-from app.indicators.sma import sma as sma_indicator
 from app.models import Index, MarketSnapshot, OhlcvDaily, Stock
 from app.models.index import StockIndex
 from app.services.fx_service import to_usd
@@ -29,8 +29,8 @@ class StockMetrics:
     last_close: float | None
     prev_close: float | None
     change_pct: float | None              # 1-day
-    sma50: float | None
-    sma200: float | None
+    ema50: float | None
+    ema200: float | None
     rsi14: float | None
     high_252: float | None
     low_252: float | None
@@ -41,7 +41,7 @@ class StockMetrics:
     vol_today: int | None
     vol_avg_20: float | None
     vol_ratio: float | None              # vol_today / vol_avg_20
-    has_full_data: bool                  # bars_count >= 200 (SMA200 defined)
+    has_full_data: bool                  # bars_count >= 200 (EMA200 visually meaningful)
     sparkline: list[float] = field(default_factory=list)  # last 30 closes for per-row UI sparklines
     change_pct_5d: float | None = None    # ~1 week (5 trading days)
     change_pct_20d: float | None = None   # ~1 month (20 trading days)
@@ -103,10 +103,10 @@ def compute_stock_metrics(
     new_52w_high = last_close >= high_252
     new_52w_low = last_close <= low_252
 
-    sma50_series = sma_indicator(close, 50)
-    sma50 = float(sma50_series.iloc[-1]) if not pd.isna(sma50_series.iloc[-1]) else None
-    sma200_series = sma_indicator(close, 200)
-    sma200 = float(sma200_series.iloc[-1]) if not pd.isna(sma200_series.iloc[-1]) else None
+    ema50_series = ema_indicator(close, 50)
+    ema50 = float(ema50_series.iloc[-1]) if not pd.isna(ema50_series.iloc[-1]) else None
+    ema200_series = ema_indicator(close, 200)
+    ema200 = float(ema200_series.iloc[-1]) if not pd.isna(ema200_series.iloc[-1]) else None
     rsi_series = rsi_indicator(close, 14)
     rsi14 = float(rsi_series.iloc[-1]) if not pd.isna(rsi_series.iloc[-1]) else None
 
@@ -131,8 +131,8 @@ def compute_stock_metrics(
         change_pct=change_pct,
         change_pct_5d=change_pct_5d,
         change_pct_20d=change_pct_20d,
-        sma50=sma50,
-        sma200=sma200,
+        ema50=ema50,
+        ema200=ema200,
         rsi14=rsi14,
         high_252=high_252,
         low_252=low_252,
@@ -148,13 +148,18 @@ def compute_stock_metrics(
     )
 
 
-def derive_mood(pct_above_sma200: float, advancers: int, decliners: int) -> str:
-    """Bullish: pct_above_sma200 >= 60 AND advancers > decliners.
-    Bearish:  pct_above_sma200 <= 40 AND decliners > advancers.
-    Otherwise neutral."""
-    if pct_above_sma200 >= 60 and advancers > decliners:
+def derive_mood(pct_above_ema200: float, advancers: int, decliners: int) -> str:
+    """Bullish: pct_above_ema200 >= 60 AND advancers > decliners.
+    Bearish:  pct_above_ema200 <= 40 AND decliners > advancers.
+    Otherwise neutral.
+
+    May 2026: arg renamed from `pct_above_sma200` to `pct_above_ema200`
+    when the moving-average lineage flipped from SMA to EMA. Semantics
+    identical — both measure "% of catalog trading above the 200-bar
+    moving average" as a breadth indicator."""
+    if pct_above_ema200 >= 60 and advancers > decliners:
         return "bullish"
-    if pct_above_sma200 <= 40 and decliners > advancers:
+    if pct_above_ema200 <= 40 and decliners > advancers:
         return "bearish"
     return "neutral"
 
@@ -167,7 +172,7 @@ def aggregate_global(metrics: list[StockMetrics]) -> dict:
             "stocks_total": 0, "stocks_with_data": 0,
             "advancers": 0, "decliners": 0, "unchanged": 0,
             "avg_change_pct": 0.0,
-            "pct_above_sma200": 0.0, "pct_above_sma50": 0.0,
+            "pct_above_ema200": 0.0, "pct_above_ema50": 0.0,
             "rsi_oversold_count": 0, "rsi_overbought_count": 0,
             "near_52w_high_count": 0, "near_52w_low_count": 0,
             "mood": "neutral",
@@ -181,14 +186,14 @@ def aggregate_global(metrics: list[StockMetrics]) -> dict:
     changes = [m.change_pct for m in metrics if m.change_pct is not None]
     avg_change = round(sum(changes) / len(changes), 2) if changes else 0.0
 
-    pct_above_sma200 = (
-        round(100.0 * sum(1 for m in full_data if m.sma200 and m.last_close > m.sma200) / len(full_data), 1)
+    pct_above_ema200 = (
+        round(100.0 * sum(1 for m in full_data if m.ema200 and m.last_close > m.ema200) / len(full_data), 1)
         if full_data else 0.0
     )
-    has_sma50 = [m for m in metrics if m.sma50 is not None]
-    pct_above_sma50 = (
-        round(100.0 * sum(1 for m in has_sma50 if m.last_close > m.sma50) / len(has_sma50), 1)
-        if has_sma50 else 0.0
+    has_ema50 = [m for m in metrics if m.ema50 is not None]
+    pct_above_ema50 = (
+        round(100.0 * sum(1 for m in has_ema50 if m.last_close > m.ema50) / len(has_ema50), 1)
+        if has_ema50 else 0.0
     )
 
     rsi_oversold = sum(1 for m in metrics if m.rsi14 is not None and m.rsi14 < 30)
@@ -196,13 +201,13 @@ def aggregate_global(metrics: list[StockMetrics]) -> dict:
     near_high = sum(1 for m in metrics if m.near_52w_high)
     near_low = sum(1 for m in metrics if m.near_52w_low)
 
-    mood = derive_mood(pct_above_sma200, advancers, decliners)
+    mood = derive_mood(pct_above_ema200, advancers, decliners)
     return {
         "stocks_total": stocks_total,
         "stocks_with_data": len(full_data),
         "advancers": advancers, "decliners": decliners, "unchanged": unchanged,
         "avg_change_pct": avg_change,
-        "pct_above_sma200": pct_above_sma200, "pct_above_sma50": pct_above_sma50,
+        "pct_above_ema200": pct_above_ema200, "pct_above_ema50": pct_above_ema50,
         "rsi_oversold_count": rsi_oversold, "rsi_overbought_count": rsi_overbought,
         "near_52w_high_count": near_high, "near_52w_low_count": near_low,
         "mood": mood,
@@ -228,7 +233,7 @@ def aggregate_by_index(
         if not bucket:
             out.append({
                 "code": code, "name": name, "n": 0,
-                "pct_above_sma200": None, "pct_above_sma50": None,
+                "pct_above_ema200": None, "pct_above_ema50": None,
                 "rsi_oversold_count": 0, "rsi_overbought_count": 0,
                 "avg_change_pct": None,
                 "advancers": 0, "decliners": 0,
@@ -237,7 +242,7 @@ def aggregate_by_index(
             })
             continue
         full_data = [m for m in bucket if m.has_full_data]
-        has_sma50 = [m for m in bucket if m.sma50 is not None]
+        has_ema50 = [m for m in bucket if m.ema50 is not None]
         # Sum of known market caps, normalized to USD via the listing
         # currency. Without this conversion the breadth row mixed
         # currencies (KOSPI 20 in KRW, Nikkei in JPY, FTSE 100 in GBP,
@@ -251,19 +256,19 @@ def aggregate_by_index(
         ]
         caps_usd = [c for c in caps_usd if c is not None]
         total_mc = float(sum(caps_usd)) if caps_usd else None
-        pct_sma200 = (
-            round(100.0 * sum(1 for m in full_data if m.sma200 and m.last_close > m.sma200) / len(full_data), 1)
+        pct_ema200 = (
+            round(100.0 * sum(1 for m in full_data if m.ema200 and m.last_close > m.ema200) / len(full_data), 1)
             if full_data else None
         )
-        pct_sma50 = (
-            round(100.0 * sum(1 for m in has_sma50 if m.last_close > m.sma50) / len(has_sma50), 1)
-            if has_sma50 else None
+        pct_ema50 = (
+            round(100.0 * sum(1 for m in has_ema50 if m.last_close > m.ema50) / len(has_ema50), 1)
+            if has_ema50 else None
         )
         changes = [m.change_pct for m in bucket if m.change_pct is not None]
         avg_change = round(sum(changes) / len(changes), 2) if changes else None
         out.append({
             "code": code, "name": name, "n": len(bucket),
-            "pct_above_sma200": pct_sma200, "pct_above_sma50": pct_sma50,
+            "pct_above_ema200": pct_ema200, "pct_above_ema50": pct_ema50,
             "rsi_oversold_count": sum(1 for m in bucket if m.rsi14 is not None and m.rsi14 < 30),
             "rsi_overbought_count": sum(1 for m in bucket if m.rsi14 is not None and m.rsi14 > 70),
             "avg_change_pct": avg_change,
@@ -289,14 +294,14 @@ def aggregate_by_sector(metrics: list[StockMetrics]) -> list[dict]:
         full_data = [m for m in bucket if m.has_full_data]
         changes = [m.change_pct for m in bucket if m.change_pct is not None]
         avg_change = round(sum(changes) / len(changes), 2) if changes else 0.0
-        pct_sma200 = (
-            round(100.0 * sum(1 for m in full_data if m.sma200 and m.last_close > m.sma200) / len(full_data), 1)
+        pct_ema200 = (
+            round(100.0 * sum(1 for m in full_data if m.ema200 and m.last_close > m.ema200) / len(full_data), 1)
             if full_data else 0.0
         )
         out.append({
             "sector": sector, "n_stocks": len(bucket),
             "avg_change_pct": avg_change,
-            "pct_above_sma200": pct_sma200,
+            "pct_above_ema200": pct_ema200,
         })
     out.sort(key=lambda r: r["avg_change_pct"], reverse=True)
     return out

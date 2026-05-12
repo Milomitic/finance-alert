@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session
 from app.indicators.bb import bollinger
 from app.indicators.macd import macd
 from app.indicators.rsi import rsi as rsi_indicator
-from app.indicators.sma import sma as sma_indicator
+from app.indicators.ema import ema as ema_indicator
 from app.models import Alert, OhlcvDaily, Rule, Stock
 
 
@@ -64,9 +64,9 @@ class StockKpis:
 class StockDetail:
     stock: Stock
     ohlcv: list[OhlcvDaily]
-    sma20: list[IndicatorPoint]
-    sma50: list[IndicatorPoint]
-    sma200: list[IndicatorPoint]
+    ema20: list[IndicatorPoint]
+    ema50: list[IndicatorPoint]
+    ema200: list[IndicatorPoint]
     rsi14: list[IndicatorPoint]
     bb_upper: list[IndicatorPoint]
     bb_middle: list[IndicatorPoint]
@@ -90,13 +90,17 @@ class StockDetail:
 @dataclass
 class IndicatorPeriods:
     """Actual periods used to compute the indicator series for the requested
-    range. The bundle keys (`sma20`, `rsi14`, etc.) are now slot names — the
-    real periods adapt to the range so a 1-month chart doesn't draw an SMA200
-    that's mostly NaN. The UI reads this to label the toggles correctly
-    ("SMA 10" vs "SMA 200" depending on the range)."""
-    sma_fast: int
-    sma_mid: int
-    sma_slow: int
+    range. The bundle keys (`ema20`, `rsi14`, etc.) are now slot names — the
+    real periods adapt to the range so a 1-month chart doesn't draw an EMA200
+    that's nearly flat. The UI reads this to label the toggles correctly
+    ("EMA 10" vs "EMA 200" depending on the range).
+
+    May 2026: switched from SMA to EMA. `ema_fast`/`ema_mid`/`ema_slow`
+    replace the old `sma_fast`/`sma_mid`/`sma_slow` field names.
+    """
+    ema_fast: int
+    ema_mid: int
+    ema_slow: int
     rsi: int
     bb_period: int
     bb_k: float
@@ -107,9 +111,9 @@ class IndicatorPeriods:
 
 @dataclass
 class _IndicatorBundle:
-    sma20: list[IndicatorPoint]
-    sma50: list[IndicatorPoint]
-    sma200: list[IndicatorPoint]
+    ema20: list[IndicatorPoint]
+    ema50: list[IndicatorPoint]
+    ema200: list[IndicatorPoint]
     rsi14: list[IndicatorPoint]
     bb_upper: list[IndicatorPoint]
     bb_middle: list[IndicatorPoint]
@@ -125,21 +129,21 @@ class _IndicatorBundle:
 # action, long enough not to be pure noise.
 #
 # 1m (~22 trading days): aggressive short windows so the 30-day chart shows
-#   meaningful indicator movement (a 200-period SMA on 22 bars is all NaN).
+#   meaningful indicator movement (an EMA200 on 22 bars converges quickly
+#   but visually still flattens — short windows are the right call).
 # 3m (~66): step up to standard fast/mid windows.
-# 6m, 1y: the standard "long" defaults; SMA200 makes sense beyond 6m.
+# 6m, 1y: the standard "long" defaults; EMA200 makes sense beyond 6m.
 # 5y (~1260 trading days): same shape as `all` — both are "long-horizon"
 #   views, the only difference is whether the user wants to bound the
-#   visible window to a recent 5y or see everything stored. SMA200 sits
-#   roughly at the 16% mark of a 5y view, exactly where it should.
+#   visible window to a recent 5y or see everything stored.
 # all: full history, longest windows.
 _RANGE_PERIODS: dict[str, IndicatorPeriods] = {
-    "1m":  IndicatorPeriods(sma_fast=5,  sma_mid=10, sma_slow=20,  rsi=7,  bb_period=10, bb_k=2.0, macd_fast=6,  macd_slow=13, macd_signal=5),
-    "3m":  IndicatorPeriods(sma_fast=10, sma_mid=20, sma_slow=50,  rsi=14, bb_period=20, bb_k=2.0, macd_fast=12, macd_slow=26, macd_signal=9),
-    "6m":  IndicatorPeriods(sma_fast=20, sma_mid=50, sma_slow=100, rsi=14, bb_period=20, bb_k=2.0, macd_fast=12, macd_slow=26, macd_signal=9),
-    "1y":  IndicatorPeriods(sma_fast=20, sma_mid=50, sma_slow=200, rsi=14, bb_period=20, bb_k=2.0, macd_fast=12, macd_slow=26, macd_signal=9),
-    "5y":  IndicatorPeriods(sma_fast=50, sma_mid=100, sma_slow=200, rsi=21, bb_period=50, bb_k=2.0, macd_fast=26, macd_slow=52, macd_signal=18),
-    "all": IndicatorPeriods(sma_fast=50, sma_mid=100, sma_slow=200, rsi=21, bb_period=50, bb_k=2.0, macd_fast=26, macd_slow=52, macd_signal=18),
+    "1m":  IndicatorPeriods(ema_fast=5,  ema_mid=10, ema_slow=20,  rsi=7,  bb_period=10, bb_k=2.0, macd_fast=6,  macd_slow=13, macd_signal=5),
+    "3m":  IndicatorPeriods(ema_fast=10, ema_mid=20, ema_slow=50,  rsi=14, bb_period=20, bb_k=2.0, macd_fast=12, macd_slow=26, macd_signal=9),
+    "6m":  IndicatorPeriods(ema_fast=20, ema_mid=50, ema_slow=100, rsi=14, bb_period=20, bb_k=2.0, macd_fast=12, macd_slow=26, macd_signal=9),
+    "1y":  IndicatorPeriods(ema_fast=20, ema_mid=50, ema_slow=200, rsi=14, bb_period=20, bb_k=2.0, macd_fast=12, macd_slow=26, macd_signal=9),
+    "5y":  IndicatorPeriods(ema_fast=50, ema_mid=100, ema_slow=200, rsi=21, bb_period=50, bb_k=2.0, macd_fast=26, macd_slow=52, macd_signal=18),
+    "all": IndicatorPeriods(ema_fast=50, ema_mid=100, ema_slow=200, rsi=21, bb_period=50, bb_k=2.0, macd_fast=26, macd_slow=52, macd_signal=18),
 }
 
 
@@ -151,9 +155,9 @@ def _compute_indicator_series(
     if len(bars) < 2:
         return empty
     close = pd.Series([float(b.close) for b in bars])
-    sma_fast_s = sma_indicator(close, p.sma_fast)
-    sma_mid_s = sma_indicator(close, p.sma_mid)
-    sma_slow_s = sma_indicator(close, p.sma_slow)
+    ema_fast_s = ema_indicator(close, p.ema_fast)
+    ema_mid_s = ema_indicator(close, p.ema_mid)
+    ema_slow_s = ema_indicator(close, p.ema_slow)
     rsi_s = rsi_indicator(close, p.rsi)
     bb_u, bb_m, bb_l = bollinger(close, period=p.bb_period, k=p.bb_k)
     macd_line_s, macd_sig_s, macd_hist_s = macd(close, fast=p.macd_fast, slow=p.macd_slow, signal=p.macd_signal)
@@ -167,12 +171,12 @@ def _compute_indicator_series(
             for i, v in enumerate(series)
         ]
 
-    # Bundle keys stay sma20/sma50/sma200/rsi14 for response-shape stability —
-    # the UI reads `periods` to label them with the actual values used.
+    # Bundle keys are ema20/ema50/ema200/rsi14 — the UI reads `periods`
+    # to label them with the actual values used at the requested range.
     return _IndicatorBundle(
-        sma20=to_points(sma_fast_s),
-        sma50=to_points(sma_mid_s),
-        sma200=to_points(sma_slow_s),
+        ema20=to_points(ema_fast_s),
+        ema50=to_points(ema_mid_s),
+        ema200=to_points(ema_slow_s),
         rsi14=to_points(rsi_s),
         bb_upper=to_points(bb_u),
         bb_middle=to_points(bb_m),
@@ -247,18 +251,18 @@ def get_detail(db: Session, ticker: str, range_key: str = "1d") -> StockDetail |
     # v2 timeframe semantics: route through `timeframe_service.fetch_bars`
     # which returns Bar dataclasses (intraday yfinance for 30m/1h/4h,
     # DB-backed for 1d/1w/1m/all). Indicator periods are now fixed
-    # (RSI=14, BB=20, SMA 20/50/200, MACD 12/26/9) regardless of
+    # (RSI=14, BB=20, EMA 20/50/200, MACD 12/26/9) regardless of
     # timeframe — see `timeframe_service.compute_bundle`.
     from app.services.timeframe_service import (
         FIXED_BB_K,
         FIXED_BB_PERIOD,
+        FIXED_EMA_FAST,
+        FIXED_EMA_MID,
+        FIXED_EMA_SLOW,
         FIXED_MACD_FAST,
         FIXED_MACD_SIGNAL,
         FIXED_MACD_SLOW,
         FIXED_RSI_PERIOD,
-        FIXED_SMA_FAST,
-        FIXED_SMA_MID,
-        FIXED_SMA_SLOW,
         compute_bundle as tf_compute_bundle,
         fetch_bars as tf_fetch_bars,
     )
@@ -287,9 +291,9 @@ def get_detail(db: Session, ticker: str, range_key: str = "1d") -> StockDetail |
     # `_IndicatorBundle` dataclass (with periods + same shape) is what
     # the legacy code expects. Build it.
     fixed_periods = IndicatorPeriods(
-        sma_fast=FIXED_SMA_FAST,
-        sma_mid=FIXED_SMA_MID,
-        sma_slow=FIXED_SMA_SLOW,
+        ema_fast=FIXED_EMA_FAST,
+        ema_mid=FIXED_EMA_MID,
+        ema_slow=FIXED_EMA_SLOW,
         rsi=FIXED_RSI_PERIOD,
         bb_period=FIXED_BB_PERIOD,
         bb_k=FIXED_BB_K,
@@ -298,9 +302,9 @@ def get_detail(db: Session, ticker: str, range_key: str = "1d") -> StockDetail |
         macd_signal=FIXED_MACD_SIGNAL,
     )
     bundle = _IndicatorBundle(
-        sma20=[IndicatorPoint(p.date, p.value) for p in tf_bundle.sma20],
-        sma50=[IndicatorPoint(p.date, p.value) for p in tf_bundle.sma50],
-        sma200=[IndicatorPoint(p.date, p.value) for p in tf_bundle.sma200],
+        ema20=[IndicatorPoint(p.date, p.value) for p in tf_bundle.ema20],
+        ema50=[IndicatorPoint(p.date, p.value) for p in tf_bundle.ema50],
+        ema200=[IndicatorPoint(p.date, p.value) for p in tf_bundle.ema200],
         rsi14=[IndicatorPoint(p.date, p.value) for p in tf_bundle.rsi14],
         bb_upper=[IndicatorPoint(p.date, p.value) for p in tf_bundle.bb_upper],
         bb_middle=[IndicatorPoint(p.date, p.value) for p in tf_bundle.bb_middle],
@@ -336,9 +340,9 @@ def get_detail(db: Session, ticker: str, range_key: str = "1d") -> StockDetail |
     return StockDetail(
         stock=stock,
         ohlcv=ohlcv_view,
-        sma20=bundle.sma20,
-        sma50=bundle.sma50,
-        sma200=bundle.sma200,
+        ema20=bundle.ema20,
+        ema50=bundle.ema50,
+        ema200=bundle.ema200,
         rsi14=bundle.rsi14,
         bb_upper=bundle.bb_upper,
         bb_middle=bundle.bb_middle,

@@ -51,7 +51,7 @@ from app.indicators.adx import adx as adx_indicator
 from app.indicators.bb import bollinger
 from app.indicators.macd import macd as macd_indicator
 from app.indicators.rsi import rsi as rsi_indicator
-from app.indicators.sma import sma as sma_indicator
+from app.indicators.ema import ema as ema_indicator
 from app.models import OhlcvDaily, Stock, StockScore
 from app.services import sector_stats_service, stock_fundamentals_service, stock_news_service
 from app.services.news_sentiment import classify_title
@@ -1059,8 +1059,8 @@ def _momentum(
       - 52-week change            (0.18)  full @ ≥+50%, half @ 0%, zero @ -30%
       - 30-day momentum           (0.14)  full @ +10%, half @ 0%, zero @ -10%
       - 90-day momentum           (0.10)  full @ +20%, half @ 0%, zero @ -15%
-      - Trend: SMA20 > SMA50 > SMA200  (0.12)  staircase (1.0/0.66/0.33/0.0)
-      - Price vs SMA200           (0.10)  full @ +15%, half @ 0%, zero @ -15%
+      - Trend: EMA20 > EMA50 > EMA200  (0.12)  staircase (1.0/0.66/0.33/0.0)
+      - Price vs EMA200           (0.10)  full @ +15%, half @ 0%, zero @ -15%
       - RSI(14)                   (0.08)  oversold > neutral > overbought
       - MACD bullishness          (0.10)  binary line>signal AND hist>0
       - Bollinger position        (0.06)  centered = best, near upper/lower = worse
@@ -1108,21 +1108,21 @@ def _momentum(
         0.10,
     ))
 
-    # --- Trend stacking: SMA20 > SMA50 > SMA200 --------------------------
+    # --- Trend stacking: EMA20 > EMA50 > EMA200 --------------------------
     trend_score: float | None = None
-    sma20_v = sma50_v = sma200_v = None
+    ema20_v = ema50_v = ema200_v = None
     last_close = float(closes.iloc[-1]) if closes_present and closes is not None else None
     if closes_present and closes is not None and len(closes) >= 200:
         try:
-            sma20_v = float(sma_indicator(closes, 20).iloc[-1])
-            sma50_v = float(sma_indicator(closes, 50).iloc[-1])
-            sma200_v = float(sma_indicator(closes, 200).iloc[-1])
-            if all(pd.notna(v) for v in (sma20_v, sma50_v, sma200_v)) and last_close is not None:
+            ema20_v = float(ema_indicator(closes, 20).iloc[-1])
+            ema50_v = float(ema_indicator(closes, 50).iloc[-1])
+            ema200_v = float(ema_indicator(closes, 200).iloc[-1])
+            if all(pd.notna(v) for v in (ema20_v, ema50_v, ema200_v)) and last_close is not None:
                 # Score 0..3 of "stacked correctly" rules.
                 rules = [
-                    last_close > sma20_v,
-                    sma20_v > sma50_v,
-                    sma50_v > sma200_v,
+                    last_close > ema20_v,
+                    ema20_v > ema50_v,
+                    ema50_v > ema200_v,
                 ]
                 trend_score = 100.0 * sum(1 for r in rules if r) / 3.0
         except Exception:  # noqa: BLE001
@@ -1130,20 +1130,20 @@ def _momentum(
     components.append(_Component(
         "trend_stack",
         {"close": _safe_round(last_close or 0.0, 2),
-         "sma20": _safe_round(sma20_v or 0.0, 2),
-         "sma50": _safe_round(sma50_v or 0.0, 2),
-         "sma200": _safe_round(sma200_v or 0.0, 2)} if trend_score is not None else None,
+         "ema20": _safe_round(ema20_v or 0.0, 2),
+         "ema50": _safe_round(ema50_v or 0.0, 2),
+         "ema200": _safe_round(ema200_v or 0.0, 2)} if trend_score is not None else None,
         trend_score,
         0.12,
     ))
 
-    # --- Price vs SMA200 -------------------------------------------------
-    px_vs_sma200: float | None = None
-    if sma200_v is not None and last_close is not None and pd.notna(sma200_v) and sma200_v > 0:
-        px_vs_sma200 = (last_close - sma200_v) / sma200_v
+    # --- Price vs EMA200 -------------------------------------------------
+    px_vs_ema200: float | None = None
+    if ema200_v is not None and last_close is not None and pd.notna(ema200_v) and ema200_v > 0:
+        px_vs_ema200 = (last_close - ema200_v) / ema200_v
     components.append(_Component(
-        "price_vs_sma200", px_vs_sma200,
-        _ramp3(px_vs_sma200, full=0.15, half=0.0, zero=-0.15) if px_vs_sma200 is not None else None,
+        "price_vs_ema200", px_vs_ema200,
+        _ramp3(px_vs_ema200, full=0.15, half=0.0, zero=-0.15) if px_vs_ema200 is not None else None,
         0.10,
     ))
 

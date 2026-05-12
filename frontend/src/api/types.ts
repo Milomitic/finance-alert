@@ -287,8 +287,8 @@ export interface MarketGlobal {
   decliners: number;
   unchanged: number;
   avg_change_pct: number;
-  pct_above_sma200: number;
-  pct_above_sma50: number;
+  pct_above_ema200: number;
+  pct_above_ema50: number;
   rsi_oversold_count: number;
   rsi_overbought_count: number;
   near_52w_high_count: number;
@@ -300,8 +300,8 @@ export interface IndexBreadth {
   code: string;
   name: string;
   n: number;
-  pct_above_sma200: number | null;
-  pct_above_sma50: number | null;
+  pct_above_ema200: number | null;
+  pct_above_ema50: number | null;
   rsi_oversold_count: number;
   rsi_overbought_count: number;
   avg_change_pct: number | null;
@@ -322,7 +322,7 @@ export interface SectorBreadth {
   sector: string;
   n_stocks: number;
   avg_change_pct: number;
-  pct_above_sma200: number;
+  pct_above_ema200: number;
 }
 
 export interface Mover {
@@ -401,13 +401,13 @@ export interface IndicatorPoint {
 }
 
 /** Actual periods used to compute the indicator series for the requested
- *  range. The series-key names (sma20/sma50/sma200, rsi14) are SLOT names —
+ *  range. The series-key names (ema20/ema50/ema200, rsi14) are SLOT names —
  *  the real periods adapt per range. The UI reads this to label toggles
  *  with the actual values used (e.g. "SMA 10" on a 1m chart). */
 export interface IndicatorPeriods {
-  sma_fast: number;
-  sma_mid: number;
-  sma_slow: number;
+  ema_fast: number;
+  ema_mid: number;
+  ema_slow: number;
   rsi: number;
   bb_period: number;
   bb_k: number;
@@ -417,9 +417,9 @@ export interface IndicatorPeriods {
 }
 
 export interface IndicatorSeries {
-  sma20?: IndicatorPoint[];
-  sma50: IndicatorPoint[];
-  sma200: IndicatorPoint[];
+  ema20?: IndicatorPoint[];
+  ema50: IndicatorPoint[];
+  ema200: IndicatorPoint[];
   rsi14: IndicatorPoint[];
   bb_upper?: IndicatorPoint[];
   bb_middle?: IndicatorPoint[];

@@ -17,9 +17,9 @@ interface Props {
   bars: MarketDetailBar[];
   indicators?: MarketIndicators;
   styles?: {
-    sma20: IndicatorStyle;
-    sma50: IndicatorStyle;
-    sma200: IndicatorStyle;
+    ema20: IndicatorStyle;
+    ema50: IndicatorStyle;
+    ema200: IndicatorStyle;
     bb: IndicatorStyle;
   };
   showVolume?: boolean;
@@ -39,7 +39,7 @@ function pointsToChartData(points: MarketIndicatorPoint[] | undefined) {
 }
 
 // Candlestick + indicator overlay chart for the MarketDetailPage.
-// Same indicator capability as PriceChart: SMA20/50/200, Bollinger
+// Same indicator capability as PriceChart: EMA20/50/200, Bollinger
 // Bands, optional volume, plus chart-sync hooks for RSI/MACD subpanels.
 export function MarketChart({
   bars,
@@ -52,9 +52,9 @@ export function MarketChart({
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const candleRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
-  const sma20Ref = useRef<ISeriesApi<"Line"> | null>(null);
-  const sma50Ref = useRef<ISeriesApi<"Line"> | null>(null);
-  const sma200Ref = useRef<ISeriesApi<"Line"> | null>(null);
+  const ema20Ref = useRef<ISeriesApi<"Line"> | null>(null);
+  const ema50Ref = useRef<ISeriesApi<"Line"> | null>(null);
+  const ema200Ref = useRef<ISeriesApi<"Line"> | null>(null);
   const bbUpperRef = useRef<ISeriesApi<"Line"> | null>(null);
   const bbMiddleRef = useRef<ISeriesApi<"Line"> | null>(null);
   const bbLowerRef = useRef<ISeriesApi<"Line"> | null>(null);
@@ -92,9 +92,9 @@ export function MarketChart({
       wickUpColor: "#16a34a",
       wickDownColor: "#dc2626",
     });
-    sma20Ref.current = chart.addLineSeries({ priceLineVisible: false, lastValueVisible: true });
-    sma50Ref.current = chart.addLineSeries({ priceLineVisible: false, lastValueVisible: true });
-    sma200Ref.current = chart.addLineSeries({ priceLineVisible: false, lastValueVisible: true });
+    ema20Ref.current = chart.addLineSeries({ priceLineVisible: false, lastValueVisible: true });
+    ema50Ref.current = chart.addLineSeries({ priceLineVisible: false, lastValueVisible: true });
+    ema200Ref.current = chart.addLineSeries({ priceLineVisible: false, lastValueVisible: true });
     bbUpperRef.current = chart.addLineSeries({ lineStyle: 2, priceLineVisible: false, lastValueVisible: true });
     bbLowerRef.current = chart.addLineSeries({ lineStyle: 2, priceLineVisible: false, lastValueVisible: true });
     bbMiddleRef.current = chart.addLineSeries({ priceLineVisible: false, lastValueVisible: true });
@@ -127,9 +127,9 @@ export function MarketChart({
       chart.remove();
       chartRef.current = null;
       candleRef.current = null;
-      sma20Ref.current = null;
-      sma50Ref.current = null;
-      sma200Ref.current = null;
+      ema20Ref.current = null;
+      ema50Ref.current = null;
+      ema200Ref.current = null;
       bbUpperRef.current = null;
       bbMiddleRef.current = null;
       bbLowerRef.current = null;
@@ -171,40 +171,40 @@ export function MarketChart({
   }, [bars, showVolume, timeframe]);
 
   useEffect(() => {
-    if (!sma20Ref.current || !indicators) return;
+    if (!ema20Ref.current || !indicators) return;
     if (styles) {
-      sma20Ref.current.applyOptions({
-        visible: styles.sma20.visible,
-        color: styles.sma20.color,
-        lineWidth: styles.sma20.width as 1 | 2 | 3 | 4,
+      ema20Ref.current.applyOptions({
+        visible: styles.ema20.visible,
+        color: styles.ema20.color,
+        lineWidth: styles.ema20.width as 1 | 2 | 3 | 4,
       });
     }
-    sma20Ref.current.setData(pointsToChartData(indicators.sma20));
-  }, [indicators?.sma20, styles?.sma20]);
+    ema20Ref.current.setData(pointsToChartData(indicators.ema20));
+  }, [indicators?.ema20, styles?.ema20]);
 
   useEffect(() => {
-    if (!sma50Ref.current || !indicators) return;
+    if (!ema50Ref.current || !indicators) return;
     if (styles) {
-      sma50Ref.current.applyOptions({
-        visible: styles.sma50.visible,
-        color: styles.sma50.color,
-        lineWidth: styles.sma50.width as 1 | 2 | 3 | 4,
+      ema50Ref.current.applyOptions({
+        visible: styles.ema50.visible,
+        color: styles.ema50.color,
+        lineWidth: styles.ema50.width as 1 | 2 | 3 | 4,
       });
     }
-    sma50Ref.current.setData(pointsToChartData(indicators.sma50));
-  }, [indicators?.sma50, styles?.sma50]);
+    ema50Ref.current.setData(pointsToChartData(indicators.ema50));
+  }, [indicators?.ema50, styles?.ema50]);
 
   useEffect(() => {
-    if (!sma200Ref.current || !indicators) return;
+    if (!ema200Ref.current || !indicators) return;
     if (styles) {
-      sma200Ref.current.applyOptions({
-        visible: styles.sma200.visible,
-        color: styles.sma200.color,
-        lineWidth: styles.sma200.width as 1 | 2 | 3 | 4,
+      ema200Ref.current.applyOptions({
+        visible: styles.ema200.visible,
+        color: styles.ema200.color,
+        lineWidth: styles.ema200.width as 1 | 2 | 3 | 4,
       });
     }
-    sma200Ref.current.setData(pointsToChartData(indicators.sma200));
-  }, [indicators?.sma200, styles?.sma200]);
+    ema200Ref.current.setData(pointsToChartData(indicators.ema200));
+  }, [indicators?.ema200, styles?.ema200]);
 
   useEffect(() => {
     if (!bbUpperRef.current || !bbMiddleRef.current || !bbLowerRef.current || !indicators) return;

@@ -8,7 +8,7 @@ interface Props {
 // Renamed semantics (v2): each key now maps to a true *timeframe* —
 // the bar interval the chart renders, not just a slice of trailing
 // daily bars. Periods stay locked across timeframes (RSI=14, BB=20,
-// SMA 20/50/200, MACD 12/26/9) so the same indicator definition
+// EMA 20/50/200, MACD 12/26/9) so the same indicator definition
 // reads differently across granularities — that's the whole point.
 //
 // 30m/1h are intraday (yfinance fetched live; cached 5min).

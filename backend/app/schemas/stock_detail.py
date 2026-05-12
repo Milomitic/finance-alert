@@ -236,12 +236,18 @@ class FundamentalsOut(BaseModel):
 
 class IndicatorPeriodsOut(BaseModel):
     """Actual periods used to compute the indicator series at the requested
-    range. The bundle keys (sma20, sma50, sma200, rsi14) are slot names; the
+    range. The bundle keys (ema20, ema50, ema200, rsi14) are slot names; the
     real periods adapt to the range so a 1-month chart uses fast windows
-    instead of an SMA200 that's almost entirely NaN."""
-    sma_fast: int
-    sma_mid: int
-    sma_slow: int
+    instead of an EMA200 that's almost entirely flat.
+
+    May 2026: switched from SMA to EMA across charts + KPIs. Slot keys
+    `ema_fast`/`ema_mid`/`ema_slow` replace the old `sma_fast`/`sma_mid`/
+    `sma_slow`. The same windows (20/50/200 by default) apply — EMA just
+    weights recent bars more heavily.
+    """
+    ema_fast: int
+    ema_mid: int
+    ema_slow: int
     rsi: int
     bb_period: int
     bb_k: float
@@ -251,9 +257,9 @@ class IndicatorPeriodsOut(BaseModel):
 
 
 class IndicatorSeriesOut(BaseModel):
-    sma20: list[IndicatorPointOut] = []
-    sma50: list[IndicatorPointOut]
-    sma200: list[IndicatorPointOut]
+    ema20: list[IndicatorPointOut] = []
+    ema50: list[IndicatorPointOut]
+    ema200: list[IndicatorPointOut]
     rsi14: list[IndicatorPointOut]
     bb_upper: list[IndicatorPointOut] = []
     bb_middle: list[IndicatorPointOut] = []
@@ -264,7 +270,7 @@ class IndicatorSeriesOut(BaseModel):
     # Default for back-compat when older code paths construct IndicatorSeriesOut
     # without specifying periods. Real responses always include it.
     periods: IndicatorPeriodsOut = IndicatorPeriodsOut(
-        sma_fast=20, sma_mid=50, sma_slow=200, rsi=14,
+        ema_fast=20, ema_mid=50, ema_slow=200, rsi=14,
         bb_period=20, bb_k=2.0, macd_fast=12, macd_slow=26, macd_signal=9,
     )
 

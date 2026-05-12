@@ -16,8 +16,8 @@ type SortKey =
   | "code"
   | "n"
   | "total_market_cap"
-  | "pct_above_sma200"
-  | "pct_above_sma50"
+  | "pct_above_ema200"
+  | "pct_above_ema50"
   | "rsi_oversold_count"
   | "rsi_overbought_count"
   | "avg_change_pct"
@@ -57,10 +57,10 @@ function fmtMarketCap(v: number | null | undefined): string {
 }
 
 function rowHighlight(r: IndexBreadth): string {
-  if (r.pct_above_sma200 !== null && r.pct_above_sma200 >= 70 && (r.avg_change_pct ?? 0) > 0) {
+  if (r.pct_above_ema200 !== null && r.pct_above_ema200 >= 70 && (r.avg_change_pct ?? 0) > 0) {
     return "bg-yellow-50/60 dark:bg-yellow-900/10";
   }
-  if (r.pct_above_sma200 !== null && r.pct_above_sma200 <= 45 && (r.avg_change_pct ?? 0) < 0) {
+  if (r.pct_above_ema200 !== null && r.pct_above_ema200 <= 45 && (r.avg_change_pct ?? 0) < 0) {
     return "bg-red-50/60 dark:bg-red-900/10";
   }
   return "";
@@ -170,8 +170,8 @@ export function BreadthMatrixTable({ data }: Props) {
                 <SortableHeader column="code" label="Indice" align="left" state={sort} onClick={handleSort} />
                 <SortableHeader column="n" label="N" help={ACRONYM_HELP.N_STOCKS} state={sort} onClick={handleSort} />
                 <SortableHeader column="total_market_cap" label="Tot MC" help="Somma dei market cap noti delle stock dell'indice" state={sort} onClick={handleSort} />
-                <SortableHeader column="pct_above_sma200" label=">SMA200" help={ACRONYM_HELP.SMA200} state={sort} onClick={handleSort} />
-                <SortableHeader column="pct_above_sma50" label=">SMA50" help={ACRONYM_HELP.SMA50} state={sort} onClick={handleSort} />
+                <SortableHeader column="pct_above_ema200" label=">EMA200" help={ACRONYM_HELP.EMA200} state={sort} onClick={handleSort} />
+                <SortableHeader column="pct_above_ema50" label=">EMA50" help={ACRONYM_HELP.EMA50} state={sort} onClick={handleSort} />
                 <SortableHeader column="rsi_oversold_count" label="RSI<30" help={ACRONYM_HELP.RSI_OVERSOLD} state={sort} onClick={handleSort} />
                 <SortableHeader column="rsi_overbought_count" label="RSI>70" help={ACRONYM_HELP.RSI_OVERBOUGHT} state={sort} onClick={handleSort} />
                 <SortableHeader column="avg_change_pct" label="Avg Δ%" help={ACRONYM_HELP.AVG_CHANGE} state={sort} onClick={handleSort} />
@@ -213,8 +213,8 @@ export function BreadthMatrixTable({ data }: Props) {
                   <td className="text-right px-3 py-2 font-semibold" title={r.total_market_cap != null ? `$${r.total_market_cap.toLocaleString()}` : undefined}>
                     {fmtMarketCap(r.total_market_cap)}
                   </td>
-                  <td className={cn("text-right px-3 py-2", cellTone(r.pct_above_sma200, "pct"))}>{fmtPct(r.pct_above_sma200)}</td>
-                  <td className={cn("text-right px-3 py-2", cellTone(r.pct_above_sma50, "pct"))}>{fmtPct(r.pct_above_sma50)}</td>
+                  <td className={cn("text-right px-3 py-2", cellTone(r.pct_above_ema200, "pct"))}>{fmtPct(r.pct_above_ema200)}</td>
+                  <td className={cn("text-right px-3 py-2", cellTone(r.pct_above_ema50, "pct"))}>{fmtPct(r.pct_above_ema50)}</td>
                   <td className={cn("text-right px-3 py-2", r.rsi_oversold_count > 0 ? "text-amber-600" : "")}>{r.rsi_oversold_count}</td>
                   <td className={cn("text-right px-3 py-2", r.rsi_overbought_count > 0 ? "text-red-600" : "")}>{r.rsi_overbought_count}</td>
                   <td className={cn("text-right px-3 py-2", cellTone(r.avg_change_pct, "change"))}>{fmtChange(r.avg_change_pct)}</td>

@@ -74,7 +74,7 @@ const MOOD_CONFIG: Record<MoodKey, {
 
 interface RegionMood {
   mood: MoodKey;
-  pct_above_sma200: number;
+  pct_above_ema200: number;
   advancers: number;
   decliners: number;
   avg_change: number;
@@ -83,11 +83,11 @@ interface RegionMood {
 
 function deriveMood(indices: IndexBreadth[]): RegionMood {
   if (indices.length === 0) {
-    return { mood: "neutral", pct_above_sma200: 0, advancers: 0, decliners: 0, avg_change: 0, total_stocks: 0 };
+    return { mood: "neutral", pct_above_ema200: 0, advancers: 0, decliners: 0, avg_change: 0, total_stocks: 0 };
   }
   const totalN = indices.reduce((s, i) => s + i.n, 0);
   const weightedPct = totalN > 0
-    ? indices.reduce((s, i) => s + (i.pct_above_sma200 ?? 0) * i.n, 0) / totalN
+    ? indices.reduce((s, i) => s + (i.pct_above_ema200 ?? 0) * i.n, 0) / totalN
     : 0;
   const advancers = indices.reduce((s, i) => s + i.advancers, 0);
   const decliners = indices.reduce((s, i) => s + i.decliners, 0);
@@ -97,7 +97,7 @@ function deriveMood(indices: IndexBreadth[]): RegionMood {
   let mood: MoodKey = "neutral";
   if (weightedPct >= 60 && advancers > decliners) mood = "bullish";
   else if (weightedPct <= 40 && decliners > advancers) mood = "bearish";
-  return { mood, pct_above_sma200: weightedPct, advancers, decliners, avg_change: weightedChange, total_stocks: totalN };
+  return { mood, pct_above_ema200: weightedPct, advancers, decliners, avg_change: weightedChange, total_stocks: totalN };
 }
 
 function MoodDot({ mood }: { mood: MoodKey }) {
@@ -114,7 +114,7 @@ function MoodDot({ mood }: { mood: MoodKey }) {
 function IndexPill({ idx }: { idx: IndexBreadth }) {
   const meta = getIndexMeta(idx.code);
   const change = idx.avg_change_pct;
-  const sma = idx.pct_above_sma200;
+  const sma = idx.pct_above_ema200;
   const changeColor =
     change == null ? "text-muted-foreground" :
     change > 0 ? "text-green-700 dark:text-green-300" :
@@ -156,9 +156,9 @@ function RegionRow({ region, byIndex, parentFg }: { region: RegionDef; byIndex: 
       )}
       <span className={cn("text-sm font-bold shrink-0", parentFg)}>{region.label}</span>
       <MoodDot mood={m.mood} />
-      <span className={cn("text-xs tabular-nums shrink-0", parentFg, "opacity-80")} title={ACRONYM_HELP.SMA200}>
-        <strong>{m.pct_above_sma200.toFixed(0)}%</strong>
-        <span className="opacity-60 ml-0.5">SMA200</span>
+      <span className={cn("text-xs tabular-nums shrink-0", parentFg, "opacity-80")} title={ACRONYM_HELP.EMA200}>
+        <strong>{m.pct_above_ema200.toFixed(0)}%</strong>
+        <span className="opacity-60 ml-0.5">EMA200</span>
       </span>
       <span className={cn("text-xs tabular-nums shrink-0", parentFg, "opacity-80")} title={ACRONYM_HELP.AD_RATIO}>
         <strong>{m.advancers}/{m.decliners}</strong>
@@ -209,8 +209,8 @@ export function MoodCard({ global, byIndex }: Props) {
             <div className="flex-1 min-w-0">
               <div className={cn("text-3xl font-bold leading-none", cfg.fg)}>{cfg.label}</div>
               <div className={cn("text-xs mt-1.5 opacity-80", cfg.fg)}>
-                <span title={ACRONYM_HELP.SMA200}>
-                  <strong className="tabular-nums">{global.pct_above_sma200.toFixed(1)}%</strong> &gt; SMA200
+                <span title={ACRONYM_HELP.EMA200}>
+                  <strong className="tabular-nums">{global.pct_above_ema200.toFixed(1)}%</strong> &gt; EMA200
                 </span>
                 <span className="opacity-50 mx-1">·</span>
                 <span title={ACRONYM_HELP.AD_RATIO}>

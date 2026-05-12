@@ -41,12 +41,12 @@ class TimeframeKpisOut(BaseModel):
     last_close: float | None
     rsi: float | None
     rsi_tone: str
-    sma20: float | None
-    sma50: float | None
-    sma200: float | None
-    sma20_above: bool | None
-    sma50_above: bool | None
-    sma200_above: bool | None
+    ema20: float | None
+    ema50: float | None
+    ema200: float | None
+    ema20_above: bool | None
+    ema50_above: bool | None
+    ema200_above: bool | None
     bb_upper: float | None
     bb_middle: float | None
     bb_lower: float | None
@@ -71,12 +71,12 @@ def _to_out(kpis: Any) -> TimeframeKpisOut:
         last_close=kpis.last_close,
         rsi=kpis.rsi,
         rsi_tone=kpis.rsi_tone,
-        sma20=kpis.sma20,
-        sma50=kpis.sma50,
-        sma200=kpis.sma200,
-        sma20_above=kpis.sma20_above,
-        sma50_above=kpis.sma50_above,
-        sma200_above=kpis.sma200_above,
+        ema20=kpis.ema20,
+        ema50=kpis.ema50,
+        ema200=kpis.ema200,
+        ema20_above=kpis.ema20_above,
+        ema50_above=kpis.ema50_above,
+        ema200_above=kpis.ema200_above,
         bb_upper=kpis.bb_upper,
         bb_middle=kpis.bb_middle,
         bb_lower=kpis.bb_lower,

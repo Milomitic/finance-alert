@@ -58,7 +58,7 @@ def test_detail_payload_shape(client, db):
         assert k in body
     assert body["stock"]["ticker"] == "AAPL"
     assert len(body["ohlcv"]) > 0
-    assert "sma50" in body["indicators"]
+    assert "ema50" in body["indicators"]
 
 
 def test_detail_invalid_range_422(client, db):

@@ -15,9 +15,9 @@ interface Props {
   ohlcv: OhlcvBar[];
   indicators: IndicatorSeries;
   styles: {
-    sma20: IndicatorStyle;
-    sma50: IndicatorStyle;
-    sma200: IndicatorStyle;
+    ema20: IndicatorStyle;
+    ema50: IndicatorStyle;
+    ema200: IndicatorStyle;
     bb: IndicatorStyle;
   };
   priceAlerts: PriceAlert[];
@@ -140,9 +140,9 @@ export function PriceChart({
     timeframeRef.current = timeframe;
     ohlcvRef.current = ohlcv;
   }, [timeframe, ohlcv]);
-  const sma20Ref = useRef<ISeriesApi<"Line"> | null>(null);
-  const sma50Ref = useRef<ISeriesApi<"Line"> | null>(null);
-  const sma200Ref = useRef<ISeriesApi<"Line"> | null>(null);
+  const ema20Ref = useRef<ISeriesApi<"Line"> | null>(null);
+  const ema50Ref = useRef<ISeriesApi<"Line"> | null>(null);
+  const ema200Ref = useRef<ISeriesApi<"Line"> | null>(null);
   const bbUpperRef = useRef<ISeriesApi<"Line"> | null>(null);
   const bbMiddleRef = useRef<ISeriesApi<"Line"> | null>(null);
   const bbLowerRef = useRef<ISeriesApi<"Line"> | null>(null);
@@ -193,13 +193,13 @@ export function PriceChart({
     // on the right price-scale with the latest value — replaces the
     // previous on-chart `title` legend that overlapped the candles.
     // No `title` is set so the only label is the price-scale badge.
-    sma20Ref.current = chart.addLineSeries({
+    ema20Ref.current = chart.addLineSeries({
       priceLineVisible: false, lastValueVisible: true,
     });
-    sma50Ref.current = chart.addLineSeries({
+    ema50Ref.current = chart.addLineSeries({
       priceLineVisible: false, lastValueVisible: true,
     });
-    sma200Ref.current = chart.addLineSeries({
+    ema200Ref.current = chart.addLineSeries({
       priceLineVisible: false, lastValueVisible: true,
     });
     bbUpperRef.current = chart.addLineSeries({
@@ -291,9 +291,9 @@ export function PriceChart({
       chart.remove();
       chartRef.current = null;
       candleRef.current = null;
-      sma20Ref.current = null;
-      sma50Ref.current = null;
-      sma200Ref.current = null;
+      ema20Ref.current = null;
+      ema50Ref.current = null;
+      ema200Ref.current = null;
       bbUpperRef.current = null;
       bbMiddleRef.current = null;
       bbLowerRef.current = null;
@@ -349,38 +349,38 @@ export function PriceChart({
     }
   }, [ohlcv, timeframe]);
 
-  // SMA20
+  // EMA20
   useEffect(() => {
-    if (!sma20Ref.current) return;
-    sma20Ref.current.applyOptions({
-      visible: styles.sma20.visible,
-      color: styles.sma20.color,
-      lineWidth: styles.sma20.width as 1 | 2 | 3 | 4,
+    if (!ema20Ref.current) return;
+    ema20Ref.current.applyOptions({
+      visible: styles.ema20.visible,
+      color: styles.ema20.color,
+      lineWidth: styles.ema20.width as 1 | 2 | 3 | 4,
     });
-    sma20Ref.current.setData(pointsToChartData(indicators.sma20));
-  }, [indicators.sma20, styles.sma20]);
+    ema20Ref.current.setData(pointsToChartData(indicators.ema20));
+  }, [indicators.ema20, styles.ema20]);
 
-  // SMA50
+  // EMA50
   useEffect(() => {
-    if (!sma50Ref.current) return;
-    sma50Ref.current.applyOptions({
-      visible: styles.sma50.visible,
-      color: styles.sma50.color,
-      lineWidth: styles.sma50.width as 1 | 2 | 3 | 4,
+    if (!ema50Ref.current) return;
+    ema50Ref.current.applyOptions({
+      visible: styles.ema50.visible,
+      color: styles.ema50.color,
+      lineWidth: styles.ema50.width as 1 | 2 | 3 | 4,
     });
-    sma50Ref.current.setData(pointsToChartData(indicators.sma50));
-  }, [indicators.sma50, styles.sma50]);
+    ema50Ref.current.setData(pointsToChartData(indicators.ema50));
+  }, [indicators.ema50, styles.ema50]);
 
-  // SMA200
+  // EMA200
   useEffect(() => {
-    if (!sma200Ref.current) return;
-    sma200Ref.current.applyOptions({
-      visible: styles.sma200.visible,
-      color: styles.sma200.color,
-      lineWidth: styles.sma200.width as 1 | 2 | 3 | 4,
+    if (!ema200Ref.current) return;
+    ema200Ref.current.applyOptions({
+      visible: styles.ema200.visible,
+      color: styles.ema200.color,
+      lineWidth: styles.ema200.width as 1 | 2 | 3 | 4,
     });
-    sma200Ref.current.setData(pointsToChartData(indicators.sma200));
-  }, [indicators.sma200, styles.sma200]);
+    ema200Ref.current.setData(pointsToChartData(indicators.ema200));
+  }, [indicators.ema200, styles.ema200]);
 
   // Bollinger Bands (3 series share style)
   useEffect(() => {

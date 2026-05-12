@@ -166,9 +166,9 @@ export function getSnapshotHeadline(
       return `${periodTxt} ${fmt(rsi)} ${cmp} ${fmt(threshold)}`;
     }
     case "golden_cross":
-      return "SMA fast ↑ incrociata sopra SMA slow";
+      return "EMA fast ↑ incrociata sopra EMA slow";
     case "death_cross":
-      return "SMA fast ↓ incrociata sotto SMA slow";
+      return "EMA fast ↓ incrociata sotto EMA slow";
     case "breakout": {
       const period = get("period");
       const close = get("close");
@@ -217,7 +217,7 @@ export function getSnapshotHeadline(
       const z = get("z_score");
       const period = get("period");
       const periodTxt =
-        typeof period === "number" ? `SMA(${period})` : "SMA";
+        typeof period === "number" ? `EMA(${period})` : "EMA";
       const dir =
         rule_kind === "mean_reversion_long" ? "sotto" : "sopra";
       return `Close a ${fmt(z, 2)}σ ${dir} ${periodTxt}`;
@@ -306,8 +306,8 @@ export function resolveSnapshot(
 
     case "golden_cross":
     case "death_cross": {
-      const fastSma = get("fast_sma") as number | null;
-      const slowSma = get("slow_sma") as number | null;
+      const fastEma = get("fast_ma") as number | null;
+      const slowEma = get("slow_ma") as number | null;
       const fast = get("fast") as number | null;
       const slow = get("slow") as number | null;
       const valueTone: AlertTone =
@@ -316,14 +316,14 @@ export function resolveSnapshot(
       return {
         rows: [
           {
-            label: `SMA(${fast ?? "?"})`,
-            value: fmtPrice(fastSma),
+            label: `EMA(${fast ?? "?"})`,
+            value: fmtPrice(fastEma),
             hint: arrow,
             valueTone,
           },
           {
-            label: `SMA(${slow ?? "?"})`,
-            value: fmtPrice(slowSma),
+            label: `EMA(${slow ?? "?"})`,
+            value: fmtPrice(slowEma),
           },
         ],
         complete: true,

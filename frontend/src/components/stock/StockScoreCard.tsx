@@ -87,8 +87,8 @@ const COMPONENT_META: Record<string, ComponentMeta> = {
   relative_strength: { label: "Relative strength vs S&P", hint: "Sovra/sottoperformance vs S&P500 nelle 52w", format: "pct" },
   rsi: { label: "RSI(14)", hint: "Oscillatore 0-100 — sopra 50 = momentum positivo", format: "num" },
   macd: { label: "MACD", hint: "Sopra signal e zero = momentum confermato", format: "score" },
-  trend_stack: { label: "Trend stack (SMA)", hint: "Allineamento SMA 20/50/200 — pieno = uptrend confermato", format: "score" },
-  price_vs_sma200: { label: "Price vs SMA200", hint: "% sopra/sotto SMA 200 giorni", format: "pct" },
+  trend_stack: { label: "Trend stack (EMA)", hint: "Allineamento EMA 20/50/200 — pieno = uptrend confermato", format: "score" },
+  price_vs_ema200: { label: "Price vs EMA200", hint: "% sopra/sotto EMA 200 giorni", format: "pct" },
   bb_position: { label: "BB position (%B)", hint: "Posizione del prezzo nelle Bande di Bollinger (0 = banda inferiore, 0.5 = mediana, 1 = banda superiore)", format: "pct" },
   adx: { label: "ADX(14)", hint: "Forza del trend — sopra 25 = trend tradeabile", format: "num" },
   short_percent_of_float: { label: "Short % of float", hint: "Pressione short — alto = sentiment ribassista", format: "pct" },
@@ -188,10 +188,10 @@ export function MultiTfStrip({ ticker, kind }: { ticker: string; kind: "stock" |
               </div>
               <div>RSI(14): {it.rsi != null ? it.rsi.toFixed(1) : "—"}</div>
               <div>
-                SMA20/50/200:{" "}
-                {it.sma20_above ? "✓" : "✗"} /{" "}
-                {it.sma50_above ? "✓" : "✗"} /{" "}
-                {it.sma200_above ? "✓" : "✗"}
+                EMA20/50/200:{" "}
+                {it.ema20_above ? "✓" : "✗"} /{" "}
+                {it.ema50_above ? "✓" : "✗"} /{" "}
+                {it.ema200_above ? "✓" : "✗"}
               </div>
               <div>BB pos: {it.bb_position != null ? `${(it.bb_position * 100).toFixed(0)}%` : "—"}</div>
               <div>MACD: {it.macd_tone}</div>

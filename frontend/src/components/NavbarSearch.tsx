@@ -213,7 +213,7 @@ export function NavbarSearch() {
             <span className="text-xs text-muted-foreground truncate">{meta.fullName}</span>
           </div>
           <div className="text-[11px] text-muted-foreground">
-            {i.n} stock · {i.pct_above_sma200 != null ? `${i.pct_above_sma200.toFixed(0)}% > SMA200` : "—"}
+            {i.n} stock · {i.pct_above_ema200 != null ? `${i.pct_above_ema200.toFixed(0)}% > EMA200` : "—"}
           </div>
         </div>
         {change != null && (

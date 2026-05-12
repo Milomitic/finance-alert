@@ -19,7 +19,7 @@ interface Props {
 
 /* ─── MultiTimeframeKpisCard ─────────────────────────────────────────────
  *
- * Shows the same indicator suite (RSI 14, BB 20, SMA 20/50/200, MACD
+ * Shows the same indicator suite (RSI 14, BB 20, EMA 20/50/200, MACD
  * 12/26/9) computed across 30m/1h/1d/1w/1m/all timeframes. Each
  * timeframe is a row in a comparison table; each column is one
  * indicator's latest reading. The right-most column is a composite
@@ -32,9 +32,11 @@ interface Props {
  * a short-term turning point.
  *
  * Indicator periods are LOCKED across timeframes (RSI=14, BB=20,
- * SMA 20/50/200, MACD 12/26/9). The "RSI on 30m" and "RSI on 1d"
+ * EMA 20/50/200, MACD 12/26/9). The "RSI on 30m" and "RSI on 1d"
  * are the same indicator definition with different bar durations,
  * which is the whole point of multi-timeframe analysis.
+ *
+ * May 2026: switched from SMA to EMA — see service/cross_rules.
  */
 export function MultiTimeframeKpisCard({ ticker, kind }: Props) {
   // Branch on `kind` so we hit the right backend endpoint. The two
@@ -53,7 +55,7 @@ export function MultiTimeframeKpisCard({ ticker, kind }: Props) {
           className="mb-3"
           right={
             <span className="text-[11px] text-muted-foreground italic">
-              RSI(14) · BB(20) · SMA(20/50/200) · MACD(12,26,9)
+              RSI(14) · BB(20) · EMA(20/50/200) · MACD(12,26,9)
             </span>
           }
         />
@@ -86,9 +88,9 @@ function KpisTable({ data }: { data: MultiTfKpis }) {
             <th className="text-left px-3 py-2 font-semibold">TF</th>
             <th className="text-right px-3 py-2 font-semibold">Prezzo</th>
             <th className="text-right px-3 py-2 font-semibold">RSI(14)</th>
-            <th className="text-center px-3 py-2 font-semibold">SMA20</th>
-            <th className="text-center px-3 py-2 font-semibold">SMA50</th>
-            <th className="text-center px-3 py-2 font-semibold">SMA200</th>
+            <th className="text-center px-3 py-2 font-semibold">EMA20</th>
+            <th className="text-center px-3 py-2 font-semibold">EMA50</th>
+            <th className="text-center px-3 py-2 font-semibold">EMA200</th>
             <th className="text-right px-3 py-2 font-semibold">BB pos</th>
             <th className="text-center px-3 py-2 font-semibold">MACD</th>
             <th className="text-right px-3 py-2 font-semibold">Score</th>
@@ -102,8 +104,8 @@ function KpisTable({ data }: { data: MultiTfKpis }) {
         </tbody>
       </table>
       <p className="mt-2 text-[11px] text-muted-foreground italic">
-        Outlook: punteggio aggregato (+3..-3) su SMA20/SMA50, MACD,
-        RSI. Bullish se prezzo &gt; SMA o MACD positivo o RSI in
+        Outlook: punteggio aggregato (+3..-3) su EMA20/EMA50, MACD,
+        RSI. Bullish se prezzo &gt; EMA o MACD positivo o RSI in
         oversold (rebound atteso); bearish in caso opposto.
       </p>
     </div>
@@ -133,9 +135,9 @@ function KpiRow({ row }: { row: TimeframeKpis }) {
       >
         {fmt(row.rsi, 1)}
       </td>
-      <SmaCell above={row.sma20_above} value={row.sma20} />
-      <SmaCell above={row.sma50_above} value={row.sma50} />
-      <SmaCell above={row.sma200_above} value={row.sma200} />
+      <EmaCell above={row.ema20_above} value={row.ema20} />
+      <EmaCell above={row.ema50_above} value={row.ema50} />
+      <EmaCell above={row.ema200_above} value={row.ema200} />
       <td
         className="text-right px-3 py-2"
         title={
@@ -171,7 +173,7 @@ function KpiRow({ row }: { row: TimeframeKpis }) {
   );
 }
 
-function SmaCell({
+function EmaCell({
   above,
   value,
 }: {
@@ -189,7 +191,7 @@ function SmaCell({
           ? "text-emerald-700 dark:text-emerald-400"
           : "text-rose-700 dark:text-rose-400",
       )}
-      title={`SMA: ${value.toFixed(2)} · prezzo ${above ? "sopra" : "sotto"}`}
+      title={`EMA: ${value.toFixed(2)} · prezzo ${above ? "sopra" : "sotto"}`}
     >
       {above ? "▲" : "▼"} {value.toFixed(2)}
     </td>

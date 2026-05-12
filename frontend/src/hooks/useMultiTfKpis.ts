@@ -8,12 +8,12 @@ export interface TimeframeKpis {
   last_close: number | null;
   rsi: number | null;
   rsi_tone: "oversold" | "overbought" | "neutral";
-  sma20: number | null;
-  sma50: number | null;
-  sma200: number | null;
-  sma20_above: boolean | null;
-  sma50_above: boolean | null;
-  sma200_above: boolean | null;
+  ema20: number | null;
+  ema50: number | null;
+  ema200: number | null;
+  ema20_above: boolean | null;
+  ema50_above: boolean | null;
+  ema200_above: boolean | null;
   bb_upper: number | null;
   bb_middle: number | null;
   bb_lower: number | null;

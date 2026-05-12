@@ -54,18 +54,22 @@ from sqlalchemy.orm import Session
 from app.indicators.bb import bollinger
 from app.indicators.macd import macd
 from app.indicators.rsi import rsi as rsi_indicator
-from app.indicators.sma import sma as sma_indicator
+from app.indicators.ema import ema as ema_indicator
 from app.models import OhlcvDaily, Stock
 
 # Canonical fixed periods. Don't adapt these per timeframe — the user
 # explicitly wants the same indicator definition applied across
 # timeframes so KPI values change naturally with bar duration.
+#
+# May 2026: switched from SMA to EMA for the trend lines. Period
+# numbers (20/50/200) preserved — EMA just weights recent bars more
+# heavily, so the same window length produces a more responsive line.
 FIXED_RSI_PERIOD = 14
 FIXED_BB_PERIOD = 20
 FIXED_BB_K = 2.0
-FIXED_SMA_FAST = 20
-FIXED_SMA_MID = 50
-FIXED_SMA_SLOW = 200
+FIXED_EMA_FAST = 20
+FIXED_EMA_MID = 50
+FIXED_EMA_SLOW = 200
 FIXED_MACD_FAST = 12
 FIXED_MACD_SLOW = 26
 FIXED_MACD_SIGNAL = 9
@@ -134,9 +138,9 @@ class IndicatorPoint:
 
 @dataclass
 class IndicatorBundle:
-    sma20: list[IndicatorPoint]
-    sma50: list[IndicatorPoint]
-    sma200: list[IndicatorPoint]
+    ema20: list[IndicatorPoint]
+    ema50: list[IndicatorPoint]
+    ema200: list[IndicatorPoint]
     rsi14: list[IndicatorPoint]
     bb_upper: list[IndicatorPoint]
     bb_middle: list[IndicatorPoint]
@@ -365,7 +369,7 @@ def fetch_bars(
 
 def compute_bundle(bars: list[Bar]) -> IndicatorBundle:
     """Run the standard indicator suite on `bars`. Periods are fixed
-    (RSI=14, BB=20, SMA 20/50/200, MACD 12/26/9) regardless of
+    (RSI=14, BB=20, EMA 20/50/200, MACD 12/26/9) regardless of
     timeframe — the user wants timeframe-vs-timeframe comparison
     where the indicator definition stays constant and only the bar
     granularity changes."""
@@ -373,9 +377,9 @@ def compute_bundle(bars: list[Bar]) -> IndicatorBundle:
     if len(bars) < 2:
         return empty
     close = pd.Series([b.close for b in bars])
-    sma_fast_s = sma_indicator(close, FIXED_SMA_FAST)
-    sma_mid_s = sma_indicator(close, FIXED_SMA_MID)
-    sma_slow_s = sma_indicator(close, FIXED_SMA_SLOW)
+    ema_fast_s = ema_indicator(close, FIXED_EMA_FAST)
+    ema_mid_s = ema_indicator(close, FIXED_EMA_MID)
+    ema_slow_s = ema_indicator(close, FIXED_EMA_SLOW)
     rsi_s = rsi_indicator(close, FIXED_RSI_PERIOD)
     bb_u, bb_m, bb_l = bollinger(close, period=FIXED_BB_PERIOD, k=FIXED_BB_K)
     macd_line_s, macd_sig_s, macd_hist_s = macd(
@@ -395,9 +399,9 @@ def compute_bundle(bars: list[Bar]) -> IndicatorBundle:
         ]
 
     return IndicatorBundle(
-        sma20=to_points(sma_fast_s),
-        sma50=to_points(sma_mid_s),
-        sma200=to_points(sma_slow_s),
+        ema20=to_points(ema_fast_s),
+        ema50=to_points(ema_mid_s),
+        ema200=to_points(ema_slow_s),
         rsi14=to_points(rsi_s),
         bb_upper=to_points(bb_u),
         bb_middle=to_points(bb_m),
@@ -424,12 +428,12 @@ class TimeframeKpis:
     last_close: float | None
     rsi: float | None
     rsi_tone: str  # "oversold" | "overbought" | "neutral"
-    sma20: float | None
-    sma50: float | None
-    sma200: float | None
-    sma20_above: bool | None  # last_close > sma20
-    sma50_above: bool | None
-    sma200_above: bool | None
+    ema20: float | None
+    ema50: float | None
+    ema200: float | None
+    ema20_above: bool | None  # last_close > ema20
+    ema50_above: bool | None
+    ema200_above: bool | None
     bb_upper: float | None
     bb_middle: float | None
     bb_lower: float | None
@@ -439,8 +443,8 @@ class TimeframeKpis:
     macd_hist: float | None
     macd_tone: str  # "bullish" | "bearish" | "neutral"
     # Aggregated bullish/bearish score, range -3..+3:
-    #   +1 each for: price > SMA20, price > SMA50, MACD bullish
-    #   -1 each for: price < SMA20, price < SMA50, MACD bearish
+    #   +1 each for: price > EMA20, price > EMA50, MACD bullish
+    #   -1 each for: price < EMA20, price < EMA50, MACD bearish
     #   RSI overbought adds -1 (caps the score at +2 from a hot rally),
     #   RSI oversold adds +1 (rebound setup).
     composite_score: int = 0
@@ -458,9 +462,9 @@ def compute_timeframe_kpis(bars: list[Bar], timeframe: str) -> TimeframeKpis:
     )
 
     rsi = last(bundle.rsi14)
-    sma20 = last(bundle.sma20)
-    sma50 = last(bundle.sma50)
-    sma200 = last(bundle.sma200)
+    ema20 = last(bundle.ema20)
+    ema50 = last(bundle.ema50)
+    ema200 = last(bundle.ema200)
     bb_u = last(bundle.bb_upper)
     bb_m = last(bundle.bb_middle)
     bb_l = last(bundle.bb_lower)
@@ -479,14 +483,14 @@ def compute_timeframe_kpis(bars: list[Bar], timeframe: str) -> TimeframeKpis:
         else "neutral"
     )
 
-    sma20_above = (
-        last_close > sma20 if last_close is not None and sma20 is not None else None
+    ema20_above = (
+        last_close > ema20 if last_close is not None and ema20 is not None else None
     )
-    sma50_above = (
-        last_close > sma50 if last_close is not None and sma50 is not None else None
+    ema50_above = (
+        last_close > ema50 if last_close is not None and ema50 is not None else None
     )
-    sma200_above = (
-        last_close > sma200 if last_close is not None and sma200 is not None else None
+    ema200_above = (
+        last_close > ema200 if last_close is not None and ema200 is not None else None
     )
 
     bb_position = None
@@ -499,13 +503,13 @@ def compute_timeframe_kpis(bars: list[Bar], timeframe: str) -> TimeframeKpis:
         bb_position = (last_close - bb_l) / (bb_u - bb_l)
 
     score = 0
-    if sma20_above is True:
+    if ema20_above is True:
         score += 1
-    elif sma20_above is False:
+    elif ema20_above is False:
         score -= 1
-    if sma50_above is True:
+    if ema50_above is True:
         score += 1
-    elif sma50_above is False:
+    elif ema50_above is False:
         score -= 1
     if macd_tone == "bullish":
         score += 1
@@ -533,12 +537,12 @@ def compute_timeframe_kpis(bars: list[Bar], timeframe: str) -> TimeframeKpis:
         last_close=last_close,
         rsi=rsi,
         rsi_tone=rsi_tone,
-        sma20=sma20,
-        sma50=sma50,
-        sma200=sma200,
-        sma20_above=sma20_above,
-        sma50_above=sma50_above,
-        sma200_above=sma200_above,
+        ema20=ema20,
+        ema50=ema50,
+        ema200=ema200,
+        ema20_above=ema20_above,
+        ema50_above=ema50_above,
+        ema200_above=ema200_above,
         bb_upper=bb_u,
         bb_middle=bb_m,
         bb_lower=bb_l,

@@ -9,7 +9,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
  * Style is user-editable: color and line width can be customized per series
  * via a small popover.
  */
-export type IndicatorKey = "sma20" | "sma50" | "sma200" | "bb" | "rsi" | "macd";
+export type IndicatorKey = "ema20" | "ema50" | "ema200" | "bb" | "rsi" | "macd";
 
 export interface IndicatorStyle {
   visible: boolean;
@@ -27,24 +27,28 @@ export interface IndicatorMeta {
   description: string;
 }
 
+// May 2026: switched SMA → EMA across the chart overlays. The `key`
+// strings (ema20/ema50/ema200) and the labels both reflect the new
+// indicator type; the API field names switched in lockstep on the
+// backend side.
 export const INDICATOR_CATALOG: IndicatorMeta[] = [
-  { key: "sma20",  label: "SMA 20",    group: "overlay", defaultColor: "#a855f7", description: "Media mobile semplice 20gg" },
-  { key: "sma50",  label: "SMA 50",    group: "overlay", defaultColor: "#3b82f6", description: "Media mobile semplice 50gg" },
-  { key: "sma200", label: "SMA 200",   group: "overlay", defaultColor: "#f59e0b", description: "Media mobile semplice 200gg (trend lungo)" },
+  { key: "ema20",  label: "EMA 20",    group: "overlay", defaultColor: "#a855f7", description: "Media mobile esponenziale 20gg" },
+  { key: "ema50",  label: "EMA 50",    group: "overlay", defaultColor: "#3b82f6", description: "Media mobile esponenziale 50gg" },
+  { key: "ema200", label: "EMA 200",   group: "overlay", defaultColor: "#f59e0b", description: "Media mobile esponenziale 200gg (trend lungo)" },
   { key: "bb",     label: "Bollinger", group: "overlay", defaultColor: "#0ea5e9", description: "Bande di Bollinger (20, 2σ)" },
   { key: "rsi",    label: "RSI(14)",   group: "panel",   defaultColor: "#7c3aed", description: "Pannello separato — RSI 14gg" },
   { key: "macd",   label: "MACD",      group: "panel",   defaultColor: "#ef4444", description: "Pannello separato — MACD 12/26/9" },
 ];
 
-// Default-on indicators: all three SMAs + Bollinger as overlays; RSI + MACD
-// as separate panels. SMA20 enabled by default (was off): users want a
+// Default-on indicators: all three EMAs + Bollinger as overlays; RSI + MACD
+// as separate panels. EMA20 enabled by default (was off): users want a
 // short-term trend reference alongside the mid- and long-term ones, and
 // the now-relocated indicator badges (right price scale instead of inline)
 // mean an extra line doesn't visually crowd the candles.
 export const DEFAULT_INDICATOR_STATE: IndicatorState = {
-  sma20:  { visible: true,  color: "#a855f7", width: 1 },
-  sma50:  { visible: true,  color: "#3b82f6", width: 1 },
-  sma200: { visible: true,  color: "#f59e0b", width: 1 },
+  ema20:  { visible: true,  color: "#a855f7", width: 1 },
+  ema50:  { visible: true,  color: "#3b82f6", width: 1 },
+  ema200: { visible: true,  color: "#f59e0b", width: 1 },
   bb:     { visible: true,  color: "#0ea5e9", width: 1 },
   rsi:    { visible: true,  color: "#7c3aed", width: 1 },
   macd:   { visible: true,  color: "#ef4444", width: 1 },
@@ -54,8 +58,8 @@ interface Props {
   state: IndicatorState;
   onChange: (key: IndicatorKey, next: IndicatorStyle) => void;
   /** Real periods used to compute the visible indicator series. When provided,
-   *  toggle labels and tooltips reflect the actual numbers ("SMA 10" on a 1m
-   *  range, "SMA 200" on 1y) instead of the static defaults. */
+   *  toggle labels and tooltips reflect the actual numbers ("EMA 10" on a 1m
+   *  range, "EMA 200" on 1y) instead of the static defaults. */
   periods?: IndicatorPeriods;
 }
 
@@ -67,20 +71,20 @@ function describeIndicator(
 ): { label: string; description: string } {
   if (!periods) return { label: meta.label, description: meta.description };
   switch (meta.key) {
-    case "sma20":
+    case "ema20":
       return {
-        label: `SMA ${periods.sma_fast}`,
-        description: `Media mobile semplice ${periods.sma_fast} barre (rapida)`,
+        label: `EMA ${periods.ema_fast}`,
+        description: `Media mobile esponenziale ${periods.ema_fast} barre (rapida)`,
       };
-    case "sma50":
+    case "ema50":
       return {
-        label: `SMA ${periods.sma_mid}`,
-        description: `Media mobile semplice ${periods.sma_mid} barre (intermedia)`,
+        label: `EMA ${periods.ema_mid}`,
+        description: `Media mobile esponenziale ${periods.ema_mid} barre (intermedia)`,
       };
-    case "sma200":
+    case "ema200":
       return {
-        label: `SMA ${periods.sma_slow}`,
-        description: `Media mobile semplice ${periods.sma_slow} barre (trend lungo)`,
+        label: `EMA ${periods.ema_slow}`,
+        description: `Media mobile esponenziale ${periods.ema_slow} barre (trend lungo)`,
       };
     case "rsi":
       return {

@@ -17,9 +17,9 @@ export interface MarketIndicatorPoint {
 }
 
 export interface MarketIndicators {
-  sma20: MarketIndicatorPoint[];
-  sma50: MarketIndicatorPoint[];
-  sma200: MarketIndicatorPoint[];
+  ema20: MarketIndicatorPoint[];
+  ema50: MarketIndicatorPoint[];
+  ema200: MarketIndicatorPoint[];
   bb_upper: MarketIndicatorPoint[];
   bb_middle: MarketIndicatorPoint[];
   bb_lower: MarketIndicatorPoint[];

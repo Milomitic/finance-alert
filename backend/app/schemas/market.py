@@ -11,8 +11,8 @@ class MarketGlobalOut(BaseModel):
     decliners: int
     unchanged: int
     avg_change_pct: float
-    pct_above_sma200: float
-    pct_above_sma50: float
+    pct_above_ema200: float
+    pct_above_ema50: float
     rsi_oversold_count: int
     rsi_overbought_count: int
     near_52w_high_count: int
@@ -24,8 +24,8 @@ class IndexBreadthOut(BaseModel):
     code: str
     name: str
     n: int
-    pct_above_sma200: float | None
-    pct_above_sma50: float | None
+    pct_above_ema200: float | None
+    pct_above_ema50: float | None
     rsi_oversold_count: int
     rsi_overbought_count: int
     avg_change_pct: float | None
@@ -46,7 +46,7 @@ class SectorBreadthOut(BaseModel):
     sector: str
     n_stocks: int
     avg_change_pct: float
-    pct_above_sma200: float
+    pct_above_ema200: float
 
 
 class MoverOut(BaseModel):

@@ -1,10 +1,15 @@
 /**
  * Centralized explanations for acronyms / shorthand used in the dashboard.
  * Used as `title={ACRONYM_HELP.X}` for native HTML hover tooltips.
+ *
+ * May 2026: switched from SMA to EMA across charts + KPIs (see the
+ * recompute_all docstring + cross_rules for context). The key names
+ * here flipped accordingly — anywhere the dashboard mentions a moving
+ * average is now an EMA.
  */
 export const ACRONYM_HELP = {
-  SMA200: "% di stock con prezzo sopra la media mobile semplice a 200 giorni — segnale di trend rialzista a lungo termine",
-  SMA50: "% di stock con prezzo sopra la media mobile semplice a 50 giorni — segnale di trend rialzista a medio termine",
+  EMA200: "% di stock con prezzo sopra la media mobile esponenziale a 200 giorni — segnale di trend rialzista a lungo termine",
+  EMA50: "% di stock con prezzo sopra la media mobile esponenziale a 50 giorni — segnale di trend rialzista a medio termine",
   RSI_OVERSOLD: "Numero di stock in zona oversold (Relative Strength Index 14 periodi sotto 30) — possibile rimbalzo",
   RSI_OVERBOUGHT: "Numero di stock in zona overbought (Relative Strength Index 14 periodi sopra 70) — possibile correzione",
   AD_RATIO: "Rapporto Advancers / Decliners — stock in salita oggi vs in discesa",
@@ -15,7 +20,7 @@ export const ACRONYM_HELP = {
   N_STOCKS: "Numero di stock monitorati nell'indice",
   UNIVERSE: "Numero totale di stock monitorati su tutti gli indici (e quanti hanno dati OHLCV sufficienti)",
   HI_LO_5PCT: "Numero di stock entro il 5% del massimo o minimo a 52 settimane",
-  MOOD_BULLISH: "Bullish: oltre il 60% dei titoli sopra SMA200 e advancers > decliners",
-  MOOD_BEARISH: "Bearish: massimo il 40% dei titoli sopra SMA200 e decliners > advancers",
+  MOOD_BULLISH: "Bullish: oltre il 60% dei titoli sopra EMA200 e advancers > decliners",
+  MOOD_BEARISH: "Bearish: massimo il 40% dei titoli sopra EMA200 e decliners > advancers",
   MOOD_NEUTRAL: "Neutral: regime intermedio — né nettamente rialzista né ribassista",
 } as const;

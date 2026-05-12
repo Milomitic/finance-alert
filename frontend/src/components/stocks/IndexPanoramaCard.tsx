@@ -24,7 +24,7 @@ function fmtChange(v: number | null): string {
 }
 
 function deriveMood(d: IndexBreadth): "bullish" | "neutral" | "bearish" {
-  const pct = d.pct_above_sma200 ?? 50;
+  const pct = d.pct_above_ema200 ?? 50;
   if (pct >= 60 && d.advancers > d.decliners) return "bullish";
   if (pct <= 40 && d.decliners > d.advancers) return "bearish";
   return "neutral";
@@ -72,22 +72,22 @@ export function IndexPanoramaCard({ data }: Props) {
       help: ACRONYM_HELP.N_STOCKS,
     },
     {
-      label: "% > SMA200",
-      value: fmtPct(data.pct_above_sma200),
+      label: "% > EMA200",
+      value: fmtPct(data.pct_above_ema200),
       icon: TrendingUp,
-      help: ACRONYM_HELP.SMA200,
-      tone: data.pct_above_sma200 == null ? "default" :
-            data.pct_above_sma200 >= 60 ? "good" :
-            data.pct_above_sma200 <= 40 ? "bad" : "default",
+      help: ACRONYM_HELP.EMA200,
+      tone: data.pct_above_ema200 == null ? "default" :
+            data.pct_above_ema200 >= 60 ? "good" :
+            data.pct_above_ema200 <= 40 ? "bad" : "default",
     },
     {
-      label: "% > SMA50",
-      value: fmtPct(data.pct_above_sma50),
+      label: "% > EMA50",
+      value: fmtPct(data.pct_above_ema50),
       icon: TrendingUp,
-      help: ACRONYM_HELP.SMA50,
-      tone: data.pct_above_sma50 == null ? "default" :
-            data.pct_above_sma50 >= 60 ? "good" :
-            data.pct_above_sma50 <= 40 ? "bad" : "default",
+      help: ACRONYM_HELP.EMA50,
+      tone: data.pct_above_ema50 == null ? "default" :
+            data.pct_above_ema50 >= 60 ? "good" :
+            data.pct_above_ema50 <= 40 ? "bad" : "default",
     },
     {
       label: "Avg Δ%",

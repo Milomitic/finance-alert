@@ -38,7 +38,7 @@ def test_get_detail_full_payload(db):
     assert len(d.ohlcv) > 0
     assert d.kpis.last_close is not None
     assert d.kpis.high_52w is not None
-    assert any(p.value is not None for p in d.sma50)
+    assert any(p.value is not None for p in d.ema50)
     assert any(p.value is not None for p in d.rsi14)
 
 

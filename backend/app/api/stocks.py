@@ -191,9 +191,9 @@ def get_stock_detail(
             for b in detail.ohlcv
         ],
         indicators=IndicatorSeriesOut(
-            sma20=[IndicatorPointOut(date=p.date, value=p.value) for p in detail.sma20],
-            sma50=[IndicatorPointOut(date=p.date, value=p.value) for p in detail.sma50],
-            sma200=[IndicatorPointOut(date=p.date, value=p.value) for p in detail.sma200],
+            ema20=[IndicatorPointOut(date=p.date, value=p.value) for p in detail.ema20],
+            ema50=[IndicatorPointOut(date=p.date, value=p.value) for p in detail.ema50],
+            ema200=[IndicatorPointOut(date=p.date, value=p.value) for p in detail.ema200],
             rsi14=[IndicatorPointOut(date=p.date, value=p.value) for p in detail.rsi14],
             bb_upper=[IndicatorPointOut(date=p.date, value=p.value) for p in detail.bb_upper],
             bb_middle=[IndicatorPointOut(date=p.date, value=p.value) for p in detail.bb_middle],
