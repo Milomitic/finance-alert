@@ -29,9 +29,19 @@ const COUNTRY_TO_FLAG: Record<string, string> = {
   DK: "dk",
   // Generic EU is the last-resort fallback when we can't pin a country
   EU: "eu",
-  // Other catalog countries
-  CA: "ca",
+  // Other catalog countries — kept in sync with public/flags/*.svg
+  // (curl from flagcdn.com — CC0). Order: alphabetical by ISO code.
   AU: "au",
+  BM: "bm",
+  BR: "br",
+  CA: "ca",
+  CL: "cl",
+  HU: "hu",
+  IL: "il",
+  LU: "lu",
+  NO: "no",
+  SE: "se",
+  TW: "tw",
 };
 
 /**
@@ -66,6 +76,15 @@ const COUNTRY_NAME_TO_FLAG: Record<string, string> = {
   "ireland": "ie",
   "finland": "fi",
   "denmark": "dk",
+  "norway": "no",
+  "sweden": "se",
+  "brazil": "br",
+  "chile": "cl",
+  "israel": "il",
+  "luxembourg": "lu",
+  "hungary": "hu",
+  "bermuda": "bm",
+  "taiwan": "tw",
 };
 
 /**
@@ -85,16 +104,23 @@ const SUFFIX_TO_FLAG: Record<string, string> = {
   IR: "ie",   // Euronext Dublin
   HE: "fi",   // Helsinki
   CO: "dk",   // Copenhagen
+  OL: "no",   // Oslo Børs
+  ST: "se",   // Stockholm
+  IL: "gb",   // London International (GDRs like SMSN.IL)
   SW: "ch",   // SIX Swiss
   Z: "ch",    // SIX (alt)
   MI: "it",   // Borsa Italiana
   L: "gb",    // London
-  // Asia
+  // Americas
+  SA: "br",   // Sao Paulo (B3)
+  // Asia & Oceania
   HK: "hk",
   SS: "cn",   // Shanghai
   SZ: "cn",   // Shenzhen
   T: "jp",    // Tokyo
   KS: "kr",   // KOSPI (Seoul)
+  TW: "tw",   // Taiwan
+  AX: "au",   // ASX (Australia)
 };
 
 /**

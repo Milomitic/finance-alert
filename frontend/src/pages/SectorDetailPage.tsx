@@ -1,5 +1,8 @@
 import {
+  ArrowDown,
   ArrowLeft,
+  ArrowUp,
+  ArrowUpDown,
   BarChart3,
   Building2,
   Factory,
@@ -9,6 +12,7 @@ import {
   TrendingDown,
   TrendingUp,
 } from "lucide-react";
+import { useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
 import { StockIdentity } from "@/components/dashboard/StockIdentity";
@@ -258,37 +262,7 @@ export default function SectorDetailPage() {
         />
       </div>
 
-      <Card>
-        <CardContent className="p-4">
-          <SectionTitle
-            icon={Building2}
-            label={`Tutte le aziende (${d.stocks.length})`}
-            className="mb-3"
-          />
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm tabular-nums">
-              <thead>
-                <tr className="text-[10px] uppercase tracking-wider text-muted-foreground/80 border-b border-border/60">
-                  <th className="px-2 py-2 text-left font-mono">Stock</th>
-                  <th className="px-2 py-2 text-left font-mono">Paese</th>
-                  <th className="px-2 py-2 text-right font-mono">Score</th>
-                  <th className="px-2 py-2 text-right font-mono">P/E</th>
-                  <th className="px-2 py-2 text-right font-mono">P/B</th>
-                  <th className="px-2 py-2 text-right font-mono">ROE</th>
-                  <th className="px-2 py-2 text-right font-mono">Cresc. ric.</th>
-                  <th className="px-2 py-2 text-right font-mono">Div. Y</th>
-                  <th className="px-2 py-2 text-right font-mono">Mkt cap</th>
-                </tr>
-              </thead>
-              <tbody>
-                {d.stocks.map((row) => (
-                  <StockRow key={row.ticker} row={row} />
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
+      <SortableStocksTable rows={d.stocks} />
     </div>
   );
 }
@@ -550,6 +524,161 @@ function DistributionCard({
             })}
           </div>
         )}
+      </CardContent>
+    </Card>
+  );
+}
+
+/* ─── SortableStocksTable ────────────────────────────────────────────────── */
+/* Client-side sortable variant of the main "Tutte le aziende" table.
+ * State lives here (not lifted) — sort is a pure view concern and the
+ * page never needs to read it back. Sort columns map to the SectorStockRow
+ * field; the comparator handles null-last consistently for both numeric
+ * and string columns.
+ *
+ * UX:
+ *   - Click header → set sort key (default desc for numeric, asc for
+ *     ticker/country); same key → flip direction.
+ *   - Active column shows an up/down chevron; inactive columns show a
+ *     dim two-way arrow so the user knows they ARE clickable.
+ *   - Default sort is composite DESC (mirrors top-picks ordering) so
+ *     the table opens on the highest-score stocks first.
+ */
+
+type SortKey =
+  | "ticker"
+  | "country"
+  | "composite"
+  | "pe"
+  | "pb"
+  | "roe"
+  | "revenue_growth"
+  | "dividend_yield"
+  | "market_cap";
+
+type SortDir = "asc" | "desc";
+
+interface ColumnSpec {
+  key: SortKey;
+  label: string;
+  align: "left" | "right";
+  /** Default sort direction the column flips to when first clicked.
+   *  Numeric columns default desc (largest first), string columns asc. */
+  defaultDir: SortDir;
+}
+
+const COLUMNS: ColumnSpec[] = [
+  { key: "ticker", label: "Stock", align: "left", defaultDir: "asc" },
+  { key: "country", label: "Paese", align: "left", defaultDir: "asc" },
+  { key: "composite", label: "Score", align: "right", defaultDir: "desc" },
+  { key: "pe", label: "P/E", align: "right", defaultDir: "asc" },
+  { key: "pb", label: "P/B", align: "right", defaultDir: "asc" },
+  { key: "roe", label: "ROE", align: "right", defaultDir: "desc" },
+  { key: "revenue_growth", label: "Cresc. ric.", align: "right", defaultDir: "desc" },
+  { key: "dividend_yield", label: "Div. Y", align: "right", defaultDir: "desc" },
+  { key: "market_cap", label: "Mkt cap", align: "right", defaultDir: "desc" },
+];
+
+function compareRows(a: SectorStockRow, b: SectorStockRow, key: SortKey, dir: SortDir): number {
+  const av = a[key];
+  const bv = b[key];
+  // Null-last regardless of direction: a row with no value (e.g. no P/E)
+  // should never bubble to the top of either asc or desc sort.
+  const aNull = av === null || av === undefined;
+  const bNull = bv === null || bv === undefined;
+  if (aNull && bNull) return 0;
+  if (aNull) return 1;
+  if (bNull) return -1;
+  let cmp: number;
+  if (typeof av === "number" && typeof bv === "number") {
+    cmp = av - bv;
+  } else {
+    cmp = String(av).localeCompare(String(bv));
+  }
+  return dir === "asc" ? cmp : -cmp;
+}
+
+function SortableStocksTable({ rows }: { rows: SectorStockRow[] }) {
+  const [sortKey, setSortKey] = useState<SortKey>("composite");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
+
+  const sorted = useMemo(() => {
+    // Slice() so we don't mutate the prop array (React rules + downstream
+    // memoisation guarantees in the parent hook).
+    return [...rows].sort((a, b) => compareRows(a, b, sortKey, sortDir));
+  }, [rows, sortKey, sortDir]);
+
+  function onHeaderClick(col: ColumnSpec) {
+    if (col.key === sortKey) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(col.key);
+      setSortDir(col.defaultDir);
+    }
+  }
+
+  return (
+    <Card>
+      <CardContent className="p-4">
+        <SectionTitle
+          icon={Building2}
+          label={`Tutte le aziende (${rows.length})`}
+          className="mb-3"
+        />
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm tabular-nums">
+            <thead>
+              <tr className="text-[10px] uppercase tracking-wider text-muted-foreground/80 border-b border-border/60">
+                {COLUMNS.map((col) => {
+                  const active = col.key === sortKey;
+                  const Indicator = active
+                    ? sortDir === "asc"
+                      ? ArrowUp
+                      : ArrowDown
+                    : ArrowUpDown;
+                  return (
+                    <th
+                      key={col.key}
+                      // Clickable header: small hover affordance + cursor.
+                      // The chevron flips between Up/Down for the active
+                      // column and stays dim two-way for inactive ones —
+                      // a discoverability hint per the "every clickable
+                      // surface MUST look clickable" UX rule.
+                      onClick={() => onHeaderClick(col)}
+                      className={cn(
+                        "px-2 py-2 font-mono select-none cursor-pointer",
+                        "hover:text-foreground transition-colors",
+                        col.align === "right" ? "text-right" : "text-left",
+                        active && "text-foreground",
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          "inline-flex items-center gap-1",
+                          col.align === "right" && "flex-row-reverse",
+                        )}
+                      >
+                        <span>{col.label}</span>
+                        <Indicator
+                          className={cn(
+                            "h-3 w-3 shrink-0",
+                            active ? "opacity-100" : "opacity-40",
+                          )}
+                          aria-hidden
+                        />
+                      </span>
+                    </th>
+                  );
+                })}
+              </tr>
+            </thead>
+            <tbody>
+              {sorted.map((row) => (
+                <StockRow key={row.ticker} row={row} />
+              ))}
+            </tbody>
+          </table>
+        </div>
       </CardContent>
     </Card>
   );
