@@ -1,4 +1,5 @@
 import { ArrowDown, ArrowUp } from "lucide-react";
+import { Link } from "react-router-dom";
 
 import { useLiveAssets, type LiveAsset } from "@/hooks/useLiveAssets";
 import { cn } from "@/lib/utils";
@@ -57,8 +58,17 @@ function TickerItem({ asset }: { asset: LiveAsset }) {
     ? ArrowDown
     : null;
 
+  // Each tile is a Link to the MarketDetailPage for that symbol —
+  // same routing convention as LiveAssetsPanel uses. The hover-pause
+  // on the parent rail keeps working because the animation is on the
+  // outer .ticker-rail, not on the Link itself; the Link inherits the
+  // pointer-events normally so click flows through.
   return (
-    <span className="inline-flex items-center gap-1.5 px-3.5 py-0.5 border-r border-border/40 whitespace-nowrap shrink-0">
+    <Link
+      to={`/markets/${encodeURIComponent(asset.symbol)}`}
+      className="inline-flex items-center gap-2 px-4 py-0.5 border-r border-border/40 whitespace-nowrap shrink-0 hover:bg-accent/40 transition-colors"
+      title={`${asset.name} — apri la pagina di dettaglio`}
+    >
       {/* Pulsing green dot for OPEN markets — the "live" tell.
           When cash is closed but futures price is being shown, an
           amber "FUT" badge replaces the dot so the user understands
@@ -70,28 +80,31 @@ function TickerItem({ asset }: { asset: LiveAsset }) {
         </span>
       ) : asset.using_futures ? (
         <span
-          className="shrink-0 px-0.5 py-0 rounded text-[8px] font-bold uppercase tracking-wider bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-200"
+          className="shrink-0 px-1 py-0 rounded text-[9px] font-bold uppercase tracking-wider bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-200"
           title="Cash market chiuso · prezzo dal contratto futures"
         >
           FUT
         </span>
       ) : null}
-      <span className="font-mono font-semibold text-[12px] tracking-tight">
+      {/* Font bumped from text-[12px] → text-sm (~14px). The ticker
+          tape used to feel cramped; the readability gain at this
+          size is worth the slight extra horizontal footprint. */}
+      <span className="font-mono font-semibold text-sm tracking-tight">
         {asset.name}
       </span>
-      <span className="font-mono text-[12px] tabular-nums text-foreground/85">
+      <span className="font-mono text-sm tabular-nums text-foreground/85">
         {fmtPrice(price)}
       </span>
       <span
         className={cn(
-          "inline-flex items-center gap-0.5 font-mono font-semibold text-[12px] tabular-nums",
+          "inline-flex items-center gap-0.5 font-mono font-semibold text-sm tabular-nums",
           tone,
         )}
       >
-        {ArrowIcon && <ArrowIcon className="h-3 w-3" />}
+        {ArrowIcon && <ArrowIcon className="h-3.5 w-3.5" />}
         {fmtPct(changePct)}
       </span>
-    </span>
+    </Link>
   );
 }
 
@@ -102,9 +115,11 @@ export function MarketTickerTape() {
   // Loading / empty: thin animated bar to keep the layout stable.
   // Empty isn't really expected (the dashboard auth gate already
   // guarantees the user has the data) but defensive.
+  // Height bumped 7→9 (28→36px) to match the live rail's new
+  // text-sm font (was text-[12px]).
   if (q.isLoading || assets.length === 0) {
     return (
-      <div className="relative w-full overflow-hidden rounded-md border bg-card/40 h-7">
+      <div className="relative w-full overflow-hidden rounded-md border bg-card/40 h-9">
         <div className="absolute inset-0 animate-pulse bg-muted/30" />
       </div>
     );
@@ -138,7 +153,9 @@ export function MarketTickerTape() {
         "group",
       )}
     >
-      <div className="flex items-center h-7 ticker-rail min-w-0">
+      {/* Rail height bumped 7→9 (28→36px) to fit the new text-sm
+          ticker pills without crushing their padding. */}
+      <div className="flex items-center h-9 ticker-rail min-w-0">
         {rail}
         <div aria-hidden>{rail}</div>
       </div>
