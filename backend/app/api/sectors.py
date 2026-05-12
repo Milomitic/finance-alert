@@ -178,11 +178,16 @@ def _to_pct(v):
 
 
 def _build_stock_row(stock, score):
+    # L1-only fundamentals lookup: read directly from the in-memory
+    # `_CACHE` dict. Cold tickers fall back to None for PE/PB/ROE/etc
+    # rather than triggering a network fetch — the sector detail
+    # endpoint used to iterate `get_fundamentals(ticker)` per stock,
+    # which on cold caches or open yfinance circuits could spend 50+
+    # seconds on a single 150-stock sector (Information Technology was
+    # the canonical victim, May 2026). L1 is hydrated from L2 at
+    # startup (~978 entries on this catalog) so warm coverage is >85%.
     pe = pb = roe = rev_g = pm = dy = None
-    try:
-        funds = stock_fundamentals_service.get_fundamentals(stock.ticker)
-    except Exception:
-        funds = None
+    funds = stock_fundamentals_service._CACHE.get(stock.ticker)  # noqa: SLF001
     if funds is not None and funds.micro is not None:
         m = funds.micro
         pe = m.trailing_pe if _is_finite(m.trailing_pe) else None
