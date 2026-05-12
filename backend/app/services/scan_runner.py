@@ -118,12 +118,25 @@ def run_tracked_scan(
         result = scan_universe(
             db, on_progress=on_progress, progress_every=5, cancel_check=cancel_check
         )
-        run.status = "success"
-        run.phase = None
+        # scan_universe done — but the run is NOT complete yet. The downstream
+        # tasks (market snapshot, score recompute, price alerts) can take
+        # seconds to minutes and the user wants the toast to stay visible
+        # showing what's happening. Hence: keep status="running", switch to
+        # the "evaluating:persisting" sub-phase, and commit so the UI picks
+        # it up on the next poll.
+        run.phase = "evaluating:persisting"
         run.current_target = None
         run.stocks_scanned = result.stocks_scanned
         run.stocks_skipped = result.stocks_skipped
         run.alerts_fired = result.alerts_fired
+        db.commit()
+
+        # Cancel between persisting sub-tasks. Each block raises ScanCancelled
+        # so the outer handler converts it into a clean "failed/cancelled" row
+        # with the friendly message (instead of overwriting with status=success
+        # at the bottom).
+        if cancel_check():
+            raise ScanCancelled("Cancellato dall'utente")
 
         # Recompute market dashboard snapshot — non-fatal, alert pipeline succeeded already.
         try:
@@ -134,19 +147,53 @@ def run_tracked_scan(
         except Exception as snap_exc:  # noqa: BLE001
             logger.warning(f"[scan_runner] snapshot recompute failed (non-fatal): {snap_exc}")
 
+        if cancel_check():
+            raise ScanCancelled("Cancellato dall'utente")
+
         # Recompute composite stock scores — non-fatal, scan succeeded already.
         # Same try/except pattern as the market-snapshot recompute above.
+        # Threading the cancel_check through so a Stop click during the long
+        # score loop bails within one stock (instead of waiting up to ~90s
+        # for the loop to finish naturally).
         try:
             from app.services import score_service
+            from app.services.score_service import RecomputeCancelled
 
-            n_ok, n_failed, n_skipped = score_service.recompute_all(db)
-            logger.info(
-                f"[scan_runner] {n_ok} stock score(s) recomputed "
-                f"({n_failed} failed, {n_skipped} skipped) "
-                f"for ScanRun {run.id}"
-            )
+            # Bump the parent ScanRun's heartbeat from inside the score loop so
+            # the stale detector (120s without heartbeat → "Scan bloccato") doesn't
+            # trip during the long recompute path. The on_progress fires every
+            # `progress_every` stocks during scoring AND periodically during the
+            # sector_stats pre-pass, well within the 120s window. We don't touch
+            # progress_done/total here — they correctly reflect the scan_universe
+            # result so the bar stays at 100% during persisting.
+            def _persisting_heartbeat(_done: int, _total: int) -> None:
+                run.last_progress_at = datetime.now(UTC)
+                # No explicit commit — score_service commits per stock and our
+                # heartbeat update piggybacks on those commits.
+
+            try:
+                n_ok, n_failed, n_skipped = score_service.recompute_all(
+                    db,
+                    on_progress=_persisting_heartbeat,
+                    cancel_check=cancel_check,
+                )
+                logger.info(
+                    f"[scan_runner] {n_ok} stock score(s) recomputed "
+                    f"({n_failed} failed, {n_skipped} skipped) "
+                    f"for ScanRun {run.id}"
+                )
+            except RecomputeCancelled:
+                # Propagate as the scan-level cancel so the outer handler can
+                # finalize the row cleanly. The user clicked Stop — same
+                # outcome whether it landed inside or outside the score loop.
+                raise ScanCancelled("Cancellato dall'utente")
+        except ScanCancelled:
+            raise
         except Exception as score_exc:  # noqa: BLE001
             logger.warning(f"[scan_runner] score recompute failed (non-fatal): {score_exc}")
+
+        if cancel_check():
+            raise ScanCancelled("Cancellato dall'utente")
 
         # Evaluate price-target alerts — non-fatal, scan succeeded already.
         try:
@@ -158,6 +205,10 @@ def run_tracked_scan(
         except Exception as pa_exc:  # noqa: BLE001
             logger.warning(f"[scan_runner] price alert evaluation failed (non-fatal): {pa_exc}")
 
+        # All persisting work done — flip to success + clear phase + stamp completed_at
+        # in a single commit so the UI's post-completion 30s window starts cleanly.
+        run.status = "success"
+        run.phase = None
         run.completed_at = datetime.now(UTC)
         db.commit()
         logger.info(

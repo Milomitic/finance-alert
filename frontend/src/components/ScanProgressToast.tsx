@@ -52,6 +52,8 @@ const SCAN_LABELS: RunToastLabels = {
         return "Caricamento regole attive";
       case "evaluating:scoring":
         return "Valutazione regole per stock";
+      case "evaluating:persisting":
+        return "Finalizzazione: snapshot · score · price alert";
       case "evaluating":
         return "Valutazione regole";
       default:
@@ -82,6 +84,11 @@ const SCAN_LABELS: RunToastLabels = {
       case "evaluating:scoring":
       case "evaluating":
         return BASELINE_EVALUATING_SCORING_BARS_PER_SEC;
+      case "evaluating:persisting":
+        // No real per-item progress in this phase (the bar sits at 100% from
+        // the end of scoring). The baseline is only used if `remaining > 0`,
+        // which it isn't here — so any value works. Return 1 to be safe.
+        return 1;
       default:
         return BASELINE_OVERALL_BARS_PER_SEC;
     }

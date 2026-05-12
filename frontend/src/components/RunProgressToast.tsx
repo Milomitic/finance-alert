@@ -86,10 +86,15 @@ function elapsedSeconds(status: ScanStatusInfo, nowMs: number): number {
 }
 
 /** ETA seconds remaining. Live rate after ≥1s + ≥1 stock; otherwise the
- *  kind+phase baseline supplied by the consumer. */
+ *  kind+phase baseline supplied by the consumer.
+ *
+ *  Critically takes `phaseElapsed` (not the run-total elapsed): each phase
+ *  resets `progress_done` to 0, so blending the fetch's elapsed into the
+ *  evaluate's rate would yield a phantom rate ~10× too low. The header still
+ *  displays the run-total elapsed — only the ETA math wants per-phase. */
 function estimateEtaSec(
   status: ScanStatusInfo,
-  elapsed: number,
+  phaseElapsed: number,
   labels: RunToastLabels,
 ): number | null {
   const total = status.progress_total;
@@ -97,8 +102,8 @@ function estimateEtaSec(
   if (total <= 0) return null;
   const remaining = Math.max(0, total - done);
   if (remaining <= 0) return 0;
-  if (done > 0 && elapsed >= 1) {
-    const rate = done / elapsed;
+  if (done > 0 && phaseElapsed >= 1) {
+    const rate = done / phaseElapsed;
     if (rate > 0) return remaining / rate;
   }
   const baseline = labels.baselineRatePerSec(status.phase);
@@ -132,6 +137,27 @@ export function RunProgressToast({ status, labels, onStop, isStopping }: Props) 
     }
   }, [status?.last_run_id]);
 
+  // Track when the current phase started, so the ETA rate uses per-phase elapsed
+  // instead of run-total elapsed. Without this, the rate during evaluating
+  // includes the fetch time and yields a wildly inflated ETA. Reset on each
+  // phase change (including sub-phase transitions like fetching:backfill →
+  // fetching:incremental) so each phase's baseline gets a clean denominator.
+  const phaseStartRef = useRef<{ phase: string | null; runId: number | null; startMs: number }>(
+    { phase: null, runId: null, startMs: 0 },
+  );
+  useEffect(() => {
+    if (!status) return;
+    const phaseChanged = status.phase !== phaseStartRef.current.phase;
+    const runChanged = status.last_run_id !== phaseStartRef.current.runId;
+    if (phaseChanged || runChanged) {
+      phaseStartRef.current = {
+        phase: status.phase,
+        runId: status.last_run_id,
+        startMs: Date.now(),
+      };
+    }
+  }, [status?.phase, status?.last_run_id]);
+
   if (!status || !status.last_run_id) return null;
   if (dismissedRunId === status.last_run_id) return null;
 
@@ -151,8 +177,14 @@ export function RunProgressToast({ status, labels, onStop, isStopping }: Props) 
       ? Math.round((status.progress_done / status.progress_total) * 100)
       : 0;
   const isStale = status.is_stale;
+  const phaseElapsed =
+    phaseStartRef.current.startMs > 0 &&
+    phaseStartRef.current.phase === status.phase &&
+    phaseStartRef.current.runId === status.last_run_id
+      ? (now - phaseStartRef.current.startMs) / 1000
+      : 0;
   const etaSec =
-    isRunning && !isStale ? estimateEtaSec(status, elapsed, labels) : null;
+    isRunning && !isStale ? estimateEtaSec(status, phaseElapsed, labels) : null;
 
   const variant = isStale
     ? "stale"

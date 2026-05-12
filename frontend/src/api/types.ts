@@ -186,6 +186,7 @@ export type ScanPhase =
   | "evaluating"
   | "evaluating:loading_rules"
   | "evaluating:scoring"
+  | "evaluating:persisting"
   | "sector_stats"
   | "scoring";
 
