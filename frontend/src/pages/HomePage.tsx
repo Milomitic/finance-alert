@@ -4,6 +4,7 @@ import { AlertsCompactPanel } from "@/components/dashboard/AlertsCompactPanel";
 import { BreadthMatrixTable } from "@/components/dashboard/BreadthMatrixTable";
 import { FiftyTwoWeekVolCard } from "@/components/dashboard/FiftyTwoWeekVolCard";
 import { HeroStrip } from "@/components/dashboard/HeroStrip";
+import { LiveVolumeMoversCard } from "@/components/dashboard/LiveVolumeMoversCard";
 import { MarketTickerTape } from "@/components/dashboard/MarketTickerTape";
 import { DataSourcesCard } from "@/components/dashboard/DataSourcesCard";
 import { ScanHeaderButton } from "@/components/dashboard/ScanHeaderButton";
@@ -148,7 +149,16 @@ export default function HomePage() {
         <ScanHeaderButton nextScanAt={nextScanAt} />
       </div>
       <HeroStrip global={m.global} byIndex={m.by_index} />
-      <BreadthMatrixTable data={m.by_index} />
+      {/* Row 2: same [3fr_2fr] split as HeroStrip — breadth matrix on
+          the left (the wider, table-shaped artifact) + live-volume
+          movers on the right (vertical list, narrower, polls live
+          prices for the most actively traded stocks of the day). The
+          symmetric split keeps the page rhythm consistent: row 1 and
+          row 2 read as "left = aggregate state, right = live signal". */}
+      <div className="grid gap-3 lg:grid-cols-[3fr_2fr]">
+        <BreadthMatrixTable data={m.by_index} />
+        <LiveVolumeMoversCard movers={m.movers} />
+      </div>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 lg:h-[520px]">
         <div className="h-full min-h-0"><RsiHistogramCard rsi={m.rsi_distribution} indices={m.by_index} /></div>
         <div className="h-full min-h-0"><SectorsHeatmapCard sectors={m.sectors} /></div>
