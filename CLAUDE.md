@@ -139,32 +139,87 @@ restart cost is the same ~1-3s either way, but the COST OF NOT RESTARTING
 is asymmetric — silent stale-code on backend, visible-stale-page on
 frontend (user notices instantly, F5s, problem solved).
 
-### Don't forget: FastAPI also serves a pre-built frontend bundle on :8000
+### ⚠️ FastAPI serves a pre-built frontend bundle on :8000 — rebuild after every FE commit
 
 `backend/app/main.py` mounts `frontend/dist/` and serves it as the SPA shell
 when present. So the same app exists at TWO URLs simultaneously:
 
-| URL | Source | Picks up source edits? |
-|---|---|---|
-| http://localhost:**5173**/ | Vite dev server (`npm run dev`) | ✅ via HMR |
-| http://localhost:**8000**/ | FastAPI serving `frontend/dist/` static files | ❌ NEVER — needs `npm run build` |
+| URL | Source | Picks up source edits? | When the user reports "non funziona" |
+|---|---|---|---|
+| http://localhost:**5173**/ | Vite dev server (`npm run dev`) | ✅ via HMR | F5 |
+| http://localhost:**8000**/ | FastAPI serving `frontend/dist/` static files | ❌ NEVER — needs `npm run build` | **REBUILD DIST FIRST**, then hard-reload |
 
-Symptom that just bit us: the user said "the score refresh button doesn't
-work on backend" — they meant they were testing on :8000, the dist bundle
-hadn't been rebuilt since yesterday afternoon, so the old code (without the
-recompute mutation) was being served. The button on :5173 worked fine
-because Vite HMR'd the new code in.
+**The user defaults to testing on :8000 in this repo.** Two losses on this in
+recent sessions (recompute button + scan-toast sub-phases): edits land,
+backend reloads, agent says "F5 to see it", user says "still old". Root
+cause every time: dist wasn't rebuilt.
 
-**Operational rule when frontend code changes:** if the user is using :8000,
-run `cd frontend && npm run build` and have them hard-reload. If they're
-on :5173 only, no rebuild needed.
+#### Post-commit hygiene checklist (run after EVERY commit that touches `frontend/`)
 
-Quick check: the dist's `index.html` mtime tells you when it was last
-built; compare against the source files you just edited.
+Treat this as a hard pre-condition for telling the user "ready". Skip it →
+the user wastes a round-trip telling you the page is still old.
+
 ```bash
+# 1. Did this commit touch any frontend source?
+git diff --name-only HEAD~1 HEAD | grep -qE '^frontend/(src|public|index\.html|vite\.config|package(-lock)?\.json|tsconfig)' && echo "FE touched — must rebuild" || echo "FE untouched — skip rebuild"
+
+# 2. If touched, compare dist freshness vs the most-recently-edited FE source:
 stat -c '%y' frontend/dist/index.html
-stat -c '%y' frontend/src/components/<file-you-edited>
+stat -c '%y' $(git diff --name-only HEAD~1 HEAD | grep '^frontend/src/' | head -1)
+
+# 3. Rebuild if dist is older:
+cd frontend && npm run build
+# Expected: "✓ built in ~1s" + new index.html + new hashed assets.
+
+# 4. Sanity-check that the new strings actually landed in the bundle. Vite
+#    minifies, so grep individual string literals (not full sentences):
+grep -c "<distinctive-string-from-your-change>" frontend/dist/assets/index-*.js
+# Expect 1+ matches. Zero = the change isn't in the bundle and you have a
+# stale build.
+
+# 5. Tell the user to hard-refresh (Ctrl+Shift+R / Cmd+Shift+R), NOT plain F5.
+#    Browsers cache hashed assets aggressively; soft reload may keep the old
+#    bundle. The hash in the filename changes on each build, so a hard
+#    reload always pulls the new one.
 ```
+
+#### Worktree pitfall: `frontend/node_modules/.bin/` may be broken in a worktree
+
+The git worktree's `node_modules` often has the package directories but
+missing `.bin/` symlinks (Windows + worktree edge case). Symptom:
+
+```bash
+$ npm run build
+> tsc -b && vite build
+"tsc" non è riconosciuto come comando interno o esterno...
+
+$ ls node_modules/.bin/
+ls: cannot access 'node_modules/.bin/': No such file or directory
+```
+
+`tsc` lives at `node_modules/typescript/bin/tsc` — the package is there, just
+the .bin shim is missing. Fix: `npm install` from the frontend dir. It's
+fast (~10s on warm cache) and only needs to run once per worktree session.
+
+```bash
+cd frontend && npm install     # restores .bin/ symlinks
+cd frontend && npm run build   # now works
+```
+
+#### Why "just run `npm run build`" isn't enough — typical agent failure modes
+
+| Agent shortcut | What goes wrong | Fix |
+|---|---|---|
+| "Source edited, F5 should work" | User is on :8000 → bundle is from last build → no F5 helps | Always rebuild after FE edits |
+| `npm run build` in worktree → tsc not found | `.bin/` broken | `npm install` first |
+| Build "succeeds" with TS errors | `npm run build` = `tsc -b && vite build`. tsc errors stop the build entirely | Read the tail; if there are TS errors NOT from your change, they're pre-existing — but a build error from YOUR change must be fixed before declaring done |
+| User refreshes with F5, still sees old | Browser cached the hashed asset. Each `npm run build` mints a new hash; the index.html points to the new file, but the F5'd page may have already had the old index in memory | Tell the user "hard reload" (Ctrl+Shift+R) not "F5" |
+
+#### TL;DR rule
+
+Anything touching `frontend/` → **commit → rebuild dist → verify strings are in bundle → THEN tell user to hard-reload**.
+Anything touching `backend/app/**` → **commit → restart uvicorn → verify /api/health → THEN tell user**.
+Both? Do both.
 
 ---
 
