@@ -151,6 +151,50 @@ def get_live_assets(_user: User = Depends(get_current_user)) -> LiveAssetsOut:
     return LiveAssetsOut(assets=out)
 
 
+def _migrate_sma_keys_in_place(payload: dict) -> None:
+    """Lazy SMA→EMA key migration for snapshots persisted before the
+    May 2026 indicator rename.
+
+    The market_snapshot row stores a serialised JSON blob whose keys
+    used to be `pct_above_sma200` / `pct_above_sma50`. The new
+    Pydantic schema expects `pct_above_ema200` / `pct_above_ema50`
+    (matching the math change from SMA to EMA — see
+    `services/market_stats_service.py` for context).
+
+    Rather than force a full scan to regenerate the snapshot — which
+    can take 5+ minutes and is the user's lived "broken dashboard"
+    experience — we rewrite the keys in-place at read time. The next
+    scan's `recompute_snapshot` will persist the new keys directly,
+    making this migration self-healing on first scan after deploy.
+
+    Mutates `payload` in place. Safe to call on a payload that already
+    has the new keys — the rename is a no-op when the old key is
+    absent.
+    """
+    OLD_TO_NEW = {
+        "pct_above_sma200": "pct_above_ema200",
+        "pct_above_sma50": "pct_above_ema50",
+    }
+
+    def _rename(d: dict) -> None:
+        for old, new in OLD_TO_NEW.items():
+            if old in d and new not in d:
+                d[new] = d.pop(old)
+            elif old in d:
+                # Both keys present (shouldn't happen in practice) — keep
+                # the new value, drop the old.
+                d.pop(old, None)
+
+    if isinstance(payload.get("global"), dict):
+        _rename(payload["global"])
+    for row in payload.get("by_index") or []:
+        if isinstance(row, dict):
+            _rename(row)
+    for row in payload.get("sectors") or []:
+        if isinstance(row, dict):
+            _rename(row)
+
+
 @router.get("/market-summary", response_model=MarketSummaryOut, response_model_by_alias=True)
 def get_market_summary(
     db: Session = Depends(get_db),
@@ -161,6 +205,9 @@ def get_market_summary(
         return MarketSummaryOut(available=False, reason="no_scan_yet")
 
     payload = json.loads(snap.payload)
+    # Migrate legacy SMA-named keys before Pydantic validation. Cheap
+    # in-place dict-rename, self-healing on the next scan.
+    _migrate_sma_keys_in_place(payload)
     computed_at_utc = snap.computed_at.replace(tzinfo=UTC) if snap.computed_at.tzinfo is None else snap.computed_at
     is_stale = (datetime.now(UTC) - computed_at_utc) > STALE_THRESHOLD
 
