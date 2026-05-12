@@ -1999,6 +1999,7 @@ def recompute_all(
     on_progress=None,
     progress_every: int = 10,
     cancel_check=None,
+    force: bool = False,
 ) -> tuple[int, int, int]:
     """Batch UPSERT scores for every stock. Returns (ok, failed, skipped).
 
@@ -2007,6 +2008,15 @@ def recompute_all(
     typical consecutive recompute most stocks fall here, so the loop
     runs in seconds instead of minutes. See `_can_skip_recompute` for
     the per-stock condition.
+
+    `force=True` bypasses the skip-decision and re-computes every stock
+    unconditionally. Use this for explicit user-triggered "Ricalcola
+    score" actions where the user expects a hard refresh — without it
+    the loop typically skips 90%+ of stocks on a consecutive call and
+    the user sees "1097 saltati, 0 processati" which feels broken.
+    The automatic post-scan recompute (inside scan_runner) leaves
+    `force` at its default False so the skip optimisation keeps the
+    scan pipeline fast.
 
     Two-phase to use *real* sector medians instead of static V1 values:
       1. Pre-pass: collect fundamentals (cache hit on the fast path) →
@@ -2084,7 +2094,9 @@ def recompute_all(
         # new fundamentals, no new OHLCV bar), do not re-run compute_score.
         # On a typical consecutive recompute this filters out 80-95% of
         # stocks → seconds instead of minutes. See _can_skip_recompute.
-        if _can_skip_recompute(stock, skip_inputs):
+        # `force=True` overrides this so a manual "Ricalcola score" action
+        # always returns a hard refresh.
+        if not force and _can_skip_recompute(stock, skip_inputs):
             skipped += 1
             if on_progress is not None and (i % progress_every == 0 or i == total - 1):
                 on_progress(i + 1, total)

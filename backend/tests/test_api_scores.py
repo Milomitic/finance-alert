@@ -306,7 +306,7 @@ def test_recompute_all_returns_202_when_idle(
     # schedules"; the runner's correctness is exercised in test_score_service.
     monkeypatch.setattr(
         "app.api.scores._run_recompute_in_background",
-        lambda: None,
+        lambda force=True: None,
     )
     resp = seeded_client.post("/api/scores/recompute-all")
     assert resp.status_code == 202, resp.text

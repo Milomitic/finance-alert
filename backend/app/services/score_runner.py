@@ -51,6 +51,7 @@ def run_tracked_recompute(
     *,
     trigger: str = "manual",
     existing_run: ScanRun | None = None,
+    force: bool = True,
 ) -> ScanRun:
     """Run score_service.recompute_all under a tracked ScanRun row.
 
@@ -71,6 +72,14 @@ def run_tracked_recompute(
     advances one stock at a time (per user request 2026-05-12). The cost
     is one DB commit per stock × ~1100 stocks = ~3s extra over a full
     recompute, negligible vs the per-stock score computation (~30-50ms).
+
+    `force` defaults to True here because this entry-point is what the
+    user's "Ricalcola score" button calls — they expect every stock to
+    be refreshed, not the optimised path where most rows are skipped
+    because their inputs haven't changed. The optimised path is still
+    used by the automatic post-scan recompute (see
+    `app.services.scan_runner` which leaves `force=False` on its
+    `recompute_all` call).
     """
     if existing_run is None:
         run = create_recompute_run(db, trigger=trigger)
@@ -105,6 +114,7 @@ def run_tracked_recompute(
             on_progress=on_progress,
             progress_every=1,
             cancel_check=cancel_check,
+            force=force,
         )
         run.status = "success"
         run.phase = None

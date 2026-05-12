@@ -177,7 +177,7 @@ def recompute_stock_score(
 # ---------------------------------------------------------------------------
 
 
-def _run_recompute_in_background() -> None:
+def _run_recompute_in_background(force: bool = True) -> None:
     """BackgroundTask body. Opens its own SessionLocal because FastAPI's
     request-scoped session has already been closed by the time this fires.
     Errors are caught + logged + persisted on the ScanRun row by the runner
@@ -186,7 +186,7 @@ def _run_recompute_in_background() -> None:
 
     db = SessionLocal()
     try:
-        run_tracked_recompute(db, trigger="manual")
+        run_tracked_recompute(db, trigger="manual", force=force)
     finally:
         db.close()
 
@@ -198,6 +198,7 @@ def _run_recompute_in_background() -> None:
 )
 def trigger_recompute_all(
     background_tasks: BackgroundTasks,
+    force: bool = True,
     db: Session = Depends(get_db),
     _user: User = Depends(get_current_user),
 ) -> ScanAccepted:
@@ -206,6 +207,13 @@ def trigger_recompute_all(
     Returns 202 immediately; the actual work runs via FastAPI's
     BackgroundTask. Live status is polled by the frontend via
     `GET /api/scores/recompute-status`, which feeds the persistent toast.
+
+    `force` (query param, default True): when True every stock is
+    re-scored unconditionally. The default matches user expectations
+    for the manual button — clicking "Ricalcola score" means "I want
+    fresh scores", not "skip 95% of stocks because their inputs are
+    unchanged since 2 minutes ago". Pass `?force=false` to use the
+    optimised skip path (matches the automatic post-scan behaviour).
 
     Guards against piling up jobs: if a score_recompute run is already
     in 'running' state we return 409 with a clear message rather than
@@ -232,7 +240,7 @@ def trigger_recompute_all(
                 "Premi Stop per annullarlo prima di lanciarne un altro."
             ),
         )
-    background_tasks.add_task(_run_recompute_in_background)
+    background_tasks.add_task(_run_recompute_in_background, force=force)
     return ScanAccepted()
 
 
