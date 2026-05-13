@@ -414,7 +414,13 @@ function ActionsList({ actions }: { actions: AnalystAction[] }) {
                 read as a "rating + target" unit. Renders only when the
                 API gave us a target. */}
             <PriceTargetChip a={a} />
-            <span className="text-muted-foreground tabular-nums shrink-0 w-10 text-right">
+            {/* `whitespace-nowrap` is the critical bit: without it, dates
+                like "11 mag" can break between the day and the month when
+                the row is squeezed (sidebar narrows on lg→md, or a long
+                grade like "Overweight" eats the row width). w-10→w-12 also
+                gives a few extra px so a two-digit-day Italian month
+                ("11 nov", "27 dic") fits cleanly. */}
+            <span className="text-muted-foreground tabular-nums shrink-0 w-12 text-right whitespace-nowrap">
               {fmtShortDate(a.date)}
             </span>
           </li>
