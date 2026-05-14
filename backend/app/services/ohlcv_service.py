@@ -1,4 +1,5 @@
 """Fetch OHLCV from yfinance and upsert into ohlcv_daily."""
+import math
 from dataclasses import dataclass
 from datetime import date
 from typing import Any
@@ -9,6 +10,20 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.models import OhlcvDaily, Stock
+
+
+def _is_bad_price(v: float | None) -> bool:
+    # yfinance occasionally returns bars (notably for LSE / some EU tickers
+    # in narrow time windows) where Close is the real closing print but
+    # Open/High/Low are all 0. Storing those produces a fake candle that
+    # plunges from price→0→price on every chart. Reject the row entirely.
+    if v is None:
+        return True
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return True
+    return math.isnan(f) or math.isinf(f) or f <= 0
 
 
 @dataclass
@@ -121,6 +136,15 @@ def _upsert_one_stock(db: Session, stock: Stock, frame: pd.DataFrame) -> tuple[i
         high_v = _normalize_minor_unit_value(native_currency, float(row["High"]))
         low_v = _normalize_minor_unit_value(native_currency, float(row["Low"]))
         close_v = _normalize_minor_unit_value(native_currency, float(row["Close"]))
+        if (
+            _is_bad_price(open_v) or _is_bad_price(high_v)
+            or _is_bad_price(low_v) or _is_bad_price(close_v)
+        ):
+            logger.warning(
+                f"[ohlcv] skip corrupt bar {stock.ticker} {d}: "
+                f"O={open_v} H={high_v} L={low_v} C={close_v}"
+            )
+            continue
         # SQLite upsert via INSERT ... ON CONFLICT
         stmt = text(
             """
