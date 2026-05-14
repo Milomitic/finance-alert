@@ -105,6 +105,44 @@ class MacroEventDC:
     expected_value: float | None = None
     actual_value: float | None = None
     surprise_pct: float | None = None
+    # Backing MacroSeries id — drives the link to /macro/:series_id from
+    # the calendar event chip. None when the event came from the
+    # hardcoded fallback list AND no MacroSeries with the same `label`
+    # exists (the enrichment helper resolves it when one does).
+    series_id: int | None = None
+    # Publishing organization (e.g. "U.S. Bureau of Labor Statistics").
+    # Pulled from MacroSeries.source when the series row exists and the
+    # seed script has populated it.
+    source: str | None = None
+
+
+# Region → ISO 4217 currency. Single source of truth for the
+# region→currency mapping consumed by the macro detail page header.
+# Mirrors the region literal set in `schemas/calendar.MacroEventOut`.
+_REGION_CURRENCY: dict[str, str] = {
+    "US": "USD",
+    "EU": "EUR", "EZ": "EUR",
+    "DE": "EUR", "FR": "EUR", "IT": "EUR", "ES": "EUR",
+    "NL": "EUR", "BE": "EUR", "IE": "EUR",
+    "UK": "GBP", "GB": "GBP",
+    "JP": "JPY",
+    "KR": "KRW",
+    "CN": "CNY",
+    "HK": "HKD",
+    "CH": "CHF",
+}
+
+
+def currency_for_region(region: str | None) -> str | None:
+    """Return the ISO 4217 currency code for a region, or None for unknown.
+
+    Used by the API layer to populate `MacroEventOut.currency` without
+    duplicating the mapping. The detail-page UI shows it next to the
+    flag so the user knows which FX a rate-decision event affects.
+    """
+    if region is None:
+        return None
+    return _REGION_CURRENCY.get(region)
 
 
 CalendarEvent = EarningsEvent | MacroEventDC
@@ -265,6 +303,10 @@ def _enrich_with_fred_value(db: Session, ev: MacroEventDC) -> None:
     ).scalar_one_or_none()
     if series is None:
         return
+    # Carry the series id + source so the calendar chip can deep-link to
+    # /macro/:series_id and the detail page knows which org publishes it.
+    ev.series_id = series.id
+    ev.source = series.source
     # Find the latest observation up to (and including) the event's date.
     # Using <= here so a same-day observation (e.g. DFEDTARU updated on
     # FOMC day) IS attached.
@@ -409,6 +451,8 @@ def get_events(
                     unit=fe.unit,
                     history=fe.history,
                     release_time=release_time_for(fe.label),
+                    series_id=fe.series_id,
+                    source=fe.source,
                 )
             )
 

@@ -75,7 +75,12 @@ def _run_scan_in_background(stock_ids: list[int] | None) -> None:
 
     from app.services import scan_cancel
     from app.services.ohlcv_service import latest_ohlcv_dates_bulk
-    from app.services.scan_runner import bump_heartbeat, create_scan_run, update_phase
+    from app.services.scan_runner import (
+        bump_heartbeat,
+        create_scan_run,
+        progress_pulse,
+        update_phase,
+    )
 
     db = SessionLocal()
     try:
@@ -96,8 +101,23 @@ def _run_scan_in_background(stock_ids: list[int] | None) -> None:
         db.commit()
 
         if stocks:
-            chunk_size = 100
+            # Fetch chunk size: 20 (was 100). Smaller batches give the user
+            # more frequent honest progress updates AND keep yfinance's
+            # internal HTTP overhead manageable (~5-10s of total added
+            # overhead vs. the previous 100-batch pattern, on ~1100 stocks
+            # — acceptable for the perceived-responsiveness gain). The
+            # progress_pulse below interpolates progress_done within each
+            # batch so the bar moves smoothly between boundaries.
+            chunk_size = 20
             cutoff = date.today() - timedelta(days=30)
+            # Per-stock baseline rates (sec/stock) used by the interpolator
+            # to estimate how long each batch should take, so the bar moves
+            # at the right pace. Slightly conservative — if the real fetch
+            # finishes faster than the estimate, the main thread snaps the
+            # final value forward; if slower, the interpolator caps at 95%
+            # of the gap so we never overshoot the true count.
+            INCREMENTAL_SEC_PER_STOCK = 0.2  # ~5/sec on warm cache
+            BACKFILL_SEC_PER_STOCK = 1.0     # ~1/sec for 10y of bars
 
             # Sub-phase 0b: bulk staleness check. Single GROUP BY query —
             # cheap, but announced explicitly so the user knows what's
@@ -121,10 +141,29 @@ def _run_scan_in_background(stock_ids: list[int] | None) -> None:
                 if latest_dates.get(s.id) is None or latest_dates[s.id] < cutoff
             )
             need_incremental_n = len(stocks) - need_backfill_n
-            run.current_target = (
-                f"{need_incremental_n} stock incrementali · "
-                f"{need_backfill_n} backfill 10y"
-            )
+            # Surface "what's the freshest bar we have" so the user knows
+            # the baseline before the chunk loop starts. max() across the
+            # incremental population tells them "we already have data up
+            # to <date>"; the gap to today is roughly how many new bars
+            # the smart-incremental path will pull.
+            inc_latest_dates = [
+                latest_dates[s.id]
+                for s in stocks
+                if latest_dates.get(s.id) is not None
+                and latest_dates[s.id] >= cutoff
+            ]
+            if inc_latest_dates:
+                global_max = max(inc_latest_dates)
+                gap_days = max(0, (date.today() - global_max).days)
+                run.current_target = (
+                    f"Dati al {global_max.strftime('%d %b').lower()} "
+                    f"· {need_incremental_n} incrementali (~{gap_days}gg) "
+                    f"· {need_backfill_n} backfill"
+                )
+            else:
+                run.current_target = (
+                    f"{need_incremental_n} incrementali · {need_backfill_n} backfill 10y"
+                )
             db.commit()
             bump_heartbeat(db, run)
 
@@ -143,32 +182,102 @@ def _run_scan_in_background(stock_ids: list[int] | None) -> None:
                     scan_cancel.clear(run.id)
                     return
                 chunk = stocks[i : i + chunk_size]
-                needs_backfill = any(
-                    latest_dates.get(s.id) is None or latest_dates[s.id] < cutoff
-                    for s in chunk
-                )
-                # Initial backfill grabs 10 years of bars so the new 5Y chart
-                # range works out of the box and historical-analysis surfaces
-                # (5Y view + long-window indicators like SMA200) have enough
-                # data to compute. Incremental scans keep the cheap "1mo"
-                # fetch — they only need the last few bars for evaluation.
-                period = "10y" if needs_backfill else "1mo"
-                chunk_num = (i // chunk_size) + 1
-                total_chunks = (len(stocks) + chunk_size - 1) // chunk_size
-                run.phase = (
-                    "fetching:backfill" if needs_backfill else "fetching:incremental"
-                )
-                run.current_target = f"{chunk[0].ticker} · chunk {chunk_num}/{total_chunks}"
-                db.commit()
-                try:
-                    fetch_and_upsert(db, chunk, period=period)
+                # SPLIT BY PERIOD — previously the entire chunk was sent
+                # with `period="10y"` whenever even ONE stock in it needed
+                # backfill, which forced yfinance to re-download 10 years
+                # of bars for the (often ~19) other stocks in the chunk
+                # that only needed "1mo". Big invisible cost on mixed
+                # chunks. By splitting the chunk into two sub-batches and
+                # making two yf.download calls with the right period for
+                # each, fresh stocks never pay the backfill tax.
+                #
+                # The cost is one extra HTTP roundtrip per mixed chunk
+                # (~150-300ms of yfinance overhead). Worth it: a single
+                # over-fetched stock at 10y replays ~2520 bars × ~5ms of
+                # UPSERT = ~12s. Recovering even one such stock per chunk
+                # already pays for the extra roundtrip.
+                incremental_chunk = [
+                    s for s in chunk
+                    if latest_dates.get(s.id) is not None
+                    and latest_dates[s.id] >= cutoff
+                ]
+                backfill_chunk = [
+                    s for s in chunk
+                    if latest_dates.get(s.id) is None
+                    or latest_dates[s.id] < cutoff
+                ]
+
+                # Run sub-batches in order: incremental first (faster,
+                # gives the user immediate progress feedback), then
+                # backfill (slower, dominates wall-time on mixed chunks).
+                # The phase label flips per sub-batch so the toast
+                # accurately announces which path is currently running.
+                #
+                # SMART-INCREMENTAL: instead of `period="1mo"` (which
+                # re-downloads ~22 bars per stock and UPSERTs identical
+                # rows), we pass `start=min(latest_date)+1` so yfinance
+                # returns ONLY the bars after the oldest already-stored
+                # date in the sub-batch. Stocks with newer latest_date
+                # get a few extra bars too (UPSERT handles the dups
+                # transparently) — accepting that minor over-fetch is
+                # the price of keeping the batch as a single HTTP call.
+                #
+                # Edge case — `start > today`: every stock in the
+                # sub-batch already has today's bar (or future). yfinance
+                # would return an empty frame, which is wasted work. Guard
+                # by skipping the call entirely in that case.
+                cursor = i
+                inc_start: date | None = None
+                if incremental_chunk:
+                    inc_start = min(
+                        latest_dates[s.id] for s in incremental_chunk
+                    ) + timedelta(days=1)
+
+                for sub_chunk, sec_per_stock, phase_label, sub_start, sub_period in (
+                    (incremental_chunk, INCREMENTAL_SEC_PER_STOCK, "fetching:incremental", inc_start, None),
+                    (backfill_chunk,    BACKFILL_SEC_PER_STOCK,    "fetching:backfill",    None,      "10y"),
+                ):
+                    if not sub_chunk:
+                        continue
+                    # Smart skip — if the sub-batch's start date is in
+                    # the future, every stock is already up to date.
+                    # Advance the cursor + heartbeat without calling
+                    # yfinance, so the bar still progresses honestly.
+                    if sub_start is not None and sub_start > date.today():
+                        end_done = cursor + len(sub_chunk)
+                        run.progress_done = end_done
+                        bump_heartbeat(db, run)
+                        cursor = end_done
+                        continue
+
+                    run.phase = phase_label
+                    tail = len(sub_chunk) - 1
+                    run.current_target = (
+                        sub_chunk[0].ticker if tail == 0
+                        else f"{sub_chunk[0].ticker} +{tail}"
+                    )
                     db.commit()
-                except Exception:  # noqa: BLE001
-                    db.rollback()
-                    # continue with the next chunk
-                # Surface fetch progress via progress_done + bump heartbeat
-                run.progress_done = min(i + chunk_size, len(stocks))
-                bump_heartbeat(db, run)
+
+                    expected_sec = max(0.5, len(sub_chunk) * sec_per_stock)
+                    end_done = cursor + len(sub_chunk)
+                    try:
+                        with progress_pulse(
+                            run.id,
+                            start_done=cursor,
+                            end_done=end_done,
+                            expected_duration_sec=expected_sec,
+                        ):
+                            if sub_start is not None:
+                                fetch_and_upsert(db, sub_chunk, start=sub_start)
+                            else:
+                                fetch_and_upsert(db, sub_chunk, period=sub_period)
+                        db.commit()
+                    except Exception:  # noqa: BLE001
+                        db.rollback()
+                        # continue — next sub-batch / next chunk
+                    run.progress_done = end_done
+                    bump_heartbeat(db, run)
+                    cursor = end_done
 
         # Phase 2: evaluate. Start in "loading_rules" — scan_universe flips
         # to "evaluating:scoring" on the first on_progress tick (done=0) so

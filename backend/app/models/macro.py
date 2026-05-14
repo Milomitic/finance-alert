@@ -62,6 +62,12 @@ class MacroSeries(Base):
     unit: Mapped[str | None] = mapped_column(String(16), nullable=True)
     # Optional Italian description shown in the tooltip / detail card.
     description: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Publishing organization, surfaced in the macro detail page header
+    # ("Fonte: U.S. Bureau of Labor Statistics"). Italian-friendly free
+    # text — populated by `scripts/seed_macro_sources.py` for known
+    # FRED series (CPI/NFP/FOMC/...) using a small static map. Older rows
+    # may be NULL until the seed runs.
+    source: Mapped[str | None] = mapped_column(String(255), nullable=True)
     last_refreshed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )

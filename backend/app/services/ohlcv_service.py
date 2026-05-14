@@ -1,5 +1,6 @@
 """Fetch OHLCV from yfinance and upsert into ohlcv_daily."""
 from dataclasses import dataclass
+from datetime import date
 from typing import Any
 
 import pandas as pd
@@ -151,12 +152,22 @@ def _upsert_one_stock(db: Session, stock: Stock, frame: pd.DataFrame) -> tuple[i
 
 
 def fetch_and_upsert(
-    db: Session, stocks: list[Stock], *, period: str = "1mo"
+    db: Session, stocks: list[Stock], *,
+    period: str | None = "1mo",
+    start: date | None = None,
 ) -> FetchResult:
     """Fetch OHLCV for the given stocks via yfinance and upsert into ohlcv_daily.
 
-    period: yfinance period string ('1mo', '1y', etc.). Use '1y' for first backfill,
-            '1mo' for incremental scans.
+    Pass EITHER `period` (e.g. "1mo", "10y") OR `start` (a date) — not both.
+    `start=` is the smart-incremental path used by the scan loop: pulls only
+    the bars from `start` (inclusive) to today. Drastically cheaper than
+    `period="1mo"` when most stocks already have a recent bar (e.g. on
+    consecutive scans the same day, `start = today - 1` returns ~1 bar
+    per stock instead of ~22).
+
+    `period` is kept for the backfill path (period="10y") and any caller
+    that doesn't have a per-stock latest-date map handy (e.g. the cron
+    job or one-off scripts).
 
     Resilience: if the yfinance circuit breaker is OPEN we skip yfinance and
     route the entire batch through the Stooq fallback. If yfinance fails on
@@ -170,13 +181,16 @@ def fetch_and_upsert(
         return FetchResult()
     tickers = [s.ticker for s in stocks]
 
-    # Map yfinance period string to a days-back number for Stooq fallback.
-    # `10y` and `max` cover the deep-backfill paths added when we extended
-    # the chart range to 5Y (see api/alerts.py + scheduler/jobs/scan_alerts.py).
-    days_for_period = {
-        "1mo": 35, "3mo": 100, "6mo": 200,
-        "1y": 380, "2y": 760, "5y": 1900, "10y": 3800, "max": 6000,
-    }.get(period, 380)
+    # Map yfinance period (or date range) to a days-back number for Stooq
+    # fallback. When `start=` is set we compute the gap from today; when
+    # `period=` is set we look up the static map.
+    if start is not None:
+        days_for_period = max(1, (date.today() - start).days + 1)
+    else:
+        days_for_period = {
+            "1mo": 35, "3mo": 100, "6mo": 200,
+            "1y": 380, "2y": 760, "5y": 1900, "10y": 3800, "max": 6000,
+        }.get(period or "1mo", 380)
 
     if yfinance_health.is_open():
         logger.info(f"[ohlcv] yfinance breaker OPEN — using Stooq fallback for {len(tickers)} tickers")
@@ -188,9 +202,15 @@ def fetch_and_upsert(
             failed_tickers=sr.failed_tickers,
         )
 
-    logger.info(f"[ohlcv] fetching {len(tickers)} tickers via yfinance, period={period}")
+    # Build the kwargs for yfinance: prefer `start=` when provided
+    # (smart-incremental); otherwise fall back to `period=`.
+    yf_kwargs: dict[str, object] = (
+        {"start": start.isoformat()} if start is not None else {"period": period or "1mo"}
+    )
+    label = f"start={start.isoformat()}" if start is not None else f"period={period}"
+    logger.info(f"[ohlcv] fetching {len(tickers)} tickers via yfinance, {label}")
     try:
-        df = _yf_download(tickers, period=period)
+        df = _yf_download(tickers, **yf_kwargs)
     except Exception as e:  # noqa: BLE001
         if yfinance_health.is_rate_limit_error(e):
             yfinance_health.record_failure(f"yf.download: {e}")

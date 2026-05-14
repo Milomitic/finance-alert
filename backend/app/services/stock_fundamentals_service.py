@@ -254,7 +254,60 @@ class Fundamentals:
 
 _CACHE: dict[str, Fundamentals] = {}
 _CACHE_LOCK = Lock()
-_TTL_SECONDS = 24 * 60 * 60
+# TTL bumped from 24h → 7d (2026-05-14). Fundamentals data (P/E, ROE,
+# margins, sector, quarterly earnings) doesn't change daily — quarterly
+# reports publish every ~90d, sector classifications essentially never.
+# The previous 24h TTL was forcing a re-fetch of ~600/1085 tickers on
+# every scan (the ones touched on rotating cron windows), costing
+# 25-50min per scan in pure yfinance latency on EU stocks where each
+# ticker pays ~3s for sub-endpoint 404s (insider/analyst data Yahoo
+# doesn't publish for non-US). At 7d we re-fetch ~150/week instead.
+# Live price data is on a separate 10s-TTL cache (`live_quote_service`),
+# so this change does NOT affect quote freshness.
+_TTL_SECONDS = 7 * 24 * 60 * 60
+# Negative-cache TTL (6 hours): how long a "permanent error" payload (404
+# / no-data / delisted ticker) stays valid in L1+L2 before we re-attempt
+# yfinance. Without this, every backend restart re-pays the ~3-5s yfinance
+# 404 cost for every dud ticker (~150-200 EU minor stocks in our catalog),
+# adding 8-15min to the sector_stats prepass on the first scan post-restart.
+# Why 6h and not 24h: a freshly-listed ticker shouldn't stay "404" all day.
+# Why not 1h: still leaves enough wasted retries on hourly cron scans.
+# Transient errors (rate-limit, circuit-breaker open) are NOT cached at all
+# (see `_is_permanent_error`) so yfinance recovery works naturally.
+_NEGATIVE_TTL_SECONDS = 6 * 60 * 60
+
+
+def _is_permanent_error(err: str | None) -> bool:
+    """True when an error string represents a stable, ticker-specific failure
+    (404, no-data, partial fetch with empty info) — safe to cache. False
+    for transient infra errors (rate-limit, circuit breaker, network)
+    where caching would just delay recovery.
+
+    The classification is conservative — when in doubt we treat as
+    transient (return False) so we don't lock out a ticker that might
+    actually have data behind a temporary failure.
+    """
+    if not err:
+        return False
+    e = err.lower()
+    # Transient — never persist
+    if "circuit breaker" in e:
+        return False
+    if "rate" in e and "limit" in e:
+        return False
+    if "429" in e or "too many" in e:
+        return False
+    if "timeout" in e or "timed out" in e:
+        return False
+    # Permanent — safe to persist for the negative-cache window
+    if "no data" in e or "not found" in e or "404" in e:
+        return True
+    if "partial fetch" in e:  # set when info endpoint returns nothing
+        return True
+    if "no fundamentals" in e:
+        return True
+    # Default conservative: treat as transient
+    return False
 
 
 def _safe_float(v: Any) -> float | None:
@@ -862,11 +915,18 @@ def get_fundamentals(ticker: str, *, force_refresh: bool = False) -> Fundamental
     a single cheap query each, so the per-call session is fine.
     """
     now = time.time()
+
+    def _is_cached_fresh(c: Fundamentals) -> bool:
+        """TTL check that respects the negative-cache: error payloads use
+        the shorter `_NEGATIVE_TTL_SECONDS` so they re-attempt sooner."""
+        ttl = _NEGATIVE_TTL_SECONDS if c.error else _TTL_SECONDS
+        return (now - c.fetched_at) < ttl
+
     if not force_refresh:
         # L1
         with _CACHE_LOCK:
             cached = _CACHE.get(ticker)
-            if cached is not None and (now - cached.fetched_at) < _TTL_SECONDS:
+            if cached is not None and _is_cached_fresh(cached):
                 return cached
         # L2 — try DB. Imported lazily to avoid an import cycle (the
         # store module imports the dataclasses defined above).
@@ -874,10 +934,14 @@ def get_fundamentals(ticker: str, *, force_refresh: bool = False) -> Fundamental
             from app.core.db import SessionLocal
             from app.services import fetch_cache_store
             with SessionLocal() as db:
+                # Pass the LONGER TTL so the DB read returns even error
+                # rows (TTL is enforced ticker-by-ticker in code below).
+                # The _is_cached_fresh check then enforces the shorter
+                # negative-cache TTL on error payloads.
                 from_db = fetch_cache_store.read_fundamentals(
                     db, ticker, _TTL_SECONDS
                 )
-            if from_db is not None:
+            if from_db is not None and _is_cached_fresh(from_db):
                 # Hydrate L1 so subsequent requests in this process skip
                 # the DB round-trip.
                 with _CACHE_LOCK:
@@ -892,9 +956,14 @@ def get_fundamentals(ticker: str, *, force_refresh: bool = False) -> Fundamental
         _CACHE[ticker] = fresh
     # UPSERT to L2. Non-fatal if the DB write blows up — L1 still serves
     # the in-process consumers and we'll retry on the next refresh cycle.
-    # Don't persist error rows: a transient yfinance failure shouldn't
-    # poison the cache for 24h.
-    if not fresh.error:
+    #
+    # Negative-cache rule: persist BOTH success rows AND permanent-error
+    # rows (404 / no-data / delisted) to L2. The L2 read above gates
+    # error rows by the shorter `_NEGATIVE_TTL_SECONDS`, so they refresh
+    # sooner than success rows. Transient errors (rate-limit, breaker)
+    # are still skipped — caching them would just delay yfinance recovery.
+    should_persist = not fresh.error or _is_permanent_error(fresh.error)
+    if should_persist:
         try:
             from app.core.db import SessionLocal
             from app.services import fetch_cache_store

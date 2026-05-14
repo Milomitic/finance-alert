@@ -46,6 +46,11 @@ class MacroEventEnriched:
     change_pct: float | None = None
     unit: str | None = None
     series_id: int | None = None
+    # Publishing organization (e.g. "U.S. Bureau of Labor Statistics") —
+    # passed through to the calendar event so the detail page header can
+    # render "Fonte: …". Populated when MacroSeries.source is set by the
+    # seed script; None for series the seed hasn't covered yet.
+    source: str | None = None
     history: list[tuple[date, float | None]] = field(default_factory=list)
     release_time: str | None = None  # UTC HH:MM, hardcoded per-label
 
@@ -151,6 +156,7 @@ def get_fred_events(
                 change_pct=change_pct,
                 unit=series.unit,
                 series_id=series.id,
+                source=series.source,
                 history=_recent_history(db, series.id, n=36),
             )
         )

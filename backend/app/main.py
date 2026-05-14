@@ -24,6 +24,7 @@ from app.api import rule_catalog as rule_catalog_router
 from app.api import rule_performance as rule_performance_router
 from app.api import rule_preview as rule_preview_router
 from app.api import rules as rules_router
+from app.api import scan_log as scan_log_router
 from app.api import scores as scores_router
 from app.api import sectors as sectors_router
 from app.api import stocks as stocks_router
@@ -146,6 +147,7 @@ app.include_router(rules_router.router)
 app.include_router(rule_catalog_router.router)
 app.include_router(rule_performance_router.router)
 app.include_router(rule_preview_router.router)
+app.include_router(scan_log_router.router)
 app.include_router(alerts_router.router)
 app.include_router(dashboard_router.router)
 app.include_router(market_router.router)

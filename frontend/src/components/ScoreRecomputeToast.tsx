@@ -55,6 +55,18 @@ const RECOMPUTE_LABELS: RunToastLabels = {
     phase === "sector_stats"
       ? BASELINE_SECTOR_STATS_BARS_PER_SEC
       : BASELINE_SCORING_BARS_PER_SEC,
+  steps: [
+    {
+      label: "Mediane settoriali",
+      phases: ["sector_stats"],
+      durationHintSec: [2, 30],
+    },
+    {
+      label: "Score per stock",
+      phases: ["scoring"],
+      durationHintSec: [10, 60],
+    },
+  ],
 };
 
 export function ScoreRecomputeToast() {

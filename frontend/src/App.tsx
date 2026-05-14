@@ -8,6 +8,7 @@ import HomePage from "@/pages/HomePage";
 import InstitutionalDetailPage from "@/pages/InstitutionalDetailPage";
 import InstitutionalsPage from "@/pages/InstitutionalsPage";
 import LoginPage from "@/pages/LoginPage";
+import MacroDetailPage from "@/pages/MacroDetailPage";
 import MarketDetailPage from "@/pages/MarketDetailPage";
 import SectorDetailPage from "@/pages/SectorDetailPage";
 import SectorsOverviewPage from "@/pages/SectorsOverviewPage";
@@ -36,6 +37,7 @@ export default function App() {
         <Route path="/sectors" element={<SectorsOverviewPage />} />
         <Route path="/alerts" element={<AlertsPage />} />
         <Route path="/calendar" element={<CalendarPage />} />
+        <Route path="/macro/:seriesId" element={<MacroDetailPage />} />
         <Route path="/stocks" element={<StocksBrowserPage />} />
         <Route path="/stocks/:ticker" element={<StockDetailPage />} />
         <Route path="/markets/:symbol" element={<MarketDetailPage />} />

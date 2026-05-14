@@ -4,6 +4,8 @@ Used by both the cron job (`scheduler/jobs/scan_alerts.py`) and the manual API
 trigger (`api/alerts.py`) so the UI can poll the latest ScanRun row to render
 a live status card.
 """
+import threading
+from contextlib import contextmanager
 from datetime import UTC, datetime
 
 from loguru import logger
@@ -49,6 +51,114 @@ def update_phase(db: Session, run: ScanRun, phase: str) -> None:
     """Update the in-progress phase label on a running ScanRun row."""
     run.phase = phase
     db.commit()
+
+
+@contextmanager
+def progress_pulse(
+    run_id: int,
+    *,
+    start_done: int,
+    end_done: int,
+    expected_duration_sec: float,
+    interval: float = 0.5,
+):
+    """Smoothly interpolate `progress_done` from `start_done` toward `end_done`
+    over `expected_duration_sec` while the wrapped block runs.
+
+    Why: the OHLCV fetch loop calls `yf.download(tickers=[...])` for a whole
+    batch in a single HTTP request, then the per-stock upsert is in-process.
+    Without this pulse, the user sees `progress_done` snap forward by N at
+    the end of each batch (jumpy bar, dead-air feel during the 2-5s download).
+    With it, the bar moves continuously every 0.5s — the user feels the scan
+    is responsive even though the network call is opaque.
+
+    Caps the interpolated value at 95% of the gap so the main thread's final
+    snap to `end_done` doesn't risk going backwards (the pulse uses an
+    advance-only update — never overwrites a higher value the main thread
+    already wrote). Failures are swallowed (a missed tick is harmless).
+    """
+    import time as _time
+
+    stop = threading.Event()
+    span = max(0, end_done - start_done)
+    duration = max(0.5, expected_duration_sec)
+
+    def _pulse() -> None:
+        from app.core.db import SessionLocal
+
+        started = _time.monotonic()
+        while not stop.wait(interval):
+            elapsed = _time.monotonic() - started
+            frac = min(0.95, elapsed / duration)
+            target = start_done + int(span * frac)
+            try:
+                with SessionLocal() as s:
+                    row = s.get(ScanRun, run_id)
+                    if row is None or row.status != "running":
+                        return
+                    if (row.progress_done or 0) < target:
+                        row.progress_done = target
+                    row.last_progress_at = datetime.now(UTC)
+                    s.commit()
+            except Exception:  # noqa: BLE001
+                pass
+
+    thread = threading.Thread(
+        target=_pulse, daemon=True, name=f"progress-pulse-{run_id}"
+    )
+    thread.start()
+    try:
+        yield
+    finally:
+        stop.set()
+        thread.join(timeout=interval + 1.0)
+
+
+@contextmanager
+def heartbeat_pulse(run_id: int, *, interval: float = 5.0):
+    """Bump `last_progress_at` on a ScanRun every `interval` seconds while the
+    wrapped block runs.
+
+    Why: the post-scan persisting steps (market_snapshot, sector_stats compute,
+    price-target evaluation) are synchronous calls into services that don't
+    expose a per-iteration progress callback. On a cold fundamentals cache they
+    can take >120s, silently exceeding the frontend's "Scan bloccato" stale
+    threshold even though the backend is still working — confusing the user
+    into clicking "Termina (forzato)" on a healthy run. Wrapping each blocking
+    step in this pulse keeps the heartbeat fresh from a daemon thread.
+
+    Runs in a daemon thread with its own SessionLocal so it doesn't share the
+    caller's Session (which is not thread-safe across SQLAlchemy operations).
+    Pulse failures are swallowed: a single missed bump is far less serious
+    than crashing the actual scan work.
+    """
+    stop = threading.Event()
+
+    def _pulse() -> None:
+        from app.core.db import SessionLocal
+
+        while not stop.wait(interval):
+            try:
+                with SessionLocal() as s:
+                    row = s.get(ScanRun, run_id)
+                    if row is not None and row.status == "running":
+                        row.last_progress_at = datetime.now(UTC)
+                        s.commit()
+            except Exception:  # noqa: BLE001
+                # SQLITE_BUSY or any other transient — next tick in `interval`s
+                # will likely succeed. The 120s stale threshold tolerates many
+                # missed pulses.
+                pass
+
+    thread = threading.Thread(
+        target=_pulse, daemon=True, name=f"heartbeat-pulse-{run_id}"
+    )
+    thread.start()
+    try:
+        yield
+    finally:
+        stop.set()
+        thread.join(timeout=interval + 1.0)
 
 
 def run_tracked_scan(
@@ -148,7 +258,12 @@ def run_tracked_scan(
         try:
             from app.services import market_stats_service
 
-            market_stats_service.recompute_snapshot(db, scan_run_id=run.id)
+            # `recompute_snapshot` is a single synchronous call with no
+            # internal progress hook. On a cold L1/L2 cache it can take
+            # >120s, tripping the stale detector. The pulse keeps the
+            # heartbeat fresh while it runs.
+            with heartbeat_pulse(run.id):
+                market_stats_service.recompute_snapshot(db, scan_run_id=run.id)
             logger.info(f"[scan_runner] market snapshot refreshed for ScanRun {run.id}")
         except Exception as snap_exc:  # noqa: BLE001
             logger.warning(f"[scan_runner] snapshot recompute failed (non-fatal): {snap_exc}")
@@ -199,12 +314,18 @@ def run_tracked_scan(
                 db.commit()
 
             try:
-                n_ok, n_failed = score_service.recompute_all(
-                    db,
-                    on_progress=_persisting_heartbeat,
-                    on_phase_change=_persisting_phase_change,
-                    cancel_check=cancel_check,
-                )
+                # Defense-in-depth pulse: score_service already heartbeats
+                # via `_persisting_heartbeat` from inside its loops, BUT
+                # individual yfinance retries on delisted tickers can
+                # stall for 30s+ between heartbeats. The pulse closes
+                # those gaps without changing the service's contract.
+                with heartbeat_pulse(run.id):
+                    n_ok, n_failed = score_service.recompute_all(
+                        db,
+                        on_progress=_persisting_heartbeat,
+                        on_phase_change=_persisting_phase_change,
+                        cancel_check=cancel_check,
+                    )
                 logger.info(
                     f"[scan_runner] {n_ok} stock score(s) recomputed "
                     f"({n_failed} failed) for ScanRun {run.id}"
@@ -230,7 +351,11 @@ def run_tracked_scan(
         try:
             from app.services import price_alert_service
 
-            fired = price_alert_service.evaluate_all(db)
+            # Same rationale as the snapshot block above: `evaluate_all` is
+            # a synchronous loop with no progress callback. Usually fast
+            # (<5s) but a network hiccup can stretch it past the threshold.
+            with heartbeat_pulse(run.id):
+                fired = price_alert_service.evaluate_all(db)
             if fired:
                 logger.info(f"[scan_runner] {fired} price alert(s) fired for ScanRun {run.id}")
         except Exception as pa_exc:  # noqa: BLE001
