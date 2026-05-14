@@ -131,6 +131,19 @@ export function PriceChart({
   const ohlcvRef = useRef<OhlcvBar[]>([]);
   const timeframeRef = useRef<string | undefined>(timeframe);
   const [tooltip, setTooltip] = useState<TooltipState | null>(null);
+  // Custom "live price" badge that replaces the candle series' native
+  // lastValue label. Reasons: (a) the native label gets pushed up/down
+  // by lightweight-charts' anti-overlap logic when other indicator
+  // labels cluster near the same y, leaving the user uncertain which
+  // dot is the actual close; (b) the native label is fixed-size and
+  // can't be bolded for emphasis. The custom badge is absolutely
+  // positioned at the close price's y-coordinate (recomputed on every
+  // pan/zoom/data tick), giving prominence + an unambiguous anchor.
+  const [priceBadge, setPriceBadge] = useState<{
+    y: number;
+    price: number;
+    isUp: boolean;
+  } | null>(null);
 
   // Keep the latest props available to the crosshair handler closure
   // (which is registered once at chart mount and survives across
@@ -188,6 +201,10 @@ export function PriceChart({
       upColor: "#16a34a", downColor: "#dc2626",
       borderUpColor: "#16a34a", borderDownColor: "#dc2626",
       wickUpColor: "#16a34a", wickDownColor: "#dc2626",
+      // Native lastValue badge is hidden — replaced by the custom
+      // <priceBadge /> DOM overlay rendered at the close's exact
+      // y-coordinate without anti-overlap displacement.
+      lastValueVisible: false,
     });
     // Indicator series: `lastValueVisible: true` shows a colored badge
     // on the right price-scale with the latest value — replaces the
@@ -349,6 +366,51 @@ export function PriceChart({
     }
   }, [ohlcv, timeframe]);
 
+  // Custom price-badge tracker. Recomputes the y-coordinate of the
+  // last close on every event that could shift it:
+  //   - data change (new bar appended / refreshed)
+  //   - visible-range change (pan / zoom on the time axis)
+  //   - crosshair move (covers vertical price-scale dragging too)
+  // priceToCoordinate returns the chart's local y (px from top); we
+  // store it in state so the floating badge re-renders at the new
+  // position. setState is cheap when the value is unchanged thanks to
+  // React's bailout (we still compare to avoid identity churn).
+  useEffect(() => {
+    if (!chartRef.current || !candleRef.current) return;
+    const recompute = () => {
+      const series = candleRef.current;
+      const bars = ohlcvRef.current;
+      if (!series || bars.length === 0) {
+        setPriceBadge(null);
+        return;
+      }
+      const last = bars[bars.length - 1];
+      const prev = bars.length > 1 ? bars[bars.length - 2] : null;
+      const y = series.priceToCoordinate(last.close);
+      if (typeof y !== "number" || !Number.isFinite(y)) {
+        setPriceBadge(null);
+        return;
+      }
+      const isUp = prev ? last.close >= prev.close : last.close >= last.open;
+      setPriceBadge((cur) => {
+        if (cur && cur.y === y && cur.price === last.close && cur.isUp === isUp) {
+          return cur;
+        }
+        return { y, price: last.close, isUp };
+      });
+    };
+    recompute();
+    const ts = chartRef.current.timeScale();
+    ts.subscribeVisibleLogicalRangeChange(recompute);
+    // Crosshair handler covers vertical price-scale dragging where the
+    // time range stays put but priceToCoordinate output changes.
+    chartRef.current.subscribeCrosshairMove(recompute);
+    return () => {
+      ts.unsubscribeVisibleLogicalRangeChange(recompute);
+      chartRef.current?.unsubscribeCrosshairMove(recompute);
+    };
+  }, [ohlcv]);
+
   // EMA20
   useEffect(() => {
     if (!ema20Ref.current) return;
@@ -464,6 +526,33 @@ export function PriceChart({
 
   return (
     <div ref={containerRef} className="w-full h-full relative">
+      {priceBadge && (
+        // Live-price badge: sits on the right edge over the price scale,
+        // centered on the last close's y-coordinate. Bolder and slightly
+        // bigger than lightweight-charts' native lastValue badges, with a
+        // tinted background tied to the up/down direction so it reads as
+        // the primary anchor even when EMA/BB badges cluster nearby.
+        // pointer-events-none so it never intercepts chart interactions.
+        <div
+          className={cn(
+            "absolute right-0 z-20 pointer-events-none",
+            "px-2 py-0.5 rounded-l-sm text-[13px] font-bold tabular-nums",
+            "shadow-md ring-1",
+            priceBadge.isUp
+              ? "bg-emerald-600 text-white ring-emerald-700/60"
+              : "bg-red-600 text-white ring-red-700/60",
+          )}
+          style={{
+            // -12px ≈ half of (text-[13px] + py-0.5) → vertically centered
+            // on the actual close y. If the badge ever moves above /
+            // below the visible plot area (after a manual zoom), the
+            // recompute returns NaN and the badge hides entirely.
+            top: priceBadge.y - 12,
+          }}
+        >
+          {fmtPrice(priceBadge.price)}
+        </div>
+      )}
       {tooltip && tooltip.visible && (
         <div
           className={cn(

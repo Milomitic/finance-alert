@@ -1,11 +1,12 @@
 import { AlertCircle } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 
-import type { PriceAlert } from "@/api/types";
+import type { LiveQuote, OhlcvBar, PriceAlert } from "@/api/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { useChartSync } from "@/hooks/useChartSync";
 import { useCreatePriceAlert, useStockPriceAlerts } from "@/hooks/useStockPriceAlerts";
+import { useLiveQuote } from "@/hooks/useLiveQuote";
 import { useStockDetail } from "@/hooks/useStockDetail";
 import { useStockDrawings } from "@/hooks/useStockDrawings";
 import { AnalystTargetCard } from "@/components/stock/AnalystTargetCard";
@@ -36,6 +37,65 @@ import { StockHeader } from "@/components/stock/StockHeader";
 import { StockScoreCard } from "@/components/stock/StockScoreCard";
 import { TechnicalKpiCard } from "@/components/stock/TechnicalKpiCard";
 
+/**
+ * Merge the live quote into the OHLCV series so the rightmost candle
+ * reflects the in-session price instead of yesterday's close.
+ *
+ * Why this is needed: for 1d/1w/1m/all the backend reads daily bars
+ * from the DB, and those are only refreshed by the EOD scan at 23:30.
+ * During the trading day the latest stored bar is yesterday's close —
+ * the chart's last candle would otherwise lag the live header price.
+ *
+ *  - 1d: if last.date is older than today, APPEND a new bar dated
+ *    today with open/high/low/close synthesized from the live quote.
+ *  - 1w / 1m / all: the last bar covers a multi-day range that
+ *    includes today, so UPDATE its close (= live price) and extend
+ *    high/low with today's session extremes.
+ *
+ * Intraday timeframes (30m / 1h) are excluded: those come straight
+ * from yfinance and already include today's partial bar with live
+ * values. Volume is intentionally left untouched for 1w/1m/all to
+ * avoid double-counting today if the catalog refresh already folded
+ * it into the partial bar.
+ */
+function mergeLiveQuoteIntoOhlcv(
+  ohlcv: OhlcvBar[],
+  live: LiveQuote | undefined,
+  range: string,
+): OhlcvBar[] {
+  if (range === "30m" || range === "1h") return ohlcv;
+  if (!live || live.price == null || ohlcv.length === 0) return ohlcv;
+
+  const last = ohlcv[ohlcv.length - 1];
+  const liveOpen = live.day_open ?? live.price;
+  const liveHigh = Math.max(live.day_high ?? live.price, live.price);
+  const liveLow = Math.min(live.day_low ?? live.price, live.price);
+  const todayISO = new Date().toISOString().slice(0, 10);
+
+  if (range === "1d" && last.date < todayISO) {
+    return [
+      ...ohlcv,
+      {
+        date: todayISO,
+        open: liveOpen,
+        high: liveHigh,
+        low: liveLow,
+        close: live.price,
+        volume: live.volume ?? 0,
+      },
+    ];
+  }
+  return [
+    ...ohlcv.slice(0, -1),
+    {
+      ...last,
+      close: live.price,
+      high: Math.max(last.high, liveHigh),
+      low: Math.min(last.low, liveLow),
+    },
+  ];
+}
+
 export default function StockDetailPage() {
   const { ticker = "" } = useParams<{ ticker: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -48,6 +108,15 @@ export default function StockDetailPage() {
   const priceAlertsQuery = useStockPriceAlerts(ticker);
   const createPa = useCreatePriceAlert(ticker);
   const drawings = useStockDrawings(ticker);
+  // Live quote drives the chart's rightmost candle merge (see
+  // mergeLiveQuoteIntoOhlcv). The query is also used by StockHeader;
+  // both calls share the same React-Query cache entry so this doesn't
+  // duplicate the upstream yfinance request.
+  const live = useLiveQuote(ticker);
+  const mergedOhlcv = useMemo(
+    () => mergeLiveQuoteIntoOhlcv(detail.data?.ohlcv ?? [], live.data, range),
+    [detail.data?.ohlcv, live.data, range],
+  );
 
   const [indicators, setIndicators] = useState<IndicatorState>(DEFAULT_INDICATOR_STATE);
   const [mode, setMode] = useState<DrawingMode>("none");
@@ -116,7 +185,7 @@ export default function StockDetailPage() {
       <StockHeader
         stock={d.stock}
         kpis={d.kpis}
-        ohlcv={d.ohlcv}
+        ohlcv={mergedOhlcv}
       />
 
       {/* Company overview (left, 67%) + Alert storici (right, 33%).
@@ -184,7 +253,7 @@ export default function StockDetailPage() {
             </div>
 
             {/* Price chart — resizable; defaults to 460px */}
-            {d.ohlcv.length < 2 ? (
+            {mergedOhlcv.length < 2 ? (
               <div className="h-[460px] flex items-center justify-center text-sm text-muted-foreground border border-border/50 rounded-md">
                 Dati insufficienti per il chart
               </div>
@@ -199,7 +268,7 @@ export default function StockDetailPage() {
                     entirely — fresh chart, fresh data, fit once. */}
                 <PriceChart
                   key={range}
-                  ohlcv={d.ohlcv}
+                  ohlcv={mergedOhlcv}
                   indicators={d.indicators}
                   styles={{
                     ema20: indicators.ema20,

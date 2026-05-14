@@ -192,6 +192,20 @@ def _fetch_yfinance(ticker: str, tf: str) -> list[Bar]:
     if hist is None or hist.empty:
         return []
 
+    # LSE listings (.L) come back from yfinance in pence with currency='GBp'
+    # for SOME tickers (the daily path scales them in `ohlcv_service`, but
+    # this intraday path used to not — the Y-axis on 30m/1h then showed
+    # 545 pence instead of 5.45 pounds, the "×100 bug" the user reported).
+    # Mirror live_quote_service._scale_pence_to_pounds so all three paths
+    # (intraday chart, daily chart, live quote) are unit-consistent.
+    scale = 1.0
+    try:
+        currency = t.fast_info.get("currency")
+        if currency in ("GBp", "GBX"):
+            scale = 0.01
+    except Exception as e:  # noqa: BLE001
+        logger.debug(f"[timeframe] currency lookup failed for {ticker}: {e}")
+
     is_intraday = tf in _INTRADAY
     bars: list[Bar] = []
     for ts, row in hist.iterrows():
@@ -217,18 +231,20 @@ def _fetch_yfinance(ticker: str, tf: str) -> list[Bar]:
         except (TypeError, ValueError):
             continue
         try:
-            close = float(row["Close"])
+            close_raw = float(row["Close"])
         except (TypeError, KeyError, ValueError):
             continue
-        if pd.isna(close):
+        if pd.isna(close_raw):
             continue
+        # Scale ALL OHLC components uniformly; the fallback in _safe_float
+        # uses the RAW close (also unscaled) so we multiply once at the end.
         bars.append(
             Bar(
                 date=d,
-                open=_safe_float(row.get("Open"), close),
-                high=_safe_float(row.get("High"), close),
-                low=_safe_float(row.get("Low"), close),
-                close=close,
+                open=_safe_float(row.get("Open"), close_raw) * scale,
+                high=_safe_float(row.get("High"), close_raw) * scale,
+                low=_safe_float(row.get("Low"), close_raw) * scale,
+                close=close_raw * scale,
                 volume=_safe_int(row.get("Volume")),
             )
         )

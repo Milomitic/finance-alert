@@ -15,7 +15,7 @@
 export function defaultVisibleBars(timeframe: string | undefined): number | null {
   switch (timeframe) {
     case "30m":
-      return 65;   // ~5 trading days × 13 30-min bars/day
+      return 100;  // ~7.5 trading days × 13 30-min bars/day (was 65)
     case "1h":
       return 210;  // ~30 days × 7 1h bars/day
     case "1d":

@@ -59,6 +59,18 @@ export function MacdPanel({ line, signal, hist, color = "#ef4444", width = 2, on
     signalRef.current = chart.addLineSeries({
       color: "#0ea5e9", lineWidth: width as 1 | 2 | 3 | 4, priceLineVisible: false, lastValueVisible: true,
     });
+    // Zero reference line: the alert rules (macd_histogram_positive /
+    // _negative + macd_line_above_signal crossovers) all hinge on the
+    // sign of the histogram relative to zero. Without an explicit line
+    // the user has to infer the threshold from the histogram colors
+    // alone; the dashed line makes the bullish-vs-bearish split obvious.
+    lineRef.current.createPriceLine({
+      price: 0,
+      color: "rgba(100,116,139,0.55)",
+      lineWidth: 1,
+      lineStyle: 2,
+      axisLabelVisible: false,
+    });
     const unregister = onReady?.(chart);
     return () => {
       unregister?.();
