@@ -40,7 +40,12 @@ const BASELINE_FETCHING_PLANNING_BARS_PER_SEC = 50.0;
 const BASELINE_FETCHING_LOADING_CATALOG_BARS_PER_SEC = 200.0;
 const BASELINE_FETCHING_CHECKING_STALENESS_BARS_PER_SEC = 200.0;
 const BASELINE_FETCHING_BACKFILL_BARS_PER_SEC = 1.0;
-const BASELINE_FETCHING_INCREMENTAL_BARS_PER_SEC = 6.0;
+// Empirically calibrated against a manual run on 2026-05-13 (1097 stocks):
+// the live `done/elapsed` rate settled at ~4 stocks/sec, NOT the 6 we were
+// using as the prior. The toast shows the baseline only during the first
+// ~1s before live rate takes over, so an honest baseline avoids flashing
+// an over-optimistic ETA that immediately corrects upward.
+const BASELINE_FETCHING_INCREMENTAL_BARS_PER_SEC = 4.5;
 const BASELINE_FETCHING_BARS_PER_SEC = 4.0;
 const BASELINE_EVALUATING_LOADING_BARS_PER_SEC = 80.0;
 const BASELINE_EVALUATING_SCORING_BARS_PER_SEC = 60.0;
@@ -137,6 +142,77 @@ const SCAN_LABELS: RunToastLabels = {
         return BASELINE_OVERALL_BARS_PER_SEC;
     }
   },
+  // High-level step grouping for the toast's "Passo X di N" indicator.
+  // Mutually-exclusive sub-phases share one logical step (e.g. backfill
+  // and incremental are two paths through the same "Download" step;
+  // scoring and scoring_recompute belong to two different steps because
+  // they actually run sequentially in the post-scan flow).
+  //
+  // `durationHintSec` ranges calibrated against real scan_runs on
+  // 2026-05-13 (catalog = 1097 stocks). The lower bound is "best case
+  // warm path"; the upper is "typical worst case" (mostly incremental
+  // with a handful of backfills). A truly cold-DB first scan with full
+  // 10y backfill across the catalog runs ~18min — outside the typical
+  // hint, kept that way so the bar doesn't flash 18min on every run.
+  steps: [
+    {
+      label: "Preparazione catalogo",
+      phases: [
+        "fetching:loading_catalog",
+        "fetching:checking_staleness",
+        "fetching:planning",
+      ],
+      // Catalog SELECT (~50ms) + bulk staleness GROUP BY on 1097 stocks
+      // (~200ms) + commit. Sub-second on warm DB; 1-5s gives slack for
+      // a cold-cache first SELECT.
+      durationHintSec: [1, 5],
+    },
+    {
+      label: "Download dati di mercato",
+      phases: ["fetching:backfill", "fetching:incremental", "fetching"],
+      // 1097 stocks ÷ ~4 stocks/sec live rate (incremental) = ~275s
+      // floor; with a few backfill chunks (each ~20s for 20 stocks at
+      // 1 stock/sec) we land in the 4-12 min window. Real run-97 took
+      // ~10min, run-96 ~5min — this range covers both.
+      durationHintSec: [180, 720],
+    },
+    {
+      label: "Valutazione regole",
+      phases: ["evaluating:loading_rules", "evaluating:scoring", "evaluating"],
+      // scan_universe ~60 stocks/sec → 1097/60 ≈ 18s + ~2s rule load.
+      // Slower on cold cache where rule eval triggers fundamentals
+      // lookups; broaden upper to 40s.
+      durationHintSec: [10, 40],
+    },
+    {
+      label: "Snapshot mercato",
+      phases: ["evaluating:market_snapshot"],
+      // recompute_snapshot is one synchronous compute over the
+      // fundamentals L1/L2 cache. Warm: 3-10s. Cold (post-restart,
+      // first scan): 30-90s due to yfinance retries inside _load_metrics.
+      durationHintSec: [3, 60],
+    },
+    {
+      label: "Statistiche settori e score",
+      phases: [
+        "evaluating:sector_stats",
+        "evaluating:scoring_recompute",
+        "evaluating:persisting",
+      ],
+      // sector_stats prepass (cached: <1s, cold: 5-30s) + recompute_all
+      // per-stock loop (1097/80 = 14s baseline, slower on cold cache
+      // when bulk_load_recent_bars misses). Combined typical 15-90s.
+      durationHintSec: [15, 90],
+    },
+    {
+      label: "Price-target alert",
+      phases: ["evaluating:price_alerts"],
+      // evaluate_all loops over price-target rules — small list, no
+      // network calls (uses cached quotes). Almost always sub-2s; 5s
+      // upper covers a one-off slow query.
+      durationHintSec: [1, 5],
+    },
+  ],
 };
 
 export function ScanProgressToast() {

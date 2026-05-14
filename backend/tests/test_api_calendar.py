@@ -198,3 +198,180 @@ def test_calendar_response_shape_uses_from_to_aliases(authed_client: TestClient)
     assert data["to"] == "2026-05-31"
     assert "date_from" not in data
     assert "date_to" not in data
+
+
+# ---------------------------------------------------------------------------
+# /api/macro/{series_id} — detail endpoint
+# ---------------------------------------------------------------------------
+
+def test_macro_detail_unauthenticated_401(db: Session):
+    app.dependency_overrides[get_db] = lambda: db
+    try:
+        client = TestClient(app)
+        resp = client.get("/api/macro/1")
+        assert resp.status_code == 401
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_macro_detail_404_for_missing_series(authed_client: TestClient):
+    resp = authed_client.get("/api/macro/999999")
+    assert resp.status_code == 404
+
+
+def test_macro_detail_full_payload(authed_client: TestClient, db: Session):
+    """Seeds a MacroSeries + 3 observations + 1 future release date and
+    verifies the response carries: metadata, derived currency, the latest
+    release with previous_value pointing at the second-most-recent
+    observation, full history (newest first), and the upcoming date."""
+    from datetime import date as _d
+    from app.models import MacroObservation, MacroReleaseDate, MacroSeries
+
+    series = MacroSeries(
+        fred_series_id="TESTSER",
+        fred_release_id=999,
+        label="Test Indicator",
+        region="US",
+        importance="high",
+        unit="pct",
+        description="A test series for the detail endpoint.",
+        source="Test Authority",
+    )
+    db.add(series)
+    db.flush()
+    db.add_all([
+        MacroObservation(series_id=series.id, date=_d(2026, 1, 15), value=1.0),
+        MacroObservation(series_id=series.id, date=_d(2026, 2, 15), value=1.5),
+        MacroObservation(series_id=series.id, date=_d(2026, 3, 15), value=2.1),
+    ])
+    db.add(MacroReleaseDate(series_id=series.id, date=_d(2030, 4, 15)))
+    db.commit()
+
+    resp = authed_client.get(f"/api/macro/{series.id}")
+    assert resp.status_code == 200
+    data = resp.json()
+
+    assert data["series_id"] == series.id
+    assert data["label"] == "Test Indicator"
+    assert data["currency"] == "USD"          # derived from region="US"
+    assert data["source"] == "Test Authority"
+    assert data["importance"] == "high"
+
+    # latest = newest observation; previous_value = the one before
+    assert data["latest"]["actual_value"] == 2.1
+    assert data["latest"]["previous_value"] == 1.5
+    assert data["latest"]["period_label"] == "Mar"
+    assert data["latest"]["expected_value"] is None  # no historical consensus
+
+    # history newest → oldest, full set
+    assert [r["actual_value"] for r in data["history"]] == [2.1, 1.5, 1.0]
+    # First row's previous = second row's actual
+    assert data["history"][0]["previous_value"] == 1.5
+    # Oldest row has no previous
+    assert data["history"][-1]["previous_value"] is None
+
+    # Future date surfaced under upcoming
+    assert "2030-04-15" in data["upcoming"]
+
+
+# ---------------------------------------------------------------------------
+# /api/scan-runs/recent — scan log endpoint (added 2026-05-14)
+# ---------------------------------------------------------------------------
+
+def test_scan_log_unauthenticated_401(db: Session):
+    app.dependency_overrides[get_db] = lambda: db
+    try:
+        client = TestClient(app)
+        resp = client.get("/api/scan-runs/recent")
+        assert resp.status_code == 401
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_scan_log_phase_history_recorded_on_phase_set(authed_client: TestClient, db: Session):
+    """Set ScanRun.phase a few times via the SQLAlchemy event listener and
+    verify phase_history closes prior entries + appends new ones."""
+    import json as _json
+    from datetime import UTC, datetime
+    from app.models import ScanRun
+
+    run = ScanRun(
+        kind="alerts_scan",
+        trigger="manual",
+        status="running",
+        started_at=datetime.now(UTC),
+    )
+    db.add(run)
+    db.commit()
+    # Initial phase set
+    run.phase = "fetching:loading_catalog"
+    db.commit()
+    run.phase = "fetching:incremental"
+    db.commit()
+    run.phase = None  # finalize
+    run.status = "success"
+    run.completed_at = datetime.now(UTC)
+    db.commit()
+
+    history = _json.loads(run.phase_history)
+    assert len(history) == 2  # None at end doesn't get appended
+    assert history[0]["phase"] == "fetching:loading_catalog"
+    assert history[0]["ended_at"] is not None  # closed when 2nd phase started
+    assert history[1]["phase"] == "fetching:incremental"
+    assert history[1]["ended_at"] is not None  # closed when None was set
+
+
+def test_scan_log_endpoint_returns_runs_with_durations(authed_client: TestClient, db: Session):
+    from datetime import UTC, datetime, timedelta
+    from app.models import ScanRun
+
+    t0 = datetime.now(UTC)
+    run = ScanRun(
+        kind="alerts_scan",
+        trigger="manual",
+        status="success",
+        started_at=t0,
+        completed_at=t0 + timedelta(seconds=42),
+        progress_done=100,
+        progress_total=100,
+        stocks_scanned=100,
+        alerts_fired=7,
+    )
+    db.add(run)
+    db.commit()
+    run.phase = "fetching:incremental"
+    db.commit()
+    run.phase = "evaluating:scoring"
+    db.commit()
+    run.phase = None
+    db.commit()
+
+    resp = authed_client.get("/api/scan-runs/recent?limit=5")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "runs" in data
+    assert any(r["id"] == run.id for r in data["runs"])
+    target = next(r for r in data["runs"] if r["id"] == run.id)
+    assert target["status"] == "success"
+    assert target["alerts_fired"] == 7
+    assert target["total_duration_sec"] == 42.0
+    assert len(target["phases"]) == 2
+    assert target["phases"][0]["phase"] == "fetching:incremental"
+    assert target["phases"][0]["duration_sec"] is not None
+    assert target["phases"][0]["duration_sec"] >= 0
+
+
+def test_scan_log_filter_by_kind(authed_client: TestClient, db: Session):
+    from datetime import UTC, datetime
+    from app.models import ScanRun
+
+    db.add_all([
+        ScanRun(kind="alerts_scan",     trigger="manual", status="success", started_at=datetime.now(UTC)),
+        ScanRun(kind="score_recompute", trigger="manual", status="success", started_at=datetime.now(UTC)),
+    ])
+    db.commit()
+
+    resp = authed_client.get("/api/scan-runs/recent?kind=score_recompute")
+    assert resp.status_code == 200
+    kinds = {r["kind"] for r in resp.json()["runs"]}
+    assert kinds == {"score_recompute"}

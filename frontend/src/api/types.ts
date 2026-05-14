@@ -921,6 +921,53 @@ export interface MacroEvent {
   /** Surprise = (actual - expected) / |expected| * 100. Null when either
    *  side is missing or expected is zero (rare). */
   surprise_pct?: number | null;
+  /** Stable id of the underlying MacroSeries — drives the deep-link from
+   *  a calendar chip to /macro/:series_id. Null for events without a
+   *  backing series row (hardcoded fallback list); the "Apri dettaglio"
+   *  link stays hidden in that case. */
+  series_id?: number | null;
+  /** Publishing organization — "Fonte: …" line in the detail header. */
+  source?: string | null;
+  /** ISO 4217 currency derived from `region` (US→USD, EZ→EUR, ...). */
+  currency?: string | null;
+}
+
+/** One historical release row, returned by `/api/macro/{series_id}`.
+ *  Used by the detail page's bar chart + history table. */
+export interface MacroRelease {
+  release_date: string;
+  /** Italian short-month label of the period the release refers to —
+   *  "Apr", "Mag", "Set". Mirrors the "(Apr)" suffix Investing shows. */
+  period_label?: string | null;
+  actual_value?: number | null;
+  /** Null on historical rows: we don't backfill consensus (Forexfactory's
+   *  free feed is week-of only). */
+  expected_value?: number | null;
+  /** Value of the immediately-prior release — pre-computed by the
+   *  endpoint so the table doesn't need a second pass. */
+  previous_value?: number | null;
+  release_time_utc?: string | null;
+}
+
+/** Full payload of `/api/macro/{series_id}`. The detail page renders
+ *  everything from a single fetch. */
+export interface MacroSeriesDetail {
+  series_id: number;
+  fred_series_id: string;
+  label: string;
+  region: string;
+  currency?: string | null;
+  importance: MacroImportance;
+  unit?: string | null;
+  description?: string | null;
+  source?: string | null;
+  last_refreshed_at?: string | null;
+  /** Most-recent release with previous_value pointing at the one before. */
+  latest?: MacroRelease | null;
+  /** Newest → oldest. The chart reverses for left-to-right rendering. */
+  history: MacroRelease[];
+  /** Future scheduled publications (date only). */
+  upcoming: string[];
 }
 
 /** Discriminated union over the `kind` tag — narrowing on `kind` gives full

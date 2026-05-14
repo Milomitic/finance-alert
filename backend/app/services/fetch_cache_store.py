@@ -186,7 +186,17 @@ def _is_payload_too_partial(d: dict[str, Any]) -> bool:
     Treating these as stale on read forces a re-fetch on next access.
     Combined with the symmetric write-side check in
     `stock_fundamentals_service._fetch_fresh`, this prevents new
-    partials from entering L2 going forward."""
+    partials from entering L2 going forward.
+
+    Negative-cache exception: if `error` is set, this is an INTENTIONAL
+    "ticker has no data" entry written by the negative-cache path —
+    return False so the L2 read serves it instead of forcing yet another
+    expensive re-fetch. The shorter `_NEGATIVE_TTL_SECONDS` in
+    stock_fundamentals_service caps how long we trust the negative
+    record (6h vs the standard 24h) — long enough to spare per-restart
+    cost, short enough that a re-listed ticker recovers."""
+    if d.get("error"):
+        return False
     micro = d.get("micro") if isinstance(d.get("micro"), dict) else {}
     profile = d.get("profile") if isinstance(d.get("profile"), dict) else {}
     has_micro = any(v is not None for v in (micro or {}).values())

@@ -60,6 +60,31 @@ export interface RunToastLabels {
   /** ETA prior in stocks-per-second per phase. Used during the first second
    *  of a run before the live `done/elapsed` rate is credible. */
   baselineRatePerSec: (phase: string | null) => number;
+  /** Optional ordered list of high-level steps (groups of phases). When set,
+   *  the toast renders a compact "Passo X di N" indicator + a horizontal
+   *  dot strip so the user sees where we are in the overall pipeline even
+   *  when individual phases are short or when `progress_done` is pinned
+   *  at 100% during post-scan persisting. Each step bundles one or more
+   *  backend phase strings — the current phase decides the highlighted
+   *  step. `durationHintSec` (optional [min, max]) renders as "~X-Ys" so
+   *  the user has a rough expectation. */
+  steps?: {
+    label: string;
+    phases: string[];
+    durationHintSec?: [number, number];
+  }[];
+}
+
+/** Find which step the current phase belongs to. Returns null if no match. */
+function findCurrentStep(
+  phase: string | null,
+  steps: NonNullable<RunToastLabels["steps"]>,
+): { index: number; step: (typeof steps)[number] } | null {
+  if (!phase) return null;
+  for (let i = 0; i < steps.length; i++) {
+    if (steps[i].phases.includes(phase)) return { index: i, step: steps[i] };
+  }
+  return null;
 }
 
 function formatSecs(sec: number): string {
@@ -234,6 +259,10 @@ export function RunProgressToast({ status, labels, onStop, isStopping }: Props) 
   // and stale variants so the row doesn't show a stale ticker from minutes ago.
   const currentTarget =
     variant === "running" && status.current_target ? status.current_target : null;
+  const stepInfo =
+    variant === "running" && labels.steps
+      ? findCurrentStep(status.phase, labels.steps)
+      : null;
 
   const dismiss = () => setDismissedRunId(status.last_run_id);
 
@@ -245,11 +274,17 @@ export function RunProgressToast({ status, labels, onStop, isStopping }: Props) 
   }));
   const hasCounters = counterValues.some((c) => c.value !== null);
 
+  // Animated indeterminate bar: when progress is pinned at 100% (post-scan
+  // persisting phases) the static solid bar reads as "frozen". A subtle
+  // `animate-pulse` makes it visibly breathe so the user trusts that work
+  // is still happening even though the counter doesn't advance.
+  const barIndeterminate = isRunning && pct >= 100;
+
   return (
     <div
       className={cn(
         "fixed bottom-4 right-4 z-50",
-        "w-[min(28rem,calc(100vw-2rem))]",
+        "w-[min(34rem,calc(100vw-2rem))]",
         "animate-in fade-in slide-in-from-bottom-4 duration-200",
       )}
       role="status"
@@ -264,28 +299,28 @@ export function RunProgressToast({ status, labels, onStop, isStopping }: Props) 
         onClick={dismiss}
         title="Clicca per chiudere"
       >
-        <div className="flex items-start gap-3 p-3">
+        <div className="flex items-start gap-3 p-3.5">
           <Icon
             className={cn(
-              "h-5 w-5 shrink-0 mt-0.5",
+              "h-6 w-6 shrink-0 mt-0.5",
               iconClass[variant],
               variant === "running" && "animate-spin",
             )}
           />
           <div className="flex-1 min-w-0">
             <div className="flex items-baseline gap-2 flex-wrap">
-              <span className="text-sm font-semibold leading-tight">
+              <span className="text-base font-semibold leading-tight">
                 {labels.headlines[variant]}
               </span>
               <span
-                className="text-[11px] text-muted-foreground tabular-nums"
+                className="text-xs text-muted-foreground tabular-nums"
                 title="Tempo trascorso dall'avvio"
               >
                 {formatSecs(elapsed)}
               </span>
               {etaSec != null && etaSec > 0 && (
                 <span
-                  className="text-[11px] text-muted-foreground tabular-nums"
+                  className="text-xs text-muted-foreground tabular-nums"
                   title="Stima del tempo residuo. Calibrato sulla velocità misurata o, all'avvio, su un valore di riferimento per la fase corrente."
                 >
                   · ETA ~{formatSecs(etaSec)}
@@ -293,7 +328,7 @@ export function RunProgressToast({ status, labels, onStop, isStopping }: Props) 
               )}
               {dismissCountdown != null && (
                 <span
-                  className="ml-auto text-[10px] uppercase tracking-wider text-muted-foreground/70 tabular-nums"
+                  className="ml-auto text-[11px] uppercase tracking-wider text-muted-foreground/70 tabular-nums"
                   title="La notifica si chiuderà automaticamente"
                 >
                   chiusura in {dismissCountdown}s
@@ -301,13 +336,48 @@ export function RunProgressToast({ status, labels, onStop, isStopping }: Props) 
               )}
             </div>
             {phaseLabel && (
-              <div className="text-[11px] text-muted-foreground mt-0.5">
+              <div className="text-sm text-muted-foreground mt-1">
                 {phaseLabel}
+              </div>
+            )}
+            {stepInfo && labels.steps && (
+              <div className="mt-1.5 flex items-center gap-2 flex-wrap">
+                <span className="text-xs font-medium text-muted-foreground tabular-nums">
+                  Passo {stepInfo.index + 1} di {labels.steps.length}
+                </span>
+                <div
+                  className="flex gap-1 items-center"
+                  aria-label={`Passo ${stepInfo.index + 1} di ${labels.steps.length}`}
+                >
+                  {labels.steps.map((s, i) => (
+                    <span
+                      key={i}
+                      title={s.label}
+                      className={cn(
+                        "h-1.5 rounded-full transition-all",
+                        i < stepInfo.index
+                          ? "w-3 bg-primary/60"
+                          : i === stepInfo.index
+                            ? "w-6 bg-primary"
+                            : "w-3 bg-muted-foreground/25",
+                      )}
+                    />
+                  ))}
+                </div>
+                {stepInfo.step.durationHintSec && (
+                  <span
+                    className="text-[11px] text-muted-foreground/70 tabular-nums"
+                    title="Durata tipica di questo passo"
+                  >
+                    ~{stepInfo.step.durationHintSec[0]}-
+                    {stepInfo.step.durationHintSec[1]}s
+                  </span>
+                )}
               </div>
             )}
             {currentTarget && (
               <div
-                className="text-[10px] font-mono text-foreground/80 mt-0.5 truncate"
+                className="text-xs font-mono text-foreground/80 mt-1 truncate"
                 title={currentTarget}
               >
                 {currentTarget}
@@ -321,28 +391,29 @@ export function RunProgressToast({ status, labels, onStop, isStopping }: Props) 
               e.stopPropagation();
               dismiss();
             }}
-            className="shrink-0 inline-flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-muted/60 hover:text-foreground transition-colors"
+            className="shrink-0 inline-flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-muted/60 hover:text-foreground transition-colors"
           >
-            <X className="h-3.5 w-3.5" />
+            <X className="h-4 w-4" />
           </button>
         </div>
 
         {isRunning && status.progress_total > 0 && (
           <div
-            className="px-3 pb-2 space-y-1"
+            className="px-3.5 pb-2 space-y-1"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex justify-between text-[11px] text-muted-foreground">
+            <div className="flex justify-between text-xs text-muted-foreground">
               <span className="tabular-nums">
                 {status.progress_done.toLocaleString()} / {status.progress_total.toLocaleString()}
               </span>
               <span className="font-semibold tabular-nums">{pct}%</span>
             </div>
-            <div className="relative h-2 rounded-full bg-muted overflow-hidden">
+            <div className="relative h-2.5 rounded-full bg-muted overflow-hidden">
               <div
                 className={cn(
                   "h-full transition-all duration-500",
                   isStale ? "bg-amber-500/70" : "bg-primary",
+                  barIndeterminate && !isStale && "animate-pulse",
                 )}
                 style={{ width: `${pct}%` }}
               />
@@ -352,7 +423,7 @@ export function RunProgressToast({ status, labels, onStop, isStopping }: Props) 
 
         {isStale && status.seconds_since_last_progress != null && (
           <div
-            className="mx-3 mb-2 text-[11px] bg-amber-100 dark:bg-amber-900/40 text-amber-900 dark:text-amber-100 rounded px-2 py-1.5"
+            className="mx-3.5 mb-2 text-sm bg-amber-100 dark:bg-amber-900/40 text-amber-900 dark:text-amber-100 rounded px-2.5 py-2"
             onClick={(e) => e.stopPropagation()}
           >
             Nessun heartbeat da{" "}
@@ -374,7 +445,7 @@ export function RunProgressToast({ status, labels, onStop, isStopping }: Props) 
             style={{
               gridTemplateColumns: `repeat(${counterValues.length}, minmax(0, 1fr))`,
             }}
-            className="grid gap-1.5 px-3 pb-3 text-[11px]"
+            className="grid gap-1.5 px-3.5 pb-3"
             onClick={(e) => e.stopPropagation()}
           >
             {counterValues.map((c, idx) => (
@@ -390,7 +461,7 @@ export function RunProgressToast({ status, labels, onStop, isStopping }: Props) 
 
         {isRunning && onStop && (
           <div
-            className="px-3 pb-3 flex justify-end"
+            className="px-3.5 pb-3.5 flex justify-end"
             onClick={(e) => e.stopPropagation()}
           >
             <Button
@@ -399,11 +470,12 @@ export function RunProgressToast({ status, labels, onStop, isStopping }: Props) 
               disabled={isStopping}
               onClick={onStop}
               className={cn(
+                "text-sm",
                 isStale &&
                   "bg-amber-600 hover:bg-amber-700 text-white border-amber-600",
               )}
             >
-              <StopCircle className="h-3.5 w-3.5 mr-1" />
+              <StopCircle className="h-4 w-4 mr-1.5" />
               {isStale ? "Termina (forzato)" : "Stop"}
             </Button>
           </div>
@@ -411,7 +483,7 @@ export function RunProgressToast({ status, labels, onStop, isStopping }: Props) 
 
         {status.error_message && !isRunning && (
           <div
-            className="mx-3 mb-3 text-[11px] text-rose-700 dark:text-rose-300 bg-rose-100/70 dark:bg-rose-900/30 rounded px-2 py-1.5"
+            className="mx-3.5 mb-3.5 text-sm text-rose-700 dark:text-rose-300 bg-rose-100/70 dark:bg-rose-900/30 rounded px-2.5 py-2"
             onClick={(e) => e.stopPropagation()}
           >
             {status.error_message}
@@ -434,16 +506,16 @@ function CounterCell({
   return (
     <div
       className={cn(
-        "rounded px-2 py-1 text-center",
+        "rounded px-2 py-1.5 text-center",
         highlight
           ? "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-900 dark:text-emerald-100"
           : "bg-muted/60",
       )}
     >
-      <div className="uppercase tracking-wider text-[9px] text-muted-foreground/80">
+      <div className="uppercase tracking-wider text-[11px] text-muted-foreground/80">
         {label}
       </div>
-      <div className="font-bold tabular-nums">{value}</div>
+      <div className="text-base font-bold tabular-nums">{value}</div>
     </div>
   );
 }

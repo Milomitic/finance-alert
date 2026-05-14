@@ -57,6 +57,22 @@ class MacroEventOut(BaseModel):
         "US", "EU", "EZ", "UK", "GB", "JP", "KR", "CN", "HK", "CH",
         "DE", "FR", "IT", "ES", "NL", "BE", "IE",
     ]
+    # Stable id of the underlying MacroSeries — drives the link from a
+    # calendar event chip to the dedicated detail page (/macro/:series_id).
+    # NULL for events sourced from the hardcoded fallback list (no FRED
+    # row exists, no detail page to open). Frontend hides the "Apri
+    # dettaglio" link in that case.
+    series_id: int | None = None
+    # Publishing organization shown in the detail page header. Comes
+    # from `MacroSeries.source` (populated by the seed script). NULL
+    # for events without a backing series row OR for series the seed
+    # hasn't covered yet — frontend renders "—".
+    source: str | None = None
+    # ISO 4217 currency code derived from `region` in `calendar_service`
+    # (US→USD, EZ/DE/FR/...→EUR, UK/GB→GBP, JP→JPY, ...). Surfaced in the
+    # detail page header so the user knows which FX a rate-decision event
+    # affects without having to mentally map region→currency.
+    currency: str | None = None
     # FRED-driven insight fields. Populated when the event came from
     # `macro_release_dates` joined with `macro_observations`; null
     # when the event is from the hardcoded fallback list. The UI
@@ -94,3 +110,52 @@ class CalendarOut(BaseModel):
     events: list[CalendarEvent]
 
     model_config = {"populate_by_name": True}
+
+
+class MacroReleaseOut(BaseModel):
+    """Single historical release row for the detail page table.
+
+    The Investing-style table shows one row per past release with date,
+    actual, expected (when known), and previous. We currently only have
+    actual/value reliably from FRED; expected_value comes from
+    Forexfactory and is only populated for upcoming/recent releases (no
+    historical backfill — the feed is week-of). Older rows therefore
+    have `expected = None`, displayed as "—" in the UI.
+    """
+    release_date: date
+    period_label: str | None = None  # e.g. "Apr" — derived from release_date
+    actual_value: float | None = None
+    expected_value: float | None = None
+    previous_value: float | None = None  # the reading immediately before this one
+    release_time_utc: str | None = None  # "14:30" UTC, when known
+
+
+class MacroSeriesDetailOut(BaseModel):
+    """Full payload for `GET /api/macro/{series_id}` — the detail page.
+
+    Includes everything the page needs in one round-trip:
+      - series metadata (label, region, currency, source, importance, unit, description)
+      - the latest release (actual / expected / previous, with surprise)
+      - full release history for the chart + table (no truncation; the
+        UI applies range filtering client-side)
+      - upcoming scheduled release dates (next ~3 publications)
+    """
+    series_id: int
+    fred_series_id: str
+    label: str
+    region: str
+    currency: str | None = None
+    importance: Literal["high", "medium", "low"]
+    unit: str | None = None
+    description: str | None = None
+    source: str | None = None
+    last_refreshed_at: str | None = None
+    # Latest release — actual/expected/previous in one place.
+    latest: MacroReleaseOut | None = None
+    # Full release history (newest → oldest in the API for natural
+    # iteration; the chart can reverse client-side). One row per known
+    # observation. `expected` populated only when a Forexfactory match
+    # was available at the time of release.
+    history: list[MacroReleaseOut] = []
+    # Future scheduled publications (date only, no values yet).
+    upcoming: list[date] = []

@@ -1,5 +1,5 @@
 import { api } from "./client";
-import type { Calendar, MacroImportance } from "./types";
+import type { Calendar, MacroImportance, MacroSeriesDetail } from "./types";
 
 export interface CalendarParams {
   /** ISO YYYY-MM-DD — start of the visible range. Defaults server-side to
@@ -33,4 +33,8 @@ function toQuery(params: CalendarParams): string {
 export const calendar = {
   events: (params: CalendarParams = {}) =>
     api<Calendar>(`/api/calendar${toQuery(params)}`),
+  /** Detail payload for one macro indicator — series metadata, latest
+   *  release, full history, upcoming dates. Used by the /macro/:id page. */
+  macroDetail: (seriesId: number) =>
+    api<MacroSeriesDetail>(`/api/macro/${seriesId}`),
 };

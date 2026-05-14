@@ -4,6 +4,7 @@ import {
   ArrowUpRight,
   CalendarOff,
   ChevronsUpDown,
+  ExternalLink,
   Landmark,
   X,
 } from "lucide-react";
@@ -747,6 +748,7 @@ function MacroInsightStrip({ event }: { event: MacroEvent }) {
   const [expanded, setExpanded] = useState(false);
   const prev = event.prev_value;
   const prevDate = event.prev_date;
+  const prior = event.prior_value;
   const unit = event.unit ?? "";
   const history = event.history ?? [];
   // Phase 3G: consensus + actual + surprise from Forexfactory weekly XML.
@@ -757,82 +759,81 @@ function MacroInsightStrip({ event }: { event: MacroEvent }) {
   const expected = event.expected_value;
   const actual = event.actual_value;
   const surprise = event.surprise_pct;
+  // The displayed "Attuale" value: prefer the post-release actual, fall
+  // back to the latest published prev_value (FRED) so the panel always
+  // shows a number when one exists.
+  const attuale = actual ?? prev;
+  const attualeTone =
+    actual != null && expected != null
+      ? actual > expected
+        ? "pos"
+        : actual < expected
+          ? "neg"
+          : "neutral"
+      : "neutral";
 
   return (
-    <div className="mt-2 pt-2 border-t border-border/40 space-y-2 text-[12px]">
-      {/* 3-column grid: Ultimo | Atteso | Sorpresa */}
-      <div className="grid grid-cols-3 gap-x-4 gap-y-2">
-        <Slot label="Ultimo" hint="Valore più recente — pubblicato (FRED) o appena uscito (Forexfactory). Quando è il dato post-release vs un consensus disponibile, il colore segue il segno della sorpresa (verde = sopra le attese, rosso = sotto).">
-          <span
-            className={cn(
-              "font-bold tabular-nums",
-              // Tint only when this is the post-release actual AND we have
-              // an expected to compare. Pre-release fallback (showing prev
-              // with "(prec.)" label) stays neutral — there's no surprise
-              // axis to represent yet.
-              actual != null && expected != null
-                ? actual > expected
-                  ? "text-emerald-600 dark:text-emerald-400"
-                  : actual < expected
-                    ? "text-rose-600 dark:text-rose-400"
-                    : "text-foreground"
-                : "text-foreground",
-            )}
-          >
-            {actual != null
-              ? formatMacroValue(actual, unit)
-              : prev != null ? formatMacroValue(prev, unit) : "—"}
-          </span>
-          {(actual != null ? null : prevDate) && (
-            <span className="text-[10px] text-muted-foreground tabular-nums ml-1">
-              ({formatMacroDate(prevDate as string)})
-            </span>
-          )}
-        </Slot>
-        <Slot
-          label="Atteso"
-          hint="Consensus forecast (mediana analisti) dal feed Forexfactory. Si popola per gli indicatori principali US/EU/UK; per i restanti resta n/d."
-        >
-          {expected != null ? (
-            <span className="font-semibold tabular-nums">
-              {formatMacroValue(expected, unit)}
-            </span>
-          ) : (
-            <span className="italic text-muted-foreground">n/d</span>
-          )}
-        </Slot>
-        <Slot
-          label="Sorpresa"
-          hint="Differenza tra valore uscito e atteso, in %. Si popola dopo il rilascio quando sia atteso che attuale sono disponibili."
-        >
-          {surprise != null ? (
-            <span
-              className={cn(
-                "font-semibold tabular-nums",
-                surprise > 0
-                  ? "text-emerald-600 dark:text-emerald-400"
-                  : surprise < 0
-                    ? "text-rose-600 dark:text-rose-400"
-                    : "text-muted-foreground",
-              )}
-              title={
-                expected != null && actual != null
-                  ? `Atteso ${formatMacroValue(expected, unit)} → Uscito ${formatMacroValue(actual, unit)}`
-                  : undefined
-              }
-            >
-              {surprise > 0 ? "▲" : surprise < 0 ? "▼" : "·"} {surprise >= 0 ? "+" : ""}
-              {surprise.toFixed(2)}%
-            </span>
-          ) : (
-            <span className="italic text-muted-foreground">—</span>
-          )}
-        </Slot>
+    <div className="mt-2.5 pt-2.5 border-t border-border/40 space-y-2.5">
+      {/* Primary KPI strip — Investing-style "Attuale / Previsto / Precedente"
+          with Attuale visually dominating. The previous 3-column "Ultimo /
+          Atteso / Sorpresa" is replaced because the user explicitly
+          asked for clearer separation between the latest reading and the
+          comparison axes (forecast + prior) on a single visual line. */}
+      <div className="grid grid-cols-3 gap-3 sm:gap-4">
+        <KpiSlot
+          label="Attuale"
+          hint="Valore della release. Quando esiste un consensus, il colore segue il segno della sorpresa (verde = sopra atteso, rosso = sotto)."
+          value={attuale}
+          unit={unit}
+          tone={attualeTone}
+          big
+          dateBadge={actual == null && prevDate ? formatMacroDate(prevDate) : undefined}
+        />
+        <KpiSlot
+          label="Previsto"
+          hint="Consensus forecast (mediana analisti) dal feed Forexfactory. Disponibile solo per gli indicatori principali US/EU/UK."
+          value={expected ?? null}
+          unit={unit}
+        />
+        <KpiSlot
+          label="Precedente"
+          hint="Valore della release precedente. Permette di leggere la direzione del trend a colpo d'occhio."
+          value={prior ?? null}
+          unit={unit}
+        />
       </div>
 
+      {/* Surprise badge — separate row, only when meaningful. Replaces the
+          old "Sorpresa" 3rd column so Attuale/Previsto/Precedente can use
+          the full width like the user's reference screenshot. */}
+      {surprise != null && (
+        <div
+          className={cn(
+            "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-semibold tabular-nums",
+            surprise > 0
+              ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300"
+              : surprise < 0
+                ? "bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300"
+                : "bg-muted text-muted-foreground",
+          )}
+          title={
+            expected != null && actual != null
+              ? `Atteso ${formatMacroValue(expected, unit)} → Uscito ${formatMacroValue(actual, unit)}`
+              : undefined
+          }
+        >
+          Sorpresa {surprise > 0 ? "▲" : surprise < 0 ? "▼" : "·"}{" "}
+          {surprise >= 0 ? "+" : ""}{surprise.toFixed(2)}%
+        </div>
+      )}
+
+      {/* Mini bar chart of recent releases + history toggle + detail link.
+          Replaces the 60×16 sparkline so the user has at-a-glance pattern
+          recognition (positive vs negative bars) without leaving the
+          panel. The full Investing-style page is one click away. */}
       {history.length >= 2 && (
-        <div className="flex items-center gap-2">
-          <MacroSparkline history={history.slice(-12)} />
+        <div className="flex items-center gap-2 flex-wrap">
+          <MacroMiniBars history={history.slice(-12)} />
           <button
             type="button"
             onClick={() => setExpanded((v) => !v)}
@@ -841,6 +842,16 @@ function MacroInsightStrip({ event }: { event: MacroEvent }) {
           >
             {expanded ? "Riduci ▴" : "Storico ▾"}
           </button>
+          {event.series_id != null && (
+            <Link
+              to={`/macro/${event.series_id}`}
+              className="ml-auto inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline"
+              title="Apri la pagina di dettaglio dell'indicatore"
+            >
+              Apri dettaglio
+              <ExternalLink className="h-3 w-3" />
+            </Link>
+          )}
         </div>
       )}
 
@@ -851,26 +862,105 @@ function MacroInsightStrip({ event }: { event: MacroEvent }) {
   );
 }
 
-/* ─── Inline slot helper (Ultimo / Atteso / Sorpresa cells) ────────────── */
+/* ─── KpiSlot — Investing-style header KPI cell ─────────────────────────── */
 
-function Slot({
+function KpiSlot({
   label,
   hint,
-  children,
+  value,
+  unit,
+  tone,
+  big,
+  dateBadge,
 }: {
   label: string;
   hint: string;
-  children: React.ReactNode;
+  value: number | null | undefined;
+  unit: string;
+  tone?: "pos" | "neg" | "neutral";
+  big?: boolean;
+  dateBadge?: string;
 }) {
+  const valueTone =
+    tone === "pos"
+      ? "text-emerald-600 dark:text-emerald-400"
+      : tone === "neg"
+        ? "text-rose-600 dark:text-rose-400"
+        : "text-foreground";
   return (
     <div className="flex flex-col gap-0.5 min-w-0" title={hint}>
       <span className="text-[10px] uppercase tracking-wider text-muted-foreground/80">
         {label}
       </span>
-      <span className="leading-tight truncate">{children}</span>
+      <span
+        className={cn(
+          "font-bold tabular-nums leading-tight",
+          big ? "text-lg" : "text-sm",
+          valueTone,
+        )}
+      >
+        {value != null ? formatMacroValue(value, unit) : <span className="text-muted-foreground italic font-normal">—</span>}
+      </span>
+      {dateBadge && (
+        <span className="text-[9px] text-muted-foreground/70 tabular-nums">
+          {dateBadge}
+        </span>
+      )}
     </div>
   );
 }
+
+/* ─── MacroMiniBars — 90×24 bar chart of recent releases ────────────────── */
+
+function MacroMiniBars({
+  history,
+}: {
+  history: { date: string; value: number | null }[];
+}) {
+  const pts = history.filter(
+    (p): p is { date: string; value: number } =>
+      p.value != null && Number.isFinite(p.value),
+  );
+  if (pts.length < 2) return null;
+  const W = 90;
+  const H = 24;
+  const max = Math.max(...pts.map((p) => Math.abs(p.value)));
+  const barW = W / pts.length;
+  const zeroY = H / 2;
+  return (
+    <svg
+      width={W}
+      height={H}
+      viewBox={`0 0 ${W} ${H}`}
+      preserveAspectRatio="none"
+      className="block"
+      aria-hidden
+    >
+      {/* Zero baseline so positive/negative bars have visual context */}
+      <line x1={0} y1={zeroY} x2={W} y2={zeroY} stroke="currentColor" strokeWidth="0.5" opacity="0.25" />
+      {pts.map((p, i) => {
+        const h = max > 0 ? Math.abs(p.value / max) * (H / 2 - 1) : 0;
+        const x = i * barW + barW * 0.15;
+        const w = barW * 0.7;
+        const y = p.value >= 0 ? zeroY - h : zeroY;
+        return (
+          <rect
+            key={i}
+            x={x}
+            y={y}
+            width={w}
+            height={Math.max(h, 0.5)}
+            fill={p.value >= 0 ? "#10b981" : "#f43f5e"}
+            opacity={i === pts.length - 1 ? 1 : 0.7}
+          />
+        );
+      })}
+    </svg>
+  );
+}
+
+/* `Slot` removed — replaced by `KpiSlot` defined alongside MacroInsightStrip
+ * which carries the bigger Investing-style typography + tone-aware Attuale. */
 
 /** Taller chart of the last ~36 observations. Used when the user
  *  expands the macro insight strip in the detail panel. */
@@ -1012,50 +1102,10 @@ function formatMacroValue(v: number, unit: string): string {
   return v.toFixed(2);
 }
 
-/** Inline 60×16 sparkline of recent observations. Filters out null
- *  values (FRED's "." marker) so the line stays continuous. */
-function MacroSparkline({
-  history,
-}: {
-  history: { date: string; value: number | null }[];
-}) {
-  const pts = history.filter((p): p is { date: string; value: number } =>
-    p.value != null && Number.isFinite(p.value),
-  );
-  if (pts.length < 2) return null;
-  const W = 60;
-  const H = 16;
-  const min = Math.min(...pts.map((p) => p.value));
-  const max = Math.max(...pts.map((p) => p.value));
-  const range = max - min || 1;
-  const points = pts
-    .map((p, i) => {
-      const x = (i / (pts.length - 1)) * (W - 1);
-      const y = H - ((p.value - min) / range) * (H - 2) - 1;
-      return `${x.toFixed(2)},${y.toFixed(2)}`;
-    })
-    .join(" ");
-  return (
-    <svg
-      width={W}
-      height={H}
-      viewBox={`0 0 ${W} ${H}`}
-      preserveAspectRatio="none"
-      className="block"
-      aria-hidden
-    >
-      <polyline
-        points={points}
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        vectorEffect="non-scaling-stroke"
-      />
-    </svg>
-  );
-}
+/* `MacroSparkline` removed — replaced by `MacroMiniBars` (a small
+ * positive/negative bar chart) defined alongside MacroInsightStrip.
+ * The bars give better at-a-glance pattern recognition than a line
+ * sparkline for indicators whose sign matters (CPI MoM, retail sales). */
 
 /* ─── Number/format helpers ─────────────────────────────────────────────── */
 

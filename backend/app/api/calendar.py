@@ -8,20 +8,24 @@ from datetime import UTC, date, datetime, timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
-from app.models import User
+from app.models import MacroObservation, MacroReleaseDate, MacroSeries, User
 from app.schemas.calendar import (
     CalendarOut,
     EarningsEventOut,
     MacroEventOut,
     MacroObservationOut,
+    MacroReleaseOut,
+    MacroSeriesDetailOut,
 )
 from app.services import calendar_service
 from app.services.calendar_service import (
     EarningsEvent,
     MacroEventDC,
+    currency_for_region,
 )
 
 router = APIRouter(prefix="/api", tags=["calendar"])
@@ -140,10 +144,105 @@ def get_calendar(
                 expected_value=e.expected_value,
                 actual_value=e.actual_value,
                 surprise_pct=e.surprise_pct,
+                series_id=e.series_id,
+                source=e.source,
+                currency=currency_for_region(e.region),
             ))
 
     return CalendarOut(
         date_from=date_from,
         date_to=date_to,
         events=out_events,
+    )
+
+
+def _period_label(d: date) -> str:
+    """Italian short-month label for a release date — "Apr", "Mag", "Set"…
+    Mirrors the "(Apr)" suffix Investing.com shows in its history table.
+    """
+    months = ["Gen", "Feb", "Mar", "Apr", "Mag", "Giu",
+              "Lug", "Ago", "Set", "Ott", "Nov", "Dic"]
+    return months[d.month - 1]
+
+
+@router.get("/macro/{series_id}", response_model=MacroSeriesDetailOut)
+def get_macro_detail(
+    series_id: int,
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+) -> MacroSeriesDetailOut:
+    """Detail view for a single macro indicator — the data behind the
+    /macro/:series_id frontend page (Investing-style layout).
+
+    Returns:
+      - Series metadata (label, region, currency, source, importance, unit, description)
+      - Latest release (actual / expected / previous, with surprise)
+      - Full release history (newest → oldest, no truncation — UI applies range filter)
+      - Upcoming scheduled release dates (next ~3)
+
+    `expected_value` on historical rows is NULL: we don't backfill consensus
+    for past releases (Forexfactory's free feed only carries the current
+    week's forecasts). Frontend renders "—" in that column for old rows.
+    """
+    series = db.get(MacroSeries, series_id)
+    if series is None:
+        raise HTTPException(status_code=404, detail=f"MacroSeries {series_id} not found")
+
+    # Full history: every observation ever stored, newest first. The
+    # frontend bar chart applies range filtering (1Y / 5Y / MAX) client-
+    # side — no need for a date filter param on this endpoint since the
+    # row count per series is bounded (~360 monthly = 30y of history).
+    obs_rows = db.execute(
+        select(MacroObservation.date, MacroObservation.value)
+        .where(MacroObservation.series_id == series_id)
+        .order_by(MacroObservation.date.desc())
+    ).all()
+
+    # Build release history with previous_value = the observation
+    # immediately before this one, so the table can show "Precedente"
+    # per row without a frontend pass over the same data. obs_rows is
+    # newest-first, so the previous value for row i is the value at
+    # row i+1 (older).
+    history: list[MacroReleaseOut] = []
+    for i, row in enumerate(obs_rows):
+        prev_v = obs_rows[i + 1].value if i + 1 < len(obs_rows) else None
+        history.append(
+            MacroReleaseOut(
+                release_date=row.date,
+                period_label=_period_label(row.date),
+                actual_value=row.value,
+                expected_value=None,  # not backfilled — see docstring
+                previous_value=prev_v,
+                release_time_utc=None,  # observations carry no time info
+            )
+        )
+
+    latest = history[0] if history else None
+
+    upcoming_rows = db.execute(
+        select(MacroReleaseDate.date)
+        .where(
+            MacroReleaseDate.series_id == series_id,
+            MacroReleaseDate.date > datetime.now(UTC).date(),
+        )
+        .order_by(MacroReleaseDate.date.asc())
+        .limit(5)
+    ).scalars().all()
+
+    return MacroSeriesDetailOut(
+        series_id=series.id,
+        fred_series_id=series.fred_series_id,
+        label=series.label,
+        region=series.region,
+        currency=currency_for_region(series.region),
+        importance=series.importance,  # type: ignore[arg-type]
+        unit=series.unit,
+        description=series.description,
+        source=series.source,
+        last_refreshed_at=(
+            series.last_refreshed_at.isoformat() if series.last_refreshed_at else None
+        ),
+        latest=latest,
+        history=history,
+        upcoming=list(upcoming_rows),
     )
