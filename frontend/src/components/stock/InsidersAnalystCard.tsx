@@ -209,7 +209,16 @@ export function InsidersAnalystCard({ ticker }: Props) {
     );
   }
 
-  const insiders = q.data?.insiders ?? [];
+  // Filter: only show transactions with a real monetary value. Drops the
+  // RSU-vesting / stock-award / gift rows that yfinance reports with
+  // value=0 or null — they pollute the list with noise (every executive
+  // gets quarterly grants; only the cash transactions are signal). Order
+  // by date desc so the most recent activity is on top, matching the
+  // user's mental model of "latest insider trades".
+  const insiders = (q.data?.insiders ?? [])
+    .filter((t) => t.value != null && t.value > 0)
+    .sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+  const latest = insiders.slice(0, 10);
 
   return (
     <Card>
@@ -219,20 +228,20 @@ export function InsidersAnalystCard({ ticker }: Props) {
           label="Insider transactions"
           className="mb-2"
           right={
-            insiders.length > 0 ? (
+            latest.length > 0 ? (
               <span className="text-xs text-muted-foreground tabular-nums">
-                ultime {Math.min(insiders.length, 10)}
+                ultime {latest.length}
               </span>
             ) : undefined
           }
         />
-        {insiders.length === 0 ? (
+        {latest.length === 0 ? (
           <div className="text-sm text-muted-foreground text-center py-3">
-            Nessuna transazione insider registrata.
+            Nessuna transazione insider con valore monetario.
           </div>
         ) : (
           <ul>
-            {insiders.slice(0, 10).map((t, i) => (
+            {latest.map((t, i) => (
               <InsiderRow key={`${t.insider}-${t.date}-${i}`} t={t} />
             ))}
           </ul>
