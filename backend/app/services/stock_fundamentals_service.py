@@ -424,6 +424,81 @@ def _extract_earnings(
     return historical, next_date, next_estimate, next_rev_estimate, next_time_utc
 
 
+def _merge_finnhub_actuals_into_earnings(ticker: str, f: "Fundamentals") -> None:
+    """Patch the most-recent earnings actuals when yfinance is lagging.
+
+    Called inline during `_fetch_fresh` after yfinance's earnings_dates
+    has been parsed. The trigger condition is "yfinance left a forward
+    event with date in the past" — i.e. an earnings has already
+    occurred but yfinance hasn't yet ingested the actual EPS/revenue.
+    Finnhub's free earnings calendar typically populates the actuals
+    within ~30 min of the press release, well before yfinance (1-3h).
+
+    If Finnhub returns a matching record with `eps_actual` set, we:
+      (1) build a new EarningsPoint and append it to f.earnings
+      (2) clear f.next_earnings_date / next_eps_estimate (the event is
+          now historical, no longer "upcoming")
+
+    No-ops on:
+      - FINNHUB_API_KEY unset (`is_enabled()` returns False)
+      - yfinance's next event in the future or absent (= already current)
+      - Finnhub has no matching released record
+
+    Failure mode: any exception is caller-swallowed (see _fetch_fresh
+    try/except wrapper) so a Finnhub outage never blocks yfinance data.
+    """
+    from app.services import finnhub_earnings_service
+    if not finnhub_earnings_service.is_enabled():
+        return
+    nxt = f.next_earnings_date
+    if not nxt:
+        return
+    try:
+        from datetime import date as _date
+        nxt_date_obj = _date.fromisoformat(nxt)
+    except (TypeError, ValueError):
+        return
+    # Only consider events whose scheduled date is today or in the past.
+    # A future event obviously hasn't been released, so Finnhub also
+    # won't have an actual; no point hitting the API.
+    if nxt_date_obj > _date.today():
+        return
+    found = finnhub_earnings_service.fetch_recent_actuals([ticker], days_back=14)
+    rec = found.get(ticker)
+    if rec is None:
+        return  # Finnhub also has no actual yet — keep yfinance's "upcoming" state
+    # Compute surprise % from the actuals we received. yfinance uses
+    # `Surprise(%) = (Reported - Estimate) / |Estimate| * 100`; mirror
+    # that formula so the EarningsPoint row's surprise_pct stays
+    # comparable across sources.
+    surprise_pct: float | None = None
+    if (
+        rec.eps_actual is not None
+        and rec.eps_estimate is not None
+        and rec.eps_estimate != 0
+    ):
+        surprise_pct = (rec.eps_actual - rec.eps_estimate) / abs(rec.eps_estimate) * 100.0
+    point = EarningsPoint(
+        date=rec.date.isoformat(),
+        eps_estimate=rec.eps_estimate,
+        eps_reported=rec.eps_actual,
+        surprise_pct=surprise_pct,
+        revenue_estimate=rec.revenue_estimate,
+        revenue_reported=rec.revenue_actual,
+        time_utc=None,  # Finnhub gives `hour` as 'amc'/'bmo' — no clock time
+    )
+    f.earnings = (f.earnings or []) + [point]
+    # Demote the "upcoming" slot — the event just became historical.
+    f.next_earnings_date = None
+    f.next_earnings_time_utc = None
+    f.next_eps_estimate = None
+    f.next_revenue_estimate = None
+    logger.info(
+        f"[fund] {ticker}: patched earnings actual from Finnhub "
+        f"(date={rec.date} eps_actual={rec.eps_actual})"
+    )
+
+
 def _extract_micro(info: dict | None) -> MicroData:
     if not info:
         return MicroData()
@@ -825,6 +900,20 @@ def _fetch_fresh(ticker: str) -> Fundamentals:
         except Exception as e:
             logger.debug(f"[fund] earnings {ticker}: {e}")
             _maybe_record(e)
+        # Finnhub fallback — patches the most recent earnings actuals when
+        # yfinance hasn't ingested them yet (typical lag: 1-3h post
+        # release; Finnhub: ~30min). Only kicks in when:
+        #  (a) FINNHUB_API_KEY is set
+        #  (b) yfinance left a "next event" with date in the past (=
+        #      release happened but yfinance hasn't scraped the actual)
+        # Cheap to call — one HTTP roundtrip per ticker, on the upstream
+        # path only (so behind the same 7d TTL gate as the rest of the
+        # fundamentals payload). Failures are silent — Finnhub down just
+        # means we keep yfinance's slower data.
+        try:
+            _merge_finnhub_actuals_into_earnings(ticker, f)
+        except Exception as e:
+            logger.debug(f"[fund] finnhub merge {ticker}: {e}")
         try:
             # Single info() call — both micro fundamentals and the company
             # profile come from the same dict, so pulling them together

@@ -30,6 +30,14 @@ class Settings(BaseSettings):
     # macro events; the calendar then renders only the hardcoded
     # fallback list in `services/calendar_macros.py`.
     fred_api_key: str = ""
+    # Finnhub API key — used as a low-latency fallback source for
+    # earnings actuals (epsActual / revenueActual) when yfinance hasn't
+    # yet scraped the press release. Free tier from https://finnhub.io
+    # gives 60 req/min, ample for our ~1100-stock catalog when we only
+    # poll the "imminent earnings" subset (~5-20 stocks per refresh).
+    # Empty string disables the Finnhub fallback; yfinance remains the
+    # sole source for earnings.
+    finnhub_api_key: str = ""
 
     @property
     def is_dev(self) -> bool:
