@@ -428,24 +428,20 @@ def _merge_finnhub_actuals_into_earnings(ticker: str, f: "Fundamentals") -> None
     """Patch the most-recent earnings actuals when yfinance is lagging.
 
     Called inline during `_fetch_fresh` after yfinance's earnings_dates
-    has been parsed. Finnhub's free earnings calendar populates actuals
-    within ~30 min of the press release; yfinance scrapes Yahoo so
-    typically lags 1-3h (or doesn't surface the event at all for
-    smaller-cap names like NVMI for a full day).
+    has been parsed. Narrow trigger: ONLY when yfinance left a forward
+    event whose date is in the past (`next_earnings_date <= today` =
+    release happened, yfinance knows about it but hasn't ingested the
+    actual yet). Spends one Finnhub API call per fresh fetch — but
+    only for tickers in that narrow lagging-actual window, so the
+    free-tier rate budget (60 req/min) is never close to saturated
+    even during a full catalog refresh.
 
-    Triggers on EITHER condition:
-      (a) yfinance left a forward event whose date is in the past
-          (next_earnings_date <= today → release happened, yfinance
-          knows about it but hasn't ingested the actual yet), OR
-      (b) yfinance's earnings history doesn't already cover the last
-          14 days (no recent quarter in `f.earnings` — yfinance
-          missed the event entirely; NVMI case where next_earnings_date
-          is null and last historical is 3 months old).
-
-    Either way, we query Finnhub for the recent window. If a released
-    record exists, we promote it into f.earnings (deduping by date so
-    a later yfinance ingest doesn't double-count) and clear the
-    "upcoming" slot when condition (a) applied.
+    Tickers yfinance doesn't track at all (next_earnings_date null,
+    last historical months old — the NVMI case) are NOT caught here.
+    Those are handled by the scheduled `refresh_imminent_earnings` job
+    which queries the Finnhub calendar globally (one HTTP call for
+    the whole catalog) and then calls `patch_earning_from_finnhub` to
+    inject the actuals directly, without a per-ticker Finnhub roundtrip.
 
     No-ops on FINNHUB_API_KEY unset (`is_enabled()` returns False) or
     when Finnhub has nothing fresh either. Exceptions caller-swallowed
@@ -454,39 +450,19 @@ def _merge_finnhub_actuals_into_earnings(ticker: str, f: "Fundamentals") -> None
     from app.services import finnhub_earnings_service
     if not finnhub_earnings_service.is_enabled():
         return
-    from datetime import date as _date, timedelta as _timedelta
-    today = _date.today()
+    from datetime import date as _date
 
-    # Condition (a): yfinance has a "next" event whose date is in the past.
-    nxt_in_past = False
     nxt = f.next_earnings_date
-    if nxt:
-        try:
-            nxt_date_obj = _date.fromisoformat(nxt)
-            nxt_in_past = nxt_date_obj <= today
-        except (TypeError, ValueError):
-            pass
-
-    # Condition (b): yfinance's history has no entry in the last 14 days,
-    # meaning either no earnings recently happened OR yfinance hasn't
-    # picked up a recent one. Either way, asking Finnhub costs ~200ms.
-    # The dedup below ensures false positives (no actual release) are
-    # cheap — Finnhub just returns nothing.
-    recent_cutoff = today - _timedelta(days=14)
-    has_recent_history = False
-    for ep in (f.earnings or []):
-        try:
-            ep_date = _date.fromisoformat(ep.date)
-            if ep_date >= recent_cutoff:
-                has_recent_history = True
-                break
-        except (TypeError, ValueError):
-            continue
-
-    if not nxt_in_past and has_recent_history:
-        # yfinance is current — no reason to spend a Finnhub call.
+    if not nxt:
+        return  # yfinance has no pending event → no actual-lag to patch
+    try:
+        nxt_date_obj = _date.fromisoformat(nxt)
+    except (TypeError, ValueError):
         return
+    if nxt_date_obj > _date.today():
+        return  # Future event — no actual to fill in yet
 
+    # yfinance has a past-dated placeholder → ask Finnhub for the actual.
     found = finnhub_earnings_service.fetch_recent_actuals([ticker], days_back=14)
     rec = found.get(ticker)
     if rec is None:
@@ -499,7 +475,7 @@ def _merge_finnhub_actuals_into_earnings(ticker: str, f: "Fundamentals") -> None
     if rec_date_str in existing_dates:
         # Still clear the "upcoming" slot if it was pointing at this
         # date — the event has been confirmed as historical.
-        if nxt_in_past and nxt == rec_date_str:
+        if nxt == rec_date_str:
             f.next_earnings_date = None
             f.next_earnings_time_utc = None
             f.next_eps_estimate = None
@@ -526,15 +502,107 @@ def _merge_finnhub_actuals_into_earnings(ticker: str, f: "Fundamentals") -> None
     )
     f.earnings = (f.earnings or []) + [point]
     # Demote the "upcoming" slot — the event just became historical.
-    if nxt_in_past:
-        f.next_earnings_date = None
-        f.next_earnings_time_utc = None
-        f.next_eps_estimate = None
-        f.next_revenue_estimate = None
+    # Guard prevents wiping a yfinance "next" pointing at a future event
+    # in the rare case Finnhub patched in a different, earlier date.
+    f.next_earnings_date = None
+    f.next_earnings_time_utc = None
+    f.next_eps_estimate = None
+    f.next_revenue_estimate = None
     logger.info(
         f"[fund] {ticker}: patched earnings actual from Finnhub "
         f"(date={rec.date} eps_actual={rec.eps_actual})"
     )
+
+
+def patch_earning_from_finnhub(ticker: str, rec) -> bool:
+    """Inject a pre-fetched Finnhub earnings record into the cached
+    Fundamentals (L1+L2) for a single ticker without a fresh yfinance
+    fetch and without a per-ticker Finnhub HTTP call.
+
+    Designed for the `refresh_imminent_earnings` job: the job has
+    already fetched the GLOBAL Finnhub calendar (one HTTP request for
+    the whole catalog) and holds {ticker: FinnhubEarning} in memory.
+    Calling this for each catalog match is cheap (DB write only) and
+    keeps the merge logic centralized.
+
+    Behavior:
+      - If the ticker isn't in L1+L2 (never fetched), no-op — there's
+        no Fundamentals object to patch. Next user view will fetch
+        fresh via the normal path.
+      - If the record's date is already in `f.earnings`, no-op (no
+        duplicates).
+      - Otherwise, append a new EarningsPoint, demote the "upcoming"
+        slot, and rewrite both cache layers.
+
+    Returns True iff the cache was modified — useful for the job to
+    log "N stocks patched, M no-ops". `rec` is typed loosely as `Any`
+    so the import of `FinnhubEarning` stays optional for callers that
+    test this in isolation; runtime checks are duck-typed.
+    """
+    from datetime import date as _date
+
+    # Read current cached state. Try L1 first; if L1 miss, peek at L2
+    # (cheap — single SELECT). If both empty, there's nothing to patch.
+    with _CACHE_LOCK:
+        f = _CACHE.get(ticker)
+    if f is None:
+        try:
+            from app.core.db import SessionLocal
+            from app.services import fetch_cache_store
+            with SessionLocal() as db:
+                f = fetch_cache_store.read_fundamentals(db, ticker, _TTL_SECONDS)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(f"[fund] patch_finnhub L2 read failed for {ticker}: {exc}")
+            return False
+        if f is None:
+            return False  # No prior fetch — let the next user request fetch fresh
+
+    rec_date_str: str = rec.date.isoformat() if isinstance(rec.date, _date) else str(rec.date)
+    existing_dates = {ep.date for ep in (f.earnings or [])}
+    if rec_date_str in existing_dates:
+        return False  # Already have this quarter — nothing to do
+
+    surprise_pct: float | None = None
+    if (
+        rec.eps_actual is not None
+        and rec.eps_estimate is not None
+        and rec.eps_estimate != 0
+    ):
+        surprise_pct = (rec.eps_actual - rec.eps_estimate) / abs(rec.eps_estimate) * 100.0
+    point = EarningsPoint(
+        date=rec_date_str,
+        eps_estimate=rec.eps_estimate,
+        eps_reported=rec.eps_actual,
+        surprise_pct=surprise_pct,
+        revenue_estimate=rec.revenue_estimate,
+        revenue_reported=rec.revenue_actual,
+        time_utc=None,
+    )
+    f.earnings = (f.earnings or []) + [point]
+    # Demote "upcoming" if it was pointing at this same date — and
+    # update fetched_at so downstream TTL math treats this as fresh.
+    if f.next_earnings_date == rec_date_str:
+        f.next_earnings_date = None
+        f.next_earnings_time_utc = None
+        f.next_eps_estimate = None
+        f.next_revenue_estimate = None
+    f.fetched_at = time.time()
+
+    # Write back to both cache layers. L1 first (fast); L2 second (durability).
+    with _CACHE_LOCK:
+        _CACHE[ticker] = f
+    try:
+        from app.core.db import SessionLocal
+        from app.services import fetch_cache_store
+        with SessionLocal() as db:
+            fetch_cache_store.write_fundamentals(db, f)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(f"[fund] patch_finnhub L2 write failed for {ticker}: {exc}")
+    logger.info(
+        f"[fund] {ticker}: injected earnings from Finnhub calendar "
+        f"(date={rec_date_str} eps_actual={rec.eps_actual})"
+    )
+    return True
 
 
 def _extract_micro(info: dict | None) -> MicroData:
