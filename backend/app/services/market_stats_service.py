@@ -3,7 +3,7 @@ into the dashboard market_snapshot payload."""
 import json
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 import pandas as pd
 from sqlalchemy import select
@@ -54,6 +54,13 @@ class StockMetrics:
     # USD before summing, so the breadth row's `total_market_cap` is
     # comparable across markets. Default None → assumed USD.
     currency: str | None = None
+    # Date of the most recent OHLCV bar in DB for this stock. Used by
+    # `_load_metrics` to detect stale rows (a stock whose latest bar is
+    # older than the catalog's freshest date — typically because the
+    # scan's per-ticker fetch dropped it). Stale rows get their
+    # change_pct/_5d/_20d nulled out so they can't surface in the
+    # gainers/losers / treemap aggregates with yesterday's stale move.
+    last_bar_date: date | None = None
 
 
 def compute_stock_metrics(
@@ -116,6 +123,18 @@ def compute_stock_metrics(
 
     sparkline = [round(float(v), 4) for v in close.tail(30).tolist()]
 
+    # Last bar's date — `_load_metrics` uses this to detect rows that
+    # missed the latest scan's fetch (PLUG and ~25 others can be dropped
+    # by yfinance in a batch of 20). Falls back to None on parse error.
+    raw_date = ohlcv["date"].iloc[-1]
+    try:
+        last_bar_date = (
+            raw_date if isinstance(raw_date, date)
+            else date.fromisoformat(str(raw_date)[:10])
+        )
+    except (TypeError, ValueError):
+        last_bar_date = None
+
     return StockMetrics(
         stock_id=stock_id,
         ticker=ticker,
@@ -145,6 +164,7 @@ def compute_stock_metrics(
         vol_ratio=vol_ratio,
         has_full_data=n >= 200,
         sparkline=sparkline,
+        last_bar_date=last_bar_date,
     )
 
 
@@ -519,6 +539,26 @@ def _load_metrics(db: Session) -> tuple[list[StockMetrics], list[tuple[str, str]
         )
         if m is not None:
             metrics.append(m)
+
+    # Stale-row guard: if a stock's last bar is older than the catalog's
+    # freshest available date, null out its change_pct fields so it
+    # can't appear in gainers/losers/treemap with a stale "yesterday's
+    # move" misrepresented as today's. Other metrics (RSI/EMA/52w/vol)
+    # survive — they're per-window aggregates where one missing day at
+    # the tail doesn't meaningfully distort the value. Concretely:
+    # without this, PLUG with bar through 2026-05-13 (close=3.96, prev
+    # close=3.56 = +11.24%) was crowning the gainers list even though
+    # today's live price was -2.4% from yesterday. Now the row's
+    # change_pct = None and PLUG drops off the movers cards until the
+    # next scan picks up today's bar.
+    bar_dates = [m.last_bar_date for m in metrics if m.last_bar_date is not None]
+    if bar_dates:
+        freshest_date = max(bar_dates)
+        for m in metrics:
+            if m.last_bar_date is not None and m.last_bar_date < freshest_date:
+                m.change_pct = None
+                m.change_pct_5d = None
+                m.change_pct_20d = None
     return metrics, indices
 
 
