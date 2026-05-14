@@ -5,11 +5,16 @@ Single read-only GET. Auth required (consistent with the rest of /api).
 from __future__ import annotations
 
 from datetime import UTC, date, datetime, timedelta
-from typing import Annotated
+from typing import Annotated, Final
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+
+# Sentinel distinct from any possible MacroObservation.value (which is
+# float or None). Used as the "no previous value seen yet" initial state
+# in the change-point dedup loop further below.
+_UNSET: Final = object()
 
 from app.api.deps import get_current_user, get_db
 from app.models import MacroObservation, MacroReleaseDate, MacroSeries, User
@@ -198,6 +203,29 @@ def get_macro_detail(
         .order_by(MacroObservation.date.desc())
     ).all()
 
+    # Collapse consecutive identical observation values into single
+    # "change points". FRED stores some indicators on a DAILY cadence
+    # (DFEDTARU / FOMC rate, DGS10 / 10y yield, DFF / fed-funds effective)
+    # but the values only ever change at discrete events (FOMC meetings,
+    # market opens). Showing 30 daily rows of "3.75%" pollutes the
+    # history table with mechanical noise; the user wants to see WHEN
+    # the rate actually changed. Walk oldest→newest and keep each row
+    # whose value differs from the previous, then preserve newest-first
+    # order for the response.
+    if len(obs_rows) > 1:
+        changes: list = []
+        last_kept_value: object = _UNSET
+        for row in reversed(obs_rows):  # oldest first
+            if row.value != last_kept_value:
+                changes.append(row)
+                last_kept_value = row.value
+        changes.reverse()  # back to newest-first
+        # Series with one constant value forever (test fixtures, broken
+        # imports) collapse to a single row — keep the original list in
+        # that pathological case so the UI has something to render.
+        if len(changes) > 1 or len(obs_rows) == 1:
+            obs_rows = changes
+
     # Build release history with previous_value = the observation
     # immediately before this one, so the table can show "Precedente"
     # per row without a frontend pass over the same data. obs_rows is
@@ -218,6 +246,55 @@ def get_macro_detail(
         )
 
     latest = history[0] if history else None
+
+    # "Release pending" override: if today has a scheduled release for
+    # this series whose release_time UTC is still in the future, the
+    # ACTUAL value isn't out yet — wipe `latest.actual_value` so the UI
+    # renders "—" in the ATTUALE slot. The previous value rolls into
+    # PRECEDENTE so the user still sees the rate currently in effect.
+    # Two scheduling sources: MacroReleaseDate (FRED-sourced for CPI/NFP)
+    # and the hardcoded `calendar_macros._MACRO_EVENTS` list for events
+    # FRED doesn't publish release_dates for (FOMC / ECB / BoE rate
+    # decisions). Either path triggers the override.
+    now_utc = datetime.now(UTC)
+    today_utc = now_utc.date()
+    has_today_release_db = db.execute(
+        select(MacroReleaseDate.id).where(
+            MacroReleaseDate.series_id == series_id,
+            MacroReleaseDate.date == today_utc,
+        ).limit(1)
+    ).first() is not None
+    if not has_today_release_db:
+        from app.services import calendar_macros as _cm
+        has_today_release = any(
+            e.date == today_utc and e.label == series.label
+            for e in _cm._MACRO_EVENTS
+        )
+    else:
+        has_today_release = True
+    if has_today_release and latest is not None:
+        from app.services.calendar_macros import release_time_for
+        rel_time_str = release_time_for(series.label)
+        if rel_time_str and ":" in rel_time_str:
+            try:
+                hh, mm = rel_time_str.split(":", 1)
+                release_dt = now_utc.replace(
+                    hour=int(hh), minute=int(mm), second=0, microsecond=0,
+                )
+                if now_utc < release_dt:
+                    # Pending — swap actual→None and bubble the prior
+                    # known value into PRECEDENTE.
+                    latest = MacroReleaseOut(
+                        release_date=today_utc,
+                        period_label=_period_label(today_utc),
+                        actual_value=None,
+                        expected_value=None,
+                        previous_value=latest.actual_value,
+                        release_time_utc=rel_time_str,
+                    )
+            except (ValueError, AttributeError):
+                # release_time string malformed — leave the latest as-is.
+                pass
 
     upcoming_rows = db.execute(
         select(MacroReleaseDate.date)
