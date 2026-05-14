@@ -428,49 +428,86 @@ def _merge_finnhub_actuals_into_earnings(ticker: str, f: "Fundamentals") -> None
     """Patch the most-recent earnings actuals when yfinance is lagging.
 
     Called inline during `_fetch_fresh` after yfinance's earnings_dates
-    has been parsed. The trigger condition is "yfinance left a forward
-    event with date in the past" — i.e. an earnings has already
-    occurred but yfinance hasn't yet ingested the actual EPS/revenue.
-    Finnhub's free earnings calendar typically populates the actuals
-    within ~30 min of the press release, well before yfinance (1-3h).
+    has been parsed. Finnhub's free earnings calendar populates actuals
+    within ~30 min of the press release; yfinance scrapes Yahoo so
+    typically lags 1-3h (or doesn't surface the event at all for
+    smaller-cap names like NVMI for a full day).
 
-    If Finnhub returns a matching record with `eps_actual` set, we:
-      (1) build a new EarningsPoint and append it to f.earnings
-      (2) clear f.next_earnings_date / next_eps_estimate (the event is
-          now historical, no longer "upcoming")
+    Triggers on EITHER condition:
+      (a) yfinance left a forward event whose date is in the past
+          (next_earnings_date <= today → release happened, yfinance
+          knows about it but hasn't ingested the actual yet), OR
+      (b) yfinance's earnings history doesn't already cover the last
+          14 days (no recent quarter in `f.earnings` — yfinance
+          missed the event entirely; NVMI case where next_earnings_date
+          is null and last historical is 3 months old).
 
-    No-ops on:
-      - FINNHUB_API_KEY unset (`is_enabled()` returns False)
-      - yfinance's next event in the future or absent (= already current)
-      - Finnhub has no matching released record
+    Either way, we query Finnhub for the recent window. If a released
+    record exists, we promote it into f.earnings (deduping by date so
+    a later yfinance ingest doesn't double-count) and clear the
+    "upcoming" slot when condition (a) applied.
 
-    Failure mode: any exception is caller-swallowed (see _fetch_fresh
-    try/except wrapper) so a Finnhub outage never blocks yfinance data.
+    No-ops on FINNHUB_API_KEY unset (`is_enabled()` returns False) or
+    when Finnhub has nothing fresh either. Exceptions caller-swallowed
+    so a Finnhub outage never blocks the yfinance payload.
     """
     from app.services import finnhub_earnings_service
     if not finnhub_earnings_service.is_enabled():
         return
+    from datetime import date as _date, timedelta as _timedelta
+    today = _date.today()
+
+    # Condition (a): yfinance has a "next" event whose date is in the past.
+    nxt_in_past = False
     nxt = f.next_earnings_date
-    if not nxt:
+    if nxt:
+        try:
+            nxt_date_obj = _date.fromisoformat(nxt)
+            nxt_in_past = nxt_date_obj <= today
+        except (TypeError, ValueError):
+            pass
+
+    # Condition (b): yfinance's history has no entry in the last 14 days,
+    # meaning either no earnings recently happened OR yfinance hasn't
+    # picked up a recent one. Either way, asking Finnhub costs ~200ms.
+    # The dedup below ensures false positives (no actual release) are
+    # cheap — Finnhub just returns nothing.
+    recent_cutoff = today - _timedelta(days=14)
+    has_recent_history = False
+    for ep in (f.earnings or []):
+        try:
+            ep_date = _date.fromisoformat(ep.date)
+            if ep_date >= recent_cutoff:
+                has_recent_history = True
+                break
+        except (TypeError, ValueError):
+            continue
+
+    if not nxt_in_past and has_recent_history:
+        # yfinance is current — no reason to spend a Finnhub call.
         return
-    try:
-        from datetime import date as _date
-        nxt_date_obj = _date.fromisoformat(nxt)
-    except (TypeError, ValueError):
-        return
-    # Only consider events whose scheduled date is today or in the past.
-    # A future event obviously hasn't been released, so Finnhub also
-    # won't have an actual; no point hitting the API.
-    if nxt_date_obj > _date.today():
-        return
+
     found = finnhub_earnings_service.fetch_recent_actuals([ticker], days_back=14)
     rec = found.get(ticker)
     if rec is None:
-        return  # Finnhub also has no actual yet — keep yfinance's "upcoming" state
-    # Compute surprise % from the actuals we received. yfinance uses
+        return  # Finnhub also has no released record in the window
+    # Dedup by date: if yfinance ALSO has this date in its history,
+    # don't append a duplicate. yfinance's record wins (its surprise%
+    # is computed against the consensus estimate yfinance tracks).
+    existing_dates = {ep.date for ep in (f.earnings or [])}
+    rec_date_str = rec.date.isoformat()
+    if rec_date_str in existing_dates:
+        # Still clear the "upcoming" slot if it was pointing at this
+        # date — the event has been confirmed as historical.
+        if nxt_in_past and nxt == rec_date_str:
+            f.next_earnings_date = None
+            f.next_earnings_time_utc = None
+            f.next_eps_estimate = None
+            f.next_revenue_estimate = None
+        return
+    # Compute surprise % from the Finnhub actuals. yfinance uses
     # `Surprise(%) = (Reported - Estimate) / |Estimate| * 100`; mirror
-    # that formula so the EarningsPoint row's surprise_pct stays
-    # comparable across sources.
+    # that formula so the row stays comparable across sources.
     surprise_pct: float | None = None
     if (
         rec.eps_actual is not None
@@ -479,7 +516,7 @@ def _merge_finnhub_actuals_into_earnings(ticker: str, f: "Fundamentals") -> None
     ):
         surprise_pct = (rec.eps_actual - rec.eps_estimate) / abs(rec.eps_estimate) * 100.0
     point = EarningsPoint(
-        date=rec.date.isoformat(),
+        date=rec_date_str,
         eps_estimate=rec.eps_estimate,
         eps_reported=rec.eps_actual,
         surprise_pct=surprise_pct,
@@ -489,10 +526,11 @@ def _merge_finnhub_actuals_into_earnings(ticker: str, f: "Fundamentals") -> None
     )
     f.earnings = (f.earnings or []) + [point]
     # Demote the "upcoming" slot — the event just became historical.
-    f.next_earnings_date = None
-    f.next_earnings_time_utc = None
-    f.next_eps_estimate = None
-    f.next_revenue_estimate = None
+    if nxt_in_past:
+        f.next_earnings_date = None
+        f.next_earnings_time_utc = None
+        f.next_eps_estimate = None
+        f.next_revenue_estimate = None
     logger.info(
         f"[fund] {ticker}: patched earnings actual from Finnhub "
         f"(date={rec.date} eps_actual={rec.eps_actual})"
