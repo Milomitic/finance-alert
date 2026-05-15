@@ -811,10 +811,15 @@ function MacroInsightStrip({ event }: { event: MacroEvent }) {
           tone={attualeTone}
           big
           dateBadge={actual == null && prevDate ? formatMacroDate(prevDate) : undefined}
+          // % variation vs Precedente, shown beneath the Attuale value
+          // so the operator reads the trend direction at a glance
+          // ("inflation up 0.2pp vs last release"). Hidden for rate
+          // decisions (handled below via the `compareTo` heuristic).
+          compareTo={prior ?? null}
         />
         <KpiSlot
           label="Previsto"
-          hint="Consensus forecast (mediana analisti) dal feed Forexfactory. Disponibile solo per gli indicatori principali US/EU/UK."
+          hint="Consensus forecast (mediana analisti) dal feed Forexfactory. Disponibile per i principali eventi US/EU/UK/JP."
           value={expected ?? null}
           unit={unit}
         />
@@ -895,6 +900,7 @@ function KpiSlot({
   tone,
   big,
   dateBadge,
+  compareTo,
 }: {
   label: string;
   hint: string;
@@ -903,6 +909,10 @@ function KpiSlot({
   tone?: "pos" | "neg" | "neutral";
   big?: boolean;
   dateBadge?: string;
+  /** Previous reading. When provided AND meaningful (see below), the
+   *  slot renders a "Δ ±N% vs prec." sub-line so the user can read the
+   *  trend direction without doing the math. */
+  compareTo?: number | null;
 }) {
   const valueTone =
     tone === "pos"
@@ -910,6 +920,34 @@ function KpiSlot({
       : tone === "neg"
         ? "text-rose-600 dark:text-rose-400"
         : "text-foreground";
+
+  // Variation vs the comparison reading. Computed as relative change
+  // for indicators where it makes sense ("CPI +0.5% vs prior"); skipped
+  // for rate decisions where a relative read is misleading (a Fed move
+  // from 3.75% → 4.00% reads as "+6.67%" which is confusing — that's
+  // what the absolute level + the bps shift convey). Heuristic: the
+  // unit "pct" identifies rate indicators in this codebase; we suppress
+  // the relative pct change for those and show ΔPP (percentage points)
+  // instead, which is the standard way to talk about rate moves.
+  const isRate = unit === "pct";
+  let deltaLabel: string | null = null;
+  let deltaTone: "pos" | "neg" | "neutral" = "neutral";
+  if (value != null && compareTo != null && compareTo !== 0) {
+    const diff = value - compareTo;
+    deltaTone = diff > 0 ? "pos" : diff < 0 ? "neg" : "neutral";
+    if (isRate) {
+      // Percentage points (ΔPP) for rate decisions / CPI rates: a move
+      // from 3.75 → 4.00 reads as "+0.25 pp", which is unambiguous.
+      const sign = diff > 0 ? "+" : "";
+      deltaLabel = `${sign}${diff.toFixed(2)} pp vs prec.`;
+    } else {
+      // Relative percent change for index/level/dollars indicators.
+      const pct = (diff / Math.abs(compareTo)) * 100;
+      const sign = pct > 0 ? "+" : "";
+      deltaLabel = `${sign}${pct.toFixed(1)}% vs prec.`;
+    }
+  }
+
   return (
     <div className="flex flex-col gap-0.5 min-w-0" title={hint}>
       <span className="text-[10px] uppercase tracking-wider text-muted-foreground/80">
@@ -924,6 +962,18 @@ function KpiSlot({
       >
         {value != null ? formatMacroValue(value, unit) : <span className="text-muted-foreground italic font-normal">—</span>}
       </span>
+      {deltaLabel && (
+        <span
+          className={cn(
+            "text-[10.5px] tabular-nums font-medium",
+            deltaTone === "pos" && "text-emerald-600 dark:text-emerald-400",
+            deltaTone === "neg" && "text-rose-600 dark:text-rose-400",
+            deltaTone === "neutral" && "text-muted-foreground",
+          )}
+        >
+          {deltaLabel}
+        </span>
+      )}
       {dateBadge && (
         <span className="text-[9px] text-muted-foreground/70 tabular-nums">
           {dateBadge}

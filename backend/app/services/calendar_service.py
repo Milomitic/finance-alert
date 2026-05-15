@@ -353,15 +353,22 @@ def _enrich_with_fred_value(db: Session, ev: MacroEventDC) -> None:
 
 def _enrich_with_forexfactory(ev: MacroEventDC) -> None:
     """Mutate `ev` in place: attach `expected_value`, `actual_value`,
-    `surprise_pct` from Forexfactory's free weekly XML feed when a
-    consensus is available for this label/date pair.
+    `surprise_pct` (and as backup `prev_value`) from Forexfactory's
+    free weekly XML feed when a consensus is available for this
+    label/date pair.
 
     No-op when:
     - The label isn't in `forexfactory_consensus._FF_LABEL_MAP` (we
-      don't try to map every label — only the major US/EU events
+      don't track every label — only the major US/EU/UK/JP events
       where the feed reliably publishes consensus).
     - No matching event in this week's XML.
     - Both forecast and actual are empty in the feed.
+
+    `prev_value` fallback: for non-US events we don't have a FRED
+    `MacroSeries` to source the previous reading from, so we lift
+    Forexfactory's `previous` field. This lets the UI render its
+    "Attuale / Previsto / Precedente" strip for UK/EU/JP releases —
+    without it `hasInsight` is false and the strip never appears.
     """
     from app.services import forexfactory_consensus as ff
     ff_event = ff.consensus_for_label(ev.label, ev.date)
@@ -369,10 +376,16 @@ def _enrich_with_forexfactory(ev: MacroEventDC) -> None:
         return
     expected = ff.parse_numeric(ff_event.forecast)
     actual = ff.parse_numeric(ff_event.actual)
+    previous = ff.parse_numeric(ff_event.previous)
     if expected is not None:
         ev.expected_value = expected
     if actual is not None:
         ev.actual_value = actual
+    # Only fall back to FF's `previous` when FRED hasn't already
+    # populated `prev_value` (FRED is authoritative for the few series
+    # both sources cover, e.g. US CPI).
+    if ev.prev_value is None and previous is not None:
+        ev.prev_value = previous
     if expected is not None and actual is not None and expected != 0:
         # Sign-preserving relative surprise. Magnitudes work cleanly
         # for non-zero expected; "expected=0" cases (rare) get null

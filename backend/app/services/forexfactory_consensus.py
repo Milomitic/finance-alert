@@ -59,17 +59,40 @@ _TTL_SEC = 30 * 60  # 30 minutes
 #   the headline one — usually the non-Core variant.
 # ---------------------------------------------------------------------------
 _FF_LABEL_MAP: dict[str, tuple[str, str]] = {
-    # FRED-curated labels (see refresh_fred.CURATED_SERIES)
+    # ── US (FRED-curated; labels match `refresh_fred.CURATED_SERIES`) ──
     "US CPI release":             ("USD", r"^CPI m/m$"),
     "US PPI release":             ("USD", r"^PPI m/m$"),
     "US NFP / Non-Farm Payrolls": ("USD", r"^Non-Farm Employment Change$"),
     "US Unemployment Rate":       ("USD", r"^Unemployment Rate$"),
     "FOMC rate decision":         ("USD", r"^Federal Funds Rate$"),
     "US GDP (real)":              ("USD", r"GDP.*q/q|Advance GDP|GDP m/m"),
+    "US GDP (advance, Q1)":       ("USD", r"GDP.*q/q|Advance GDP"),
+    "US GDP (final, Q1)":         ("USD", r"GDP.*q/q|Final GDP"),
     "US Retail Sales":            ("USD", r"^(Core )?Retail Sales m/m$"),
+    "ISM Manufacturing PMI":      ("USD", r"^ISM Manufacturing PMI$"),
+    "ISM Services PMI":           ("USD", r"^ISM Services PMI$"),
+
+    # ── Eurozone / Europe ──
+    # Note: the hardcoded `calendar_macros._MACRO_EVENTS` adds month
+    # suffixes like "Eurozone HICP flash (April)"; `_normalize_label`
+    # below strips those so the lookup hits this base key.
     "Eurozone HICP flash":        ("EUR", r"^CPI Flash Estimate y/y$"),
-    "ECB Deposit Facility Rate":  ("EUR", r"^Main Refinancing Rate$"),
-    "BoE Bank Rate":              ("GBP", r"^Official Bank Rate$"),
+    "Eurozone PMI flash":         ("EUR", r"Flash (Manufacturing|Services) PMI"),
+    "ECB rate decision":          ("EUR", r"^Main Refinancing Rate$"),
+    "ECB Deposit Facility Rate":  ("EUR", r"^Main Refinancing Rate$"),  # legacy alias
+    "ZEW Economic Sentiment (DE)": ("EUR", r"German ZEW Economic Sentiment"),
+    "IFO Business Climate (DE)":  ("EUR", r"German ifo Business Climate"),
+
+    # ── United Kingdom ──
+    "UK CPI release":             ("GBP", r"^CPI y/y$"),
+    "UK GDP (Q1, prelim)":        ("GBP", r"^Prelim GDP q/q$"),
+    "UK GDP (final)":             ("GBP", r"^Final GDP q/q$"),
+    "BoE rate decision":          ("GBP", r"^Official Bank Rate$"),
+    "BoE Bank Rate":              ("GBP", r"^Official Bank Rate$"),  # legacy alias
+
+    # ── Japan ──
+    "Japan CPI release":          ("JPY", r"^(National )?Core CPI y/y$"),
+    "BoJ rate decision":          ("JPY", r"^BOJ Policy Rate$"),
 }
 
 
@@ -176,6 +199,16 @@ def _get_events() -> list[FFEvent]:
 # Public API
 # ---------------------------------------------------------------------------
 
+def _normalize_label(label: str) -> str:
+    """Strip a trailing `( ... )` annotation so labels like
+    "Eurozone HICP flash (April)" and "ZEW Economic Sentiment (DE)" hit
+    the same key as their base form. `calendar_macros._MACRO_EVENTS`
+    sometimes appends the period or country in parens — without this
+    helper the dict lookup misses every parenthesized variant."""
+    import re as _re
+    return _re.sub(r"\s*\([^)]*\)\s*$", "", label).strip()
+
+
 def consensus_for_label(label: str, on_date: date) -> FFEvent | None:
     """Look up the Forexfactory consensus event matching our internal
     `label` for `on_date`. Returns None when:
@@ -183,8 +216,12 @@ def consensus_for_label(label: str, on_date: date) -> FFEvent | None:
       - No matching event is in the current weekly XML for that date
       - The XML failed to load entirely (network issue)
     Date matching is exact (same day); ±1-day tolerance isn't worth it
-    because Forexfactory uses the local-of-event date, same as ours."""
-    mapping = _FF_LABEL_MAP.get(label)
+    because Forexfactory uses the local-of-event date, same as ours.
+
+    The lookup first tries the exact label, then strips any trailing
+    "(...)" annotation (`_normalize_label`) so e.g. "Eurozone HICP
+    flash (April)" resolves to the "Eurozone HICP flash" entry."""
+    mapping = _FF_LABEL_MAP.get(label) or _FF_LABEL_MAP.get(_normalize_label(label))
     if mapping is None:
         return None
     expected_country, title_pattern = mapping
