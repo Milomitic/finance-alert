@@ -4,6 +4,7 @@ from apscheduler.triggers.cron import CronTrigger
 from loguru import logger
 
 from app.core.config import settings
+from app.scheduler.jobs.dedupe_stocks_job import run_dedupe_stocks
 from app.scheduler.jobs.refresh_catalog import run_refresh_all
 from app.scheduler.jobs.refresh_fred import run_refresh_fred
 from app.scheduler.jobs.refresh_imminent_earnings import run_refresh_imminent_earnings
@@ -23,6 +24,14 @@ def get_scheduler() -> BackgroundScheduler:
             run_refresh_all,
             trigger=CronTrigger(day_of_week="sat", hour=3, minute=0),
             id="refresh_catalog",
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+        )
+        _scheduler.add_job(
+            run_dedupe_stocks,
+            trigger=CronTrigger(day_of_week="sat", hour=3, minute=30),
+            id="dedupe_stocks",
             replace_existing=True,
             max_instances=1,
             coalesce=True,
