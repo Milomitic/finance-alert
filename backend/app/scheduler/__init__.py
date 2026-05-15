@@ -13,6 +13,7 @@ from app.scheduler.jobs.refresh_institutionals import run_refresh_institutionals
 from app.scheduler.jobs.refresh_sec_13f import run_refresh_sec_13f
 from app.scheduler.jobs.scan_alerts import run_scan_alerts
 from app.scheduler.jobs.send_digest import run_send_digest
+from app.services.scheduler_metrics import install_listener as _install_scheduler_listener
 
 _scheduler: BackgroundScheduler | None = None
 
@@ -21,6 +22,7 @@ def get_scheduler() -> BackgroundScheduler:
     global _scheduler
     if _scheduler is None:
         _scheduler = BackgroundScheduler(timezone="Europe/Rome")
+        _install_scheduler_listener(_scheduler)
         _scheduler.add_job(
             run_refresh_all,
             trigger=CronTrigger(day_of_week="sat", hour=3, minute=0),
