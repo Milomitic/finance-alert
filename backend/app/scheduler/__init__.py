@@ -1,4 +1,6 @@
 """APScheduler setup and lifecycle bound to FastAPI."""
+from datetime import datetime, timedelta
+
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from loguru import logger
@@ -6,6 +8,10 @@ from loguru import logger
 from app.core.config import settings
 from app.scheduler.jobs.cleanup_orphan_scans_job import run_cleanup_orphan_scans
 from app.scheduler.jobs.dedupe_stocks_job import run_dedupe_stocks
+from app.scheduler.jobs.health_probes_job import (
+    run_health_probes_fast,
+    run_health_probes_slow,
+)
 from app.scheduler.jobs.refresh_catalog import run_refresh_all
 from app.scheduler.jobs.refresh_fred import run_refresh_fred
 from app.scheduler.jobs.refresh_imminent_earnings import run_refresh_imminent_earnings
@@ -112,6 +118,30 @@ def get_scheduler() -> BackgroundScheduler:
             replace_existing=True,
             max_instances=1,
             coalesce=True,
+        )
+        # Health probes — keep platform-health UI populated even when no
+        # user traffic is exercising a given source. Fast set every 5 min
+        # (light calls), slow set every 30 min (heavier or rate-limited
+        # like Marketaux 100/day). First run scheduled 15s after boot so
+        # the UI exits "Idle" immediately instead of waiting up to 5 min.
+        now = datetime.now()
+        _scheduler.add_job(
+            run_health_probes_fast,
+            trigger=CronTrigger(minute="*/5"),
+            id="health_probes_fast",
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+            next_run_time=now + timedelta(seconds=15),
+        )
+        _scheduler.add_job(
+            run_health_probes_slow,
+            trigger=CronTrigger(minute="*/30"),
+            id="health_probes_slow",
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+            next_run_time=now + timedelta(seconds=45),
         )
     return _scheduler
 
