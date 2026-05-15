@@ -68,10 +68,10 @@ KNOWN_SOURCES: list[SourceSpec] = [
                notes="FRED. Job ogni 2h + probe ogni 5 min."),
     SourceSpec("forexfactory", "consensus", "ForexFactory — Macro consensus", "scheduled",
                per_minute=None, per_day=None,
-               notes="HTML scrape (heavy). Niente probe — esercitato solo dal job."),
+               notes="XML weekly calendar. Probe HEAD ogni 30 min (reachability)."),
     SourceSpec("sec_13f", "filings", "SEC EDGAR — 13F filings", "scheduled",
                per_minute=None, per_day=None,
-               notes="Weekly scrape (heavy). Niente probe — esercitato solo dal job."),
+               notes="EDGAR submissions endpoint. Probe ogni 30 min (CIK Berkshire)."),
 ]
 
 

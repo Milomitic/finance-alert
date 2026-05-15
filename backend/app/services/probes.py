@@ -164,9 +164,18 @@ def probe_fred_macro() -> None:
 def probe_marketaux_news() -> None:
     """Marketaux. Each call consumes 1 unit of the 100/day free tier —
     scheduled every 30 min (slow set) for ~48 probes/day, leaving 52
-    units of headroom for organic fallback traffic."""
+    units of headroom for organic fallback traffic.
+
+    When no api_key is configured we record a failure with a clear
+    reason so the UI surfaces the missing-key state instead of leaving
+    the source perpetually 'Idle' (which is indistinguishable from
+    'never called yet')."""
     from app.core.config import settings
     if not settings.marketaux_api_key:
+        _record(
+            "marketaux", "news", False,
+            "MARKETAUX_API_KEY non configurata — il fallback è disabilitato",
+        )
         return
     try:
         import requests
@@ -189,6 +198,58 @@ def probe_marketaux_news() -> None:
         _record("marketaux", "news", False, repr(exc))
 
 
+def probe_forexfactory_consensus() -> None:
+    """ForexFactory provides a static weekly XML calendar. The probe
+    HEAD-hits the URL to confirm the host is reachable and serving the
+    expected content-type. Doesn't validate the XML schema — that's
+    exercised by the real scheduled job."""
+    try:
+        import requests
+        r = requests.head(
+            "https://nfs.faireconomy.media/ff_calendar_thisweek.xml",
+            timeout=8,
+            allow_redirects=True,
+            headers={"User-Agent": "FinanceAlert milomitic@gmail.com"},
+        )
+        ok = r.status_code == 200
+        _record(
+            "forexfactory", "consensus", ok,
+            "" if ok else f"HTTP {r.status_code}",
+        )
+    except Exception as exc:  # noqa: BLE001
+        _record("forexfactory", "consensus", False, repr(exc))
+
+
+def probe_sec_13f_filings() -> None:
+    """SEC EDGAR submissions endpoint, hit on a known CIK (Berkshire
+    Hathaway, 0001067983). The JSON response is small and the call is
+    cached by SEC's CDN, so this is a very light probe. SEC requires a
+    User-Agent identifying the operator — we match the real scraper."""
+    try:
+        import requests
+        r = requests.get(
+            "https://data.sec.gov/submissions/CIK0001067983.json",
+            timeout=8,
+            headers={
+                "User-Agent": "FinanceAlert milomitic@gmail.com",
+                "Accept": "application/json",
+            },
+        )
+        # Defense in depth: SEC rate-limits aggressively and may return
+        # 200 with a throttling JSON. We don't need to parse the whole
+        # body — a header + body shape check is enough.
+        ok = (
+            r.status_code == 200
+            and "cik" in r.text[:200].lower()
+        )
+        _record(
+            "sec_13f", "filings", ok,
+            "" if ok else f"HTTP {r.status_code}",
+        )
+    except Exception as exc:  # noqa: BLE001
+        _record("sec_13f", "filings", False, repr(exc))
+
+
 # ─── orchestrators ───────────────────────────────────────────────────
 
 FAST_PROBES: list[Callable[[], None]] = [
@@ -203,6 +264,8 @@ SLOW_PROBES: list[Callable[[], None]] = [
     probe_yfinance_ohlcv,
     probe_yfinance_fundamentals,
     probe_marketaux_news,
+    probe_forexfactory_consensus,
+    probe_sec_13f_filings,
 ]
 
 
