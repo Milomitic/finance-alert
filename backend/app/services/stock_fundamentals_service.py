@@ -1026,36 +1026,60 @@ def _do_yf_call(ticker: str) -> dict:
     }
     try:
         out["income_stmt"] = t.income_stmt
-    except Exception as e:
-        logger.debug(f"[fund] income_stmt {ticker}: {e}")
+    except Exception as exc:  # noqa: BLE001
+        normalized = _normalize_yf_error(exc)
+        if isinstance(normalized, (RateLimitError, UpstreamTimeout)):
+            raise normalized from exc
+        logger.debug(f"[fund] income_stmt {ticker}: {exc}")
     try:
         out["quarterly_income_stmt"] = t.quarterly_income_stmt
-    except Exception as e:
-        logger.debug(f"[fund] quarterly_income_stmt {ticker}: {e}")
+    except Exception as exc:  # noqa: BLE001
+        normalized = _normalize_yf_error(exc)
+        if isinstance(normalized, (RateLimitError, UpstreamTimeout)):
+            raise normalized from exc
+        logger.debug(f"[fund] quarterly_income_stmt {ticker}: {exc}")
     try:
         out["earnings_dates"] = t.earnings_dates
-    except Exception as e:
-        logger.debug(f"[fund] earnings_dates {ticker}: {e}")
+    except Exception as exc:  # noqa: BLE001
+        normalized = _normalize_yf_error(exc)
+        if isinstance(normalized, (RateLimitError, UpstreamTimeout)):
+            raise normalized from exc
+        logger.debug(f"[fund] earnings_dates {ticker}: {exc}")
     try:
         out["info"] = t.get_info()
-    except Exception as e:
-        logger.debug(f"[fund] info {ticker}: {e}")
+    except Exception as exc:  # noqa: BLE001
+        normalized = _normalize_yf_error(exc)
+        if isinstance(normalized, (RateLimitError, UpstreamTimeout)):
+            raise normalized from exc
+        logger.debug(f"[fund] info {ticker}: {exc}")
     try:
         out["insider_transactions"] = t.insider_transactions
-    except Exception as e:
-        logger.debug(f"[fund] insider_transactions {ticker}: {e}")
+    except Exception as exc:  # noqa: BLE001
+        normalized = _normalize_yf_error(exc)
+        if isinstance(normalized, (RateLimitError, UpstreamTimeout)):
+            raise normalized from exc
+        logger.debug(f"[fund] insider_transactions {ticker}: {exc}")
     try:
         out["recommendations"] = t.recommendations
-    except Exception as e:
-        logger.debug(f"[fund] recommendations {ticker}: {e}")
+    except Exception as exc:  # noqa: BLE001
+        normalized = _normalize_yf_error(exc)
+        if isinstance(normalized, (RateLimitError, UpstreamTimeout)):
+            raise normalized from exc
+        logger.debug(f"[fund] recommendations {ticker}: {exc}")
     try:
         out["analyst_price_targets"] = t.analyst_price_targets
-    except Exception as e:
-        logger.debug(f"[fund] analyst_price_targets {ticker}: {e}")
+    except Exception as exc:  # noqa: BLE001
+        normalized = _normalize_yf_error(exc)
+        if isinstance(normalized, (RateLimitError, UpstreamTimeout)):
+            raise normalized from exc
+        logger.debug(f"[fund] analyst_price_targets {ticker}: {exc}")
     try:
         out["upgrades_downgrades"] = t.upgrades_downgrades
-    except Exception as e:
-        logger.debug(f"[fund] upgrades_downgrades {ticker}: {e}")
+    except Exception as exc:  # noqa: BLE001
+        normalized = _normalize_yf_error(exc)
+        if isinstance(normalized, (RateLimitError, UpstreamTimeout)):
+            raise normalized from exc
+        logger.debug(f"[fund] upgrades_downgrades {ticker}: {exc}")
     return out
 
 
@@ -1067,8 +1091,13 @@ def _do_yf_call(ticker: str) -> dict:
 )
 def _yf_fetch_with_retry(ticker: str) -> dict:
     """Wrapping point: chiamata yfinance + normalizzazione errori.
-    Le eccezioni di rete/yfinance vengono normalizzate nelle nostre classi
-    tipate, così il decorator sa cosa ri-tentare."""
+
+    Per-endpoint timeouts and rate-limit errors are re-raised from
+    ``_do_yf_call`` (as ``UpstreamTimeout`` / ``RateLimitError``) so the
+    ``@with_backoff`` decorator retries them.  Other per-endpoint exceptions
+    (e.g. malformed payload causing ``KeyError`` / ``ValueError``) are swallowed
+    inside ``_do_yf_call`` and degrade gracefully to ``None`` for that key —
+    they do NOT trigger a retry."""
     try:
         return _do_yf_call(ticker)
     except Exception as exc:  # noqa: BLE001
