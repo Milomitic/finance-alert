@@ -1097,11 +1097,23 @@ def _yf_fetch_with_retry(ticker: str) -> dict:
     ``@with_backoff`` decorator retries them.  Other per-endpoint exceptions
     (e.g. malformed payload causing ``KeyError`` / ``ValueError``) are swallowed
     inside ``_do_yf_call`` and degrade gracefully to ``None`` for that key —
-    they do NOT trigger a retry."""
+    they do NOT trigger a retry.
+
+    Each retryable failure ALSO informs ``yfinance_health`` so the circuit
+    breaker converges as designed (5 failures → OPEN within WINDOW_SECONDS).
+    Without this, the @with_backoff decorator would hide intermediate
+    failures and the breaker would only see the final retry-exhausted
+    exception — a single user call could consume up to 4 raw upstream
+    failures while contributing only 1 to the threshold, making the
+    breaker open ~4x slower than designed."""
+    from app.services import yfinance_health
     try:
         return _do_yf_call(ticker)
     except Exception as exc:  # noqa: BLE001
-        raise _normalize_yf_error(exc) from exc
+        normalized = _normalize_yf_error(exc)
+        if isinstance(normalized, (RateLimitError, UpstreamTimeout)):
+            yfinance_health.record_failure(f"fundamentals {ticker}: {exc}")
+        raise normalized from exc
 
 
 # ── fetch orchestration ───────────────────────────────────────────────────────
@@ -1209,8 +1221,10 @@ def _fetch_fresh(ticker: str) -> Fundamentals:
     except Exception as e:  # noqa: BLE001
         logger.warning(f"[fundamentals] top-level failure for {ticker}: {e}")
         f.error = str(e)
-        if yfinance_health.is_rate_limit_error(e):
-            yfinance_health.record_failure(f"fundamentals top-level {ticker}: {e}")
+        # NOTE: no `record_failure` here — `_yf_fetch_with_retry` already
+        # records each retry attempt to the breaker, so an additional
+        # record here would double-count and trip the breaker too fast
+        # on a single user-call exhaustion.
     # Partial-fetch detection: when the slow `Ticker.info` call fails
     # (rate-limited / yfinance backoff) the payload survives without a
     # top-level exception — annual/quarterly may be populated, but micro

@@ -99,3 +99,39 @@ def test_hydrate_l1_from_db_returns_loaded_and_skipped_counts(db):
     result = stock_fundamentals_service.hydrate_l1_from_db()
     assert isinstance(result, tuple)
     assert result == (0, 0)
+
+
+def test_breaker_records_failure_on_each_retry_attempt(monkeypatch):
+    """The retry loop must inform yfinance_health on every attempt failure,
+    not just the final exhaustion. Without this, with retries=3 the breaker
+    sees only 1 record per user call instead of 4 (1 initial + 3 retries),
+    and its 5-failure threshold takes ~5x longer to trip than designed."""
+    from app.services import stock_fundamentals_service, yfinance_health
+
+    yfinance_health.reset()
+    # No-op sleep so retries don't actually wait the 0.5/1.0/2.0s backoffs.
+    monkeypatch.setattr("app.services._retry.time.sleep", lambda _s: None)
+
+    def always_429(_t):
+        # The string "Too Many Requests" makes `_normalize_yf_error` classify
+        # this as a RateLimitError, which is retryable AND satisfies
+        # `yfinance_health.is_rate_limit_error` heuristic.
+        raise RuntimeError("Too Many Requests")
+
+    monkeypatch.setattr(
+        stock_fundamentals_service, "_do_yf_call", always_429
+    )
+
+    with pytest.raises(Exception):
+        stock_fundamentals_service._yf_fetch_with_retry("AAPL")
+
+    status = yfinance_health.status()
+    # The retry decorator uses "total attempts" semantic: retries=3 means
+    # 3 total attempts (not 1 initial + 3 retries). Each failed attempt
+    # records to the breaker, so we expect 3 records, not 1.
+    assert status["failures_in_window"] == 3, (
+        f"expected exactly 3 breaker records after retry exhaustion "
+        f"(retries=3 = 3 total attempts), got: {status}"
+    )
+
+    yfinance_health.reset()  # leave clean for other tests

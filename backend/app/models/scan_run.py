@@ -26,7 +26,13 @@ class ScanRun(Base):
     """
 
     __tablename__ = "scan_runs"
-    __table_args__ = (SAIndex("ix_scan_runs_started_at", "started_at"),)
+    __table_args__ = (
+        SAIndex("ix_scan_runs_started_at", "started_at"),
+        # Used by the per-minute orphan-cleanup job: filters on
+        # (status='running' AND last_progress_at < cutoff). Without this
+        # index the query full-scans scan_runs every minute.
+        SAIndex("ix_scan_runs_status_last_progress", "status", "last_progress_at"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     # 'alerts_scan' | 'score_recompute'. Defaults at the DB level so legacy
