@@ -1,9 +1,11 @@
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { fetchHealth, fetchLogs } from "@/api/platformHealth";
+import { fetchHealth, fetchLogs, type LogRecord } from "@/api/platformHealth";
 import DataSourcesCard from "@/components/health/DataSourcesCard";
 import SchedulerCard from "@/components/health/SchedulerCard";
 import ScansCard from "@/components/health/ScansCard";
 import CacheCard from "@/components/health/CacheCard";
+import LogStream from "@/components/health/LogStream";
 
 export default function PlatformHealthPage() {
   const { data: health, isLoading: healthLoading } = useQuery({
@@ -16,6 +18,16 @@ export default function PlatformHealthPage() {
     queryKey: ["platform-logs-initial"],
     queryFn: () => fetchLogs({ limit: 500 }),
   });
+
+  const [logs, setLogs] = useState<LogRecord[]>([]);
+  const [paused, setPaused] = useState(false);
+
+  // Hydrate the local buffer once when the initial query resolves.
+  // (Task 11 will replace this with an EventSource subscription that
+  // appends new records as they arrive.)
+  useEffect(() => {
+    if (initialLogs) setLogs(initialLogs);
+  }, [initialLogs]);
 
   return (
     <div className="space-y-6">
@@ -39,21 +51,12 @@ export default function PlatformHealthPage() {
         </div>
       )}
 
-      <section className="space-y-2">
-        <h2 className="text-lg font-semibold">Log</h2>
-        <div className="rounded border bg-background p-2 max-h-[400px] overflow-auto font-mono text-xs space-y-1">
-          {(initialLogs ?? []).slice(-200).map((r, i) => (
-            <div key={i} className="flex gap-2">
-              <span className="text-muted-foreground">
-                {new Date(r.ts * 1000).toLocaleTimeString()}
-              </span>
-              <span className="font-semibold w-16">{r.level}</span>
-              <span className="text-muted-foreground">[{r.module}]</span>
-              <span className="flex-1 truncate">{r.message}</span>
-            </div>
-          ))}
-        </div>
-      </section>
+      <LogStream
+        records={logs}
+        paused={paused}
+        onTogglePause={() => setPaused((p) => !p)}
+        onClear={() => setLogs([])}
+      />
     </div>
   );
 }
