@@ -371,9 +371,10 @@ function SectionTitle({
 
 // Stock | Cap | Ultimo | Atteso | Sorpresa | Score | Risk = 7 cols.
 // Stock cell is flex-1 (minmax 0 / 1fr); the rest are fixed widths
-// chosen so EPS values like "-0.34" / "+1.23" fit at text-[14px].
+// with extra breathing room so values like "$155.3B", "+12.5%", and
+// the "AGGR" risk pill don't feel cramped against the column edges.
 const COL_TEMPLATE =
-  "grid-cols-[minmax(0,1fr)_72px_64px_64px_72px_56px_64px]";
+  "grid-cols-[minmax(0,1fr)_88px_80px_80px_88px_68px_76px]";
 
 function EarningsTable({
   rows,
