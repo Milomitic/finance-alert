@@ -4,6 +4,7 @@ import {
   CalendarDays,
   Filter,
   Grid3x3,
+  HeartPulse,
   LayoutDashboard,
   LogOut,
   Settings,
@@ -42,6 +43,7 @@ const NAV: NavEntry[] = [
   // sidebar so the user composes rules + reviews their alerts in one
   // surface. The /rules route was removed.
   { to: "/alerts", label: "Alerts", icon: Bell, enabled: true },
+  { to: "/health", label: "Salute", icon: HeartPulse, enabled: true },
   { to: "/settings", label: "Impostazioni", icon: Settings, enabled: true },
 ];
 

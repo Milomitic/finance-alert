@@ -9,6 +9,7 @@ import InstitutionalDetailPage from "@/pages/InstitutionalDetailPage";
 import InstitutionalsPage from "@/pages/InstitutionalsPage";
 import LoginPage from "@/pages/LoginPage";
 import MacroDetailPage from "@/pages/MacroDetailPage";
+import PlatformHealthPage from "@/pages/PlatformHealthPage";
 import MarketDetailPage from "@/pages/MarketDetailPage";
 import SectorDetailPage from "@/pages/SectorDetailPage";
 import SectorsOverviewPage from "@/pages/SectorsOverviewPage";
@@ -36,6 +37,7 @@ export default function App() {
             the existing /sectors/:name detail page. */}
         <Route path="/sectors" element={<SectorsOverviewPage />} />
         <Route path="/alerts" element={<AlertsPage />} />
+        <Route path="/health" element={<PlatformHealthPage />} />
         <Route path="/calendar" element={<CalendarPage />} />
         <Route path="/macro/:seriesId" element={<MacroDetailPage />} />
         <Route path="/stocks" element={<StocksBrowserPage />} />
