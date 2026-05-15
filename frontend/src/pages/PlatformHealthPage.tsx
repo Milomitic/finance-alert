@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { CheckCircle2, AlertTriangle, XCircle, Wifi, WifiOff } from "lucide-react";
-import { fetchHealth, fetchLogs } from "@/api/platformHealth";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { CheckCircle2, AlertTriangle, XCircle, Wifi, WifiOff, RefreshCw } from "lucide-react";
+import { fetchHealth, fetchLogs, runProbesNow } from "@/api/platformHealth";
 import DataSourcesCard from "@/components/health/DataSourcesCard";
 import SchedulerCard from "@/components/health/SchedulerCard";
 import ScansCard from "@/components/health/ScansCard";
@@ -66,6 +66,30 @@ export default function PlatformHealthPage() {
   const health = snapshot ?? initialHealth ?? null;
   const [paused, setPaused] = useState(false);
 
+  // Manual refresh: triggers all probes server-side and invalidates the
+  // local query cache so the next /health snapshot reflects the run.
+  const queryClient = useQueryClient();
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshedAt, setRefreshedAt] = useState<number | null>(null);
+  const triggerRefresh = async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    try {
+      await runProbesNow();
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["platform-health"] }),
+        queryClient.invalidateQueries({ queryKey: ["platform-logs-initial"] }),
+      ]);
+      setRefreshedAt(Date.now());
+    } catch (err) {
+      // Surface in console; the operator will still see the status
+      // refresh via SSE on the normal 5s cadence.
+      console.error("[platform-health] manual refresh failed:", err);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   // Derive overall status from the health snapshot for the hero banner
   const overall: OverallStatus = useMemo(() => {
     if (!health) return "operational";
@@ -108,27 +132,52 @@ export default function PlatformHealthPage() {
               Stato live di sorgenti dati, scheduler, scan e log — aggiornato in tempo reale via SSE.
             </p>
           </div>
-          <div
-            className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border text-sm font-medium ${
-              connected
-                ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                : "bg-amber-50 text-amber-700 border-amber-200"
-            }`}
-            title={
-              connected
-                ? "Connessione SSE attiva — eventi push in tempo reale"
-                : "Riconnessione SSE in corso — i dati potrebbero essere fermi"
-            }
-          >
-            {connected ? (
-              <>
-                <Wifi className="h-3.5 w-3.5" /> Live
-              </>
-            ) : (
-              <>
-                <WifiOff className="h-3.5 w-3.5" /> Riconnessione…
-              </>
-            )}
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={triggerRefresh}
+              disabled={refreshing}
+              className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border text-sm font-medium transition-colors ${
+                refreshing
+                  ? "bg-sky-50 text-sky-700 border-sky-200 cursor-wait"
+                  : "bg-background text-foreground border-border hover:bg-muted"
+              }`}
+              title={
+                refreshing
+                  ? "Esecuzione probe in corso (~5-10s)…"
+                  : refreshedAt
+                    ? `Ultimo refresh manuale: ${new Date(refreshedAt).toLocaleTimeString()}`
+                    : "Forza un refresh sincrono di tutte le sorgenti dati"
+              }
+              aria-label="Aggiorna stato sorgenti dati"
+            >
+              <RefreshCw
+                className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`}
+              />
+              {refreshing ? "Aggiornando…" : "Aggiorna"}
+            </button>
+            <div
+              className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border text-sm font-medium ${
+                connected
+                  ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                  : "bg-amber-50 text-amber-700 border-amber-200"
+              }`}
+              title={
+                connected
+                  ? "Connessione SSE attiva — eventi push in tempo reale"
+                  : "Riconnessione SSE in corso — i dati potrebbero essere fermi"
+              }
+            >
+              {connected ? (
+                <>
+                  <Wifi className="h-3.5 w-3.5" /> Live
+                </>
+              ) : (
+                <>
+                  <WifiOff className="h-3.5 w-3.5" /> Riconnessione…
+                </>
+              )}
+            </div>
           </div>
         </div>
 

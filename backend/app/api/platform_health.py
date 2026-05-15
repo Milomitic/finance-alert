@@ -114,6 +114,27 @@ def health_snapshot(
     )
 
 
+@router.post("/probes/run")
+def run_probes_now(
+    _user: User = Depends(get_current_user),
+) -> dict:
+    """Manually trigger all health probes (fast + slow) and block until
+    they complete. Used by the UI "Aggiorna" button — the operator can
+    force a fresh status snapshot without waiting up to 5 min for the
+    next scheduled tick. Total runtime: ~5-10s depending on upstream
+    latency. Each probe records to `data_source_metrics` so the next
+    /health snapshot reflects the refresh.
+
+    Marketaux note: this consumes 1 of its 100/day quota (since the
+    slow set includes its probe), so don't hammer this endpoint."""
+    import time as _time
+    from app.services import probes
+    t0 = _time.perf_counter()
+    probes.run_fast_probes()
+    probes.run_slow_probes()
+    return {"ok": True, "elapsed_ms": round((_time.perf_counter() - t0) * 1000, 1)}
+
+
 @router.get("/logs", response_model=list[LogRecordOut])
 def logs(
     level: Annotated[str | None, Query()] = None,

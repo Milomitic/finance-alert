@@ -79,6 +79,15 @@ export async function fetchHealth(): Promise<PlatformHealth> {
   return r.json();
 }
 
+export async function runProbesNow(): Promise<{ ok: boolean; elapsed_ms: number }> {
+  const r = await fetch("/api/platform/probes/run", {
+    method: "POST",
+    credentials: "include",
+  });
+  if (!r.ok) throw new Error(`probes ${r.status}`);
+  return r.json();
+}
+
 export async function fetchLogs(params: {
   level?: string;
   module?: string;
