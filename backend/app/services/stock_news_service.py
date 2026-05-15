@@ -124,6 +124,30 @@ def get_news(ticker: str, limit: int = 5) -> list[dict[str, Any]]:
         return []
     normalized = [n for raw in raw_items if (n := _normalize_yf_item(raw))]
     normalized.sort(key=lambda n: n.get("published_at") or "", reverse=True)
+
+    if not normalized:  # yfinance returned 0 usable headlines — try Marketaux
+        try:
+            from app.services import marketaux_news_service
+            fallback = marketaux_news_service.fetch_news(ticker, limit=10)
+            if fallback:
+                logger.info(
+                    f"[news] yfinance empty for {ticker}, using Marketaux fallback "
+                    f"({len(fallback)} items)"
+                )
+                normalized = [
+                    {
+                        "title": item.title,
+                        "link": item.url,
+                        "publisher": item.source or "Unknown",
+                        "published_at": item.published_at or None,
+                        "sentiment": classify_title(item.title),
+                        "summary": None,
+                    }
+                    for item in fallback
+                ]
+        except Exception as exc:  # noqa: BLE001 — fallback can fail, that's OK
+            logger.warning(f"[news] marketaux fallback failed for {ticker}: {exc}")
+
     _CACHE[ticker] = (now, normalized)
     # Persist to L2. Non-fatal — L1 still serves consumers if the DB write fails.
     try:

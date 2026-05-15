@@ -38,6 +38,11 @@ class Settings(BaseSettings):
     # Empty string disables the Finnhub fallback; yfinance remains the
     # sole source for earnings.
     finnhub_api_key: str = ""
+    # Marketaux API key — used as a fallback news source when yfinance returns
+    # 0 headlines for a ticker. Free tier from https://www.marketaux.com gives
+    # 100 req/day, sufficient for a single-user local-first context.
+    # Empty string disables the fallback; yfinance remains the sole source.
+    marketaux_api_key: str = ""
 
     @property
     def is_dev(self) -> bool:

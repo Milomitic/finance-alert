@@ -107,3 +107,36 @@ def test_get_news_fallback_on_yfinance_error(monkeypatch):
 
     items = stock_news_service.get_news("AAPL")
     assert items == []
+
+
+def test_falls_back_to_marketaux_when_yfinance_empty(monkeypatch):
+    """Se yfinance ritorna 0 headline, il service prova Marketaux."""
+    from app.services import marketaux_news_service
+
+    stock_news_service.clear_cache()
+
+    def fake_marketaux(ticker: str, limit: int = 10):
+        return [
+            marketaux_news_service.NewsItem(
+                title="From marketaux fallback",
+                url="https://x",
+                published_at="2026-05-15T00:00:00Z",
+                source="Reuters",
+            )
+        ]
+
+    monkeypatch.setattr(marketaux_news_service, "fetch_news", fake_marketaux)
+
+    # yfinance returns empty news list
+    class EmptyTicker:
+        def __init__(self, t): pass
+        @property
+        def news(self):
+            return []
+
+    fake_module = type("M", (), {"Ticker": EmptyTicker})
+    monkeypatch.setitem(__import__("sys").modules, "yfinance", fake_module)
+
+    result = stock_news_service.get_news("AAPL")
+    assert len(result) == 1
+    assert "marketaux fallback" in result[0]["title"].lower()
