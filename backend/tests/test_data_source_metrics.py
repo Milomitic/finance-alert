@@ -47,10 +47,12 @@ def test_analyse_gaps_suggests_when_only_source_failing() -> None:
 
 
 def test_analyse_gaps_silent_when_fallback_healthy() -> None:
+    # `news` is the only op left with a primary + fallback pair after
+    # Stooq's OHLCV path was removed (see source_catalog).
     for _ in range(10):
-        data_source_metrics.record_failure("yfinance", "ohlcv", reason="429")
+        data_source_metrics.record_failure("yfinance", "news", reason="429")
     for _ in range(10):
-        data_source_metrics.record_success("stooq", "ohlcv")
-    # ohlcv has yfinance failing but stooq healthy → no gap suggestion
+        data_source_metrics.record_success("marketaux", "news")
+    # news has yfinance failing but marketaux healthy → no gap suggestion
     gaps = data_source_metrics.analyse_gaps()
-    assert all(g.op != "ohlcv" for g in gaps)
+    assert all(g.op != "news" for g in gaps)

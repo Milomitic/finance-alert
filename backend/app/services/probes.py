@@ -110,32 +110,6 @@ def probe_yfinance_fundamentals() -> None:
         _record("yfinance", "fundamentals", False, repr(exc))
 
 
-def probe_stooq_ohlcv() -> None:
-    """One-CSV-row probe of Stooq. Matches the User-Agent used by the
-    real `stooq_ohlcv_service` — without it Stooq returns a "Get your
-    apikey" instructions page (HTTP 200, no CSV)."""
-    try:
-        import requests
-        from datetime import date
-        d = date.today().strftime("%Y%m%d")
-        url = f"https://stooq.com/q/d/l/?s=aapl.us&d1={d}&d2={d}&i=d"
-        r = requests.get(
-            url, timeout=8,
-            headers={"User-Agent": "FinanceAlert/0.1"},
-        )
-        # Stooq returns "Date,Open,High,Low,Close,Volume" header even on
-        # weekends/holidays (just no data rows). The header presence
-        # proves the host is reachable + responding correctly.
-        body_head = r.text.strip()[:50]
-        ok = r.status_code == 200 and body_head.startswith("Date,")
-        _record(
-            "stooq", "ohlcv", ok,
-            "" if ok else f"HTTP {r.status_code}: {body_head!r}"
-        )
-    except Exception as exc:  # noqa: BLE001
-        _record("stooq", "ohlcv", False, repr(exc))
-
-
 def probe_finnhub_earnings() -> None:
     """Earnings-calendar 1-day window probe."""
     from app.core.config import settings
@@ -221,7 +195,6 @@ FAST_PROBES: list[Callable[[], None]] = [
     probe_yfinance_live_quote,
     probe_yfinance_market_cap,
     probe_yfinance_news,
-    probe_stooq_ohlcv,
     probe_finnhub_earnings,
     probe_fred_macro,
 ]

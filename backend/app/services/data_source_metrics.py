@@ -14,12 +14,13 @@ calls in the last N seconds" — used for rate-limit usage indicators in
 the platform-health UI (Finnhub free tier 60/min, Marketaux 100/day…).
 
 Sources currently tracked:
-- yfinance.ohlcv      — yfinance.download() batch path
+- yfinance.ohlcv      — yfinance.download() batch path (no fallback in 2026: Stooq
+                        introduced apikey gate, Finnhub /stock/candle is paywalled,
+                        Polygon free is 5/min — no viable batch alternative)
 - yfinance.market_cap — yfinance.Ticker.fast_info marketCap
 - yfinance.fundamentals — yfinance.Ticker.* (income_stmt, info, etc.)
 - yfinance.live_quote — yfinance.Ticker.fast_info per-tab polling
 - yfinance.news       — yfinance.Ticker.news headlines
-- stooq.ohlcv         — Stooq CSV fallback for OHLCV
 - finnhub.earnings    — Finnhub fallback for actual earnings
 - fred.macro          — FRED macro series download
 - marketaux.news      — Marketaux fallback when yfinance returns empty
@@ -174,9 +175,9 @@ def analyse_gaps() -> list[GapAnalysis]:
         by_op.setdefault(s.op, []).append(s)
 
     fallback_hints = {
-        "market_cap": "Aggiungere fallback es. Stooq Insider list / FinancialModelingPrep free-tier per market cap.",
+        "market_cap": "Aggiungere fallback es. FinancialModelingPrep free-tier per market cap.",
         "fundamentals": "Aggiungere fallback es. SEC EDGAR (revenue+EPS, US-only) o FinancialModelingPrep free-tier.",
-        "ohlcv": "Stooq è già il fallback OHLCV. Se anche Stooq degrada, valutare yahoo-fin (alt parser) o Alpha Vantage (free 5 req/min, key richiesta).",
+        "ohlcv": "Nessun fallback OHLCV gratuito viable in 2026 (Stooq apikey-gated, Finnhub /candle paywalled, Polygon free 5/min, Tiingo 1000/day). Quando yfinance breaker apre, lo scan skippa e ritenta al ciclo successivo.",
     }
 
     for op, sources in by_op.items():

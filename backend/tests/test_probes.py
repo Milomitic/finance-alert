@@ -51,14 +51,14 @@ def test_run_fast_probes_invokes_all_probes_when_breaker_closed():
     fake_probes = [
         make_stub("yfinance_live_quote"),
         make_stub("yfinance_market_cap"),
-        make_stub("stooq_ohlcv"),
+        make_stub("fred_macro"),
         make_stub("finnhub_earnings"),
     ]
     with patch.object(probes, "FAST_PROBES", fake_probes):
         probes.run_fast_probes()
     assert calls == [
         "yfinance_live_quote", "yfinance_market_cap",
-        "stooq_ohlcv", "finnhub_earnings",
+        "fred_macro", "finnhub_earnings",
     ]
 
 
@@ -78,13 +78,13 @@ def test_run_fast_probes_skips_yfinance_when_breaker_open(monkeypatch):
     fake_probes = [
         make_stub("yfinance_live_quote"),
         make_stub("yfinance_market_cap"),
-        make_stub("stooq_ohlcv"),
+        make_stub("fred_macro"),
         make_stub("finnhub_earnings"),
     ]
     with patch.object(probes, "FAST_PROBES", fake_probes):
         probes.run_fast_probes()
     # Only non-yfinance probes executed.
-    assert calls == ["stooq_ohlcv", "finnhub_earnings"]
+    assert calls == ["fred_macro", "finnhub_earnings"]
 
 
 def test_run_fast_probes_isolates_per_probe_exceptions():

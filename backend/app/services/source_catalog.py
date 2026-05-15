@@ -9,7 +9,7 @@ free-tier rate limit, fallback role) and merges it with the live counters.
 Rate-limit semantics:
 - `per_minute`: free tier allows N calls per rolling minute (Finnhub, FRED).
 - `per_day`: free tier allows N calls per rolling day (Marketaux).
-- Both None: no documented limit (yfinance, Stooq, SEC EDGAR — they just
+- Both None: no documented limit (yfinance, SEC EDGAR — they just
   start failing when overused).
 """
 from dataclasses import dataclass
@@ -51,9 +51,10 @@ KNOWN_SOURCES: list[SourceSpec] = [
                notes="Ticker.news. Probe ogni 5 min."),
 
     # ── Fallbacks ──
-    SourceSpec("stooq", "ohlcv", "Stooq — OHLCV", "fallback",
-               per_minute=None, per_day=None,
-               notes="CSV fallback (yfinance breaker open). Probe ogni 5 min."),
+    # NOTE: no fallback for OHLCV. Stooq required an API key (May 2026)
+    # and no free tier (Polygon 5/min, Tiingo 1000/day, Finnhub
+    # /stock/candle paywalled) can service ~1100 tickers per scan. When
+    # the yfinance breaker opens, scans skip and retry the next cycle.
     SourceSpec("finnhub", "earnings", "Finnhub — Earnings", "fallback",
                per_minute=60, per_day=None,
                notes="Earnings actuals ~30min vs yfinance ~1-3h. Probe ogni 5 min."),

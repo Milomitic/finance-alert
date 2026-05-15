@@ -193,38 +193,28 @@ def fetch_and_upsert(
     that doesn't have a per-stock latest-date map handy (e.g. the cron
     job or one-off scripts).
 
-    Resilience: if the yfinance circuit breaker is OPEN we skip yfinance and
-    route the entire batch through the Stooq fallback. If yfinance fails on
-    THIS call (rate-limit fingerprint), we trip the breaker and re-route via
-    Stooq. Stooq has no batch endpoint, so the fallback is per-ticker.
+    Resilience: if the yfinance circuit breaker is OPEN we skip the
+    download entirely and return an empty result — the scan will retry
+    on the next scheduled tick, by which time the breaker should have
+    closed. We previously had a Stooq fallback here, but Stooq
+    introduced an API-key requirement (May 2026) that broke the CSV
+    endpoint, and no free-tier alternative we evaluated (Polygon 5/min,
+    Tiingo 1000/day, Finnhub /stock/candle behind paywall) can service
+    a batch of ~1100 tickers in reasonable time. Skipping the run is
+    cheaper than serving stale/wrong data via a degraded source.
     """
     from app.services import yfinance_health
-    from app.services.stooq_ohlcv_service import upsert_via_stooq
 
     if not stocks:
         return FetchResult()
     tickers = [s.ticker for s in stocks]
 
-    # Map yfinance period (or date range) to a days-back number for Stooq
-    # fallback. When `start=` is set we compute the gap from today; when
-    # `period=` is set we look up the static map.
-    if start is not None:
-        days_for_period = max(1, (date.today() - start).days + 1)
-    else:
-        days_for_period = {
-            "1mo": 35, "3mo": 100, "6mo": 200,
-            "1y": 380, "2y": 760, "5y": 1900, "10y": 3800, "max": 6000,
-        }.get(period or "1mo", 380)
-
     if yfinance_health.is_open():
-        logger.info(f"[ohlcv] yfinance breaker OPEN — using Stooq fallback for {len(tickers)} tickers")
-        sr = upsert_via_stooq(db, stocks, days=days_for_period)
-        return FetchResult(
-            rows_inserted=sr.rows_inserted,
-            stocks_succeeded=sr.stocks_succeeded,
-            stocks_failed=sr.stocks_failed,
-            failed_tickers=sr.failed_tickers,
+        logger.info(
+            f"[ohlcv] yfinance breaker OPEN — skipping batch of {len(tickers)} tickers; "
+            "will retry next cycle"
         )
+        return FetchResult(stocks_failed=len(stocks), failed_tickers=tickers[:])
 
     # Build the kwargs for yfinance: prefer `start=` when provided
     # (smart-incremental); otherwise fall back to `period=`.
@@ -238,14 +228,11 @@ def fetch_and_upsert(
     except Exception as e:  # noqa: BLE001
         if yfinance_health.is_rate_limit_error(e):
             yfinance_health.record_failure(f"yf.download: {e}")
-            logger.warning(f"[ohlcv] yfinance.download rate-limited → Stooq fallback")
-            sr = upsert_via_stooq(db, stocks, days=days_for_period)
-            return FetchResult(
-                rows_inserted=sr.rows_inserted,
-                stocks_succeeded=sr.stocks_succeeded,
-                stocks_failed=sr.stocks_failed,
-                failed_tickers=sr.failed_tickers,
+            logger.warning(
+                "[ohlcv] yfinance.download rate-limited — breaker tripped; "
+                "skipping batch (no fallback available)"
             )
+            return FetchResult(stocks_failed=len(stocks), failed_tickers=tickers[:])
         logger.error(f"[ohlcv] yfinance.download crashed: {e}")
         return FetchResult(stocks_failed=len(stocks), failed_tickers=tickers[:])
 
