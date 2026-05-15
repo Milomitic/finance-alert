@@ -80,24 +80,27 @@ def _cleanup_orphan_scans() -> None:
 
 
 def _hydrate_fetch_caches() -> None:
-    """Restore the in-memory L1 caches (fundamentals + news) from the
-    persistent L2 fetch_cache table. Without this, the first request after
-    every restart would round-trip the DB once per ticker; with it, L1 is
-    warm before any client connects.
+    """Restore L1 caches da L2. Logga timing + count di righe corrotte
+    skippate, così una L2 sempre più sporca emerge nelle metriche."""
+    import time as _time
 
-    Both calls are non-fatal — a corrupt L2 row should log + skip, not
-    crash startup.
-    """
     from app.services import stock_fundamentals_service, stock_news_service
+
+    t0 = _time.perf_counter()
     try:
-        n_fund = stock_fundamentals_service.hydrate_l1_from_db()
-        n_news = stock_news_service.hydrate_l1_from_db()
-        if n_fund or n_news:
-            logger.info(
-                f"[startup] L1 hydrated: fundamentals={n_fund} news={n_news}"
-            )
-    except Exception as exc:  # noqa: BLE001
+        n_fund_ok, n_fund_skip = stock_fundamentals_service.hydrate_l1_from_db()
+        n_news_ok, n_news_skip = stock_news_service.hydrate_l1_from_db()
+    except Exception as exc:  # noqa: BLE001 — boot-time best effort
         logger.warning(f"[startup] L1 hydration failed (non-fatal): {exc}")
+        return
+
+    elapsed_ms = (_time.perf_counter() - t0) * 1000
+    if n_fund_ok or n_news_ok or n_fund_skip or n_news_skip:
+        logger.info(
+            f"[startup] L1 hydrated in {elapsed_ms:.0f}ms: "
+            f"fundamentals={n_fund_ok} (skipped {n_fund_skip}), "
+            f"news={n_news_ok} (skipped {n_news_skip})"
+        )
 
 
 def _ensure_default_rules() -> None:

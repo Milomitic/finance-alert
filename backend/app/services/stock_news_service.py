@@ -176,20 +176,24 @@ def clear_cache() -> None:
         logger.warning(f"[news] L2 clear failed: {exc}")
 
 
-def hydrate_l1_from_db() -> int:
+def hydrate_l1_from_db() -> tuple[int, int]:
     """Populate the in-memory L1 cache from the persistent L2 table at
     startup. Mirrors stock_fundamentals_service.hydrate_l1_from_db.
-    Returns the number of fresh entries hydrated."""
+
+    Returns:
+        (loaded, skipped) — loaded is the number of fresh entries hydrated;
+        skipped is the count of rows that failed deserialization."""
     try:
         from app.core.db import SessionLocal
         from app.services import fetch_cache_store
         ttl_sec = int(NEWS_TTL.total_seconds())
         with SessionLocal() as db:
-            entries = fetch_cache_store.hydrate_all_news(db, ttl_sec)
+            entries, skipped = fetch_cache_store.hydrate_all_news(db, ttl_sec)
     except Exception as exc:  # noqa: BLE001
         logger.warning(f"[news] L1 hydration failed: {exc}")
-        return 0
+        return 0, 0
     _CACHE.update(entries)
-    if entries:
-        logger.info(f"[news] hydrated L1 with {len(entries)} entries from L2")
-    return len(entries)
+    loaded = len(entries)
+    if loaded or skipped:
+        logger.info(f"[news] hydrated L1 with {loaded} entries from L2 (skipped {skipped})")
+    return loaded, skipped

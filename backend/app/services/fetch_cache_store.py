@@ -271,18 +271,23 @@ def read_news(
 
 def hydrate_all_fundamentals(
     db: Session, max_age_seconds: int
-) -> dict[str, Fundamentals]:
+) -> tuple[dict[str, Fundamentals], int]:
     """Read every fresh fundamentals row from L2 and rebuild a {ticker: F}
     dict suitable for assigning to the in-memory L1 cache.
 
     Called once during app startup so the first request after a restart
     doesn't have to round-trip the DB per ticker. Skips rows that fail
     schema validation (old version) — those will re-fetch on first
-    access via `get_fundamentals`."""
+    access via `get_fundamentals`.
+
+    Returns:
+        (entries, skipped) — entries is the loaded dict; skipped is the count
+        of rows that failed deserialization or schema validation."""
     rows = db.execute(
         select(FetchCache).where(FetchCache.kind == KIND_FUNDAMENTALS)
     ).scalars().all()
     out: dict[str, Fundamentals] = {}
+    skipped = 0
     now = datetime.now(UTC)
     for r in rows:
         fetched = r.fetched_at
@@ -292,29 +297,36 @@ def hydrate_all_fundamentals(
             continue
         try:
             d = json.loads(r.payload)
-        except json.JSONDecodeError:
-            continue
-        if _is_payload_stale_schema(d):
-            continue
-        if _is_payload_too_partial(d):
-            # Skip; the next `get_fundamentals` for this ticker will
-            # see L1 miss + L2 read-skip and re-fetch upstream.
-            continue
-        f = _fundamentals_from_dict(d)
-        f.fetched_at = fetched.timestamp()
-        out[r.ticker] = f
-    return out
+            if _is_payload_stale_schema(d):
+                skipped += 1
+                continue
+            if _is_payload_too_partial(d):
+                # Skip; the next `get_fundamentals` for this ticker will
+                # see L1 miss + L2 read-skip and re-fetch upstream.
+                skipped += 1
+                continue
+            f = _fundamentals_from_dict(d)
+            f.fetched_at = fetched.timestamp()
+            out[r.ticker] = f
+        except Exception:  # noqa: BLE001 — corrupt row, log at call site
+            skipped += 1
+    return out, skipped
 
 
 def hydrate_all_news(
     db: Session, max_age_seconds: int
-) -> dict[str, tuple[datetime, list[dict[str, Any]]]]:
+) -> tuple[dict[str, tuple[datetime, list[dict[str, Any]]]], int]:
     """Read every fresh news row from L2 and rebuild the (timestamp, items)
-    tuple shape that `stock_news_service._CACHE` uses."""
+    tuple shape that `stock_news_service._CACHE` uses.
+
+    Returns:
+        (entries, skipped) — entries is the loaded dict; skipped is the count
+        of rows that failed deserialization."""
     rows = db.execute(
         select(FetchCache).where(FetchCache.kind == KIND_NEWS)
     ).scalars().all()
     out: dict[str, tuple[datetime, list[dict[str, Any]]]] = {}
+    skipped = 0
     now = datetime.now(UTC)
     for r in rows:
         fetched = r.fetched_at
@@ -324,8 +336,10 @@ def hydrate_all_news(
             continue
         try:
             items = json.loads(r.payload)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(items, list):
-            out[r.ticker] = (fetched, items)
-    return out
+            if isinstance(items, list):
+                out[r.ticker] = (fetched, items)
+            else:
+                skipped += 1
+        except Exception:  # noqa: BLE001 — corrupt row, log at call site
+            skipped += 1
+    return out, skipped

@@ -116,7 +116,7 @@ def test_hydrate_skips_stale_rows(db: Session):
     row.fetched_at = datetime.now(UTC) - timedelta(hours=48)
     db.commit()
 
-    out = fetch_cache_store.hydrate_all_fundamentals(db, max_age_seconds=24 * 3600)
+    out, skipped = fetch_cache_store.hydrate_all_fundamentals(db, max_age_seconds=24 * 3600)
     assert "FRESH" in out
     assert "STALE" not in out
 

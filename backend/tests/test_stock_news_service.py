@@ -140,3 +140,10 @@ def test_falls_back_to_marketaux_when_yfinance_empty(monkeypatch):
     result = stock_news_service.get_news("AAPL")
     assert len(result) == 1
     assert "marketaux fallback" in result[0]["title"].lower()
+
+
+def test_news_hydrate_l1_returns_tuple(db):
+    """hydrate_l1_from_db deve tornare (loaded, skipped) anche per news."""
+    result = stock_news_service.hydrate_l1_from_db()
+    assert isinstance(result, tuple)
+    assert result == (0, 0)

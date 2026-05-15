@@ -122,7 +122,7 @@ def test_hydrate_skips_partial_rows(db: Session) -> None:
     doesn't re-prime L1 with the bad data."""
     fetch_cache_store.write_fundamentals(db, Fundamentals(ticker="MU", micro=MicroData(), profile=CompanyProfile()))
     fetch_cache_store.write_fundamentals(db, Fundamentals(ticker="AAPL", micro=MicroData(trailing_pe=27.5)))
-    out = fetch_cache_store.hydrate_all_fundamentals(db, max_age_seconds=86400)
+    out, skipped = fetch_cache_store.hydrate_all_fundamentals(db, max_age_seconds=86400)
     assert "MU" not in out
     assert "AAPL" in out
 

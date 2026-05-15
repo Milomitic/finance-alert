@@ -89,3 +89,13 @@ def test_per_endpoint_value_error_is_swallowed_not_re_raised():
         # Should NOT raise — ValueError is not retryable.
         out = stock_fundamentals_service._do_yf_call("AAPL")
     assert out["info"] is None
+
+
+def test_hydrate_l1_from_db_returns_loaded_and_skipped_counts(db):
+    """hydrate_l1_from_db deve tornare una tupla (loaded:int, skipped:int)
+    invece di un int singolo, così il caller può loggare entrambi."""
+    from app.services import stock_fundamentals_service
+    # Su DB vuoto: 0 loaded, 0 skipped.
+    result = stock_fundamentals_service.hydrate_l1_from_db()
+    assert isinstance(result, tuple)
+    assert result == (0, 0)

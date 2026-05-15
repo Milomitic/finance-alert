@@ -1330,22 +1330,26 @@ def clear_cache() -> None:
         logger.warning(f"[fund] L2 clear failed: {exc}")
 
 
-def hydrate_l1_from_db() -> int:
+def hydrate_l1_from_db() -> tuple[int, int]:
     """Populate the in-memory L1 cache from the persistent L2 table. Call
     once at app startup so the first request after a restart hits L1
     instantly instead of round-tripping the DB per ticker.
 
-    Returns the number of fresh entries hydrated."""
+    Returns:
+        (loaded, skipped) — loaded is the number of fresh entries hydrated;
+        skipped is the count of rows that failed deserialization or schema
+        validation (corrupt / old-schema rows)."""
     try:
         from app.core.db import SessionLocal
         from app.services import fetch_cache_store
         with SessionLocal() as db:
-            entries = fetch_cache_store.hydrate_all_fundamentals(db, _TTL_SECONDS)
+            entries, skipped = fetch_cache_store.hydrate_all_fundamentals(db, _TTL_SECONDS)
     except Exception as exc:  # noqa: BLE001
         logger.warning(f"[fund] L1 hydration failed: {exc}")
-        return 0
+        return 0, 0
     with _CACHE_LOCK:
         _CACHE.update(entries)
-    if entries:
-        logger.info(f"[fund] hydrated L1 with {len(entries)} entries from L2")
-    return len(entries)
+    loaded = len(entries)
+    if loaded or skipped:
+        logger.info(f"[fund] hydrated L1 with {loaded} entries from L2 (skipped {skipped})")
+    return loaded, skipped
