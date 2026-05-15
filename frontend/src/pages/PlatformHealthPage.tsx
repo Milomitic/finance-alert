@@ -1,5 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { fetchHealth, fetchLogs } from "@/api/platformHealth";
+import DataSourcesCard from "@/components/health/DataSourcesCard";
+import SchedulerCard from "@/components/health/SchedulerCard";
+import ScansCard from "@/components/health/ScansCard";
+import CacheCard from "@/components/health/CacheCard";
 
 export default function PlatformHealthPage() {
   const { data: health, isLoading: healthLoading } = useQuery({
@@ -25,18 +29,13 @@ export default function PlatformHealthPage() {
       {healthLoading && <div>Caricamento…</div>}
       {health && (
         <div className="grid gap-3 lg:grid-cols-4">
-          <pre className="rounded border bg-muted/40 p-3 text-xs overflow-auto max-h-[300px]">
-            {JSON.stringify(health.data_sources, null, 2)}
-          </pre>
-          <pre className="rounded border bg-muted/40 p-3 text-xs overflow-auto max-h-[300px]">
-            {JSON.stringify(health.scheduler, null, 2)}
-          </pre>
-          <pre className="rounded border bg-muted/40 p-3 text-xs overflow-auto max-h-[300px]">
-            {JSON.stringify(health.scans, null, 2)}
-          </pre>
-          <pre className="rounded border bg-muted/40 p-3 text-xs overflow-auto max-h-[300px]">
-            {JSON.stringify(health.cache, null, 2)}
-          </pre>
+          <DataSourcesCard
+            metrics={health.data_sources}
+            yfinanceBreaker={health.yfinance_breaker}
+          />
+          <SchedulerCard jobs={health.scheduler} />
+          <ScansCard scans={health.scans} />
+          <CacheCard cache={health.cache} />
         </div>
       )}
 
