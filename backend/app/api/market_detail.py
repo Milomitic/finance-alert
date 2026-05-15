@@ -20,8 +20,10 @@ from pydantic import BaseModel
 
 from app.api.deps import get_current_user
 from app.api.market import LIVE_ASSET_DEFINITIONS
+from app.core.errors import UpstreamError
 from app.models import User
 from app.services import live_quote_service, market_detail_service
+from loguru import logger
 
 router = APIRouter(prefix="/api/markets", tags=["markets"])
 
@@ -149,7 +151,14 @@ def get_market_detail(
                 currency=q.currency,
                 error=q.error,
             )
-    except Exception:  # noqa: BLE001
+    except UpstreamError as e:
+        logger.warning(
+            f"[market_detail] upstream {e.source}.{e.op} failed for {symbol}: {e}"
+        )
+        # Quote is best-effort; the chart still renders without it.
+        quote_out = None
+    except Exception as e:  # noqa: BLE001 — defensive last-resort
+        logger.exception(f"[market_detail] unexpected error fetching quote for {symbol}: {e}")
         # Quote is best-effort; the chart still renders without it.
         quote_out = None
 

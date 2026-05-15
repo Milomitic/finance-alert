@@ -28,6 +28,7 @@ from app.api import scan_log as scan_log_router
 from app.api import scores as scores_router
 from app.api import sectors as sectors_router
 from app.api import stocks as stocks_router
+from app.core.errors import UpstreamError
 from app.core.logging import configure_logging
 from app.scheduler import get_scheduler, start_scheduler, stop_scheduler
 
@@ -217,7 +218,12 @@ def warmup_fundamentals(
                     ok += 1
                 else:
                     empty += 1
-            except Exception:  # noqa: BLE001
+            except UpstreamError as e:
+                logger.warning(
+                    f"[warmup] upstream {e.source}.{e.op} failed for {s.ticker}: {e}"
+                )
+                err += 1
+            except Exception:  # noqa: BLE001 — defensive last-resort
                 err += 1
             time.sleep(0.3)
         # Now that the fundamentals cache is warm, recompute scores so the

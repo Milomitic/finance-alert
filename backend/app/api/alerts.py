@@ -5,11 +5,13 @@ from datetime import date
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
+from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db, require_json
 from app.core.db import SessionLocal
+from app.core.errors import UpstreamError
 from app.models import ScanRun, Stock, User
 from app.models.scan_run import KIND_ALERTS_SCAN
 from app.schemas.alert import (
@@ -272,7 +274,14 @@ def _run_scan_in_background(stock_ids: list[int] | None) -> None:
                             else:
                                 fetch_and_upsert(db, sub_chunk, period=sub_period)
                         db.commit()
-                    except Exception:  # noqa: BLE001
+                    except UpstreamError as e:
+                        logger.warning(
+                            f"[scan] upstream {e.source}.{e.op} failed: {e}"
+                        )
+                        db.rollback()
+                        # continue — next sub-batch / next chunk
+                    except Exception as e:  # noqa: BLE001 — defensive last-resort
+                        logger.exception(f"[scan] unexpected error in fetch chunk: {e}")
                         db.rollback()
                         # continue — next sub-batch / next chunk
                     run.progress_done = end_done

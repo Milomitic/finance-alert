@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
 from app.core.db import SessionLocal
+from app.core.errors import UpstreamError
 from app.core.visibility import visible_country_clause
 from app.models import OhlcvDaily, ScanRun, Stock, StockScore, User
 from app.models.scan_run import KIND_SCORE_RECOMPUTE
@@ -133,10 +134,15 @@ def recompute_stock_score(
     # the same broken score the user already sees.
     try:
         stock_fundamentals_service.get_fundamentals(stock.ticker, force_refresh=True)
-    except Exception as exc:  # noqa: BLE001
+    except UpstreamError as exc:
         # Non-fatal: compute_score will still try with whatever cache holds.
         logger.warning(
-            f"[score-recompute] fundamentals refresh failed for {stock.ticker}: {exc}"
+            f"[score-recompute] upstream {exc.source}.{exc.op} failed for {stock.ticker}: {exc}"
+        )
+    except Exception as exc:  # noqa: BLE001 — defensive last-resort
+        # Non-fatal: compute_score will still try with whatever cache holds.
+        logger.exception(
+            f"[score-recompute] unexpected error refreshing fundamentals for {stock.ticker}: {exc}"
         )
 
     new_score = score_service.compute_score(db, stock)

@@ -2,6 +2,7 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from loguru import logger
 from sqlalchemy import select
 
 from app.core.visibility import visible_country_clause
@@ -27,6 +28,7 @@ from app.services import (
     stock_detail_service, stock_fundamentals_service,
     stock_news_service,
 )
+from app.core.errors import UpstreamError
 from app.services.earnings_session_timing import classify_session_timing
 from app.services.stock_service import (
     SORTABLE_COLUMNS, StockFilter, get_filter_options, search_stocks,
@@ -347,7 +349,14 @@ def _merge_news_analyst_actions(ticker: str, structured_actions: list) -> list:
     from app.services.stock_fundamentals_service import AnalystAction
     try:
         news = stock_news_service.get_news(ticker)
-    except Exception:  # noqa: BLE001
+    except UpstreamError as e:
+        logger.warning(
+            f"[stock_detail] upstream {e.source}.{e.op} failed for {ticker}: {e}"
+        )
+        # News service offline → return structured actions unchanged.
+        return list(structured_actions)
+    except Exception as e:  # noqa: BLE001 — defensive last-resort
+        logger.exception(f"[stock_detail] unexpected error for {ticker}: {e}")
         # News service offline → return structured actions unchanged.
         return list(structured_actions)
     if not news:
