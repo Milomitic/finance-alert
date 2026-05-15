@@ -1,11 +1,14 @@
-"""Read-only API for the platform-health UI. Two REST endpoints:
+"""Read-only API for the platform-health UI. Three endpoints:
 - GET /health    -> combined snapshot
 - GET /logs      -> filtered log slice
-(SSE /stream endpoint will be added in Task 7)
+- GET /stream    -> SSE stream (snapshot + log push + keepalive)
 """
+import asyncio
+import json
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
+from fastapi.responses import StreamingResponse
 from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
 
@@ -97,3 +100,99 @@ def logs(
         level=level, module=module, search=search, limit=limit
     )
     return [LogRecordOut(**r) for r in records]
+
+
+@router.get("/stream")
+async def stream(
+    request: Request,
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+) -> StreamingResponse:
+    """SSE stream emitting:
+       - event: snapshot   (initial + every 5s)
+       - event: log        (on each new log record)
+       - : keepalive       (every 30s, SSE comment)
+    """
+    queue: asyncio.Queue[tuple[str, str]] = asyncio.Queue(maxsize=1000)
+    loop = asyncio.get_running_loop()
+
+    def on_log(record: dict) -> None:
+        # Called from the loguru sink thread. Schedule the put on the
+        # event loop so we cross thread boundaries safely.
+        try:
+            payload = json.dumps(record, default=str)
+
+            def _enqueue() -> None:
+                try:
+                    queue.put_nowait(("log", payload))
+                except asyncio.QueueFull:
+                    pass
+
+            loop.call_soon_threadsafe(_enqueue)
+        except Exception:  # noqa: BLE001 — never break logging
+            pass
+
+    unsub = log_buffer.subscribe(on_log)
+
+    async def _snapshot_payload() -> str:
+        metrics = data_source_metrics.snapshot()
+        snap_dict = {
+            "data_sources": [
+                {
+                    "source": m.source, "op": m.op, "success": m.success,
+                    "failure": m.failure, "success_rate": m.success_rate,
+                    "last_success_at": m.last_success_at,
+                    "last_failure_at": m.last_failure_at,
+                    "last_failure_reason": m.last_failure_reason,
+                    "health": m.health,
+                }
+                for m in metrics
+            ],
+            "yfinance_breaker": yfinance_health.status(),
+            "scheduler": scheduler_metrics.snapshot_dict(),
+            "scans": [s.model_dump() for s in _recent_scans(db)],
+            "cache": cache_metrics.snapshot(),
+        }
+        return json.dumps(snap_dict, default=str)
+
+    async def _snapshot_loop() -> None:
+        while True:
+            await asyncio.sleep(5.0)
+            try:
+                payload = await _snapshot_payload()
+                queue.put_nowait(("snapshot", payload))
+            except asyncio.QueueFull:
+                pass
+            except Exception:  # noqa: BLE001
+                pass
+
+    async def event_gen():
+        snapshot_task = None
+        try:
+            initial = await _snapshot_payload()
+            yield f"event: snapshot\ndata: {initial}\n\n"
+            snapshot_task = asyncio.create_task(_snapshot_loop())
+            while True:
+                if await request.is_disconnected():
+                    return
+                try:
+                    event_type, data = await asyncio.wait_for(
+                        queue.get(), timeout=30.0
+                    )
+                except asyncio.TimeoutError:
+                    yield ": keepalive\n\n"
+                    continue
+                yield f"event: {event_type}\ndata: {data}\n\n"
+        finally:
+            if snapshot_task is not None:
+                snapshot_task.cancel()
+            unsub()
+
+    return StreamingResponse(
+        event_gen(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
