@@ -23,6 +23,7 @@ from dataclasses import asdict, fields, is_dataclass
 from datetime import UTC, datetime
 from typing import Any
 
+from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -308,7 +309,10 @@ def hydrate_all_fundamentals(
             f = _fundamentals_from_dict(d)
             f.fetched_at = fetched.timestamp()
             out[r.ticker] = f
-        except Exception:  # noqa: BLE001 — corrupt row, log at call site
+        except Exception as exc:  # noqa: BLE001 — corrupt row, skip + log
+            logger.warning(
+                f"[fetch_cache_store] hydrate skip fundamentals {r.ticker!r}: {exc!r}"
+            )
             skipped += 1
     return out, skipped
 
@@ -339,7 +343,14 @@ def hydrate_all_news(
             if isinstance(items, list):
                 out[r.ticker] = (fetched, items)
             else:
+                logger.warning(
+                    f"[fetch_cache_store] hydrate skip news {r.ticker!r}: "
+                    f"payload is {type(items).__name__}, expected list"
+                )
                 skipped += 1
-        except Exception:  # noqa: BLE001 — corrupt row, log at call site
+        except Exception as exc:  # noqa: BLE001 — corrupt row, skip + log
+            logger.warning(
+                f"[fetch_cache_store] hydrate skip news {r.ticker!r}: {exc!r}"
+            )
             skipped += 1
     return out, skipped
