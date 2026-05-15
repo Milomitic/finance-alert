@@ -177,24 +177,74 @@ function SourceRow({ m }: { m: DataSourceMetric }) {
   );
 }
 
+// Op (= service) labels in Italian. Ordered the way they appear in the
+// catalog so the visual ordering mirrors KNOWN_SOURCES.
+const OP_LABEL: Record<string, string> = {
+  ohlcv: "Prezzi storici (OHLCV)",
+  fundamentals: "Fondamentali (income, info)",
+  market_cap: "Capitalizzazione",
+  live_quote: "Quote real-time",
+  news: "News",
+  earnings: "Earnings",
+  macro: "Macro (FRED)",
+  consensus: "Consensus macro",
+  filings: "Filings 13F",
+};
+
+// Pick the rolled-up health for a group of sources covering the same op:
+//   any healthy → covered & operational
+//   all failing → outage on that service
+//   anything else (mixed) → degraded
+function rollupHealth(sources: DataSourceMetric[]): "healthy" | "degraded" | "failing" | "idle" {
+  if (sources.length === 0) return "idle";
+  const hasHealthy = sources.some((s) => s.health === "healthy");
+  const allFailing = sources.every((s) => s.health === "failing");
+  if (hasHealthy) return "healthy";
+  if (allFailing) return "failing";
+  return "degraded";
+}
+
+const ROLLUP_BADGE: Record<string, { label: string; classes: string }> = {
+  healthy: {
+    label: "Operational",
+    classes: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  },
+  degraded: {
+    label: "Degraded",
+    classes: "bg-amber-50 text-amber-700 border-amber-200",
+  },
+  failing: {
+    label: "Major outage",
+    classes: "bg-red-50 text-red-700 border-red-200",
+  },
+  idle: {
+    label: "Idle",
+    classes: "bg-slate-50 text-slate-600 border-slate-200",
+  },
+};
+
 export default function DataSourcesCard({ metrics, yfinanceBreaker }: Props) {
   const breakerState = String(yfinanceBreaker.state ?? "closed").toLowerCase();
   const breakerOpen = breakerState === "open" || breakerState === "half_open";
 
-  // Group by role for visual hierarchy
-  const groups: Record<string, DataSourceMetric[]> = {
-    primary: [],
-    fallback: [],
-    scheduled: [],
-  };
+  // Group by op (= service), preserving the catalog's natural ordering.
+  // `Object.entries` on a string-keyed object iterates in insertion order
+  // in modern JS engines, which means the first source seen for an op
+  // determines that op's slot in the rendered list.
+  const groups = new Map<string, DataSourceMetric[]>();
   for (const m of metrics) {
-    const g = groups[m.role] ?? groups.primary;
-    g.push(m);
+    const arr = groups.get(m.op);
+    if (arr) arr.push(m);
+    else groups.set(m.op, [m]);
   }
 
-  const totalSources = metrics.length;
-  const healthy = metrics.filter((m) => m.health === "healthy").length;
-  const failing = metrics.filter((m) => m.health === "failing").length;
+  const totalServices = groups.size;
+  const failingServices = Array.from(groups.values()).filter(
+    (sources) => rollupHealth(sources) === "failing"
+  ).length;
+  const operationalServices = Array.from(groups.values()).filter(
+    (sources) => rollupHealth(sources) === "healthy"
+  ).length;
 
   return (
     <Card className="h-full overflow-hidden">
@@ -202,9 +252,9 @@ export default function DataSourcesCard({ metrics, yfinanceBreaker }: Props) {
         <div className="flex items-center justify-between gap-2">
           <CardTitle className="text-base font-semibold flex items-center gap-1.5">
             <Activity className="h-4 w-4" />
-            Sorgenti dati
+            Servizi dati
             <span className="text-[11px] font-normal text-muted-foreground ml-1 tabular-nums">
-              {healthy}/{totalSources} healthy
+              {operationalServices}/{totalServices} operativi
             </span>
           </CardTitle>
           <span
@@ -219,25 +269,50 @@ export default function DataSourcesCard({ metrics, yfinanceBreaker }: Props) {
             Breaker {breakerState}
           </span>
         </div>
-        {failing > 0 && (
+        {failingServices > 0 && (
           <div className="text-xs text-red-700 mt-1">
-            ⚠ {failing} fonte{failing === 1 ? "" : "i"} in errore — verifica fallback
+            ⚠ {failingServices} servizi{failingServices === 1 ? "o" : ""} in errore —
+            tutte le fonti che li alimentano stanno fallendo
           </div>
         )}
       </CardHeader>
       <CardContent className="p-0 max-h-[480px] overflow-auto">
-        {(["primary", "fallback", "scheduled"] as const).map((role) =>
-          groups[role].length > 0 ? (
-            <div key={role}>
-              <div className="px-4 py-1.5 bg-muted/40 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground border-b">
-                {ROLE_LABEL[role]}
+        {Array.from(groups.entries()).map(([op, sources]) => {
+          const rollup = rollupHealth(sources);
+          const badge = ROLLUP_BADGE[rollup];
+          const opLabel = OP_LABEL[op] ?? op;
+          const singleSource = sources.length === 1;
+          return (
+            <div key={op}>
+              <div className="px-4 py-2 bg-muted/40 border-b flex items-center justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  <div className="text-[12px] font-semibold tracking-tight">
+                    {opLabel}
+                  </div>
+                  <div className="text-[10.5px] text-muted-foreground mt-0.5">
+                    {sources.length} font{sources.length === 1 ? "e" : "i"}
+                    {singleSource && (
+                      <span
+                        className="ml-1.5 text-amber-700"
+                        title="Questo servizio dipende da una singola fonte: se cade non c'è fallback"
+                      >
+                        · single-source
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <span
+                  className={`inline-flex items-center gap-1 px-2 py-0.5 text-[10.5px] font-medium rounded-full border shrink-0 ${badge.classes}`}
+                >
+                  {badge.label}
+                </span>
               </div>
-              {groups[role].map((m) => (
+              {sources.map((m) => (
                 <SourceRow key={`${m.source}.${m.op}`} m={m} />
               ))}
             </div>
-          ) : null
-        )}
+          );
+        })}
       </CardContent>
     </Card>
   );

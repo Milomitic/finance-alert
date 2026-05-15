@@ -199,22 +199,34 @@ def probe_marketaux_news() -> None:
 
 
 def probe_forexfactory_consensus() -> None:
-    """ForexFactory provides a static weekly XML calendar. The probe
-    HEAD-hits the URL to confirm the host is reachable and serving the
-    expected content-type. Doesn't validate the XML schema — that's
-    exercised by the real scheduled job."""
+    """ForexFactory's static weekly XML calendar. Cloudflare aggressively
+    rate-limits HEAD requests (HTTP 429 with Retry-After), so we use a
+    GET with `Range: bytes=0-256` to download just the first chunk —
+    enough to confirm the host is reachable AND the body starts with
+    `<?xml` (proof it's the calendar, not a Cloudflare error page).
+
+    HTTP 206 (Partial Content) and 200 are both valid responses; the
+    range header is a hint, the server may ignore it."""
     try:
         import requests
-        r = requests.head(
+        r = requests.get(
             "https://nfs.faireconomy.media/ff_calendar_thisweek.xml",
             timeout=8,
             allow_redirects=True,
-            headers={"User-Agent": "FinanceAlert milomitic@gmail.com"},
+            headers={
+                "User-Agent": "FinanceAlert milomitic@gmail.com",
+                "Range": "bytes=0-256",
+                "Accept": "application/xml,text/xml",
+            },
         )
-        ok = r.status_code == 200
+        body_head = r.text.strip()[:50]
+        ok = (
+            r.status_code in (200, 206)
+            and body_head.startswith("<?xml")
+        )
         _record(
             "forexfactory", "consensus", ok,
-            "" if ok else f"HTTP {r.status_code}",
+            "" if ok else f"HTTP {r.status_code}: {body_head!r}",
         )
     except Exception as exc:  # noqa: BLE001
         _record("forexfactory", "consensus", False, repr(exc))
