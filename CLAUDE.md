@@ -334,6 +334,34 @@ still active.
 
 ---
 
+## Typed upstream error hierarchy (`app/core/errors.py`)
+
+Upstream-fetch failures are tagged with one of three subclasses of
+`UpstreamError(message, *, source, op)`:
+
+- `UpstreamTimeout` — network timeout (retryable)
+- `RateLimitError` — 429 / "too many requests" (retryable with backoff)
+- `UpstreamUnavailable` — 5xx / malformed body (NOT retryable — re-fetch would
+  just hit the same problem)
+
+Routers catch the base `UpstreamError` for warning-level structured logging
+(`logger.warning(f"upstream {e.source}.{e.op} failed: {e}")`), then fall back to
+`except Exception` only as a defensive last-resort.
+
+When adding a new external fetch:
+1. Wrap raw network calls so they raise the appropriate typed exception (see
+   `_normalize_yf_error` in `stock_fundamentals_service.py` for the pattern).
+2. Apply `@with_backoff(retries=N, base_delay=..., max_delay=..., on=(UpstreamTimeout, RateLimitError))`
+   from `app/services/_retry.py` to get exponential backoff with jitter.
+3. Catch `UpstreamError` in any consumer router and either return a graceful
+   fallback (e.g. cached EOD, secondary provider) or surface a 503 — never let
+   it 500.
+
+The retry decorator only retries the typed errors listed in `on=`. Passing
+`UpstreamUnavailable` there would waste cycles on non-recoverable failures.
+
+---
+
 ## Two-tier cache: in-memory L1 + persistent L2 (`fetch_cache` table)
 
 `stock_fundamentals_service` and `stock_news_service` use a two-layer cache:
