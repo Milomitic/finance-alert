@@ -72,24 +72,24 @@ export default function LogStream({
 
   return (
     <section className="space-y-3 rounded-lg border bg-card shadow-sm">
-      <header className="flex items-start justify-between gap-3 px-4 pt-4 pb-2 border-b flex-wrap">
-        <div className="space-y-1">
-          <h2 className="text-base font-semibold tracking-tight">
+      <header className="flex items-start justify-between gap-3 px-5 pt-4 pb-3 border-b flex-wrap">
+        <div className="space-y-1.5">
+          <h2 className="text-lg font-semibold tracking-tight">
             Log live
             <span className="ml-2 text-xs font-normal text-muted-foreground">
               {filtered.length} visibili · {records.length} in buffer
             </span>
           </h2>
-          <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
+          <div className="flex items-center gap-3 text-xs text-muted-foreground">
             {(counts.ERROR ?? 0) + (counts.CRITICAL ?? 0) > 0 && (
               <span className="inline-flex items-center gap-1 text-red-700">
-                <AlertCircle className="h-3 w-3" />
+                <AlertCircle className="h-3.5 w-3.5" />
                 {(counts.ERROR ?? 0) + (counts.CRITICAL ?? 0)} errori
               </span>
             )}
             {counts.WARNING > 0 && (
               <span className="inline-flex items-center gap-1 text-amber-700">
-                <AlertTriangle className="h-3 w-3" />
+                <AlertTriangle className="h-3.5 w-3.5" />
                 {counts.WARNING} warning
               </span>
             )}
@@ -98,11 +98,11 @@ export default function LogStream({
             )}
           </div>
         </div>
-        <div className="flex items-center gap-2 text-xs">
+        <div className="flex items-center gap-2 text-sm">
           <select
             value={levelFilter}
             onChange={(e) => setLevelFilter(e.target.value)}
-            className="rounded-md border bg-background px-2 py-1.5 font-medium"
+            className="rounded-md border bg-background px-2.5 py-1.5 font-medium"
             title="Soglia minima del livello"
           >
             <option value="ALL">Tutti i livelli</option>
@@ -116,37 +116,37 @@ export default function LogStream({
             placeholder="Modulo"
             value={moduleFilter}
             onChange={(e) => setModuleFilter(e.target.value)}
-            className="rounded-md border bg-background px-2 py-1.5 w-28"
+            className="rounded-md border bg-background px-2.5 py-1.5 w-32"
           />
           <input
             type="text"
             placeholder="Cerca testo…"
             value={searchFilter}
             onChange={(e) => setSearchFilter(e.target.value)}
-            className="rounded-md border bg-background px-2 py-1.5 w-44"
+            className="rounded-md border bg-background px-2.5 py-1.5 w-52"
           />
           <button
             type="button"
             onClick={onTogglePause}
-            className="rounded-md border px-2 py-1.5 hover:bg-muted transition-colors"
+            className="rounded-md border px-2.5 py-1.5 hover:bg-muted transition-colors"
             title={paused ? "Riprendi" : "Pausa"}
           >
-            {paused ? <Play className="h-3.5 w-3.5" /> : <Pause className="h-3.5 w-3.5" />}
+            {paused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
           </button>
           <button
             type="button"
             onClick={onClear}
-            className="rounded-md border px-2 py-1.5 hover:bg-muted transition-colors"
+            className="rounded-md border px-2.5 py-1.5 hover:bg-muted transition-colors"
             title="Pulisci buffer locale"
           >
-            <Trash2 className="h-3.5 w-3.5" />
+            <Trash2 className="h-4 w-4" />
           </button>
         </div>
       </header>
 
-      <div className="max-h-[420px] overflow-auto font-mono text-[11.5px] leading-relaxed">
+      <div className="max-h-[480px] overflow-auto font-mono text-[12.5px] leading-relaxed">
         {filtered.length === 0 && (
-          <div className="px-4 py-6 text-center text-muted-foreground italic">
+          <div className="px-5 py-8 text-center text-muted-foreground italic text-sm">
             Nessun log corrisponde ai filtri.
           </div>
         )}
@@ -157,20 +157,20 @@ export default function LogStream({
           return (
             <div
               key={`${r.ts}-${i}`}
-              className={`flex items-start gap-3 px-4 py-1 ${borderClass} ${bgClass} hover:bg-muted/40 transition-colors`}
+              className={`flex items-start gap-3 px-5 py-1.5 ${borderClass} ${bgClass} hover:bg-muted/40 transition-colors`}
             >
-              <span className="text-muted-foreground shrink-0 w-[72px] tabular-nums">
+              <span className="text-muted-foreground shrink-0 w-[80px] tabular-nums">
                 {new Date(r.ts * 1000).toLocaleTimeString()}
               </span>
               <span
-                className={`shrink-0 w-[90px] font-semibold inline-flex items-center gap-1 ${
+                className={`shrink-0 w-[100px] font-semibold inline-flex items-center gap-1 ${
                   LEVEL_TONE[r.level] ?? ""
                 }`}
               >
-                {Icon && <Icon className="h-3 w-3 shrink-0" />}
+                {Icon && <Icon className="h-3.5 w-3.5 shrink-0" />}
                 {r.level}
               </span>
-              <span className="text-muted-foreground shrink-0 w-44 truncate font-normal" title={r.module}>
+              <span className="text-muted-foreground shrink-0 w-52 truncate font-normal" title={r.module}>
                 {r.module}
               </span>
               <span className="flex-1 break-all">{r.message}</span>

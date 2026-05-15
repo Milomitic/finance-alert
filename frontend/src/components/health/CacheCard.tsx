@@ -31,15 +31,15 @@ function CacheSection({
 }) {
   const coverage = l2 > 0 ? Math.min(100, (l1 / l2) * 100) : 0;
   return (
-    <div className="space-y-1.5 py-2.5 px-3 border-b last:border-b-0">
+    <div className="space-y-2 py-3 px-4 border-b last:border-b-0">
       <div className="flex items-center justify-between">
-        <span className="text-[11.5px] font-medium">{title}</span>
-        <span className="text-[10.5px] text-muted-foreground tabular-nums">
+        <span className="text-sm font-medium">{title}</span>
+        <span className="text-xs text-muted-foreground tabular-nums">
           {l1} L1 · {l2} L2
         </span>
       </div>
       {l2 > 0 && (
-        <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
+        <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
           <div
             className="h-full bg-sky-500 transition-all"
             style={{ width: `${coverage}%` }}
@@ -47,7 +47,7 @@ function CacheSection({
           />
         </div>
       )}
-      <div className="flex items-center justify-between text-[10px] text-muted-foreground tabular-nums">
+      <div className="flex items-center justify-between text-[11px] text-muted-foreground tabular-nums">
         <span>Oldest entry</span>
         <span className="font-mono">{fmtAge(oldestAgeS)}</span>
       </div>
@@ -62,16 +62,16 @@ export default function CacheCard({ cache }: Props) {
     <Card className="h-full overflow-hidden">
       <CardHeader className="pb-3 border-b bg-muted/20">
         <div className="flex items-center justify-between gap-2">
-          <CardTitle className="text-sm font-semibold flex items-center gap-1.5">
+          <CardTitle className="text-base font-semibold flex items-center gap-1.5">
             <Layers className="h-4 w-4" />
             Cache &amp; Database
           </CardTitle>
-          <span className="text-[10px] text-muted-foreground tabular-nums">
+          <span className="text-[11px] text-muted-foreground tabular-nums">
             {totalL1}/{totalL2}
           </span>
         </div>
       </CardHeader>
-      <CardContent className="p-0 text-xs">
+      <CardContent className="p-0 text-sm">
         <CacheSection
           title="Fundamentals"
           l1={cache.fundamentals.l1_entries}
@@ -84,17 +84,17 @@ export default function CacheCard({ cache }: Props) {
           l2={cache.news.l2_entries}
           oldestAgeS={cache.news.oldest_age_s}
         />
-        <div className="py-2.5 px-3 bg-muted/10">
+        <div className="py-3 px-4 bg-muted/10">
           <div className="flex items-center justify-between">
-            <span className="text-[11.5px] font-medium inline-flex items-center gap-1.5">
-              <Database className="h-3.5 w-3.5" />
+            <span className="text-sm font-medium inline-flex items-center gap-1.5">
+              <Database className="h-4 w-4" />
               app.db
             </span>
-            <span className="text-[11px] font-mono tabular-nums">
+            <span className="text-[12.5px] font-mono tabular-nums">
               {fmtSize(cache.db.size_mb)}
             </span>
           </div>
-          <div className="text-[10px] text-muted-foreground mt-0.5">
+          <div className="text-[11px] text-muted-foreground mt-1">
             SQLite WAL · backup automatici settimanali
           </div>
         </div>

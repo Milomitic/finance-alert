@@ -88,17 +88,29 @@ def _run_scan_in_background(stock_ids: list[int] | None) -> None:
     try:
         # Sub-phase 0a: announce "loading universe" BEFORE the SELECT so the
         # toast shows that text even on a slow first DB query.
+        #
+        # Per-step atomic progress (May 2026 UX iteration): Step 1
+        # (Preparazione catalogo) gets a synthetic 0-100 % bar instead of
+        # the stock-count denominator. The two prep sub-phases — catalog
+        # SELECT + bulk staleness GROUP BY — are sub-second each on warm
+        # DB and have no per-row granularity, so a per-stock counter would
+        # sit at 0/N for the whole step (the user complaint). Bar advances
+        # in manual steps (40 → 60 → 100) at the natural sub-phase
+        # boundaries; bar resets to the real stock count just before the
+        # Step 2 download loop kicks in.
         run = create_scan_run(
             db, trigger="manual", phase="fetching:loading_catalog"
         )
         run.current_target = "Caricamento elenco stock dal catalogo…"
+        run.progress_total = 100
+        run.progress_done = 0
         db.commit()
 
         if stock_ids:
             stocks = list(db.execute(select(Stock).where(Stock.id.in_(stock_ids))).scalars().all())
         else:
             stocks = list(db.execute(select(Stock)).scalars().all())
-        run.progress_total = len(stocks)
+        run.progress_done = 40
         run.current_target = f"{len(stocks)} stock caricati"
         db.commit()
 
@@ -128,6 +140,7 @@ def _run_scan_in_background(stock_ids: list[int] | None) -> None:
             run.current_target = (
                 f"Verifica freschezza barre per {len(stocks)} stock…"
             )
+            run.progress_done = 60
             db.commit()
             # B2 — one bulk SELECT replaces N×chunk_size point lookups. For
             # 1132 stocks × 12 chunks that was ~13k indexed queries; now it's
@@ -166,8 +179,20 @@ def _run_scan_in_background(stock_ids: list[int] | None) -> None:
                 run.current_target = (
                     f"{need_incremental_n} incrementali · {need_backfill_n} backfill 10y"
                 )
+            # Step 1 (Preparazione) terminata: snap del bar a 100% prima
+            # di passare al reset Step 2 (Download), così l'ultima frame
+            # del passo precedente è visibile per un istante.
+            run.progress_done = 100
             db.commit()
             bump_heartbeat(db, run)
+
+            # Step 2 (Download dati di mercato) — reset del bar all'unità
+            # atomica di questo passo: stock scaricati / N. Il chunk loop
+            # qui sotto avanza progress_done per stock (cursor) e
+            # progress_pulse interpola tra i confini dei chunk.
+            run.progress_total = len(stocks)
+            run.progress_done = 0
+            db.commit()
 
             for i in range(0, len(stocks), chunk_size):
                 # Cooperative cancel during fetch phase too — the fetch can take

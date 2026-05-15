@@ -71,14 +71,14 @@ function RateLimitBar({
   const tone =
     pct >= 90 ? "bg-red-500" : pct >= 70 ? "bg-amber-500" : "bg-emerald-500";
   return (
-    <div className="space-y-0.5">
-      <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+    <div className="space-y-1">
+      <div className="flex items-center justify-between text-[11px] text-muted-foreground">
         <span>Quota {unit}</span>
         <span className="tabular-nums">
           <span className="font-medium text-foreground">{used}</span> / {limit}
         </span>
       </div>
-      <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
+      <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
         <div
           className={`h-full ${tone} transition-all`}
           style={{ width: `${pct}%` }}
@@ -93,25 +93,25 @@ function SourceRow({ m }: { m: DataSourceMetric }) {
   const total = m.success + m.failure;
   const showRate = m.success_rate >= 0;
   return (
-    <div className="flex flex-col gap-1.5 py-2.5 px-3 border-b last:border-b-0 hover:bg-muted/30 transition-colors">
-      <div className="flex items-start justify-between gap-2">
+    <div className="flex flex-col gap-1.5 py-3 px-4 border-b last:border-b-0 hover:bg-muted/30 transition-colors">
+      <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5 flex-wrap">
+          <div className="flex items-center gap-2 flex-wrap">
             <span
-              className="font-medium text-[13px] truncate"
+              className="font-medium text-sm truncate"
               title={m.notes || m.label}
             >
               {m.label}
             </span>
             <span
-              className={`px-1.5 py-0 text-[9px] font-medium rounded border ${
+              className={`px-1.5 py-0.5 text-[10px] font-medium rounded border ${
                 ROLE_TONE[m.role] ?? ROLE_TONE.primary
               }`}
             >
               {ROLE_LABEL[m.role] ?? m.role}
             </span>
           </div>
-          <div className="text-[10.5px] text-muted-foreground mt-0.5 tabular-nums">
+          <div className="text-xs text-muted-foreground mt-1 tabular-nums">
             {total > 0 ? (
               <>
                 <span className="text-emerald-700 font-medium">{m.success}</span>
@@ -142,7 +142,7 @@ function SourceRow({ m }: { m: DataSourceMetric }) {
           </div>
         </div>
         <span
-          className={`inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium rounded-full border shrink-0 ${badge.classes}`}
+          className={`inline-flex items-center gap-1 px-2.5 py-0.5 text-[11px] font-medium rounded-full border shrink-0 ${badge.classes}`}
         >
           <badge.Icon className="h-3 w-3" />
           {badge.label}
@@ -167,7 +167,7 @@ function SourceRow({ m }: { m: DataSourceMetric }) {
 
       {m.last_failure_reason && m.health !== "healthy" && (
         <div
-          className="text-[10px] text-red-700/80 truncate font-mono"
+          className="text-[11px] text-red-700/80 truncate font-mono"
           title={m.last_failure_reason}
         >
           ✗ {m.last_failure_reason}
@@ -200,15 +200,15 @@ export default function DataSourcesCard({ metrics, yfinanceBreaker }: Props) {
     <Card className="h-full overflow-hidden">
       <CardHeader className="pb-3 border-b bg-muted/20">
         <div className="flex items-center justify-between gap-2">
-          <CardTitle className="text-sm font-semibold flex items-center gap-1.5">
+          <CardTitle className="text-base font-semibold flex items-center gap-1.5">
             <Activity className="h-4 w-4" />
             Sorgenti dati
-            <span className="text-[10px] font-normal text-muted-foreground ml-1 tabular-nums">
+            <span className="text-[11px] font-normal text-muted-foreground ml-1 tabular-nums">
               {healthy}/{totalSources} healthy
             </span>
           </CardTitle>
           <span
-            className={`inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium rounded-full border ${
+            className={`inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-medium rounded-full border ${
               breakerOpen
                 ? "bg-red-50 text-red-700 border-red-200"
                 : "bg-emerald-50 text-emerald-700 border-emerald-200"
@@ -220,7 +220,7 @@ export default function DataSourcesCard({ metrics, yfinanceBreaker }: Props) {
           </span>
         </div>
         {failing > 0 && (
-          <div className="text-[11px] text-red-700 mt-1">
+          <div className="text-xs text-red-700 mt-1">
             ⚠ {failing} fonte{failing === 1 ? "" : "i"} in errore — verifica fallback
           </div>
         )}
@@ -229,7 +229,7 @@ export default function DataSourcesCard({ metrics, yfinanceBreaker }: Props) {
         {(["primary", "fallback", "scheduled"] as const).map((role) =>
           groups[role].length > 0 ? (
             <div key={role}>
-              <div className="px-3 py-1 bg-muted/40 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground border-b">
+              <div className="px-4 py-1.5 bg-muted/40 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground border-b">
                 {ROLE_LABEL[role]}
               </div>
               {groups[role].map((m) => (

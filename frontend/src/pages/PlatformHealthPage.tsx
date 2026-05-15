@@ -94,18 +94,18 @@ export default function PlatformHealthPage() {
   const status = STATUS_INFO[overall];
 
   return (
-    <div className="mx-auto max-w-7xl space-y-8 pb-12">
+    <div className="mx-auto w-full max-w-[1800px] space-y-8 pb-12">
       {/* Header — title + global status pill, à la Claude status */}
       <header className="space-y-3">
         <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div className="space-y-1">
-            <h1 className="text-3xl font-bold tracking-tight">Salute piattaforma</h1>
-            <p className="text-sm text-muted-foreground">
+          <div className="space-y-1.5">
+            <h1 className="text-4xl font-bold tracking-tight">Salute piattaforma</h1>
+            <p className="text-base text-muted-foreground">
               Stato live di sorgenti dati, scheduler, scan e log — aggiornato in tempo reale via SSE.
             </p>
           </div>
           <div
-            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium ${
+            className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border text-sm font-medium ${
               connected
                 ? "bg-emerald-50 text-emerald-700 border-emerald-200"
                 : "bg-amber-50 text-amber-700 border-amber-200"
@@ -118,11 +118,11 @@ export default function PlatformHealthPage() {
           >
             {connected ? (
               <>
-                <Wifi className="h-3 w-3" /> Live
+                <Wifi className="h-3.5 w-3.5" /> Live
               </>
             ) : (
               <>
-                <WifiOff className="h-3 w-3" /> Riconnessione…
+                <WifiOff className="h-3.5 w-3.5" /> Riconnessione…
               </>
             )}
           </div>
@@ -130,11 +130,11 @@ export default function PlatformHealthPage() {
 
         {/* Overall status banner */}
         <div
-          className={`flex items-start gap-3 rounded-lg border p-4 ${status.bg} ${status.border}`}
+          className={`flex items-start gap-3 rounded-lg border p-5 ${status.bg} ${status.border}`}
         >
-          <status.Icon className={`h-6 w-6 mt-0.5 shrink-0 ${status.fg}`} />
+          <status.Icon className={`h-7 w-7 mt-0.5 shrink-0 ${status.fg}`} />
           <div className="min-w-0 flex-1">
-            <div className={`text-base font-semibold ${status.fg}`}>
+            <div className={`text-lg font-semibold ${status.fg}`}>
               {status.label}
             </div>
             <p className="text-sm text-muted-foreground mt-0.5">

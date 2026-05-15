@@ -41,26 +41,26 @@ export default function SchedulerCard({ jobs }: Props) {
     <Card className="h-full overflow-hidden">
       <CardHeader className="pb-3 border-b bg-muted/20">
         <div className="flex items-center justify-between gap-2">
-          <CardTitle className="text-sm font-semibold flex items-center gap-1.5">
+          <CardTitle className="text-base font-semibold flex items-center gap-1.5">
             <Clock className="h-4 w-4" />
             Scheduler
-            <span className="text-[10px] font-normal text-muted-foreground ml-1">
+            <span className="text-[11px] font-normal text-muted-foreground ml-1">
               {jobs.length} job tracciati
             </span>
           </CardTitle>
-          <span className="text-[10px] text-muted-foreground tabular-nums">
+          <span className="text-[11px] text-muted-foreground tabular-nums">
             {totalRuns} runs · {totalErrors} err
           </span>
         </div>
         {errors > 0 && (
-          <div className="text-[11px] text-red-700 mt-1">
+          <div className="text-xs text-red-700 mt-1">
             ⚠ {errors} job in errore — verifica scheduler
           </div>
         )}
       </CardHeader>
-      <CardContent className="p-0 text-xs max-h-[480px] overflow-auto">
+      <CardContent className="p-0 text-sm max-h-[480px] overflow-auto">
         {jobs.length === 0 && (
-          <div className="p-4 text-muted-foreground italic text-center">
+          <div className="p-4 text-muted-foreground italic text-center text-sm">
             <Circle className="h-4 w-4 mx-auto mb-2 opacity-50" />
             Nessun evento registrato dal restart.
             <br />I job appariranno mano a mano che vengono eseguiti.
@@ -75,23 +75,23 @@ export default function SchedulerCard({ jobs }: Props) {
           return (
             <div
               key={j.job_id}
-              className="flex items-start gap-2 py-2 px-3 border-b last:border-b-0 hover:bg-muted/30 transition-colors"
+              className="flex items-start gap-2.5 py-2.5 px-4 border-b last:border-b-0 hover:bg-muted/30 transition-colors"
             >
-              <badge.Icon className={`h-3.5 w-3.5 mt-0.5 shrink-0 ${badge.classes}`} />
+              <badge.Icon className={`h-4 w-4 mt-0.5 shrink-0 ${badge.classes}`} />
               <div className="min-w-0 flex-1">
-                <div className="font-medium text-[12.5px] truncate" title={j.job_id}>
+                <div className="font-medium text-sm truncate" title={j.job_id}>
                   {label}
                 </div>
-                <div className="text-[10.5px] text-muted-foreground font-mono truncate">
+                <div className="text-[11px] text-muted-foreground font-mono truncate mt-0.5">
                   {j.job_id} · {ago(j.last_run_at)}
                 </div>
                 {j.last_error && (
-                  <div className="text-[10px] text-red-700/80 mt-0.5 truncate" title={j.last_error}>
+                  <div className="text-[11px] text-red-700/80 mt-0.5 truncate" title={j.last_error}>
                     ✗ {j.last_error}
                   </div>
                 )}
               </div>
-              <div className="text-right text-[10px] text-muted-foreground tabular-nums shrink-0">
+              <div className="text-right text-[11px] text-muted-foreground tabular-nums shrink-0">
                 <div className="text-emerald-700 font-medium">{j.runs}</div>
                 {j.errors > 0 && <div className="text-red-700">{j.errors} err</div>}
               </div>

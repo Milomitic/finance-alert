@@ -252,8 +252,17 @@ def run_tracked_scan(
         # Sub-phase A: market snapshot refresh — breadth + leaders aggregate
         # over the freshly-evaluated alerts. Non-fatal: the alert pipeline
         # already committed its rows.
+        #
+        # Per-step atomic progress (May 2026 UX iteration): reset the bar
+        # to 0/100 (synthetic %) so the user sees this step's own progress
+        # rather than the pinned-at-100% scan_universe stock count. The
+        # pulse interpolates toward 95% over the expected wall time; the
+        # final snap to 100 runs after recompute_snapshot returns.
+        SNAPSHOT_EXPECTED_SEC = 15.0  # warm ~3s, cold up to ~60s
         run.phase = "evaluating:market_snapshot"
         run.current_target = "Aggiornamento breadth + leaders di mercato…"
+        run.progress_done = 0
+        run.progress_total = 100
         db.commit()
         try:
             from app.services import market_stats_service
@@ -261,9 +270,17 @@ def run_tracked_scan(
             # `recompute_snapshot` is a single synchronous call with no
             # internal progress hook. On a cold L1/L2 cache it can take
             # >120s, tripping the stale detector. The pulse keeps the
-            # heartbeat fresh while it runs.
-            with heartbeat_pulse(run.id):
+            # heartbeat fresh while it runs; progress_pulse animates the
+            # synthetic % bar in parallel.
+            with heartbeat_pulse(run.id), progress_pulse(
+                run.id,
+                start_done=0,
+                end_done=100,
+                expected_duration_sec=SNAPSHOT_EXPECTED_SEC,
+            ):
                 market_stats_service.recompute_snapshot(db, scan_run_id=run.id)
+            run.progress_done = 100
+            db.commit()
             logger.info(f"[scan_runner] market snapshot refreshed for ScanRun {run.id}")
         except Exception as snap_exc:  # noqa: BLE001
             logger.warning(f"[scan_runner] snapshot recompute failed (non-fatal): {snap_exc}")
@@ -275,35 +292,47 @@ def run_tracked_scan(
         # sector_stats pre-pass first (cheap on the cache, slow on cold) and
         # then a per-stock recompute. We split the surface into two
         # sub-phases so the user sees the distinction:
-        #   evaluating:sector_stats   — pre-pass (no per-stock progress)
-        #   evaluating:scoring_recompute — per-stock loop (progress_done
-        #                                 reflects the current stock)
+        #   evaluating:sector_stats   — pre-pass (counts settori, ~12)
+        #   evaluating:scoring_recompute — per-stock loop (counts stocks)
         # Non-fatal, scan succeeded already. cancel_check is threaded
         # through so a Stop during the long recompute bails within one
         # stock instead of waiting ~90s for natural completion.
+        #
+        # Per-step atomic progress (May 2026 UX iteration): score_service
+        # emits on_progress with the right denominator per sub-phase
+        # (settori then stocks); we relay those values to the ScanRun row
+        # so the toast bar advances with each phase's own atomic unit
+        # instead of staying pinned at the scan_universe N/N.
         run.phase = "evaluating:sector_stats"
         run.current_target = "Pre-calcolo statistiche settoriali…"
+        run.progress_done = 0
+        run.progress_total = 1  # placeholder — score_service overrides on first tick
         db.commit()
         try:
             from app.services import score_service
             from app.services.score_service import RecomputeCancelled
 
-            # Bump the parent ScanRun's heartbeat from inside the score
-            # loop so the stale detector (120s without heartbeat → "Scan
-            # bloccato") doesn't trip during the long recompute path.
-            # The on_progress fires every `progress_every` stocks during
-            # scoring AND periodically during the sector_stats pre-pass,
-            # well within the 120s window. We don't touch progress_done/
-            # total here — they correctly reflect the scan_universe
-            # result so the post-scan bar stays at 100% during persisting.
-            def _persisting_heartbeat(_done: int, _total: int) -> None:
+            # Relay score_service's per-loop (done, total) onto the ScanRun
+            # row so the toast bar tracks each sub-phase's atomic unit.
+            # Commits on every tick: SQLite handles 5-10 UPDATE/sec just
+            # fine, and the polling API uses a separate Session so visibility
+            # requires real commits (piggybacking on score_service's own
+            # commits would lag the bar by up to BATCH_COMMIT_EVERY=50 stocks).
+            def _persisting_heartbeat(done: int, total: int) -> None:
+                run.progress_done = done
+                run.progress_total = total
                 run.last_progress_at = datetime.now(UTC)
-                # No explicit commit — score_service commits per stock
-                # and our heartbeat update piggybacks on those commits.
+                try:
+                    db.commit()
+                except Exception:  # noqa: BLE001
+                    db.rollback()
 
             # Sub-phase signal arrives explicitly from recompute_all (post
             # the May 2026 refactor): "sector_stats" then "scoring".
-            # Translated 1:1 to the sub-phase labels the toast shows.
+            # Translated 1:1 to the sub-phase labels the toast shows; the
+            # progress_done reset is critical so each sub-phase's bar
+            # animates from 0 (without it the bar would snap from 12/12
+            # straight to 1100/1100 with no intermediate motion).
             def _persisting_phase_change(phase: str) -> None:
                 if phase == "sector_stats":
                     run.phase = "evaluating:sector_stats"
@@ -311,6 +340,7 @@ def run_tracked_scan(
                 else:  # phase == "scoring"
                     run.phase = "evaluating:scoring_recompute"
                     run.current_target = "Ricalcolo score composito per stock…"
+                run.progress_done = 0
                 db.commit()
 
             try:
@@ -345,8 +375,18 @@ def run_tracked_scan(
 
         # Sub-phase C: price-target alerts evaluation. Non-fatal, scan
         # succeeded already.
+        #
+        # Per-step atomic progress (May 2026 UX iteration): same synthetic
+        # % bar pattern as market_snapshot — evaluate_all has no per-iteration
+        # progress hook, so progress_pulse drives the bar over the expected
+        # wall time. Reset to 0/100 first so the pulse can advance from a
+        # clean baseline (its guard prevents writes that would walk the
+        # bar backwards).
+        PA_EXPECTED_SEC = 3.0
         run.phase = "evaluating:price_alerts"
         run.current_target = "Valutazione price-target alert…"
+        run.progress_done = 0
+        run.progress_total = 100
         db.commit()
         try:
             from app.services import price_alert_service
@@ -354,8 +394,15 @@ def run_tracked_scan(
             # Same rationale as the snapshot block above: `evaluate_all` is
             # a synchronous loop with no progress callback. Usually fast
             # (<5s) but a network hiccup can stretch it past the threshold.
-            with heartbeat_pulse(run.id):
+            with heartbeat_pulse(run.id), progress_pulse(
+                run.id,
+                start_done=0,
+                end_done=100,
+                expected_duration_sec=PA_EXPECTED_SEC,
+            ):
                 fired = price_alert_service.evaluate_all(db)
+            run.progress_done = 100
+            db.commit()
             if fired:
                 logger.info(f"[scan_runner] {fired} price alert(s) fired for ScanRun {run.id}")
         except Exception as pa_exc:  # noqa: BLE001
