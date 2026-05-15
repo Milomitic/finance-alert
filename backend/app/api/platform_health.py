@@ -5,6 +5,7 @@
 """
 import asyncio
 import json
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Request
@@ -25,6 +26,23 @@ from app.services import cache_metrics, source_catalog, yfinance_health
 from app.services.scheduler_metrics import _INSTANCE as scheduler_metrics
 
 router = APIRouter(prefix="/api/platform", tags=["platform"])
+
+
+def _iso_utc(dt: datetime | None) -> str | None:
+    """Serialize a datetime as an ISO-8601 string with explicit UTC offset.
+
+    SQLite + SQLAlchemy round-trips ``DateTime(timezone=True)`` columns as
+    NAIVE Python datetimes (the timezone is silently dropped). Project
+    convention: all timestamps are stored in UTC. We re-attach the
+    timezone before serialization so the browser sees ``+00:00`` and
+    parses correctly — without this marker, ``new Date(iso)`` in JS
+    interprets the string as LOCAL time and a CEST viewer sees scans
+    apparently started 2h ago, tripping stuck-scan heuristics."""
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=UTC)
+    return dt.isoformat()
 
 
 def _recent_scans(db: Session, limit: int = 10) -> list[RecentScanOut]:
@@ -49,8 +67,8 @@ def _recent_scans(db: Session, limit: int = 10) -> list[RecentScanOut]:
             status=r.status,
             phase=r.phase,
             trigger=r.trigger,
-            started_at=r.started_at.isoformat() if r.started_at else None,
-            completed_at=r.completed_at.isoformat() if r.completed_at else None,
+            started_at=_iso_utc(r.started_at),
+            completed_at=_iso_utc(r.completed_at),
             duration_s=duration_s,
             progress_done=r.progress_done,
             progress_total=r.progress_total,

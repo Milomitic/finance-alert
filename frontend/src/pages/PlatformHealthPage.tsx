@@ -77,12 +77,16 @@ export default function PlatformHealthPage() {
     const erroredJobs = health.scheduler.filter(
       (j) => j.last_result === "error"
     ).length;
-    const runningScanStuck = health.scans.some(
-      (s) =>
-        s.status === "running" &&
-        s.started_at &&
-        Date.now() - new Date(s.started_at).getTime() > 30 * 60_000
-    );
+    const runningScanStuck = health.scans.some((s) => {
+      if (s.status !== "running" || !s.started_at) return false;
+      const elapsedMs = Date.now() - new Date(s.started_at).getTime();
+      // Guardrail: if the diff is negative (clock skew) or implausibly
+      // large (>24h, almost certainly a timezone parsing issue), don't
+      // claim outage on this signal. The 30-min threshold is for genuine
+      // stuck scans where the worker died silently.
+      if (elapsedMs < 0 || elapsedMs > 24 * 3600_000) return false;
+      return elapsedMs > 30 * 60_000;
+    });
     if (breakerOpen || failingSources > 0 || runningScanStuck) return "outage";
     const degraded =
       health.data_sources.filter((m) => m.health === "degraded").length > 0 ||
