@@ -4,6 +4,7 @@ from apscheduler.triggers.cron import CronTrigger
 from loguru import logger
 
 from app.core.config import settings
+from app.scheduler.jobs.cleanup_orphan_scans_job import run_cleanup_orphan_scans
 from app.scheduler.jobs.dedupe_stocks_job import run_dedupe_stocks
 from app.scheduler.jobs.refresh_catalog import run_refresh_all
 from app.scheduler.jobs.refresh_fred import run_refresh_fred
@@ -94,6 +95,18 @@ def get_scheduler() -> BackgroundScheduler:
             run_refresh_imminent_earnings,
             trigger=CronTrigger(minute=45),
             id="refresh_imminent_earnings",
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+        )
+        # Cleanup orfani ScanRun — ogni minuto. Necessario perché
+        # _cleanup_orphan_scans in main.py gira solo al boot; se uvicorn
+        # resta su ma un worker scan crasha, la riga resta 'running'
+        # all'infinito (la UI mostra una progress bar fantasma).
+        _scheduler.add_job(
+            run_cleanup_orphan_scans,
+            trigger=CronTrigger(minute="*"),
+            id="cleanup_orphan_scans",
             replace_existing=True,
             max_instances=1,
             coalesce=True,
