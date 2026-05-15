@@ -961,9 +961,125 @@ def _extract_price_target(pt: Any) -> AnalystPriceTarget:
     )
 
 
+# ── yfinance raw-call helpers ─────────────────────────────────────────────────
+
+from app.core.errors import RateLimitError, UpstreamTimeout, UpstreamUnavailable  # noqa: E402
+from app.services._retry import with_backoff  # noqa: E402
+
+
+def _normalize_yf_error(exc: Exception) -> Exception:
+    """Map yfinance/requests exceptions into our typed UpstreamError hierarchy.
+    The retry decorator only retries the typed errors it knows about.
+
+    Classification order:
+    1. Exception type check (TimeoutError, requests.Timeout, etc.)
+    2. Message keyword check (for yfinance-specific error strings)
+    3. Fallback to UpstreamUnavailable (non-retryable)
+    """
+    # Type-based check first — catches TimeoutError / requests.Timeout / socket.timeout
+    # regardless of message text.
+    try:
+        import socket
+        timeout_types: tuple[type[BaseException], ...] = (TimeoutError, socket.timeout)
+    except ImportError:
+        timeout_types = (TimeoutError,)
+    try:
+        import requests
+        timeout_types = timeout_types + (requests.Timeout,)
+    except ImportError:
+        pass
+    if isinstance(exc, timeout_types):
+        return UpstreamTimeout(str(exc), source="yfinance", op="fundamentals")
+
+    msg = str(exc).lower()
+    if "429" in msg or "rate limit" in msg or "too many" in msg:
+        return RateLimitError(str(exc), source="yfinance", op="fundamentals")
+    if "timeout" in msg or "timed out" in msg:
+        return UpstreamTimeout(str(exc), source="yfinance", op="fundamentals")
+    return UpstreamUnavailable(str(exc), source="yfinance", op="fundamentals")
+
+
+def _do_yf_call(ticker: str) -> dict:
+    """Issue all yfinance sub-requests for a single ticker and return the raw
+    results as a plain dict keyed by endpoint name.  Each endpoint is wrapped
+    in its own try/except so a 404 on one (e.g. insider_transactions for EU
+    stocks) does not blank out the others.
+
+    This function is the single wrapping point for the retry decorator: if
+    ANY top-level exception escapes (i.e. is not caught by a per-endpoint
+    block), the decorator decides whether to re-raise or retry.  Per-endpoint
+    failures are returned as None values so the caller can detect partial
+    payloads.
+    """
+    import yfinance as yf
+
+    t = yf.Ticker(ticker)
+    out: dict = {
+        "income_stmt": None,
+        "quarterly_income_stmt": None,
+        "earnings_dates": None,
+        "info": None,
+        "insider_transactions": None,
+        "recommendations": None,
+        "analyst_price_targets": None,
+        "upgrades_downgrades": None,
+    }
+    try:
+        out["income_stmt"] = t.income_stmt
+    except Exception as e:
+        logger.debug(f"[fund] income_stmt {ticker}: {e}")
+    try:
+        out["quarterly_income_stmt"] = t.quarterly_income_stmt
+    except Exception as e:
+        logger.debug(f"[fund] quarterly_income_stmt {ticker}: {e}")
+    try:
+        out["earnings_dates"] = t.earnings_dates
+    except Exception as e:
+        logger.debug(f"[fund] earnings_dates {ticker}: {e}")
+    try:
+        out["info"] = t.get_info()
+    except Exception as e:
+        logger.debug(f"[fund] info {ticker}: {e}")
+    try:
+        out["insider_transactions"] = t.insider_transactions
+    except Exception as e:
+        logger.debug(f"[fund] insider_transactions {ticker}: {e}")
+    try:
+        out["recommendations"] = t.recommendations
+    except Exception as e:
+        logger.debug(f"[fund] recommendations {ticker}: {e}")
+    try:
+        out["analyst_price_targets"] = t.analyst_price_targets
+    except Exception as e:
+        logger.debug(f"[fund] analyst_price_targets {ticker}: {e}")
+    try:
+        out["upgrades_downgrades"] = t.upgrades_downgrades
+    except Exception as e:
+        logger.debug(f"[fund] upgrades_downgrades {ticker}: {e}")
+    return out
+
+
+@with_backoff(
+    retries=3,
+    base_delay=0.5,
+    max_delay=4.0,
+    on=(UpstreamTimeout, RateLimitError),
+)
+def _yf_fetch_with_retry(ticker: str) -> dict:
+    """Wrapping point: chiamata yfinance + normalizzazione errori.
+    Le eccezioni di rete/yfinance vengono normalizzate nelle nostre classi
+    tipate, così il decorator sa cosa ri-tentare."""
+    try:
+        return _do_yf_call(ticker)
+    except Exception as exc:  # noqa: BLE001
+        raise _normalize_yf_error(exc) from exc
+
+
+# ── fetch orchestration ───────────────────────────────────────────────────────
+
+
 def _fetch_fresh(ticker: str) -> Fundamentals:
     from app.services import yfinance_health
-    import yfinance as yf
 
     f = Fundamentals(ticker=ticker, fetched_at=time.time())
 
@@ -978,25 +1094,25 @@ def _fetch_fresh(ticker: str) -> Fundamentals:
             return
         if yfinance_health.is_rate_limit_error(exc):
             yfinance_health.record_failure(f"fundamentals {ticker}: {exc}")
+
     try:
-        t = yf.Ticker(ticker)
+        raw = _yf_fetch_with_retry(ticker)
         # Each of these is independently network-bound and may individually
-        # fail; we wrap each in a try so a single 429 doesn't blank out
-        # the whole payload.
+        # fail; _do_yf_call returns None for each failed endpoint.
         try:
-            f.annual = _extract_annual(t.income_stmt)
+            f.annual = _extract_annual(raw.get("income_stmt"))
             if f.annual: saw_success = True
         except Exception as e:
             logger.debug(f"[fund] annual {ticker}: {e}")
             _maybe_record(e)
         try:
-            f.quarterly = _extract_quarterly(t.quarterly_income_stmt)
+            f.quarterly = _extract_quarterly(raw.get("quarterly_income_stmt"))
             if f.quarterly: saw_success = True
         except Exception as e:
             logger.debug(f"[fund] quarterly {ticker}: {e}")
             _maybe_record(e)
         try:
-            hist, nxt_date, nxt_est, nxt_rev_est, nxt_time = _extract_earnings(t.earnings_dates)
+            hist, nxt_date, nxt_est, nxt_rev_est, nxt_time = _extract_earnings(raw.get("earnings_dates"))
             f.earnings = hist
             f.next_earnings_date = nxt_date
             f.next_earnings_time_utc = nxt_time
@@ -1024,7 +1140,7 @@ def _fetch_fresh(ticker: str) -> Fundamentals:
             # Single info() call — both micro fundamentals and the company
             # profile come from the same dict, so pulling them together
             # avoids a duplicate slow-endpoint roundtrip.
-            info = t.get_info()
+            info = raw.get("info")
             f.micro = _extract_micro(info)
             f.profile = _extract_profile(info)
             if any(getattr(f.micro, k) is not None for k in vars(f.micro)): saw_success = True
@@ -1038,25 +1154,25 @@ def _fetch_fresh(ticker: str) -> Fundamentals:
             # significance filter can drop a chunk of rows (gifts, admin
             # micro-transfers). 25 in → after filter the UI's slice(0,10)
             # still has 10 real events for most tickers.
-            f.insiders = _extract_insiders(t.insider_transactions, limit=25)
+            f.insiders = _extract_insiders(raw.get("insider_transactions"), limit=25)
             if f.insiders: saw_success = True
         except Exception as e:
             logger.debug(f"[fund] insiders {ticker}: {e}")
             _maybe_record(e)
         try:
-            f.analyst_ratings = _extract_ratings(t.recommendations)
+            f.analyst_ratings = _extract_ratings(raw.get("recommendations"))
             if f.analyst_ratings: saw_success = True
         except Exception as e:
             logger.debug(f"[fund] recommendations {ticker}: {e}")
             _maybe_record(e)
         try:
-            f.price_target = _extract_price_target(t.analyst_price_targets)
+            f.price_target = _extract_price_target(raw.get("analyst_price_targets"))
             if f.price_target.mean is not None: saw_success = True
         except Exception as e:
             logger.debug(f"[fund] price_target {ticker}: {e}")
             _maybe_record(e)
         try:
-            f.analyst_actions = _extract_actions(t.upgrades_downgrades)
+            f.analyst_actions = _extract_actions(raw.get("upgrades_downgrades"))
             if f.analyst_actions: saw_success = True
         except Exception as e:
             logger.debug(f"[fund] upgrades_downgrades {ticker}: {e}")
