@@ -266,16 +266,67 @@ def _override_prev_close_from_ohlcv(ticker: str, live_price: float | None) -> fl
         return None
 
 
+def _eod_fallback_quote(ticker: str) -> LiveQuote:
+    """Popola un LiveQuote dall'ultima OhlcvDaily disponibile. Usato quando
+    il breaker yfinance è aperto: EOD-stale-but-correct beats blank '—'.
+
+    Returns LiveQuote with error="not_found" if the ticker isn't in the DB,
+    error="no_ohlcv" if there are no OHLCV bars, otherwise a fully-populated
+    LiveQuote with market_state="CLOSED" and fetched_at=now."""
+    from sqlalchemy import select, desc
+    from app.core.db import SessionLocal
+    from app.models import OhlcvDaily, Stock
+
+    with SessionLocal() as db:
+        # .limit(1).scalars().first() tolerates legacy duplicate ticker rows
+        # (see CLAUDE.md). All duplicates are equivalent for this read.
+        stock = db.execute(
+            select(Stock).where(Stock.ticker == ticker).limit(1)
+        ).scalars().first()
+        if stock is None:
+            return LiveQuote(ticker=ticker, error="not_found")
+        bars = db.execute(
+            select(OhlcvDaily)
+            .where(OhlcvDaily.stock_id == stock.id)
+            .order_by(desc(OhlcvDaily.date))
+            .limit(2)
+        ).scalars().all()
+        if not bars:
+            return LiveQuote(ticker=ticker, error="no_ohlcv")
+        last = bars[0]
+        prev = bars[1] if len(bars) > 1 else None
+        price = float(last.close) if last.close is not None else None
+        prev_close = float(prev.close) if (prev and prev.close is not None) else None
+        change_abs = None
+        change_pct = None
+        if price is not None and prev_close not in (None, 0):
+            change_abs = price - prev_close
+            change_pct = change_abs / prev_close * 100.0
+        return LiveQuote(
+            ticker=ticker,
+            price=price,
+            prev_close=prev_close,
+            change_abs=change_abs,
+            change_pct=change_pct,
+            day_open=float(last.open) if last.open is not None else None,
+            day_high=float(last.high) if last.high is not None else None,
+            day_low=float(last.low) if last.low is not None else None,
+            volume=int(last.volume) if last.volume is not None else None,
+            market_state="CLOSED",
+            fetched_at=time.time(),
+            error=None,
+        )
+
+
 def _fetch_fresh(ticker: str) -> LiveQuote:
     """Hit yfinance fast_info for one ticker. Wrapped for monkeypatching."""
     from app.services import yfinance_health
     import yfinance as yf
 
-    quote = LiveQuote(ticker=ticker, fetched_at=time.time())
-
     if yfinance_health.is_open():
-        quote.error = "yfinance circuit breaker is open (rate-limited)"
-        return quote
+        return _eod_fallback_quote(ticker)
+
+    quote = LiveQuote(ticker=ticker, fetched_at=time.time())
 
     try:
         t = yf.Ticker(ticker)

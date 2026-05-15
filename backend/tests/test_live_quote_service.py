@@ -120,22 +120,32 @@ def test_force_refresh_bypasses_cache(monkeypatch: pytest.MonkeyPatch) -> None:
     assert call_count["n"] == 2
 
 
-def test_open_breaker_returns_error_quote(monkeypatch: pytest.MonkeyPatch) -> None:
-    """When the breaker is open we don't hit Yahoo at all — quote.error set."""
+def test_open_breaker_skips_yfinance_and_uses_eod_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """When the breaker is open we don't hit Yahoo at all — EOD fallback is used."""
     for _ in range(yfinance_health.N_FAILURES):
         yfinance_health.record_failure("simulated 429")
     assert yfinance_health.is_open()
 
-    # If yfinance got called we'd raise; the test relies on the breaker
-    # short-circuit.
+    # If yfinance got called we'd raise; the test relies on the breaker short-circuit.
     def boom(_t: str) -> None:
         raise RuntimeError("yfinance should not be called when breaker is open")
     monkeypatch.setattr("yfinance.Ticker", boom)
 
+    # Stub the EOD fallback so the test doesn't depend on the prod DB state.
+    from app.services.live_quote_service import LiveQuote as _LQ
+    monkeypatch.setattr(
+        "app.services.live_quote_service._eod_fallback_quote",
+        lambda ticker: _LQ(ticker=ticker, price=150.0, prev_close=148.0,
+                           market_state="CLOSED", error=None),
+    )
+
     q = live_quote_service.get_quote("AAPL")
-    assert q.error is not None
-    assert "breaker" in q.error.lower()
-    assert q.price is None
+    # Breaker should route to EOD fallback, not return a breaker-error quote.
+    assert q.error is None
+    assert q.price == 150.0
+    assert q.market_state == "CLOSED"
 
 
 def test_yfinance_exception_sets_error_and_records_failure(
@@ -197,3 +207,41 @@ def test_quote_includes_market_state(monkeypatch: pytest.MonkeyPatch) -> None:
     _patch_yf(monkeypatch, fi)
     q = live_quote_service.get_quote("AAPL")
     assert q.market_state in ("OPEN", "CLOSED")
+
+
+def test_breaker_open_uses_eod_fallback(db, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Quando yfinance_health.is_open() == True, get_quotes_batch deve
+    popolare i campi base dall'ultima OhlcvDaily invece di tornare error."""
+    from datetime import date
+    from app.models import OhlcvDaily, Stock
+
+    s = Stock(ticker="TESTBREAKER", name="Test Co", exchange="NYSE")
+    db.add(s)
+    db.commit()
+
+    bar2 = OhlcvDaily(
+        stock_id=s.id,
+        date=date(2026, 5, 13),
+        open=98.0, high=101.0, low=97.0, close=100.0, volume=900_000,
+    )
+    bar1 = OhlcvDaily(
+        stock_id=s.id,
+        date=date(2026, 5, 14),
+        open=100.0, high=105.0, low=99.0, close=104.5, volume=1_000_000,
+    )
+    db.add_all([bar2, bar1])
+    db.commit()
+
+    monkeypatch.setattr(yfinance_health, "is_open", lambda: True)
+    live_quote_service._CACHE.clear()
+
+    quotes = live_quote_service.get_quotes_batch(["TESTBREAKER"])
+
+    assert "TESTBREAKER" in quotes
+    q = quotes["TESTBREAKER"]
+    assert q.error is None, f"expected no error after fallback, got: {q.error!r}"
+    assert q.price == 104.5
+    assert q.prev_close == 100.0
+    assert q.market_state == "CLOSED"
+    assert q.change_abs == pytest.approx(4.5)
+    assert q.change_pct == pytest.approx(4.5)
