@@ -8,15 +8,33 @@ Stored in-process (single uvicorn worker) — fine for a local-first tool.
 A reset() helper makes it test-friendly. Counters are timestamped per
 operation so we also know "last success at" for staleness reasoning.
 
+Each counter also keeps a small ring buffer of recent call timestamps
+(bounded; ~25KB total across all sources) so we can answer "how many
+calls in the last N seconds" — used for rate-limit usage indicators in
+the platform-health UI (Finnhub free tier 60/min, Marketaux 100/day…).
+
 Sources currently tracked:
 - yfinance.ohlcv      — yfinance.download() batch path
 - yfinance.market_cap — yfinance.Ticker.fast_info marketCap
 - yfinance.fundamentals — yfinance.Ticker.* (income_stmt, info, etc.)
+- yfinance.live_quote — yfinance.Ticker.fast_info per-tab polling
+- yfinance.news       — yfinance.Ticker.news headlines
 - stooq.ohlcv         — Stooq CSV fallback for OHLCV
+- finnhub.earnings    — Finnhub fallback for actual earnings
+- fred.macro          — FRED macro series download
+- marketaux.news      — Marketaux fallback when yfinance returns empty
+- forexfactory.consensus — ForexFactory macro consensus
+- sec_13f.filings     — SEC EDGAR 13F filings scraper
 """
 import time
+from collections import deque
 from dataclasses import dataclass, field
 from threading import Lock
+
+# How many recent call timestamps to keep per (source, op). 200 covers a
+# Marketaux daily window (100/day with margin) and ~3min of Finnhub-pace
+# traffic (60/min). Bounded so memory stays trivial even with many sources.
+_RECENT_MAX = 200
 
 
 @dataclass
@@ -26,6 +44,8 @@ class _Counter:
     last_success_at: float | None = None
     last_failure_at: float | None = None
     last_failure_reason: str | None = None
+    # Timestamps of recent calls (success or failure). Bounded ring buffer.
+    recent_calls: deque = field(default_factory=lambda: deque(maxlen=_RECENT_MAX))
 
 
 _counters: dict[str, _Counter] = {}
@@ -38,22 +58,46 @@ def _key(source: str, op: str) -> str:
 
 def record_success(source: str, op: str, count: int = 1) -> None:
     """Record `count` successful fetch operations on (source, op)."""
+    now = time.time()
     with _lock:
         c = _counters.setdefault(_key(source, op), _Counter())
         c.success += count
-        c.last_success_at = time.time()
+        c.last_success_at = now
+        # Record one timestamp per call (bounded ring buffer); used by
+        # calls_in_window() for rate-limit usage indicators.
+        for _ in range(count):
+            c.recent_calls.append(now)
 
 
 def record_failure(source: str, op: str, reason: str = "", count: int = 1) -> None:
     """Record `count` failed fetch operations. `reason` is captured for the
     most recent failure only (the user just needs the latest hint)."""
+    now = time.time()
     with _lock:
         c = _counters.setdefault(_key(source, op), _Counter())
         c.failure += count
-        c.last_failure_at = time.time()
+        c.last_failure_at = now
         if reason:
             # Trim long messages — we only want a hint
             c.last_failure_reason = reason[:200]
+        for _ in range(count):
+            c.recent_calls.append(now)
+
+
+def calls_in_window(source: str, op: str, window_seconds: float) -> int:
+    """Count calls (success+failure) on (source, op) in the last `window_seconds`.
+
+    Bounded by `_RECENT_MAX` — older calls are evicted from the ring buffer
+    so for windows larger than ~3min on a busy source the count saturates
+    at _RECENT_MAX. That's intentional: rate-limit indicators don't need
+    exact long-window precision, just "approaching the limit / not".
+    """
+    cutoff = time.time() - window_seconds
+    with _lock:
+        c = _counters.get(_key(source, op))
+        if c is None:
+            return 0
+        return sum(1 for t in c.recent_calls if t >= cutoff)
 
 
 @dataclass

@@ -112,11 +112,16 @@ def get_news(ticker: str, limit: int = 5) -> list[dict[str, Any]]:
         logger.warning(f"[news] L2 read failed for {ticker}: {exc}")
 
     # Both layers missed → upstream fetch
+    from app.services import data_source_metrics
     try:
         import yfinance as yf
         raw_items = yf.Ticker(ticker).news or []
+        data_source_metrics.record_success("yfinance", "news")
     except Exception as exc:  # noqa: BLE001
         logger.warning(f"[news] yfinance fetch failed for {ticker}: {exc}")
+        data_source_metrics.record_failure(
+            "yfinance", "news", reason=str(exc)[:200]
+        )
         # Cache empty result in L1 only to avoid hammering on failure.
         # Don't persist failures to L2 — a transient yfinance outage shouldn't
         # poison the cache for an hour across restarts.

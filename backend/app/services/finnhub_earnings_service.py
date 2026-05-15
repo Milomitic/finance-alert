@@ -88,6 +88,8 @@ def fetch_calendar(
     }
     if symbol:
         params["symbol"] = symbol
+    # Lazy import: avoid circular deps at startup.
+    from app.services import data_source_metrics
     try:
         r = requests.get(
             _BASE_URL,
@@ -97,8 +99,13 @@ def fetch_calendar(
         )
         r.raise_for_status()
         payload = r.json()
+        # 1 unit consumed from the 60/min free-tier quota.
+        data_source_metrics.record_success("finnhub", "earnings")
     except Exception as exc:  # noqa: BLE001
         logger.warning(f"[finnhub] earnings calendar fetch failed: {exc}")
+        data_source_metrics.record_failure(
+            "finnhub", "earnings", reason=str(exc)[:200]
+        )
         return []
 
     raw = payload.get("earningsCalendar") or []

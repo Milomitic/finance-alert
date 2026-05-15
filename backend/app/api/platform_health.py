@@ -21,7 +21,7 @@ from app.schemas.platform import (
     RecentScanOut,
     SchedulerJobStatOut,
 )
-from app.services import cache_metrics, data_source_metrics, yfinance_health
+from app.services import cache_metrics, source_catalog, yfinance_health
 from app.services.scheduler_metrics import _INSTANCE as scheduler_metrics
 
 router = APIRouter(prefix="/api/platform", tags=["platform"])
@@ -60,27 +60,35 @@ def _recent_scans(db: Session, limit: int = 10) -> list[RecentScanOut]:
     return out
 
 
+def _sources_payload() -> list[dict]:
+    """Catalog-enriched data-source snapshot. Includes every known source
+    (idle entries with zero counts) plus rate-limit usage when applicable."""
+    return [
+        {
+            "source": s.source, "op": s.op, "label": s.label, "role": s.role,
+            "per_minute_limit": s.per_minute_limit,
+            "per_day_limit": s.per_day_limit,
+            "notes": s.notes,
+            "success": s.success, "failure": s.failure,
+            "success_rate": s.success_rate,
+            "last_success_at": s.last_success_at,
+            "last_failure_at": s.last_failure_at,
+            "last_failure_reason": s.last_failure_reason,
+            "health": s.health,
+            "calls_last_minute": s.calls_last_minute,
+            "calls_last_day": s.calls_last_day,
+        }
+        for s in source_catalog.full_snapshot()
+    ]
+
+
 @router.get("/health", response_model=PlatformHealthOut)
 def health_snapshot(
     db: Session = Depends(get_db),
     _user: User = Depends(get_current_user),
 ) -> PlatformHealthOut:
-    metrics = data_source_metrics.snapshot()
     return PlatformHealthOut(
-        data_sources=[
-            {
-                "source": m.source,
-                "op": m.op,
-                "success": m.success,
-                "failure": m.failure,
-                "success_rate": m.success_rate,
-                "last_success_at": m.last_success_at,
-                "last_failure_at": m.last_failure_at,
-                "last_failure_reason": m.last_failure_reason,
-                "health": m.health,
-            }
-            for m in metrics
-        ],
+        data_sources=_sources_payload(),
         yfinance_breaker=yfinance_health.status(),
         scheduler=[SchedulerJobStatOut(**s) for s in scheduler_metrics.snapshot_dict()],
         scans=_recent_scans(db),
@@ -135,19 +143,8 @@ async def stream(
     unsub = log_buffer.subscribe(on_log)
 
     async def _snapshot_payload() -> str:
-        metrics = data_source_metrics.snapshot()
         snap_dict = {
-            "data_sources": [
-                {
-                    "source": m.source, "op": m.op, "success": m.success,
-                    "failure": m.failure, "success_rate": m.success_rate,
-                    "last_success_at": m.last_success_at,
-                    "last_failure_at": m.last_failure_at,
-                    "last_failure_reason": m.last_failure_reason,
-                    "health": m.health,
-                }
-                for m in metrics
-            ],
+            "data_sources": _sources_payload(),
             "yfinance_breaker": yfinance_health.status(),
             "scheduler": scheduler_metrics.snapshot_dict(),
             "scans": [s.model_dump() for s in _recent_scans(db)],

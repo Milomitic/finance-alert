@@ -3,15 +3,28 @@ from pydantic import BaseModel
 
 
 class DataSourceMetricOut(BaseModel):
+    """Catalog entry + live counters + rate-limit usage for one (source, op).
+
+    Mirrors `app.services.source_catalog.SourceWithUsage`. The frontend
+    uses `role` to group sources (primary / fallback / scheduled), the
+    rate-limit fields to render usage progress bars, and `health` to
+    color-code the status badge."""
     source: str
     op: str
+    label: str
+    role: str                          # "primary" | "fallback" | "scheduled"
+    per_minute_limit: int | None
+    per_day_limit: int | None
+    notes: str
     success: int
     failure: int
     success_rate: float
     last_success_at: float | None
     last_failure_at: float | None
     last_failure_reason: str | None
-    health: str
+    health: str                        # "healthy" | "degraded" | "failing" | "idle"
+    calls_last_minute: int | None
+    calls_last_day: int | None
 
 
 class SchedulerJobStatOut(BaseModel):

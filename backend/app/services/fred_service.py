@@ -98,13 +98,18 @@ def fetch_observations(
         extra["observation_start"] = observation_start.isoformat()
     if observation_end:
         extra["observation_end"] = observation_end.isoformat()
+    from app.services import data_source_metrics
     try:
         with httpx.Client(timeout=15.0) as c:
             resp = c.get(f"{_FRED_BASE}/series/observations", params=_params(extra))
             resp.raise_for_status()
             data = resp.json()
+        data_source_metrics.record_success("fred", "macro")
     except Exception as e:  # noqa: BLE001
         logger.warning(f"[fred] observations fetch failed for {series_id}: {e}")
+        data_source_metrics.record_failure(
+            "fred", "macro", reason=str(e)[:200]
+        )
         return []
     out: list[FredObservation] = []
     for row in data.get("observations", []):

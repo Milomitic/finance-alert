@@ -5,13 +5,20 @@
 export type DataSourceMetric = {
   source: string;
   op: string;
+  label: string;
+  role: "primary" | "fallback" | "scheduled" | string;
+  per_minute_limit: number | null;
+  per_day_limit: number | null;
+  notes: string;
   success: number;
   failure: number;
-  success_rate: number;
+  success_rate: number; // -1 when idle
   last_success_at: number | null;
   last_failure_at: number | null;
   last_failure_reason: string | null;
-  health: string;
+  health: "healthy" | "degraded" | "failing" | "idle" | string;
+  calls_last_minute: number | null;
+  calls_last_day: number | null;
 };
 
 export type SchedulerJobStat = {

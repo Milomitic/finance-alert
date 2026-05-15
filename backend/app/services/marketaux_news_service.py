@@ -46,6 +46,8 @@ def fetch_news(ticker: str, limit: int = 10) -> list[NewsItem]:
     (graceful degrade — il caller decide se sollevare o ignorare)."""
     if not settings.marketaux_api_key:
         return []
+    # Lazy import to avoid a circular dep on the metrics module at startup.
+    from app.services import data_source_metrics
     try:
         resp = requests.get(
             _BASE,
@@ -58,6 +60,7 @@ def fetch_news(ticker: str, limit: int = 10) -> list[NewsItem]:
             timeout=_TIMEOUT,
         )
     except requests.RequestException as e:
+        data_source_metrics.record_failure("marketaux", "news", reason=str(e))
         raise UpstreamUnavailable(str(e), source="marketaux", op="news") from e
 
     if resp.status_code != 200:
@@ -65,10 +68,15 @@ def fetch_news(ticker: str, limit: int = 10) -> list[NewsItem]:
             f"[marketaux] HTTP {resp.status_code} for {ticker}: "
             f"{_scrub_token(resp.text[:200])}"
         )
+        data_source_metrics.record_failure(
+            "marketaux", "news", reason=f"HTTP {resp.status_code}"
+        )
         raise UpstreamUnavailable(
             f"marketaux HTTP {resp.status_code}", source="marketaux", op="news"
         )
     data = resp.json().get("data", [])
+    # Count the successful API call (1 unit consumed from the 100/day quota).
+    data_source_metrics.record_success("marketaux", "news")
     return [
         NewsItem(
             title=item.get("title", ""),
