@@ -551,7 +551,7 @@ function EarningsTableRow({ event }: { event: EarningsEvent }) {
       )}
       title={`${event.ticker} · ${event.name}${event.eps_estimate != null ? ` · EPS atteso ${formatEps(event.eps_estimate)}` : ""}`}
     >
-      {/* Stock cell — logo + ticker + truncated name (when there's room) */}
+      {/* Stock cell — logo + ticker + session-timing indicator + name */}
       <div className="flex items-center gap-2 min-w-0">
         <StockLogo ticker={event.ticker} size="xs" />
         <div className="min-w-0 flex-1">
@@ -559,6 +559,28 @@ function EarningsTableRow({ event }: { event: EarningsEvent }) {
             <span className="text-[14.5px] font-bold tabular-nums truncate">
               {event.ticker}
             </span>
+            {/* Pre/after-market indicator — same glyphs and tooltips as
+                EventChip in the calendar grid. ☀ = pre-market release
+                (before US session open), ☾ = after-market (post close).
+                Inferred server-side from yfinance UTC timestamps. */}
+            {event.earnings_when === "pre" && (
+              <span
+                className="text-[12px] leading-none shrink-0"
+                title="Pre-market: earnings rilasciati prima dell'apertura della sessione"
+                aria-label="pre-market"
+              >
+                ☀
+              </span>
+            )}
+            {event.earnings_when === "after" && (
+              <span
+                className="text-[12px] leading-none shrink-0 opacity-80"
+                title="After-market: earnings rilasciati dopo la chiusura della sessione"
+                aria-label="after-market"
+              >
+                ☾
+              </span>
+            )}
             <ArrowUpRight
               className="h-3 w-3 text-muted-foreground/40 group-hover/row:text-foreground/70 transition-colors shrink-0"
               aria-hidden
