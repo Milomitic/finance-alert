@@ -41,3 +41,9 @@ finance-alert/
 
 # Runtime logs (emitted by uvicorn started from repo root)
 data/logs/
+
+# Worktrees (created by superpowers using-git-worktrees skill)
+.worktrees/
+
+# Local scratch/build dirs created by Claude tooling
+.pptx-build/
