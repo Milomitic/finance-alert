@@ -137,48 +137,72 @@ function abbreviatePosition(raw: string | null | undefined): string {
  * on a single row with the date right-aligned. Hover-title preserves
  * the full strings for the truncated cells.
  */
+/* Shared column grid — header + every row use the SAME template so
+ * cells align by construction. Tracks:
+ *   insider (flex, truncates) · role · transaction · shares·$ · date
+ * `minmax(0,1fr)` injects the implicit min-width:0 the name needs to
+ * truncate instead of overflowing its track. */
+const INSIDER_GRID =
+  "grid grid-cols-[minmax(0,1fr)_4.25rem_5.5rem_5.25rem_3.5rem] items-baseline gap-2";
+
+function InsiderHeader() {
+  return (
+    <li
+      className={cn(
+        INSIDER_GRID,
+        "pb-1 text-[10px] uppercase tracking-wider text-muted-foreground/70 font-semibold",
+      )}
+    >
+      <span className="truncate">Insider</span>
+      <span className="truncate">Ruolo</span>
+      <span className="truncate">Operazione</span>
+      <span className="text-right">Quote · $</span>
+      <span className="text-right">Data</span>
+    </li>
+  );
+}
+
 function InsiderRow({ t }: { t: InsiderTransaction }) {
   const sub =
     t.value != null
       ? `${fmtShares(t.shares)} · ${fmtBig(t.value)}`
       : `${fmtShares(t.shares)}`;
   return (
-    <li className="flex items-baseline gap-2 py-1 border-t border-border/40 first:border-t-0 leading-tight">
+    <li
+      className={cn(
+        INSIDER_GRID,
+        "py-1 border-t border-border/40 leading-tight",
+      )}
+    >
       {/* V3.5: insider name + position. The position (es. "CFO",
           "Director", "Chief Executive Officer") sits right after the
           name in muted/italic so the user identifies the role without
           mistaking it for the transaction text. */}
       <span
-        className="text-[13.5px] font-semibold truncate"
+        className="text-[13.5px] font-semibold truncate min-w-0"
         title={t.insider || ""}
       >
         {t.insider || "—"}
       </span>
-      {t.position && (
-        <span
-          // Hover-title preserves the full verbose role for users who
-          // need it; the visible label uses the canonical abbreviation
-          // (CEO / CFO / EVP / etc.) so it doesn't truncate to "..."
-          // in the cramped sidebar slot.
-          className="text-[12px] italic text-muted-foreground/80 truncate max-w-[110px]"
-          title={t.position}
-        >
-          {abbreviatePosition(t.position)}
-        </span>
-      )}
       <span
-        className={cn(
-          "text-[12px] truncate shrink-0 max-w-[90px]",
-          txnTone(t.transaction),
-        )}
+        // Hover-title preserves the full verbose role; the visible
+        // label uses the canonical abbreviation (CEO / CFO / EVP / …)
+        // so it doesn't truncate to "..." in the cramped slot.
+        className="text-[12px] italic text-muted-foreground/80 truncate"
+        title={t.position || ""}
+      >
+        {t.position ? abbreviatePosition(t.position) : "—"}
+      </span>
+      <span
+        className={cn("text-[12px] truncate", txnTone(t.transaction))}
         title={t.transaction}
       >
         {t.transaction || "—"}
       </span>
-      <span className="text-[12px] text-muted-foreground tabular-nums shrink-0">
+      <span className="text-[12px] text-muted-foreground tabular-nums text-right">
         {sub}
       </span>
-      <span className="ml-auto text-[12px] text-muted-foreground tabular-nums shrink-0">
+      <span className="text-[12px] text-muted-foreground tabular-nums text-right">
         {shortDate(t.date)}
       </span>
     </li>
@@ -241,6 +265,7 @@ export function InsidersAnalystCard({ ticker }: Props) {
           </div>
         ) : (
           <ul>
+            <InsiderHeader />
             {latest.map((t, i) => (
               <InsiderRow key={`${t.insider}-${t.date}-${i}`} t={t} />
             ))}

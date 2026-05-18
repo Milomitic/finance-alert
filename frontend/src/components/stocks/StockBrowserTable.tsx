@@ -5,12 +5,29 @@ import { Link } from "react-router-dom";
 import type { StockSortBy, SortDir } from "@/api/stocks";
 import type { StockSearchItem } from "@/api/types";
 import { StockLogo } from "@/components/dashboard/StockLogo";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import { TableSearchInput } from "@/components/ui/table-search-input";
 import { useMarketSummary } from "@/hooks/useMarketSummary";
 import { RISK_LABEL, RISK_TONE, scoreColor } from "@/lib/scoreMeta";
 import { getStockFlagCode } from "@/lib/stockMeta";
 import { cn } from "@/lib/utils";
+
+/** Sort options offered in the mobile card view (no clickable column
+ *  headers there). Mirrors the desktop table's sortable columns. */
+const MOBILE_SORT_OPTIONS: { key: TableSortKey; label: string }[] = [
+  { key: "ticker", label: "Ticker" },
+  { key: "name", label: "Nome" },
+  { key: "composite", label: "Score" },
+  { key: "change_pct", label: "Δ%" },
+  { key: "market_cap", label: "Mkt Cap" },
+  { key: "sector", label: "Settore" },
+  { key: "industry", label: "Industry" },
+  { key: "exchange", label: "Exchange" },
+];
 
 /** All sortable columns the table renders. `change_pct` is client-side only
  *  (Δ% comes from the market-stats snapshot, not the Stock table) — the
@@ -137,7 +154,137 @@ export function StockBrowserTable({ items, sortBy, sortDir, onSortChange, q, onQ
   return (
     <Card>
       <CardContent className="p-0">
-        <div className="overflow-x-auto">
+        {/* ─── Mobile: stacked cards (no horizontal scroll on a phone).
+            The desktop table's clickable column headers don't exist
+            here, so search + sort move into a dedicated toolbar. ─── */}
+        <div className="md:hidden">
+          <div className="flex flex-col gap-2 border-b p-3">
+            <TableSearchInput
+              value={q}
+              onChange={onQueryChange}
+              placeholder="cerca ticker o nome…"
+              ariaLabel="Filtra per ticker o nome"
+              className="w-full"
+            />
+            <div className="flex items-center gap-2">
+              <Select
+                value={sortBy}
+                onValueChange={(v) => onSortChange(v as TableSortKey)}
+              >
+                <SelectTrigger className="h-8 flex-1 text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {MOBILE_SORT_OPTIONS.map((o) => (
+                    <SelectItem key={o.key} value={o.key}>
+                      Ordina: {o.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-8 shrink-0"
+                aria-label={`Direzione ordinamento: ${sortDir === "asc" ? "crescente" : "decrescente"}`}
+                onClick={() => onSortChange(sortBy)}
+              >
+                {sortDir === "asc" ? (
+                  <ArrowUp className="h-4 w-4" />
+                ) : (
+                  <ArrowDown className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
+          </div>
+          {displayItems.length === 0 ? (
+            <div className="px-4 py-10 text-center text-sm text-muted-foreground">
+              Nessuno stock trovato.
+              {q.trim()
+                ? ` Nessun risultato per "${q}".`
+                : " Prova a rimuovere qualche filtro."}
+            </div>
+          ) : (
+            <ul className="divide-y divide-border/50">
+              {displayItems.map((item) => {
+                const s = item.stock;
+                const change = changeByTicker.get(s.ticker);
+                const flag = getStockFlagCode(s.country, s.ticker);
+                const changeColor = change == null
+                  ? "text-muted-foreground"
+                  : change > 0 ? "text-green-600 dark:text-green-400"
+                  : change < 0 ? "text-red-600 dark:text-red-400"
+                  : "";
+                const compositeCls = item.score.composite != null
+                  ? scoreColor(item.score.composite)
+                  : "text-muted-foreground";
+                return (
+                  <li key={s.id}>
+                    <Link
+                      to={`/stocks/${encodeURIComponent(s.ticker)}`}
+                      className="block px-3 py-2.5 hover:bg-muted/40 transition-colors"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <StockLogo ticker={s.ticker} size="sm" />
+                        <span className="font-semibold shrink-0">{s.ticker}</span>
+                        <span className="text-sm text-muted-foreground truncate min-w-0 flex-1">
+                          {s.name}
+                        </span>
+                        <span className={cn("text-base font-bold tabular-nums shrink-0", compositeCls)}>
+                          {item.score.composite != null ? item.score.composite.toFixed(1) : "—"}
+                        </span>
+                      </div>
+                      <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs tabular-nums">
+                        <span className={changeColor}>
+                          Δ {change == null ? "—" : `${change >= 0 ? "+" : ""}${change.toFixed(2)}%`}
+                        </span>
+                        <span className="text-muted-foreground">
+                          {fmtClose(closeByTicker.get(s.ticker), currencyByTicker.get(s.ticker) ?? s.currency ?? undefined)}
+                        </span>
+                        <span className="text-muted-foreground">
+                          MC {fmtMc(s.market_cap)}
+                        </span>
+                        <span className="inline-flex items-center gap-1 text-muted-foreground">
+                          {flag && (
+                            <img
+                              src={`/flags/${flag}.svg`}
+                              alt={s.country ?? ""}
+                              width={14} height={10}
+                              style={{ width: "14px", height: "10px", objectFit: "cover" }}
+                              className="rounded-[1px] shadow-sm"
+                            />
+                          )}
+                          {s.exchange}
+                        </span>
+                        {item.score.risk_tier && (
+                          <span
+                            className={cn(
+                              "inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider",
+                              RISK_TONE[item.score.risk_tier],
+                            )}
+                          >
+                            {RISK_LABEL[item.score.risk_tier]}
+                          </span>
+                        )}
+                      </div>
+                      {s.sector && (
+                        <div className="mt-1 text-xs text-muted-foreground truncate">
+                          {s.sector}
+                          {s.industry ? ` · ${s.industry}` : ""}
+                        </div>
+                      )}
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+
+        {/* ─── Desktop/tablet: the full sortable table (scrolls
+            horizontally inside its own container if it overflows). ─── */}
+        <div className="hidden md:block overflow-x-auto">
           {/* Per user spec: rows at 0.875rem (text-sm), headers at 1rem
               (text-base via SortableHeader). Set the table root to
               text-sm so every body cell inherits without per-cell

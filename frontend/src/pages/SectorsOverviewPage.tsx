@@ -278,7 +278,7 @@ export default function SectorsOverviewPage() {
   if (isLoading) {
     return (
       <div className="space-y-6">
-        <h2 className="text-3xl font-semibold tracking-tight">Settori</h2>
+        <h2 className="text-2xl sm:text-3xl font-semibold tracking-tight">Settori</h2>
         <Card>
           <CardContent className="p-6 text-sm text-muted-foreground">
             Caricamento overview settori…
@@ -291,7 +291,7 @@ export default function SectorsOverviewPage() {
   if (isError || !data) {
     return (
       <div className="space-y-6">
-        <h2 className="text-3xl font-semibold tracking-tight">Settori</h2>
+        <h2 className="text-2xl sm:text-3xl font-semibold tracking-tight">Settori</h2>
         <Card>
           <CardContent className="p-6 text-sm text-destructive">
             Errore nel caricamento dei dati settoriali.
@@ -305,7 +305,7 @@ export default function SectorsOverviewPage() {
     <div className="space-y-6">
       {/* ─── Header ────────────────────────────────────────────────── */}
       <div>
-        <h2 className="text-3xl font-semibold tracking-tight flex items-center gap-3">
+        <h2 className="text-2xl sm:text-3xl font-semibold tracking-tight flex items-center gap-3">
           <Grid3x3 className="h-7 w-7 text-muted-foreground" aria-hidden />
           Settori
         </h2>

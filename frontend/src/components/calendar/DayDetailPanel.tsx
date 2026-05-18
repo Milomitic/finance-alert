@@ -391,14 +391,24 @@ function EarningsTable({
 }) {
   return (
     <div className="overflow-hidden rounded-lg border bg-card">
+      {/* Mobile: the 7-column grid (~480px of fixed tracks) can't fit a
+          phone, so this wrapper scrolls it horizontally as a contained
+          unit — the page itself never breaks. md+: `overflow-visible`
+          so desktop is pixel-identical and the sticky header keeps
+          working against the panel-body scroll. (Header drops `sticky`
+          on mobile: overflow-x:auto forces overflow-y:auto per CSS spec,
+          which would otherwise fight the panel's own vertical scroll —
+          exactly the overflow+sticky quirk this component avoids.) */}
+      <div className="overflow-x-auto md:overflow-visible">
       {/* Sticky header — stays visible as the user scrolls a long list.
           The `top-0` works because the parent body (`overflow-y-auto`)
           is the scroll container. Background is opaque so rows scroll
           underneath without bleed-through. */}
       <div
         className={cn(
-          "sticky top-0 z-10 grid items-center border-b bg-muted/70 backdrop-blur-sm",
+          "static md:sticky top-0 z-10 grid items-center border-b bg-muted/70 backdrop-blur-sm",
           "px-2 py-1 text-[12.5px] font-semibold uppercase tracking-[0.08em] text-muted-foreground",
+          "min-w-[620px] md:min-w-0",
           COL_TEMPLATE,
         )}
         role="row"
@@ -473,14 +483,16 @@ function EarningsTable({
         />
       </div>
 
-      {/* Rows */}
-      <ul role="rowgroup" className="divide-y">
+      {/* Rows — min-width matches the header so columns stay aligned
+          while the wrapper scrolls horizontally on mobile. */}
+      <ul role="rowgroup" className="divide-y min-w-[620px] md:min-w-0">
         {rows.map((ev, i) => (
           <li key={`e-${ev.ticker}-${i}`} role="row">
             <EarningsTableRow event={ev} />
           </li>
         ))}
       </ul>
+      </div>
     </div>
   );
 }

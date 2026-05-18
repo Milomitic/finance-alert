@@ -7,12 +7,15 @@ import {
   HeartPulse,
   LayoutDashboard,
   LogOut,
+  Menu,
   Settings,
+  X,
 } from "lucide-react";
+import { useEffect, useState } from "react";
 import { NavbarSearch } from "@/components/NavbarSearch";
 import { ScanProgressToast } from "@/components/ScanProgressToast";
 import { ScoreRecomputeToast } from "@/components/ScoreRecomputeToast";
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -47,10 +50,83 @@ const NAV: NavEntry[] = [
   { to: "/settings", label: "Impostazioni", icon: Settings, enabled: true },
 ];
 
+/** The nav link list — shared verbatim by the desktop sidebar and the
+ *  mobile drawer so there's a single source of truth for entries +
+ *  active styling. `onNavigate` lets the mobile drawer close itself
+ *  the moment a link is tapped. */
+function NavList({ onNavigate }: { onNavigate?: () => void }) {
+  return (
+    <nav className="flex flex-1 flex-col gap-1 p-3">
+      {NAV.map((entry) => {
+        const Icon = entry.icon;
+        if (!entry.enabled) {
+          return (
+            <span
+              key={entry.to}
+              title="Disponibile nelle prossime fasi"
+              className="flex cursor-not-allowed items-center gap-2 rounded px-3 py-2 text-sm text-muted-foreground/60"
+            >
+              <Icon className="h-4 w-4" />
+              {entry.label}
+            </span>
+          );
+        }
+        return (
+          <NavLink
+            key={entry.to}
+            to={entry.to}
+            end={entry.to === "/"}
+            onClick={onNavigate}
+            className={({ isActive }) =>
+              cn(
+                "flex items-center gap-2 rounded px-3 py-2 text-sm transition-colors",
+                isActive
+                  ? "bg-primary text-primary-foreground"
+                  : "text-foreground hover:bg-accent",
+              )
+            }
+          >
+            <Icon className="h-4 w-4" />
+            {entry.label}
+          </NavLink>
+        );
+      })}
+    </nav>
+  );
+}
+
+function SidebarBrand() {
+  return (
+    <div className="px-5 py-4">
+      <h1 className="text-base font-semibold">Finance Alert</h1>
+      <p className="text-xs text-muted-foreground">v0.1 — Fase 1</p>
+    </div>
+  );
+}
+
 export default function Layout() {
   const me = useMe();
   const logout = useLogout();
   const navigate = useNavigate();
+  const location = useLocation();
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+
+  // Close the drawer on any route change — covers nav taps, the
+  // navbar search jumping to a stock, browser back/forward, etc.
+  useEffect(() => {
+    setMobileNavOpen(false);
+  }, [location.pathname]);
+
+  // Lock body scroll while the drawer overlay is open so the page
+  // behind it doesn't scroll under the user's thumb.
+  useEffect(() => {
+    if (!mobileNavOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [mobileNavOpen]);
 
   const onLogout = async () => {
     await logout.mutateAsync();
@@ -59,48 +135,44 @@ export default function Layout() {
 
   return (
     <div className="flex min-h-screen bg-background">
-      <aside className="flex w-60 flex-col border-r bg-card">
-        <div className="px-5 py-4">
-          <h1 className="text-base font-semibold">Finance Alert</h1>
-          <p className="text-xs text-muted-foreground">v0.1 — Fase 1</p>
-        </div>
+      {/* Desktop sidebar — hidden below lg; the mobile drawer below
+          replaces it on phones/tablets. */}
+      <aside className="hidden lg:flex w-60 flex-col border-r bg-card">
+        <SidebarBrand />
         <Separator />
-        <nav className="flex flex-1 flex-col gap-1 p-3">
-          {NAV.map((entry) => {
-            const Icon = entry.icon;
-            if (!entry.enabled) {
-              return (
-                <span
-                  key={entry.to}
-                  title="Disponibile nelle prossime fasi"
-                  className="flex cursor-not-allowed items-center gap-2 rounded px-3 py-2 text-sm text-muted-foreground/60"
-                >
-                  <Icon className="h-4 w-4" />
-                  {entry.label}
-                </span>
-              );
-            }
-            return (
-              <NavLink
-                key={entry.to}
-                to={entry.to}
-                end={entry.to === "/"}
-                className={({ isActive }) =>
-                  cn(
-                    "flex items-center gap-2 rounded px-3 py-2 text-sm transition-colors",
-                    isActive
-                      ? "bg-primary text-primary-foreground"
-                      : "text-foreground hover:bg-accent"
-                  )
-                }
-              >
-                <Icon className="h-4 w-4" />
-                {entry.label}
-              </NavLink>
-            );
-          })}
-        </nav>
+        <NavList />
       </aside>
+
+      {/* Mobile drawer: overlay + slide-in panel. Rendered only when
+          open so it stays out of the a11y tree otherwise. */}
+      {mobileNavOpen && (
+        <div className="fixed inset-0 z-50 lg:hidden">
+          <button
+            type="button"
+            aria-label="Chiudi menu"
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            onClick={() => setMobileNavOpen(false)}
+          />
+          <aside className="absolute left-0 top-0 flex h-full w-64 max-w-[80vw] flex-col border-r bg-card shadow-xl animate-in slide-in-from-left duration-200">
+            <div className="flex items-center justify-between pr-2">
+              <SidebarBrand />
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Chiudi menu"
+                onClick={() => setMobileNavOpen(false)}
+              >
+                <X className="h-5 w-5" />
+              </Button>
+            </div>
+            <Separator />
+            <div className="flex-1 overflow-y-auto">
+              <NavList onNavigate={() => setMobileNavOpen(false)} />
+            </div>
+          </aside>
+        </div>
+      )}
+
       {/* `min-w-0` is essential: flex children default to
           `min-width: auto` which means "fit content". When a child
           (e.g. the dashboard's MarketTickerTape with its duplicated
@@ -109,17 +181,34 @@ export default function Layout() {
           unless this column allows itself to shrink below its
           content. Same trick applied on `<main>`. */}
       <div className="flex flex-1 flex-col min-w-0">
-        <header className="flex h-14 items-center gap-4 border-b px-6">
+        <header className="flex h-14 items-center gap-2 border-b px-3 sm:gap-4 sm:px-6">
+          {/* Hamburger — only on screens without the persistent
+              sidebar. */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="lg:hidden shrink-0"
+            aria-label="Apri menu"
+            onClick={() => setMobileNavOpen(true)}
+          >
+            <Menu className="h-5 w-5" />
+          </Button>
           <NavbarSearch />
-          <span className="ml-auto text-sm text-muted-foreground">
+          <span className="ml-auto hidden text-sm text-muted-foreground sm:inline">
             {me.data ? me.data.username : ""}
           </span>
-          <Button variant="ghost" size="sm" onClick={onLogout} disabled={logout.isPending}>
-            <LogOut className="mr-2 h-4 w-4" />
-            Esci
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onLogout}
+            disabled={logout.isPending}
+            className="shrink-0"
+          >
+            <LogOut className="h-4 w-4 sm:mr-2" />
+            <span className="hidden sm:inline">Esci</span>
           </Button>
         </header>
-        <main className="flex-1 min-w-0 overflow-y-auto p-6">
+        <main className="flex-1 min-w-0 overflow-y-auto p-3 sm:p-6">
           <Outlet />
         </main>
       </div>
@@ -136,4 +225,3 @@ export default function Layout() {
     </div>
   );
 }
-

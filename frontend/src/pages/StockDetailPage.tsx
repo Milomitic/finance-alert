@@ -195,8 +195,17 @@ export default function StockDetailPage() {
           The profile is the page's lead content and dictates the row
           height; the alerts card adapts. Stacks vertically below `lg`. */}
       <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-3 lg:h-[340px]">
-        <CompanyOverviewCard ticker={ticker} stock={d.stock} />
-        <StockAlertsHistoryCard alerts={d.alerts_history} />
+        {/* CompanyOverview is prose (natural height on mobile — never
+            give it a fixed height or it clips). AlertsHistory scrolls
+            internally so it needs a concrete mobile height, else its
+            `flex-1 min-h-0` pane collapses to 0 without the row's
+            `lg:h-[340px]`. */}
+        <div className="lg:h-full lg:min-h-0">
+          <CompanyOverviewCard ticker={ticker} stock={d.stock} />
+        </div>
+        <div className="h-[340px] lg:h-full lg:min-h-0">
+          <StockAlertsHistoryCard alerts={d.alerts_history} />
+        </div>
       </div>
 
       {/* Four side-by-side cards: Fundamentals | Valuation+KPIs | News | Analyst.
@@ -210,10 +219,24 @@ export default function StockDetailPage() {
           across 2 columns after the yfinance expansion), News scrolls
           its items, Analyst scrolls its recent actions. */}
       <div className="grid grid-cols-1 lg:grid-cols-[1.5fr_1fr_1fr_1fr] gap-3 lg:h-[520px]">
-        <FundamentalsCard ticker={ticker} />
-        <MicroDataCard ticker={ticker} stock={d.stock} kpis={d.kpis} />
-        <NewsCard ticker={ticker} />
-        <AnalystTargetCard ticker={ticker} />
+        {/* Fundamentals: no internal scroll — its earnings table sets
+            the natural height (CLAUDE.md). Leave it auto on mobile.
+            The other three scroll internally so they need an explicit
+            mobile height to not collapse. NewsCard is internally
+            `relative h-full` + absolute-inset child, so a fixed-height
+            wrapper is exactly the containing block it needs. */}
+        <div className="lg:h-full lg:min-h-0">
+          <FundamentalsCard ticker={ticker} />
+        </div>
+        <div className="h-[520px] lg:h-full lg:min-h-0">
+          <MicroDataCard ticker={ticker} stock={d.stock} kpis={d.kpis} />
+        </div>
+        <div className="h-[520px] lg:h-full lg:min-h-0">
+          <NewsCard ticker={ticker} />
+        </div>
+        <div className="h-[480px] lg:h-full lg:min-h-0">
+          <AnalystTargetCard ticker={ticker} />
+        </div>
       </div>
 
       {/* The dedicated Alerts + Insiders row that used to live here was

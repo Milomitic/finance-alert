@@ -62,28 +62,63 @@ function actionMeta(action: string | null): {
   }
 }
 
+/* Shared column grid — header row and every data row use the SAME
+ * template string so the cells align by construction. Tracks:
+ *   name (flex, truncates) · action · % · value$ · date
+ * `minmax(0,1fr)` (not plain `1fr`) is load-bearing: it injects the
+ * implicit min-width:0 that lets the long fund name truncate instead
+ * of overflowing its track. */
+const HOLDER_GRID =
+  "grid grid-cols-[minmax(0,1fr)_4rem_3rem_4.75rem_3.5rem] items-baseline gap-2";
+
+function HolderHeader() {
+  return (
+    <li
+      className={cn(
+        HOLDER_GRID,
+        "pb-1 text-[10px] uppercase tracking-wider text-muted-foreground/70 font-semibold",
+      )}
+    >
+      <span className="truncate">Fondo</span>
+      <span className="truncate">Azione</span>
+      <span className="text-right">%</span>
+      <span className="text-right">Valore</span>
+      <span className="text-right">Data</span>
+    </li>
+  );
+}
+
 function HolderRow({ h }: { h: TickerHolder }) {
   const a = actionMeta(h.action);
-  const displayName = h.institutional_manager
-    ? `${h.institutional_manager} · ${h.institutional_name}`
-    : h.institutional_name;
+  // Show ONLY the fund/firm — the individual manager/analyst name is
+  // deliberately omitted (user spec: "lascia solo le società e i fondi
+  // di appartenenza").
+  const displayName = h.institutional_name;
 
   return (
-    <li className="flex items-baseline gap-2 py-1 border-t border-border/40 first:border-t-0 leading-tight">
+    <li
+      className={cn(
+        HOLDER_GRID,
+        "py-1 border-t border-border/40 leading-tight",
+      )}
+    >
       <Link
         to={`/institutionals/${h.institutional_slug}`}
-        className="text-[13.5px] font-semibold truncate hover:underline"
+        className="text-[13.5px] font-semibold truncate hover:underline min-w-0"
         title={displayName}
       >
         {displayName}
       </Link>
-      <span className={cn("text-[12px] truncate shrink-0", a.tone)} title={a.label}>
+      <span className={cn("text-[12px] truncate", a.tone)} title={a.label}>
         {a.label}
       </span>
-      <span className="text-[12px] text-muted-foreground tabular-nums shrink-0">
-        {fmtPct(h.portfolio_pct)} · {fmtBig(h.value_usd)}
+      <span className="text-[12px] text-muted-foreground tabular-nums text-right">
+        {fmtPct(h.portfolio_pct)}
       </span>
-      <span className="ml-auto text-[12px] text-muted-foreground tabular-nums shrink-0">
+      <span className="text-[12px] text-muted-foreground tabular-nums text-right">
+        {fmtBig(h.value_usd)}
+      </span>
+      <span className="text-[12px] text-muted-foreground tabular-nums text-right">
         {shortDate(h.period_end_date)}
       </span>
     </li>
@@ -137,6 +172,7 @@ export function InstitutionalHoldersCard({ ticker }: Props) {
           </div>
         ) : (
           <ul>
+            <HolderHeader />
             {visible.map((h) => (
               <HolderRow key={`${h.institutional_id}-${h.period_end_date}`} h={h} />
             ))}

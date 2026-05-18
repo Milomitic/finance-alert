@@ -124,10 +124,10 @@ export default function HomePage() {
           Sets the "trading floor" tone for the page — the rest of the
           UI feels static without it. */}
       <MarketTickerTape />
-      <div className="flex items-center justify-between gap-3 px-1">
-        <div className="flex items-baseline gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 px-1">
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 min-w-0">
           <h2 className="text-base font-semibold tracking-tight">Dashboard</h2>
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
             <Clock className="h-3 w-3" />
             {m.computed_at && (
               <span className={m.is_stale ? "text-amber-600 dark:text-amber-400" : ""}>
@@ -161,10 +161,10 @@ export default function HomePage() {
         <LiveVolumeMoversCard movers={m.movers} />
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 lg:h-[520px]">
-        <div className="h-full min-h-0"><RsiHistogramCard rsi={m.rsi_distribution} indices={m.by_index} /></div>
-        <div className="h-full min-h-0"><SectorsHeatmapCard sectors={m.sectors} /></div>
-        <div className="h-full min-h-0"><TopMoversCard movers={m.movers} /></div>
-        <div className="h-full min-h-0"><FiftyTwoWeekVolCard movers={m.movers} /></div>
+        <div className="h-[440px] lg:h-full min-h-0"><RsiHistogramCard rsi={m.rsi_distribution} indices={m.by_index} /></div>
+        <div className="h-[440px] lg:h-full min-h-0"><SectorsHeatmapCard sectors={m.sectors} /></div>
+        <div className="h-[440px] lg:h-full min-h-0"><TopMoversCard movers={m.movers} /></div>
+        <div className="h-[440px] lg:h-full min-h-0"><FiftyTwoWeekVolCard movers={m.movers} /></div>
       </div>
       {/* Alerts (left) + Top Picks (right) on the same row. The two are
           complementary: alerts is "what just happened that needs your
@@ -197,13 +197,17 @@ export default function HomePage() {
           readable. `[2fr_1fr_1fr]` keeps the sub-columns legible while
           still fitting the new third card on the same row. */}
       <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr_1fr] gap-3 lg:h-[420px]">
+        {/* No fixed mobile height: TopPicksCard flows its 3 tiers
+            (24 rows) at natural height and the page scrolls. A capped
+            height here would crush the rows (text overlap). lg+: fills
+            the row height as before. */}
         <div className="lg:h-full lg:min-h-0">
           <TopPicksCard />
         </div>
-        <div className="lg:h-full lg:min-h-0">
+        <div className="h-[420px] lg:h-full lg:min-h-0">
           <SuperinvestorPicksCard />
         </div>
-        <div className="lg:h-full lg:min-h-0">
+        <div className="h-[420px] lg:h-full lg:min-h-0">
           <AnalystActionsCard />
         </div>
       </div>

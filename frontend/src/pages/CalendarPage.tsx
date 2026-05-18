@@ -156,7 +156,7 @@ export default function CalendarPage() {
           <CalendarRange className="h-3 w-3" />
           <span>Pianificazione · Eventi di mercato</span>
         </div>
-        <h1 className="text-3xl font-semibold tracking-tight leading-tight">
+        <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight leading-tight">
           Calendario eventi
         </h1>
         <p className="text-sm text-muted-foreground max-w-2xl">

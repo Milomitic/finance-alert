@@ -46,7 +46,11 @@ function PickRow({ item }: { item: TopPickItem }) {
     // — without them, flexbox's default `min-width: auto` lets the
     // long name override its truncate and overflow into the next
     // column. CLAUDE.md: same pattern as the LiveAssetsPanel row guard.
-    <li className="flex-1 min-h-0 min-w-0 flex border-b border-border/40 last:border-b-0">
+    // Mobile: natural row height (the page scrolls). md+: `flex-1`
+    // distributes the column height evenly across the 8 rows. Without
+    // the `md:` gate, 24 stacked rows (3 tiers × 8) get crushed into
+    // the card's fixed height on a phone and the text overlaps.
+    <li className="md:flex-1 md:min-h-0 min-w-0 flex border-b border-border/40 last:border-b-0">
       <Link
         to={`/stocks/${encodeURIComponent(item.ticker)}`}
         className="flex-1 min-w-0 flex items-center gap-2 px-3 py-1.5 hover:bg-accent/30 transition-colors"
@@ -122,7 +126,7 @@ function PicksColumn({ col }: { col: { key: ColumnKey; label: string } }) {
           Nessun dato
         </div>
       ) : (
-        <ul className="flex-1 min-h-0 flex flex-col">
+        <ul className="md:flex-1 md:min-h-0 flex flex-col">
           {items.map((it) => (
             <PickRow key={it.stock_id} item={it} />
           ))}
@@ -147,7 +151,7 @@ function PicksColumn({ col }: { col: { key: ColumnKey; label: string } }) {
  */
 export function TopPicksCard() {
   return (
-    <Card className="h-full overflow-hidden flex flex-col">
+    <Card className="md:h-full overflow-hidden flex flex-col">
       <CardContent className="p-0 flex-1 min-h-0 flex flex-col">
         <div className="shrink-0 px-3 py-2 border-b bg-muted/30">
           <SectionTitle
@@ -160,7 +164,7 @@ export function TopPicksCard() {
             }
           />
         </div>
-        <div className="flex-1 min-h-0 grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-border/40">
+        <div className="md:flex-1 md:min-h-0 grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-border/40">
           {COLUMNS.map((col) => (
             <PicksColumn key={col.key} col={col} />
           ))}

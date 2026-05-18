@@ -42,7 +42,7 @@ export default function SettingsPage() {
           <SettingsIcon className="h-3 w-3" />
           <span>Amministrazione · diagnostica</span>
         </div>
-        <h1 className="text-3xl font-semibold tracking-tight leading-tight">
+        <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight leading-tight">
           Impostazioni
         </h1>
         <p className="text-sm text-muted-foreground max-w-2xl">

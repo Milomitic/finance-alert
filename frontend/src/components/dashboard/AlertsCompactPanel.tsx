@@ -40,7 +40,7 @@ export function AlertsCompactPanel({
     delta === 0 ? "= ieri" : `${delta > 0 ? "+" : ""}${delta} vs ieri`;
 
   return (
-    <Card className="h-full overflow-hidden flex flex-col">
+    <Card className="md:h-full overflow-hidden flex flex-col">
       <CardContent className="p-0 flex-1 min-h-0 flex flex-col">
         {/* Header — title + 24h badge + "Vedi tutti" link. */}
         <div className="shrink-0 flex items-center gap-3 border-b px-3 bg-muted/30 py-2">
@@ -71,7 +71,11 @@ export function AlertsCompactPanel({
               <div className="shrink-0 px-3 py-1.5 text-[11.5px] uppercase tracking-[0.16em] font-bold text-muted-foreground border-b bg-muted/40">
                 {col.label}
               </div>
-              <div className="flex-1 min-h-0 overflow-y-auto">
+              {/* Mobile: natural flow capped at 55vh so a long Feed
+                  doesn't run away — the page scrolls. md+: fixed-height
+                  pane with its own scroll (keeps the 3 columns aligned
+                  to the card height). */}
+              <div className="max-h-[55vh] overflow-y-auto md:max-h-none md:flex-1 md:min-h-0">
                 {col.key === "top" && <TopStocksTable data={topStocks} />}
                 {col.key === "feed" && <RecentAlertsFeed alerts={recentAlerts} />}
                 {col.key === "byindex" && <AlertsByIndexBars data={alertsByIndex} />}

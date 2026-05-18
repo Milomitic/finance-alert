@@ -136,7 +136,7 @@ export function LiveVolumeMoversCard({ movers }: Props) {
                 <li key={r.ticker}>
                   <Link
                     to={`/stocks/${encodeURIComponent(r.ticker)}`}
-                    className="grid grid-cols-[minmax(0,1fr)_auto_auto_auto_auto_auto] items-center gap-2 px-3 py-1.5 hover:bg-accent/30 transition-colors"
+                    className="grid grid-cols-[minmax(0,1fr)_auto_auto] sm:grid-cols-[minmax(0,1fr)_auto_auto_auto_auto_auto] items-center gap-2 px-3 py-1.5 hover:bg-accent/30 transition-colors"
                   >
                     {/* Col 1: identity + inline %change ("how is it moving") */}
                     <div className="flex items-center gap-2 min-w-0">
@@ -177,7 +177,7 @@ export function LiveVolumeMoversCard({ movers }: Props) {
                         column so the figure stays comfortably readable
                         at typical viewport widths. */}
                     <div
-                      className="shrink-0 text-sm font-semibold tabular-nums text-foreground/80 min-w-[68px] text-right"
+                      className="hidden sm:block shrink-0 text-sm font-semibold tabular-nums text-foreground/80 min-w-[68px] text-right"
                       title={
                         volToday != null
                           ? `${volToday.toLocaleString("it-IT")} share scambiate oggi`
@@ -194,7 +194,7 @@ export function LiveVolumeMoversCard({ movers }: Props) {
                         right. */}
                     <div
                       className={cn(
-                        "shrink-0 text-xs font-mono font-semibold tabular-nums rounded px-2 py-0.5 min-w-[52px] text-center",
+                        "hidden sm:block shrink-0 text-xs font-mono font-semibold tabular-nums rounded px-2 py-0.5 min-w-[52px] text-center",
                         volRatio != null && volRatio >= 3
                           ? "bg-orange-100 dark:bg-orange-950/40 text-orange-800 dark:text-orange-200"
                           : volRatio != null && volRatio >= 2

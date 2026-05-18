@@ -7,6 +7,7 @@ import { StockIdentity } from "@/components/dashboard/StockIdentity";
 import { Card, CardContent } from "@/components/ui/card";
 import { SectionTitle } from "@/components/ui/section-title";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useLiveQuotes } from "@/hooks/useLiveQuote";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -21,6 +22,11 @@ interface WindowedMovers {
   losers: Mover[];
   field: keyof Pick<Mover, "change_pct" | "change_pct_5d" | "change_pct_20d">;
 }
+
+// Batch live-quote endpoint caps at 50 tickers/request — keep the live
+// candidate pool under that.
+const MAX_LIVE_TICKERS = 50;
+const ROWS_PER_COL = 8;
 
 function getWindowed(movers: MoversBlock, w: Window): WindowedMovers {
   if (w === "1w") {
@@ -40,16 +46,19 @@ function getWindowed(movers: MoversBlock, w: Window): WindowedMovers {
   return { gainers: movers.gainers, losers: movers.losers, field: "change_pct" };
 }
 
-function MoverRow({ m, field, kind }: {
+function MoverRow({ m, field, live }: {
   m: Mover;
   field: WindowedMovers["field"];
-  kind: Side;
+  /** When true, colour by the value's own sign (a stock can flip
+   *  gainer↔loser intraday so the column it lands in no longer
+   *  dictates the colour). EOD windows keep the static sign. */
+  live: boolean;
 }) {
   const v = m[field] ?? null;
-  const color =
-    kind === "gainers"
-      ? "text-green-600 dark:text-green-400"
-      : "text-red-600 dark:text-red-400";
+  const positive = v != null ? v >= 0 : true;
+  const color = positive
+    ? "text-green-600 dark:text-green-400"
+    : "text-red-600 dark:text-red-400";
   return (
     <li className="border-b border-border/40 last:border-b-0">
       <Link
@@ -59,6 +68,7 @@ function MoverRow({ m, field, kind }: {
         <StockIdentity ticker={m.ticker} name={m.name} />
         <span className={cn("text-sm font-semibold tabular-nums shrink-0", color)}>
           {v != null ? `${v >= 0 ? "+" : ""}${v.toFixed(2)}%` : "—"}
+          {live ? <span className="ml-0.5 align-top text-[8px] text-muted-foreground">●</span> : null}
         </span>
       </Link>
     </li>
@@ -88,11 +98,83 @@ function ColumnHeader({ side }: { side: Side }) {
  * the user wanted both visible at once, so we now render the two
  * lists side-by-side. The window picker (1G/1S/1M) stays in the
  * header — same data, different period.
+ *
+ * Near-real-time 1G ranking
+ * ─────────────────────────
+ * The server-side movers block is EOD-derived (`change_pct =
+ * (last_close − prev_close)/prev_close` off daily bars) and only moves
+ * when a scan re-ingests OHLCV. For the **1G** window we re-rank it
+ * intraday: every 15s we batch-poll live quotes for the EOD top
+ * gainers∪losers (the candidate pool), substitute each row's
+ * `change_pct` with the live value (same %-points scale,
+ * `change_abs/prev_close*100`), then re-sort both columns from the
+ * combined pool — so a stock can flip gainer↔loser as prices move.
+ *
+ * Deliberate scope limit: the *candidate pool* stays EOD-bounded. A
+ * stock that explodes intraday but wasn't an EOD top mover won't
+ * surface — true whole-universe intraday ranking would mean live-
+ * quoting ~1100 tickers every 15s (infeasible vs yfinance limits).
+ * 1S/1M stay pure EOD (live quotes only carry today's move).
  */
 export function TopMoversCard({ movers }: Props) {
   const [window, setWindow] = useState<Window>("1d");
-  const data = useMemo(() => getWindowed(movers, window), [movers, window]);
-  const ROWS_PER_COL = 8;
+  const isLive = window === "1d";
+
+  // Live candidate pool: the union of the EOD 1G gainers+losers. These
+  // are the only tickers whose intraday rank we can refresh without
+  // live-quoting the whole catalog.
+  const candidateTickers = useMemo(() => {
+    if (!isLive) return [];
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const m of [...movers.gainers, ...movers.losers]) {
+      if (!seen.has(m.ticker)) {
+        seen.add(m.ticker);
+        out.push(m.ticker);
+      }
+    }
+    return out.slice(0, MAX_LIVE_TICKERS);
+  }, [isLive, movers.gainers, movers.losers]);
+
+  // 15s batch poll (server-cached 10s). Disabled on 1S/1M so we don't
+  // burn quota for windows that can't use live prices anyway.
+  const liveQ = useLiveQuotes(candidateTickers, isLive);
+
+  const liveMap = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const q of liveQ.data?.quotes ?? []) {
+      if (q.change_pct != null) map.set(q.ticker, q.change_pct);
+    }
+    return map;
+  }, [liveQ.data]);
+
+  const data = useMemo<WindowedMovers>(() => {
+    if (!isLive) return getWindowed(movers, window);
+    // Combined pool, effective change = live ?? EOD fallback.
+    const seen = new Set<string>();
+    const pool: Mover[] = [];
+    for (const m of [...movers.gainers, ...movers.losers]) {
+      if (seen.has(m.ticker)) continue;
+      seen.add(m.ticker);
+      const liveVal = liveMap.get(m.ticker);
+      pool.push(liveVal != null ? { ...m, change_pct: liveVal } : m);
+    }
+    const withChange = pool.filter((m) => m.change_pct != null);
+    const gainers = [...withChange].sort(
+      (a, b) => (b.change_pct as number) - (a.change_pct as number),
+    );
+    // Losers from the same pool, opposite end — exclude tickers already
+    // shown as gainers so a small pool can't double-list the same row.
+    const topGainers = new Set(
+      gainers.slice(0, ROWS_PER_COL).map((m) => m.ticker),
+    );
+    const losers = [...withChange]
+      .filter((m) => !topGainers.has(m.ticker))
+      .sort((a, b) => (a.change_pct as number) - (b.change_pct as number));
+    return { gainers, losers, field: "change_pct" };
+  }, [isLive, movers, window, liveMap]);
+
+  const liveActive = isLive && liveMap.size > 0;
 
   return (
     <Card className="h-full overflow-hidden">
@@ -102,13 +184,27 @@ export function TopMoversCard({ movers }: Props) {
             icon={Flame}
             label="Top movers"
             right={
-              <Tabs value={window} onValueChange={(v) => setWindow(v as Window)}>
-                <TabsList className="h-6 p-0.5">
-                  <TabsTrigger value="1d" className="h-5 text-[10px] px-1.5" title="Variazione giornaliera">1G</TabsTrigger>
-                  <TabsTrigger value="1w" className="h-5 text-[10px] px-1.5" title="Variazione settimanale (~5 giorni)">1S</TabsTrigger>
-                  <TabsTrigger value="1m" className="h-5 text-[10px] px-1.5" title="Variazione mensile (~20 giorni)">1M</TabsTrigger>
-                </TabsList>
-              </Tabs>
+              <div className="flex items-center gap-2">
+                {liveActive ? (
+                  <span
+                    className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-green-600 dark:text-green-400"
+                    title="Ranking 1G aggiornato dai prezzi live ogni 15s"
+                  >
+                    <span className="relative flex h-1.5 w-1.5">
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-500 opacity-75" />
+                      <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-green-500" />
+                    </span>
+                    Live
+                  </span>
+                ) : null}
+                <Tabs value={window} onValueChange={(v) => setWindow(v as Window)}>
+                  <TabsList className="h-6 p-0.5">
+                    <TabsTrigger value="1d" className="h-5 text-[10px] px-1.5" title="Variazione giornaliera — ranking live ogni 15s">1G</TabsTrigger>
+                    <TabsTrigger value="1w" className="h-5 text-[10px] px-1.5" title="Variazione settimanale (~5 giorni)">1S</TabsTrigger>
+                    <TabsTrigger value="1m" className="h-5 text-[10px] px-1.5" title="Variazione mensile (~20 giorni)">1M</TabsTrigger>
+                  </TabsList>
+                </Tabs>
+              </div>
             }
           />
         </div>
@@ -129,7 +225,12 @@ export function TopMoversCard({ movers }: Props) {
                 ) : (
                   <ul className="flex-1 overflow-y-auto">
                     {list.slice(0, ROWS_PER_COL).map((m) => (
-                      <MoverRow key={m.ticker} m={m} field={data.field} kind={side} />
+                      <MoverRow
+                        key={m.ticker}
+                        m={m}
+                        field={data.field}
+                        live={liveActive && liveMap.has(m.ticker)}
+                      />
                     ))}
                   </ul>
                 )}
