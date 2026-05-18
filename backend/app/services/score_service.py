@@ -707,6 +707,19 @@ def _earnings_stability_5y(fundamentals) -> float | None:
     if len(nis) < 3:
         return None
     import statistics
+    # Robustness vs M&A one-offs (the Omnicom/Interpublic FY25 case):
+    # a single year of GAAP net income wrecked by merger/restructuring
+    # charges (e.g. +1.48B → −55M) blows the raw CV up and zeroes this
+    # lane even for an operationally healthy company. With ≥4 reports
+    # we drop the SINGLE point furthest from the median (a standard
+    # trimmed estimator) and compute CV on the rest — ≥3 points always
+    # remain. A *persistent* GAAP shortfall (multiple bad years) still
+    # drags the lane, which is the correct earnings-quality penalty;
+    # only the lone transient shock is neutralised.
+    if len(nis) >= 4:
+        med = statistics.median(nis)
+        worst = max(range(len(nis)), key=lambda i: abs(nis[i] - med))
+        nis = [v for i, v in enumerate(nis) if i != worst]
     mean = sum(nis) / len(nis)
     if mean <= 0:
         return None
@@ -719,13 +732,22 @@ def _earnings_stability_5y(fundamentals) -> float | None:
 
 
 def _margin_trend_3y(fundamentals) -> float | None:
-    """Linear regression slope of profit_margin over the last 3 annual
-    reports. Returns slope in fraction-per-year units; +0.02 is a
-    +2pp/year improvement. Returns None below 3 data points.
+    """Robust slope of profit_margin over the last (up to) 5 annual
+    reports, in fraction-per-year units (+0.02 ≈ +2pp/year).
+
+    Uses the Theil–Sen estimator (median of all pairwise slopes)
+    instead of OLS. Rationale: a single M&A/impairment year (the
+    Omnicom FY25 GAAP loss) drags an OLS line through 3 points to a
+    sharply negative slope and unfairly punishes the quality pillar.
+    Theil–Sen ignores up to ~29% of outlying points by construction,
+    so one transient shock can't flip the trend — while a *persistent*
+    margin decline (the majority of pairwise slopes negative) still
+    registers correctly. Widened from 3→5 years so the median has
+    enough pairs to be meaningful. Returns None below 3 valid points.
     """
     annual = getattr(fundamentals, "annual", None) or []
     margins: list[float] = []
-    for a in annual[-3:]:
+    for a in annual[-5:]:
         rev = getattr(a, "revenue", None)
         ni = getattr(a, "net_income", None)
         if not _is_finite(rev) or not _is_finite(ni) or rev is None or float(rev) <= 0:
@@ -733,15 +755,15 @@ def _margin_trend_3y(fundamentals) -> float | None:
         margins.append(float(ni) / float(rev))
     if len(margins) < 3:
         return None
-    n = len(margins)
-    xs = list(range(n))
-    x_mean = sum(xs) / n
-    y_mean = sum(margins) / n
-    num = sum((xs[i] - x_mean) * (margins[i] - y_mean) for i in range(n))
-    den = sum((xs[i] - x_mean) ** 2 for i in range(n))
-    if den == 0:
+    import statistics
+    slopes = [
+        (margins[j] - margins[i]) / (j - i)
+        for i in range(len(margins))
+        for j in range(i + 1, len(margins))
+    ]
+    if not slopes:
         return 0.0
-    return num / den
+    return statistics.median(slopes)
 
 
 def _dividend_coverage(micro) -> float | None:

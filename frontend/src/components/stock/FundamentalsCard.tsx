@@ -258,7 +258,18 @@ function AnnualTabBody({
               <th className="px-1.5 py-1 text-right">Rev</th>
               <th className="px-1.5 py-1 text-right">YoY</th>
               <th className="px-1.5 py-1 text-right">Net Inc</th>
-              <th className="px-1.5 py-1 text-right">EPS</th>
+              <th
+                className="px-1.5 py-1 text-right"
+                title="EPS GAAP (conto economico) — include poste straordinarie (es. costi di fusione, impairment). Può divergere fortemente dalla somma degli EPS adjusted trimestrali."
+              >
+                EPS<span className="ml-0.5 text-[9px] align-top text-muted-foreground">GAAP</span>
+              </th>
+              <th
+                className="px-1.5 py-1 text-right"
+                title="EPS adjusted — somma degli EPS reported trimestrali (esclude le poste straordinarie). È la metrica confrontata col consensus analisti (Est EPS) e usata per la Surprise."
+              >
+                EPS adj.
+              </th>
               <th className="px-1.5 py-1 text-right">Est EPS</th>
               <th className="px-1.5 py-1 text-right">Surp</th>
             </tr>
@@ -273,7 +284,13 @@ function AnnualTabBody({
               // in the ASC array, since DESC walks newest → oldest).
               const ascIdx = annualAsc.findIndex((x) => x.fiscal_year_end === a.fiscal_year_end);
               const prevYear = ascIdx > 0 ? annualAsc[ascIdx - 1] : null;
-              const epsTone = beatTone(a.eps, agg?.eps_est);
+              // Adjusted annual EPS = Σ quarterly reported EPS. This is
+              // the consensus-comparable figure (Est EPS / Surp are
+              // adjusted-based), so colour the BEAT/MISS on it — not on
+              // GAAP, where comparing to an adjusted estimate is
+              // apples-to-oranges (the OMC FY25 −0.27 vs 8.25 case).
+              const epsAdj = agg?.eps_real ?? null;
+              const epsAdjTone = beatTone(epsAdj, agg?.eps_est);
               return (
                 <tr key={a.fiscal_year_end} className="border-t border-border/40 hover:bg-muted/30">
                   <td className="px-1.5 py-1 font-mono">{shortYear(a.fiscal_year_end)}</td>
@@ -282,8 +299,14 @@ function AnnualTabBody({
                     {prevYear ? yoy(a.revenue, prevYear.revenue) : "—"}
                   </td>
                   <td className="px-1.5 py-1 text-right">{fmtBig(a.net_income)}</td>
-                  <td className={cn("px-1.5 py-1 text-right font-semibold", epsTone)}>
+                  {/* GAAP EPS — neutral/muted: it's the audited legal
+                      figure but NOT comparable to the adjusted consensus,
+                      so no beat/miss colour claim here. */}
+                  <td className="px-1.5 py-1 text-right text-muted-foreground">
                     {a.eps != null ? `$${a.eps.toFixed(2)}` : "—"}
+                  </td>
+                  <td className={cn("px-1.5 py-1 text-right font-semibold", epsAdjTone)}>
+                    {epsAdj != null ? `$${epsAdj.toFixed(2)}` : "—"}
                   </td>
                   <td className="px-1.5 py-1 text-right text-muted-foreground">
                     {agg?.eps_est ? `$${agg.eps_est.toFixed(2)}` : "—"}
@@ -359,8 +382,14 @@ function QuarterlyTabBody({
   // NOT by year-month. Earnings release date ≠ quarter end date — subtracting
   // ~45 days from the release date lands in the reporting quarter.
   const revByQuarter = new Map<string, number | null>();
+  // GAAP quarterly EPS (from the income statement) keyed by fiscal
+  // quarter, so each earnings row can show GAAP alongside the adjusted
+  // `eps_reported`. This is what makes the OMC story legible at the
+  // quarter level: Q4'25 GAAP −4.02 next to adj. +2.59.
+  const epsGaapByQuarter = new Map<string, number | null>();
   for (const q of quarterly) {
     revByQuarter.set(fiscalEndToQuarter(q.fiscal_quarter_end), q.revenue);
+    epsGaapByQuarter.set(fiscalEndToQuarter(q.fiscal_quarter_end), q.eps);
   }
   // NOTE: the "storico" tail (quarters from `quarterly` not covered by
   // `earnings`) was removed per user request. Those rows were redundant —
@@ -385,7 +414,18 @@ function QuarterlyTabBody({
               <th className="px-1.5 py-1 text-left">Data</th>
               <th className="px-1.5 py-1 text-right">Rev</th>
               <th className="px-1.5 py-1 text-right">Est Rev</th>
-              <th className="px-1.5 py-1 text-right">EPS</th>
+              <th
+                className="px-1.5 py-1 text-right"
+                title="EPS GAAP del trimestre (conto economico) — include poste straordinarie (es. costi di fusione, impairment)."
+              >
+                EPS<span className="ml-0.5 text-[9px] align-top text-muted-foreground">GAAP</span>
+              </th>
+              <th
+                className="px-1.5 py-1 text-right"
+                title="EPS adjusted reported — la cifra confrontata col consensus (Est EPS) e usata per la Surprise."
+              >
+                EPS adj.
+              </th>
               <th className="px-1.5 py-1 text-right">Est EPS</th>
               <th className="px-1.5 py-1 text-right">Surp</th>
             </tr>
@@ -428,6 +468,8 @@ function QuarterlyTabBody({
                 <td className="px-1.5 py-1 text-right text-blue-700 dark:text-blue-300 font-semibold">
                   {nextRevenueEstimate != null ? fmtBig(nextRevenueEstimate) : "—"}
                 </td>
+                {/* GAAP EPS + adj. EPS — both empty (no actuals yet). */}
+                <td className="px-1.5 py-1 text-right text-muted-foreground italic">—</td>
                 <td className="px-1.5 py-1 text-right text-muted-foreground italic">—</td>
                 <td className="px-1.5 py-1 text-right text-blue-700 dark:text-blue-300 font-semibold">
                   {nextEpsEstimate != null ? `$${nextEpsEstimate.toFixed(2)}` : "—"}
@@ -453,6 +495,16 @@ function QuarterlyTabBody({
                   </td>
                   <td className="px-1.5 py-1 text-right text-muted-foreground">
                     {e.revenue_estimate != null ? fmtBig(e.revenue_estimate) : "—"}
+                  </td>
+                  {/* GAAP EPS for the quarter (from the income
+                      statement) — muted, no beat/miss claim (not
+                      consensus-comparable). "—" when yfinance has no
+                      quarterly statement row for this fiscal quarter. */}
+                  <td className="px-1.5 py-1 text-right text-muted-foreground">
+                    {(() => {
+                      const g = epsGaapByQuarter.get(fq);
+                      return g != null ? `$${g.toFixed(2)}` : "—";
+                    })()}
                   </td>
                   <td className={cn("px-1.5 py-1 text-right font-semibold", epsTone)}>
                     {e.eps_reported != null ? `$${e.eps_reported.toFixed(2)}` : "—"}
