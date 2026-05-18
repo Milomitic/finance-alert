@@ -4,17 +4,18 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
-from app.models import ScanRun, User
+from app.models import ScanRun, Stock, User
 from app.schemas.alert import AlertOut, ScanStatusOut
 from app.schemas.dashboard import (
     AlertsByDayPointOut,
     AlertsByIndexPointOut,
+    AnalystActionOut,
     DashboardSummaryOut,
     KpiSummaryOut,
     SystemStatusOut,
     TopStockOut,
 )
-from app.services import alert_service, stats_service
+from app.services import alert_service, analyst_actions_feed, stats_service
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
@@ -42,6 +43,42 @@ def _latest_scan(db: Session) -> ScanStatusOut | None:
         current_target=latest.current_target,
         error_message=latest.error_message,
     )
+
+
+@router.get("/analyst-actions", response_model=list[AnalystActionOut])
+def get_analyst_actions(
+    limit: int = 40,
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+) -> list[AnalystActionOut]:
+    """Recent analyst upgrades/downgrades/initiations across the pool,
+    newest first. Aggregated from the in-memory L1 fundamentals cache
+    (see `analyst_actions_feed`), then enriched with company names via a
+    single batched query against the Stock table."""
+    items = analyst_actions_feed.recent_actions(limit=max(1, min(limit, 100)))
+    if not items:
+        return []
+    # Batch-resolve ticker → name in one query instead of N.
+    tickers = {it.ticker for it in items}
+    name_map = dict(
+        db.execute(
+            select(Stock.ticker, Stock.name).where(Stock.ticker.in_(tickers))
+        ).all()
+    )
+    return [
+        AnalystActionOut(
+            ticker=it.ticker,
+            name=name_map.get(it.ticker) or it.ticker,
+            date=it.date,
+            firm=it.firm,
+            to_grade=it.to_grade,
+            from_grade=it.from_grade,
+            action=it.action,
+            current_price_target=it.current_price_target,
+            from_news=it.from_news,
+        )
+        for it in items
+    ]
 
 
 @router.get("/summary", response_model=DashboardSummaryOut)

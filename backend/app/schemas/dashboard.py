@@ -64,3 +64,18 @@ class DashboardSummaryOut(BaseModel):
     alerts_by_index_30d: list[AlertsByIndexPointOut]
     recent_alerts: list[AlertOut]
     system_status: SystemStatusOut
+
+
+class AnalystActionOut(BaseModel):
+    """One recent analyst rating action surfaced on the dashboard
+    "Ultime valutazioni analisti" card. Mirrors
+    `analyst_actions_feed.AnalystActionFeedItem`."""
+    ticker: str
+    name: str | None = None
+    date: str                       # ISO YYYY-MM-DD
+    firm: str
+    to_grade: str
+    from_grade: str
+    action: str                     # up | down | init | main | reit | ...
+    current_price_target: float | None = None
+    from_news: bool = False

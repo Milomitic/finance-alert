@@ -7,6 +7,7 @@ import { HeroStrip } from "@/components/dashboard/HeroStrip";
 import { LiveVolumeMoversCard } from "@/components/dashboard/LiveVolumeMoversCard";
 import { MarketTickerTape } from "@/components/dashboard/MarketTickerTape";
 import { DataSourcesCard } from "@/components/dashboard/DataSourcesCard";
+import { AnalystActionsCard } from "@/components/dashboard/AnalystActionsCard";
 import { ScanHeaderButton } from "@/components/dashboard/ScanHeaderButton";
 import { TopMoversCard } from "@/components/dashboard/TopMoversCard";
 import { TopPicksCard } from "@/components/dashboard/TopPicksCard";
@@ -184,6 +185,28 @@ export default function HomePage() {
           AlertsCompactPanel has 3 internal sub-columns that overflow
           when squeezed to 1/3 of the viewport, so giving it the full
           row keeps it readable. */}
+      {/* Discovery row (moved ABOVE Alerts per user request): three
+          complementary "what looks good" surfaces side-by-side —
+          score-based picks, superinvestor consensus, and the latest
+          analyst rating actions on the pool. 3 columns at lg+, stacked
+          below. Placed before Alerts so the page reads "discover →
+          react" top-to-bottom. */}
+      {/* Asymmetric split: TopPicks renders 3 internal sub-columns
+          (Conservative/Moderate/Aggressive) so it needs ~2x the width
+          of the single-column Superinvestor + Analyst lists to stay
+          readable. `[2fr_1fr_1fr]` keeps the sub-columns legible while
+          still fitting the new third card on the same row. */}
+      <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr_1fr] gap-3 lg:h-[420px]">
+        <div className="lg:h-full lg:min-h-0">
+          <TopPicksCard />
+        </div>
+        <div className="lg:h-full lg:min-h-0">
+          <SuperinvestorPicksCard />
+        </div>
+        <div className="lg:h-full lg:min-h-0">
+          <AnalystActionsCard />
+        </div>
+      </div>
       {summaryData && (
         <div className="lg:h-[420px]">
           <AlertsCompactPanel
@@ -195,14 +218,6 @@ export default function HomePage() {
           />
         </div>
       )}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 lg:h-[420px]">
-        <div className="lg:h-full lg:min-h-0">
-          <TopPicksCard />
-        </div>
-        <div className="lg:h-full lg:min-h-0">
-          <SuperinvestorPicksCard />
-        </div>
-      </div>
       <DataSourcesCard />
       {summaryData && <SystemStatusFooter status={summaryData.system_status} />}
     </div>
