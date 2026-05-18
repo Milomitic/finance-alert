@@ -129,6 +129,22 @@ def _upsert_one_stock(db: Session, stock: Stock, frame: pd.DataFrame) -> tuple[i
     # Look up yfinance's native currency once per stock. Fails to None on
     # any error -> caller passes through (no scaling, fail-safe).
     native_currency = _get_yfinance_native_currency(stock.ticker)
+    # The latest date in the frame. yfinance routinely returns the most
+    # recent bar with O/H/L populated but Close=NaN — the session hasn't
+    # "settled" yet at the data provider (very common for Asian markets
+    # like TSE `.T` when we fetch in European evening hours = next-day
+    # JST). That specific shape is EXPECTED, not data corruption: we
+    # still skip the row (a NaN close would wreck the chart) but log it
+    # at DEBUG so it doesn't flood the WARNING-level platform-health
+    # stream. A corrupt bar anywhere ELSE in the history, or one with
+    # multiple bad fields, stays a WARNING because it's actionable.
+    try:
+        _latest_date = max(
+            (ts.date() if isinstance(ts, pd.Timestamp) else ts)
+            for ts in frame.index
+        )
+    except (ValueError, TypeError):
+        _latest_date = None
     for ts, row in frame.iterrows():
         d = ts.date() if isinstance(ts, pd.Timestamp) else ts
         # Scale pence->pounds for LSE before INSERT. Pass-through for everything else.
@@ -136,14 +152,27 @@ def _upsert_one_stock(db: Session, stock: Stock, frame: pd.DataFrame) -> tuple[i
         high_v = _normalize_minor_unit_value(native_currency, float(row["High"]))
         low_v = _normalize_minor_unit_value(native_currency, float(row["Low"]))
         close_v = _normalize_minor_unit_value(native_currency, float(row["Close"]))
-        if (
-            _is_bad_price(open_v) or _is_bad_price(high_v)
-            or _is_bad_price(low_v) or _is_bad_price(close_v)
-        ):
-            logger.warning(
+        bad_open = _is_bad_price(open_v)
+        bad_high = _is_bad_price(high_v)
+        bad_low = _is_bad_price(low_v)
+        bad_close = _is_bad_price(close_v)
+        if bad_open or bad_high or bad_low or bad_close:
+            # Expected, benign shape: the LATEST bar, where ONLY the
+            # close is bad (O/H/L are valid). This is yfinance's
+            # unsettled-last-bar artifact — skip quietly at DEBUG.
+            is_unsettled_last_bar = (
+                d == _latest_date
+                and bad_close
+                and not (bad_open or bad_high or bad_low)
+            )
+            msg = (
                 f"[ohlcv] skip corrupt bar {stock.ticker} {d}: "
                 f"O={open_v} H={high_v} L={low_v} C={close_v}"
             )
+            if is_unsettled_last_bar:
+                logger.debug(f"{msg} (last bar, close not settled)")
+            else:
+                logger.warning(msg)
             continue
         # SQLite upsert via INSERT ... ON CONFLICT
         stmt = text(
