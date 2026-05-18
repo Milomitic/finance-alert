@@ -514,6 +514,100 @@ def _merge_finnhub_actuals_into_earnings(ticker: str, f: "Fundamentals") -> None
     )
 
 
+def _merge_finnhub_revenue(ticker: str, f: "Fundamentals") -> None:
+    """Backfill revenue estimate/actual on the earnings history + the
+    next event from Finnhub.
+
+    Why this exists: yfinance's `Ticker.earnings_dates` carries ONLY
+    EPS columns (EPS Estimate / Reported EPS / Surprise%) — it has no
+    revenue at all — so without this every "Revenue stim." / "Revenue
+    ultimo" cell in the UI is blank. Finnhub's earnings calendar DOES
+    expose `revenueEstimate` / `revenueActual`.
+
+    Cost: ONE per-symbol Finnhub call, behind the 7-day fundamentals
+    TTL (only stale tickers refetch). During a full catalog backfill
+    the 60/min free-tier may 429 on some tickers — `fetch_calendar`
+    returns [] on 429, so those just stay revenue-less until the next
+    refresh cycle fills them in. Graceful, progressive, never raises.
+
+    Date matching is tolerant (±2 days): yfinance and Finnhub
+    occasionally disagree by a day on the same earnings event
+    (timezone / BMO-AMC classification).
+    """
+    from app.services import finnhub_earnings_service
+    if not finnhub_earnings_service.is_enabled():
+        return
+
+    from datetime import date as _date, timedelta as _td
+
+    needs_history = any(
+        ep.revenue_estimate is None or ep.revenue_reported is None
+        for ep in (f.earnings or [])
+    )
+    needs_next = (
+        f.next_earnings_date is not None and f.next_revenue_estimate is None
+    )
+    if not (needs_history or needs_next):
+        return  # nothing to fill
+
+    today = _date.today()
+    oldest = today - _td(days=920)  # ~2.5y default window
+    parsed_dates: list[_date] = []
+    for ep in (f.earnings or []):
+        try:
+            parsed_dates.append(_date.fromisoformat(ep.date[:10]))
+        except (TypeError, ValueError):
+            continue
+    if parsed_dates:
+        oldest = min(parsed_dates) - _td(days=2)
+    to_date = today + _td(days=120)
+
+    recs = finnhub_earnings_service.fetch_calendar(
+        from_date=oldest, to_date=to_date, symbol=ticker,
+    )
+    if not recs:
+        return
+
+    def _closest(date_str: str | None):
+        if not date_str:
+            return None
+        try:
+            d = _date.fromisoformat(date_str[:10])
+        except (TypeError, ValueError):
+            return None
+        best = None
+        best_gap = 3  # accept at most ±2 days
+        for r in recs:
+            gap = abs((r.date - d).days)
+            if gap < best_gap:
+                best, best_gap = r, gap
+        return best
+
+    filled = 0
+    for ep in (f.earnings or []):
+        rec = _closest(ep.date)
+        if rec is None:
+            continue
+        if ep.revenue_estimate is None and rec.revenue_estimate is not None:
+            ep.revenue_estimate = rec.revenue_estimate
+            filled += 1
+        if ep.revenue_reported is None and rec.revenue_actual is not None:
+            ep.revenue_reported = rec.revenue_actual
+            filled += 1
+
+    if needs_next:
+        rec = _closest(f.next_earnings_date)
+        if rec is not None and rec.revenue_estimate is not None:
+            f.next_revenue_estimate = rec.revenue_estimate
+            filled += 1
+
+    if filled:
+        logger.info(
+            f"[fund] {ticker}: backfilled {filled} revenue field(s) "
+            f"from Finnhub ({len(recs)} cal rows)"
+        )
+
+
 def patch_earning_from_finnhub(ticker: str, rec) -> bool:
     """Inject a pre-fetched Finnhub earnings record into the cached
     Fundamentals (L1+L2) for a single ticker without a fresh yfinance
@@ -1177,6 +1271,15 @@ def _fetch_fresh(ticker: str) -> Fundamentals:
             _merge_finnhub_actuals_into_earnings(ticker, f)
         except Exception as e:
             logger.debug(f"[fund] finnhub merge {ticker}: {e}")
+        # Revenue backfill — yfinance never provides revenue in
+        # earnings_dates, so without this the revenue columns are
+        # always blank. One per-symbol Finnhub call, behind the 7d
+        # fundamentals TTL. Failures silent (Finnhub down → no revenue
+        # this cycle, filled next refresh).
+        try:
+            _merge_finnhub_revenue(ticker, f)
+        except Exception as e:
+            logger.debug(f"[fund] finnhub revenue merge {ticker}: {e}")
         try:
             # Single info() call — both micro fundamentals and the company
             # profile come from the same dict, so pulling them together
