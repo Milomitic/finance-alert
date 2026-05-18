@@ -794,28 +794,69 @@ def _growth(latest: float | None, prior: float | None) -> float | None:
     return (latest - prior) / abs(prior)
 
 
+def _grossly_diverges(provided: float, derived: float) -> bool:
+    """True when a source-provided growth value is so far from the value
+    we derive from our own reported-EPS/revenue series that showing it
+    next to that series would break user trust.
+
+    The canonical case: yfinance's `earningsGrowth` is computed off GAAP
+    net income, which whipsaws when the prior-year base quarter was
+    depressed by one-time items (merger amortization, restructuring,
+    tax). GEN (post-Avast Gen Digital) shows +265% there while its
+    smooth adjusted-EPS series (0.59→0.67) implies ~+14%. The two can't
+    both sit in the same card.
+
+    Heuristic (conservative — only fires on egregious mismatch):
+      - opposite sign (one says growth, the other contraction), OR
+      - magnitude off by > 3x with an absolute cushion so values near
+        zero don't flap (0.20 vs 0.15 = normal noise, kept; 2.65 vs
+        0.14 = ~19x = the GAAP-base artifact, overridden).
+    """
+    if (provided > 0) != (derived > 0) and abs(provided - derived) > 0.05:
+        return True
+    return abs(provided) > 3.0 * abs(derived) + 0.05
+
+
 def _fill_growth_fallbacks(f: "Fundamentals") -> None:
-    """When yfinance's `info` didn't supply a growth metric, derive it
-    from the historical series we already have.
+    """Make the three growth metrics consistent with the EPS/revenue
+    history shown in the same fundamentals card.
 
-    yfinance frequently leaves `earningsGrowth` / `revenueGrowth` /
-    `earningsQuarterlyGrowth` null for non-US or thinly-covered tickers
-    even though `earnings_dates` / quarterly statements give us the raw
-    numbers. This fills the three UI metrics:
+    The metrics (`earnings_growth` = EPS YoY, `earnings_quarterly_growth`
+    = EPS QoQ, `revenue_growth` = Rev YoY) come from yfinance's `info`.
+    Two failure modes this corrects:
 
-    - `earnings_growth`           — EPS YoY: latest reported quarter EPS
-      vs the EPS 4 quarters back (same fiscal quarter, prior year).
-    - `earnings_quarterly_growth` — EPS QoQ: latest reported quarter EPS
-      vs the immediately preceding reported quarter.
-    - `revenue_growth`            — Revenue YoY: latest quarter revenue
-      vs 4 quarters back. Prefers `f.quarterly` (clean reported
-      revenue); falls back to `f.earnings.revenue_reported` (the
-      Finnhub-backfilled values).
+    1. NULL — yfinance leaves them empty for non-US / thin-coverage
+       tickers (e.g. UCG.MI) even though `earnings_dates` / quarterly
+       statements give us the raw numbers. We derive + fill.
 
-    Only fills None gaps — a value yfinance provided is authoritative
-    and left untouched. No-op when there isn't enough history.
+    2. MISLEADING — yfinance's `earningsGrowth` is GAAP-net-income
+       based and explodes off a depressed prior-year base (GEN: +265%
+       vs a +14% adjusted-EPS trend). When we can derive the growth
+       from our own reported series AND yfinance's number grossly
+       diverges from it, we prefer the derived value so the metric
+       agrees with the EPS chart the user is looking at.
+
+    Derivation:
+    - EPS YoY:  latest reported quarter EPS vs 4 quarters back.
+    - EPS QoQ:  latest reported quarter EPS vs the previous quarter.
+    - Rev YoY:  latest quarter revenue vs 4 back. Prefers the clean
+      `f.quarterly` statement; falls back to
+      `f.earnings.revenue_reported` (Finnhub-backfilled).
+
+    A source value within normal noise of the derived one is kept
+    (yfinance is authoritative when sane). No-op on short history.
     """
     m = f.micro
+
+    def _reconcile(provided: float | None, derived: float | None) -> float | None:
+        """None-fill OR gross-divergence-correct, else keep provided."""
+        if derived is None:
+            return provided                 # can't derive → trust source
+        if provided is None:
+            return derived                  # source null → fill
+        if _grossly_diverges(provided, derived):
+            return derived                  # source absurd vs our series
+        return provided                     # source sane → authoritative
 
     # EPS series: reported-only EarningsPoints, oldest→newest.
     eps_hist = [
@@ -824,29 +865,41 @@ def _fill_growth_fallbacks(f: "Fundamentals") -> None:
         if ep.eps_reported is not None
     ]
 
-    if m.earnings_quarterly_growth is None and len(eps_hist) >= 2:
-        m.earnings_quarterly_growth = _growth(eps_hist[-1], eps_hist[-2])
+    qoq = _growth(eps_hist[-1], eps_hist[-2]) if len(eps_hist) >= 2 else None
+    yoy = _growth(eps_hist[-1], eps_hist[-5]) if len(eps_hist) >= 5 else None
 
-    if m.earnings_growth is None and len(eps_hist) >= 5:
-        # 5 points: latest + the one 4 quarters back = same quarter LY.
-        m.earnings_growth = _growth(eps_hist[-1], eps_hist[-5])
+    before_q, before_y = m.earnings_quarterly_growth, m.earnings_growth
+    m.earnings_quarterly_growth = _reconcile(m.earnings_quarterly_growth, qoq)
+    m.earnings_growth = _reconcile(m.earnings_growth, yoy)
 
-    if m.revenue_growth is None:
-        # Prefer the clean quarterly statement revenue.
+    # Revenue YoY — prefer the clean quarterly statement revenue.
+    rev_hist = [
+        qp.revenue for qp in (f.quarterly or []) if qp.revenue is not None
+    ]
+    if len(rev_hist) < 5:
         rev_hist = [
-            qp.revenue
-            for qp in (f.quarterly or [])
-            if qp.revenue is not None
+            ep.revenue_reported
+            for ep in (f.earnings or [])
+            if ep.revenue_reported is not None
         ]
-        if len(rev_hist) < 5:
-            # Fall back to earnings.revenue_reported (Finnhub-backfilled).
-            rev_hist = [
-                ep.revenue_reported
-                for ep in (f.earnings or [])
-                if ep.revenue_reported is not None
-            ]
-        if len(rev_hist) >= 5:
-            m.revenue_growth = _growth(rev_hist[-1], rev_hist[-5])
+    rev_yoy = _growth(rev_hist[-1], rev_hist[-5]) if len(rev_hist) >= 5 else None
+    before_r = m.revenue_growth
+    m.revenue_growth = _reconcile(m.revenue_growth, rev_yoy)
+
+    # Log only when we actually overrode a non-null source value (the
+    # interesting case — a NULL-fill is routine and silent).
+    corrected = []
+    if before_y is not None and m.earnings_growth != before_y:
+        corrected.append(f"EPS YoY {before_y:.3f}->{m.earnings_growth:.3f}")
+    if before_q is not None and m.earnings_quarterly_growth != before_q:
+        corrected.append(f"EPS QoQ {before_q:.3f}->{m.earnings_quarterly_growth:.3f}")
+    if before_r is not None and m.revenue_growth != before_r:
+        corrected.append(f"Rev YoY {before_r:.3f}->{m.revenue_growth:.3f}")
+    if corrected:
+        logger.info(
+            f"[fund] {f.ticker}: reconciled growth vs reported-EPS "
+            f"series ({', '.join(corrected)})"
+        )
 
 
 def _extract_profile(info: dict | None) -> CompanyProfile:

@@ -52,18 +52,67 @@ def test_yoy_eps_filled_from_five_quarters():
     assert f.micro.earnings_quarterly_growth == (2.6 - 2.3) / 2.3
 
 
-def test_does_not_overwrite_yfinance_values():
+def test_keeps_sane_yfinance_values():
+    """When yfinance's value is within normal noise of the value we'd
+    derive from the reported-EPS series, yfinance is authoritative and
+    must NOT be overridden."""
     f = Fundamentals(ticker="X")
-    f.micro = MicroData(
-        earnings_growth=0.99,            # yfinance gave it → authoritative
-        earnings_quarterly_growth=0.88,
-        revenue_growth=0.77,
-    )
-    f.earnings = [_eps("a", 1.0), _eps("b", 5.0)] * 3  # would compute big growth
+    # Clean smooth series: YoY ≈ (0.67-0.59)/0.59 = +13.6%,
+    # QoQ ≈ (0.67-0.64)/0.64 = +4.7%.
+    f.earnings = [
+        _eps("2025-04-30", 0.59),
+        _eps("2025-07-31", 0.62),
+        _eps("2025-10-31", 0.63),
+        _eps("2026-01-31", 0.64),
+        _eps("2026-05-07", 0.67),
+    ]
+    # yfinance gives values CLOSE to derived → kept verbatim.
+    f.micro = MicroData(earnings_growth=0.14, earnings_quarterly_growth=0.05)
     _fill_growth_fallbacks(f)
-    assert f.micro.earnings_growth == 0.99
-    assert f.micro.earnings_quarterly_growth == 0.88
-    assert f.micro.revenue_growth == 0.77
+    assert f.micro.earnings_growth == 0.14            # within noise → kept
+    assert f.micro.earnings_quarterly_growth == 0.05  # within noise → kept
+
+
+def test_reconciles_gross_yfinance_divergence_gen_case():
+    """The GEN bug: yfinance's GAAP-net-income earningsGrowth explodes
+    to +265% off a depressed prior-year base, while the smooth
+    adjusted-EPS series (0.59→0.67) implies ~+14%. The metric shown
+    next to that series must agree with it → override the absurd value
+    with the history-derived one."""
+    f = Fundamentals(ticker="GEN")
+    f.earnings = [
+        _eps("2025-04-30", 0.59),
+        _eps("2025-07-31", 0.64),
+        _eps("2025-11-06", 0.62),
+        _eps("2026-02-05", 0.64),
+        _eps("2026-05-07", 0.67),
+    ]
+    f.micro = MicroData(
+        earnings_growth=2.652,            # yfinance GAAP artifact
+        earnings_quarterly_growth=2.606,  # ditto
+    )
+    _fill_growth_fallbacks(f)
+    # Derived YoY = (0.67-0.59)/0.59 ≈ 0.1356; QoQ = (0.67-0.64)/0.64 ≈ 0.0469
+    assert abs(f.micro.earnings_growth - (0.67 - 0.59) / 0.59) < 1e-9
+    assert abs(
+        f.micro.earnings_quarterly_growth - (0.67 - 0.64) / 0.64
+    ) < 1e-9
+
+
+def test_opposite_sign_is_reconciled():
+    """yfinance says contraction, our series says growth (or vice
+    versa) → trust our series (it matches the displayed EPS trend)."""
+    f = Fundamentals(ticker="X")
+    f.earnings = [
+        _eps("2025-04-30", 1.0),
+        _eps("2025-07-31", 1.1),
+        _eps("2025-10-31", 1.2),
+        _eps("2026-01-31", 1.3),
+        _eps("2026-05-07", 1.4),  # clearly growing
+    ]
+    f.micro = MicroData(earnings_growth=-0.30)  # source says -30% (wrong)
+    _fill_growth_fallbacks(f)
+    assert f.micro.earnings_growth == (1.4 - 1.0) / 1.0  # +40% derived
 
 
 def test_revenue_yoy_prefers_quarterly_statement():
