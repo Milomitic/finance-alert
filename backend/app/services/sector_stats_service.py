@@ -115,6 +115,9 @@ class SectorStats:
     revenue_growth_median: float | None = None
     earnings_growth_median: float | None = None
     earnings_quarterly_growth_median: float | None = None
+    revenue_quarterly_growth_median: float | None = None
+    earnings_growth_5y_median: float | None = None
+    revenue_growth_5y_median: float | None = None
 
     # Income
     dividend_yield_median: float | None = None  # PERCENT (normalised)
@@ -233,6 +236,15 @@ def _compute_one(sector: str, funds: list["Fundamentals"]) -> SectorStats:
         ),
         earnings_quarterly_growth_median=_signed_median(
             [m.earnings_quarterly_growth for m in micros if m.earnings_quarterly_growth is not None]
+        ),
+        revenue_quarterly_growth_median=_signed_median(
+            [m.revenue_quarterly_growth for m in micros if m.revenue_quarterly_growth is not None]
+        ),
+        earnings_growth_5y_median=_signed_median(
+            [m.earnings_growth_5y for m in micros if m.earnings_growth_5y is not None]
+        ),
+        revenue_growth_5y_median=_signed_median(
+            [m.revenue_growth_5y for m in micros if m.revenue_growth_5y is not None]
         ),
         # Income
         dividend_yield_median=_safe_median(

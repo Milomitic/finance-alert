@@ -601,6 +601,9 @@ export interface MicroData {
   // Growth
   revenue_growth: number | null;
   earnings_growth: number | null;
+  revenue_quarterly_growth?: number | null;
+  earnings_growth_5y?: number | null;
+  revenue_growth_5y?: number | null;
   // Dividend
   dividend_rate?: number | null;
   dividend_yield: number | null;

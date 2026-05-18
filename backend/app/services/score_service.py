@@ -819,13 +819,18 @@ def _growth(stock: Stock, fundamentals: Fundamentals | None, sector_stats: Secto
     12% revenue grower in semis (sector median ~22%) is below par;
     the same 12% in utilities (sector median ~3%) is excellent.
 
-    Components:
-      - Revenue growth (YoY)        (0.25)  HIB blend, abs full@20%/half@0/zero@-10%, rel +5pp
-      - Earnings growth (YoY)       (0.25)  HIB blend, abs full@20%/half@0/zero@-10%, rel +5pp
-      - Quarterly earnings growth   (0.15)  HIB blend, abs full@25%/half@0/zero@-15%, rel +10pp
-      - EPS forward vs trailing     (0.10)  HIB absolute (no sector aggregate)
-      - Earnings beats (last 4 q)   (0.15)  HIB absolute (no sector aggregate)
-      - Revenue trend (3y CAGR)     (0.10)  HIB absolute (no sector aggregate)
+    Components (rebalanced V3.6 — added Rev QoQ + 5y CAGRs for rev/eps,
+    all sector-aware where a peer median exists; the old mislabeled
+    "3y" revenue CAGR is replaced by the cleaner 5y one computed in
+    `_fill_growth_fallbacks`):
+      - Revenue growth (YoY)        (0.18)  HIB blend
+      - Earnings growth (YoY)       (0.18)  HIB blend
+      - Quarterly earnings growth   (0.10)  HIB blend
+      - Quarterly revenue growth    (0.08)  HIB blend  [NEW]
+      - EPS forward vs trailing     (0.08)  HIB absolute
+      - Earnings beats (last 4 q)   (0.12)  HIB absolute
+      - Revenue growth (5Y CAGR)    (0.13)  HIB blend  [was 3y abs]
+      - Earnings growth (5Y CAGR)   (0.13)  HIB blend  [NEW]
     """
     if fundamentals is None:
         return None, 100.0, {}
@@ -844,7 +849,7 @@ def _growth(stock: Stock, fundamentals: Fundamentals | None, sector_stats: Secto
         _blended_hib(rg, _med("revenue_growth_median"),
                      abs_full=0.20, abs_half=0.0, abs_zero=-0.10,
                      rel_full_pp=0.05),
-        0.25,
+        0.18,
     sector_median=_med("revenue_growth_median"),
     ))
     eg = micro.earnings_growth if micro else None
@@ -853,7 +858,7 @@ def _growth(stock: Stock, fundamentals: Fundamentals | None, sector_stats: Secto
         _blended_hib(eg, _med("earnings_growth_median"),
                      abs_full=0.20, abs_half=0.0, abs_zero=-0.10,
                      rel_full_pp=0.05),
-        0.25,
+        0.18,
     sector_median=_med("earnings_growth_median"),
     ))
     qeg = micro.earnings_quarterly_growth if micro else None
@@ -862,8 +867,17 @@ def _growth(stock: Stock, fundamentals: Fundamentals | None, sector_stats: Secto
         _blended_hib(qeg, _med("earnings_quarterly_growth_median"),
                      abs_full=0.25, abs_half=0.0, abs_zero=-0.15,
                      rel_full_pp=0.10),
-        0.15,
+        0.10,
     sector_median=_med("earnings_quarterly_growth_median"),
+    ))
+    qrg = micro.revenue_quarterly_growth if micro else None
+    components.append(_Component(
+        "qoq_revenue_growth", qrg,
+        _blended_hib(qrg, _med("revenue_quarterly_growth_median"),
+                     abs_full=0.10, abs_half=0.0, abs_zero=-0.06,
+                     rel_full_pp=0.05),
+        0.08,
+    sector_median=_med("revenue_quarterly_growth_median"),
     ))
 
     # --- Forward EPS vs trailing EPS (no sector aggregate) ---------------
@@ -875,7 +889,7 @@ def _growth(stock: Stock, fundamentals: Fundamentals | None, sector_stats: Secto
     components.append(_Component(
         "eps_forward_growth", fwd_growth,
         _ramp3(fwd_growth, full=0.20, half=0.0, zero=-0.10) if fwd_growth is not None else None,
-        0.10,
+        0.08,
     ))
 
     # --- Earnings-beats history (no sector aggregate) --------------------
@@ -884,26 +898,32 @@ def _growth(stock: Stock, fundamentals: Fundamentals | None, sector_stats: Secto
     if last4:
         beats = sum(1 for e in last4 if e.eps_reported > e.eps_estimate)
         beat_score = _ramp3(float(beats), full=4.0, half=2.0, zero=0.0)
-        components.append(_Component("earnings_beats", beats, beat_score, 0.15))
+        components.append(_Component("earnings_beats", beats, beat_score, 0.12))
     else:
-        components.append(_Component("earnings_beats", None, None, 0.15))
+        components.append(_Component("earnings_beats", None, None, 0.12))
 
-    # --- Multi-year revenue CAGR (no sector aggregate) -------------------
-    annual = fundamentals.annual or []
-    revs = [a.revenue for a in annual if a.revenue is not None and a.revenue > 0]
-    cagr = None
-    if len(revs) >= 3:
-        first = float(revs[-3])
-        last = float(revs[-1])
-        if first > 0:
-            try:
-                cagr = (last / first) ** (1.0 / 2.0) - 1.0
-            except (ValueError, ZeroDivisionError):
-                cagr = None
+    # --- Multi-year CAGRs (sector-aware) --------------------------------
+    # Replaces the old inline "revenue_cagr_3y" (which was actually a
+    # 2-year exponent off 3 annual points). Now reads the cleanly
+    # computed 5y CAGRs from `_fill_growth_fallbacks` for BOTH revenue
+    # and earnings, scored relative to the sector like the YoY metrics.
+    r5 = micro.revenue_growth_5y if micro else None
     components.append(_Component(
-        "revenue_cagr_3y", cagr,
-        _ramp3(cagr, full=0.15, half=0.05, zero=-0.05) if cagr is not None else None,
-        0.10,
+        "revenue_growth_5y", r5,
+        _blended_hib(r5, _med("revenue_growth_5y_median"),
+                     abs_full=0.15, abs_half=0.05, abs_zero=-0.05,
+                     rel_full_pp=0.04),
+        0.13,
+    sector_median=_med("revenue_growth_5y_median"),
+    ))
+    e5 = micro.earnings_growth_5y if micro else None
+    components.append(_Component(
+        "earnings_growth_5y", e5,
+        _blended_hib(e5, _med("earnings_growth_5y_median"),
+                     abs_full=0.15, abs_half=0.05, abs_zero=-0.05,
+                     rel_full_pp=0.04),
+        0.13,
+    sector_median=_med("earnings_growth_5y_median"),
     ))
 
     return _aggregate(components)

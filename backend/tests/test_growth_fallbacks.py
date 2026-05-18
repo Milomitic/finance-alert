@@ -1,10 +1,12 @@
 """`_fill_growth_fallbacks` derives EPS YoY/QoQ + Rev YoY from the
 historical series when yfinance's `info` left them null."""
 from app.services.stock_fundamentals_service import (
+    AnnualPoint,
     EarningsPoint,
     Fundamentals,
     MicroData,
     QuarterlyPoint,
+    _cagr_5y,
     _fill_growth_fallbacks,
     _growth,
 )
@@ -151,3 +153,76 @@ def test_noop_when_insufficient_history():
     assert f.micro.earnings_quarterly_growth is None
     assert f.micro.earnings_growth is None
     assert f.micro.revenue_growth is None
+
+
+def test_cagr_5y_basic():
+    # 100 → 200 over exactly 5 years = 2^(1/5)-1 ≈ 0.1487
+    series = [("2021-05-01", 100.0), ("2026-05-01", 200.0)]
+    c = _cagr_5y(series)
+    assert c is not None
+    assert abs(c - (2.0 ** (1 / 5.0) - 1.0)) < 1e-4
+
+
+def test_cagr_5y_picks_anchor_closest_to_5y():
+    # Many points; anchor must be the one ~5y before the latest.
+    series = [
+        ("2020-05-01", 50.0),   # ~6y back (too old)
+        ("2021-05-01", 100.0),  # ~5y back → anchor
+        ("2023-05-01", 150.0),
+        ("2026-05-01", 200.0),  # latest
+    ]
+    c = _cagr_5y(series)
+    # 100 → 200 over ~5y
+    assert abs(c - (2.0 ** (1 / 5.0) - 1.0)) < 1e-3
+
+
+def test_cagr_5y_none_when_span_too_short():
+    # Only ~1y of data → can't call it a multi-year rate.
+    series = [("2025-05-01", 100.0), ("2026-05-01", 130.0)]
+    assert _cagr_5y(series) is None
+
+
+def test_cagr_5y_none_on_nonpositive_endpoint():
+    # A negative/zero base makes annualized CAGR undefined.
+    series = [("2021-05-01", -10.0), ("2026-05-01", 50.0)]
+    assert _cagr_5y(series) is None
+    series2 = [("2021-05-01", 10.0), ("2026-05-01", 0.0)]
+    assert _cagr_5y(series2) is None
+
+
+def test_fill_computes_qoq_revenue_and_5y_cagrs():
+    f = Fundamentals(ticker="X")
+    f.micro = MicroData()
+    # 6 quarters of revenue, growing
+    f.quarterly = [
+        QuarterlyPoint("2025-01-31", revenue=100.0, eps=1.0),
+        QuarterlyPoint("2025-04-30", revenue=105.0, eps=1.1),
+        QuarterlyPoint("2025-07-31", revenue=110.0, eps=1.2),
+        QuarterlyPoint("2025-10-31", revenue=115.0, eps=1.3),
+        QuarterlyPoint("2026-01-31", revenue=120.0, eps=1.4),
+        QuarterlyPoint("2026-04-30", revenue=126.0, eps=1.5),
+    ]
+    # 6 years of annual revenue for the 5y CAGR
+    f.annual = [
+        AnnualPoint("2020-12-31", revenue=300.0, net_income=30.0, eps=2.0),
+        AnnualPoint("2021-12-31", revenue=340.0, net_income=34.0, eps=2.2),
+        AnnualPoint("2022-12-31", revenue=380.0, net_income=38.0, eps=2.5),
+        AnnualPoint("2023-12-31", revenue=420.0, net_income=42.0, eps=2.8),
+        AnnualPoint("2024-12-31", revenue=470.0, net_income=47.0, eps=3.1),
+        AnnualPoint("2026-04-30", revenue=560.0, net_income=56.0, eps=3.6),
+    ]
+    f.earnings = [
+        _eps("2021-05-01", 1.0),
+        _eps("2022-05-01", 1.2),
+        _eps("2023-05-01", 1.35),
+        _eps("2024-05-01", 1.5),
+        _eps("2026-04-30", 2.0),
+    ]
+    _fill_growth_fallbacks(f)
+    # Rev QoQ = (126-120)/120 = 0.05
+    assert abs(f.micro.revenue_quarterly_growth - 0.05) < 1e-9
+    # 5y CAGRs present and positive (both series grow)
+    assert f.micro.revenue_growth_5y is not None
+    assert f.micro.revenue_growth_5y > 0
+    assert f.micro.earnings_growth_5y is not None
+    assert f.micro.earnings_growth_5y > 0

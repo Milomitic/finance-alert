@@ -555,6 +555,27 @@ function buildColumns(m: MicroData): { left: Row[]; right: Row[] } {
       tip: "Crescita EPS QoQ (ultimo trimestre vs trimestre immediatamente precedente). Più rumoroso del YoY ma cattura cambi di trend più velocemente.",
       toneFor: signTone("EPS quarterly growth", "pct"),
     },
+    {
+      label: "Rev growth (QoQ)",
+      raw: m.revenue_quarterly_growth ?? null,
+      format: pct,
+      tip: "Crescita revenue QoQ (ultimo trimestre vs trimestre immediatamente precedente). Calcolata da noi dalla serie revenue trimestrale.",
+      toneFor: signTone("Revenue quarterly growth", "pct"),
+    },
+    {
+      label: "EPS growth (5Y CAGR)",
+      raw: m.earnings_growth_5y ?? null,
+      format: pct,
+      tip: "Tasso di crescita annualizzato (CAGR) dell'EPS su ~5 anni, calcolato da noi dalla serie EPS reportata. Null se <2.5 anni di storico o EPS non positivo agli estremi (il CAGR non è definito attraverso una perdita).",
+      toneFor: signTone("EPS 5Y CAGR", "pct"),
+    },
+    {
+      label: "Rev growth (5Y CAGR)",
+      raw: m.revenue_growth_5y ?? null,
+      format: pct,
+      tip: "Tasso di crescita annualizzato (CAGR) della revenue su ~5 anni, calcolato da noi (preferendo il bilancio annuale, altrimenti la serie trimestrale).",
+      toneFor: signTone("Revenue 5Y CAGR", "pct"),
+    },
     // ── Dividend ───────────────────────────────────────────────────
     {
       label: "Dividend rate",

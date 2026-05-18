@@ -118,6 +118,9 @@ class MicroDataOut(BaseModel):
     # Growth
     revenue_growth: float | None = None
     earnings_growth: float | None = None
+    revenue_quarterly_growth: float | None = None
+    earnings_growth_5y: float | None = None
+    revenue_growth_5y: float | None = None
     # Dividend
     dividend_rate: float | None = None
     dividend_yield: float | None = None

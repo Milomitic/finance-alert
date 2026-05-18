@@ -144,9 +144,13 @@ def test_growth_missing_components_neutralised():
     f = Fundamentals(ticker="TEST", micro=micro, earnings=[])
     score, _, br = _growth(_stock(), f)
     assert score == pytest.approx(100.0, abs=1.0)
+    # Every component except the two present ones is neutralized
+    # (excluded from the weighted average, not scored as 0).
     assert br["earnings_beats"]["present"] is False
     assert br["qoq_earnings_growth"]["present"] is False
-    assert br["revenue_cagr_3y"]["present"] is False
+    assert br["qoq_revenue_growth"]["present"] is False
+    assert br["revenue_growth_5y"]["present"] is False   # was revenue_cagr_3y
+    assert br["earnings_growth_5y"]["present"] is False
 
 
 # ---------------------------------------------------------------------------

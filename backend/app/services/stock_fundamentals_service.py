@@ -175,8 +175,14 @@ class MicroData:
     free_cashflow: float | None = None
     operating_cashflow: float | None = None
     # ── Growth ─────────────────────────────────────────────────────────
-    revenue_growth: float | None = None
-    earnings_growth: float | None = None
+    revenue_growth: float | None = None              # Rev YoY (fraction)
+    earnings_growth: float | None = None             # EPS YoY (fraction)
+    revenue_quarterly_growth: float | None = None    # Rev QoQ (fraction)
+    # Annualized CAGR over ~5y (computed by us — yfinance doesn't expose
+    # multi-year growth). None when <2.5y of history or non-positive
+    # endpoints (CAGR is undefined across a sign flip).
+    earnings_growth_5y: float | None = None
+    revenue_growth_5y: float | None = None
     # ── Dividend ───────────────────────────────────────────────────────
     dividend_rate: float | None = None              # USD/share annual
     dividend_yield: float | None = None             # %, yfinance returns 1.81 = 1.81%
@@ -794,6 +800,48 @@ def _growth(latest: float | None, prior: float | None) -> float | None:
     return (latest - prior) / abs(prior)
 
 
+def _cagr_5y(series: list[tuple[str, float]]) -> float | None:
+    """Annualized growth (CAGR) over ~5 years from a dated value series.
+
+    `series`: (iso_date, value) tuples, oldest→newest. Picks the point
+    closest to 5 years before the latest as the anchor, computes the
+    exact year span from the dates, and returns
+    `(latest/anchor)^(1/years) - 1` as a fraction.
+
+    Returns None when:
+      - fewer than 2 usable points,
+      - the available span is < 2.5y (too short to call it a
+        multi-year rate — a noisy 1y reading would masquerade as 5y),
+      - either endpoint is <= 0 (CAGR is undefined across a sign
+        flip / from a loss base; the YoY metric covers that regime).
+    """
+    from datetime import date as _date
+
+    pts: list[tuple[_date, float]] = []
+    for d_str, v in series:
+        if v is None or v <= 0:
+            continue
+        try:
+            pts.append((_date.fromisoformat(str(d_str)[:10]), float(v)))
+        except (ValueError, TypeError):
+            continue
+    if len(pts) < 2:
+        return None
+    pts.sort(key=lambda t: t[0])
+    latest_d, latest_v = pts[-1]
+    target = latest_d.toordinal() - 1826  # ~5y in days
+    anchor_d, anchor_v = min(
+        pts[:-1], key=lambda t: abs(t[0].toordinal() - target)
+    )
+    years = (latest_d.toordinal() - anchor_d.toordinal()) / 365.25
+    if years < 2.5 or anchor_v <= 0 or latest_v <= 0:
+        return None
+    try:
+        return (latest_v / anchor_v) ** (1.0 / years) - 1.0
+    except (ValueError, ZeroDivisionError):
+        return None
+
+
 def _grossly_diverges(provided: float, derived: float) -> bool:
     """True when a source-provided growth value is so far from the value
     we derive from our own reported-EPS/revenue series that showing it
@@ -872,19 +920,46 @@ def _fill_growth_fallbacks(f: "Fundamentals") -> None:
     m.earnings_quarterly_growth = _reconcile(m.earnings_quarterly_growth, qoq)
     m.earnings_growth = _reconcile(m.earnings_growth, yoy)
 
-    # Revenue YoY — prefer the clean quarterly statement revenue.
-    rev_hist = [
-        qp.revenue for qp in (f.quarterly or []) if qp.revenue is not None
+    # Revenue series — prefer the clean quarterly statement revenue,
+    # fall back to earnings.revenue_reported (Finnhub-backfilled).
+    # Keep dates alongside values for the 5y CAGR anchor.
+    rev_dated = [
+        (qp.fiscal_quarter_end, qp.revenue)
+        for qp in (f.quarterly or [])
+        if qp.revenue is not None
     ]
-    if len(rev_hist) < 5:
-        rev_hist = [
-            ep.revenue_reported
+    if len(rev_dated) < 5:
+        rev_dated = [
+            (ep.date, ep.revenue_reported)
             for ep in (f.earnings or [])
             if ep.revenue_reported is not None
         ]
+    rev_hist = [v for _, v in rev_dated]
+
     rev_yoy = _growth(rev_hist[-1], rev_hist[-5]) if len(rev_hist) >= 5 else None
     before_r = m.revenue_growth
     m.revenue_growth = _reconcile(m.revenue_growth, rev_yoy)
+
+    # Revenue QoQ (new) — yfinance never provides this; always derive.
+    if len(rev_hist) >= 2:
+        m.revenue_quarterly_growth = _growth(rev_hist[-1], rev_hist[-2])
+
+    # 5-year annualized CAGR (new) — EPS from the reported series,
+    # revenue preferring the cleaner annual statement when available
+    # (less noise than quarterly), else the quarterly/earnings series.
+    eps_dated = [
+        (ep.date, ep.eps_reported)
+        for ep in (f.earnings or [])
+        if ep.eps_reported is not None
+    ]
+    m.earnings_growth_5y = _cagr_5y(eps_dated)
+
+    annual_rev = [
+        (ap.fiscal_year_end, ap.revenue)
+        for ap in (f.annual or [])
+        if ap.revenue is not None
+    ]
+    m.revenue_growth_5y = _cagr_5y(annual_rev) or _cagr_5y(rev_dated)
 
     # Log only when we actually overrode a non-null source value (the
     # interesting case — a NULL-fill is routine and silent).
