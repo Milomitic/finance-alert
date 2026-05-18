@@ -32,7 +32,7 @@ const STATUS_INFO: Record<
   },
   degraded: {
     label: "Servizi degradati",
-    desc: "Una o più sorgenti dati riportano errori non bloccanti.",
+    desc: "Una sorgente fallback/scheduled o un job è fuori servizio, ma le sorgenti primarie funzionano — nessun impatto bloccante.",
     Icon: AlertTriangle,
     bg: "bg-amber-50",
     fg: "text-amber-700",
@@ -40,7 +40,7 @@ const STATUS_INFO: Record<
   },
   outage: {
     label: "Outage in corso",
-    desc: "Almeno una sorgente o un job è in errore critico — verifica subito.",
+    desc: "Una sorgente dati PRIMARIA è in errore critico (o il breaker yfinance è aperto / uno scan è bloccato) — verifica subito.",
     Icon: XCircle,
     bg: "bg-red-50",
     fg: "text-red-700",
@@ -95,8 +95,16 @@ export default function PlatformHealthPage() {
     if (!health) return "operational";
     const breakerOpen =
       String(health.yfinance_breaker.state ?? "closed").toLowerCase() !== "closed";
-    const failingSources = health.data_sources.filter(
-      (m) => m.health === "failing"
+    // Outage is reserved for PRIMARY data-path failures. A failing
+    // fallback (e.g. Marketaux without an API key) or a failing
+    // scheduled source means reduced resilience, NOT a user-visible
+    // outage — the app still serves data off the primary sources. So
+    // only `role === "primary"` failures escalate to red.
+    const failingPrimary = health.data_sources.filter(
+      (m) => m.role === "primary" && m.health === "failing"
+    ).length;
+    const failingNonPrimary = health.data_sources.filter(
+      (m) => m.role !== "primary" && m.health === "failing"
     ).length;
     const erroredJobs = health.scheduler.filter(
       (j) => j.last_result === "error"
@@ -111,9 +119,18 @@ export default function PlatformHealthPage() {
       if (elapsedMs < 0 || elapsedMs > 24 * 3600_000) return false;
       return elapsedMs > 30 * 60_000;
     });
-    if (breakerOpen || failingSources > 0 || runningScanStuck) return "outage";
+    if (breakerOpen || failingPrimary > 0 || runningScanStuck) return "outage";
     const degraded =
-      health.data_sources.filter((m) => m.health === "degraded").length > 0 ||
+      // Any primary source merely degraded (not failing) …
+      health.data_sources.some(
+        (m) => m.role === "primary" && m.health === "degraded"
+      ) ||
+      // … OR any fallback/scheduled source failing or degraded …
+      failingNonPrimary > 0 ||
+      health.data_sources.some(
+        (m) => m.role !== "primary" && m.health === "degraded"
+      ) ||
+      // … OR an errored scheduler job.
       erroredJobs > 0;
     if (degraded) return "degraded";
     return "operational";
