@@ -47,3 +47,6 @@ data/logs/
 
 # Local scratch/build dirs created by Claude tooling
 .pptx-build/
+
+# scoring non-regression gate snapshots (transient)
+backend/tests/_ranking_*.json

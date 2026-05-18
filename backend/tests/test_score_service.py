@@ -543,6 +543,25 @@ def test_build_score_missing_pillar_renormalises():
     assert cs.composite == pytest.approx(cs.sub_scores["momentum"], abs=0.1)
 
 
+def test_build_score_exposes_global_coverage():
+    """QW5: breakdown carries a _meta_global confidence block, and each
+    present pillar's _meta carries its component coverage. Additive only
+    — composite must equal the momentum-only renormalised value (same
+    invariant as test_build_score_missing_pillar_renormalises)."""
+    closes = _strong_uptrend_closes()
+    cs = _build_score(_stock(), None, closes, news_count=None)
+    mg = cs.breakdown["_meta_global"]
+    assert 0.0 <= mg["coverage"] <= 1.0
+    assert mg["pillars_total"] == 6
+    # Only momentum had data → exactly 1 pillar present, low global coverage.
+    assert mg["pillars_present"] == 1
+    assert mg["coverage"] < 0.5
+    # Per-pillar coverage present on the pillar that scored.
+    assert 0.0 < cs.breakdown["momentum"]["_meta"]["coverage"] <= 1.0
+    # Additive: composite still the renormalised momentum-only score.
+    assert cs.composite == pytest.approx(cs.sub_scores["momentum"], abs=0.1)
+
+
 def test_build_score_breakdown_is_json_serialisable():
     closes = _strong_uptrend_closes()
     cs = _build_score(_stock(), None, closes, news_count=5)

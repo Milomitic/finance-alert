@@ -739,6 +739,32 @@ export function StockScoreCard({ ticker }: Props) {
         <span title={new Date(data.computed_at).toLocaleString("it-IT")}>
           Calcolato {formatRelative(data.computed_at)}
         </span>
+        {(() => {
+          // QW5 — confidence/coverage. The composite is renormalised
+          // over whatever factors had data, so two scores aren't
+          // strictly comparable; surface how much real data this one
+          // rests on. Read defensively (older cached rows lack it).
+          const mg = (data.breakdown as Record<string, unknown> | undefined)
+            ?._meta_global as
+            | { coverage?: number; pillars_present?: number; pillars_total?: number }
+            | undefined;
+          if (!mg || typeof mg.coverage !== "number") return null;
+          const pct = Math.round(mg.coverage * 100);
+          const tone =
+            pct >= 80
+              ? "text-emerald-600 dark:text-emerald-400"
+              : pct >= 55
+                ? "text-amber-600 dark:text-amber-400"
+                : "text-rose-600 dark:text-rose-400";
+          return (
+            <span
+              className={cn("tabular-nums", tone)}
+              title={`Confidence: lo score poggia sul ${pct}% del peso fattoriale nominale (${mg.pillars_present ?? "?"}/${mg.pillars_total ?? 6} pilastri con dati). Più basso = score basato su pochi input, da interpretare con cautela.`}
+            >
+              Confidence {pct}%
+            </span>
+          );
+        })()}
       </div>
     </CardShell>
   );

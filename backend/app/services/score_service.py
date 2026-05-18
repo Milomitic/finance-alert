@@ -288,10 +288,19 @@ def _aggregate(components: list[_Component]) -> tuple[float | None, float, dict[
     if n_present == 0 or den <= 0:
         return None, 100.0, {}
     pillar = num / den
+    weight_sum_total = sum(c.weight for c in components)
     breakdown["_meta"] = {
         "components_present": n_present,
         "components_total": len(components),
         "weight_sum_present": _safe_round(den, 4),
+        "weight_sum_total": _safe_round(weight_sum_total, 4),
+        # Fraction of this pillar's nominal component weight that had
+        # data. 1.0 = fully covered; low values mean the pillar score
+        # rests on few inputs and is renormalised over a thin base —
+        # the consumer should trust it less (QW5 confidence signal).
+        "coverage": _safe_round(
+            den / weight_sum_total if weight_sum_total > 0 else 0.0, 4
+        ),
     }
     return _safe_round(pillar, 2), 100.0, breakdown
 
@@ -1753,6 +1762,32 @@ def _build_score(
         "momentum": m_break,
         "sentiment": s_break,
         "weights_used": {k: _safe_round(v, 4) for k, v in weights.items()},
+        # QW5 — global confidence/coverage. Weighted (by nominal pillar
+        # weight) average of each pillar's component-coverage. Honest
+        # companion to the missing-data renormalisation: two composites
+        # built on different factor bases are NOT comparable, so the UI
+        # surfaces how much real data each rests on. Purely additive —
+        # does NOT affect `composite` (verified by the QW5 gate: ρ=1.0,
+        # tier churn=0).
+        "_meta_global": {
+            "coverage": _safe_round(
+                sum(
+                    PILLAR_WEIGHTS[p]
+                    * float((brk.get("_meta") or {}).get("coverage", 0.0))
+                    for p, brk in (
+                        ("profitability", p_break),
+                        ("sustainability", su_break),
+                        ("growth", g_break),
+                        ("value", v_break),
+                        ("momentum", m_break),
+                        ("sentiment", s_break),
+                    )
+                ),
+                4,
+            ),
+            "pillars_present": sum(1 for v in sub.values() if v is not None),
+            "pillars_total": len(sub),
+        },
         "risk_inputs": {
             "beta": _safe_round(micro.beta, 4) if micro and _is_finite(micro.beta) else None,
             "volatility_90d_pct": _safe_round(vol_90d, 4) if vol_90d is not None else None,
