@@ -65,7 +65,13 @@ KIND_NEWS = "news"
 #       (noise floor for stock gifts / director admin transfers). Old payloads
 #       cached with no filter must be re-fetched so the UI doesn't keep
 #       surfacing the stale unfiltered list.
-_FUNDAMENTALS_SCHEMA_VERSION = 6
+# v7 — MicroData gained revenue_quarterly_growth (Rev QoQ), earnings_growth_5y
+#       and revenue_growth_5y (history-derived 5Y CAGRs), plus the growth
+#       reconciliation (yfinance YoY/QoQ vs reported-EPS series) and the
+#       Finnhub revenue est/actual backfill. Pre-deploy payloads carry these
+#       as null and would otherwise never re-fetch (same schema + fresh TTL),
+#       so they MUST be invalidated to populate the new fundamentals.
+_FUNDAMENTALS_SCHEMA_VERSION = 7
 _SCHEMA_VERSION_KEY = "_schema_version"
 
 
