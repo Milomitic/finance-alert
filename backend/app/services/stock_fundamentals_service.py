@@ -781,6 +781,74 @@ def _extract_micro(info: dict | None) -> MicroData:
     )
 
 
+def _growth(latest: float | None, prior: float | None) -> float | None:
+    """Relative growth as a fraction: (latest - prior) / |prior|.
+
+    Returns None when either side is missing or prior is zero (can't
+    divide). Uses `abs(prior)` so the sign tracks the change direction
+    consistently even across a loss→profit flip — same convention as
+    `surprise_pct` elsewhere in this module and what yfinance's
+    `earningsGrowth`/`revenueGrowth` fields encode (0.15 = +15%)."""
+    if latest is None or prior is None or prior == 0:
+        return None
+    return (latest - prior) / abs(prior)
+
+
+def _fill_growth_fallbacks(f: "Fundamentals") -> None:
+    """When yfinance's `info` didn't supply a growth metric, derive it
+    from the historical series we already have.
+
+    yfinance frequently leaves `earningsGrowth` / `revenueGrowth` /
+    `earningsQuarterlyGrowth` null for non-US or thinly-covered tickers
+    even though `earnings_dates` / quarterly statements give us the raw
+    numbers. This fills the three UI metrics:
+
+    - `earnings_growth`           — EPS YoY: latest reported quarter EPS
+      vs the EPS 4 quarters back (same fiscal quarter, prior year).
+    - `earnings_quarterly_growth` — EPS QoQ: latest reported quarter EPS
+      vs the immediately preceding reported quarter.
+    - `revenue_growth`            — Revenue YoY: latest quarter revenue
+      vs 4 quarters back. Prefers `f.quarterly` (clean reported
+      revenue); falls back to `f.earnings.revenue_reported` (the
+      Finnhub-backfilled values).
+
+    Only fills None gaps — a value yfinance provided is authoritative
+    and left untouched. No-op when there isn't enough history.
+    """
+    m = f.micro
+
+    # EPS series: reported-only EarningsPoints, oldest→newest.
+    eps_hist = [
+        ep.eps_reported
+        for ep in (f.earnings or [])
+        if ep.eps_reported is not None
+    ]
+
+    if m.earnings_quarterly_growth is None and len(eps_hist) >= 2:
+        m.earnings_quarterly_growth = _growth(eps_hist[-1], eps_hist[-2])
+
+    if m.earnings_growth is None and len(eps_hist) >= 5:
+        # 5 points: latest + the one 4 quarters back = same quarter LY.
+        m.earnings_growth = _growth(eps_hist[-1], eps_hist[-5])
+
+    if m.revenue_growth is None:
+        # Prefer the clean quarterly statement revenue.
+        rev_hist = [
+            qp.revenue
+            for qp in (f.quarterly or [])
+            if qp.revenue is not None
+        ]
+        if len(rev_hist) < 5:
+            # Fall back to earnings.revenue_reported (Finnhub-backfilled).
+            rev_hist = [
+                ep.revenue_reported
+                for ep in (f.earnings or [])
+                if ep.revenue_reported is not None
+            ]
+        if len(rev_hist) >= 5:
+            m.revenue_growth = _growth(rev_hist[-1], rev_hist[-5])
+
+
 def _extract_profile(info: dict | None) -> CompanyProfile:
     """Pull identity fields from `Ticker.info`. yfinance is inconsistent —
     fields can be present, missing, or empty-string. We coerce empty-string
@@ -1293,6 +1361,15 @@ def _fetch_fresh(ticker: str) -> Fundamentals:
         except Exception as e:
             logger.debug(f"[fund] info {ticker}: {e}")
             _maybe_record(e)
+        # Growth fallback — derive EPS YoY/QoQ + Rev YoY from the
+        # historical series when yfinance's `info` left them null
+        # (common for non-US / thin-coverage tickers). Runs AFTER
+        # _extract_micro (so we know what yfinance gave) and after
+        # earnings/quarterly are populated. Pure in-memory, no I/O.
+        try:
+            _fill_growth_fallbacks(f)
+        except Exception as e:
+            logger.debug(f"[fund] growth fallback {ticker}: {e}")
         try:
             # Pull more candidates upstream than the UI shows because the
             # significance filter can drop a chunk of rows (gifts, admin
