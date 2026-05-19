@@ -1504,8 +1504,13 @@ def _classify_risk(
     stock: Stock,
     micro: MicroData | None,
     volatility_90d: float | None,
-) -> str:
-    """Map (Beta, vol, sector, market_cap, leverage, drawdown) → tier.
+) -> tuple[str, int]:
+    """Map (Beta, vol, sector, market_cap, leverage, drawdown) → (tier, vote).
+
+    Returns the tier AND the signed integer vote sum (M3 uses |vote| as
+    a decisiveness signal: a ±1 classification that disagrees with the
+    previously-persisted tier is treated as flicker and held; ±2 or
+    stronger flips immediately).
 
     Each input contributes -1 / 0 / +1 votes; sum is thresholded.
       - Beta < 0.8 → conservative; > 1.3 → aggressive
@@ -1561,12 +1566,12 @@ def _classify_risk(
             score += 1
 
     if inputs == 0:
-        return "moderate"
+        return "moderate", 0
     if score <= -1:
-        return "conservative"
+        return "conservative", score
     if score >= 1:
-        return "aggressive"
-    return "moderate"
+        return "aggressive", score
+    return "moderate", score
 
 
 def _risk_overlay_factor(
@@ -1819,7 +1824,7 @@ def _build_score(
     composite_raw = sum((sub[k] or 0.0) * weights[k] for k in PILLAR_WEIGHTS)
 
     vol_90d = _compute_volatility_90d(closes)
-    risk_tier = _classify_risk(stock, micro, vol_90d)
+    risk_tier, risk_vote = _classify_risk(stock, micro, vol_90d)
 
     # M2 — risk overlay: bounded, centred haircut/bonus so the composite
     # is risk-adjusted (was risk-blind; beta/vol only fed the tier).
@@ -1872,6 +1877,7 @@ def _build_score(
             },
         },
         "risk_inputs": {
+            "risk_vote": risk_vote,  # M3: |vote| drives tier hysteresis
             "beta": _safe_round(micro.beta, 4) if micro and _is_finite(micro.beta) else None,
             "volatility_90d_pct": _safe_round(vol_90d, 4) if vol_90d is not None else None,
             "sector": stock.sector,
@@ -1891,6 +1897,53 @@ def _build_score(
         breakdown=breakdown,
         computed_at=datetime.now(UTC),
     )
+
+
+# M3 — turnover control. EWMA weight on the freshly-computed composite;
+# the rest carries over from the previously-persisted score. 0.6 ≈
+# half-life of ~1.4 recomputes — enough to damp earnings/TTM-rollover
+# and sector-median jitter without making the score laggy. Tier
+# hysteresis: a ±1 (indecisive) risk classification that disagrees with
+# the persisted tier is held; |vote|≥2 flips immediately.
+_EWMA_ALPHA = 0.6
+
+
+def _apply_turnover_control(db: Session, cs: "_ComputedScore") -> None:
+    """Mutate `cs` in place: EWMA-smooth the composite against the last
+    persisted score and apply tier hysteresis. Cold start (no prior row,
+    or prior composite null) is a no-op so a fresh universe isn't
+    dragged toward 0. Records the decision in breakdown._meta_global."""
+    prior = db.execute(
+        select(StockScore).where(StockScore.stock_id == cs.stock_id)
+    ).scalar_one_or_none()
+    mg = cs.breakdown.setdefault("_meta_global", {})
+    if prior is None or prior.composite is None:
+        mg["turnover"] = {"cold_start": True}
+        return
+    a = _EWMA_ALPHA
+    presmooth = cs.composite
+    smoothed = _safe_round(a * presmooth + (1.0 - a) * float(prior.composite), 1)
+    vote = int(
+        (cs.breakdown.get("risk_inputs") or {}).get("risk_vote", 0) or 0
+    )
+    tier_presmooth = cs.risk_tier
+    tier_held = (
+        prior.risk_tier
+        and tier_presmooth != prior.risk_tier
+        and abs(vote) < 2
+    )
+    if tier_held:
+        cs.risk_tier = prior.risk_tier
+    cs.composite = smoothed
+    mg["turnover"] = {
+        "alpha": a,
+        "composite_presmooth": presmooth,
+        "prior_composite": _safe_round(float(prior.composite), 1),
+        "smoothed": smoothed,
+        "tier_presmooth": tier_presmooth,
+        "tier_held": bool(tier_held),
+        "risk_vote": vote,
+    }
 
 
 def compute_score(
@@ -1943,6 +1996,10 @@ def compute_score(
         ohlcv_df=ohlcv_df, news_polarity=news_polarity,
         sector_stats=sector_stats,
     )
+    # M3 — EWMA composite smoothing + tier hysteresis (turnover control).
+    # Applied here (compute_score has `db`) so it covers BOTH the bulk
+    # recompute_all path and the single-stock recompute endpoint.
+    _apply_turnover_control(db, cs)
     return StockScore(
         stock_id=cs.stock_id,
         composite=cs.composite,

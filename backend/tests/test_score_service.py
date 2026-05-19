@@ -21,6 +21,8 @@ from app.models import OhlcvDaily, Stock, StockScore
 from app.services import score_service, stock_fundamentals_service, stock_news_service
 from app.services.score_service import (
     PILLAR_WEIGHTS,
+    _ComputedScore,
+    _apply_turnover_control,
     _build_score,
     _classify_risk,
     _quality,
@@ -448,28 +450,28 @@ def test_renormalize_all_present_gives_original_weights():
 def test_risk_defensive_low_beta_mega_cap_is_conservative():
     s = _stock(sector="Utilities", market_cap=300_000_000_000)
     micro = MicroData(beta=0.5)
-    tier = _classify_risk(s, micro, volatility_90d=0.8)
+    tier, _ = _classify_risk(s, micro, volatility_90d=0.8)
     assert tier == "conservative"
 
 
 def test_risk_high_beta_small_cap_cyclical_is_aggressive():
     s = _stock(sector="Technology", market_cap=2_000_000_000)
     micro = MicroData(beta=1.8)
-    tier = _classify_risk(s, micro, volatility_90d=4.5)
+    tier, _ = _classify_risk(s, micro, volatility_90d=4.5)
     assert tier == "aggressive"
 
 
 def test_risk_default_moderate_when_inputs_balance():
     s = _stock(sector=None, market_cap=10_000_000_000)
     micro = MicroData(beta=1.0)
-    tier = _classify_risk(s, micro, volatility_90d=2.0)
+    tier, _ = _classify_risk(s, micro, volatility_90d=2.0)
     assert tier == "moderate"
 
 
 def test_risk_no_inputs_defaults_moderate():
     s = _stock(sector=None, market_cap=None)
     micro = MicroData(beta=None)
-    tier = _classify_risk(s, micro, volatility_90d=None)
+    tier, _ = _classify_risk(s, micro, volatility_90d=None)
     assert tier == "moderate"
 
 
@@ -478,7 +480,7 @@ def test_risk_high_leverage_pushes_aggressive():
     other inputs are neutral."""
     s = _stock(sector=None, market_cap=10_000_000_000)
     micro = MicroData(beta=1.0, debt_to_equity=350.0)  # very levered
-    tier = _classify_risk(s, micro, volatility_90d=2.0)
+    tier, _ = _classify_risk(s, micro, volatility_90d=2.0)
     assert tier == "aggressive"
 
 
@@ -567,6 +569,60 @@ def test_build_score_exposes_global_coverage():
     assert cs.composite == pytest.approx(
         min(100.0, cs.sub_scores["momentum"] * rf), abs=0.1
     )
+
+
+def _mk_cs(stock_id: int, composite: float, tier: str, vote: int) -> _ComputedScore:
+    from datetime import datetime, timezone
+    return _ComputedScore(
+        stock_id=stock_id,
+        composite=composite,
+        sub_scores={"momentum": composite},
+        risk_tier=tier,
+        breakdown={"risk_inputs": {"risk_vote": vote}, "_meta_global": {}},
+        computed_at=datetime.now(timezone.utc),
+    )
+
+
+def test_m3_cold_start_is_noop(db: Session):
+    """M3: no prior persisted row → smoothing/hysteresis must NOT drag
+    a fresh universe (composite unchanged, cold_start flagged)."""
+    s = Stock(ticker="ZZ", exchange="NMS", name="ZZ", market_cap=int(1e10))
+    db.add(s)
+    db.commit()
+    cs = _mk_cs(s.id, 42.0, "moderate", 0)
+    _apply_turnover_control(db, cs)
+    assert cs.composite == 42.0
+    assert cs.breakdown["_meta_global"]["turnover"] == {"cold_start": True}
+
+
+def test_m3_ewma_and_tier_hysteresis(db: Session):
+    """M3: composite EWMA-blended vs the persisted prior; an indecisive
+    (|vote|<2) tier disagreement is HELD, a decisive one flips."""
+    s = Stock(ticker="YY", exchange="NMS", name="YY", market_cap=int(1e10))
+    db.add(s)
+    db.commit()
+    db.add(StockScore(
+        stock_id=s.id, composite=80.0, risk_tier="aggressive",
+        computed_at=__import__("datetime").datetime.now(
+            __import__("datetime").timezone.utc),
+        breakdown="{}",
+    ))
+    db.commit()
+
+    # Indecisive disagreement (vote -1): tier held at prior "aggressive";
+    # composite = 0.6*60 + 0.4*80 = 68.0.
+    cs = _mk_cs(s.id, 60.0, "conservative", -1)
+    _apply_turnover_control(db, cs)
+    assert cs.composite == pytest.approx(68.0, abs=0.05)
+    assert cs.risk_tier == "aggressive"
+    t = cs.breakdown["_meta_global"]["turnover"]
+    assert t["tier_held"] is True and t["alpha"] == 0.6
+
+    # Decisive disagreement (vote -2): tier flips immediately.
+    cs2 = _mk_cs(s.id, 60.0, "conservative", -2)
+    _apply_turnover_control(db, cs2)
+    assert cs2.risk_tier == "conservative"
+    assert cs2.breakdown["_meta_global"]["turnover"]["tier_held"] is False
 
 
 def test_build_score_breakdown_is_json_serialisable():
