@@ -1120,18 +1120,25 @@ def _momentum(
     closes_present = closes is not None and len(closes) > 0
     components: list[_Component] = []
 
-    # --- 52-week change (prefer micro field; fall back to bars) ----------
+    # --- 12-1 momentum (skip the most recent ~1 month) ------------------
+    # QW6: the canonical Jegadeesh-Titman momentum is the 12-month return
+    # EXCLUDING the last month — the most recent ~21 trading days carry
+    # short-term reversal that contaminates the signal and lowers its IC.
+    # Prefer the closes-based 12-1 window (t-273 → t-22 ≈ 12m ending 1m
+    # ago); fall back to micro.fifty_two_week_change (which DOES include
+    # the last month) only when the price series is too short.
     chg_52w: float | None = None
-    if micro is not None and _is_finite(micro.fifty_two_week_change):
+    if closes_present and closes is not None and len(closes) >= 273:
+        old = float(closes.iloc[-273])
+        recent = float(closes.iloc[-22])
+        if old > 0:
+            chg_52w = recent / old - 1.0
+    elif micro is not None and _is_finite(micro.fifty_two_week_change):
         chg_52w = float(micro.fifty_two_week_change)
-    elif closes_present and closes is not None and len(closes) >= 252:
-        ref = float(closes.iloc[-252])
-        if ref > 0:
-            chg_52w = (float(closes.iloc[-1]) - ref) / ref
     components.append(_Component(
         "change_52w", chg_52w,
         _ramp3(chg_52w, full=0.50, half=0.0, zero=-0.30) if chg_52w is not None else None,
-        0.18,
+        0.22,  # QW6: 0.18→0.22 (absorbs de-weighted 30d reversal lane)
     ))
 
     # --- 30-day momentum --------------------------------------------------
@@ -1143,7 +1150,8 @@ def _momentum(
     components.append(_Component(
         "momentum_30d", mom30,
         _ramp3(mom30, full=0.10, half=0.0, zero=-0.10) if mom30 is not None else None,
-        0.14,
+        0.06,  # QW6: 0.14→0.06 — 30d return is mostly short-term
+               # reversal (sign often opposite the 12-1 edge); demoted.
     ))
 
     # --- 90-day momentum --------------------------------------------------
@@ -1184,7 +1192,7 @@ def _momentum(
          "ema50": _safe_round(ema50_v or 0.0, 2),
          "ema200": _safe_round(ema200_v or 0.0, 2)} if trend_score is not None else None,
         trend_score,
-        0.12,
+        0.16,  # QW6: 0.12→0.16 (absorbs de-weighted 30d reversal lane)
     ))
 
     # --- Price vs EMA200 -------------------------------------------------
