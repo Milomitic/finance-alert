@@ -905,7 +905,9 @@ def _growth(stock: Stock, fundamentals: Fundamentals | None, sector_stats: Secto
         _blended_hib(qeg, _med("earnings_quarterly_growth_median"),
                      abs_full=0.25, abs_half=0.0, abs_zero=-0.15,
                      rel_full_pp=0.10),
-        0.10,
+        0.06,  # M1: 0.10→0.06 — single-quarter EPS growth is the
+               # noisiest, most YoY-redundant lane (collinear cluster);
+               # weight shifted to the orthogonal beats + persistent 5Y.
     sector_median=_med("earnings_quarterly_growth_median"),
     ))
     qrg = micro.revenue_quarterly_growth if micro else None
@@ -914,7 +916,7 @@ def _growth(stock: Stock, fundamentals: Fundamentals | None, sector_stats: Secto
         _blended_hib(qrg, _med("revenue_quarterly_growth_median"),
                      abs_full=0.10, abs_half=0.0, abs_zero=-0.06,
                      rel_full_pp=0.05),
-        0.08,
+        0.05,  # M1: 0.08→0.05 — same collinear-QoQ rationale.
     sector_median=_med("revenue_quarterly_growth_median"),
     ))
 
@@ -936,9 +938,9 @@ def _growth(stock: Stock, fundamentals: Fundamentals | None, sector_stats: Secto
     if last4:
         beats = sum(1 for e in last4 if e.eps_reported > e.eps_estimate)
         beat_score = _ramp3(float(beats), full=4.0, half=2.0, zero=0.0)
-        components.append(_Component("earnings_beats", beats, beat_score, 0.12))
+        components.append(_Component("earnings_beats", beats, beat_score, 0.15))  # M1: 0.12→0.15 (PEAD = most orthogonal growth-adjacent signal)
     else:
-        components.append(_Component("earnings_beats", None, None, 0.12))
+        components.append(_Component("earnings_beats", None, None, 0.15))
 
     # --- Multi-year CAGRs (sector-aware) --------------------------------
     # Replaces the old inline "revenue_cagr_3y" (which was actually a
@@ -951,7 +953,7 @@ def _growth(stock: Stock, fundamentals: Fundamentals | None, sector_stats: Secto
         _blended_hib(r5, _med("revenue_growth_5y_median"),
                      abs_full=0.15, abs_half=0.05, abs_zero=-0.05,
                      rel_full_pp=0.04),
-        0.13,
+        0.15,  # M1: 0.13→0.15 — multi-year persistence > single quarter.
     sector_median=_med("revenue_growth_5y_median"),
     ))
     e5 = micro.earnings_growth_5y if micro else None
@@ -960,7 +962,7 @@ def _growth(stock: Stock, fundamentals: Fundamentals | None, sector_stats: Secto
         _blended_hib(e5, _med("earnings_growth_5y_median"),
                      abs_full=0.15, abs_half=0.05, abs_zero=-0.05,
                      rel_full_pp=0.04),
-        0.13,
+        0.15,  # M1: 0.13→0.15 — multi-year persistence > single quarter.
     sector_median=_med("earnings_growth_5y_median"),
     ))
 

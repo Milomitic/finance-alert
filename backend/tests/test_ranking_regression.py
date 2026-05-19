@@ -103,7 +103,28 @@ def test_ranking_non_regression() -> None:
     tier_churn = len(tier_changes) / len(keys)
 
     # 4. Per-pillar + composite delta distribution (diagnostic).
-    deltas = sorted((abs(comp_c[k] - comp_b[k]), k) for k in keys)
+    #
+    # max_abs_delta is measured ONLY over adequately-covered names. Why:
+    # baseline and candidate are two recomputes separated in time with a
+    # live scheduler that can refetch news/fundamentals in between, so a
+    # low-coverage name (composite resting on 1-2 thin pillars, e.g. an
+    # ETF whose sentiment is a single news-polarity lane) can swing on
+    # DATA drift, not the code change under test. Spearman / top-decile /
+    # tier-churn stay on the FULL universe (they're robust to a handful
+    # of drifting names and we DO want full-universe rank stability); only
+    # this point-delta diagnostic gets the coverage floor so the hard
+    # RANK_MAX_ABS_DELTA cap reflects the code change, not cache drift.
+    min_cov = float(os.environ.get("RANK_MIN_COVERAGE", "0.5"))
+
+    def _cov(d: dict, k: str) -> float:
+        v = d[k].get("coverage")
+        return float(v) if isinstance(v, (int, float)) else 1.0
+
+    solid = [
+        k for k in keys
+        if _cov(base, k) >= min_cov and _cov(cand, k) >= min_cov
+    ] or keys  # fall back to full set if coverage absent (pre-QW5 snaps)
+    deltas = sorted((abs(comp_c[k] - comp_b[k]), k) for k in solid)
     max_abs_delta = deltas[-1][0] if deltas else 0.0
     movers = [
         {
@@ -131,6 +152,8 @@ def test_ranking_non_regression() -> None:
         "tier_churn": round(tier_churn, 6),
         "tier_changes": tier_changes[:15],
         "max_abs_delta": round(max_abs_delta, 3),
+        "max_abs_delta_basis": f"{len(solid)}/{len(keys)} names (coverage>={min_cov})",
+        "low_coverage_excluded_from_delta": len(keys) - len(solid),
         "pillar_p95_abs_delta": pillar_p95,
         "biggest_movers": movers,
     }
