@@ -1302,9 +1302,15 @@ def _momentum(
     ))
 
     # --- Relative strength vs S&P 500 ------------------------------------
+    # QW4: only meaningful for US names. Subtracting the S&P 500 12-month
+    # return from a .MI / .L / .HK stock injects US market beta as fake
+    # idiosyncratic alpha (wrong-benchmark error). Better "no signal"
+    # (component neutralised → renormalised away) than a wrong one, until
+    # a per-listing-market benchmark is wired (Medium follow-up).
     rel_strength: float | None = None
     if (
-        micro is not None
+        stock.country == "US"
+        and micro is not None
         and _is_finite(micro.fifty_two_week_change)
         and _is_finite(micro.sp500_fifty_two_week_change)
     ):
