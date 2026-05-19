@@ -1569,6 +1569,56 @@ def _classify_risk(
     return "moderate"
 
 
+def _risk_overlay_factor(
+    vol_90d: float | None, micro: MicroData | None
+) -> tuple[float, str]:
+    """M2 — bounded risk-adjustment multiplier for the composite.
+
+    The score used to be risk-blind: beta/vol fed only the risk *tier*,
+    so a stock that earned its momentum/growth with 1.8 beta scored the
+    same as a calm compounder. That rewards unremunerated risk and
+    ignores the low-volatility anomaly (one of the most robust documented
+    factors). This applies a *centred, bounded* haircut/bonus:
+
+      90d daily-return vol   factor
+      ≤ 1.0%/day             1.05  (low-vol bonus, capped)
+      1.0 → 2.0%/day         1.05 → 1.00 (linear)
+      2.0%/day  (neutral)    1.00  (median name ≈ unchanged → score
+                                    calibration / labels preserved)
+      2.0 → 5.0%/day         1.00 → 0.88 (linear)
+      ≥ 5.0%/day             0.88  (max 12% haircut)
+
+    Falls back to beta when vol is unavailable; no-op (1.0) when neither
+    is present (consistent with missing-data neutralisation). Bounded to
+    [0.88, 1.05] so it nudges the ranking toward risk-adjusted quality
+    without dominating the fundamental signal or rescaling the universe.
+    """
+    if vol_90d is not None and _is_finite(vol_90d):
+        v = float(vol_90d)
+        if v <= 1.0:
+            f = 1.05
+        elif v <= 2.0:
+            f = 1.05 + (1.00 - 1.05) * (v - 1.0) / 1.0
+        elif v <= 5.0:
+            f = 1.00 + (0.88 - 1.00) * (v - 2.0) / 3.0
+        else:
+            f = 0.88
+        return max(0.88, min(1.05, f)), f"vol90d={round(v, 3)}"
+    beta = micro.beta if micro is not None else None
+    if _is_finite(beta) and beta is not None:
+        b = float(beta)
+        if b <= 0.8:
+            f = 1.03
+        elif b <= 1.3:
+            f = 1.03 + (1.00 - 1.03) * (b - 0.8) / 0.5
+        elif b <= 2.0:
+            f = 1.00 + (0.90 - 1.00) * (b - 1.3) / 0.7
+        else:
+            f = 0.90
+        return max(0.88, min(1.05, f)), f"beta={round(b, 3)}"
+    return 1.0, "no-risk-input"
+
+
 # ---------------------------------------------------------------------------
 # Composite + weight renormalisation.
 # ---------------------------------------------------------------------------
@@ -1766,11 +1816,19 @@ def _build_score(
         "sentiment": s_score,
     }
     weights = _renormalize_weights(sub)
-    composite = sum((sub[k] or 0.0) * weights[k] for k in PILLAR_WEIGHTS)
-    composite = _safe_round(composite, 1)
+    composite_raw = sum((sub[k] or 0.0) * weights[k] for k in PILLAR_WEIGHTS)
 
     vol_90d = _compute_volatility_90d(closes)
     risk_tier = _classify_risk(stock, micro, vol_90d)
+
+    # M2 — risk overlay: bounded, centred haircut/bonus so the composite
+    # is risk-adjusted (was risk-blind; beta/vol only fed the tier).
+    risk_factor, risk_basis = _risk_overlay_factor(vol_90d, micro)
+    # Clamp to [0, 100]: the low-vol bonus (≤1.05) must not push a
+    # near-perfect score past the 0-100 contract the UI/labels rely on.
+    composite = _safe_round(
+        max(0.0, min(100.0, composite_raw * risk_factor)), 1
+    )
 
     breakdown: dict[str, Any] = {
         "profitability": p_break,
@@ -1805,6 +1863,13 @@ def _build_score(
             ),
             "pillars_present": sum(1 for v in sub.values() if v is not None),
             "pillars_total": len(sub),
+            # M2 — explainable risk overlay: raw (pre-risk) composite,
+            # the bounded factor applied, and which input drove it.
+            "risk_adjust": {
+                "composite_raw": _safe_round(composite_raw, 1),
+                "factor": _safe_round(risk_factor, 4),
+                "basis": risk_basis,
+            },
         },
         "risk_inputs": {
             "beta": _safe_round(micro.beta, 4) if micro and _is_finite(micro.beta) else None,

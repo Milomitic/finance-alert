@@ -540,7 +540,11 @@ def test_build_score_missing_pillar_renormalises():
     assert cs.sub_scores["growth"] is None
     assert cs.sub_scores["value"] is None
     assert cs.sub_scores["sentiment"] is None
-    assert cs.composite == pytest.approx(cs.sub_scores["momentum"], abs=0.1)
+    # M2: composite = renormalised momentum-only * bounded risk overlay.
+    rf = cs.breakdown["_meta_global"]["risk_adjust"]["factor"]
+    assert cs.composite == pytest.approx(
+        min(100.0, cs.sub_scores["momentum"] * rf), abs=0.1
+    )
 
 
 def test_build_score_exposes_global_coverage():
@@ -558,8 +562,11 @@ def test_build_score_exposes_global_coverage():
     assert mg["coverage"] < 0.5
     # Per-pillar coverage present on the pillar that scored.
     assert 0.0 < cs.breakdown["momentum"]["_meta"]["coverage"] <= 1.0
-    # Additive: composite still the renormalised momentum-only score.
-    assert cs.composite == pytest.approx(cs.sub_scores["momentum"], abs=0.1)
+    # Composite = renormalised momentum-only * bounded M2 risk overlay.
+    rf = cs.breakdown["_meta_global"]["risk_adjust"]["factor"]
+    assert cs.composite == pytest.approx(
+        min(100.0, cs.sub_scores["momentum"] * rf), abs=0.1
+    )
 
 
 def test_build_score_breakdown_is_json_serialisable():
