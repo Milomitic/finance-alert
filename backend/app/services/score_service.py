@@ -1434,7 +1434,9 @@ def _sentiment(
     components.append(_Component(
         "price_target_upside", upside,
         _ramp3(upside, full=0.20, half=0.0, zero=-0.10) if upside is not None else None,
-        0.30,
+        0.10,  # QW2: 0.30→0.10 — low-IC, lagging, anchored, sell-side
+               # optimism bias; also the main Sentiment↔Momentum crowding
+               # channel (targets are anchored to price).
     ))
 
     # --- Analyst recommendation mean (1=strong buy ↔ 5=sell) --------------
@@ -1452,7 +1454,8 @@ def _sentiment(
     components.append(_Component(
         "net_upgrades_90d", net_up,
         _ramp3(float(net_up), full=3.0, half=0.0, zero=-3.0) if net_up is not None else None,
-        0.18,
+        0.28,  # QW2: 0.18→0.28 — estimate-revision/upgrade flow is the
+               # robust analyst signal (higher IC than target levels).
     ))
 
     # --- News volume (recent count) -------------------------------------
@@ -1478,7 +1481,7 @@ def _sentiment(
     if _is_finite(spf) and spf is not None and spf >= 0:
         # Lower-is-better ramp: 0% → full, 20% → zero, half at 5%.
         spf_score = _ramp3(spf, full=0.0, half=0.05, zero=0.20)
-    components.append(_Component("short_percent_of_float", spf, spf_score, 0.05))
+    components.append(_Component("short_percent_of_float", spf, spf_score, 0.15))  # QW2: 0.05→0.15 (robust, under-weighted anomaly)
 
     return _aggregate(components)
 
