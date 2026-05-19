@@ -22,6 +22,7 @@ from app.services import score_service, stock_fundamentals_service, stock_news_s
 from app.services.score_service import (
     PILLAR_WEIGHTS,
     _ComputedScore,
+    _apply_cross_sectional_engine,
     _apply_turnover_control,
     _build_score,
     _classify_risk,
@@ -623,6 +624,69 @@ def test_m3_ewma_and_tier_hysteresis(db: Session):
     _apply_turnover_control(db, cs2)
     assert cs2.risk_tier == "conservative"
     assert cs2.breakdown["_meta_global"]["turnover"]["tier_held"] is False
+
+
+def _seed_scored(db: Session, sector: str, comps: list[float]) -> list[Stock]:
+    import datetime as _dt
+    stocks = []
+    for i, c in enumerate(comps):
+        s = Stock(ticker=f"XS{i}", exchange="NMS", name=f"XS{i}",
+                  sector=sector, market_cap=int(1e10))
+        db.add(s)
+        db.flush()
+        bd = {
+            "growth": {"_meta": {"coverage": 1.0}},
+            "value": {"_meta": {"coverage": 1.0}},
+            "momentum": {"_meta": {"coverage": 1.0}},
+            "profitability": {"_meta": {"coverage": 1.0}},
+            "sustainability": {"_meta": {"coverage": 1.0}},
+            "sentiment": {"_meta": {"coverage": 1.0}},
+            "_meta_global": {"risk_adjust": {"factor": 1.0}},
+        }
+        db.add(StockScore(
+            stock_id=s.id, composite=c, growth=c, value=c, momentum=c,
+            profitability=c, sustainability=c, sentiment=c,
+            risk_tier="moderate",
+            computed_at=_dt.datetime.now(_dt.timezone.utc),
+            breakdown=json.dumps(bd),
+        ))
+        stocks.append(s)
+    db.commit()
+    return stocks
+
+
+def test_m4_xs_engine_additive_when_flag_off(db: Session, monkeypatch):
+    """M4: flag OFF → composite untouched, but breakdown._xs annotated
+    with a within-sector percentile (stationary, no fixed knots)."""
+    monkeypatch.delenv("SCORE_ENGINE_XS", raising=False)
+    stocks = _seed_scored(db, "Technology", [10, 20, 30, 40, 50, 60, 70, 80, 90, 100])
+    _apply_cross_sectional_engine(db, stocks)
+    rows = {s.ticker: db.query(StockScore).filter_by(stock_id=s.id).one()
+            for s in stocks}
+    for s in stocks:
+        sc = rows[s.ticker]
+        xs = json.loads(sc.breakdown)["_xs"]
+        assert xs["flag_on"] is False
+        assert 0.0 <= xs["composite"] <= 100.0
+        assert 0.0 <= xs["pillars_pct"]["growth"] <= 100.0
+    # composite unchanged (additive)
+    assert rows["XS0"].composite == 10.0 and rows["XS9"].composite == 100.0
+    # monotone: the strongest raw name is the top percentile
+    a = json.loads(rows["XS0"].breakdown)["_xs"]["composite"]
+    b = json.loads(rows["XS9"].breakdown)["_xs"]["composite"]
+    assert b > a
+
+
+def test_m4_xs_engine_overwrites_composite_when_flag_on(db: Session, monkeypatch):
+    """M4: flag ON → live composite becomes the cross-sectional score."""
+    monkeypatch.setenv("SCORE_ENGINE_XS", "1")
+    stocks = _seed_scored(db, "Energy", [25, 35, 45, 55, 65, 75, 85, 95, 50, 60])
+    _apply_cross_sectional_engine(db, stocks)
+    for s in stocks:
+        sc = db.query(StockScore).filter_by(stock_id=s.id).one()
+        xs = json.loads(sc.breakdown)["_xs"]
+        assert xs["flag_on"] is True
+        assert sc.composite == xs["composite"]  # cutover applied
 
 
 def test_build_score_breakdown_is_json_serialisable():
