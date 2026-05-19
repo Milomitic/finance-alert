@@ -476,7 +476,7 @@ def _profitability(
         _blended_hib(micro.return_on_equity, _med("roe_median"),
                      abs_full=0.20, abs_half=0.10, abs_zero=0.0,
                      rel_full_pp=0.05),
-        0.22,
+        0.26,  # QW1: rebalanced after moving ownership out (0.22→0.26)
         sector_median=_med("roe_median"),
     ))
     components.append(_Component(
@@ -484,7 +484,7 @@ def _profitability(
         _blended_hib(micro.return_on_assets, _med("roa_median"),
                      abs_full=0.10, abs_half=0.05, abs_zero=0.0,
                      rel_full_pp=0.025),
-        0.15,
+        0.18,  # QW1: rebalanced (roa 0.15→0.18)
         sector_median=_med("roa_median"),
     ))
     components.append(_Component(
@@ -492,7 +492,7 @@ def _profitability(
         _blended_hib(micro.profit_margins, _med("profit_margin_median"),
                      abs_full=0.20, abs_half=0.10, abs_zero=0.0,
                      rel_full_pp=0.05),
-        0.20,
+        0.24,  # QW1: rebalanced (profit_margin 0.20→0.24)
         sector_median=_med("profit_margin_median"),
     ))
     components.append(_Component(
@@ -500,7 +500,7 @@ def _profitability(
         _blended_hib(micro.operating_margins, _med("operating_margin_median"),
                      abs_full=0.20, abs_half=0.10, abs_zero=0.0,
                      rel_full_pp=0.05),
-        0.15,
+        0.18,  # QW1: rebalanced (operating_margin 0.15→0.18)
         sector_median=_med("operating_margin_median"),
     ))
     components.append(_Component(
@@ -508,20 +508,27 @@ def _profitability(
         _blended_hib(micro.gross_margins, _med("gross_margin_median"),
                      abs_full=0.50, abs_half=0.30, abs_zero=0.10,
                      rel_full_pp=0.10),
-        0.13,
+        0.14,  # QW1: rebalanced (gross_margin 0.13→0.14); sum=1.00
         sector_median=_med("gross_margin_median"),
     ))
+    # QW1: ownership is NOT profitability — insider/institutional holdings
+    # are a positioning/sentiment signal that was contaminating the
+    # economic meaning of this pillar and inflating its correlation with
+    # Size/Sentiment. Kept at weight 0.0 (still shown in the breakdown as
+    # informational, contributes nothing to the pillar score). A future
+    # Medium refactor can promote them to a separate "Positioning"
+    # micro-factor with its own (small) composite weight.
     components.append(_Component(
         "insider_holdings", micro.held_percent_insiders,
         _ramp3(micro.held_percent_insiders, full=0.10, half=0.03, zero=0.0)
         if _is_finite(micro.held_percent_insiders) else None,
-        0.07,
+        0.0,
     ))
     components.append(_Component(
         "institutional_holdings", micro.held_percent_institutions,
         _ramp3(micro.held_percent_institutions, full=0.70, half=0.40, zero=0.10)
         if _is_finite(micro.held_percent_institutions) else None,
-        0.08,
+        0.0,
     ))
 
     return _aggregate(components)
@@ -1003,7 +1010,7 @@ def _value(
         "pe", micro.trailing_pe,
         _blended_lib_multiple(micro.trailing_pe, _med("pe_median"),
                               abs_full=22.0, abs_half=33.0, abs_zero=44.0),
-        0.22,
+        0.25,  # QW1: +0.03 (absorbs part of removed payout double-count)
     sector_median=_med("pe_median"),
     ))
 
@@ -1022,7 +1029,7 @@ def _value(
         "peg", peg,
         _blended_lib_multiple(peg, _med("peg_median"),
                               abs_full=1.0, abs_half=2.0, abs_zero=3.0),
-        0.18,
+        0.21,  # QW1: +0.03 (absorbs part of removed payout double-count)
     sector_median=_med("peg_median"),
     ))
 
@@ -1049,7 +1056,7 @@ def _value(
         "ev_ebitda", micro.enterprise_to_ebitda,
         _blended_lib_multiple(micro.enterprise_to_ebitda, _med("ev_ebitda_median"),
                               abs_full=8.0, abs_half=14.0, abs_zero=25.0),
-        0.10,
+        0.11,  # QW1: +0.01 (absorbs part of removed payout double-count)
     sector_median=_med("ev_ebitda_median"),
     ))
 
@@ -1077,21 +1084,13 @@ def _value(
     sector_median=_med("dividend_yield_median"),
     ))
 
-    # --- Payout ratio sanity (no sector aggregate; healthy 30-60% band) -
-    pr = micro.payout_ratio
-    pr_score = None
-    if _is_finite(pr) and pr is not None and (dy_pct is not None and dy_pct > 0):
-        if pr <= 0:
-            pr_score = 0.0
-        elif pr <= 0.30:
-            pr_score = 70.0
-        elif pr <= 0.60:
-            pr_score = 100.0
-        elif pr <= 1.0:
-            pr_score = max(0.0, 100.0 * (1.0 - (pr - 0.60) / 0.40))
-        else:
-            pr_score = 0.0
-    components.append(_Component("payout_ratio", pr if dy_pct else None, pr_score, 0.07))
+    # QW1: payout-ratio sanity REMOVED from Value — it was double-counted
+    # (identical lane already weighted 0.07 in _sustainability). Keeping it
+    # in both pillars put implicit ~+0.07 leverage on a single low-IC
+    # dividend-safety signal. The freed 0.07 was redistributed to the core
+    # value multiples (P/E +0.03, PEG +0.03, EV/EBITDA +0.01) so the pillar
+    # still sums to 1.0. Dividend *yield* (a genuine value signal) stays;
+    # only the duplicated payout *sanity* lane is dropped here.
 
     return _aggregate(components)
 
