@@ -63,8 +63,16 @@ function mergeLiveQuoteIntoOhlcv(
   live: LiveQuote | undefined,
   range: string,
 ): OhlcvBar[] {
-  if (range === "30m" || range === "1h") return ohlcv;
+  if (range === "5m" || range === "30m" || range === "1h") return ohlcv;
   if (!live || live.price == null || ohlcv.length === 0) return ohlcv;
+  // Only overlay the live quote during a genuine open session. When the
+  // market is CLOSED the backend's live-quote fallback echoes the last
+  // DB bar verbatim (price = last.close, day_open/high/low = last bar,
+  // market_state="CLOSED"); appending that as a "today" bar produced a
+  // phantom candle that is an exact duplicate of the last real bar
+  // (the reported bug). Closed / pre-open / unknown → no overlay: the
+  // last finalized bar correctly stays the rightmost candle.
+  if (live.market_state !== "OPEN") return ohlcv;
 
   const last = ohlcv[ohlcv.length - 1];
   const liveOpen = live.day_open ?? live.price;

@@ -33,8 +33,9 @@ from threading import Lock
 from loguru import logger
 
 # v2 timeframe vocabulary (matches `services/timeframe_service`):
-# 30m/1h are intraday, 1d/1w/1m are daily-resolution at increasing
-# aggregation, `all` = full history at daily. Legacy keys map to the
+# 5m/30m/1h are intraday, 1d/1w/1m are daily-resolution at increasing
+# aggregation. `all` was removed from the selector; it survives only as
+# a legacy alias → monthly (its closest meaning). Legacy keys map to the
 # closest equivalent for old URLs.
 #
 # 4h was dropped — yfinance hourly bars start at the trading-session
@@ -42,13 +43,14 @@ from loguru import logger
 # sequential 4-bar grouping produced candles misaligned with what other
 # tools show. Use 1h for sub-daily granularity instead.
 _RANGE_TO_YF: dict[str, tuple[str, str]] = {
+    "5m":  ("60d",  "5m"),
     "30m": ("60d",  "30m"),
     "1h":  ("730d", "1h"),
     "1d":  ("max",  "1d"),
     "1w":  ("max",  "1wk"),
     "1m":  ("max",  "1mo"),
-    "all": ("max",  "1d"),
-    # Legacy
+    # Legacy aliases for old URLs/bookmarks ("all" → monthly).
+    "all": ("max",  "1mo"),
     "1y":  ("max",  "1d"),
     "3m":  ("730d", "1h"),
     "6m":  ("730d", "1h"),
@@ -144,7 +146,7 @@ def _fetch_fresh(symbol: str, range_key: str) -> MarketDetailDC | None:
 
     # Intraday timeframes (30m/1h) need full datetime so each bar gets
     # a unique chart timestamp; daily+ keeps date-only YYYY-MM-DD.
-    is_intraday = range_key in ("30m", "1h")
+    is_intraday = range_key in ("5m", "30m", "1h")
     bars: list[OhlcvBar] = []
     for ts, row in hist.iterrows():
         try:

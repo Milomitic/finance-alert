@@ -203,16 +203,20 @@ def get_stock_detail(
     db: Session = Depends(get_db),
     _user: User = Depends(get_current_user),
 ) -> StockDetailOut:
-    # v2 timeframe vocabulary: 30m/1h are intraday (yfinance live),
-    # 1d/1w/1m/all are daily-resolution (DB-backed for catalog stocks).
-    # Legacy keys (1y/3m/6m/5y/4h) accepted for backward-compat URLs and
-    # mapped to nearest equivalent. 4h was dropped because yfinance
-    # hourly bars don't divide cleanly into 4h boundaries — see
-    # `services/timeframe_service.py` for the full rationale.
-    LEGACY_TF_MAP = {"1y": "1d", "3m": "1h", "6m": "1h", "5y": "1w", "4h": "1h"}
+    # v2 timeframe vocabulary: 5m/30m/1h are intraday (yfinance live),
+    # 1d/1w/1m are daily-resolution (DB-backed for catalog stocks).
+    # Legacy keys (1y/3m/6m/5y/4h, and the now-removed "all") accepted for
+    # backward-compat URLs and mapped to the nearest equivalent — "all"
+    # → "1m" (monthly long-term view, its closest surviving meaning). 4h
+    # was dropped because yfinance hourly bars don't divide cleanly into
+    # 4h boundaries — see `services/timeframe_service.py` for rationale.
+    LEGACY_TF_MAP = {
+        "1y": "1d", "3m": "1h", "6m": "1h", "5y": "1w", "4h": "1h",
+        "all": "1m",
+    }
     if range in LEGACY_TF_MAP:
         range = LEGACY_TF_MAP[range]
-    if range not in ("30m", "1h", "1d", "1w", "1m", "all"):
+    if range not in ("5m", "30m", "1h", "1d", "1w", "1m"):
         raise HTTPException(status_code=422, detail="invalid timeframe")
     detail = stock_detail_service.get_detail(db, ticker, range_key=range)
     if detail is None:

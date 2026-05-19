@@ -75,26 +75,25 @@ FIXED_MACD_SLOW = 26
 FIXED_MACD_SIGNAL = 9
 
 VALID_TIMEFRAMES: tuple[str, ...] = (
-    "30m", "1h", "1d", "1w", "1m", "all",
+    "5m", "30m", "1h", "1d", "1w", "1m",
 )
 
 # yfinance (period, interval) per timeframe.
 #
-# "all" intentionally uses the same MONTHLY interval as "1m". Rationale
-# (per user request 2026-05-12): showing every daily bar across 20+ years
-# crushes the chart into one dense black smear with daily ticks on the
-# x-axis. Aggregating to monthly bars gives readable trend visibility and
-# matches the natural "I want the long-term shape" mental model. The
-# difference vs "1m" is purely the default zoom: "1m" caps to ~240 bars
-# (~20y) via defaultVisibleBars, while "all" returns every monthly bar
-# the symbol has (useful for tickers older than 20y like KO, JNJ).
+# "all" was removed (per user request): it duplicated "1m" (same monthly
+# interval, differing only in default zoom) and added selector clutter.
+# Legacy ?range=all links are mapped to "1m" at the route layer; this
+# service falls back to "1d" for any unknown timeframe as a last resort.
+#
+# "5m" added: yfinance's 5-minute interval. Like 30m it is hard-capped
+# at 60 days of history by Yahoo's intraday endpoint.
 _YF_TIMEFRAME: dict[str, tuple[str, str]] = {
+    "5m":  ("60d",  "5m"),
     "30m": ("60d",  "30m"),
     "1h":  ("730d", "1h"),
     "1d":  ("max",  "1d"),
     "1w":  ("max",  "1wk"),
     "1m":  ("max",  "1mo"),
-    "all": ("max",  "1mo"),
 }
 
 # Intraday timeframes need yfinance — DB only stores daily. Daily and
@@ -103,7 +102,7 @@ _YF_TIMEFRAME: dict[str, tuple[str, str]] = {
 # open and don't align with traditional 4h candle boundaries, so
 # sequential 4-bar grouping produced misaligned candles vs. other
 # charting tools.
-_INTRADAY = frozenset({"30m", "1h"})
+_INTRADAY = frozenset({"5m", "30m", "1h"})
 
 # 5-min cache for intraday fetches (Yahoo intraday delay is already
 # ~15min; staleness within 5 min is invisible to the user).
@@ -363,12 +362,10 @@ def fetch_bars(
         if timeframe == "1d":
             bars = daily
         else:
-            # "all" is monthly now (see _YF_TIMEFRAME doc above). For the
-            # DB-served path we resample daily → monthly using the same
-            # rule as "1m" so both timeframes render at identical bar
-            # resolution. "1w" / "1m" go through their own resample rules.
-            tf_for_resample = "1m" if timeframe == "all" else timeframe
-            bars = _resample_daily_to(daily, tf_for_resample)
+            # Daily-resolution non-1d timeframes ("1w"/"1m") resample the
+            # DB daily series with their own rules. (Intraday 5m/30m/1h
+            # never reach here — handled by the yfinance branch above.)
+            bars = _resample_daily_to(daily, timeframe)
         _cache_put(ticker, timeframe, bars)
         return bars
 

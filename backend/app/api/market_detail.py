@@ -113,10 +113,11 @@ def get_market_detail(
     _user: User = Depends(get_current_user),
 ) -> MarketDetailOut:
     if range not in (
-        "30m", "1h", "1d", "1w", "1m", "all",
-        # legacy compat for old URLs/bookmarks (4h dropped — see
+        "5m", "30m", "1h", "1d", "1w", "1m",
+        # legacy compat for old URLs/bookmarks ("all" removed from the
+        # selector but still resolves → monthly; 4h dropped — see
         # services/timeframe_service.py for rationale)
-        "1y", "3m", "6m", "5y", "4h",
+        "all", "1y", "3m", "6m", "5y", "4h",
     ):
         raise HTTPException(status_code=422, detail="invalid timeframe")
     # Legacy 4h URL → fall through to "1h" inside market_detail_service

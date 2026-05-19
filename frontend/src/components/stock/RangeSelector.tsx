@@ -22,12 +22,15 @@ interface Props {
 // misaligned with what other charting tools show. Use 1h for
 // sub-daily granularity instead.
 const OPTIONS = [
+  { key: "5m",  label: "5m" },
   { key: "30m", label: "30m" },
   { key: "1h",  label: "1h" },
   { key: "1d",  label: "1d" },
   { key: "1w",  label: "1w" },
   { key: "1m",  label: "1m" },
-  { key: "all", label: "All" },
+  // "All" removed: it duplicated "1m" (same monthly bars, differing
+  // only in default zoom) and cluttered the selector. Legacy ?range=all
+  // links still resolve server-side → monthly.
 ];
 
 export function RangeSelector({ value, onChange }: Props) {
