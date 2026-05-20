@@ -15,14 +15,13 @@ SEEDS = [
     ("djia.csv", "DJI", "Dow Jones Industrial Average", "US"),
     ("ftsemib.csv", "FTSEMIB", "FTSE MIB", "IT"),
     ("eustx50.csv", "EUSTX50", "EuroStoxx 50", "EU"),
-    # SSE 50 — Chinese stocks ARE seeded again so they contribute to
-    # the dashboard breadth row + the Asia market-mood calculation,
-    # but they're filtered out of every user-facing surface (screener,
-    # search, scan/alerts). See `services/stock_service._apply_filter`
-    # and `services/scan_service.scan_run` for the filter points;
-    # `services/market_stats_service._load_metrics` intentionally does
-    # NOT filter, which is what makes the dual visibility work.
-    ("sse50.csv", "SSE50", "SSE 50", "CN"),
+    # SSE 50 removed from the catalog (user request, 2026-05). The
+    # Chinese constituents brought no signal vs the rest of the Asia
+    # bucket (HSI30 + KOSPI20 + N225 already cover the region), and
+    # they consumed yfinance quota on every scan. The index row + 50
+    # `.SS` Stock rows + per-ticker fetch_cache entries are purged by
+    # `app/scripts/remove_sse50.py`; re-seed entry deliberately not
+    # restored here so a `seed.py` re-run doesn't re-create them.
     ("hsi30.csv", "HSI30", "Hang Seng top 30", "HK"),
     # Nikkei 225 — top ~40 most-traded constituents seeded; full 225
     # would require a scraped feed. Yahoo tickers use the .T suffix

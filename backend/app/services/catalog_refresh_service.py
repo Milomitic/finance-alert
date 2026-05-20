@@ -79,23 +79,11 @@ INDEX_SOURCES: dict[str, dict[str, object]] = {
         "default_exchange": "XETRA",
         "currency": "EUR",
     },
-    # SSE 50 — refresh source restored. Chinese constituents are needed
-    # for breadth + Asia mood aggregation, but the user-facing surfaces
-    # (screener / search / alerts) filter them out via
-    # `Stock.country='CN'`. CSI 300 is intentionally NOT restored —
-    # SSE 50 alone is enough sample size for the breadth metric.
-    "SSE50": {
-        "url": "https://en.wikipedia.org/wiki/SSE_50_Index",
-        "name": "SSE 50",
-        "country": "CN",
-        "table_index": 1,
-        "ticker_col": "Ticker symbol",
-        "name_col": "Name",
-        "sector_col": "Industry",
-        "industry_col": None,
-        "default_exchange": "SSE",
-        "currency": "CNY",
-    },
+    # SSE 50 — refresh source REMOVED (2026-05). The index + all
+    # 50 .SS constituents were purged from the catalog (see
+    # `app/scripts/remove_sse50.py`). Keeping the entry here would
+    # cause `catalog_refresh` jobs to re-seed CN stocks the user
+    # asked to retire. CSI 300 was already not present.
     "HSI30": {
         # Code kept as HSI30 for backward-compat with snapshots/alerts; display
         # name now reflects the wider top-50 cut. Constituents table is at

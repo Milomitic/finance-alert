@@ -5,6 +5,7 @@ import { useMemo } from "react";
 import type { MoversBlock } from "@/api/types";
 import { StockIdentity } from "@/components/dashboard/StockIdentity";
 import { Card, CardContent } from "@/components/ui/card";
+import { FlashValue } from "@/components/ui/FlashValue";
 import { SectionTitle } from "@/components/ui/section-title";
 import { useLiveQuotes } from "@/hooks/useLiveQuote";
 import { projectVolRatio } from "@/lib/intradayVolume";
@@ -172,18 +173,32 @@ export function LiveVolumeMoversCard({ movers, computedAt }: Props) {
                     </div>
 
                     {/* Col 2: price — underline removed; live state
-                        now communicated by the green dot above. */}
+                        now communicated by the green dot above.
+                        Wrapped in FlashValue for the Wall-Street-tape
+                        tint (emerald uptick / rose downtick) on each
+                        15s polling refresh. `noTween` avoids running
+                        N simultaneous number-tweens on a 10-row list. */}
                     <div
                       className="shrink-0 text-sm font-semibold tabular-nums"
                       title={
                         livePulse ? "Prezzo live (polling 15s)" : "Ultima chiusura disponibile"
                       }
                     >
-                      {displayPrice != null ? `$${displayPrice.toFixed(2)}` : "—"}
+                      <FlashValue
+                        value={displayPrice}
+                        format={(p) => `$${p.toFixed(2)}`}
+                        noTween
+                      />
                     </div>
 
                     {/* Col 3: %change — to the RIGHT of the price, a
-                        notch larger than before (13px) for emphasis. */}
+                        notch larger than before (13px) for emphasis.
+                        Also flash-tinted on live ticks: the base
+                        green/red sign-color is the steady state, the
+                        flash briefly overrides during the ~700ms
+                        transition window (a downtick on a positive %
+                        flashes rose then settles back to green —
+                        classic NYSE tape behavior). */}
                     <span
                       className={cn(
                         "shrink-0 text-[13px] font-semibold tabular-nums w-[62px] text-right",
@@ -195,9 +210,11 @@ export function LiveVolumeMoversCard({ movers, computedAt }: Props) {
                       )}
                       title="Variazione % giornaliera (live)"
                     >
-                      {displayChange != null
-                        ? `${displayChange >= 0 ? "+" : ""}${displayChange.toFixed(2)}%`
-                        : "—"}
+                      <FlashValue
+                        value={displayChange}
+                        format={(p) => `${p >= 0 ? "+" : ""}${p.toFixed(2)}%`}
+                        noTween
+                      />
                     </span>
 
                     {/* Col 3: absolute volume — the actual ranking

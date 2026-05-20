@@ -29,15 +29,15 @@ interface RegionDef {
 // toward Italy. EUSTX50's broader 50-name pan-Eurozone basket is
 // the cleaner mood proxy.
 //
-// Asia mood blends Japan + Korea + Hong Kong + China. Japan ranks
-// first per user preference (Nikkei is the headline Asian benchmark
-// in most Italian financial press); SSE50 stays in the list so
-// mainland China still feeds the breadth/mood signal even though
-// its individual stocks are hidden from every user-facing surface.
+// Asia mood blends Japan + Korea + Hong Kong. Japan ranks first per
+// user preference (Nikkei is the headline Asian benchmark in most
+// Italian financial press). Mainland China (SSE50) removed 2026-05 —
+// the user retired the .SS constituents from the catalog and the
+// remaining three indices already cover the Asia signal adequately.
 const REGIONS: RegionDef[] = [
   { code: "US",   label: "USA",     flagSrc: "/flags/us.svg",   indexCodes: ["SP500", "NDX", "DJI"] },
   { code: "EU",   label: "Europa",  flagSrc: "/flags/eu.svg",   indexCodes: ["EUSTX50"] },
-  { code: "ASIA", label: "Asia",    flagSrc: null, emoji: "🌏", indexCodes: ["N225", "KOSPI20", "HSI30", "SSE50"] },
+  { code: "ASIA", label: "Asia",    flagSrc: null, emoji: "🌏", indexCodes: ["N225", "KOSPI20", "HSI30"] },
 ];
 
 const MOOD_CONFIG: Record<MoodKey, {

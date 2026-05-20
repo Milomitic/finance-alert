@@ -9,6 +9,7 @@ import {
 } from "@/components/dashboard/LiveVolumeMoversCard";
 import { StockIdentity } from "@/components/dashboard/StockIdentity";
 import { Card, CardContent } from "@/components/ui/card";
+import { FlashValue } from "@/components/ui/FlashValue";
 import { SectionTitle } from "@/components/ui/section-title";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useLiveQuotes } from "@/hooks/useLiveQuote";
@@ -96,7 +97,10 @@ function MoverRow({ m, field, live, computedAt, livePrice }: {
             reads "ticker → price → % move" left-to-right. When 1G is
             active and the polled overlay has a fresh price for this
             ticker we use that; otherwise we fall back to the snapshot's
-            last_close. */}
+            last_close. Wrapped in FlashValue → Wall-Street-tape flash
+            (green uptick / rose downtick) on every polling refresh.
+            `noTween` because list rows are many and simultaneous
+            number-tweens would look noisy; flash alone is enough. */}
         <span
           className="shrink-0 text-[13px] font-semibold tabular-nums text-foreground/85 w-[58px] text-right"
           title={
@@ -105,9 +109,20 @@ function MoverRow({ m, field, live, computedAt, livePrice }: {
               : "Ultima chiusura disponibile"
           }
         >
-          {displayPrice != null ? `$${displayPrice.toFixed(2)}` : "—"}
+          <FlashValue
+            value={displayPrice}
+            format={(p) => `$${p.toFixed(2)}`}
+            noTween
+          />
         </span>
-        {/* % change — headline metric. */}
+        {/* % change — headline metric. Also flash-tinted on live
+            updates: in 1G mode `change_pct` is overlaid from the
+            polled quote, so the cell ticks each 15s like a real
+            tape. The base sign-color (green/red) stays as the
+            steady-state; the flash briefly overrides during the
+            tween window per Wall-Street convention (a downtick on a
+            positive % still shows rose for ~700ms then settles back
+            to green). */}
         <span
           className={cn(
             "shrink-0 text-sm font-semibold tabular-nums w-[66px] text-right",
@@ -119,7 +134,11 @@ function MoverRow({ m, field, live, computedAt, livePrice }: {
               : "Variazione % nella finestra selezionata"
           }
         >
-          {v != null ? `${v >= 0 ? "+" : ""}${v.toFixed(2)}%` : "—"}
+          <FlashValue
+            value={v}
+            format={(p) => `${p >= 0 ? "+" : ""}${p.toFixed(2)}%`}
+            noTween
+          />
         </span>
         {/* Volume + multiplier — "12.4M (3.2×)". Font bumped 11→13px
             per user feedback: the figure was visually subordinate to

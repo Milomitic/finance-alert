@@ -23,7 +23,7 @@ const COLORS: Record<string, string> = {
   DJI:     "#1e40af",
   EUSTX50: "#10b981",
   FTSEMIB: "#84cc16",
-  SSE50:   "#f97316",
+  // SSE50 color removed 2026-05 along with the index itself.
   HSI30:   "#ec4899",
 };
 

@@ -20,7 +20,10 @@ const META: Record<string, IndexMeta> = {
   EUSTX50: { countryCode: "eu", country: "Europe",    fullName: "EuroStoxx 50",                     displayCode: "EUSTX50" },
   FTSEMIB: { countryCode: "it", country: "Italy",     fullName: "FTSE MIB (Milano)",                displayCode: "FTSEMIB" },
   FTSE100: { countryCode: "gb", country: "UK",        fullName: "FTSE 100 (London)",                displayCode: "FTSE100" },
-  SSE50:   { countryCode: "cn", country: "China",     fullName: "SSE 50",                           displayCode: "SSE50" },
+  // SSE50 removed 2026-05 — index + .SS constituents purged from
+  // the catalog. CSI 300 entry kept here for backward-compat if any
+  // historical snapshot row still references the code, but the
+  // index has no live members (the breadth row will simply omit it).
   CSI300:  { countryCode: "cn", country: "China",     fullName: "CSI 300 (Shanghai + Shenzhen)",    displayCode: "CSI300" },
   HSI30:   { countryCode: "hk", country: "Hong Kong", fullName: "Hang Seng top 50",                 displayCode: "HSI50" },
   N225:    { countryCode: "jp", country: "Japan",     fullName: "Nikkei 225 (top constituents)",   displayCode: "NIKKEI" },
