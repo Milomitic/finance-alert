@@ -305,14 +305,40 @@ function priceTargetTone(action: string | null | undefined): {
 }
 
 /** Compact price-target chip: shows the new dollar number + a tone-colored
- *  arrow indicating the direction of the change. The full prior→current
- *  detail moves to the row's hover tooltip — single-line layout doesn't
- *  have horizontal budget for both numbers, so we surface the most
- *  important value (new target) and the direction signal (↑/↓/=/✦). */
+ *  arrow indicating the direction of the change.
+ *
+ *  Uniform-slot behavior (added 2026-05 per user feedback): the target
+ *  slot is ALWAYS rendered, even when the action has no extracted
+ *  target. A row without a number shows "—" + an "n/d" tone so the
+ *  card alignment is consistent across yfinance-structured rows
+ *  (which usually carry the target) and news-extracted rows (which
+ *  sometimes only have firm + action). Previously the chip simply
+ *  vanished, leaving misaligned rows and the impression that some
+ *  analyst actions had "lost" their target field. */
 function PriceTargetChip({ a }: { a: AnalystAction }) {
-  const hasTarget = a.current_price_target != null && Number.isFinite(a.current_price_target);
-  if (!hasTarget) return null;
+  const hasTarget =
+    a.current_price_target != null && Number.isFinite(a.current_price_target);
   const ptTone = priceTargetTone(a.price_target_action);
+
+  if (!hasTarget) {
+    // Placeholder slot — keeps row alignment consistent and signals to
+    // the user that we tried but couldn't pin down the dollar amount
+    // for this particular row. Hover-title explains the n/d.
+    return (
+      <span
+        className="inline-flex items-center gap-0.5 tabular-nums shrink-0 text-muted-foreground/70 italic"
+        title={
+          a.from_news
+            ? "Target non riportato nel titolo/summary della news"
+            : "Target non fornito da questa fonte"
+        }
+      >
+        <span className="text-[13px]">·</span>
+        <span>—</span>
+      </span>
+    );
+  }
+
   const target = a.current_price_target!;
   // Drop cents when the target is a round number to save 3 chars of width
   // — yfinance's analyst targets are almost always whole-dollar values

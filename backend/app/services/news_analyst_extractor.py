@@ -36,6 +36,8 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
+from loguru import logger
+
 
 # ---------------------------------------------------------------------------
 # Firm matchers — order matters: more specific patterns FIRST so the longer
@@ -180,10 +182,14 @@ def extract_from_news_item(
     summary: str | None = None,
     published_at_iso: str | None = None,
     link: str | None = None,
+    ticker: str | None = None,
+    company_name: str | None = None,
 ) -> ExtractedAnalystMention | None:
     """Parse one news item (title + optional body summary).
 
-    Returns None if neither title nor body looks like an analyst action.
+    Returns None if neither title nor body looks like an analyst action
+    OR if the news item doesn't actually refer to the subject ticker
+    (see ticker-presence gate below).
 
     Strategy:
     1. Try the title first. Headlines have the highest signal-to-noise
@@ -197,11 +203,21 @@ def extract_from_news_item(
        most useful field for the user, so we squeeze it out of whichever
        text source has it.
 
+    ## Ticker-presence gate (anti-contamination)
+    The yfinance news feed often returns articles that are *correlated*
+    to the requested ticker but actually about a different company —
+    e.g. AAPL's feed surfaces "Wedbush raises Tesla target to $400"
+    because Tesla is a peer / sector neighbour. Without a gate we'd
+    extract the Tesla action and attribute it to AAPL's analyst list.
+    When `ticker` (and optionally `company_name`) are passed in, we
+    require the text to actually mention the subject — by ticker
+    symbol OR by company name — before accepting the extraction.
+    Recommended for all production callers; tests can omit them.
+
     Body-text caveat: summaries can mention historical analyst actions
-    that aren't the current article's subject (e.g. "On Tuesday Goldman
-    had raised the target..."). We accept that risk — false positives
-    surface as a "news" badge with click-through to the article, so the
-    user can verify on the source.
+    that aren't the current article's subject. We accept that risk —
+    false positives surface as a "news" badge with click-through to
+    the article, so the user can verify on the source.
 
     The published_at_iso is parsed for the `YYYY-MM-DD` date. Parse
     failures fall through to empty date.
@@ -218,30 +234,86 @@ def extract_from_news_item(
 
     # First pass: title alone.
     title_mention = _try_extract(title, date_str=date_str, link=link, source_title=title)
+
+    # Build the merged "best-effort" mention from title + body — only
+    # then apply the ticker-presence gate (so the gate sees the
+    # COMBINED corpus). Why this order: a title like "Apple gets
+    # target hike at $260" might not match the company name in
+    # `_is_about_ticker` (no "Apple" / "AAPL"), but the body might
+    # say "Apple Inc. saw Goldman raise its price target to $260".
     if title_mention is not None and title_mention.current_price_target is not None:
-        # Best case — title matched AND has a price target. Done.
-        return title_mention
+        merged = title_mention
+    else:
+        body_mention = (
+            _try_extract(summary, date_str=date_str, link=link, source_title=title)
+            if summary
+            else None
+        )
+        if title_mention is not None and body_mention is not None:
+            # Title matched (firm + action) but no target; body matched
+            # too. Prefer the title's firm classification (article
+            # subject) but lift the target from the body.
+            if body_mention.current_price_target is not None:
+                title_mention.current_price_target = body_mention.current_price_target
+            merged = title_mention
+        else:
+            merged = title_mention or body_mention
 
-    # Second pass: body. Either the title didn't match at all, or it
-    # matched but didn't yield a price target — we'll use the body to
-    # try to fill in the missing target.
-    body_mention = (
-        _try_extract(summary, date_str=date_str, link=link, source_title=title)
-        if summary
-        else None
-    )
+    if merged is None:
+        return None
 
-    if title_mention is not None and body_mention is not None:
-        # Title matched (firm + action) but had no target; body matched
-        # too. Prefer the title's firm classification (the article subject
-        # is the firm in the headline) but lift the target from the body.
-        if body_mention.current_price_target is not None:
-            title_mention.current_price_target = body_mention.current_price_target
-        return title_mention
+    # ── Ticker-presence gate ──
+    # When `ticker` is supplied, the news item must mention either the
+    # ticker symbol or the company name somewhere in title+summary,
+    # otherwise we treat the extraction as cross-ticker contamination
+    # and drop it. Callers without ticker context (legacy code, tests)
+    # bypass the gate.
+    haystack_known = " ".join(filter(None, [title, summary])).strip()
+    if ticker:
+        if not _is_news_about_ticker(haystack_known, ticker, company_name):
+            return None
 
-    # Either title-only-match (no body match), or body-only-match,
-    # or no match at all. Whichever is non-None wins.
-    return title_mention or body_mention
+    # ── Body-fetch last-resort enrichment ──
+    # If the merged extraction is missing the price target AND we
+    # have a link, GET the article and re-run the regex against the
+    # full body. The fetcher is best-effort (5s timeout, paywall
+    # skip-list, per-host circuit breaker, 24h cache) so this stage
+    # is conditional and cheap when it fails.
+    # We also re-check the ticker gate against the body — body text
+    # may name the ticker even when title+summary do not (which is a
+    # common case for syndicated news wires).
+    if merged.current_price_target is None and link:
+        try:
+            from app.services import news_body_fetcher
+            body = news_body_fetcher.fetch_article_body(link)
+        except Exception as e:  # noqa: BLE001
+            # Defensive — the fetcher already swallows its own errors,
+            # but a misbehaving import / network library shouldn't
+            # bring the whole news-merge down.
+            logger.debug(f"[analyst-extractor] body fetch failed: {e}")
+            body = None
+        if body:
+            # Truncate to a generous slice — regex backtracking on a
+            # 200 KB body is fast but not free, and the target/firm
+            # usually live in the first ~10 KB.
+            body_excerpt = body[:10_000]
+            # If we lacked a strong ticker signal in title+summary,
+            # the body must confirm it — guards against contamination
+            # via "story XYZ also mentioned in passing".
+            if ticker and not _is_news_about_ticker(
+                haystack_known + " " + body_excerpt, ticker, company_name,
+            ):
+                pass  # gate failed even with body → drop the enrichment
+            else:
+                body_target = _match_target(body_excerpt)
+                if body_target is not None:
+                    merged.current_price_target = body_target
+                # While we have the body, opportunistically fill in
+                # the grade / firm if title+summary missed them.
+                if not merged.to_grade:
+                    merged.to_grade = _match_grade(body_excerpt) or ""
+
+    return merged
 
 
 def _try_extract(
@@ -298,6 +370,87 @@ def extract_from_title(
 # ---------------------------------------------------------------------------
 # Internals
 # ---------------------------------------------------------------------------
+
+def _is_news_about_ticker(
+    text: str,
+    ticker: str,
+    company_name: str | None = None,
+) -> bool:
+    """Return True if `text` actually refers to `ticker` (or its
+    underlying company) — used as a gate against cross-ticker
+    contamination in news-feed extraction.
+
+    Match strategies (any one is enough):
+      1. Ticker symbol present as a standalone word, case-insensitive.
+         The Yahoo exchange suffix (".MI", ".PA", ".HK", ".US") is
+         stripped — news outlets quote the base symbol ("AAPL"), not
+         "AAPL.US".
+      2. Company name present, ignoring legal suffixes ("Inc.",
+         "Corporation", ", Ltd"). Both the full cleaned name and its
+         first significant token count: "Apple" matches a story
+         titled "Apple Inc. — Q4 beat"; "Goldman" alone matches when
+         the company is "Goldman Sachs Group, Inc.".
+
+    Tuning:
+      - First-word match requires length ≥ 4 to avoid matches on
+        short stop-words ("Inc", "Co", "AG") that appear everywhere.
+      - Full multi-word name match requires the whole sequence to
+        appear (case-insensitive) — guards against "Bank of America"
+        matching a Goldman-only article that mentions "the bank".
+    """
+    if not text:
+        return False
+    haystack_lc = text.lower()
+
+    # Strategy 1: ticker symbol. Strip any Yahoo exchange suffix.
+    base_ticker = ticker.split(".")[0].strip().lower()
+    if (
+        len(base_ticker) >= 1
+        and re.search(rf"\b{re.escape(base_ticker)}\b", haystack_lc)
+    ):
+        return True
+
+    # Strategy 2: company name (or first significant word).
+    if company_name:
+        clean = _strip_legal_suffixes(company_name).strip().lower()
+        if clean:
+            # Whole cleaned name — requires multi-word to be safe.
+            if " " in clean and clean in haystack_lc:
+                return True
+            # First significant token: skip articles and short
+            # stop-words by requiring length ≥ 4 so "Apple",
+            # "Microsoft", "Goldman" pass while "Banco" / "Inc" do not.
+            first = clean.split()[0] if clean else ""
+            if (
+                len(first) >= 4
+                and re.search(rf"\b{re.escape(first)}\b", haystack_lc)
+            ):
+                return True
+    return False
+
+
+# Legal/structural suffixes commonly appended to company names. Stripping
+# them before matching avoids "Apple Inc." failing to match "Apple".
+_LEGAL_SUFFIX_RE = re.compile(
+    r"\b(?:Inc\.?|Incorporated|Corp\.?|Corporation|Co\.?|Company|"
+    r"Ltd\.?|Limited|LLC|PLC|N\.V\.?|S\.A\.?|S\.p\.?A\.?|AG|"
+    r"Holdings?|Group|Trust|Partners?|"
+    r"International|Industries|Technologies|Tech|Holding)\b\.?",
+    re.IGNORECASE,
+)
+
+
+def _strip_legal_suffixes(name: str) -> str:
+    """Remove common trailing legal suffixes and stray punctuation so
+    name-based matching works against the way news outlets ACTUALLY
+    refer to the company."""
+    if not name:
+        return ""
+    cleaned = _LEGAL_SUFFIX_RE.sub("", name)
+    cleaned = re.sub(r"[,;()]+", " ", cleaned)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip(" .,-")
+    return cleaned
+
 
 def _match_firm(text: str) -> str | None:
     for canonical, pattern in _FIRM_PATTERNS:

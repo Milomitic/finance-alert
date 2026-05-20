@@ -316,8 +316,13 @@ def get_stock_fundamentals(
     # from news headlines — yfinance's upgrades_downgrades feed lags the
     # news cycle for many tickers. The merger dedupes by (firm, ±3-day
     # window), so the same action reported by both sources counts once.
-    # See `news_analyst_extractor` for the regex/firm-list rationale.
-    merged_actions = _merge_news_analyst_actions(ticker, f.analyst_actions)
+    # Passing `ticker + company_name` activates the ticker-presence gate
+    # in the extractor — news items that don't actually mention this
+    # company are dropped instead of being mis-attributed (cross-stock
+    # contamination via correlated-news feeds was a recurring bug).
+    merged_actions = _merge_news_analyst_actions(
+        ticker, f.analyst_actions, company_name=stock.name,
+    )
     # Sun/moon icon hint: classify the next earnings release timing relative
     # to the listing-country session. Country fed from `Stock.country`.
     next_earnings_when = classify_session_timing(
@@ -342,7 +347,12 @@ def get_stock_fundamentals(
     )
 
 
-def _merge_news_analyst_actions(ticker: str, structured_actions: list) -> list:
+def _merge_news_analyst_actions(
+    ticker: str,
+    structured_actions: list,
+    *,
+    company_name: str | None = None,
+) -> list:
     """Build the unified analyst-actions list: structured (yfinance +
     Finnhub) + news-derived (regex on news headlines). Returns a NEW
     list — never mutates the cached `f.analyst_actions` so the L1+L2
@@ -466,7 +476,17 @@ def _merge_news_analyst_actions(ticker: str, structured_actions: list) -> list:
         published = (item.get("published_at") if isinstance(item, dict) else None) or ""
         link = (item.get("link") if isinstance(item, dict) else None) or None
         mention = news_analyst_extractor.extract_from_news_item(
-            title, summary=summary, published_at_iso=published, link=link,
+            title,
+            summary=summary,
+            published_at_iso=published,
+            link=link,
+            # Pass the ticker + company name so the extractor's
+            # presence gate can reject cross-ticker contamination
+            # (news items about peer companies surfacing in this
+            # ticker's correlated-news feed) AND the body-fetch
+            # last-resort can confirm subject identity.
+            ticker=ticker,
+            company_name=company_name,
         )
         if mention is None:
             continue
