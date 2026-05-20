@@ -107,19 +107,42 @@ export function DataSourcesCard() {
     staleTime: 30_000,
   });
 
-  if (q.isLoading) {
+  const data = q.data;
+  // Structure-stable: render the same card shell whether we're loading
+  // OR the endpoint failed entirely. The previous `if (!data) return
+  // null;` made the data-sources footer silently disappear on hard
+  // errors, leaving the user wondering whether the section was even
+  // supposed to be there. Same anti-pattern we removed from
+  // PremarketMoversCard.
+  if (q.isLoading || !data) {
     return (
       <Card>
         <CardContent className="p-4">
-          <SectionTitle icon={Database} label="Data Sources" className="mb-2" />
-          <div className="h-24 animate-pulse bg-muted/40 rounded" />
+          <SectionTitle
+            icon={Database}
+            label="Data sources"
+            className="mb-2"
+            right={
+              q.isError ? (
+                <span className="text-[11px] text-muted-foreground">
+                  endpoint non raggiungibile
+                </span>
+              ) : undefined
+            }
+          />
+          <div className="space-y-2">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div
+                key={i}
+                className="h-3 rounded bg-muted/50 animate-pulse"
+                style={{ width: `${85 - i * 12}%` }}
+              />
+            ))}
+          </div>
         </CardContent>
       </Card>
     );
   }
-
-  const data = q.data;
-  if (!data) return null;
 
   const breakerColor =
     data.yfinance_breaker.state === "open"

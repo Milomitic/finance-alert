@@ -1,7 +1,12 @@
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, AlertTriangle, XCircle, Wifi, WifiOff, RefreshCw } from "lucide-react";
-import { fetchHealth, fetchLogs, runProbesNow } from "@/api/platformHealth";
+import {
+  fetchHealth,
+  fetchLogs,
+  fetchProbeProgress,
+  runProbesNow,
+} from "@/api/platformHealth";
 import DataSourcesCard from "@/components/health/DataSourcesCard";
 import SchedulerCard from "@/components/health/SchedulerCard";
 import ScansCard from "@/components/health/ScansCard";
@@ -70,12 +75,32 @@ export default function PlatformHealthPage() {
   // local query cache so the next /health snapshot reflects the run.
   const queryClient = useQueryClient();
   const [refreshing, setRefreshing] = useState(false);
+  const [progressPct, setProgressPct] = useState(0);
   const [refreshedAt, setRefreshedAt] = useState<number | null>(null);
+  // Same spinner+% contract as the pre-market card: kick the run
+  // (202), then poll {refreshing, progress_pct} so the bar tracks the
+  // real per-probe progress instead of a blind ~5-10s block.
   const triggerRefresh = async () => {
     if (refreshing) return;
     setRefreshing(true);
+    setProgressPct(0);
     try {
       await runProbesNow();
+      // Poll until the backend reports the run finished (or a safety
+      // cap so a wedged run can't spin forever).
+      const deadline = Date.now() + 60_000;
+      // small initial delay so the first poll sees refreshing=true
+      for (;;) {
+        await new Promise((r) => setTimeout(r, 700));
+        let p: { refreshing: boolean; progress_pct: number };
+        try {
+          p = await fetchProbeProgress();
+        } catch {
+          break; // progress endpoint hiccup → stop polling, refetch
+        }
+        setProgressPct(p.progress_pct);
+        if (!p.refreshing || Date.now() > deadline) break;
+      }
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["platform-health"] }),
         queryClient.invalidateQueries({ queryKey: ["platform-logs-initial"] }),
@@ -87,6 +112,7 @@ export default function PlatformHealthPage() {
       console.error("[platform-health] manual refresh failed:", err);
     } finally {
       setRefreshing(false);
+      setProgressPct(0);
     }
   };
 
@@ -171,7 +197,9 @@ export default function PlatformHealthPage() {
               <RefreshCw
                 className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`}
               />
-              {refreshing ? "Aggiornando…" : "Aggiorna"}
+              {refreshing
+                ? `Aggiornando… ${progressPct}%`
+                : "Aggiorna"}
             </button>
             <div
               className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border text-sm font-medium ${

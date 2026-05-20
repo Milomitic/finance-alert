@@ -2,6 +2,7 @@ import { Building2 } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import type { TickerHolder } from "@/api/types";
+import { AllocationBars } from "@/components/dashboard/AllocationBars";
 import { Card, CardContent } from "@/components/ui/card";
 import { SectionTitle } from "@/components/ui/section-title";
 import { useTickerInstitutionalHolders } from "@/hooks/useInstitutionals";
@@ -135,7 +136,7 @@ function HolderRow({ h }: { h: TickerHolder }) {
  * empty so the info-architecture doesn't shift between stocks.
  */
 export function InstitutionalHoldersCard({ ticker }: Props) {
-  const q = useTickerInstitutionalHolders(ticker);
+  const q = useTickerInstitutionalHolders(ticker, 25, true);
 
   if (q.isLoading) {
     return (
@@ -149,7 +150,32 @@ export function InstitutionalHoldersCard({ ticker }: Props) {
   }
 
   const holders = q.data?.holders ?? [];
+  const historical = q.data?.historical ?? [];
   const visible = holders.slice(0, 10);
+
+  // Infographic data: current holders first (real action chip), then
+  // funds that used to hold it. Historical rows are forced to the
+  // "sold_out" chip → red "Uscito" — relative to *now* they are not
+  // current holders, which is exactly the signal the user wants the
+  // dual-encoded bars to carry alongside live positions.
+  const allocItems = [
+    ...holders.map((h) => ({
+      key: `cur-${h.institutional_id}-${h.period_end_date}`,
+      label: h.institutional_name,
+      href: `/institutionals/${h.institutional_slug}`,
+      valueUsd: h.value_usd,
+      pct: h.portfolio_pct,
+      action: h.action,
+    })),
+    ...historical.map((h) => ({
+      key: `hist-${h.institutional_id}-${h.period_end_date}`,
+      label: h.institutional_name,
+      href: `/institutionals/${h.institutional_slug}`,
+      valueUsd: h.value_usd,
+      pct: h.portfolio_pct,
+      action: "sold_out" as const,
+    })),
+  ];
 
   return (
     <Card>
@@ -171,12 +197,25 @@ export function InstitutionalHoldersCard({ ticker }: Props) {
             Nessun fondo tracciato detiene questo titolo.
           </div>
         ) : (
-          <ul>
-            <HolderHeader />
-            {visible.map((h) => (
-              <HolderRow key={`${h.institutional_id}-${h.period_end_date}`} h={h} />
-            ))}
-          </ul>
+          <>
+            <ul>
+              <HolderHeader />
+              {visible.map((h) => (
+                <HolderRow key={`${h.institutional_id}-${h.period_end_date}`} h={h} />
+              ))}
+            </ul>
+            {/* Besides the latest transactions above, the same data as
+                an infographic: WHO holds this stock and in what
+                measure — bar = position value, colour = weight in
+                that fund's portfolio. */}
+            <div className="mt-3 border-t border-border/40 pt-3">
+              <AllocationBars
+                title="Quote per istituzione (incl. storiche)"
+                max={10}
+                items={allocItems}
+              />
+            </div>
+          </>
         )}
       </CardContent>
     </Card>

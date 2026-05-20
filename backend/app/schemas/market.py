@@ -60,6 +60,14 @@ class MoverOut(BaseModel):
     last_close: float
     prev_close: float | None
     sparkline: list[float] = []  # last ~30 close prices for the per-row UI sparkline
+    # Secondary context — same fields previously lived only on
+    # `TopVolumeOut`. Promoted to the base mover row so the dashboard's
+    # "Top movers" card (gainers / losers) can render volume + score
+    # columns alongside the % change. Optional everywhere: legacy
+    # snapshot payloads without these keys still validate.
+    vol_today: int | None = None
+    vol_ratio: float | None = None
+    composite: float | None = None
 
 
 class VolumeSpikeOut(MoverOut):

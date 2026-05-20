@@ -36,6 +36,12 @@ router = APIRouter(prefix="/api", tags=["scores"])
 _VALID_RISK = set(get_args(RiskTier))
 _VALID_CATEGORY = set(get_args(ScoreCategory))
 
+# A "top pick" must rest on enough real data. Scores whose QW5
+# confidence/coverage (breakdown._meta_global.coverage) is below this
+# — or unknown — are excluded from /scores/top so the homepage cards
+# never surface a high number that's built on a thin factor base.
+_MIN_CONFIDENCE = 0.70
+
 
 @router.get("/stocks/{ticker}/score", response_model=StockScoreOut)
 def get_stock_score(
@@ -380,9 +386,28 @@ def get_top_picks(
     # appear in a "top by quality" list at all (a NULL pillar means missing data).
     if category != "composite":
         q = q.where(sort_col.isnot(None))
-    q = q.order_by(sort_col.desc()).limit(limit)
+    # Over-fetch: the confidence gate below drops some rows, so pull a
+    # generous candidate pool (capped) and truncate to `limit` after
+    # filtering. Coverage is JSON inside a Text column → can't filter in
+    # SQL on SQLite cleanly; doing it in Python over a bounded pool is
+    # simplest and keeps the downstream per-stock change_pct loop small.
+    q = q.order_by(sort_col.desc()).limit(min(limit * 6, 300))
 
-    rows = db.execute(q).all()
+    candidate_rows = db.execute(q).all()
+
+    def _confidence(s: StockScore) -> float | None:
+        try:
+            mg = json.loads(s.breakdown or "{}").get("_meta_global") or {}
+        except (json.JSONDecodeError, TypeError):
+            return None
+        c = mg.get("coverage")
+        return float(c) if isinstance(c, (int, float)) else None
+
+    rows = [
+        (sc, st)
+        for (sc, st) in candidate_rows
+        if (_cov := _confidence(sc)) is not None and _cov >= _MIN_CONFIDENCE
+    ][:limit]
 
     # change_pct: most-recent two close prices per stock. Batch-fetch the last
     # two bars for all stocks in the result set in one query — avoids N+1.

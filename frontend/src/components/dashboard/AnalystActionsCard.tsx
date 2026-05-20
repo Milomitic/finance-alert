@@ -1,5 +1,16 @@
 import { useQuery } from "@tanstack/react-query";
-import { Gavel, ArrowUpRight, ArrowDownRight, Sparkles, Minus, Newspaper } from "lucide-react";
+import {
+  Gavel,
+  ArrowUpRight,
+  ArrowDownRight,
+  Sparkles,
+  Minus,
+  Newspaper,
+  ChevronsUp,
+  ChevronsDown,
+  Target,
+  Equal,
+} from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { dashboard, type AnalystAction } from "@/api/dashboard";
@@ -13,17 +24,98 @@ import { cn } from "@/lib/utils";
    reit/main = reiterate/maintain (no grade change). */
 const ACTION_META: Record<
   string,
-  { label: string; tone: string; Icon: React.ComponentType<{ className?: string }> }
+  { label: string; tone: string; chipBg: string; Icon: React.ComponentType<{ className?: string }> }
 > = {
-  up: { label: "Upgrade", tone: "text-emerald-600 dark:text-emerald-400", Icon: ArrowUpRight },
-  down: { label: "Downgrade", tone: "text-rose-600 dark:text-rose-400", Icon: ArrowDownRight },
-  init: { label: "Initiation", tone: "text-sky-600 dark:text-sky-400", Icon: Sparkles },
-  reit: { label: "Reiterate", tone: "text-muted-foreground", Icon: Minus },
-  main: { label: "Maintain", tone: "text-muted-foreground", Icon: Minus },
+  up:   { label: "Upgrade",    tone: "text-emerald-700 dark:text-emerald-300", chipBg: "bg-emerald-100/70 dark:bg-emerald-900/30 border-emerald-300/60 dark:border-emerald-700/50", Icon: ArrowUpRight },
+  down: { label: "Downgrade",  tone: "text-rose-700 dark:text-rose-300",       chipBg: "bg-rose-100/70 dark:bg-rose-900/30 border-rose-300/60 dark:border-rose-700/50",          Icon: ArrowDownRight },
+  init: { label: "Initiation", tone: "text-sky-700 dark:text-sky-300",         chipBg: "bg-sky-100/70 dark:bg-sky-900/30 border-sky-300/60 dark:border-sky-700/50",            Icon: Sparkles },
+  reit: { label: "Reiterate",  tone: "text-muted-foreground",                  chipBg: "bg-muted/60 border-border/50",                                                          Icon: Minus },
+  main: { label: "Maintain",   tone: "text-muted-foreground",                  chipBg: "bg-muted/60 border-border/50",                                                          Icon: Minus },
 };
 
 function actionMeta(action: string) {
   return ACTION_META[action] ?? ACTION_META.main;
+}
+
+/* Price-target chip palette — mirrors the rating action chip so the
+ * row reads as a coherent pair: rating-action on the left, price-
+ * target action on the right, same shape, same tone vocabulary.
+ *
+ * `price_target_action` is yfinance's *separate* axis from the
+ * rating: e.g. a "Maintain" rating can pair with a "Raises" target.
+ * That decoupling is informative ("they're standing pat on the
+ * rating but bumping the target +5%") so we surface it explicitly
+ * instead of folding the two into one chip. */
+const PT_META: Record<
+  string,
+  { label: string; tone: string; chipBg: string; Icon: React.ComponentType<{ className?: string }> }
+> = {
+  Raises:    { label: "Alza target",    tone: "text-emerald-700 dark:text-emerald-300", chipBg: "bg-emerald-50/80 dark:bg-emerald-950/40 border-emerald-300/60 dark:border-emerald-700/50", Icon: ChevronsUp },
+  Lowers:    { label: "Abbassa target", tone: "text-rose-700 dark:text-rose-300",       chipBg: "bg-rose-50/80 dark:bg-rose-950/40 border-rose-300/60 dark:border-rose-700/50",             Icon: ChevronsDown },
+  Maintains: { label: "Conferma target", tone: "text-muted-foreground",                 chipBg: "bg-muted/40 border-border/40",                                                              Icon: Equal },
+  Initiates: { label: "Apre target",    tone: "text-sky-700 dark:text-sky-300",         chipBg: "bg-sky-50/80 dark:bg-sky-950/40 border-sky-300/60 dark:border-sky-700/50",                Icon: Target },
+};
+
+function ptMeta(pt: string | null | undefined) {
+  if (!pt) return null;
+  return PT_META[pt] ?? null;
+}
+
+/* Renders the right-hand price-target chip. Inside one tag we pack:
+ *  - colour/tone signalling the direction (Raises/Lowers/etc.)
+ *  - the new target as the dominant figure
+ *  - the prior target as a smaller strikethrough → "291 → $314"
+ *
+ * If we have an action but no numeric target (Yahoo doesn't always
+ * expose them), we fall back to just the action label so the user
+ * still sees that the firm touched the target. If we have neither,
+ * we render nothing (the date column still anchors the row). */
+function PriceTargetChip({ a }: { a: AnalystAction }) {
+  const meta = ptMeta(a.price_target_action);
+  const cur = a.current_price_target;
+  const prior = a.prior_price_target;
+  if (!meta && cur == null) return null;
+
+  // Even without a meta entry (older API rows), a bare current target
+  // still deserves the "Target" framing — gives it semantic context
+  // instead of a stray dollar amount.
+  const M = meta ?? PT_META.Maintains;
+  const hasDelta = cur != null && prior != null && cur !== prior;
+  const deltaPct =
+    hasDelta && prior !== 0 ? ((cur! - prior!) / prior!) * 100 : null;
+
+  return (
+    <span
+      className={cn(
+        "shrink-0 inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 tabular-nums",
+        M.chipBg,
+        M.tone,
+      )}
+      title={
+        deltaPct != null
+          ? `${M.label}: $${prior!.toFixed(0)} → $${cur!.toFixed(0)} (${deltaPct >= 0 ? "+" : ""}${deltaPct.toFixed(1)}%)`
+          : meta
+          ? `${M.label}${cur != null ? `: $${cur.toFixed(0)}` : ""}`
+          : "Target price"
+      }
+    >
+      <M.Icon className="h-3 w-3 shrink-0" />
+      {cur != null ? (
+        <>
+          {hasDelta && (
+            <span className="text-[10.5px] line-through opacity-60">
+              ${prior!.toFixed(0)}
+            </span>
+          )}
+          <span className="text-[12.5px] font-bold leading-none">
+            ${cur.toFixed(0)}
+          </span>
+        </>
+      ) : (
+        <span className="text-[11px] font-semibold">{M.label}</span>
+      )}
+    </span>
+  );
 }
 
 function fmtDate(iso: string): string {
@@ -47,9 +139,21 @@ function ActionRow({ a }: { a: AnalystAction }) {
         <StockIdentity ticker={a.ticker} name={a.name} />
         <div className="min-w-0 flex-1 hidden sm:block">
           <div className="flex items-center gap-1 text-[12px] truncate">
-            <meta.Icon className={cn("h-3.5 w-3.5 shrink-0", meta.tone)} />
-            <span className={cn("font-semibold shrink-0", meta.tone)}>
-              {meta.label}
+            {/* Rating chip — mirrors the price-target chip shape on the
+                right so the row reads as a balanced "rating action /
+                target action" pair. */}
+            <span
+              className={cn(
+                "inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 shrink-0",
+                meta.chipBg,
+                meta.tone,
+              )}
+              title={`Rating: ${meta.label}`}
+            >
+              <meta.Icon className="h-3 w-3 shrink-0" />
+              <span className="text-[11px] font-semibold leading-none">
+                {meta.label}
+              </span>
             </span>
             <span className="text-muted-foreground truncate" title={a.firm}>
               · {a.firm || "—"}
@@ -67,14 +171,7 @@ function ActionRow({ a }: { a: AnalystAction }) {
             {gradeChange}
           </div>
         </div>
-        {a.current_price_target != null && (
-          <span
-            className="shrink-0 w-[64px] text-right text-[12.5px] font-bold tabular-nums"
-            title="Target price assegnato dall'analista"
-          >
-            ${a.current_price_target.toFixed(0)}
-          </span>
-        )}
+        <PriceTargetChip a={a} />
         <span className="shrink-0 w-[52px] text-right text-[11px] text-muted-foreground tabular-nums">
           {fmtDate(a.date)}
         </span>

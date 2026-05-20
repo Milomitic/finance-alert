@@ -1514,6 +1514,34 @@ def _fetch_fresh(ticker: str) -> Fundamentals:
         except Exception as e:
             logger.debug(f"[fund] recommendations {ticker}: {e}")
             _maybe_record(e)
+        # Finnhub fallback for aggregated ratings buckets — yfinance's
+        # `recommendations` table is stale at source for an expanding
+        # subset of names (the same dead-feed pattern that killed
+        # `upgrades_downgrades`). When yfinance returns zero buckets,
+        # ask Finnhub. Same shape, same dataclass — just hot-swapped.
+        if not f.analyst_ratings:
+            try:
+                from app.services import finnhub_news_service
+                trend = finnhub_news_service.fetch_recommendation_trend(ticker)
+                if trend:
+                    f.analyst_ratings = [
+                        AnalystRating(
+                            period=b.period,
+                            strong_buy=b.strong_buy,
+                            buy=b.buy,
+                            hold=b.hold,
+                            sell=b.sell,
+                            strong_sell=b.strong_sell,
+                        )
+                        for b in trend
+                    ]
+                    saw_success = True
+                    logger.debug(
+                        f"[fund] {ticker}: yfinance ratings empty, "
+                        f"filled {len(trend)} buckets from Finnhub fallback"
+                    )
+            except Exception as e:  # noqa: BLE001 — fallback is non-fatal
+                logger.debug(f"[fund] finnhub recommendation fallback {ticker}: {e}")
         try:
             f.price_target = _extract_price_target(raw.get("analyst_price_targets"))
             if f.price_target.mean is not None: saw_success = True

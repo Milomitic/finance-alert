@@ -4,6 +4,7 @@ import { useParams, useSearchParams } from "react-router-dom";
 
 import type { LiveQuote, OhlcvBar, PriceAlert } from "@/api/types";
 import { Card, CardContent } from "@/components/ui/card";
+import { CardSkeleton } from "@/components/ui/card-skeleton";
 import { useChartSync } from "@/hooks/useChartSync";
 import { useCreatePriceAlert, useStockPriceAlerts } from "@/hooks/useStockPriceAlerts";
 import { useLiveQuote } from "@/hooks/useLiveQuote";
@@ -152,16 +153,32 @@ export default function StockDetailPage() {
     }
   };
 
+  // First-paint skeleton — mirrors the stock-detail layout so the
+  // transition loaded→data fills in content rather than reflowing. The
+  // page is essentially `[1fr_320px]` (main chart column + right
+  // sidebar of context cards) under a sticky header.
   if (detail.isLoading) {
     return (
       <div className="space-y-3">
-        <Card><CardContent className="p-4 h-[100px] animate-pulse bg-muted/40" /></Card>
+        {/* Header strip: ticker / live price / score chips */}
+        <CardSkeleton label={ticker?.toUpperCase()} rows={2} className="h-[100px]" />
         <div className="grid lg:grid-cols-[1fr_320px] gap-3">
-          <Card><CardContent className="p-4 h-[600px] animate-pulse bg-muted/40" /></Card>
           <div className="space-y-3">
-            {[0,1,2,3,4].map((i) =>
-              <Card key={i}><CardContent className="p-4 h-[100px] animate-pulse bg-muted/40" /></Card>
-            )}
+            {/* Main chart placeholder — matches the PriceChart's tall slot. */}
+            <CardSkeleton label="GRAFICO PREZZO" rows={10} strongHeader className="h-[600px]" />
+            {/* Below-chart row: 3 ~equal-height context cards. */}
+            <div className="grid lg:grid-cols-3 gap-3">
+              <CardSkeleton label="FONDAMENTALI" rows={6} strongHeader className="h-[260px]" />
+              <CardSkeleton label="VALUTAZIONE" rows={6} strongHeader className="h-[260px]" />
+              <CardSkeleton label="NEWS" rows={6} strongHeader className="h-[260px]" />
+            </div>
+          </div>
+          <div className="space-y-3">
+            <CardSkeleton label="OVERVIEW" rows={5} strongHeader className="h-[200px]" />
+            <CardSkeleton label="SCORE" rows={6} strongHeader className="h-[260px]" />
+            <CardSkeleton label="ANALYST TARGET" rows={5} strongHeader className="h-[200px]" />
+            <CardSkeleton label="SUPERINVESTOR / FONDI" rows={6} strongHeader className="h-[260px]" />
+            <CardSkeleton label="INSIDER / ANALISTI" rows={5} strongHeader className="h-[200px]" />
           </div>
         </div>
       </div>

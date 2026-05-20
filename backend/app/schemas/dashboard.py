@@ -78,4 +78,36 @@ class AnalystActionOut(BaseModel):
     from_grade: str
     action: str                     # up | down | init | main | reit | ...
     current_price_target: float | None = None
+    # Same firm's prior target so the dashboard chip can render the
+    # delta ("$287 → $296") rather than just the current number.
+    prior_price_target: float | None = None
+    # yfinance's separate "Raises" | "Lowers" | "Maintains" |
+    # "Initiates" axis — informative when paired with a Maintain
+    # rating (firm holds the grade but moves the target).
+    price_target_action: str | None = None
     from_news: bool = False
+
+
+class PremarketMoverOut(BaseModel):
+    """One US pre-market gainer/loser row."""
+    ticker: str
+    name: str | None = None
+    price: float                    # latest pre-market price
+    prev_close: float               # prior regular-session close
+    change_pct: float               # (price - prev_close)/prev_close * 100
+    volume: int | None = None       # summed pre-market volume (None = n/d)
+
+
+class PremarketMoversOut(BaseModel):
+    """US pre-market top gainers/losers. `available` is the single flag
+    the frontend keys on: True only when the US regular market is
+    CLOSED and fresh pre-market data exists for the latest session
+    (otherwise the card is hidden)."""
+    available: bool
+    market_open: bool
+    as_of: str | None = None        # ISO date of the pre-market session
+    computed_at: str | None = None  # ISO datetime of last compute
+    refreshing: bool = False
+    progress_pct: int = 0
+    gainers: list[PremarketMoverOut] = []
+    losers: list[PremarketMoverOut] = []

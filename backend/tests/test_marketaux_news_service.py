@@ -4,7 +4,19 @@ from unittest.mock import patch
 import pytest
 
 from app.core.errors import UpstreamUnavailable
-from app.services.marketaux_news_service import fetch_news
+from app.services.marketaux_news_service import _clear_caches_for_tests, fetch_news
+
+
+@pytest.fixture(autouse=True)
+def _reset_marketaux_state():
+    """The service has a 12h per-ticker response cache + a circuit
+    breaker. Without resetting between tests, the second test that
+    fetches AAPL would hit the cache populated by the first and skip
+    the HTTP mock entirely — silently masking the test's expectations.
+    """
+    _clear_caches_for_tests()
+    yield
+    _clear_caches_for_tests()
 
 
 def test_returns_empty_when_no_api_key(monkeypatch):

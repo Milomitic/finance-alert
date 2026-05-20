@@ -113,3 +113,9 @@ class TickerHolderOut(BaseModel):
 class TickerHoldersOut(BaseModel):
     ticker: str
     holders: list[TickerHolderOut]
+    # Funds that USED to hold the ticker but are no longer current
+    # holders (sold out, or last sighting older than the freshness
+    # cutoff). Only populated when the endpoint is called with
+    # `include_historical=true`. Each row is that fund's most recent
+    # holding of the ticker.
+    historical: list[TickerHolderOut] = []

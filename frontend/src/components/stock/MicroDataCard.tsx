@@ -534,6 +534,16 @@ function buildColumns(m: MicroData): { left: Row[]; right: Row[] } {
           : null,
     },
     // ── Growth ─────────────────────────────────────────────────────
+    // Order (user spec): Rev QoQ → Rev YoY → Rev 5Y, then EPS QoQ →
+    // EPS YoY → EPS 5Y. Revenue block first, each metric short→long
+    // horizon, so the eye reads "top-line momentum, then bottom-line".
+    {
+      label: "Rev growth (QoQ)",
+      raw: m.revenue_quarterly_growth ?? null,
+      format: pct,
+      tip: "Crescita revenue QoQ (ultimo trimestre vs trimestre immediatamente precedente). Calcolata da noi dalla serie revenue trimestrale.",
+      toneFor: signTone("Revenue quarterly growth", "pct"),
+    },
     {
       label: "Rev growth (YoY)",
       raw: m.revenue_growth,
@@ -542,11 +552,11 @@ function buildColumns(m: MicroData): { left: Row[]; right: Row[] } {
       toneFor: signTone("Revenue growth", "pct"),
     },
     {
-      label: "EPS growth (YoY)",
-      raw: m.earnings_growth,
+      label: "Rev growth (5Y CAGR)",
+      raw: m.revenue_growth_5y ?? null,
       format: pct,
-      tip: "Crescita EPS YoY (ultimo trimestre vs stesso trimestre anno precedente).",
-      toneFor: signTone("EPS growth", "pct"),
+      tip: "Tasso di crescita annualizzato (CAGR) della revenue su ~5 anni, calcolato da noi (preferendo il bilancio annuale, altrimenti la serie trimestrale).",
+      toneFor: signTone("Revenue 5Y CAGR", "pct"),
     },
     {
       label: "EPS growth (QoQ)",
@@ -556,11 +566,11 @@ function buildColumns(m: MicroData): { left: Row[]; right: Row[] } {
       toneFor: signTone("EPS quarterly growth", "pct"),
     },
     {
-      label: "Rev growth (QoQ)",
-      raw: m.revenue_quarterly_growth ?? null,
+      label: "EPS growth (YoY)",
+      raw: m.earnings_growth,
       format: pct,
-      tip: "Crescita revenue QoQ (ultimo trimestre vs trimestre immediatamente precedente). Calcolata da noi dalla serie revenue trimestrale.",
-      toneFor: signTone("Revenue quarterly growth", "pct"),
+      tip: "Crescita EPS YoY (ultimo trimestre vs stesso trimestre anno precedente).",
+      toneFor: signTone("EPS growth", "pct"),
     },
     {
       label: "EPS growth (5Y CAGR)",
@@ -568,13 +578,6 @@ function buildColumns(m: MicroData): { left: Row[]; right: Row[] } {
       format: pct,
       tip: "Tasso di crescita annualizzato (CAGR) dell'EPS su ~5 anni, calcolato da noi dalla serie EPS reportata. Null se <2.5 anni di storico o EPS non positivo agli estremi (il CAGR non è definito attraverso una perdita).",
       toneFor: signTone("EPS 5Y CAGR", "pct"),
-    },
-    {
-      label: "Rev growth (5Y CAGR)",
-      raw: m.revenue_growth_5y ?? null,
-      format: pct,
-      tip: "Tasso di crescita annualizzato (CAGR) della revenue su ~5 anni, calcolato da noi (preferendo il bilancio annuale, altrimenti la serie trimestrale).",
-      toneFor: signTone("Revenue 5Y CAGR", "pct"),
     },
     // ── Dividend ───────────────────────────────────────────────────
     {

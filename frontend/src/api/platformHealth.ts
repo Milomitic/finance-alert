@@ -79,12 +79,25 @@ export async function fetchHealth(): Promise<PlatformHealth> {
   return r.json();
 }
 
-export async function runProbesNow(): Promise<{ ok: boolean; elapsed_ms: number }> {
+export async function runProbesNow(): Promise<{ accepted: boolean }> {
   const r = await fetch("/api/platform/probes/run", {
     method: "POST",
     credentials: "include",
   });
   if (!r.ok) throw new Error(`probes ${r.status}`);
+  return r.json();
+}
+
+/** {refreshing, progress_pct} of the manual probe run — same contract
+ *  as the pre-market card's progress, polled while the spinner shows. */
+export async function fetchProbeProgress(): Promise<{
+  refreshing: boolean;
+  progress_pct: number;
+}> {
+  const r = await fetch("/api/platform/probes/progress", {
+    credentials: "include",
+  });
+  if (!r.ok) throw new Error(`probe-progress ${r.status}`);
   return r.json();
 }
 

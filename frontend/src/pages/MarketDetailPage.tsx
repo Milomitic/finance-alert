@@ -12,6 +12,7 @@ import { useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 
 import { Card, CardContent } from "@/components/ui/card";
+import { CardSkeleton } from "@/components/ui/card-skeleton";
 import { FlashValue } from "@/components/ui/FlashValue";
 import { MarketChart } from "@/components/market/MarketChart";
 import { MacdPanel } from "@/components/stock/MacdPanel";
@@ -114,14 +115,13 @@ export default function MarketDetailPage() {
   }
 
   if (q.isLoading || !q.data) {
+    // Header KPI strip + chart, mirroring the loaded layout. Was two
+    // generic `animate-pulse` boxes — same dimensions, but the header
+    // strip now hints at the real "Symbol · Price · Change%" content.
     return (
       <div className="space-y-3">
-        <Card>
-          <CardContent className="p-6 h-[120px] animate-pulse bg-muted/40" />
-        </Card>
-        <Card>
-          <CardContent className="p-4 h-[460px] animate-pulse bg-muted/40" />
-        </Card>
+        <CardSkeleton rows={3} className="h-[120px]" />
+        <CardSkeleton label="GRAFICO" rows={10} strongHeader className="h-[460px]" />
       </div>
     );
   }

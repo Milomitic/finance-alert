@@ -39,6 +39,14 @@ class AnalystActionFeedItem:
     from_grade: str
     action: str          # "up" | "down" | "init" | "main" | "reit" | ...
     current_price_target: float | None
+    # Same firm's previous target so the UI can render "287 → $296"
+    # instead of a bare current value (the delta is the most readable
+    # signal in the row).
+    prior_price_target: float | None
+    # yfinance's *separate* axis from the rating action — "Raises" /
+    # "Lowers" / "Maintains" / "Initiates" / None. Distinct from
+    # `action` because a Maintain rating can pair with a target raise.
+    price_target_action: str | None
     from_news: bool
 
 
@@ -90,6 +98,8 @@ def recent_actions(limit: int = _MAX_ITEMS) -> list[AnalystActionFeedItem]:
                     from_grade=getattr(a, "from_grade", "") or "",
                     action=getattr(a, "action", "") or "",
                     current_price_target=getattr(a, "current_price_target", None),
+                    prior_price_target=getattr(a, "prior_price_target", None),
+                    price_target_action=getattr(a, "price_target_action", None),
                     from_news=bool(getattr(a, "from_news", False)),
                 ),
             ))

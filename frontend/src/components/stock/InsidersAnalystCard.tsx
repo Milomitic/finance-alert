@@ -34,45 +34,104 @@ function shortDate(s: string): string {
   return `${d}/${m}/${y.slice(2)}`;
 }
 
-/* Insider-transaction tone classifier.
+/* Insider-transaction signal-vs-noise classification.
  *
- * yfinance's `Transaction` text is unstructured and a few patterns
- * deserve different colors:
+ * Academic insider-trading literature (Lakonishok & Lee 2001;
+ * Cohen-Malloy-Pomorski 2012) treats only a subset of Form 4 events
+ * as informative:
  *
- *  - "Sale" / "Sell"            → RED (open-market divestiture)
- *  - "Purchase" / "Buy"         → GREEN (open-market accumulation,
- *                                 the strongest signal in the dataset)
- *  - "Acquisition" / "Award" / "Conversion" / "Gift" → MUTED
- *    These represent NON-cash events: RSU vesting, option conversion,
- *    stock awards, gifts. Tagging them green misleads the reader into
- *    thinking the insider voluntarily put money in — they didn't.
+ *   STRONGEST signal  → open-market PURCHASES (insider puts cash in)
+ *   WEAKER bearish    → open-market SALES / dispositions
+ *                       (often noisy: 10b5-1 plans, taxes,
+ *                        diversification — but in aggregate bearish)
+ *   PURE NOISE        → option exercises, conversion of derivatives,
+ *                       RSU vesting, awards, gifts, statements,
+ *                       anything tagged "Non Open Market"
+ *                       (these are mechanical compensation flows,
+ *                        not directional bets)
  *
- * The user reasonably asked "why are green buys so rare?" — the answer
- * is structural: insider open-market PURCHASES are genuinely rare
- * compared to RSU-driven sales (every executive sells vested grants
- * to diversify and pay taxes; very few executives buy more of their
- * employer's stock with cash). When you DO see green, it's a
- * meaningful signal — the insider chose to put their own capital in.
+ * The list is filtered to drop the NOISE bucket entirely (see
+ * `isInformativeTxn` below) so the user sees only directional rows.
+ * `txnTone` then colours those rows green (bullish) or red (bearish).
  *
- * "Non Open Market" disclaimer in the text → automatically not green
- * (RSU vesting often shows up as "Acquisition (Non Open Market)").
- */
+ * Why green buys still look rare: structural truth — executives
+ * routinely sell RSUs to pay tax and diversify; very few EVER buy
+ * more of their employer's stock with personal cash. So when you do
+ * see a green row, it carries real signal weight. */
 function txnTone(text: string): string {
   const lc = text.toLowerCase();
-  // Hard-block: anything labeled "non open market" is by definition
-  // a non-cash event, regardless of which verb the row uses.
+  // Belt-and-braces: even after the noise filter, never colour a
+  // "non open market" event as directional — RSU edge cases can slip
+  // through filters when phrasing is unusual.
   const isNonOpenMarket = lc.includes("non open market");
 
-  if (lc.includes("sale") || lc.includes("sell")) {
-    return "text-red-700 dark:text-red-300";
-  }
-  if (!isNonOpenMarket && (lc.includes("purchase") || lc.includes("buy"))) {
+  // Bullish: open-market accumulation. Multiple yfinance phrasings.
+  if (
+    !isNonOpenMarket &&
+    (lc.includes("purchase") || lc.includes("buy") || lc.includes("acquisition (open market)"))
+  ) {
     return "text-green-700 dark:text-green-300";
   }
-  // Acquisitions, gifts, conversions, awards, statements, dispositions,
-  // and any other "neutral" disclosures stay muted — they don't reflect
-  // the insider's directional conviction.
+  // Bearish: open-market divestiture. Same row can be labelled
+  // "Sale", "Sale (Multiple)", or "Disposition (Open Market)" /
+  // "Disposition in the Public Market" depending on filer — match
+  // all of them. The previous classifier left "Disposition" muted,
+  // which under-reported bearish flow.
+  if (
+    !isNonOpenMarket &&
+    (lc.includes("sale") || lc.includes("sell") || lc.includes("disposition"))
+  ) {
+    return "text-rose-700 dark:text-rose-300";
+  }
+  // Fallback for anything that somehow survives the filter — should
+  // be rare. Stay muted so it never looks directional by accident.
   return "text-muted-foreground";
+}
+
+/* Filter: keep only directionally-informative transactions.
+ *
+ * Drops:
+ *  - any "Exercise" / "Conversion of Derivative Security" — option
+ *    exercises are mechanical vested-comp conversions, NOT a bet
+ *  - anything "(Non Open Market)" — RSU vesting / tax withholding /
+ *    deferred comp settlement: non-cash, non-directional
+ *  - "Gift" / "Statement" / "Award" / "Grant" — non-cash compensation
+ *    or disclosure events
+ *
+ * Keeps:
+ *  - open-market Purchases (Buys) → bullish signal
+ *  - open-market Sales / Dispositions → bearish signal
+ *
+ * The user's stock-detail card now reads as a directional ledger
+ * instead of a mixed comp/trade feed.
+ */
+function isInformativeTxn(text: string | null | undefined): boolean {
+  if (!text) return false;
+  const lc = text.toLowerCase();
+
+  // Hard noise filters (mechanical / non-cash / non-directional).
+  if (lc.includes("non open market")) return false;
+  if (lc.includes("exercise")) return false;            // option exercise
+  if (lc.includes("conversion of derivative")) return false; // same idea, alt phrasing
+  if (lc.includes("gift")) return false;                // gifted shares
+  if (lc.includes("award") || lc.includes("grant")) return false; // RSU / stock award
+  if (lc.includes("statement of ownership")) return false;
+  // Ambiguous "Acquisition" alone without "Open Market" qualifier is
+  // typically an RSU vest in yfinance feed → drop. Only the explicit
+  // "Acquisition (Open Market)" variant survives (handled below as
+  // bullish).
+  if (lc.includes("acquisition") && !lc.includes("open market")) return false;
+
+  // Allowlist on the informative side: be conservative — only let
+  // through rows that match a known directional verb.
+  return (
+    lc.includes("purchase") ||
+    lc.includes("buy") ||
+    lc.includes("sale") ||
+    lc.includes("sell") ||
+    lc.includes("disposition") ||
+    lc.includes("acquisition (open market)")
+  );
 }
 
 /* Position-name abbreviation map.
@@ -233,14 +292,18 @@ export function InsidersAnalystCard({ ticker }: Props) {
     );
   }
 
-  // Filter: only show transactions with a real monetary value. Drops the
-  // RSU-vesting / stock-award / gift rows that yfinance reports with
-  // value=0 or null — they pollute the list with noise (every executive
-  // gets quarterly grants; only the cash transactions are signal). Order
-  // by date desc so the most recent activity is on top, matching the
-  // user's mental model of "latest insider trades".
+  // Two-stage filter:
+  //   1. monetary value > 0 — drops zero-value disclosures (statements,
+  //      ownership filings, dollar-less amends).
+  //   2. `isInformativeTxn` — drops mechanical / non-directional events
+  //      (option exercises, RSU vesting, gifts, awards, non-open-market
+  //      acquisitions). See the function's docstring for the rationale
+  //      grounded in insider-trading literature.
+  // Result: the list reads as a directional buy/sell ledger only, which
+  // is what the user actually scans this card for.
   const insiders = (q.data?.insiders ?? [])
     .filter((t) => t.value != null && t.value > 0)
+    .filter((t) => isInformativeTxn(t.transaction))
     .sort((a, b) => (b.date || "").localeCompare(a.date || ""));
   const latest = insiders.slice(0, 10);
 
@@ -261,7 +324,10 @@ export function InsidersAnalystCard({ ticker }: Props) {
         />
         {latest.length === 0 ? (
           <div className="text-sm text-muted-foreground text-center py-3">
-            Nessuna transazione insider con valore monetario.
+            Nessuna transazione insider direzionale recente
+            <span className="block text-[10.5px] text-muted-foreground/70 mt-1">
+              (acquisti/vendite open-market — vest, exercise e award sono filtrati)
+            </span>
           </div>
         ) : (
           <ul>

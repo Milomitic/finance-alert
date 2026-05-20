@@ -8,7 +8,7 @@ import json
 from datetime import UTC, datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, Query, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
@@ -114,25 +114,38 @@ def health_snapshot(
     )
 
 
-@router.post("/probes/run")
+@router.post("/probes/run", status_code=202)
 def run_probes_now(
+    background: BackgroundTasks,
     _user: User = Depends(get_current_user),
 ) -> dict:
-    """Manually trigger all health probes (fast + slow) and block until
-    they complete. Used by the UI "Aggiorna" button — the operator can
-    force a fresh status snapshot without waiting up to 5 min for the
-    next scheduled tick. Total runtime: ~5-10s depending on upstream
-    latency. Each probe records to `data_source_metrics` so the next
-    /health snapshot reflects the refresh.
+    """Manually trigger all health probes (fast + slow). Runs in the
+    BACKGROUND (returns 202 immediately) so the UI "Aggiorna" button
+    can show live progress instead of a blind ~5-10s block — poll
+    GET /probes/progress for {refreshing, progress_pct} (same contract
+    as the pre-market card). Each probe records to
+    `data_source_metrics` so the next /health snapshot reflects it.
+    De-duped: a run already in flight keeps going, this is a no-op.
 
-    Marketaux note: this consumes 1 of its 100/day quota (since the
-    slow set includes its probe), so don't hammer this endpoint."""
-    import time as _time
+    Marketaux note: consumes 1 of its 100/day quota (slow set includes
+    its probe), so don't hammer this."""
     from app.services import probes
-    t0 = _time.perf_counter()
-    probes.run_fast_probes()
-    probes.run_slow_probes()
-    return {"ok": True, "elapsed_ms": round((_time.perf_counter() - t0) * 1000, 1)}
+
+    if not probes.progress()["refreshing"]:
+        background.add_task(probes.run_all_probes)
+    return {"accepted": True}
+
+
+@router.get("/probes/progress")
+def probes_progress(
+    _user: User = Depends(get_current_user),
+) -> dict:
+    """{refreshing, progress_pct} of the manual probe run — polled by
+    the Salute "Aggiorna" spinner. Same shape the pre-market card uses
+    so the frontend reuses one progress component."""
+    from app.services import probes
+
+    return probes.progress()
 
 
 @router.get("/logs", response_model=list[LogRecordOut])

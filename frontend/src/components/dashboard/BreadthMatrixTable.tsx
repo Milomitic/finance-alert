@@ -12,10 +12,14 @@ interface Props {
   data: IndexBreadth[];
 }
 
+// `n` and `total_market_cap` were dropped from the visible table per
+// user request — the card was bleeding horizontal space in the
+// dashboard row and those two columns are static catalog facts (count
+// of stocks, sum of market caps) that don't help read *today's*
+// breadth. The keys are kept in `IndexBreadth` (still served by the
+// API) so we don't disturb backend/payload shape.
 type SortKey =
   | "code"
-  | "n"
-  | "total_market_cap"
   | "pct_above_ema200"
   | "pct_above_ema50"
   | "rsi_oversold_count"
@@ -46,14 +50,6 @@ function fmtNum(v: number | null): string {
 function fmtChange(v: number | null): string {
   if (v === null) return "—";
   return `${v >= 0 ? "+" : ""}${v.toFixed(2)}`;
-}
-
-function fmtMarketCap(v: number | null | undefined): string {
-  if (v == null) return "—";
-  if (v >= 1e12) return `$${(v / 1e12).toFixed(2)}T`;
-  if (v >= 1e9) return `$${(v / 1e9).toFixed(0)}B`;
-  if (v >= 1e6) return `$${(v / 1e6).toFixed(0)}M`;
-  return `$${v.toLocaleString()}`;
 }
 
 function rowHighlight(r: IndexBreadth): string {
@@ -121,12 +117,13 @@ function SortableHeader({ column, label, align = "right", help, state, onClick }
 }
 
 export function BreadthMatrixTable({ data }: Props) {
-  // Default: sort by total market cap desc — so the headline indices
-  // (S&P 500, Nasdaq, etc.) sit at the top regardless of alphabetical
-  // code order. Click any header to override; clicking the same
-  // header twice cycles through desc -> asc -> default.
+  // Default: sort by "% above EMA200" desc — the breadth headline:
+  // "how many constituents are above their long-term trend". This
+  // replaced the old `total_market_cap` default after that column was
+  // removed from the table. Click any header to override; clicking
+  // the same header twice cycles through desc -> asc -> default.
   const [sort, setSort] = useState<SortState>({
-    key: "total_market_cap",
+    key: "pct_above_ema200",
     dir: "desc",
   });
 
@@ -168,8 +165,6 @@ export function BreadthMatrixTable({ data }: Props) {
             <thead>
               <tr className="bg-muted/30 text-xs uppercase tracking-wide text-muted-foreground">
                 <SortableHeader column="code" label="Indice" align="left" state={sort} onClick={handleSort} />
-                <SortableHeader column="n" label="N" help={ACRONYM_HELP.N_STOCKS} state={sort} onClick={handleSort} />
-                <SortableHeader column="total_market_cap" label="Tot MC" help="Somma dei market cap noti delle stock dell'indice" state={sort} onClick={handleSort} />
                 <SortableHeader column="pct_above_ema200" label=">EMA200" help={ACRONYM_HELP.EMA200} state={sort} onClick={handleSort} />
                 <SortableHeader column="pct_above_ema50" label=">EMA50" help={ACRONYM_HELP.EMA50} state={sort} onClick={handleSort} />
                 <SortableHeader column="rsi_oversold_count" label="RSI<30" help={ACRONYM_HELP.RSI_OVERSOLD} state={sort} onClick={handleSort} />
@@ -208,10 +203,6 @@ export function BreadthMatrixTable({ data }: Props) {
                       )}
                       <span>{getIndexMeta(r.code).displayCode || r.code}</span>
                     </Link>
-                  </td>
-                  <td className="text-right px-3 py-2">{r.n}</td>
-                  <td className="text-right px-3 py-2 font-semibold" title={r.total_market_cap != null ? `$${r.total_market_cap.toLocaleString()}` : undefined}>
-                    {fmtMarketCap(r.total_market_cap)}
                   </td>
                   <td className={cn("text-right px-3 py-2", cellTone(r.pct_above_ema200, "pct"))}>{fmtPct(r.pct_above_ema200)}</td>
                   <td className={cn("text-right px-3 py-2", cellTone(r.pct_above_ema50, "pct"))}>{fmtPct(r.pct_above_ema50)}</td>

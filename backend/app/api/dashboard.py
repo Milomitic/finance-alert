@@ -1,9 +1,10 @@
 """Single BFF endpoint that aggregates KPI + chart + top + feed + system status."""
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, BackgroundTasks, Depends
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
+from app.core.db import SessionLocal
 from app.models import ScanRun, Stock, User
 from app.schemas.alert import AlertOut, ScanStatusOut
 from app.schemas.dashboard import (
@@ -12,10 +13,16 @@ from app.schemas.dashboard import (
     AnalystActionOut,
     DashboardSummaryOut,
     KpiSummaryOut,
+    PremarketMoversOut,
     SystemStatusOut,
     TopStockOut,
 )
-from app.services import alert_service, analyst_actions_feed, stats_service
+from app.services import (
+    alert_service,
+    analyst_actions_feed,
+    premarket_service,
+    stats_service,
+)
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
@@ -75,10 +82,56 @@ def get_analyst_actions(
             from_grade=it.from_grade,
             action=it.action,
             current_price_target=it.current_price_target,
+            prior_price_target=it.prior_price_target,
+            price_target_action=it.price_target_action,
             from_news=it.from_news,
         )
         for it in items
     ]
+
+
+@router.get("/premarket-movers", response_model=PremarketMoversOut)
+def get_premarket_movers(
+    _user: User = Depends(get_current_user),
+) -> PremarketMoversOut:
+    """US pre-market top gainers/losers (cached by the scheduler job
+    during the pre-market window). `available` is False — and the
+    frontend hides the card — whenever the US regular market is open or
+    the cached pre-market data is stale/empty."""
+    s = premarket_service.get_state()
+    return PremarketMoversOut(
+        available=s["available"],
+        market_open=s["market_open"],
+        as_of=s.get("as_of"),
+        computed_at=s.get("computed_at"),
+        refreshing=s.get("refreshing", False),
+        progress_pct=s.get("progress_pct", 0),
+        gainers=s.get("gainers", []),
+        losers=s.get("losers", []),
+    )
+
+
+def _premarket_refresh_task() -> None:
+    db = SessionLocal()
+    try:
+        premarket_service.refresh(db)
+    finally:
+        db.close()
+
+
+@router.post("/premarket-movers/refresh", status_code=202)
+def refresh_premarket_movers(
+    background: BackgroundTasks,
+    _user: User = Depends(get_current_user),
+) -> dict[str, bool]:
+    """On-demand recompute (the card's manual refresh button). Returns
+    202 immediately; progress is polled via GET /premarket-movers
+    (`refreshing` + `progress_pct`). De-duped: if a refresh is already
+    in flight the in-flight one keeps running and this is a no-op."""
+    state = premarket_service.get_state()
+    if not state.get("refreshing"):
+        background.add_task(_premarket_refresh_task)
+    return {"accepted": True}
 
 
 @router.get("/summary", response_model=DashboardSummaryOut)

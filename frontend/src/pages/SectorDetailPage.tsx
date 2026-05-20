@@ -17,6 +17,7 @@ import { Link, useParams } from "react-router-dom";
 
 import { StockIdentity } from "@/components/dashboard/StockIdentity";
 import { Card, CardContent } from "@/components/ui/card";
+import { CardSkeleton } from "@/components/ui/card-skeleton";
 import { SectionTitle } from "@/components/ui/section-title";
 import { useSectorDetail, type SectorStockRow } from "@/hooks/useSectorDetail";
 import { getSectorIcon, getSectorIconColor } from "@/lib/sectorMeta";
@@ -128,7 +129,19 @@ export default function SectorDetailPage() {
   const iconColor = getSectorIconColor(decoded);
 
   if (q.isLoading) {
-    return <div className="p-8 text-muted-foreground">Caricamento…</div>;
+    // Sector page = header + KPI strip + stocks table. Structured
+    // skeleton mirrors that shape (was bare "Caricamento…").
+    return (
+      <div className="space-y-3">
+        <CardSkeleton rows={3} className="h-[120px]" />
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <CardSkeleton key={i} rows={2} className="h-[100px]" />
+          ))}
+        </div>
+        <CardSkeleton label="STOCKS DEL SETTORE" rows={12} strongHeader className="h-[500px]" />
+      </div>
+    );
   }
   if (q.error || !q.data) {
     return (

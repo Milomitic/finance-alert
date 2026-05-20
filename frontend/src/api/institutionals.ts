@@ -36,8 +36,13 @@ export const institutionals = {
     return api<InstitutionalDetail>(`/api/institutionals/${slug}${suffix}`);
   },
 
-  forTicker: (ticker: string, limit: number = 25) =>
+  forTicker: (
+    ticker: string,
+    limit: number = 25,
+    includeHistorical: boolean = false,
+  ) =>
     api<TickerHolders>(
-      `/api/stocks/${encodeURIComponent(ticker)}/institutional-holders?limit=${limit}`
+      `/api/stocks/${encodeURIComponent(ticker)}/institutional-holders` +
+        `?limit=${limit}&include_historical=${includeHistorical}`
     ),
 };

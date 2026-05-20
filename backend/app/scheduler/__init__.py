@@ -16,6 +16,7 @@ from app.scheduler.jobs.refresh_catalog import run_refresh_all
 from app.scheduler.jobs.refresh_fred import run_refresh_fred
 from app.scheduler.jobs.refresh_imminent_earnings import run_refresh_imminent_earnings
 from app.scheduler.jobs.refresh_institutionals import run_refresh_institutionals
+from app.scheduler.jobs.refresh_premarket import run_refresh_premarket
 from app.scheduler.jobs.refresh_sec_13f import run_refresh_sec_13f
 from app.scheduler.jobs.scan_alerts import run_scan_alerts
 from app.scheduler.jobs.send_digest import run_send_digest
@@ -69,6 +70,16 @@ def get_scheduler() -> BackgroundScheduler:
             run_refresh_institutionals,
             trigger=CronTrigger(day_of_week="sat", hour=4, minute=0),
             id="refresh_institutionals",
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+        )
+        _scheduler.add_job(
+            run_refresh_premarket,
+            # Every 5 min; the job self-gates to the US pre-market
+            # window (~03:55-09:35 ET) and no-ops cheaply otherwise.
+            trigger=CronTrigger(day_of_week="mon-fri", minute="*/5"),
+            id="refresh_premarket",
             replace_existing=True,
             max_instances=1,
             coalesce=True,

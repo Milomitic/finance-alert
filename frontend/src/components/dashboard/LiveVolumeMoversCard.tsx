@@ -7,10 +7,14 @@ import { StockIdentity } from "@/components/dashboard/StockIdentity";
 import { Card, CardContent } from "@/components/ui/card";
 import { SectionTitle } from "@/components/ui/section-title";
 import { useLiveQuotes } from "@/hooks/useLiveQuote";
+import { projectVolRatio } from "@/lib/intradayVolume";
 import { cn } from "@/lib/utils";
 
 interface Props {
   movers: MoversBlock;
+  /** Market snapshot `computed_at` — used as time reference for the
+   *  intraday vol_ratio projection (see `projectVolRatio`). */
+  computedAt?: string | null;
 }
 
 /* ─── LiveVolumeMoversCard ────────────────────────────────────────────────
@@ -49,7 +53,7 @@ interface Props {
  *   - Absolute volume is the actual ranking criterion — sits where
  *     the eye scans naturally between price and score.
  */
-export function LiveVolumeMoversCard({ movers }: Props) {
+export function LiveVolumeMoversCard({ movers, computedAt }: Props) {
   const ROWS_VISIBLE = 10;
   // Use the new `top_volume` list (ranked by absolute share-volume).
   // Falls back to the legacy `volume_spikes` (ranked by ratio) when
@@ -126,8 +130,15 @@ export function LiveVolumeMoversCard({ movers }: Props) {
               // vol_ratio but no vol_today — handle both shapes.
               const volToday =
                 "vol_today" in r ? (r as { vol_today?: number }).vol_today ?? null : null;
-              const volRatio =
+              const rawVolRatio =
                 "vol_ratio" in r ? (r as { vol_ratio?: number | null }).vol_ratio ?? null : null;
+              // Project to end-of-day using the intraday cum-volume
+              // curve. Outside US session (or in the first 30 min)
+              // the helper returns `projected:false` and we display
+              // the raw ratio unchanged.
+              const projVol = projectVolRatio(rawVolRatio, computedAt);
+              const volRatio = projVol?.value ?? null;
+              const isProjected = !!projVol?.projected;
               const composite =
                 "composite" in r
                   ? (r as { composite?: number | null }).composite ?? null
@@ -136,40 +147,58 @@ export function LiveVolumeMoversCard({ movers }: Props) {
                 <li key={r.ticker}>
                   <Link
                     to={`/stocks/${encodeURIComponent(r.ticker)}`}
-                    className="grid grid-cols-[minmax(0,1fr)_auto_auto] sm:grid-cols-[minmax(0,1fr)_auto_auto_auto_auto_auto] items-center gap-2 px-3 py-1.5 hover:bg-accent/30 transition-colors"
+                    className="grid grid-cols-[minmax(0,1fr)_auto_auto_auto] sm:grid-cols-[minmax(0,1fr)_auto_auto_auto_auto_auto] items-center gap-2 px-3 py-1.5 hover:bg-accent/30 transition-colors"
                   >
-                    {/* Col 1: identity + inline %change ("how is it moving") */}
+                    {/* Col 1: identity + per-row live-poll dot.
+                        Previously the "is this row being polled
+                        live?" signal was a dotted-underline on the
+                        PRICE (only visible on hover). The user asked
+                        to surface it explicitly: a classic pulsing
+                        green dot sits IMMEDIATELY right of the
+                        ticker, visible at a glance for every row
+                        whose 15s polling is currently active. */}
                     <div className="flex items-center gap-2 min-w-0">
                       <StockIdentity ticker={r.ticker} name={r.name} />
-                      <span
-                        className={cn(
-                          "shrink-0 text-[11px] font-semibold tabular-nums",
-                          displayChange != null && displayChange >= 0
-                            ? "text-emerald-600 dark:text-emerald-400"
-                            : displayChange != null
-                              ? "text-rose-600 dark:text-rose-400"
-                              : "text-muted-foreground",
-                        )}
-                        title="Variazione % giornaliera (live)"
-                      >
-                        {displayChange != null
-                          ? `${displayChange >= 0 ? "+" : ""}${displayChange.toFixed(2)}%`
-                          : "—"}
-                      </span>
+                      {livePulse && (
+                        <span
+                          className="relative inline-flex h-2 w-2 shrink-0"
+                          title="Pollato live (refresh ogni 15s)"
+                          aria-label="live"
+                        >
+                          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-75" />
+                          <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+                        </span>
+                      )}
                     </div>
 
-                    {/* Col 2: live price */}
+                    {/* Col 2: price — underline removed; live state
+                        now communicated by the green dot above. */}
                     <div
-                      className={cn(
-                        "shrink-0 text-sm font-semibold tabular-nums",
-                        livePulse && "underline decoration-dotted decoration-emerald-500/60 underline-offset-2",
-                      )}
+                      className="shrink-0 text-sm font-semibold tabular-nums"
                       title={
                         livePulse ? "Prezzo live (polling 15s)" : "Ultima chiusura disponibile"
                       }
                     >
                       {displayPrice != null ? `$${displayPrice.toFixed(2)}` : "—"}
                     </div>
+
+                    {/* Col 3: %change — to the RIGHT of the price, a
+                        notch larger than before (13px) for emphasis. */}
+                    <span
+                      className={cn(
+                        "shrink-0 text-[13px] font-semibold tabular-nums w-[62px] text-right",
+                        displayChange != null && displayChange >= 0
+                          ? "text-emerald-600 dark:text-emerald-400"
+                          : displayChange != null
+                            ? "text-rose-600 dark:text-rose-400"
+                            : "text-muted-foreground",
+                      )}
+                      title="Variazione % giornaliera (live)"
+                    >
+                      {displayChange != null
+                        ? `${displayChange >= 0 ? "+" : ""}${displayChange.toFixed(2)}%`
+                        : "—"}
+                    </span>
 
                     {/* Col 3: absolute volume — the actual ranking
                         criterion. Formatted as compact 12.4M / 1.2B.
@@ -187,14 +216,18 @@ export function LiveVolumeMoversCard({ movers }: Props) {
                       {fmtVolume(volToday)}
                     </div>
 
-                    {/* Col 4: vol multiplier (vs 20-day avg). Orange
-                        tint at ≥3× signals "really unusual". Bumped
-                        text-[10px] → text-xs and wider min-w so the
-                        chip reads at a glance like the score on its
-                        right. */}
+                    {/* Col 4: vol multiplier (vs 20-day avg).
+                        INTRADAY-PROJECTED to end-of-day when the
+                        snapshot is partial (see `projectVolRatio`).
+                        A "~" prefix marks projected values so the
+                        user reads them as estimates. Orange tint at
+                        ≥3× still signals "really unusual" — applied
+                        to the projected figure since that's the one
+                        that reflects the burst regardless of when
+                        in the session we're looking. */}
                     <div
                       className={cn(
-                        "hidden sm:block shrink-0 text-xs font-mono font-semibold tabular-nums rounded px-2 py-0.5 min-w-[52px] text-center",
+                        "hidden sm:block shrink-0 text-xs font-mono font-semibold tabular-nums rounded px-2 py-0.5 min-w-[56px] text-center",
                         volRatio != null && volRatio >= 3
                           ? "bg-orange-100 dark:bg-orange-950/40 text-orange-800 dark:text-orange-200"
                           : volRatio != null && volRatio >= 2
@@ -203,11 +236,15 @@ export function LiveVolumeMoversCard({ movers }: Props) {
                       )}
                       title={
                         volRatio != null
-                          ? `Volume oggi ${volRatio.toFixed(2)}× la media a 20 giorni`
+                          ? isProjected
+                            ? `Proiezione fine giornata ~${volRatio.toFixed(2)}× (scalato dalla curva intraday a ${Math.round((projVol?.fraction ?? 0) * 100)}% sessione)`
+                            : `Volume oggi ${volRatio.toFixed(2)}× la media a 20 giorni`
                           : "Multiplo vs media a 20 giorni non disponibile"
                       }
                     >
-                      {volRatio != null ? `${volRatio.toFixed(1)}×` : "—"}
+                      {volRatio != null
+                        ? `${isProjected ? "~" : ""}${volRatio.toFixed(1)}×`
+                        : "—"}
                     </div>
 
                     {/* Col 5: composite score (latest persisted). Color
@@ -226,8 +263,10 @@ export function LiveVolumeMoversCard({ movers }: Props) {
 
 /** Render absolute share volume as compact "12.4M" / "1.2B" — keeps
  *  the column narrow while still readable. Below 1k shows the raw
- *  number; null is rendered as em-dash. */
-function fmtVolume(v: number | null): string {
+ *  number; null is rendered as em-dash.
+ *  Exported so the sibling TopMoversCard (which now also surfaces
+ *  volume next to the % change) can share the same vocabulary. */
+export function fmtVolume(v: number | null): string {
   if (v == null || !Number.isFinite(v)) return "—";
   if (v >= 1e9) return `${(v / 1e9).toFixed(1)}B`;
   if (v >= 1e6) return `${(v / 1e6).toFixed(1)}M`;
@@ -238,8 +277,11 @@ function fmtVolume(v: number | null): string {
 /** Composite score chip — color-coded by tier so the card shows
  *  "high-volume + high-score" at a glance.
  *  Tailwind purger needs literal class strings; keep this as a switch,
- *  not a template. */
-function ScoreChip({ score }: { score: number | null | undefined }) {
+ *  not a template.
+ *  Exported so the sibling TopMoversCard can render the same chip in
+ *  its gainers/losers rows — keeps the visual vocabulary consistent
+ *  ("a score is a score is a score" across the dashboard). */
+export function ScoreChip({ score }: { score: number | null | undefined }) {
   if (score == null || !Number.isFinite(score)) {
     return (
       <span

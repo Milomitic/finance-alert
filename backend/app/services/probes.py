@@ -19,6 +19,7 @@ Rate-limit budget (5-minute fast cadence):
 Probes use AAPL as the canonical probe ticker — always listed, very
 liquid, never delisted, no exchange suffix.
 """
+import threading
 from collections.abc import Callable
 
 from loguru import logger
@@ -26,6 +27,19 @@ from loguru import logger
 from app.services import data_source_metrics
 
 _PROBE_TICKER = "AAPL"
+
+# Manual "Aggiorna" (run-now) progress — same shape/contract as
+# premarket_service so the frontend reuses one spinner+% pattern.
+_PROBE_LOCK = threading.Lock()
+_PROBE_PROGRESS: dict = {"refreshing": False, "done": 0, "total": 0}
+
+
+def progress() -> dict:
+    """{refreshing, progress_pct} for the Salute manual-refresh spinner."""
+    with _PROBE_LOCK:
+        s = dict(_PROBE_PROGRESS)
+    pct = round(100.0 * s["done"] / s["total"]) if s["total"] else 0
+    return {"refreshing": s["refreshing"], "progress_pct": pct}
 
 
 def _record(source: str, op: str, ok: bool, reason: str = "") -> None:
@@ -134,6 +148,82 @@ def probe_finnhub_earnings() -> None:
         _record("finnhub", "earnings", False, repr(exc))
 
 
+def probe_finnhub_news() -> None:
+    """`/company-news` reachability probe. Same elision pattern as
+    Marketaux: skip when breaker open OR a real fetch succeeded in
+    the last 4h — saves 1 quota unit per skip though Finnhub's 60/min
+    budget is so generous the saving is mostly cosmetic.
+    Probe gets the *latest day* news for AAPL (always populated)."""
+    from app.core.config import settings
+    if not settings.finnhub_api_key:
+        return
+    from app.services import finnhub_news_service
+    blocked, _ = finnhub_news_service._is_blocked()
+    if blocked:
+        return
+    recent = data_source_metrics.seconds_since_last_success("finnhub", "news")
+    if recent is not None and recent < 4 * 3600:
+        return
+    try:
+        import requests
+        from datetime import date, timedelta
+        to_d = date.today()
+        from_d = to_d - timedelta(days=2)
+        r = requests.get(
+            "https://finnhub.io/api/v1/company-news",
+            params={
+                "symbol": _PROBE_TICKER,
+                "from": from_d.isoformat(),
+                "to": to_d.isoformat(),
+                "token": settings.finnhub_api_key,
+            },
+            timeout=8,
+        )
+        if r.status_code == 429:
+            finnhub_news_service._trip_breaker("probe HTTP 429")
+        ok = r.status_code == 200
+        _record(
+            "finnhub", "news", ok,
+            "" if ok else f"HTTP {r.status_code}"
+        )
+    except Exception as exc:  # noqa: BLE001
+        _record("finnhub", "news", False, repr(exc))
+
+
+def probe_finnhub_upgrades() -> None:
+    """`/stock/upgrade-downgrade` reachability probe. Same elision +
+    breaker awareness as `probe_finnhub_news`."""
+    from app.core.config import settings
+    if not settings.finnhub_api_key:
+        return
+    from app.services import finnhub_news_service
+    blocked, _ = finnhub_news_service._is_blocked()
+    if blocked:
+        return
+    recent = data_source_metrics.seconds_since_last_success("finnhub", "upgrades")
+    if recent is not None and recent < 4 * 3600:
+        return
+    try:
+        import requests
+        r = requests.get(
+            "https://finnhub.io/api/v1/stock/upgrade-downgrade",
+            params={
+                "symbol": _PROBE_TICKER,
+                "token": settings.finnhub_api_key,
+            },
+            timeout=8,
+        )
+        if r.status_code == 429:
+            finnhub_news_service._trip_breaker("probe HTTP 429")
+        ok = r.status_code == 200
+        _record(
+            "finnhub", "upgrades", ok,
+            "" if ok else f"HTTP {r.status_code}"
+        )
+    except Exception as exc:  # noqa: BLE001
+        _record("finnhub", "upgrades", False, repr(exc))
+
+
 def probe_fred_macro() -> None:
     """Single-observation probe of UNRATE (US unemployment, monthly)."""
     from app.core.config import settings
@@ -162,21 +252,56 @@ def probe_fred_macro() -> None:
 
 
 def probe_marketaux_news() -> None:
-    """Marketaux. Each call consumes 1 unit of the 100/day free tier —
-    scheduled every 30 min (slow set) for ~48 probes/day, leaving 52
-    units of headroom for organic fallback traffic.
+    """Marketaux probe. Originally fired every 30 min (~48/day),
+    burning nearly half the 100/day free-tier quota on "is it up?"
+    checks before producing any real fetch. After the user reported
+    persistent out-of-service this was reworked into two short-circuit
+    elisions:
+
+      1. **Breaker check**: if `marketaux_news_service._is_blocked()`
+         is True (breaker open or daily budget exhausted), skip
+         silently — no failure recorded. The UI already shows the
+         tripping reason from the last real failure.
+      2. **Organic-success elision**: if a real fetch succeeded in
+         the last 4h, the source is provably healthy and re-probing
+         just to confirm wastes a unit. Skip without recording.
+      3. **Otherwise**: do the cheapest probe (limit=1, single ticker)
+         exactly as before.
+
+    Net effect: from ~48 probes/day down to ~6/day (one every 4h when
+    no organic traffic is exercising the source). Frees ~42 units of
+    daily quota for the user's actual browsing.
 
     When no api_key is configured we record a failure with a clear
     reason so the UI surfaces the missing-key state instead of leaving
     the source perpetually 'Idle' (which is indistinguishable from
     'never called yet')."""
     from app.core.config import settings
+    from app.services import marketaux_news_service
     if not settings.marketaux_api_key:
         _record(
             "marketaux", "news", False,
             "MARKETAUX_API_KEY non configurata — il fallback è disabilitato",
         )
         return
+
+    # Elision 1: breaker open / budget exhausted → don't probe.
+    blocked, reason = marketaux_news_service._is_blocked()
+    if blocked:
+        logger.debug(f"[marketaux probe] skipped — {reason}")
+        return
+
+    # Elision 2: organic traffic already proved the source healthy
+    # within the last 4h → re-probing is wasted quota.
+    recent_ok = data_source_metrics.seconds_since_last_success(
+        "marketaux", "news"
+    )
+    if recent_ok is not None and recent_ok < 4 * 3600:
+        logger.debug(
+            f"[marketaux probe] skipped — last success {recent_ok:.0f}s ago"
+        )
+        return
+
     try:
         import requests
         r = requests.get(
@@ -189,6 +314,12 @@ def probe_marketaux_news() -> None:
             },
             timeout=8,
         )
+        # Probe's own 429/402 → trip the breaker too so subsequent
+        # organic traffic doesn't waste a 1-second timeout each.
+        if r.status_code in (402, 429):
+            marketaux_news_service._trip_breaker(
+                f"probe HTTP {r.status_code}"
+            )
         ok = r.status_code == 200
         _record(
             "marketaux", "news", ok,
@@ -262,6 +393,41 @@ def probe_sec_13f_filings() -> None:
         _record("sec_13f", "filings", False, repr(exc))
 
 
+def probe_nasdaq_premarket() -> None:
+    """Nasdaq's unofficial (key-less) quote endpoint — the only free
+    source of extended-hours VOLUME (yfinance never returns it). Hit on
+    AAPL: cheap, always present. ok = HTTP 200 and the JSON body shape
+    is intact (`"symbol"` near the top). Nasdaq 403s default UAs, so we
+    send the same browser-like header set the real enrichment uses.
+
+    This source is non-critical (role=scheduled): a failure only
+    degrades the pre-market card's volume column to n/d, never an
+    outage — surfaced in Salute so the operator sees the ToS-gray
+    endpoint drifting/blocking before users notice missing volume."""
+    try:
+        import requests
+        r = requests.get(
+            "https://api.nasdaq.com/api/quote/AAPL/info?assetclass=stocks",
+            timeout=8,
+            headers={
+                "User-Agent": (
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/124.0 Safari/537.36"
+                ),
+                "Accept": "application/json, text/plain, */*",
+                "Accept-Language": "en-US,en;q=0.9",
+            },
+        )
+        ok = r.status_code == 200 and '"symbol"' in r.text[:400]
+        _record(
+            "nasdaq", "premarket", ok,
+            "" if ok else f"HTTP {r.status_code}",
+        )
+    except Exception as exc:  # noqa: BLE001
+        _record("nasdaq", "premarket", False, repr(exc))
+
+
 # ─── orchestrators ───────────────────────────────────────────────────
 
 FAST_PROBES: list[Callable[[], None]] = [
@@ -276,23 +442,66 @@ SLOW_PROBES: list[Callable[[], None]] = [
     probe_yfinance_ohlcv,
     probe_yfinance_fundamentals,
     probe_marketaux_news,
+    # Finnhub news + upgrade-downgrade — both internally smart-elide
+    # (skip if breaker open or last success < 4h), so even at 30 min
+    # scheduler cadence they effectively run only when needed. Sit in
+    # SLOW set because they target rate-limit-aware sources and
+    # there's no value in 5-min cadence.
+    probe_finnhub_news,
+    probe_finnhub_upgrades,
     probe_forexfactory_consensus,
     probe_sec_13f_filings,
+    probe_nasdaq_premarket,
 ]
 
 
-def _run_set(probes: list[Callable[[], None]], *, skip_yfinance: bool) -> None:
+def _run_set(
+    probes: list[Callable[[], None]],
+    *,
+    skip_yfinance: bool,
+    on_progress: Callable[[], None] | None = None,
+) -> None:
     """Run each probe in `probes`, isolating exceptions per probe so one
-    crashing probe doesn't skip the rest."""
+    crashing probe doesn't skip the rest. `on_progress` (when given) is
+    called once per probe — INCLUDING skipped ones — so a progress bar
+    over the full set still reaches 100%."""
     for fn in probes:
         name = fn.__name__
         if skip_yfinance and name.startswith("probe_yfinance_"):
             logger.debug(f"[probe] skipping {name} (breaker open)")
-            continue
-        try:
-            fn()
-        except Exception as exc:  # noqa: BLE001 — probe runs must never raise
-            logger.warning(f"[probe] {name} unexpectedly raised: {exc!r}")
+        else:
+            try:
+                fn()
+            except Exception as exc:  # noqa: BLE001 — must never raise
+                logger.warning(f"[probe] {name} unexpectedly raised: {exc!r}")
+        if on_progress is not None:
+            on_progress()
+
+
+def run_all_probes() -> None:
+    """Manual run-now: FAST + SLOW with live progress for the Salute
+    "Aggiorna" spinner. Mirrors premarket_service.refresh — sets
+    refreshing/total up front, bumps done per probe, always clears
+    refreshing in a finally so a crash can't wedge the spinner."""
+    from app.services import yfinance_health
+
+    skip = yfinance_health.is_open()
+    with _PROBE_LOCK:
+        _PROBE_PROGRESS.update(
+            refreshing=True, done=0,
+            total=len(FAST_PROBES) + len(SLOW_PROBES),
+        )
+
+    def _bump() -> None:
+        with _PROBE_LOCK:
+            _PROBE_PROGRESS["done"] += 1
+
+    try:
+        _run_set(FAST_PROBES, skip_yfinance=skip, on_progress=_bump)
+        _run_set(SLOW_PROBES, skip_yfinance=skip, on_progress=_bump)
+    finally:
+        with _PROBE_LOCK:
+            _PROBE_PROGRESS["refreshing"] = False
 
 
 def run_fast_probes() -> None:

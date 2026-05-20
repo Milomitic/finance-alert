@@ -4,7 +4,9 @@ import { Link, useParams, useSearchParams } from "react-router-dom";
 import type { HoldingDetail } from "@/api/types";
 import { StockLogo } from "@/components/dashboard/StockLogo";
 import { Card, CardContent } from "@/components/ui/card";
+import { CardSkeleton } from "@/components/ui/card-skeleton";
 import { SectionTitle } from "@/components/ui/section-title";
+import { AllocationBars } from "@/components/dashboard/AllocationBars";
 import { useInstitutionalDetail } from "@/hooks/useInstitutionals";
 import { cn } from "@/lib/utils";
 
@@ -181,7 +183,19 @@ export default function InstitutionalDetailPage() {
   const q = useInstitutionalDetail(slug, periodParam);
 
   if (q.isLoading) {
-    return <div className="p-4 text-sm text-muted-foreground">Caricamento…</div>;
+    // Mirror the loaded layout: header strip + 2-col body (allocation
+    // bars + holdings table) so the page doesn't reflow when data
+    // arrives. Was bare "Caricamento…" text — replaced for visual
+    // continuity with the rest of the app.
+    return (
+      <div className="space-y-3">
+        <CardSkeleton rows={3} className="h-[120px]" />
+        <div className="grid lg:grid-cols-[1fr_1fr] gap-3">
+          <CardSkeleton label="COMPOSIZIONE PORTAFOGLIO" rows={10} strongHeader className="h-[480px]" />
+          <CardSkeleton label="HOLDINGS" rows={10} strongHeader className="h-[480px]" />
+        </div>
+      </div>
+    );
   }
   if (q.isError || !q.data) {
     return (
@@ -312,6 +326,29 @@ export default function InstitutionalDetailPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Portfolio-composition infographic: who/what this fund holds
+          and in what measure (bar = position value, colour = weight). */}
+      <Card>
+        <CardContent className="p-3">
+          <AllocationBars
+            title="Composizione portafoglio — top posizioni"
+            max={12}
+            emptyHint="Nessuna posizione tracciata per questo periodo."
+            items={holdings.map((h) => ({
+              key: h.ticker,
+              label: h.company_name || h.ticker,
+              href:
+                h.stock_id != null && !h.ticker.startsWith("CUSIP:")
+                  ? `/stocks/${encodeURIComponent(h.ticker)}`
+                  : undefined,
+              valueUsd: h.value_usd,
+              pct: h.portfolio_pct,
+              action: h.action,
+            }))}
+          />
+        </CardContent>
+      </Card>
 
       <Card>
         <CardContent className="p-3">

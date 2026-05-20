@@ -106,15 +106,30 @@ def get_detail(
 def get_ticker_holders(
     ticker: str,
     limit: int = 25,
+    include_historical: bool = False,
     db: Session = Depends(get_db),
     _user: User = Depends(get_current_user),
 ) -> TickerHoldersOut:
     """Used by the stock detail card. Returns the list of
     institutionals/superinvestors holding `ticker` in their latest
     filing. Empty list = no tracked fund holds it (still a 200,
-    not a 404)."""
+    not a 404).
+
+    With `include_historical=true` the response also carries a
+    `historical` list: funds that held the ticker in the past but are
+    no longer current holders (sold out or stale), each with their
+    most recent holding — used by the dual-encoded infographic to show
+    past conviction alongside live positions."""
     holders = institutional_service.holders_for_ticker(db, ticker, limit=limit)
+    historical: list[TickerHolderOut] = []
+    if include_historical:
+        current_ids = {h.institutional_id for h in holders}
+        hist = institutional_service.historical_holders_for_ticker(
+            db, ticker, limit=limit, exclude_ids=current_ids
+        )
+        historical = [TickerHolderOut.model_validate(h) for h in hist]
     return TickerHoldersOut(
         ticker=ticker,
         holders=[TickerHolderOut.model_validate(h) for h in holders],
+        historical=historical,
     )

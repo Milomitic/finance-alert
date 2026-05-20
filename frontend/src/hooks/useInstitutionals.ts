@@ -41,10 +41,14 @@ export function useInstitutionalDetail(slug: string, periodEnd?: string) {
   });
 }
 
-export function useTickerInstitutionalHolders(ticker: string, limit: number = 25) {
+export function useTickerInstitutionalHolders(
+  ticker: string,
+  limit: number = 25,
+  includeHistorical: boolean = false,
+) {
   return useQuery({
-    queryKey: ["institutionals", "for-ticker", ticker, limit],
-    queryFn: () => institutionals.forTicker(ticker, limit),
+    queryKey: ["institutionals", "for-ticker", ticker, limit, includeHistorical],
+    queryFn: () => institutionals.forTicker(ticker, limit, includeHistorical),
     enabled: Boolean(ticker),
     staleTime: STALE_MEDIUM,
     retry: 1,

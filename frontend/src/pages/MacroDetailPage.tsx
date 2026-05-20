@@ -1,4 +1,4 @@
-import { ArrowLeft, Building2, Globe, Loader2 } from "lucide-react";
+import { ArrowLeft, Building2, Globe } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
@@ -16,6 +16,7 @@ import {
 import type { MacroRelease } from "@/api/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { CardSkeleton } from "@/components/ui/card-skeleton";
 import { useMacroDetail } from "@/hooks/useCalendar";
 import { regionFlagAsset, regionLabel } from "@/lib/calendarMeta";
 import { cn } from "@/lib/utils";
@@ -88,10 +89,12 @@ export default function MacroDetailPage() {
   }
 
   if (detail.isLoading) {
+    // Macro indicator detail = header KPIs + time-series chart. The
+    // skeleton mirrors that two-block layout (was a spinner-line).
     return (
-      <div className="p-8 flex items-center gap-2 text-sm text-muted-foreground">
-        <Loader2 className="h-4 w-4 animate-spin" />
-        Caricamento dettaglio…
+      <div className="space-y-3">
+        <CardSkeleton rows={3} className="h-[140px]" />
+        <CardSkeleton label="SERIE STORICA" rows={10} strongHeader className="h-[460px]" />
       </div>
     );
   }

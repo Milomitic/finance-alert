@@ -3,15 +3,24 @@ import { Link } from "react-router-dom";
 import { useMemo, useState } from "react";
 
 import type { Mover, MoversBlock } from "@/api/types";
+import {
+  ScoreChip,
+  fmtVolume,
+} from "@/components/dashboard/LiveVolumeMoversCard";
 import { StockIdentity } from "@/components/dashboard/StockIdentity";
 import { Card, CardContent } from "@/components/ui/card";
 import { SectionTitle } from "@/components/ui/section-title";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useLiveQuotes } from "@/hooks/useLiveQuote";
+import { projectVolRatio } from "@/lib/intradayVolume";
 import { cn } from "@/lib/utils";
 
 interface Props {
   movers: MoversBlock;
+  /** Market snapshot's `computed_at` — used as the time reference for
+   *  projecting partial-day vol_ratio to end-of-day. Falls back to
+   *  "now" inside the projector when null. */
+  computedAt?: string | null;
 }
 
 type Window = "1d" | "1w" | "1m";
@@ -46,30 +55,117 @@ function getWindowed(movers: MoversBlock, w: Window): WindowedMovers {
   return { gainers: movers.gainers, losers: movers.losers, field: "change_pct" };
 }
 
-function MoverRow({ m, field, live }: {
+function MoverRow({ m, field, live, computedAt, livePrice }: {
   m: Mover;
   field: WindowedMovers["field"];
   /** When true, colour by the value's own sign (a stock can flip
    *  gainer↔loser intraday so the column it lands in no longer
    *  dictates the colour). EOD windows keep the static sign. */
   live: boolean;
+  /** Snapshot `computed_at` — threaded down so the row can project
+   *  vol_ratio to end-of-day using the intraday curve. */
+  computedAt?: string | null;
+  /** Optional live price from the 15s batch poller, overlaid on top of
+   *  the snapshot's `last_close`. Undefined → fall back to last_close. */
+  livePrice?: number | null;
 }) {
   const v = m[field] ?? null;
   const positive = v != null ? v >= 0 : true;
   const color = positive
     ? "text-green-600 dark:text-green-400"
     : "text-red-600 dark:text-red-400";
+  const volToday = m.vol_today ?? null;
+  const rawVolRatio = m.vol_ratio ?? null;
+  // Project the snapshot's raw vol_ratio to end-of-day when we're
+  // inside the US session. Outside session (or first ~30 min) the
+  // helper returns `projected:false` and we just show the raw value.
+  const projVol = projectVolRatio(rawVolRatio, computedAt);
+  const displayVolRatio = projVol?.value ?? null;
+  const isProjected = !!projVol?.projected;
+  const composite = m.composite ?? null;
+  const displayPrice = livePrice ?? m.last_close ?? null;
   return (
     <li className="border-b border-border/40 last:border-b-0">
       <Link
         to={`/stocks/${encodeURIComponent(m.ticker)}`}
-        className="flex items-center gap-2 px-3 py-1.5 hover:bg-accent/30 transition-colors min-w-0"
+        className="flex items-center gap-1.5 px-2 py-1.5 hover:bg-accent/30 transition-colors min-w-0"
       >
+        {/* Identity — flexes; will truncate first when the row narrows. */}
         <StockIdentity ticker={m.ticker} name={m.name} />
-        <span className={cn("text-sm font-semibold tabular-nums shrink-0", color)}>
-          {v != null ? `${v >= 0 ? "+" : ""}${v.toFixed(2)}%` : "—"}
-          {live ? <span className="ml-0.5 align-top text-[8px] text-muted-foreground">●</span> : null}
+        {/* Live/last price — between identity and % change so the eye
+            reads "ticker → price → % move" left-to-right. When 1G is
+            active and the polled overlay has a fresh price for this
+            ticker we use that; otherwise we fall back to the snapshot's
+            last_close. */}
+        <span
+          className="shrink-0 text-[13px] font-semibold tabular-nums text-foreground/85 w-[58px] text-right"
+          title={
+            livePrice != null
+              ? "Prezzo live (polling 15s)"
+              : "Ultima chiusura disponibile"
+          }
+        >
+          {displayPrice != null ? `$${displayPrice.toFixed(2)}` : "—"}
         </span>
+        {/* % change — headline metric. */}
+        <span
+          className={cn(
+            "shrink-0 text-sm font-semibold tabular-nums w-[66px] text-right",
+            color,
+          )}
+          title={
+            live
+              ? "Variazione % giornaliera (live)"
+              : "Variazione % nella finestra selezionata"
+          }
+        >
+          {v != null ? `${v >= 0 ? "+" : ""}${v.toFixed(2)}%` : "—"}
+        </span>
+        {/* Volume + multiplier — "12.4M (3.2×)". Font bumped 11→13px
+            per user feedback: the figure was visually subordinate to
+            % change but it carries comparable signal weight ("how
+            unusual is today's activity"). The multiplier is
+            INTRADAY-PROJECTED when the snapshot is partial-day — see
+            `projectVolRatio` for the curve. We mark projected values
+            with a "~" prefix so the user reads it as an estimate. */}
+        <span
+          className="shrink-0 text-[12.5px] tabular-nums text-muted-foreground/90 min-w-[92px] text-right"
+          title={
+            volToday != null
+              ? `Volume oggi: ${volToday.toLocaleString("it-IT")} share${
+                  displayVolRatio != null
+                    ? ` · ${
+                        isProjected
+                          ? `proiezione fine giornata ~${displayVolRatio.toFixed(2)}× (scalato da ${projVol?.fraction ? Math.round(projVol.fraction * 100) : 0}% sessione)`
+                          : `${displayVolRatio.toFixed(2)}× la media a 20 giorni`
+                      }`
+                    : ""
+                }`
+              : "Volume non disponibile"
+          }
+        >
+          <span className="font-semibold text-foreground/80">
+            {fmtVolume(volToday)}
+          </span>
+          {displayVolRatio != null && (
+            <span
+              className={cn(
+                "ml-1",
+                displayVolRatio >= 3
+                  ? "text-orange-700 dark:text-orange-300 font-semibold"
+                  : displayVolRatio >= 2
+                  ? "text-foreground/70"
+                  : "text-muted-foreground/70",
+              )}
+            >
+              ({isProjected ? "~" : ""}
+              {displayVolRatio.toFixed(1)}×)
+            </span>
+          )}
+        </span>
+        {/* Composite score chip — reuses the shared chip so the
+            visual vocabulary matches LiveVolumeMoversCard exactly. */}
+        <ScoreChip score={composite} />
       </Link>
     </li>
   );
@@ -116,7 +212,7 @@ function ColumnHeader({ side }: { side: Side }) {
  * quoting ~1100 tickers every 15s (infeasible vs yfinance limits).
  * 1S/1M stay pure EOD (live quotes only carry today's move).
  */
-export function TopMoversCard({ movers }: Props) {
+export function TopMoversCard({ movers, computedAt }: Props) {
   const [window, setWindow] = useState<Window>("1d");
   const isLive = window === "1d";
 
@@ -140,24 +236,35 @@ export function TopMoversCard({ movers }: Props) {
   // burn quota for windows that can't use live prices anyway.
   const liveQ = useLiveQuotes(candidateTickers, isLive);
 
+  // Live overlay carries both change_pct AND price now — price feeds
+  // the new price column in the row layout. Previously the map stored
+  // only change_pct (which dictated re-ranking) and the price column
+  // didn't exist.
   const liveMap = useMemo(() => {
-    const map = new Map<string, number>();
+    const map = new Map<string, { change_pct: number; price: number | null }>();
     for (const q of liveQ.data?.quotes ?? []) {
-      if (q.change_pct != null) map.set(q.ticker, q.change_pct);
+      if (q.change_pct != null) {
+        map.set(q.ticker, {
+          change_pct: q.change_pct,
+          price: q.price ?? null,
+        });
+      }
     }
     return map;
   }, [liveQ.data]);
 
   const data = useMemo<WindowedMovers>(() => {
     if (!isLive) return getWindowed(movers, window);
-    // Combined pool, effective change = live ?? EOD fallback.
+    // Combined pool, effective change = live ?? EOD fallback. (Price
+    // overlay is applied in the row render, not the pool — sorting is
+    // by change_pct only, so the pool only needs the live change_pct.)
     const seen = new Set<string>();
     const pool: Mover[] = [];
     for (const m of [...movers.gainers, ...movers.losers]) {
       if (seen.has(m.ticker)) continue;
       seen.add(m.ticker);
-      const liveVal = liveMap.get(m.ticker);
-      pool.push(liveVal != null ? { ...m, change_pct: liveVal } : m);
+      const overlay = liveMap.get(m.ticker);
+      pool.push(overlay != null ? { ...m, change_pct: overlay.change_pct } : m);
     }
     const withChange = pool.filter((m) => m.change_pct != null);
     const gainers = [...withChange].sort(
@@ -230,6 +337,10 @@ export function TopMoversCard({ movers }: Props) {
                         m={m}
                         field={data.field}
                         live={liveActive && liveMap.has(m.ticker)}
+                        computedAt={computedAt}
+                        livePrice={
+                          liveActive ? liveMap.get(m.ticker)?.price ?? null : null
+                        }
                       />
                     ))}
                   </ul>

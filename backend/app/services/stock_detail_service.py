@@ -239,12 +239,17 @@ def get_detail(db: Session, ticker: str, range_key: str = "1d") -> StockDetail |
     # Filter hidden countries (CN/JP/KR) so the detail page treats
     # those rows as 404 — catalog-only, used for breadth/mood, not
     # for direct user navigation.
+    # Duplicate-tolerant: ~59 tickers have two catalog rows (CLAUDE.md).
+    # `scalar_one_or_none()` raises MultipleResultsFound on those (MPC,
+    # AAPL, AMZN, …) → the detail page 500s with "verifica che esista
+    # in catalogo" even though the stock IS in the catalog. All dup
+    # rows are equivalent for this read-only path, so take the first.
     stock = db.execute(
         select(Stock).where(
             Stock.ticker == ticker,
             visible_country_clause(),
-        )
-    ).scalar_one_or_none()
+        ).limit(1)
+    ).scalars().first()
     if stock is None:
         return None
 

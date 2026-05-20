@@ -336,6 +336,17 @@ export interface Mover {
   last_close: number;
   prev_close: number | null;
   sparkline?: number[];  // last ~30 close prices for the row's faded background trend
+  /** Absolute share count traded today. Used by the "Top movers" card
+   *  to surface volume next to the % change. Optional — older snapshot
+   *  payloads predate this field. */
+  vol_today?: number | null;
+  /** vol_today / vol_avg_20 — multiplier vs the 20-day average. Tells
+   *  the reader whether today's volume is unusual. Same value as on
+   *  `VolumeSpike` / `TopVolume`. Optional. */
+  vol_ratio?: number | null;
+  /** Latest persisted composite score (0-100). Optional — null when
+   *  the score service hasn't yet processed the stock. */
+  composite?: number | null;
 }
 
 export interface VolumeSpike extends Mover {
@@ -1092,4 +1103,8 @@ export interface TickerHolder {
 export interface TickerHolders {
   ticker: string;
   holders: TickerHolder[];
+  /** Funds that USED to hold the ticker but are no longer current
+   *  holders (sold out / stale). Each row is their most recent
+   *  holding. Only populated when fetched with include_historical. */
+  historical?: TickerHolder[];
 }

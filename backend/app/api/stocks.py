@@ -157,18 +157,21 @@ def get_quotes_batch(
 def get_one(
     ticker: str, db: Session = Depends(get_db), _user: User = Depends(get_current_user)
 ) -> StockOut:
-    # `ticker` è univoco a livello di catalogo dopo `dedupe_stocks` +
-    # canonicalizzazione in seed/catalog refresh: usiamo
-    # `scalar_one_or_none()` per fail-loud se qualcuno reintroduce
-    # duplicati (più sicuro di `.first()` che li nasconderebbe).
-    # Hidden countries (CN/JP/KR) → 404 for deep links. Single source
-    # of truth: `app.core.visibility`.
+    # Duplicate-tolerant read path. The "ticker is unique after
+    # dedupe_stocks" assumption was WRONG in practice: ~59 tickers
+    # (MPC, AAPL, AMZN, …) still have two catalog rows — CLAUDE.md is
+    # explicit that the dedup is a deferred background task and that
+    # read paths MUST tolerate duplicates with `.limit(1).scalars()
+    # .first()`. `scalar_one_or_none()` here raised MultipleResultsFound
+    # → /stocks/<dup> 500'd with "verifica che esista in catalogo" even
+    # though the stock IS catalogued. All dup rows are equivalent for
+    # this read. Hidden countries (CN/JP/KR) → 404 for deep links.
     stock = db.execute(
         select(Stock).where(
             Stock.ticker == ticker,
             visible_country_clause(),
-        )
-    ).scalar_one_or_none()
+        ).limit(1)
+    ).scalars().first()
     if stock is None:
         raise HTTPException(status_code=404, detail="Stock not found")
     return StockOut.model_validate(stock)
@@ -340,31 +343,114 @@ def get_stock_fundamentals(
 
 
 def _merge_news_analyst_actions(ticker: str, structured_actions: list) -> list:
-    """Build the unified analyst-actions list: structured (yfinance) +
-    news-derived (regex). Returns a NEW list — never mutates the cached
-    `f.analyst_actions` so the L1+L2 fundamentals payload stays untouched.
+    """Build the unified analyst-actions list: structured (yfinance +
+    Finnhub) + news-derived (regex on news headlines). Returns a NEW
+    list — never mutates the cached `f.analyst_actions` so the L1+L2
+    fundamentals payload stays untouched.
 
-    Sort order: by date DESC so the freshest action (likely the news one)
-    appears at the top of the AnalystTargetCard. Within the same date,
-    structured rows go first because they have richer data (from_grade,
-    prior_price_target). News-derived rows use the AnalystAction dataclass
-    so the API serialization works without code changes downstream.
+    Source priority (highest to lowest confidence):
+      1. yfinance `upgrades_downgrades` — historically the structured
+         feed of record. Currently stale at the source for many large
+         caps (Yahoo deprecated the per-event endpoint), but kept
+         first because when it IS fresh, the data shape is richer
+         (carries `prior_price_target`).
+      2. Finnhub `/stock/upgrade-downgrade` — added because (1) went
+         dead. Same structured shape (firm + from/to grade + action +
+         date), independent quota (60/min, ample), refreshed weekly+.
+         Deduped against (1) by (normalized firm name, date ±3 days).
+      3. News-headline regex extraction — last resort, runs against
+         the combined news feed (yfinance + Finnhub news + Marketaux
+         fallback). Deduped against both (1) and (2).
+
+    Sort order: by date DESC so the freshest action (likely the news
+    one) appears at the top of the AnalystTargetCard. Within the same
+    date, structured rows go first because they have richer data
+    (from_grade, prior_price_target). News-derived rows use the
+    AnalystAction dataclass so the API serialization works without
+    code changes downstream.
     """
     from app.services.stock_fundamentals_service import AnalystAction
+
+    # ── Augment structured actions with Finnhub's upgrade-downgrade
+    #    feed BEFORE running the news extractor. This way the news
+    #    extractor's dedup naturally avoids creating duplicates of
+    #    Finnhub-sourced events too. ────────────────────────────────
+    structured_combined = list(structured_actions)
+    try:
+        from app.services import finnhub_news_service
+        finnhub_events = finnhub_news_service.fetch_upgrade_downgrade(ticker)
+    except Exception as exc:  # noqa: BLE001 — fallback failure is non-fatal
+        logger.warning(
+            f"[stock_detail] finnhub upgrade-downgrade failed for {ticker}: {exc}"
+        )
+        finnhub_events = []
+
+    if finnhub_events:
+        # Dedup Finnhub against yfinance using the same (firm, date±3d)
+        # heuristic the news extractor uses internally. Re-uses
+        # `_normalize_firm` from the extractor so "Goldman Sachs" and
+        # "Goldman" map together.
+        from app.services.news_analyst_extractor import (
+            _normalize_firm, _date_within,
+        )
+        existing_keys = {
+            (_normalize_firm(getattr(ex, "firm", "") or ""), getattr(ex, "date", "") or "")
+            for ex in structured_combined
+        }
+
+        def _overlaps_yf(fev) -> bool:
+            norm_firm = _normalize_firm(fev.firm)
+            if not norm_firm:
+                return False
+            for ex in structured_combined:
+                ex_firm_norm = _normalize_firm(getattr(ex, "firm", "") or "")
+                if ex_firm_norm != norm_firm:
+                    continue
+                if _date_within(fev.date, getattr(ex, "date", "") or "", 3):
+                    return True
+            return False
+
+        added = 0
+        for fev in finnhub_events:
+            if _overlaps_yf(fev):
+                continue
+            structured_combined.append(AnalystAction(
+                date=fev.date,
+                firm=fev.firm,
+                to_grade=fev.to_grade,
+                from_grade=fev.from_grade,
+                action=fev.action,
+                # Finnhub's free endpoint doesn't carry target prices
+                # — only the rating action. Future paid Finnhub tiers
+                # do; until then these stay None.
+                current_price_target=None,
+                prior_price_target=None,
+                price_target_action=None,
+                from_news=False,  # structured — not regex-extracted
+                source_link=None,
+                source_title="",
+            ))
+            added += 1
+        if added > 0:
+            logger.debug(
+                f"[stock_detail] {ticker}: +{added} Finnhub analyst events "
+                f"merged (after yfinance dedup; existing_keys={len(existing_keys)})"
+            )
+
     try:
         news = stock_news_service.get_news(ticker)
     except UpstreamError as e:
         logger.warning(
             f"[stock_detail] upstream {e.source}.{e.op} failed for {ticker}: {e}"
         )
-        # News service offline → return structured actions unchanged.
-        return list(structured_actions)
+        # News service offline → return what we have (yfinance + Finnhub
+        # structured events) without the regex extraction step.
+        return structured_combined
     except Exception as e:  # noqa: BLE001 — defensive last-resort
         logger.exception(f"[stock_detail] unexpected error for {ticker}: {e}")
-        # News service offline → return structured actions unchanged.
-        return list(structured_actions)
+        return structured_combined
     if not news:
-        return list(structured_actions)
+        return structured_combined
 
     # Walk every news item and turn analyst-flavored headlines into
     # AnalystAction dataclasses. Skip duplicates of existing rows.
@@ -384,7 +470,10 @@ def _merge_news_analyst_actions(ticker: str, structured_actions: list) -> list:
         )
         if mention is None:
             continue
-        if news_analyst_extractor.is_duplicate_of_existing(mention, structured_actions):
+        # Dedup against the COMBINED set (yfinance + Finnhub) — using
+        # the original `structured_actions` here would let a news
+        # mention duplicate a Finnhub event we just added.
+        if news_analyst_extractor.is_duplicate_of_existing(mention, structured_combined):
             continue
         # Internal de-dup across multiple news outlets reporting the same
         # action — merge against the in-progress `extras` list too.
@@ -405,9 +494,9 @@ def _merge_news_analyst_actions(ticker: str, structured_actions: list) -> list:
         ))
 
     if not extras:
-        return list(structured_actions)
+        return structured_combined
 
-    merged = list(structured_actions) + extras
+    merged = structured_combined + extras
     # Sort: most recent first; structured-source ties beat news-derived
     # ties (richer data first). `date` is YYYY-MM-DD so string sort works.
     merged.sort(

@@ -950,3 +950,106 @@ def holders_for_ticker(
             )
         )
     return out
+
+
+def historical_holders_for_ticker(
+    db: Session,
+    ticker: str,
+    *,
+    limit: int = 25,
+    exclude_ids: set[int] | None = None,
+) -> list[TickerHolder]:
+    """Funds that held `ticker` at some point but are NOT current
+    holders (per `holders_for_ticker`): either they sold out (their
+    latest filing no longer lists it) or their last filing listing it
+    is older than the 18-month freshness cutoff.
+
+    For each such fund we surface their *most recent* holding of the
+    ticker — i.e. the last filing in which they still held it — so the
+    infographic can show "who used to hold this, and how big it was the
+    last time we saw it". The `action` on that row (typically
+    `sold_out`) carries the exited signal to the UI.
+
+    Distinct from `holders_for_ticker`, this query does NOT join the
+    institution's *latest filing*; it ranks by the latest filing **in
+    which the ticker actually appears**. `exclude_ids` removes the
+    current holders so the two lists never double-count a fund.
+    """
+    exclude_ids = set(exclude_ids or [])
+
+    # Latest period in which each institution still held the ticker.
+    last_held = (
+        select(
+            InstitutionalFiling.institutional_id.label("inst_id"),
+            func.max(InstitutionalFiling.period_end_date).label("max_period"),
+        )
+        .join(
+            InstitutionalHolding,
+            InstitutionalHolding.filing_id == InstitutionalFiling.id,
+        )
+        .where(InstitutionalHolding.ticker == ticker)
+        .group_by(InstitutionalFiling.institutional_id)
+        .subquery()
+    )
+    rows = db.execute(
+        select(
+            Institutional.id,
+            Institutional.slug,
+            Institutional.name,
+            Institutional.manager_name,
+            Institutional.type,
+            InstitutionalFiling.period_end_date,
+            InstitutionalHolding.shares,
+            InstitutionalHolding.value_usd,
+            InstitutionalHolding.portfolio_pct,
+            InstitutionalHolding.qoq_change_pct,
+            InstitutionalHolding.action,
+        )
+        .join(
+            InstitutionalFiling,
+            InstitutionalFiling.id == InstitutionalHolding.filing_id,
+        )
+        .join(
+            Institutional,
+            Institutional.id == InstitutionalFiling.institutional_id,
+        )
+        .join(
+            last_held,
+            (last_held.c.inst_id == Institutional.id)
+            & (last_held.c.max_period == InstitutionalFiling.period_end_date),
+        )
+        .where(InstitutionalHolding.ticker == ticker)
+        .order_by(
+            InstitutionalFiling.period_end_date.desc(),
+            InstitutionalHolding.value_usd.desc().nullslast(),
+            InstitutionalHolding.portfolio_pct.desc().nullslast(),
+        )
+        # over-fetch: excluded current holders are dropped post-query
+        .limit(limit + len(exclude_ids))
+    ).all()
+
+    out: list[TickerHolder] = []
+    for (
+        inst_id, slug, name, manager_name, type_, period_end,
+        shares, value_usd, portfolio_pct, qoq_change_pct, action,
+    ) in rows:
+        if inst_id in exclude_ids:
+            continue
+        out.append(
+            TickerHolder(
+                institutional_id=inst_id,
+                institutional_slug=slug,
+                institutional_name=name,
+                institutional_manager=manager_name,
+                institutional_type=type_,
+                period_end_date=period_end,
+                shares=shares,
+                value_usd=value_usd,
+                portfolio_pct=portfolio_pct,
+                qoq_change_pct=qoq_change_pct,
+                action=action,
+            )
+        )
+        if len(out) >= limit:
+            break
+    return out

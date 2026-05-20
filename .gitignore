@@ -18,6 +18,10 @@ backend/data/*.db-journal
 backend/data/*.db-wal
 backend/data/*.db-shm
 backend/data/logs/
+# Runtime state — persistent circuit-breaker timestamps + cached upstream
+# payloads (regenerated on demand, machine-specific, not source of truth)
+backend/data/breakers.json
+backend/data/ff_calendar.xml
 # Stray repo-root /data — sometimes created by scripts run from the wrong
 # cwd (worktree edge case). Belongs nowhere in git, ever.
 /data/

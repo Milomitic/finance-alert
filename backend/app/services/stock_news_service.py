@@ -130,14 +130,54 @@ def get_news(ticker: str, limit: int = 5) -> list[dict[str, Any]]:
     normalized = [n for raw in raw_items if (n := _normalize_yf_item(raw))]
     normalized.sort(key=lambda n: n.get("published_at") or "", reverse=True)
 
-    if not normalized:  # yfinance returned 0 usable headlines — try Marketaux
+    if not normalized:
+        # yfinance returned 0 usable headlines → try fallbacks in
+        # quota-friendliness order:
+        #   1. Finnhub (60/min, ~free for our volumes) — added because
+        #      yfinance's company-news coverage is patchy for non-US
+        #      large-caps AND its analyst-flavored headlines are scarce
+        #      even for US large-caps (yfinance prioritizes
+        #      generalist "Meta layoffs" headlines over "Wedbush
+        #      raises target"). Finnhub aggregates Benzinga / MarketBeat
+        #      style publishers that DO carry the analyst-firm-named
+        #      headlines.
+        #   2. Marketaux (100/day, gated by quota guard + breaker) —
+        #      only consulted if Finnhub also returns empty. Same
+        #      transformation into the shared news shape.
+        # On a typical browsing session: yfinance covers ~80% of
+        # tickers, Finnhub covers the rest, Marketaux is rarely needed.
+        try:
+            from app.services import finnhub_news_service
+            finnhub_items = finnhub_news_service.fetch_company_news(
+                ticker, limit=15
+            )
+            if finnhub_items:
+                logger.info(
+                    f"[news] yfinance empty for {ticker}, using Finnhub "
+                    f"fallback ({len(finnhub_items)} items)"
+                )
+                normalized = [
+                    {
+                        "title": item.title,
+                        "link": item.url,
+                        "publisher": item.source or "Finnhub",
+                        "published_at": item.published_at or None,
+                        "sentiment": classify_title(item.title),
+                        "summary": item.summary,
+                    }
+                    for item in finnhub_items
+                ]
+        except Exception as exc:  # noqa: BLE001 — fallback can fail, that's OK
+            logger.warning(f"[news] finnhub fallback failed for {ticker}: {exc}")
+
+    if not normalized:
         try:
             from app.services import marketaux_news_service
             fallback = marketaux_news_service.fetch_news(ticker, limit=10)
             if fallback:
                 logger.info(
-                    f"[news] yfinance empty for {ticker}, using Marketaux fallback "
-                    f"({len(fallback)} items)"
+                    f"[news] yfinance+finnhub empty for {ticker}, using "
+                    f"Marketaux fallback ({len(fallback)} items)"
                 )
                 normalized = [
                     {

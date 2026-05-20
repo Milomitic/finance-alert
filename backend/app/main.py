@@ -1,4 +1,5 @@
 """FastAPI application entry point."""
+import threading
 import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -121,12 +122,34 @@ def _ensure_default_rules() -> None:
         logger.warning(f"[startup] ensure_global_rules failed (non-fatal): {exc}")
 
 
+def _warm_premarket_on_boot() -> None:
+    """Pre-market cache lives in-process, so a backend restart blanks it
+    → the pre-market card vanishes (its only refresh button is INSIDE
+    the card, so the user has no manual recourse) until the 5-min
+    scheduler tick. Kick one refresh at boot, in a daemon thread so
+    startup isn't blocked. Reuses the scheduler job verbatim — it
+    self-gates to the US pre-market window and no-ops cheaply
+    otherwise, so this is safe to call unconditionally on every boot."""
+    try:
+        from app.scheduler.jobs.refresh_premarket import (
+            run_refresh_premarket,
+        )
+        threading.Thread(
+            target=run_refresh_premarket,
+            name="premarket-boot-warm",
+            daemon=True,
+        ).start()
+    except Exception as exc:  # noqa: BLE001 — never block startup
+        logger.warning(f"[startup] premarket warm skipped: {exc}")
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     _cleanup_orphan_scans()
     _hydrate_fetch_caches()
     _ensure_default_rules()
     start_scheduler()
+    _warm_premarket_on_boot()
     try:
         yield
     finally:

@@ -30,6 +30,7 @@ import re
 import time
 from dataclasses import dataclass
 from datetime import date, datetime
+from pathlib import Path
 from typing import Iterable
 
 import requests
@@ -40,6 +41,31 @@ _FF_URL = "https://nfs.faireconomy.media/ff_calendar_thisweek.xml"
 _USER_AGENT = "FinanceAlert milomitic@gmail.com"
 _TIMEOUT = 15.0
 _TTL_SEC = 30 * 60  # 30 minutes
+
+# ─── Persistent fallback (resilience layer) ──────────────────────────
+# ForexFactory is a single point of failure for macro CONSENSUS values
+# (FRED has actuals, FF has the consensus median). The XML host
+# (`nfs.faireconomy.media`) is unaffiliated with any of our other
+# sources, so when it's down (or rate-limits / changes format) we
+# silently lose every "Atteso" column on the calendar.
+#
+# Finding a real second SOURCE for free macro consensus is hard (the
+# alternatives are paid Bloomberg-style feeds). The pragmatic fix is
+# a **resilience cache**: persist the most recent successful XML to
+# disk and fall back to it on fetch failure. The consensus for an
+# event is set days before the release and updated only a handful of
+# times — so serving a 6-12h stale "Atteso" value is far better than
+# losing the data entirely.
+#
+# Behavior:
+#   • Every successful fetch overwrites `data/ff_calendar.xml`.
+#   • Every failed fetch (HTTP error / parse error / empty response)
+#     falls back to the on-disk copy if it's < `_DISK_MAX_AGE_SEC` old.
+#   • A log line distinguishes "live" vs "stale-disk" service so the
+#     operator sees when we're in degraded mode.
+_DISK_DIR = Path(__file__).resolve().parent.parent.parent / "data"
+_DISK_FILE = _DISK_DIR / "ff_calendar.xml"
+_DISK_MAX_AGE_SEC = 6 * 3600  # 6h — consensus doesn't move faster than this in practice
 
 
 # ---------------------------------------------------------------------------
@@ -120,20 +146,69 @@ class FFEvent:
 _CACHE: tuple[float, list[FFEvent]] | None = None  # (fetched_at, events)
 
 
-def _fetch_xml() -> str | None:
+def _read_disk_fallback() -> str | None:
+    """Return the on-disk XML if it exists and is < `_DISK_MAX_AGE_SEC`
+    old. None otherwise. Used as a secondary source when the live
+    upstream fetch fails — better to serve a 1-6h stale consensus
+    than to drop the column entirely."""
+    try:
+        if not _DISK_FILE.exists():
+            return None
+        age = time.time() - _DISK_FILE.stat().st_mtime
+        if age > _DISK_MAX_AGE_SEC:
+            return None
+        return _DISK_FILE.read_text(encoding="utf-8")
+    except OSError as e:
+        logger.debug(f"[forexfactory] disk fallback read failed: {e}")
+        return None
+
+
+def _write_disk_fallback(xml: str) -> None:
+    """Persist the latest successful XML. Atomic write (tmp + rename)
+    so a crash mid-write can't leave a half-truncated file that
+    `_read_disk_fallback()` would happily serve as garbage."""
+    try:
+        _DISK_DIR.mkdir(parents=True, exist_ok=True)
+        tmp = _DISK_FILE.with_suffix(_DISK_FILE.suffix + ".tmp")
+        tmp.write_text(xml, encoding="utf-8")
+        tmp.replace(_DISK_FILE)
+    except OSError as e:
+        # Persistence failure is non-fatal — live serving still works,
+        # the next fetch will retry persistence.
+        logger.warning(f"[forexfactory] disk fallback write failed: {e}")
+
+
+def _fetch_xml() -> tuple[str | None, str]:
+    """Fetch the FF weekly XML, with a persistent-cache fallback on
+    failure. Returns `(xml_or_None, source_tag)` where `source_tag`
+    is one of:
+        "live"        — live HTTP fetch succeeded
+        "stale-disk"  — live failed, served from on-disk persistence
+        "none"        — live failed AND disk fallback unavailable/stale
+    The tag is exposed for log differentiation; the caller doesn't
+    branch on it (treats empty xml as failure either way)."""
     try:
         resp = requests.get(
             _FF_URL,
             headers={"User-Agent": _USER_AGENT, "Accept": "text/xml"},
             timeout=_TIMEOUT,
         )
-        if resp.status_code != 200:
-            logger.warning(f"[forexfactory] GET -> {resp.status_code}")
-            return None
-        return resp.text
+        if resp.status_code == 200 and resp.text:
+            _write_disk_fallback(resp.text)
+            return resp.text, "live"
+        logger.warning(f"[forexfactory] GET -> {resp.status_code}")
     except Exception as e:  # noqa: BLE001
         logger.warning(f"[forexfactory] fetch failed: {e}")
-        return None
+
+    # Live fetch failed — try the disk fallback.
+    fallback_xml = _read_disk_fallback()
+    if fallback_xml:
+        logger.info(
+            "[forexfactory] live fetch failed, serving on-disk fallback "
+            f"(age <{_DISK_MAX_AGE_SEC // 3600}h)"
+        )
+        return fallback_xml, "stale-disk"
+    return None, "none"
 
 
 def _parse_xml(text: str) -> list[FFEvent]:
@@ -180,14 +255,17 @@ def _cdata_or_text(block: str, tag: str) -> str | None:
 
 
 def _get_events() -> list[FFEvent]:
-    """Cached events for the current week. Returns [] on fetch failure."""
+    """Cached events for the current week. Returns [] only when both
+    the live HTTP fetch AND the on-disk fallback are unavailable."""
     global _CACHE
     now = time.time()
     if _CACHE is not None and (now - _CACHE[0]) < _TTL_SEC:
         return _CACHE[1]
-    xml = _fetch_xml()
+    xml, _source = _fetch_xml()
     if xml is None:
-        # Cache empty result briefly to avoid hammering on outage
+        # Both live and disk fallback failed → cache empty briefly to
+        # avoid hammering on outage. Memory-cache TTL is shorter than
+        # the disk fallback's 6h so we keep probing the live source.
         _CACHE = (now, [])
         return []
     events = _parse_xml(xml)

@@ -85,6 +85,23 @@ def record_failure(source: str, op: str, reason: str = "", count: int = 1) -> No
             c.recent_calls.append(now)
 
 
+def seconds_since_last_success(source: str, op: str) -> float | None:
+    """Wall-clock seconds since the last successful call on (source, op).
+
+    Returns None when the source has never recorded a success (so the
+    caller can distinguish "never tested" from "tested long ago").
+
+    Used by health probes that want to elide their own call when organic
+    traffic recently confirmed the source — e.g. Marketaux probe skips
+    the round-trip if a real fetch succeeded in the last 4h, sparing
+    one of the 100/day free-tier units."""
+    with _lock:
+        c = _counters.get(_key(source, op))
+        if c is None or c.last_success_at is None:
+            return None
+        return time.time() - c.last_success_at
+
+
 def calls_in_window(source: str, op: str, window_seconds: float) -> int:
     """Count calls (success+failure) on (source, op) in the last `window_seconds`.
 

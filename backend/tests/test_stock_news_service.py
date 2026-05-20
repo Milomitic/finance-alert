@@ -110,10 +110,22 @@ def test_get_news_fallback_on_yfinance_error(monkeypatch):
 
 
 def test_falls_back_to_marketaux_when_yfinance_empty(monkeypatch):
-    """Se yfinance ritorna 0 headline, il service prova Marketaux."""
-    from app.services import marketaux_news_service
+    """Se yfinance ritorna 0 headline e Finnhub torna vuoto, il
+    service prova Marketaux come ultima fallback.
+
+    Aggiornato dopo l'aggiunta di Finnhub come fallback prioritario:
+    ora la pipeline è yfinance → finnhub → marketaux. Per testare
+    che marketaux sia raggiunto serve mockare anche finnhub a vuoto."""
+    from app.services import finnhub_news_service, marketaux_news_service
 
     stock_news_service.clear_cache()
+
+    def fake_finnhub_empty(ticker: str, *, days_back: int = 14, limit: int = 20):
+        return []
+
+    monkeypatch.setattr(
+        finnhub_news_service, "fetch_company_news", fake_finnhub_empty
+    )
 
     def fake_marketaux(ticker: str, limit: int = 10):
         return [
@@ -140,6 +152,56 @@ def test_falls_back_to_marketaux_when_yfinance_empty(monkeypatch):
     result = stock_news_service.get_news("AAPL")
     assert len(result) == 1
     assert "marketaux fallback" in result[0]["title"].lower()
+
+
+def test_falls_back_to_finnhub_when_yfinance_empty(monkeypatch):
+    """Se yfinance ritorna 0 headline, il service prova Finnhub PRIMA
+    di Marketaux (priorità per la sua quota più generosa, 60/min vs
+    100/giorno). Marketaux non deve essere consultato in questo caso."""
+    from app.services import finnhub_news_service, marketaux_news_service
+
+    stock_news_service.clear_cache()
+
+    def fake_finnhub(ticker: str, *, days_back: int = 14, limit: int = 20):
+        return [
+            finnhub_news_service.FinnhubNewsItem(
+                title="From finnhub fallback",
+                url="https://finnhub.example/apple-target",
+                published_at="2026-05-15T12:00:00+00:00",
+                source="Benzinga",
+                summary="Wedbush raises Apple target.",
+            )
+        ]
+
+    monkeypatch.setattr(
+        finnhub_news_service, "fetch_company_news", fake_finnhub
+    )
+
+    # Marketaux must NOT be called when Finnhub already returned data.
+    marketaux_calls = []
+
+    def boom_marketaux(ticker, limit=10):
+        marketaux_calls.append(ticker)
+        return []
+
+    monkeypatch.setattr(marketaux_news_service, "fetch_news", boom_marketaux)
+
+    class EmptyTicker:
+        def __init__(self, t): pass
+        @property
+        def news(self):
+            return []
+
+    fake_module = type("M", (), {"Ticker": EmptyTicker})
+    monkeypatch.setitem(__import__("sys").modules, "yfinance", fake_module)
+
+    result = stock_news_service.get_news("AAPL")
+    assert len(result) == 1
+    assert "finnhub fallback" in result[0]["title"].lower()
+    assert marketaux_calls == [], (
+        "Marketaux should not be consulted when Finnhub already produced "
+        "headlines — the latter has 60/min quota vs the former's 100/day."
+    )
 
 
 def test_news_hydrate_l1_returns_tuple(db):

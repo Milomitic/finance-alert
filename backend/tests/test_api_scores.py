@@ -29,7 +29,16 @@ def _make_score(
         momentum=momentum, sentiment=sentiment,
         risk_tier=risk,
         computed_at=datetime.now(UTC),
-        breakdown=json.dumps(breakdown or {"quality": {"roe": {"raw": 0.2, "points": 30, "max": 30}}}),
+        # Real scores always carry breakdown._meta_global (QW5 coverage);
+        # default it to fully-covered so seeded picks pass the /scores/top
+        # confidence gate. Tests can still override _meta_global to
+        # exercise the gate explicitly.
+        breakdown=json.dumps({
+            **(breakdown or {"quality": {"roe": {"raw": 0.2, "points": 30, "max": 30}}}),
+            "_meta_global": (breakdown or {}).get(
+                "_meta_global", {"coverage": 1.0}
+            ),
+        }),
     )
 
 
@@ -492,6 +501,35 @@ def test_top_picks_by_category(seeded_client: TestClient):
     tickers = [item["ticker"] for item in data["items"]]
     # AAA: quality=90, BBB: 60, CCC: 30 → AAA first.
     assert tickers == ["AAA", "BBB", "CCC"]
+
+
+def test_top_picks_excludes_low_confidence(db: Session):
+    """A high composite built on a thin factor base (QW5 coverage < 0.70)
+    must NOT surface as a top pick; an adequately-covered lower score
+    still does."""
+    user = User(username="t2", password_hash="x")
+    db.add(user)
+    db.flush()
+    hi = Stock(ticker="HIQ", exchange="NMS", name="Hi",
+               sector="Utilities", market_cap=int(1e11))
+    lo = Stock(ticker="LOQ", exchange="NMS", name="Lo",
+               sector="Utilities", market_cap=int(1e11))
+    db.add_all([hi, lo])
+    db.flush()
+    db.add(_make_score(stock_id=hi.id, composite=80.0,
+                       breakdown={"_meta_global": {"coverage": 0.95}}))
+    db.add(_make_score(stock_id=lo.id, composite=99.0,
+                       breakdown={"_meta_global": {"coverage": 0.40}}))
+    db.commit()
+    app.dependency_overrides[get_db] = lambda: db
+    app.dependency_overrides[get_current_user] = lambda: user
+    try:
+        data = TestClient(app).get("/api/scores/top").json()
+        tickers = [i["ticker"] for i in data["items"]]
+        assert "HIQ" in tickers          # 0.95 ≥ 0.70 → shown
+        assert "LOQ" not in tickers      # 0.40 < 0.70 → excluded despite top composite
+    finally:
+        app.dependency_overrides.clear()
 
 
 def test_top_picks_invalid_risk_422(seeded_client: TestClient):

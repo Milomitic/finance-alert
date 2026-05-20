@@ -58,9 +58,27 @@ KNOWN_SOURCES: list[SourceSpec] = [
     SourceSpec("finnhub", "earnings", "Finnhub — Earnings", "fallback",
                per_minute=60, per_day=None,
                notes="Earnings actuals ~30min vs yfinance ~1-3h. Probe ogni 5 min."),
+    SourceSpec("finnhub", "news", "Finnhub — Company news", "fallback",
+               per_minute=60, per_day=None,
+               notes=("Fallback news quando yfinance restituisce 0 articoli. "
+                      "Cache 1h per ticker → quota usata trascurabile. "
+                      "Probe ogni 30 min (slow set).")),
+    SourceSpec("finnhub", "upgrades", "Finnhub — Analyst upgrade/downgrade", "fallback",
+               per_minute=60, per_day=None,
+               notes=("Eventi rating analisti strutturati — sostituto del "
+                      "feed yfinance upgrades_downgrades ormai stale. "
+                      "Cache 24h per ticker. Probe ogni 30 min.")),
+    SourceSpec("finnhub", "recommendation", "Finnhub — Recommendation trends", "fallback",
+               per_minute=60, per_day=None,
+               notes=("Aggregati buy/hold/sell per ticker — sostituto del "
+                      "feed yfinance recommendations quando torna stale. "
+                      "Cache 24h. Triggerato solo se yfinance vuoto. ")),
     SourceSpec("marketaux", "news", "Marketaux — News", "fallback",
                per_minute=None, per_day=100,
-               notes="Free tier 100/day. Probe ogni 30 min (~48/day, lascia headroom)."),
+               notes=("Free tier 100/day. Cache 12h per ticker + circuit "
+                      "breaker su 429/quota → ~6-10 unità/day in uso reale. "
+                      "Probe smart-elision: salta se Finnhub copre il caso "
+                      "o se ultima call < 4h.")),
 
     # ── Scheduled / macro ──
     SourceSpec("fred", "macro", "FRED — Macro series", "scheduled",
@@ -72,6 +90,11 @@ KNOWN_SOURCES: list[SourceSpec] = [
     SourceSpec("sec_13f", "filings", "SEC EDGAR — 13F filings", "scheduled",
                per_minute=None, per_day=None,
                notes="EDGAR submissions endpoint. Probe ogni 30 min (CIK Berkshire)."),
+    SourceSpec("nasdaq", "premarket", "Nasdaq — Pre-market volume", "scheduled",
+               per_minute=None, per_day=None,
+               notes=("Endpoint non ufficiale api.nasdaq.com (no key). "
+                      "Arricchimento volume pre-market sui ~20 nomi "
+                      "mostrati. Probe ogni 30 min (AAPL, reachability).")),
 ]
 
 

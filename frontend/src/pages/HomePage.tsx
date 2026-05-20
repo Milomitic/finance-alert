@@ -6,6 +6,7 @@ import { FiftyTwoWeekVolCard } from "@/components/dashboard/FiftyTwoWeekVolCard"
 import { HeroStrip } from "@/components/dashboard/HeroStrip";
 import { LiveVolumeMoversCard } from "@/components/dashboard/LiveVolumeMoversCard";
 import { MarketTickerTape } from "@/components/dashboard/MarketTickerTape";
+import { PremarketMoversCard } from "@/components/dashboard/PremarketMoversCard";
 import { DataSourcesCard } from "@/components/dashboard/DataSourcesCard";
 import { AnalystActionsCard } from "@/components/dashboard/AnalystActionsCard";
 import { ScanHeaderButton } from "@/components/dashboard/ScanHeaderButton";
@@ -16,8 +17,58 @@ import { SectorsHeatmapCard } from "@/components/dashboard/SectorsHeatmapCard";
 import { SuperinvestorPicksCard } from "@/components/dashboard/SuperinvestorPicksCard";
 import { SystemStatusFooter } from "@/components/dashboard/SystemStatusFooter";
 import { Card, CardContent } from "@/components/ui/card";
+import { CardSkeleton } from "@/components/ui/card-skeleton";
 import { useDashboardSummary } from "@/hooks/useDashboardSummary";
 import { useMarketSummary } from "@/hooks/useMarketSummary";
+import { usePremarketMovers } from "@/hooks/usePremarketMovers";
+
+/**
+ * First-paint loading skeleton for the dashboard. The structure
+ * mirrors the loaded layout EXACTLY — same outer grids, same row
+ * heights, same column templates — so the transition loaded→data
+ * just fills in content rather than reflowing the page. This was a
+ * deliberate replacement of the previous "generic boxes grid"
+ * skeleton (3 hero + 1 big + 4 mini) which did NOT match the final
+ * structure and caused a visible jump.
+ */
+function DashboardSkeleton() {
+  return (
+    <div className="space-y-4">
+      {/* HeroStrip row: [340px_1fr_200px] split at lg+. */}
+      <div className="grid gap-3 lg:grid-cols-[340px_1fr_200px]">
+        <CardSkeleton className="h-[120px]" rows={3} />
+        <CardSkeleton label="MERCATI LIVE" rows={4} strongHeader className="h-[120px]" />
+        <CardSkeleton className="h-[120px]" rows={3} />
+      </div>
+      {/* Row 2: outer [3fr_2fr]; inner [1fr_1fr] (breadth + movers);
+          right cell = pre-market — mirrors the real row template. */}
+      <div className="grid gap-3 lg:grid-cols-[3fr_2fr]">
+        <div className="grid gap-3 lg:grid-cols-[1fr_1fr]">
+          <CardSkeleton label="BREADTH PER INDICE" rows={8} strongHeader className="h-[400px]" />
+          <CardSkeleton label="TOP MOVERS" rows={8} strongHeader className="h-[400px]" />
+        </div>
+        <CardSkeleton label="PRE-MARKET USA" rows={8} strongHeader className="h-[400px]" />
+      </div>
+      {/* 4-col mini cards row (lg:h-[520px]). */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 lg:h-[520px]">
+        <CardSkeleton label="RSI DISTRIBUTION" rows={6} strongHeader />
+        <CardSkeleton label="SETTORI" rows={6} strongHeader />
+        <CardSkeleton label="VOLUMI" rows={6} strongHeader />
+        <CardSkeleton label="52 SETTIMANE" rows={6} strongHeader />
+      </div>
+      {/* Discovery row: [2fr_1fr_1fr] at lg+. */}
+      <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr_1fr] gap-3 lg:h-[420px]">
+        <CardSkeleton label="TOP PICKS" rows={10} strongHeader />
+        <CardSkeleton label="SUPERINVESTOR" rows={8} strongHeader />
+        <CardSkeleton label="VALUTAZIONI ANALISTI" rows={8} strongHeader />
+      </div>
+      {/* Alerts panel — single-row, fixed height. */}
+      <CardSkeleton label="ALERTS" rows={8} strongHeader className="lg:h-[420px]" />
+      {/* Footer (DataSources). */}
+      <CardSkeleton label="DATA SOURCES" rows={3} className="h-[120px]" />
+    </div>
+  );
+}
 
 function MarketUnavailable() {
   return (
@@ -50,24 +101,26 @@ function MarketError({ onRetry }: { onRetry: () => void }) {
 export default function HomePage() {
   const market = useMarketSummary();
   const summary = useDashboardSummary();
+  // The pre-market card is meaningful ONLY when the US regular
+  // session is closed (pre-market data doesn't exist while RTH is
+  // running). Earlier iteration kept the card always-visible with a
+  // "mercato aperto" placeholder, but the user objected that during
+  // market hours that slot is dead real-estate. Now: hide the card
+  // entirely AND collapse the surrounding grid so the breadth+movers
+  // row takes the full width — no empty column.
+  // Default: SHOW (i.e. hide==false) while the hook is loading. The
+  // hook has staleTime=5s and a shared cache, so data is usually
+  // immediate; defaulting to show avoids a hide→show reflow in the
+  // common case (user outside RTH). During RTH there'll be a brief
+  // flash of the placeholder before it hides, which is acceptable.
+  const premarketQ = usePremarketMovers();
+  const hidePremarket = premarketQ.data?.market_open === true;
 
-  // Loading skeleton
+  // First-paint loading skeleton — mirrors the loaded layout 1:1 so
+  // the transition is a *fill-in*, not a reflow. See DashboardSkeleton
+  // for the structural rationale.
   if (market.isLoading || summary.isLoading) {
-    return (
-      <div className="space-y-4">
-        <div className="grid lg:grid-cols-[340px_1fr_200px] gap-3">
-          <Card><CardContent className="p-4 h-[80px] animate-pulse bg-muted/40" /></Card>
-          <Card><CardContent className="p-4 h-[80px] animate-pulse bg-muted/40" /></Card>
-          <Card><CardContent className="p-4 h-[80px] animate-pulse bg-muted/40" /></Card>
-        </div>
-        <Card><CardContent className="p-0 h-[200px] animate-pulse bg-muted/40" /></Card>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-          {[0, 1, 2, 3].map((i) => (
-            <Card key={i}><CardContent className="p-4 h-[160px] animate-pulse bg-muted/40" /></Card>
-          ))}
-        </div>
-      </div>
-    );
+    return <DashboardSkeleton />;
   }
 
   const summaryData = summary.data;
@@ -156,14 +209,41 @@ export default function HomePage() {
           prices for the most actively traded stocks of the day). The
           symmetric split keeps the page rhythm consistent: row 1 and
           row 2 read as "left = aggregate state, right = live signal". */}
-      <div className="grid gap-3 lg:grid-cols-[3fr_2fr]">
-        <BreadthMatrixTable data={m.by_index} />
-        <LiveVolumeMoversCard movers={m.movers} />
-      </div>
+      {/* Row 2: breadth (left) + live-volume + (when available) the
+          US pre-market card to the RIGHT of live-volume. Pre-market
+          shown → 3 columns with breadth narrowed (2fr vs 3fr); not
+          shown → original 2-column split, no empty track. */}
+      {/* Pre-market-aware row. Two layouts, both pixel-locked to the
+          HeroStrip `[3fr_2fr]` boundary above so each card's right
+          edge aligns with the matching card in the row above:
+            - RTH (US market open): pre-market hidden. Row is a flat
+              `[3fr_2fr]` → Breadth (left, ~60% — aligns with MoodCard
+              edges) + TopMovers (right, ~40% — aligns with the
+              "MERCATI LIVE" card edges). Previous iteration was
+              `[1fr_1fr]` (50/50) which left TopMovers wider than its
+              upstairs counterpart, off-axis.
+            - Off-hours: outer `[3fr_2fr]` brings the pre-market card
+              in on the right (same 2fr as MERCATI LIVE upstairs);
+              inner `[1fr_1fr]` splits Breadth + TopMovers evenly
+              within the left 3fr. */}
+      {hidePremarket ? (
+        <div className="grid gap-3 lg:grid-cols-[3fr_2fr]">
+          <BreadthMatrixTable data={m.by_index} />
+          <TopMoversCard movers={m.movers} computedAt={m.computed_at} />
+        </div>
+      ) : (
+        <div className="grid gap-3 lg:grid-cols-[3fr_2fr]">
+          <div className="grid gap-3 lg:grid-cols-[1fr_1fr]">
+            <BreadthMatrixTable data={m.by_index} />
+            <TopMoversCard movers={m.movers} computedAt={m.computed_at} />
+          </div>
+          <PremarketMoversCard />
+        </div>
+      )}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 lg:h-[520px]">
         <div className="h-[440px] lg:h-full min-h-0"><RsiHistogramCard rsi={m.rsi_distribution} indices={m.by_index} /></div>
         <div className="h-[440px] lg:h-full min-h-0"><SectorsHeatmapCard sectors={m.sectors} /></div>
-        <div className="h-[440px] lg:h-full min-h-0"><TopMoversCard movers={m.movers} /></div>
+        <div className="h-[440px] lg:h-full min-h-0"><LiveVolumeMoversCard movers={m.movers} computedAt={m.computed_at} /></div>
         <div className="h-[440px] lg:h-full min-h-0"><FiftyTwoWeekVolCard movers={m.movers} /></div>
       </div>
       {/* Alerts (left) + Top Picks (right) on the same row. The two are

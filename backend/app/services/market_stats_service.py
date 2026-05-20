@@ -377,6 +377,14 @@ def build_movers(
     new_lows = _dedupe_by_ticker([m for m in metrics if m.new_52w_low])
 
     def _row(m: StockMetrics) -> dict:
+        # `vol_today`, `vol_ratio` and `composite` used to live only on
+        # the `top_volume` rows. They were promoted onto the base mover
+        # row so the dashboard's "Top movers" card (gainers / losers)
+        # can render volume + score columns alongside the % change —
+        # secondary context that turns a flat "what moved" list into a
+        # "what moved AND on what conviction / how busy" view.
+        # All three fields are optional: a row carrying only price data
+        # still validates against the schema.
         return {
             "ticker": m.ticker,
             "name": m.name,
@@ -388,6 +396,9 @@ def build_movers(
             "last_close": m.last_close,
             "prev_close": m.prev_close,
             "sparkline": m.sparkline,
+            "vol_today": m.vol_today,
+            "vol_ratio": round(m.vol_ratio, 2) if m.vol_ratio is not None else None,
+            "composite": scores.get(m.stock_id),
         }
 
     # Top 10 by 5-day and 20-day windows for the dashboard "Top movers" picker
@@ -408,15 +419,11 @@ def build_movers(
         "volume_spikes": [
             {**_row(m), "vol_ratio": round(m.vol_ratio, 2)} for m in vol_spikes
         ],
-        "top_volume": [
-            {
-                **_row(m),
-                "vol_today": m.vol_today,
-                "vol_ratio": round(m.vol_ratio, 2) if m.vol_ratio is not None else None,
-                "composite": scores.get(m.stock_id),
-            }
-            for m in top_volume
-        ],
+        # `vol_today`/`vol_ratio`/`composite` are now part of `_row`,
+        # so top_volume rows just inherit them — no per-row override
+        # needed. The list itself is still ranked by absolute share
+        # volume, that hasn't changed.
+        "top_volume": [_row(m) for m in top_volume],
         "new_52w_high": [_row(m) for m in new_highs],
         "new_52w_low": [_row(m) for m in new_lows],
     }
