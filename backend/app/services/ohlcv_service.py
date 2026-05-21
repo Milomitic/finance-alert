@@ -145,8 +145,34 @@ def _upsert_one_stock(db: Session, stock: Stock, frame: pd.DataFrame) -> tuple[i
         )
     except (ValueError, TypeError):
         _latest_date = None
+    # Skip writing a bar dated TODAY while the market is still open:
+    # yfinance returns the in-progress session as a "today" bar whose
+    # close is the CURRENT intraday price, not a settled session close.
+    # Persisting it pollutes every close-to-close consumer — the EOD
+    # movers snapshot reported SOXS/SOXL/OKLO day-changes off an
+    # intraday value instead of yesterday's real close. The daily table
+    # must hold SETTLED closes only; intraday display is the live-quote
+    # service's job. After the close the EOD scan writes the real bar.
+    # Computed once (market-open state doesn't change mid-loop).
+    _skip_today = False
+    try:
+        from datetime import UTC as _UTC, datetime as _dt
+        from app.services.live_quote_service import _is_market_open
+        if _is_market_open(stock.ticker):
+            _skip_today = True
+            _today_utc = _dt.now(_UTC).date()
+    except Exception:  # noqa: BLE001 — never block ingestion on this guard
+        _skip_today = False
+
     for ts, row in frame.iterrows():
         d = ts.date() if isinstance(ts, pd.Timestamp) else ts
+        # Intraday "today" bar while market open → skip (see above).
+        if _skip_today and d >= _today_utc:
+            logger.debug(
+                f"[ohlcv] skip today's unsettled bar {stock.ticker} {d} "
+                f"(market open — intraday snapshot, not a session close)"
+            )
+            continue
         # Scale pence->pounds for LSE before INSERT. Pass-through for everything else.
         open_v = _normalize_minor_unit_value(native_currency, float(row["Open"]))
         high_v = _normalize_minor_unit_value(native_currency, float(row["High"]))

@@ -33,9 +33,16 @@ interface WindowedMovers {
   field: keyof Pick<Mover, "change_pct" | "change_pct_5d" | "change_pct_20d">;
 }
 
-// Batch live-quote endpoint caps at 50 tickers/request — keep the live
-// candidate pool under that.
-const MAX_LIVE_TICKERS = 50;
+// Live candidate pool size. The backend caps each HTTP request at 50
+// tickers, but `useLiveQuotes` now chunks + parallelises, so the pool
+// can be wider. 120 covers the union of every EOD mover list (gainers/
+// losers across 1d/1w/1m windows + top-volume + volume-spikes + 52w
+// extremes) — the set of names that have DEMONSTRATED they can move,
+// which is where intraday movers realistically come from. A flat-for-
+// months name suddenly topping the board is vanishingly rare, so this
+// bounded superset captures ~all realistic intraday movers without
+// live-quoting the whole ~1100-name catalog.
+const MAX_LIVE_TICKERS = 120;
 const ROWS_PER_COL = 8;
 
 function getWindowed(movers: MoversBlock, w: Window): WindowedMovers {
@@ -219,37 +226,54 @@ function ColumnHeader({ side }: { side: Side }) {
  * The server-side movers block is EOD-derived (`change_pct =
  * (last_close − prev_close)/prev_close` off daily bars) and only moves
  * when a scan re-ingests OHLCV. For the **1G** window we re-rank it
- * intraday: every 15s we batch-poll live quotes for the EOD top
- * gainers∪losers (the candidate pool), substitute each row's
- * `change_pct` with the live value (same %-points scale,
- * `change_abs/prev_close*100`), then re-sort both columns from the
- * combined pool — so a stock can flip gainer↔loser as prices move.
+ * intraday: every 15s we batch-poll live quotes for a WIDE candidate
+ * pool (the union of every EOD mover list — see candidateTickers),
+ * substitute each row's `change_pct` with the live value, then re-sort
+ * both columns from that pool — so a stock can flip gainer↔loser AND a
+ * name that wasn't a top EOD mover can climb in as it moves intraday.
  *
- * Deliberate scope limit: the *candidate pool* stays EOD-bounded. A
- * stock that explodes intraday but wasn't an EOD top mover won't
- * surface — true whole-universe intraday ranking would mean live-
- * quoting ~1100 tickers every 15s (infeasible vs yfinance limits).
- * 1S/1M stay pure EOD (live quotes only carry today's move).
+ * Scope: the candidate pool is the union of all mover lists (1d/1w/1m
+ * gainers+losers, top-volume, volume-spikes, 52w high/low), bounded at
+ * MAX_LIVE_TICKERS=120 and polled via chunked parallel requests. This
+ * covers the names that have demonstrated they can move — true whole-
+ * universe intraday ranking (~1100 tickers every 15s) stays infeasible
+ * vs yfinance limits, but a flat-for-months name suddenly topping the
+ * board is vanishingly rare, so the bounded superset captures ~all
+ * realistic intraday movers. 1S/1M stay pure EOD.
  */
 export function TopMoversCard({ movers, computedAt }: Props) {
   const [window, setWindow] = useState<Window>("1d");
   const isLive = window === "1d";
 
-  // Live candidate pool: the union of the EOD 1G gainers+losers. These
-  // are the only tickers whose intraday rank we can refresh without
-  // live-quoting the whole catalog.
+  // Live candidate pool: the union of EVERY EOD mover list — not just
+  // the displayed 1G gainers/losers. Polling only the already-shown
+  // names froze the live ranking (a stock outside the top-8 could
+  // never rise into it because we never polled it). Widening to all
+  // mover lists (1d/1w/1m gainers+losers, top-volume, volume-spikes,
+  // 52w high/low) means a name ranked #40 by EOD can climb to #1 on
+  // live prices and surface. Bounded at MAX_LIVE_TICKERS; useLiveQuotes
+  // chunks the pool into parallel <=50 requests.
   const candidateTickers = useMemo(() => {
     if (!isLive) return [];
     const seen = new Set<string>();
     const out: string[] = [];
-    for (const m of [...movers.gainers, ...movers.losers]) {
-      if (!seen.has(m.ticker)) {
-        seen.add(m.ticker);
-        out.push(m.ticker);
+    const lists: (Mover[] | undefined)[] = [
+      movers.gainers, movers.losers,
+      movers.gainers_5d, movers.losers_5d,
+      movers.gainers_20d, movers.losers_20d,
+      movers.top_volume, movers.volume_spikes,
+      movers.new_52w_high, movers.new_52w_low,
+    ];
+    for (const list of lists) {
+      for (const m of list ?? []) {
+        if (m && m.ticker && !seen.has(m.ticker)) {
+          seen.add(m.ticker);
+          out.push(m.ticker);
+        }
       }
     }
     return out.slice(0, MAX_LIVE_TICKERS);
-  }, [isLive, movers.gainers, movers.losers]);
+  }, [isLive, movers]);
 
   // 15s batch poll (server-cached 10s). Disabled on 1S/1M so we don't
   // burn quota for windows that can't use live prices anyway.
@@ -274,16 +298,27 @@ export function TopMoversCard({ movers, computedAt }: Props) {
 
   const data = useMemo<WindowedMovers>(() => {
     if (!isLive) return getWindowed(movers, window);
-    // Combined pool, effective change = live ?? EOD fallback. (Price
-    // overlay is applied in the row render, not the pool — sorting is
-    // by change_pct only, so the pool only needs the live change_pct.)
+    // Combined pool from EVERY mover list (same union as the live
+    // candidate pool) so a name that wasn't an EOD top-gainer but
+    // moves intraday can climb into the displayed list. Effective
+    // change = live ?? EOD fallback. (Price overlay is applied in the
+    // row render; sorting is by change_pct only.)
     const seen = new Set<string>();
     const pool: Mover[] = [];
-    for (const m of [...movers.gainers, ...movers.losers]) {
-      if (seen.has(m.ticker)) continue;
-      seen.add(m.ticker);
-      const overlay = liveMap.get(m.ticker);
-      pool.push(overlay != null ? { ...m, change_pct: overlay.change_pct } : m);
+    const lists: (Mover[] | undefined)[] = [
+      movers.gainers, movers.losers,
+      movers.gainers_5d, movers.losers_5d,
+      movers.gainers_20d, movers.losers_20d,
+      movers.top_volume, movers.volume_spikes,
+      movers.new_52w_high, movers.new_52w_low,
+    ];
+    for (const list of lists) {
+      for (const m of list ?? []) {
+        if (!m || !m.ticker || seen.has(m.ticker)) continue;
+        seen.add(m.ticker);
+        const overlay = liveMap.get(m.ticker);
+        pool.push(overlay != null ? { ...m, change_pct: overlay.change_pct } : m);
+      }
     }
     const withChange = pool.filter((m) => m.change_pct != null);
     const gainers = [...withChange].sort(

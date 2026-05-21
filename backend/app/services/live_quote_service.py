@@ -430,17 +430,33 @@ def get_quote(ticker: str, *, force_refresh: bool = False) -> LiveQuote:
 
 
 def get_quotes_batch(tickers: list[str]) -> dict[str, LiveQuote]:
-    """Fetch multiple quotes in sequence. Cache hits return instantly; only
-    cache-miss tickers hit yfinance. Returns {ticker: LiveQuote}.
+    """Fetch multiple quotes CONCURRENTLY. Cache hits return instantly;
+    only cache-miss tickers hit yfinance. Returns {ticker: LiveQuote}.
 
-    No batched yfinance call — fast_info is per-Ticker. Stooq fallback could
-    plug in here if breaker opens, but Stooq doesn't expose live quotes
-    cleanly via CSV (only EOD). For now we just return the cached/fetched
-    quotes; entries with error set tell the frontend to render a stale state.
+    Parallelised (May 2026): `fast_info` is a per-Ticker HTTP call, so
+    a sequential loop over 50 names on a full cache miss took ~5s —
+    too slow for the dashboard's 15s live-poll, and it capped how wide
+    the top-movers candidate pool could be (only the ~handful of
+    displayed names got polled, so intraday movers outside the EOD set
+    never surfaced). A bounded thread pool (I/O-bound work) turns that
+    into ~1s. Worker count kept small so concurrent Yahoo load stays
+    within tolerance; the yfinance circuit breaker is the backstop.
+
+    No batched yfinance call exists (fast_info is per-Ticker); Stooq
+    only exposes EOD, not live, so there's no live fallback when the
+    breaker opens — entries with `error` set tell the frontend to
+    render a stale state.
     """
     out: dict[str, LiveQuote] = {}
-    for t in tickers:
-        out[t] = get_quote(t)
+    if not tickers:
+        return out
+    from concurrent.futures import ThreadPoolExecutor
+    # 8 workers: enough to collapse a 50-name batch to ~1s without
+    # hammering Yahoo with 50 simultaneous connections.
+    workers = min(8, len(tickers))
+    with ThreadPoolExecutor(max_workers=workers) as ex:
+        for t, q in zip(tickers, ex.map(get_quote, tickers)):
+            out[t] = q
     return out
 
 

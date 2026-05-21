@@ -30,17 +30,42 @@ export function useLiveQuote(ticker: string | undefined, enabled: boolean = true
 }
 
 /**
- * Batch variant — one HTTP call returns N quotes. Useful for the dashboard
- * where we want live prices for the top movers / spotlight stocks without
- * spawning N concurrent React-Query subscriptions.
+ * Batch variant — returns live quotes for N tickers. Useful for the
+ * dashboard where we want live prices for a WIDE pool of candidate
+ * movers without spawning N React-Query subscriptions.
+ *
+ * Chunking (May 2026): the backend caps each request at 50 tickers
+ * (rate-limit safety). To poll a broader candidate pool — so that an
+ * intraday mover OUTSIDE the EOD top set can actually surface when we
+ * re-rank on live prices — we split `tickers` into <=50 chunks and
+ * fire them in PARALLEL (Promise.all), then merge. The backend
+ * parallelises within each chunk too, so even a ~120-name pool
+ * resolves in ~1-2s. Without this the live poll only ever saw the
+ * handful of already-displayed names, so the "top movers" were
+ * effectively frozen to the EOD ranking.
  */
+const _BATCH_SIZE = 50;
+
 export function useLiveQuotes(tickers: string[], enabled: boolean = true) {
   const sorted = [...tickers].sort();
   const key = sorted.join(",");
   return useQuery({
     queryKey: ["live-quotes-batch", key],
-    queryFn: () =>
-      api<{ quotes: LiveQuote[] }>(`/api/stocks/quotes?tickers=${encodeURIComponent(key)}`),
+    queryFn: async () => {
+      // Split into <=50-ticker chunks, fetch in parallel, merge.
+      const chunks: string[][] = [];
+      for (let i = 0; i < sorted.length; i += _BATCH_SIZE) {
+        chunks.push(sorted.slice(i, i + _BATCH_SIZE));
+      }
+      const results = await Promise.all(
+        chunks.map((c) =>
+          api<{ quotes: LiveQuote[] }>(
+            `/api/stocks/quotes?tickers=${encodeURIComponent(c.join(","))}`,
+          ),
+        ),
+      );
+      return { quotes: results.flatMap((r) => r.quotes) };
+    },
     enabled: enabled && tickers.length > 0,
     refetchInterval: 15_000,
     refetchIntervalInBackground: false,
