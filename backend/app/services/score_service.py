@@ -1143,7 +1143,20 @@ def _momentum(
         0.22,  # QW6: 0.18→0.22 (absorbs de-weighted 30d reversal lane)
     ))
 
-    # --- 30-day momentum --------------------------------------------------
+    # --- 30-day momentum: CONTRARIAN (short-term reversal) ---------------
+    # IC study (app/scripts/entry_ic_report.py, US universe 2016-2026)
+    # measured raw 30d return with IC of -0.020/-0.025 across 5/21d
+    # horizons — i.e. high recent return predicts LOWER forward return
+    # (the well-documented 1-month reversal). The previous scoring used
+    # `full=+0.10` (higher-is-better), rewarding exactly the wrong sign.
+    # Flipped to lower-is-better: a modest recent pullback (-15%) scores
+    # max, a recent spike (+15%) scores zero. This converts a counter-
+    # predictive component into a predictive one. The `dist_52w_high`
+    # component below counterbalances by penalising names that are also
+    # far off their 52w high — so the net reward is for SHALLOW pullbacks
+    # in otherwise-strong names, which is the entry edge that the
+    # hand-coded `pullback_setup` flag failed to capture (it over-
+    # constrained on simultaneous uptrend + RSI band).
     mom30: float | None = None
     if closes_present and closes is not None and len(closes) >= 22:
         ref = float(closes.iloc[-22])
@@ -1151,9 +1164,9 @@ def _momentum(
             mom30 = (float(closes.iloc[-1]) - ref) / ref
     components.append(_Component(
         "momentum_30d", mom30,
-        _ramp3(mom30, full=0.10, half=0.0, zero=-0.10) if mom30 is not None else None,
-        0.06,  # QW6: 0.14→0.06 — 30d return is mostly short-term
-               # reversal (sign often opposite the 12-1 edge); demoted.
+        # lower-is-better: full @ -15% (pullback), zero @ +15% (spike).
+        _ramp3(mom30, full=-0.15, half=0.0, zero=0.15) if mom30 is not None else None,
+        0.06,
     ))
 
     # --- 90-day momentum --------------------------------------------------
@@ -1165,7 +1178,31 @@ def _momentum(
     components.append(_Component(
         "momentum_90d", mom90,
         _ramp3(mom90, full=0.20, half=0.0, zero=-0.15) if mom90 is not None else None,
-        0.10,
+        0.04,  # IC study: ~0 IC (-0.002/+0.005) — near-noise; weight cut
+               # 0.10→0.04, freeing budget for the validated
+               # `dist_52w_high` component added below.
+    ))
+
+    # --- Distance from 52-week high --------------------------------------
+    # IC study: dist_52w_high (close / 252d-high − 1) had a consistent
+    # positive IC (+0.030/+0.019/+0.028) and 63% hit at 63d — proximity
+    # to the 52w high predicts higher forward return ("don't catch
+    # falling knives"). Was NOT a scoring component before; added here.
+    # Higher-is-better orientation: at the high (0) → max, deep below
+    # (-40%) → zero.
+    dist_52w_high: float | None = None
+    if closes_present and closes is not None and len(closes) >= 252:
+        window = closes.iloc[-252:]
+        hi = float(window.max())
+        cur = float(closes.iloc[-1])  # `last_close` is defined later in
+                                       # the trend block; compute locally.
+        if hi > 0:
+            dist_52w_high = cur / hi - 1.0
+    components.append(_Component(
+        "dist_52w_high", dist_52w_high,
+        _ramp3(dist_52w_high, full=-0.02, half=-0.15, zero=-0.40)
+        if dist_52w_high is not None else None,
+        0.06,
     ))
 
     # --- Trend stacking: EMA20 > EMA50 > EMA200 --------------------------
