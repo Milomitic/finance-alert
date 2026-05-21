@@ -396,7 +396,127 @@ def _conditional_return(obs: pd.DataFrame, flag: str, fwd_col: str) -> tuple[flo
     return float(on.mean()), float(off.mean()), int(len(on))
 
 
-def run(*, us_only: bool, min_bars: int, obs_step: int) -> None:
+def _ramp3_vec(v: np.ndarray, *, full: float, half: float, zero: float) -> np.ndarray:
+    """Vectorised mirror of score_service._ramp3 for the retune
+    validation. Same two-segment piecewise-linear logic, both
+    orientations. NaN in → NaN out."""
+    out = np.full_like(v, np.nan, dtype="float64")
+    hs = 50.0
+    if full > zero:  # higher-is-better
+        out = np.where(v >= full, 100.0, out)
+        out = np.where(v <= zero, 0.0, out)
+        mid_hi = (v < full) & (v >= half)
+        out = np.where(mid_hi, hs + (100.0 - hs) * (v - half) / (full - half), out)
+        mid_lo = (v > zero) & (v < half)
+        out = np.where(mid_lo, hs * (v - zero) / (half - zero), out)
+    else:  # lower-is-better (full < zero)
+        out = np.where(v <= full, 100.0, out)
+        out = np.where(v >= zero, 0.0, out)
+        mid_hi = (v > full) & (v <= half)
+        out = np.where(mid_hi, hs + (100.0 - hs) * (half - v) / (half - full), out)
+        mid_lo = (v < zero) & (v > half)
+        out = np.where(mid_lo, hs * (zero - v) / (zero - half), out)
+    return out
+
+
+def _rsi_staircase_vec(rsi: np.ndarray) -> np.ndarray:
+    """Vectorised mirror of the RSI staircase in _momentum."""
+    out = np.full_like(rsi, np.nan, dtype="float64")
+    out = np.where(rsi < 25, 70.0, out)
+    out = np.where((rsi >= 25) & (rsi < 30), 80.0, out)
+    out = np.where((rsi >= 30) & (rsi < 45), 75.0, out)
+    out = np.where((rsi >= 45) & (rsi <= 60), 60.0, out)
+    out = np.where((rsi > 60) & (rsi <= 70), 40.0, out)
+    out = np.where(rsi > 70, 20.0, out)
+    return out
+
+
+def _weighted_present(scores: dict[str, np.ndarray], weights: dict[str, float]) -> np.ndarray:
+    """Missing-data-neutralised weighted average — mirrors
+    score_service._aggregate: per row, sum(score*weight) over the
+    components that are present (non-NaN), divided by sum of present
+    weights. Rows with no present component → NaN."""
+    n = len(next(iter(scores.values())))
+    num = np.zeros(n)
+    den = np.zeros(n)
+    for k, w in weights.items():
+        s = scores[k]
+        present = ~np.isnan(s)
+        num = num + np.where(present, s * w, 0.0)
+        den = den + np.where(present, w, 0.0)
+    return np.where(den > 0, num / den, np.nan)
+
+
+def _validate_retune(obs: pd.DataFrame) -> None:
+    """Compare the momentum-pillar composite IC under the OLD config
+    (pre-retune) vs the NEW config (post-retune), to confirm the
+    change is a measured improvement and not a guess.
+
+    Faithful proxy: covers the 7 momentum components the harness
+    computes (12-1, trend_stack, px_vs_ema200, rsi, mom_30d, mom_90d,
+    dist_52w_high) — including ALL 3 that changed. The 4 omitted
+    components (macd / bb / adx / relative_strength) are identical
+    across both configs, so the OLD->NEW delta is unaffected by their
+    absence (they'd only shift the absolute IC level equally).
+    """
+    # Ramp the shared components once (identical in both configs).
+    score_1211 = _ramp3_vec(obs["mom_12_1"].to_numpy(), full=0.50, half=0.0, zero=-0.30)
+    score_px = _ramp3_vec(obs["px_vs_ema200"].to_numpy(), full=0.15, half=0.0, zero=-0.15)
+    score_rsi = _rsi_staircase_vec(obs["rsi14"].to_numpy())
+    score_trend = obs["trend_stack"].to_numpy() / 3.0 * 100.0  # 0-3 -> 0-100
+    score_mom90 = _ramp3_vec(obs["mom_90d"].to_numpy(), full=0.20, half=0.0, zero=-0.15)
+    score_dist = _ramp3_vec(obs["dist_52w_high"].to_numpy(), full=-0.02, half=-0.15, zero=-0.40)
+
+    # The two configurations of the changed components.
+    mom30 = obs["mom_30d"].to_numpy()
+    score_mom30_old = _ramp3_vec(mom30, full=0.10, half=0.0, zero=-0.10)   # higher-better
+    score_mom30_new = _ramp3_vec(mom30, full=-0.15, half=0.0, zero=0.15)   # contrarian
+
+    shared = {
+        "s_1211": score_1211, "s_px": score_px,
+        "s_rsi": score_rsi, "s_trend": score_trend,
+    }
+    obs = obs.copy()
+    obs["mom_OLD"] = _weighted_present(
+        {**shared, "s_mom30": score_mom30_old, "s_mom90": score_mom90},
+        {"s_1211": 0.22, "s_trend": 0.16, "s_px": 0.10, "s_rsi": 0.08,
+         "s_mom30": 0.06, "s_mom90": 0.10},
+    )
+    obs["mom_NEW"] = _weighted_present(
+        {**shared, "s_mom30": score_mom30_new, "s_mom90": score_mom90, "s_dist": score_dist},
+        {"s_1211": 0.22, "s_trend": 0.16, "s_px": 0.10, "s_rsi": 0.08,
+         "s_mom30": 0.06, "s_mom90": 0.04, "s_dist": 0.06},
+    )
+
+    print()
+    print("=" * 78)
+    print("  RETUNE VALIDATION — momentum pillar composite IC: OLD vs NEW")
+    print("  (7-component proxy; the 3 changed components are all included)")
+    print("=" * 78)
+    print(f"{'config':<10}" + "".join(f"{'h='+str(h):>22}" for h in _HORIZONS))
+    print("-" * 78)
+    for label, col in (("OLD", "mom_OLD"), ("NEW", "mom_NEW")):
+        cells = []
+        for h in _HORIZONS:
+            ic, std, hit = _rank_ic_by_date(obs, col, f"fwd_{h}")
+            ir = ic / std if (std and np.isfinite(std) and std > 0) else float("nan")
+            cells.append(f"IC{ic:+.4f} IR{ir:+.2f} hit{hit*100:.0f}")
+        print(f"{label:<10}" + "".join(f"{c:>22}" for c in cells))
+    # Delta row
+    cells = []
+    for h in _HORIZONS:
+        ic_o, _, _ = _rank_ic_by_date(obs, "mom_OLD", f"fwd_{h}")
+        ic_n, _, _ = _rank_ic_by_date(obs, "mom_NEW", f"fwd_{h}")
+        cells.append(f"dIC{(ic_n - ic_o):+.4f}")
+    print(f"{'NEW-OLD':<10}" + "".join(f"{c:>22}" for c in cells))
+    print()
+    print("  Positive NEW-OLD dIC = the retune improved the pillar's")
+    print("  cross-sectional predictive power. (IC = mean per-date rank-IC")
+    print("  of the momentum composite vs forward return.)")
+    print()
+
+
+def run(*, us_only: bool, min_bars: int, obs_step: int, validate_retune: bool = False) -> None:
     db = SessionLocal()
     try:
         logger.info(
@@ -417,6 +537,12 @@ def run(*, us_only: bool, min_bars: int, obs_step: int) -> None:
             f"[entry_ic] {len(obs):,} observations across "
             f"~{n_dates} monthly cross-sections"
         )
+
+        # Retune validation short-circuits the full signal report —
+        # it just needs the observation frame.
+        if validate_retune:
+            _validate_retune(obs)
+            return
 
         continuous = [
             "mom_12_1", "mom_90d", "mom_30d", "px_vs_ema200", "trend_stack",
@@ -481,5 +607,8 @@ if __name__ == "__main__":
     ap.add_argument("--us-only", action="store_true")
     ap.add_argument("--min-bars", type=int, default=800)
     ap.add_argument("--obs-step", type=int, default=21)
+    ap.add_argument("--validate-retune", action="store_true",
+                    help="Compare momentum-pillar IC OLD vs NEW config")
     args = ap.parse_args()
-    run(us_only=args.us_only, min_bars=args.min_bars, obs_step=args.obs_step)
+    run(us_only=args.us_only, min_bars=args.min_bars, obs_step=args.obs_step,
+        validate_retune=args.validate_retune)
