@@ -736,6 +736,69 @@ def _build_fundamental_obs(
     return out
 
 
+def _validate_prof_retune(obs: pd.DataFrame) -> None:
+    """Validate the profitability-pillar retune (OLD vs NEW weights) by
+    building a percentile-normalised composite of the profitability
+    components and comparing rank-IC. Percentile-per-date normalisation
+    mirrors how the pillar blends 0-100 component scores; rank-IC is
+    invariant to the monotonic transform so per-signal predictive power
+    is preserved while the WEIGHTING choice drives the composite delta.
+
+    Components measured: gross_margin, roa, roe, net_margin (=profit
+    margin), operating_margin. The pillar's holdings components are 0-
+    weight in both configs, so they're irrelevant to the comparison.
+    """
+    obs = obs.copy()
+    comps = ["gross_margin", "roa", "roe", "net_margin", "operating_margin"]
+    # Percentile (0-100) of each component WITHIN each obs date.
+    for c in comps:
+        obs[c + "_p"] = (
+            obs.groupby("obs_date")[c].rank(pct=True) * 100.0
+        )
+
+    def _composite(weights: dict[str, float]) -> pd.Series:
+        num = pd.Series(0.0, index=obs.index)
+        den = pd.Series(0.0, index=obs.index)
+        for c, w in weights.items():
+            p = obs[c + "_p"]
+            present = p.notna()
+            num = num.add((p * w).where(present, 0.0), fill_value=0.0)
+            den = den.add(pd.Series(w, index=obs.index).where(present, 0.0), fill_value=0.0)
+        return (num / den).where(den > 0)
+
+    old_w = {"roe": 0.26, "roa": 0.18, "net_margin": 0.24,
+             "operating_margin": 0.18, "gross_margin": 0.14}
+    new_w = {"roe": 0.18, "roa": 0.26, "net_margin": 0.14,
+             "operating_margin": 0.12, "gross_margin": 0.30}
+    obs["prof_OLD"] = _composite(old_w)
+    obs["prof_NEW"] = _composite(new_w)
+
+    print()
+    print("=" * 78)
+    print("  PROFITABILITY RETUNE VALIDATION — composite IC: OLD vs NEW weights")
+    print("=" * 78)
+    print(f"{'config':<10}" + "".join(f"{'h='+str(h):>16}" for h in _HORIZONS))
+    print("-" * 78)
+    for label, col in (("OLD", "prof_OLD"), ("NEW", "prof_NEW")):
+        cells = []
+        for h in _HORIZONS:
+            ic, std, hit = _rank_ic_by_date(obs, col, f"fwd_{h}")
+            ir = ic / std if (std and np.isfinite(std) and std > 0) else float("nan")
+            cells.append(f"IC{ic:+.4f} IR{ir:+.2f}")
+        print(f"{label:<10}" + "".join(f"{c:>16}" for c in cells))
+    cells = []
+    for h in _HORIZONS:
+        o, _, _ = _rank_ic_by_date(obs, "prof_OLD", f"fwd_{h}")
+        n, _, _ = _rank_ic_by_date(obs, "prof_NEW", f"fwd_{h}")
+        cells.append(f"d{(n - o):+.4f}")
+    print(f"{'NEW-OLD':<10}" + "".join(f"{c:>16}" for c in cells))
+    print()
+    print("  Positive NEW-OLD = the evidence-based reweight (promote")
+    print("  gross_margin+roa, demote net/operating margin) improved the")
+    print("  profitability pillar's cross-sectional IC.")
+    print()
+
+
 def _validate_fundamentals(obs: pd.DataFrame) -> None:
     """IC report for the split-immune fundamental signals, PLUS the
     absolute-vs-sector-relative comparison that answers the open
@@ -779,7 +842,8 @@ def _validate_fundamentals(obs: pd.DataFrame) -> None:
 
 def run(*, us_only: bool, min_bars: int, obs_step: int,
         validate_retune: bool = False, validate_xs: bool = False,
-        validate_fundamentals: bool = False) -> None:
+        validate_fundamentals: bool = False,
+        validate_prof_retune: bool = False) -> None:
     db = SessionLocal()
     try:
         logger.info(
@@ -809,14 +873,17 @@ def run(*, us_only: bool, min_bars: int, obs_step: int,
         if validate_xs:
             _validate_xs(obs)
             return
-        if validate_fundamentals:
+        if validate_fundamentals or validate_prof_retune:
             logger.info("[fund] loading PIT fundamentals (first run hits SEC)...")
             histories = _load_pit_fundamentals(db, universe)
             fobs = _build_fundamental_obs(universe, histories, obs_step=obs_step)
             if fobs.empty:
                 print("No fundamental observations produced.")
                 return
-            _validate_fundamentals(fobs)
+            if validate_prof_retune:
+                _validate_prof_retune(fobs)
+            else:
+                _validate_fundamentals(fobs)
             return
 
         continuous = [
@@ -888,7 +955,10 @@ if __name__ == "__main__":
                     help="Compare momentum IC absolute vs sector-relative")
     ap.add_argument("--validate-fundamentals", action="store_true",
                     help="IC of PIT fundamental signals (SEC) abs vs sector-rel")
+    ap.add_argument("--validate-prof-retune", action="store_true",
+                    help="Profitability pillar composite IC: OLD vs NEW weights")
     args = ap.parse_args()
     run(us_only=args.us_only, min_bars=args.min_bars, obs_step=args.obs_step,
         validate_retune=args.validate_retune, validate_xs=args.validate_xs,
-        validate_fundamentals=args.validate_fundamentals)
+        validate_fundamentals=args.validate_fundamentals,
+        validate_prof_retune=args.validate_prof_retune)

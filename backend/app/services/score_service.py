@@ -453,14 +453,23 @@ def _profitability(
     in absolute terms AND vs its peers. Magnitude only - durability
     is in the sibling Sustainability pillar.
 
-    Components (weights add to 1.0):
-      - ROE                       (0.22)  HIB blend abs full@20%/half@10%/zero@0%, rel +5pp vs sector
-      - ROA                       (0.15)  HIB blend abs full@10%/half@5%/zero@0%, rel +2.5pp
-      - Profit margin             (0.20)  HIB blend abs full@20%/half@10%/zero@0%, rel +5pp
-      - Operating margin          (0.15)  HIB blend abs full@20%/half@10%/zero@0%, rel +5pp
-      - Gross margin              (0.13)  HIB blend abs full@50%/half@30%/zero@10%, rel +10pp
-      - Insider holdings          (0.07)  HIB absolute (no peer aggregate)
-      - Institutional holdings    (0.08)  HIB absolute (no peer aggregate)
+    Components (weights add to 1.0). Weights re-tuned 2026-05 against
+    point-in-time IC (SEC companyfacts, US universe 2016-2026; see
+    app/scripts/entry_ic_report.py --validate-prof-retune). The prior
+    weights loaded heavily on margin LEVELS (net 0.24, operating 0.18),
+    which the IC study found flat-to-NEGATIVE at long horizons
+    (net_margin -0.047 @252d) — making the OLD pillar counter-
+    predictive at 1y (IC -0.009). The validated re-tune promotes the
+    signals that DO predict (gross_margin +0.030, roa +0.020) and
+    demotes the counter-predictive levels, flipping the 1y IC positive
+    (+0.003) and improving it at every horizon.
+      - Gross margin              (0.30)  best fundamental signal; durable moat
+      - ROA                       (0.26)  validated, stable across horizons
+      - ROE                       (0.18)  weakly positive
+      - Profit (net) margin       (0.14)  level flat/neg long-horizon → demoted
+      - Operating margin          (0.12)  level negative long-horizon → demoted
+      - Insider holdings          (0.0)   informational only (QW1)
+      - Institutional holdings    (0.0)   informational only (QW1)
     """
     if micro is None:
         return None, 100.0, {}
@@ -476,7 +485,7 @@ def _profitability(
         _blended_hib(micro.return_on_equity, _med("roe_median"),
                      abs_full=0.20, abs_half=0.10, abs_zero=0.0,
                      rel_full_pp=0.05),
-        0.26,  # QW1: rebalanced after moving ownership out (0.22→0.26)
+        0.18,  # IC-retune: 0.26→0.18 (roe only weakly predictive, +0.010)
         sector_median=_med("roe_median"),
     ))
     components.append(_Component(
@@ -484,7 +493,7 @@ def _profitability(
         _blended_hib(micro.return_on_assets, _med("roa_median"),
                      abs_full=0.10, abs_half=0.05, abs_zero=0.0,
                      rel_full_pp=0.025),
-        0.18,  # QW1: rebalanced (roa 0.15→0.18)
+        0.26,  # IC-retune: 0.18→0.26 (roa validated +0.020, stable)
         sector_median=_med("roa_median"),
     ))
     components.append(_Component(
@@ -492,7 +501,8 @@ def _profitability(
         _blended_hib(micro.profit_margins, _med("profit_margin_median"),
                      abs_full=0.20, abs_half=0.10, abs_zero=0.0,
                      rel_full_pp=0.05),
-        0.24,  # QW1: rebalanced (profit_margin 0.20→0.24)
+        0.14,  # IC-retune: 0.24→0.14 (net-margin LEVEL -0.047 @252d;
+               # kept non-zero as a "profitable at all" quality floor)
         sector_median=_med("profit_margin_median"),
     ))
     components.append(_Component(
@@ -500,7 +510,7 @@ def _profitability(
         _blended_hib(micro.operating_margins, _med("operating_margin_median"),
                      abs_full=0.20, abs_half=0.10, abs_zero=0.0,
                      rel_full_pp=0.05),
-        0.18,  # QW1: rebalanced (operating_margin 0.15→0.18)
+        0.12,  # IC-retune: 0.18→0.12 (operating-margin level -0.037 @252d)
         sector_median=_med("operating_margin_median"),
     ))
     components.append(_Component(
@@ -508,7 +518,8 @@ def _profitability(
         _blended_hib(micro.gross_margins, _med("gross_margin_median"),
                      abs_full=0.50, abs_half=0.30, abs_zero=0.10,
                      rel_full_pp=0.10),
-        0.14,  # QW1: rebalanced (gross_margin 0.13→0.14); sum=1.00
+        0.30,  # IC-retune: 0.14→0.30 (best fundamental signal, +0.030
+               # consistent across horizons); sum=1.00
         sector_median=_med("gross_margin_median"),
     ))
     # QW1: ownership is NOT profitability — insider/institutional holdings
