@@ -80,6 +80,7 @@ class _StockSeries:
     closes: pd.Series   # indexed 0..N-1, chronological
     volumes: pd.Series
     dates: list[str]    # ISO date per bar position (same length as closes)
+    sector: str         # current sector (static proxy for the XS test)
 
 
 def _load_universe(db, *, us_only: bool, min_bars: int) -> list[_StockSeries]:
@@ -95,7 +96,7 @@ def _load_universe(db, *, us_only: bool, min_bars: int) -> list[_StockSeries]:
     rows = db.execute(
         text(
             f"""
-            SELECT s.id, s.ticker
+            SELECT s.id, s.ticker, s.sector
             FROM stocks s
             {where}
             AND (SELECT COUNT(*) FROM ohlcv_daily o WHERE o.stock_id = s.id)
@@ -107,6 +108,7 @@ def _load_universe(db, *, us_only: bool, min_bars: int) -> list[_StockSeries]:
     ).all()
     ids = [r[0] for r in rows]
     ticker_by_id = {r[0]: r[1] for r in rows}
+    sector_by_id = {r[0]: (r[2] or "—") for r in rows}
     if not ids:
         return []
 
@@ -140,6 +142,7 @@ def _load_universe(db, *, us_only: bool, min_bars: int) -> list[_StockSeries]:
                 closes=pd.Series(cur_close, dtype="float64").reset_index(drop=True),
                 volumes=pd.Series(cur_vol, dtype="float64").reset_index(drop=True),
                 dates=list(cur_dates),
+                sector=sector_by_id.get(cur_id, "—"),
             )
         )
 
@@ -294,6 +297,7 @@ def _build_observation_frame(
         sub = sig.iloc[rows_idx].copy()
         sub["stock_id"] = s.stock_id
         sub["obs_date"] = rows_date
+        sub["sector"] = s.sector
         for h in _HORIZONS:
             sub[f"fwd_{h}"] = np.array(
                 [c[i + h] / c[i] - 1.0 if c[i] > 0 else np.nan for i in rows_idx]
@@ -516,7 +520,80 @@ def _validate_retune(obs: pd.DataFrame) -> None:
     print()
 
 
-def run(*, us_only: bool, min_bars: int, obs_step: int, validate_retune: bool = False) -> None:
+def _build_mom_new(obs: pd.DataFrame) -> pd.Series:
+    """Recompute the post-retune momentum composite (mom_NEW) as a
+    Series — shared helper for the XS validation."""
+    score_1211 = _ramp3_vec(obs["mom_12_1"].to_numpy(), full=0.50, half=0.0, zero=-0.30)
+    score_px = _ramp3_vec(obs["px_vs_ema200"].to_numpy(), full=0.15, half=0.0, zero=-0.15)
+    score_rsi = _rsi_staircase_vec(obs["rsi14"].to_numpy())
+    score_trend = obs["trend_stack"].to_numpy() / 3.0 * 100.0
+    score_mom90 = _ramp3_vec(obs["mom_90d"].to_numpy(), full=0.20, half=0.0, zero=-0.15)
+    score_dist = _ramp3_vec(obs["dist_52w_high"].to_numpy(), full=-0.02, half=-0.15, zero=-0.40)
+    score_mom30 = _ramp3_vec(obs["mom_30d"].to_numpy(), full=-0.15, half=0.0, zero=0.15)
+    comp = _weighted_present(
+        {"s_1211": score_1211, "s_px": score_px, "s_rsi": score_rsi,
+         "s_trend": score_trend, "s_mom30": score_mom30,
+         "s_mom90": score_mom90, "s_dist": score_dist},
+        {"s_1211": 0.22, "s_trend": 0.16, "s_px": 0.10, "s_rsi": 0.08,
+         "s_mom30": 0.06, "s_mom90": 0.04, "s_dist": 0.06},
+    )
+    return pd.Series(comp, index=obs.index)
+
+
+def _validate_xs(obs: pd.DataFrame) -> None:
+    """Test the cross-sectional engine's core mechanism on the one
+    pillar that is point-in-time safe (momentum): does ranking
+    SECTOR-RELATIVE predict forward returns better than ABSOLUTE?
+
+    HONEST SCOPE NOTE printed in the output: the XS engine's biggest
+    intended benefit is on the FUNDAMENTAL pillars (value/quality —
+    where 'cheap' only means something relative to the sector). Those
+    can't be backtested without point-in-time fundamentals, which we
+    don't have. So this validates the *mechanism* on momentum only —
+    where sector-neutralisation is known to help LEAST (sector
+    momentum is itself a real effect). Read the result as a lower
+    bound on the engine's value, not the whole story.
+    """
+    obs = obs.copy()
+    obs["mom"] = _build_mom_new(obs)
+
+    # Sector-relative percentile of mom WITHIN each (obs_date, sector).
+    def _sector_pct(g: pd.DataFrame) -> pd.Series:
+        return g.groupby("sector")["mom"].rank(pct=True) * 100.0
+
+    obs["mom_secrel"] = (
+        obs.groupby("obs_date", group_keys=False).apply(_sector_pct)
+    )
+
+    print()
+    print("=" * 78)
+    print("  XS-ENGINE MECHANISM TEST — momentum: ABSOLUTE vs SECTOR-RELATIVE")
+    print("=" * 78)
+    print(f"{'ranking':<14}" + "".join(f"{'h='+str(h):>20}" for h in _HORIZONS))
+    print("-" * 78)
+    for label, col in (("absolute", "mom"), ("sector-rel", "mom_secrel")):
+        cells = []
+        for h in _HORIZONS:
+            ic, std, hit = _rank_ic_by_date(obs, col, f"fwd_{h}")
+            ir = ic / std if (std and np.isfinite(std) and std > 0) else float("nan")
+            cells.append(f"IC{ic:+.4f} IR{ir:+.2f} h{hit*100:.0f}")
+        print(f"{label:<14}" + "".join(f"{c:>20}" for c in cells))
+    cells = []
+    for h in _HORIZONS:
+        a, _, _ = _rank_ic_by_date(obs, "mom", f"fwd_{h}")
+        s, _, _ = _rank_ic_by_date(obs, "mom_secrel", f"fwd_{h}")
+        cells.append(f"dIC{(s - a):+.4f}")
+    print(f"{'secrel-abs':<14}" + "".join(f"{c:>20}" for c in cells))
+    print()
+    print("  CAVEAT: validates the XS MECHANISM on momentum only (point-in-")
+    print("  time safe). The engine's main value is on value/quality pillars")
+    print("  vs sector — NOT backtestable here without point-in-time")
+    print("  fundamentals. Treat as a lower bound, not a verdict.")
+    print()
+
+
+def run(*, us_only: bool, min_bars: int, obs_step: int,
+        validate_retune: bool = False, validate_xs: bool = False) -> None:
     db = SessionLocal()
     try:
         logger.info(
@@ -542,6 +619,9 @@ def run(*, us_only: bool, min_bars: int, obs_step: int, validate_retune: bool = 
         # it just needs the observation frame.
         if validate_retune:
             _validate_retune(obs)
+            return
+        if validate_xs:
+            _validate_xs(obs)
             return
 
         continuous = [
@@ -609,6 +689,8 @@ if __name__ == "__main__":
     ap.add_argument("--obs-step", type=int, default=21)
     ap.add_argument("--validate-retune", action="store_true",
                     help="Compare momentum-pillar IC OLD vs NEW config")
+    ap.add_argument("--validate-xs", action="store_true",
+                    help="Compare momentum IC absolute vs sector-relative")
     args = ap.parse_args()
     run(us_only=args.us_only, min_bars=args.min_bars, obs_step=args.obs_step,
-        validate_retune=args.validate_retune)
+        validate_retune=args.validate_retune, validate_xs=args.validate_xs)
