@@ -101,20 +101,26 @@ function MarketError({ onRetry }: { onRetry: () => void }) {
 export default function HomePage() {
   const market = useMarketSummary();
   const summary = useDashboardSummary();
-  // The pre-market card is meaningful ONLY when the US regular
-  // session is closed (pre-market data doesn't exist while RTH is
-  // running). Earlier iteration kept the card always-visible with a
-  // "mercato aperto" placeholder, but the user objected that during
-  // market hours that slot is dead real-estate. Now: hide the card
-  // entirely AND collapse the surrounding grid so the breadth+movers
-  // row takes the full width — no empty column.
-  // Default: SHOW (i.e. hide==false) while the hook is loading. The
-  // hook has staleTime=5s and a shared cache, so data is usually
-  // immediate; defaulting to show avoids a hide→show reflow in the
-  // common case (user outside RTH). During RTH there'll be a brief
-  // flash of the placeholder before it hides, which is acceptable.
+  // The pre-market card is visible ONLY when the backend tells us
+  // `available=true` — i.e. the US regular market is CLOSED AND the
+  // pre-market cache is fresh AND non-empty. Any other state (RTH
+  // open / cache cold / fetch in flight / no data) hides the card
+  // entirely AND collapses the surrounding grid so the breadth +
+  // top-movers row takes the full row width (no dead column).
+  //
+  // Evolution: earlier we kept the slot visible during cache-cold
+  // off-hours with a "in attesa" placeholder, but the user
+  // requested that the card appear only when there's actually
+  // something to show. Hiding the slot is the strictest possible
+  // surface — no flash of empty boxes, no "perché non si carica?"
+  // moment, just "card appears when data exists".
+  //
+  // While the hook is in flight `premarketQ.data` is undefined →
+  // `available` is undefined → `!!undefined` is false → we default
+  // to HIDE. The hook has staleTime=5s + a shared cache so on
+  // subsequent navigations data is usually already populated.
   const premarketQ = usePremarketMovers();
-  const hidePremarket = premarketQ.data?.market_open === true;
+  const hidePremarket = !premarketQ.data?.available;
 
   // First-paint loading skeleton — mirrors the loaded layout 1:1 so
   // the transition is a *fill-in*, not a reflow. See DashboardSkeleton
@@ -216,16 +222,18 @@ export default function HomePage() {
       {/* Pre-market-aware row. Two layouts, both pixel-locked to the
           HeroStrip `[3fr_2fr]` boundary above so each card's right
           edge aligns with the matching card in the row above:
-            - RTH (US market open): pre-market hidden. Row is a flat
-              `[3fr_2fr]` → Breadth (left, ~60% — aligns with MoodCard
-              edges) + TopMovers (right, ~40% — aligns with the
-              "MERCATI LIVE" card edges). Previous iteration was
-              `[1fr_1fr]` (50/50) which left TopMovers wider than its
-              upstairs counterpart, off-axis.
-            - Off-hours: outer `[3fr_2fr]` brings the pre-market card
-              in on the right (same 2fr as MERCATI LIVE upstairs);
-              inner `[1fr_1fr]` splits Breadth + TopMovers evenly
-              within the left 3fr. */}
+            - Pre-market NOT available (RTH open OR cache cold OR no
+              data): card hidden. Row is a flat `[3fr_2fr]` → Breadth
+              (left, ~60% — aligns with MoodCard edges) + TopMovers
+              (right, ~40% — aligns with the "MERCATI LIVE" card
+              edges). Gate predicate updated 2026-05: was `market_open`
+              (RTH only), now `available` (strict "we have data to
+              show right now") per user request to never display the
+              card with a placeholder body.
+            - Pre-market AVAILABLE: outer `[3fr_2fr]` brings the
+              pre-market card in on the right (same 2fr as MERCATI
+              LIVE upstairs); inner `[1fr_1fr]` splits Breadth +
+              TopMovers evenly within the left 3fr. */}
       {hidePremarket ? (
         <div className="grid gap-3 lg:grid-cols-[3fr_2fr]">
           <BreadthMatrixTable data={m.by_index} />

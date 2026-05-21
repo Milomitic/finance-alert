@@ -90,43 +90,45 @@ function Column({
 }
 
 /**
- * US pre-market top gainers/losers. Visibility rules:
+ * US pre-market top gainers/losers. Strict visibility rule:
  *
- *   • US RTH open (`market_open=true`) → returns null (the parent row
- *     collapses to remove the dead column). Pre-market data doesn't
- *     exist while the regular session is running, so showing a
- *     placeholder during market hours is just wasted real-estate.
- *   • Off-hours, data missing/loading → render the card shell with a
- *     skeleton/cache-cold placeholder body, refresh button wired.
- *   • Off-hours, data ready → real gainers/losers panes.
+ *   • Backend `available=true`  → render the gainers/losers panes.
+ *   • Anything else             → return null.
  *
- * Parent (HomePage) ALSO gates rendering on `market_open` so the
- * surrounding grid reflows to `[1fr_1fr]` (no empty 2fr column).
- * The card-level null-return below is belt-and-braces in case the
- * card is ever mounted by some other layout that doesn't gate.
+ * "Available" already encodes the full set of preconditions: market
+ * closed AND cache fresh AND non-empty. So a single check covers all
+ * four prior states (RTH open / cache cold / fetch in flight / no
+ * data) without the per-state placeholder branching we had before.
+ *
+ * The parent (`HomePage`) gates the surrounding grid on the same
+ * predicate so the row reflows to `[3fr_2fr]` (no dead column) when
+ * the card is hidden. The card-level null-return below is
+ * belt-and-braces in case the card is ever mounted by some other
+ * layout that doesn't gate.
+ *
+ * The off-hours-but-cache-cold "in attesa" placeholder was removed
+ * per user request (2026-05): the user wants the card to **appear
+ * only when there's actually something to show**, not to advertise
+ * "loading" with a skeleton that may sit there for minutes during
+ * a cache-warm cycle.
  */
 export function PremarketMoversCard() {
   const q = usePremarketMovers();
   const refresh = useRefreshPremarketMovers();
   const d = q.data;
 
-  const marketOpen = !!d?.market_open;
-  // Hide entirely during US RTH — no card, no slot, no placeholder.
-  if (marketOpen) return null;
-
   const available = !!d?.available;
-  const busy = !!d?.refreshing || refresh.isPending;
-  // Since `marketOpen` early-returns above, the only remaining
-  // refresh-disabled case is "already busy fetching". The previous
-  // "during RTH" guard is gone.
-  const canRefresh = !busy;
+  // Strict gate: nothing renders unless the backend tells us data is
+  // fresh AND non-empty (the `available` flag aggregates all
+  // preconditions: market closed, cache fresh, at least one
+  // gainer/loser populated).
+  if (!available || !d) return null;
 
-  // Placeholder copy for the off-hours / cache-cold case. The "mercato
-  // aperto" branch was removed when this card started returning null
-  // during RTH.
-  const placeholderMsg = busy
-    ? "Caricamento dati pre-market…"
-    : "Pre-market in attesa. Premi l'icona di refresh per scaricare gli ultimi dati.";
+  const busy = !!d.refreshing || refresh.isPending;
+  // Refresh button stays disabled while another refresh is in
+  // flight; otherwise it's always actionable since we only render
+  // when the market is closed and data is fresh.
+  const canRefresh = !busy;
 
   return (
     <Card className="h-full overflow-hidden">
@@ -137,7 +139,7 @@ export function PremarketMoversCard() {
             label="Pre-market USA · top variazioni"
             right={
               <div className="flex items-center gap-2">
-                {d?.as_of && (
+                {d.as_of && (
                   <span
                     className="text-[11px] text-muted-foreground tabular-nums"
                     title={
@@ -160,7 +162,7 @@ export function PremarketMoversCard() {
                     )}
                   </span>
                 )}
-                {busy && d && (
+                {busy && (
                   <span className="text-[11px] font-semibold tabular-nums text-sky-600 dark:text-sky-400">
                     {d.progress_pct}%
                   </span>
@@ -184,52 +186,15 @@ export function PremarketMoversCard() {
             }
           />
         </div>
-        {available && d ? (
-          <div className="grid grid-cols-2 divide-x divide-border/40 flex-1 min-h-0">
-            <Column title="Gainers" rows={d.gainers} side="g" />
-            <Column title="Losers" rows={d.losers} side="l" />
-          </div>
-        ) : (
-          /* Structurally identical 2-pane layout used by the live state
-             so the row height & dividers don't shift when data arrives.
-             The placeholders mirror Gainers / Losers headers + a few
-             skeleton rows; only the body content differs. */
-          <div className="grid grid-cols-2 divide-x divide-border/40 flex-1 min-h-0">
-            {(["g", "l"] as const).map((side) => (
-              <div key={side} className="flex flex-col min-h-0 min-w-0">
-                <div
-                  className={cn(
-                    "shrink-0 px-3 py-1 text-[10.5px] uppercase tracking-[0.16em] font-bold border-b",
-                    side === "g"
-                      ? "bg-green-50/40 dark:bg-green-950/20 text-green-700/60 dark:text-green-300/60"
-                      : "bg-red-50/40 dark:bg-red-950/20 text-red-700/60 dark:text-red-300/60",
-                  )}
-                >
-                  {side === "g" ? "Gainers" : "Losers"}
-                </div>
-                <div className="flex-1 min-h-0 overflow-hidden">
-                  {side === "g" && (
-                    <div className="px-4 pt-3 pb-2 text-[11.5px] leading-snug text-muted-foreground">
-                      {placeholderMsg}
-                    </div>
-                  )}
-                  <ul className="px-3 space-y-1.5">
-                    {Array.from({ length: 6 }).map((_, i) => (
-                      <li
-                        key={i}
-                        className="flex items-center gap-2 py-1"
-                      >
-                        <div className="h-6 w-6 rounded-full bg-muted/50 animate-pulse" />
-                        <div className="h-2.5 flex-1 rounded bg-muted/40 animate-pulse" />
-                        <div className="h-2.5 w-10 rounded bg-muted/40 animate-pulse" />
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+        {/* Single render path: the early `!available` return at the
+            top guarantees real data is present here. The previous
+            placeholder branch (cache-cold skeleton) was removed when
+            the visibility gate moved from `market_open` to
+            `available` — see the docstring for rationale. */}
+        <div className="grid grid-cols-2 divide-x divide-border/40 flex-1 min-h-0">
+          <Column title="Gainers" rows={d.gainers} side="g" />
+          <Column title="Losers" rows={d.losers} side="l" />
+        </div>
       </CardContent>
     </Card>
   );
