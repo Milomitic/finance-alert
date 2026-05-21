@@ -56,6 +56,7 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass
+from datetime import date
 
 import numpy as np
 import pandas as pd
@@ -67,8 +68,12 @@ from app.indicators.ema import ema as ema_indicator
 from app.indicators.rsi import rsi as rsi_indicator
 
 
-# Forward-return horizons in trading days: ~1 week, ~1 month, ~1 quarter.
-_HORIZONS = (5, 21, 63)
+# Forward-return horizons in trading days: ~1 week, ~1 month, ~1
+# quarter, ~1 year. The 252d horizon is the fair test for SLOW factors
+# (value / quality / growth) which express over quarters-to-years, not
+# weeks — judging fundamentals only at <=63d is biased toward fast
+# (momentum) signals.
+_HORIZONS = (5, 21, 63, 252)
 # Deciles for the spread analysis.
 _N_BUCKETS = 10
 
@@ -592,8 +597,189 @@ def _validate_xs(obs: pd.DataFrame) -> None:
     print()
 
 
+# ── Fundamental pillar validation (phase 2/3) ────────────────────────
+# Split-immune fundamental signals only (ratios of TOTAL quantities or
+# per-period values that survive splits). Value (P/E, P/B) is excluded:
+# it mixes split-adjusted OHLCV price with SEC's unadjusted per-share /
+# share-count data, which would corrupt the ratio without split-history
+# reconciliation. Deferred to a follow-up.
+_FUND_SIGNALS = [
+    "net_margin", "gross_margin", "operating_margin", "roe", "roa",
+    "fcf_to_ni", "fcf_margin", "debt_to_equity", "rev_yoy", "ni_yoy",
+]
+
+
+def _load_pit_fundamentals(db, universe: list[_StockSeries]) -> dict[int, dict]:
+    """Bulk-fetch + cache the SEC PIT fact history for every stock in
+    the universe. First run hits SEC (rate-limited ~6/s inside the
+    service); subsequent runs are L2 cache hits. Returns
+    {stock_id: fact_history}. Stocks that don't resolve to a CIK
+    (non-US / ADRs) get an empty history and are skipped downstream."""
+    from app.services import sec_fundamentals_history as sf
+    out: dict[int, dict] = {}
+    n = len(universe)
+    resolved = 0
+    for i, s in enumerate(universe):
+        try:
+            hist = sf.get_fact_history(db, s.ticker)
+        except Exception as e:  # noqa: BLE001
+            logger.debug(f"[fund] {s.ticker} history failed: {e}")
+            hist = {}
+        out[s.stock_id] = hist
+        if hist:
+            resolved += 1
+        if (i + 1) % 50 == 0 or i + 1 == n:
+            logger.info(f"[fund] PIT history {i + 1}/{n} (resolved {resolved})")
+    return out
+
+
+def _fund_signals_as_of(hist: dict, as_of: date) -> dict[str, float | None]:
+    """Compute the split-immune fundamental signals as of `as_of`,
+    using only facts FILED by then (PIT). Division guards return None
+    on zero/None denominators rather than inf/NaN."""
+    from app.services import sec_fundamentals_history as sf
+    import datetime as _dt
+
+    def _ttm(c):
+        return sf.ttm_flow(hist, c, as_of)
+
+    def _inst(c):
+        fp = sf.latest_instant(hist, c, as_of)
+        return fp.val if fp else None
+
+    rev = _ttm("revenue")
+    ni = _ttm("net_income")
+    gp = _ttm("gross_profit")
+    oi = _ttm("operating_income")
+    ocf = _ttm("operating_cash_flow")
+    capex = _ttm("capex")
+    eq = _inst("equity")
+    assets = _inst("assets")
+    debt = _inst("long_term_debt")
+
+    def _safe_div(a, b):
+        if a is None or b is None or b == 0:
+            return None
+        return a / b
+
+    fcf = (ocf - capex) if (ocf is not None and capex is not None) else None
+    # capex in companyfacts is a positive outflow magnitude; FCF = OCF - capex.
+
+    out: dict[str, float | None] = {
+        "net_margin": _safe_div(ni, rev),
+        "gross_margin": _safe_div(gp, rev),
+        "operating_margin": _safe_div(oi, rev),
+        "roe": _safe_div(ni, eq),
+        "roa": _safe_div(ni, assets),
+        "fcf_to_ni": _safe_div(fcf, ni),
+        "fcf_margin": _safe_div(fcf, rev),
+        # debt_to_equity expected NEGATIVE IC (more leverage = riskier);
+        # we keep raw and read the sign.
+        "debt_to_equity": _safe_div(debt, eq),
+    }
+    # YoY growth: compare TTM now vs TTM one year ago (both PIT-filtered).
+    prev = as_of - _dt.timedelta(days=365)
+    rev_prev = sf.ttm_flow(hist, "revenue", prev)
+    ni_prev = sf.ttm_flow(hist, "net_income", prev)
+    out["rev_yoy"] = (
+        (rev / rev_prev - 1.0) if (rev and rev_prev and rev_prev > 0) else None
+    )
+    # NI YoY only meaningful when prior NI is positive (avoid sign flips).
+    out["ni_yoy"] = (
+        (ni / ni_prev - 1.0) if (ni is not None and ni_prev and ni_prev > 0) else None
+    )
+    return out
+
+
+def _build_fundamental_obs(
+    universe: list[_StockSeries], histories: dict[int, dict], *, obs_step: int,
+    min_lead: int = 273,
+) -> pd.DataFrame:
+    """Calendar-aligned observation frame of FUNDAMENTAL signals +
+    forward returns + sector. Same monthly grid / market-neutral
+    excess-return treatment as the technical frame."""
+    max_h = max(_HORIZONS)
+    all_dates: set[str] = set()
+    for s in universe:
+        all_dates.update(s.dates)
+    cal = sorted(all_dates)
+    if len(cal) < min_lead + max_h + obs_step:
+        return pd.DataFrame()
+    obs_dates = cal[min_lead:len(cal) - max_h:obs_step]
+
+    rows: list[dict] = []
+    for s in universe:
+        hist = histories.get(s.stock_id) or {}
+        if not hist:
+            continue
+        pos_by_date = {d: i for i, d in enumerate(s.dates)}
+        c = s.closes.to_numpy()
+        n = len(c)
+        for d in obs_dates:
+            i = pos_by_date.get(d)
+            if i is None or i < min_lead or i + max_h >= n:
+                continue
+            sig = _fund_signals_as_of(hist, date.fromisoformat(d))
+            if all(v is None for v in sig.values()):
+                continue
+            row = {"stock_id": s.stock_id, "obs_date": d, "sector": s.sector}
+            row.update(sig)
+            for h in _HORIZONS:
+                row[f"fwd_{h}"] = c[i + h] / c[i] - 1.0 if c[i] > 0 else np.nan
+            rows.append(row)
+    if not rows:
+        return pd.DataFrame()
+    out = pd.DataFrame(rows)
+    for h in _HORIZONS:
+        col = f"fwd_{h}"
+        out[f"xfwd_{h}"] = out[col] - out.groupby("obs_date")[col].transform("mean")
+    return out
+
+
+def _validate_fundamentals(obs: pd.DataFrame) -> None:
+    """IC report for the split-immune fundamental signals, PLUS the
+    absolute-vs-sector-relative comparison that answers the open
+    SCORE_ENGINE_XS question for the quality pillars: does sector-
+    neutralising these signals improve their cross-sectional IC?"""
+    print()
+    print("=" * 94)
+    print("  FUNDAMENTAL SIGNALS (PIT, split-immune) — rank-IC absolute vs sector-relative")
+    print(f"  obs={len(obs):,}  dates~{obs['obs_date'].nunique()}  "
+          f"stocks~{obs['stock_id'].nunique()}")
+    print("=" * 94)
+    print(f"{'signal':<16}{'rank':<10}" + "".join(f"{'h='+str(h):>16}" for h in _HORIZONS))
+    print("-" * 94)
+    for sig in _FUND_SIGNALS:
+        if sig not in obs.columns:
+            continue
+        # Absolute IC
+        abs_cells = []
+        for h in _HORIZONS:
+            ic, std, hit = _rank_ic_by_date(obs, sig, f"fwd_{h}")
+            ir = ic / std if (std and np.isfinite(std) and std > 0) else float("nan")
+            abs_cells.append(f"IC{ic:+.3f} IR{ir:+.2f}")
+        print(f"{sig:<16}{'absolute':<10}" + "".join(f"{c:>16}" for c in abs_cells))
+        # Sector-relative IC
+        obs2 = obs.copy()
+        obs2[sig + "_sr"] = (
+            obs2.groupby("obs_date", group_keys=False)
+            .apply(lambda g: g.groupby("sector")[sig].rank(pct=True) * 100.0)
+        )
+        sr_cells = []
+        for h in _HORIZONS:
+            ic, std, hit = _rank_ic_by_date(obs2, sig + "_sr", f"fwd_{h}")
+            sr_cells.append(f"IC{ic:+.3f}")
+        print(f"{'':<16}{'sector-rel':<10}" + "".join(f"{c:>16}" for c in sr_cells))
+    print()
+    print("  Compare 'absolute' vs 'sector-rel' IC per signal: if sector-rel")
+    print("  is consistently higher, the XS engine helps that pillar (supports")
+    print("  turning SCORE_ENGINE_XS on, at least selectively for fundamentals).")
+    print()
+
+
 def run(*, us_only: bool, min_bars: int, obs_step: int,
-        validate_retune: bool = False, validate_xs: bool = False) -> None:
+        validate_retune: bool = False, validate_xs: bool = False,
+        validate_fundamentals: bool = False) -> None:
     db = SessionLocal()
     try:
         logger.info(
@@ -622,6 +808,15 @@ def run(*, us_only: bool, min_bars: int, obs_step: int,
             return
         if validate_xs:
             _validate_xs(obs)
+            return
+        if validate_fundamentals:
+            logger.info("[fund] loading PIT fundamentals (first run hits SEC)...")
+            histories = _load_pit_fundamentals(db, universe)
+            fobs = _build_fundamental_obs(universe, histories, obs_step=obs_step)
+            if fobs.empty:
+                print("No fundamental observations produced.")
+                return
+            _validate_fundamentals(fobs)
             return
 
         continuous = [
@@ -691,6 +886,9 @@ if __name__ == "__main__":
                     help="Compare momentum-pillar IC OLD vs NEW config")
     ap.add_argument("--validate-xs", action="store_true",
                     help="Compare momentum IC absolute vs sector-relative")
+    ap.add_argument("--validate-fundamentals", action="store_true",
+                    help="IC of PIT fundamental signals (SEC) abs vs sector-rel")
     args = ap.parse_args()
     run(us_only=args.us_only, min_bars=args.min_bars, obs_step=args.obs_step,
-        validate_retune=args.validate_retune, validate_xs=args.validate_xs)
+        validate_retune=args.validate_retune, validate_xs=args.validate_xs,
+        validate_fundamentals=args.validate_fundamentals)

@@ -237,6 +237,12 @@ def get_fact_history(db: Session, ticker: str) -> dict[str, list[FactPoint]]:
     cik = ticker_to_cik(ticker)
     if cik is None:
         return {}
+    # Polite rate-limit on the ACTUAL network fetch (cache hits above
+    # never reach here). SEC's documented ceiling is 10 req/s; the
+    # 13F scraper uses ~6/s headroom, mirrored here so a bulk backtest
+    # fetch of the whole universe stays within SEC's fair-access rule.
+    import time as _time
+    _time.sleep(0.15)
     raw = _http_get_json(_COMPANYFACTS_URL.format(cik=cik))
     if not isinstance(raw, dict):
         return {}
