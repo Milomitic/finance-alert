@@ -1,8 +1,33 @@
 # Finance Alert
 
-Local-first, single-user stock watchlist manager. A FastAPI backend serves a React SPA over a SQLite database; everything runs on the user's own machine, no cloud, no network exposure.
+**Local-first, single-user equity research & screening platform.** A FastAPI
+backend serves a React SPA over a SQLite database; everything runs on your own
+machine — no cloud, no network exposure (beyond the optional outbound calls to
+free market-data providers).
 
-Phase 1 (current) ships the catalog browser and the watchlist editor. Phase 2 will add a technical-signal alert engine; Phase 3 will add a charts/statistics dashboard.
+What started as a catalog + watchlist tool is now a full personal
+**market-intelligence dashboard**: it ingests ~1,000 global stocks nightly,
+computes a 6-pillar composite **score** per stock, ranks **top picks** and
+**movers**, tracks **superinvestor 13F holdings**, surfaces **pre-market**
+gainers/losers, an **earnings + macro calendar**, **sector** breadth, and an
+**alert engine** with Telegram digests — all behind a single login on your LAN.
+
+---
+
+## What it does
+
+| Area | Highlights |
+|---|---|
+| **Dashboard** (`/`) | Market-mood hero, per-index breadth matrix, live top-movers (15s polling), top-volume, RSI histogram, sector heatmap, 52-week/vol stats, US pre-market card, score-based top picks, superinvestor consensus, latest analyst actions |
+| **Scoring** | 6-pillar composite (Profitability · Sustainability · Growth · Value · Momentum · Sentiment), risk-tier classification, EWMA smoothing + turnover control. Weights are **IC-validated** against point-in-time data (see [docs/scoring-algorithm.md](docs/scoring-algorithm.md)) |
+| **Screener** (`/stocks`) | Filter/sort the catalog by score, sector, index, fundamentals |
+| **Stock detail** (`/stocks/:ticker`) | Candlestick chart (lightweight-charts) with adaptive indicators (SMA/EMA/RSI/MACD/BB), multi-timeframe (5m→monthly), fundamentals, valuation, analyst targets + actions, insider transactions, institutional holders, news |
+| **Institutionals** (`/institutionals`) | Superinvestor / fund 13F portfolios (SEC EDGAR), per-stock holders, dual-encoded allocation infographics, historical-holder tracking |
+| **Sectors** (`/sectors`) | Per-sector breadth, valuation, and constituent drill-down |
+| **Calendar** (`/calendar`) | Upcoming earnings (with EPS/revenue estimates + post-release surprise) and macro releases (FRED + ForexFactory consensus) |
+| **Market detail** (`/market/:symbol`) | Indices, commodities, crypto with live quotes + charts |
+| **Alerts** (`/alerts`) | Configurable technical-signal rules, edge-triggered nightly, on-screen feed + optional Telegram digest |
+| **Platform health** (`/health`) | Live status of every external data source, rate-limit usage, circuit-breaker state |
 
 ---
 
@@ -10,11 +35,13 @@ Phase 1 (current) ships the catalog browser and the watchlist editor. Phase 2 wi
 
 - **Python 3.11+**
 - **Node.js 20+** (with `npm`)
-- **[uv](https://docs.astral.sh/uv/)** — Python package manager (`winget install astral-sh.uv` on Windows)
-- **[just](https://github.com/casey/just)** — task runner (`winget install Casey.Just` on Windows)
+- **[uv](https://docs.astral.sh/uv/)** — Python package manager (`winget install astral-sh.uv`)
+- **[just](https://github.com/casey/just)** — task runner (`winget install Casey.Just`)
 - **Git**
 
-On Windows, the recipes work from **PowerShell** or **cmd** out of the box (the `justfile` declares `set windows-shell := ["cmd.exe", "/C"]`). The `just up` recipe uses platform-specific recipe attributes (`[unix]` / `[windows]`) so it works on both.
+On Windows the recipes run from **PowerShell** or **cmd** (the `justfile`
+declares `set windows-shell := ["cmd.exe", "/C"]`). The `just up` recipe uses
+`[unix]` / `[windows]` attributes so it works on both.
 
 ---
 
@@ -26,122 +53,172 @@ git clone <your-remote> finance-alert
 cd finance-alert
 
 # 2. Copy the env template into backend/ (where pydantic-settings reads it)
-#    Linux/macOS/Git Bash:    cp .env.example backend/.env
-#    Windows PowerShell:      Copy-Item .env.example backend/.env
+#    Git Bash / Linux / macOS:  cp .env.example backend/.env
+#    Windows PowerShell:        Copy-Item .env.example backend/.env
 
 # 3. Install backend + frontend deps and bootstrap the DB
-#    (runs alembic upgrade head, generates SECRET_KEY if empty,
-#     seeds the 4 indices and ~79 stocks)
+#    (alembic upgrade head, generate SECRET_KEY if empty, seed indices + stocks)
 just install
 
-# 4. Set the admin password — the script hashes it, writes it to
-#    backend/.env, AND creates/updates the user in the DB in one go
+# 4. Set the admin password (hashes it, writes to backend/.env, upserts the DB user)
 just set-password
 
 # 5. Start the dev servers (backend :8000, frontend :5173)
 just up
 ```
 
-Open <http://localhost:5173> and log in with `admin` / the password you just set.
+Open <http://localhost:5173> and log in with `admin` / your password.
+
+> **First scan** backfills ~250 days of OHLCV for the whole catalog (~5-10 min
+> via yfinance batch download) and computes the first scores. Subsequent nightly
+> scans take 30-90s. The first run may emit many "initial-state" alerts — bulk-
+> archive them in `/alerts`.
 
 ---
 
-## Fase 2: Alert engine (live)
+## Configuration
 
-The app continuously scans ~700 catalogued stocks (US S&P 500 / NASDAQ-100 /
-DJIA + EuroStoxx 50 + SSE 50 + Hang Seng top 30 + FTSE MIB) every night
-at 23:30 Europe/Rome, evaluates 4 pre-installed rules per stock with
-edge-trigger semantics, and sends a single Telegram digest the next
-morning at 08:00.
+All settings live in `backend/.env` (template: [`.env.example`](.env.example)).
+**Every external data source is optional** — the app degrades gracefully when a
+key is missing (the feature that needs it simply shows "n/d" or falls back to
+another source).
 
-### Pre-installed global rules (Tier 1)
+| Variable | Required | Purpose |
+|---|---|---|
+| `SECRET_KEY` | auto-generated | Signs the session cookie |
+| `ADMIN_USERNAME` / `ADMIN_PASSWORD_HASH` | yes (via `just set-password`) | Single-user login |
+| `FRED_API_KEY` | optional | Macro series (CPI, unemployment, rates…) — free from [FRED](https://fred.stlouisfed.org/docs/api/api_key.html) |
+| `FINNHUB_API_KEY` | optional | Earnings actuals + company news + analyst upgrade/downgrade + recommendation trends — free from [Finnhub](https://finnhub.io) (60 req/min) |
+| `MARKETAUX_API_KEY` | optional | News fallback (100 req/day free; quota-guarded + circuit-broken) |
+| `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` | optional | Daily alert digest |
+| `SCAN_HOUR` / `SCAN_MINUTE` | default 23:30 | Nightly scan time (Europe/Rome) |
+| `DIGEST_HOUR` / `DIGEST_MINUTE` | default 08:00 | Telegram digest time |
 
-| Kind | Default params |
-|---|---|
-| RSI Oversold | period=14, threshold=30 |
-| RSI Overbought | period=14, threshold=70 |
-| Golden Cross | fast=50, slow=200 |
-| Death Cross | fast=50, slow=200 |
+**Feature flags (environment):**
 
-Modify globally via `PATCH /api/rules/{id}`. Override per watchlist
-from the WatchlistDetailPage (3 states per kind: Default global /
-Disabled / Custom params).
+- `SCORE_ENGINE_XS=1` enables the cross-sectional (sector-relative) scoring
+  engine. **Left OFF by default** — IC validation showed sector-neutralisation
+  degrades the predictive signal on this universe (see scoring docs).
 
 ### Telegram setup (optional)
 
-1. Talk to `@BotFather` on Telegram, `/newbot`, get a `BOT_TOKEN`.
+1. `@BotFather` → `/newbot` → get a `BOT_TOKEN`.
 2. Open the chat with your bot, send `/start`.
-3. `curl https://api.telegram.org/bot<BOT_TOKEN>/getUpdates` → find `result[0].message.chat.id`.
-4. In `backend/.env`, set:
-   ```
-   TELEGRAM_BOT_TOKEN=<your token>
-   TELEGRAM_CHAT_ID=<your chat id>
-   ```
-5. Restart the app; click "Invia digest ora" in `/alerts` to test.
+3. `curl https://api.telegram.org/bot<BOT_TOKEN>/getUpdates` → read `result[0].message.chat.id`.
+4. Set `TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID` in `backend/.env`, restart, click
+   "Invia digest ora" in `/alerts` to test.
 
-### First-run notes
+---
 
-The first scan backfills 250 days of OHLCV for the entire catalog —
-~5-10 minutes via yfinance batch download. Subsequent daily scans
-take 30-90 seconds. The first digest may include a large number
-of "initial-state" alerts; use bulk archive in `/alerts` to clear
-them.
+## Data sources
 
-See [docs/superpowers/specs/2026-05-01-finance-alert-fase2-design.md](docs/superpowers/specs/2026-05-01-finance-alert-fase2-design.md)
-for the full design.
+The app is **multi-source with graceful fallback** — no single provider is a hard
+dependency. Each source is monitored on `/health` (success rate, rate-limit usage,
+circuit-breaker state).
+
+| Source | Used for | Limit / protection |
+|---|---|---|
+| **yfinance** (Yahoo) | Primary: OHLCV, fundamentals, live quotes, news, market cap | No documented limit; protected by a local circuit breaker |
+| **Finnhub** | Earnings actuals + company news + analyst upgrade/downgrade + recommendation buckets (fallbacks when yfinance is stale/empty) | 60 req/min; client-side rate-limiter (30/min organic) + 5-min breaker |
+| **Marketaux** | News fallback (last resort, after yfinance + Finnhub) | 100/day; 12h per-ticker cache + soft 85/day budget + UTC-midnight breaker |
+| **SEC EDGAR** | 13F institutional filings; **point-in-time fundamentals** via XBRL companyfacts (for backtesting/score validation) | Polite ~6 req/s; persistent breaker |
+| **FRED** | Macro series for the calendar | 120 req/min |
+| **ForexFactory** | Macro consensus (expected values) | XML weekly; 6h on-disk fallback cache |
+| **Nasdaq** (unofficial) | Pre-market volume enrichment | Best-effort, US pre-market window only |
+
+Circuit-breaker state persists across restarts (`backend/data/breakers.json`), so a
+tripped breaker isn't blanked by a reload.
+
+---
+
+## The scoring system
+
+Each stock gets a **composite score 0-100** = weighted blend of six pillars, each
+itself 0-100 with missing-data renormalization (a pillar with no data is dropped
+and the remaining weights re-normalize):
+
+| Pillar | Weight | Measures |
+|---|---|---|
+| Profitability | 0.15 | Margins, ROE/ROA (sector-aware) |
+| Sustainability | 0.15 | Balance-sheet solidity, FCF quality, earnings stability, dividend safety |
+| Growth | 0.23 | Revenue/EPS growth, beat consistency |
+| Value | 0.13 | Valuation multiples vs sector medians |
+| Momentum | 0.20 | 12-1 momentum, trend stack, distance-from-52w-high, RSI, MACD |
+| Sentiment | 0.14 | Analyst consensus + net upgrades + news tone |
+
+Stocks are classified into **risk tiers** (conservative / moderate / aggressive).
+Scores are smoothed run-over-run (EWMA) with tier hysteresis to control churn.
+
+**Weights are evidence-based, not guessed.** `app/scripts/entry_ic_report.py` is a
+read-only Information-Coefficient harness that measures each signal's predictive
+power (rank-IC vs forward returns, 5/21/63/252-day horizons) against **point-in-time**
+data — OHLCV (always PIT) plus SEC companyfacts for fundamentals. Recent retunes
+(momentum, profitability) were validated OLD-vs-NEW before being committed. Full
+detail: [docs/scoring-algorithm.md](docs/scoring-algorithm.md).
 
 ---
 
 ## Daily development
 
-| Recipe              | What it does                                                         |
-| ------------------- | -------------------------------------------------------------------- |
-| `just be`           | Run backend with `--reload` on port 8000                             |
-| `just fe`           | Run Vite dev server on port 5173 (proxies `/api` → 8000)             |
-| `just up`           | Run backend + frontend together (cross-platform via `[unix]`/`[windows]` recipes) |
-| `just test`         | `pytest` (backend) + `vitest --run` (frontend)                       |
-| `just lint`         | `ruff check` + `pyright` (backend) + `eslint` (frontend)             |
-| `just fmt`          | `ruff format` (backend) + `prettier` (frontend)                      |
-| `just migrate "msg"`| Autogenerate a new Alembic revision                                  |
-| `just migrate-apply`| `alembic upgrade head`                                               |
-| `just seed`         | Re-run the catalog seed (idempotent)                                 |
+| Recipe | What it does |
+|---|---|
+| `just be` | Backend with `--reload` on :8000 |
+| `just fe` | Vite dev server on :5173 (proxies `/api` → :8000) |
+| `just up` | Backend + frontend together |
+| `just test` | `pytest` (backend, ~580 tests) + `vitest --run` (frontend) |
+| `just lint` | `ruff check` + `pyright` + `eslint` |
+| `just fmt` | `ruff format` + `prettier` |
+| `just migrate "msg"` | Autogenerate an Alembic revision |
+| `just migrate-apply` | `alembic upgrade head` |
+| `just seed` | Re-run the catalog seed (idempotent) |
+| `just prod-local` | Build the SPA + serve everything from one uvicorn on :8000 |
 
-The bootstrap script (`just install` calls it) is idempotent: re-running it is safe.
+`just install` is idempotent — safe to re-run on every pull.
+
+> **Windows note:** `uvicorn --reload` can miss file-change events; after a backend
+> edit, restart it explicitly. FastAPI on :8000 serves a **pre-built** `frontend/dist`
+> — rebuild (`cd frontend && npm run build`) after frontend changes before testing
+> on :8000. See [CLAUDE.md](CLAUDE.md) for the full operational playbook.
 
 ---
 
 ## Production-local mode
 
-A single uvicorn process serves both the API and the built React assets — same origin, SPA fallback, no Vite dev server.
+A single uvicorn process serves the API **and** the built React assets (same origin,
+SPA fallback, no Vite dev server):
 
 ```bash
-just prod-local
-```
-
-Equivalent to:
-
-```bash
-cd frontend && npm run build
-cd ../backend && uv run uvicorn app.main:app --port 8000
+just prod-local         # = cd frontend && npm run build ; cd ../backend && uv run uvicorn app.main:app --port 8000
 ```
 
 Then open <http://localhost:8000>.
+
+### LAN access (e.g. from your phone)
+
+Bind to all interfaces and reach the dashboard from another device on the same Wi-Fi:
+
+```bash
+cd backend && uv run uvicorn app.main:app --host 0.0.0.0 --port 8000
+# → http://<your-LAN-IP>:8000  (find it with `ipconfig` / `ip addr`)
+```
+
+`0.0.0.0` listens on every local interface but stays behind your router's NAT — it
+is **not** exposed to the internet without explicit port-forwarding. You may need to
+allow Python through the Windows Firewall on Private networks the first time.
 
 ---
 
 ## Windows auto-start (optional)
 
-Schedule the app to launch at user logon via Windows Task Scheduler. Scripts live in `scripts/windows/` and do **not** require admin privileges.
+Launch the app at logon via Task Scheduler (no admin needed). Scripts in
+`scripts/windows/`:
 
 ```powershell
-# Register the scheduled task (creates "Finance Alert" in Task Scheduler)
-powershell -ExecutionPolicy Bypass -File scripts\windows\Register-FinanceAlertStartup.ps1
-
-# Remove it
-powershell -ExecutionPolicy Bypass -File scripts\windows\Unregister-FinanceAlertStartup.ps1
+powershell -ExecutionPolicy Bypass -File scripts\windows\Register-FinanceAlertStartup.ps1    # register
+powershell -ExecutionPolicy Bypass -File scripts\windows\Unregister-FinanceAlertStartup.ps1  # remove
 ```
 
-`Run-FinanceAlert.ps1` is what the task invokes; it boots `prod-local` with rotated logs into `backend/data/logs/`.
+`Run-FinanceAlert.ps1` boots `prod-local` with rotated logs into `backend/data/logs/`.
 
 ---
 
@@ -149,11 +226,9 @@ powershell -ExecutionPolicy Bypass -File scripts\windows\Unregister-FinanceAlert
 
 ```bash
 git pull
-just install        # re-syncs deps and runs bootstrap
-just migrate-apply  # apply any new Alembic revisions
+just install        # re-syncs deps + bootstrap
+just migrate-apply  # apply new Alembic revisions
 ```
-
-`just install` is safe to re-run on every pull.
 
 ---
 
@@ -161,82 +236,88 @@ just migrate-apply  # apply any new Alembic revisions
 
 ```
 finance-alert/
-├── backend/                  # FastAPI app
+├── backend/                         # FastAPI app
 │   ├── app/
-│   │   ├── api/              # routers: auth, catalog, stocks, watchlists
-│   │   ├── core/             # config, db, logging, security, sessions
-│   │   ├── models/           # SQLAlchemy models
-│   │   ├── schemas/          # Pydantic schemas
-│   │   ├── services/         # business logic (auth, seed, stocks, watchlists, refresh)
-│   │   ├── scheduler/        # APScheduler jobs (weekly Wikipedia refresh)
-│   │   ├── scripts/          # bootstrap, seed, set_admin_password
-│   │   ├── data/             # bundled seed CSV
-│   │   └── main.py           # FastAPI app + lifespan
-│   ├── alembic/              # migrations
-│   ├── tests/                # pytest suite (48 tests)
-│   └── data/                 # SQLite DB + logs (gitignored)
-├── frontend/                 # React + Vite SPA
+│   │   ├── api/                     # routers: auth, dashboard, stocks, scores,
+│   │   │                            #   institutionals, sectors, calendar, market,
+│   │   │                            #   alerts, rules, price_alerts, platform_health…
+│   │   ├── core/                    # config, db, logging, security, breaker_state
+│   │   ├── indicators/              # ema, sma, rsi, macd, bb, atr, adx
+│   │   ├── models/                  # SQLAlchemy models
+│   │   ├── schemas/                 # Pydantic schemas
+│   │   ├── services/                # ~60 modules: score_service, market_stats_service,
+│   │   │                            #   stock_fundamentals_service, live_quote_service,
+│   │   │                            #   premarket_service, institutional_service,
+│   │   │                            #   finnhub_*, marketaux_*, sec_*, fred, probes…
+│   │   ├── scheduler/jobs/          # APScheduler: scan_alerts, send_digest,
+│   │   │                            #   refresh_catalog/fred/institutionals/sec_13f/
+│   │   │                            #   premarket/imminent_earnings, health_probes…
+│   │   ├── scripts/                 # bootstrap, seed, set_admin_password,
+│   │   │                            #   entry_ic_report (scoring IC harness),
+│   │   │                            #   remove_sse50, one-off maintenance
+│   │   ├── data/seed/               # bundled index-constituent CSVs
+│   │   └── main.py                  # FastAPI app + lifespan (cache hydrate, scheduler)
+│   ├── alembic/versions/            # migrations
+│   ├── tests/                       # pytest suite (~580 tests)
+│   └── data/                        # SQLite DB, logs, runtime state (gitignored)
+├── frontend/                        # React 19 + Vite SPA
 │   └── src/
-│       ├── pages/            # routes
-│       ├── components/       # UI (shadcn/ui based)
-│       ├── hooks/            # autosave, query hooks
-│       ├── api/              # typed fetch client
-│       └── lib/              # helpers
-├── docs/
-│   ├── ARCHITECTURE.md       # living technical reference
-│   └── superpowers/
-│       ├── specs/            # design spec
-│       └── plans/            # implementation plan
-├── scripts/windows/          # PowerShell scripts (auto-start)
-├── justfile                  # task runner recipes
-└── .env.example              # environment template
+│       ├── pages/                   # routes (Home, Stocks, StockDetail, Sectors,
+│       │                            #   Institutionals, Calendar, Market, Alerts, Health…)
+│       ├── components/dashboard/    # dashboard cards (movers, breadth, premarket, picks…)
+│       ├── components/stock/        # stock-detail cards (chart, fundamentals, analysts…)
+│       ├── components/ui/           # shadcn/ui primitives + shared (CardSkeleton, FlashValue…)
+│       ├── hooks/                   # TanStack Query hooks, live-quote polling, price-flash
+│       ├── api/                     # typed fetch client + response types
+│       └── lib/                     # formatters, meta maps, helpers
+├── docs/                            # ARCHITECTURE.md, scoring-algorithm.md, calendar-page.md
+├── scripts/windows/                 # PowerShell auto-start
+├── justfile                         # task runner
+├── CLAUDE.md                        # operational playbook + accumulated gotchas
+└── .env.example                     # environment template
 ```
 
 ---
 
 ## Tech stack
 
-**Backend**
+**Backend** — Python 3.11+ · FastAPI · uvicorn · SQLAlchemy 2.0 + Alembic ·
+SQLite (WAL) · APScheduler · pydantic-settings · loguru · pandas/numpy ·
+yfinance · requests/httpx · bcrypt + itsdangerous · pytest · ruff · pyright
 
-- Python 3.11+, FastAPI, uvicorn
-- SQLAlchemy 2.0 + Alembic
-- SQLite (WAL mode)
-- APScheduler (in-process cron)
-- pydantic-settings, loguru
-- pandas + lxml (Wikipedia HTML scraping)
-- bcrypt + itsdangerous (auth + signed cookie sessions)
-- pytest, ruff, pyright
+**Frontend** — React 19 + TypeScript · Vite 8 · TailwindCSS + shadcn/ui ·
+TanStack Query 5 · React Router · React Hook Form + Zod · lightweight-charts ·
+Recharts · vitest · eslint · prettier
 
-**Frontend**
+**Tooling** — `uv`, `just`.
 
-- React 18 + TypeScript
-- Vite
-- TailwindCSS + shadcn/ui
-- TanStack Query
-- React Router
-- React Hook Form + Zod
-- vitest, eslint, prettier
+---
 
-**Tooling**: `uv`, `just`.
+## Testing
+
+```bash
+just test                                   # backend + frontend
+cd backend && uv run pytest tests/ -x -q    # backend only (~580 tests, ~40s)
+cd frontend && npm run build                # type-check + production build
+```
 
 ---
 
 ## Documentation
 
-- [Design spec](docs/superpowers/specs/2026-04-30-finance-alert-fase1-design.md) — what we're building and why
-- [Implementation plan](docs/superpowers/plans/2026-04-30-finance-alert-fase1.md) — task breakdown for Phase 1
-- [Architecture reference](docs/ARCHITECTURE.md) — living technical doc, updated on every merge that touches architecture/data model/dependencies
-
----
-
-## Roadmap
-
-- **Phase 1 (done)** — Catalog + watchlist editor. Auth, models, API, autosave UI, weekly Wikipedia refresh, prod-local mode, Windows auto-start.
-- **Phase 2** — Alert engine: configurable technical signals (e.g. crossings, threshold breaks) evaluated on a schedule with on-screen + system notifications.
-- **Phase 3** — Dashboard: per-watchlist statistics, candle/line charts (Recharts + lightweight-charts), historical-quote ingestion.
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — living technical reference (data
+  model, flows, caching, scheduler, scoring engine internals)
+- [docs/scoring-algorithm.md](docs/scoring-algorithm.md) — the 6-pillar composite,
+  per-pillar formulas, and the IC-validation methodology
+- [docs/calendar-page.md](docs/calendar-page.md) — earnings + macro calendar design
+- [CLAUDE.md](CLAUDE.md) — operational playbook (backend restart discipline, dist
+  rebuild rules, known data quirks)
 
 ---
 
 ## License / personal-use note
 
-This is a personal, single-user, local-first project. No license is granted for redistribution; no warranty is provided. Run it on your own machine at your own risk.
+Personal, single-user, local-first project. No license is granted for
+redistribution; no warranty is provided. Market data is fetched from third-party
+providers under their respective free-tier terms — respect their rate limits. Run
+it on your own machine at your own risk; nothing here is investment advice.

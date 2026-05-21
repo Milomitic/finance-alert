@@ -6,6 +6,26 @@ anything else in this repo.**
 
 ---
 
+## ✅ Commit & push automatically (standing user instruction, 2026-05)
+
+**The user has explicitly opted in to auto-commit + auto-push.** After
+completing a coherent unit of work (a feature, fix, refactor, or doc update),
+**commit it and push to `origin/master` without being asked** — this overrides
+the generic "only commit when explicitly asked" default.
+
+Guidelines:
+- Commit at natural completion points (work builds + tests pass), not mid-edit.
+- Group related changes into one logical commit with a descriptive message;
+  split unrelated work into separate commits.
+- Follow the existing message style and the `Co-Authored-By` trailer.
+- After any `frontend/` change: rebuild `dist` per the post-commit hygiene
+  checklist below BEFORE telling the user it's ready.
+- Still NEVER force-push, skip hooks, amend shared history, or commit secrets.
+- If something genuinely shouldn't be committed yet (broken/experimental),
+  say so explicitly rather than committing it.
+
+---
+
 ## ⚠️ Backend restart: ignore the OLD task's "failed" notification
 
 **The most common time-waster.** Every backend restart produces a misleading

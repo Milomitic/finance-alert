@@ -1,83 +1,99 @@
 # Stock Scoring Algorithm
 
-A composite score per stock (0–100) computed from fundamentals, technicals,
-analyst sentiment, and news activity. Surfaced via dashboard "Top Picks"
-and a per-stock breakdown card on the detail page.
+A composite score per stock (0–100) from fundamentals, technicals, analyst
+data, and news. Surfaced via dashboard "Top Picks" + a per-stock breakdown
+card on the detail page.
+
+> **Source of truth = `backend/app/services/score_service.py`.** This doc
+> describes the model conceptually; the exact piecewise-linear ramps, sector
+> blends, and weights live in code (they evolve via IC-validated retunes — see
+> the methodology section). The weights below are current as of 2026-05.
 
 ---
 
 ## Composite score (0–100)
 
-Weighted average of five sub-scores, each itself 0–100:
+Weighted average of **six pillars**, each itself 0–100 (`PILLAR_WEIGHTS`):
 
-| Sub-score | Weight | What it measures                                   |
-|-----------|--------|----------------------------------------------------|
-| Quality   | 25%    | Margin profile, returns on capital, balance sheet  |
-| Growth    | 25%    | Top/bottom-line growth, earnings beat consistency  |
-| Value     | 15%    | Valuation multiples vs benchmarks                  |
-| Momentum  | 20%    | Price trend + technical signals                    |
-| Sentiment | 15%    | Analyst consensus + news activity                  |
+| Pillar | Weight | What it measures |
+|---|---|---|
+| Profitability  | 0.15 | Margins, ROE/ROA — sector-aware (vs peer median) |
+| Sustainability | 0.15 | Balance-sheet solidity, FCF quality, earnings stability, dividend safety |
+| Growth         | 0.23 | Revenue/EPS growth (QoQ/YoY/5Y), earnings-beat consistency |
+| Value          | 0.13 | Valuation multiples vs sector medians |
+| Momentum       | 0.20 | 12-1 momentum, trend stack, distance-from-52w-high, RSI, MACD |
+| Sentiment      | 0.14 | Analyst consensus, net upgrades, news tone |
 
-NULL sub-scores (missing data) are excluded and remaining weights
-re-normalized — a stock with no analyst coverage still gets a composite
-from the other four pillars.
+(Profitability + Sustainability replaced the original single "Quality" pillar.)
 
-The composite is rounded to the nearest 0.1 for display.
+**Missing-data renormalization** (`_aggregate`): a pillar — or a component
+within a pillar — with no input is *excluded*, and the remaining weights
+re-normalize. A stock with no analyst coverage still gets a composite from the
+other five pillars; it is never penalized to zero for a gap.
+
+Composite rounded to 0.1 for display. Stored composite is **EWMA-smoothed**
+run-over-run with risk-tier hysteresis (`_apply_turnover_control`) to control
+churn, and modulated by a bounded **risk-overlay factor** (vol/beta).
 
 ---
 
-## Sub-score formulas
+## Pillar internals (conceptual)
 
-Each formula maps raw values to a 0–100 component score using piecewise-linear
-ramps. Caps are intentional — the goal is "good / not good" signal, not
-ranking by absolute magnitude.
+Each component maps a raw value to a 0–100 score via a piecewise-linear ramp
+(`_ramp` / `_ramp3`) or a sector-aware blend (`_blended_hib` / `_blended_lib`:
+absolute ramp blended with the value's distance from the sector median). The
+goal is a "good / not good" signal, not ranking by raw magnitude.
 
-### Quality (max 100)
+- **Profitability** — gross_margin (0.30, top signal) · ROA (0.26) · ROE (0.18)
+  · net margin (0.14) · operating margin (0.12). Weights IC-retuned: margin
+  *levels* were demoted (flat/negative long-horizon IC), gross_margin + ROA
+  promoted (validated positive).
+- **Sustainability** — debt/equity, current/quick ratio, FCF positive, FCF/NI,
+  earnings stability (5y), margin trend (3y), dividend coverage + payout
+  sanity, Yahoo overall_risk. (A durability/risk filter, not an alpha source.)
+- **Growth** — revenue & EPS growth (QoQ/YoY/5Y) with collinearity collapse,
+  earnings-beat ratio. (rev_yoy is the strongest fundamental signal by IC.)
+- **Value** — P/E and P/B vs sector medians, multiple-blend, dividend lane.
+- **Momentum** — 12-1 (Jegadeesh-Titman skip-month, top weight) · trend stack
+  (EMA20>50>200) · price vs EMA200 · distance-from-52w-high · 30-day return
+  (contrarian: short-term reversal) · 90-day · RSI · MACD · Bollinger · ADX ·
+  relative strength vs S&P (US only).
+- **Sentiment** — analyst price-target upside · net upgrades−downgrades (90d) ·
+  short interest · news tone.
 
-| Component       | Max pts | Full when      | Half when    | Zero when    |
-|-----------------|---------|----------------|--------------|--------------|
-| ROE             | 30      | ≥ 20%          | 10%          | ≤ 0%         |
-| Profit margin   | 25      | ≥ 20%          | 10%          | ≤ 0%         |
-| Free cash flow  | 20      | > 0            | —            | ≤ 0          |
-| Debt/Equity     | 15      | ≤ 50%          | 100%         | ≥ 200%       |
-| Current ratio   | 10      | ≥ 2            | 1            | ≤ 0.7        |
+The component breakdown (raw input + score + weight per component) is persisted
+in `stock_scores.breakdown` so the UI can render a transparent "why this score".
 
-### Growth (max 100)
+---
 
-| Component                    | Max pts | Full when | Half when | Zero when    |
-|------------------------------|---------|-----------|-----------|--------------|
-| Revenue growth (YoY)         | 35      | ≥ 20%     | 0%        | ≤ -10%       |
-| EPS growth (YoY)             | 35      | ≥ 20%     | 0%        | ≤ -10%       |
-| Earnings-beat ratio (last 4) | 30      | 4/4 beats | 2/4       | 0/4          |
+## IC-validation methodology (how weights are set)
 
-### Value (max 100)
+Weights are **evidence-based, not guessed.** `app/scripts/entry_ic_report.py`
+is a read-only Information-Coefficient harness:
 
-| Component       | Max pts | Logic                                                                |
-|-----------------|---------|----------------------------------------------------------------------|
-| P/E (TTM)       | 40      | Below sector median = full; above = scaled down. Use static sector medians table for V1 |
-| PEG             | 30      | ≤ 1 = full, 2 = 50%, ≥ 3 = 0                                         |
-| Dividend yield  | 30      | > 3% = full, 0% = 0; minor weight (not all stocks pay dividends)     |
+- For each candidate signal, at a monthly grid of historical observation dates,
+  it computes the per-date Spearman **rank-IC** vs forward returns at
+  **5 / 21 / 63 / 252-day** horizons (averaged across dates — not pooled, to
+  avoid autocorrelation inflation), plus decile spread and hit rate.
+- **Point-in-time discipline**: technical signals use OHLCV (inherently PIT);
+  fundamental signals use SEC EDGAR companyfacts keyed on the `filed` date
+  (`sec_fundamentals_history.py`) so a 2019 backtest sees only what was public
+  in 2019 — no look-ahead.
+- **Market-neutral**: forward returns are demeaned per date for the decile /
+  conditional-return analyses, so they measure signal edge, not market drift.
+- Retunes are validated **OLD-vs-NEW** before commit (e.g. the momentum retune
+  lifted pillar IC +25-35% across horizons; the profitability retune flipped
+  the 1-year IC from negative to positive).
 
-### Momentum (max 100)
-
-| Component                | Max pts | Logic                                                |
-|--------------------------|---------|------------------------------------------------------|
-| 52-week change           | 30      | ≥ 50% = full, 0% = 50%, ≤ -30% = 0                   |
-| RSI                      | 20      | 30–70 = 50%, oversold (< 30) = 80% (bounce), overbought (> 70) = 20% |
-| MACD trend (line vs sig) | 20      | line > signal AND hist > 0 = full; else 0            |
-| 30-day momentum          | 30      | ≥ 10% = full, 0% = 50%, ≤ -10% = 0                   |
-
-### Sentiment (max 100)
-
-| Component                          | Max pts | Logic                                       |
-|------------------------------------|---------|---------------------------------------------|
-| Analyst price-target upside        | 50      | ≥ 20% above current = full, 0% = 50%, ≤ -10% = 0 |
-| Recent upgrades − downgrades (90d) | 30      | ≥ +3 net upgrades = full, 0 = 50%, ≤ -3 = 0 |
-| News volume (last 30d)             | 20      | ≥ 20 articles = full, 0 = 0 (linear)        |
-
-NLP-based news *sentiment* (positive/negative tone) is **out of scope for V1** —
-adds infrastructure (model hosting, batch processing) without clear ROI.
-News *volume* is a coarse proxy: more coverage ≈ more attention.
+Key findings driving the current model:
+- Momentum (12-1) is the strongest single factor (IC ~0.05, IR ~0.27 @63d).
+- 30-day return is a *reversal* (negative IC) → scored contrarian.
+- Margin *levels* (net/operating) are flat-to-negative long-horizon; gross
+  margin + ROA + rev_yoy are the validated fundamental signals.
+- **Sector-relative ranking degrades** every predictive signal on this
+  universe → the cross-sectional engine (`SCORE_ENGINE_XS`) stays **OFF**.
+- Naive entry-timing setups (breakout/pullback via classic TA) had **negative**
+  edge → no separate entry-timing pillar was built.
 
 ---
 
@@ -102,20 +118,25 @@ New table `stock_scores`:
 
 ```sql
 CREATE TABLE stock_scores (
-    stock_id     INTEGER PRIMARY KEY REFERENCES stocks(id) ON DELETE CASCADE,
-    composite    REAL NOT NULL,
-    quality      REAL,
-    growth       REAL,
-    value        REAL,
-    momentum     REAL,
-    sentiment    REAL,
-    risk_tier    VARCHAR(16) NOT NULL,
-    computed_at  DATETIME WITH TIMEZONE NOT NULL,
-    breakdown    TEXT NOT NULL  -- JSON: per-component raw inputs + points
+    stock_id        INTEGER PRIMARY KEY REFERENCES stocks(id) ON DELETE CASCADE,
+    composite       REAL NOT NULL,
+    profitability   REAL,
+    sustainability  REAL,
+    growth          REAL,
+    value           REAL,
+    momentum        REAL,
+    sentiment       REAL,
+    risk_tier       VARCHAR(16) NOT NULL,
+    computed_at     DATETIME WITH TIMEZONE NOT NULL,
+    breakdown       TEXT NOT NULL  -- JSON: per-pillar components (raw+score+weight),
+                                   --   _meta (coverage), _meta_global, _xs annotations
 );
 CREATE INDEX ix_stock_scores_composite ON stock_scores(composite DESC);
 CREATE INDEX ix_stock_scores_risk_tier ON stock_scores(risk_tier);
 ```
+
+> A legacy `quality` column may persist for back-compat (= avg of
+> profitability + sustainability); current code reads the 6 split pillars.
 
 `breakdown` stores the per-component inputs + points so the UI can show a
 transparent "why this score" view without re-fetching upstream data.
@@ -128,16 +149,18 @@ A score is **stale** if its `computed_at` is older than the most recent of:
 - The stock's most recent OHLCV bar
 - The stock's last fundamentals fetch (`stock_fundamentals_service` cache)
 
-Triggers (order of priority):
-1. **At end of `scan_runner` success path** — recompute all stocks (~1132)
-   in one pass. Each computation is in-memory arithmetic + a fundamentals
-   lookup; should run in well under a minute.
-2. **After `warmup_fundamentals`** — same batch recompute.
-3. **Manual**: `POST /api/admin/recompute-scores` for testing or when a
-   user wants fresh values without waiting for the next scan.
+Triggers:
+1. **End of the nightly `scan_alerts` job** — `recompute_all` re-scores the
+   whole catalog (~1,000 stocks) in a two-phase pass (sector-stats pre-pass →
+   per-stock score). Fundamentals come from the L1/L2 cache, so it's mostly
+   in-memory arithmetic + OHLCV indicator computation.
+2. **Manual**: `POST /api/scores/recompute` (background task; progress at
+   `GET /api/scores/recompute-status`, cancel via `POST /api/scores/recompute-stop`)
+   — the dashboard "Ricalcola" button. Also `POST /api/stocks/{ticker}/score/recompute`
+   for a single stock.
 
-The batch recompute is a single transaction with `UPSERT` semantics
-(via `INSERT ... ON CONFLICT(stock_id) DO UPDATE`).
+`recompute_all` persists incrementally with `db.merge()` UPSERT semantics and
+applies the EWMA turnover-control + cross-sectional annotation passes at the end.
 
 ---
 
@@ -154,24 +177,28 @@ ScoreCard component.
   "ticker": "AAPL",
   "composite": 78.4,
   "sub_scores": {
-    "quality":   85.2,
-    "growth":    62.0,
-    "value":     45.8,
-    "momentum":  88.9,
-    "sentiment": 91.3
+    "profitability":  82.1,
+    "sustainability": 75.3,
+    "growth":         62.0,
+    "value":          45.8,
+    "momentum":       88.9,
+    "sentiment":      91.3
   },
   "risk_tier": "moderate",
-  "computed_at": "2026-05-04T15:13:39Z",
+  "computed_at": "2026-05-22T15:13:39Z",
   "breakdown": {
-    "quality": {
-      "roe":           {"raw": 0.27, "points": 30, "max": 30},
-      "profit_margin": {"raw": 0.24, "points": 25, "max": 25},
-      "fcf":           {"raw": 102e9, "points": 20, "max": 20},
-      "debt_equity":   {"raw": 145.2, "points": 7.5, "max": 15},
-      "current_ratio": {"raw": 0.92, "points": 2.0, "max": 10}
+    "profitability": {
+      "gross_margin":     {"raw": 0.46, "score": 92.0, "weight": 0.30, "present": true, "sector_median": 0.41},
+      "roa":              {"raw": 0.28, "score": 100.0, "weight": 0.26, "present": true},
+      "roe":              {"raw": 1.50, "score": 100.0, "weight": 0.18},
+      "profit_margin":    {"raw": 0.25, "score": 100.0, "weight": 0.14},
+      "operating_margin": {"raw": 0.31, "score": 100.0, "weight": 0.12},
+      "_meta":            {"coverage": 1.0}
     },
-    "growth": { ... },
-    ...
+    "growth": { "...": "..." },
+    "momentum": { "...": "..." },
+    "_meta_global": {"coverage": 0.95},
+    "_xs": {"composite": 80.1, "flag_on": false}
   }
 }
 ```
@@ -180,7 +207,8 @@ ScoreCard component.
 
 Returns top picks. Query params:
 - `risk` — `conservative` | `moderate` | `aggressive` (omit for all)
-- `category` — `composite` (default) | `quality` | `growth` | `value` | `momentum` | `sentiment`
+- `category` — `composite` (default) | `profitability` | `sustainability` | `growth` | `value` | `momentum` | `sentiment`
+- top picks are confidence-gated: stocks with `breakdown._meta_global.coverage < 0.70` are excluded
 - `limit` — default 10, max 50
 
 ```json

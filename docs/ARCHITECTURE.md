@@ -2,51 +2,85 @@
 
 > Documento vivo. **Aggiornare ad ogni commit che modifica architettura, flussi, modello dati, dipendenze esterne, o policy operative.** Vedi §10 (Policy di manutenzione).
 
-**Ultimo aggiornamento**: 2026-05-02
-**Roadmap update 2026-05-02**: Fase 3D (Multi-channel notifiers) rimossa dal piano — out of scope.
-**Stato applicazione**: Fase 1 in production. Fase 2 (alert engine) implemented. Fase 3A (Dashboard Home) implemented. Fase 3A-bis (Market Dashboard redesign) implemented. Fase 3B (Stock Detail) implemented.
+**Ultimo aggiornamento**: 2026-05-22
+**Stato applicazione**: in production come **piattaforma di research/screening
+azionario** single-user. Tutte le fasi 1-3 implementate ed estese ben oltre il
+piano originale. Sottosistemi attivi: scoring composito 6-pilastri (IC-validato),
+dashboard di mercato, screener, stock-detail con chart, calendario earnings+macro,
+istituzionali/13F, pre-market USA, alert engine + digest Telegram, salute
+piattaforma. Le **watchlist sono state rimosse** (lo screener `/stocks` + lo
+scoring le hanno rese superflue) — vedi nota in §4.
+
+> Le sezioni §4 (modello dati) e §5 (flussi) descrivono il **nucleo originale
+> Fase 1/2** e restano in gran parte valide; per i sottosistemi aggiunti dopo
+> (scoring, fonti dati, istituzionali, pre-market, fondamentali PIT) vedi la
+> nuova **§3.5 Sottosistemi attuali**.
 
 ---
 
 ## 1. Panoramica
 
-Applicazione web full-stack single-user per:
+Applicazione web full-stack single-user per la **ricerca e selezione azionaria**.
+Ingerisce ~1.000 titoli globali ogni notte, ne calcola uno **score composito**,
+e li espone attraverso una dashboard di mercato, uno screener, pagine di
+dettaglio ricche e un motore di alert. Funzioni principali:
 
-- Catalogare e selezionare azioni in watchlist tematiche
-- **(Fase 2 — implementato)** Monitorare segnali tecnici e inviare alert Telegram
-- **(Fase 3A — implementato)** Dashboard riepilogativa su `/` con KPI, grafico alert/giorno, top 10 stock, feed alert recenti, stato sistema
-- **(Fase 3A-bis — implementato)** Dashboard ridisegnata: hero strip (mood + KPI globali) + matrice breadth per-indice (7×11) + 4-col grid (movers tabbed/RSI histogram/sectors heatmap/52w-vol tabbed) + treemap mkt-cap × performance + alerts compact panel + system status footer slim. Snapshot pre-computato in `market_snapshot` rigenerato a fine scan (~0.75s su 201 stock)
-- **(Fase 3B — implementato)** Pagina Stock Detail su `/stocks/:ticker` con candlestick chart (lightweight-charts), indicatori SMA/RSI, drawing tools (H-line persistite in localStorage), price-target alerts (nuovo dominio `PriceAlert` + edge-trigger evaluator integrato in scan_runner non-fatal), news headlines via yfinance (cache TTL 1h), vista read-only delle regole effettive (Tier 1 + override Tier 2). SpotlightCards reali in HomePage (top gainer + most-alerted-7d + vol spike) al posto del placeholder
-- (Fase 3C+) Indicatori avanzati (MACD/BB/ATR/ADX), settings, hit-rate stats per regola
+- **Scoring** — score composito 0-100 per titolo da 6 pilastri (Profitability ·
+  Sustainability · Growth · Value · Momentum · Sentiment), classificazione in
+  risk-tier, smoothing EWMA con isteresi. Pesi **validati sull'Information
+  Coefficient** vs dati point-in-time (vedi §3.5 e `docs/scoring-algorithm.md`).
+- **Dashboard** (`/`) — hero mood + KPI globali, matrice breadth per-indice,
+  top-movers con polling live 15s su pool ampio, top-volume, RSI histogram,
+  sector heatmap, 52w/vol, card pre-market USA, top-pick per score, consensus
+  superinvestor, ultime azioni analisti. Snapshot pre-computato in
+  `market_snapshot` a fine scan.
+- **Screener** (`/stocks`) — filtro/ordina il catalogo per score/settore/indice/
+  fondamentali (ha soppiantato le watchlist).
+- **Stock detail** (`/stocks/:ticker`) — candlestick (lightweight-charts) con
+  indicatori adattivi al range (SMA/EMA/RSI/MACD/BB), multi-timeframe (5m→mensile),
+  fondamentali, valutazione, target+azioni analisti, insider, holder
+  istituzionali, news.
+- **Istituzionali** (`/institutionals`) — portafogli 13F superinvestor/fondi
+  (SEC EDGAR), holder per-stock, infografiche allocation dual-encoded.
+- **Settori** (`/sectors`), **Calendario** (`/calendar`, earnings+macro),
+  **Market detail** (`/market/:symbol`, indici/commodity/crypto live),
+  **Alert** (`/alerts`, regole tecniche edge-triggered + digest Telegram),
+  **Salute piattaforma** (`/health`, stato di ogni fonte dati).
 
-**Modello di deployment**: locale sul PC dell'utente (Windows 11). Nessun cloud, nessuna esposizione di rete.
+**Modello di deployment**: locale sul PC dell'utente (Windows 11). Nessun cloud,
+nessuna esposizione di rete (oltre alle chiamate outbound opzionali ai provider
+free di dati di mercato). Accesso LAN opzionale bindando su `0.0.0.0`.
 
 ## 2. Stack tecnologico
 
 ```
 ┌─ Frontend ──────────────────────────────────────┐
-│ React 18 + TypeScript                           │
-│ Vite (bundler / dev server)                     │
+│ React 19 + TypeScript                           │
+│ Vite 8 (bundler / dev server)                   │
 │ TailwindCSS + shadcn/ui                         │
-│ TanStack Query (server state)                   │
+│ TanStack Query 5 (server state)                 │
 │ React Router                                    │
 │ React Hook Form + Zod                           │
-│ Recharts (Fase 3) + lightweight-charts (Fase 3) │
+│ lightweight-charts (candle) + Recharts          │
 └─────────────────────────────────────────────────┘
               ↕ HTTP /api (JSON, cookie session)
 ┌─ Backend ───────────────────────────────────────┐
 │ Python 3.11+                                    │
 │ FastAPI                                         │
 │ SQLAlchemy 2.0 + Alembic (migrations)           │
-│ APScheduler (in-process)                        │
+│ APScheduler (in-process cron)                   │
 │ pydantic-settings, loguru                       │
-│ pandas + lxml (HTML scraping)                   │
-│ yfinance + numpy (OHLCV fetch)                  │
+│ pandas + numpy (metrics, indicators)            │
+│ yfinance (primary market data)                  │
+│ requests / httpx (Finnhub, Marketaux, FRED,     │
+│   SEC EDGAR, ForexFactory, Nasdaq)              │
 │ bcrypt + itsdangerous (auth)                    │
 └─────────────────────────────────────────────────┘
-              ↕ SQLAlchemy
+              ↕ SQLAlchemy / two-tier cache (L1 dict + L2 fetch_cache)
 ┌─ Storage ───────────────────────────────────────┐
 │ SQLite (file ./backend/data/app.db, WAL mode)   │
+│ fetch_cache table (L2 persistent payload cache) │
+│ Runtime state: breakers.json, ff_calendar.xml   │
 │ Filesystem logs ./backend/data/logs/            │
 └─────────────────────────────────────────────────┘
 ```
@@ -85,10 +119,17 @@ Un solo processo. FastAPI serve sia API che assets React buildati.
 │ │ └── /*     → StaticFiles(frontend/dist)    │   │
 │ │             SPA fallback → index.html      │   │
 │ └────────────────────────────────────────────┘   │
-│ APScheduler                                      │
-│ ├── refresh_catalog (weekly Sat 03:00)           │
-│ ├── scan_alerts    (daily 23:30)                 │
-│ └── send_digest    (daily 08:00)                 │
+│ APScheduler (in-process cron)                    │
+│ ├── scan_alerts          (daily 23:30 → score    │
+│ │     recompute + market snapshot + alert eval)  │
+│ ├── send_digest          (daily 08:00, Telegram) │
+│ ├── refresh_catalog      (weekly, Wikipedia)     │
+│ ├── refresh_fred         (every 2h, macro)       │
+│ ├── refresh_institutionals + refresh_sec_13f     │
+│ ├── refresh_imminent_earnings (Finnhub calendar) │
+│ ├── refresh_premarket    (*/5 in US PM window)   │
+│ ├── health_probes_fast/slow (5m / 30m)           │
+│ └── cleanup_orphan_scans, dedupe_stocks          │
 │ ./backend/data/app.db                            │
 └────────────────────▲─────────────────────────────┘
                      │
@@ -99,7 +140,84 @@ Avvio:
 - Manuale: `just prod-local`
 - Automatico al logon Windows: Task Scheduler → `Run-FinanceAlert.ps1` (vedi §8)
 
+## 3.5 Sottosistemi attuali
+
+Aggiunti dopo il nucleo Fase 1/2. Ognuno ha il proprio servizio in
+`backend/app/services/` e (dove serve) job schedulato + router API.
+
+### 3.5.1 Scoring engine (`score_service.py`)
+
+Score composito 0-100 per titolo = media pesata di 6 pilastri (vedi §1 e
+`docs/scoring-algorithm.md`), ciascuno 0-100 con **rinormalizzazione dei pesi
+sui pilastri presenti** (un pilastro senza dati viene escluso, non azzerato).
+Caratteristiche:
+
+- **Sector-aware**: i pilastri value/profitability/growth confrontano il titolo
+  con la mediana del suo settore (`_build_sector_stats` pre-pass).
+- **EWMA + isteresi**: lo score e il risk-tier sono smoothed run-over-run per
+  controllare il churn (`_apply_turnover_control`).
+- **Risk overlay**: fattore vol/beta bounded che modula il composite.
+- **Cross-sectional engine** (`_apply_cross_sectional_engine`, flag
+  `SCORE_ENGINE_XS`): percentile sector-relative + shrinkage bayesiano.
+  **Disattivato di default** — la validazione IC ha mostrato che degrada il
+  segnale predittivo su questo universo.
+- **Validazione IC**: `app/scripts/entry_ic_report.py` è un harness read-only
+  che misura l'Information Coefficient (rank-IC vs forward return a 5/21/63/252
+  giorni) di ogni segnale contro dati **point-in-time**, e confronta retune
+  OLD-vs-NEW prima del commit. Persistenza score in `stock_scores`.
+
+### 3.5.2 Layer fonti dati (multi-source con fallback)
+
+Nessun provider è dipendenza hard. Pipeline e protezioni:
+
+- **News**: yfinance → Finnhub → Marketaux (in ordine di larghezza-quota).
+- **Analyst actions**: yfinance `upgrades_downgrades` + Finnhub upgrade/downgrade
+  (deduplicati per firm+data±3g) + estrazione regex dalle news (con gate di
+  presenza-ticker e fetch del corpo articolo come last-resort).
+- **Earnings**: yfinance + Finnhub actuals (più veloci a popolarsi).
+- **Macro**: FRED (serie) + ForexFactory (consensus, con cache su disco 6h).
+- **13F**: SEC EDGAR submissions/infotable.
+- **Fondamentali point-in-time**: SEC EDGAR XBRL companyfacts
+  (`sec_fundamentals_history.py`) — usa il campo `filed` come marcatore PIT.
+- **Pre-market**: yfinance prepost + arricchimento volume via endpoint Nasdaq.
+
+**Protezioni** (`data_source_metrics.py`, `probes.py`, `breaker_state.py`):
+circuit breaker per-fonte **persistente tra restart** (`breakers.json`),
+rate-limiter client-side, budget giornaliero soft, probe di reachability con
+elision intelligente. Tutto monitorato su `/health`.
+
+### 3.5.3 Cache a due livelli
+
+- **L1**: dict in-process (microsecondi), idratato all'avvio da L2.
+- **L2**: tabella `fetch_cache` (una riga per `(ticker, kind)`, payload JSON),
+  sopravvive ai restart. `stock_fundamentals_service` e `stock_news_service`
+  seguono `L1 hit → L2 hit → upstream` con UPSERT su successo. Gli errori NON
+  vengono persistiti (un fallimento transitorio non avvelena la cache 24h).
+
+### 3.5.4 Live quote + pre-market
+
+- `live_quote_service`: quote near-real-time (TTL 10s), batch **parallelizzato**
+  (ThreadPool) per pool ampi; prev_close derivato dall'OHLCV per correggere i
+  `previousClose` errati di yfinance. La dashboard polla i top-movers ogni 15s
+  su un pool ampio (unione di tutte le liste mover) così nuovi mover possono
+  emergere.
+- `premarket_service`: top gainer/loser USA pre-market, warm-on-boot + job
+  schedulato nella finestra PM; la card è visibile solo quando i dati sono freschi.
+
 ## 4. Modello dati
+
+> **Nota stato (2026-05):** l'ERD Fase-1 sotto mostra il nucleo storico. Le
+> **watchlist sono state rimosse** (tabelle `watchlists`/`watchlist_items`
+> deprecate; lo screener `/stocks` + lo scoring le hanno rese superflue — le
+> regole "Tier 2" per-watchlist non esistono più, restano solo le regole
+> globali Tier 1). Tabelle **aggiunte** dopo la Fase 1, oltre a quelle in
+> "Aggiunte Fase 2": `stock_scores` (composito + sub-score + breakdown JSON +
+> risk_tier), `market_snapshot` (dashboard pre-computata), `fetch_cache` (L2
+> payload cache), `scan_runs` (storico scan), `institutionals` +
+> `institutional_filings` + `institutional_holdings` (13F), `macro_series` +
+> `macro_observations` + `macro_release_dates` (FRED/calendario),
+> `price_alerts`, `rule_states`. Il catalogo `stocks` ha duplicati noti per
+> ~12 ticker (i read-path usano `.limit(1).scalars().first()` — vedi CLAUDE.md).
 
 ERD (Fase 1):
 
@@ -447,6 +565,8 @@ Questo file è **vincolante**: ogni commit che introduce uno dei seguenti cambia
 
 | Data | Commit | Cambiamento |
 |---|---|---|
+| 2026-05-22 | (docs) | **Documentazione aggiornata allo stato attuale.** README riscritto come "piattaforma di research/screening" (non più "watchlist editor"); ARCHITECTURE §1/§2/§3.5 aggiornate (scoring engine IC-validato, layer fonti dati multi-source con breaker persistenti, cache L1/L2, live-quote/pre-market); nota in §4 su watchlist rimosse + tabelle aggiunte (stock_scores, market_snapshot, fetch_cache, institutionals/13F, macro_*, scan_runs, price_alerts); `.env.example` con chiavi FRED/Finnhub/Marketaux + flag SCORE_ENGINE_XS; `docs/scoring-algorithm.md` riscritto a 6 pilastri + metodologia IC. |
+| 2026-05 | (vari) | **Estensioni post-Fase-3** (sintesi): scoring engine 6-pilastri sector-aware con EWMA + risk overlay + retune momentum/profitability validati su IC point-in-time (harness `entry_ic_report.py`); fondamentali point-in-time da SEC companyfacts (`sec_fundamentals_history.py`); istituzionali/13F (SEC EDGAR) con pagine `/institutionals`; pre-market USA (`premarket_service` + card); calendario earnings+macro (FRED + Finnhub + ForexFactory); fonti dati Finnhub (earnings/news/upgrades/recommendations) + Marketaux (news fallback) con rate-limiter/quota-guard/circuit-breaker persistenti; cache a due livelli L1/L2; live-quote batch parallelizzato + polling top-movers su pool ampio; pagina Salute piattaforma `/health`; rimozione watchlist e SSE50. ~580 test. |
 | 2026-04-30 | 6fd274a | Fase 1 complete: 30 tasks across 10 sections (A-J) shipped. Backend (FastAPI + SQLAlchemy + APScheduler + 48 tests) and frontend (React + Vite + shadcn + autosave) deliver an end-to-end watchlist editor over a seeded catalog with weekly Wikipedia refresh. README finalized; Windows auto-start scripts ready. |
 | 2026-04-30 | initial | Creazione documento, descrizione architettura Fase 1 (in pianificazione) |
 | 2026-04-30 | 0ffebfb | Schema persisted via Alembic migration. SQLite tables: users, stocks, indices, stock_indices, watchlists, watchlist_items, catalog_refresh_log. WAL mode active via SQLAlchemy connect-listener. |
