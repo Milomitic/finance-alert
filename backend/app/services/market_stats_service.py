@@ -411,6 +411,23 @@ def build_movers(
     top_volume = _dedupe_by_ticker(
         sorted(with_abs_vol, key=lambda m: m.vol_today, reverse=True)
     )[:top_n]
+    # Top by DOLLAR (notional) turnover — vol_today × price, converted to
+    # USD so it's comparable across markets. This is the "where did the
+    # money actually flow" view: raw share-count ranking over-represents
+    # cheap instruments (penny stocks, inverse leveraged ETFs like
+    # SOXS/TZA trade enormous share counts at a few dollars), while the
+    # high-priced bull twins (SOXL/TNA) move far more dollars on fewer
+    # shares. The dashboard card toggles between the two.
+    with_dollar_vol = [
+        m for m in metrics if m.vol_today is not None and m.last_close is not None
+    ]
+
+    def _usd_notional(m: StockMetrics) -> float:
+        return (m.vol_today or 0) * (to_usd(m.last_close, m.currency) or 0.0)
+
+    top_dollar_volume = _dedupe_by_ticker(
+        sorted(with_dollar_vol, key=_usd_notional, reverse=True)
+    )[:top_n]
     new_highs = _dedupe_by_ticker([m for m in metrics if m.new_52w_high])
     new_lows = _dedupe_by_ticker([m for m in metrics if m.new_52w_low])
 
@@ -453,6 +470,14 @@ def build_movers(
             "sparkline": m.sparkline,
             "vol_today": m.vol_today,
             "vol_ratio": round(m.vol_ratio, 2) if m.vol_ratio is not None else None,
+            # Dollar (notional) turnover in USD — vol_today × USD price.
+            # Powers the "Controvalore" view of the volume card; None when
+            # either share count or price is missing.
+            "dollar_volume": (
+                round(m.vol_today * (to_usd(m.last_close, m.currency) or 0.0))
+                if m.vol_today is not None and m.last_close is not None
+                else None
+            ),
             "composite": scores.get(m.stock_id),
         }
 
@@ -479,6 +504,9 @@ def build_movers(
         # needed. The list itself is still ranked by absolute share
         # volume, that hasn't changed.
         "top_volume": [_row(m) for m in top_volume],
+        # Same rows as top_volume but ranked by USD notional turnover —
+        # the dashboard volume card toggles between share-count and this.
+        "top_dollar_volume": [_row(m) for m in top_dollar_volume],
         "new_52w_high": [_row(m) for m in new_highs],
         "new_52w_low": [_row(m) for m in new_lows],
         # Leveraged-bull ETFs + highest-volatility names — always live-

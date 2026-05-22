@@ -1,6 +1,6 @@
 import { Activity } from "lucide-react";
 import { Link } from "react-router-dom";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
 import type { MoversBlock } from "@/api/types";
 import {
@@ -11,9 +11,12 @@ import { StockIdentity } from "@/components/dashboard/StockIdentity";
 import { Card, CardContent } from "@/components/ui/card";
 import { FlashValue } from "@/components/ui/FlashValue";
 import { SectionTitle } from "@/components/ui/section-title";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useLiveQuotes } from "@/hooks/useLiveQuote";
 import { projectVolRatio } from "@/lib/intradayVolume";
 import { cn } from "@/lib/utils";
+
+type VolMode = "dollar" | "shares";
 
 interface Props {
   movers: MoversBlock;
@@ -60,13 +63,27 @@ interface Props {
  */
 export function LiveVolumeMoversCard({ movers, computedAt }: Props) {
   const ROWS_VISIBLE = 10;
-  // Use the new `top_volume` list (ranked by absolute share-volume).
-  // Falls back to the legacy `volume_spikes` (ranked by ratio) when
-  // the snapshot pre-dates the field, so older snapshots still
-  // render something useful instead of an empty card.
-  const sourceRows = (movers.top_volume?.length ?? 0) > 0
-    ? movers.top_volume!
-    : (movers.volume_spikes ?? []);
+  // Default to DOLLAR (notional) turnover — "where the money flowed".
+  // Raw share-count over-represents cheap instruments (inverse leveraged
+  // ETFs like SOXS/TZA trade huge share counts at a few dollars while
+  // their high-priced bull twins SOXL/TNA move far more dollars on fewer
+  // shares), so the share view alone is misleading. The toggle keeps both.
+  const [mode, setMode] = useState<VolMode>("dollar");
+
+  // Show dollar ranking only when the backend actually provided the
+  // dollar-ranked list (older snapshots predate it) — otherwise fall
+  // back to the share view so the figure and the ordering stay consistent.
+  const hasDollar = (movers.top_dollar_volume?.length ?? 0) > 0;
+  const showDollar = mode === "dollar" && hasDollar;
+
+  // Source list per view. Dollar → top_dollar_volume; shares → the
+  // share-ranked top_volume (legacy volume_spikes fallback for very old
+  // snapshots so the card still renders something).
+  const sourceRows = showDollar
+    ? movers.top_dollar_volume!
+    : (movers.top_volume?.length ?? 0) > 0
+      ? movers.top_volume!
+      : (movers.volume_spikes ?? []);
   const rows = sourceRows.slice(0, ROWS_VISIBLE);
   const tickers = useMemo(() => rows.map((r) => r.ticker), [rows]);
   const liveQ = useLiveQuotes(tickers, tickers.length > 0);
@@ -98,7 +115,29 @@ export function LiveVolumeMoversCard({ movers, computedAt }: Props) {
           <SectionTitle
             icon={Activity}
             label="Volumi maggiori oggi"
-            right={<MarketStateBadge phase={phase} />}
+            right={
+              <div className="flex items-center gap-2">
+                <MarketStateBadge phase={phase} />
+                <Tabs value={mode} onValueChange={(v) => setMode(v as VolMode)}>
+                  <TabsList className="h-6 p-0.5">
+                    <TabsTrigger
+                      value="dollar"
+                      className="h-5 text-[10px] px-1.5"
+                      title="Ordina per controvalore scambiato (volume × prezzo, convertito in USD) — la vera dimensione del flusso di denaro"
+                    >
+                      $
+                    </TabsTrigger>
+                    <TabsTrigger
+                      value="shares"
+                      className="h-5 text-[10px] px-1.5"
+                      title="Ordina per numero di azioni scambiate (favorisce i titoli a basso prezzo)"
+                    >
+                      Vol
+                    </TabsTrigger>
+                  </TabsList>
+                </Tabs>
+              </div>
+            }
           />
         </div>
 
@@ -118,6 +157,10 @@ export function LiveVolumeMoversCard({ movers, computedAt }: Props) {
               // vol_ratio but no vol_today — handle both shapes.
               const volToday =
                 "vol_today" in r ? (r as { vol_today?: number }).vol_today ?? null : null;
+              const dollarVol =
+                "dollar_volume" in r
+                  ? (r as { dollar_volume?: number | null }).dollar_volume ?? null
+                  : null;
               const rawVolRatio =
                 "vol_ratio" in r ? (r as { vol_ratio?: number | null }).vol_ratio ?? null : null;
               // Project to end-of-day using the intraday cum-volume
@@ -204,20 +247,27 @@ export function LiveVolumeMoversCard({ movers, computedAt }: Props) {
                       />
                     </span>
 
-                    {/* Col 3: absolute volume — the actual ranking
-                        criterion. Formatted as compact 12.4M / 1.2B.
-                        Bumped from text-[11px] to text-sm with a wider
-                        column so the figure stays comfortably readable
-                        at typical viewport widths. */}
+                    {/* Col 3: the ranking criterion. In "$" mode it's the
+                        USD notional turnover ("$9.2B" — where the money
+                        flowed); in "Vol" mode it's the raw share count
+                        ("250M"). The tooltip always shows BOTH so the
+                        cross-reference is one hover away. */}
                     <div
                       className="hidden sm:block shrink-0 text-sm font-semibold tabular-nums text-foreground/80 min-w-[68px] text-right"
                       title={
-                        volToday != null
-                          ? `${volToday.toLocaleString("it-IT")} share scambiate oggi`
-                          : undefined
+                        [
+                          dollarVol != null
+                            ? `Controvalore ≈ $${Math.round(dollarVol).toLocaleString("it-IT")}`
+                            : null,
+                          volToday != null
+                            ? `${volToday.toLocaleString("it-IT")} share scambiate oggi`
+                            : null,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ") || undefined
                       }
                     >
-                      {fmtVolume(volToday)}
+                      {showDollar ? fmtDollar(dollarVol) : fmtVolume(volToday)}
                     </div>
 
                     {/* Col 4: vol multiplier (vs 20-day avg).
@@ -276,6 +326,18 @@ export function fmtVolume(v: number | null): string {
   if (v >= 1e6) return `${(v / 1e6).toFixed(1)}M`;
   if (v >= 1e3) return `${(v / 1e3).toFixed(0)}k`;
   return v.toString();
+}
+
+/** Render USD notional turnover as compact "$9.2B" / "$340M". Mirrors
+ *  fmtVolume but money-prefixed and with a T tier (whole-market days).
+ *  null → em-dash. */
+export function fmtDollar(v: number | null): string {
+  if (v == null || !Number.isFinite(v)) return "—";
+  if (v >= 1e12) return `$${(v / 1e12).toFixed(1)}T`;
+  if (v >= 1e9) return `$${(v / 1e9).toFixed(1)}B`;
+  if (v >= 1e6) return `$${(v / 1e6).toFixed(1)}M`;
+  if (v >= 1e3) return `$${(v / 1e3).toFixed(0)}k`;
+  return `$${v.toFixed(0)}`;
 }
 
 /** Composite score chip — color-coded by tier so the card shows

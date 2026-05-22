@@ -344,6 +344,9 @@ export interface Mover {
    *  the reader whether today's volume is unusual. Same value as on
    *  `VolumeSpike` / `TopVolume`. Optional. */
   vol_ratio?: number | null;
+  /** USD notional turnover (vol_today × USD price). Powers the volume
+   *  card's "Controvalore" view. Optional — older snapshots lack it. */
+  dollar_volume?: number | null;
   /** Latest persisted composite score (0-100). Optional — null when
    *  the score service hasn't yet processed the stock. */
   composite?: number | null;
@@ -376,6 +379,9 @@ export interface MoversBlock {
   /** Optional — older market_snapshot rows didn't include this list.
    *  Falls back to empty when missing. */
   top_volume?: TopVolume[];
+  /** Same rows as top_volume but ranked by USD notional turnover. The
+   *  volume card toggles between share-count and this. Optional. */
+  top_dollar_volume?: TopVolume[];
   new_52w_high: Mover[];
   new_52w_low: Mover[];
   /** Leveraged-bull ETFs (SOXL/TNA…) + highest-volatility names. Folded

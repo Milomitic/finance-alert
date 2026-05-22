@@ -67,6 +67,9 @@ class MoverOut(BaseModel):
     # snapshot payloads without these keys still validate.
     vol_today: int | None = None
     vol_ratio: float | None = None
+    # USD notional turnover (vol_today × USD price). Powers the volume
+    # card's "Controvalore" ranking. Optional for back-compat.
+    dollar_volume: float | None = None
     composite: float | None = None
 
 
@@ -97,6 +100,9 @@ class MoversBlockOut(BaseModel):
     # existed; the lazy migration in `api/market.py` keeps older rows
     # readable, and the next scan repopulates this list.
     top_volume: list[TopVolumeOut] = []
+    # Same shape as top_volume, ranked by USD notional turnover instead
+    # of raw share count. Default [] for snapshots persisted before it.
+    top_dollar_volume: list[TopVolumeOut] = []
     new_52w_high: list[MoverOut]
     new_52w_low: list[MoverOut]
     # Leveraged-bull ETFs (SOXL/TNA…) + highest-volatility names. The
