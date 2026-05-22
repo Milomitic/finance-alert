@@ -1,5 +1,5 @@
 import { AlertCircle } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 
 import type { LiveQuote, OhlcvBar, PriceAlert } from "@/api/types";
@@ -131,6 +131,12 @@ export default function StockDetailPage() {
   const [mode, setMode] = useState<DrawingMode>("none");
   const [pendingPrice, setPendingPrice] = useState<number | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  // Line tool: the first clicked point, awaiting the second click that
+  // completes the trend line. Cleared whenever we leave "trend" mode.
+  const [pendingTrend, setPendingTrend] = useState<{ x: number; y: number } | null>(null);
+  useEffect(() => {
+    if (mode !== "trend") setPendingTrend(null);
+  }, [mode]);
 
   // Chart-sync orchestrator: PriceChart + RsiPanel + MacdPanel each
   // register with this on mount, the hook then forwards every pan/zoom
@@ -142,7 +148,7 @@ export default function StockDetailPage() {
   const onIndicatorChange = (key: IndicatorKey, next: IndicatorStyle) =>
     setIndicators((prev) => ({ ...prev, [key]: next }));
 
-  const handleChartClick = (price: number) => {
+  const handleChartClick = (price: number, time?: number) => {
     if (mode === "alert") {
       setPendingPrice(price);
       setDialogOpen(true);
@@ -150,6 +156,20 @@ export default function StockDetailPage() {
     } else if (mode === "hline") {
       drawings.addHorizontal(Math.round(price * 100) / 100);
       setMode("none");
+    } else if (mode === "trend") {
+      // Two-click line: capture the first (time, price), then on the
+      // second click commit the segment and exit the tool. `time` is the
+      // bar's UTC-seconds timestamp; clicks off the data range are ignored.
+      if (time == null) return;
+      if (!pendingTrend) {
+        setPendingTrend({ x: time, y: price });
+      } else if (time !== pendingTrend.x) {
+        // Need two DISTINCT bars — a same-bar (vertical) segment has
+        // duplicate timestamps which a line series can't render.
+        drawings.addTrend(pendingTrend.x, pendingTrend.y, time, price);
+        setPendingTrend(null);
+        setMode("none");
+      }
     }
   };
 
@@ -273,29 +293,35 @@ export default function StockDetailPage() {
       <div className="grid lg:grid-cols-[1fr_480px] gap-3">
         <Card>
           <CardContent className="p-4">
-            {/* Toolbar: range on the left, indicators row, drawing tools on the right.
-                Each row breaks independently when the card narrows. */}
-            <div className="space-y-2 mb-3">
-              <div className="flex items-center justify-between flex-wrap gap-2">
-                <RangeSelector
-                  value={range}
-                  onChange={(r) => setSearchParams({ range: r })}
-                />
-                <DrawingToolbar
-                  mode={mode}
-                  onSetMode={setMode}
-                  onClearAll={drawings.clearAll}
-                />
-              </div>
-              <div className="flex items-center gap-2 px-2 py-1.5 rounded-md bg-muted/30 border border-border/50">
-                <span className="text-[13px] uppercase tracking-wider font-bold text-muted-foreground shrink-0">
+            {/* Single-row toolbar: timeframe (left) · indicatori (middle) ·
+                strumenti di disegno (right). Wraps gracefully when the
+                card narrows. */}
+            <div className="flex items-center flex-wrap gap-x-3 gap-y-2 mb-3">
+              <RangeSelector
+                value={range}
+                onChange={(r) => setSearchParams({ range: r })}
+              />
+              <div className="h-5 w-px bg-border hidden md:block" />
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="text-[11px] uppercase tracking-wider font-bold text-muted-foreground shrink-0">
                   Indicatori
                 </span>
-                <div className="h-4 w-px bg-border" />
                 <IndicatorToggles
                   state={indicators}
                   onChange={onIndicatorChange}
                   periods={d.indicators.periods}
+                />
+              </div>
+              <div className="flex items-center gap-2 ml-auto">
+                {mode === "trend" && (
+                  <span className="text-[11px] font-medium text-blue-600 animate-pulse whitespace-nowrap">
+                    {pendingTrend ? "Clicca il 2° punto" : "Clicca il 1° punto"}
+                  </span>
+                )}
+                <DrawingToolbar
+                  mode={mode}
+                  onSetMode={setMode}
+                  onClearAll={drawings.clearAll}
                 />
               </div>
             </div>
@@ -326,6 +352,7 @@ export default function StockDetailPage() {
                   }}
                   priceAlerts={priceAlerts}
                   horizontalDrawings={drawings.drawings.horizontal}
+                  trendDrawings={drawings.drawings.trend}
                   onChartClick={handleChartClick}
                   onReady={registerChart}
                   timeframe={range}

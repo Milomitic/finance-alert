@@ -144,7 +144,7 @@ export function RsiPanel({ rsi14, color = "#7c3aed", width = 2, onReady }: Props
       price: 50, color: "rgba(100,116,139,0.4)", lineWidth: 1, lineStyle: 1, axisLabelVisible: false,
     });
 
-    const unregister = onReady?.(chart);
+    const unregister = onReady?.(chart, { series: lineRef.current ?? undefined });
     return () => {
       unregister?.();
       chart.remove();

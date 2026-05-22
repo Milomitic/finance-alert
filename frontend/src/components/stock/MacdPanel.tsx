@@ -71,7 +71,7 @@ export function MacdPanel({ line, signal, hist, color = "#ef4444", width = 2, on
       lineStyle: 2,
       axisLabelVisible: false,
     });
-    const unregister = onReady?.(chart);
+    const unregister = onReady?.(chart, { series: lineRef.current ?? undefined });
     return () => {
       unregister?.();
       chart.remove();

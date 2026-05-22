@@ -22,7 +22,13 @@ interface Props {
   };
   priceAlerts: PriceAlert[];
   horizontalDrawings?: { id: string; price: number }[];
-  onChartClick?: (price: number) => void;
+  /** Trend lines drawn by the "Linea" tool — each connects two
+   *  (time, price) points. Rendered as a 2-point line series. */
+  trendDrawings?: { id: string; x1: number; y1: number; x2: number; y2: number }[];
+  /** Chart click → (price, time). `time` is the UTC-seconds timestamp of
+   *  the bar under the cursor (undefined off-axis); the Line tool needs
+   *  it to anchor a trend line's X coordinate. */
+  onChartClick?: (price: number, time?: number) => void;
   /** Optional chart-sync registration. When the parent provides this,
    *  the chart's pan/zoom propagates to the RSI / MACD sub-panels (and
    *  vice-versa) so the time axis stays anchored across the stack. */
@@ -83,13 +89,12 @@ function pointsToChartData(points: IndicatorPoint[] | undefined) {
     .map((p) => ({ time: dateToTime(p.date), value: p.value as number }));
 }
 
-/** OHLC tooltip state. Tracking position via x/y lets us flip the
- *  tooltip to the opposite side of the cursor near the chart edge,
- *  preventing it from clipping out of view. */
-interface TooltipState {
-  visible: boolean;
-  x: number;       // px from the chart container's left edge
-  y: number;       // px from top
+/** OHLC legend datum. Rendered as a FIXED legend in the chart's
+ *  top-left corner (no cursor-following popup): it shows the latest
+ *  bar by default and the hovered bar while the crosshair is over a
+ *  candle — the classic TradingView legend, so nothing ever occludes
+ *  the candles under the cursor. */
+interface LegendDatum {
   date: string;    // formatted "DD/MM/YY HH:MM" or "DD/MM/YYYY"
   open: number;
   high: number;
@@ -112,9 +117,32 @@ interface TooltipState {
   isUp: boolean;
 }
 
+/** Build a legend datum from a bar + its predecessor (for the Δ%). */
+function barToLegend(
+  bar: OhlcvBar,
+  prevBar: OhlcvBar | null,
+  timeframe: string | undefined,
+): LegendDatum {
+  const changePct =
+    prevBar && prevBar.close !== 0
+      ? ((bar.close - prevBar.close) / prevBar.close) * 100
+      : null;
+  return {
+    date: formatBarDate(bar.date, timeframe),
+    open: bar.open,
+    high: bar.high,
+    low: bar.low,
+    close: bar.close,
+    volume: bar.volume,
+    changePct,
+    isUp: bar.close >= bar.open,
+  };
+}
+
 export function PriceChart({
   ohlcv, indicators, styles,
-  priceAlerts, horizontalDrawings = [], onChartClick, onReady, timeframe,
+  priceAlerts, horizontalDrawings = [], trendDrawings = [],
+  onChartClick, onReady, timeframe,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -130,7 +158,13 @@ export function PriceChart({
   // would otherwise close over the initial `ohlcv` snapshot.
   const ohlcvRef = useRef<OhlcvBar[]>([]);
   const timeframeRef = useRef<string | undefined>(timeframe);
-  const [tooltip, setTooltip] = useState<TooltipState | null>(null);
+  // The fixed top-left legend. `null` only before the first data load;
+  // afterwards it shows the latest bar (idle) or the hovered bar.
+  const [legend, setLegend] = useState<LegendDatum | null>(null);
+  // Latest bar's legend, kept in a ref so the crosshair handler can
+  // restore it when the cursor leaves the plot (handler is registered
+  // once at mount and must not close over a stale snapshot).
+  const latestLegendRef = useRef<LegendDatum | null>(null);
   // (The custom floating price badge was removed: the price is now the
   // candle series' native lastValue badge, integrated with the EMA/BB
   // badges and anti-overlap-stacked by lightweight-charts.)
@@ -235,12 +269,15 @@ export function PriceChart({
       scaleMargins: { top: 0.8, bottom: 0 },
     });
 
-    const clickHandler = (param: { point?: { x: number; y: number } }) => {
+    const clickHandler = (param: { point?: { x: number; y: number }; time?: Time }) => {
       const handler = onChartClickRef.current;
       if (!handler || !param.point || !candleRef.current) return;
       const price = candleRef.current.coordinateToPrice(param.point.y);
       if (price !== null && typeof price === "number") {
-        handler(price);
+        // Emit the bar time too — the Line tool anchors a trend line's
+        // X coordinate to it. `param.time` is undefined when the click
+        // lands off the data range.
+        handler(price, param.time as number | undefined);
       }
     };
     chart.subscribeClick(clickHandler);
@@ -251,12 +288,11 @@ export function PriceChart({
     // container-local coordinates; the JSX below positions the
     // floating tooltip with absolute offsets relative to the same
     // container. Edge-flipping is done at render time, not here.
-    const crosshairHandler = (param: {
-      time?: Time;
-      point?: { x: number; y: number };
-    }) => {
-      if (!param.time || !param.point) {
-        setTooltip(null);
+    const crosshairHandler = (param: { time?: Time }) => {
+      // Off the plot (or on a gap) → revert the legend to the latest bar
+      // instead of hiding it, so the corner always shows something.
+      if (!param.time) {
+        setLegend(latestLegendRef.current);
         return;
       }
       // We use UTCTimestamp (number) throughout via dateToTime, so the
@@ -264,40 +300,22 @@ export function PriceChart({
       // includes BusinessDay/string. Cast for the Map lookup.
       const bar = barsByTimeRef.current.get(param.time as number);
       if (!bar) {
-        setTooltip(null);
+        setLegend(latestLegendRef.current);
         return;
       }
-      // Δ% bar-over-bar (this close vs PREVIOUS close). On daily bars
-      // this is the canonical D/D return; on 30m/1h it's the period-
-      // over-period return. Reverted from the previous intra-candle
-      // (close-vs-open) semantics per user feedback — the prev-close
-      // baseline is the standard finance reading and matches the
-      // page-header chip's logic.
-      // First bar in the window has no predecessor → null.
+      // Δ% bar-over-bar (this close vs PREVIOUS close) — the canonical
+      // D/D return on daily bars, period-over-period on intraday.
       const prevBar = bar.idx > 0 ? ohlcvRef.current[bar.idx - 1] : null;
-      const changePct = prevBar && prevBar.close !== 0
-        ? ((bar.close - prevBar.close) / prevBar.close) * 100
-        : null;
-      setTooltip({
-        visible: true,
-        x: param.point.x,
-        y: param.point.y,
-        date: formatBarDate(bar.date, timeframeRef.current),
-        open: bar.open,
-        high: bar.high,
-        low: bar.low,
-        close: bar.close,
-        volume: bar.volume,
-        changePct,
-        isUp: bar.close >= bar.open,
-      });
+      setLegend(barToLegend(bar, prevBar, timeframeRef.current));
     };
     chart.subscribeCrosshairMove(crosshairHandler);
 
-    // Register with the chart-sync orchestrator so pan/zoom propagates
-    // to the RSI / MACD sub-panels. The cleanup the registrar returns
-    // is called on unmount to detach the listener cleanly.
-    const unregister = onReady?.(chart);
+    // Register with the chart-sync orchestrator so pan/zoom AND the
+    // crosshair propagate to the RSI / MACD sub-panels. Passing the
+    // candle series lets the sync read the hovered price and anchor the
+    // shared vertical line on the other panes. The cleanup the registrar
+    // returns is called on unmount to detach the listeners cleanly.
+    const unregister = onReady?.(chart, { series: candleRef.current ?? undefined });
 
     return () => {
       unregister?.();
@@ -335,6 +353,12 @@ export function PriceChart({
       map.set(dateToTime(b.date) as unknown as number, { ...b, idx });
     });
     barsByTimeRef.current = map;
+    // Seed/refresh the top-left legend with the latest bar (idle state).
+    const lastBar = ohlcv[ohlcv.length - 1];
+    const prevOfLast = ohlcv.length > 1 ? ohlcv[ohlcv.length - 2] : null;
+    const latest = lastBar ? barToLegend(lastBar, prevOfLast, timeframe) : null;
+    latestLegendRef.current = latest;
+    setLegend(latest);
     candleRef.current.setData(
       ohlcv.map((b) => ({
         time: dateToTime(b.date),
@@ -450,90 +474,85 @@ export function PriceChart({
     };
   }, [horizontalDrawings]);
 
-  // Tooltip positioning: hug the cursor with a 14px offset, but flip
-  // to the OPPOSITE side when we'd otherwise clip the right edge.
-  // Width 240 / height 180 is a generous estimate; if the actual
-  // tooltip is smaller the offset just leaves a tiny gap (acceptable).
-  // Bumped from 220/150 to fit the slightly larger fonts (text-xs →
-  // text-sm body) per user request.
-  const TT_W = 240;
-  const TT_H = 180;
-  const TT_OFFSET = 14;
-  const containerWidth = containerRef.current?.clientWidth ?? 0;
-  const containerHeight = containerRef.current?.clientHeight ?? 0;
-  const flipX = tooltip
-    ? tooltip.x + TT_OFFSET + TT_W > containerWidth
-    : false;
-  const flipY = tooltip
-    ? tooltip.y + TT_OFFSET + TT_H > containerHeight
-    : false;
-  const ttLeft = tooltip
-    ? flipX
-      ? tooltip.x - TT_OFFSET - TT_W
-      : tooltip.x + TT_OFFSET
-    : 0;
-  const ttTop = tooltip
-    ? flipY
-      ? tooltip.y - TT_OFFSET - TT_H
-      : tooltip.y + TT_OFFSET
-    : 0;
+  // Trend lines (drawn with the "Linea" tool) — each is a 2-point line
+  // series connecting the two clicked (time, price) points. Excluded
+  // from autoscale so a steep line can't blow out the price range.
+  useEffect(() => {
+    const chart = chartRef.current;
+    if (!chart) return;
+    const created = trendDrawings
+      // Skip degenerate (same-time) segments — a line series can't have
+      // two points at the same timestamp.
+      .filter((t) => t.x1 !== t.x2)
+      .map((t) => {
+        const s = chart.addLineSeries({
+          color: "#2563eb",
+          lineWidth: 2,
+          priceLineVisible: false,
+          lastValueVisible: false,
+          crosshairMarkerVisible: false,
+          autoscaleInfoProvider: () => null,
+        });
+        const pts = [
+          { time: t.x1 as UTCTimestamp, value: t.y1 },
+          { time: t.x2 as UTCTimestamp, value: t.y2 },
+        ].sort((a, b) => (a.time as number) - (b.time as number));
+        try {
+          s.setData(pts);
+        } catch {
+          // Defensive: malformed persisted drawing — don't kill the chart.
+        }
+        return s;
+      });
+    return () => {
+      created.forEach((s) => {
+        try {
+          chart.removeSeries(s);
+        } catch {
+          // chart torn down between render and cleanup — ignore.
+        }
+      });
+    };
+  }, [trendDrawings]);
+
+  // Color helper for the up/down values in the legend.
+  const upTone = "text-emerald-700 dark:text-emerald-300";
+  const downTone = "text-red-700 dark:text-red-300";
 
   return (
     <div ref={containerRef} className="w-full h-full relative">
-      {tooltip && tooltip.visible && (
-        <div
-          className={cn(
-            "absolute z-10 pointer-events-none rounded border bg-card/95 backdrop-blur-sm",
-            // text-xs → text-sm: a "leggero" bump per user feedback.
-            // Body cells, header date, all flow from this base size.
-            "shadow-md text-sm leading-snug font-mono tabular-nums",
-            "px-3 py-2.5 min-w-[220px]",
-          )}
-          style={{ left: ttLeft, top: ttTop }}
-        >
-          <div className="text-[13px] font-semibold text-muted-foreground border-b border-border/40 pb-1 mb-1.5">
-            {tooltip.date}
-          </div>
-          <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">
-            <div className="text-muted-foreground">Open</div>
-            <div className="text-right">{fmtPrice(tooltip.open)}</div>
-            <div className="text-muted-foreground">High</div>
-            <div className="text-right text-emerald-700 dark:text-emerald-300">
-              {fmtPrice(tooltip.high)}
-            </div>
-            <div className="text-muted-foreground">Low</div>
-            <div className="text-right text-red-700 dark:text-red-300">
-              {fmtPrice(tooltip.low)}
-            </div>
-            <div className="text-muted-foreground">Close</div>
-            <div
-              className={cn(
-                "text-right font-semibold",
-                tooltip.isUp
-                  ? "text-emerald-700 dark:text-emerald-300"
-                  : "text-red-700 dark:text-red-300",
-              )}
-            >
-              {fmtPrice(tooltip.close)}
-            </div>
-            <div className="text-muted-foreground">Volume</div>
-            <div className="text-right">{fmtVolume(tooltip.volume)}</div>
-          </div>
-          {tooltip.changePct !== null && (
-            <div className="border-t border-border/40 pt-1.5 mt-1.5 grid grid-cols-2 gap-x-4 gap-y-0.5">
-              <div className="text-muted-foreground">Variazione</div>
-              <div
-                className={cn(
-                  "text-right font-semibold",
-                  tooltip.changePct >= 0
-                    ? "text-emerald-700 dark:text-emerald-300"
-                    : "text-red-700 dark:text-red-300",
-                )}
-              >
-                {tooltip.changePct >= 0 ? "+" : ""}
-                {tooltip.changePct.toFixed(2)}%
-              </div>
-            </div>
+      {/* Fixed top-left legend (replaces the cursor-following popup): the
+          OHLCV of the latest bar by default, the hovered bar on
+          crosshair-move. Sits in the chart's top-left corner — under the
+          toolbar's indicators row — and never occludes the candles. */}
+      {legend && (
+        <div className="absolute top-2 left-2 z-10 pointer-events-none flex flex-wrap items-center gap-x-3 gap-y-0.5 rounded-md border bg-card/85 backdrop-blur-sm px-2.5 py-1 text-[12px] leading-tight font-mono tabular-nums shadow-sm">
+          <span className="font-semibold text-foreground/80">{legend.date}</span>
+          <span>
+            <span className="text-muted-foreground">O</span> {fmtPrice(legend.open)}
+          </span>
+          <span>
+            <span className="text-muted-foreground">H</span>{" "}
+            <span className={upTone}>{fmtPrice(legend.high)}</span>
+          </span>
+          <span>
+            <span className="text-muted-foreground">L</span>{" "}
+            <span className={downTone}>{fmtPrice(legend.low)}</span>
+          </span>
+          <span>
+            <span className="text-muted-foreground">C</span>{" "}
+            <span className={cn("font-semibold", legend.isUp ? upTone : downTone)}>
+              {fmtPrice(legend.close)}
+            </span>
+          </span>
+          <span>
+            <span className="text-muted-foreground">Vol</span> {fmtVolume(legend.volume)}
+          </span>
+          {legend.changePct !== null && (
+            <span className={cn("font-semibold", legend.changePct >= 0 ? upTone : downTone)}>
+              {legend.changePct >= 0 ? "+" : ""}
+              {legend.changePct.toFixed(2)}%
+            </span>
           )}
         </div>
       )}

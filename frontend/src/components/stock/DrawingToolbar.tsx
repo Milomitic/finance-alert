@@ -1,4 +1,4 @@
-import { Bell, Eraser, Minus, TrendingUp } from "lucide-react";
+import { Bell, Eraser, Minus, Slash } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -31,7 +31,7 @@ export function DrawingToolbar({ mode, onSetMode, onClearAll }: Props) {
   return (
     <div className="inline-flex items-center gap-2">
       <Tool target="hline" label="H-line" icon={Minus} title="Disegna una linea orizzontale al prezzo cliccato" />
-      <Tool target="trend" label="Trend" icon={TrendingUp} title="Disegna una trendline (coming soon)" />
+      <Tool target="trend" label="Linea" icon={Slash} title="Disegna una retta cliccando su due punti del grafico" />
       <Tool target="alert" label="Set alert" icon={Bell} title="Crea un price alert al prezzo cliccato" />
       <Button
         type="button" size="sm" variant="ghost" onClick={onClearAll}
