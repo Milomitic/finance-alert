@@ -7,6 +7,7 @@ from sqlalchemy import (
     ForeignKey,
     Integer,
     Numeric,
+    String,
     Text,
     func,
 )
@@ -26,6 +27,7 @@ class Alert(Base):
         SAIndex("ix_alerts_stock_id", "stock_id"),
         SAIndex("ix_alerts_read_at", "read_at"),
         SAIndex("ix_alerts_archived_at", "archived_at"),
+        SAIndex("ix_alerts_signal_name", "signal_name"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -46,6 +48,9 @@ class Alert(Base):
     # the system noticed Monday" — useful when a scan is missed or when
     # backfilling. Nullable for legacy rows from before this column existed.
     signal_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    # Set on alerts produced by the signal engine (rule_id is then None).
+    # The "kind" surfaced to the UI is derived as f"signal:{signal_name}".
+    signal_name: Mapped[str | None] = mapped_column(String(64), nullable=True)
     trigger_price: Mapped[float] = mapped_column(Numeric(12, 4), nullable=False)
     # JSON snapshot of indicator values at trigger time, e.g.
     # {"rsi": 28.4, "period": 14, "threshold": 30}
