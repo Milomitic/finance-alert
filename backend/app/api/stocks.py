@@ -3,13 +3,13 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from loguru import logger
-from sqlalchemy import select
+from sqlalchemy import desc, select
 
 from app.core.visibility import visible_country_clause
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
-from app.models import Stock, User
+from app.models import OhlcvDaily, Stock, User
 from app.schemas.alert import AlertOut
 from app.schemas.stock import (
     FilterOptionsOut, IndexOptionOut, StockOut, StockScoreRefOut,
@@ -17,14 +17,14 @@ from app.schemas.stock import (
 )
 from app.schemas.stock_detail import (
     AnalystActionOut, AnalystPriceTargetOut, AnalystRatingOut,
-    CompanyProfileOut, EffectiveRuleOut,
+    CompanyProfileOut, EffectiveRuleOut, EtfHoldingOut, EtfHoldingsOut,
     FundamentalsAnnualOut, FundamentalsEarningsOut, FundamentalsOut,
     FundamentalsQuarterlyOut, IndicatorPeriodsOut, IndicatorPointOut, IndicatorSeriesOut,
     InsiderTransactionOut, LiveQuoteOut, LiveQuotesBatchOut, MicroDataOut,
     OhlcvBarOut, StockDetailOut, StockKpisOut, StockNewsItemOut, StockNewsOut,
 )
 from app.services import (
-    live_quote_service, news_analyst_extractor,
+    etf_holdings_service, live_quote_service, news_analyst_extractor,
     stock_detail_service, stock_fundamentals_service,
     stock_news_service,
 )
@@ -544,3 +544,68 @@ def get_stock_quote(
         raise HTTPException(status_code=404, detail=f"Ticker not found: {ticker}")
     q = live_quote_service.get_quote(ticker)
     return LiveQuoteOut(**q.__dict__)
+
+
+@router.get("/{ticker}/etf-holdings", response_model=EtfHoldingsOut)
+def get_etf_holdings(
+    ticker: str,
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+) -> EtfHoldingsOut:
+    """Top components of an ETF, each enriched with the live price + day
+    variation (live-quote batch) and a short OHLCV sparkline (when the
+    holding is in our catalog). `is_etf=False` for regular equities — the
+    UI hides the view in that case."""
+    holdings = etf_holdings_service.get_holdings(db, ticker)
+    if not holdings:
+        return EtfHoldingsOut(is_etf=False, holdings=[])
+
+    symbols = [h.symbol for h in holdings]
+    quotes = live_quote_service.get_quotes_batch(symbols)
+
+    # Map symbols → catalog stock_id (tolerate duplicate ticker rows), then
+    # pull each matched symbol's last ~30 closes for the sparkline.
+    catalog_rows = db.execute(
+        select(Stock.id, Stock.ticker).where(Stock.ticker.in_(symbols))
+    ).all()
+    stock_id_by_ticker: dict[str, int] = {}
+    for sid, tk in catalog_rows:
+        stock_id_by_ticker.setdefault(tk, sid)
+
+    spark_by_ticker: dict[str, list[float]] = {}
+    for tk, sid in stock_id_by_ticker.items():
+        closes = db.execute(
+            select(OhlcvDaily.close)
+            .where(OhlcvDaily.stock_id == sid)
+            .order_by(desc(OhlcvDaily.date))
+            .limit(30)
+        ).scalars().all()
+        if closes:
+            spark_by_ticker[tk] = [float(c) for c in reversed(closes)]
+
+    out: list[EtfHoldingOut] = []
+    w_change_sum = 0.0
+    w_total = 0.0
+    for h in holdings:
+        q = quotes.get(h.symbol)
+        ok = q is not None and q.error is None
+        change = q.change_pct if ok else None
+        price = q.price if ok else None
+        currency = q.currency if q else None
+        if change is not None and h.weight > 0:
+            w_change_sum += change * h.weight
+            w_total += h.weight
+        out.append(
+            EtfHoldingOut(
+                symbol=h.symbol,
+                name=h.name,
+                weight=h.weight,
+                price=price,
+                change_pct=change,
+                currency=currency,
+                sparkline=spark_by_ticker.get(h.symbol, []),
+                in_catalog=h.symbol in stock_id_by_ticker,
+            )
+        )
+    weighted = (w_change_sum / w_total) if w_total > 0 else None
+    return EtfHoldingsOut(is_etf=True, holdings=out, weighted_change_pct=weighted)

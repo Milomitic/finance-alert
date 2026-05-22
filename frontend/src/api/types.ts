@@ -755,6 +755,28 @@ export interface Fundamentals {
   error: string | null;
 }
 
+/** One ETF component holding, enriched with live price + day variation
+ *  + a short OHLCV sparkline. Powers the stock-detail "Componenti ETF"
+ *  view. */
+export interface EtfHolding {
+  symbol: string;
+  name: string;
+  weight: number;             // fraction 0..1 of the fund
+  price: number | null;
+  change_pct: number | null;  // daily
+  currency: string | null;
+  sparkline: number[];        // last ~30 closes (catalog holdings only)
+  in_catalog: boolean;
+}
+
+export interface EtfHoldings {
+  is_etf: boolean;
+  holdings: EtfHolding[];
+  /** Weighted average of the components' day variation — proxy for the
+   *  ETF's expected move. Null when no component has a quote. */
+  weighted_change_pct: number | null;
+}
+
 export interface LiveQuote {
   ticker: string;
   price: number | null;

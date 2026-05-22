@@ -54,6 +54,29 @@ class LiveQuotesBatchOut(BaseModel):
     quotes: list[LiveQuoteOut]
 
 
+class EtfHoldingOut(BaseModel):
+    """One ETF component, enriched with live price + day variation +
+    a short OHLCV sparkline (when the holding is in our catalog)."""
+    symbol: str
+    name: str
+    weight: float                       # fraction 0..1 of the fund
+    price: float | None = None
+    change_pct: float | None = None     # daily, from the live quote
+    currency: str | None = None
+    sparkline: list[float] = []         # last ~30 closes (catalog holdings)
+    in_catalog: bool = False            # we have a Stock row for this symbol
+
+
+class EtfHoldingsOut(BaseModel):
+    """Stock-detail "Componenti ETF" payload. `is_etf=False` (empty
+    holdings) tells the UI to hide the view for regular equities."""
+    is_etf: bool
+    holdings: list[EtfHoldingOut] = []
+    # Weighted average of the components' day variation — a proxy for how
+    # the ETF should move today. None when no component has a quote.
+    weighted_change_pct: float | None = None
+
+
 class FundamentalsAnnualOut(BaseModel):
     fiscal_year_end: str
     revenue: float | None

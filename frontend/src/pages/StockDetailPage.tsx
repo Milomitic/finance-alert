@@ -35,6 +35,7 @@ import { ResizableSection } from "@/components/stock/ResizableSection";
 import { RsiPanel } from "@/components/stock/RsiPanel";
 import { StockAlertsHistoryCard } from "@/components/stock/StockAlertsHistoryCard";
 import { StockHeader } from "@/components/stock/StockHeader";
+import { EtfHoldingsCard } from "@/components/stock/EtfHoldingsCard";
 import { StockScoreCard } from "@/components/stock/StockScoreCard";
 import { TechnicalKpiCard } from "@/components/stock/TechnicalKpiCard";
 
@@ -236,6 +237,11 @@ export default function StockDetailPage() {
         kpis={d.kpis}
         ohlcv={mergedOhlcv}
       />
+
+      {/* ETF components — renders only for ETFs (null for equities), so
+          for a fund it sits right under the hero as the lead content:
+          per-component weight, trend sparkline, price + day variation. */}
+      <EtfHoldingsCard ticker={ticker} />
 
       {/* Company overview (left, 67%) + Alert storici (right, 33%).
           Equal-height row (`items-stretch`, the grid default): the
