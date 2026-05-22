@@ -7,6 +7,10 @@ import {
   ScoreChip,
   fmtVolume,
 } from "@/components/dashboard/LiveVolumeMoversCard";
+import {
+  MarketStateBadge,
+  deriveMarketPhase,
+} from "@/components/dashboard/MarketStateBadge";
 import { StockIdentity } from "@/components/dashboard/StockIdentity";
 import { Card, CardContent } from "@/components/ui/card";
 import { FlashValue } from "@/components/ui/FlashValue";
@@ -336,6 +340,13 @@ export function TopMoversCard({ movers, computedAt }: Props) {
   }, [isLive, movers, window, liveMap]);
 
   const liveActive = isLive && liveMap.size > 0;
+  // Aggregate market phase across the polled quotes → LIVE / PRE / Closed
+  // badge. During pre-market the quotes carry market_state="PRE", so the
+  // badge reads PRE and the user knows the % is the pre-open move.
+  const phase = useMemo(
+    () => deriveMarketPhase((liveQ.data?.quotes ?? []).map((q) => q.market_state)),
+    [liveQ.data],
+  );
 
   return (
     <Card className="h-full overflow-hidden">
@@ -346,18 +357,7 @@ export function TopMoversCard({ movers, computedAt }: Props) {
             label="Top movers"
             right={
               <div className="flex items-center gap-2">
-                {liveActive ? (
-                  <span
-                    className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-green-600 dark:text-green-400"
-                    title="Ranking 1G aggiornato dai prezzi live ogni 15s"
-                  >
-                    <span className="relative flex h-1.5 w-1.5">
-                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-500 opacity-75" />
-                      <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-green-500" />
-                    </span>
-                    Live
-                  </span>
-                ) : null}
+                {liveActive ? <MarketStateBadge phase={phase} /> : null}
                 <Tabs value={window} onValueChange={(v) => setWindow(v as Window)}>
                   <TabsList className="h-6 p-0.5">
                     <TabsTrigger value="1d" className="h-5 text-[10px] px-1.5" title="Variazione giornaliera — ranking live ogni 15s">1G</TabsTrigger>

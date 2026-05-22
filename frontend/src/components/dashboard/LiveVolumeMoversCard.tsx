@@ -1,8 +1,12 @@
-import { Activity, Radio } from "lucide-react";
+import { Activity } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useMemo } from "react";
 
 import type { MoversBlock } from "@/api/types";
+import {
+  MarketStateBadge,
+  deriveMarketPhase,
+} from "@/components/dashboard/MarketStateBadge";
 import { StockIdentity } from "@/components/dashboard/StockIdentity";
 import { Card, CardContent } from "@/components/ui/card";
 import { FlashValue } from "@/components/ui/FlashValue";
@@ -72,15 +76,19 @@ export function LiveVolumeMoversCard({ movers, computedAt }: Props) {
       m.set(q.ticker, {
         price: q.price ?? null,
         change_pct: q.change_pct ?? null,
-        is_open: q.market_state === "OPEN",
+        // OPEN and PRE both carry a fresh live/pre-market price → pulse.
+        is_open: q.market_state === "OPEN" || q.market_state === "PRE",
       });
     }
     return m;
   }, [liveQ.data]);
 
-  const anyMarketOpen = useMemo(
-    () => Array.from(liveByTicker.values()).some((v) => v.is_open),
-    [liveByTicker],
+  // Aggregate phase across the polled tickers → drives the LIVE/PRE/Closed
+  // badge so the user knows whether the % is regular-session, pre-market,
+  // or last EOD close.
+  const phase = useMemo(
+    () => deriveMarketPhase((liveQ.data?.quotes ?? []).map((q) => q.market_state)),
+    [liveQ.data],
   );
 
   return (
@@ -90,28 +98,7 @@ export function LiveVolumeMoversCard({ movers, computedAt }: Props) {
           <SectionTitle
             icon={Activity}
             label="Volumi maggiori oggi"
-            right={
-              anyMarketOpen ? (
-                <span
-                  className="inline-flex items-center gap-1 text-[10px] font-mono uppercase tracking-wider text-emerald-700 dark:text-emerald-300"
-                  title="Almeno un mercato è aperto — prezzi in live update ogni 15s"
-                >
-                  <span className="relative inline-flex h-1.5 w-1.5">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                    <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500" />
-                  </span>
-                  <Radio className="h-2.5 w-2.5" />
-                  LIVE
-                </span>
-              ) : (
-                <span
-                  className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground"
-                  title="Tutti i mercati visibili sono chiusi — mostro l'ultima chiusura disponibile"
-                >
-                  Closed
-                </span>
-              )
-            }
+            right={<MarketStateBadge phase={phase} />}
           />
         </div>
 
