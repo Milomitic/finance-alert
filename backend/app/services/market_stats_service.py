@@ -16,6 +16,24 @@ from app.models import Index, MarketSnapshot, OhlcvDaily, Stock
 from app.models.index import StockIndex
 from app.services.fx_service import to_usd
 
+# Bull (long) leveraged ETFs — 2×/3× daily-reset funds. They swing
+# several times harder than the market, so they're prime intraday
+# movers but, on a quiet day for their underlying, won't make the EOD
+# top-N. `build_movers` always seeds the `high_beta` list with the ones
+# present in the catalog so the dashboard keeps live-polling them every
+# 15s and they can climb into the gainers/losers columns the instant
+# they move. Inverse/bear funds (SOXS, SQQQ, TZA…) are intentionally
+# excluded — the user asked for "ETF bull"; they still surface via the
+# volume/EOD mover lists. Tickers not in the catalog are harmlessly
+# filtered out (build_movers intersects this set with live metrics).
+LEVERAGED_BULL_ETFS: frozenset[str] = frozenset({
+    "SOXL", "TNA", "TQQQ", "UPRO", "SPXL", "UDOW", "TECL", "FAS",
+    "LABU", "CURE", "NAIL", "DFEN", "DPST", "RETL", "MIDU", "YINN",
+    "ERX", "GUSH", "BOIL", "NUGT", "JNUG", "DRN", "FNGU", "BULZ",
+    "TSLL", "NVDL", "NVDU", "CONL", "AMZU", "GGLL", "MSFU", "WEBL",
+    "HIBL", "PILL", "ROM", "QLD", "SSO",
+})
+
 
 @dataclass
 class StockMetrics:
@@ -61,6 +79,13 @@ class StockMetrics:
     # change_pct/_5d/_20d nulled out so they can't surface in the
     # gainers/losers / treemap aggregates with yesterday's stale move.
     last_bar_date: date | None = None
+    # Annualized realized volatility (%) — stddev of daily returns over
+    # the last ~60 sessions, ×√252×100. A self-contained proxy for
+    # "beta molto alto": leveraged bull ETFs (SOXL/TNA = 3×) and
+    # high-beta single names top this ranking. `build_movers` uses it to
+    # seed the `high_beta` mover list (the Top-movers card's widened 15s
+    # polling pool). None when there are too few returns to estimate.
+    volatility: float | None = None
 
 
 def compute_stock_metrics(
@@ -121,6 +146,18 @@ def compute_stock_metrics(
     vol_avg_20 = float(volume.tail(20).mean()) if n >= 20 else None
     vol_ratio = (vol_today / vol_avg_20) if vol_avg_20 and vol_avg_20 > 0 else None
 
+    # Realized volatility — annualized stddev of daily returns over the
+    # last ~60 sessions. Ranks high-beta names + leveraged ETFs to the
+    # top; feeds build_movers' `high_beta` list. ddof=0 (population std)
+    # since we're describing the realized sample, not inferring a wider
+    # population. Needs >=20 returns to be meaningful.
+    daily_ret = close.pct_change().dropna()
+    vol_window = daily_ret.tail(60)
+    volatility = (
+        float(vol_window.std(ddof=0) * (252.0 ** 0.5) * 100.0)
+        if len(vol_window) >= 20 else None
+    )
+
     sparkline = [round(float(v), 4) for v in close.tail(30).tolist()]
 
     # Last bar's date — `_load_metrics` uses this to detect rows that
@@ -165,6 +202,7 @@ def compute_stock_metrics(
         has_full_data=n >= 200,
         sparkline=sparkline,
         last_bar_date=last_bar_date,
+        volatility=volatility,
     )
 
 
@@ -376,6 +414,23 @@ def build_movers(
     new_highs = _dedupe_by_ticker([m for m in metrics if m.new_52w_high])
     new_lows = _dedupe_by_ticker([m for m in metrics if m.new_52w_low])
 
+    # High-beta / leveraged-bull pool. Seeded first with the catalog's
+    # bull leveraged ETFs (SOXL/TNA/TQQQ…) so they're ALWAYS live-polled
+    # every 15s — even on a day they didn't crack the EOD top-N — then
+    # topped up with the highest realized-volatility names. Deduped with
+    # ETFs first (so they're never crowded out by the vol ranking, which
+    # they'd otherwise dominate). The Top-movers card unions this list
+    # into both its 15s polling pool and its intraday display pool, so
+    # these names can climb into the gainers/losers columns the moment
+    # they move. We pull 2×top_n by volatility so high-beta SINGLE stocks
+    # still make the cut even when leveraged ETFs occupy the very top.
+    lev_etfs = [m for m in metrics if m.ticker in LEVERAGED_BULL_ETFS]
+    with_volatility = [m for m in metrics if m.volatility is not None]
+    top_volatility = sorted(
+        with_volatility, key=lambda m: m.volatility, reverse=True
+    )[: top_n * 2]
+    high_beta = _dedupe_by_ticker(lev_etfs + top_volatility)
+
     def _row(m: StockMetrics) -> dict:
         # `vol_today`, `vol_ratio` and `composite` used to live only on
         # the `top_volume` rows. They were promoted onto the base mover
@@ -426,6 +481,9 @@ def build_movers(
         "top_volume": [_row(m) for m in top_volume],
         "new_52w_high": [_row(m) for m in new_highs],
         "new_52w_low": [_row(m) for m in new_lows],
+        # Leveraged-bull ETFs + highest-volatility names — always live-
+        # polled so they can surface as intraday movers (see comment above).
+        "high_beta": [_row(m) for m in high_beta],
     }
 
 

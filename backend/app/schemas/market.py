@@ -99,6 +99,11 @@ class MoversBlockOut(BaseModel):
     top_volume: list[TopVolumeOut] = []
     new_52w_high: list[MoverOut]
     new_52w_low: list[MoverOut]
+    # Leveraged-bull ETFs (SOXL/TNA…) + highest-volatility names. The
+    # Top-movers card folds this into its 15s live-polling pool so these
+    # high-beta names can surface intraday. Default [] for back-compat
+    # with snapshots persisted before the field existed.
+    high_beta: list[MoverOut] = []
 
 
 class TreemapLeafOut(BaseModel):

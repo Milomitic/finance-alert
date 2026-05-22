@@ -254,9 +254,11 @@ export function TopMoversCard({ movers, computedAt }: Props) {
   // names froze the live ranking (a stock outside the top-8 could
   // never rise into it because we never polled it). Widening to all
   // mover lists (1d/1w/1m gainers+losers, top-volume, volume-spikes,
-  // 52w high/low) means a name ranked #40 by EOD can climb to #1 on
-  // live prices and surface. Bounded at MAX_LIVE_TICKERS; useLiveQuotes
-  // chunks the pool into parallel <=50 requests.
+  // 52w high/low, PLUS the high-beta/leveraged-bull pool) means a name
+  // ranked #40 by EOD — or a leveraged ETF like SOXL/TNA that was flat
+  // yesterday — can climb to #1 on live prices and surface. Bounded at
+  // MAX_LIVE_TICKERS; useLiveQuotes chunks the pool into parallel
+  // <=50 requests.
   const candidateTickers = useMemo(() => {
     if (!isLive) return [];
     const seen = new Set<string>();
@@ -267,6 +269,10 @@ export function TopMoversCard({ movers, computedAt }: Props) {
       movers.gainers_20d, movers.losers_20d,
       movers.top_volume, movers.volume_spikes,
       movers.new_52w_high, movers.new_52w_low,
+      // Leveraged-bull ETFs (SOXL/TNA…) + highest-volatility names —
+      // always polled so they can climb into the live ranking even on a
+      // day they didn't make the EOD top-N.
+      movers.high_beta,
     ];
     for (const list of lists) {
       for (const m of list ?? []) {
@@ -315,6 +321,10 @@ export function TopMoversCard({ movers, computedAt }: Props) {
       movers.gainers_20d, movers.losers_20d,
       movers.top_volume, movers.volume_spikes,
       movers.new_52w_high, movers.new_52w_low,
+      // Leveraged-bull ETFs (SOXL/TNA…) + highest-volatility names —
+      // always polled so they can climb into the live ranking even on a
+      // day they didn't make the EOD top-N.
+      movers.high_beta,
     ];
     for (const list of lists) {
       for (const m of list ?? []) {

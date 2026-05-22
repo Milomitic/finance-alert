@@ -378,6 +378,11 @@ export interface MoversBlock {
   top_volume?: TopVolume[];
   new_52w_high: Mover[];
   new_52w_low: Mover[];
+  /** Leveraged-bull ETFs (SOXL/TNA…) + highest-volatility names. Folded
+   *  into the Top-movers card's 15s live-polling + intraday display
+   *  pools so these high-beta names surface intraday. Optional — older
+   *  snapshots predate it. */
+  high_beta?: Mover[];
 }
 
 export interface TreemapLeaf {
