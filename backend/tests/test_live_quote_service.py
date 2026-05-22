@@ -206,7 +206,9 @@ def test_quote_includes_market_state(monkeypatch: pytest.MonkeyPatch) -> None:
     fi = _fake_fast_info({"lastPrice": 100.0, "previousClose": 99.0, "currency": "USD"})
     _patch_yf(monkeypatch, fi)
     q = live_quote_service.get_quote("AAPL")
-    assert q.market_state in ("OPEN", "CLOSED")
+    # "PRE" is a valid state too (US pre-market window) — the test only
+    # checks the field is populated with a recognised state.
+    assert q.market_state in ("OPEN", "CLOSED", "PRE")
 
 
 def test_breaker_open_uses_eod_fallback(db, monkeypatch: pytest.MonkeyPatch) -> None:

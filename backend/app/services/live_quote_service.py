@@ -98,6 +98,37 @@ def _is_market_open(ticker: str, now_utc: datetime | None = None) -> bool:
     return open_t <= cur <= close_t
 
 
+# US pre-market session: 4:00–9:30 ET. In UTC that's 08:00–13:30 (EDT)
+# / 09:00–14:30 (EST). We use 08:00 → regular-open (13:30 UTC, the
+# value `_MARKET_HOURS_UTC["US"]` uses) so the window butts right up
+# against the regular session and covers the EDT case fully; the EST
+# tail (13:30–14:30) is already classified as regular-open by
+# `_is_market_open`, matching the existing DST imprecision. Pre/post-
+# market is reliable on yfinance only for US listings, so this is
+# US-only by design.
+_US_PREMARKET_START = dtime(8, 0)
+
+
+def _is_premarket(ticker: str, now_utc: datetime | None = None) -> bool:
+    """True iff `ticker` is a US listing currently in the pre-market
+    window (before regular open). Used to swap the displayed day-change
+    for the live pre-market move vs the prior session close."""
+    if _exchange_region(ticker) != "US":
+        return False
+    now = now_utc or datetime.now(timezone.utc)
+    if now.weekday() >= 5:
+        return False
+    oh, om, _ch, _cm = _MARKET_HOURS_UTC["US"]
+    return _US_PREMARKET_START <= now.time() < dtime(oh, om)
+
+
+# A pre-market price within this fraction of the prior close is treated
+# as "no real pre-market trade yet" (yfinance returns the stale prior
+# close as lastPrice when nothing has traded), so we fall back to the
+# EOD close-to-close change rather than report a misleading ~0%.
+_PREMARKET_EPS = 0.0005  # 0.05%
+
+
 _CACHE: dict[str, LiveQuote] = {}
 _CACHE_LOCK = Lock()
 _TTL_SECONDS = 10.0
@@ -362,16 +393,46 @@ def _fetch_fresh(ticker: str) -> LiveQuote:
         # `_override_prev_close_from_ohlcv` docstring).
         market_open = _is_market_open(ticker)
         last_eff: float | None = last
-        if not market_open:
-            eod = _eod_pair_from_ohlcv(ticker)
-            if eod is not None:
-                last_eff, prev_effective = eod
-            else:
-                prev_overridden = _override_prev_close_from_ohlcv(ticker, last_eff)
-                prev_effective = prev_overridden if prev_overridden is not None else prev
-        else:
+        state = "OPEN" if market_open else "CLOSED"
+        if market_open:
             prev_overridden = _override_prev_close_from_ohlcv(ticker, last_eff)
             prev_effective = prev_overridden if prev_overridden is not None else prev
+        else:
+            # Market CLOSED. During the US pre-market window, if yfinance
+            # has a live pre-market quote, show that move vs yesterday's
+            # close INSTEAD of the previous day's close-to-close change —
+            # that's the variation the user cares about pre-open.
+            #
+            # Use yfinance's OWN pair (lastPrice + previousClose) for the
+            # pre-market change, NOT the OHLCV prior close. Two reasons:
+            #  1. Same-source consistency — mixing a yfinance pre-market
+            #     price with an OHLCV close skews the ratio (different
+            #     adjustment basis / timestamp).
+            #  2. Our daily bar for "yesterday" can be a stale intraday
+            #     snapshot (observed: NVDA OHLCV 2026-05-21=219.51 while
+            #     the real settled close was 220.12); yfinance's
+            #     previousClose is the official prior-session close and is
+            #     reliable pre-open (the `_override` machinery exists for
+            #     the DIFFERENT problem of wrong previousClose during
+            #     sharp INTRADAY moves, which doesn't apply pre-market).
+            # Guard: if lastPrice ≈ previousClose (no real pre-market
+            # trade yet, yfinance echoes the prior close), fall back to
+            # the EOD close-to-close rather than report a misleading ~0%.
+            if (
+                _is_premarket(ticker)
+                and last is not None and prev is not None and prev > 0
+                and abs(last - prev) / prev > _PREMARKET_EPS
+            ):
+                last_eff = last
+                prev_effective = prev
+                state = "PRE"
+            else:
+                eod = _eod_pair_from_ohlcv(ticker)
+                if eod is not None:
+                    last_eff, prev_effective = eod
+                else:
+                    prev_overridden = _override_prev_close_from_ohlcv(ticker, last_eff)
+                    prev_effective = prev_overridden if prev_overridden is not None else prev
 
         change_abs = (last_eff - prev_effective) if (last_eff is not None and prev_effective is not None) else None
         change_pct = ((change_abs / prev_effective * 100.0) if (change_abs is not None and prev_effective) else None)
@@ -384,11 +445,12 @@ def _fetch_fresh(ticker: str) -> LiveQuote:
         quote.day_high = day_high
         quote.day_low = day_low
         quote.volume = _safe_int(fi.get("lastVolume"))
-        # Market state is computed locally from the ticker suffix + UTC time
-        # — yfinance fast_info doesn't expose it and t.info is rate-limited.
-        # Returns "OPEN" during exchange hours, "CLOSED" otherwise. The
-        # frontend uses this to decide whether to render the LIVE badge.
-        quote.market_state = "OPEN" if market_open else "CLOSED"
+        # Market state computed locally from ticker suffix + UTC time
+        # (yfinance fast_info doesn't expose it; t.info is rate-limited).
+        # "OPEN" during regular hours, "PRE" when a live US pre-market
+        # quote is driving change_pct, "CLOSED" otherwise. The frontend
+        # renders the LIVE badge on "OPEN".
+        quote.market_state = state
         quote.currency = "GBP" if currency in ("GBp", "GBX") else currency
 
         if last is not None:

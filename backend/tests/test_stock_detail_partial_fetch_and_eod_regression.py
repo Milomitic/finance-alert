@@ -246,9 +246,16 @@ def test_quote_when_market_closed_uses_eod_pair(
         def __init__(self, _t: str) -> None:
             self.fast_info = FakeFastInfo()
     monkeypatch.setattr("yfinance.Ticker", FakeTicker)
-    # Force the closed-market branch deterministically.
+    # Force the closed-market branch deterministically. This is the
+    # POST-market drift case (NOT pre-market), so disable the pre-market
+    # path too — otherwise the test's outcome would depend on the wall
+    # clock (it would take the pre-market branch when run 08:00-13:30 UTC).
     monkeypatch.setattr(
         "app.services.live_quote_service._is_market_open",
+        lambda *_args, **_kw: False,
+    )
+    monkeypatch.setattr(
+        "app.services.live_quote_service._is_premarket",
         lambda *_args, **_kw: False,
     )
     live_quote_service.clear_cache()

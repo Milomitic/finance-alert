@@ -135,7 +135,16 @@ def test_arm_us_prev_close_uses_ohlcv_when_yfinance_disagrees(db: Session) -> No
         day_open=215.0, day_high=216.0, day_low=210.0, last_volume=30_000_000,
     )
 
-    with patch("yfinance.Ticker", return_value=fake_ticker):
+    # Deterministically pin the market-closed, NON-pre-market scenario:
+    # this regression is about the OHLCV override during a settled
+    # close (post-market / weekend), not pre-market. Without pinning,
+    # the test would take the pre-market branch (yfinance pair) when run
+    # 08:00-13:30 UTC on a weekday and miss the override path entirely.
+    with (
+        patch("yfinance.Ticker", return_value=fake_ticker),
+        patch("app.services.live_quote_service._is_market_open", return_value=False),
+        patch("app.services.live_quote_service._is_premarket", return_value=False),
+    ):
         quote = live_quote_service.get_quote("ARM_TEST", force_refresh=True)
 
     assert quote.error is None
