@@ -7,7 +7,6 @@ import { HeroStrip } from "@/components/dashboard/HeroStrip";
 import { LiveVolumeMoversCard } from "@/components/dashboard/LiveVolumeMoversCard";
 import { MarketTickerTape } from "@/components/dashboard/MarketTickerTape";
 import { PremarketMoversCard } from "@/components/dashboard/PremarketMoversCard";
-import { DataSourcesCard } from "@/components/dashboard/DataSourcesCard";
 import { AnalystActionsCard } from "@/components/dashboard/AnalystActionsCard";
 import { ScanHeaderButton } from "@/components/dashboard/ScanHeaderButton";
 import { TopMoversCard } from "@/components/dashboard/TopMoversCard";
@@ -15,7 +14,6 @@ import { TopPicksCard } from "@/components/dashboard/TopPicksCard";
 import { RsiHistogramCard } from "@/components/dashboard/RsiHistogramCard";
 import { SectorsHeatmapCard } from "@/components/dashboard/SectorsHeatmapCard";
 import { SuperinvestorPicksCard } from "@/components/dashboard/SuperinvestorPicksCard";
-import { SystemStatusFooter } from "@/components/dashboard/SystemStatusFooter";
 import { Card, CardContent } from "@/components/ui/card";
 import { CardSkeleton } from "@/components/ui/card-skeleton";
 import { useDashboardSummary } from "@/hooks/useDashboardSummary";
@@ -162,7 +160,6 @@ export default function HomePage() {
             alertsPrev24h={summaryData.kpis.alerts_prev_24h}
           />
         )}
-        {summaryData && <SystemStatusFooter status={summaryData.system_status} />}
       </div>
     );
   }
@@ -310,8 +307,6 @@ export default function HomePage() {
           />
         </div>
       )}
-      <DataSourcesCard />
-      {summaryData && <SystemStatusFooter status={summaryData.system_status} />}
     </div>
   );
 }

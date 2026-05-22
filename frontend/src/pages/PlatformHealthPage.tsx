@@ -249,13 +249,17 @@ export default function PlatformHealthPage() {
         </div>
       )}
 
-      {/* Cards grid */}
+      {/* Fonti dati — the clustered overview, full-width on top. */}
       {health && (
-        <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
-          <DataSourcesCard
-            metrics={health.data_sources}
-            yfinanceBreaker={health.yfinance_breaker}
-          />
+        <DataSourcesCard
+          metrics={health.data_sources}
+          yfinanceBreaker={health.yfinance_breaker}
+        />
+      )}
+
+      {/* Secondary operational cards. */}
+      {health && (
+        <div className="grid gap-4 lg:grid-cols-3">
           <SchedulerCard jobs={health.scheduler} />
           <ScansCard scans={health.scans} />
           <CacheCard cache={health.cache} />

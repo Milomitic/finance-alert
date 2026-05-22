@@ -1,52 +1,144 @@
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { CheckCircle2, AlertTriangle, XCircle, Circle, Activity } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  AlertTriangle,
+  Building2,
+  CalendarClock,
+  CandlestickChart,
+  CheckCircle2,
+  Circle,
+  Database,
+  FileSpreadsheet,
+  Gavel,
+  Globe,
+  Newspaper,
+  ShieldAlert,
+  ShieldCheck,
+  Sunrise,
+  XCircle,
+} from "lucide-react";
 import type { DataSourceMetric } from "@/api/platformHealth";
+import { cn } from "@/lib/utils";
 
 type Props = {
   metrics: DataSourceMetric[];
   yfinanceBreaker: Record<string, unknown>;
 };
 
-const HEALTH_BADGE: Record<
-  string,
-  {
-    label: string;
-    classes: string;
-    Icon: React.ComponentType<{ className?: string }>;
-  }
+type Health = "healthy" | "degraded" | "failing" | "idle";
+
+/* ─── Fonti dati ──────────────────────────────────────────────────────
+ *
+ * Clustered health view of every data source. Sources are grouped by
+ * WHAT THEY PROVIDE (a "tipologia"), not by which endpoint they hit — so
+ * the three analyst feeds (Finnhub upgrades, Finnhub recommendation,
+ * Nasdaq consensus) finally read as one "Analisti" cluster, the two
+ * earnings providers as one "Earnings" cluster, etc. Each cluster shows
+ * a glanceable visual (a dot per source) beside the textual list, and a
+ * top summary strip rolls the whole fleet into a single segmented bar.
+ */
+
+const HEALTH_META: Record<
+  Health,
+  { label: string; dot: string; bar: string; chip: string; Icon: React.ComponentType<{ className?: string }> }
 > = {
   healthy: {
-    label: "Operational",
-    classes: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    label: "Operativa",
+    dot: "bg-emerald-500",
+    bar: "bg-emerald-500",
+    chip: "bg-emerald-50 text-emerald-700 border-emerald-200",
     Icon: CheckCircle2,
   },
   degraded: {
-    label: "Degraded",
-    classes: "bg-amber-50 text-amber-700 border-amber-200",
+    label: "Degradata",
+    dot: "bg-amber-500",
+    bar: "bg-amber-500",
+    chip: "bg-amber-50 text-amber-700 border-amber-200",
     Icon: AlertTriangle,
   },
   failing: {
-    label: "Major outage",
-    classes: "bg-red-50 text-red-700 border-red-200",
+    label: "In errore",
+    dot: "bg-rose-500",
+    bar: "bg-rose-500",
+    chip: "bg-rose-50 text-rose-700 border-rose-200",
     Icon: XCircle,
   },
   idle: {
-    label: "Idle",
-    classes: "bg-slate-50 text-slate-600 border-slate-200",
+    label: "Inattiva",
+    dot: "bg-slate-300",
+    bar: "bg-slate-300",
+    chip: "bg-slate-50 text-slate-600 border-slate-200",
     Icon: Circle,
   },
 };
 
+function normHealth(h: string): Health {
+  return h === "healthy" || h === "degraded" || h === "failing" ? h : "idle";
+}
+
 const ROLE_LABEL: Record<string, string> = {
   primary: "Primaria",
   fallback: "Fallback",
-  scheduled: "Scheduled",
+  scheduled: "Pianificata",
 };
-
 const ROLE_TONE: Record<string, string> = {
   primary: "bg-sky-50 text-sky-700 border-sky-200",
   fallback: "bg-violet-50 text-violet-700 border-violet-200",
-  scheduled: "bg-slate-100 text-slate-700 border-slate-200",
+  scheduled: "bg-slate-100 text-slate-600 border-slate-200",
+};
+
+/* Cluster taxonomy. `ops` lists the data_source_metrics `op` values that
+ * belong to each tipologia; the order here is the render order. */
+type CatKey =
+  | "market" | "fundamentals" | "news" | "analyst"
+  | "earnings" | "macro" | "institutional" | "premarket" | "other";
+
+const CATEGORIES: {
+  key: CatKey;
+  label: string;
+  desc: string;
+  Icon: React.ComponentType<{ className?: string }>;
+  tint: string; // icon chip
+  ops: string[];
+}[] = [
+  { key: "market", label: "Prezzi & quote", desc: "OHLCV · capitalizzazione · quote live",
+    Icon: CandlestickChart, tint: "bg-sky-50 text-sky-600 border-sky-200",
+    ops: ["ohlcv", "market_cap", "live_quote"] },
+  { key: "fundamentals", label: "Fondamentali", desc: "Income statement · info · micro-dati",
+    Icon: FileSpreadsheet, tint: "bg-indigo-50 text-indigo-600 border-indigo-200",
+    ops: ["fundamentals"] },
+  { key: "news", label: "News", desc: "Articoli e headline per ticker",
+    Icon: Newspaper, tint: "bg-cyan-50 text-cyan-600 border-cyan-200",
+    ops: ["news"] },
+  { key: "analyst", label: "Analisti", desc: "Upgrade/downgrade · recommendation · target",
+    Icon: Gavel, tint: "bg-violet-50 text-violet-600 border-violet-200",
+    ops: ["upgrades", "recommendation", "analyst"] },
+  { key: "earnings", label: "Earnings", desc: "EPS / revenue: stime e dati effettivi",
+    Icon: CalendarClock, tint: "bg-emerald-50 text-emerald-600 border-emerald-200",
+    ops: ["earnings"] },
+  { key: "macro", label: "Macro", desc: "Serie FRED · consensus calendario",
+    Icon: Globe, tint: "bg-amber-50 text-amber-600 border-amber-200",
+    ops: ["macro", "consensus"] },
+  { key: "institutional", label: "Istituzionali", desc: "Filing 13F dei fondi",
+    Icon: Building2, tint: "bg-rose-50 text-rose-600 border-rose-200",
+    ops: ["filings"] },
+  { key: "premarket", label: "Pre-market", desc: "Volume di pre-apertura",
+    Icon: Sunrise, tint: "bg-orange-50 text-orange-600 border-orange-200",
+    ops: ["premarket"] },
+];
+
+const OP_TO_CAT: Record<string, CatKey> = (() => {
+  const m: Record<string, CatKey> = {};
+  for (const c of CATEGORIES) for (const op of c.ops) m[op] = c.key;
+  return m;
+})();
+
+const OTHER_CAT = {
+  key: "other" as CatKey,
+  label: "Altre fonti",
+  desc: "Operazioni non ancora classificate",
+  Icon: Database,
+  tint: "bg-slate-50 text-slate-600 border-slate-200",
+  ops: [] as string[],
 };
 
 function ago(ts: number | null): string {
@@ -58,118 +150,83 @@ function ago(ts: number | null): string {
   return `${Math.floor(s / 86400)}g fa`;
 }
 
-function RateLimitBar({
-  used,
-  limit,
-  unit,
-}: {
-  used: number;
-  limit: number;
-  unit: string;
-}) {
+function rollup(sources: DataSourceMetric[]): Health {
+  if (sources.length === 0) return "idle";
+  if (sources.some((s) => normHealth(s.health) === "healthy")) return "healthy";
+  if (sources.every((s) => normHealth(s.health) === "failing")) return "failing";
+  if (sources.some((s) => normHealth(s.health) === "failing" || normHealth(s.health) === "degraded"))
+    return "degraded";
+  return "idle";
+}
+
+function RateLimitBar({ used, limit, unit }: { used: number; limit: number; unit: string }) {
   const pct = Math.min(100, (used / limit) * 100);
-  const tone =
-    pct >= 90 ? "bg-red-500" : pct >= 70 ? "bg-amber-500" : "bg-emerald-500";
+  const tone = pct >= 90 ? "bg-rose-500" : pct >= 70 ? "bg-amber-500" : "bg-emerald-500";
   return (
-    <div className="space-y-1">
-      <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+    <div className="space-y-0.5">
+      <div className="flex items-center justify-between text-[10px] text-muted-foreground">
         <span>Quota {unit}</span>
         <span className="tabular-nums">
           <span className="font-medium text-foreground">{used}</span> / {limit}
         </span>
       </div>
-      <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
-        <div
-          className={`h-full ${tone} transition-all`}
-          style={{ width: `${pct}%` }}
-        />
+      <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
+        <div className={cn("h-full transition-all", tone)} style={{ width: `${pct}%` }} />
       </div>
     </div>
   );
 }
 
+/* One source line inside a cluster card. */
 function SourceRow({ m }: { m: DataSourceMetric }) {
-  const badge = HEALTH_BADGE[m.health] ?? HEALTH_BADGE.idle;
+  const h = normHealth(m.health);
+  const meta = HEALTH_META[h];
   const total = m.success + m.failure;
-  const showRate = m.success_rate >= 0;
   return (
-    <div className="flex flex-col gap-1.5 py-3 px-4 border-b last:border-b-0 hover:bg-muted/30 transition-colors">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span
-              className="font-medium text-sm truncate"
-              title={m.notes || m.label}
-            >
-              {m.label}
-            </span>
-            <span
-              className={`px-1.5 py-0.5 text-[10px] font-medium rounded border ${
-                ROLE_TONE[m.role] ?? ROLE_TONE.primary
-              }`}
-            >
-              {ROLE_LABEL[m.role] ?? m.role}
-            </span>
-          </div>
-          <div className="text-xs text-muted-foreground mt-1 tabular-nums">
-            {total > 0 ? (
-              <>
-                <span className="text-emerald-700 font-medium">{m.success}</span>
-                <span className="mx-0.5">OK</span>
-                {m.failure > 0 && (
-                  <>
-                    {" · "}
-                    <span className="text-red-700 font-medium">{m.failure}</span>
-                    <span className="mx-0.5">KO</span>
-                  </>
-                )}
-                {showRate && (
-                  <>
-                    {" · "}
-                    {(m.success_rate * 100).toFixed(1)}%
-                  </>
-                )}
-                {m.last_success_at && (
-                  <>
-                    {" · ultimo "}
-                    {ago(m.last_success_at)}
-                  </>
-                )}
-              </>
-            ) : (
-              <span className="italic">Nessuna chiamata recente</span>
-            )}
-          </div>
-        </div>
+    <div className="px-3 py-2 border-t first:border-t-0 border-border/60 hover:bg-muted/30 transition-colors">
+      <div className="flex items-center gap-2 min-w-0">
+        <span className={cn("h-2 w-2 rounded-full shrink-0", meta.dot)} title={meta.label} />
+        <span className="text-[13px] font-medium truncate" title={m.notes || m.label}>
+          {m.label}
+        </span>
         <span
-          className={`inline-flex items-center gap-1 px-2.5 py-0.5 text-[11px] font-medium rounded-full border shrink-0 ${badge.classes}`}
+          className={cn(
+            "ml-auto shrink-0 px-1.5 py-0.5 text-[9.5px] font-medium rounded border",
+            ROLE_TONE[m.role] ?? ROLE_TONE.primary,
+          )}
         >
-          <badge.Icon className="h-3 w-3" />
-          {badge.label}
+          {ROLE_LABEL[m.role] ?? m.role}
         </span>
       </div>
-
-      {/* Rate-limit usage bars, only if the source declared a free-tier limit */}
-      {m.per_minute_limit != null && (
-        <RateLimitBar
-          used={m.calls_last_minute ?? 0}
-          limit={m.per_minute_limit}
-          unit="/ min"
-        />
+      <div className="mt-0.5 pl-4 text-[11px] text-muted-foreground tabular-nums">
+        {total > 0 ? (
+          <>
+            <span className="text-emerald-700 font-medium">{m.success}</span> ok
+            {m.failure > 0 && (
+              <>
+                {" · "}
+                <span className="text-rose-700 font-medium">{m.failure}</span> ko
+              </>
+            )}
+            {m.success_rate >= 0 && <> · {(m.success_rate * 100).toFixed(0)}%</>}
+            {m.last_success_at && <> · {ago(m.last_success_at)}</>}
+          </>
+        ) : (
+          <span className="italic">nessuna chiamata recente</span>
+        )}
+      </div>
+      {(m.per_minute_limit != null || m.per_day_limit != null) && (
+        <div className="mt-1.5 pl-4 space-y-1">
+          {m.per_minute_limit != null && (
+            <RateLimitBar used={m.calls_last_minute ?? 0} limit={m.per_minute_limit} unit="/ min" />
+          )}
+          {m.per_day_limit != null && (
+            <RateLimitBar used={m.calls_last_day ?? 0} limit={m.per_day_limit} unit="/ giorno" />
+          )}
+        </div>
       )}
-      {m.per_day_limit != null && (
-        <RateLimitBar
-          used={m.calls_last_day ?? 0}
-          limit={m.per_day_limit}
-          unit="/ giorno"
-        />
-      )}
-
-      {m.last_failure_reason && m.health !== "healthy" && (
-        <div
-          className="text-[11px] text-red-700/80 truncate font-mono"
-          title={m.last_failure_reason}
-        >
+      {m.last_failure_reason && h !== "healthy" && (
+        <div className="mt-1 pl-4 text-[10.5px] text-rose-700/80 truncate font-mono" title={m.last_failure_reason}>
           ✗ {m.last_failure_reason}
         </div>
       )}
@@ -177,142 +234,194 @@ function SourceRow({ m }: { m: DataSourceMetric }) {
   );
 }
 
-// Op (= service) labels in Italian. Ordered the way they appear in the
-// catalog so the visual ordering mirrors KNOWN_SOURCES.
-const OP_LABEL: Record<string, string> = {
-  ohlcv: "Prezzi storici (OHLCV)",
-  fundamentals: "Fondamentali (income, info)",
-  market_cap: "Capitalizzazione",
-  live_quote: "Quote real-time",
-  news: "News",
-  earnings: "Earnings",
-  macro: "Macro (FRED)",
-  consensus: "Consensus macro",
-  filings: "Filings 13F",
-};
-
-// Pick the rolled-up health for a group of sources covering the same op:
-//   any healthy → covered & operational
-//   all failing → outage on that service
-//   anything else (mixed) → degraded
-function rollupHealth(sources: DataSourceMetric[]): "healthy" | "degraded" | "failing" | "idle" {
-  if (sources.length === 0) return "idle";
-  const hasHealthy = sources.some((s) => s.health === "healthy");
-  const allFailing = sources.every((s) => s.health === "failing");
-  if (hasHealthy) return "healthy";
-  if (allFailing) return "failing";
-  return "degraded";
+/* A cluster (tipologia) card: icon + label + per-source dots (visual) +
+ * the textual source list. */
+function ClusterCard({
+  cat,
+  sources,
+  index,
+}: {
+  cat: (typeof CATEGORIES)[number] | typeof OTHER_CAT;
+  sources: DataSourceMetric[];
+  index: number;
+}) {
+  const roll = rollup(sources);
+  const meta = HEALTH_META[roll];
+  const single = sources.length === 1;
+  return (
+    <div
+      className="rounded-xl border bg-card overflow-hidden flex flex-col animate-in fade-in-0 slide-in-from-bottom-2 fill-mode-both"
+      style={{ animationDelay: `${index * 45}ms`, animationDuration: "320ms" }}
+    >
+      <div className="flex items-center gap-2.5 px-3 py-2.5 border-b bg-muted/20">
+        <span className={cn("grid place-items-center h-8 w-8 rounded-lg border shrink-0", cat.tint)}>
+          <cat.Icon className="h-4 w-4" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5">
+            <span className="text-sm font-semibold tracking-tight truncate">{cat.label}</span>
+            {single && (
+              <span
+                className="text-amber-600 shrink-0"
+                title="Singola fonte: nessun fallback se cade"
+              >
+                <ShieldAlert className="h-3 w-3" />
+              </span>
+            )}
+          </div>
+          <div className="text-[10.5px] text-muted-foreground truncate" title={cat.desc}>
+            {cat.desc}
+          </div>
+        </div>
+        {/* Visual: a dot per source, colored by health. */}
+        <div className="flex items-center gap-1 shrink-0" title={`${sources.length} fonti`}>
+          {sources.map((s) => (
+            <span
+              key={`${s.source}.${s.op}`}
+              className={cn("h-2 w-2 rounded-full", HEALTH_META[normHealth(s.health)].dot)}
+            />
+          ))}
+        </div>
+        <span
+          className={cn(
+            "shrink-0 inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium rounded-full border",
+            meta.chip,
+          )}
+        >
+          <meta.Icon className="h-3 w-3" />
+          {meta.label}
+        </span>
+      </div>
+      <div className="flex-1">
+        {sources.map((m) => (
+          <SourceRow key={`${m.source}.${m.op}`} m={m} />
+        ))}
+      </div>
+    </div>
+  );
 }
 
-const ROLLUP_BADGE: Record<string, { label: string; classes: string }> = {
-  healthy: {
-    label: "Operational",
-    classes: "bg-emerald-50 text-emerald-700 border-emerald-200",
-  },
-  degraded: {
-    label: "Degraded",
-    classes: "bg-amber-50 text-amber-700 border-amber-200",
-  },
-  failing: {
-    label: "Major outage",
-    classes: "bg-red-50 text-red-700 border-red-200",
-  },
-  idle: {
-    label: "Idle",
-    classes: "bg-slate-50 text-slate-600 border-slate-200",
-  },
-};
+/* The top "vista riassuntiva": stat tiles + a single segmented bar that
+ * rolls the whole fleet into one glance. */
+function SummaryStrip({
+  counts,
+  total,
+}: {
+  counts: Record<Health, number>;
+  total: number;
+}) {
+  const order: Health[] = ["healthy", "degraded", "failing", "idle"];
+  const tiles: { key: Health; label: string }[] = [
+    { key: "healthy", label: "Operative" },
+    { key: "degraded", label: "Degradate" },
+    { key: "failing", label: "In errore" },
+    { key: "idle", label: "Inattive" },
+  ];
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        {tiles.map((t) => {
+          const meta = HEALTH_META[t.key];
+          return (
+            <div key={t.key} className="rounded-lg border bg-card px-3 py-2 flex items-center gap-2.5">
+              <span className={cn("grid place-items-center h-8 w-8 rounded-lg border", meta.chip)}>
+                <meta.Icon className="h-4 w-4" />
+              </span>
+              <div className="leading-tight">
+                <div className="text-xl font-bold tabular-nums">{counts[t.key]}</div>
+                <div className="text-[10.5px] text-muted-foreground">{t.label}</div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      {/* Segmented health bar — the corresponding VISUAL of the textual list. */}
+      <div>
+        <div className="flex h-2.5 w-full rounded-full overflow-hidden bg-muted">
+          {order.map((k) =>
+            counts[k] > 0 ? (
+              <div
+                key={k}
+                className={cn("h-full transition-all", HEALTH_META[k].bar)}
+                style={{ width: `${(counts[k] / total) * 100}%` }}
+                title={`${counts[k]} ${HEALTH_META[k].label.toLowerCase()}`}
+              />
+            ) : null,
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function DataSourcesCard({ metrics, yfinanceBreaker }: Props) {
   const breakerState = String(yfinanceBreaker.state ?? "closed").toLowerCase();
   const breakerOpen = breakerState === "open" || breakerState === "half_open";
 
-  // Group by op (= service), preserving the catalog's natural ordering.
-  // `Object.entries` on a string-keyed object iterates in insertion order
-  // in modern JS engines, which means the first source seen for an op
-  // determines that op's slot in the rendered list.
-  const groups = new Map<string, DataSourceMetric[]>();
+  // Bucket every metric into its cluster, preserving CATEGORIES order.
+  const buckets = new Map<CatKey, DataSourceMetric[]>();
   for (const m of metrics) {
-    const arr = groups.get(m.op);
+    const key = OP_TO_CAT[m.op] ?? "other";
+    const arr = buckets.get(key);
     if (arr) arr.push(m);
-    else groups.set(m.op, [m]);
+    else buckets.set(key, [m]);
   }
+  const ordered: { cat: (typeof CATEGORIES)[number] | typeof OTHER_CAT; sources: DataSourceMetric[] }[] = [];
+  for (const cat of CATEGORIES) {
+    const s = buckets.get(cat.key);
+    if (s && s.length) ordered.push({ cat, sources: s });
+  }
+  const other = buckets.get("other");
+  if (other && other.length) ordered.push({ cat: OTHER_CAT, sources: other });
 
-  const totalServices = groups.size;
-  const failingServices = Array.from(groups.values()).filter(
-    (sources) => rollupHealth(sources) === "failing"
-  ).length;
-  const operationalServices = Array.from(groups.values()).filter(
-    (sources) => rollupHealth(sources) === "healthy"
-  ).length;
+  const counts: Record<Health, number> = { healthy: 0, degraded: 0, failing: 0, idle: 0 };
+  for (const m of metrics) counts[normHealth(m.health)]++;
+  const total = metrics.length || 1;
+  const operational = counts.healthy;
 
   return (
-    <Card className="h-full overflow-hidden">
+    <Card className="overflow-hidden">
       <CardHeader className="pb-3 border-b bg-muted/20">
-        <div className="flex items-center justify-between gap-2">
-          <CardTitle className="text-base font-semibold flex items-center gap-1.5">
-            <Activity className="h-4 w-4" />
-            Servizi dati
-            <span className="text-[11px] font-normal text-muted-foreground ml-1 tabular-nums">
-              {operationalServices}/{totalServices} operativi
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <CardTitle className="text-base font-semibold flex items-center gap-2">
+            <span className="grid place-items-center h-7 w-7 rounded-lg border bg-background">
+              <Database className="h-4 w-4" />
+            </span>
+            Fonti dati
+            <span className="text-[11px] font-normal text-muted-foreground tabular-nums">
+              {operational}/{metrics.length} operative
             </span>
           </CardTitle>
           <span
-            className={`inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-medium rounded-full border ${
+            className={cn(
+              "inline-flex items-center gap-1.5 px-2.5 py-0.5 text-[11px] font-medium rounded-full border",
               breakerOpen
-                ? "bg-red-50 text-red-700 border-red-200"
-                : "bg-emerald-50 text-emerald-700 border-emerald-200"
-            }`}
-            title="yfinance circuit breaker"
+                ? "bg-rose-50 text-rose-700 border-rose-200"
+                : "bg-emerald-50 text-emerald-700 border-emerald-200",
+            )}
+            title="Circuit breaker yfinance — quando aperto, gli scan saltano il provider primario"
           >
-            {breakerOpen ? <XCircle className="h-3 w-3" /> : <CheckCircle2 className="h-3 w-3" />}
-            Breaker {breakerState}
+            {breakerOpen ? <ShieldAlert className="h-3.5 w-3.5" /> : <ShieldCheck className="h-3.5 w-3.5" />}
+            Breaker yfinance: {breakerState}
           </span>
         </div>
-        {failingServices > 0 && (
-          <div className="text-xs text-red-700 mt-1">
-            ⚠ {failingServices} servizi{failingServices === 1 ? "o" : ""} in errore —
-            tutte le fonti che li alimentano stanno fallendo
-          </div>
-        )}
       </CardHeader>
-      <CardContent className="p-0 max-h-[480px] overflow-auto">
-        {Array.from(groups.entries()).map(([op, sources]) => {
-          const rollup = rollupHealth(sources);
-          const badge = ROLLUP_BADGE[rollup];
-          const opLabel = OP_LABEL[op] ?? op;
-          const singleSource = sources.length === 1;
-          return (
-            <div key={op}>
-              <div className="px-4 py-2 bg-muted/40 border-b flex items-center justify-between gap-2">
-                <div className="min-w-0 flex-1">
-                  <div className="text-[12px] font-semibold tracking-tight">
-                    {opLabel}
-                  </div>
-                  <div className="text-[10.5px] text-muted-foreground mt-0.5">
-                    {sources.length} font{sources.length === 1 ? "e" : "i"}
-                    {singleSource && (
-                      <span
-                        className="ml-1.5 text-amber-700"
-                        title="Questo servizio dipende da una singola fonte: se cade non c'è fallback"
-                      >
-                        · single-source
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <span
-                  className={`inline-flex items-center gap-1 px-2 py-0.5 text-[10.5px] font-medium rounded-full border shrink-0 ${badge.classes}`}
-                >
-                  {badge.label}
-                </span>
-              </div>
-              {sources.map((m) => (
-                <SourceRow key={`${m.source}.${m.op}`} m={m} />
+      <CardContent className="p-4 space-y-4">
+        {metrics.length === 0 ? (
+          <div className="text-sm text-muted-foreground py-6 text-center">
+            Nessuna chiamata registrata ancora. Le metriche si popolano dopo il primo
+            scan / refresh fondamentali.
+          </div>
+        ) : (
+          <>
+            <SummaryStrip counts={counts} total={total} />
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+              {ordered.map(({ cat, sources }, i) => (
+                <ClusterCard key={cat.key} cat={cat} sources={sources} index={i} />
               ))}
             </div>
-          );
-        })}
+          </>
+        )}
       </CardContent>
     </Card>
   );
