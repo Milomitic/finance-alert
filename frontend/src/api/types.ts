@@ -769,6 +769,10 @@ export interface LiveQuote {
   currency: string | null;
   fetched_at: number;
   error: string | null;
+  /** ISO date (YYYY-MM-DD) the `price` refers to. The chart overlays a
+   *  "today" candle when this equals today, even at market CLOSED
+   *  (provisional/official today close before the EOD scan). */
+  as_of_date?: string | null;
 }
 
 // === Stock scoring ===

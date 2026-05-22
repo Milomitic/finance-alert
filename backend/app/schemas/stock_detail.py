@@ -43,6 +43,11 @@ class LiveQuoteOut(BaseModel):
     currency: str | None = None
     fetched_at: float = 0.0
     error: str | None = None
+    # ISO date (YYYY-MM-DD) of the bar `price` refers to. The chart uses
+    # it to decide whether to overlay a "today" candle even when the
+    # market is CLOSED (provisional/official today close before the EOD
+    # scan persists it). None when unknown / breaker fallback.
+    as_of_date: str | None = None
 
 
 class LiveQuotesBatchOut(BaseModel):

@@ -25,7 +25,7 @@ quote with `error` set instead of hitting Yahoo.
 import math
 import time
 from dataclasses import dataclass
-from datetime import datetime, time as dtime, timezone
+from datetime import date, datetime, time as dtime, timezone
 from threading import Lock
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -44,10 +44,14 @@ class LiveQuote:
     day_high: float | None = None
     day_low: float | None = None
     volume: int | None = None
-    market_state: str | None = None     # "OPEN" | "CLOSED" | "UNKNOWN"
+    market_state: str | None = None     # "OPEN" | "CLOSED" | "PRE" | "UNKNOWN"
     currency: str | None = None
     fetched_at: float = 0.0
     error: str | None = None
+    # ISO date (YYYY-MM-DD) the `price` refers to. Lets the chart overlay
+    # a "today" candle even when CLOSED (provisional/official today close
+    # before the EOD scan persists it). None when unknown.
+    as_of_date: str | None = None
 
 
 # Market hours per region, expressed in the exchange's LOCAL timezone +
@@ -192,6 +196,15 @@ def _eod_pair_from_ohlcv(ticker: str) -> tuple[float, float] | None:
     than 2 bars (in which case the caller falls back to the yfinance
     pair + the existing `_override_prev_close_from_ohlcv` heuristic).
     """
+    res = _latest_two_bars(ticker)
+    return (res[1], res[2]) if res is not None else None
+
+
+def _latest_two_bars(ticker: str) -> tuple[date, float, float] | None:
+    """(most_recent_date, most_recent_close, prior_close) from the OHLCV
+    daily table. The DATE is what lets callers tell whether the EOD scan
+    has already written today's bar (most_recent_date == market-today) or
+    we're still in the post-close gap (most_recent_date == yesterday)."""
     try:
         from app.core.db import SessionLocal
         from app.models import OhlcvDaily, Stock
@@ -211,10 +224,104 @@ def _eod_pair_from_ohlcv(ticker: str) -> tuple[float, float] | None:
             ).scalars().all()
             if len(bars) < 2:
                 return None
-            return float(bars[0].close), float(bars[1].close)
+            return bars[0].date, float(bars[0].close), float(bars[1].close)
     except Exception as e:  # noqa: BLE001
-        logger.debug(f"[live_quote] _eod_pair_from_ohlcv failed for {ticker}: {e}")
+        logger.debug(f"[live_quote] _latest_two_bars failed for {ticker}: {e}")
         return None
+
+
+def _market_today(ticker: str) -> date:
+    """Today's calendar date in the exchange's local timezone — the key
+    we compare OHLCV bar dates against to know if 'today' is filled yet."""
+    region = _exchange_region(ticker)
+    tzname = _MARKET_HOURS_LOCAL[region][0]
+    return datetime.now(timezone.utc).astimezone(_tz(tzname)).date()
+
+
+# ─── "Today" close in the post-close gap (close → EOD scan) ──────────
+# When the market just closed, the DB has no bar for today yet (the EOD
+# scan runs at 23:30) and the daily-bar fallback would show yesterday.
+# To keep showing TODAY we use, in order:
+#   1. the official daily bar from yfinance (real close, no post-market
+#      drift) — fetched on-demand and cached for the day; and
+#   2. the last intraday tick we saw while the market was open — a
+#      provisional close, replaced by the scan later.
+
+# Last intraday tick per ticker (only updated while OPEN). Provisional
+# fallback when the official daily bar isn't published yet.
+_LAST_INTRADAY: dict[str, dict[str, Any]] = {}
+_LAST_INTRADAY_LOCK = Lock()
+
+
+def _remember_intraday(
+    ticker: str, today: date, price: float | None, prev_close: float | None,
+) -> None:
+    if price is None or prev_close is None:
+        return
+    with _LAST_INTRADAY_LOCK:
+        _LAST_INTRADAY[ticker] = {"date": today, "price": price, "prev_close": prev_close}
+
+
+# Official today's daily bar, fetched on-demand from yfinance and cached.
+# Value: (today, close|None, prev_close|None, fetched_at). A None close is
+# a cached MISS (yfinance hasn't published today yet) re-checked every
+# _TODAY_BAR_MISS_TTL seconds; a real close is cached for the whole day.
+_TODAY_BAR_CACHE: dict[str, tuple[date, float | None, float | None, float]] = {}
+_TODAY_BAR_LOCK = Lock()
+_TODAY_BAR_MISS_TTL = 300.0
+
+
+def _today_official_bar(
+    ticker: str, today: date, currency: str | None,
+) -> tuple[float, float] | None:
+    """(today_close, prior_close) from yfinance's daily history IF it has
+    already published today's bar; else None. Cached per (ticker, today)."""
+    now = time.time()
+    with _TODAY_BAR_LOCK:
+        cached = _TODAY_BAR_CACHE.get(ticker)
+        if cached and cached[0] == today:
+            if cached[1] is not None:
+                return cached[1], cached[2]  # real close — good for the day
+            if (now - cached[3]) < _TODAY_BAR_MISS_TTL:
+                return None  # recent MISS — don't hammer yfinance
+    try:
+        import yfinance as yf
+        df = yf.Ticker(ticker).history(period="5d", interval="1d", auto_adjust=False)
+        if df is None or df.empty or len(df) < 2:
+            return None
+        idx_last = df.index[-1]
+        last_date = idx_last.date() if hasattr(idx_last, "date") else None
+        if last_date != today:
+            # Today not published yet → cache a MISS so the next polls
+            # (≤5min) skip the fetch.
+            with _TODAY_BAR_LOCK:
+                _TODAY_BAR_CACHE[ticker] = (today, None, None, now)
+            return None
+        close = _scale_pence_to_pounds(currency, float(df["Close"].iloc[-1]))
+        prev = _scale_pence_to_pounds(currency, float(df["Close"].iloc[-2]))
+        with _TODAY_BAR_LOCK:
+            _TODAY_BAR_CACHE[ticker] = (today, close, prev, now)
+        return (close, prev) if close is not None and prev is not None else None
+    except Exception as e:  # noqa: BLE001
+        logger.debug(f"[live_quote] _today_official_bar failed for {ticker}: {e}")
+        return None
+
+
+def _provisional_today(
+    ticker: str, currency: str | None, today: date, allow_fetch: bool,
+) -> tuple[float, float] | None:
+    """(today_close, prior_close) for the post-close gap: the official
+    daily bar if published (only when `allow_fetch`), else the last
+    intraday tick seen while OPEN today. None if neither is available."""
+    if allow_fetch:
+        official = _today_official_bar(ticker, today, currency)
+        if official is not None:
+            return official
+    with _LAST_INTRADAY_LOCK:
+        snap = _LAST_INTRADAY.get(ticker)
+    if snap and snap.get("date") == today:
+        return snap["price"], snap["prev_close"]
+    return None
 
 
 def _override_prev_close_from_ohlcv(ticker: str, live_price: float | None) -> float | None:
@@ -356,11 +463,17 @@ def _eod_fallback_quote(ticker: str) -> LiveQuote:
             market_state="CLOSED",
             fetched_at=time.time(),
             error=None,
+            as_of_date=last.date.isoformat() if last.date is not None else None,
         )
 
 
-def _fetch_fresh(ticker: str) -> LiveQuote:
-    """Hit yfinance fast_info for one ticker. Wrapped for monkeypatching."""
+def _fetch_fresh(ticker: str, *, allow_remote_today_fetch: bool = True) -> LiveQuote:
+    """Hit yfinance fast_info for one ticker. Wrapped for monkeypatching.
+
+    `allow_remote_today_fetch`: when True (single-quote path) we may pull
+    today's official daily bar from yfinance in the post-close gap. The
+    batch path passes False to avoid firing ~100 history() calls at once
+    right after the close — it relies on the in-memory intraday tick."""
     from app.services import yfinance_health
     import yfinance as yf
 
@@ -402,11 +515,18 @@ def _fetch_fresh(ticker: str) -> LiveQuote:
         # case observed for ARM on 2026-05-08 → see
         # `_override_prev_close_from_ohlcv` docstring).
         market_open = _is_market_open(ticker)
+        today = _market_today(ticker)
         last_eff: float | None = last
         state = "OPEN" if market_open else "CLOSED"
+        as_of: date | None = None
         if market_open:
             prev_overridden = _override_prev_close_from_ohlcv(ticker, last_eff)
             prev_effective = prev_overridden if prev_overridden is not None else prev
+            as_of = today
+            # Remember this live tick so we can keep showing "today" after
+            # the close (provisional fallback until the EOD scan / official
+            # bar lands). See `_provisional_today`.
+            _remember_intraday(ticker, today, last_eff, prev_effective)
         else:
             # Market CLOSED. During the US pre-market window, if yfinance
             # has a live pre-market quote, show that move vs yesterday's
@@ -436,13 +556,33 @@ def _fetch_fresh(ticker: str) -> LiveQuote:
                 last_eff = last
                 prev_effective = prev
                 state = "PRE"
+                as_of = today
             else:
-                eod = _eod_pair_from_ohlcv(ticker)
-                if eod is not None:
-                    last_eff, prev_effective = eod
+                # Closed (post-market / weekend / pre-open echo). Prefer
+                # the most-recent OHLCV bar; but if the DB doesn't have
+                # TODAY yet (post-close gap before the EOD scan), fill it
+                # with today's close — official daily bar if published,
+                # else the last intraday tick — so the chart/header keep
+                # showing today instead of snapping back to yesterday.
+                two = _latest_two_bars(ticker)
+                db_has_today = two is not None and two[0] == today
+                if two is not None and db_has_today:
+                    last_eff, prev_effective = two[1], two[2]
+                    as_of = two[0]
                 else:
-                    prev_overridden = _override_prev_close_from_ohlcv(ticker, last_eff)
-                    prev_effective = prev_overridden if prev_overridden is not None else prev
+                    prov = _provisional_today(
+                        ticker, currency, today, allow_remote_today_fetch
+                    )
+                    if prov is not None:
+                        last_eff, prev_effective = prov
+                        as_of = today
+                    elif two is not None:
+                        # No "today" available → genuine last close (yesterday).
+                        last_eff, prev_effective = two[1], two[2]
+                        as_of = two[0]
+                    else:
+                        prev_overridden = _override_prev_close_from_ohlcv(ticker, last_eff)
+                        prev_effective = prev_overridden if prev_overridden is not None else prev
 
         change_abs = (last_eff - prev_effective) if (last_eff is not None and prev_effective is not None) else None
         change_pct = ((change_abs / prev_effective * 100.0) if (change_abs is not None and prev_effective) else None)
@@ -454,6 +594,7 @@ def _fetch_fresh(ticker: str) -> LiveQuote:
         quote.day_open = day_open
         quote.day_high = day_high
         quote.day_low = day_low
+        quote.as_of_date = as_of.isoformat() if as_of is not None else None
         quote.volume = _safe_int(fi.get("lastVolume"))
         # Market state computed locally from ticker suffix + UTC time
         # (yfinance fast_info doesn't expose it; t.info is rate-limited).
@@ -487,15 +628,19 @@ def _fetch_fresh(ticker: str) -> LiveQuote:
     return quote
 
 
-def get_quote(ticker: str, *, force_refresh: bool = False) -> LiveQuote:
-    """Cached single-ticker quote (TTL 10s). Force-refresh bypasses cache."""
+def get_quote(
+    ticker: str, *, force_refresh: bool = False, allow_remote_today_fetch: bool = True,
+) -> LiveQuote:
+    """Cached single-ticker quote (TTL 10s). Force-refresh bypasses cache.
+    `allow_remote_today_fetch=False` (used by the batch path) skips the
+    on-demand official-today-bar fetch."""
     now = time.time()
     if not force_refresh:
         with _CACHE_LOCK:
             cached = _CACHE.get(ticker)
             if cached is not None and (now - cached.fetched_at) < _TTL_SECONDS:
                 return cached
-    fresh = _fetch_fresh(ticker)
+    fresh = _fetch_fresh(ticker, allow_remote_today_fetch=allow_remote_today_fetch)
     with _CACHE_LOCK:
         _CACHE[ticker] = fresh
     return fresh
@@ -526,8 +671,16 @@ def get_quotes_batch(tickers: list[str]) -> dict[str, LiveQuote]:
     # 8 workers: enough to collapse a 50-name batch to ~1s without
     # hammering Yahoo with 50 simultaneous connections.
     workers = min(8, len(tickers))
+    # allow_remote_today_fetch=False: the batch must NOT fire an on-demand
+    # history() per ticker (≈100 names would hammer yfinance right after
+    # the close). The in-memory intraday tick covers the displayed names
+    # (they were polled while OPEN); single-quote views still fetch the
+    # official bar.
     with ThreadPoolExecutor(max_workers=workers) as ex:
-        for t, q in zip(tickers, ex.map(get_quote, tickers)):
+        results = ex.map(
+            lambda t: get_quote(t, allow_remote_today_fetch=False), tickers
+        )
+        for t, q in zip(tickers, results):
             out[t] = q
     return out
 

@@ -66,20 +66,24 @@ function mergeLiveQuoteIntoOhlcv(
 ): OhlcvBar[] {
   if (range === "5m" || range === "30m" || range === "1h") return ohlcv;
   if (!live || live.price == null || ohlcv.length === 0) return ohlcv;
-  // Only overlay the live quote during a genuine open session. When the
-  // market is CLOSED the backend's live-quote fallback echoes the last
-  // DB bar verbatim (price = last.close, day_open/high/low = last bar,
-  // market_state="CLOSED"); appending that as a "today" bar produced a
-  // phantom candle that is an exact duplicate of the last real bar
-  // (the reported bug). Closed / pre-open / unknown → no overlay: the
-  // last finalized bar correctly stays the rightmost candle.
-  if (live.market_state !== "OPEN") return ohlcv;
+  const todayISO = new Date().toISOString().slice(0, 10);
+  // Overlay the live quote whenever the backend says `price` is TODAY's
+  // value — either a genuine open session (market_state OPEN/PRE) OR the
+  // post-close gap where the backend now serves today's official/
+  // provisional close (as_of_date === today). When `price` is yesterday's
+  // close (as_of_date < today, e.g. no today data available) we DON'T
+  // overlay: appending an echo of the last DB bar would just duplicate
+  // the rightmost candle (the original phantom-candle bug).
+  const showsToday =
+    live.market_state === "OPEN" ||
+    live.market_state === "PRE" ||
+    live.as_of_date === todayISO;
+  if (!showsToday) return ohlcv;
 
   const last = ohlcv[ohlcv.length - 1];
   const liveOpen = live.day_open ?? live.price;
   const liveHigh = Math.max(live.day_high ?? live.price, live.price);
   const liveLow = Math.min(live.day_low ?? live.price, live.price);
-  const todayISO = new Date().toISOString().slice(0, 10);
 
   if (range === "1d" && last.date < todayISO) {
     return [

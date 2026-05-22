@@ -25,15 +25,16 @@ def _patch_yf(monkeypatch: pytest.MonkeyPatch, fi: object) -> None:
         def __init__(self, _t: str) -> None:
             self.fast_info = fi
     monkeypatch.setattr("yfinance.Ticker", FakeTicker)
-    # Also disable BOTH OHLCV-driven overrides — these tests assert that
-    # yfinance's `previousClose` flows through unchanged. Without these
-    # patches:
-    #   - `_override_prev_close_from_ohlcv` would hit the real DB (test
-    #     runs against the dev DB) and replace yfinance's mocked prev.
-    #   - `_eod_pair_from_ohlcv` would activate when the market is closed
-    #     at test runtime (depends on time-of-day), overriding both price
-    #     AND prev with OHLCV values, breaking yfinance-pure assertions.
-    # Production callers still benefit from both overrides; only this
+    # Also disable ALL the OHLCV/DB-driven overrides — these tests assert
+    # that yfinance's mocked price/previousClose flow through unchanged.
+    # Without these patches, when the market is closed at test runtime
+    # (time-of-day dependent) the CLOSED branch would replace price AND
+    # prev with DB values, breaking the yfinance-pure assertions:
+    #   - `_override_prev_close_from_ohlcv` / `_eod_pair_from_ohlcv`: the
+    #     original close-to-close override.
+    #   - `_latest_two_bars` / `_provisional_today`: the post-close-gap
+    #     "today close" machinery (official bar / intraday tick).
+    # Production callers still benefit from all of them; only this
     # isolated unit-test path bypasses them.
     monkeypatch.setattr(
         "app.services.live_quote_service._override_prev_close_from_ohlcv",
@@ -42,6 +43,14 @@ def _patch_yf(monkeypatch: pytest.MonkeyPatch, fi: object) -> None:
     monkeypatch.setattr(
         "app.services.live_quote_service._eod_pair_from_ohlcv",
         lambda _ticker: None,
+    )
+    monkeypatch.setattr(
+        "app.services.live_quote_service._latest_two_bars",
+        lambda _ticker: None,
+    )
+    monkeypatch.setattr(
+        "app.services.live_quote_service._provisional_today",
+        lambda *_args, **_kw: None,
     )
 
 
