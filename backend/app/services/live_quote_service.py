@@ -28,6 +28,7 @@ from dataclasses import dataclass
 from datetime import datetime, time as dtime, timezone
 from threading import Lock
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from loguru import logger
 
@@ -49,25 +50,36 @@ class LiveQuote:
     error: str | None = None
 
 
-# Market hours per exchange suffix, in UTC. Source: standard local hours
-# converted to UTC (no DST awareness — close enough to drive a LIVE badge).
-# Tuple is (open_hour_utc, open_min, close_hour_utc, close_min).
-_MARKET_HOURS_UTC: dict[str, tuple[int, int, int, int]] = {
-    # US: 9:30am-4:00pm ET → 14:30-21:00 UTC (winter) / 13:30-20:00 (summer DST).
-    # We pick the wider window (13:30-21:00) so we don't flag LIVE as CLOSED
-    # in the half-hour DST overlap.
-    "US": (13, 30, 21, 0),
-    # London (.L): 8:00-16:30 UK → 8:00-16:30 UTC (winter) / 7:00-15:30 (summer).
-    "UK": (7, 0, 16, 30),
-    # Continental EU (.MI/.DE/.PA/.AS/.MC/.SW/.BR/.HE/.CO/.IR): Xetra/EuroNext
-    # 9:00-17:30 local → 8:00-16:30 UTC (winter) / 7:00-15:30 (summer).
-    "EU": (7, 0, 16, 30),
-    # Hong Kong (.HK): 9:30-16:00 HKT (UTC+8) → 1:30-8:00 UTC. No DST.
-    "HK": (1, 30, 8, 0),
-    # Shanghai/Shenzhen (.SS/.SZ): 9:30-15:00 CST (UTC+8), lunch break ignored
-    # for simplicity → 1:30-7:00 UTC.
-    "CN": (1, 30, 7, 0),
+# Market hours per region, expressed in the exchange's LOCAL timezone +
+# its IANA tz name. We convert "now" into that tz (DST-aware via
+# `zoneinfo`) and compare against the local open/close — correct
+# year-round.
+#
+# This replaces a previous fixed-UTC table that hardcoded the US window
+# as 13:30-21:00 UTC (the UNION of EDT 13:30-20:00 and EST 14:30-21:00).
+# That union didn't prevent any real false-CLOSED — on any given day the
+# US is in exactly one of EDT/EST — it just flagged the market OPEN for a
+# full hour AFTER the real close in summer (and an hour early in winter),
+# so a stock stayed "LIVE" ~1h past the actual 16:00 ET bell.
+#
+# Tuple is (iana_tz_name, (open_h, open_m), (close_h, close_m)) — local.
+_MARKET_HOURS_LOCAL: dict[str, tuple[str, tuple[int, int], tuple[int, int]]] = {
+    "US": ("America/New_York", (9, 30), (16, 0)),    # NYSE / Nasdaq
+    "UK": ("Europe/London",    (8, 0), (16, 30)),    # LSE (.L)
+    "EU": ("Europe/Berlin",    (9, 0), (17, 30)),    # Xetra / EuroNext (.MI/.DE/...)
+    "HK": ("Asia/Hong_Kong",   (9, 30), (16, 0)),    # HKEX (.HK), lunch break ignored
+    "CN": ("Asia/Shanghai",    (9, 30), (15, 0)),    # SSE/SZSE (.SS/.SZ), lunch ignored
 }
+
+# ZoneInfo objects are cheap but not free to construct; cache per name.
+_TZ_CACHE: dict[str, ZoneInfo] = {}
+
+
+def _tz(name: str) -> ZoneInfo:
+    tz = _TZ_CACHE.get(name)
+    if tz is None:
+        tz = _TZ_CACHE[name] = ZoneInfo(name)
+    return tz
 
 
 def _exchange_region(ticker: str) -> str:
@@ -86,40 +98,38 @@ def _exchange_region(ticker: str) -> str:
 
 def _is_market_open(ticker: str, now_utc: datetime | None = None) -> bool:
     """True iff the exchange of `ticker` is currently in regular trading hours.
-    No holiday calendar — only weekday + time-of-day check."""
+    No holiday calendar — only weekday + time-of-day check, but DST-aware:
+    we convert `now` into the exchange's local timezone and compare against
+    its local open/close, so the LIVE flag flips exactly at the local bell
+    year-round (no summer/winter 1-hour drift)."""
     now = now_utc or datetime.now(timezone.utc)
-    if now.weekday() >= 5:   # Sat/Sun
-        return False
     region = _exchange_region(ticker)
-    oh, om, ch, cm = _MARKET_HOURS_UTC[region]
-    open_t = dtime(oh, om)
-    close_t = dtime(ch, cm)
-    cur = now.time()
-    return open_t <= cur <= close_t
+    tzname, (oh, om), (ch, cm) = _MARKET_HOURS_LOCAL[region]
+    local = now.astimezone(_tz(tzname))
+    if local.weekday() >= 5:   # Sat/Sun in the exchange's local time
+        return False
+    cur = local.time()
+    return dtime(oh, om) <= cur <= dtime(ch, cm)
 
 
-# US pre-market session: 4:00–9:30 ET. In UTC that's 08:00–13:30 (EDT)
-# / 09:00–14:30 (EST). We use 08:00 → regular-open (13:30 UTC, the
-# value `_MARKET_HOURS_UTC["US"]` uses) so the window butts right up
-# against the regular session and covers the EDT case fully; the EST
-# tail (13:30–14:30) is already classified as regular-open by
-# `_is_market_open`, matching the existing DST imprecision. Pre/post-
-# market is reliable on yfinance only for US listings, so this is
-# US-only by design.
-_US_PREMARKET_START = dtime(8, 0)
+# US pre-market session: 4:00–9:30 ET (local). Pre/post-market data is
+# reliable on yfinance only for US listings, so this is US-only by design.
+_US_PREMARKET_START_LOCAL = dtime(4, 0)
 
 
 def _is_premarket(ticker: str, now_utc: datetime | None = None) -> bool:
     """True iff `ticker` is a US listing currently in the pre-market
-    window (before regular open). Used to swap the displayed day-change
-    for the live pre-market move vs the prior session close."""
+    window (04:00 ET → regular open). Used to swap the displayed day-change
+    for the live pre-market move vs the prior session close. DST-aware via
+    the exchange-local conversion (same as `_is_market_open`)."""
     if _exchange_region(ticker) != "US":
         return False
     now = now_utc or datetime.now(timezone.utc)
-    if now.weekday() >= 5:
+    tzname, (oh, om), _close = _MARKET_HOURS_LOCAL["US"]
+    local = now.astimezone(_tz(tzname))
+    if local.weekday() >= 5:
         return False
-    oh, om, _ch, _cm = _MARKET_HOURS_UTC["US"]
-    return _US_PREMARKET_START <= now.time() < dtime(oh, om)
+    return _US_PREMARKET_START_LOCAL <= local.time() < dtime(oh, om)
 
 
 # A pre-market price within this fraction of the prior close is treated
