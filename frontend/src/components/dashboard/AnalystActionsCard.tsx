@@ -3,6 +3,7 @@ import {
   Gavel,
   ArrowUpRight,
   ArrowDownRight,
+  ArrowRight,
   Sparkles,
   Minus,
   Newspaper,
@@ -14,7 +15,7 @@ import {
 import { Link } from "react-router-dom";
 
 import { dashboard, type AnalystAction } from "@/api/dashboard";
-import { StockIdentity } from "@/components/dashboard/StockIdentity";
+import { StockLogo } from "@/components/dashboard/StockLogo";
 import { Card, CardContent } from "@/components/ui/card";
 import { SectionTitle } from "@/components/ui/section-title";
 import { cn } from "@/lib/utils";
@@ -61,6 +62,63 @@ function ptMeta(pt: string | null | undefined) {
   return PT_META[pt] ?? null;
 }
 
+/* A price target is only meaningful when strictly positive. yfinance /
+ * the news extractor sometimes hand back 0 (or null) when a firm moved
+ * the rating but didn't publish a number — rendering that as "$0" was a
+ * bug (see the Keybanc row in the screenshot). Coerce non-positive to
+ * null so the chip logic treats it as "no number". */
+function posTarget(v: number | null | undefined): number | null {
+  return v != null && v > 0 ? v : null;
+}
+
+/* Grade → sentiment colour. Buy/Outperform/Overweight read bullish
+ * (emerald), Sell/Underperform/Underweight bearish (rose), and
+ * Hold/Neutral/Sector-Weight/Equal-Weight stay muted. Literal class
+ * strings (not composed) so Tailwind's purger keeps them. */
+function gradeTone(grade: string | null | undefined): string {
+  if (!grade) return "text-muted-foreground";
+  if (/sell|underperform|underweight|reduce|negative/i.test(grade))
+    return "text-rose-600 dark:text-rose-400";
+  if (/buy|outperform|overweight|accumulate|positive|^add$/i.test(grade))
+    return "text-emerald-600 dark:text-emerald-400";
+  return "text-muted-foreground"; // hold / neutral / sector weight / in-line
+}
+
+/* The resulting grade, sentiment-coloured. For a genuine change we show
+ * "from → to" (the `to` carries the colour); the full pair also lives in
+ * the title for when it truncates. The row's action chip (Upgrade/
+ * Downgrade) already signals direction, so this stays compact. */
+function GradeDisplay({
+  from,
+  to,
+}: {
+  from?: string | null;
+  to?: string | null;
+}) {
+  const changed = !!(from && to && from !== to);
+  if (changed) {
+    return (
+      <span
+        className="inline-flex items-center gap-0.5 shrink-0 font-medium leading-none"
+        title={`${from} → ${to}`}
+      >
+        <span className="text-muted-foreground/70">{from}</span>
+        <ArrowRight className="h-2.5 w-2.5 shrink-0 text-muted-foreground/50" />
+        <span className={gradeTone(to)}>{to}</span>
+      </span>
+    );
+  }
+  const g = to || from || null;
+  return (
+    <span
+      className={cn("shrink-0 font-medium leading-none", gradeTone(g))}
+      title={g ?? undefined}
+    >
+      {g || "—"}
+    </span>
+  );
+}
+
 /* Renders the right-hand price-target chip. Inside one tag we pack:
  *  - colour/tone signalling the direction (Raises/Lowers/etc.)
  *  - the new target as the dominant figure
@@ -72,17 +130,42 @@ function ptMeta(pt: string | null | undefined) {
  * we render nothing (the date column still anchors the row). */
 function PriceTargetChip({ a }: { a: AnalystAction }) {
   const meta = ptMeta(a.price_target_action);
-  const cur = a.current_price_target;
-  const prior = a.prior_price_target;
-  if (!meta && cur == null) return null;
+  const cur = posTarget(a.current_price_target);
+  const prior = posTarget(a.prior_price_target);
 
-  // Even without a meta entry (older API rows), a bare current target
-  // still deserves the "Target" framing — gives it semantic context
-  // instead of a stray dollar amount.
+  // No usable number. A chip is only worth showing if the firm
+  // DIRECTIONALLY moved the target (Raises / Lowers) — that conveys
+  // signal even without a figure. A bare "Maintains"/"Initiates" with
+  // no number is noise (this is exactly what produced the meaningless
+  // "= $0" chip), so we render nothing and let the date anchor the row.
+  if (cur == null) {
+    const directional =
+      a.price_target_action === "Raises" || a.price_target_action === "Lowers";
+    if (meta && directional) {
+      return (
+        <span
+          className={cn(
+            "shrink-0 inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5",
+            meta.chipBg,
+            meta.tone,
+          )}
+          title={meta.label}
+        >
+          <meta.Icon className="h-3 w-3 shrink-0" />
+          <span className="text-[10.5px] font-semibold leading-none">
+            {meta.label}
+          </span>
+        </span>
+      );
+    }
+    return null;
+  }
+
+  // We have a positive target. Frame it with the PT action when known,
+  // else fall back to a neutral "Target" treatment.
   const M = meta ?? PT_META.Maintains;
-  const hasDelta = cur != null && prior != null && cur !== prior;
-  const deltaPct =
-    hasDelta && prior !== 0 ? ((cur! - prior!) / prior!) * 100 : null;
+  const hasDelta = prior != null && cur !== prior;
+  const deltaPct = hasDelta && prior !== 0 ? ((cur - prior!) / prior!) * 100 : null;
 
   return (
     <span
@@ -93,27 +176,19 @@ function PriceTargetChip({ a }: { a: AnalystAction }) {
       )}
       title={
         deltaPct != null
-          ? `${M.label}: $${prior!.toFixed(0)} → $${cur!.toFixed(0)} (${deltaPct >= 0 ? "+" : ""}${deltaPct.toFixed(1)}%)`
-          : meta
-          ? `${M.label}${cur != null ? `: $${cur.toFixed(0)}` : ""}`
-          : "Target price"
+          ? `${M.label}: $${prior!.toFixed(0)} → $${cur.toFixed(0)} (${deltaPct >= 0 ? "+" : ""}${deltaPct.toFixed(1)}%)`
+          : `${M.label}: $${cur.toFixed(0)}`
       }
     >
       <M.Icon className="h-3 w-3 shrink-0" />
-      {cur != null ? (
-        <>
-          {hasDelta && (
-            <span className="text-[10.5px] line-through opacity-60">
-              ${prior!.toFixed(0)}
-            </span>
-          )}
-          <span className="text-[12.5px] font-bold leading-none">
-            ${cur.toFixed(0)}
-          </span>
-        </>
-      ) : (
-        <span className="text-[11px] font-semibold">{M.label}</span>
+      {hasDelta && (
+        <span className="text-[10px] line-through opacity-60">
+          ${prior!.toFixed(0)}
+        </span>
       )}
+      <span className="text-[12.5px] font-bold leading-none">
+        ${cur.toFixed(0)}
+      </span>
     </span>
   );
 }
@@ -126,22 +201,28 @@ function fmtDate(iso: string): string {
 
 function ActionRow({ a }: { a: AnalystAction }) {
   const meta = actionMeta(a.action);
-  const gradeChange =
-    a.from_grade && a.to_grade && a.from_grade !== a.to_grade
-      ? `${a.from_grade} → ${a.to_grade}`
-      : a.to_grade || a.from_grade || "—";
   return (
     <li className="border-b border-border/40 last:border-b-0 min-w-0">
       <Link
         to={`/stocks/${encodeURIComponent(a.ticker)}`}
-        className="flex items-center gap-2 px-3 py-1.5 hover:bg-accent/30 transition-colors min-w-0"
+        className="flex items-center gap-2.5 px-3 py-2 hover:bg-accent/30 transition-colors min-w-0"
+        title={a.name ?? a.ticker}
       >
-        <StockIdentity ticker={a.ticker} name={a.name} />
-        <div className="min-w-0 flex-1 hidden sm:block">
-          <div className="flex items-center gap-1 text-[12px] truncate">
-            {/* Rating chip — mirrors the price-target chip shape on the
-                right so the row reads as a balanced "rating action /
-                target action" pair. */}
+        {/* Compact identity: logo + ticker only (company name → row
+            tooltip). In this narrow 1fr dashboard column the repeated
+            full name was clutter AND a second flex-1 block that starved
+            the firm/grade of width. Fixing identity to a small width
+            hands all the free space to the content block below. */}
+        <StockLogo ticker={a.ticker} size="xs" />
+        <span className="shrink-0 w-[40px] text-[13px] font-bold tabular-nums leading-none truncate">
+          {a.ticker}
+        </span>
+
+        {/* Content — the sole flex-1 block, so it claims the full
+            remaining width. Line 1: rating action + firm. Line 2:
+            resulting grade (sentiment-coloured). */}
+        <div className="flex-1 min-w-0 space-y-1">
+          <div className="flex items-center gap-1.5 min-w-0">
             <span
               className={cn(
                 "inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 shrink-0",
@@ -151,12 +232,15 @@ function ActionRow({ a }: { a: AnalystAction }) {
               title={`Rating: ${meta.label}`}
             >
               <meta.Icon className="h-3 w-3 shrink-0" />
-              <span className="text-[11px] font-semibold leading-none">
+              <span className="text-[10.5px] font-semibold leading-none">
                 {meta.label}
               </span>
             </span>
-            <span className="text-muted-foreground truncate" title={a.firm}>
-              · {a.firm || "—"}
+            <span
+              className="text-[11.5px] text-muted-foreground truncate"
+              title={a.firm}
+            >
+              {a.firm || "—"}
             </span>
             {a.from_news && (
               <span
@@ -167,14 +251,20 @@ function ActionRow({ a }: { a: AnalystAction }) {
               </span>
             )}
           </div>
-          <div className="text-[11px] text-muted-foreground truncate" title={gradeChange}>
-            {gradeChange}
+          <div className="flex items-center gap-1 text-[11px] min-w-0 leading-none">
+            <GradeDisplay from={a.from_grade} to={a.to_grade} />
           </div>
         </div>
-        <PriceTargetChip a={a} />
-        <span className="shrink-0 w-[52px] text-right text-[11px] text-muted-foreground tabular-nums">
-          {fmtDate(a.date)}
-        </span>
+
+        {/* Right cluster — price-target chip stacked over the date,
+            right-aligned. Stacking reclaims the horizontal room the old
+            inline date column took, giving the firm/grade more space. */}
+        <div className="shrink-0 flex flex-col items-end gap-1">
+          <PriceTargetChip a={a} />
+          <span className="text-[10px] text-muted-foreground tabular-nums leading-none">
+            {fmtDate(a.date)}
+          </span>
+        </div>
       </Link>
     </li>
   );
