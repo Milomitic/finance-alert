@@ -54,33 +54,58 @@ _BASE = "https://finnhub.io/api/v1"
 _TIMEOUT = 10.0
 _USER_AGENT = "FinanceAlert/0.1 (personal use)"
 
-# ─── Circuit breaker / quota state ───────────────────────────────────
-# Free tier is 60/min — generous enough that we rarely trip it from
-# user-triggered browsing, but a runaway bug could still cause it.
-# Same pattern as `marketaux_news_service._BLOCKED_UNTIL`: on 429 we
-# pause all calls for a fixed window. Finnhub's per-minute quota
-# resets quickly, so 5 minutes is enough (vs Marketaux's daily reset).
-# Persisted via `breaker_state` so a restart inherits the closed
-# state — without persistence, a backend restart during the breaker
-# window would re-trip immediately on the first call.
-_BREAKER_KEY = "finnhub.news_upgrades"
-_BLOCKED_UNTIL: _dt.datetime | None = breaker_state.load(_BREAKER_KEY)
+# ─── Per-scope circuit breakers / quota state ────────────────────────
+# Finnhub's free tier is 60/min PER KEY, shared across every endpoint —
+# so an account-level 429 can hit any op. We nonetheless keep SEPARATE
+# breakers for the two surfaces:
+#
+#   • "news"     — company-news, used as a fallback BEHIND yfinance and
+#                  Marketaux. If it's throttled, the user still gets news.
+#   • "analyst"  — upgrade-downgrade + recommendation. yfinance's feeds
+#                  for these are dead at source, so Finnhub is the ONLY
+#                  upstream. Losing this loses the data entirely.
+#
+# With one shared breaker (the old `finnhub.news_upgrades`), a single
+# 429 on the low-stakes news surface darkened the irreplaceable analyst
+# surface too. Splitting them — together with the prioritized rate
+# limiter below (news yields budget to analyst) — keeps the analyst
+# feeds alive when news gets throttled.
+#
+# Persisted via `breaker_state` so a restart inherits the open state.
+_NEWS_SCOPE = "news"
+_ANALYST_SCOPE = "analyst"
+_BREAKER_KEYS: dict[str, str] = {
+    _NEWS_SCOPE: "finnhub.news",
+    _ANALYST_SCOPE: "finnhub.analyst",
+}
+_blocked_until: dict[str, _dt.datetime | None] = {
+    scope: breaker_state.load(key) for scope, key in _BREAKER_KEYS.items()
+}
+# Legacy single-breaker key (pre-split). Drop any persisted entry so a
+# restart right after this upgrade doesn't inherit an orphaned breaker.
+breaker_state.clear("finnhub.news_upgrades")
 _BLOCK_LOCK = threading.Lock()
 _BLOCK_DURATION = _dt.timedelta(minutes=5)
 
-# ─── Client-side rate limiter for organic news + upgrades calls ──────
-# Finnhub's free tier is 60/min, but a runaway in the stock-detail
-# render path (e.g. mass browsing or a bug that triggers fetch on
-# every scroll) could blow past that. A 30/min ceiling on the
-# COMBINED news + upgrades workload defends without throttling the
-# normal case (a single stock-detail open consumes 2 calls — news +
-# upgrades — so 30/min = 15 stock-details/min of headroom before
-# silent skip kicks in, plenty for a single user).
+# ─── Priority-aware client-side rate limiter ─────────────────────────
+# A runaway in the stock-detail render path (mass browsing / a fetch
+# loop) could blow past Finnhub's 60/min. All calls share ONE rolling
+# window (they share one account quota), but the SKIP threshold is
+# priority-tiered:
 #
-# Earnings (`finnhub_earnings_service`) is intentionally NOT included
-# here: that path runs on the scheduler with predictable cadence, the
-# rate-limiter target is the unbounded organic browsing surface.
-_RATE_LIMIT_PER_MIN = 30
+#   • analyst calls (only upstream) get the full ceiling.
+#   • news calls (have yfinance + Marketaux behind them) stop sooner,
+#     reserving the top slice of the budget for the analyst surface.
+#
+# So under contention news degrades first and analyst keeps flowing —
+# exactly the opposite of the old behaviour where a news burst could
+# starve (and then breaker-trip) the analyst feeds.
+#
+# Earnings (`finnhub_earnings_service`) is intentionally NOT counted
+# here: it runs on the scheduler with predictable cadence; this limiter
+# targets the unbounded organic browsing surface.
+_RATE_LIMIT_PER_MIN = 30          # analyst (high-priority) ceiling
+_NEWS_RATE_CEILING = 18           # news yields ~12 calls/min to analyst
 _RATE_WINDOW = _dt.timedelta(seconds=60)
 _RATE_TIMESTAMPS: deque[_dt.datetime] = deque(maxlen=_RATE_LIMIT_PER_MIN * 2)
 _RATE_LOCK = threading.Lock()
@@ -150,38 +175,41 @@ def is_enabled() -> bool:
     return bool(settings.finnhub_api_key)
 
 
-def _is_blocked() -> tuple[bool, str | None]:
-    """True if the breaker is open. Cheap check — used by probes and
-    callers to short-circuit before the network round-trip."""
-    global _BLOCKED_UNTIL
+def _is_blocked(scope: str = _NEWS_SCOPE) -> tuple[bool, str | None]:
+    """True if the `scope`'s breaker is open. Cheap check — used by
+    probes and callers to short-circuit before the network round-trip.
+    Defaults to the news scope for backwards-compatible callers."""
     now = _dt.datetime.now(_dt.UTC)
     with _BLOCK_LOCK:
-        if _BLOCKED_UNTIL is None:
+        until = _blocked_until.get(scope)
+        if until is None:
             return False, None
-        if _BLOCKED_UNTIL <= now:
+        if until <= now:
             # In-memory reset + drop the persisted entry so next boot
             # doesn't reload a stale timestamp.
-            _BLOCKED_UNTIL = None
-            breaker_state.clear(_BREAKER_KEY)
+            _blocked_until[scope] = None
+            breaker_state.clear(_BREAKER_KEYS[scope])
             return False, None
-        return True, f"finnhub breaker aperto fino a {_BLOCKED_UNTIL.isoformat()}"
+        return True, f"finnhub {scope} breaker aperto fino a {until.isoformat()}"
 
 
-def _rate_limited() -> bool:
-    """True when we've already issued `_RATE_LIMIT_PER_MIN` calls in
-    the trailing 60s window. Drops timestamps older than the window
-    before counting, so memory stays bounded.
+def _rate_limited(ceiling: int = _RATE_LIMIT_PER_MIN) -> bool:
+    """True when the trailing-60s call count has reached `ceiling`.
+    Drops timestamps older than the window before counting, so memory
+    stays bounded. Lower-priority callers (news) pass a smaller
+    `ceiling` so they stop before exhausting the shared budget the
+    higher-priority analyst calls rely on.
 
-    Callers should treat True as "skip this call silently"  — the
-    rate limiter is defensive, not authoritative; the goal is to
-    blunt runaway burst patterns, not to enforce a hard contract.
+    Callers should treat True as "skip this call silently" — the rate
+    limiter is defensive, not authoritative; the goal is to blunt
+    runaway burst patterns, not to enforce a hard contract.
     """
     now = _dt.datetime.now(_dt.UTC)
     cutoff = now - _RATE_WINDOW
     with _RATE_LOCK:
         while _RATE_TIMESTAMPS and _RATE_TIMESTAMPS[0] < cutoff:
             _RATE_TIMESTAMPS.popleft()
-        return len(_RATE_TIMESTAMPS) >= _RATE_LIMIT_PER_MIN
+        return len(_RATE_TIMESTAMPS) >= ceiling
 
 
 def _record_rate_call() -> None:
@@ -193,30 +221,42 @@ def _record_rate_call() -> None:
         _RATE_TIMESTAMPS.append(_dt.datetime.now(_dt.UTC))
 
 
-def _trip_breaker(reason: str) -> None:
-    """Open the breaker for `_BLOCK_DURATION`. Idempotent. Persists the
-    open-until timestamp to `app/data/breakers.json` so a restart
-    inherits the closed state (avoid first-call-after-boot reopening
-    the breaker when upstream is still rate-limited)."""
-    global _BLOCKED_UNTIL
+def _trip_breaker(reason: str, scope: str = _NEWS_SCOPE) -> None:
+    """Open the `scope`'s breaker for `_BLOCK_DURATION`. Idempotent.
+    Persists the open-until timestamp to `app/data/breakers.json` so a
+    restart inherits the open state (avoid first-call-after-boot
+    reopening the breaker when upstream is still rate-limited).
+    Defaults to the news scope for backwards-compatible callers."""
+    now = _dt.datetime.now(_dt.UTC)
     with _BLOCK_LOCK:
-        if _BLOCKED_UNTIL is None or _BLOCKED_UNTIL <= _dt.datetime.now(_dt.UTC):
-            _BLOCKED_UNTIL = _dt.datetime.now(_dt.UTC) + _BLOCK_DURATION
-            breaker_state.save(_BREAKER_KEY, _BLOCKED_UNTIL, reason=reason)
+        until = _blocked_until.get(scope)
+        if until is None or until <= now:
+            new_until = now + _BLOCK_DURATION
+            _blocked_until[scope] = new_until
+            breaker_state.save(_BREAKER_KEYS[scope], new_until, reason=reason)
             logger.warning(
-                f"[finnhub] circuit breaker OPEN until "
-                f"{_BLOCKED_UNTIL.isoformat()} — reason: {reason}"
+                f"[finnhub] {scope} circuit breaker OPEN until "
+                f"{new_until.isoformat()} — reason: {reason}"
             )
 
 
 def status() -> dict:
-    """Public introspection — mirrors `marketaux_news_service.status()`."""
-    blocked, reason = _is_blocked()
-    return {
-        "blocked": blocked,
-        "reason": reason,
-        "blocked_until": _BLOCKED_UNTIL.isoformat() if _BLOCKED_UNTIL else None,
-    }
+    """Public introspection — mirrors `marketaux_news_service.status()`.
+    Reports each scope's breaker plus a top-level `blocked` that is True
+    when EITHER scope is open (back-compat for any boolean consumer)."""
+    out: dict[str, Any] = {}
+    any_blocked = False
+    for scope in _BREAKER_KEYS:
+        blocked, reason = _is_blocked(scope)
+        until = _blocked_until.get(scope)
+        out[scope] = {
+            "blocked": blocked,
+            "reason": reason,
+            "blocked_until": until.isoformat() if until else None,
+        }
+        any_blocked = any_blocked or blocked
+    out["blocked"] = any_blocked
+    return out
 
 
 # ─── /company-news ───────────────────────────────────────────────────
@@ -238,7 +278,7 @@ def fetch_company_news(
     """
     if not is_enabled():
         return []
-    blocked, why = _is_blocked()
+    blocked, why = _is_blocked(_NEWS_SCOPE)
     if blocked:
         logger.debug(f"[finnhub] news skipped for {ticker}: {why}")
         return []
@@ -250,11 +290,12 @@ def fetch_company_news(
             return cached[1][:limit]
 
     # Rate-limit guard: defends against runaway burst patterns (mass
-    # browsing / bug-induced fetch loops). Checked AFTER the cache so a
-    # cache hit never gets throttled.
-    if _rate_limited():
+    # browsing / bug-induced fetch loops). News uses the LOWER ceiling
+    # so it yields the top of the budget to the analyst surface.
+    # Checked AFTER the cache so a cache hit never gets throttled.
+    if _rate_limited(_NEWS_RATE_CEILING):
         logger.debug(
-            f"[finnhub] news rate-limited (>{_RATE_LIMIT_PER_MIN}/min) — "
+            f"[finnhub] news rate-limited (>{_NEWS_RATE_CEILING}/min) — "
             f"skipping fetch for {ticker}"
         )
         return []
@@ -280,7 +321,7 @@ def fetch_company_news(
         raise UpstreamUnavailable(str(e), source="finnhub", op="news") from e
 
     if r.status_code == 429:
-        _trip_breaker(f"HTTP 429 on /company-news")
+        _trip_breaker("HTTP 429 on /company-news", _NEWS_SCOPE)
         data_source_metrics.record_failure(
             "finnhub", "news", reason="HTTP 429 — breaker aperto"
         )
@@ -375,7 +416,7 @@ def fetch_upgrade_downgrade(
     """
     if not is_enabled():
         return []
-    blocked, why = _is_blocked()
+    blocked, why = _is_blocked(_ANALYST_SCOPE)
     if blocked:
         logger.debug(f"[finnhub] upgrade-downgrade skipped for {ticker}: {why}")
         return []
@@ -412,7 +453,7 @@ def fetch_upgrade_downgrade(
         return []
 
     if r.status_code == 429:
-        _trip_breaker("HTTP 429 on /stock/upgrade-downgrade")
+        _trip_breaker("HTTP 429 on /stock/upgrade-downgrade", _ANALYST_SCOPE)
         data_source_metrics.record_failure(
             "finnhub", "upgrades", reason="HTTP 429 — breaker aperto"
         )
@@ -494,7 +535,7 @@ def fetch_recommendation_trend(ticker: str) -> list[FinnhubRatingBucket]:
     """
     if not is_enabled():
         return []
-    blocked, why = _is_blocked()
+    blocked, why = _is_blocked(_ANALYST_SCOPE)
     if blocked:
         logger.debug(f"[finnhub] recommendation skipped for {ticker}: {why}")
         return []
@@ -531,7 +572,7 @@ def fetch_recommendation_trend(ticker: str) -> list[FinnhubRatingBucket]:
         return []
 
     if r.status_code == 429:
-        _trip_breaker("HTTP 429 on /stock/recommendation")
+        _trip_breaker("HTTP 429 on /stock/recommendation", _ANALYST_SCOPE)
         data_source_metrics.record_failure(
             "finnhub", "recommendation", reason="HTTP 429 — breaker aperto"
         )

@@ -197,7 +197,7 @@ def probe_finnhub_upgrades() -> None:
     if not settings.finnhub_api_key:
         return
     from app.services import finnhub_news_service
-    blocked, _ = finnhub_news_service._is_blocked()
+    blocked, _ = finnhub_news_service._is_blocked(finnhub_news_service._ANALYST_SCOPE)
     if blocked:
         return
     recent = data_source_metrics.seconds_since_last_success("finnhub", "upgrades")
@@ -214,7 +214,9 @@ def probe_finnhub_upgrades() -> None:
             timeout=8,
         )
         if r.status_code == 429:
-            finnhub_news_service._trip_breaker("probe HTTP 429")
+            finnhub_news_service._trip_breaker(
+                "probe HTTP 429", finnhub_news_service._ANALYST_SCOPE
+            )
         ok = r.status_code == 200
         _record(
             "finnhub", "upgrades", ok,
