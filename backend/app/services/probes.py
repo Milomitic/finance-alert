@@ -258,6 +258,35 @@ def probe_twelvedata_earnings() -> None:
         _record("twelvedata", "earnings", False, repr(exc))
 
 
+def probe_nasdaq_analyst() -> None:
+    """Nasdaq `/analyst/{sym}/targetprice` reachability probe. Key-less,
+    so always eligible; smart-elides like the other fallback probes
+    (skip when breaker open OR a real fetch succeeded in the last 4h)."""
+    from app.services import nasdaq_analyst_service
+    blocked, _ = nasdaq_analyst_service._is_blocked()
+    if blocked:
+        return
+    recent = data_source_metrics.seconds_since_last_success("nasdaq", "analyst")
+    if recent is not None and recent < 4 * 3600:
+        return
+    try:
+        import requests
+        r = requests.get(
+            f"https://api.nasdaq.com/api/analyst/{_PROBE_TICKER}/targetprice",
+            headers=nasdaq_analyst_service._HEADERS,
+            timeout=8,
+        )
+        if r.status_code in (403, 429):
+            nasdaq_analyst_service._trip_breaker(f"probe HTTP {r.status_code}")
+        ok = r.status_code == 200 and "consensusOverview" in r.text
+        _record(
+            "nasdaq", "analyst", ok,
+            "" if ok else f"HTTP {r.status_code}"
+        )
+    except Exception as exc:  # noqa: BLE001
+        _record("nasdaq", "analyst", False, repr(exc))
+
+
 def probe_fred_macro() -> None:
     """Single-observation probe of UNRATE (US unemployment, monthly)."""
     from app.core.config import settings
@@ -484,6 +513,7 @@ SLOW_PROBES: list[Callable[[], None]] = [
     probe_finnhub_news,
     probe_finnhub_upgrades,
     probe_twelvedata_earnings,
+    probe_nasdaq_analyst,
     probe_forexfactory_consensus,
     probe_sec_13f_filings,
     probe_nasdaq_premarket,

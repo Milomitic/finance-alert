@@ -1555,12 +1555,64 @@ def _fetch_fresh(ticker: str) -> Fundamentals:
                     )
             except Exception as e:  # noqa: BLE001 — fallback is non-fatal
                 logger.debug(f"[fund] finnhub recommendation fallback {ticker}: {e}")
+        # Tier-3 fallback: Nasdaq's key-less consensus. Reached only when
+        # BOTH yfinance and Finnhub came up empty (e.g. Finnhub breaker
+        # open) — an independent provider so the buckets survive a
+        # Finnhub outage. Nasdaq has no strong-buy/strong-sell split
+        # (those map to 0). One fetch is 24h-cached and ALSO serves the
+        # price-target fallback below.
+        if not f.analyst_ratings:
+            try:
+                from app.services import nasdaq_analyst_service
+                na = nasdaq_analyst_service.fetch_analyst(ticker)
+                if na and na.buckets:
+                    f.analyst_ratings = [
+                        AnalystRating(
+                            period=b.period,
+                            strong_buy=b.strong_buy,
+                            buy=b.buy,
+                            hold=b.hold,
+                            sell=b.sell,
+                            strong_sell=b.strong_sell,
+                        )
+                        for b in na.buckets
+                    ]
+                    saw_success = True
+                    logger.debug(
+                        f"[fund] {ticker}: yfinance+Finnhub ratings empty, "
+                        f"filled {len(na.buckets)} buckets from Nasdaq fallback"
+                    )
+            except Exception as e:  # noqa: BLE001 — fallback is non-fatal
+                logger.debug(f"[fund] nasdaq ratings fallback {ticker}: {e}")
         try:
             f.price_target = _extract_price_target(raw.get("analyst_price_targets"))
             if f.price_target.mean is not None: saw_success = True
         except Exception as e:
             logger.debug(f"[fund] price_target {ticker}: {e}")
             _maybe_record(e)
+        # Tier-3 fallback for the price target: when yfinance left it
+        # empty, borrow Nasdaq's consensus spread (low/high/mean). The
+        # fetch is the SAME 24h-cached call the ratings fallback used, so
+        # this is free when ratings already triggered it.
+        if f.price_target.mean is None:
+            try:
+                from app.services import nasdaq_analyst_service
+                na = nasdaq_analyst_service.fetch_analyst(ticker)
+                if na and na.pt_mean is not None:
+                    f.price_target = AnalystPriceTarget(
+                        current=None,
+                        low=na.pt_low,
+                        mean=na.pt_mean,
+                        median=na.pt_mean,  # Nasdaq exposes no separate median
+                        high=na.pt_high,
+                    )
+                    saw_success = True
+                    logger.debug(
+                        f"[fund] {ticker}: yfinance price-target empty, "
+                        f"filled from Nasdaq fallback (mean={na.pt_mean})"
+                    )
+            except Exception as e:  # noqa: BLE001 — fallback is non-fatal
+                logger.debug(f"[fund] nasdaq price-target fallback {ticker}: {e}")
         try:
             f.analyst_actions = _extract_actions(raw.get("upgrades_downgrades"))
             if f.analyst_actions: saw_success = True

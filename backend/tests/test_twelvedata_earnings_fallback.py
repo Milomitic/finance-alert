@@ -35,8 +35,18 @@ def _earnings_body(rows: list[dict]) -> dict:
 def setup_function() -> None:
     """Each test starts from a clean rate-limiter + closed breaker so
     ordering can't bleed state between cases."""
+    from app.core import breaker_state
     td._RATE_TIMESTAMPS.clear()
     td._BLOCKED_UNTIL = None
+    breaker_state.clear(td._BREAKER_KEY)  # don't leak a persisted breaker
+
+
+def teardown_function() -> None:
+    """The 429 test persists to breakers.json — clear it so the open
+    state can't leak into the running app or other test processes."""
+    from app.core import breaker_state
+    td._BLOCKED_UNTIL = None
+    breaker_state.clear(td._BREAKER_KEY)
 
 
 # ─── client parsing ──────────────────────────────────────────────────

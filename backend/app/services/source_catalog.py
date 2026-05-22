@@ -85,6 +85,13 @@ KNOWN_SOURCES: list[SourceSpec] = [
                       "breaker su 429/quota → ~6-10 unità/day in uso reale. "
                       "Probe smart-elision: salta se Finnhub copre il caso "
                       "o se ultima call < 4h.")),
+    SourceSpec("nasdaq", "analyst", "Nasdaq — Analyst consensus", "fallback",
+               per_minute=None, per_day=None,
+               notes=("Endpoint non ufficiale api.nasdaq.com (no key): "
+                      "consensus buy/hold/sell + target price. Tier-3 dietro "
+                      "yfinance+Finnhub per recommendation e price target. "
+                      "Cache 24h + breaker su 403/429. Gray-area, fail-closed. "
+                      "Probe ogni 30 min (AAPL).")),
 
     # ── Scheduled / macro ──
     SourceSpec("fred", "macro", "FRED — Macro series", "scheduled",
