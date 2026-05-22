@@ -58,6 +58,12 @@ KNOWN_SOURCES: list[SourceSpec] = [
     SourceSpec("finnhub", "earnings", "Finnhub — Earnings", "fallback",
                per_minute=60, per_day=None,
                notes="Earnings actuals ~30min vs yfinance ~1-3h. Probe ogni 5 min."),
+    SourceSpec("twelvedata", "earnings", "Twelve Data — Earnings", "fallback",
+               per_minute=8, per_day=800,
+               notes=("Tier-3 EPS actuals (solo EPS, no revenue) dietro "
+                      "yfinance+Finnhub. Provider separato da Finnhub → "
+                      "regge quando il breaker Finnhub è aperto. Rate "
+                      "client 6/min + breaker su 429.")),
     SourceSpec("finnhub", "news", "Finnhub — Company news", "fallback",
                per_minute=60, per_day=None,
                notes=("Fallback news quando yfinance restituisce 0 articoli. "

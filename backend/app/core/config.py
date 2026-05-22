@@ -43,6 +43,15 @@ class Settings(BaseSettings):
     # 100 req/day, sufficient for a single-user local-first context.
     # Empty string disables the fallback; yfinance remains the sole source.
     marketaux_api_key: str = ""
+    # Twelve Data API key — TIER-3 fallback for EPS actuals, behind
+    # yfinance (primary) and Finnhub (fallback #1). A SEPARATE provider
+    # from Finnhub, so a Finnhub rate-limit/outage no longer leaves a
+    # freshly-released EPS actual unfilled. Free tier from
+    # https://twelvedata.com gives 800 req/day, 8 req/min — ample since
+    # only the narrow "actual just lagging" subset hits it. Note: the
+    # free /earnings endpoint is EPS-only (no revenue). Empty string
+    # disables this tier; yfinance + Finnhub remain the sources.
+    twelvedata_api_key: str = ""
 
     @property
     def is_dev(self) -> bool:

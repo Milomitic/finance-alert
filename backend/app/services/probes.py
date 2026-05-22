@@ -226,6 +226,38 @@ def probe_finnhub_upgrades() -> None:
         _record("finnhub", "upgrades", False, repr(exc))
 
 
+def probe_twelvedata_earnings() -> None:
+    """Twelve Data `/earnings` reachability probe. Smart-elides like the
+    Finnhub fallback probes: skip when breaker open OR a real fetch
+    succeeded in the last 4h, to spare the 800/day budget."""
+    from app.core.config import settings
+    if not settings.twelvedata_api_key:
+        return
+    from app.services import twelvedata_earnings_service
+    blocked, _ = twelvedata_earnings_service._is_blocked()
+    if blocked:
+        return
+    recent = data_source_metrics.seconds_since_last_success("twelvedata", "earnings")
+    if recent is not None and recent < 4 * 3600:
+        return
+    try:
+        import requests
+        r = requests.get(
+            "https://api.twelvedata.com/earnings",
+            params={"symbol": _PROBE_TICKER, "apikey": settings.twelvedata_api_key},
+            timeout=8,
+        )
+        if r.status_code == 429:
+            twelvedata_earnings_service._trip_breaker("probe HTTP 429")
+        ok = r.status_code == 200 and "earnings" in r.text
+        _record(
+            "twelvedata", "earnings", ok,
+            "" if ok else f"HTTP {r.status_code}"
+        )
+    except Exception as exc:  # noqa: BLE001
+        _record("twelvedata", "earnings", False, repr(exc))
+
+
 def probe_fred_macro() -> None:
     """Single-observation probe of UNRATE (US unemployment, monthly)."""
     from app.core.config import settings
@@ -451,6 +483,7 @@ SLOW_PROBES: list[Callable[[], None]] = [
     # there's no value in 5-min cadence.
     probe_finnhub_news,
     probe_finnhub_upgrades,
+    probe_twelvedata_earnings,
     probe_forexfactory_consensus,
     probe_sec_13f_filings,
     probe_nasdaq_premarket,

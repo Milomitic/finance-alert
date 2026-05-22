@@ -449,12 +449,16 @@ def _merge_finnhub_actuals_into_earnings(ticker: str, f: "Fundamentals") -> None
     the whole catalog) and then calls `patch_earning_from_finnhub` to
     inject the actuals directly, without a per-ticker Finnhub roundtrip.
 
-    No-ops on FINNHUB_API_KEY unset (`is_enabled()` returns False) or
-    when Finnhub has nothing fresh either. Exceptions caller-swallowed
-    so a Finnhub outage never blocks the yfinance payload.
+    Sources are tried in order: Finnhub (fallback #1), then Twelve Data
+    (tier-3, a separate free provider) when Finnhub has nothing — so a
+    Finnhub rate-limit/outage doesn't leave the actual blank. No-ops
+    when BOTH keys are unset or neither has a fresh actual. Exceptions
+    caller-swallowed so an upstream outage never blocks the yfinance
+    payload.
     """
-    from app.services import finnhub_earnings_service
-    if not finnhub_earnings_service.is_enabled():
+    from app.services import finnhub_earnings_service, twelvedata_earnings_service
+    if not (finnhub_earnings_service.is_enabled()
+            or twelvedata_earnings_service.is_enabled()):
         return
     from datetime import date as _date
 
@@ -472,7 +476,16 @@ def _merge_finnhub_actuals_into_earnings(ticker: str, f: "Fundamentals") -> None
     found = finnhub_earnings_service.fetch_recent_actuals([ticker], days_back=14)
     rec = found.get(ticker)
     if rec is None:
-        return  # Finnhub also has no released record in the window
+        # Tier-3 fallback: Finnhub had nothing OR its breaker is open
+        # (rate-limited). Twelve Data is a SEPARATE free provider, so a
+        # Finnhub outage no longer leaves the just-released actual blank.
+        # Same record shape (revenue None) — consumed identically below.
+        td_found = twelvedata_earnings_service.fetch_recent_actuals(
+            [ticker], days_back=14
+        )
+        rec = td_found.get(ticker)
+    if rec is None:
+        return  # neither Finnhub nor Twelve Data has a released record
     # Dedup by date: if yfinance ALSO has this date in its history,
     # don't append a duplicate. yfinance's record wins (its surprise%
     # is computed against the consensus estimate yfinance tracks).
@@ -515,8 +528,8 @@ def _merge_finnhub_actuals_into_earnings(ticker: str, f: "Fundamentals") -> None
     f.next_eps_estimate = None
     f.next_revenue_estimate = None
     logger.info(
-        f"[fund] {ticker}: patched earnings actual from Finnhub "
-        f"(date={rec.date} eps_actual={rec.eps_actual})"
+        f"[fund] {ticker}: patched earnings actual from "
+        f"{type(rec).__name__} (date={rec.date} eps_actual={rec.eps_actual})"
     )
 
 
