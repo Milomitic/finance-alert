@@ -559,6 +559,7 @@ def get_etf_holdings(
     holdings = etf_holdings_service.get_holdings(db, ticker)
     if not holdings:
         return EtfHoldingsOut(is_etf=False, holdings=[])
+    underlying = etf_holdings_service.underlying_of(ticker)
 
     symbols = [h.symbol for h in holdings]
     quotes = live_quote_service.get_quotes_batch(symbols)
@@ -608,4 +609,6 @@ def get_etf_holdings(
             )
         )
     weighted = (w_change_sum / w_total) if w_total > 0 else None
-    return EtfHoldingsOut(is_etf=True, holdings=out, weighted_change_pct=weighted)
+    return EtfHoldingsOut(
+        is_etf=True, holdings=out, weighted_change_pct=weighted, underlying=underlying,
+    )

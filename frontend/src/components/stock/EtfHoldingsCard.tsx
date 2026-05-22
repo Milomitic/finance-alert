@@ -40,6 +40,7 @@ export function EtfHoldingsCard({ ticker }: Props) {
   }
 
   const wChange = data.weighted_change_pct;
+  const underlying = data.underlying;
 
   return (
     <Card className="overflow-hidden">
@@ -50,7 +51,15 @@ export function EtfHoldingsCard({ ticker }: Props) {
             label="Componenti ETF"
             right={
               <span className="text-[11px] text-muted-foreground tabular-nums">
-                {holdings.length} posizioni
+                {underlying ? (
+                  <>
+                    via{" "}
+                    <span className="font-semibold text-foreground/70">{underlying}</span>{" "}
+                    · {holdings.length}
+                  </>
+                ) : (
+                  <>{holdings.length} posizioni</>
+                )}
               </span>
             }
           />
@@ -62,13 +71,25 @@ export function EtfHoldingsCard({ ticker }: Props) {
                   ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/60"
                   : "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800/60",
               )}
-              title="Variazione media delle componenti, pesata per quota — proxy del movimento dell'ETF"
+              title={
+                underlying
+                  ? `Variazione media pesata del paniere dell'indice sottostante (${underlying})`
+                  : "Variazione media delle componenti, pesata per quota — proxy del movimento dell'ETF"
+              }
             >
-              media pesata {wChange >= 0 ? "+" : ""}
+              {underlying ? "indice" : "media pesata"} {wChange >= 0 ? "+" : ""}
               {wChange.toFixed(2)}%
             </span>
           )}
         </div>
+        {underlying && (
+          <div className="px-4 py-1.5 text-[11px] text-muted-foreground border-b bg-muted/10 leading-snug">
+            ETF a leva: esposizione tramite swap sull'indice. Mostriamo il
+            paniere reale dell'indice sottostante (
+            <span className="font-semibold text-foreground/70">{underlying}</span>
+            ) — stesse componenti, leva/direzione a parte.
+          </div>
+        )}
 
         <ul className="divide-y divide-border/40 max-h-[460px] overflow-y-auto">
           {holdings.map((h) => (

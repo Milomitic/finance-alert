@@ -73,8 +73,11 @@ class EtfHoldingsOut(BaseModel):
     is_etf: bool
     holdings: list[EtfHoldingOut] = []
     # Weighted average of the components' day variation — a proxy for how
-    # the ETF should move today. None when no component has a quote.
+    # the underlying index moved today. None when no component has a quote.
     weighted_change_pct: float | None = None
+    # For a leveraged/inverse ETF: the physical ETF whose basket we show
+    # in place of the swaps (e.g. SOXL → "SOXX"). None for plain ETFs.
+    underlying: str | None = None
 
 
 class FundamentalsAnnualOut(BaseModel):

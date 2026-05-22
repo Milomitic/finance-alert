@@ -773,8 +773,11 @@ export interface EtfHoldings {
   is_etf: boolean;
   holdings: EtfHolding[];
   /** Weighted average of the components' day variation — proxy for the
-   *  ETF's expected move. Null when no component has a quote. */
+   *  underlying index's move. Null when no component has a quote. */
   weighted_change_pct: number | null;
+  /** For a leveraged/inverse ETF: the physical ETF whose basket is shown
+   *  in place of the swaps (e.g. SOXL → "SOXX"). Null for plain ETFs. */
+  underlying?: string | null;
 }
 
 export interface LiveQuote {
