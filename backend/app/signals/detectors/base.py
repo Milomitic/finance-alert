@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import date as _date
-from typing import Any, Protocol
+from typing import Protocol
 
 import pandas as pd
 
@@ -11,6 +11,9 @@ from app.signals.context import SignalContext
 from app.signals.events import Event
 
 
+# frozen=True makes the fields immutable but NOT hashable — chain/invalidation/
+# factors are mutable containers. Don't put SignalMatch in a set or use it as a
+# dict key; it is meant to be iterated and serialised to JSON.
 @dataclass(frozen=True)
 class SignalMatch:
     name: str
