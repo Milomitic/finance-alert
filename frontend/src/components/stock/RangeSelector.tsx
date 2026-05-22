@@ -35,14 +35,14 @@ const OPTIONS = [
 
 export function RangeSelector({ value, onChange }: Props) {
   return (
-    <div className="inline-flex rounded-md border bg-muted/30 p-0.5">
+    <div className="inline-flex h-8 items-center rounded-md border bg-muted/30 p-0.5">
       {OPTIONS.map((opt) => (
         <button
           key={opt.key}
           type="button"
           onClick={() => onChange(opt.key)}
           className={cn(
-            "px-3 py-1 text-sm font-medium rounded transition-colors",
+            "h-7 px-3 text-sm font-medium rounded transition-colors flex items-center",
             value === opt.key
               ? "bg-background shadow-sm text-foreground"
               : "text-muted-foreground hover:text-foreground",

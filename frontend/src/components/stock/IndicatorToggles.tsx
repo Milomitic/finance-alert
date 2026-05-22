@@ -168,7 +168,7 @@ function withAlpha(hex: string, a: number): string {
 
 export function IndicatorToggles({ state, onChange, periods }: Props) {
   return (
-    <div className="inline-flex items-center gap-x-2 gap-y-1 flex-wrap">
+    <div className="inline-flex items-center gap-2 flex-wrap">
       {INDICATOR_CATALOG.map((meta) => {
         const s = state[meta.key];
         const on = s.visible;
@@ -184,7 +184,7 @@ export function IndicatorToggles({ state, onChange, periods }: Props) {
         return (
           <div
             key={meta.key}
-            className="inline-flex items-center rounded-md overflow-hidden transition-colors"
+            className="inline-flex h-8 items-center rounded-md overflow-hidden transition-colors"
             style={{
               backgroundColor: activeBg,
               border: `1px solid ${activeBorder ?? "hsl(var(--border))"}`,
@@ -193,7 +193,7 @@ export function IndicatorToggles({ state, onChange, periods }: Props) {
             <button
               type="button"
               onClick={() => onChange(meta.key, { ...s, visible: !on })}
-              className="px-2.5 py-1 text-sm font-semibold transition-colors"
+              className="h-full px-2.5 text-sm font-semibold transition-colors flex items-center"
               title={`${on ? "Nascondi" : "Mostra"} ${live.label} — ${live.description}`}
               style={{ color: on ? s.color : "var(--muted-foreground, #64748b)" }}
             >

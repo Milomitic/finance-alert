@@ -524,36 +524,41 @@ export function PriceChart({
       {/* Fixed top-left legend (replaces the cursor-following popup): the
           OHLCV of the latest bar by default, the hovered bar on
           crosshair-move. Sits in the chart's top-left corner — under the
-          toolbar's indicators row — and never occludes the candles. */}
+          toolbar's indicators row — and never occludes the candles.
+          Two lines: O/H/L/C on top, Vol + Δ% below (no date — it's
+          already on the time axis under the cursor). */}
       {legend && (
-        <div className="absolute top-2 left-2 z-10 pointer-events-none flex flex-wrap items-center gap-x-3 gap-y-0.5 rounded-md border bg-card/85 backdrop-blur-sm px-2.5 py-1 text-[12px] leading-tight font-mono tabular-nums shadow-sm">
-          <span className="font-semibold text-foreground/80">{legend.date}</span>
-          <span>
-            <span className="text-muted-foreground">O</span> {fmtPrice(legend.open)}
-          </span>
-          <span>
-            <span className="text-muted-foreground">H</span>{" "}
-            <span className={upTone}>{fmtPrice(legend.high)}</span>
-          </span>
-          <span>
-            <span className="text-muted-foreground">L</span>{" "}
-            <span className={downTone}>{fmtPrice(legend.low)}</span>
-          </span>
-          <span>
-            <span className="text-muted-foreground">C</span>{" "}
-            <span className={cn("font-semibold", legend.isUp ? upTone : downTone)}>
-              {fmtPrice(legend.close)}
+        <div className="absolute top-2 left-2 z-10 pointer-events-none rounded-md border bg-card/85 backdrop-blur-sm px-3 py-1.5 font-mono tabular-nums shadow-sm text-sm leading-snug">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-0.5">
+            <span>
+              <span className="text-muted-foreground">O</span> {fmtPrice(legend.open)}
             </span>
-          </span>
-          <span>
-            <span className="text-muted-foreground">Vol</span> {fmtVolume(legend.volume)}
-          </span>
-          {legend.changePct !== null && (
-            <span className={cn("font-semibold", legend.changePct >= 0 ? upTone : downTone)}>
-              {legend.changePct >= 0 ? "+" : ""}
-              {legend.changePct.toFixed(2)}%
+            <span>
+              <span className="text-muted-foreground">H</span>{" "}
+              <span className={upTone}>{fmtPrice(legend.high)}</span>
             </span>
-          )}
+            <span>
+              <span className="text-muted-foreground">L</span>{" "}
+              <span className={downTone}>{fmtPrice(legend.low)}</span>
+            </span>
+            <span>
+              <span className="text-muted-foreground">C</span>{" "}
+              <span className={cn("font-semibold", legend.isUp ? upTone : downTone)}>
+                {fmtPrice(legend.close)}
+              </span>
+            </span>
+          </div>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-0.5 mt-1">
+            <span>
+              <span className="text-muted-foreground">Vol</span> {fmtVolume(legend.volume)}
+            </span>
+            {legend.changePct !== null && (
+              <span className={cn("font-semibold", legend.changePct >= 0 ? upTone : downTone)}>
+                {legend.changePct >= 0 ? "+" : ""}
+                {legend.changePct.toFixed(2)}%
+              </span>
+            )}
+          </div>
         </div>
       )}
     </div>

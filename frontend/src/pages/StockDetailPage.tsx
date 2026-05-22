@@ -294,30 +294,30 @@ export default function StockDetailPage() {
         <Card>
           <CardContent className="p-4">
             {/* Single-row toolbar: timeframe (left) · indicatori (middle) ·
-                strumenti di disegno (right). Wraps gracefully when the
-                card narrows. */}
-            <div className="flex items-center flex-wrap gap-x-3 gap-y-2 mb-3">
+                strumenti di disegno (right). All controls share a 32px
+                (h-8) height and sit on one wrapping row, separated by thin
+                dividers so the three groups read as distinct clusters. */}
+            <div className="flex items-center flex-wrap gap-x-2.5 gap-y-2 mb-3">
               <RangeSelector
                 value={range}
                 onChange={(r) => setSearchParams({ range: r })}
               />
-              <div className="h-5 w-px bg-border hidden md:block" />
-              <div className="flex items-center gap-2 min-w-0">
-                <span className="text-[11px] uppercase tracking-wider font-bold text-muted-foreground shrink-0">
-                  Indicatori
-                </span>
-                <IndicatorToggles
-                  state={indicators}
-                  onChange={onIndicatorChange}
-                  periods={d.indicators.periods}
-                />
-              </div>
-              <div className="flex items-center gap-2 ml-auto">
+              <div className="h-6 w-px bg-border/70 hidden md:block" />
+              <span className="text-[11px] uppercase tracking-wider font-semibold text-muted-foreground/80 shrink-0 hidden sm:block">
+                Indicatori
+              </span>
+              <IndicatorToggles
+                state={indicators}
+                onChange={onIndicatorChange}
+                periods={d.indicators.periods}
+              />
+              <div className="flex items-center gap-2.5 ml-auto">
                 {mode === "trend" && (
                   <span className="text-[11px] font-medium text-blue-600 animate-pulse whitespace-nowrap">
                     {pendingTrend ? "Clicca il 2° punto" : "Clicca il 1° punto"}
                   </span>
                 )}
+                <div className="h-6 w-px bg-border/70 hidden lg:block" />
                 <DrawingToolbar
                   mode={mode}
                   onSetMode={setMode}
