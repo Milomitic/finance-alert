@@ -1,6 +1,5 @@
-import { Radio } from "lucide-react";
-
 import type { OhlcvBar, Stock, StockKpis } from "@/api/types";
+import { MarketStateBadge } from "@/components/dashboard/MarketStateBadge";
 import { StockLogo } from "@/components/dashboard/StockLogo";
 import { Card, CardContent } from "@/components/ui/card";
 import { FlashValue } from "@/components/ui/FlashValue";
@@ -84,6 +83,11 @@ export function StockHeader({ stock, kpis, ohlcv }: Props) {
   const live = useLiveQuote(stock.ticker);
   const liveOk = live.data && live.data.price != null && live.data.error == null;
   const isMarketOpen = liveOk && live.data!.market_state === "OPEN";
+  // US pre-market: the live price is a pre-open quote and `change_pct` is the
+  // pre-open move vs yesterday's close. Without flagging this, the price block
+  // would read "Ultima chiusura" over a live pre-market figure — exactly the
+  // ambiguity the PRE badge resolves on the dashboard cards.
+  const isPremarket = liveOk && live.data!.market_state === "PRE";
   const displayPrice = liveOk ? live.data!.price! : kpis.last_close;
   const change = liveOk ? (live.data!.change_pct ?? null) : kpis.change_pct;
   const changeAbs = liveOk ? live.data!.change_abs : null;
@@ -170,21 +174,25 @@ export function StockHeader({ stock, kpis, ohlcv }: Props) {
               <>
                 <div className="flex items-center gap-1.5 text-sm uppercase tracking-wide">
                   {isMarketOpen ? (
-                    <span
-                      className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-300 font-semibold"
+                    <MarketStateBadge
+                      phase="open"
+                      size="md"
                       title={
                         liveAge != null
                           ? `Mercato aperto · prezzo aggiornato ${Math.round(liveAge)}s fa (cache 10s + polling 15s)`
                           : "Prezzo live"
                       }
-                    >
-                      <span className="relative inline-flex h-2 w-2">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                        <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
-                      </span>
-                      <Radio className="h-3 w-3" />
-                      LIVE
-                    </span>
+                    />
+                  ) : isPremarket ? (
+                    <MarketStateBadge
+                      phase="pre"
+                      size="md"
+                      title={
+                        liveAge != null
+                          ? `Pre-market USA · la variazione è il movimento pre-apertura vs chiusura di ieri · aggiornato ${Math.round(liveAge)}s fa`
+                          : "Pre-market USA — la variazione mostrata è il movimento pre-apertura rispetto alla chiusura di ieri"
+                      }
+                    />
                   ) : (
                     <span
                       className="inline-flex items-center gap-1 text-muted-foreground font-semibold"
@@ -212,17 +220,22 @@ export function StockHeader({ stock, kpis, ohlcv }: Props) {
                 <span>{change >= 0 ? "+" : ""}{change.toFixed(2)}%</span>
               </div>
             )}
-            {/* V3.3: quando il mercato è aperto e il prezzo "live"
-                differisce dalla chiusura precedente, mostra la previous
-                close come contesto. La variazione % è già coperta
-                sopra; questa caption fornisce il prezzo di partenza
-                della giornata, utile per leggere la dimensione del
-                movimento intraday. Nascosto a mercato chiuso (in quel
-                caso il prezzo mostrato È già la chiusura). */}
-            {isMarketOpen && live.data?.prev_close != null && (
+            {/* V3.3: quando il mercato è aperto (o in pre-market) e il
+                prezzo "live" differisce dalla chiusura precedente, mostra
+                la previous close come contesto. La variazione % è già
+                coperta sopra; questa caption fornisce il prezzo di
+                riferimento da cui si calcola il movimento. In pre-market
+                è la base del movimento pre-apertura; intraday è il prezzo
+                di partenza della giornata. Nascosto a mercato chiuso (in
+                quel caso il prezzo mostrato È già la chiusura). */}
+            {(isMarketOpen || isPremarket) && live.data?.prev_close != null && (
               <div
                 className="text-[11px] uppercase tracking-wider text-muted-foreground/80 mt-0.5"
-                title="Chiusura della sessione di trading precedente — riferimento da cui calcolare la variazione intraday"
+                title={
+                  isPremarket
+                    ? "Chiusura di ieri — riferimento da cui si calcola il movimento pre-apertura"
+                    : "Chiusura della sessione di trading precedente — riferimento da cui calcolare la variazione intraday"
+                }
               >
                 Prev close:{" "}
                 <span className="text-foreground/80 font-semibold tabular-nums">
