@@ -251,6 +251,73 @@ export interface GridDay {
   jsDayIndex: number;
 }
 
+/** Build the 5 weekday cells (Mon→Fri) of the week containing `ref`.
+ *  Saturday/Sunday are intentionally excluded — earnings + macro
+ *  releases land Mon-Fri, so the weekly view dedicates the full width to
+ *  the five trading days. `inMonth` is always true (the weekly view has
+ *  no adjacent-month dimming concept). */
+export function buildWeekDays(ref: Date): GridDay[] {
+  const jsDay = ref.getDay(); // 0=Sun..6=Sat
+  const mondayOffset = (jsDay + 6) % 7; // days since Monday
+  const monday = new Date(
+    ref.getFullYear(),
+    ref.getMonth(),
+    ref.getDate() - mondayOffset,
+  );
+  const out: GridDay[] = [];
+  for (let i = 0; i < 5; i++) {
+    const d = new Date(
+      monday.getFullYear(),
+      monday.getMonth(),
+      monday.getDate() + i,
+    );
+    out.push({
+      iso: toISODate(d),
+      day: d.getDate(),
+      inMonth: true,
+      isWeekend: false,
+      jsDayIndex: d.getDay(),
+    });
+  }
+  return out;
+}
+
+/** Compact label for the weekly nav: "18 – 22 mag 2026", or
+ *  "29 set – 3 ott 2026" when the week straddles two months. */
+export function formatWeekLabel(days: GridDay[]): string {
+  if (days.length === 0) return "";
+  const first = parseISODate(days[0].iso);
+  const last = parseISODate(days[days.length - 1].iso);
+  const month = (d: Date) =>
+    new Intl.DateTimeFormat("it-IT", { month: "short" })
+      .format(d)
+      .replace(".", "");
+  const year = last.getFullYear();
+  if (first.getMonth() === last.getMonth()) {
+    return `${first.getDate()} – ${last.getDate()} ${month(last)} ${year}`;
+  }
+  return `${first.getDate()} ${month(first)} – ${last.getDate()} ${month(last)} ${year}`;
+}
+
+/* ─── Earnings beat/miss tone ────────────────────────────────────────────── */
+/* Applied to the WHOLE earnings chip once the quarter has reported
+ * (surprise_pct != null): green when the actual beat the estimate,
+ * red when it missed. Replaces the sector tone so the ticker label
+ * reads green/red at a glance. Literal class strings for the purger. */
+export const EARNINGS_BEAT_TONE =
+  "bg-emerald-100 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-200 border-emerald-300/80 dark:border-emerald-800/70";
+export const EARNINGS_MISS_TONE =
+  "bg-rose-100 dark:bg-rose-950/50 text-rose-800 dark:text-rose-200 border-rose-300/80 dark:border-rose-800/70";
+
+/** Whole-chip tone for a reported earnings event; null when the quarter
+ *  hasn't reported yet (caller falls back to the sector tone). */
+export function earningsBeatTone(
+  surprisePct: number | null | undefined,
+): string | null {
+  if (surprisePct == null) return null;
+  return surprisePct >= 0 ? EARNINGS_BEAT_TONE : EARNINGS_MISS_TONE;
+}
+
 export function buildMonthGrid(year: number, month0: number): GridDay[] {
   // First day of the visible target month
   const first = new Date(year, month0, 1);

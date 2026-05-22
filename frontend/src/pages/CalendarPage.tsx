@@ -1,4 +1,10 @@
-import { CalendarRange, AlertCircle, Loader2 } from "lucide-react";
+import {
+  CalendarRange,
+  AlertCircle,
+  CalendarDays,
+  Columns3,
+  Loader2,
+} from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type { CalendarEvent, MacroImportance } from "@/api/types";
@@ -8,10 +14,63 @@ import {
   type CalendarKindFilter,
   MonthGrid,
   MonthNav,
+  WeekGrid,
 } from "@/components/calendar";
 import { useCalendar } from "@/hooks/useCalendar";
-import { buildMonthGrid, todayISO } from "@/lib/calendarMeta";
+import {
+  buildMonthGrid,
+  buildWeekDays,
+  formatMonthLabel,
+  formatWeekLabel,
+  todayISO,
+} from "@/lib/calendarMeta";
 import { cn } from "@/lib/utils";
+
+type CalendarView = "month" | "week";
+
+/* Prominent Month/Week switch — the request asks for a clearly-visible
+ * toggle. Segmented control with icon + label per option. */
+function ViewToggle({
+  view,
+  onChange,
+}: {
+  view: CalendarView;
+  onChange: (v: CalendarView) => void;
+}) {
+  const Opt = ({
+    value,
+    label,
+    Icon,
+  }: {
+    value: CalendarView;
+    label: string;
+    Icon: typeof CalendarDays;
+  }) => {
+    const active = view === value;
+    return (
+      <button
+        type="button"
+        onClick={() => onChange(value)}
+        aria-pressed={active}
+        className={cn(
+          "inline-flex items-center gap-1.5 h-9 px-3.5 text-sm font-semibold rounded-md transition-colors",
+          active
+            ? "bg-background shadow-sm text-foreground"
+            : "text-muted-foreground hover:text-foreground",
+        )}
+      >
+        <Icon className="h-4 w-4" />
+        {label}
+      </button>
+    );
+  };
+  return (
+    <div className="inline-flex items-center rounded-lg border bg-muted/40 p-1">
+      <Opt value="month" label="Mese" Icon={CalendarDays} />
+      <Opt value="week" label="Settimana" Icon={Columns3} />
+    </div>
+  );
+}
 
 /* ─── CalendarPage — /calendar route ────────────────────────────────────── */
 /* Top-level layout (desktop):
@@ -38,9 +97,10 @@ import { cn } from "@/lib/utils";
  * usually re-uses the cache for adjacent ranges. */
 
 export default function CalendarPage() {
-  // Cursor: any date inside the target month. Initialize to today so the
-  // page lands on the current month.
+  // Cursor: any date inside the target period (month or week). Initialize
+  // to today so the page lands on the current one.
   const [cursor, setCursor] = useState<Date>(() => new Date());
+  const [view, setView] = useState<CalendarView>("month");
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
 
   // Filters
@@ -49,16 +109,34 @@ export default function CalendarPage() {
     () => new Set(["high", "medium", "low"]),
   );
 
-  // The visible grid spans 6 weeks of dates. The query range is computed
-  // to match that exactly so the leading/trailing days of adjacent months
-  // can still render their events.
-  const { fromISO, toISO } = useMemo(() => {
+  const today = useMemo(() => new Date(), []);
+
+  // Fetch range + nav metadata, adapted to the active view. Month view
+  // spans the full 6-week grid (so adjacent-month edges still render);
+  // week view spans Mon→Fri of the cursor's week.
+  const { fromISO, toISO, navLabel, atCurrent, unitLabel } = useMemo(() => {
+    if (view === "week") {
+      const days = buildWeekDays(cursor);
+      const todayWeek = buildWeekDays(today);
+      return {
+        fromISO: days[0].iso,
+        toISO: days[days.length - 1].iso,
+        navLabel: formatWeekLabel(days),
+        atCurrent: days[0].iso === todayWeek[0].iso,
+        unitLabel: "Settimana",
+      };
+    }
     const grid = buildMonthGrid(cursor.getFullYear(), cursor.getMonth());
     return {
       fromISO: grid[0].iso,
       toISO: grid[grid.length - 1].iso,
+      navLabel: formatMonthLabel(cursor),
+      atCurrent:
+        cursor.getFullYear() === today.getFullYear() &&
+        cursor.getMonth() === today.getMonth(),
+      unitLabel: "Mese",
     };
-  }, [cursor]);
+  }, [view, cursor, today]);
 
   const queryParams = useMemo(() => {
     const kinds: Array<"earnings" | "macro"> | undefined =
@@ -75,20 +153,25 @@ export default function CalendarPage() {
 
   const q = useCalendar(queryParams);
 
-  // Today's month is the cursor's reference; lets us disable the Oggi CTA
-  // when already on the current month.
-  const today = useMemo(() => new Date(), []);
-  const isOnCurrentMonth =
-    cursor.getFullYear() === today.getFullYear() &&
-    cursor.getMonth() === today.getMonth();
-
+  // Prev/Next step by one month (month view) or one week (week view) —
+  // both scroll the cursor; the range memo above re-derives everything.
   const goPrev = useCallback(
-    () => setCursor((d) => new Date(d.getFullYear(), d.getMonth() - 1, 1)),
-    [],
+    () =>
+      setCursor((d) =>
+        view === "week"
+          ? new Date(d.getFullYear(), d.getMonth(), d.getDate() - 7)
+          : new Date(d.getFullYear(), d.getMonth() - 1, 1),
+      ),
+    [view],
   );
   const goNext = useCallback(
-    () => setCursor((d) => new Date(d.getFullYear(), d.getMonth() + 1, 1)),
-    [],
+    () =>
+      setCursor((d) =>
+        view === "week"
+          ? new Date(d.getFullYear(), d.getMonth(), d.getDate() + 7)
+          : new Date(d.getFullYear(), d.getMonth() + 1, 1),
+      ),
+    [view],
   );
   const goToday = useCallback(() => {
     setCursor(new Date());
@@ -165,15 +248,20 @@ export default function CalendarPage() {
         </p>
       </header>
 
-      {/* ── Control bar — month nav (left) + filters (right). ────────── */}
+      {/* ── Control bar — view switch + period nav (left) + filters
+            (right). ──────────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <MonthNav
-          cursor={cursor}
-          onPrev={goPrev}
-          onNext={goNext}
-          onToday={goToday}
-          isOnCurrentMonth={isOnCurrentMonth}
-        />
+        <div className="flex flex-wrap items-center gap-3">
+          <ViewToggle view={view} onChange={setView} />
+          <MonthNav
+            label={navLabel}
+            onPrev={goPrev}
+            onNext={goNext}
+            onToday={goToday}
+            atCurrent={atCurrent}
+            unitLabel={unitLabel}
+          />
+        </div>
         <FilterStrip
           kind={kind}
           onKindChange={setKind}
@@ -241,17 +329,27 @@ export default function CalendarPage() {
             Wrapping into one column keeps these aligned with each other
             when the panel is open. */}
         <div className="space-y-5 min-w-0">
-          <MonthGrid
-            cursor={cursor}
-            events={events}
-            selectedDate={selectedDate}
-            onSelectDate={onSelectDate}
-            isLoading={q.isLoading}
-          />
+          {view === "week" ? (
+            <WeekGrid
+              cursor={cursor}
+              events={events}
+              selectedDate={selectedDate}
+              onSelectDate={onSelectDate}
+              isLoading={q.isLoading}
+            />
+          ) : (
+            <MonthGrid
+              cursor={cursor}
+              events={events}
+              selectedDate={selectedDate}
+              onSelectDate={onSelectDate}
+              isLoading={q.isLoading}
+            />
+          )}
 
           {!q.isLoading && !q.isError && events.length === 0 && (
             <div className="rounded-xl border border-dashed bg-muted/20 px-6 py-10 text-center text-sm text-muted-foreground">
-              Nessun evento questo mese.
+              Nessun evento {view === "week" ? "questa settimana" : "questo mese"}.
             </div>
           )}
         </div>

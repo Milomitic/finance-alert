@@ -5,3 +5,4 @@ export { FilterStrip, type CalendarKindFilter } from "./FilterStrip";
 export { ImportanceDots } from "./ImportanceDots";
 export { MonthGrid } from "./MonthGrid";
 export { MonthNav } from "./MonthNav";
+export { WeekGrid } from "./WeekGrid";

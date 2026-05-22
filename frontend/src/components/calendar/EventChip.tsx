@@ -10,6 +10,7 @@ import {
 import {
   IMPORTANCE_BG,
   IMPORTANCE_LABEL,
+  earningsBeatTone,
   formatEps,
   formatMarketCap,
   regionFlag,
@@ -64,7 +65,13 @@ function EarningsChip({
   tabIndex?: number;
   onClick?: (e: React.MouseEvent) => void;
 }) {
-  const tone = getSectorTone(event.sector);
+  // Once the quarter has reported (surprise_pct != null) we recolor the
+  // WHOLE chip green (beat) / red (miss) so the ticker label reads its
+  // result at a glance; before that it keeps the neutral sector tone.
+  const beatTone = earningsBeatTone(event.surprise_pct);
+  const reported = beatTone != null;
+  const beat = reported && (event.surprise_pct ?? 0) >= 0;
+  const tone = beatTone ?? getSectorTone(event.sector);
   const ring = getSectorRing(event.sector);
   const epsLabel = formatEps(event.eps_estimate);
   const mcapLabel = formatMarketCap(event.market_cap);
@@ -102,6 +109,17 @@ function EarningsChip({
           <span className="text-[14px] font-bold tracking-tight tabular-nums leading-none truncate">
             {event.ticker}
           </span>
+          {/* Beat/miss arrow once reported — color inherits the chip's
+              green/red tone, so it reads without extra palette. */}
+          {reported && (
+            <span
+              className="text-[11px] font-bold leading-none shrink-0"
+              aria-label={beat ? "ha battuto le stime" : "sotto le stime"}
+              title={beat ? "Ha battuto le stime" : "Sotto le stime"}
+            >
+              {beat ? "▲" : "▼"}
+            </span>
+          )}
           {/* V3.4: pre/after-market icon. ☀ before market open (the
               earnings was reported in pre-market window),
               ☾ after-market close. Backend infers from yfinance UTC
@@ -142,6 +160,33 @@ function EarningsChip({
         <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 pt-1 text-[14px] tabular-nums">
           <span className="text-muted-foreground">EPS est.</span>
           <span className="text-right font-semibold">{epsLabel}</span>
+          {reported && (
+            <>
+              <span className="text-muted-foreground">EPS rilasciato</span>
+              <span
+                className={cn(
+                  "text-right font-semibold",
+                  beat
+                    ? "text-emerald-700 dark:text-emerald-300"
+                    : "text-rose-700 dark:text-rose-300",
+                )}
+              >
+                {formatEps(event.eps_reported)}
+              </span>
+              <span className="text-muted-foreground">Sorpresa</span>
+              <span
+                className={cn(
+                  "text-right font-semibold",
+                  beat
+                    ? "text-emerald-700 dark:text-emerald-300"
+                    : "text-rose-700 dark:text-rose-300",
+                )}
+              >
+                {(event.surprise_pct ?? 0) >= 0 ? "+" : ""}
+                {(event.surprise_pct ?? 0).toFixed(1)}%
+              </span>
+            </>
+          )}
           <span className="text-muted-foreground">Cap. mercato</span>
           <span className="text-right font-semibold">{mcapLabel}</span>
         </div>
