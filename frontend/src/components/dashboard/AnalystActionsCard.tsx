@@ -1,17 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import {
-  Gavel,
-  ArrowUpRight,
-  ArrowDownRight,
-  ArrowRight,
-  Sparkles,
-  Minus,
-  Newspaper,
-  ChevronsUp,
-  ChevronsDown,
-  Target,
-  Equal,
-} from "lucide-react";
+import { Gavel, Newspaper } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { dashboard, type AnalystAction } from "@/api/dashboard";
@@ -20,175 +8,102 @@ import { Card, CardContent } from "@/components/ui/card";
 import { SectionTitle } from "@/components/ui/section-title";
 import { cn } from "@/lib/utils";
 
-/* Action → visual treatment. yfinance's `action` codes:
-   up = upgrade, down = downgrade, init = new coverage,
-   reit/main = reiterate/maintain (no grade change). */
-const ACTION_META: Record<
-  string,
-  { label: string; tone: string; chipBg: string; Icon: React.ComponentType<{ className?: string }> }
-> = {
-  up:   { label: "Upgrade",    tone: "text-emerald-700 dark:text-emerald-300", chipBg: "bg-emerald-100/70 dark:bg-emerald-900/30 border-emerald-300/60 dark:border-emerald-700/50", Icon: ArrowUpRight },
-  down: { label: "Downgrade",  tone: "text-rose-700 dark:text-rose-300",       chipBg: "bg-rose-100/70 dark:bg-rose-900/30 border-rose-300/60 dark:border-rose-700/50",          Icon: ArrowDownRight },
-  init: { label: "Initiation", tone: "text-sky-700 dark:text-sky-300",         chipBg: "bg-sky-100/70 dark:bg-sky-900/30 border-sky-300/60 dark:border-sky-700/50",            Icon: Sparkles },
-  reit: { label: "Reiterate",  tone: "text-muted-foreground",                  chipBg: "bg-muted/60 border-border/50",                                                          Icon: Minus },
-  main: { label: "Maintain",   tone: "text-muted-foreground",                  chipBg: "bg-muted/60 border-border/50",                                                          Icon: Minus },
-};
-
-function actionMeta(action: string) {
-  return ACTION_META[action] ?? ACTION_META.main;
-}
-
-/* Price-target chip palette — mirrors the rating action chip so the
- * row reads as a coherent pair: rating-action on the left, price-
- * target action on the right, same shape, same tone vocabulary.
- *
- * `price_target_action` is yfinance's *separate* axis from the
- * rating: e.g. a "Maintain" rating can pair with a "Raises" target.
- * That decoupling is informative ("they're standing pat on the
- * rating but bumping the target +5%") so we surface it explicitly
- * instead of folding the two into one chip. */
-const PT_META: Record<
-  string,
-  { label: string; tone: string; chipBg: string; Icon: React.ComponentType<{ className?: string }> }
-> = {
-  Raises:    { label: "Alza target",    tone: "text-emerald-700 dark:text-emerald-300", chipBg: "bg-emerald-50/80 dark:bg-emerald-950/40 border-emerald-300/60 dark:border-emerald-700/50", Icon: ChevronsUp },
-  Lowers:    { label: "Abbassa target", tone: "text-rose-700 dark:text-rose-300",       chipBg: "bg-rose-50/80 dark:bg-rose-950/40 border-rose-300/60 dark:border-rose-700/50",             Icon: ChevronsDown },
-  Maintains: { label: "Conferma target", tone: "text-muted-foreground",                 chipBg: "bg-muted/40 border-border/40",                                                              Icon: Equal },
-  Initiates: { label: "Apre target",    tone: "text-sky-700 dark:text-sky-300",         chipBg: "bg-sky-50/80 dark:bg-sky-950/40 border-sky-300/60 dark:border-sky-700/50",                Icon: Target },
-};
-
-function ptMeta(pt: string | null | undefined) {
-  if (!pt) return null;
-  return PT_META[pt] ?? null;
-}
+/* Genuine rating CHANGES only — the card used to be dominated by
+ * "Maintain"/"Reiterate" rows (a firm reaffirming, no change) which are
+ * noise. We keep upgrades, downgrades and coverage initiations and drop
+ * the maintains, matching the card's own description. */
+const CHANGE_ACTIONS = new Set(["up", "down", "init"]);
 
 /* A price target is only meaningful when strictly positive. yfinance /
- * the news extractor sometimes hand back 0 (or null) when a firm moved
- * the rating but didn't publish a number — rendering that as "$0" was a
- * bug (see the Keybanc row in the screenshot). Coerce non-positive to
- * null so the chip logic treats it as "no number". */
+ * the news extractor sometimes return 0 (or null) when a firm moved the
+ * rating but didn't publish a number → treat non-positive as "no number". */
 function posTarget(v: number | null | undefined): number | null {
   return v != null && v > 0 ? v : null;
 }
 
-/* Grade → sentiment colour. Buy/Outperform/Overweight read bullish
- * (emerald), Sell/Underperform/Underweight bearish (rose), and
- * Hold/Neutral/Sector-Weight/Equal-Weight stay muted. Literal class
- * strings (not composed) so Tailwind's purger keeps them. */
-function gradeTone(grade: string | null | undefined): string {
-  if (!grade) return "text-muted-foreground";
-  if (/sell|underperform|underweight|reduce|negative/i.test(grade))
-    return "text-rose-600 dark:text-rose-400";
-  if (/buy|outperform|overweight|accumulate|positive|^add$/i.test(grade))
-    return "text-emerald-600 dark:text-emerald-400";
-  return "text-muted-foreground"; // hold / neutral / sector weight / in-line
+/* Grade → buy/hold/sell tone bucket. Mirrors AnalystTargetCard.gradeTone
+ * so the dashboard feed and the stock-detail "Analyst" card share the
+ * exact same rating vocabulary + colors. */
+function gradeTone(grade: string | null | undefined): "buy" | "hold" | "sell" | "neutral" {
+  const g = (grade ?? "").toLowerCase();
+  if (/buy|outperform|overweight|positive|accumulate/.test(g)) return "buy";
+  if (/sell|underperform|underweight|negative|reduce/.test(g)) return "sell";
+  if (/hold|neutral|equal|market perform|sector weight|in-line|peer perform/.test(g))
+    return "hold";
+  return "neutral";
 }
 
-/* The resulting grade, sentiment-coloured. For a genuine change we show
- * "from → to" (the `to` carries the colour); the full pair also lives in
- * the title for when it truncates. The row's action chip (Upgrade/
- * Downgrade) already signals direction, so this stays compact. */
-function GradeDisplay({
+/* Literal class strings (not composed) so Tailwind's purger keeps them.
+ * Same palette as AnalystTargetCard's TONE_CLASSES. */
+const TONE_CLASSES: Record<ReturnType<typeof gradeTone>, string> = {
+  buy: "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-200",
+  hold: "bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200",
+  sell: "bg-rose-100 dark:bg-rose-900/40 text-rose-800 dark:text-rose-200",
+  neutral: "bg-muted text-muted-foreground",
+};
+
+/* The rating itself, as a tone-classed chip (the new row "label" — the
+ * Upgrade/Maintain action chip was removed). The full from→to transition
+ * lives on hover for context. */
+function GradeChip({
   from,
   to,
 }: {
   from?: string | null;
   to?: string | null;
 }) {
-  const changed = !!(from && to && from !== to);
-  if (changed) {
-    return (
-      <span
-        className="inline-flex items-center gap-0.5 shrink-0 font-medium leading-none"
-        title={`${from} → ${to}`}
-      >
-        <span className="text-muted-foreground/70">{from}</span>
-        <ArrowRight className="h-2.5 w-2.5 shrink-0 text-muted-foreground/50" />
-        <span className={gradeTone(to)}>{to}</span>
-      </span>
-    );
-  }
-  const g = to || from || null;
+  const grade = to || from || "—";
   return (
     <span
-      className={cn("shrink-0 font-medium leading-none", gradeTone(g))}
-      title={g ?? undefined}
+      className={cn(
+        "px-1.5 py-0.5 rounded text-[12px] font-semibold shrink-0",
+        TONE_CLASSES[gradeTone(grade)],
+      )}
+      title={from && to && from !== to ? `${from} → ${to}` : grade}
     >
-      {g || "—"}
+      {grade}
     </span>
   );
 }
 
-/* Renders the right-hand price-target chip. Inside one tag we pack:
- *  - colour/tone signalling the direction (Raises/Lowers/etc.)
- *  - the new target as the dominant figure
- *  - the prior target as a smaller strikethrough → "291 → $314"
- *
- * If we have an action but no numeric target (Yahoo doesn't always
- * expose them), we fall back to just the action label so the user
- * still sees that the firm touched the target. If we have neither,
- * we render nothing (the date column still anchors the row). */
-function PriceTargetChip({ a }: { a: AnalystAction }) {
-  const meta = ptMeta(a.price_target_action);
-  const cur = posTarget(a.current_price_target);
-  const prior = posTarget(a.prior_price_target);
-
-  // No usable number. A chip is only worth showing if the firm
-  // DIRECTIONALLY moved the target (Raises / Lowers) — that conveys
-  // signal even without a figure. A bare "Maintains"/"Initiates" with
-  // no number is noise (this is exactly what produced the meaningless
-  // "= $0" chip), so we render nothing and let the date anchor the row.
-  if (cur == null) {
-    const directional =
-      a.price_target_action === "Raises" || a.price_target_action === "Lowers";
-    if (meta && directional) {
-      return (
-        <span
-          className={cn(
-            "shrink-0 inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5",
-            meta.chipBg,
-            meta.tone,
-          )}
-          title={meta.label}
-        >
-          <meta.Icon className="h-3 w-3 shrink-0" />
-          <span className="text-[10.5px] font-semibold leading-none">
-            {meta.label}
-          </span>
-        </span>
-      );
-    }
-    return null;
+/* Price-target chip — arrow (direction of the target move) + the new
+ * dollar figure, colored by `price_target_action`. Same inline style as
+ * AnalystTargetCard.PriceTargetChip. Renders nothing when there's no
+ * usable number (the date still anchors the row). */
+function priceTargetTone(action: string | null | undefined): { cls: string; arrow: string } {
+  switch (action) {
+    case "Raises":
+      return { cls: "text-emerald-700 dark:text-emerald-300", arrow: "↑" };
+    case "Lowers":
+      return { cls: "text-rose-700 dark:text-rose-300", arrow: "↓" };
+    case "Initiates":
+      return { cls: "text-blue-700 dark:text-blue-300", arrow: "✦" };
+    case "Maintains":
+    default:
+      return { cls: "text-muted-foreground", arrow: "→" };
   }
+}
 
-  // We have a positive target. Frame it with the PT action when known,
-  // else fall back to a neutral "Target" treatment.
-  const M = meta ?? PT_META.Maintains;
-  const hasDelta = prior != null && cur !== prior;
-  const deltaPct = hasDelta && prior !== 0 ? ((cur - prior!) / prior!) * 100 : null;
-
+function PriceTargetChip({ a }: { a: AnalystAction }) {
+  const cur = posTarget(a.current_price_target);
+  if (cur == null) return null;
+  const prior = posTarget(a.prior_price_target);
+  const tone = priceTargetTone(a.price_target_action);
+  const fmt = Number.isInteger(cur) ? `$${cur}` : `$${cur.toFixed(2)}`;
+  const title =
+    prior != null && prior !== cur
+      ? `Target: $${prior.toFixed(0)} → $${cur.toFixed(0)}`
+      : `Target: $${cur.toFixed(0)}`;
   return (
     <span
       className={cn(
-        "shrink-0 inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 tabular-nums",
-        M.chipBg,
-        M.tone,
+        "inline-flex items-center gap-0.5 tabular-nums font-bold shrink-0 text-[13px]",
+        tone.cls,
       )}
-      title={
-        deltaPct != null
-          ? `${M.label}: $${prior!.toFixed(0)} → $${cur.toFixed(0)} (${deltaPct >= 0 ? "+" : ""}${deltaPct.toFixed(1)}%)`
-          : `${M.label}: $${cur.toFixed(0)}`
-      }
+      title={title}
     >
-      <M.Icon className="h-3 w-3 shrink-0" />
-      {hasDelta && (
-        <span className="text-[10px] line-through opacity-60">
-          ${prior!.toFixed(0)}
-        </span>
-      )}
-      <span className="text-[12.5px] font-bold leading-none">
-        ${cur.toFixed(0)}
-      </span>
+      <span>{tone.arrow}</span>
+      <span>{fmt}</span>
     </span>
   );
 }
@@ -200,7 +115,6 @@ function fmtDate(iso: string): string {
 }
 
 function ActionRow({ a }: { a: AnalystAction }) {
-  const meta = actionMeta(a.action);
   return (
     <li className="border-b border-border/40 last:border-b-0 min-w-0">
       <Link
@@ -208,63 +122,36 @@ function ActionRow({ a }: { a: AnalystAction }) {
         className="flex items-center gap-2.5 px-3 py-2 hover:bg-accent/30 transition-colors min-w-0"
         title={a.name ?? a.ticker}
       >
-        {/* Compact identity: logo + ticker only (company name → row
-            tooltip). In this narrow 1fr dashboard column the repeated
-            full name was clutter AND a second flex-1 block that starved
-            the firm/grade of width. Fixing identity to a small width
-            hands all the free space to the content block below. */}
+        {/* Compact identity: logo + ticker (company name → row tooltip). */}
         <StockLogo ticker={a.ticker} size="xs" />
         <span className="shrink-0 w-[40px] text-[13px] font-bold tabular-nums leading-none truncate">
           {a.ticker}
         </span>
 
-        {/* Content — the sole flex-1 block, so it claims the full
-            remaining width. Line 1: rating action + firm. Line 2:
-            resulting grade (sentiment-coloured). */}
-        <div className="flex-1 min-w-0 space-y-1">
-          <div className="flex items-center gap-1.5 min-w-0">
-            <span
-              className={cn(
-                "inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 shrink-0",
-                meta.chipBg,
-                meta.tone,
-              )}
-              title={`Rating: ${meta.label}`}
-            >
-              <meta.Icon className="h-3 w-3 shrink-0" />
-              <span className="text-[10.5px] font-semibold leading-none">
-                {meta.label}
-              </span>
-            </span>
-            <span
-              className="text-[11.5px] text-muted-foreground truncate"
-              title={a.firm}
-            >
-              {a.firm || "—"}
-            </span>
-            {a.from_news && (
-              <span
-                className="inline-flex items-center gap-0.5 text-[9.5px] text-muted-foreground/70 shrink-0"
-                title="Estratto da una notizia (non dal feed strutturato)"
-              >
-                <Newspaper className="h-2.5 w-2.5" /> news
-              </span>
-            )}
-          </div>
-          <div className="flex items-center gap-1 text-[11px] min-w-0 leading-none">
-            <GradeDisplay from={a.from_grade} to={a.to_grade} />
-          </div>
-        </div>
-
-        {/* Right cluster — price-target chip stacked over the date,
-            right-aligned. Stacking reclaims the horizontal room the old
-            inline date column took, giving the firm/grade more space. */}
-        <div className="shrink-0 flex flex-col items-end gap-1">
-          <PriceTargetChip a={a} />
-          <span className="text-[10px] text-muted-foreground tabular-nums leading-none">
-            {fmtDate(a.date)}
+        {/* Firm — flexes + truncates first when the row gets tight. */}
+        <span
+          className="flex-1 min-w-0 text-[12px] text-muted-foreground truncate"
+          title={a.firm}
+        >
+          {a.firm || "—"}
+        </span>
+        {a.from_news && (
+          <span
+            className="inline-flex items-center gap-0.5 text-[9.5px] text-muted-foreground/70 shrink-0"
+            title="Estratto da una notizia (non dal feed strutturato)"
+          >
+            <Newspaper className="h-2.5 w-2.5" /> news
           </span>
-        </div>
+        )}
+
+        {/* The new "label": rating (valutazione) + price target, in the
+            stock-detail Analyst card's style. */}
+        <GradeChip from={a.from_grade} to={a.to_grade} />
+        <PriceTargetChip a={a} />
+
+        <span className="shrink-0 w-10 text-right text-[10px] text-muted-foreground tabular-nums whitespace-nowrap">
+          {fmtDate(a.date)}
+        </span>
       </Link>
     </li>
   );
@@ -272,14 +159,12 @@ function ActionRow({ a }: { a: AnalystAction }) {
 
 function RowSkeleton() {
   return (
-    <li className="border-b border-border/40 last:border-b-0 px-3 py-1.5">
-      <div className="flex items-center gap-2">
+    <li className="border-b border-border/40 last:border-b-0 px-3 py-2">
+      <div className="flex items-center gap-2.5">
         <div className="h-7 w-7 rounded-full bg-muted/60 animate-pulse" />
-        <div className="flex-1 space-y-1">
-          <div className="h-3 w-20 rounded bg-muted/60 animate-pulse" />
-          <div className="h-2.5 w-28 rounded bg-muted/40 animate-pulse" />
-        </div>
-        <div className="h-3.5 w-10 rounded bg-muted/40 animate-pulse" />
+        <div className="h-3 w-10 rounded bg-muted/60 animate-pulse" />
+        <div className="h-3 flex-1 rounded bg-muted/40 animate-pulse" />
+        <div className="h-4 w-12 rounded bg-muted/40 animate-pulse" />
       </div>
     </li>
   );
@@ -294,7 +179,8 @@ export function AnalystActionsCard() {
     // dashboard revisit while staying fresh enough.
     staleTime: 5 * 60_000,
   });
-  const items = q.data ?? [];
+  // Show only genuine rating changes — hide the Maintain/Reiterate rows.
+  const items = (q.data ?? []).filter((a) => CHANGE_ACTIONS.has(a.action));
   const isEmpty = !q.isLoading && items.length === 0;
 
   return (
@@ -306,7 +192,7 @@ export function AnalystActionsCard() {
             label="Valutazioni analisti"
             right={
               <span className="text-xs text-muted-foreground">
-                ultime uscite sul pool
+                upgrade & downgrade
               </span>
             }
           />
@@ -320,11 +206,12 @@ export function AnalystActionsCard() {
         ) : isEmpty ? (
           <div className="flex-1 min-h-0 flex items-center justify-center px-4 text-center">
             <div className="text-xs text-muted-foreground">
-              Nessuna valutazione analista recente.
+              Nessun upgrade/downgrade recente.
               <br />
               <span className="text-muted-foreground/70">
-                Compaiono qui upgrade/downgrade/initiation degli ultimi 90
-                giorni man mano che i fondamentali vengono aggiornati.
+                Compaiono qui i cambi di rating (upgrade / downgrade /
+                initiation) degli ultimi 90 giorni man mano che i
+                fondamentali vengono aggiornati.
               </span>
             </div>
           </div>
