@@ -297,31 +297,37 @@ export default function StockDetailPage() {
       <div className="grid lg:grid-cols-[1fr_480px] gap-3">
         <Card>
           <CardContent className="p-4">
-            {/* Single-row toolbar: timeframe (left) · indicatori (middle) ·
-                strumenti di disegno (right). All controls share a 32px
-                (h-8) height and sit on one wrapping row, separated by thin
-                dividers so the three groups read as distinct clusters. */}
-            <div className="flex items-center flex-wrap gap-x-2.5 gap-y-2 mb-3">
+            {/* Single-row toolbar with three balanced clusters: timeframe
+                pinned LEFT, indicators CENTERED, drawing tools pinned
+                RIGHT. The centering is done with `mx-auto` on the middle
+                group — in a flex row its two auto margins split the free
+                space equally, so the indicators sit centred between the
+                left/right clusters (and wrap gracefully when space runs
+                out). All controls share the 32px (h-8) height. */}
+            <div className="flex items-center flex-wrap gap-x-3 gap-y-2 mb-3">
+              {/* LEFT — timeframe */}
               <RangeSelector
                 value={range}
                 onChange={(r) => setSearchParams({ range: r })}
               />
-              <div className="h-6 w-px bg-border/70 hidden md:block" />
-              <span className="text-[11px] uppercase tracking-wider font-semibold text-muted-foreground/80 shrink-0 hidden sm:block">
-                Indicatori
-              </span>
-              <IndicatorToggles
-                state={indicators}
-                onChange={onIndicatorChange}
-                periods={d.indicators.periods}
-              />
-              <div className="flex items-center gap-2.5 ml-auto">
+              {/* CENTER — indicators */}
+              <div className="mx-auto flex items-center gap-2 flex-wrap justify-center">
+                <span className="text-[11px] uppercase tracking-wider font-semibold text-muted-foreground/70 shrink-0 hidden md:block">
+                  Indicatori
+                </span>
+                <IndicatorToggles
+                  state={indicators}
+                  onChange={onIndicatorChange}
+                  periods={d.indicators.periods}
+                />
+              </div>
+              {/* RIGHT — drawing tools (+ live hint for the Line tool) */}
+              <div className="flex items-center gap-2.5 shrink-0">
                 {mode === "trend" && (
                   <span className="text-[11px] font-medium text-blue-600 animate-pulse whitespace-nowrap">
                     {pendingTrend ? "Clicca il 2° punto" : "Clicca il 1° punto"}
                   </span>
                 )}
-                <div className="h-6 w-px bg-border/70 hidden lg:block" />
                 <DrawingToolbar
                   mode={mode}
                   onSetMode={setMode}
