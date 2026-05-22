@@ -8,6 +8,8 @@ import {
   LayoutDashboard,
   LogOut,
   Menu,
+  PanelLeftClose,
+  PanelLeftOpen,
   Settings,
   X,
 } from "lucide-react";
@@ -53,21 +55,33 @@ const NAV: NavEntry[] = [
 /** The nav link list — shared verbatim by the desktop sidebar and the
  *  mobile drawer so there's a single source of truth for entries +
  *  active styling. `onNavigate` lets the mobile drawer close itself
- *  the moment a link is tapped. */
-function NavList({ onNavigate }: { onNavigate?: () => void }) {
+ *  the moment a link is tapped. When `collapsed` the desktop rail
+ *  renders icons only (labels hidden, full label moved to the hover
+ *  tooltip + accessible label) so navigation stays usable at w-16. */
+function NavList({
+  onNavigate,
+  collapsed = false,
+}: {
+  onNavigate?: () => void;
+  collapsed?: boolean;
+}) {
   return (
     <nav className="flex flex-1 flex-col gap-1 p-3">
       {NAV.map((entry) => {
         const Icon = entry.icon;
+        const base = cn(
+          "flex items-center rounded text-sm transition-colors",
+          collapsed ? "justify-center px-0 py-2.5" : "gap-2 px-3 py-2",
+        );
         if (!entry.enabled) {
           return (
             <span
               key={entry.to}
-              title="Disponibile nelle prossime fasi"
-              className="flex cursor-not-allowed items-center gap-2 rounded px-3 py-2 text-sm text-muted-foreground/60"
+              title={`${entry.label} — Disponibile nelle prossime fasi`}
+              className={cn(base, "cursor-not-allowed text-muted-foreground/60")}
             >
-              <Icon className="h-4 w-4" />
-              {entry.label}
+              <Icon className="h-4 w-4 shrink-0" />
+              {!collapsed && entry.label}
             </span>
           );
         }
@@ -77,17 +91,21 @@ function NavList({ onNavigate }: { onNavigate?: () => void }) {
             to={entry.to}
             end={entry.to === "/"}
             onClick={onNavigate}
+            // Title only when collapsed — expanded shows the label inline,
+            // so a tooltip would be redundant noise.
+            title={collapsed ? entry.label : undefined}
+            aria-label={collapsed ? entry.label : undefined}
             className={({ isActive }) =>
               cn(
-                "flex items-center gap-2 rounded px-3 py-2 text-sm transition-colors",
+                base,
                 isActive
                   ? "bg-primary text-primary-foreground"
                   : "text-foreground hover:bg-accent",
               )
             }
           >
-            <Icon className="h-4 w-4" />
-            {entry.label}
+            <Icon className="h-4 w-4 shrink-0" />
+            {!collapsed && entry.label}
           </NavLink>
         );
       })}
@@ -110,6 +128,23 @@ export default function Layout() {
   const navigate = useNavigate();
   const location = useLocation();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  // Desktop sidebar collapse (icon-rail). Persisted so the choice
+  // survives reloads. Lazy init reads localStorage once; the effect
+  // mirrors every change back. Defaults to expanded.
+  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem("sidebar-collapsed") === "1";
+    } catch {
+      return false;
+    }
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem("sidebar-collapsed", sidebarCollapsed ? "1" : "0");
+    } catch {
+      /* private mode / quota — non-fatal, just don't persist */
+    }
+  }, [sidebarCollapsed]);
 
   // Close the drawer on any route change — covers nav taps, the
   // navbar search jumping to a stock, browser back/forward, etc.
@@ -136,11 +171,46 @@ export default function Layout() {
   return (
     <div className="flex min-h-screen bg-background">
       {/* Desktop sidebar — hidden below lg; the mobile drawer below
-          replaces it on phones/tablets. */}
-      <aside className="hidden lg:flex w-60 flex-col border-r bg-card">
-        <SidebarBrand />
+          replaces it on phones/tablets. Collapses to a w-16 icon rail
+          via the toggle; the width animates while labels swap in/out. */}
+      <aside
+        className={cn(
+          "hidden lg:flex flex-col border-r bg-card transition-[width] duration-200 ease-out",
+          sidebarCollapsed ? "w-16" : "w-60",
+        )}
+      >
+        {/* Brand + collapse toggle. When collapsed, the brand text is
+            dropped and the toggle centers in the rail; expanded shows
+            the brand on the left and the toggle on the right. */}
+        <div
+          className={cn(
+            "flex items-center py-4",
+            sidebarCollapsed ? "justify-center px-2" : "justify-between pl-5 pr-2",
+          )}
+        >
+          {!sidebarCollapsed && (
+            <div className="min-w-0">
+              <h1 className="text-base font-semibold truncate">Finance Alert</h1>
+              <p className="text-xs text-muted-foreground">v0.1 — Fase 1</p>
+            </div>
+          )}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="shrink-0"
+            aria-label={sidebarCollapsed ? "Espandi menu" : "Comprimi menu"}
+            title={sidebarCollapsed ? "Espandi menu" : "Comprimi menu"}
+            onClick={() => setSidebarCollapsed((c) => !c)}
+          >
+            {sidebarCollapsed ? (
+              <PanelLeftOpen className="h-5 w-5" />
+            ) : (
+              <PanelLeftClose className="h-5 w-5" />
+            )}
+          </Button>
+        </div>
         <Separator />
-        <NavList />
+        <NavList collapsed={sidebarCollapsed} />
       </aside>
 
       {/* Mobile drawer: overlay + slide-in panel. Rendered only when
