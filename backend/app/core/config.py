@@ -24,6 +24,9 @@ class Settings(BaseSettings):
     digest_minute: int = 0
     scan_hour: int = 23
     scan_minute: int = 30
+    # Signal engine: minimum confidence (0-100) for a detected signal to
+    # become an alert. Below this the signal is computed but not surfaced.
+    signal_min_confidence: int = 60
     # FRED (Federal Reserve Economic Data) API key for the macro
     # calendar. Free, gettable from https://fred.stlouisfed.org —
     # rate-limited at 120 req/min. Empty string disables FRED-driven
