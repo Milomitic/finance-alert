@@ -343,6 +343,12 @@ def extract_macd_divergence(
 
 
 # Registry of active extractors. Each is f(ohlcv) -> list[Event].
+# The candle extractor uses a lazy import inside its lambda to break the
+# circular dependency: candles.py imports Event/_iso from this module, so a
+# top-level or bottom-level import here would trigger a partially-initialized-
+# module error whenever candles.py is the first module touched. The lazy
+# wrapper defers the import until the lambda is actually called, at which
+# point both modules are fully initialized.
 EXTRACTORS = [
     lambda df: extract_breakout(df, lookback=20),
     lambda df: extract_volume_spike(df, avg_period=20, k=2.0),
@@ -355,6 +361,7 @@ EXTRACTORS = [
     lambda df: extract_gap(df, min_pct=0.02),
     lambda df: extract_adx_trend(df, period=14, adx_min=25.0),
     lambda df: extract_macd_divergence(df, pivot_w=5, max_gap=60),
+    lambda df: __import__("app.signals.candles", fromlist=["extract_candle_reversal"]).extract_candle_reversal(df),
 ]
 
 
