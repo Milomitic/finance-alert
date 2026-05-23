@@ -21,6 +21,11 @@ def test_fires_on_upgrade_with_breakout():
     assert isinstance(m, SignalMatch) and m.tone == "bull" and m.confidence > 0
     assert any("analist" in s["label"].lower() or "upgrade" in s["label"].lower()
                or "rating" in s["label"].lower() for s in m.chain)
+    # Non-technical (first) chain step must carry source="analyst".
+    assert m.chain[0].get("source") == "analyst"
+    # Technical confirmation steps must NOT carry a source key.
+    for step in m.chain[1:]:
+        assert "source" not in step
 
 
 def test_silent_upgrade_without_confirmation():

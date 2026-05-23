@@ -1,8 +1,31 @@
-import { BookOpen, ShieldAlert } from "lucide-react";
+import { BadgeDollarSign, BookOpen, CalendarClock, ShieldAlert, Users } from "lucide-react";
 
 import type { SignalSnapshot } from "@/api/types";
 import { TONE_TEXT, type AlertTone } from "@/lib/alertMeta";
 import { cn } from "@/lib/utils";
+
+/** Source badge configuration for non-technical hybrid chain steps.
+ *  Keeps label/icon in one place so adding a new source is a one-liner. */
+const SOURCE_BADGE: Record<
+  string,
+  { label: string; Icon: React.FC<{ className?: string }>; cls: string }
+> = {
+  earnings: {
+    label: "Earnings",
+    Icon: CalendarClock,
+    cls: "bg-violet-100 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300",
+  },
+  analyst: {
+    label: "Analista",
+    Icon: Users,
+    cls: "bg-sky-100 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300",
+  },
+  insider: {
+    label: "Insider",
+    Icon: BadgeDollarSign,
+    cls: "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300",
+  },
+};
 
 /* Human labels for the per-detector confidence sub-factors. Unknown keys
  * fall back to the raw name (with underscores spaced) so a new detector's
@@ -33,6 +56,9 @@ export function SignalSnapshotView({ snapshot }: { snapshot: Record<string, unkn
     s.tone === "bull" ? "bullish" : s.tone === "bear" ? "bearish" : "neutral";
   const confidence = typeof s.confidence === "number" ? Math.round(s.confidence) : null;
   const chain = Array.isArray(s.chain) ? s.chain : [];
+  const isHybrid = chain.some(
+    (step) => typeof step.source === "string" && step.source in SOURCE_BADGE,
+  );
   const factors =
     s.factors && typeof s.factors === "object" ? (s.factors as Record<string, number>) : {};
   const sources = Array.isArray(s.sources) ? s.sources : [];
@@ -42,6 +68,14 @@ export function SignalSnapshotView({ snapshot }: { snapshot: Record<string, unkn
 
   return (
     <div className="space-y-4">
+      {isHybrid && (
+        <div className="flex items-center gap-1.5">
+          <span className="inline-flex items-center gap-1 rounded-full border border-indigo-300/60 bg-indigo-50 px-2 py-0.5 text-[11px] font-semibold text-indigo-700 dark:border-indigo-700/50 dark:bg-indigo-950/40 dark:text-indigo-300">
+            Ibrido
+          </span>
+        </div>
+      )}
+
       {confidence != null && (
         <div className="flex items-center gap-3">
           <span className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
@@ -60,14 +94,30 @@ export function SignalSnapshotView({ snapshot }: { snapshot: Record<string, unkn
             Catena di eventi
           </div>
           <ol className="relative border-l border-border/60 ml-2 space-y-3">
-            {chain.map((step, i) => (
-              <li key={`${step.date}-${i}`} className="ml-4 relative">
-                <span className="absolute -left-[1.39rem] mt-1 h-3 w-3 rounded-full bg-primary/70 border-2 border-background" />
-                <div className="text-sm font-semibold">{step.label}</div>
-                {step.detail && <div className="text-xs text-muted-foreground">{step.detail}</div>}
-                <div className="text-[11px] text-muted-foreground/70 tabular-nums">{step.date}</div>
-              </li>
-            ))}
+            {chain.map((step, i) => {
+              const badge = step.source ? SOURCE_BADGE[step.source] : null;
+              return (
+                <li key={`${step.date}-${i}`} className="ml-4 relative">
+                  <span className="absolute -left-[1.39rem] mt-1 h-3 w-3 rounded-full bg-primary/70 border-2 border-background" />
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-sm font-semibold">{step.label}</span>
+                    {badge && (
+                      <span
+                        className={cn(
+                          "inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none",
+                          badge.cls,
+                        )}
+                      >
+                        <badge.Icon className="h-2.5 w-2.5" />
+                        {badge.label}
+                      </span>
+                    )}
+                  </div>
+                  {step.detail && <div className="text-xs text-muted-foreground">{step.detail}</div>}
+                  <div className="text-[11px] text-muted-foreground/70 tabular-nums">{step.date}</div>
+                </li>
+              );
+            })}
           </ol>
         </div>
       )}

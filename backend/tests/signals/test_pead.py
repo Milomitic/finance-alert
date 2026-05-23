@@ -22,6 +22,11 @@ def test_fires_on_beat_gap_volume():
     assert isinstance(m, SignalMatch) and m.tone == "bull" and m.confidence > 0
     assert any("earning" in s["label"].lower() or "sorpresa" in s["label"].lower()
                or "drift" in s["label"].lower() for s in m.chain)
+    # Non-technical (first) chain step must carry source="earnings".
+    assert m.chain[0].get("source") == "earnings"
+    # Technical confirmation steps must NOT carry a source key.
+    for step in m.chain[1:]:
+        assert "source" not in step
 
 
 def test_silent_earnings_without_confirmation():

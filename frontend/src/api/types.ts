@@ -87,6 +87,9 @@ export interface SignalChainStep {
   date: string;
   label: string;
   detail?: string;
+  /** Present only on the non-technical (fundamental) leg of a hybrid signal.
+   *  Values: "earnings" | "analyst" | "insider". Technical legs omit this key. */
+  source?: string;
 }
 
 export interface SignalSnapshot {

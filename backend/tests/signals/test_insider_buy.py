@@ -22,6 +22,11 @@ def test_fires_on_cluster_with_oversold():
     m = InsiderBuy().detect(events, _df(), build_context(_df()))
     assert isinstance(m, SignalMatch) and m.tone == "bull" and m.confidence > 0
     assert any("insider" in s["label"].lower() for s in m.chain)
+    # Non-technical (first) chain step must carry source="insider".
+    assert m.chain[0].get("source") == "insider"
+    # Technical confirmation steps must NOT carry a source key.
+    for step in m.chain[1:]:
+        assert "source" not in step
 
 
 def test_silent_cluster_without_confirmation():

@@ -113,6 +113,7 @@ class AnalystMomentum:
                     f"Rating change da {firm}: {rating_txt}. "
                     "Atteso post-revision drift."
                 ),
+                "source": "analyst",
             },
         ]
 

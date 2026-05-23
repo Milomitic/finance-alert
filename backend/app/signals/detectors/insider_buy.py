@@ -133,6 +133,7 @@ class InsiderBuy:
                     f"({shares_txt} azioni totali). "
                     "Segnale storicamente bullish (Lakonishok & Lee 2001)."
                 ),
+                "source": "insider",
             },
         ]
 

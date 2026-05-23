@@ -111,6 +111,7 @@ class Pead:
                 "date": surprise.date,
                 "label": f"Earnings drift {'beat' if tone == 'bull' else 'miss'} ({sp_txt})",
                 "detail": f"sorpresa EPS {sp_txt}: drift post-earnings atteso",
+                "source": "earnings",
             },
         ]
         if gap:
