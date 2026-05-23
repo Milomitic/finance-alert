@@ -38,6 +38,15 @@ export interface SearchParams {
   risk?: ("conservative" | "moderate" | "aggressive")[];
   /** Minimum composite score (0–100). When set, unscored stocks are excluded. */
   min_score?: number;
+  /** Maximum composite score (0–100). */
+  score_max?: number;
+  /** Per-pillar minimum scores (0–100). */
+  profitability_min?: number;
+  sustainability_min?: number;
+  growth_min?: number;
+  value_min?: number;
+  momentum_min?: number;
+  sentiment_min?: number;
   sort_by?: StockSortBy;
   sort_dir?: SortDir;
   limit?: number;
@@ -54,6 +63,13 @@ function toQuery(params: SearchParams): string {
   for (const v of params.index ?? []) sp.append("index", v);
   for (const v of params.risk ?? []) sp.append("risk", v);
   if (params.min_score !== undefined) sp.set("min_score", String(params.min_score));
+  if (params.score_max !== undefined) sp.set("score_max", String(params.score_max));
+  if (params.profitability_min !== undefined) sp.set("profitability_min", String(params.profitability_min));
+  if (params.sustainability_min !== undefined) sp.set("sustainability_min", String(params.sustainability_min));
+  if (params.growth_min !== undefined) sp.set("growth_min", String(params.growth_min));
+  if (params.value_min !== undefined) sp.set("value_min", String(params.value_min));
+  if (params.momentum_min !== undefined) sp.set("momentum_min", String(params.momentum_min));
+  if (params.sentiment_min !== undefined) sp.set("sentiment_min", String(params.sentiment_min));
   if (params.sort_by) sp.set("sort_by", params.sort_by);
   if (params.sort_dir) sp.set("sort_dir", params.sort_dir);
   if (params.limit !== undefined) sp.set("limit", String(params.limit));

@@ -11,6 +11,10 @@ export interface AlertListParams {
    *  labels the column. */
   q?: string;
   rule_kind?: string;
+  /** Tone filter: "bull" or "bear". Matched against snapshot.tone. */
+  tone?: string;
+  /** Minimum confidence score 0-100. Only alerts with confidence >= this are returned. */
+  confidence_min?: number;
   date_from?: string; // ISO date
   date_to?: string;
   read?: boolean;
@@ -26,6 +30,8 @@ function toQuery(params: AlertListParams): string {
   if (params.ticker) sp.set("ticker", params.ticker);
   if (params.q) sp.set("q", params.q);
   if (params.rule_kind) sp.set("rule_kind", params.rule_kind);
+  if (params.tone) sp.set("tone", params.tone);
+  if (params.confidence_min !== undefined) sp.set("confidence_min", String(params.confidence_min));
   if (params.date_from) sp.set("date_from", params.date_from);
   if (params.date_to) sp.set("date_to", params.date_to);
   if (params.read !== undefined) sp.set("read", String(params.read));

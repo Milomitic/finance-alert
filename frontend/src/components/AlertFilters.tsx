@@ -33,6 +33,32 @@ function paramsToStatus(p: AlertListParams): string {
   return p.archived ? "archived" : "active";
 }
 
+// The 17 signal kinds the engine can emit.
+const SIGNAL_KINDS: { value: string; label: string }[] = [
+  { value: "signal:volume_breakout",    label: "Volume Breakout" },
+  { value: "signal:trend_pullback",     label: "Trend + Pullback" },
+  { value: "signal:rsi_divergence",     label: "Divergenza RSI" },
+  { value: "signal:squeeze_expansion",  label: "Squeeze + Espansione" },
+  { value: "signal:high52_momentum",    label: "Massimo 52 settimane" },
+  { value: "signal:oversold_reversal",  label: "Reversal Oversold" },
+  { value: "signal:sr_flip",            label: "S/R Flip" },
+  { value: "signal:structure_break",    label: "Rottura Struttura" },
+  { value: "signal:macd_divergence",    label: "Divergenza MACD" },
+  { value: "signal:gap_and_go",         label: "Gap and Go" },
+  { value: "signal:adx_confirmation",   label: "Conferma ADX" },
+  { value: "signal:candle_reversal",    label: "Reversal Candele" },
+  { value: "signal:pead",               label: "PEAD (Post-earnings drift)" },
+  { value: "signal:analyst_momentum",   label: "Momentum Analisti" },
+  { value: "signal:insider_buy",        label: "Insider Buy" },
+  { value: "signal:chart_pattern",      label: "Chart Pattern" },
+  { value: "signal:hidden_divergence",  label: "Divergenza Nascosta" },
+];
+
+const TONE_OPTIONS: { value: string; label: string }[] = [
+  { value: "bull", label: "Rialzista" },
+  { value: "bear", label: "Ribassista" },
+];
+
 /** Small "active filter" chip with an X to clear that single filter. Used
  *  to surface what's currently applied so the user can scan filters at
  *  a glance and dismiss them one at a time. */
@@ -78,12 +104,25 @@ export function AlertFilters({ value, onChange }: Props) {
     onChange({ archived: false });
   };
 
+  // Friendly label for the currently-selected signal kind.
+  const signalKindLabel = value.rule_kind
+    ? (SIGNAL_KINDS.find((k) => k.value === value.rule_kind)?.label ?? value.rule_kind)
+    : null;
+
+  // Friendly label for the currently-selected tone.
+  const toneLabel = value.tone
+    ? (TONE_OPTIONS.find((t) => t.value === value.tone)?.label ?? value.tone)
+    : null;
+
   // Count active filters so the header can show a badge. "active" status
   // is the default and not counted; "archived" counts as 1.
   const activeCount =
     (value.ticker ? 1 : 0) +
     (value.q ? 1 : 0) +
-    (status === "archived" ? 1 : 0);
+    (status === "archived" ? 1 : 0) +
+    (value.rule_kind ? 1 : 0) +
+    (value.tone ? 1 : 0) +
+    (value.confidence_min != null ? 1 : 0);
 
   return (
     <Card>
@@ -129,6 +168,86 @@ export function AlertFilters({ value, onChange }: Props) {
           </Select>
         </div>
 
+        {/* Tipo segnale — maps to rule_kind. "tutti" sentinel clears the filter. */}
+        <div>
+          <Label className="text-xs uppercase tracking-wider text-muted-foreground">
+            Tipo segnale
+          </Label>
+          <Select
+            value={value.rule_kind ?? "tutti"}
+            onValueChange={(v) =>
+              onChange({ ...value, rule_kind: v === "tutti" ? undefined : v })
+            }
+          >
+            <SelectTrigger className="mt-1">
+              <SelectValue placeholder="Tutti" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="tutti">Tutti</SelectItem>
+              {SIGNAL_KINDS.map((k) => (
+                <SelectItem key={k.value} value={k.value}>
+                  {k.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Tono — bull / bear. "tutti" clears the filter. */}
+        <div>
+          <Label className="text-xs uppercase tracking-wider text-muted-foreground">
+            Tono
+          </Label>
+          <Select
+            value={value.tone ?? "tutti"}
+            onValueChange={(v) =>
+              onChange({ ...value, tone: v === "tutti" ? undefined : v })
+            }
+          >
+            <SelectTrigger className="mt-1">
+              <SelectValue placeholder="Tutti" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="tutti">Tutti</SelectItem>
+              {TONE_OPTIONS.map((t) => (
+                <SelectItem key={t.value} value={t.value}>
+                  {t.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Confidenza minima — number input 0-100. */}
+        <div>
+          <Label className="text-xs uppercase tracking-wider text-muted-foreground">
+            Confidenza minima
+          </Label>
+          <div className="mt-1 inline-flex items-center gap-1.5 h-9 px-2 rounded border border-input w-full">
+            <input
+              type="number"
+              min={0}
+              max={100}
+              step={5}
+              placeholder="—"
+              value={value.confidence_min ?? ""}
+              onChange={(e) => {
+                const raw = e.target.value;
+                if (raw === "") {
+                  onChange({ ...value, confidence_min: undefined });
+                  return;
+                }
+                const n = Number(raw);
+                if (Number.isFinite(n) && n >= 0 && n <= 100) {
+                  onChange({ ...value, confidence_min: n });
+                }
+              }}
+              className="flex-1 bg-transparent text-sm tabular-nums focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+            />
+            <span className="text-xs text-muted-foreground">/ 100</span>
+          </div>
+        </div>
+
         {/* Active-filter chip row — shows what's applied so the user can
             scan filters at a glance and dismiss any one of them by clicking
             its X. Hidden when nothing is filtered. */}
@@ -163,6 +282,46 @@ export function AlertFilters({ value, onChange }: Props) {
               <FilterChip
                 label="Solo archiviati"
                 onClear={() => onChange({ ...value, archived: false })}
+                className="bg-muted text-foreground border-border"
+              />
+            )}
+            {value.rule_kind && (
+              <FilterChip
+                label={
+                  <>
+                    <span className="text-muted-foreground/80">Segnale:</span>{" "}
+                    {signalKindLabel}
+                  </>
+                }
+                onClear={() => onChange({ ...value, rule_kind: undefined })}
+                className="bg-muted text-foreground border-border"
+              />
+            )}
+            {value.tone && (
+              <FilterChip
+                label={
+                  <>
+                    <span className="text-muted-foreground/80">Tono:</span>{" "}
+                    {toneLabel}
+                  </>
+                }
+                onClear={() => onChange({ ...value, tone: undefined })}
+                className={
+                  value.tone === "bull"
+                    ? "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 border-emerald-200/70 dark:border-emerald-800/60"
+                    : "bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300 border-rose-200/70 dark:border-rose-800/60"
+                }
+              />
+            )}
+            {value.confidence_min != null && (
+              <FilterChip
+                label={
+                  <>
+                    <span className="text-muted-foreground/80">Confidenza ≥</span>{" "}
+                    {value.confidence_min}%
+                  </>
+                }
+                onClear={() => onChange({ ...value, confidence_min: undefined })}
                 className="bg-muted text-foreground border-border"
               />
             )}

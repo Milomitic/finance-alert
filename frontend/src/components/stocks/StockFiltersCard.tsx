@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import {
   Popover, PopoverContent, PopoverTrigger,
 } from "@/components/ui/popover";
+import { CATEGORY_LABEL } from "@/lib/scoreMeta";
 import { cn } from "@/lib/utils";
 
 /** Filter state for the stock browser. The text-search field has been
@@ -23,6 +24,15 @@ export interface FiltersState {
   /** Min composite score 0–100, or null = no threshold. When set, unscored
    *  stocks are excluded by the backend. */
   minScore: number | null;
+  /** Max composite score 0–100, or null = no ceiling. */
+  scoreMax: number | null;
+  /** Per-pillar minimum scores 0–100, or null = no threshold. */
+  profitabilityMin: number | null;
+  sustainabilityMin: number | null;
+  growthMin: number | null;
+  valueMin: number | null;
+  momentumMin: number | null;
+  sentimentMin: number | null;
 }
 
 interface Props {
@@ -125,6 +135,41 @@ const RISK_OPTIONS: { value: "conservative" | "moderate" | "aggressive"; label: 
   { value: "aggressive",   label: "Aggressive",   tone: "bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300" },
 ];
 
+/** Compact number input used for pillar min thresholds. */
+function PillarInput({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: number | null;
+  onChange: (v: number | null) => void;
+}) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <span className="text-xs text-muted-foreground w-28 shrink-0">{label}</span>
+      <div className="inline-flex items-center gap-1 h-7 px-1.5 rounded border border-input">
+        <span className="text-xs text-muted-foreground">≥</span>
+        <input
+          type="number"
+          min={0}
+          max={100}
+          step={5}
+          placeholder="—"
+          value={value ?? ""}
+          onChange={(e) => {
+            const raw = e.target.value;
+            if (raw === "") { onChange(null); return; }
+            const n = Number(raw);
+            if (Number.isFinite(n) && n >= 0 && n <= 100) onChange(n);
+          }}
+          className="w-10 bg-transparent text-xs tabular-nums focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+        />
+      </div>
+    </div>
+  );
+}
+
 export function StockFiltersCard({ state, onChange, filters }: Props) {
   const indexOptions = (filters?.indices ?? []).map((i) => ({
     value: i.code,
@@ -135,6 +180,14 @@ export function StockFiltersCard({ state, onChange, filters }: Props) {
   const exchangeOptions = (filters?.exchanges ?? []).map((e) => ({ value: e, label: e }));
   const countryOptions = (filters?.countries ?? []).map((c) => ({ value: c, label: c }));
 
+  const pillarActiveCount =
+    (state.profitabilityMin != null ? 1 : 0) +
+    (state.sustainabilityMin != null ? 1 : 0) +
+    (state.growthMin != null ? 1 : 0) +
+    (state.valueMin != null ? 1 : 0) +
+    (state.momentumMin != null ? 1 : 0) +
+    (state.sentimentMin != null ? 1 : 0);
+
   const totalActive =
     state.indexCodes.length +
     state.sectors.length +
@@ -142,17 +195,26 @@ export function StockFiltersCard({ state, onChange, filters }: Props) {
     state.exchanges.length +
     state.countries.length +
     state.riskTiers.length +
-    (state.minScore != null ? 1 : 0);
+    (state.minScore != null ? 1 : 0) +
+    (state.scoreMax != null ? 1 : 0) +
+    pillarActiveCount;
 
   const clearAll = () =>
     onChange({
       indexCodes: [], sectors: [], industries: [], exchanges: [], countries: [],
-      riskTiers: [], minScore: null,
+      riskTiers: [], minScore: null, scoreMax: null,
+      profitabilityMin: null, sustainabilityMin: null, growthMin: null,
+      valueMin: null, momentumMin: null, sentimentMin: null,
     });
 
   const removeChip = (kind: keyof FiltersState, value: string) => {
-    if (kind === "minScore") {
-      onChange({ ...state, minScore: null });
+    if (
+      kind === "minScore" || kind === "scoreMax" ||
+      kind === "profitabilityMin" || kind === "sustainabilityMin" ||
+      kind === "growthMin" || kind === "valueMin" ||
+      kind === "momentumMin" || kind === "sentimentMin"
+    ) {
+      onChange({ ...state, [kind]: null });
       return;
     }
     if (kind === "riskTiers") {
@@ -211,30 +273,40 @@ export function StockFiltersCard({ state, onChange, filters }: Props) {
             selected={state.riskTiers}
             onChange={(v) => onChange({ ...state, riskTiers: v as FiltersState["riskTiers"] })}
           />
-          {/* Score-min filter: single threshold input. Kept inline next to
-              the multi-selects rather than in a popover because it's just
-              one number; popover-overhead is unwarranted. */}
-          <div className="inline-flex items-center gap-1.5 h-9 px-2 rounded border border-input">
-            <span className="text-xs text-muted-foreground">Score ≥</span>
+          {/* Composite score range: min + max inline. Kept without a popover
+              since they're just two numbers and popover overhead is unwarranted. */}
+          <div className="inline-flex items-center gap-1 h-9 px-2 rounded border border-input">
+            <span className="text-xs text-muted-foreground">Score</span>
             <input
               type="number"
               min={0}
               max={100}
               step={5}
-              placeholder="—"
+              placeholder="min"
               value={state.minScore ?? ""}
               onChange={(e) => {
                 const raw = e.target.value;
-                if (raw === "") {
-                  onChange({ ...state, minScore: null });
-                  return;
-                }
+                if (raw === "") { onChange({ ...state, minScore: null }); return; }
                 const n = Number(raw);
-                if (Number.isFinite(n) && n >= 0 && n <= 100) {
-                  onChange({ ...state, minScore: n });
-                }
+                if (Number.isFinite(n) && n >= 0 && n <= 100) onChange({ ...state, minScore: n });
               }}
-              className="w-12 bg-transparent text-sm tabular-nums focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+              className="w-10 bg-transparent text-sm tabular-nums focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+            />
+            <span className="text-xs text-muted-foreground">–</span>
+            <input
+              type="number"
+              min={0}
+              max={100}
+              step={5}
+              placeholder="max"
+              value={state.scoreMax ?? ""}
+              onChange={(e) => {
+                const raw = e.target.value;
+                if (raw === "") { onChange({ ...state, scoreMax: null }); return; }
+                const n = Number(raw);
+                if (Number.isFinite(n) && n >= 0 && n <= 100) onChange({ ...state, scoreMax: n });
+              }}
+              className="w-10 bg-transparent text-sm tabular-nums focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
             />
           </div>
           {totalActive > 0 && (
@@ -248,6 +320,53 @@ export function StockFiltersCard({ state, onChange, filters }: Props) {
             </Button>
           )}
         </div>
+
+        {/* Per-pillar minimum scores sub-section. Shown as a compact 2-col grid. */}
+        <div className="pt-2 border-t border-border/40">
+          <div className="flex items-center gap-1.5 mb-2">
+            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+              Punteggi pillar
+            </span>
+            {pillarActiveCount > 0 && (
+              <Badge variant="secondary" className="h-4 px-1 text-[10px]">
+                {pillarActiveCount}
+              </Badge>
+            )}
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-1.5">
+            <PillarInput
+              label={CATEGORY_LABEL.profitability}
+              value={state.profitabilityMin}
+              onChange={(v) => onChange({ ...state, profitabilityMin: v })}
+            />
+            <PillarInput
+              label={CATEGORY_LABEL.sustainability}
+              value={state.sustainabilityMin}
+              onChange={(v) => onChange({ ...state, sustainabilityMin: v })}
+            />
+            <PillarInput
+              label={CATEGORY_LABEL.growth}
+              value={state.growthMin}
+              onChange={(v) => onChange({ ...state, growthMin: v })}
+            />
+            <PillarInput
+              label={CATEGORY_LABEL.value}
+              value={state.valueMin}
+              onChange={(v) => onChange({ ...state, valueMin: v })}
+            />
+            <PillarInput
+              label={CATEGORY_LABEL.momentum}
+              value={state.momentumMin}
+              onChange={(v) => onChange({ ...state, momentumMin: v })}
+            />
+            <PillarInput
+              label={CATEGORY_LABEL.sentiment}
+              value={state.sentimentMin}
+              onChange={(v) => onChange({ ...state, sentimentMin: v })}
+            />
+          </div>
+        </div>
+
         {totalActive > 0 && (
           <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-border/50">
             <span className="text-xs text-muted-foreground mr-1">Attivi:</span>
@@ -329,10 +448,58 @@ export function StockFiltersCard({ state, onChange, filters }: Props) {
                 <button
                   onClick={() => onChange({ ...state, minScore: null })}
                   className="ml-0.5 rounded hover:bg-background/60 p-0.5"
-                  aria-label="Rimuovi soglia score"
+                  aria-label="Rimuovi soglia score minima"
                 >
                   <X className="h-3 w-3" />
                 </button>
+              </Badge>
+            )}
+            {state.scoreMax != null && (
+              <Badge variant="secondary" className="text-xs gap-1 pr-1">
+                <span className="text-muted-foreground/80">Score ≤</span> {state.scoreMax}
+                <button
+                  onClick={() => onChange({ ...state, scoreMax: null })}
+                  className="ml-0.5 rounded hover:bg-background/60 p-0.5"
+                  aria-label="Rimuovi soglia score massima"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </Badge>
+            )}
+            {state.profitabilityMin != null && (
+              <Badge variant="secondary" className="text-xs gap-1 pr-1">
+                <span className="text-muted-foreground/80">Profitt. ≥</span> {state.profitabilityMin}
+                <button onClick={() => onChange({ ...state, profitabilityMin: null })} className="ml-0.5 rounded hover:bg-background/60 p-0.5" aria-label="Rimuovi soglia profittabilità"><X className="h-3 w-3" /></button>
+              </Badge>
+            )}
+            {state.sustainabilityMin != null && (
+              <Badge variant="secondary" className="text-xs gap-1 pr-1">
+                <span className="text-muted-foreground/80">Sosten. ≥</span> {state.sustainabilityMin}
+                <button onClick={() => onChange({ ...state, sustainabilityMin: null })} className="ml-0.5 rounded hover:bg-background/60 p-0.5" aria-label="Rimuovi soglia sostenibilità"><X className="h-3 w-3" /></button>
+              </Badge>
+            )}
+            {state.growthMin != null && (
+              <Badge variant="secondary" className="text-xs gap-1 pr-1">
+                <span className="text-muted-foreground/80">Crescita ≥</span> {state.growthMin}
+                <button onClick={() => onChange({ ...state, growthMin: null })} className="ml-0.5 rounded hover:bg-background/60 p-0.5" aria-label="Rimuovi soglia crescita"><X className="h-3 w-3" /></button>
+              </Badge>
+            )}
+            {state.valueMin != null && (
+              <Badge variant="secondary" className="text-xs gap-1 pr-1">
+                <span className="text-muted-foreground/80">Valore ≥</span> {state.valueMin}
+                <button onClick={() => onChange({ ...state, valueMin: null })} className="ml-0.5 rounded hover:bg-background/60 p-0.5" aria-label="Rimuovi soglia valore"><X className="h-3 w-3" /></button>
+              </Badge>
+            )}
+            {state.momentumMin != null && (
+              <Badge variant="secondary" className="text-xs gap-1 pr-1">
+                <span className="text-muted-foreground/80">Momentum ≥</span> {state.momentumMin}
+                <button onClick={() => onChange({ ...state, momentumMin: null })} className="ml-0.5 rounded hover:bg-background/60 p-0.5" aria-label="Rimuovi soglia momentum"><X className="h-3 w-3" /></button>
+              </Badge>
+            )}
+            {state.sentimentMin != null && (
+              <Badge variant="secondary" className="text-xs gap-1 pr-1">
+                <span className="text-muted-foreground/80">Sentiment ≥</span> {state.sentimentMin}
+                <button onClick={() => onChange({ ...state, sentimentMin: null })} className="ml-0.5 rounded hover:bg-background/60 p-0.5" aria-label="Rimuovi soglia sentiment"><X className="h-3 w-3" /></button>
               </Badge>
             )}
           </div>

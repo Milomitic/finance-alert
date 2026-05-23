@@ -41,12 +41,15 @@ function parseRiskList(searchParams: URLSearchParams): FiltersState["riskTiers"]
     );
 }
 
-function parseMinScore(raw: string | null): number | null {
+function parseNullableScore(raw: string | null): number | null {
   if (raw == null || raw === "") return null;
   const n = Number(raw);
   if (!Number.isFinite(n) || n < 0 || n > 100) return null;
   return n;
 }
+
+// Keep backward-compat alias used below
+const parseMinScore = parseNullableScore;
 
 function parseSortBy(raw: string | null): TableSortKey {
   if (raw === "change_pct") return "change_pct";
@@ -132,6 +135,13 @@ export default function StocksBrowserPage() {
     countries: parseListParam(searchParams, "country"),
     riskTiers: parseRiskList(searchParams),
     minScore: parseMinScore(searchParams.get("min_score")),
+    scoreMax: parseNullableScore(searchParams.get("score_max")),
+    profitabilityMin: parseNullableScore(searchParams.get("profitability_min")),
+    sustainabilityMin: parseNullableScore(searchParams.get("sustainability_min")),
+    growthMin: parseNullableScore(searchParams.get("growth_min")),
+    valueMin: parseNullableScore(searchParams.get("value_min")),
+    momentumMin: parseNullableScore(searchParams.get("momentum_min")),
+    sentimentMin: parseNullableScore(searchParams.get("sentiment_min")),
   }));
   const [sortBy, setSortBy] = useState<TableSortKey>(() =>
     parseSortBy(searchParams.get("sort_by")),
@@ -153,6 +163,13 @@ export default function StocksBrowserPage() {
     state.countries.forEach((v) => sp.append("country", v));
     state.riskTiers.forEach((v) => sp.append("risk", v));
     if (state.minScore != null) sp.set("min_score", String(state.minScore));
+    if (state.scoreMax != null) sp.set("score_max", String(state.scoreMax));
+    if (state.profitabilityMin != null) sp.set("profitability_min", String(state.profitabilityMin));
+    if (state.sustainabilityMin != null) sp.set("sustainability_min", String(state.sustainabilityMin));
+    if (state.growthMin != null) sp.set("growth_min", String(state.growthMin));
+    if (state.valueMin != null) sp.set("value_min", String(state.valueMin));
+    if (state.momentumMin != null) sp.set("momentum_min", String(state.momentumMin));
+    if (state.sentimentMin != null) sp.set("sentiment_min", String(state.sentimentMin));
     if (sortBy !== "ticker") sp.set("sort_by", sortBy);
     if (sortDir !== "asc") sp.set("sort_dir", sortDir);
     if (pageSize !== 50) sp.set("page_size", String(pageSize));
@@ -196,6 +213,13 @@ export default function StocksBrowserPage() {
     country: state.countries.length > 0 ? state.countries : undefined,
     risk: state.riskTiers.length > 0 ? state.riskTiers : undefined,
     min_score: state.minScore ?? undefined,
+    score_max: state.scoreMax ?? undefined,
+    profitability_min: state.profitabilityMin ?? undefined,
+    sustainability_min: state.sustainabilityMin ?? undefined,
+    growth_min: state.growthMin ?? undefined,
+    value_min: state.valueMin ?? undefined,
+    momentum_min: state.momentumMin ?? undefined,
+    sentiment_min: state.sentimentMin ?? undefined,
     sort_by: serverSortBy,
     sort_dir: serverSortDir,
     limit: pageSize,
