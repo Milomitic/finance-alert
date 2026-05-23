@@ -140,7 +140,7 @@ export function AlertDetailDialog({ alert, onClose }: Props) {
 
   return (
     <Dialog open={alert !== null} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-2xl p-0 overflow-hidden">
+      <DialogContent className="sm:max-w-4xl p-0 overflow-hidden">
         {/* HEADER — colored band carrying the rule-kind tone. The chip + ticker
             sit on a single baseline so the eye reads "this kind of alert / on
             this ticker" in one fixation. */}

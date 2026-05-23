@@ -508,7 +508,7 @@ export function StockBrowserTable({ items, sortBy, sortDir, onSortChange, q, onQ
                       if (!isVisible(pillar)) return null;
                       const v = item.score[pillar];
                       return (
-                        <td key={pillar} className={cn("px-3 py-1.5 text-right text-xs tabular-nums", v != null ? scoreColor(v) : "text-muted-foreground")}>
+                        <td key={pillar} className={cn("px-3 py-1.5 text-right text-sm font-semibold tabular-nums", v != null ? scoreColor(v) : "text-muted-foreground")}>
                           {v != null ? v.toFixed(0) : "—"}
                         </td>
                       );

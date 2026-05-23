@@ -450,10 +450,10 @@ export function AlertsTable({
                         : "text-rose-600 dark:text-rose-400";
                   return (
                     <div className="flex items-center gap-2" title={`Confidenza ${pct}%`}>
-                      <span className={cn("text-xs font-semibold tabular-nums w-9 text-right", txt)}>
+                      <span className={cn("text-sm font-semibold tabular-nums w-10 text-right", txt)}>
                         {pct}%
                       </span>
-                      <div className="h-1.5 w-16 rounded-full bg-muted overflow-hidden">
+                      <div className="h-2 w-16 rounded-full bg-muted overflow-hidden">
                         <div className={cn("h-full rounded-full", bar)} style={{ width: `${pct}%` }} />
                       </div>
                     </div>
