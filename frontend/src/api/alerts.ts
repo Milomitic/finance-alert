@@ -17,6 +17,8 @@ export interface AlertListParams {
   archived?: boolean;
   limit?: number;
   offset?: number;
+  sort_by?: string;
+  sort_dir?: "asc" | "desc";
 }
 
 function toQuery(params: AlertListParams): string {
@@ -30,6 +32,8 @@ function toQuery(params: AlertListParams): string {
   if (params.archived !== undefined) sp.set("archived", String(params.archived));
   if (params.limit !== undefined) sp.set("limit", String(params.limit));
   if (params.offset !== undefined) sp.set("offset", String(params.offset));
+  if (params.sort_by) sp.set("sort_by", params.sort_by);
+  if (params.sort_dir) sp.set("sort_dir", params.sort_dir);
   const s = sp.toString();
   return s ? `?${s}` : "";
 }

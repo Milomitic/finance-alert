@@ -1,4 +1,4 @@
-import { Clock } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, Clock } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import type { Alert } from "@/api/types";
@@ -16,7 +16,6 @@ import {
 import { TableSearchInput } from "@/components/ui/table-search-input";
 import {
   daysBetween,
-  formatDayMonth,
   formatShortDate,
   isDelayedDetection,
 } from "@/lib/alertDates";
@@ -43,6 +42,59 @@ interface Props {
    *      repeat the same value on every row in this mode.
    *  Default false (the canonical alerts-page layout). */
   embedded?: boolean;
+  /** Active sort column key (non-embedded only). */
+  sortBy?: string;
+  /** Active sort direction (non-embedded only). */
+  sortDir?: "asc" | "desc";
+  /** Called when a sortable header is clicked (non-embedded only). */
+  onSort?: (col: string) => void;
+}
+
+/** Small local sortable column header — same pattern as StockBrowserTable
+ *  and BreadthMatrixTable but scoped to AlertsTable so we avoid an
+ *  unrelated cross-component refactor. */
+function SortableHeader({
+  column,
+  label,
+  align = "left",
+  title,
+  sortBy,
+  sortDir,
+  onSort,
+}: {
+  column: string;
+  label: string;
+  align?: "left" | "right";
+  title?: string;
+  sortBy: string;
+  sortDir: "asc" | "desc";
+  onSort: (col: string) => void;
+}) {
+  const active = sortBy === column;
+  return (
+    <th
+      className={cn(
+        "px-3 py-1.5 text-base font-medium",
+        align === "right" ? "text-right" : "text-left",
+      )}
+    >
+      <button
+        type="button"
+        onClick={() => onSort(column)}
+        title={title}
+        className={cn(
+          "inline-flex items-center gap-1 hover:text-foreground transition-colors",
+          active && "text-foreground",
+          align === "right" && "ml-auto",
+        )}
+      >
+        <span>{label}</span>
+        {active && sortDir === "desc" && <ArrowDown className="h-3 w-3" />}
+        {active && sortDir === "asc" && <ArrowUp className="h-3 w-3" />}
+        {!active && <ArrowUpDown className="h-3 w-3 opacity-30" />}
+      </button>
+    </th>
+  );
 }
 
 export function AlertsTable({
@@ -54,6 +106,9 @@ export function AlertsTable({
   q,
   onQueryChange,
   embedded = false,
+  sortBy = "triggered_at",
+  sortDir = "desc",
+  onSort,
 }: Props) {
   const allSelected = alerts.length > 0 && alerts.every((a) => selectedIds.has(a.id));
   // Embedded mode drops checkbox + Ticker + Nome + Rilevato + Archivio
@@ -61,8 +116,8 @@ export function AlertsTable({
   // endpoint, and on a per-stock view the Rilevato (detection
   // timestamp) column adds noise — Data segnale alone is the relevant
   // "when did this fire" date. colSpan tracks the remaining column
-  // count.
-  const colSpan = embedded ? 4 : 8;
+  // count. Non-embedded gains a Catena column → 9 total.
+  const colSpan = embedded ? 4 : 9;
 
   // Per user spec: header cells at 1rem (text-base), body rows at
   // 0.875rem (text-sm) — uniform across all cells. Table root sits at
@@ -80,39 +135,113 @@ export function AlertsTable({
               />
             </TableHead>
           )}
-          <TableHead className="text-base" title="Data della barra di mercato in cui la regola è scattata">
-            Data segnale
-          </TableHead>
-          {!embedded && (
-            <TableHead className="text-base" title="Quando il sistema ha registrato l'alert">
-              Rilevato
+          {!embedded && onSort ? (
+            <SortableHeader
+              column="signal_date"
+              label="Data segnale"
+              title="Data della barra di mercato in cui la regola è scattata"
+              sortBy={sortBy}
+              sortDir={sortDir}
+              onSort={onSort}
+            />
+          ) : (
+            <TableHead className="text-base" title="Data della barra di mercato in cui la regola è scattata">
+              Data segnale
             </TableHead>
+          )}
+          {!embedded && (
+            onSort ? (
+              <SortableHeader
+                column="triggered_at"
+                label="Rilevato"
+                title="Quando il sistema ha registrato l'alert"
+                sortBy={sortBy}
+                sortDir={sortDir}
+                onSort={onSort}
+              />
+            ) : (
+              <TableHead className="text-base" title="Quando il sistema ha registrato l'alert">
+                Rilevato
+              </TableHead>
+            )
           )}
           {!embedded && (
             /* Titolo column: logo + ticker (top) / company name (below),
                like the dashboard cards. Holds the inline ticker/name search. */
-            <TableHead className="text-base">
-              <div className="flex items-center gap-2 min-w-0">
-                <span className="shrink-0">Titolo</span>
-                <TableSearchInput
-                  value={q}
-                  onChange={onQueryChange}
-                  placeholder="cerca ticker o nome…"
-                  ariaLabel="Filtra per ticker o nome"
-                  className="flex-1 max-w-[200px]"
-                />
-              </div>
-            </TableHead>
+            onSort ? (
+              <th className="px-3 py-1.5 text-base text-left font-medium">
+                <div className="flex items-center gap-2 min-w-0">
+                  <button
+                    type="button"
+                    onClick={() => onSort("ticker")}
+                    className={cn(
+                      "inline-flex items-center gap-1 hover:text-foreground transition-colors shrink-0",
+                      sortBy === "ticker" && "text-foreground",
+                    )}
+                  >
+                    <span>Titolo</span>
+                    {sortBy === "ticker" && sortDir === "desc" && <ArrowDown className="h-3 w-3" />}
+                    {sortBy === "ticker" && sortDir === "asc" && <ArrowUp className="h-3 w-3" />}
+                    {sortBy !== "ticker" && <ArrowUpDown className="h-3 w-3 opacity-30" />}
+                  </button>
+                  <TableSearchInput
+                    value={q}
+                    onChange={onQueryChange}
+                    placeholder="cerca ticker o nome…"
+                    ariaLabel="Filtra per ticker o nome"
+                    className="flex-1 max-w-[200px]"
+                  />
+                </div>
+              </th>
+            ) : (
+              <TableHead className="text-base">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="shrink-0">Titolo</span>
+                  <TableSearchInput
+                    value={q}
+                    onChange={onQueryChange}
+                    placeholder="cerca ticker o nome…"
+                    ariaLabel="Filtra per ticker o nome"
+                    className="flex-1 max-w-[200px]"
+                  />
+                </div>
+              </TableHead>
+            )
           )}
           <TableHead className="text-base">Regola</TableHead>
+          {!embedded && (
+            <TableHead className="text-base">Catena</TableHead>
+          )}
           <TableHead className="text-base" title="Direzione semantica dell'alert (rialzista / ribassista / neutra)">
             Tono
           </TableHead>
-          <TableHead className="text-base text-right">Prezzo</TableHead>
+          {!embedded && onSort ? (
+            <SortableHeader
+              column="trigger_price"
+              label="Prezzo"
+              align="right"
+              sortBy={sortBy}
+              sortDir={sortDir}
+              onSort={onSort}
+            />
+          ) : (
+            <TableHead className="text-base text-right">Prezzo</TableHead>
+          )}
           {!embedded && (
-            <TableHead className="text-base" title="Confidenza del segnale (0-100)">
-              Confidenza
-            </TableHead>
+            onSort ? (
+              <SortableHeader
+                column="confidence"
+                label="Confidenza"
+                title="Confidenza del segnale (0-100)"
+                sortBy={sortBy}
+                sortDir={sortDir}
+                onSort={onSort}
+              />
+            ) : (
+              <TableHead className="text-base" title="Confidenza del segnale (0-100)">
+                Confidenza
+              </TableHead>
+            )
           )}
         </TableRow>
       </TableHeader>
@@ -179,7 +308,7 @@ export function AlertsTable({
                       {delayed && (
                         <Clock className="h-3 w-3 text-amber-600 dark:text-amber-400 shrink-0" />
                       )}
-                      {formatDayMonth(a.triggered_at)}
+                      {formatShortDate(a.triggered_at)}
                     </span>
                   );
                 })()}
@@ -221,6 +350,23 @@ export function AlertsTable({
             <TableCell>
               <AlertKindChip alert={a} />
             </TableCell>
+            {!embedded && (
+              <TableCell className="max-w-[260px]">
+                {(() => {
+                  const chain = (a.snapshot as Record<string, unknown> | undefined)?.chain;
+                  if (!Array.isArray(chain) || chain.length === 0) {
+                    return <span className="text-muted-foreground">—</span>;
+                  }
+                  const labels = (chain as { label?: string }[]).map((s) => s.label ?? "").filter(Boolean);
+                  const summary = labels.join(" → ");
+                  return (
+                    <span className="text-xs text-muted-foreground truncate block" title={summary}>
+                      {summary}
+                    </span>
+                  );
+                })()}
+              </TableCell>
+            )}
             <TableCell>
               <AlertToneCell alert={a} />
             </TableCell>

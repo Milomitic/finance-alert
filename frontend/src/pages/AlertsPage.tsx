@@ -29,8 +29,26 @@ export default function AlertsPage() {
   const [page, setPage] = useState(0);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [openDetail, setOpenDetail] = useState<Alert | null>(null);
+  const [sortBy, setSortBy] = useState("triggered_at");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
-  const list = useAlertsList({ ...filters, offset: page * PAGE_SIZE });
+  const list = useAlertsList({
+    ...filters,
+    offset: page * PAGE_SIZE,
+    sort_by: sortBy,
+    sort_dir: sortDir,
+  });
+
+  const handleSort = (col: string) => {
+    if (col === sortBy) {
+      setSortDir((d) => (d === "desc" ? "asc" : "desc"));
+    } else {
+      setSortBy(col);
+      // Ticker sorts ascending by default; all others default desc.
+      setSortDir(col === "ticker" ? "asc" : "desc");
+    }
+    setPage(0);
+  };
   const bulk = useBulkAlerts();
 
   const items = list.data?.items ?? [];
@@ -95,6 +113,9 @@ export default function AlertsPage() {
                 setPage(0);
                 setFilters({ ...filters, q: v || undefined });
               }}
+              sortBy={sortBy}
+              sortDir={sortDir}
+              onSort={handleSort}
             />
           )}
         </CardContent>
