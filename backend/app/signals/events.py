@@ -14,6 +14,7 @@ from app.indicators.atr import atr
 from app.indicators.bb import bollinger
 from app.indicators.ema import ema
 from app.indicators.rsi import rsi
+from app.signals.pivots import find_pivots
 
 
 @dataclass(frozen=True)
@@ -23,6 +24,7 @@ class Event:
     direction: str | None = None    # "bull" | "bear" | None
     magnitude: float | None = None  # normalised strength (ratio, % amplitude)
     payload: dict[str, Any] = field(default_factory=dict)
+    source: str = "technical"       # "technical" | "earnings" | "analyst" | "insider"
 
 
 def _iso(v: Any) -> str:
@@ -104,22 +106,6 @@ def extract_ema_cross(
     return out
 
 
-def _pivots(series: pd.Series, width: int, *, kind: str) -> list[int]:
-    """Indices of confirmed local extrema: a bar is a pivot low (kind='low')
-    if it is the minimum of the [i-width, i+width] window (mirror for 'high').
-    Only bars with `width` neighbours on each side can be pivots."""
-    idx: list[int] = []
-    n = len(series)
-    for i in range(width, n - width):
-        window = series.iloc[i - width:i + width + 1]
-        v = series.iloc[i]
-        if kind == "low" and v == window.min():
-            idx.append(i)
-        elif kind == "high" and v == window.max():
-            idx.append(i)
-    return idx
-
-
 def extract_rsi_divergence(
     ohlcv: pd.DataFrame, *, period: int = 14, pivot_w: int = 5, max_gap: int = 60,
 ) -> list[Event]:
@@ -134,7 +120,7 @@ def extract_rsi_divergence(
     r = rsi(close, period).reset_index(drop=True)
     out: list[Event] = []
 
-    lows = _pivots(close, pivot_w, kind="low")
+    lows = find_pivots(close, pivot_w, kind="low")
     if len(lows) >= 2:
         a, b = lows[-2], lows[-1]
         if (b - a) <= max_gap and close.iloc[b] < close.iloc[a] \
@@ -145,7 +131,7 @@ def extract_rsi_divergence(
                                       "pivot_dates": [_iso(dates.iloc[a]), _iso(dates.iloc[b])],
                                       "rsi": [float(r.iloc[a]), float(r.iloc[b])]}))
 
-    highs = _pivots(close, pivot_w, kind="high")
+    highs = find_pivots(close, pivot_w, kind="high")
     if len(highs) >= 2:
         a, b = highs[-2], highs[-1]
         if (b - a) <= max_gap and close.iloc[b] > close.iloc[a] \
