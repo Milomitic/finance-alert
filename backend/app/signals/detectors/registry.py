@@ -1,5 +1,6 @@
 """Active signal detectors for the current phase."""
 from app.signals.detectors.high52_momentum import High52Momentum
+from app.signals.detectors.oversold_reversal import OversoldReversal
 from app.signals.detectors.rsi_divergence import RsiDivergence
 from app.signals.detectors.squeeze_expansion import SqueezeExpansion
 from app.signals.detectors.trend_pullback import TrendPullback
@@ -11,4 +12,5 @@ DETECTORS = [
     RsiDivergence(),
     SqueezeExpansion(),
     High52Momentum(),
+    OversoldReversal(),
 ]
