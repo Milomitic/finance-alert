@@ -114,7 +114,11 @@ def extract_rsi_divergence(
     """Regular RSI divergence over the two most recent confirmed price pivots.
     Bull: price lower-low but RSI higher-low. Bear: price higher-high but RSI
     lower-high. Event dated at the second (more recent) pivot. magnitude = the
-    RSI delta between the two pivots (normalised to [0,1] by /50)."""
+    RSI delta between the two pivots (normalised to [0,1] by /50).
+
+    Also emits hidden_divergence (trend-continuation):
+    Bull hidden: price higher-low but RSI lower-low (uptrend continuation).
+    Bear hidden: price lower-high but RSI higher-high (downtrend continuation)."""
     if len(ohlcv) < period + 2 * pivot_w + 2:
         return []
     close = ohlcv["close"].astype(float).reset_index(drop=True)
@@ -125,24 +129,40 @@ def extract_rsi_divergence(
     lows = find_pivots(close, pivot_w, kind="low")
     if len(lows) >= 2:
         a, b = lows[-2], lows[-1]
-        if (b - a) <= max_gap and close.iloc[b] < close.iloc[a] \
-                and pd.notna(r.iloc[a]) and pd.notna(r.iloc[b]) and r.iloc[b] > r.iloc[a]:
-            out.append(Event(_iso(dates.iloc[b]), "rsi_divergence", "bull",
-                             magnitude=float(min(1.0, (r.iloc[b] - r.iloc[a]) / 50.0)),
-                             payload={"period": period,
-                                      "pivot_dates": [_iso(dates.iloc[a]), _iso(dates.iloc[b])],
-                                      "rsi": [float(r.iloc[a]), float(r.iloc[b])]}))
+        if (b - a) <= max_gap and pd.notna(r.iloc[a]) and pd.notna(r.iloc[b]):
+            # Regular bull divergence: price lower-low, RSI higher-low
+            if close.iloc[b] < close.iloc[a] and r.iloc[b] > r.iloc[a]:
+                out.append(Event(_iso(dates.iloc[b]), "rsi_divergence", "bull",
+                                 magnitude=float(min(1.0, (r.iloc[b] - r.iloc[a]) / 50.0)),
+                                 payload={"period": period,
+                                          "pivot_dates": [_iso(dates.iloc[a]), _iso(dates.iloc[b])],
+                                          "rsi": [float(r.iloc[a]), float(r.iloc[b])]}))
+            # Hidden bull divergence: price higher-low, RSI lower-low (continuation)
+            elif close.iloc[b] > close.iloc[a] and r.iloc[b] < r.iloc[a]:
+                out.append(Event(_iso(dates.iloc[b]), "hidden_divergence", "bull",
+                                 magnitude=float(min(1.0, (r.iloc[a] - r.iloc[b]) / 50.0)),
+                                 payload={"period": period,
+                                          "pivot_dates": [_iso(dates.iloc[a]), _iso(dates.iloc[b])],
+                                          "rsi": [float(r.iloc[a]), float(r.iloc[b])]}))
 
     highs = find_pivots(close, pivot_w, kind="high")
     if len(highs) >= 2:
         a, b = highs[-2], highs[-1]
-        if (b - a) <= max_gap and close.iloc[b] > close.iloc[a] \
-                and pd.notna(r.iloc[a]) and pd.notna(r.iloc[b]) and r.iloc[b] < r.iloc[a]:
-            out.append(Event(_iso(dates.iloc[b]), "rsi_divergence", "bear",
-                             magnitude=float(min(1.0, (r.iloc[a] - r.iloc[b]) / 50.0)),
-                             payload={"period": period,
-                                      "pivot_dates": [_iso(dates.iloc[a]), _iso(dates.iloc[b])],
-                                      "rsi": [float(r.iloc[a]), float(r.iloc[b])]}))
+        if (b - a) <= max_gap and pd.notna(r.iloc[a]) and pd.notna(r.iloc[b]):
+            # Regular bear divergence: price higher-high, RSI lower-high
+            if close.iloc[b] > close.iloc[a] and r.iloc[b] < r.iloc[a]:
+                out.append(Event(_iso(dates.iloc[b]), "rsi_divergence", "bear",
+                                 magnitude=float(min(1.0, (r.iloc[a] - r.iloc[b]) / 50.0)),
+                                 payload={"period": period,
+                                          "pivot_dates": [_iso(dates.iloc[a]), _iso(dates.iloc[b])],
+                                          "rsi": [float(r.iloc[a]), float(r.iloc[b])]}))
+            # Hidden bear divergence: price lower-high, RSI higher-high (continuation)
+            elif close.iloc[b] < close.iloc[a] and r.iloc[b] > r.iloc[a]:
+                out.append(Event(_iso(dates.iloc[b]), "hidden_divergence", "bear",
+                                 magnitude=float(min(1.0, (r.iloc[b] - r.iloc[a]) / 50.0)),
+                                 payload={"period": period,
+                                          "pivot_dates": [_iso(dates.iloc[a]), _iso(dates.iloc[b])],
+                                          "rsi": [float(r.iloc[a]), float(r.iloc[b])]}))
     return out
 
 
