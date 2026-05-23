@@ -6,7 +6,6 @@ was removed in May 2026. All rules are now global. The `EffectiveRule`
 dataclass is preserved (with a constant `source="tier1"`) so the API
 shape and FE consumers don't break.
 """
-import json
 from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import Any
@@ -21,7 +20,7 @@ from app.indicators.bb import bollinger
 from app.indicators.macd import macd
 from app.indicators.rsi import rsi as rsi_indicator
 from app.indicators.ema import ema as ema_indicator
-from app.models import Alert, OhlcvDaily, Rule, Stock
+from app.models import Alert, OhlcvDaily, Stock
 from app.services.alert_service import derive_rule_kind
 
 
@@ -215,25 +214,15 @@ def _compute_kpis(bars: list[OhlcvDaily]) -> StockKpis:
 
 
 def resolve_effective_rules(db: Session, stock_id: int) -> list[EffectiveRule]:
-    """Return every global rule as it will fire at scan-time for this stock.
+    """Return effective rules for this stock.
 
-    Pre-May-2026 this resolved Tier 1 (global) ↓ Tier 2 (per-watchlist
-    override) and surfaced which watchlist contributed each row. After
-    the watchlist removal it's a straight pass-through over the global
-    rules table — `stock_id` is unused but kept in the signature so the
-    API + tests don't have to change.
+    Rules are being removed — the rule engine is signals-only now. This
+    function is kept for API/FE backward-compat (the `effective_rules` key
+    must exist in the stock-detail payload) and always returns an empty list
+    until the Rule model and routes are fully deleted in a later task.
     """
     _ = stock_id  # reserved for a future per-stock override mechanism
-    global_rules = list(db.execute(select(Rule)).scalars())
-    return [
-        EffectiveRule(
-            kind=g.kind,
-            enabled=g.enabled,
-            params=json.loads(g.params or "{}"),
-            source="tier1",
-        )
-        for g in global_rules
-    ]
+    return []
 
 
 def get_detail(db: Session, ticker: str, range_key: str = "1d") -> StockDetail | None:
@@ -326,22 +315,18 @@ def get_detail(db: Session, ticker: str, range_key: str = "1d") -> StockDetail |
     # "stock-level" metrics, not chart-window metrics.
     kpis = _compute_kpis(daily_bars)
     effective_rules = resolve_effective_rules(db, stock.id)
-    # JOIN Rule so each alert carries its rule.kind for the UI
-    # (Regola + Tono chips on the stock-detail "Alert storici" card).
-    # Was `select(Alert)` only, which left the API endpoint to
-    # hard-code rule_kind=None.
-    # Also filter out archived alerts here — the stock-detail card
-    # doesn't surface an Archivio column anymore, and showing
-    # archived rows mixed with active ones would be misleading.
+    # All alerts are now signal-based (rule_id=None, signal_name set).
+    # No Rule join needed — derive kind directly from signal_name.
+    # Filter out archived alerts — the stock-detail card doesn't surface
+    # an Archivio column, so mixing archived rows would be misleading.
     alerts_history = [
-        (alert, derive_rule_kind(rule_kind, alert.signal_name))
-        for alert, rule_kind in db.execute(
-            select(Alert, Rule.kind)
-            .outerjoin(Rule, Rule.id == Alert.rule_id)
+        (alert, derive_rule_kind(None, alert.signal_name))
+        for alert in db.execute(
+            select(Alert)
             .where(Alert.stock_id == stock.id, Alert.archived_at.is_(None))
             .order_by(Alert.triggered_at.desc())
             .limit(50)
-        ).all()
+        ).scalars().all()
     ]
     return StockDetail(
         stock=stock,

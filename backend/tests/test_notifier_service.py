@@ -1,11 +1,11 @@
-"""Tests for Telegram digest notifier."""
+"""Tests for Telegram digest notifier — signals-only (rule_id removed)."""
 from unittest.mock import MagicMock, patch
 
 import pytest
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.models import Alert, Rule, Stock
+from app.models import Alert, Stock
 from app.services.notifier_service import (
     DigestResult,
     build_digest_message,
@@ -13,15 +13,13 @@ from app.services.notifier_service import (
 )
 
 
-def _seed_for_digest(db: Session) -> tuple[Stock, Rule, Alert]:
+def _seed_for_digest(db: Session) -> tuple[Stock, Alert]:
     stock = Stock(ticker="AAPL", exchange="NASDAQ", name="Apple Inc.")
     db.add(stock)
     db.commit()
-    rule = Rule(kind="rsi_oversold", params="{}", enabled=True)
-    db.add(rule)
-    db.commit()
     alert = Alert(
-        rule_id=rule.id,
+        rule_id=None,
+        signal_name="rsi_oversold",
         stock_id=stock.id,
         trigger_price=182.50,
         snapshot='{"rsi": 28.4, "period": 14, "threshold": 30}',
@@ -29,7 +27,7 @@ def _seed_for_digest(db: Session) -> tuple[Stock, Rule, Alert]:
     db.add(alert)
     db.commit()
     db.refresh(alert)
-    return stock, rule, alert
+    return stock, alert
 
 
 def test_send_digest_skipped_when_no_token(db: Session, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -72,8 +70,16 @@ def test_send_digest_calls_telegram_when_alerts_present(
 
 
 def test_build_digest_message_contains_summary_and_top_alerts(db: Session) -> None:
-    stock, rule, alert = _seed_for_digest(db)
+    stock, alert = _seed_for_digest(db)
     message = build_digest_message(db, [alert])
     assert "AAPL" in message
-    assert "RSI Oversold" in message
+    # signal:rsi_oversold kind — label falls back to the raw kind string
+    assert "signal:rsi_oversold" in message
     assert "Finance Alert" in message
+
+
+def test_build_digest_message_kind_is_signal_prefixed(db: Session) -> None:
+    """digest uses derive_rule_kind(None, signal_name) → 'signal:<name>'."""
+    stock, alert = _seed_for_digest(db)
+    message = build_digest_message(db, [alert])
+    assert "signal:rsi_oversold" in message

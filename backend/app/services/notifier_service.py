@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.models import Alert, Rule, Stock
+from app.models import Alert, Stock
 from app.services.alert_service import derive_rule_kind
 
 # Maximum alerts to enumerate in the message body
@@ -62,16 +62,10 @@ def build_digest_message(db: Session, alerts: list[Alert]) -> str:
     n = len(alerts)
     today = datetime.now(UTC).strftime("%Y-%m-%d")
 
-    # Group counts by kind
-    rule_ids = {a.rule_id for a in alerts}
-    rules_by_id = {
-        r.id: r
-        for r in db.execute(select(Rule).where(Rule.id.in_(rule_ids))).scalars().all()
-    }
+    # Group counts by kind — all alerts are now signal-based (signal_name set)
     counts: dict[str, int] = {}
     for a in alerts:
-        rule = rules_by_id.get(a.rule_id)
-        kind = derive_rule_kind(rule.kind if rule else None, a.signal_name) or "unknown"
+        kind = derive_rule_kind(None, a.signal_name) or "unknown"
         counts[kind] = counts.get(kind, 0) + 1
 
     # Per-stock lookup
@@ -92,8 +86,7 @@ def build_digest_message(db: Session, alerts: list[Alert]) -> str:
     top = alerts[:DIGEST_TOP_N]
     lines.append(f"<b>Top {len(top)} alert per timestamp:</b>")
     for a in top:
-        rule = rules_by_id.get(a.rule_id)
-        kind = derive_rule_kind(rule.kind if rule else None, a.signal_name) or "unknown"
+        kind = derive_rule_kind(None, a.signal_name) or "unknown"
         emoji = RULE_EMOJIS.get(kind, "•")
         label = RULE_LABELS.get(kind, kind)
         stock = stocks_by_id.get(a.stock_id)

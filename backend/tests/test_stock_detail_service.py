@@ -1,12 +1,13 @@
 """Tests for stock_detail_service.
 
-The Tier 2 (per-watchlist override) layer was removed in May 2026 —
-the tier-2 test cases that lived here are gone. `source` on
-`EffectiveRule` is always "tier1" now.
+Rules are being removed — the rule engine is signals-only. The Tier 2
+(per-watchlist override) layer was already removed in May 2026. The
+`resolve_effective_rules` function now returns [] as a backward-compat stub
+until the Rule model is fully deleted in a later task.
 """
 from datetime import date, timedelta
 
-from app.models import OhlcvDaily, Rule, Stock
+from app.models import OhlcvDaily, Stock
 from app.services import stock_detail_service
 
 
@@ -51,15 +52,27 @@ def test_get_detail_range_filter_1m(db):
     assert 8 <= len(d.ohlcv) <= 15
 
 
-def test_resolve_effective_rules_returns_globals(db):
+def test_resolve_effective_rules_returns_empty(db):
+    """Rules are being removed — function returns [] as backward-compat stub."""
     s = _seed_stock_full(db, n_bars=10)
-    db.add(Rule(kind="rsi_oversold", params='{"threshold":30}', enabled=True))
-    db.add(Rule(kind="death_cross", params='{}', enabled=True))
-    db.commit()
-
     rules = stock_detail_service.resolve_effective_rules(db, s.id)
-    assert len(rules) == 2
-    kinds = {r.kind: r for r in rules}
-    assert kinds["rsi_oversold"].source == "tier1"
-    assert kinds["rsi_oversold"].enabled is True
-    assert kinds["death_cross"].source == "tier1"
+    assert rules == []
+
+
+def test_alerts_history_uses_signal_kind(db):
+    """alerts_history derives kind from signal_name, not rule join."""
+    from app.models import Alert
+    s = _seed_stock_full(db, n_bars=10)
+    db.add(Alert(
+        rule_id=None,
+        signal_name="rsi_oversold",
+        stock_id=s.id,
+        trigger_price=100.0,
+        snapshot="{}",
+    ))
+    db.commit()
+    d = stock_detail_service.get_detail(db, s.ticker, range_key="1y")
+    assert d is not None
+    assert len(d.alerts_history) == 1
+    alert_obj, kind = d.alerts_history[0]
+    assert kind == "signal:rsi_oversold"
