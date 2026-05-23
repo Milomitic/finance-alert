@@ -81,3 +81,19 @@ class TopPicksOut(BaseModel):
     category: ScoreCategory
     risk: RiskTier | None = None
     items: list[TopPickItemOut]
+
+
+class TechnicalScoreOut(BaseModel):
+    """Single-stock continuous technical score (composite + dimensions +
+    posture). Mirrors the TechnicalScore model."""
+    stock_id: int
+    ticker: str
+    composite: float
+    trend: float | None = None
+    momentum: float | None = None
+    structure: float | None = None
+    volume: float | None = None
+    rel_strength: float | None = None
+    signals: float | None = None
+    posture: str
+    computed_at: datetime

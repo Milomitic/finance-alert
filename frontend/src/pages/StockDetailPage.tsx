@@ -37,6 +37,7 @@ import { StockAlertsHistoryCard } from "@/components/stock/StockAlertsHistoryCar
 import { StockHeader } from "@/components/stock/StockHeader";
 import { EtfHoldingsCard } from "@/components/stock/EtfHoldingsCard";
 import { StockScoreCard } from "@/components/stock/StockScoreCard";
+import { StockTechnicalCard } from "@/components/stock/StockTechnicalCard";
 import { TechnicalKpiCard } from "@/components/stock/TechnicalKpiCard";
 
 /**
@@ -432,6 +433,7 @@ export default function StockDetailPage() {
 
         <div className="space-y-3">
           <StockScoreCard ticker={ticker} />
+          <StockTechnicalCard ticker={ticker} />
           <TechnicalKpiCard ticker={ticker} />
           {/* Institutional / superinvestor holders sit ABOVE insiders
               (per user spec): the conviction signal from a 13F-tracked

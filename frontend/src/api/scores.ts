@@ -5,6 +5,7 @@ import type {
   ScanStopResultInfo,
   ScoreCategory,
   StockScore,
+  TechnicalScoreDetail,
   TopPicks,
 } from "./types";
 
@@ -27,6 +28,8 @@ function toQuery(params: TopPicksParams): string {
 export const scores = {
   forStock: (ticker: string) =>
     api<StockScore>(`/api/stocks/${encodeURIComponent(ticker)}/score`),
+  technicalForStock: (ticker: string) =>
+    api<TechnicalScoreDetail>(`/api/stocks/${encodeURIComponent(ticker)}/technical`),
   /**
    * Force a fresh score recomputation for one stock and persist it. Used by
    * the "refresh score" button on the detail page when the persisted score

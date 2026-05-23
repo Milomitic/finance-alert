@@ -1117,3 +1117,17 @@ export interface TickerHolders {
    *  holding. Only populated when fetched with include_historical. */
   historical?: TickerHolder[];
 }
+
+export interface TechnicalScoreDetail {
+  stock_id: number;
+  ticker: string;
+  composite: number;
+  trend: number | null;
+  momentum: number | null;
+  structure: number | null;
+  volume: number | null;
+  rel_strength: number | null;
+  signals: number | null;
+  posture: string;
+  computed_at: string;
+}

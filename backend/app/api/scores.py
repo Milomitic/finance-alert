@@ -16,7 +16,7 @@ from app.api.deps import get_current_user, get_db
 from app.core.db import SessionLocal
 from app.core.errors import UpstreamError
 from app.core.visibility import visible_country_clause
-from app.models import OhlcvDaily, ScanRun, Stock, StockScore, User
+from app.models import OhlcvDaily, ScanRun, Stock, StockScore, TechnicalScore, User
 from app.models.scan_run import KIND_SCORE_RECOMPUTE
 from app.schemas.alert import ScanAccepted, ScanStatusOut, ScanStopResult
 from app.schemas.score import (
@@ -24,6 +24,7 @@ from app.schemas.score import (
     ScoreCategory,
     StockScoreOut,
     SubScoresOut,
+    TechnicalScoreOut,
     TopPickItemOut,
     TopPicksOut,
 )
@@ -98,6 +99,47 @@ def get_stock_score(
         risk_tier=score.risk_tier,  # type: ignore[arg-type]
         computed_at=score.computed_at,
         breakdown=breakdown,
+    )
+
+
+@router.get("/stocks/{ticker}/technical", response_model=TechnicalScoreOut)
+def get_stock_technical(
+    ticker: str,
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+) -> TechnicalScoreOut:
+    """Single-stock continuous technical score. 404 if the ticker is unknown or
+    no technical score has been computed yet."""
+    stock = db.execute(
+        select(Stock).where(Stock.ticker == ticker).limit(1)
+    ).scalars().first()
+    if stock is None:
+        raise HTTPException(status_code=404, detail=f"Ticker not found: {ticker}")
+    dup_ids = [
+        sid for sid in db.execute(
+            select(Stock.id).where(Stock.ticker == ticker)
+        ).scalars().all()
+    ]
+    ts = db.execute(
+        select(TechnicalScore).where(TechnicalScore.stock_id.in_(dup_ids)).limit(1)
+    ).scalars().first()
+    if ts is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Technical score not yet computed (wait for the next scan)",
+        )
+    return TechnicalScoreOut(
+        stock_id=ts.stock_id,
+        ticker=stock.ticker,
+        composite=ts.composite,
+        trend=ts.trend,
+        momentum=ts.momentum,
+        structure=ts.structure,
+        volume=ts.volume,
+        rel_strength=ts.rel_strength,
+        signals=ts.signals,
+        posture=ts.posture,
+        computed_at=ts.computed_at,
     )
 
 
