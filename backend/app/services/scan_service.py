@@ -126,7 +126,7 @@ def scan_universe(
     total = len(stocks)
     global_rules = _load_global_rules(db)
     if not global_rules:
-        logger.warning("[scan] no rules configured; rule scan will be skipped but signal scan continues")
+        logger.warning("[scan] no rules configured; rule scan skipped, signal engine still runs per stock")
 
     if on_progress:
         on_progress(0, total, result, None)
@@ -239,8 +239,11 @@ def scan_universe(
         try:
             fired = evaluate_signals(db, stock, ohlcv)
             result.alerts_fired += fired
-        except Exception as e:  # noqa: BLE001
-            logger.warning(f"[scan] signals failed for {stock.ticker}: {e}")
+        except Exception:  # noqa: BLE001
+            # logger.exception (not warning) to keep the traceback - the signal
+            # stack is new and growing; the first failure should be diagnosable.
+            # Matches the rule-eval crash handlers above.
+            logger.exception(f"[scan] signals failed for {stock.ticker}")
 
         if on_progress and (idx % progress_every == 0 or idx == total):
             on_progress(idx, total, result, stock.ticker)
