@@ -1,6 +1,7 @@
 import { api } from "./client";
 import type {
   FilterOptions,
+  OhlcvBar,
   Stock,
   StockDetail,
   StockNews,
@@ -91,5 +92,9 @@ export const stocks = {
   news: (ticker: string, limit = 5) =>
     api<StockNews>(
       `/api/stocks/${encodeURIComponent(ticker)}/news?limit=${limit}`
+    ),
+  ohlcv: (ticker: string, bars = 120) =>
+    api<OhlcvBar[]>(
+      `/api/stocks/${encodeURIComponent(ticker)}/ohlcv?bars=${bars}`
     ),
 };
