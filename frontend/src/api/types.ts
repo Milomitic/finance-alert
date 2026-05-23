@@ -78,6 +78,10 @@ export type RuleKind =
   | "mean_reversion_short"
   | "composite";
 
+/** Signal-engine alerts use the "signal:<detector-name>" convention for
+ *  rule_kind (e.g. "signal:volume_breakout"); they have rule_id === null. */
+export type SignalKind = `signal:${string}`;
+
 export type RuleExpressionAtomic = {
   op: "atomic";
   kind: string;
@@ -134,14 +138,14 @@ export interface Rule {
 
 export interface Alert {
   id: number;
-  rule_id: number;
+  rule_id: number | null;
   /** ISO date (YYYY-MM-DD) of the market-data bar where the rule's
    *  condition matched. May differ from `triggered_at` (the wall-clock
    *  moment the row was created): a scan run on Monday morning may detect
    *  a signal whose underlying bar closed Friday. NULL only for legacy
    *  rows from before this column existed. */
   signal_date?: string | null;
-  rule_kind: RuleKind | null;
+  rule_kind: RuleKind | SignalKind | null;
   stock_id: number;
   ticker: string | null;
   name: string | null;
@@ -150,6 +154,21 @@ export interface Alert {
   snapshot: Record<string, unknown>;
   read_at: string | null;
   archived_at: string | null;
+}
+
+export interface SignalChainStep {
+  date: string;
+  label: string;
+  detail?: string;
+}
+
+export interface SignalSnapshot {
+  tone: "bull" | "bear";
+  confidence: number; // 0..100
+  chain: SignalChainStep[];
+  factors?: Record<string, number>;
+  invalidation?: { level?: number; reason?: string } | null;
+  sources?: string[];
 }
 
 export interface AlertList {

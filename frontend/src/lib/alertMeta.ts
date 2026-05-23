@@ -70,6 +70,26 @@ export function getAlertKindMeta(rule_kind: string | null | undefined): AlertKin
   );
 }
 
+/** True when the alert kind is a signal-engine kind ("signal:<name>"). */
+export function isSignalKind(rule_kind: string | null | undefined): boolean {
+  return typeof rule_kind === "string" && rule_kind.startsWith("signal:");
+}
+
+/** Friendly label + icon per signal detector name (the part after "signal:").
+ *  Tone is NOT here - it comes from the snapshot's bull/bear field. */
+const SIGNAL_META: Record<string, { label: string; icon: LucideIcon }> = {
+  volume_breakout: { label: "Volume Breakout", icon: Zap },
+  trend_pullback: { label: "Trend + Pullback", icon: TrendingUp },
+  rsi_divergence: { label: "Divergenza RSI", icon: Activity },
+  squeeze_expansion: { label: "Squeeze + Espansione", icon: ChevronsUp },
+  high52_momentum: { label: "Massimo 52 settimane", icon: ArrowUpToLine },
+};
+
+function signalMeta(rule_kind: string): { label: string; icon: LucideIcon } {
+  const name = rule_kind.slice("signal:".length);
+  return SIGNAL_META[name] ?? { label: name.replace(/_/g, " "), icon: Bell };
+}
+
 /** Get metadata for an alert as a whole — same as `getAlertKindMeta` for
  *  rule-based alerts, but for PRICE alerts it derives the directional tone
  *  from `snapshot.direction`:
@@ -86,6 +106,13 @@ export function getAlertKindMeta(rule_kind: string | null | undefined): AlertKin
  *  for the few places that genuinely care about kind only (e.g. the
  *  rule-name dropdown in AlertFilters). */
 export function getAlertMeta(alert: Alert): AlertKindMeta {
+  if (isSignalKind(alert.rule_kind)) {
+    const { label, icon } = signalMeta(alert.rule_kind as string);
+    const snapTone = (alert.snapshot as Record<string, unknown> | undefined)?.tone;
+    const tone: AlertTone =
+      snapTone === "bull" ? "bullish" : snapTone === "bear" ? "bearish" : "neutral";
+    return { label, icon, tone };
+  }
   if (alert.rule_kind) return getAlertKindMeta(alert.rule_kind);
   // Price alert — read direction from the snapshot dict the backend
   // wrote (`backend/app/services/price_alert_service.py`).
@@ -150,6 +177,13 @@ export function getSnapshotHeadline(
   snap: Record<string, unknown> | null | undefined,
 ): string | null {
   if (!snap) return null;
+  if (isSignalKind(rule_kind)) {
+    const conf = snap["confidence"];
+    const chain = snap["chain"];
+    const nEvents = Array.isArray(chain) ? chain.length : 0;
+    const confTxt = typeof conf === "number" ? `Confidenza ${Math.round(conf)}%` : "Segnale";
+    return nEvents > 0 ? `${confTxt} - ${nEvents} eventi` : confTxt;
+  }
   const get = (k: string): unknown => snap[k];
   const fmt = (v: unknown, digits = 2): string =>
     typeof v === "number" && Number.isFinite(v) ? v.toFixed(digits) : "—";
