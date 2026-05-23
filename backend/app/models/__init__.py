@@ -15,12 +15,14 @@ from app.models.price_alert import PriceAlert
 from app.models.scan_run import ScanRun
 from app.models.stock import Stock
 from app.models.stock_score import StockScore
+from app.models.technical_score import TechnicalScore
 from app.models.user import User
 
 __all__ = [
     "User",
     "Stock",
     "StockScore",
+    "TechnicalScore",
     "Index",
     "StockIndex",
     "CatalogRefreshLog",

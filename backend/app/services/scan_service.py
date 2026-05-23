@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from app.core.visibility import visible_country_clause
 from app.models import Alert, OhlcvDaily, Stock
 from app.signals.signal_scan_service import evaluate_signals
+from app.services import technical_score_service
 
 
 @dataclass
@@ -76,6 +77,7 @@ def scan_universe(
     so the overhead is negligible.
     """
     result = ScanResult()
+    tech_partials: dict[int, dict] = {}
     # Skip catalog-only countries (CN/JP/KR) from alert generation —
     # they live in DB only to feed dashboard breadth + Asia mood.
     # Single source of truth: `app.core.visibility`.
@@ -115,8 +117,20 @@ def scan_universe(
         except Exception as e:  # noqa: BLE001
             logger.warning(f"[scan] signals failed for {stock.ticker}: {e}")
 
+        # Continuous technical score: collect per-stock dimensions; relative
+        # strength is filled in a finalize pass after the loop.
+        tp = technical_score_service.partial_for(ohlcv)
+        if tp is not None:
+            tech_partials[stock.id] = tp
+
         if on_progress and (idx % progress_every == 0 or idx == total):
             on_progress(idx, total, result, stock.ticker)
+
+    # Cross-sectional finalize: relative-strength percentile + composite, upsert.
+    try:
+        technical_score_service.finalize(db, tech_partials)
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"[scan] technical score finalize failed: {e}")
 
     if on_progress:
         on_progress(total, total, result, None)
