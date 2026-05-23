@@ -1,14 +1,9 @@
-"""Daily alert scan: fetch OHLCV, evaluate every global rule,
-fire alerts on edge transitions (False -> True).
-
-The Tier 1 / Tier 2 (watchlist override) layer was removed in May 2026
-— see CLAUDE.md. The scan is now a straight pass over the rules table.
+"""Daily scan: fetch OHLCV per stock, run the signal engine,
+fire edge-deduped signal alerts.
 """
-import json
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any
 
 import pandas as pd
 from loguru import logger
@@ -16,9 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.visibility import visible_country_clause
-from app.models import Alert, OhlcvDaily, Rule, RuleState, Stock
-from app.rules.composite import evaluate_expression, snapshot_expression
-from app.rules.registry import RULES
+from app.models import Alert, OhlcvDaily, Stock
 from app.signals.signal_scan_service import evaluate_signals
 
 
@@ -28,16 +21,6 @@ class ScanResult:
     stocks_skipped: int = 0
     alerts_fired: int = 0
     states_updated: int = 0
-
-
-def _load_global_rules(db: Session) -> dict[str, Rule]:
-    """Return {kind: Rule} for every rule in the registry. Atomic kinds
-    are unique by construction (enforced at create time). Composite
-    rules share kind="composite" and would collide on the dict key —
-    this preserves the pre-watchlist behaviour where only the
-    last-inserted composite is evaluated."""
-    rows = db.execute(select(Rule)).scalars().all()
-    return {r.kind: r for r in rows}
 
 
 def _load_ohlcv(db: Session, stock_id: int, limit: int = 260) -> pd.DataFrame | None:
@@ -65,28 +48,6 @@ def _load_ohlcv(db: Session, stock_id: int, limit: int = 260) -> pd.DataFrame | 
     )
 
 
-def _resolve_effective_rule(
-    kind: str,
-    global_rules: dict[str, Rule],
-) -> tuple[Rule, dict[str, Any]] | None:
-    """Pick the rule + params to apply for (kind). Returns None when the
-    rule is missing or disabled. Pre-watchlist removal this also merged
-    Tier 2 overrides — now it's a straight global lookup.
-    """
-    global_rule = global_rules.get(kind)
-    if global_rule is None or not global_rule.enabled:
-        return None
-    return global_rule, json.loads(global_rule.params or "{}")
-
-
-def _get_or_create_state(db: Session, rule_id: int, stock_id: int) -> RuleState | None:
-    return db.execute(
-        select(RuleState).where(
-            RuleState.rule_id == rule_id, RuleState.stock_id == stock_id
-        )
-    ).scalar_one_or_none()
-
-
 class ScanCancelled(RuntimeError):
     """Raised when the cancel_check callback returned True between iterations.
     The runner catches this and marks the ScanRun row as 'failed' with a clear
@@ -100,7 +61,7 @@ def scan_universe(
     progress_every: int = 10,
     cancel_check: Callable[[], bool] | None = None,
 ) -> ScanResult:
-    """Scan all stocks, evaluate every global rule, fire edge alerts.
+    """Scan all stocks, run the signal engine, fire edge-deduped signal alerts.
 
     on_progress, if provided, is called every `progress_every` stocks AND at start/end
     with (stocks_done, stocks_total, result_so_far, current_ticker). Use this to
@@ -124,9 +85,6 @@ def scan_universe(
         .all()
     )
     total = len(stocks)
-    global_rules = _load_global_rules(db)
-    if not global_rules:
-        logger.warning("[scan] no rules configured; rule scan skipped, signal engine still runs per stock")
 
     if on_progress:
         on_progress(0, total, result, None)
@@ -150,100 +108,12 @@ def scan_universe(
                 on_progress(idx, total, result, stock.ticker)
             continue
         result.stocks_scanned += 1
-        last_close = float(ohlcv["close"].iloc[-1])
-        # The market-data bar date on which the indicator condition matched.
-        # Stored on every Alert row created in this iteration so the UI can
-        # distinguish "signal occurred Friday" from "system recorded Monday".
-        # Falls back to None if the date column is missing (defensive — should
-        # never happen given _load_ohlcv always sets it).
-        signal_bar_date = ohlcv["date"].iloc[-1] if "date" in ohlcv.columns else None
 
-        for kind, candidate_global in global_rules.items():
-            global_rule = candidate_global
-            if not global_rule.enabled:
-                continue
-            if global_rule.expression:
-                try:
-                    expr = json.loads(global_rule.expression)
-                    new_eval = evaluate_expression(expr, ohlcv)
-                except Exception as e:  # noqa: BLE001
-                    logger.exception(
-                        f"[scan] composite eval crashed stock={stock.ticker} rule_id={global_rule.id}: {e}"
-                    )
-                    continue
-                eff_params: dict[str, Any] = {}
-                rule_obj = None  # signals "use composite snapshot below"
-            else:
-                resolved = _resolve_effective_rule(kind, global_rules)
-                if resolved is None:
-                    continue
-                global_rule, eff_params = resolved
-                rule_obj = RULES.get(kind)
-                if rule_obj is None:
-                    continue
-                try:
-                    new_eval = rule_obj.evaluate(ohlcv, eff_params)
-                except Exception as e:  # noqa: BLE001
-                    logger.exception(f"[scan] eval crashed for stock={stock.ticker} kind={kind}: {e}")
-                    continue
-
-            state = _get_or_create_state(db, global_rule.id, stock.id)
-            now = datetime.now(UTC)
-            if state is None:
-                if new_eval:
-                    if rule_obj is not None:
-                        snapshot = rule_obj.snapshot(ohlcv, eff_params)
-                    else:
-                        snapshot = snapshot_expression(json.loads(global_rule.expression), ohlcv)
-                    db.add(
-                        Alert(
-                            rule_id=global_rule.id,
-                            stock_id=stock.id,
-                            trigger_price=last_close,
-                            snapshot=json.dumps(snapshot),
-                            signal_date=signal_bar_date,
-                        )
-                    )
-                    result.alerts_fired += 1
-                db.add(
-                    RuleState(
-                        rule_id=global_rule.id,
-                        stock_id=stock.id,
-                        last_evaluation=new_eval,
-                        last_evaluated_at=now,
-                    )
-                )
-                result.states_updated += 1
-            else:
-                if not state.last_evaluation and new_eval:
-                    if rule_obj is not None:
-                        snapshot = rule_obj.snapshot(ohlcv, eff_params)
-                    else:
-                        snapshot = snapshot_expression(json.loads(global_rule.expression), ohlcv)
-                    db.add(
-                        Alert(
-                            rule_id=global_rule.id,
-                            stock_id=stock.id,
-                            trigger_price=last_close,
-                            snapshot=json.dumps(snapshot),
-                            signal_date=signal_bar_date,
-                        )
-                    )
-                    result.alerts_fired += 1
-                state.last_evaluation = new_eval
-                state.last_evaluated_at = now
-                result.states_updated += 1
-
-        # Signal engine - runs on the same OHLCV already loaded. Wrapped so a
-        # signals failure can never abort the legacy rule scan.
+        # Signal engine — the only alert source.
         try:
-            fired = evaluate_signals(db, stock, ohlcv)
-            result.alerts_fired += fired
-        except Exception:  # noqa: BLE001
-            # logger.exception (not warning) to keep the traceback - the signal
-            # stack is new and growing; the first failure should be diagnosable.
-            # Matches the rule-eval crash handlers above.
-            logger.exception(f"[scan] signals failed for {stock.ticker}")
+            result.alerts_fired += evaluate_signals(db, stock, ohlcv)
+        except Exception as e:  # noqa: BLE001
+            logger.warning(f"[scan] signals failed for {stock.ticker}: {e}")
 
         if on_progress and (idx % progress_every == 0 or idx == total):
             on_progress(idx, total, result, stock.ticker)
