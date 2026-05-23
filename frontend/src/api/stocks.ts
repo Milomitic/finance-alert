@@ -18,7 +18,13 @@ export type StockSortBy =
   | "sector"
   | "industry"
   | "exchange"
-  | "composite";
+  | "composite"
+  | "profitability"
+  | "sustainability"
+  | "growth"
+  | "value"
+  | "momentum"
+  | "sentiment";
 export type SortDir = "asc" | "desc";
 
 export interface SearchParams {

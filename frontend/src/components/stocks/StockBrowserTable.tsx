@@ -20,7 +20,6 @@ import { cn } from "@/lib/utils";
  *  headers there). Mirrors the desktop table's sortable columns. */
 const MOBILE_SORT_OPTIONS: { key: TableSortKey; label: string }[] = [
   { key: "ticker", label: "Ticker" },
-  { key: "name", label: "Nome" },
   { key: "composite", label: "Score" },
   { key: "change_pct", label: "Δ%" },
   { key: "market_cap", label: "Mkt Cap" },
@@ -322,7 +321,6 @@ export function StockBrowserTable({ items, sortBy, sortDir, onSortChange, q, onQ
                     />
                   </div>
                 </th>
-                <SortableHeader column="name" label="Nome" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} />
                 <SortableHeader column="exchange" label="Exchange" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} />
                 <SortableHeader column="sector" label="Settore" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} />
                 <SortableHeader column="industry" label="Industry" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} />
@@ -336,6 +334,12 @@ export function StockBrowserTable({ items, sortBy, sortDir, onSortChange, q, onQ
                 <SortableHeader column="market_cap" label="Mkt Cap" align="right" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} />
                 <SortableHeader column="change_pct" label="Δ%" align="right" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} clientOnly />
                 <SortableHeader column="composite" label="Score" align="right" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} />
+                <SortableHeader column="profitability" label="Profitt." align="right" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} />
+                <SortableHeader column="sustainability" label="Sosten." align="right" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} />
+                <SortableHeader column="growth" label="Cresc." align="right" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} />
+                <SortableHeader column="value" label="Valore" align="right" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} />
+                <SortableHeader column="momentum" label="Mom." align="right" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} />
+                <SortableHeader column="sentiment" label="Sent." align="right" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} />
                 <th className="px-3 py-1.5 text-base uppercase tracking-wide font-semibold">Risk</th>
               </tr>
             </thead>
@@ -343,7 +347,7 @@ export function StockBrowserTable({ items, sortBy, sortDir, onSortChange, q, onQ
               {items.length === 0 && (
                 <tr>
                   <td
-                    colSpan={10}
+                    colSpan={15}
                     className="px-4 py-10 text-center text-muted-foreground"
                   >
                     Nessuno stock trovato.
@@ -371,20 +375,23 @@ export function StockBrowserTable({ items, sortBy, sortDir, onSortChange, q, onQ
                     className="border-b border-border/50 hover:bg-muted/40 transition-colors"
                   >
                     <td className="px-3 py-1.5">
-                      {/* Logo size bumped from xs (28px) → sm (36px) per
-                          user feedback ("aggiungi le icone delle stock")
-                          + monogram fallback (in StockLogo) for HK/JP/KR
-                          tickers the CDN doesn't carry, so EVERY row now
-                          shows a logo. */}
-                      <Link to={`/stocks/${encodeURIComponent(s.ticker)}`} className="inline-flex items-center gap-2 font-semibold hover:underline">
+                      {/* Identity cell: logo + stacked ticker (top, bold) +
+                          company name (below, muted, truncated). Mirrors
+                          the alerts table "Titolo" cell. Nome column removed. */}
+                      <div className="inline-flex items-center gap-2 min-w-0">
                         <StockLogo ticker={s.ticker} size="sm" />
-                        <span>{s.ticker}</span>
-                      </Link>
-                    </td>
-                    <td className="px-3 py-1.5 text-muted-foreground truncate max-w-[280px]">
-                      <Link to={`/stocks/${encodeURIComponent(s.ticker)}`} className="hover:underline">
-                        {s.name}
-                      </Link>
+                        <div className="flex flex-col min-w-0">
+                          <Link
+                            to={`/stocks/${encodeURIComponent(s.ticker)}`}
+                            className="font-semibold hover:underline leading-tight"
+                          >
+                            {s.ticker}
+                          </Link>
+                          <span className="text-xs text-muted-foreground truncate max-w-[220px] leading-tight">
+                            {s.name}
+                          </span>
+                        </div>
+                      </div>
                     </td>
                     <td className="px-3 py-1.5">
                       <span className="inline-flex items-center gap-1.5">
@@ -416,6 +423,14 @@ export function StockBrowserTable({ items, sortBy, sortDir, onSortChange, q, onQ
                     <td className={cn("px-3 py-1.5 text-right font-bold", compositeCls)}>
                       {item.score.composite != null ? item.score.composite.toFixed(1) : "—"}
                     </td>
+                    {(["profitability", "sustainability", "growth", "value", "momentum", "sentiment"] as const).map((pillar) => {
+                      const v = item.score[pillar];
+                      return (
+                        <td key={pillar} className={cn("px-3 py-1.5 text-right text-xs tabular-nums", v != null ? scoreColor(v) : "text-muted-foreground")}>
+                          {v != null ? v.toFixed(0) : "—"}
+                        </td>
+                      );
+                    })}
                     <td className="px-3 py-1.5">
                       {item.score.risk_tier ? (
                         <span

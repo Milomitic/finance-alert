@@ -22,6 +22,12 @@ export interface StockSearchItem {
   score: {
     composite: number | null;
     risk_tier: "conservative" | "moderate" | "aggressive" | null;
+    profitability: number | null;
+    sustainability: number | null;
+    growth: number | null;
+    value: number | null;
+    momentum: number | null;
+    sentiment: number | null;
   };
 }
 
