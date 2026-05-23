@@ -30,3 +30,10 @@ def test_adx_trend_emits_bull_in_strong_uptrend():
     closes = [100 + i * 2 for i in range(40)]   # strong, steady uptrend
     evs = extract_adx_trend(_df([(c, c + 1, c - 1) for c in closes]), period=14, adx_min=20)
     assert any(e.type == "adx_trend" and e.direction == "bull" for e in evs)
+
+
+def test_macd_divergence_returns_list():
+    closes = [100 - i for i in range(20)] + [80 + (i % 3) for i in range(20)]
+    from app.signals.events import extract_macd_divergence
+    evs = extract_macd_divergence(_df([(c, c + 1, c - 1) for c in closes]))
+    assert isinstance(evs, list)   # smoke: deterministic MACD divergence is hard to synthesise

@@ -310,6 +310,38 @@ def extract_adx_trend(
     return out
 
 
+def extract_macd_divergence(
+    ohlcv: pd.DataFrame, *, fast: int = 12, slow: int = 26, signal: int = 9,
+    pivot_w: int = 5, max_gap: int = 60,
+) -> list[Event]:
+    """Regular MACD-line divergence over the two most recent price pivots.
+    Bull: price lower-low but MACD higher-low. Bear: mirror on highs."""
+    if len(ohlcv) < slow + signal + 2 * pivot_w + 2:
+        return []
+    close = ohlcv["close"].astype(float).reset_index(drop=True)
+    dates = ohlcv["date"].reset_index(drop=True)
+    line, _sig, _hist = macd(close, fast, slow, signal)
+    line = line.reset_index(drop=True)
+    out: list[Event] = []
+    lows = find_pivots(close, pivot_w, kind="low")
+    if len(lows) >= 2:
+        a, b = lows[-2], lows[-1]
+        if (b - a) <= max_gap and close.iloc[b] < close.iloc[a] \
+                and pd.notna(line.iloc[a]) and pd.notna(line.iloc[b]) and line.iloc[b] > line.iloc[a]:
+            out.append(Event(_iso(dates.iloc[b]), "macd_divergence", "bull",
+                             magnitude=float(min(1.0, abs(line.iloc[b] - line.iloc[a]) / (abs(line.iloc[a]) + 1e-9))),
+                             payload={"pivot_dates": [_iso(dates.iloc[a]), _iso(dates.iloc[b])]}))
+    highs = find_pivots(close, pivot_w, kind="high")
+    if len(highs) >= 2:
+        a, b = highs[-2], highs[-1]
+        if (b - a) <= max_gap and close.iloc[b] > close.iloc[a] \
+                and pd.notna(line.iloc[a]) and pd.notna(line.iloc[b]) and line.iloc[b] < line.iloc[a]:
+            out.append(Event(_iso(dates.iloc[b]), "macd_divergence", "bear",
+                             magnitude=float(min(1.0, abs(line.iloc[a] - line.iloc[b]) / (abs(line.iloc[a]) + 1e-9))),
+                             payload={"pivot_dates": [_iso(dates.iloc[a]), _iso(dates.iloc[b])]}))
+    return out
+
+
 # Registry of active extractors. Each is f(ohlcv) -> list[Event].
 EXTRACTORS = [
     lambda df: extract_breakout(df, lookback=20),
@@ -322,6 +354,7 @@ EXTRACTORS = [
     lambda df: extract_macd_cross(df),
     lambda df: extract_gap(df, min_pct=0.02),
     lambda df: extract_adx_trend(df, period=14, adx_min=25.0),
+    lambda df: extract_macd_divergence(df, pivot_w=5, max_gap=60),
 ]
 
 
