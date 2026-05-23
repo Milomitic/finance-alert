@@ -1,5 +1,5 @@
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
-import { useMemo } from "react";
+import { type MouseEvent, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
 import type { StockSortBy, SortDir } from "@/api/stocks";
@@ -7,14 +7,35 @@ import type { StockSearchItem } from "@/api/types";
 import { StockLogo } from "@/components/dashboard/StockLogo";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { ColumnVisibilityMenu } from "@/components/ui/column-visibility-menu";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { TableSearchInput } from "@/components/ui/table-search-input";
+import { useColumnVisibility } from "@/hooks/useColumnVisibility";
 import { useMarketSummary } from "@/hooks/useMarketSummary";
 import { RISK_LABEL, RISK_TONE, scoreColor } from "@/lib/scoreMeta";
 import { getStockFlagCode } from "@/lib/stockMeta";
 import { cn } from "@/lib/utils";
+
+/** Toggleable columns for the desktop screener table.
+ *  The identity column (Ticker + name) is always-on. */
+const SCREENER_COLS = [
+  { id: "exchange",       label: "Exchange" },
+  { id: "settore",        label: "Settore" },
+  { id: "industry",       label: "Industry" },
+  { id: "prezzo",         label: "Prezzo" },
+  { id: "market_cap",     label: "Mkt Cap" },
+  { id: "delta_pct",      label: "Δ%" },
+  { id: "score",          label: "Score" },
+  { id: "profitability",  label: "Profittabilità" },
+  { id: "sustainability", label: "Sostenibilità" },
+  { id: "growth",         label: "Crescita" },
+  { id: "value",          label: "Valore" },
+  { id: "momentum",       label: "Momentum" },
+  { id: "sentiment",      label: "Sentiment" },
+  { id: "risk",           label: "Risk" },
+] as const;
 
 /** Sort options offered in the mobile card view (no clickable column
  *  headers there). Mirrors the desktop table's sortable columns. */
@@ -114,6 +135,22 @@ function SortableHeader({
 
 export function StockBrowserTable({ items, sortBy, sortDir, onSortChange, q, onQueryChange }: Props) {
   const market = useMarketSummary();
+
+  // Column visibility for the desktop table variant.
+  const { isVisible, toggle } = useColumnVisibility(
+    "screener",
+    SCREENER_COLS as unknown as { id: string; label: string }[],
+  );
+
+  // Context-menu state for the column-visibility dropdown.
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [menuAnchor, setMenuAnchor] = useState({ x: 0, y: 0 });
+
+  function openColumnMenu(e: MouseEvent) {
+    e.preventDefault();
+    setMenuAnchor({ x: e.clientX, y: e.clientY });
+    setMenuOpen(true);
+  }
   // Build ticker -> {change_pct, last_close, currency} maps from the
   // snapshot's treemap data. Single iteration produces all three so
   // every row's Prezzo + Δ% cells render without a per-ticker lookup.
@@ -284,6 +321,16 @@ export function StockBrowserTable({ items, sortBy, sortDir, onSortChange, q, onQ
         {/* ─── Desktop/tablet: the full sortable table (scrolls
             horizontally inside its own container if it overflows). ─── */}
         <div className="hidden md:block overflow-x-auto">
+          {/* Column-visibility context menu — rendered outside <table> so
+              Radix portals the dropdown to <body> without nesting issues. */}
+          <ColumnVisibilityMenu
+            columns={SCREENER_COLS as unknown as { id: string; label: string }[]}
+            isVisible={isVisible}
+            toggle={toggle}
+            open={menuOpen}
+            onOpenChange={setMenuOpen}
+            anchor={menuAnchor}
+          />
           {/* Per user spec: rows at 0.875rem (text-sm), headers at 1rem
               (text-base via SortableHeader). Set the table root to
               text-sm so every body cell inherits without per-cell
@@ -292,11 +339,9 @@ export function StockBrowserTable({ items, sortBy, sortDir, onSortChange, q, onQ
               inherit too. */}
           <table className="w-full text-sm tabular-nums">
             <thead className="bg-muted/30 text-muted-foreground border-b">
-              <tr>
-                {/* Ticker column: sortable label + the inline ticker/name
-                    search input. Replaces the previously-removed text
-                    search field in the filters card. The input filters
-                    server-side via the `q` URL param. */}
+              {/* Right-click on the header row opens the column-visibility menu. */}
+              <tr onContextMenu={openColumnMenu}>
+                {/* Ticker column: always-on (identity). */}
                 <th className="px-3 py-1.5 text-left text-base">
                   <div className="flex items-center gap-2 min-w-0">
                     <button
@@ -321,33 +366,57 @@ export function StockBrowserTable({ items, sortBy, sortDir, onSortChange, q, onQ
                     />
                   </div>
                 </th>
-                <SortableHeader column="exchange" label="Exchange" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} />
-                <SortableHeader column="sector" label="Settore" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} />
-                <SortableHeader column="industry" label="Industry" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} />
-                {/* Prezzo column: last close in listing currency, sourced
-                    from the market snapshot (treemap.last_close). Not
-                    sortable — the snapshot doesn't ship absolute prices
-                    in a comparable way (USD 200 vs JPY 18000). */}
-                <th className="px-3 py-1.5 text-right text-base">
-                  <span className="uppercase tracking-wide font-semibold">Prezzo</span>
-                </th>
-                <SortableHeader column="market_cap" label="Mkt Cap" align="right" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} />
-                <SortableHeader column="change_pct" label="Δ%" align="right" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} clientOnly />
-                <SortableHeader column="composite" label="Score" align="right" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} />
-                <SortableHeader column="profitability" label="Profitt." align="right" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} />
-                <SortableHeader column="sustainability" label="Sosten." align="right" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} />
-                <SortableHeader column="growth" label="Cresc." align="right" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} />
-                <SortableHeader column="value" label="Valore" align="right" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} />
-                <SortableHeader column="momentum" label="Mom." align="right" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} />
-                <SortableHeader column="sentiment" label="Sent." align="right" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} />
-                <th className="px-3 py-1.5 text-base uppercase tracking-wide font-semibold">Risk</th>
+                {isVisible("exchange") && (
+                  <SortableHeader column="exchange" label="Exchange" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} />
+                )}
+                {isVisible("settore") && (
+                  <SortableHeader column="sector" label="Settore" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} />
+                )}
+                {isVisible("industry") && (
+                  <SortableHeader column="industry" label="Industry" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} />
+                )}
+                {isVisible("prezzo") && (
+                  <th className="px-3 py-1.5 text-right text-base">
+                    <span className="uppercase tracking-wide font-semibold">Prezzo</span>
+                  </th>
+                )}
+                {isVisible("market_cap") && (
+                  <SortableHeader column="market_cap" label="Mkt Cap" align="right" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} />
+                )}
+                {isVisible("delta_pct") && (
+                  <SortableHeader column="change_pct" label="Δ%" align="right" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} clientOnly />
+                )}
+                {isVisible("score") && (
+                  <SortableHeader column="composite" label="Score" align="right" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} />
+                )}
+                {isVisible("profitability") && (
+                  <SortableHeader column="profitability" label="Profitt." align="right" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} />
+                )}
+                {isVisible("sustainability") && (
+                  <SortableHeader column="sustainability" label="Sosten." align="right" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} />
+                )}
+                {isVisible("growth") && (
+                  <SortableHeader column="growth" label="Cresc." align="right" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} />
+                )}
+                {isVisible("value") && (
+                  <SortableHeader column="value" label="Valore" align="right" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} />
+                )}
+                {isVisible("momentum") && (
+                  <SortableHeader column="momentum" label="Mom." align="right" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} />
+                )}
+                {isVisible("sentiment") && (
+                  <SortableHeader column="sentiment" label="Sent." align="right" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} />
+                )}
+                {isVisible("risk") && (
+                  <th className="px-3 py-1.5 text-base uppercase tracking-wide font-semibold">Risk</th>
+                )}
               </tr>
             </thead>
             <tbody>
               {items.length === 0 && (
                 <tr>
                   <td
-                    colSpan={15}
+                    colSpan={1 + SCREENER_COLS.filter((c) => isVisible(c.id)).length}
                     className="px-4 py-10 text-center text-muted-foreground"
                   >
                     Nessuno stock trovato.
@@ -374,10 +443,8 @@ export function StockBrowserTable({ items, sortBy, sortDir, onSortChange, q, onQ
                     key={s.id}
                     className="border-b border-border/50 hover:bg-muted/40 transition-colors"
                   >
+                    {/* Identity cell — always visible */}
                     <td className="px-3 py-1.5">
-                      {/* Identity cell: logo + stacked ticker (top, bold) +
-                          company name (below, muted, truncated). Mirrors
-                          the alerts table "Titolo" cell. Nome column removed. */}
                       <div className="inline-flex items-center gap-2 min-w-0">
                         <StockLogo ticker={s.ticker} size="sm" />
                         <div className="flex flex-col min-w-0">
@@ -393,37 +460,52 @@ export function StockBrowserTable({ items, sortBy, sortDir, onSortChange, q, onQ
                         </div>
                       </div>
                     </td>
-                    <td className="px-3 py-1.5">
-                      <span className="inline-flex items-center gap-1.5">
-                        {flag && (
-                          <img
-                            src={`/flags/${flag}.svg`}
-                            alt={s.country ?? ""}
-                            width={16} height={11}
-                            style={{ width: "16px", height: "11px", objectFit: "cover" }}
-                            className="rounded-[1px] shadow-sm"
-                          />
-                        )}
-                        <span className="text-muted-foreground">{s.exchange}</span>
-                      </span>
-                    </td>
-                    <td className="px-3 py-1.5 text-muted-foreground truncate max-w-[140px]">
-                      {s.sector ?? "—"}
-                    </td>
-                    <td className="px-3 py-1.5 text-muted-foreground truncate max-w-[160px]" title={s.industry ?? ""}>
-                      {s.industry ?? "—"}
-                    </td>
-                    <td className="px-3 py-1.5 text-right font-semibold">
-                      {fmtClose(closeByTicker.get(s.ticker), currencyByTicker.get(s.ticker) ?? s.currency ?? undefined)}
-                    </td>
-                    <td className="px-3 py-1.5 text-right">{fmtMc(s.market_cap)}</td>
-                    <td className={cn("px-3 py-1.5 text-right", changeColor)}>
-                      {change == null ? "—" : `${change >= 0 ? "+" : ""}${change.toFixed(2)}%`}
-                    </td>
-                    <td className={cn("px-3 py-1.5 text-right font-bold", compositeCls)}>
-                      {item.score.composite != null ? item.score.composite.toFixed(1) : "—"}
-                    </td>
+                    {isVisible("exchange") && (
+                      <td className="px-3 py-1.5">
+                        <span className="inline-flex items-center gap-1.5">
+                          {flag && (
+                            <img
+                              src={`/flags/${flag}.svg`}
+                              alt={s.country ?? ""}
+                              width={16} height={11}
+                              style={{ width: "16px", height: "11px", objectFit: "cover" }}
+                              className="rounded-[1px] shadow-sm"
+                            />
+                          )}
+                          <span className="text-muted-foreground">{s.exchange}</span>
+                        </span>
+                      </td>
+                    )}
+                    {isVisible("settore") && (
+                      <td className="px-3 py-1.5 text-muted-foreground truncate max-w-[140px]">
+                        {s.sector ?? "—"}
+                      </td>
+                    )}
+                    {isVisible("industry") && (
+                      <td className="px-3 py-1.5 text-muted-foreground truncate max-w-[160px]" title={s.industry ?? ""}>
+                        {s.industry ?? "—"}
+                      </td>
+                    )}
+                    {isVisible("prezzo") && (
+                      <td className="px-3 py-1.5 text-right font-semibold">
+                        {fmtClose(closeByTicker.get(s.ticker), currencyByTicker.get(s.ticker) ?? s.currency ?? undefined)}
+                      </td>
+                    )}
+                    {isVisible("market_cap") && (
+                      <td className="px-3 py-1.5 text-right">{fmtMc(s.market_cap)}</td>
+                    )}
+                    {isVisible("delta_pct") && (
+                      <td className={cn("px-3 py-1.5 text-right", changeColor)}>
+                        {change == null ? "—" : `${change >= 0 ? "+" : ""}${change.toFixed(2)}%`}
+                      </td>
+                    )}
+                    {isVisible("score") && (
+                      <td className={cn("px-3 py-1.5 text-right font-bold", compositeCls)}>
+                        {item.score.composite != null ? item.score.composite.toFixed(1) : "—"}
+                      </td>
+                    )}
                     {(["profitability", "sustainability", "growth", "value", "momentum", "sentiment"] as const).map((pillar) => {
+                      if (!isVisible(pillar)) return null;
                       const v = item.score[pillar];
                       return (
                         <td key={pillar} className={cn("px-3 py-1.5 text-right text-xs tabular-nums", v != null ? scoreColor(v) : "text-muted-foreground")}>
@@ -431,20 +513,22 @@ export function StockBrowserTable({ items, sortBy, sortDir, onSortChange, q, onQ
                         </td>
                       );
                     })}
-                    <td className="px-3 py-1.5">
-                      {item.score.risk_tier ? (
-                        <span
-                          className={cn(
-                            "inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider",
-                            RISK_TONE[item.score.risk_tier],
-                          )}
-                        >
-                          {RISK_LABEL[item.score.risk_tier]}
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
-                    </td>
+                    {isVisible("risk") && (
+                      <td className="px-3 py-1.5">
+                        {item.score.risk_tier ? (
+                          <span
+                            className={cn(
+                              "inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider",
+                              RISK_TONE[item.score.risk_tier],
+                            )}
+                          >
+                            {RISK_LABEL[item.score.risk_tier]}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </td>
+                    )}
                   </tr>
                 );
               })}

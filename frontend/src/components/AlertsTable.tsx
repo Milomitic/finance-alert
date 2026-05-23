@@ -1,10 +1,12 @@
 import { ArrowDown, ArrowUp, ArrowUpDown, Clock } from "lucide-react";
+import { type MouseEvent, useState } from "react";
 import { Link } from "react-router-dom";
 
 import type { Alert } from "@/api/types";
 import { AlertKindChip, AlertToneCell } from "@/components/AlertChips";
 import { StockLogo } from "@/components/dashboard/StockLogo";
 import { Checkbox } from "@/components/ui/checkbox";
+import { ColumnVisibilityMenu } from "@/components/ui/column-visibility-menu";
 import {
   Table,
   TableBody,
@@ -14,12 +16,25 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { TableSearchInput } from "@/components/ui/table-search-input";
+import { useColumnVisibility } from "@/hooks/useColumnVisibility";
 import {
   daysBetween,
   formatShortDate,
   isDelayedDetection,
 } from "@/lib/alertDates";
 import { cn } from "@/lib/utils";
+
+/** Toggleable columns for the non-embedded alerts table.
+ *  Checkbox + Titolo are always-on (identity + selection). */
+const ALERTS_COLS = [
+  { id: "data_segnale", label: "Data segnale" },
+  { id: "rilevato",    label: "Rilevato" },
+  { id: "regola",      label: "Regola" },
+  { id: "catena",      label: "Catena" },
+  { id: "tono",        label: "Tono" },
+  { id: "prezzo",      label: "Prezzo" },
+  { id: "confidenza",  label: "Confidenza" },
+] as const;
 
 interface Props {
   alerts: Alert[];
@@ -111,22 +126,50 @@ export function AlertsTable({
   onSort,
 }: Props) {
   const allSelected = alerts.length > 0 && alerts.every((a) => selectedIds.has(a.id));
-  // Embedded mode drops checkbox + Ticker + Nome + Rilevato + Archivio
-  // columns. Backend pre-filters archived alerts on the stock-detail
-  // endpoint, and on a per-stock view the Rilevato (detection
-  // timestamp) column adds noise — Data segnale alone is the relevant
-  // "when did this fire" date. colSpan tracks the remaining column
-  // count. Non-embedded gains a Catena column → 9 total.
-  const colSpan = embedded ? 4 : 9;
+
+  // Column visibility — non-embedded only. Embedded mode has a fixed set
+  // of columns (no menu, no toggles).
+  const { isVisible, toggle } = useColumnVisibility("alerts", ALERTS_COLS as unknown as { id: string; label: string }[]);
+
+  // Context-menu state for the column-visibility dropdown.
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [menuAnchor, setMenuAnchor] = useState({ x: 0, y: 0 });
+
+  function openColumnMenu(e: MouseEvent) {
+    e.preventDefault();
+    setMenuAnchor({ x: e.clientX, y: e.clientY });
+    setMenuOpen(true);
+  }
+
+  // Embedded mode: 4 fixed columns (data_segnale, regola, tono, prezzo).
+  // Non-embedded: checkbox + titolo always visible (2) + up to 7 toggleable.
+  // colSpan for the empty-state row must match visible column count.
+  const colSpan = embedded
+    ? 4
+    : 2 + ALERTS_COLS.filter((c) => isVisible(c.id)).length;
 
   // Per user spec: header cells at 1rem (text-base), body rows at
   // 0.875rem (text-sm) — uniform across all cells. Table root sits at
   // text-sm so every body cell inherits without per-cell overrides;
   // each <TableHead> bumps to text-base for the header band only.
   return (
-    <Table className={embedded ? "text-[13.5px] [&_td]:py-1 [&_td]:px-2 [&_th]:h-8 [&_th]:px-2 [&_th]:text-[13.5px]" : "text-sm"}>
+    <>
+      {/* Column-visibility context menu (non-embedded only) */}
+      {!embedded && (
+        <ColumnVisibilityMenu
+          columns={ALERTS_COLS as unknown as { id: string; label: string }[]}
+          isVisible={isVisible}
+          toggle={toggle}
+          open={menuOpen}
+          onOpenChange={setMenuOpen}
+          anchor={menuAnchor}
+        />
+      )}
+      <Table className={embedded ? "text-[13.5px] [&_td]:py-1 [&_td]:px-2 [&_th]:h-8 [&_th]:px-2 [&_th]:text-[13.5px]" : "text-sm"}>
       <TableHeader>
-        <TableRow>
+        {/* Right-click anywhere on the header row opens the column-visibility
+            menu (non-embedded only). The menu positions itself at the cursor. */}
+        <TableRow onContextMenu={embedded ? undefined : openColumnMenu}>
           {!embedded && (
             <TableHead className="w-8 text-base">
               <Checkbox
@@ -135,21 +178,23 @@ export function AlertsTable({
               />
             </TableHead>
           )}
-          {!embedded && onSort ? (
-            <SortableHeader
-              column="signal_date"
-              label="Data segnale"
-              title="Data della barra di mercato in cui la regola è scattata"
-              sortBy={sortBy}
-              sortDir={sortDir}
-              onSort={onSort}
-            />
-          ) : (
-            <TableHead className="text-base" title="Data della barra di mercato in cui la regola è scattata">
-              Data segnale
-            </TableHead>
+          {!embedded && isVisible("data_segnale") && (
+            onSort ? (
+              <SortableHeader
+                column="signal_date"
+                label="Data segnale"
+                title="Data della barra di mercato in cui la regola è scattata"
+                sortBy={sortBy}
+                sortDir={sortDir}
+                onSort={onSort}
+              />
+            ) : (
+              <TableHead className="text-base" title="Data della barra di mercato in cui la regola è scattata">
+                Data segnale
+              </TableHead>
+            )
           )}
-          {!embedded && (
+          {!embedded && isVisible("rilevato") && (
             onSort ? (
               <SortableHeader
                 column="triggered_at"
@@ -167,7 +212,8 @@ export function AlertsTable({
           )}
           {!embedded && (
             /* Titolo column: logo + ticker (top) / company name (below),
-               like the dashboard cards. Holds the inline ticker/name search. */
+               like the dashboard cards. Holds the inline ticker/name search.
+               Always visible — identity column. */
             onSort ? (
               <th className="px-3 py-1.5 text-base text-left font-medium">
                 <div className="flex items-center gap-2 min-w-0">
@@ -208,26 +254,33 @@ export function AlertsTable({
               </TableHead>
             )
           )}
-          <TableHead className="text-base">Regola</TableHead>
-          {!embedded && (
+          {/* Embedded always shows Regola; non-embedded gates on isVisible */}
+          {(embedded || isVisible("regola")) && (
+            <TableHead className="text-base">Regola</TableHead>
+          )}
+          {!embedded && isVisible("catena") && (
             <TableHead className="text-base">Catena</TableHead>
           )}
-          <TableHead className="text-base" title="Direzione semantica dell'alert (rialzista / ribassista / neutra)">
-            Tono
-          </TableHead>
-          {!embedded && onSort ? (
-            <SortableHeader
-              column="trigger_price"
-              label="Prezzo"
-              align="right"
-              sortBy={sortBy}
-              sortDir={sortDir}
-              onSort={onSort}
-            />
-          ) : (
-            <TableHead className="text-base text-right">Prezzo</TableHead>
+          {(embedded || isVisible("tono")) && (
+            <TableHead className="text-base" title="Direzione semantica dell'alert (rialzista / ribassista / neutra)">
+              Tono
+            </TableHead>
           )}
-          {!embedded && (
+          {(embedded || isVisible("prezzo")) && (
+            !embedded && onSort ? (
+              <SortableHeader
+                column="trigger_price"
+                label="Prezzo"
+                align="right"
+                sortBy={sortBy}
+                sortDir={sortDir}
+                onSort={onSort}
+              />
+            ) : (
+              <TableHead className="text-base text-right">Prezzo</TableHead>
+            )
+          )}
+          {!embedded && isVisible("confidenza") && (
             onSort ? (
               <SortableHeader
                 column="confidence"
@@ -268,30 +321,23 @@ export function AlertsTable({
                 />
               </TableCell>
             )}
-            {/* Signal date: when the market actually crossed the rule's
-                threshold. Bold + tabular so it reads as the primary date —
-                this is the one that matters for "when did the indicator
-                fire". Backwards-compat: legacy rows have signal_date=null
-                and we fall back to "—" with a tip explaining why. */}
-            <TableCell className="font-semibold tabular-nums">
-              {a.signal_date ? (
-                formatShortDate(a.signal_date)
-              ) : (
-                <span
-                  className="text-muted-foreground italic font-normal"
-                  title="Alert legacy creato prima dell'introduzione della data segnale"
-                >
-                  —
-                </span>
-              )}
-            </TableCell>
-            {/* Detection timestamp: when the scan job created the row.
-                Highlighted with an orange clock when noticeably later than
-                the signal (≥1 calendar day) so the user sees at a glance
-                that the system noticed a backfilled signal. Hidden in
-                embedded mode (per-stock view) — the signal date alone
-                is enough context there. */}
-            {!embedded && (
+            {/* Signal date — toggleable, hidden in embedded mode via !embedded check */}
+            {(embedded || isVisible("data_segnale")) && (
+              <TableCell className="font-semibold tabular-nums">
+                {a.signal_date ? (
+                  formatShortDate(a.signal_date)
+                ) : (
+                  <span
+                    className="text-muted-foreground italic font-normal"
+                    title="Alert legacy creato prima dell'introduzione della data segnale"
+                  >
+                    —
+                  </span>
+                )}
+              </TableCell>
+            )}
+            {/* Detection timestamp — non-embedded, toggleable */}
+            {!embedded && isVisible("rilevato") && (
               <TableCell className="text-muted-foreground tabular-nums">
                 {(() => {
                   const delayed = isDelayedDetection(a.triggered_at, a.signal_date);
@@ -315,10 +361,7 @@ export function AlertsTable({
               </TableCell>
             )}
             {!embedded && (
-              /* Titolo cell: logo + ticker (link, top) over company name
-                 (below), dashboard-card style. stopPropagation on the link so
-                 it navigates instead of bubbling to the row (which opens the
-                 alert popup). */
+              /* Titolo cell: always visible (identity column). */
               <TableCell>
                 <div className="flex items-center gap-2 min-w-0">
                   <StockLogo ticker={a.ticker ?? ""} size="xs" />
@@ -347,10 +390,14 @@ export function AlertsTable({
                 </div>
               </TableCell>
             )}
-            <TableCell>
-              <AlertKindChip alert={a} />
-            </TableCell>
-            {!embedded && (
+            {/* Regola — embedded always shows; non-embedded toggleable */}
+            {(embedded || isVisible("regola")) && (
+              <TableCell>
+                <AlertKindChip alert={a} />
+              </TableCell>
+            )}
+            {/* Catena — non-embedded, toggleable */}
+            {!embedded && isVisible("catena") && (
               <TableCell className="max-w-[260px]">
                 {(() => {
                   const chain = (a.snapshot as Record<string, unknown> | undefined)?.chain;
@@ -367,13 +414,20 @@ export function AlertsTable({
                 })()}
               </TableCell>
             )}
-            <TableCell>
-              <AlertToneCell alert={a} />
-            </TableCell>
-            <TableCell className="text-right tabular-nums font-semibold">
-              ${a.trigger_price}
-            </TableCell>
-            {!embedded && (
+            {/* Tono — embedded always shows; non-embedded toggleable */}
+            {(embedded || isVisible("tono")) && (
+              <TableCell>
+                <AlertToneCell alert={a} />
+              </TableCell>
+            )}
+            {/* Prezzo — embedded always shows; non-embedded toggleable */}
+            {(embedded || isVisible("prezzo")) && (
+              <TableCell className="text-right tabular-nums font-semibold">
+                ${a.trigger_price}
+              </TableCell>
+            )}
+            {/* Confidenza — non-embedded, toggleable */}
+            {!embedded && isVisible("confidenza") && (
               <TableCell>
                 {(() => {
                   // Signal alerts carry confidence (0-100) in the snapshot.
@@ -411,6 +465,7 @@ export function AlertsTable({
         ))}
       </TableBody>
     </Table>
+    </>
   );
 }
 
