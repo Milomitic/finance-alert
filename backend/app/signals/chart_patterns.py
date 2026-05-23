@@ -13,6 +13,7 @@ _LEVEL_TOL = 0.04    # two extremes within 4% count as "equal"
 _MIN_SEP = 5         # bars between the two extremes
 _MAX_SEP = 60
 _PIVOT_W = 5
+_HNS_TOL = 0.05      # shoulders within 5% count as "equal"
 
 
 def extract_chart_patterns(ohlcv: pd.DataFrame, *, pivot_w: int = _PIVOT_W) -> list[Event]:
@@ -56,4 +57,30 @@ def extract_chart_patterns(ohlcv: pd.DataFrame, *, pivot_w: int = _PIVOT_W) -> l
                                  if (ha + hb) else None,
                                  payload={"pattern": "double_top", "neckline": neckline,
                                           "highs": [float(ha), float(hb)]}))
+    # Inverse H&S (bull): last 3 pivot lows, head lowest, shoulders ~equal.
+    if len(lows) >= 3:
+        s1, head, s2 = lows[-3], lows[-2], lows[-1]
+        l1, lh, l2 = low.iloc[s1], low.iloc[head], low.iloc[s2]
+        if lh < l1 and lh < l2 and l1 > 0 and abs(l2 - l1) / l1 <= _HNS_TOL \
+                and (s2 - s1) <= _MAX_SEP:
+            necks = [high.iloc[h] for h in highs if s1 < h < s2]
+            if necks:
+                neckline = float(max(necks))
+                out.append(Event(_iso(dates.iloc[s2]), "chart_pattern", "bull",
+                                 magnitude=float(min(1.0, (neckline - lh) / neckline)) if neckline else None,
+                                 payload={"pattern": "inverse_head_shoulders", "neckline": neckline,
+                                          "head": float(lh)}))
+    # H&S top (bear): last 3 pivot highs, head highest, shoulders ~equal.
+    if len(highs) >= 3:
+        s1, head, s2 = highs[-3], highs[-2], highs[-1]
+        h1, hh, h2 = high.iloc[s1], high.iloc[head], high.iloc[s2]
+        if hh > h1 and hh > h2 and h1 > 0 and abs(h2 - h1) / h1 <= _HNS_TOL \
+                and (s2 - s1) <= _MAX_SEP:
+            necks = [low.iloc[lo] for lo in lows if s1 < lo < s2]
+            if necks:
+                neckline = float(min(necks))
+                out.append(Event(_iso(dates.iloc[s2]), "chart_pattern", "bear",
+                                 magnitude=float(min(1.0, (hh - neckline) / hh)) if hh else None,
+                                 payload={"pattern": "head_shoulders", "neckline": neckline,
+                                          "head": float(hh)}))
     return out

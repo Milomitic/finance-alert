@@ -28,5 +28,23 @@ def test_double_bottom_emitted():
                and e.payload.get("pattern") == "double_bottom" for e in evs)
 
 
+def _inverse_hns():
+    # left shoulder low ~92, head low ~88, right shoulder low ~92, neckline highs ~100,
+    # then break above 100.
+    seg = (
+        [100, 96, 92, 96, 100]        # down to left shoulder (92) and back up (neckline ~100)
+        + [100, 95, 90, 88, 90, 95, 100]   # down to head (88) and back up
+        + [100, 96, 92, 96, 100]      # down to right shoulder (92) and back up
+        + [101, 103, 105]             # break above neckline
+    )
+    return _df([100] * 6 + seg)
+
+
+def test_inverse_head_shoulders_emitted():
+    evs = extract_chart_patterns(_inverse_hns(), pivot_w=2)
+    assert any(e.type == "chart_pattern" and e.direction == "bull"
+               and e.payload.get("pattern") == "inverse_head_shoulders" for e in evs)
+
+
 def test_flat_series_no_pattern():
     assert extract_chart_patterns(_df([100] * 60), pivot_w=2) == []

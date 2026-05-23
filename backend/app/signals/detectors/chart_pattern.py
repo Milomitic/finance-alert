@@ -9,7 +9,12 @@ from app.signals.context import SignalContext
 from app.signals.detectors.base import SignalMatch, clamp01, score
 from app.signals.events import Event
 
-_PATTERN_IT = {"double_bottom": "Doppio minimo", "double_top": "Doppio massimo"}
+_PATTERN_IT = {
+    "double_bottom": "Doppio minimo",
+    "double_top": "Doppio massimo",
+    "inverse_head_shoulders": "Testa-spalle inverso",
+    "head_shoulders": "Testa-spalle",
+}
 
 
 class ChartPattern:
