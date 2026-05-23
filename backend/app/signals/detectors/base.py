@@ -23,6 +23,7 @@ class SignalMatch:
     chain: list[dict]               # [{date, label, detail}]
     invalidation: dict | None       # {"level": float, "reason": str}
     factors: dict[str, float] = field(default_factory=dict)
+    annotations: dict = field(default_factory=lambda: {"levels": [], "points": []})
 
 
 class SignalDetector(Protocol):

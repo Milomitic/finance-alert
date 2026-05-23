@@ -53,10 +53,17 @@ def evaluate_signals(db: Session, stock: Stock, ohlcv: pd.DataFrame) -> int:
         ).scalars().first()
         if exists is not None:
             continue
+        ann = {"levels": list(m.annotations.get("levels", [])),
+               "points": list(m.annotations.get("points", []))}
+        inv = m.invalidation or {}
+        inv_level = inv.get("level") if isinstance(inv, dict) else None
+        if isinstance(inv_level, (int, float)) and not any(l.get("kind") == "stop" for l in ann["levels"]):
+            ann["levels"].append({"label": "Stop / invalidazione", "price": float(inv_level), "kind": "stop"})
         snapshot = {
             "tone": m.tone, "confidence": m.confidence, "chain": m.chain,
             "factors": m.factors, "invalidation": m.invalidation,
             "sources": getattr(_detector_for(m.name), "sources", []),
+            "annotations": ann,
         }
         db.add(Alert(
             stock_id=stock.id, trigger_price=last_close,

@@ -98,6 +98,9 @@ export interface SignalChainStep {
   source?: string;
 }
 
+export interface SignalLevel { label: string; price: number; kind: string; }
+export interface SignalPoint { date: string; price: number; }
+
 export interface SignalSnapshot {
   tone: "bull" | "bear";
   confidence: number; // 0..100
@@ -105,6 +108,7 @@ export interface SignalSnapshot {
   factors?: Record<string, number>;
   invalidation?: { level?: number; reason?: string } | null;
   sources?: string[];
+  annotations?: { levels: SignalLevel[]; points: SignalPoint[] };
 }
 
 export interface AlertList {
