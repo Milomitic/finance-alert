@@ -362,6 +362,7 @@ EXTRACTORS = [
     lambda df: extract_adx_trend(df, period=14, adx_min=25.0),
     lambda df: extract_macd_divergence(df, pivot_w=5, max_gap=60),
     lambda df: __import__("app.signals.candles", fromlist=["extract_candle_reversal"]).extract_candle_reversal(df),
+    lambda df: __import__("app.signals.chart_patterns", fromlist=["extract_chart_patterns"]).extract_chart_patterns(df),
 ]
 
 
