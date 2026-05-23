@@ -182,6 +182,54 @@ def extract_bollinger(
     return out
 
 
+def extract_rsi_extreme(
+    ohlcv: pd.DataFrame, *, period: int = 14, low: float = 30.0, high: float = 70.0,
+) -> list[Event]:
+    """Emit rsi_extreme on each bar where RSI <= low (bull=oversold) or
+    RSI >= high (bear=overbought). magnitude = how far past the threshold,
+    normalised by the distance to 0/100."""
+    if len(ohlcv) < period + 2:
+        return []
+    close = ohlcv["close"].astype(float).reset_index(drop=True)
+    dates = ohlcv["date"].reset_index(drop=True)
+    r = rsi(close, period).reset_index(drop=True)
+    out: list[Event] = []
+    for i in range(len(close)):
+        v = r.iloc[i]
+        if pd.isna(v):
+            continue
+        if v <= low:
+            out.append(Event(_iso(dates.iloc[i]), "rsi_extreme", "bull",
+                             magnitude=float((low - v) / low) if low else None,
+                             payload={"rsi": float(v), "period": period}))
+        elif v >= high:
+            out.append(Event(_iso(dates.iloc[i]), "rsi_extreme", "bear",
+                             magnitude=float((v - high) / (100.0 - high)) if high < 100 else None,
+                             payload={"rsi": float(v), "period": period}))
+    return out
+
+
+def extract_sr_levels(ohlcv: pd.DataFrame, *, width: int = 5) -> list[Event]:
+    """Emit sr_level events at confirmed swing pivots: a pivot low is a
+    support level, a pivot high is a resistance level. payload carries the
+    price level + kind."""
+    if len(ohlcv) < 2 * width + 2:
+        return []
+    high = ohlcv["high"].astype(float).reset_index(drop=True)
+    low = ohlcv["low"].astype(float).reset_index(drop=True)
+    dates = ohlcv["date"].reset_index(drop=True)
+    out: list[Event] = []
+    for i in find_pivots(low, width, kind="low"):
+        out.append(Event(_iso(dates.iloc[i]), "sr_level", None,
+                         magnitude=None,
+                         payload={"kind": "support", "level": float(low.iloc[i])}))
+    for i in find_pivots(high, width, kind="high"):
+        out.append(Event(_iso(dates.iloc[i]), "sr_level", None,
+                         magnitude=None,
+                         payload={"kind": "resistance", "level": float(high.iloc[i])}))
+    return out
+
+
 # Registry of active extractors. Each is f(ohlcv) -> list[Event].
 EXTRACTORS = [
     lambda df: extract_breakout(df, lookback=20),
@@ -189,6 +237,8 @@ EXTRACTORS = [
     lambda df: extract_ema_cross(df, fast=50, slow=200),
     lambda df: extract_rsi_divergence(df, period=14, pivot_w=5, max_gap=60),
     lambda df: extract_bollinger(df, period=20, k=2.0, kc_mult=1.5),
+    lambda df: extract_rsi_extreme(df, period=14, low=30.0, high=70.0),
+    lambda df: extract_sr_levels(df, width=5),
 ]
 
 
