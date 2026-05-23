@@ -9,8 +9,9 @@ import {
 import { useState } from "react";
 import { Link } from "react-router-dom";
 
-import type { Alert } from "@/api/types";
+import type { Alert, SignalChainStep, SignalSnapshot } from "@/api/types";
 import { AlertKindChip, AlertToneChip } from "@/components/AlertChips";
+import { SignalChartSvg } from "@/components/SignalChartSvg";
 import { SignalSnapshotView } from "@/components/SignalSnapshotView";
 import {
   Dialog,
@@ -29,6 +30,7 @@ import {
   type AlertTone,
 } from "@/lib/alertMeta";
 import { cn } from "@/lib/utils";
+import { useSignalOhlcv } from "@/hooks/useSignalOhlcv";
 
 interface Props {
   alert: Alert | null;
@@ -116,8 +118,12 @@ function SnapshotRow({
  *      action — go look at the chart) + a Close.
  */
 export function AlertDetailDialog({ alert, onClose }: Props) {
-  // Hooks must run unconditionally — keep state above the early-return guard.
+  // Hooks must run unconditionally — keep state + queries above the
+  // early-return guard. The OHLCV fetch is gated on `isSig` so it only fires
+  // for signal alerts (the only kind that carries an annotated chart).
   const [showRaw, setShowRaw] = useState(false);
+  const isSig = !!alert && isSignalKind(alert.rule_kind);
+  const ohlcvQ = useSignalOhlcv(alert?.ticker, isSig);
 
   if (!alert) {
     return <Dialog open={false} onOpenChange={(open) => !open && onClose()} />;
@@ -279,6 +285,30 @@ export function AlertDetailDialog({ alert, onClose }: Props) {
             </div>
           );
         })()}
+
+        {/* ANNOTATED CHART — signal alerts only. A static SVG screenshot of the
+            recent price (close line) with the detector's annotation levels +
+            pattern shape + numbered chain markers, so the user can SEE the
+            setup the chain describes. Fetched lazily by useSignalOhlcv. */}
+        {isSignalKind(alert.rule_kind) && (
+          <div className="px-5 pt-4">
+            <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">
+              Grafico del segnale
+            </div>
+            <SignalChartSvg
+              bars={(ohlcvQ.data ?? []).map((b) => ({ date: b.date, close: b.close }))}
+              annotations={(alert.snapshot as { annotations?: SignalSnapshot["annotations"] }).annotations}
+              chain={(alert.snapshot as { chain?: SignalChainStep[] }).chain ?? []}
+              tone={
+                (alert.snapshot as { tone?: string }).tone === "bull"
+                  ? "bull"
+                  : (alert.snapshot as { tone?: string }).tone === "bear"
+                    ? "bear"
+                    : "neutral"
+              }
+            />
+          </div>
+        )}
 
         {/* SNAPSHOT — labeled rows when we know the kind, raw JSON otherwise. */}
         <div className="px-5 pt-4 pb-1">
