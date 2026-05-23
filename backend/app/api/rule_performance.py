@@ -1,7 +1,9 @@
-"""Rule hit-rate / forward-return statistics endpoint.
+"""Signal hit-rate / forward-return statistics endpoint.
 
 Reads from `services/rule_performance_service`. Used by the Settings
-page (Fase 3E) to render a "rule effectiveness" table.
+page (Fase 3E) to render a "signal effectiveness" table.
+The `rule_kind` field in the response now carries a "signal:<name>"
+string — the field name is kept stable to avoid frontend churn.
 """
 from typing import Annotated
 
@@ -44,8 +46,9 @@ def list_rule_performance(
     db: Session = Depends(get_db),
     _user: User = Depends(get_current_user),
 ) -> RulePerformanceListOut:
-    """Returns one row per rule.kind that fired in the last `days`
-    days, with forward-return stats over 1d / 5d / 20d windows."""
+    """Returns one row per signal_name that fired in the last `days`
+    days, with forward-return stats over 1d / 5d / 20d windows.
+    The `rule_kind` field carries a "signal:<name>" string."""
     perf = compute_performance(db, days=days)
     return RulePerformanceListOut(
         days=days,

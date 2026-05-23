@@ -1,37 +1,37 @@
-"""Rule hit-rate / forward-return statistics.
+"""Signal hit-rate / forward-return statistics.
 
-For every alert that fired, look up the underlying stock's price K
+For every signal alert that fired, look up the underlying stock's price K
 days after the signal date and compute the forward return. Aggregate
-per rule.kind to surface "RSI oversold alerts have a +1.8% median
-return after 5 days; bb_squeeze averages -0.4%".
+per signal_name to surface "volume_breakout alerts have a +1.8% median
+return after 5 days; rsi_oversold averages -0.4%".
 
 Why this matters
 ----------------
-A rule that fires often but produces zero alpha is noise; one with a
-small but consistent edge is signal. The hit-rate panel turns
+A signal that fires often but produces zero alpha is noise; one with a
+small but consistent edge is real signal. The hit-rate panel turns
 historical alert data into a feedback loop the user can use to
-prune unreliable rules.
+evaluate the signal engine's output.
 
 Forward windows: 1d, 5d, 20d (1 day / 1 week / 1 month). Each is a
 column in the output. We use trading-day-adjacent OHLCV bars (not
 calendar days) so weekends/holidays don't penalize the metric.
 
-Stat shape per (rule, window):
+Stat shape per (signal, window):
   - count          alerts with enough forward data to compute return
   - mean_pct       arithmetic mean forward return
   - median_pct     more robust to outliers
   - hit_rate       % of alerts where forward return matched the
-                   rule's directional expectation:
-                     bullish rules → positive forward return
-                     bearish rules → negative forward return
-                     neutral rules → not computed (None)
+                   signal's directional expectation:
+                     bullish signals → positive forward return
+                     bearish signals → negative forward return
+                     neutral signals → not computed (None)
 
 Caveats
 -------
 - We don't account for survivorship bias (delisted tickers don't
   contribute) or transaction costs.
 - "Tone" comes from `lib/alertMeta.getAlertKindMeta` on the
-  frontend; here we mirror that mapping in `_RULE_TONE` for
+  frontend; here we mirror that mapping in `_SIGNAL_TONE` for
   consistency. If the frontend tone changes, update the dict.
 - Excludes archived alerts (user-flagged as "no longer relevant").
 """
@@ -44,12 +44,13 @@ from datetime import UTC, date, datetime, timedelta
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import Alert, OhlcvDaily, Rule
+from app.models import Alert, OhlcvDaily
 
 # Mirror of frontend `getAlertKindMeta` tone classification. Used
-# only for the directional hit_rate calculation. Update when adding
-# rules or shifting an existing rule's directional bias.
-_RULE_TONE: dict[str, str] = {
+# only for the directional hit_rate calculation. Keys are raw signal
+# names (without the "signal:" prefix). Update when adding signals
+# or shifting an existing signal's directional bias.
+_SIGNAL_TONE: dict[str, str] = {
     "rsi_oversold": "bullish",
     "rsi_overbought": "bearish",
     "golden_cross": "bullish",
@@ -60,6 +61,7 @@ _RULE_TONE: dict[str, str] = {
     "bollinger_breakout_up": "bullish",
     "bollinger_breakout_down": "bearish",
     "volume_spike": "neutral",        # direction depends on price action
+    "volume_breakout": "bullish",
     "breakout_up": "bullish",
     "breakout_down": "bearish",
     "gap_up": "bullish",
@@ -144,41 +146,49 @@ def compute_performance(
     days: int = 90,
     windows: tuple[int, ...] = (1, 5, 20),
 ) -> list[RulePerformance]:
-    """Walk alerts fired in the last `days` days, compute forward
-    returns over each window, aggregate per rule.kind.
+    """Walk signal alerts fired in the last `days` days, compute forward
+    returns over each window, aggregate per signal_name.
 
-    Returns sorted by total_alerts desc — the rule with the most fires
+    Returns sorted by total_alerts desc — the signal with the most fires
     appears first so the user sees the heavy-hitters' performance
     immediately.
     """
     cutoff = datetime.now(UTC) - timedelta(days=days)
     rows = db.execute(
-        select(Alert, Rule.kind)
-        .join(Rule, Rule.id == Alert.rule_id)
+        select(Alert)
         .where(
             Alert.triggered_at >= cutoff,
             Alert.archived_at.is_(None),
+            Alert.signal_name.is_not(None),
         )
-    ).all()
+    ).scalars().all()
 
     if not rows:
         return []
 
-    # Group by rule kind, collect (stock_id, signal_date) pairs.
+    # Group by "signal:<name>", collect (stock_id, signal_date) pairs.
     by_kind: dict[str, list[tuple[int, date]]] = {}
     stock_ids: set[int] = set()
-    for alert, kind in rows:
-        # `signal_date` is the bar where the rule matched; falls back
+    for alert in rows:
+        if not alert.signal_name:
+            continue
+        kind = f"signal:{alert.signal_name}"
+        # `signal_date` is the bar where the signal matched; falls back
         # to triggered_at's date for legacy rows.
         sig_d = alert.signal_date or alert.triggered_at.date()
         by_kind.setdefault(kind, []).append((alert.stock_id, sig_d))
         stock_ids.add(alert.stock_id)
 
+    if not by_kind:
+        return []
+
     bars_by_stock = _load_bars(db, stock_ids)
 
     out: list[RulePerformance] = []
     for kind, signals in by_kind.items():
-        tone = _RULE_TONE.get(kind, "neutral")
+        # kind is "signal:<name>"; extract just the name for tone lookup
+        signal_name = kind[len("signal:"):]
+        tone = _SIGNAL_TONE.get(signal_name, "neutral")
         per_window: dict[int, WindowStats] = {}
         for w in windows:
             rets: list[float] = []
