@@ -62,4 +62,8 @@ class High52Momentum:
         invalidation = {"level": lo_52, "reason": "rottura del minimo a 52 settimane"}
         return SignalMatch(name=self.name, tone="bull", confidence=conf,
                            signal_date=last_date, chain=chain,
-                           invalidation=invalidation, factors=factors)
+                           invalidation=invalidation, factors=factors,
+                           annotations={"levels": [{"label": "Max 52 settimane",
+                                                    "price": hi_52,
+                                                    "kind": "resistance"}],
+                                        "points": []})

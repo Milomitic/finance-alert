@@ -34,6 +34,17 @@ def test_silent_near_high_without_confirmation():
     assert High52Momentum().detect([], df, build_context(df)) is None
 
 
+def test_high52_momentum_annotations_has_resistance_level():
+    df = _near_52w_high_uptrend()
+    m = High52Momentum().detect(extract_events(df), df, build_context(df))
+    assert m is not None
+    levels = m.annotations["levels"]
+    resistance_levels = [l for l in levels if l.get("kind") == "resistance"]
+    assert len(resistance_levels) == 1
+    assert resistance_levels[0]["label"] == "Max 52 settimane"
+    assert isinstance(resistance_levels[0]["price"], float)
+
+
 def test_silent_far_below_high():
     rows = []
     price = 50.0

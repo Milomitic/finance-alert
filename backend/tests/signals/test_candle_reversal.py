@@ -32,3 +32,19 @@ def test_silent_candle_away_from_level():
     events = [Event("2026-02-10", "candle_reversal", "bull", magnitude=0.8,
                     payload={"pattern": "hammer"})]   # no S/R level near price
     assert CandleReversal().detect(events, df, build_context(df)) is None
+
+
+def test_candle_reversal_annotations_has_primary_level():
+    df = _df(96.5)
+    events = [
+        Event("2026-02-10", "candle_reversal", "bull", magnitude=0.8,
+              payload={"pattern": "hammer"}),
+        Event("2026-02-05", "sr_level", None, payload={"kind": "support", "level": 96.0}),
+    ]
+    m = CandleReversal().detect(events, df, build_context(df))
+    assert m is not None
+    levels = m.annotations["levels"]
+    assert len(levels) >= 1
+    primary = levels[0]
+    assert primary["kind"] in ("support", "resistance")
+    assert isinstance(primary["price"], float)

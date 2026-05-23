@@ -24,3 +24,22 @@ def test_fires_bull_hidden_in_uptrend():
 def test_silent_without_event():
     df = _uptrend_df()
     assert HiddenDivergence().detect([], df, build_context(df)) is None
+
+
+def test_hidden_divergence_annotations_points_from_pivot_dates():
+    df = pd.DataFrame([
+        {"date": f"2026-{1 + i // 28:02d}-{1 + i % 28:02d}", "open": 100 + i,
+         "high": 101 + i, "low": 99 + i, "close": 100 + i * 0.5, "volume": 1000}
+        for i in range(40)])
+    d1 = str(df["date"].iloc[5])[:10]
+    d2 = str(df["date"].iloc[30])[:10]
+    events = [Event("2026-02-10", "hidden_divergence", "bull", magnitude=0.5,
+                    payload={"rsi": [45.0, 38.0], "pivot_dates": [d1, d2]})]
+    m = HiddenDivergence().detect(events, df, build_context(df))
+    assert m is not None
+    pts = m.annotations["points"]
+    assert len(pts) == 2
+    assert pts[0]["date"] == d1
+    assert pts[1]["date"] == d2
+    assert isinstance(pts[0]["price"], float)
+    assert isinstance(pts[1]["price"], float)

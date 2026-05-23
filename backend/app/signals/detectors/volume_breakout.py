@@ -74,7 +74,13 @@ class VolumeBreakout:
              "reason": "rientro sotto il livello di breakout"}
             if bo.payload.get("level") is not None else None
         )
+        bo_level = bo.payload.get("level")
+        primary_levels = (
+            [{"label": "Breakout", "price": float(bo_level), "kind": "breakout"}]
+            if isinstance(bo_level, (int, float)) else []
+        )
         return SignalMatch(
             name=self.name, tone=tone, confidence=conf, signal_date=confirm_date,
             chain=chain, invalidation=invalidation, factors=factors,
+            annotations={"levels": primary_levels, "points": []},
         )

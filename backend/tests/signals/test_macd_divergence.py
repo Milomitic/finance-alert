@@ -22,3 +22,22 @@ def test_fires_from_bull_macd_divergence():
 
 def test_silent_without_event():
     assert MacdDivergence().detect([], _df(), build_context(_df())) is None
+
+
+def test_macd_divergence_annotations_points_from_pivot_dates():
+    df = pd.DataFrame([
+        {"date": f"2026-{1 + i // 28:02d}-{1 + i % 28:02d}", "open": 100,
+         "high": 101, "low": 99, "close": 100 + i * 0.1, "volume": 1000}
+        for i in range(40)])
+    d1 = str(df["date"].iloc[5])[:10]
+    d2 = str(df["date"].iloc[35])[:10]
+    events = [Event("2026-02-10", "macd_divergence", "bull", magnitude=0.6,
+                    payload={"pivot_dates": [d1, d2]})]
+    m = MacdDivergence().detect(events, df, build_context(df))
+    assert m is not None
+    pts = m.annotations["points"]
+    assert len(pts) == 2
+    assert pts[0]["date"] == d1
+    assert pts[1]["date"] == d2
+    assert isinstance(pts[0]["price"], float)
+    assert isinstance(pts[1]["price"], float)

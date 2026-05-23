@@ -50,6 +50,11 @@ class HiddenDivergence:
             {"date": d.date, "label": f"Divergenza nascosta {tone} (continuazione)",
              "detail": "prezzo e RSI divergono nella stessa direzione del trend -- continuazione attesa"},
         ]
+        close_by_date = {str(row.date)[:10]: float(row.close)
+                         for row in ohlcv.itertuples(index=False)}
+        points = [{"date": dt, "price": close_by_date[dt]}
+                  for dt in pivots if dt in close_by_date]
         return SignalMatch(name=self.name, tone=tone, confidence=conf,
                            signal_date=d.date, chain=chain, invalidation=None,
-                           factors=factors)
+                           factors=factors,
+                           annotations={"levels": [], "points": points})

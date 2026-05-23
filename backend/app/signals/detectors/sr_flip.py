@@ -66,7 +66,13 @@ class SRFlip:
             ]
             invalidation = {"level": float(level),
                             "reason": f"ritorno oltre il livello {level:.2f} (flip fallito)"}
+            level_kind = "support" if tone == "bull" else "resistance"
+            level_label = "Supporto (ex resistenza)" if tone == "bull" else "Resistenza (ex supporto)"
             return SignalMatch(name=self.name, tone=tone, confidence=conf,
                                signal_date=last_date, chain=chain,
-                               invalidation=invalidation, factors=factors)
+                               invalidation=invalidation, factors=factors,
+                               annotations={"levels": [{"label": level_label,
+                                                        "price": float(level),
+                                                        "kind": level_kind}],
+                                            "points": []})
         return None

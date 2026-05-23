@@ -37,3 +37,15 @@ def test_bear_choch_breaks_last_higher_low():
 def test_silent_on_intact_uptrend():
     df = _df([100 + i for i in range(40)])
     assert StructureBreak().detect([], df, build_context(df)) is None
+
+
+def test_structure_break_annotations_has_primary_level():
+    df = _uptrend_then_break_down()
+    m = StructureBreak().detect([], df, build_context(df))
+    assert m is not None
+    levels = m.annotations["levels"]
+    assert len(levels) >= 1
+    primary = levels[0]
+    assert primary["kind"] in ("support", "resistance")
+    assert primary["label"] == "Livello protetto"
+    assert isinstance(primary["price"], float)

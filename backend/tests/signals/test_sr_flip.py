@@ -35,3 +35,17 @@ def test_silent_when_price_back_below_level():
 def test_silent_without_sr_level():
     df = _df([100.0] * 30)
     assert SRFlip().detect([], df, build_context(df)) is None
+
+
+def test_sr_flip_annotations_has_primary_level():
+    closes = [98, 99, 100, 99, 100, 106, 104, 102, 101]
+    df = _df([100.0] * 25 + closes)
+    events = [Event("2026-02-05", "sr_level", None,
+                    payload={"kind": "resistance", "level": 100.0})]
+    m = SRFlip().detect(events, df, build_context(df))
+    assert m is not None
+    levels = m.annotations["levels"]
+    assert len(levels) >= 1
+    primary = levels[0]
+    assert primary["kind"] in ("support", "resistance")
+    assert primary["price"] == 100.0

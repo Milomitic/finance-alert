@@ -29,3 +29,14 @@ def test_silent_without_volume_confirmation():
 def test_silent_without_breakout():
     df = _series(breakout=False)
     assert VolumeBreakout().detect(extract_events(df), df, build_context(df)) is None
+
+
+def test_volume_breakout_annotations_has_breakout_level():
+    df = _series(breakout=True, with_volume=True)
+    m = VolumeBreakout().detect(extract_events(df), df, build_context(df))
+    assert m is not None
+    levels = m.annotations["levels"]
+    breakout_levels = [l for l in levels if l.get("kind") == "breakout"]
+    assert len(breakout_levels) == 1
+    assert isinstance(breakout_levels[0]["price"], float)
+    assert breakout_levels[0]["label"] == "Breakout"

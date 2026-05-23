@@ -66,9 +66,15 @@ class OversoldReversal:
         ]
         invalidation = {"level": float(nearest),
                         "reason": f"rottura del {'supporto' if tone == 'bull' else 'resistenza'}"}
+        level_kind = "support" if tone == "bull" else "resistance"
+        level_label = "Supporto" if tone == "bull" else "Resistenza"
         return SignalMatch(name=self.name, tone=tone, confidence=conf,
                            signal_date=_last_date(ohlcv), chain=chain,
-                           invalidation=invalidation, factors=factors)
+                           invalidation=invalidation, factors=factors,
+                           annotations={"levels": [{"label": level_label,
+                                                    "price": float(nearest),
+                                                    "kind": level_kind}],
+                                        "points": []})
 
 
 def _last_date(ohlcv: pd.DataFrame) -> str:

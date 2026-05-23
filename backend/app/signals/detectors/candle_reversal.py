@@ -58,6 +58,12 @@ class CandleReversal:
              "detail": f"prezzo {last:.2f} al livello {nearest:.2f}"},
         ]
         invalidation = {"level": float(nearest), "reason": f"rottura del {loc}"}
+        level_kind = "support" if tone == "bull" else "resistance"
+        level_label = "Supporto" if tone == "bull" else "Resistenza"
         return SignalMatch(name=self.name, tone=tone, confidence=conf,
                            signal_date=cdl.date, chain=chain,
-                           invalidation=invalidation, factors=factors)
+                           invalidation=invalidation, factors=factors,
+                           annotations={"levels": [{"label": level_label,
+                                                    "price": float(nearest),
+                                                    "kind": level_kind}],
+                                        "points": []})
