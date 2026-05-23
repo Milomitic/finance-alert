@@ -33,6 +33,10 @@ export interface FiltersState {
   valueMin: number | null;
   momentumMin: number | null;
   sentimentMin: number | null;
+  /** Technical composite minimum 0-100, or null. */
+  techMin: number | null;
+  /** Technical posture filter (Forte / Neutro / Debole). Empty = no filter. */
+  postures: string[];
 }
 
 interface Props {
@@ -205,6 +209,7 @@ export function StockFiltersCard({ state, onChange, filters }: Props) {
       riskTiers: [], minScore: null, scoreMax: null,
       profitabilityMin: null, sustainabilityMin: null, growthMin: null,
       valueMin: null, momentumMin: null, sentimentMin: null,
+      techMin: null, postures: [],
     });
 
   const removeChip = (kind: keyof FiltersState, value: string) => {
@@ -308,6 +313,40 @@ export function StockFiltersCard({ state, onChange, filters }: Props) {
               }}
               className="w-10 bg-transparent text-sm tabular-nums focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
             />
+          </div>
+          <div className="inline-flex items-center gap-1 h-9 px-2 rounded border border-input">
+            <span className="text-xs text-muted-foreground">Tecnico</span>
+            <input
+              type="number"
+              min={0}
+              max={100}
+              step={5}
+              placeholder="min"
+              value={state.techMin ?? ""}
+              onChange={(e) => {
+                const raw = e.target.value;
+                if (raw === "") { onChange({ ...state, techMin: null }); return; }
+                const n = Number(raw);
+                if (Number.isFinite(n) && n >= 0 && n <= 100) onChange({ ...state, techMin: n });
+              }}
+              className="w-10 bg-transparent text-sm tabular-nums focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+            />
+          </div>
+          <div className="inline-flex items-center gap-1 h-9 px-2 rounded border border-input">
+            <span className="text-xs text-muted-foreground">Postura</span>
+            {(["Forte", "Neutro", "Debole"] as const).map((pp) => {
+              const on = state.postures.includes(pp);
+              return (
+                <button
+                  key={pp}
+                  type="button"
+                  onClick={() => onChange({ ...state, postures: on ? state.postures.filter((x) => x !== pp) : [...state.postures, pp] })}
+                  className={cn("px-1.5 py-0.5 rounded text-xs font-medium", on ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted")}
+                >
+                  {pp}
+                </button>
+              );
+            })}
           </div>
           {totalActive > 0 && (
             <Button

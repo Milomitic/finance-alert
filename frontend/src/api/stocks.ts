@@ -25,7 +25,13 @@ export type StockSortBy =
   | "growth"
   | "value"
   | "momentum"
-  | "sentiment";
+  | "sentiment"
+  | "tech_composite"
+  | "tech_trend"
+  | "tech_momentum"
+  | "tech_structure"
+  | "tech_volume"
+  | "tech_rel_strength";
 export type SortDir = "asc" | "desc";
 
 export interface SearchParams {
@@ -48,6 +54,11 @@ export interface SearchParams {
   value_min?: number;
   momentum_min?: number;
   sentiment_min?: number;
+  /** Technical composite range (0-100). */
+  tech_min?: number;
+  tech_max?: number;
+  /** Technical posture filter (Forte / Neutro / Debole). */
+  posture?: string[];
   sort_by?: StockSortBy;
   sort_dir?: SortDir;
   limit?: number;
@@ -71,6 +82,9 @@ function toQuery(params: SearchParams): string {
   if (params.value_min !== undefined) sp.set("value_min", String(params.value_min));
   if (params.momentum_min !== undefined) sp.set("momentum_min", String(params.momentum_min));
   if (params.sentiment_min !== undefined) sp.set("sentiment_min", String(params.sentiment_min));
+  if (params.tech_min !== undefined) sp.set("tech_min", String(params.tech_min));
+  if (params.tech_max !== undefined) sp.set("tech_max", String(params.tech_max));
+  for (const v of params.posture ?? []) sp.append("posture", v);
   if (params.sort_by) sp.set("sort_by", params.sort_by);
   if (params.sort_dir) sp.set("sort_dir", params.sort_dir);
   if (params.limit !== undefined) sp.set("limit", String(params.limit));

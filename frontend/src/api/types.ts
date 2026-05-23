@@ -29,6 +29,16 @@ export interface StockSearchItem {
     momentum: number | null;
     sentiment: number | null;
   };
+  technical: {
+    composite: number | null;
+    trend: number | null;
+    momentum: number | null;
+    structure: number | null;
+    volume: number | null;
+    rel_strength: number | null;
+    signals: number | null;
+    posture: string | null;
+  };
 }
 
 export interface StockSearch {

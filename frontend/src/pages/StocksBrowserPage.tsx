@@ -142,6 +142,8 @@ export default function StocksBrowserPage() {
     valueMin: parseNullableScore(searchParams.get("value_min")),
     momentumMin: parseNullableScore(searchParams.get("momentum_min")),
     sentimentMin: parseNullableScore(searchParams.get("sentiment_min")),
+    techMin: parseNullableScore(searchParams.get("tech_min")),
+    postures: parseListParam(searchParams, "posture").filter((v) => ["Forte", "Neutro", "Debole"].includes(v)),
   }));
   const [sortBy, setSortBy] = useState<TableSortKey>(() =>
     parseSortBy(searchParams.get("sort_by")),
@@ -170,6 +172,8 @@ export default function StocksBrowserPage() {
     if (state.valueMin != null) sp.set("value_min", String(state.valueMin));
     if (state.momentumMin != null) sp.set("momentum_min", String(state.momentumMin));
     if (state.sentimentMin != null) sp.set("sentiment_min", String(state.sentimentMin));
+    if (state.techMin != null) sp.set("tech_min", String(state.techMin));
+    state.postures.forEach((v) => sp.append("posture", v));
     if (sortBy !== "ticker") sp.set("sort_by", sortBy);
     if (sortDir !== "asc") sp.set("sort_dir", sortDir);
     if (pageSize !== 50) sp.set("page_size", String(pageSize));
@@ -220,6 +224,8 @@ export default function StocksBrowserPage() {
     value_min: state.valueMin ?? undefined,
     momentum_min: state.momentumMin ?? undefined,
     sentiment_min: state.sentimentMin ?? undefined,
+    tech_min: state.techMin ?? undefined,
+    posture: state.postures.length > 0 ? state.postures : undefined,
     sort_by: serverSortBy,
     sort_dir: serverSortDir,
     limit: pageSize,

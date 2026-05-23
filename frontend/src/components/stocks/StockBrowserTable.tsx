@@ -34,6 +34,12 @@ const SCREENER_COLS = [
   { id: "value",          label: "Valore" },
   { id: "momentum",       label: "Momentum" },
   { id: "sentiment",      label: "Sentiment" },
+  { id: "tech_composite",  label: "Tecnico" },
+  { id: "tech_trend",      label: "T-Trend" },
+  { id: "tech_momentum",   label: "T-Mom" },
+  { id: "tech_structure",  label: "T-Strut" },
+  { id: "tech_volume",     label: "T-Vol" },
+  { id: "tech_rel_strength", label: "T-RS" },
   { id: "risk",           label: "Risk" },
 ] as const;
 
@@ -407,6 +413,24 @@ export function StockBrowserTable({ items, sortBy, sortDir, onSortChange, q, onQ
                 {isVisible("sentiment") && (
                   <SortableHeader column="sentiment" label="Sent." align="right" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} />
                 )}
+                {isVisible("tech_composite") && (
+                  <SortableHeader column="tech_composite" label="Tecnico" align="right" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} />
+                )}
+                {isVisible("tech_trend") && (
+                  <SortableHeader column="tech_trend" label="T-Trend" align="right" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} />
+                )}
+                {isVisible("tech_momentum") && (
+                  <SortableHeader column="tech_momentum" label="T-Mom" align="right" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} />
+                )}
+                {isVisible("tech_structure") && (
+                  <SortableHeader column="tech_structure" label="T-Strut" align="right" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} />
+                )}
+                {isVisible("tech_volume") && (
+                  <SortableHeader column="tech_volume" label="T-Vol" align="right" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} />
+                )}
+                {isVisible("tech_rel_strength") && (
+                  <SortableHeader column="tech_rel_strength" label="T-RS" align="right" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} />
+                )}
                 {isVisible("risk") && (
                   <th className="px-3 py-1.5 text-base uppercase tracking-wide font-semibold">Risk</th>
                 )}
@@ -510,6 +534,26 @@ export function StockBrowserTable({ items, sortBy, sortDir, onSortChange, q, onQ
                       return (
                         <td key={pillar} className={cn("px-3 py-1.5 text-right text-sm font-semibold tabular-nums", v != null ? scoreColor(v) : "text-muted-foreground")}>
                           {v != null ? v.toFixed(0) : "—"}
+                        </td>
+                      );
+                    })}
+                    {isVisible("tech_composite") && (
+                      <td className="px-3 py-1.5 text-right">
+                        <span className={cn("text-sm font-bold tabular-nums", item.technical.composite != null ? scoreColor(item.technical.composite) : "text-muted-foreground")}>
+                          {item.technical.composite != null ? item.technical.composite.toFixed(0) : "-"}
+                        </span>
+                        {item.technical.posture && (
+                          <span className="block text-[10px] text-muted-foreground leading-none">{item.technical.posture}</span>
+                        )}
+                      </td>
+                    )}
+                    {(["trend", "momentum", "structure", "volume", "rel_strength"] as const).map((dim) => {
+                      const colId = `tech_${dim}`;
+                      if (!isVisible(colId)) return null;
+                      const v = item.technical[dim];
+                      return (
+                        <td key={colId} className={cn("px-3 py-1.5 text-right text-sm tabular-nums", v != null ? scoreColor(v) : "text-muted-foreground")}>
+                          {v != null ? v.toFixed(0) : "-"}
                         </td>
                       );
                     })}
