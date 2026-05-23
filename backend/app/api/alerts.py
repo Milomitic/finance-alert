@@ -337,9 +337,23 @@ def list_alerts(
     archived: bool | None = False,
     limit: int = 50,
     offset: int = 0,
+    sort_by: str = "triggered_at",
+    sort_dir: str = "desc",
     db: Session = Depends(get_db),
     _user: User = Depends(get_current_user),
 ) -> AlertListOut:
+    from app.services.alert_service import _SORTABLE_KEYS
+
+    if sort_dir not in ("asc", "desc"):
+        raise HTTPException(
+            status_code=422,
+            detail=f"sort_dir must be 'asc' or 'desc', got: {sort_dir!r}",
+        )
+    if sort_by not in _SORTABLE_KEYS:
+        raise HTTPException(
+            status_code=422,
+            detail=f"sort_by must be one of {sorted(_SORTABLE_KEYS)}, got: {sort_by!r}",
+        )
     items, total, has_more = alert_service.list_alerts(
         db,
         ticker=ticker,
@@ -351,6 +365,8 @@ def list_alerts(
         archived=archived,
         limit=limit,
         offset=offset,
+        sort_by=sort_by,
+        sort_dir=sort_dir,
     )
     return AlertListOut(
         items=[AlertOut(**i) for i in items],

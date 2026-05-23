@@ -2,10 +2,28 @@
 from datetime import UTC, date, datetime
 from typing import Any
 
-from sqlalchemy import and_, func, or_, select, update
+import sqlalchemy
+from sqlalchemy import Float, and_, asc, desc, func, or_, select, update
 from sqlalchemy.orm import Session
 
 from app.models import Alert, Stock
+
+# Columns that the caller may request sorting on.
+# confidence/tone live inside Alert.snapshot (SQLite JSON text column) and
+# are extracted at query time via json_extract so they sort correctly across
+# all rows regardless of pagination.
+_SORTABLE: dict[str, Any] = {
+    "triggered_at": Alert.triggered_at,
+    "signal_date": Alert.signal_date,
+    "ticker": Stock.ticker,
+    "trigger_price": Alert.trigger_price,
+    "kind": Alert.signal_name,
+    "confidence": sqlalchemy.cast(
+        func.json_extract(Alert.snapshot, "$.confidence"), Float
+    ),
+    "tone": func.json_extract(Alert.snapshot, "$.tone"),
+}
+_SORTABLE_KEYS = frozenset(_SORTABLE)
 
 
 def derive_rule_kind(rule_kind: str | None, signal_name: str | None) -> str | None:
@@ -73,6 +91,8 @@ def list_alerts(
     archived: bool | None = False,
     limit: int = 50,
     offset: int = 0,
+    sort_by: str = "triggered_at",
+    sort_dir: str = "desc",
 ) -> tuple[list[dict[str, Any]], int, bool]:
     """List alerts with stock.ticker. Returns (items, total, has_more)."""
     limit = max(1, min(limit, 500))
@@ -96,8 +116,11 @@ def list_alerts(
     )
     count_stmt = select(func.count()).select_from(base.subquery())
     total = int(db.execute(count_stmt).scalar_one())
+    # Build ORDER BY: requested column (with NULLS LAST) + stable id tiebreaker.
+    sort_col = _SORTABLE.get(sort_by, Alert.triggered_at)
+    direction = asc if sort_dir == "asc" else desc
     rows = db.execute(
-        base.order_by(Alert.triggered_at.desc()).limit(limit + 1).offset(offset)
+        base.order_by(direction(sort_col).nullslast(), Alert.id.desc()).limit(limit + 1).offset(offset)
     ).all()
     has_more = len(rows) > limit
     items = []
