@@ -17,6 +17,8 @@ def _seed_breakout_stock(db):
 
 def test_scan_creates_signal_alert(db, monkeypatch):
     monkeypatch.setattr("app.signals.signal_scan_service.settings.signal_min_confidence", 0)
+    monkeypatch.setattr("app.signals.signal_scan_service.settings.signal_require_follow_through", False)
+    monkeypatch.setattr("app.signals.signal_scan_service.settings.signal_require_trend_alignment", False)
     s = _seed_breakout_stock(db)
     scan_service.scan_universe(db)
     db.commit()  # scan_universe adds but does not commit; caller commits (matches tests/test_scan_service.py)

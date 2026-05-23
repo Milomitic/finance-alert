@@ -32,6 +32,13 @@ class Settings(BaseSettings):
     # Stops the first scan after a deploy/backfill from flooding the feed with
     # months-old setups (the ~260-bar window contains a year of history).
     signal_max_age_days: int = 7
+    # Quality gates to cut false positives (both default ON; override in .env).
+    # Regime gate: drop trend-following signals whose direction contradicts the
+    # prevailing EMA200-slope trend (reversal/fundamental detectors are exempt).
+    signal_require_trend_alignment: bool = True
+    # Follow-through: require the bar after the trigger to hold the invalidation
+    # level; a fresh last-bar trigger is held until a later scan can confirm it.
+    signal_require_follow_through: bool = True
     # FRED (Federal Reserve Economic Data) API key for the macro
     # calendar. Free, gettable from https://fred.stlouisfed.org —
     # rate-limited at 120 req/min. Empty string disables FRED-driven

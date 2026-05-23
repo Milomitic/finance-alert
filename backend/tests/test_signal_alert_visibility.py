@@ -6,6 +6,8 @@ from app.services.alert_service import derive_rule_kind, list_alerts
 
 def _seed_and_scan(db, monkeypatch, ticker):
     monkeypatch.setattr("app.signals.signal_scan_service.settings.signal_min_confidence", 0)
+    monkeypatch.setattr("app.signals.signal_scan_service.settings.signal_require_follow_through", False)
+    monkeypatch.setattr("app.signals.signal_scan_service.settings.signal_require_trend_alignment", False)
     s = Stock(ticker=ticker, exchange="NASDAQ", name="Vis Co", country="US")
     db.add(s); db.flush()
     for i in range(1, 21):

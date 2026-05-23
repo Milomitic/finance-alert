@@ -51,6 +51,8 @@ def test_recent_signal_kept_with_large_max_age(db, monkeypatch):
 
 def test_creates_signal_alert_above_threshold(db, monkeypatch):
     monkeypatch.setattr("app.signals.signal_scan_service.settings.signal_min_confidence", 0)
+    monkeypatch.setattr("app.signals.signal_scan_service.settings.signal_require_follow_through", False)
+    monkeypatch.setattr("app.signals.signal_scan_service.settings.signal_require_trend_alignment", False)
     s = Stock(ticker="BRK_SIG", exchange="NASDAQ", name="BO Co", country="US")
     db.add(s); db.flush()
     n = evaluate_signals(db, s, _confirmed_df())
@@ -63,6 +65,8 @@ def test_creates_signal_alert_above_threshold(db, monkeypatch):
 
 def test_dedup_same_signal_date(db, monkeypatch):
     monkeypatch.setattr("app.signals.signal_scan_service.settings.signal_min_confidence", 0)
+    monkeypatch.setattr("app.signals.signal_scan_service.settings.signal_require_follow_through", False)
+    monkeypatch.setattr("app.signals.signal_scan_service.settings.signal_require_trend_alignment", False)
     s = Stock(ticker="BRK_SIG2", exchange="NASDAQ", name="BO2", country="US")
     db.add(s); db.flush()
     df = _confirmed_df()
