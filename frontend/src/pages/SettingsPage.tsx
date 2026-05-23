@@ -46,7 +46,7 @@ export default function SettingsPage() {
           Impostazioni
         </h1>
         <p className="text-sm text-muted-foreground max-w-2xl">
-          Statistiche di efficacia delle regole alert e stato dei refresh
+          Statistiche di efficacia dei segnali e stato dei refresh
           catalogo per indice.
         </p>
       </header>
@@ -70,7 +70,7 @@ function RulePerformancePanel() {
       <CardContent className="p-4">
         <SectionTitle
           icon={TrendingUp}
-          label="Efficacia regole — forward return"
+          label="Efficacia segnali — forward return"
           right={
             <div className="flex items-center gap-2 text-xs">
               <span className="text-muted-foreground">Finestra:</span>
@@ -104,7 +104,7 @@ function RulePerformancePanel() {
             <table className="w-full text-sm tabular-nums">
               <thead className="bg-muted/30 text-muted-foreground border-b">
                 <tr className="text-base">
-                  <th className="text-left px-3 py-2 font-semibold">Regola</th>
+                  <th className="text-left px-3 py-2 font-semibold">Segnale</th>
                   <th className="text-right px-3 py-2 font-semibold">N</th>
                   {[1, 5, 20].flatMap((w) => [
                     <th key={`m${w}`} className="text-right px-3 py-2 font-semibold">
@@ -201,9 +201,9 @@ function RulePerformancePanel() {
               </tbody>
             </table>
             <p className="mt-2 text-[11px] text-muted-foreground italic">
-              "Hit" = % di alert con direzione coerente con il tono della
-              regola entro la finestra (bullish → ritorno positivo,
-              bearish → negativo). Le regole neutre non hanno hit-rate.
+              "Hit" = % di alert con direzione coerente con il tono del
+              segnale entro la finestra (bullish → ritorno positivo,
+              bearish → negativo). I segnali neutri non hanno hit-rate.
             </p>
           </div>
         )}
