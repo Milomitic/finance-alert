@@ -22,10 +22,7 @@ from app.api import market_detail as market_detail_router
 from app.api import multi_tf as multi_tf_router
 from app.api import price_alerts as price_alerts_router
 from app.api import spotlight as spotlight_router
-from app.api import rule_catalog as rule_catalog_router
 from app.api import rule_performance as rule_performance_router
-from app.api import rule_preview as rule_preview_router
-from app.api import rules as rules_router
 from app.api import scan_log as scan_log_router
 from app.api import scores as scores_router
 from app.api import sectors as sectors_router
@@ -105,22 +102,6 @@ def _hydrate_fetch_caches() -> None:
         )
 
 
-def _ensure_default_rules() -> None:
-    """Idempotent: create a global Rule row for every kind in the registry
-    that doesn't already have one. The bootstrap script (`scripts/bootstrap_rules`)
-    used to be the only call site, which meant new kinds added to the
-    registry never reached the user until someone re-ran the script
-    manually. Running on every backend boot fixes that — the call is a
-    no-op when all kinds already exist, so the cost is one SELECT per
-    registered kind on a process that just took ~2s to start up. */
-    """
-    try:
-        from app.scripts.bootstrap_rules import ensure_global_rules
-        ensure_global_rules()
-    except Exception as exc:  # noqa: BLE001
-        # Non-fatal — startup keeps going, just log.
-        logger.warning(f"[startup] ensure_global_rules failed (non-fatal): {exc}")
-
 
 def _warm_premarket_on_boot() -> None:
     """Pre-market cache lives in-process, so a backend restart blanks it
@@ -147,7 +128,6 @@ def _warm_premarket_on_boot() -> None:
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     _cleanup_orphan_scans()
     _hydrate_fetch_caches()
-    _ensure_default_rules()
     start_scheduler()
     _warm_premarket_on_boot()
     try:
@@ -171,10 +151,7 @@ async def log_requests(request: Request, call_next):
 app.include_router(auth_router.router)
 app.include_router(stocks_router.router)
 app.include_router(catalog_router.router)
-app.include_router(rules_router.router)
-app.include_router(rule_catalog_router.router)
 app.include_router(rule_performance_router.router)
-app.include_router(rule_preview_router.router)
 app.include_router(scan_log_router.router)
 app.include_router(alerts_router.router)
 app.include_router(dashboard_router.router)
