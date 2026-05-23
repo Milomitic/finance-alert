@@ -4,6 +4,7 @@ from app.signals.detectors.analyst_momentum import AnalystMomentum
 from app.signals.detectors.candle_reversal import CandleReversal
 from app.signals.detectors.gap_and_go import GapAndGo
 from app.signals.detectors.high52_momentum import High52Momentum
+from app.signals.detectors.insider_buy import InsiderBuy
 from app.signals.detectors.macd_divergence import MacdDivergence
 from app.signals.detectors.oversold_reversal import OversoldReversal
 from app.signals.detectors.pead import Pead
@@ -29,4 +30,5 @@ DETECTORS = [
     CandleReversal(),
     Pead(),
     AnalystMomentum(),
+    InsiderBuy(),
 ]

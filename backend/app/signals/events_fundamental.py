@@ -94,7 +94,84 @@ def produce_analyst_events(db, stock) -> list[Event]:
 
 
 def produce_insider_events(db, stock) -> list[Event]:
-    return []  # U3-T4
+    """Emit bull insider_cluster events from cached fundamentals.
+
+    Cache-only -- never triggers an upstream fetch. Bull-only: insider
+    BUYS (Purchases) are a meaningful signal; routine SELLS from vesting
+    are too noisy to act on.
+
+    Clustering logic: group Purchases by a ~30-day sliding window. A
+    window qualifies as a cluster when >=2 DISTINCT insiders bought OR
+    total shares bought >= 10,000. Emit one event per cluster dated at
+    the latest purchase in the window.
+    """
+    from app.services.stock_fundamentals_service import (
+        _transaction_type,
+        get_fundamentals_cached,
+    )
+    from datetime import date as _date, timedelta
+
+    f = get_fundamentals_cached(db, stock.ticker)
+    if f is None:
+        return []
+
+    # Collect all Purchase rows that have a date and shares.
+    _WINDOW_DAYS = 30
+    _MIN_BUYERS = 2
+    _MIN_SHARES = 10_000
+
+    purchases = []
+    for tx in (f.insiders or []):
+        if _transaction_type(tx.transaction) != "Purchase":
+            continue
+        if not tx.date:
+            continue
+        try:
+            d = _date.fromisoformat(str(tx.date)[:10])
+        except ValueError:
+            continue
+        purchases.append((d, tx.insider, tx.shares or 0))
+
+    if not purchases:
+        return []
+
+    # Sort by date ascending then do a forward-looking window sweep.
+    purchases.sort(key=lambda x: x[0])
+
+    out: list[Event] = []
+    emitted_windows: list[tuple[_date, _date]] = []  # (start, end) of already-emitted clusters
+
+    for i, (d_start, _, _) in enumerate(purchases):
+        d_end = d_start + timedelta(days=_WINDOW_DAYS)
+        # Gather all purchases inside [d_start, d_end]
+        in_window = [(d, ins, sh) for (d, ins, sh) in purchases if d_start <= d <= d_end]
+        buyers = {ins for (_, ins, _) in in_window}
+        total_shares = sum(sh for (_, _, sh) in in_window)
+        latest_date = max(d for (d, _, _) in in_window)
+
+        if len(buyers) < _MIN_BUYERS and total_shares < _MIN_SHARES:
+            continue
+
+        # Deduplicate: skip if this cluster is fully covered by a prior emission
+        # (its latest_date is within an already-emitted window).
+        already_covered = any(ws <= latest_date <= we for (ws, we) in emitted_windows)
+        if already_covered:
+            continue
+
+        n_buyers = len(buyers)
+        # magnitude: max of (buyers / 4) or (shares / floor), clamped [0,1]
+        mag = min(1.0, max(n_buyers / 4.0, total_shares / _MIN_SHARES))
+        out.append(Event(
+            str(latest_date),
+            "insider_cluster",
+            "bull",
+            magnitude=float(mag),
+            payload={"n_buyers": n_buyers, "total_shares": int(total_shares)},
+            source="insider",
+        ))
+        emitted_windows.append((d_start, d_end))
+
+    return out
 
 
 _PRODUCERS = [produce_earnings_events, produce_analyst_events, produce_insider_events]
