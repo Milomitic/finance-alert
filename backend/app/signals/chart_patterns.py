@@ -14,6 +14,7 @@ _MIN_SEP = 5         # bars between the two extremes
 _MAX_SEP = 60
 _PIVOT_W = 5
 _HNS_TOL = 0.05      # shoulders within 5% count as "equal"
+_TRI_TOL = 0.02      # flat side of triangle within 2%
 
 
 def extract_chart_patterns(ohlcv: pd.DataFrame, *, pivot_w: int = _PIVOT_W) -> list[Event]:
@@ -83,4 +84,23 @@ def extract_chart_patterns(ohlcv: pd.DataFrame, *, pivot_w: int = _PIVOT_W) -> l
                                  magnitude=float(min(1.0, (hh - neckline) / hh)) if hh else None,
                                  payload={"pattern": "head_shoulders", "neckline": neckline,
                                           "head": float(hh)}))
+    # Ascending triangle (bull): flat highs + rising lows.
+    if len(highs) >= 3 and len(lows) >= 3:
+        h = [high.iloc[i] for i in highs[-3:]]
+        lo3 = [low.iloc[i] for i in lows[-3:]]
+        flat_highs = max(h) > 0 and (max(h) - min(h)) / max(h) <= _TRI_TOL
+        rising_lows = lo3[0] < lo3[1] < lo3[2]
+        if flat_highs and rising_lows:
+            neckline = float(sum(h) / len(h))
+            out.append(Event(_iso(dates.iloc[lows[-1]]), "chart_pattern", "bull",
+                             magnitude=0.6,
+                             payload={"pattern": "ascending_triangle", "neckline": neckline}))
+        # Descending triangle (bear): flat lows + falling highs.
+        flat_lows = min(lo3) > 0 and (max(lo3) - min(lo3)) / min(lo3) <= _TRI_TOL
+        falling_highs = h[0] > h[1] > h[2]
+        if flat_lows and falling_highs:
+            neckline = float(sum(lo3) / len(lo3))
+            out.append(Event(_iso(dates.iloc[highs[-1]]), "chart_pattern", "bear",
+                             magnitude=0.6,
+                             payload={"pattern": "descending_triangle", "neckline": neckline}))
     return out

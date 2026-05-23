@@ -14,6 +14,8 @@ _PATTERN_IT = {
     "double_top": "Doppio massimo",
     "inverse_head_shoulders": "Testa-spalle inverso",
     "head_shoulders": "Testa-spalle",
+    "ascending_triangle": "Triangolo ascendente",
+    "descending_triangle": "Triangolo discendente",
 }
 
 

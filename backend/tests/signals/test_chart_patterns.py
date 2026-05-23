@@ -46,5 +46,21 @@ def test_inverse_head_shoulders_emitted():
                and e.payload.get("pattern") == "inverse_head_shoulders" for e in evs)
 
 
+def _ascending_triangle():
+    # flat highs ~110, rising lows; then break above 110.
+    seg = []
+    lows_floor = [95, 99, 103]   # rising lows
+    for k in range(3):
+        seg += [lows_floor[k], 106, 110, 106, lows_floor[k]]  # up to flat top 110, back to a higher low
+    seg += [111, 113]            # break above the flat resistance
+    return _df([100] * 6 + seg)
+
+
+def test_ascending_triangle_emitted():
+    evs = extract_chart_patterns(_ascending_triangle(), pivot_w=2)
+    assert any(e.type == "chart_pattern" and e.direction == "bull"
+               and e.payload.get("pattern") == "ascending_triangle" for e in evs)
+
+
 def test_flat_series_no_pattern():
     assert extract_chart_patterns(_df([100] * 60), pivot_w=2) == []
