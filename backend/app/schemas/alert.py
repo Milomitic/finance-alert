@@ -28,8 +28,11 @@ class AlertOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    rule_id: int | None
-    rule_kind: str | None = None  # joined for convenience
+    rule_id: int | None  # None for signal-engine alerts (they have no Rule row)
+    # Rule-based alerts carry the joined Rule.kind. Signal-engine alerts use the
+    # "signal:<name>" convention (e.g. "signal:volume_breakout") derived from
+    # Alert.signal_name. May be None only for an alert with neither (not expected).
+    rule_kind: str | None = None
     stock_id: int
     ticker: str | None = None  # joined
     name: str | None = None  # joined company name
