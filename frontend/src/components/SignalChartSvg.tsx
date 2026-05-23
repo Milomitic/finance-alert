@@ -1,3 +1,5 @@
+import { useRef, useState } from "react";
+
 import type { SignalChainStep, SignalSnapshot } from "@/api/types";
 
 interface Bar {
@@ -46,6 +48,10 @@ function priceLabel(p: number): string {
 }
 
 export function SignalChartSvg({ bars, annotations, chain }: Props) {
+  // Hover crosshair state (hooks run before any early return).
+  const svgRef = useRef<SVGSVGElement>(null);
+  const [hover, setHover] = useState<{ x: number; y: number } | null>(null);
+
   if (!bars || bars.length < 2) {
     return (
       <div className="rounded-lg border border-dashed border-border/60 p-4 text-xs text-muted-foreground italic text-center">
@@ -132,7 +138,25 @@ export function SignalChartSvg({ bars, annotations, chain }: Props) {
     .join(" ");
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} width="100%" role="img" aria-label="Grafico annotato del segnale">
+    <svg
+      ref={svgRef}
+      viewBox={`0 0 ${W} ${H}`}
+      width="100%"
+      role="img"
+      aria-label="Grafico annotato del segnale"
+      style={{ cursor: "crosshair" }}
+      onMouseMove={(e) => {
+        const el = svgRef.current;
+        if (!el) return;
+        const r = el.getBoundingClientRect();
+        setHover({
+          x: ((e.clientX - r.left) / r.width) * W,
+          y: ((e.clientY - r.top) / r.height) * H,
+        });
+      }}
+      onMouseLeave={() => setHover(null)}
+    >
+      <rect x={0} y={0} width={W} height={H} fill="transparent" />
       {/* price axis: gridlines + labels (left) */}
       {yTicks.map((p, i) => {
         const yy = y(p);
@@ -216,6 +240,25 @@ export function SignalChartSvg({ bars, annotations, chain }: Props) {
           </g>
         );
       })}
+      {hover &&
+        (() => {
+          const hx = Math.max(PAD_L, Math.min(W - PAD_R, hover.x));
+          const hy = Math.max(PAD_T, Math.min(H - PAD_B, hover.y));
+          const bi = Math.max(0, Math.min(wlen - 1, Math.round((hx - PAD_L) / slot - 0.5)));
+          const bx = cx(bi);
+          const price = lo + (1 - (hy - PAD_T) / innerH) * range;
+          return (
+            <g>
+              <line x1={bx} y1={PAD_T} x2={bx} y2={H - PAD_B} stroke="#475569" strokeWidth={0.6} strokeDasharray="3 2" opacity={0.75} />
+              <line x1={PAD_L} y1={hy} x2={W - PAD_R} y2={hy} stroke="#475569" strokeWidth={0.6} strokeDasharray="3 2" opacity={0.75} />
+              <circle cx={bx} cy={y(win[bi].close)} r={2.5} fill="#0f172a" stroke="#fff" strokeWidth={1} />
+              <rect x={0} y={hy - 7} width={PAD_L - 3} height={14} rx={2} fill="#0f172a" />
+              <text x={PAD_L - 5} y={hy + 3} textAnchor="end" fontSize={9} fill="#fff">{priceLabel(price)}</text>
+              <rect x={bx - 19} y={H - PAD_B + 2} width={38} height={13} rx={2} fill="#0f172a" />
+              <text x={bx} y={H - PAD_B + 11} textAnchor="middle" fontSize={9} fill="#fff">{dm(win[bi].date)}</text>
+            </g>
+          );
+        })()}
     </svg>
   );
 }

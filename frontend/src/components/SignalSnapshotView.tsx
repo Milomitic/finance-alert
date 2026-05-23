@@ -3,7 +3,7 @@ import { BadgeDollarSign, BookOpen, CalendarClock, ShieldAlert, Users } from "lu
 import type { SignalSnapshot } from "@/api/types";
 import { TONE_TEXT, type AlertTone } from "@/lib/alertMeta";
 import { cn } from "@/lib/utils";
-import { concludeSignal, glossForStep } from "@/lib/signalInterpretation";
+import { glossForStep } from "@/lib/signalInterpretation";
 
 /* Source badge configuration for non-technical hybrid chain steps. */
 const SOURCE_BADGE: Record<
@@ -186,28 +186,6 @@ export function SignalSnapshotView({
                 );
               })}
             </ol>
-            {(() => {
-              const c = concludeSignal({
-                tone: tone === "bullish" ? "bull" : tone === "bearish" ? "bear" : "neutral",
-                confidence,
-                invalidationLevel: inv && typeof inv.level === "number" ? inv.level : null,
-              });
-              return (
-                <div
-                  className={cn(
-                    "mt-3 rounded-lg border p-2.5 text-xs",
-                    tone === "bullish"
-                      ? "border-emerald-300/50 bg-emerald-50/40 dark:bg-emerald-950/15"
-                      : tone === "bearish"
-                        ? "border-rose-300/50 bg-rose-50/40 dark:bg-rose-950/15"
-                        : "border-border/60 bg-muted/30",
-                  )}
-                >
-                  <div className={cn("font-semibold mb-0.5", TONE_TEXT[tone])}>{c.headline}</div>
-                  <div className="text-muted-foreground leading-snug">{c.detail}</div>
-                </div>
-              );
-            })()}
           </div>
         )}
       </div>
