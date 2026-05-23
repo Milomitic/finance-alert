@@ -263,7 +263,7 @@ def get_stock_detail(
         ],
         alerts_history=[
             AlertOut(
-                id=a.id, rule_id=a.rule_id, rule_kind=rule_kind,
+                id=a.id, rule_kind=rule_kind,
                 stock_id=a.stock_id, ticker=detail.stock.ticker,
                 name=detail.stock.name,
                 triggered_at=a.triggered_at, signal_date=a.signal_date,

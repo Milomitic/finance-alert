@@ -31,4 +31,3 @@ def test_signal_alert_visible_in_list_with_signal_kind(db, monkeypatch):
     mine = [it for it in items if it["stock_id"] == s.id]
     assert len(mine) == 1
     assert mine[0]["rule_kind"] == "signal:volume_breakout"
-    assert mine[0]["rule_id"] is None

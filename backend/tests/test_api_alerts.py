@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
 from app.main import app
-from app.models import Alert, Rule, Stock, User
+from app.models import Alert, Stock, User
 
 
 @pytest.fixture
@@ -23,17 +23,15 @@ def client(db: Session) -> TestClient:
     app.dependency_overrides.clear()
 
 
-def _seed_alerts(db: Session, n: int = 3) -> list[Alert]:
+def _seed_alerts(db: Session, n: int = 3, signal_name: str = "volume_breakout") -> list[Alert]:
     stock = Stock(ticker="AAPL", exchange="NASDAQ", name="Apple")
     db.add(stock)
-    db.commit()
-    rule = Rule(kind="rsi_oversold", params="{}", enabled=True)
-    db.add(rule)
     db.commit()
     alerts = []
     for i in range(n):
         a = Alert(
-            rule_id=rule.id,
+            rule_id=None,
+            signal_name=signal_name,
             stock_id=stock.id,
             trigger_price=100.0 + i,
             snapshot='{"rsi": 28.0}',
@@ -53,15 +51,15 @@ def test_list_alerts_returns_paginated(client: TestClient, db: Session) -> None:
     assert len(body["items"]) == 2
     assert body["has_more"] is True
     assert body["items"][0]["ticker"] == "AAPL"
-    assert body["items"][0]["rule_kind"] == "rsi_oversold"
+    assert body["items"][0]["rule_kind"] == "signal:volume_breakout"
 
 
 def test_list_alerts_filter_by_rule_kind(client: TestClient, db: Session) -> None:
-    _seed_alerts(db, n=2)
-    resp = client.get("/api/alerts?rule_kind=rsi_oversold")
+    _seed_alerts(db, n=2, signal_name="volume_breakout")
+    resp = client.get("/api/alerts?rule_kind=signal:volume_breakout")
     assert resp.status_code == 200
     assert resp.json()["total"] == 2
-    resp = client.get("/api/alerts?rule_kind=golden_cross")
+    resp = client.get("/api/alerts?rule_kind=signal:golden_cross")
     assert resp.json()["total"] == 0
 
 

@@ -5,14 +5,13 @@ from typing import Any
 from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.orm import Session
 
-from app.models import Alert, Rule, Stock
+from app.models import Alert, Stock
 
 
 def derive_rule_kind(rule_kind: str | None, signal_name: str | None) -> str | None:
-    """The UI 'kind' for an alert. Rule-based alerts use the joined Rule.kind;
-    signal-engine alerts (no rule) use f'signal:{signal_name}'. Returns None
-    only for the (currently impossible) case of neither — the frontend already
-    tolerates a null kind."""
+    """The UI 'kind' for an alert. Signal-engine alerts use f'signal:{signal_name}'.
+    Returns None only for the (currently impossible) case of neither — the frontend
+    already tolerates a null kind."""
     if rule_kind is not None:
         return rule_kind
     if signal_name:
@@ -45,7 +44,8 @@ def _apply_filters(
             )
         )
     if rule_kind:
-        stmt = stmt.where(Rule.kind == rule_kind)
+        name = rule_kind[len("signal:"):] if rule_kind.startswith("signal:") else rule_kind
+        stmt = stmt.where(Alert.signal_name == name)
     if date_from:
         stmt = stmt.where(Alert.triggered_at >= date_from)
     if date_to:
@@ -74,16 +74,14 @@ def list_alerts(
     limit: int = 50,
     offset: int = 0,
 ) -> tuple[list[dict[str, Any]], int, bool]:
-    """List alerts with joined rule.kind and stock.ticker. Returns (items, total, has_more)."""
+    """List alerts with stock.ticker. Returns (items, total, has_more)."""
     limit = max(1, min(limit, 500))
     base = (
         select(
             Alert,
-            Rule.kind.label("rule_kind"),
             Stock.ticker.label("ticker"),
             Stock.name.label("name"),
         )
-        .outerjoin(Rule, Rule.id == Alert.rule_id)
         .join(Stock, Stock.id == Alert.stock_id)
     )
     base = _apply_filters(
@@ -103,12 +101,11 @@ def list_alerts(
     ).all()
     has_more = len(rows) > limit
     items = []
-    for alert, rule_kind_val, ticker_val, name_val in rows[:limit]:
+    for alert, ticker_val, name_val in rows[:limit]:
         items.append(
             {
                 "id": alert.id,
-                "rule_id": alert.rule_id,
-                "rule_kind": derive_rule_kind(rule_kind_val, alert.signal_name),
+                "rule_kind": derive_rule_kind(None, alert.signal_name),
                 "stock_id": alert.stock_id,
                 "ticker": ticker_val,
                 "name": name_val,

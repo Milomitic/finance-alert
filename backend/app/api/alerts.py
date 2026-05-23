@@ -547,10 +547,8 @@ def patch(
     if a is None:
         raise HTTPException(status_code=404, detail="Alert not found")
     # Resolve ticker + rule_kind for AlertOut
-    from app.models import Rule as _Rule
     from app.models import Stock as _Stock
-    rule_kind = db.execute(select(_Rule.kind).where(_Rule.id == a.rule_id)).scalar_one_or_none()
-    rule_kind = alert_service.derive_rule_kind(rule_kind, a.signal_name)
+    rule_kind = alert_service.derive_rule_kind(None, a.signal_name)
     stock_row = db.execute(
         select(_Stock.ticker, _Stock.name).where(_Stock.id == a.stock_id)
     ).first()
@@ -558,7 +556,6 @@ def patch(
     name = stock_row.name if stock_row else None
     return AlertOut(
         id=a.id,
-        rule_id=a.rule_id,
         rule_kind=rule_kind,
         stock_id=a.stock_id,
         ticker=ticker,
