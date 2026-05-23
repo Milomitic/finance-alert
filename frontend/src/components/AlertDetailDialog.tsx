@@ -11,6 +11,7 @@ import { Link } from "react-router-dom";
 
 import type { Alert } from "@/api/types";
 import { AlertKindChip, AlertToneChip } from "@/components/AlertChips";
+import { SignalSnapshotView } from "@/components/SignalSnapshotView";
 import {
   Dialog,
   DialogContent,
@@ -23,6 +24,7 @@ import {
   TONE_BORDER_LEFT,
   TONE_TEXT,
   getAlertMeta,
+  isSignalKind,
   resolveSnapshot,
   type AlertTone,
 } from "@/lib/alertMeta";
@@ -281,9 +283,11 @@ export function AlertDetailDialog({ alert, onClose }: Props) {
         {/* SNAPSHOT — labeled rows when we know the kind, raw JSON otherwise. */}
         <div className="px-5 pt-4 pb-1">
           <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">
-            Snapshot del trigger
+            {isSignalKind(alert.rule_kind) ? "Dettaglio segnale" : "Snapshot del trigger"}
           </div>
-          {hasResolvedRows ? (
+          {isSignalKind(alert.rule_kind) ? (
+            <SignalSnapshotView snapshot={alert.snapshot ?? {}} />
+          ) : hasResolvedRows ? (
             <div className="rounded-lg border border-border/60 px-3 py-1">
               {resolution.rows.map((r) => (
                 <SnapshotRow key={r.label} {...r} />
@@ -305,7 +309,7 @@ export function AlertDetailDialog({ alert, onClose }: Props) {
           {/* Power-user "raw JSON" toggle, available whenever we DO have a
               resolved view but raw data also exists. Lets a debugger inspect
               every field without forcing the JSON into the primary view. */}
-          {hasResolvedRows && hasRawData && (
+          {(hasResolvedRows || isSignalKind(alert.rule_kind)) && hasRawData && (
             <button
               type="button"
               onClick={() => setShowRaw((v) => !v)}
@@ -321,7 +325,7 @@ export function AlertDetailDialog({ alert, onClose }: Props) {
               />
             </button>
           )}
-          {hasResolvedRows && hasRawData && showRaw && (
+          {(hasResolvedRows || isSignalKind(alert.rule_kind)) && hasRawData && showRaw && (
             <pre className="mt-2 rounded-lg border border-border/60 bg-muted/40 dark:bg-muted/15 p-3 text-xs overflow-auto max-h-48 leading-relaxed">
               {JSON.stringify(alert.snapshot, null, 2)}
             </pre>
