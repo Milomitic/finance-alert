@@ -105,6 +105,12 @@ def test_quote_caches_within_ttl(monkeypatch: pytest.MonkeyPatch) -> None:
             self.fast_info = FakeFastInfo()
 
     monkeypatch.setattr("yfinance.Ticker", FakeTicker)
+    # Neutralise the post-close-gap remote fetch: it instantiates its own
+    # yfinance.Ticker, which would inflate call_count non-deterministically
+    # depending on the wall-clock market state.
+    monkeypatch.setattr(
+        "app.services.live_quote_service._today_official_bar", lambda *a, **k: None
+    )
     a = live_quote_service.get_quote("AAPL")
     b = live_quote_service.get_quote("AAPL")
     assert a is b
@@ -124,6 +130,9 @@ def test_force_refresh_bypasses_cache(monkeypatch: pytest.MonkeyPatch) -> None:
             self.fast_info = FakeFastInfo()
 
     monkeypatch.setattr("yfinance.Ticker", FakeTicker)
+    monkeypatch.setattr(
+        "app.services.live_quote_service._today_official_bar", lambda *a, **k: None
+    )
     live_quote_service.get_quote("AAPL")
     live_quote_service.get_quote("AAPL", force_refresh=True)
     assert call_count["n"] == 2
