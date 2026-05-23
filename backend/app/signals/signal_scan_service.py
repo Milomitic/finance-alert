@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.models import Alert, Stock
+from app.signals.detectors.registry import DETECTORS
 from app.signals.runner import detect_signals
 
 
@@ -60,7 +61,4 @@ def evaluate_signals(db: Session, stock: Stock, ohlcv: pd.DataFrame) -> int:
 
 
 def _detector_for(name: str):
-    # Deferred import: the detectors package imports the signal stack, so a
-    # module-level import here would create a cycle at load time. Keep local.
-    from app.signals.detectors.registry import DETECTORS
     return next((d for d in DETECTORS if getattr(d, "name", None) == name), None)
