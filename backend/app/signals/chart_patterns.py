@@ -103,4 +103,22 @@ def extract_chart_patterns(ohlcv: pd.DataFrame, *, pivot_w: int = _PIVOT_W) -> l
             out.append(Event(_iso(dates.iloc[highs[-1]]), "chart_pattern", "bear",
                              magnitude=0.6,
                              payload={"pattern": "descending_triangle", "neckline": neckline}))
+    # Symmetrical triangle: converging (falling highs + rising lows); direction
+    # resolved by which boundary price breaks. neckline = the broken pivot.
+    if len(highs) >= 3 and len(lows) >= 3:
+        h3 = [high.iloc[i] for i in highs[-3:]]
+        l3 = [low.iloc[i] for i in lows[-3:]]
+        converging = (h3[0] > h3[1] > h3[2]) and (l3[0] < l3[1] < l3[2])
+        if converging:
+            last_close = float(ohlcv["close"].astype(float).iloc[-1])
+            recent_high = float(h3[-1])
+            recent_low = float(l3[-1])
+            if last_close > recent_high:
+                out.append(Event(_iso(dates.iloc[-1]), "chart_pattern", "bull",
+                                 magnitude=0.55,
+                                 payload={"pattern": "symmetrical_triangle", "neckline": recent_high}))
+            elif last_close < recent_low:
+                out.append(Event(_iso(dates.iloc[-1]), "chart_pattern", "bear",
+                                 magnitude=0.55,
+                                 payload={"pattern": "symmetrical_triangle", "neckline": recent_low}))
     return out

@@ -64,3 +64,21 @@ def test_ascending_triangle_emitted():
 
 def test_flat_series_no_pattern():
     assert extract_chart_patterns(_df([100] * 60), pivot_w=2) == []
+
+
+def _symmetrical_triangle():
+    # converging: falling highs (110,107,104) + rising lows (96,98,100),
+    # then a breakout above the last high.
+    seg = []
+    highs = [110, 107, 104]
+    lows = [96, 98, 100]
+    for k in range(3):
+        seg += [lows[k], (lows[k] + highs[k]) / 2, highs[k], (lows[k] + highs[k]) / 2, lows[k]]
+    seg += [106, 109]   # break above the most recent pivot high (104)
+    return _df([100] * 6 + seg)
+
+
+def test_symmetrical_triangle_emitted():
+    evs = extract_chart_patterns(_symmetrical_triangle(), pivot_w=2)
+    assert any(e.type == "chart_pattern"
+               and e.payload.get("pattern") == "symmetrical_triangle" for e in evs)

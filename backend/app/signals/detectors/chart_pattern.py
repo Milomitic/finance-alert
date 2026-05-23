@@ -16,6 +16,7 @@ _PATTERN_IT = {
     "head_shoulders": "Testa-spalle",
     "ascending_triangle": "Triangolo ascendente",
     "descending_triangle": "Triangolo discendente",
+    "symmetrical_triangle": "Triangolo simmetrico",
 }
 
 
