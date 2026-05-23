@@ -308,6 +308,36 @@ def get_stock_detail(
     )
 
 
+@router.get("/{ticker}/ohlcv", response_model=list[OhlcvBarOut])
+def get_ohlcv_window(
+    ticker: str,
+    bars: int = 120,
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+) -> list[OhlcvBarOut]:
+    """Recent daily OHLCV window for the annotated signal chart. Tolerates the
+    catalog's duplicate-ticker rows (picks any matching stock); returns an
+    empty list when the ticker is unknown or has no bars."""
+    bars = max(10, min(bars, 400))
+    stock = db.execute(
+        select(Stock).where(Stock.ticker == ticker).limit(1)
+    ).scalars().first()
+    if stock is None:
+        return []
+    rows = db.execute(
+        select(OhlcvDaily).where(OhlcvDaily.stock_id == stock.id)
+        .order_by(OhlcvDaily.date.desc()).limit(bars)
+    ).scalars().all()
+    rows = list(reversed(rows))  # ascending for the chart
+    return [
+        OhlcvBarOut(
+            date=str(b.date), open=float(b.open), high=float(b.high),
+            low=float(b.low), close=float(b.close), volume=int(b.volume),
+        )
+        for b in rows
+    ]
+
+
 @router.get("/{ticker}/news", response_model=StockNewsOut)
 def get_stock_news(
     ticker: str,
