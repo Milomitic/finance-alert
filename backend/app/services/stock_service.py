@@ -5,7 +5,7 @@ from sqlalchemy import distinct, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.visibility import visible_country_clause
-from app.models import Index, Stock, StockIndex, StockScore
+from app.models import Index, Stock, StockIndex, StockScore, TechnicalScore
 
 # Allowed sort columns; whitelist guards against SQL injection / typos.
 # Columns from JOINed tables (`composite`, `risk_tier`) are sortable too —
@@ -25,6 +25,12 @@ SORTABLE_COLUMNS: dict[str, object] = {
     "value": StockScore.value,
     "momentum": StockScore.momentum,
     "sentiment": StockScore.sentiment,
+    "tech_composite": TechnicalScore.composite,
+    "tech_trend": TechnicalScore.trend,
+    "tech_momentum": TechnicalScore.momentum,
+    "tech_structure": TechnicalScore.structure,
+    "tech_volume": TechnicalScore.volume,
+    "tech_rel_strength": TechnicalScore.rel_strength,
 }
 
 
@@ -51,6 +57,10 @@ class StockFilter:
     value_min: float | None = None
     momentum_min: float | None = None
     sentiment_min: float | None = None
+    # Technical score (continuous) filters.
+    tech_min: float | None = None
+    tech_max: float | None = None
+    postures: list[str] = field(default_factory=list)
     sort_by: str = "ticker"
     sort_dir: str = "asc"
     limit: int = 50
@@ -72,10 +82,25 @@ class StockScoreRef:
 
 
 @dataclass
+class StockTechRef:
+    """Continuous technical score fields surfaced on the screener row.
+    All None when the stock has no technical score yet."""
+    composite: float | None = None
+    trend: float | None = None
+    momentum: float | None = None
+    structure: float | None = None
+    volume: float | None = None
+    rel_strength: float | None = None
+    signals: float | None = None
+    posture: str | None = None
+
+
+@dataclass
 class StockSearchItem:
-    """Stock + optional score data joined for the screener."""
+    """Stock + optional fundamental + technical score data for the screener."""
     stock: Stock
     score: StockScoreRef
+    technical: StockTechRef = field(default_factory=StockTechRef)
 
 
 @dataclass
@@ -149,6 +174,12 @@ def _apply_filter(stmt, f: StockFilter):
         stmt = stmt.where(StockScore.momentum >= f.momentum_min)
     if f.sentiment_min is not None:
         stmt = stmt.where(StockScore.sentiment >= f.sentiment_min)
+    if f.tech_min is not None:
+        stmt = stmt.where(TechnicalScore.composite >= f.tech_min)
+    if f.tech_max is not None:
+        stmt = stmt.where(TechnicalScore.composite <= f.tech_max)
+    if f.postures:
+        stmt = stmt.where(TechnicalScore.posture.in_(f.postures))
     return stmt
 
 
@@ -190,7 +221,17 @@ def search_stocks(db: Session, f: StockFilter) -> StockPage:
         StockScore.value,
         StockScore.momentum,
         StockScore.sentiment,
-    ).outerjoin(StockScore, StockScore.stock_id == Stock.id)
+        TechnicalScore.composite.label("tech_composite"),
+        TechnicalScore.trend.label("tech_trend"),
+        TechnicalScore.momentum.label("tech_momentum"),
+        TechnicalScore.structure.label("tech_structure"),
+        TechnicalScore.volume.label("tech_volume"),
+        TechnicalScore.rel_strength.label("tech_rel_strength"),
+        TechnicalScore.signals.label("tech_signals"),
+        TechnicalScore.posture.label("tech_posture"),
+    ).outerjoin(StockScore, StockScore.stock_id == Stock.id).outerjoin(
+        TechnicalScore, TechnicalScore.stock_id == Stock.id
+    )
     base = _apply_filter(base, f)
 
     # COUNT must be over the same FROM clause (with the JOIN + filters
@@ -213,6 +254,16 @@ def search_stocks(db: Session, f: StockFilter) -> StockPage:
                 value=row[6],
                 momentum=row[7],
                 sentiment=row[8],
+            ),
+            technical=StockTechRef(
+                composite=row[9],
+                trend=row[10],
+                momentum=row[11],
+                structure=row[12],
+                volume=row[13],
+                rel_strength=row[14],
+                signals=row[15],
+                posture=row[16],
             ),
         )
         for row in rows[:limit]

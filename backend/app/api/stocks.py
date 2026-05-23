@@ -13,7 +13,7 @@ from app.models import OhlcvDaily, Stock, User
 from app.schemas.alert import AlertOut
 from app.schemas.stock import (
     FilterOptionsOut, IndexOptionOut, StockOut, StockScoreRefOut,
-    StockSearchItemOut, StockSearchOut,
+    StockSearchItemOut, StockSearchOut, TechnicalScoreRefOut,
 )
 from app.schemas.stock_detail import (
     AnalystActionOut, AnalystPriceTargetOut, AnalystRatingOut,
@@ -60,6 +60,9 @@ def search(
     value_min: float | None = None,
     momentum_min: float | None = None,
     sentiment_min: float | None = None,
+    tech_min: float | None = None,
+    tech_max: float | None = None,
+    posture: Annotated[list[str] | None, Query()] = None,
     sort_by: str = "ticker",
     sort_dir: str = "asc",
     limit: int = 50,
@@ -90,6 +93,16 @@ def search(
     _validate_score_param(value_min, "value_min")
     _validate_score_param(momentum_min, "momentum_min")
     _validate_score_param(sentiment_min, "sentiment_min")
+    _validate_score_param(tech_min, "tech_min")
+    _validate_score_param(tech_max, "tech_max")
+    if posture:
+        valid_post = {"Forte", "Neutro", "Debole"}
+        badp = [x for x in posture if x not in valid_post]
+        if badp:
+            raise HTTPException(
+                status_code=422,
+                detail=f"posture must be one of {sorted(valid_post)}; got {badp}",
+            )
     page = search_stocks(
         db,
         StockFilter(
@@ -108,6 +121,9 @@ def search(
             value_min=value_min,
             momentum_min=momentum_min,
             sentiment_min=sentiment_min,
+            tech_min=tech_min,
+            tech_max=tech_max,
+            postures=posture or [],
             sort_by=sort_by,
             sort_dir=sort_dir,
             limit=limit,
@@ -127,6 +143,16 @@ def search(
                     value=item.score.value,
                     momentum=item.score.momentum,
                     sentiment=item.score.sentiment,
+                ),
+                technical=TechnicalScoreRefOut(
+                    composite=item.technical.composite,
+                    trend=item.technical.trend,
+                    momentum=item.technical.momentum,
+                    structure=item.technical.structure,
+                    volume=item.technical.volume,
+                    rel_strength=item.technical.rel_strength,
+                    signals=item.technical.signals,
+                    posture=item.technical.posture,
                 ),
             )
             for item in page.items

@@ -31,6 +31,19 @@ class StockScoreRefOut(BaseModel):
     sentiment: float | None = None
 
 
+class TechnicalScoreRefOut(BaseModel):
+    """Continuous technical score on the screener row. All None when the stock
+    has no technical score yet. Mirrors StockTechRef in the service layer."""
+    composite: float | None = None
+    trend: float | None = None
+    momentum: float | None = None
+    structure: float | None = None
+    volume: float | None = None
+    rel_strength: float | None = None
+    signals: float | None = None
+    posture: str | None = None
+
+
 class StockSearchItemOut(BaseModel):
     """A row in the screener result. Carries the Stock anagrafica + the
     optional score join. Splitting score into a sub-object (vs flattening
@@ -38,6 +51,7 @@ class StockSearchItemOut(BaseModel):
     need scoring data (`GET /api/stocks/{ticker}` etc.)."""
     stock: StockOut
     score: StockScoreRefOut
+    technical: TechnicalScoreRefOut = TechnicalScoreRefOut()
 
 
 class StockSearchOut(BaseModel):

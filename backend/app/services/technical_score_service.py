@@ -8,16 +8,17 @@ from __future__ import annotations
 
 import json
 import math
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import pandas as pd
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.indicators.adx import adx
 from app.indicators.ema import ema
 from app.indicators.macd import macd
 from app.indicators.rsi import rsi
-from app.models import TechnicalScore
+from app.models import Alert, TechnicalScore
 
 # Composite weights for the five price dimensions (must sum to 1.0).
 _WEIGHTS = {
@@ -135,6 +136,34 @@ def partial_for(ohlcv: pd.DataFrame) -> dict | None:
         return None
 
 
+def _recent_signal_facets(db: Session, stock_ids: list[int]) -> dict[int, dict]:
+    # Best recent signal per stock (last 14 days): max-confidence alert with its
+    # tone, parsed from the snapshot. Feeds the signals badge + a capped nudge.
+    if not stock_ids:
+        return {}
+    cutoff = datetime.now(timezone.utc) - timedelta(days=14)
+    rows = db.execute(
+        select(Alert.stock_id, Alert.snapshot).where(
+            Alert.signal_name.isnot(None),
+            Alert.triggered_at >= cutoff,
+            Alert.stock_id.in_(stock_ids),
+        )
+    ).all()
+    best: dict[int, tuple[float, str | None]] = {}
+    for sid, snap in rows:
+        try:
+            d = json.loads(snap) if snap else {}
+        except Exception:
+            continue
+        conf = d.get("confidence")
+        if not isinstance(conf, (int, float)):
+            continue
+        cur = best.get(sid)
+        if cur is None or conf > cur[0]:
+            best[sid] = (float(conf), d.get("tone"))
+    return {sid: {"confidence": c, "tone": t} for sid, (c, t) in best.items()}
+
+
 def finalize(db: Session, partials: dict[int, dict]) -> int:
     # Assign relative-strength percentile from the blended returns, compute the
     # composite + posture, and upsert one technical_scores row per stock.
@@ -150,6 +179,7 @@ def finalize(db: Session, partials: dict[int, dict]) -> int:
     rank: dict[int, float] = {}
     for i, (sid, _) in enumerate(rets):
         rank[sid] = (i / (m - 1) * 100.0) if m > 1 else 50.0
+    facets = _recent_signal_facets(db, list(partials.keys()))
     now = datetime.now(timezone.utc)
     count = 0
     for sid, p in partials.items():
@@ -162,6 +192,13 @@ def finalize(db: Session, partials: dict[int, dict]) -> int:
             "rel_strength": rel,
         }
         composite = sum(_WEIGHTS[k] * dims[k] for k in _WEIGHTS)
+        fac = facets.get(sid)
+        signals_val = None
+        if fac is not None:
+            signals_val = round(fac["confidence"], 1)
+            nudge = _clamp((fac["confidence"] - 60.0) / 40.0) * 5.0
+            sign = 1.0 if fac["tone"] == "bull" else -1.0 if fac["tone"] == "bear" else 0.0
+            composite = max(0.0, min(100.0, composite + sign * nudge))
         posture = "Forte" if composite >= 66 else "Neutro" if composite >= 40 else "Debole"
         db.merge(TechnicalScore(
             stock_id=sid,
@@ -171,7 +208,7 @@ def finalize(db: Session, partials: dict[int, dict]) -> int:
             structure=round(dims["structure"], 1),
             volume=round(dims["volume"], 1),
             rel_strength=round(rel, 1),
-            signals=None,
+            signals=signals_val,
             posture=posture,
             computed_at=now,
             breakdown=json.dumps({
