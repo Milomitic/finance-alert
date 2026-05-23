@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.models import Alert, Rule, Stock
+from app.services.alert_service import derive_rule_kind
 
 # Maximum alerts to enumerate in the message body
 DIGEST_TOP_N = 10
@@ -69,7 +70,8 @@ def build_digest_message(db: Session, alerts: list[Alert]) -> str:
     }
     counts: dict[str, int] = {}
     for a in alerts:
-        kind = rules_by_id.get(a.rule_id).kind if rules_by_id.get(a.rule_id) else "unknown"
+        rule = rules_by_id.get(a.rule_id)
+        kind = derive_rule_kind(rule.kind if rule else None, a.signal_name) or "unknown"
         counts[kind] = counts.get(kind, 0) + 1
 
     # Per-stock lookup
@@ -91,7 +93,7 @@ def build_digest_message(db: Session, alerts: list[Alert]) -> str:
     lines.append(f"<b>Top {len(top)} alert per timestamp:</b>")
     for a in top:
         rule = rules_by_id.get(a.rule_id)
-        kind = rule.kind if rule else "unknown"
+        kind = derive_rule_kind(rule.kind if rule else None, a.signal_name) or "unknown"
         emoji = RULE_EMOJIS.get(kind, "•")
         label = RULE_LABELS.get(kind, kind)
         stock = stocks_by_id.get(a.stock_id)
