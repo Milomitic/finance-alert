@@ -47,6 +47,8 @@ def _apply_filters(
     date_to: date | None = None,
     read: bool | None = None,
     archived: bool | None = None,
+    tone: str | None = None,
+    confidence_min: float | None = None,
 ):
     if ticker:
         stmt = stmt.where(func.lower(Stock.ticker) == ticker.lower())
@@ -76,6 +78,13 @@ def _apply_filters(
         stmt = stmt.where(Alert.archived_at.isnot(None))
     elif archived is False:
         stmt = stmt.where(Alert.archived_at.is_(None))
+    if tone is not None:
+        stmt = stmt.where(func.json_extract(Alert.snapshot, "$.tone") == tone)
+    if confidence_min is not None:
+        stmt = stmt.where(
+            sqlalchemy.cast(func.json_extract(Alert.snapshot, "$.confidence"), Float)
+            >= confidence_min
+        )
     return stmt
 
 
@@ -89,6 +98,8 @@ def list_alerts(
     date_to: date | None = None,
     read: bool | None = None,
     archived: bool | None = False,
+    tone: str | None = None,
+    confidence_min: float | None = None,
     limit: int = 50,
     offset: int = 0,
     sort_by: str = "triggered_at",
@@ -113,6 +124,8 @@ def list_alerts(
         date_to=date_to,
         read=read,
         archived=archived,
+        tone=tone,
+        confidence_min=confidence_min,
     )
     count_stmt = select(func.count()).select_from(base.subquery())
     total = int(db.execute(count_stmt).scalar_one())

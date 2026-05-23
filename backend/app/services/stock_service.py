@@ -38,9 +38,19 @@ class StockFilter:
     index_codes: list[str] = field(default_factory=list)
     # Risk tiers from the score table. Empty list = don't filter on risk.
     risk_tiers: list[str] = field(default_factory=list)
-    # Minimum composite score (0–100). None = no threshold. Stocks without a
+    # Minimum composite score (0-100). None = no threshold. Stocks without a
     # computed score are excluded when this is set (LEFT JOIN nullability).
     min_score: float | None = None
+    # Maximum composite score (0-100). Stocks above this cap are excluded.
+    score_max: float | None = None
+    # Per-pillar minimum thresholds (0-100). Stocks without a score row (or
+    # with a NULL pillar) are excluded when any of these are set.
+    profitability_min: float | None = None
+    sustainability_min: float | None = None
+    growth_min: float | None = None
+    value_min: float | None = None
+    momentum_min: float | None = None
+    sentiment_min: float | None = None
     sort_by: str = "ticker"
     sort_dir: str = "asc"
     limit: int = 50
@@ -125,6 +135,20 @@ def _apply_filter(stmt, f: StockFilter):
         stmt = stmt.where(StockScore.risk_tier.in_(f.risk_tiers))
     if f.min_score is not None:
         stmt = stmt.where(StockScore.composite >= f.min_score)
+    if f.score_max is not None:
+        stmt = stmt.where(StockScore.composite <= f.score_max)
+    if f.profitability_min is not None:
+        stmt = stmt.where(StockScore.profitability >= f.profitability_min)
+    if f.sustainability_min is not None:
+        stmt = stmt.where(StockScore.sustainability >= f.sustainability_min)
+    if f.growth_min is not None:
+        stmt = stmt.where(StockScore.growth >= f.growth_min)
+    if f.value_min is not None:
+        stmt = stmt.where(StockScore.value >= f.value_min)
+    if f.momentum_min is not None:
+        stmt = stmt.where(StockScore.momentum >= f.momentum_min)
+    if f.sentiment_min is not None:
+        stmt = stmt.where(StockScore.sentiment >= f.sentiment_min)
     return stmt
 
 

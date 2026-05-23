@@ -138,3 +138,70 @@ def test_search_returns_pillars_and_sorts_by_pillar(db: Session) -> None:
     page = search_stocks(db, StockFilter(sort_by="momentum", sort_dir="desc"))
     assert [i.stock.ticker for i in page.items[:2]] == ["AAA", "BBB"]
     assert page.items[0].score.momentum == 90.0
+
+
+# ── score_max filter ─────────────────────────────────────────────────────────
+
+def test_filter_by_score_max(db: Session) -> None:
+    _seed_scored(db, "HIGH", composite=85.0)
+    _seed_scored(db, "MID",  composite=60.0)
+    _seed_scored(db, "LOW",  composite=30.0)
+
+    page = search_stocks(db, StockFilter(score_max=65.0))
+    tickers = {i.stock.ticker for i in page.items}
+    assert tickers == {"MID", "LOW"}
+    assert page.total == 2
+
+
+def test_filter_by_score_max_exact_boundary(db: Session) -> None:
+    _seed_scored(db, "EXACT", composite=65.0)
+    _seed_scored(db, "ABOVE", composite=66.0)
+
+    page = search_stocks(db, StockFilter(score_max=65.0))
+    assert [i.stock.ticker for i in page.items] == ["EXACT"]
+
+
+def test_filter_by_score_max_and_min_score_range(db: Session) -> None:
+    _seed_scored(db, "X1", composite=20.0)
+    _seed_scored(db, "X2", composite=50.0)
+    _seed_scored(db, "X3", composite=80.0)
+
+    page = search_stocks(db, StockFilter(min_score=40.0, score_max=70.0))
+    assert [i.stock.ticker for i in page.items] == ["X2"]
+
+
+# ── pillar min filters ───────────────────────────────────────────────────────
+
+def test_filter_by_momentum_min(db: Session) -> None:
+    _seed_scored(db, "P1", momentum=90.0)
+    _seed_scored(db, "P2", momentum=50.0)
+    _seed_scored(db, "P3", momentum=20.0)
+
+    page = search_stocks(db, StockFilter(momentum_min=60.0))
+    assert [i.stock.ticker for i in page.items] == ["P1"]
+
+
+def test_filter_by_profitability_min(db: Session) -> None:
+    _seed_scored(db, "Q1", profitability=80.0)
+    _seed_scored(db, "Q2", profitability=40.0)
+
+    page = search_stocks(db, StockFilter(profitability_min=70.0))
+    assert [i.stock.ticker for i in page.items] == ["Q1"]
+
+
+def test_filter_by_multiple_pillar_mins(db: Session) -> None:
+    """Only stocks meeting ALL pillar minimums should be returned."""
+    _seed_scored(db, "GOOD", momentum=80.0, value=75.0, growth=70.0)
+    _seed_scored(db, "BAD_M", momentum=30.0, value=75.0, growth=70.0)
+    _seed_scored(db, "BAD_V", momentum=80.0, value=20.0, growth=70.0)
+
+    page = search_stocks(db, StockFilter(momentum_min=60.0, value_min=60.0, growth_min=60.0))
+    assert [i.stock.ticker for i in page.items] == ["GOOD"]
+
+
+def test_filter_pillar_no_match_returns_empty(db: Session) -> None:
+    _seed_scored(db, "R1", sentiment=30.0)
+
+    page = search_stocks(db, StockFilter(sentiment_min=80.0))
+    assert page.items == []
+    assert page.total == 0

@@ -37,6 +37,12 @@ from app.services.stock_service import (
 router = APIRouter(prefix="/api/stocks", tags=["stocks"])
 
 
+def _validate_score_param(value: float | None, name: str) -> None:
+    """Raise 422 if a score param is outside [0, 100]."""
+    if value is not None and not (0.0 <= value <= 100.0):
+        raise HTTPException(status_code=422, detail=f"{name} must be in [0, 100]")
+
+
 @router.get("/search", response_model=StockSearchOut)
 def search(
     q: str | None = None,
@@ -47,6 +53,13 @@ def search(
     index: Annotated[list[str] | None, Query()] = None,
     risk: Annotated[list[str] | None, Query()] = None,
     min_score: float | None = None,
+    score_max: float | None = None,
+    profitability_min: float | None = None,
+    sustainability_min: float | None = None,
+    growth_min: float | None = None,
+    value_min: float | None = None,
+    momentum_min: float | None = None,
+    sentiment_min: float | None = None,
     sort_by: str = "ticker",
     sort_dir: str = "asc",
     limit: int = 50,
@@ -69,8 +82,14 @@ def search(
                 status_code=422,
                 detail=f"risk must be one of {sorted(valid_risk)}; got {bad}",
             )
-    if min_score is not None and not (0.0 <= min_score <= 100.0):
-        raise HTTPException(status_code=422, detail="min_score must be in [0, 100]")
+    _validate_score_param(min_score, "min_score")
+    _validate_score_param(score_max, "score_max")
+    _validate_score_param(profitability_min, "profitability_min")
+    _validate_score_param(sustainability_min, "sustainability_min")
+    _validate_score_param(growth_min, "growth_min")
+    _validate_score_param(value_min, "value_min")
+    _validate_score_param(momentum_min, "momentum_min")
+    _validate_score_param(sentiment_min, "sentiment_min")
     page = search_stocks(
         db,
         StockFilter(
@@ -82,6 +101,13 @@ def search(
             index_codes=index or [],
             risk_tiers=risk or [],
             min_score=min_score,
+            score_max=score_max,
+            profitability_min=profitability_min,
+            sustainability_min=sustainability_min,
+            growth_min=growth_min,
+            value_min=value_min,
+            momentum_min=momentum_min,
+            sentiment_min=sentiment_min,
             sort_by=sort_by,
             sort_dir=sort_dir,
             limit=limit,

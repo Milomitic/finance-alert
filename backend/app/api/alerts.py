@@ -326,6 +326,9 @@ def _run_scan_in_background(stock_ids: list[int] | None) -> None:
 
 
 
+_VALID_TONES = frozenset({"bull", "bear"})
+
+
 @router.get("", response_model=AlertListOut)
 def list_alerts(
     ticker: str | None = None,
@@ -335,6 +338,8 @@ def list_alerts(
     date_to: date | None = None,
     read: bool | None = None,
     archived: bool | None = False,
+    tone: str | None = None,
+    confidence_min: float | None = None,
     limit: int = 50,
     offset: int = 0,
     sort_by: str = "triggered_at",
@@ -354,6 +359,16 @@ def list_alerts(
             status_code=422,
             detail=f"sort_by must be one of {sorted(_SORTABLE_KEYS)}, got: {sort_by!r}",
         )
+    if tone is not None and tone not in _VALID_TONES:
+        raise HTTPException(
+            status_code=422,
+            detail=f"tone must be one of {sorted(_VALID_TONES)}, got: {tone!r}",
+        )
+    if confidence_min is not None and not (0.0 <= confidence_min <= 100.0):
+        raise HTTPException(
+            status_code=422,
+            detail="confidence_min must be in [0, 100]",
+        )
     items, total, has_more = alert_service.list_alerts(
         db,
         ticker=ticker,
@@ -363,6 +378,8 @@ def list_alerts(
         date_to=date_to,
         read=read,
         archived=archived,
+        tone=tone,
+        confidence_min=confidence_min,
         limit=limit,
         offset=offset,
         sort_by=sort_by,
