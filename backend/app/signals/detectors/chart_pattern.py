@@ -57,6 +57,13 @@ class ChartPattern:
         ]
         invalidation = {"level": float(neckline),
                         "reason": "rientro oltre la neckline (pattern fallito)"}
+        pts = p.payload.get("points") or []
+        annotations = {
+            "levels": [{"label": "Neckline", "price": float(neckline), "kind": "neckline"}],
+            "points": [{"date": str(pt["date"])[:10], "price": float(pt["price"])}
+                       for pt in pts if isinstance(pt.get("price"), (int, float))],
+        }
         return SignalMatch(name=self.name, tone=tone, confidence=conf,
                            signal_date=last_date, chain=chain,
-                           invalidation=invalidation, factors=factors)
+                           invalidation=invalidation, factors=factors,
+                           annotations=annotations)

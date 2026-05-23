@@ -28,3 +28,17 @@ def test_silent_before_neckline_break():
     events = [Event("2026-02-10", "chart_pattern", "bull", magnitude=0.5,
                     payload={"pattern": "double_bottom", "neckline": 100.0})]
     assert ChartPattern().detect(events, df, build_context(df)) is None
+
+
+def test_chart_pattern_annotations_have_neckline_and_points():
+    df = _df(103)
+    events = [Event("2026-02-10", "chart_pattern", "bull", magnitude=0.5,
+                    payload={"pattern": "double_bottom", "neckline": 100.0,
+                             "points": [{"date": "2026-01-20", "price": 90.0},
+                                        {"date": "2026-01-28", "price": 100.0},
+                                        {"date": "2026-02-05", "price": 90.5}]})]
+    m = ChartPattern().detect(events, df, build_context(df))
+    assert m is not None
+    levels = m.annotations["levels"]; points = m.annotations["points"]
+    assert any(l["kind"] == "neckline" for l in levels)
+    assert len(points) >= 2

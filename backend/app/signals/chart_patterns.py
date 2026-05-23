@@ -37,11 +37,17 @@ def extract_chart_patterns(ohlcv: pd.DataFrame, *, pivot_w: int = _PIVOT_W) -> l
             if between:
                 neck_i = max(between, key=lambda h: high.iloc[h])
                 neckline = float(high.iloc[neck_i])
+                points = [
+                    {"date": _iso(dates.iloc[a]), "price": float(low.iloc[a])},
+                    {"date": _iso(dates.iloc[neck_i]), "price": float(high.iloc[neck_i])},
+                    {"date": _iso(dates.iloc[b]), "price": float(low.iloc[b])},
+                ]
                 out.append(Event(_iso(dates.iloc[b]), "chart_pattern", "bull",
                                  magnitude=float(min(1.0, (neckline - (la + lb) / 2) / neckline))
                                  if neckline else None,
                                  payload={"pattern": "double_bottom", "neckline": neckline,
-                                          "lows": [float(la), float(lb)]}))
+                                          "lows": [float(la), float(lb)],
+                                          "points": points}))
 
     # Double top: last two pivot highs ~equal with a pivot low (neckline) between.
     if len(highs) >= 2:
@@ -53,11 +59,17 @@ def extract_chart_patterns(ohlcv: pd.DataFrame, *, pivot_w: int = _PIVOT_W) -> l
             if between:
                 neck_i = min(between, key=lambda lo: low.iloc[lo])
                 neckline = float(low.iloc[neck_i])
+                points = [
+                    {"date": _iso(dates.iloc[a]), "price": float(high.iloc[a])},
+                    {"date": _iso(dates.iloc[neck_i]), "price": float(low.iloc[neck_i])},
+                    {"date": _iso(dates.iloc[b]), "price": float(high.iloc[b])},
+                ]
                 out.append(Event(_iso(dates.iloc[b]), "chart_pattern", "bear",
                                  magnitude=float(min(1.0, ((ha + hb) / 2 - neckline) / ((ha + hb) / 2)))
                                  if (ha + hb) else None,
                                  payload={"pattern": "double_top", "neckline": neckline,
-                                          "highs": [float(ha), float(hb)]}))
+                                          "highs": [float(ha), float(hb)],
+                                          "points": points}))
     # Inverse H&S (bull): last 3 pivot lows, head lowest, shoulders ~equal.
     if len(lows) >= 3:
         s1, head, s2 = lows[-3], lows[-2], lows[-1]
@@ -67,10 +79,15 @@ def extract_chart_patterns(ohlcv: pd.DataFrame, *, pivot_w: int = _PIVOT_W) -> l
             necks = [high.iloc[h] for h in highs if s1 < h < s2]
             if necks:
                 neckline = float(max(necks))
+                points = [
+                    {"date": _iso(dates.iloc[s1]), "price": float(low.iloc[s1])},
+                    {"date": _iso(dates.iloc[head]), "price": float(low.iloc[head])},
+                    {"date": _iso(dates.iloc[s2]), "price": float(low.iloc[s2])},
+                ]
                 out.append(Event(_iso(dates.iloc[s2]), "chart_pattern", "bull",
                                  magnitude=float(min(1.0, (neckline - lh) / neckline)) if neckline else None,
                                  payload={"pattern": "inverse_head_shoulders", "neckline": neckline,
-                                          "head": float(lh)}))
+                                          "head": float(lh), "points": points}))
     # H&S top (bear): last 3 pivot highs, head highest, shoulders ~equal.
     if len(highs) >= 3:
         s1, head, s2 = highs[-3], highs[-2], highs[-1]
@@ -80,45 +97,70 @@ def extract_chart_patterns(ohlcv: pd.DataFrame, *, pivot_w: int = _PIVOT_W) -> l
             necks = [low.iloc[lo] for lo in lows if s1 < lo < s2]
             if necks:
                 neckline = float(min(necks))
+                points = [
+                    {"date": _iso(dates.iloc[s1]), "price": float(high.iloc[s1])},
+                    {"date": _iso(dates.iloc[head]), "price": float(high.iloc[head])},
+                    {"date": _iso(dates.iloc[s2]), "price": float(high.iloc[s2])},
+                ]
                 out.append(Event(_iso(dates.iloc[s2]), "chart_pattern", "bear",
                                  magnitude=float(min(1.0, (hh - neckline) / hh)) if hh else None,
                                  payload={"pattern": "head_shoulders", "neckline": neckline,
-                                          "head": float(hh)}))
+                                          "head": float(hh), "points": points}))
     # Ascending triangle (bull): flat highs + rising lows.
     if len(highs) >= 3 and len(lows) >= 3:
-        h = [high.iloc[i] for i in highs[-3:]]
-        lo3 = [low.iloc[i] for i in lows[-3:]]
+        hi_idx = highs[-3:]
+        lo_idx = lows[-3:]
+        h = [high.iloc[i] for i in hi_idx]
+        lo3 = [low.iloc[i] for i in lo_idx]
         flat_highs = max(h) > 0 and (max(h) - min(h)) / max(h) <= _TRI_TOL
         rising_lows = lo3[0] < lo3[1] < lo3[2]
         if flat_highs and rising_lows:
             neckline = float(sum(h) / len(h))
+            tri_points = (
+                [{"date": _iso(dates.iloc[i]), "price": float(high.iloc[i])} for i in hi_idx]
+                + [{"date": _iso(dates.iloc[i]), "price": float(low.iloc[i])} for i in lo_idx]
+            )
             out.append(Event(_iso(dates.iloc[lows[-1]]), "chart_pattern", "bull",
                              magnitude=0.6,
-                             payload={"pattern": "ascending_triangle", "neckline": neckline}))
+                             payload={"pattern": "ascending_triangle", "neckline": neckline,
+                                      "points": tri_points}))
         # Descending triangle (bear): flat lows + falling highs.
         flat_lows = min(lo3) > 0 and (max(lo3) - min(lo3)) / min(lo3) <= _TRI_TOL
         falling_highs = h[0] > h[1] > h[2]
         if flat_lows and falling_highs:
             neckline = float(sum(lo3) / len(lo3))
+            tri_points = (
+                [{"date": _iso(dates.iloc[i]), "price": float(high.iloc[i])} for i in hi_idx]
+                + [{"date": _iso(dates.iloc[i]), "price": float(low.iloc[i])} for i in lo_idx]
+            )
             out.append(Event(_iso(dates.iloc[highs[-1]]), "chart_pattern", "bear",
                              magnitude=0.6,
-                             payload={"pattern": "descending_triangle", "neckline": neckline}))
+                             payload={"pattern": "descending_triangle", "neckline": neckline,
+                                      "points": tri_points}))
     # Symmetrical triangle: converging (falling highs + rising lows); direction
     # resolved by which boundary price breaks. neckline = the broken pivot.
     if len(highs) >= 3 and len(lows) >= 3:
-        h3 = [high.iloc[i] for i in highs[-3:]]
-        l3 = [low.iloc[i] for i in lows[-3:]]
+        sym_hi_idx = highs[-3:]
+        sym_lo_idx = lows[-3:]
+        h3 = [high.iloc[i] for i in sym_hi_idx]
+        l3 = [low.iloc[i] for i in sym_lo_idx]
         converging = (h3[0] > h3[1] > h3[2]) and (l3[0] < l3[1] < l3[2])
         if converging:
             last_close = float(ohlcv["close"].astype(float).iloc[-1])
             recent_high = float(h3[-1])
             recent_low = float(l3[-1])
+            sym_points = (
+                [{"date": _iso(dates.iloc[i]), "price": float(high.iloc[i])} for i in sym_hi_idx]
+                + [{"date": _iso(dates.iloc[i]), "price": float(low.iloc[i])} for i in sym_lo_idx]
+            )
             if last_close > recent_high:
                 out.append(Event(_iso(dates.iloc[-1]), "chart_pattern", "bull",
                                  magnitude=0.55,
-                                 payload={"pattern": "symmetrical_triangle", "neckline": recent_high}))
+                                 payload={"pattern": "symmetrical_triangle", "neckline": recent_high,
+                                          "points": sym_points}))
             elif last_close < recent_low:
                 out.append(Event(_iso(dates.iloc[-1]), "chart_pattern", "bear",
                                  magnitude=0.55,
-                                 payload={"pattern": "symmetrical_triangle", "neckline": recent_low}))
+                                 payload={"pattern": "symmetrical_triangle", "neckline": recent_low,
+                                          "points": sym_points}))
     return out
