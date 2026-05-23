@@ -45,20 +45,19 @@ def _to_date(iso: str) -> date | None:
         return None
 
 
-def _follow_through_ok(m, ohlcv: pd.DataFrame, idx_by_date: dict[str, int]):
-    # Has the bar AFTER the trigger held the invalidation level? Returns True
-    # (confirmed, or nothing to confirm), False (the next bar broke back through
-    # the level -> likely fakeout), or None (the signal triggered on the last
-    # available bar, so confirmation is pending a later scan).
+def _follow_through_ok(m, ohlcv: pd.DataFrame, idx_by_date: dict[str, int]) -> bool:
+    # Drop only a CONFIRMED fakeout: the bar AFTER the trigger exists and closed
+    # back through the invalidation level. A trigger on the last available bar
+    # passes -- it cannot be a confirmed fakeout yet, and many detectors stamp
+    # signal_date on the latest bar, so "holding" it would suppress them
+    # permanently (the date moves with each scan) instead of by one bar.
     inv = m.invalidation or {}
     level = inv.get("level") if isinstance(inv, dict) else None
     if not isinstance(level, (int, float)):
         return True
     si = idx_by_date.get(str(m.signal_date)[:10]) if m.signal_date else None
-    if si is None:
+    if si is None or si >= len(ohlcv) - 1:
         return True
-    if si >= len(ohlcv) - 1:
-        return None
     next_close = float(ohlcv["close"].iloc[si + 1])
     if m.tone == "bull":
         return next_close >= float(level)
@@ -90,7 +89,7 @@ def evaluate_signals(db: Session, stock: Stock, ohlcv: pd.DataFrame) -> int:
         # invalidation level. A fresh last-bar trigger is held for a later scan
         # (None); a fakeout is dropped (False).
         if settings.signal_require_follow_through:
-            if _follow_through_ok(m, ohlcv, idx_by_date) is not True:
+            if not _follow_through_ok(m, ohlcv, idx_by_date):
                 continue
         sig_date = _to_date(m.signal_date)
         # Recency guard: skip setups that completed long before the latest bar

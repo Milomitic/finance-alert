@@ -55,18 +55,25 @@ def test_regime_gate_exempts_reversal(db, monkeypatch):
     assert svc.evaluate_signals(db, s, df) == 1  # reversal detector is exempt
 
 
-def test_follow_through_holds_then_confirms(db, monkeypatch):
+def test_follow_through_passes_last_bar(db, monkeypatch):
     monkeypatch.setattr(svc.settings, "signal_min_confidence", 0)
     monkeypatch.setattr(svc.settings, "signal_require_trend_alignment", False)
     monkeypatch.setattr(svc.settings, "signal_require_follow_through", True)
-    df = _df([100] * 30 + [110])  # breakout on the last bar
+    df = _df([100] * 30 + [110])  # trigger on the last bar (no next bar yet)
     m = _match(df["date"].iloc[-1], tone="bull", invalidation={"level": 105.0, "reason": "x"})
     monkeypatch.setattr(svc, "detect_signals", lambda *a, **k: [m])
-    s = _stock(db, "FTC")
-    assert svc.evaluate_signals(db, s, df) == 0  # no next bar -> held
-    db.commit()
-    df2 = _df([100] * 30 + [110, 112])  # next bar closes above the level
-    assert svc.evaluate_signals(db, s, df2) == 1
+    # Last-bar trigger is NOT suppressed (cannot be a confirmed fakeout yet).
+    assert svc.evaluate_signals(db, _stock(db, "FTL"), df) == 1
+
+
+def test_follow_through_confirms_when_next_bar_holds(db, monkeypatch):
+    monkeypatch.setattr(svc.settings, "signal_min_confidence", 0)
+    monkeypatch.setattr(svc.settings, "signal_require_trend_alignment", False)
+    monkeypatch.setattr(svc.settings, "signal_require_follow_through", True)
+    df = _df([100] * 30 + [110, 112])  # past-dated trigger, next bar holds
+    m = _match(df["date"].iloc[30], tone="bull", invalidation={"level": 105.0, "reason": "x"})
+    monkeypatch.setattr(svc, "detect_signals", lambda *a, **k: [m])
+    assert svc.evaluate_signals(db, _stock(db, "FTH"), df) == 1
 
 
 def test_follow_through_drops_fakeout(db, monkeypatch):
