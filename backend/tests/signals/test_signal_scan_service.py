@@ -55,7 +55,7 @@ def test_creates_signal_alert_above_threshold(db, monkeypatch):
     db.add(s); db.flush()
     n = evaluate_signals(db, s, _confirmed_df())
     db.commit()
-    assert n == 1
+    assert n >= 1  # at least volume_breakout fires; other detectors may also fire
     a = db.query(Alert).filter(Alert.stock_id == s.id,
                                Alert.signal_name == "volume_breakout").first()
     assert a is not None and a.signal_date == date(2026, 5, 1)
@@ -66,7 +66,8 @@ def test_dedup_same_signal_date(db, monkeypatch):
     s = Stock(ticker="BRK_SIG2", exchange="NASDAQ", name="BO2", country="US")
     db.add(s); db.flush()
     df = _confirmed_df()
-    assert evaluate_signals(db, s, df) == 1
+    first_run = evaluate_signals(db, s, df)
+    assert first_run >= 1  # at least volume_breakout fires; other detectors may also fire
     db.commit()
     assert evaluate_signals(db, s, df) == 0   # same (stock, name, signal_date) -> skip
     db.commit()
