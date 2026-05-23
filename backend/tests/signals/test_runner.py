@@ -12,10 +12,22 @@ def test_runner_returns_match_for_confirmed_breakout():
 
 
 def test_runner_isolates_a_failing_detector(monkeypatch):
+    called = {"hit": False}
+
     class Boom:
-        name = "boom"; min_bars = 1
-        def detect(self, *a, **k): raise RuntimeError("nope")
+        name = "boom"
+        min_bars = 1
+
+        def detect(self, *a, **k):
+            called["hit"] = True
+            raise RuntimeError("nope")
+
     monkeypatch.setattr("app.signals.runner.DETECTORS", [Boom()])
-    # Must not raise; just returns no matches.
-    assert detect_signals(pd.DataFrame([{"date": "2026-05-01", "open": 1,
-        "high": 1, "low": 1, "close": 1, "volume": 1}])) == []
+    # Two rows so we clear the short-frame guard (len >= 2) and actually reach
+    # the detector loop; the crashing detector must be caught, not propagated.
+    df = pd.DataFrame([
+        {"date": "2026-05-01", "open": 1, "high": 1, "low": 1, "close": 1, "volume": 1},
+        {"date": "2026-05-02", "open": 1, "high": 1, "low": 1, "close": 1, "volume": 1},
+    ])
+    assert detect_signals(df) == []
+    assert called["hit"], "failing detector was never invoked - guard short-circuited"
