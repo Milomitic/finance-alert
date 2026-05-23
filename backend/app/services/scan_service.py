@@ -19,6 +19,7 @@ from app.core.visibility import visible_country_clause
 from app.models import Alert, OhlcvDaily, Rule, RuleState, Stock
 from app.rules.composite import evaluate_expression, snapshot_expression
 from app.rules.registry import RULES
+from app.signals.signal_scan_service import evaluate_signals
 
 
 @dataclass
@@ -125,10 +126,7 @@ def scan_universe(
     total = len(stocks)
     global_rules = _load_global_rules(db)
     if not global_rules:
-        logger.warning("[scan] no rules configured; skipping scan")
-        if on_progress:
-            on_progress(0, total, result, None)
-        return result
+        logger.warning("[scan] no rules configured; rule scan will be skipped but signal scan continues")
 
     if on_progress:
         on_progress(0, total, result, None)
@@ -235,6 +233,14 @@ def scan_universe(
                 state.last_evaluation = new_eval
                 state.last_evaluated_at = now
                 result.states_updated += 1
+
+        # Signal engine - runs on the same OHLCV already loaded. Wrapped so a
+        # signals failure can never abort the legacy rule scan.
+        try:
+            fired = evaluate_signals(db, stock, ohlcv)
+            result.alerts_fired += fired
+        except Exception as e:  # noqa: BLE001
+            logger.warning(f"[scan] signals failed for {stock.ticker}: {e}")
 
         if on_progress and (idx % progress_every == 0 or idx == total):
             on_progress(idx, total, result, stock.ticker)
