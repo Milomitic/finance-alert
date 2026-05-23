@@ -1657,6 +1657,21 @@ def _fetch_fresh(ticker: str) -> Fundamentals:
     return f
 
 
+def get_fundamentals_cached(db, ticker: str) -> "Fundamentals | None":
+    """CACHE-ONLY fundamentals read for the signal scan: L1 then L2, never an
+    upstream fetch (the scan touches ~900 stocks; a fetch storm is unacceptable).
+    Returns None on a cache miss - that stock simply gets no non-technical events."""
+    f = _CACHE.get(ticker)
+    if f is not None:
+        return f
+    from app.services import fetch_cache_store
+    from_db = fetch_cache_store.read_fundamentals(db, ticker, _TTL_SECONDS)
+    if from_db is not None:
+        _CACHE[ticker] = from_db
+        return from_db
+    return None
+
+
 def get_fundamentals(ticker: str, *, force_refresh: bool = False) -> Fundamentals:
     """Two-tier cache:
       L1 = in-memory _CACHE (microseconds)

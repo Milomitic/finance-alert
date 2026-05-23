@@ -10,7 +10,25 @@ from app.signals.events import Event, extract_events
 
 
 def produce_earnings_events(db, stock) -> list[Event]:
-    return []  # U3-T2
+    from app.services.stock_fundamentals_service import get_fundamentals_cached
+    f = get_fundamentals_cached(db, stock.ticker)
+    if f is None:
+        return []
+    out: list[Event] = []
+    for ep in (f.earnings or []):
+        sp = ep.surprise_pct
+        if sp is None or ep.eps_reported is None or not ep.date:
+            continue
+        direction = "bull" if sp > 0 else "bear"
+        # surprise_pct is a percentage (e.g. 15.0 = +15%). Normalise to [0,1]:
+        # treat |surprise| of 25% as a "full" magnitude (mag=1.0).
+        # For the rare fraction-encoded value (|sp| <= 1.5) scale against 0.25.
+        mag = abs(sp) / (25.0 if abs(sp) > 1.5 else 0.25)
+        out.append(Event(str(ep.date)[:10], "earnings_surprise", direction,
+                         magnitude=float(min(1.0, mag)),
+                         payload={"surprise_pct": float(sp), "eps_reported": ep.eps_reported,
+                                  "eps_estimate": ep.eps_estimate}, source="earnings"))
+    return out
 
 
 def produce_analyst_events(db, stock) -> list[Event]:
