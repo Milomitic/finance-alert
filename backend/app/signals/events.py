@@ -10,9 +10,11 @@ from typing import Any
 
 import pandas as pd
 
+from app.indicators.adx import adx
 from app.indicators.atr import atr
 from app.indicators.bb import bollinger
 from app.indicators.ema import ema
+from app.indicators.macd import macd
 from app.indicators.rsi import rsi
 from app.signals.pivots import find_pivots
 
@@ -230,6 +232,84 @@ def extract_sr_levels(ohlcv: pd.DataFrame, *, width: int = 5) -> list[Event]:
     return out
 
 
+def extract_macd_cross(
+    ohlcv: pd.DataFrame, *, fast: int = 12, slow: int = 26, signal: int = 9,
+) -> list[Event]:
+    """Emit macd_cross on each bar where the MACD histogram changes sign:
+    bull when the line crosses ABOVE its signal (hist <0 -> >=0), bear below."""
+    if len(ohlcv) < slow + signal + 1:
+        return []
+    close = ohlcv["close"].astype(float).reset_index(drop=True)
+    dates = ohlcv["date"].reset_index(drop=True)
+    line, sig, hist = macd(close, fast, slow, signal)
+    hist = hist.reset_index(drop=True)
+    out: list[Event] = []
+    for i in range(1, len(close)):
+        p, c = hist.iloc[i - 1], hist.iloc[i]
+        if pd.isna(p) or pd.isna(c):
+            continue
+        if p <= 0 < c:
+            out.append(Event(_iso(dates.iloc[i]), "macd_cross", "bull",
+                             magnitude=float(abs(c) / close.iloc[i]) if close.iloc[i] else None,
+                             payload={"fast": fast, "slow": slow, "signal": signal}))
+        elif p >= 0 > c:
+            out.append(Event(_iso(dates.iloc[i]), "macd_cross", "bear",
+                             magnitude=float(abs(c) / close.iloc[i]) if close.iloc[i] else None,
+                             payload={"fast": fast, "slow": slow, "signal": signal}))
+    return out
+
+
+def extract_gap(ohlcv: pd.DataFrame, *, min_pct: float = 0.02) -> list[Event]:
+    """Emit gap (bull/bear) when a bar opens beyond the prior close by >= min_pct."""
+    if len(ohlcv) < 2:
+        return []
+    open_ = ohlcv["open"].astype(float).reset_index(drop=True)
+    close = ohlcv["close"].astype(float).reset_index(drop=True)
+    dates = ohlcv["date"].reset_index(drop=True)
+    out: list[Event] = []
+    for i in range(1, len(close)):
+        prev_c = close.iloc[i - 1]
+        if prev_c <= 0:
+            continue
+        gap_pct = (open_.iloc[i] - prev_c) / prev_c
+        if gap_pct >= min_pct:
+            out.append(Event(_iso(dates.iloc[i]), "gap", "bull", magnitude=float(gap_pct),
+                             payload={"gap_pct": float(gap_pct), "open": float(open_.iloc[i]),
+                                      "prev_close": float(prev_c)}))
+        elif gap_pct <= -min_pct:
+            out.append(Event(_iso(dates.iloc[i]), "gap", "bear", magnitude=float(abs(gap_pct)),
+                             payload={"gap_pct": float(gap_pct), "open": float(open_.iloc[i]),
+                                      "prev_close": float(prev_c)}))
+    return out
+
+
+def extract_adx_trend(
+    ohlcv: pd.DataFrame, *, period: int = 14, adx_min: float = 25.0,
+) -> list[Event]:
+    """Emit adx_trend on bars where ADX >= adx_min: bull when +DI > -DI, bear
+    when -DI > +DI. magnitude = (ADX - adx_min) / (100 - adx_min) clamped."""
+    if len(ohlcv) < 2 * period + 2:
+        return []
+    adx_s, plus_di, minus_di = adx(ohlcv, period)
+    adx_s = adx_s.reset_index(drop=True)
+    plus_di = plus_di.reset_index(drop=True)
+    minus_di = minus_di.reset_index(drop=True)
+    dates = ohlcv["date"].reset_index(drop=True)
+    out: list[Event] = []
+    for i in range(len(adx_s)):
+        a, p, m = adx_s.iloc[i], plus_di.iloc[i], minus_di.iloc[i]
+        if pd.isna(a) or pd.isna(p) or pd.isna(m) or a < adx_min:
+            continue
+        mag = float(max(0.0, min(1.0, (a - adx_min) / (100.0 - adx_min)))) if adx_min < 100 else None
+        if p > m:
+            out.append(Event(_iso(dates.iloc[i]), "adx_trend", "bull", magnitude=mag,
+                             payload={"adx": float(a), "plus_di": float(p), "minus_di": float(m)}))
+        elif m > p:
+            out.append(Event(_iso(dates.iloc[i]), "adx_trend", "bear", magnitude=mag,
+                             payload={"adx": float(a), "plus_di": float(p), "minus_di": float(m)}))
+    return out
+
+
 # Registry of active extractors. Each is f(ohlcv) -> list[Event].
 EXTRACTORS = [
     lambda df: extract_breakout(df, lookback=20),
@@ -239,6 +319,9 @@ EXTRACTORS = [
     lambda df: extract_bollinger(df, period=20, k=2.0, kc_mult=1.5),
     lambda df: extract_rsi_extreme(df, period=14, low=30.0, high=70.0),
     lambda df: extract_sr_levels(df, width=5),
+    lambda df: extract_macd_cross(df),
+    lambda df: extract_gap(df, min_pct=0.02),
+    lambda df: extract_adx_trend(df, period=14, adx_min=25.0),
 ]
 
 
