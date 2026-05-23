@@ -5,6 +5,7 @@ import json
 from datetime import date
 
 import pandas as pd
+from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -17,6 +18,11 @@ def _to_date(iso: str) -> date | None:
     try:
         return date.fromisoformat(iso[:10])
     except (ValueError, TypeError):
+        # A NULL signal_date collapses dedup (all null-dated signals for a
+        # stock/name share one slot), so make a parse failure visible rather
+        # than silently suppressing real signals. Never fires in practice -
+        # signal_date comes from an extractor-produced ISO string.
+        logger.warning(f"[signals] could not parse signal_date {iso!r}; storing NULL")
         return None
 
 
@@ -54,5 +60,7 @@ def evaluate_signals(db: Session, stock: Stock, ohlcv: pd.DataFrame) -> int:
 
 
 def _detector_for(name: str):
+    # Deferred import: the detectors package imports the signal stack, so a
+    # module-level import here would create a cycle at load time. Keep local.
     from app.signals.detectors.registry import DETECTORS
     return next((d for d in DETECTORS if getattr(d, "name", None) == name), None)
