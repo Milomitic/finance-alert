@@ -27,6 +27,11 @@ class Settings(BaseSettings):
     # Signal engine: minimum confidence (0-100) for a detected signal to
     # become an alert. Below this the signal is computed but not surfaced.
     signal_min_confidence: int = 60
+    # Signal engine recency guard: a detected signal is only surfaced if its
+    # signal_date is within this many calendar days of the latest OHLCV bar.
+    # Stops the first scan after a deploy/backfill from flooding the feed with
+    # months-old setups (the ~260-bar window contains a year of history).
+    signal_max_age_days: int = 7
     # FRED (Federal Reserve Economic Data) API key for the macro
     # calendar. Free, gettable from https://fred.stlouisfed.org —
     # rate-limited at 120 req/min. Empty string disables FRED-driven

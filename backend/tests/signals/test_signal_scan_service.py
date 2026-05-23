@@ -12,6 +12,43 @@ def _confirmed_df():
     return pd.DataFrame(rows)
 
 
+def _confirmed_then_stale_df():
+    """The breakout fires on 2026-05-01, then 10 calmer bars follow so that
+    bar's signal_date is ~10 days behind the latest bar."""
+    df = _confirmed_df()
+    extra = pd.DataFrame([
+        {"date": f"2026-05-{d:02d}", "open": 110, "high": 110.5, "low": 109.5,
+         "close": 110, "volume": 1000} for d in range(2, 12)
+    ])
+    return pd.concat([df, extra], ignore_index=True)
+
+
+def test_stale_signal_skipped_by_recency_guard(db, monkeypatch):
+    monkeypatch.setattr("app.signals.signal_scan_service.settings.signal_min_confidence", 0)
+    monkeypatch.setattr("app.signals.signal_scan_service.settings.signal_max_age_days", 3)
+    s = Stock(ticker="STALE_BO", exchange="NASDAQ", name="Stale", country="US")
+    db.add(s); db.flush()
+    evaluate_signals(db, s, _confirmed_then_stale_df())
+    db.commit()
+    # The breakout's signal_date (2026-05-01) is 10 days before the last bar
+    # (2026-05-11) -> older than max_age=3 -> the volume_breakout is skipped.
+    vb = db.query(Alert).filter(Alert.stock_id == s.id,
+                                Alert.signal_name == "volume_breakout").first()
+    assert vb is None
+
+
+def test_recent_signal_kept_with_large_max_age(db, monkeypatch):
+    monkeypatch.setattr("app.signals.signal_scan_service.settings.signal_min_confidence", 0)
+    monkeypatch.setattr("app.signals.signal_scan_service.settings.signal_max_age_days", 365)
+    s = Stock(ticker="FRESH_BO", exchange="NASDAQ", name="Fresh", country="US")
+    db.add(s); db.flush()
+    evaluate_signals(db, s, _confirmed_then_stale_df())
+    db.commit()
+    vb = db.query(Alert).filter(Alert.stock_id == s.id,
+                                Alert.signal_name == "volume_breakout").first()
+    assert vb is not None   # 10 days <= 365 -> kept
+
+
 def test_creates_signal_alert_above_threshold(db, monkeypatch):
     monkeypatch.setattr("app.signals.signal_scan_service.settings.signal_min_confidence", 0)
     s = Stock(ticker="BRK_SIG", exchange="NASDAQ", name="BO Co", country="US")

@@ -31,11 +31,18 @@ def evaluate_signals(db: Session, stock: Stock, ohlcv: pd.DataFrame) -> int:
     """Detect signals for `stock` and add Alert rows for new ones above the
     confidence threshold. Returns the count added. Caller commits."""
     last_close = float(ohlcv["close"].iloc[-1])
+    last_bar_date = _to_date(str(ohlcv["date"].iloc[-1]))
     added = 0
     for m in detect_signals(ohlcv):
         if m.confidence < settings.signal_min_confidence:
             continue
         sig_date = _to_date(m.signal_date)
+        # Recency guard: skip setups that completed long before the latest bar
+        # (the ~260-bar window holds a year of history; without this the first
+        # scan would surface months-old signals as if fresh).
+        if sig_date is not None and last_bar_date is not None \
+                and (last_bar_date - sig_date).days > settings.signal_max_age_days:
+            continue
         # Dedup: same (stock, signal, signal_date) already emitted -> skip.
         exists = db.execute(
             select(Alert.id).where(

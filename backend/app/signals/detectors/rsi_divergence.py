@@ -21,6 +21,8 @@ class RsiDivergence:
     min_bars = 20
 
     def detect(self, events: list[Event], ohlcv: pd.DataFrame, ctx: SignalContext) -> SignalMatch | None:
+        if len(ohlcv) < self.min_bars:
+            return None
         divs = [e for e in events if e.type == "rsi_divergence"]
         if not divs:
             return None

@@ -55,7 +55,10 @@ class TrendPullback:
             "trend_alignment": 1.0 if trend_aligned else 0.4,
             "resume": 1.0 if resumed else 0.0,
         }
-        conf = score(factors, {"trend_strength": 1.0, "trend_alignment": 1.0, "resume": 0.6})
+        # `resume` is a gate condition (detect returns None when it is false),
+        # so it is always 1.0 here - kept in `factors` as displayed evidence
+        # but excluded from the score weights to avoid inflating the floor.
+        conf = score(factors, {"trend_strength": 1.0, "trend_alignment": 1.0})
         chain = [
             {"date": cross.date, "label": f"Incrocio EMA {tone}",
              "detail": f"EMA{_FAST}/EMA{_SLOW} ({'golden' if tone == 'bull' else 'death'} cross)"},

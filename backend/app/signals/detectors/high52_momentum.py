@@ -40,7 +40,10 @@ class High52Momentum:
             "trend": 1.0 if ctx.trend_sign > 0 else 0.0,
             "momentum": momentum,
         }
-        conf = score(factors, {"proximity": 1.0, "trend": 0.8, "momentum": 0.8})
+        # `trend` is a gate condition (detect returns None when trend_sign<=0),
+        # so it is always 1.0 here - kept in `factors` as displayed evidence
+        # but excluded from the score weights to avoid inflating the floor.
+        conf = score(factors, {"proximity": 1.0, "momentum": 0.8})
         last_date = str(ohlcv["date"].iloc[-1])[:10]
         chain = [
             {"date": last_date, "label": "Vicino al massimo 52 settimane",
