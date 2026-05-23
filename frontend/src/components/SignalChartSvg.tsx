@@ -2,6 +2,9 @@ import type { SignalChainStep, SignalSnapshot } from "@/api/types";
 
 interface Bar {
   date: string;
+  open: number;
+  high: number;
+  low: number;
   close: number;
 }
 
@@ -9,18 +12,15 @@ interface Props {
   bars: Bar[];
   annotations: SignalSnapshot["annotations"];
   chain: SignalChainStep[];
-  tone: "bull" | "bear" | "neutral";
 }
 
-const W = 640;
-const H = 220;
-const PAD_X = 8;
-const PAD_T = 10;
-const PAD_B = 18;
+const W = 680;
+const H = 264;
+const PAD_L = 46;
+const PAD_R = 14;
+const PAD_T = 16;
+const PAD_B = 28;
 
-/** Per-kind line style for the annotation levels. `stop` is dashed amber to
- *  visually separate "where the setup invalidates" from the structural levels
- *  (neckline / breakout / support / resistance). */
 const LEVEL_STYLE: Record<string, { stroke: string; dash?: string }> = {
   neckline: { stroke: "#6366f1" },
   breakout: { stroke: "#0ea5e9" },
@@ -29,15 +29,23 @@ const LEVEL_STYLE: Record<string, { stroke: string; dash?: string }> = {
   stop: { stroke: "#d97706", dash: "4 3" },
 };
 
-/**
- * Hand-drawn SVG of the detected signal: the recent close line (tone-colored),
- * the annotation levels as horizontal lines, the pattern shape as a dashed
- * polyline through its vertices, and numbered markers on the chain dates.
- *
- * Same hand-rolled approach as the existing MiniSpark — no charting library,
- * so it stays a cheap static screenshot suitable for the detail popup.
- */
-export function SignalChartSvg({ bars, annotations, chain, tone }: Props) {
+const UP = "#16a34a";
+const DOWN = "#dc2626";
+const GRID = "#94a3b8";
+
+function dm(iso: string): string {
+  const k = iso.slice(0, 10).split("-");
+  return k.length === 3 ? `${k[2]}/${k[1]}` : iso.slice(0, 10);
+}
+
+function priceLabel(p: number): string {
+  if (p >= 1000) return p.toFixed(0);
+  if (p >= 100) return p.toFixed(1);
+  if (p >= 1) return p.toFixed(2);
+  return p.toFixed(3);
+}
+
+export function SignalChartSvg({ bars, annotations, chain }: Props) {
   if (!bars || bars.length < 2) {
     return (
       <div className="rounded-lg border border-dashed border-border/60 p-4 text-xs text-muted-foreground italic text-center">
@@ -48,105 +56,162 @@ export function SignalChartSvg({ bars, annotations, chain, tone }: Props) {
 
   const levels = annotations?.levels ?? [];
   const points = annotations?.points ?? [];
-  const closes = bars.map((b) => b.close);
-  const lvlPrices = levels.map((l) => l.price).filter((p) => Number.isFinite(p));
-  const ptPrices = points.map((p) => p.price).filter((p) => Number.isFinite(p));
-  const lo = Math.min(...closes, ...lvlPrices, ...ptPrices);
-  const hi = Math.max(...closes, ...lvlPrices, ...ptPrices);
+
+  // Number only the technical chain steps (no source). Collect their dates so
+  // the window can zoom around them. Non-technical steps have no chart point.
+  const techDates: string[] = [];
+  const chainNum: (number | null)[] = [];
+  let tc = 0;
+  for (const step of chain) {
+    if (step.source) {
+      chainNum.push(null);
+    } else {
+      tc += 1;
+      chainNum.push(tc);
+      techDates.push(step.date.slice(0, 10));
+    }
+  }
+
+  const nearestIn = (list: Bar[], iso: string): number | null => {
+    const t = Date.parse(iso.slice(0, 10));
+    if (Number.isNaN(t)) return null;
+    let best = -1;
+    let bestD = Infinity;
+    for (let i = 0; i < list.length; i++) {
+      const d = Math.abs(Date.parse(list[i].date.slice(0, 10)) - t);
+      if (d < bestD) {
+        bestD = d;
+        best = i;
+      }
+    }
+    return best >= 0 ? best : null;
+  };
+
+  // Focus window: indices of the technical chain dates + the shape points,
+  // padded on both sides, to zoom into the relevant area.
+  const focusDates = [...techDates, ...points.map((p) => p.date.slice(0, 10))];
+  const focusIdx = focusDates
+    .map((d) => nearestIn(bars, d))
+    .filter((v): v is number => v != null);
+  let startIdx = 0;
+  let endIdx = bars.length - 1;
+  if (focusIdx.length > 0) {
+    const minI = Math.min(...focusIdx);
+    const maxI = Math.max(...focusIdx);
+    startIdx = Math.max(0, minI - 24);
+    endIdx = Math.min(bars.length - 1, maxI + 8);
+    if (endIdx - startIdx < 14) {
+      const mid = Math.round((minI + maxI) / 2);
+      startIdx = Math.max(0, mid - 9);
+      endIdx = Math.min(bars.length - 1, mid + 9);
+    }
+  }
+  const win = bars.slice(startIdx, endIdx + 1);
+  const wlen = win.length;
+
+  const lvlP = levels.map((l) => l.price).filter((p) => Number.isFinite(p));
+  const ptP = points.map((p) => p.price).filter((p) => Number.isFinite(p));
+  const lo = Math.min(...win.map((b) => b.low), ...lvlP, ...ptP);
+  const hi = Math.max(...win.map((b) => b.high), ...lvlP, ...ptP);
   const range = hi - lo || 1;
-  const innerW = W - PAD_X * 2;
+  const innerW = W - PAD_L - PAD_R;
   const innerH = H - PAD_T - PAD_B;
-  const x = (i: number) => PAD_X + (i / (bars.length - 1)) * innerW;
-  const y = (price: number) => PAD_T + (1 - (price - lo) / range) * innerH;
+  const slot = innerW / wlen;
+  const cx = (i: number) => PAD_L + slot * (i + 0.5);
+  const y = (p: number) => PAD_T + (1 - (p - lo) / range) * innerH;
+  const candleW = Math.max(1.5, Math.min(slot * 0.62, 11));
 
-  // date -> bar index. Out-of-window dates clamp to the nearest edge so a
-  // chain step whose date predates the loaded window still shows a marker.
-  const idxByDate = new Map<string, number>();
-  bars.forEach((b, i) => idxByDate.set(b.date.slice(0, 10), i));
-  const firstDate = bars[0].date.slice(0, 10);
-  const xForDate = (d: string): number => {
-    const k = d.slice(0, 10);
-    if (idxByDate.has(k)) return x(idxByDate.get(k)!);
-    return k < firstDate ? x(0) : x(bars.length - 1);
-  };
-  const closeAtDate = (d: string): number | null => {
-    const k = d.slice(0, 10);
-    return idxByDate.has(k) ? bars[idxByDate.get(k)!].close : null;
-  };
+  const yTicks = Array.from({ length: 5 }, (_, k) => lo + (range * k) / 4);
 
-  const lineColor = tone === "bull" ? "#16a34a" : tone === "bear" ? "#dc2626" : "#64748b";
-  const priceLine = closes.map((c, i) => `${x(i).toFixed(1)},${y(c).toFixed(1)}`).join(" ");
-  const shape = points
-    .map((p) => `${xForDate(p.date).toFixed(1)},${y(p.price).toFixed(1)}`)
+  const shapePts = points
+    .map((p) => {
+      const idx = nearestIn(win, p.date);
+      return idx == null ? null : `${cx(idx).toFixed(1)},${y(p.price).toFixed(1)}`;
+    })
+    .filter((v): v is string => v != null)
     .join(" ");
 
   return (
-    <svg
-      viewBox={`0 0 ${W} ${H}`}
-      width="100%"
-      className="overflow-visible"
-      role="img"
-      aria-label="Grafico annotato del segnale"
-    >
-      {/* level lines */}
+    <svg viewBox={`0 0 ${W} ${H}`} width="100%" role="img" aria-label="Grafico annotato del segnale">
+      {/* price axis: gridlines + labels (left) */}
+      {yTicks.map((p, i) => {
+        const yy = y(p);
+        return (
+          <g key={`y-${i}`}>
+            <line x1={PAD_L} y1={yy} x2={W - PAD_R} y2={yy} stroke={GRID} strokeWidth={0.5} opacity={0.25} />
+            <text x={PAD_L - 5} y={yy + 3} textAnchor="end" fontSize={9} fill={GRID}>
+              {priceLabel(p)}
+            </text>
+          </g>
+        );
+      })}
+
+      {/* date axis: vertical guides + labels at the numbered markers */}
+      {chain.map((step, i) => {
+        if (chainNum[i] == null) return null;
+        const idx = nearestIn(win, step.date);
+        if (idx == null) return null;
+        const x = cx(idx);
+        return (
+          <g key={`x-${i}`}>
+            <line x1={x} y1={PAD_T} x2={x} y2={H - PAD_B} stroke={GRID} strokeWidth={0.5} strokeDasharray="2 3" opacity={0.45} />
+            <text x={x} y={H - PAD_B + 13} textAnchor="middle" fontSize={9} fill="#64748b">
+              {dm(step.date)}
+            </text>
+          </g>
+        );
+      })}
+
+      {/* annotation levels + labels (right) */}
       {levels.map((l, i) => {
-        const st = LEVEL_STYLE[l.kind] ?? { stroke: "#94a3b8" };
+        const st = LEVEL_STYLE[l.kind] ?? { stroke: GRID };
         const yy = y(l.price);
         return (
           <g key={`lvl-${i}`}>
-            <line
-              x1={PAD_X}
-              y1={yy}
-              x2={W - PAD_X}
-              y2={yy}
-              stroke={st.stroke}
-              strokeWidth={1}
-              strokeDasharray={st.dash}
-              opacity={0.8}
-            />
-            <text x={W - PAD_X} y={yy - 2} textAnchor="end" fontSize={9} fill={st.stroke}>
+            <line x1={PAD_L} y1={yy} x2={W - PAD_R} y2={yy} stroke={st.stroke} strokeWidth={1} strokeDasharray={st.dash} opacity={0.85} />
+            <text x={W - PAD_R} y={yy - 2} textAnchor="end" fontSize={9} fill={st.stroke}>
               {l.label}
             </text>
           </g>
         );
       })}
+
+      {/* candlesticks */}
+      {win.map((b, i) => {
+        const up = b.close >= b.open;
+        const col = up ? UP : DOWN;
+        const x = cx(i);
+        const bodyTop = Math.min(y(b.open), y(b.close));
+        const bodyH = Math.max(1, Math.abs(y(b.close) - y(b.open)));
+        return (
+          <g key={`c-${i}`}>
+            <line x1={x} y1={y(b.high)} x2={x} y2={y(b.low)} stroke={col} strokeWidth={1} />
+            <rect x={x - candleW / 2} y={bodyTop} width={candleW} height={bodyH} fill={col} />
+          </g>
+        );
+      })}
+
       {/* pattern shape */}
       {points.length >= 2 && (
-        <polyline
-          points={shape}
-          fill="none"
-          stroke="#a855f7"
-          strokeWidth={1.4}
-          strokeDasharray="3 2"
-          opacity={0.9}
-        />
+        <polyline points={shapePts} fill="none" stroke="#a855f7" strokeWidth={1.4} strokeDasharray="3 2" opacity={0.9} />
       )}
-      {/* price close line */}
-      <polyline
-        points={priceLine}
-        fill="none"
-        stroke={lineColor}
-        strokeWidth={1.5}
-        strokeLinejoin="round"
-      />
-      {/* numbered chain markers */}
+
+      {/* numbered markers (technical steps only), above the bar high */}
       {chain.map((step, i) => {
-        const c = closeAtDate(step.date);
-        if (c == null) return null;
-        const cx = xForDate(step.date);
-        const cy = y(c);
+        const num = chainNum[i];
+        if (num == null) return null;
+        const idx = nearestIn(win, step.date);
+        if (idx == null) return null;
+        const x = cx(idx);
+        const top = y(win[idx].high);
+        let my = top - 13;
+        if (my < PAD_T + 8) my = y(win[idx].low) + 15;
         return (
           <g key={`mk-${i}`}>
-            <circle cx={cx} cy={cy} r={7} fill="#0f172a" opacity={0.85} />
-            <text
-              x={cx}
-              y={cy + 3}
-              textAnchor="middle"
-              fontSize={9}
-              fill="#fff"
-              fontWeight="bold"
-            >
-              {i + 1}
+            <line x1={x} y1={my} x2={x} y2={top} stroke="#0f172a" strokeWidth={0.75} opacity={0.5} />
+            <circle cx={x} cy={my} r={8} fill="#0f172a" stroke="#fff" strokeWidth={1} />
+            <text x={x} y={my + 3} textAnchor="middle" fontSize={9} fill="#fff" fontWeight="bold">
+              {num}
             </text>
           </g>
         );
