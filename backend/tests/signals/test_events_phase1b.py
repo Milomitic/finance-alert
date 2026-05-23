@@ -1,7 +1,19 @@
 import pandas as pd
 from app.signals.events import (
-    extract_ema_cross, extract_rsi_divergence, extract_bollinger,
+    _pivots, extract_ema_cross, extract_rsi_divergence, extract_bollinger,
 )
+
+
+def test_pivots_finds_local_extrema_and_excludes_edges():
+    # index:        0  1  2  3  4  5  6
+    s = pd.Series([5, 3, 1, 4, 2, 6, 0])
+    # width=1 -> candidate indices are 1..5 (edges 0 and 6 can never be pivots).
+    # lows: i=2 (min of 3,1,4) and i=4 (min of 4,2,6).
+    assert _pivots(s, 1, kind="low") == [2, 4]
+    # highs: i=3 (max of 1,4,2) and i=5 (max of 2,6,0).
+    assert _pivots(s, 1, kind="high") == [3, 5]
+    edges = _pivots(s, 1, kind="low") + _pivots(s, 1, kind="high")
+    assert 0 not in edges and 6 not in edges
 
 
 def _df(rows):
