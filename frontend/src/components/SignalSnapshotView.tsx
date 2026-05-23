@@ -103,9 +103,9 @@ export function SignalSnapshotView({
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
-        {/* Left column: confidence + the factors that compose it */}
-        <div className="space-y-4">
+      <div className="grid grid-cols-1 md:grid-cols-[1.6fr_1fr] gap-x-6 gap-y-5">
+        {/* Right column (desktop): confidence + the factors that compose it */}
+        <div className="space-y-4 md:order-2">
           {confidence != null && (
             <div className="flex items-center gap-3">
               <span className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
@@ -143,9 +143,9 @@ export function SignalSnapshotView({
           )}
         </div>
 
-        {/* Right column: the event chain */}
+        {/* Left column (desktop): the event chain */}
         {chain.length > 0 && (
-          <div>
+          <div className="md:order-1">
             <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">
               Catena di eventi
             </div>
