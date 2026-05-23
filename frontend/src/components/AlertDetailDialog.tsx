@@ -134,7 +134,7 @@ export function AlertDetailDialog({ alert, onClose }: Props) {
 
   return (
     <Dialog open={alert !== null} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-lg p-0 overflow-hidden">
+      <DialogContent className="sm:max-w-2xl p-0 overflow-hidden">
         {/* HEADER — colored band carrying the rule-kind tone. The chip + ticker
             sit on a single baseline so the eye reads "this kind of alert / on
             this ticker" in one fixation. */}
@@ -188,7 +188,7 @@ export function AlertDetailDialog({ alert, onClose }: Props) {
           const delayed = isDelayedDetection(alert.triggered_at, alert.signal_date);
           const delta = daysBetween(alert.triggered_at, alert.signal_date);
           return (
-            <div className="px-5 grid grid-cols-3 gap-2">
+            <div className="px-5 grid grid-cols-3 gap-3">
               {/* Trigger price */}
               <div className="rounded-lg border border-border/60 bg-muted/30 dark:bg-muted/15 p-3">
                 <div className="flex items-center gap-1 text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
