@@ -33,16 +33,22 @@ class High52Momentum:
         proximity = last / hi_52
         if proximity < _NEAR_THRESHOLD or ctx.trend_sign <= 0:
             return None
+        # Confirmation (atomic-never-alone): the momentum must be corroborated
+        # by a fresh breakout or a volume spike, not bare proximity.
+        confirmed = any(e.type in ("breakout", "volume_spike") for e in events)
+        if not confirmed:
+            return None
         rng = hi_52 - lo_52
         momentum = clamp01((last - lo_52) / rng) if rng > 0 else 0.0
         factors = {
             "proximity": clamp01((proximity - _NEAR_THRESHOLD) / (1.0 - _NEAR_THRESHOLD)),
             "trend": 1.0 if ctx.trend_sign > 0 else 0.0,
             "momentum": momentum,
+            "confirmation": 1.0,
         }
-        # `trend` is a gate condition (detect returns None when trend_sign<=0),
-        # so it is always 1.0 here - kept in `factors` as displayed evidence
-        # but excluded from the score weights to avoid inflating the floor.
+        # `trend` and `confirmation` are gate conditions - kept in `factors` as
+        # displayed evidence but excluded from score weights to avoid inflating
+        # the floor.
         conf = score(factors, {"proximity": 1.0, "momentum": 0.8})
         last_date = str(ohlcv["date"].iloc[-1])[:10]
         chain = [
@@ -50,6 +56,8 @@ class High52Momentum:
              "detail": f"prezzo a {proximity * 100:.1f}% del massimo a 52w"},
             {"date": last_date, "label": "Trend rialzista",
              "detail": "EMA lunga in salita: momentum confermato"},
+            {"date": last_date, "label": "Conferma breakout/volume",
+             "detail": "momentum corroborato da rottura o spike di volume"},
         ]
         invalidation = {"level": lo_52, "reason": "rottura del minimo a 52 settimane"}
         return SignalMatch(name=self.name, tone="bull", confidence=conf,
