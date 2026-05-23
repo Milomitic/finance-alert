@@ -1,5 +1,6 @@
 """Active signal detectors for the current phase."""
 from app.signals.detectors.adx_confirmation import AdxConfirmation
+from app.signals.detectors.candle_reversal import CandleReversal
 from app.signals.detectors.gap_and_go import GapAndGo
 from app.signals.detectors.high52_momentum import High52Momentum
 from app.signals.detectors.macd_divergence import MacdDivergence
@@ -23,4 +24,5 @@ DETECTORS = [
     MacdDivergence(),
     GapAndGo(),
     AdxConfirmation(),
+    CandleReversal(),
 ]
