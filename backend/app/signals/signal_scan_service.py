@@ -33,7 +33,7 @@ def evaluate_signals(db: Session, stock: Stock, ohlcv: pd.DataFrame) -> int:
     last_close = float(ohlcv["close"].iloc[-1])
     last_bar_date = _to_date(str(ohlcv["date"].iloc[-1]))
     added = 0
-    for m in detect_signals(ohlcv):
+    for m in detect_signals(ohlcv, db=db, stock=stock):
         if m.confidence < settings.signal_min_confidence:
             continue
         sig_date = _to_date(m.signal_date)

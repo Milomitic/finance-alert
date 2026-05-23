@@ -7,14 +7,14 @@ from loguru import logger
 from app.signals.context import build_context
 from app.signals.detectors.base import SignalMatch
 from app.signals.detectors.registry import DETECTORS
-from app.signals.events import extract_events
+from app.signals.events_fundamental import gather_events
 
 
-def detect_signals(ohlcv: pd.DataFrame) -> list[SignalMatch]:
+def detect_signals(ohlcv: pd.DataFrame, *, db=None, stock=None) -> list[SignalMatch]:
     if ohlcv is None or len(ohlcv) < 2:
         return []
     try:
-        events = extract_events(ohlcv)
+        events = gather_events(ohlcv, db=db, stock=stock)
         ctx = build_context(ohlcv)
     except Exception as e:  # noqa: BLE001
         logger.warning(f"[signals] feature build failed: {e}")
