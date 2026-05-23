@@ -3,6 +3,7 @@ import { BadgeDollarSign, BookOpen, CalendarClock, ShieldAlert, Users } from "lu
 import type { SignalSnapshot } from "@/api/types";
 import { TONE_TEXT, type AlertTone } from "@/lib/alertMeta";
 import { cn } from "@/lib/utils";
+import { concludeSignal, glossForStep } from "@/lib/signalInterpretation";
 
 /* Source badge configuration for non-technical hybrid chain steps. */
 const SOURCE_BADGE: Record<
@@ -152,6 +153,7 @@ export function SignalSnapshotView({
               {chain.map((step, i) => {
                 const badge = step.source ? SOURCE_BADGE[step.source] : null;
                 const num = step.source ? null : (techCounter += 1);
+                const gloss = glossForStep(step.label);
                 return (
                   <li key={`${step.date}-${i}`} className="ml-4 relative">
                     {num != null ? (
@@ -176,11 +178,36 @@ export function SignalSnapshotView({
                       )}
                     </div>
                     {step.detail && <div className="text-xs text-muted-foreground">{step.detail}</div>}
-                    <div className="text-[11px] text-muted-foreground/70 tabular-nums">{step.date}</div>
+                    {gloss && (
+                      <div className="text-[11px] text-sky-700/80 dark:text-sky-300/80 italic mt-0.5">{gloss}</div>
+                    )}
+                    <div className="text-[11px] text-muted-foreground/70 tabular-nums mt-0.5">{step.date}</div>
                   </li>
                 );
               })}
             </ol>
+            {(() => {
+              const c = concludeSignal({
+                tone: tone === "bullish" ? "bull" : tone === "bearish" ? "bear" : "neutral",
+                confidence,
+                invalidationLevel: inv && typeof inv.level === "number" ? inv.level : null,
+              });
+              return (
+                <div
+                  className={cn(
+                    "mt-3 rounded-lg border p-2.5 text-xs",
+                    tone === "bullish"
+                      ? "border-emerald-300/50 bg-emerald-50/40 dark:bg-emerald-950/15"
+                      : tone === "bearish"
+                        ? "border-rose-300/50 bg-rose-50/40 dark:bg-rose-950/15"
+                        : "border-border/60 bg-muted/30",
+                  )}
+                >
+                  <div className={cn("font-semibold mb-0.5", TONE_TEXT[tone])}>{c.headline}</div>
+                  <div className="text-muted-foreground leading-snug">{c.detail}</div>
+                </div>
+              );
+            })()}
           </div>
         )}
       </div>
