@@ -4,6 +4,7 @@ from app.signals.detectors.oversold_reversal import OversoldReversal
 from app.signals.detectors.rsi_divergence import RsiDivergence
 from app.signals.detectors.squeeze_expansion import SqueezeExpansion
 from app.signals.detectors.sr_flip import SRFlip
+from app.signals.detectors.structure_break import StructureBreak
 from app.signals.detectors.trend_pullback import TrendPullback
 from app.signals.detectors.volume_breakout import VolumeBreakout
 
@@ -15,4 +16,5 @@ DETECTORS = [
     High52Momentum(),
     OversoldReversal(),
     SRFlip(),
+    StructureBreak(),
 ]
