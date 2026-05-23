@@ -14,6 +14,7 @@ import type { Alert, SignalChainStep, SignalSnapshot } from "@/api/types";
 import { AlertKindChip, AlertToneChip } from "@/components/AlertChips";
 import { SignalChartSvg } from "@/components/SignalChartSvg";
 import { SignalSnapshotView } from "@/components/SignalSnapshotView";
+import { PlaybookView } from "@/components/PlaybookView";
 import {
   Dialog,
   DialogContent,
@@ -32,6 +33,7 @@ import {
   type AlertTone,
 } from "@/lib/alertMeta";
 import { cn } from "@/lib/utils";
+import { buildPlaybook } from "@/lib/tradePlaybook";
 
 interface Props {
   alert: Alert | null;
@@ -318,6 +320,24 @@ export function AlertDetailDialog({ alert, onClose }: Props) {
             </pre>
           )}
         </div>
+
+        {isSignalKind(alert.rule_kind) && (() => {
+          const pb = buildPlaybook(alert.snapshot ?? {}, alert.trigger_price, alert.rule_kind ?? null);
+          return (
+            <div className="px-5 pt-2 pb-4">
+              <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">
+                Piano operativo
+              </div>
+              {pb ? (
+                <PlaybookView playbook={pb} />
+              ) : (
+                <div className="rounded-lg border border-dashed border-border/60 p-3 text-xs text-muted-foreground italic text-center">
+                  Piano non disponibile: manca un livello di stop strutturale per questo segnale.
+                </div>
+              )}
+            </div>
+          );
+        })()}
       </DialogContent>
     </Dialog>
   );
