@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 
 import type { Alert } from "@/api/types";
 import { AlertKindChip, AlertToneCell } from "@/components/AlertChips";
+import { StockLogo } from "@/components/dashboard/StockLogo";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Table,
@@ -15,10 +16,11 @@ import {
 import { TableSearchInput } from "@/components/ui/table-search-input";
 import {
   daysBetween,
-  formatDateTime,
+  formatDayMonth,
   formatShortDate,
   isDelayedDetection,
 } from "@/lib/alertDates";
+import { cn } from "@/lib/utils";
 
 interface Props {
   alerts: Alert[];
@@ -60,7 +62,7 @@ export function AlertsTable({
   // timestamp) column adds noise — Data segnale alone is the relevant
   // "when did this fire" date. colSpan tracks the remaining column
   // count.
-  const colSpan = embedded ? 4 : 9;
+  const colSpan = embedded ? 4 : 8;
 
   // Per user spec: header cells at 1rem (text-base), body rows at
   // 0.875rem (text-sm) — uniform across all cells. Table root sits at
@@ -87,31 +89,31 @@ export function AlertsTable({
             </TableHead>
           )}
           {!embedded && (
-            <>
-              {/* Ticker column: sortable label is just text (this table
-                  doesn't support sorting) + the inline ticker/name
-                  search input. */}
-              <TableHead className="text-base">
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="shrink-0">Ticker</span>
-                  <TableSearchInput
-                    value={q}
-                    onChange={onQueryChange}
-                    placeholder="cerca ticker o nome…"
-                    ariaLabel="Filtra per ticker o nome"
-                    className="flex-1 max-w-[200px]"
-                  />
-                </div>
-              </TableHead>
-              <TableHead className="text-base">Nome</TableHead>
-            </>
+            /* Titolo column: logo + ticker (top) / company name (below),
+               like the dashboard cards. Holds the inline ticker/name search. */
+            <TableHead className="text-base">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="shrink-0">Titolo</span>
+                <TableSearchInput
+                  value={q}
+                  onChange={onQueryChange}
+                  placeholder="cerca ticker o nome…"
+                  ariaLabel="Filtra per ticker o nome"
+                  className="flex-1 max-w-[200px]"
+                />
+              </div>
+            </TableHead>
           )}
           <TableHead className="text-base">Regola</TableHead>
           <TableHead className="text-base" title="Direzione semantica dell'alert (rialzista / ribassista / neutra)">
             Tono
           </TableHead>
           <TableHead className="text-base text-right">Prezzo</TableHead>
-          {!embedded && <TableHead className="text-base">Archivio</TableHead>}
+          {!embedded && (
+            <TableHead className="text-base" title="Confidenza del segnale (0-100)">
+              Confidenza
+            </TableHead>
+          )}
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -177,35 +179,44 @@ export function AlertsTable({
                       {delayed && (
                         <Clock className="h-3 w-3 text-amber-600 dark:text-amber-400 shrink-0" />
                       )}
-                      {formatDateTime(a.triggered_at)}
+                      {formatDayMonth(a.triggered_at)}
                     </span>
                   );
                 })()}
               </TableCell>
             )}
             {!embedded && (
-              <>
-                {/* Ticker cell: stopPropagation so the click navigates to
-                    the stock detail page instead of bubbling up to the
-                    row's onClick (which opens the alert popup). */}
-                <TableCell className="font-semibold">
-                  {a.ticker ? (
-                    <Link
-                      to={`/stocks/${encodeURIComponent(a.ticker)}`}
-                      onClick={(e) => e.stopPropagation()}
-                      className="hover:underline"
-                      title={`Vai al dettaglio di ${a.ticker}`}
-                    >
-                      {a.ticker}
-                    </Link>
-                  ) : (
-                    "—"
-                  )}
-                </TableCell>
-                <TableCell className="text-muted-foreground truncate max-w-[240px]" title={a.name ?? ""}>
-                  {a.name ?? "—"}
-                </TableCell>
-              </>
+              /* Titolo cell: logo + ticker (link, top) over company name
+                 (below), dashboard-card style. stopPropagation on the link so
+                 it navigates instead of bubbling to the row (which opens the
+                 alert popup). */
+              <TableCell>
+                <div className="flex items-center gap-2 min-w-0">
+                  <StockLogo ticker={a.ticker ?? ""} size="xs" />
+                  <div className="min-w-0">
+                    {a.ticker ? (
+                      <Link
+                        to={`/stocks/${encodeURIComponent(a.ticker)}`}
+                        onClick={(e) => e.stopPropagation()}
+                        className="font-semibold hover:underline block leading-tight"
+                        title={`Vai al dettaglio di ${a.ticker}`}
+                      >
+                        {a.ticker}
+                      </Link>
+                    ) : (
+                      <span className="font-semibold">—</span>
+                    )}
+                    {a.name && (
+                      <div
+                        className="text-xs text-muted-foreground truncate max-w-[200px] leading-tight"
+                        title={a.name}
+                      >
+                        {a.name}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </TableCell>
             )}
             <TableCell>
               <AlertKindChip alert={a} />
@@ -218,7 +229,36 @@ export function AlertsTable({
             </TableCell>
             {!embedded && (
               <TableCell>
-                {a.archived_at ? "🗄 Archiviato" : "—"}
+                {(() => {
+                  // Signal alerts carry confidence (0-100) in the snapshot.
+                  // Show it as a percentage + a reliability bar coloured by
+                  // value (rose < 50, amber 50-69, emerald >= 70) so the
+                  // table reads conviction at a glance. Non-signal/price
+                  // alerts have no confidence -> em dash.
+                  const conf = (a.snapshot as Record<string, unknown> | undefined)?.confidence;
+                  if (typeof conf !== "number") {
+                    return <span className="text-muted-foreground">—</span>;
+                  }
+                  const pct = Math.max(0, Math.min(100, Math.round(conf)));
+                  const bar =
+                    pct >= 70 ? "bg-emerald-500" : pct >= 50 ? "bg-amber-500" : "bg-rose-500";
+                  const txt =
+                    pct >= 70
+                      ? "text-emerald-600 dark:text-emerald-400"
+                      : pct >= 50
+                        ? "text-amber-600 dark:text-amber-400"
+                        : "text-rose-600 dark:text-rose-400";
+                  return (
+                    <div className="flex items-center gap-2" title={`Confidenza ${pct}%`}>
+                      <span className={cn("text-xs font-semibold tabular-nums w-9 text-right", txt)}>
+                        {pct}%
+                      </span>
+                      <div className="h-1.5 w-16 rounded-full bg-muted overflow-hidden">
+                        <div className={cn("h-full rounded-full", bar)} style={{ width: `${pct}%` }} />
+                      </div>
+                    </div>
+                  );
+                })()}
               </TableCell>
             )}
           </TableRow>
