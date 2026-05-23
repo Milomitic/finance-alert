@@ -5,7 +5,6 @@ import type { Alert } from "@/api/types";
 import { AlertDetailDialog } from "@/components/AlertDetailDialog";
 import { AlertFilters } from "@/components/AlertFilters";
 import { AlertsTable } from "@/components/AlertsTable";
-import { RulesPanel } from "@/components/rules/RulesPanel";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useAlertsList } from "@/hooks/useAlerts";
@@ -13,26 +12,13 @@ import { useBulkAlerts } from "@/hooks/useAlertMutations";
 
 const PAGE_SIZE = 50;
 
-/* ─── AlertsPage layout (V3) ─────────────────────────────────────────────
+/* ─── AlertsPage layout ─────────────────────────────────────────────────
  *
- * Top: title + count + "Esporta CSV"
+ * Top: title + count
+ * Body: AlertFilters + AlertsTable + pagination + detail dialog
  *
- * Body: 2-column grid on lg+
- *   ┌─────────────────────────┐  ┌──────────────────┐
- *   │  AlertFilters           │  │  RulesPanel      │
- *   │  (left, fluid 1fr)      │  │  (right, 480px)  │
- *   └─────────────────────────┘  └──────────────────┘
- *
- * What CHANGED from V2:
- *   - Manual scan trigger + ScanStatusCard moved to the dashboard
- *     (HeroStrip → ScanTriggerCard); progress now lives in the persistent
- *     ScanProgressToast (mounted in Layout, bottom-right).
- *   - "Invia digest" button moved to ScanTriggerCard alongside the scan
- *     trigger (both are admin-style on-demand jobs).
- *   - The right-column slot is repurposed: was ScanStatusCard, now RulesPanel
- *     (the standalone /rules page is gone — rules + alerts compose better
- *     on the same screen, since you tune rules based on the alerts they
- *     produce).
+ * Rule management UI removed: the rule engine was deleted backend-side.
+ * Alerts are now signals-only.
  */
 export default function AlertsPage() {
   const [filters, setFilters] = useState<AlertListParams>({
@@ -77,13 +63,7 @@ export default function AlertsPage() {
         </p>
       </div>
 
-      {/* Filters (left) + Rules (right). Right-column 480px is the same
-          size the old ScanStatusCard occupied — the rules panel inherits
-          that slot wholesale. Stacks vertically on narrow viewports. */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_480px] gap-3 items-start">
-        <AlertFilters value={filters} onChange={(v) => { setPage(0); setFilters(v); }} />
-        <RulesPanel />
-      </div>
+      <AlertFilters value={filters} onChange={(v) => { setPage(0); setFilters(v); }} />
 
       {selectedIds.size > 0 && (
         <Card>

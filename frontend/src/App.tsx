@@ -47,9 +47,7 @@ export default function App() {
         <Route path="/institutionals" element={<InstitutionalsPage />} />
         <Route path="/institutionals/:slug" element={<InstitutionalDetailPage />} />
         <Route path="/settings" element={<SettingsPage />} />
-        {/* /rules removed: rules now live in the AlertsPage right sidebar
-            (RulesPanel) since they're tightly coupled with the alerts they
-            produce. */}
+        {/* /rules removed: rule engine deleted backend-side; alerts are signals-only. */}
       </Route>
       <Route path="*" element={<div className="p-8">404</div>} />
     </Routes>

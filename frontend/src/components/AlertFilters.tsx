@@ -1,7 +1,6 @@
 import { Filter, Search, X } from "lucide-react";
 
 import type { AlertListParams } from "@/api/alerts";
-import type { RuleKind } from "@/api/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -13,35 +12,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { SectionTitle } from "@/components/ui/section-title";
-import { TONE_BG, getAlertKindMeta } from "@/lib/alertMeta";
 import { cn } from "@/lib/utils";
 
 interface Props {
   value: AlertListParams;
   onChange: (next: AlertListParams) => void;
 }
-
-/* The full rule-kind catalog as Select options. Labels + icons come from
- * the shared alertMeta helper so adding a new rule kind there propagates
- * here automatically (no second list to keep in sync). */
-const RULE_KINDS: RuleKind[] = [
-  "rsi_oversold",
-  "rsi_overbought",
-  "golden_cross",
-  "death_cross",
-  "volume_spike",
-  "breakout",
-  "macd_bullish_cross",
-  "macd_bearish_cross",
-  "bollinger_breakout",
-  // Desk/trader signals (replaced bollinger_squeeze)
-  "adx_bullish_trend",
-  "adx_bearish_trend",
-  "gap_up",
-  "gap_down",
-  "mean_reversion_long",
-  "mean_reversion_short",
-];
 
 // Archive axis only — read/unread was removed from the UI in a prior pass.
 const STATUS_OPTIONS: { value: string; label: string }[] = [
@@ -107,10 +83,7 @@ export function AlertFilters({ value, onChange }: Props) {
   const activeCount =
     (value.ticker ? 1 : 0) +
     (value.q ? 1 : 0) +
-    (value.rule_kind ? 1 : 0) +
     (status === "archived" ? 1 : 0);
-
-  const ruleMeta = value.rule_kind ? getAlertKindMeta(value.rule_kind) : null;
 
   return (
     <Card>
@@ -135,65 +108,25 @@ export function AlertFilters({ value, onChange }: Props) {
           }
         />
 
-        {/* Two-column responsive grid (was three before the Ticker
-            input moved into the table header). `items-end` aligns the
-            inputs (which have different label heights) along their
-            bottom edge. */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
-          <div>
-            <Label className="text-xs uppercase tracking-wider text-muted-foreground">
-              Regola
-            </Label>
-            <Select
-              value={value.rule_kind ?? "__all__"}
-              onValueChange={(v) =>
-                onChange({
-                  ...value,
-                  rule_kind: v === "__all__" ? undefined : (v as RuleKind),
-                })
-              }
-            >
-              <SelectTrigger className="mt-1">
-                <SelectValue placeholder="Tutte le regole" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__all__">Tutte le regole</SelectItem>
-                {RULE_KINDS.map((kind) => {
-                  const m = getAlertKindMeta(kind);
-                  const Icon = m.icon;
-                  return (
-                    <SelectItem key={kind} value={kind}>
-                      <span className="inline-flex items-center gap-2">
-                        <Icon className="h-3.5 w-3.5" />
-                        {m.label}
-                      </span>
-                    </SelectItem>
-                  );
-                })}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div>
-            <Label className="text-xs uppercase tracking-wider text-muted-foreground">
-              Archivio
-            </Label>
-            <Select
-              value={status}
-              onValueChange={(v) => onChange({ ...value, ...statusToParams(v) })}
-            >
-              <SelectTrigger className="mt-1">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {STATUS_OPTIONS.map((o) => (
-                  <SelectItem key={o.value} value={o.value}>
-                    {o.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+        <div>
+          <Label className="text-xs uppercase tracking-wider text-muted-foreground">
+            Archivio
+          </Label>
+          <Select
+            value={status}
+            onValueChange={(v) => onChange({ ...value, ...statusToParams(v) })}
+          >
+            <SelectTrigger className="mt-1">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {STATUS_OPTIONS.map((o) => (
+                <SelectItem key={o.value} value={o.value}>
+                  {o.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         {/* Active-filter chip row — shows what's applied so the user can
@@ -224,18 +157,6 @@ export function AlertFilters({ value, onChange }: Props) {
                 }
                 onClear={() => onChange({ ...value, q: undefined })}
                 className="bg-muted text-foreground border-border"
-              />
-            )}
-            {ruleMeta && (
-              <FilterChip
-                label={
-                  <>
-                    <ruleMeta.icon className="h-3 w-3" />
-                    {ruleMeta.label}
-                  </>
-                }
-                onClear={() => onChange({ ...value, rule_kind: undefined })}
-                className={cn("border-transparent", TONE_BG[ruleMeta.tone])}
               />
             )}
             {status === "archived" && (

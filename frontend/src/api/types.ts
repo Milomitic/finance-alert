@@ -59,82 +59,9 @@ export interface CatalogStatus {
   indices: IndexStatus[];
 }
 
-export type RuleKind =
-  | "rsi_oversold"
-  | "rsi_overbought"
-  | "golden_cross"
-  | "death_cross"
-  | "volume_spike"
-  | "breakout"
-  | "macd_bullish_cross"
-  | "macd_bearish_cross"
-  | "bollinger_breakout"
-  // Desk/trader signals introduced when bollinger_squeeze was retired
-  | "adx_bullish_trend"
-  | "adx_bearish_trend"
-  | "gap_up"
-  | "gap_down"
-  | "mean_reversion_long"
-  | "mean_reversion_short"
-  | "composite";
-
 /** Signal-engine alerts use the "signal:<detector-name>" convention for
  *  rule_kind (e.g. "signal:volume_breakout"); they have rule_id === null. */
 export type SignalKind = `signal:${string}`;
-
-export type RuleExpressionAtomic = {
-  op: "atomic";
-  kind: string;
-  params: Record<string, unknown>;
-};
-
-export type RuleExpressionComposite = {
-  op: "and" | "or";
-  children: RuleExpressionNode[];
-};
-
-export type RuleExpressionNode = RuleExpressionAtomic | RuleExpressionComposite;
-
-export interface RuleCatalogEntry {
-  kind: string;
-  label: string;
-  description: string;
-  default_params: Record<string, unknown>;
-}
-
-export interface RulePreviewSnapshotAtomic {
-  op: "atomic";
-  kind: string;
-  params: Record<string, unknown>;
-  matched?: boolean;
-  snapshot?: Record<string, unknown>;
-  error?: string;
-}
-
-export interface RulePreviewSnapshotComposite {
-  op: "and" | "or";
-  matched: boolean;
-  children: RulePreviewSnapshotNode[];
-}
-
-export type RulePreviewSnapshotNode =
-  | RulePreviewSnapshotAtomic
-  | RulePreviewSnapshotComposite;
-
-export interface RulePreviewResponse {
-  matched: boolean;
-  snapshot: RulePreviewSnapshotNode;
-}
-
-export interface Rule {
-  id: number;
-  kind: RuleKind;
-  params: Record<string, unknown>;
-  enabled: boolean;
-  expression: RuleExpressionNode | null;
-  created_at: string;
-  updated_at: string;
-}
 
 export interface Alert {
   id: number;
@@ -145,7 +72,7 @@ export interface Alert {
    *  a signal whose underlying bar closed Friday. NULL only for legacy
    *  rows from before this column existed. */
   signal_date?: string | null;
-  rule_kind: RuleKind | SignalKind | null;
+  rule_kind: SignalKind | string | null;
   stock_id: number;
   ticker: string | null;
   name: string | null;
