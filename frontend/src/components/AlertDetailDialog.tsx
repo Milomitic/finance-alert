@@ -276,9 +276,11 @@ export function AlertDetailDialog({ alert, onClose }: Props) {
         )}
 
         <div className="px-5 pt-4 pb-1">
-          <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">
-            {isSignalKind(alert.rule_kind) ? "Dettaglio segnale" : "Snapshot del trigger"}
-          </div>
+          {!isSignalKind(alert.rule_kind) && (
+            <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">
+              Snapshot del trigger
+            </div>
+          )}
           {isSignalKind(alert.rule_kind) ? (
             <SignalSnapshotView snapshot={alert.snapshot ?? {}} showInvalidation={false} />
           ) : hasResolvedRows ? (

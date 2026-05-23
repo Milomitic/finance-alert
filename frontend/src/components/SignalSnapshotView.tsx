@@ -81,7 +81,6 @@ export function SignalSnapshotView({
   const isHybrid = chain.some(
     (step) => typeof step.source === "string" && step.source in SOURCE_BADGE,
   );
-  const hasTechnical = chain.some((step) => !step.source);
   const factors =
     s.factors && typeof s.factors === "object" ? (s.factors as Record<string, number>) : {};
   const sources = Array.isArray(s.sources) ? s.sources : [];
@@ -103,88 +102,88 @@ export function SignalSnapshotView({
         </div>
       )}
 
-      {confidence != null && (
-        <div className="flex items-center gap-3">
-          <span className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
-            Confidenza
-          </span>
-          <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
-            <div className={cn("h-full rounded-full", barColor)} style={{ width: `${confidence}%` }} />
-          </div>
-          <span className={cn("text-sm font-bold tabular-nums", TONE_TEXT[tone])}>{confidence}%</span>
-        </div>
-      )}
-
-      {chain.length > 0 && (
-        <div>
-          <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold mb-1">
-            Catena di eventi
-          </div>
-          {hasTechnical && (
-            <div className="text-[11px] text-muted-foreground/80 italic mb-2">
-              I numeri corrispondono ai punti sul grafico. Gli eventi con badge
-              (earnings / analista / insider) sono contesto non riportato sul grafico.
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
+        {/* Left column: confidence + the factors that compose it */}
+        <div className="space-y-4">
+          {confidence != null && (
+            <div className="flex items-center gap-3">
+              <span className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
+                Confidenza
+              </span>
+              <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
+                <div className={cn("h-full rounded-full", barColor)} style={{ width: `${confidence}%` }} />
+              </div>
+              <span className={cn("text-sm font-bold tabular-nums", TONE_TEXT[tone])}>{confidence}%</span>
             </div>
           )}
-          <ol className="relative border-l border-border/60 ml-2.5 space-y-3">
-            {chain.map((step, i) => {
-              const badge = step.source ? SOURCE_BADGE[step.source] : null;
-              const num = step.source ? null : (techCounter += 1);
-              return (
-                <li key={`${step.date}-${i}`} className="ml-4 relative">
-                  {num != null ? (
-                    <span className="absolute -left-[1.72rem] top-0 h-5 w-5 rounded-full bg-slate-900 dark:bg-slate-700 text-white text-[10px] font-bold flex items-center justify-center border-2 border-background">
-                      {num}
-                    </span>
-                  ) : (
-                    <span className="absolute -left-[1.39rem] mt-1 h-3 w-3 rounded-full bg-muted-foreground/50 border-2 border-background" />
-                  )}
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="text-sm font-semibold">{step.label}</span>
-                    {badge && (
-                      <span
-                        className={cn(
-                          "inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none",
-                          badge.cls,
-                        )}
-                      >
-                        <badge.Icon className="h-2.5 w-2.5" />
-                        {badge.label}
-                      </span>
-                    )}
-                  </div>
-                  {step.detail && <div className="text-xs text-muted-foreground">{step.detail}</div>}
-                  <div className="text-[11px] text-muted-foreground/70 tabular-nums">{step.date}</div>
-                </li>
-              );
-            })}
-          </ol>
-        </div>
-      )}
 
-      {Object.keys(factors).length > 0 && (
-        <div>
-          <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">
-            Fattori di confidenza
-          </div>
-          <div className="space-y-1.5">
-            {Object.entries(factors).map(([k, v]) => {
-              const pct = Math.round(Math.max(0, Math.min(1, typeof v === "number" ? v : 0)) * 100);
-              return (
-                <div key={k} className="flex items-center gap-2">
-                  <span className="w-40 text-xs text-foreground/70 shrink-0 truncate" title={FACTOR_LABELS[k] ?? k}>
-                    {FACTOR_LABELS[k] ?? k}
-                  </span>
-                  <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
-                    <div className="h-full bg-sky-500/70 rounded-full" style={{ width: `${pct}%` }} />
-                  </div>
-                  <span className="w-9 text-right text-[11px] tabular-nums text-muted-foreground">{pct}%</span>
-                </div>
-              );
-            })}
-          </div>
+          {Object.keys(factors).length > 0 && (
+            <div>
+              <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">
+                Fattori di confidenza
+              </div>
+              <div className="space-y-1.5">
+                {Object.entries(factors).map(([k, v]) => {
+                  const pct = Math.round(Math.max(0, Math.min(1, typeof v === "number" ? v : 0)) * 100);
+                  return (
+                    <div key={k} className="flex items-center gap-2">
+                      <span className="w-36 text-xs text-foreground/70 shrink-0 truncate" title={FACTOR_LABELS[k] ?? k}>
+                        {FACTOR_LABELS[k] ?? k}
+                      </span>
+                      <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
+                        <div className="h-full bg-sky-500/70 rounded-full" style={{ width: `${pct}%` }} />
+                      </div>
+                      <span className="w-9 text-right text-[11px] tabular-nums text-muted-foreground">{pct}%</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
-      )}
+
+        {/* Right column: the event chain */}
+        {chain.length > 0 && (
+          <div>
+            <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">
+              Catena di eventi
+            </div>
+            <ol className="relative border-l border-border/60 ml-2.5 space-y-3">
+              {chain.map((step, i) => {
+                const badge = step.source ? SOURCE_BADGE[step.source] : null;
+                const num = step.source ? null : (techCounter += 1);
+                return (
+                  <li key={`${step.date}-${i}`} className="ml-4 relative">
+                    {num != null ? (
+                      <span className="absolute -left-[1.72rem] top-0 h-5 w-5 rounded-full bg-slate-900 dark:bg-slate-700 text-white text-[10px] font-bold flex items-center justify-center border-2 border-background">
+                        {num}
+                      </span>
+                    ) : (
+                      <span className="absolute -left-[1.39rem] mt-1 h-3 w-3 rounded-full bg-muted-foreground/50 border-2 border-background" />
+                    )}
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-sm font-semibold">{step.label}</span>
+                      {badge && (
+                        <span
+                          className={cn(
+                            "inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none",
+                            badge.cls,
+                          )}
+                        >
+                          <badge.Icon className="h-2.5 w-2.5" />
+                          {badge.label}
+                        </span>
+                      )}
+                    </div>
+                    {step.detail && <div className="text-xs text-muted-foreground">{step.detail}</div>}
+                    <div className="text-[11px] text-muted-foreground/70 tabular-nums">{step.date}</div>
+                  </li>
+                );
+              })}
+            </ol>
+          </div>
+        )}
+      </div>
 
       {showInvalidation && inv && (inv.level != null || inv.reason) && (
         <div className="flex items-start gap-2 rounded-lg border border-amber-300/60 bg-amber-50/50 dark:bg-amber-950/20 p-2.5">
