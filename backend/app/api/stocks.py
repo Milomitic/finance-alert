@@ -95,6 +95,12 @@ def search(
                 score=StockScoreRefOut(
                     composite=item.score.composite,
                     risk_tier=item.score.risk_tier,
+                    profitability=item.score.profitability,
+                    sustainability=item.score.sustainability,
+                    growth=item.score.growth,
+                    value=item.score.value,
+                    momentum=item.score.momentum,
+                    sentiment=item.score.sentiment,
                 ),
             )
             for item in page.items

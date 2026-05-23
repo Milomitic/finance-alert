@@ -1,7 +1,9 @@
 """Tests for stock search service."""
+from datetime import datetime, timezone
+
 from sqlalchemy.orm import Session
 
-from app.models import Index, Stock, StockIndex
+from app.models import Index, Stock, StockIndex, StockScore
 from app.services.stock_service import StockFilter, get_filter_options, search_stocks
 
 
@@ -108,3 +110,31 @@ def test_sort_unknown_column_falls_back_to_ticker(db: Session) -> None:
     _seed(db)
     page = search_stocks(db, StockFilter(sort_by="nope", sort_dir="asc"))
     assert [s.stock.ticker for s in page.items] == ["AAPL", "ENI.MI", "MSFT"]
+
+
+def _seed_scored(db: Session, ticker: str, **pillars) -> None:
+    s = Stock(ticker=ticker, exchange="NASDAQ", name=ticker, country="US")
+    db.add(s)
+    db.flush()
+    db.add(StockScore(
+        stock_id=s.id,
+        composite=pillars.get("composite", 50.0),
+        profitability=pillars.get("profitability"),
+        sustainability=pillars.get("sustainability"),
+        growth=pillars.get("growth"),
+        value=pillars.get("value"),
+        momentum=pillars.get("momentum"),
+        sentiment=pillars.get("sentiment"),
+        risk_tier="moderate",
+        computed_at=datetime.now(timezone.utc),
+        breakdown="{}",
+    ))
+    db.commit()
+
+
+def test_search_returns_pillars_and_sorts_by_pillar(db: Session) -> None:
+    _seed_scored(db, "AAA", momentum=90.0, value=10.0)
+    _seed_scored(db, "BBB", momentum=10.0, value=90.0)
+    page = search_stocks(db, StockFilter(sort_by="momentum", sort_dir="desc"))
+    assert [i.stock.ticker for i in page.items[:2]] == ["AAA", "BBB"]
+    assert page.items[0].score.momentum == 90.0

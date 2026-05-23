@@ -23,6 +23,12 @@ class StockScoreRefOut(BaseModel):
     Mirrors `StockScoreRef` in the service layer."""
     composite: float | None = None
     risk_tier: Literal["conservative", "moderate", "aggressive"] | None = None
+    profitability: float | None = None
+    sustainability: float | None = None
+    growth: float | None = None
+    value: float | None = None
+    momentum: float | None = None
+    sentiment: float | None = None
 
 
 class StockSearchItemOut(BaseModel):

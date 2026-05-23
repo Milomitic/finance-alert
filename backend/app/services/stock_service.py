@@ -19,6 +19,12 @@ SORTABLE_COLUMNS: dict[str, object] = {
     "industry": Stock.industry,
     "exchange": Stock.exchange,
     "composite": StockScore.composite,
+    "profitability": StockScore.profitability,
+    "sustainability": StockScore.sustainability,
+    "growth": StockScore.growth,
+    "value": StockScore.value,
+    "momentum": StockScore.momentum,
+    "sentiment": StockScore.sentiment,
 }
 
 
@@ -47,6 +53,12 @@ class StockScoreRef:
     when the stock hasn't been scored yet."""
     composite: float | None = None
     risk_tier: str | None = None
+    profitability: float | None = None
+    sustainability: float | None = None
+    growth: float | None = None
+    value: float | None = None
+    momentum: float | None = None
+    sentiment: float | None = None
 
 
 @dataclass
@@ -143,10 +155,18 @@ def search_stocks(db: Session, f: StockFilter) -> StockPage:
     min_score, which require a non-null score by definition.
     """
     limit = max(1, min(f.limit, 500))
-    # SELECT Stock, StockScore.composite, StockScore.risk_tier
-    base = select(Stock, StockScore.composite, StockScore.risk_tier).outerjoin(
-        StockScore, StockScore.stock_id == Stock.id
-    )
+    # SELECT Stock + all score columns needed for the screener row
+    base = select(
+        Stock,
+        StockScore.composite,
+        StockScore.risk_tier,
+        StockScore.profitability,
+        StockScore.sustainability,
+        StockScore.growth,
+        StockScore.value,
+        StockScore.momentum,
+        StockScore.sentiment,
+    ).outerjoin(StockScore, StockScore.stock_id == Stock.id)
     base = _apply_filter(base, f)
 
     # COUNT must be over the same FROM clause (with the JOIN + filters
@@ -160,7 +180,16 @@ def search_stocks(db: Session, f: StockFilter) -> StockPage:
     items = [
         StockSearchItem(
             stock=row[0],
-            score=StockScoreRef(composite=row[1], risk_tier=row[2]),
+            score=StockScoreRef(
+                composite=row[1],
+                risk_tier=row[2],
+                profitability=row[3],
+                sustainability=row[4],
+                growth=row[5],
+                value=row[6],
+                momentum=row[7],
+                sentiment=row[8],
+            ),
         )
         for row in rows[:limit]
     ]
