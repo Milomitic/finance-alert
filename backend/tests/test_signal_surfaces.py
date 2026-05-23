@@ -18,7 +18,6 @@ def _signal_alert(db, ticker="SIGSURF", d=date(2026, 5, 1)):
     db.add(s)
     db.flush()
     a = Alert(
-        rule_id=None,
         stock_id=s.id,
         trigger_price=10.0,
         signal_date=d,

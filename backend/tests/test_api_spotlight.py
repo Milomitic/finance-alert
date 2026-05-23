@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
 from app.main import app
-from app.models import Alert, MarketSnapshot, OhlcvDaily, Rule, Stock, User
+from app.models import Alert, MarketSnapshot, OhlcvDaily, Stock, User
 
 
 @pytest.fixture

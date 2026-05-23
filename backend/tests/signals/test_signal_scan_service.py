@@ -58,7 +58,7 @@ def test_creates_signal_alert_above_threshold(db, monkeypatch):
     assert n == 1
     a = db.query(Alert).filter(Alert.stock_id == s.id,
                                Alert.signal_name == "volume_breakout").first()
-    assert a is not None and a.rule_id is None and a.signal_date == date(2026, 5, 1)
+    assert a is not None and a.signal_date == date(2026, 5, 1)
 
 
 def test_dedup_same_signal_date(db, monkeypatch):

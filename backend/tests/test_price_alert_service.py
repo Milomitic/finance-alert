@@ -46,7 +46,6 @@ def test_evaluate_above_fires_when_crossed(db):
     assert fired == 1
     alerts = db.query(Alert).all()
     assert len(alerts) == 1
-    assert alerts[0].rule_id is None
     snap = json.loads(alerts[0].snapshot)
     assert snap["direction"] == "above"
     assert snap["target"] == 100.0

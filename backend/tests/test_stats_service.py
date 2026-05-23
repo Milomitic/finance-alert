@@ -3,7 +3,7 @@ from datetime import date, datetime, timedelta, timezone
 
 from sqlalchemy.orm import Session
 
-from app.models import Alert, Rule, Stock
+from app.models import Alert, Stock
 from app.services.stats_service import (
     AlertsByDayPoint,
     KpiSummary,
@@ -14,30 +14,27 @@ from app.services.stats_service import (
 )
 
 
-def _seed_baseline(db: Session) -> tuple[Stock, Rule]:
+def _seed_baseline(db: Session) -> Stock:
     stock = Stock(ticker="AAPL", exchange="NASDAQ", name="Apple Inc.")
     db.add(stock)
-    rule = Rule(kind="rsi_oversold", params="{}", enabled=True)
-    db.add(rule)
     db.commit()
     db.refresh(stock)
-    db.refresh(rule)
-    return stock, rule
+    return stock
 
 
 def _make_alert(
     db: Session,
     stock: Stock,
-    rule: Rule,
     *,
+    signal_name: str = "rsi_oversold",
     age_hours: float = 0.0,
     archived: bool = False,
 ) -> Alert:
     a = Alert(
-        rule_id=rule.id,
         stock_id=stock.id,
         trigger_price=100.0,
         snapshot="{}",
+        signal_name=signal_name,
     )
     a.triggered_at = datetime.now(timezone.utc) - timedelta(hours=age_hours)
     if archived:
@@ -48,34 +45,34 @@ def _make_alert(
 
 
 def test_kpi_alerts_24h_counts_only_recent_unarchived(db: Session) -> None:
-    stock, rule = _seed_baseline(db)
-    _make_alert(db, stock, rule, age_hours=2)      # in 24h
-    _make_alert(db, stock, rule, age_hours=12)     # in 24h
-    _make_alert(db, stock, rule, age_hours=30)     # outside 24h
-    _make_alert(db, stock, rule, age_hours=2, archived=True)  # archived → excluded
+    stock = _seed_baseline(db)
+    _make_alert(db, stock, age_hours=2)      # in 24h
+    _make_alert(db, stock, age_hours=12)     # in 24h
+    _make_alert(db, stock, age_hours=30)     # outside 24h
+    _make_alert(db, stock, age_hours=2, archived=True)  # archived → excluded
     summary = get_kpi_summary(db)
     assert isinstance(summary, KpiSummary)
     assert summary.alerts_last_24h == 2
 
 
 def test_kpi_alerts_prev_24h_window(db: Session) -> None:
-    stock, rule = _seed_baseline(db)
-    _make_alert(db, stock, rule, age_hours=2)      # in current 24h
-    _make_alert(db, stock, rule, age_hours=30)     # in [24h, 48h)
-    _make_alert(db, stock, rule, age_hours=40)     # in [24h, 48h)
-    _make_alert(db, stock, rule, age_hours=72)     # outside
+    stock = _seed_baseline(db)
+    _make_alert(db, stock, age_hours=2)      # in current 24h
+    _make_alert(db, stock, age_hours=30)     # in [24h, 48h)
+    _make_alert(db, stock, age_hours=40)     # in [24h, 48h)
+    _make_alert(db, stock, age_hours=72)     # outside
     summary = get_kpi_summary(db)
     assert summary.alerts_last_24h == 1
     assert summary.alerts_prev_24h == 2
 
 
 def test_kpi_unread_excludes_archived_and_read(db: Session) -> None:
-    stock, rule = _seed_baseline(db)
-    _make_alert(db, stock, rule, age_hours=2)
-    a_read = _make_alert(db, stock, rule, age_hours=2)
+    stock = _seed_baseline(db)
+    _make_alert(db, stock, age_hours=2)
+    a_read = _make_alert(db, stock, age_hours=2)
     a_read.read_at = datetime.now(timezone.utc)
     db.commit()
-    _make_alert(db, stock, rule, age_hours=2, archived=True)
+    _make_alert(db, stock, age_hours=2, archived=True)
     summary = get_kpi_summary(db)
     assert summary.alerts_unread == 1
 
@@ -104,11 +101,7 @@ def test_alerts_by_day_groups_by_date_and_kind(db: Session) -> None:
     always matches whichever day the seeded triggered_at actually
     lands on, regardless of clock position.
     """
-    stock, rule = _seed_baseline(db)
-    rule2 = Rule(kind="golden_cross", params="{}", enabled=True)
-    db.add(rule2)
-    db.commit()
-    db.refresh(rule2)
+    stock = _seed_baseline(db)
     # Capture the reference UTC moment first; _make_alert uses
     # datetime.now(UTC) internally so the dates derived here will
     # match (within the few-millisecond gap between calls).
@@ -117,10 +110,10 @@ def test_alerts_by_day_groups_by_date_and_kind(db: Session) -> None:
     def _date_at(hours: float) -> "date":
         return (ref - timedelta(hours=hours)).date()
 
-    _make_alert(db, stock, rule, age_hours=2)
-    _make_alert(db, stock, rule, age_hours=3)
-    _make_alert(db, stock, rule2, age_hours=4)
-    _make_alert(db, stock, rule, age_hours=26)
+    _make_alert(db, stock, signal_name="rsi_oversold", age_hours=2)
+    _make_alert(db, stock, signal_name="rsi_oversold", age_hours=3)
+    _make_alert(db, stock, signal_name="golden_cross", age_hours=4)
+    _make_alert(db, stock, signal_name="rsi_oversold", age_hours=26)
 
     points = get_alerts_by_day(db, days=30)
     assert all(isinstance(p, AlertsByDayPoint) for p in points)
@@ -128,8 +121,8 @@ def test_alerts_by_day_groups_by_date_and_kind(db: Session) -> None:
 
     # Aggregate expected counts by deriving each alert's date.
     expected: dict = {}
-    for hours, kind in [(2, "rsi_oversold"), (3, "rsi_oversold"),
-                        (4, "golden_cross"), (26, "rsi_oversold")]:
+    for hours, kind in [(2, "signal:rsi_oversold"), (3, "signal:rsi_oversold"),
+                        (4, "signal:golden_cross"), (26, "signal:rsi_oversold")]:
         d = _date_at(hours)
         bucket = expected.setdefault(d, {"count": 0, "by_kind": {}})
         bucket["count"] += 1
@@ -155,12 +148,12 @@ def test_alerts_by_day_excludes_archived(db: Session) -> None:
     reference moment before seeding so the expected date matches
     whichever UTC day the 2h-ago alert actually lands on. Robust
     even when running at UTC 00:00-02:00."""
-    stock, rule = _seed_baseline(db)
+    stock = _seed_baseline(db)
     ref = datetime.now(timezone.utc)
     target_date = (ref - timedelta(hours=2)).date()
 
-    _make_alert(db, stock, rule, age_hours=2)
-    _make_alert(db, stock, rule, age_hours=2, archived=True)
+    _make_alert(db, stock, age_hours=2)
+    _make_alert(db, stock, age_hours=2, archived=True)
 
     # days=2 covers the case where the 2h-ago alert lands on UTC
     # yesterday (clock just rolled past midnight). days=1 would only
@@ -171,10 +164,6 @@ def test_alerts_by_day_excludes_archived(db: Session) -> None:
 
 
 def test_top_stocks_orders_by_count_desc_limit_10(db: Session) -> None:
-    rule = Rule(kind="rsi_oversold", params="{}", enabled=True)
-    db.add(rule)
-    db.commit()
-    db.refresh(rule)
     stocks = []
     for i in range(12):
         s = Stock(ticker=f"T{i:02d}", exchange="X", name=f"Stock {i}")
@@ -184,7 +173,7 @@ def test_top_stocks_orders_by_count_desc_limit_10(db: Session) -> None:
         stocks.append(s)
         # Stock with index i gets (i+1) alerts to enforce ordering
         for _ in range(i + 1):
-            _make_alert(db, s, rule, age_hours=1)
+            _make_alert(db, s, age_hours=1)
     top = get_top_stocks(db, days=30, limit=10)
     assert len(top) == 10
     # Highest count first; ties broken by ticker ASC (no ties here, but verify ordering)
@@ -195,26 +184,20 @@ def test_top_stocks_orders_by_count_desc_limit_10(db: Session) -> None:
 def test_top_stocks_top_kind_is_most_frequent(db: Session) -> None:
     stock = Stock(ticker="AAPL", exchange="NASDAQ", name="Apple")
     db.add(stock)
-    rule_oversold = Rule(kind="rsi_oversold", params="{}", enabled=True)
-    rule_cross = Rule(kind="golden_cross", params="{}", enabled=True)
-    db.add(rule_oversold)
-    db.add(rule_cross)
     db.commit()
     db.refresh(stock)
-    db.refresh(rule_oversold)
-    db.refresh(rule_cross)
-    _make_alert(db, stock, rule_oversold, age_hours=2)
-    _make_alert(db, stock, rule_oversold, age_hours=3)
-    _make_alert(db, stock, rule_cross, age_hours=4)
+    _make_alert(db, stock, signal_name="rsi_oversold", age_hours=2)
+    _make_alert(db, stock, signal_name="rsi_oversold", age_hours=3)
+    _make_alert(db, stock, signal_name="golden_cross", age_hours=4)
     top = get_top_stocks(db, days=30, limit=10)
     assert len(top) == 1
-    assert top[0].top_kind == "rsi_oversold"
+    assert top[0].top_kind == "signal:rsi_oversold"
 
 
 def test_top_stocks_excludes_archived(db: Session) -> None:
-    stock, rule = _seed_baseline(db)
-    _make_alert(db, stock, rule, age_hours=2)
-    _make_alert(db, stock, rule, age_hours=2, archived=True)
+    stock = _seed_baseline(db)
+    _make_alert(db, stock, age_hours=2)
+    _make_alert(db, stock, age_hours=2, archived=True)
     top = get_top_stocks(db, days=30, limit=10)
     assert len(top) == 1 and top[0].alert_count == 1
 

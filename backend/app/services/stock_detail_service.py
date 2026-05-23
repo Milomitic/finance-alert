@@ -216,10 +216,9 @@ def _compute_kpis(bars: list[OhlcvDaily]) -> StockKpis:
 def resolve_effective_rules(db: Session, stock_id: int) -> list[EffectiveRule]:
     """Return effective rules for this stock.
 
-    Rules are being removed — the rule engine is signals-only now. This
-    function is kept for API/FE backward-compat (the `effective_rules` key
-    must exist in the stock-detail payload) and always returns an empty list
-    until the Rule model and routes are fully deleted in a later task.
+    The rule engine has been removed. This function is kept for API/FE
+    backward-compat (the `effective_rules` key must exist in the
+    stock-detail payload) and always returns an empty list.
     """
     _ = stock_id  # reserved for a future per-stock override mechanism
     return []
@@ -315,8 +314,8 @@ def get_detail(db: Session, ticker: str, range_key: str = "1d") -> StockDetail |
     # "stock-level" metrics, not chart-window metrics.
     kpis = _compute_kpis(daily_bars)
     effective_rules = resolve_effective_rules(db, stock.id)
-    # All alerts are now signal-based (rule_id=None, signal_name set).
-    # No Rule join needed — derive kind directly from signal_name.
+    # All alerts are signal-based (signal_name set).
+    # Derive kind directly from signal_name — no Rule join needed.
     # Filter out archived alerts — the stock-detail card doesn't surface
     # an Archivio column, so mixing archived rows would be misleading.
     alerts_history = [

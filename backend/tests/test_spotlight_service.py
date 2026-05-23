@@ -2,7 +2,7 @@
 import json
 from datetime import UTC, date, datetime, timedelta
 
-from app.models import Alert, MarketSnapshot, OhlcvDaily, Rule, Stock
+from app.models import Alert, MarketSnapshot, OhlcvDaily, Stock
 from app.services import spotlight_service, stats_service
 
 
@@ -26,15 +26,15 @@ def test_top_alerted_7d_empty(db):
 def test_top_alerted_7d_returns_winner(db):
     s1 = _seed_stock(db, "A")
     s2 = _seed_stock(db, "B")
-    rule = Rule(kind="rsi_oversold", params="{}", enabled=True)
-    db.add(rule); db.commit()
     now = datetime.now(UTC)
     for _ in range(5):
-        db.add(Alert(rule_id=rule.id, stock_id=s1.id, trigger_price=100.0,
-                     snapshot="{}", triggered_at=now - timedelta(hours=1)))
+        db.add(Alert(stock_id=s1.id, trigger_price=100.0,
+                     snapshot="{}", triggered_at=now - timedelta(hours=1),
+                     signal_name="rsi_oversold"))
     for _ in range(2):
-        db.add(Alert(rule_id=rule.id, stock_id=s2.id, trigger_price=100.0,
-                     snapshot="{}", triggered_at=now - timedelta(hours=1)))
+        db.add(Alert(stock_id=s2.id, trigger_price=100.0,
+                     snapshot="{}", triggered_at=now - timedelta(hours=1),
+                     signal_name="rsi_oversold"))
     db.commit()
     result = stats_service.get_top_alerted_stock_7d(db)
     assert result is not None
@@ -58,10 +58,9 @@ def test_build_spotlight_with_snapshot_and_alerts(db):
         id=1, computed_at=datetime.now(UTC),
         stocks_total=3, stocks_with_data=3, payload=json.dumps(payload),
     ))
-    rule = Rule(kind="rsi_oversold", params="{}", enabled=True)
-    db.add(rule); db.commit()
-    db.add(Alert(rule_id=rule.id, stock_id=s2.id, trigger_price=170.0,
-                 snapshot="{}", triggered_at=datetime.now(UTC) - timedelta(hours=1)))
+    db.add(Alert(stock_id=s2.id, trigger_price=170.0,
+                 snapshot="{}", triggered_at=datetime.now(UTC) - timedelta(hours=1),
+                 signal_name="rsi_oversold"))
     db.commit()
 
     cards = spotlight_service.build(db)

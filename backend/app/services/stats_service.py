@@ -9,7 +9,7 @@ from datetime import date, datetime, timedelta, timezone
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.models import Alert, Index, Rule, Stock
+from app.models import Alert, Index, Stock
 from app.models.index import StockIndex
 from app.services.alert_service import derive_rule_kind
 
@@ -132,16 +132,14 @@ def get_alerts_by_day(db: Session, days: int = 30) -> list[AlertsByDayPoint]:
     rows = db.execute(
         select(
             func.date(Alert.triggered_at).label("d"),
-            Rule.kind.label("rule_kind"),
             Alert.signal_name.label("signal_name"),
             func.count(Alert.id).label("c"),
         )
-        .outerjoin(Rule, Rule.id == Alert.rule_id)
         .where(
             Alert.triggered_at >= cutoff_dt,
             Alert.archived_at.is_(None),
         )
-        .group_by("d", Rule.kind, Alert.signal_name)
+        .group_by("d", Alert.signal_name)
     ).all()
 
     by_date: dict[date, dict[str, int]] = {}
@@ -150,7 +148,7 @@ def get_alerts_by_day(db: Session, days: int = 30) -> list[AlertsByDayPoint]:
         # SQLite returns str from func.date(); Postgres returns date.
         if isinstance(d, str):
             d = date.fromisoformat(d[:10])
-        kind = derive_rule_kind(row.rule_kind, row.signal_name) or "unknown"
+        kind = derive_rule_kind(None, row.signal_name) or "unknown"
         by_date.setdefault(d, {}).setdefault(kind, 0)
         by_date[d][kind] += int(row.c)
 
@@ -206,19 +204,18 @@ def get_top_stocks(db: Session, *, days: int = 30, limit: int = 10) -> list[TopS
     top_kind_by_stock: dict[int, str] = {}
     for sid in stock_ids:
         kind_row = db.execute(
-            select(Rule.kind.label("rule_kind"), Alert.signal_name.label("signal_name"), func.count(Alert.id).label("c"))
-            .outerjoin(Rule, Rule.id == Alert.rule_id)
+            select(Alert.signal_name.label("signal_name"), func.count(Alert.id).label("c"))
             .where(
                 Alert.stock_id == sid,
                 Alert.triggered_at >= cutoff,
                 Alert.archived_at.is_(None),
             )
-            .group_by(Rule.kind, Alert.signal_name)
-            .order_by(func.count(Alert.id).desc(), func.coalesce(Rule.kind, Alert.signal_name).asc())
+            .group_by(Alert.signal_name)
+            .order_by(func.count(Alert.id).desc(), Alert.signal_name.asc())
             .limit(1)
         ).first()
         if kind_row is not None:
-            resolved = derive_rule_kind(kind_row.rule_kind, kind_row.signal_name)
+            resolved = derive_rule_kind(None, kind_row.signal_name)
             if resolved is not None:
                 top_kind_by_stock[sid] = resolved
 

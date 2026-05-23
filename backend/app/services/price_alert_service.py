@@ -135,7 +135,6 @@ def evaluate_all(db: Session) -> int:
         # `prev_close → last_close` straddled the target threshold.
         db.add(
             Alert(
-                rule_id=None,
                 stock_id=pa.stock_id,
                 trigger_price=last_close,
                 snapshot=json.dumps(snapshot),

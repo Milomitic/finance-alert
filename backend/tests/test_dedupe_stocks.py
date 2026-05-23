@@ -18,8 +18,6 @@ from app.models import (
     Index,
     OhlcvDaily,
     PriceAlert,
-    Rule,
-    RuleState,
     Stock,
     StockIndex,
     User,
@@ -225,39 +223,6 @@ def test_dedupe_merges_ohlcv_overlapping_dates(db: Session) -> None:
         (str(d2), 2.0),  # NOT 99 — canonical's bar was preserved
         (str(d3), 3.0),  # moved over from dup
     ]
-
-
-def test_dedupe_reassigns_rule_states(db: Session) -> None:
-    canon, dup = _seed_dup_pair(
-        db, "ENEL.MI", canon_exchange="BIT", dup_exchange="Borsa Italiana"
-    )
-    rule_a = Rule(kind="rsi_oversold", params="{}")
-    rule_b = Rule(kind="rsi_overbought", params="{}")
-    db.add_all([rule_a, rule_b])
-    db.flush()
-    now = datetime.now(timezone.utc)
-    db.add_all([
-        # Canonical already has state for rule_a (collision target).
-        RuleState(rule_id=rule_a.id, stock_id=canon.id, last_evaluation=False,
-                  last_evaluated_at=now),
-        # Dup has state for rule_a (collides) AND rule_b (unique).
-        RuleState(rule_id=rule_a.id, stock_id=dup.id, last_evaluation=True,
-                  last_evaluated_at=now),
-        RuleState(rule_id=rule_b.id, stock_id=dup.id, last_evaluation=True,
-                  last_evaluated_at=now),
-    ])
-    db.flush()
-
-    dedupe_on_connection(db.connection())
-
-    states = db.execute(
-        text("SELECT rule_id, last_evaluation FROM rule_states WHERE stock_id = :id ORDER BY rule_id"),
-        {"id": canon.id},
-    ).fetchall()
-    assert sorted((r[0], bool(r[1])) for r in states) == sorted([
-        (rule_a.id, False),  # canonical's original state preserved
-        (rule_b.id, True),   # moved over from dup
-    ])
 
 
 def test_dedupe_is_idempotent(db: Session) -> None:

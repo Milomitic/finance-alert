@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
 from app.main import app
-from app.models import Alert, Rule, Stock, User
+from app.models import Alert, Stock, User
 
 
 @pytest.fixture
@@ -34,17 +34,13 @@ def test_dashboard_summary_payload_shape(client: TestClient, db: Session) -> Non
     stock = Stock(ticker="AAPL", exchange="NASDAQ", name="Apple")
     db.add(stock)
     db.commit()
-    rule = Rule(kind="rsi_oversold", params="{}", enabled=True)
-    db.add(rule)
-    db.commit()
     db.refresh(stock)
-    db.refresh(rule)
     db.add(
         Alert(
-            rule_id=rule.id,
             stock_id=stock.id,
             trigger_price=100.0,
             snapshot="{}",
+            signal_name="rsi_oversold",
         )
     )
     db.commit()

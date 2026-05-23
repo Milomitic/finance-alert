@@ -23,4 +23,3 @@ def test_scan_creates_signal_alert(db, monkeypatch):
     a = db.query(Alert).filter(Alert.stock_id == s.id,
                                Alert.signal_name == "volume_breakout").first()
     assert a is not None
-    assert a.rule_id is None

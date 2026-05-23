@@ -18,7 +18,6 @@ def _seed_for_digest(db: Session) -> tuple[Stock, Alert]:
     db.add(stock)
     db.commit()
     alert = Alert(
-        rule_id=None,
         signal_name="rsi_oversold",
         stock_id=stock.id,
         trigger_price=182.50,

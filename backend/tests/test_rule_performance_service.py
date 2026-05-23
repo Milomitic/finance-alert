@@ -35,7 +35,6 @@ def _make_alert(db, stock_id: int, signal_name: str, signal_date: date,
     if triggered_at is None:
         triggered_at = datetime.now(UTC)
     a = Alert(
-        rule_id=None,
         stock_id=stock_id,
         trigger_price=100.0,
         signal_date=signal_date,
@@ -184,9 +183,8 @@ def test_none_signal_name_skipped(db):
     sig_date = date(2026, 1, 2)
     _add_bars(db, s.id, sig_date, [100.0] * 25)
 
-    # Simulate a legacy/rule alert without signal_name — filter at DB level
+    # Simulate an alert without signal_name — filter at DB level
     a = Alert(
-        rule_id=None,
         stock_id=s.id,
         trigger_price=100.0,
         signal_date=sig_date,

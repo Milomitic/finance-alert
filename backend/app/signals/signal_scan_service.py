@@ -59,7 +59,7 @@ def evaluate_signals(db: Session, stock: Stock, ohlcv: pd.DataFrame) -> int:
             "sources": getattr(_detector_for(m.name), "sources", []),
         }
         db.add(Alert(
-            rule_id=None, stock_id=stock.id, trigger_price=last_close,
+            stock_id=stock.id, trigger_price=last_close,
             signal_date=sig_date, signal_name=m.name,
             snapshot=json.dumps(snapshot),
         ))

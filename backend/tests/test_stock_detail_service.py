@@ -1,9 +1,7 @@
 """Tests for stock_detail_service.
 
-Rules are being removed — the rule engine is signals-only. The Tier 2
-(per-watchlist override) layer was already removed in May 2026. The
-`resolve_effective_rules` function now returns [] as a backward-compat stub
-until the Rule model is fully deleted in a later task.
+The rule engine has been fully removed. The `resolve_effective_rules`
+function is a backward-compat stub that always returns [].
 """
 from datetime import date, timedelta
 
@@ -64,7 +62,6 @@ def test_alerts_history_uses_signal_kind(db):
     from app.models import Alert
     s = _seed_stock_full(db, n_bars=10)
     db.add(Alert(
-        rule_id=None,
         signal_name="rsi_oversold",
         stock_id=s.id,
         trigger_price=100.0,

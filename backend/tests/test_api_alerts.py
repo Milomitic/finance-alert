@@ -30,7 +30,6 @@ def _seed_alerts(db: Session, n: int = 3, signal_name: str = "volume_breakout") 
     alerts = []
     for i in range(n):
         a = Alert(
-            rule_id=None,
             signal_name=signal_name,
             stock_id=stock.id,
             trigger_price=100.0 + i,

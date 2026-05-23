@@ -12,7 +12,6 @@ from app.models.macro import MacroObservation, MacroReleaseDate, MacroSeries
 from app.models.market_snapshot import MarketSnapshot
 from app.models.ohlcv import OhlcvDaily
 from app.models.price_alert import PriceAlert
-from app.models.rule import Rule, RuleState
 from app.models.scan_run import ScanRun
 from app.models.stock import Stock
 from app.models.stock_score import StockScore
@@ -27,8 +26,6 @@ __all__ = [
     "CatalogRefreshLog",
     "OhlcvDaily",
     "MarketSnapshot",
-    "Rule",
-    "RuleState",
     "Alert",
     "PriceAlert",
     "ScanRun",

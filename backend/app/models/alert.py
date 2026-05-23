@@ -1,4 +1,4 @@
-"""Alert events fired on rule edge-transition (False -> True)."""
+"""Alert events produced by the signal engine."""
 from datetime import date, datetime
 
 from sqlalchemy import (
@@ -23,7 +23,6 @@ class Alert(Base):
     __tablename__ = "alerts"
     __table_args__ = (
         SAIndex("ix_alerts_triggered_at", "triggered_at"),
-        SAIndex("ix_alerts_rule_id", "rule_id"),
         SAIndex("ix_alerts_stock_id", "stock_id"),
         SAIndex("ix_alerts_read_at", "read_at"),
         SAIndex("ix_alerts_archived_at", "archived_at"),
@@ -31,9 +30,6 @@ class Alert(Base):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    rule_id: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("rules.id", ondelete="CASCADE"), nullable=True
-    )
     stock_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("stocks.id", ondelete="CASCADE"), nullable=False
     )
