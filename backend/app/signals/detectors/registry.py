@@ -1,4 +1,5 @@
 """Active signal detectors for the current phase."""
+from app.signals.detectors.gap_and_go import GapAndGo
 from app.signals.detectors.high52_momentum import High52Momentum
 from app.signals.detectors.macd_divergence import MacdDivergence
 from app.signals.detectors.oversold_reversal import OversoldReversal
@@ -19,4 +20,5 @@ DETECTORS = [
     SRFlip(),
     StructureBreak(),
     MacdDivergence(),
+    GapAndGo(),
 ]
