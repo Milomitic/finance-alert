@@ -22,6 +22,7 @@ from app.indicators.macd import macd
 from app.indicators.rsi import rsi as rsi_indicator
 from app.indicators.ema import ema as ema_indicator
 from app.models import Alert, OhlcvDaily, Rule, Stock
+from app.services.alert_service import derive_rule_kind
 
 
 RANGE_DAYS: dict[str, int | None] = {
@@ -333,10 +334,10 @@ def get_detail(db: Session, ticker: str, range_key: str = "1d") -> StockDetail |
     # doesn't surface an Archivio column anymore, and showing
     # archived rows mixed with active ones would be misleading.
     alerts_history = [
-        (alert, rule_kind)
+        (alert, derive_rule_kind(rule_kind, alert.signal_name))
         for alert, rule_kind in db.execute(
             select(Alert, Rule.kind)
-            .join(Rule, Rule.id == Alert.rule_id)
+            .outerjoin(Rule, Rule.id == Alert.rule_id)
             .where(Alert.stock_id == stock.id, Alert.archived_at.is_(None))
             .order_by(Alert.triggered_at.desc())
             .limit(50)

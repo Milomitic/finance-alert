@@ -28,7 +28,7 @@ class AlertOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    rule_id: int
+    rule_id: int | None
     rule_kind: str | None = None  # joined for convenience
     stock_id: int
     ticker: str | None = None  # joined

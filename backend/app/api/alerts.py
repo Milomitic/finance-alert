@@ -550,6 +550,7 @@ def patch(
     from app.models import Rule as _Rule
     from app.models import Stock as _Stock
     rule_kind = db.execute(select(_Rule.kind).where(_Rule.id == a.rule_id)).scalar_one_or_none()
+    rule_kind = alert_service.derive_rule_kind(rule_kind, a.signal_name)
     stock_row = db.execute(
         select(_Stock.ticker, _Stock.name).where(_Stock.id == a.stock_id)
     ).first()

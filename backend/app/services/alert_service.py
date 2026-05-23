@@ -8,6 +8,18 @@ from sqlalchemy.orm import Session
 from app.models import Alert, Rule, Stock
 
 
+def derive_rule_kind(rule_kind: str | None, signal_name: str | None) -> str | None:
+    """The UI 'kind' for an alert. Rule-based alerts use the joined Rule.kind;
+    signal-engine alerts (no rule) use f'signal:{signal_name}'. Returns None
+    only for the (currently impossible) case of neither — the frontend already
+    tolerates a null kind."""
+    if rule_kind is not None:
+        return rule_kind
+    if signal_name:
+        return f"signal:{signal_name}"
+    return None
+
+
 def _apply_filters(
     stmt,
     *,
@@ -71,7 +83,7 @@ def list_alerts(
             Stock.ticker.label("ticker"),
             Stock.name.label("name"),
         )
-        .join(Rule, Rule.id == Alert.rule_id)
+        .outerjoin(Rule, Rule.id == Alert.rule_id)
         .join(Stock, Stock.id == Alert.stock_id)
     )
     base = _apply_filters(
@@ -96,7 +108,7 @@ def list_alerts(
             {
                 "id": alert.id,
                 "rule_id": alert.rule_id,
-                "rule_kind": rule_kind_val,
+                "rule_kind": derive_rule_kind(rule_kind_val, alert.signal_name),
                 "stock_id": alert.stock_id,
                 "ticker": ticker_val,
                 "name": name_val,
