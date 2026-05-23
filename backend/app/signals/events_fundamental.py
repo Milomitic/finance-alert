@@ -32,7 +32,65 @@ def produce_earnings_events(db, stock) -> list[Event]:
 
 
 def produce_analyst_events(db, stock) -> list[Event]:
-    return []  # U3-T3
+    """Emit analyst_change events (bull=upgrade, bear=downgrade) from cached
+    fundamentals.  Cache-only -- never triggers an upstream fetch."""
+    from app.services.stock_fundamentals_service import get_fundamentals_cached
+
+    # Grade ordering for inferring direction when `action` is ambiguous.
+    _GRADE_RANK: dict[str, int] = {
+        "strong sell": 0, "sell": 1, "underperform": 2, "underweight": 2,
+        "reduce": 2, "neutral": 3, "market perform": 3, "equal weight": 3,
+        "hold": 3, "sector perform": 3, "peer perform": 3,
+        "outperform": 4, "overweight": 4, "buy": 5, "strong buy": 6,
+    }
+
+    def _infer_direction(action: str, from_grade: str, to_grade: str) -> str | None:
+        """Return "bull" / "bear" / None for a single analyst action row."""
+        a = (action or "").lower().strip()
+        if a in ("up",):
+            return "bull"
+        if a in ("down",):
+            return "bear"
+        # Fall back to grade comparison when action is "main" / "reit" / "init" / ""
+        fg = _GRADE_RANK.get((from_grade or "").lower().strip())
+        tg = _GRADE_RANK.get((to_grade or "").lower().strip())
+        if fg is not None and tg is not None:
+            if tg > fg:
+                return "bull"
+            if tg < fg:
+                return "bear"
+        return None
+
+    f = get_fundamentals_cached(db, stock.ticker)
+    if f is None:
+        return []
+    out: list[Event] = []
+    for aa in (f.analyst_actions or []):
+        if not getattr(aa, "date", None):
+            continue
+        direction = _infer_direction(
+            getattr(aa, "action", ""),
+            getattr(aa, "from_grade", ""),
+            getattr(aa, "to_grade", ""),
+        )
+        if direction is None:
+            continue
+        out.append(Event(
+            str(aa.date)[:10],
+            "analyst_change",
+            direction,
+            magnitude=0.5,
+            payload={
+                k: v for k, v in {
+                    "firm": getattr(aa, "firm", None),
+                    "from_grade": getattr(aa, "from_grade", None) or None,
+                    "to_grade": getattr(aa, "to_grade", None) or None,
+                    "action": getattr(aa, "action", None),
+                }.items() if v is not None
+            },
+            source="analyst",
+        ))
+    return out
 
 
 def produce_insider_events(db, stock) -> list[Event]:
