@@ -44,6 +44,7 @@ const FACTOR_LABELS: Record<string, string> = {
   proximity: "Vicinanza max 52w",
   trend: "Trend",
   momentum: "Momentum",
+  trend_maturity: "Maturità trend",
   pattern_amplitude: "Ampiezza pattern",
   neckline_break: "Rottura neckline",
   candle_strength: "Forza candela",
@@ -153,7 +154,7 @@ export function SignalSnapshotView({
               {chain.map((step, i) => {
                 const badge = step.source ? SOURCE_BADGE[step.source] : null;
                 const num = step.source ? null : (techCounter += 1);
-                const gloss = glossForStep(step.label);
+                const gloss = glossForStep(step.label, step.detail, s.tone, s.annotations?.levels ?? []);
                 return (
                   <li key={`${step.date}-${i}`} className="ml-4 relative">
                     {num != null ? (

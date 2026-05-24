@@ -7,7 +7,7 @@ import { stocks } from "@/api/stocks";
 export function useSignalOhlcv(ticker: string | null | undefined, enabled: boolean) {
   return useQuery({
     queryKey: ["signal-ohlcv", ticker],
-    queryFn: () => stocks.ohlcv(ticker as string, 120),
+    queryFn: () => stocks.ohlcv(ticker as string, 260),
     enabled: enabled && !!ticker,
     staleTime: 5 * 60_000,
   });

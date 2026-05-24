@@ -47,6 +47,23 @@ function priceLabel(p: number): string {
   return p.toFixed(3);
 }
 
+function emaArr(vals: number[], period: number): number[] {
+  const k = 2 / (period + 1);
+  const out: number[] = [];
+  let prev = vals.length ? vals[0] : NaN;
+  for (let i = 0; i < vals.length; i++) {
+    prev = i === 0 ? vals[0] : vals[i] * k + prev * (1 - k);
+    out.push(prev);
+  }
+  return out;
+}
+
+const EMA_DEFS = [
+  { p: 20, color: "#c084fc" },
+  { p: 50, color: "#3b82f6" },
+  { p: 200, color: "#f59e0b" },
+];
+
 export function SignalChartSvg({ bars, annotations, chain }: Props) {
   // Hover crosshair state (hooks run before any early return).
   const svgRef = useRef<SVGSVGElement>(null);
@@ -104,21 +121,29 @@ export function SignalChartSvg({ bars, annotations, chain }: Props) {
   if (focusIdx.length > 0) {
     const minI = Math.min(...focusIdx);
     const maxI = Math.max(...focusIdx);
-    startIdx = Math.max(0, minI - 24);
-    endIdx = Math.min(bars.length - 1, maxI + 8);
-    if (endIdx - startIdx < 14) {
+    startIdx = Math.max(0, minI - 55);
+    endIdx = Math.min(bars.length - 1, maxI + 18);
+    if (endIdx - startIdx < 50) {
       const mid = Math.round((minI + maxI) / 2);
-      startIdx = Math.max(0, mid - 9);
-      endIdx = Math.min(bars.length - 1, mid + 9);
+      startIdx = Math.max(0, mid - 30);
+      endIdx = Math.min(bars.length - 1, mid + 20);
     }
   }
   const win = bars.slice(startIdx, endIdx + 1);
   const wlen = win.length;
 
+  const closesFull = bars.map((b) => b.close);
+  const emaWin = EMA_DEFS.map((d) => ({
+    color: d.color,
+    label: `EMA${d.p}`,
+    vals: emaArr(closesFull, d.p).slice(startIdx, endIdx + 1),
+  }));
+  const emaAll = emaWin.flatMap((e) => e.vals).filter((v) => Number.isFinite(v));
+
   const lvlP = levels.map((l) => l.price).filter((p) => Number.isFinite(p));
   const ptP = points.map((p) => p.price).filter((p) => Number.isFinite(p));
-  const lo = Math.min(...win.map((b) => b.low), ...lvlP, ...ptP);
-  const hi = Math.max(...win.map((b) => b.high), ...lvlP, ...ptP);
+  const lo = Math.min(...win.map((b) => b.low), ...lvlP, ...ptP, ...emaAll);
+  const hi = Math.max(...win.map((b) => b.high), ...lvlP, ...ptP, ...emaAll);
   const range = hi - lo || 1;
   const innerW = W - PAD_L - PAD_R;
   const innerH = H - PAD_T - PAD_B;
@@ -214,6 +239,20 @@ export function SignalChartSvg({ bars, annotations, chain }: Props) {
           </g>
         );
       })}
+
+      {/* moving averages */}
+      {emaWin.map((e) => {
+        const pl = e.vals
+          .map((v, i) => (Number.isFinite(v) ? `${cx(i).toFixed(1)},${y(v).toFixed(1)}` : null))
+          .filter((q): q is string => q != null)
+          .join(" ");
+        return <polyline key={e.label} points={pl} fill="none" stroke={e.color} strokeWidth={1} opacity={0.75} />;
+      })}
+      {emaWin.map((e, i) => (
+        <text key={`leg-${e.label}`} x={PAD_L + 2 + i * 52} y={PAD_T + 8} fontSize={9} fill={e.color} fontWeight="bold">
+          {e.label}
+        </text>
+      ))}
 
       {/* pattern shape */}
       {points.length >= 2 && (
