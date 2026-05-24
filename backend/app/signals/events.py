@@ -279,8 +279,21 @@ def extract_macd_cross(
     return out
 
 
+# A directional gap only "confirms" if it HOLDS: the bar must keep at least
+# this fraction of the gap by the close. A gap-up that closes back near (or
+# below) the prior close is a filled/rejected gap - a bearish reversal candle,
+# not bullish confirmation - and must not be tagged "bull". Real case that
+# motivated this: NIO 2026-05-21 opened +5.9% (5.92 vs prev close 5.59) but
+# closed 5.60, giving back ~the entire gap; the old logic still emitted a
+# "gap bull" that the PEAD detector consumed as confirmation right before the
+# stock fell. The midpoint rule (retain >= 50% of the gap) rejects that bar.
+_GAP_HOLD_FRAC = 0.5
+
+
 def extract_gap(ohlcv: pd.DataFrame, *, min_pct: float = 0.02) -> list[Event]:
-    """Emit gap (bull/bear) when a bar opens beyond the prior close by >= min_pct."""
+    """Emit gap (bull/bear) when a bar opens beyond the prior close by >=
+    min_pct AND the close holds at least `_GAP_HOLD_FRAC` of that gap (so a
+    gap that fills/reverses intraday does not count as directional)."""
     if len(ohlcv) < 2:
         return []
     open_ = ohlcv["open"].astype(float).reset_index(drop=True)
@@ -291,15 +304,24 @@ def extract_gap(ohlcv: pd.DataFrame, *, min_pct: float = 0.02) -> list[Event]:
         prev_c = close.iloc[i - 1]
         if prev_c <= 0:
             continue
-        gap_pct = (open_.iloc[i] - prev_c) / prev_c
+        o = open_.iloc[i]
+        c = close.iloc[i]
+        gap_pct = (o - prev_c) / prev_c
+        # Level the close must reach to count the gap as held: the midpoint
+        # between the prior close and the open.
+        hold_level = prev_c + _GAP_HOLD_FRAC * (o - prev_c)
         if gap_pct >= min_pct:
+            if c < hold_level:
+                continue  # bull gap filled/rejected intraday -> not a confirmation
             out.append(Event(_iso(dates.iloc[i]), "gap", "bull", magnitude=float(gap_pct),
-                             payload={"gap_pct": float(gap_pct), "open": float(open_.iloc[i]),
-                                      "prev_close": float(prev_c)}))
+                             payload={"gap_pct": float(gap_pct), "open": float(o),
+                                      "prev_close": float(prev_c), "close": float(c)}))
         elif gap_pct <= -min_pct:
+            if c > hold_level:
+                continue  # bear gap filled/rejected intraday -> not a confirmation
             out.append(Event(_iso(dates.iloc[i]), "gap", "bear", magnitude=float(abs(gap_pct)),
-                             payload={"gap_pct": float(gap_pct), "open": float(open_.iloc[i]),
-                                      "prev_close": float(prev_c)}))
+                             payload={"gap_pct": float(gap_pct), "open": float(o),
+                                      "prev_close": float(prev_c), "close": float(c)}))
     return out
 
 
