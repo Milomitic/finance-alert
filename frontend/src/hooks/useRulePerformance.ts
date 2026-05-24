@@ -34,3 +34,29 @@ export function useRulePerformance(days: number = 90) {
     staleTime: 5 * 60 * 1000,
   });
 }
+
+export interface CalibrationBucket {
+  label: string;
+  count: number;
+  hit_rate: number | null;
+  mean_pct: number | null;
+  median_pct: number | null;
+}
+
+export interface Calibration {
+  days: number;
+  window: number;
+  by_confidence: CalibrationBucket[];
+  by_nature: CalibrationBucket[];
+}
+
+/** Realized directional hit-rate + forward return bucketed by confidence and
+ *  by nature, at a fixed horizon. Matures over forward time. */
+export function useCalibration(days = 365, horizon = 20) {
+  return useQuery({
+    queryKey: ["calibration", days, horizon],
+    queryFn: () =>
+      api<Calibration>(`/api/rule-performance/calibration?days=${days}&window=${horizon}`),
+    staleTime: 5 * 60 * 1000,
+  });
+}

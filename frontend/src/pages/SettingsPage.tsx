@@ -6,6 +6,7 @@ import {
   Loader2,
   RefreshCw,
   Settings as SettingsIcon,
+  Target,
   TrendingUp,
 } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -17,7 +18,7 @@ import {
   useCatalogStatus,
   useTriggerCatalogRefresh,
 } from "@/hooks/useCatalogStatus";
-import { useRulePerformance } from "@/hooks/useRulePerformance";
+import { useCalibration, useRulePerformance } from "@/hooks/useRulePerformance";
 import { useScanLog, type PhaseTiming, type ScanRunSummary } from "@/hooks/useScanLog";
 import { getAlertKindMeta } from "@/lib/alertMeta";
 import { getIndexMeta } from "@/lib/indexMeta";
@@ -52,6 +53,7 @@ export default function SettingsPage() {
       </header>
 
       <RulePerformancePanel />
+      <CalibrationPanel />
       <ScanLogPanel />
       <CatalogRefreshPanel />
     </div>
@@ -685,5 +687,98 @@ function CatalogRefreshPanel() {
         )}
       </CardContent>
     </Card>
+  );
+}
+
+/* ─── Calibration panel ─────────────────────────────────────────────────── */
+
+function CalibrationPanel() {
+  const [horizon, setHorizon] = useState(20);
+  const q = useCalibration(365, horizon);
+  const c = q.data;
+  const matured = c ? c.by_confidence.reduce((a, b) => a + b.count, 0) : 0;
+  const pct = (v: number | null) => (v == null ? "-" : `${(v * 100).toFixed(0)}%`);
+  const ret = (v: number | null) => (v == null ? "-" : `${v >= 0 ? "+" : ""}${v.toFixed(2)}%`);
+
+  return (
+    <Card>
+      <CardContent className="p-4">
+        <SectionTitle
+          icon={Target}
+          label="Calibrazione - confidenza vs esito reale"
+          right={
+            <div className="flex items-center gap-2 text-xs">
+              <span className="text-muted-foreground">Orizzonte:</span>
+              <select
+                value={horizon}
+                onChange={(e) => setHorizon(Number(e.target.value))}
+                className="bg-background border rounded px-2 py-0.5 text-xs"
+              >
+                <option value={5}>5 giorni</option>
+                <option value={10}>10 giorni</option>
+                <option value={20}>20 giorni</option>
+              </select>
+            </div>
+          }
+          className="mb-3"
+        />
+        {q.isLoading ? (
+          <div className="py-8 text-center text-sm text-muted-foreground inline-flex items-center gap-2 justify-center w-full">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Calcolo calibrazione...
+          </div>
+        ) : matured === 0 ? (
+          <div className="py-6 text-center text-sm text-muted-foreground">
+            Esiti non ancora maturi: la calibrazione richiede circa {horizon} giorni di
+            borsa dopo ogni segnale. Si popolera man mano che gli alert maturano.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <CalTable title="Per confidenza" rows={c!.by_confidence} pct={pct} ret={ret} />
+            <CalTable title="Per natura" rows={c!.by_nature} pct={pct} ret={ret} />
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function CalTable({
+  title,
+  rows,
+  pct,
+  ret,
+}: {
+  title: string;
+  rows: { label: string; count: number; hit_rate: number | null; mean_pct: number | null }[];
+  pct: (v: number | null) => string;
+  ret: (v: number | null) => string;
+}) {
+  return (
+    <div>
+      <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold mb-1">
+        {title}
+      </div>
+      <table className="w-full text-sm tabular-nums">
+        <thead className="text-muted-foreground border-b">
+          <tr>
+            <th className="text-left px-2 py-1 font-semibold">Gruppo</th>
+            <th className="text-right px-2 py-1 font-semibold">N</th>
+            <th className="text-right px-2 py-1 font-semibold">Hit</th>
+            <th className="text-right px-2 py-1 font-semibold">Media</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.label} className="border-b border-border/40">
+              <td className="px-2 py-1">{r.label}</td>
+              <td className="px-2 py-1 text-right">{r.count || "-"}</td>
+              <td className="px-2 py-1 text-right font-semibold">{r.count ? pct(r.hit_rate) : "-"}</td>
+              <td className="px-2 py-1 text-right">{r.count ? ret(r.mean_pct) : "-"}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
