@@ -39,6 +39,9 @@ class Settings(BaseSettings):
     # Follow-through: require the bar after the trigger to hold the invalidation
     # level; a fresh last-bar trigger is held until a later scan can confirm it.
     signal_require_follow_through: bool = True
+    # Weight of the (non-monotonic) trend-maturity factor in trend-following
+    # detectors. 0 disables it. Backtest-tuned; see technical-evaluation docs.
+    signal_trend_maturity_weight: float = 0.6
     # FRED (Federal Reserve Economic Data) API key for the macro
     # calendar. Free, gettable from https://fred.stlouisfed.org —
     # rate-limited at 120 req/min. Empty string disables FRED-driven

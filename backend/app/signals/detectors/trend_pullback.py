@@ -8,7 +8,8 @@ import pandas as pd
 
 from app.indicators.ema import ema
 from app.signals.context import SignalContext
-from app.signals.detectors.base import SignalMatch, clamp01, score
+from app.core.config import settings
+from app.signals.detectors.base import SignalMatch, clamp01, score, trend_maturity_factor
 from app.signals.events import Event
 
 _FAST = 50
@@ -54,11 +55,13 @@ class TrendPullback:
             "trend_strength": clamp01(spread / _TREND_SPREAD_REF),
             "trend_alignment": 1.0 if trend_aligned else 0.4,
             "resume": 1.0 if resumed else 0.0,
+            "trend_maturity": trend_maturity_factor(ctx.trend_age),
         }
         # `resume` is a gate condition (detect returns None when it is false),
         # so it is always 1.0 here - kept in `factors` as displayed evidence
         # but excluded from the score weights to avoid inflating the floor.
-        conf = score(factors, {"trend_strength": 1.0, "trend_alignment": 1.0})
+        conf = score(factors, {"trend_strength": 1.0, "trend_alignment": 1.0,
+                               "trend_maturity": settings.signal_trend_maturity_weight})
         chain = [
             {"date": cross.date, "label": f"Incrocio EMA {tone}",
              "detail": f"EMA{_FAST}/EMA{_SLOW} ({'golden' if tone == 'bull' else 'death'} cross)"},

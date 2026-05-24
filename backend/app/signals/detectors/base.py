@@ -65,6 +65,22 @@ def clamp01(x: float) -> float:
     return max(0.0, min(1.0, x))
 
 
+def trend_maturity_factor(age: int | None) -> float:
+    """Backtest-derived favorability of a trend-following entry by trend age
+    (bars since the EMA50/EMA200 cross). Forward 21d returns peaked mid-life
+    (~120-250 bars) and were weakest for very young (<60) and mature (250+)
+    trends, so this factor is non-monotonic by design."""
+    if age is None:
+        return 0.6
+    if age < 60:
+        return 0.5
+    if age < 120:
+        return 0.7
+    if age < 250:
+        return 1.0
+    return 0.35
+
+
 def score(factors: dict[str, float], weights: dict[str, float]) -> int:
     """Weighted mean of [0,1] factors -> 0..100 int."""
     num = sum(clamp01(factors.get(k, 0.0)) * w for k, w in weights.items())

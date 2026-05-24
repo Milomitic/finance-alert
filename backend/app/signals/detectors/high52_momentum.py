@@ -6,7 +6,8 @@ from __future__ import annotations
 import pandas as pd
 
 from app.signals.context import SignalContext
-from app.signals.detectors.base import SignalMatch, clamp01, score
+from app.core.config import settings
+from app.signals.detectors.base import SignalMatch, clamp01, score, trend_maturity_factor
 from app.signals.events import Event
 
 _WINDOW = 252
@@ -45,11 +46,13 @@ class High52Momentum:
             "trend": 1.0 if ctx.trend_sign > 0 else 0.0,
             "momentum": momentum,
             "confirmation": 1.0,
+            "trend_maturity": trend_maturity_factor(ctx.trend_age),
         }
         # `trend` and `confirmation` are gate conditions - kept in `factors` as
         # displayed evidence but excluded from score weights to avoid inflating
         # the floor.
-        conf = score(factors, {"proximity": 1.0, "momentum": 0.8})
+        conf = score(factors, {"proximity": 1.0, "momentum": 0.8,
+                               "trend_maturity": settings.signal_trend_maturity_weight})
         last_date = str(ohlcv["date"].iloc[-1])[:10]
         chain = [
             {"date": last_date, "label": "Vicino al massimo 52 settimane",
