@@ -38,10 +38,12 @@ class StructureBreak:
         downtrend = (h2 < h1) and (l2 < l1)
         if uptrend:
             protected = float(l2)
+            protected_idx = lo_piv[-1]
             broke = last < protected
             tone = "bear"
         elif downtrend:
             protected = float(h2)
+            protected_idx = hi_piv[-1]
             broke = last > protected
             tone = "bull"
         else:
@@ -58,8 +60,12 @@ class StructureBreak:
         last_date = str(ohlcv["date"].iloc[-1])[:10]
         kind_txt = "ribassista (rotto l'ultimo minimo crescente)" if tone == "bear" \
             else "rialzista (rotto l'ultimo massimo decrescente)"
+        # The protected swing that defined the structure formed earlier; the
+        # break is now. Date the structure event at that swing so the chain
+        # spans the real setup instead of collapsing onto the break candle.
+        struct_date = str(ohlcv["date"].iloc[protected_idx])[:10]
         chain = [
-            {"date": last_date, "label": "Struttura di mercato",
+            {"date": struct_date, "label": "Struttura di mercato",
              "detail": "sequenza di massimi/minimi che definiva il trend"},
             {"date": last_date, "label": f"Rottura struttura {tone}",
              "detail": f"chiusura {last:.2f} oltre il livello protetto {protected:.2f} - {kind_txt}"},

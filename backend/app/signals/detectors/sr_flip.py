@@ -58,8 +58,21 @@ class SRFlip:
             conf = score(factors, {"retest_proximity": 1.0, "trend_alignment": 0.8})
             last_date = str(ohlcv["date"].iloc[-1])[:10]
             new_role = "supporto" if tone == "bull" else "resistenza"
+            # The break and the retest are DISTINCT moments: price crossed the
+            # level some bars ago (the breakout) and is only now pulling back
+            # to retest it. Date the break at the actual crossing bar so the
+            # chain spans real time instead of collapsing onto one candle.
+            if kind == "resistance":
+                thr = level * (1 + _BREAK_MARGIN)
+                crosses = [i for i in range(1, len(close))
+                           if close.iloc[i] > thr and close.iloc[i - 1] <= thr]
+            else:
+                thr = level * (1 - _BREAK_MARGIN)
+                crosses = [i for i in range(1, len(close))
+                           if close.iloc[i] < thr and close.iloc[i - 1] >= thr]
+            break_date = str(ohlcv["date"].iloc[crosses[-1]])[:10] if crosses else last_date
             chain = [
-                {"date": last_date, "label": f"Rottura {kind}",
+                {"date": break_date, "label": f"Rottura {kind}",
                  "detail": f"prezzo ha rotto il livello {level:.2f}"},
                 {"date": last_date, "label": f"Flip di polarita ({new_role})",
                  "detail": f"retest del livello {level:.2f} come nuovo {new_role}, tenuta"},

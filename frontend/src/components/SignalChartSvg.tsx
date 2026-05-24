@@ -313,26 +313,41 @@ export function SignalChartSvg({ bars, annotations, chain }: Props) {
         <polyline points={shapePts} fill="none" stroke="#a855f7" strokeWidth={1.4} strokeDasharray="3 2" opacity={0.9} />
       )}
 
-      {/* numbered markers (technical steps only), above the bar high */}
-      {chain.map((step, i) => {
-        const num = chainNum[i];
-        if (num == null) return null;
-        const idx = nearestIn(win, step.date);
-        if (idx == null) return null;
-        const x = cx(idx);
-        const top = y(win[idx].high);
-        let my = top - 13;
-        if (my < PAD_T + 8) my = y(win[idx].low) + 15;
-        return (
-          <g key={`mk-${i}`}>
-            <line x1={x} y1={my} x2={x} y2={top} stroke="#0f172a" strokeWidth={0.75} opacity={0.5} />
-            <circle cx={x} cy={my} r={8} fill="#0f172a" stroke="#fff" strokeWidth={1} />
-            <text x={x} y={my + 3} textAnchor="middle" fontSize={9} fill="#fff" fontWeight="bold">
-              {num}
-            </text>
-          </g>
-        );
-      })}
+      {/* numbered markers (technical steps only). Markers that resolve to
+          the SAME candle (e.g. a break + same-bar confirmation) are fanned
+          upward by a fixed step so they never hide one another. */}
+      {(() => {
+        type Mk = { num: number; idx: number; x: number; hi: number; lo: number };
+        const desc: Mk[] = [];
+        chain.forEach((step, i) => {
+          const num = chainNum[i];
+          if (num == null) return;
+          const idx = nearestIn(win, step.date);
+          if (idx == null) return;
+          desc.push({ num, idx, x: cx(idx), hi: y(win[idx].high), lo: y(win[idx].low) });
+        });
+        const usedByIdx: Record<number, number> = {};
+        const STEP = 19; // vertical gap between stacked markers (circle r=8)
+        return desc.map((d, k) => {
+          const order = usedByIdx[d.idx] ?? 0;
+          usedByIdx[d.idx] = order + 1;
+          let my = d.hi - 13 - order * STEP; // stack upward on collision
+          let anchorY = d.hi;
+          if (my < PAD_T + 8) {              // no headroom -> stack below the low
+            my = d.lo + 15 + order * STEP;
+            anchorY = d.lo;
+          }
+          return (
+            <g key={`mk-${k}`}>
+              <line x1={d.x} y1={my} x2={d.x} y2={anchorY} stroke="#0f172a" strokeWidth={0.75} opacity={0.5} />
+              <circle cx={d.x} cy={my} r={8} fill="#0f172a" stroke="#fff" strokeWidth={1} />
+              <text x={d.x} y={my + 3} textAnchor="middle" fontSize={9} fill="#fff" fontWeight="bold">
+                {d.num}
+              </text>
+            </g>
+          );
+        });
+      })()}
       {hover &&
         (() => {
           const hx = Math.max(PAD_L, Math.min(W - PAD_R, hover.x));
