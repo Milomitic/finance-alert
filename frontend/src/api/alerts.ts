@@ -1,6 +1,27 @@
 import { api } from "./client";
 import type { Alert, AlertList, DigestResult, ScanStatusInfo, ScanStopResultInfo, UnreadCount } from "./types";
 
+export interface ConfluenceComponent {
+  alert_id: number;
+  rule_kind: string;
+  signal_name: string;
+  confidence: number;
+  tone: string;
+  signal_date: string | null;
+}
+
+export interface Confluence {
+  ticker: string;
+  name: string | null;
+  direction: string;        // prevailing side: "bull" | "bear"
+  strength: number;
+  n_signals: number;
+  bull_strength: number;
+  bear_strength: number;
+  contested: boolean;
+  components: ConfluenceComponent[];
+}
+
 export interface AlertListParams {
   /** Exact-match ticker filter (legacy — not used by the UI anymore;
    *  superseded by `q` for the column-header search). Kept on the
@@ -79,4 +100,8 @@ export const alerts = {
       body: "{}",
     }),
   scanStatus: () => api<ScanStatusInfo>("/api/alerts/scan-status"),
+  /** Confluence clusters: active signal alerts grouped by ticker+direction,
+   *  strongest first. `days` = active-window length (default 7). */
+  confluence: (days = 7) =>
+    api<Confluence[]>(`/api/alerts/confluence?days=${days}`),
 };

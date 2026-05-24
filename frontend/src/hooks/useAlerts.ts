@@ -9,3 +9,13 @@ export function useAlertsList(params: AlertListParams) {
     placeholderData: keepPreviousData,
   });
 }
+
+/** Confluence clusters (active signals grouped by ticker+direction). */
+export function useConfluence(days = 7, enabled = true) {
+  return useQuery({
+    queryKey: ["confluence", days],
+    queryFn: () => alerts.confluence(days),
+    enabled,
+    staleTime: 60_000,
+  });
+}

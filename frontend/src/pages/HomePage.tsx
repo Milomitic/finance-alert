@@ -8,6 +8,7 @@ import { LiveVolumeMoversCard } from "@/components/dashboard/LiveVolumeMoversCar
 import { MarketTickerTape } from "@/components/dashboard/MarketTickerTape";
 import { PremarketMoversCard } from "@/components/dashboard/PremarketMoversCard";
 import { AnalystActionsCard } from "@/components/dashboard/AnalystActionsCard";
+import { ConfluenceCard } from "@/components/dashboard/ConfluenceCard";
 import { ScanHeaderButton } from "@/components/dashboard/ScanHeaderButton";
 import { TopMoversCard } from "@/components/dashboard/TopMoversCard";
 import { TopPicksCard } from "@/components/dashboard/TopPicksCard";
@@ -307,6 +308,9 @@ export default function HomePage() {
           />
         </div>
       )}
+      <div className="lg:h-[340px]">
+        <ConfluenceCard />
+      </div>
     </div>
   );
 }

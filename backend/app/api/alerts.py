@@ -27,7 +27,8 @@ from app.schemas.alert import (
     ScanStopResult,
     UnreadCountOut,
 )
-from app.services import alert_service
+from app.schemas.confluence import ConfluenceOut
+from app.services import alert_service, confluence_service
 from app.services.notifier_service import send_daily_digest
 from app.services.ohlcv_service import fetch_and_upsert
 from app.services.scan_runner import run_tracked_scan
@@ -397,6 +398,20 @@ def list_alerts(
         total=total,
         has_more=has_more,
     )
+
+
+@router.get("/confluence", response_model=list[ConfluenceOut])
+def get_confluence(
+    days: int = 7,
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+) -> list[ConfluenceOut]:
+    """Cluster currently-active signal alerts by ticker+direction and score the
+    agreement (confluence). Read-time aggregation over existing alerts - the
+    individual signals are untouched. `days` = active-window length (1-30)."""
+    window = max(1, min(days, 30))
+    clusters = confluence_service.compute_confluence(db, days=window)
+    return [ConfluenceOut.model_validate(c) for c in clusters]
 
 
 @router.get("/unread-count", response_model=UnreadCountOut)
