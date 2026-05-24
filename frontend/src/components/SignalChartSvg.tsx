@@ -64,6 +64,30 @@ const EMA_DEFS = [
   { p: 200, color: "#f59e0b" },
 ];
 
+function bbands(vals: number[], period = 20, k = 2): { up: number[]; lo: number[] } {
+  const up: number[] = [];
+  const lo: number[] = [];
+  for (let i = 0; i < vals.length; i++) {
+    if (i < period - 1) {
+      up.push(NaN);
+      lo.push(NaN);
+      continue;
+    }
+    let sum = 0;
+    for (let j = i - period + 1; j <= i; j++) sum += vals[j];
+    const mean = sum / period;
+    let v = 0;
+    for (let j = i - period + 1; j <= i; j++) {
+      const d = vals[j] - mean;
+      v += d * d;
+    }
+    const sd = Math.sqrt(v / period);
+    up.push(mean + k * sd);
+    lo.push(mean - k * sd);
+  }
+  return { up, lo };
+}
+
 export function SignalChartSvg({ bars, annotations, chain }: Props) {
   // Hover crosshair state (hooks run before any early return).
   const svgRef = useRef<SVGSVGElement>(null);
@@ -139,11 +163,15 @@ export function SignalChartSvg({ bars, annotations, chain }: Props) {
     vals: emaArr(closesFull, d.p).slice(startIdx, endIdx + 1),
   }));
   const emaAll = emaWin.flatMap((e) => e.vals).filter((v) => Number.isFinite(v));
+  const bb = bbands(closesFull, 20, 2);
+  const bbUp = bb.up.slice(startIdx, endIdx + 1);
+  const bbLo = bb.lo.slice(startIdx, endIdx + 1);
+  const bbAll = [...bbUp, ...bbLo].filter((v) => Number.isFinite(v));
 
   const lvlP = levels.map((l) => l.price).filter((p) => Number.isFinite(p));
   const ptP = points.map((p) => p.price).filter((p) => Number.isFinite(p));
-  const lo = Math.min(...win.map((b) => b.low), ...lvlP, ...ptP, ...emaAll);
-  const hi = Math.max(...win.map((b) => b.high), ...lvlP, ...ptP, ...emaAll);
+  const lo = Math.min(...win.map((b) => b.low), ...lvlP, ...ptP, ...emaAll, ...bbAll);
+  const hi = Math.max(...win.map((b) => b.high), ...lvlP, ...ptP, ...emaAll, ...bbAll);
   const range = hi - lo || 1;
   const innerW = W - PAD_L - PAD_R;
   const innerH = H - PAD_T - PAD_B;
@@ -153,6 +181,23 @@ export function SignalChartSvg({ bars, annotations, chain }: Props) {
   const candleW = Math.max(1.5, Math.min(slot * 0.62, 11));
 
   const yTicks = Array.from({ length: 5 }, (_, k) => lo + (range * k) / 4);
+
+  const bbUpLine = bbUp
+    .map((v, i) => (Number.isFinite(v) ? `${cx(i).toFixed(1)},${y(v).toFixed(1)}` : null))
+    .filter((q): q is string => q != null)
+    .join(" ");
+  const bbLoLine = bbLo
+    .map((v, i) => (Number.isFinite(v) ? `${cx(i).toFixed(1)},${y(v).toFixed(1)}` : null))
+    .filter((q): q is string => q != null)
+    .join(" ");
+  const bbIdx = bbUp.map((_, i) => i).filter((i) => Number.isFinite(bbUp[i]) && Number.isFinite(bbLo[i]));
+  const bbFill =
+    bbIdx.length >= 2
+      ? [
+          ...bbIdx.map((i) => `${cx(i).toFixed(1)},${y(bbUp[i]).toFixed(1)}`),
+          ...bbIdx.slice().reverse().map((i) => `${cx(i).toFixed(1)},${y(bbLo[i]).toFixed(1)}`),
+        ].join(" ")
+      : "";
 
   const shapePts = points
     .map((p) => {
@@ -224,6 +269,15 @@ export function SignalChartSvg({ bars, annotations, chain }: Props) {
           </g>
         );
       })}
+
+      {/* Bollinger Bands (20, 2 sigma) */}
+      {bbFill && <polygon points={bbFill} fill="#94a3b8" opacity={0.08} />}
+      {bbUpLine && (
+        <polyline points={bbUpLine} fill="none" stroke="#94a3b8" strokeWidth={0.75} strokeDasharray="2 2" opacity={0.55} />
+      )}
+      {bbLoLine && (
+        <polyline points={bbLoLine} fill="none" stroke="#94a3b8" strokeWidth={0.75} strokeDasharray="2 2" opacity={0.55} />
+      )}
 
       {/* candlesticks */}
       {win.map((b, i) => {
