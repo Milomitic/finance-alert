@@ -32,6 +32,26 @@ from app.signals.events import Event
 _CONF_WINDOW_DAYS = 3
 
 
+def _closes_in_direction(ohlcv: pd.DataFrame, iso_date: str, tone: str) -> bool:
+    """True if the bar at `iso_date` closes in the surprise direction (a green
+    candle for bull, red for bear). Validates the volume confirmation: a
+    high-volume day that closed AGAINST the surprise - e.g. a gap-up sold off
+    into a red candle - is distribution, not follow-through, and must not
+    confirm the drift. Real case: NIO 2026-05-21 spiked 3.2x volume but closed
+    a deep red candle (open 5.92 -> close 5.60); without this gate the volume
+    alone fired a bull PEAD right before the stock fell."""
+    try:
+        d = ohlcv["date"].astype(str).str[:10]
+        rows = ohlcv[d == iso_date[:10]]
+        if rows.empty:
+            return False
+        o = float(rows.iloc[-1]["open"])
+        c = float(rows.iloc[-1]["close"])
+    except Exception:  # noqa: BLE001 - defensive: never break the scan
+        return False
+    return c >= o if tone == "bull" else c <= o
+
+
 class Pead:
     name = "pead"
     tone = "dynamic"  # resolved per-match from the surprise direction
@@ -80,6 +100,12 @@ class Pead:
             events, "volume_spike", after=surprise.date, within_days=_CONF_WINDOW_DAYS,
         )
         vol = vol_same or vol_after
+        # Volume is direction-neutral, so a spike only confirms the drift if
+        # ITS bar closed in the surprise direction. The gap path is already
+        # directional (extract_gap only emits a held gap), so it needs no
+        # extra check here.
+        if vol is not None and not _closes_in_direction(ohlcv, vol.date, tone):
+            vol = None
 
         # Require at least one confirming event.
         if gap is None and vol is None:
