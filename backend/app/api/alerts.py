@@ -340,6 +340,7 @@ def list_alerts(
     archived: bool | None = False,
     tone: str | None = None,
     confidence_min: float | None = None,
+    nature: str | None = None,
     limit: int = 50,
     offset: int = 0,
     sort_by: str = "triggered_at",
@@ -369,6 +370,11 @@ def list_alerts(
             status_code=422,
             detail="confidence_min must be in [0, 100]",
         )
+    if nature is not None and nature not in ("continuazione", "inversione"):
+        raise HTTPException(
+            status_code=422,
+            detail="nature must be 'continuazione' or 'inversione'",
+        )
     items, total, has_more = alert_service.list_alerts(
         db,
         ticker=ticker,
@@ -380,6 +386,7 @@ def list_alerts(
         archived=archived,
         tone=tone,
         confidence_min=confidence_min,
+        nature=nature,
         limit=limit,
         offset=offset,
         sort_by=sort_by,

@@ -37,6 +37,21 @@ def derive_rule_kind(rule_kind: str | None, signal_name: str | None) -> str | No
     return None
 
 
+# Signal "nature": continuation (trend-following) vs reversal (mean-reversion).
+# chart_pattern is mixed (triangle=continuation, double-top/bottom=reversal) and
+# is intentionally excluded from both sets; the UI badge classifies it precisely
+# from the chain, but the coarse server-side filter leaves it out.
+_CONTINUATION_SIGNALS = {
+    "volume_breakout", "high52_momentum", "trend_pullback", "squeeze_expansion",
+    "gap_and_go", "adx_confirmation", "sr_flip", "structure_break",
+    "hidden_divergence", "pead", "analyst_momentum",
+}
+_REVERSAL_SIGNALS = {
+    "rsi_divergence", "macd_divergence", "oversold_reversal", "candle_reversal",
+    "insider_buy",
+}
+
+
 def _apply_filters(
     stmt,
     *,
@@ -49,6 +64,7 @@ def _apply_filters(
     archived: bool | None = None,
     tone: str | None = None,
     confidence_min: float | None = None,
+    nature: str | None = None,
 ):
     if ticker:
         stmt = stmt.where(func.lower(Stock.ticker) == ticker.lower())
@@ -85,6 +101,10 @@ def _apply_filters(
             sqlalchemy.cast(func.json_extract(Alert.snapshot, "$.confidence"), Float)
             >= confidence_min
         )
+    if nature == "continuazione":
+        stmt = stmt.where(Alert.signal_name.in_(_CONTINUATION_SIGNALS))
+    elif nature == "inversione":
+        stmt = stmt.where(Alert.signal_name.in_(_REVERSAL_SIGNALS))
     return stmt
 
 
@@ -100,6 +120,7 @@ def list_alerts(
     archived: bool | None = False,
     tone: str | None = None,
     confidence_min: float | None = None,
+    nature: str | None = None,
     limit: int = 50,
     offset: int = 0,
     sort_by: str = "triggered_at",
@@ -126,6 +147,7 @@ def list_alerts(
         archived=archived,
         tone=tone,
         confidence_min=confidence_min,
+        nature=nature,
     )
     count_stmt = select(func.count()).select_from(base.subquery())
     total = int(db.execute(count_stmt).scalar_one())

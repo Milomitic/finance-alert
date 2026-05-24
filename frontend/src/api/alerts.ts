@@ -15,6 +15,8 @@ export interface AlertListParams {
   tone?: string;
   /** Minimum confidence score 0-100. Only alerts with confidence >= this are returned. */
   confidence_min?: number;
+  /** Signal nature: 'continuazione' | 'inversione'. */
+  nature?: string;
   date_from?: string; // ISO date
   date_to?: string;
   read?: boolean;
@@ -32,6 +34,7 @@ function toQuery(params: AlertListParams): string {
   if (params.rule_kind) sp.set("rule_kind", params.rule_kind);
   if (params.tone) sp.set("tone", params.tone);
   if (params.confidence_min !== undefined) sp.set("confidence_min", String(params.confidence_min));
+  if (params.nature) sp.set("nature", params.nature);
   if (params.date_from) sp.set("date_from", params.date_from);
   if (params.date_to) sp.set("date_to", params.date_to);
   if (params.read !== undefined) sp.set("read", String(params.read));

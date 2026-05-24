@@ -189,3 +189,48 @@ export function resolveSnapshot(
 ): SnapshotResolution {
   return { rows: [], complete: false };
 }
+
+/* ─── Signal nature: continuation vs reversal ───────────────────────────── */
+const _CONTINUATION = new Set([
+  "volume_breakout", "high52_momentum", "trend_pullback", "squeeze_expansion",
+  "gap_and_go", "adx_confirmation", "sr_flip", "structure_break",
+  "hidden_divergence", "pead", "analyst_momentum",
+]);
+const _REVERSAL = new Set([
+  "rsi_divergence", "macd_divergence", "oversold_reversal", "candle_reversal",
+  "insider_buy",
+]);
+
+export type SignalNature = "continuazione" | "inversione" | "misto";
+
+/** Classify a signal as trend-continuation vs reversal. chart_pattern is mixed
+ *  and resolved from the chain labels (double top/bottom + H&S = reversal,
+ *  triangle/flag = continuation). Null for non-signal alerts. */
+export function signalNature(
+  rule_kind: string | null | undefined,
+  chain?: { label?: string }[],
+): SignalNature | null {
+  if (!isSignalKind(rule_kind)) return null;
+  const name = (rule_kind as string).slice("signal:".length);
+  if (_CONTINUATION.has(name)) return "continuazione";
+  if (_REVERSAL.has(name)) return "inversione";
+  if (name === "chart_pattern") {
+    const labels = (chain ?? []).map((c) => (c.label ?? "").toLowerCase()).join(" ");
+    if (/doppio|testa e spalle|inverse/.test(labels)) return "inversione";
+    if (/triangolo|flag|bandiera|cuneo/.test(labels)) return "continuazione";
+    return "misto";
+  }
+  return "misto";
+}
+
+export const NATURE_LABEL: Record<SignalNature, string> = {
+  continuazione: "Continuazione",
+  inversione: "Inversione",
+  misto: "Misto",
+};
+
+export const NATURE_BG: Record<SignalNature, string> = {
+  continuazione: "bg-sky-100 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300",
+  inversione: "bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-950/50 dark:text-fuchsia-300",
+  misto: "bg-muted text-muted-foreground",
+};

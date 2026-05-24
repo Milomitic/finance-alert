@@ -27,9 +27,12 @@ import { daysBetween, isDelayedDetection } from "@/lib/alertDates";
 import {
   TONE_BORDER_LEFT,
   TONE_TEXT,
+  NATURE_BG,
+  NATURE_LABEL,
   getAlertMeta,
   isSignalKind,
   resolveSnapshot,
+  signalNature,
   type AlertTone,
 } from "@/lib/alertMeta";
 import { cn } from "@/lib/utils";
@@ -134,6 +137,17 @@ export function AlertDetailDialog({ alert, onClose }: Props) {
             <div className="flex items-center gap-2 flex-wrap">
               <AlertKindChip alert={alert} />
               <AlertToneChip alert={alert} />
+              {(() => {
+                const nat = signalNature(
+                  alert.rule_kind,
+                  (alert.snapshot as { chain?: { label?: string }[] }).chain,
+                );
+                return nat ? (
+                  <span className={cn("inline-flex items-center rounded px-2 py-0.5 text-xs font-semibold", NATURE_BG[nat])}>
+                    {NATURE_LABEL[nat]}
+                  </span>
+                ) : null;
+              })()}
               {isArchived && (
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold bg-muted text-muted-foreground">
                   Archiviato

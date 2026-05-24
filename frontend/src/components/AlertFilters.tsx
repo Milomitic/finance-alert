@@ -122,7 +122,8 @@ export function AlertFilters({ value, onChange }: Props) {
     (status === "archived" ? 1 : 0) +
     (value.rule_kind ? 1 : 0) +
     (value.tone ? 1 : 0) +
-    (value.confidence_min != null ? 1 : 0);
+    (value.confidence_min != null ? 1 : 0) +
+    (value.nature ? 1 : 0);
 
   return (
     <Card>
@@ -214,6 +215,26 @@ export function AlertFilters({ value, onChange }: Props) {
                   {t.label}
                 </SelectItem>
               ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Natura — continuazione / inversione. "tutti" clears. */}
+        <div>
+          <Label className="text-xs uppercase tracking-wider text-muted-foreground">
+            Natura
+          </Label>
+          <Select
+            value={value.nature ?? "tutti"}
+            onValueChange={(v) => onChange({ ...value, nature: v === "tutti" ? undefined : v })}
+          >
+            <SelectTrigger className="mt-1">
+              <SelectValue placeholder="Tutte" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="tutti">Tutte</SelectItem>
+              <SelectItem value="continuazione">Continuazione</SelectItem>
+              <SelectItem value="inversione">Inversione</SelectItem>
             </SelectContent>
           </Select>
         </div>
