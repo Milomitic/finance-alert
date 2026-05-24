@@ -32,6 +32,15 @@ from app.models import Stock
 # never surfaced individually in the UI.
 HIDDEN_COUNTRIES: frozenset[str] = frozenset({"CN", "JP", "KR"})
 
+# US listings are ALWAYS surfaced regardless of domicile. A Chinese or
+# Japanese company trading as a NASDAQ / NYSE ADR (BIDU, PDD, TM, LI,
+# DQ, ...) is liquid and individually tradable, so the country-based
+# hide does not apply to it. Exchange labels match the catalog
+# convention (see catalog_refresh_service / source_catalog). This is the
+# standing rule: "stock cinesi/giapponesi quotate NASDAQ o NYSE devono
+# essere visibili e generare segnali".
+US_LISTED_EXCHANGES: frozenset[str] = frozenset({"NASDAQ", "NYSE", "NYSE Arca"})
+
 
 def visible_country_clause():
     """SQLAlchemy WHERE clause: rows whose country is NULL OR not in
@@ -44,13 +53,20 @@ def visible_country_clause():
     return or_(
         Stock.country.is_(None),
         ~Stock.country.in_(HIDDEN_COUNTRIES),
+        # US-listed ADRs of CN/JP/KR companies stay visible.
+        Stock.exchange.in_(US_LISTED_EXCHANGES),
     )
 
 
-def is_visible_country(country: str | None) -> bool:
+def is_visible_country(country: str | None, exchange: str | None = None) -> bool:
     """Python-side equivalent of `visible_country_clause()` for callsites
     that already have a `country` value in memory (e.g. filtering an
-    in-memory metrics list before passing to mover/treemap aggregators)."""
+    in-memory metrics list before passing to mover/treemap aggregators).
+
+    `exchange`, when supplied, applies the US-listed exception: a stock
+    on NASDAQ / NYSE is always visible regardless of its domicile."""
     if country is None:
+        return True
+    if exchange is not None and exchange in US_LISTED_EXCHANGES:
         return True
     return country.upper() not in HIDDEN_COUNTRIES

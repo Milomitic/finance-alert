@@ -67,6 +67,9 @@ class StockMetrics:
     # the user-facing aggregates (movers/treemap/sectors/top-picks).
     # Default None for legacy callers / test fixtures.
     country: str | None = None
+    # Listing exchange (NASDAQ / NYSE / BIT / ...). Used with `country`
+    # for the US-listed visibility exception (see app/core/visibility.py).
+    exchange: str | None = None
     # ISO-3 currency (USD/EUR/JPY/...) — listing currency from yfinance.
     # Used by `aggregate_by_index` to convert per-stock market caps to
     # USD before summing, so the breadth row's `total_market_cap` is
@@ -99,6 +102,7 @@ def compute_stock_metrics(
     *,
     country: str | None = None,
     currency: str | None = None,
+    exchange: str | None = None,
 ) -> StockMetrics | None:
     """Compute all metrics for one stock from its OHLCV history.
 
@@ -179,6 +183,7 @@ def compute_stock_metrics(
         sector=sector,
         country=country,
         currency=currency,
+        exchange=exchange,
         index_codes=index_codes,
         market_cap=market_cap,
         bars_count=n,
@@ -626,6 +631,7 @@ def _load_metrics(db: Session) -> tuple[list[StockMetrics], list[tuple[str, str]
             sector=stock.sector,
             country=stock.country,
             currency=stock.currency,
+            exchange=stock.exchange,
             index_codes=stock_to_indices.get(stock.id, []),
             market_cap=float(stock.market_cap) if stock.market_cap is not None else None,
             ohlcv=ohlcv,
@@ -668,7 +674,7 @@ def recompute_snapshot(db: Session, *, scan_run_id: int | None = None) -> Market
     See `app/core/visibility.py` for the country set.
     """
     metrics, indices = _load_metrics(db)
-    visible_metrics = [m for m in metrics if is_visible_country(m.country)]
+    visible_metrics = [m for m in metrics if is_visible_country(m.country, m.exchange)]
 
     # Pre-load composite scores in one SELECT so build_movers can stitch
     # the score next to the volume figures on the dashboard's
