@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
 from app.models import User
-from app.services.rule_performance_service import compute_performance
+from app.services.rule_performance_service import compute_calibration, compute_performance
 from pydantic import BaseModel
 
 router = APIRouter(prefix="/api/rule-performance", tags=["rule-performance"])
@@ -69,4 +69,37 @@ def list_rule_performance(
             )
             for p in perf
         ],
+    )
+
+
+class CalibrationBucketOut(BaseModel):
+    label: str
+    count: int
+    hit_rate: float | None
+    mean_pct: float | None
+    median_pct: float | None
+
+
+class CalibrationOut(BaseModel):
+    days: int
+    window: int
+    by_confidence: list[CalibrationBucketOut]
+    by_nature: list[CalibrationBucketOut]
+
+
+@router.get("/calibration", response_model=CalibrationOut)
+def get_calibration(
+    days: Annotated[int, Query(ge=7, le=730)] = 365,
+    window: Annotated[int, Query(ge=1, le=60)] = 20,
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+) -> CalibrationOut:
+    """Calibration: realized directional hit-rate + forward return by confidence
+    bucket and by nature, over `days`, at a `window`-day horizon."""
+    c = compute_calibration(db, days=days, window=window)
+    return CalibrationOut(
+        days=c.days,
+        window=c.window,
+        by_confidence=[CalibrationBucketOut(**vars(b)) for b in c.by_confidence],
+        by_nature=[CalibrationBucketOut(**vars(b)) for b in c.by_nature],
     )

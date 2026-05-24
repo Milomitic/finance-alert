@@ -31,15 +31,16 @@ def _add_bars(db, stock_id: int, start_date: date, closes: list[float]) -> None:
 
 
 def _make_alert(db, stock_id: int, signal_name: str, signal_date: date,
-                triggered_at: datetime | None = None) -> Alert:
+                triggered_at: datetime | None = None, tone: str | None = None) -> Alert:
     if triggered_at is None:
         triggered_at = datetime.now(UTC)
+    snapshot = f'{{"tone": "{tone}"}}' if tone else "{}"
     a = Alert(
         stock_id=stock_id,
         trigger_price=100.0,
         signal_date=signal_date,
         triggered_at=triggered_at,
-        snapshot="{}",
+        snapshot=snapshot,
         signal_name=signal_name,
     )
     db.add(a)
@@ -102,14 +103,14 @@ def test_bullish_signal_positive_return_counted_as_hit(db):
     closes = [100.0] + [110.0] * 24
     _add_bars(db, s.id, sig_date, closes)
 
-    _make_alert(db, s.id, "rsi_oversold", sig_date)
+    _make_alert(db, s.id, "rsi_oversold", sig_date, tone="bull")
     db.commit()
 
     rows = compute_performance(db, days=365, windows=(1,))
     assert len(rows) == 1
     row = rows[0]
     assert row.rule_kind == "signal:rsi_oversold"
-    assert row.tone == "bullish"
+    assert row.tone == "bull"
     s1 = row.stats[1]
     assert s1.count == 1
     assert s1.mean_pct is not None and s1.mean_pct > 0
@@ -123,13 +124,13 @@ def test_bearish_signal_negative_return_counted_as_hit(db):
     closes = [100.0] + [90.0] * 24
     _add_bars(db, s.id, sig_date, closes)
 
-    _make_alert(db, s.id, "rsi_overbought", sig_date)
+    _make_alert(db, s.id, "rsi_overbought", sig_date, tone="bear")
     db.commit()
 
     rows = compute_performance(db, days=365, windows=(1,))
     assert len(rows) == 1
     row = rows[0]
-    assert row.tone == "bearish"
+    assert row.tone == "bear"
     assert row.stats[1].hit_rate == 1.0
 
 
