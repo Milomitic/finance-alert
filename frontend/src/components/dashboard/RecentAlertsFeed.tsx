@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 
 import type { Alert } from "@/api/types";
 import { AlertDetailDialog } from "@/components/AlertDetailDialog";
+import { AlertNatureChip } from "@/components/AlertChips";
 import { StockIdentity } from "@/components/dashboard/StockIdentity";
 import { isDelayedDetection } from "@/lib/alertDates";
 import { TONE_BG, getAlertKindMeta } from "@/lib/alertMeta";
@@ -70,6 +71,10 @@ export function RecentAlertsFeed({ alerts }: Props) {
                     ) : (
                       <span className="font-medium min-w-[60px]">—</span>
                     )}
+                    {/* Nature chip (continuazione vs inversione) - renders
+                        only for signal alerts; null otherwise. Mirrors the
+                        new Natura column on the alerts-page table. */}
+                    <AlertNatureChip alert={a} size="sm" className="shrink-0" />
                     <span
                       className={cn(
                         "px-2 py-0.5 rounded text-xs font-semibold shrink-0",
@@ -78,6 +83,28 @@ export function RecentAlertsFeed({ alerts }: Props) {
                     >
                       {meta.label}
                     </span>
+                    {/* Confidence % - signals carry it in the snapshot;
+                        colored by conviction (rose<50, amber 50-69,
+                        emerald>=70), matching the table's Confidenza cell. */}
+                    {(() => {
+                      const conf = (a.snapshot as Record<string, unknown> | undefined)?.confidence;
+                      if (typeof conf !== "number") return null;
+                      const pct = Math.max(0, Math.min(100, Math.round(conf)));
+                      const txt =
+                        pct >= 70
+                          ? "text-emerald-600 dark:text-emerald-400"
+                          : pct >= 50
+                            ? "text-amber-600 dark:text-amber-400"
+                            : "text-rose-600 dark:text-rose-400";
+                      return (
+                        <span
+                          className={cn("text-xs font-semibold tabular-nums shrink-0", txt)}
+                          title={`Confidenza ${pct}%`}
+                        >
+                          {pct}%
+                        </span>
+                      );
+                    })()}
                     <span className="text-sm tabular-nums shrink-0">${a.trigger_price}</span>
                     {/* Date cell: signal_date is the primary "when did the
                         market do the thing"; detection time is secondary.

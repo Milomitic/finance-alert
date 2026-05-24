@@ -3,7 +3,7 @@ import { type MouseEvent, useState } from "react";
 import { Link } from "react-router-dom";
 
 import type { Alert } from "@/api/types";
-import { AlertKindChip, AlertToneCell } from "@/components/AlertChips";
+import { AlertKindChip, AlertNatureCell, AlertToneCell } from "@/components/AlertChips";
 import { StockLogo } from "@/components/dashboard/StockLogo";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ColumnVisibilityMenu } from "@/components/ui/column-visibility-menu";
@@ -31,6 +31,7 @@ const ALERTS_COLS = [
   { id: "rilevato",    label: "Rilevato" },
   { id: "regola",      label: "Regola" },
   { id: "catena",      label: "Catena" },
+  { id: "natura",      label: "Natura" },
   { id: "tono",        label: "Tono" },
   { id: "prezzo",      label: "Prezzo" },
   { id: "confidenza",  label: "Confidenza" },
@@ -261,6 +262,11 @@ export function AlertsTable({
           {!embedded && isVisible("catena") && (
             <TableHead className="text-base">Catena</TableHead>
           )}
+          {!embedded && isVisible("natura") && (
+            <TableHead className="text-base" title="Natura del segnale: continuazione del trend o inversione">
+              Natura
+            </TableHead>
+          )}
           {(embedded || isVisible("tono")) && (
             <TableHead className="text-base" title="Direzione semantica dell'alert (rialzista / ribassista / neutra)">
               Tono
@@ -415,6 +421,12 @@ export function AlertsTable({
               </TableCell>
             )}
             {/* Tono — embedded always shows; non-embedded toggleable */}
+            {/* Natura - continuazione vs inversione, non-embedded toggleable */}
+            {!embedded && isVisible("natura") && (
+              <TableCell>
+                <AlertNatureCell alert={a} size="sm" />
+              </TableCell>
+            )}
             {(embedded || isVisible("tono")) && (
               <TableCell>
                 <AlertToneCell alert={a} />

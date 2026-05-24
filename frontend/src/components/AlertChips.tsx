@@ -2,9 +2,12 @@ import { Minus, TrendingDown, TrendingUp } from "lucide-react";
 
 import type { Alert } from "@/api/types";
 import {
+  NATURE_BG,
+  NATURE_LABEL,
   TONE_BG,
   TONE_LABEL,
   getAlertMeta,
+  signalNature,
 } from "@/lib/alertMeta";
 import { cn } from "@/lib/utils";
 
@@ -110,6 +113,58 @@ export function AlertToneCell({ alert, size = "md" }: Props) {
     );
   }
   return <AlertToneChip alert={alert} size={size} />;
+}
+
+/* ─── AlertNatureChip + AlertNatureCell — continuation vs reversal ───────
+ *
+ * Signal alerts carry a "nature": is this a trend *continuation*
+ * (Continuazione) or a *reversal* (Inversione)? The classification lives
+ * in `signalNature(rule_kind, chain)` and is rendered identically in the
+ * alerts table, the dashboard feed, and the detail popup so the three
+ * surfaces never drift. Returns null for non-signal / unclassifiable
+ * alerts (the chip variant), or a faint em dash (the cell variant).
+ */
+export function AlertNatureChip({ alert, size = "md", className }: Props) {
+  const nat = signalNature(
+    alert.rule_kind,
+    (alert.snapshot as { chain?: { label?: string }[] } | undefined)?.chain,
+  );
+  if (!nat) return null;
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center rounded font-semibold whitespace-nowrap",
+        size === "sm" ? "px-1.5 py-0.5 text-[11px]" : "px-2 py-0.5 text-xs",
+        NATURE_BG[nat],
+        className,
+      )}
+      title={`Natura del segnale: ${NATURE_LABEL[nat].toLowerCase()}`}
+    >
+      {NATURE_LABEL[nat]}
+    </span>
+  );
+}
+
+/** Table-cell variant: renders a faint `—` placeholder for
+ *  non-signal alerts so the column stays aligned, the chip otherwise. */
+export function AlertNatureCell({ alert, size = "md" }: Props) {
+  const nat = signalNature(
+    alert.rule_kind,
+    (alert.snapshot as { chain?: { label?: string }[] } | undefined)?.chain,
+  );
+  if (!nat) {
+    return (
+      <span
+        className={cn(
+          "text-muted-foreground/60",
+          size === "sm" ? "text-[11px]" : "text-sm",
+        )}
+      >
+        —
+      </span>
+    );
+  }
+  return <AlertNatureChip alert={alert} size={size} />;
 }
 
 // Re-export Minus so consumers that want a placeholder icon don't have
