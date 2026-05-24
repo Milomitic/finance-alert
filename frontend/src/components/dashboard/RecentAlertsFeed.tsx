@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 
 import type { Alert } from "@/api/types";
-import { AlertNatureChip } from "@/components/AlertChips";
+import { AlertKindChip, AlertNatureChip } from "@/components/AlertChips";
 import { AlertDetailDialog } from "@/components/AlertDetailDialog";
 import { StockIdentity } from "@/components/dashboard/StockIdentity";
 import {
@@ -15,7 +15,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { isDelayedDetection } from "@/lib/alertDates";
-import { TONE_BG, getAlertKindMeta } from "@/lib/alertMeta";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -60,8 +59,6 @@ export function RecentAlertsFeed({ alerts }: Props) {
         </TableHeader>
         <TableBody>
           {alerts.map((a) => {
-            const meta = getAlertKindMeta(a.rule_kind);
-            const Icon = meta.icon;
             const delayed = isDelayedDetection(a.triggered_at, a.signal_date);
             const conf = (a.snapshot as Record<string, unknown> | undefined)?.confidence;
             const pct =
@@ -103,19 +100,11 @@ export function RecentAlertsFeed({ alerts }: Props) {
                 <TableCell className="py-2">
                   <AlertNatureChip alert={a} size="sm" />
                 </TableCell>
-                {/* Regola — canonical kind chip; identical markup to
-                    TopStocksTable so the two tables read the same. */}
+                {/* Regola — the shared AlertKindChip (same component the
+                    alerts-page table uses): friendly label, no "signal:"
+                    prefix, colored green/red by the snapshot bull/bear tone. */}
                 <TableCell className="py-2">
-                  <span
-                    className={cn(
-                      "inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold whitespace-nowrap",
-                      TONE_BG[meta.tone],
-                    )}
-                    title={meta.label}
-                  >
-                    <Icon className="h-3 w-3 shrink-0" />
-                    {meta.label}
-                  </span>
+                  <AlertKindChip alert={a} size="sm" />
                 </TableCell>
                 {/* Confidenza — colored by conviction; em dash when absent. */}
                 <TableCell className="py-2 text-right">

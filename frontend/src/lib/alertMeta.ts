@@ -32,6 +32,14 @@ export interface AlertKindMeta {
  *  with a Bell icon — matches the legacy convention used for non-rule alerts
  *  (e.g. user-defined price targets that bypass the rule engine). */
 export function getAlertKindMeta(rule_kind: string | null | undefined): AlertKindMeta {
+  // Signal kinds get a friendly label + icon (no "signal:" prefix). Tone
+  // stays neutral here because a bare kind string carries no bull/bear
+  // direction - that lives in the per-alert snapshot, which kind-only
+  // callers (Top Stocks aggregate, Settings perf table) do not have.
+  if (isSignalKind(rule_kind)) {
+    const { label, icon } = signalMeta(rule_kind as string);
+    return { label, icon, tone: "neutral" };
+  }
   return {
     label: rule_kind ?? "Price alert",
     icon: Bell,
@@ -52,6 +60,18 @@ const SIGNAL_META: Record<string, { label: string; icon: LucideIcon }> = {
   rsi_divergence: { label: "Divergenza RSI", icon: Activity },
   squeeze_expansion: { label: "Squeeze + Espansione", icon: ChevronsUp },
   high52_momentum: { label: "Massimo 52 settimane", icon: ArrowUpToLine },
+  gap_and_go: { label: "Gap and Go", icon: Zap },
+  adx_confirmation: { label: "Conferma ADX", icon: Activity },
+  sr_flip: { label: "Flip S/R", icon: Activity },
+  structure_break: { label: "Rottura struttura", icon: ChevronsUp },
+  hidden_divergence: { label: "Divergenza nascosta", icon: Activity },
+  pead: { label: "Drift post-utili", icon: Zap },
+  analyst_momentum: { label: "Momentum analisti", icon: TrendingUp },
+  macd_divergence: { label: "Divergenza MACD", icon: Activity },
+  oversold_reversal: { label: "Inversione ipervenduto", icon: Activity },
+  candle_reversal: { label: "Inversione a candela", icon: Activity },
+  insider_buy: { label: "Acquisti insider", icon: TrendingUp },
+  chart_pattern: { label: "Pattern grafico", icon: Activity },
 };
 
 function signalMeta(rule_kind: string): { label: string; icon: LucideIcon } {

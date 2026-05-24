@@ -10,7 +10,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { TONE_BG, getAlertKindMeta } from "@/lib/alertMeta";
+import {
+  NATURE_BG,
+  NATURE_LABEL,
+  TONE_BG,
+  getAlertKindMeta,
+  signalNature,
+} from "@/lib/alertMeta";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -59,6 +65,7 @@ export function TopStocksTable({ data }: Props) {
         <TableHeader>
           <TableRow>
             <TableHead className="text-xs">Stock</TableHead>
+            <TableHead className="text-xs">Natura</TableHead>
             <TableHead className="text-xs">Regola top</TableHead>
             <TableHead className="text-xs text-right pr-4">Alert</TableHead>
           </TableRow>
@@ -67,6 +74,9 @@ export function TopStocksTable({ data }: Props) {
           {data.map((s) => {
             const meta = s.top_kind ? getAlertKindMeta(s.top_kind) : null;
             const Icon = meta?.icon;
+            // Nature of the stock most-frequent signal kind. No chain here
+            // (aggregate row), so chart_pattern resolves to "misto".
+            const nature = s.top_kind ? signalNature(s.top_kind) : null;
             return (
               <TableRow key={s.stock_id} className="hover:bg-accent/30">
                 {/* Identity cell: logo + ticker (link) + name. Single column
@@ -78,6 +88,23 @@ export function TopStocksTable({ data }: Props) {
                   >
                     <StockIdentity ticker={s.ticker} name={s.name} />
                   </Link>
+                </TableCell>
+                {/* Natura cell: continuazione / inversione chip, mirroring
+                    the dashboard FEED + alerts-page Natura column. */}
+                <TableCell className="py-2">
+                  {nature ? (
+                    <span
+                      className={cn(
+                        "inline-flex items-center rounded px-1.5 py-0.5 text-[11px] font-semibold whitespace-nowrap",
+                        NATURE_BG[nature],
+                      )}
+                      title={`Natura del segnale: ${NATURE_LABEL[nature].toLowerCase()}`}
+                    >
+                      {NATURE_LABEL[nature]}
+                    </span>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">—</span>
+                  )}
                 </TableCell>
                 {/* Top rule cell: canonical chip with icon + tone (matches
                     the rest of the app — alerts page, stock detail card). */}
