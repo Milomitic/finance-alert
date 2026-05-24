@@ -27,6 +27,13 @@ from datetime import UTC, date, datetime, timedelta
 _MAX_AGE_DAYS = 90
 # Hard cap so the card render stays cheap and scannable.
 _MAX_ITEMS = 40
+# Genuine rating CHANGES only - upgrades, downgrades, coverage initiations.
+# The dashboard card drops "Maintain"/"Reiterate" rows (a firm reaffirming
+# with no change) as noise. Mirror of the frontend CHANGE_ACTIONS set so the
+# limit is applied to the *filtered* stream, not before it (otherwise 40
+# maintains crowd out the handful of real changes). Kept module-level so the
+# API endpoint can pass it without re-declaring the vocabulary.
+CHANGE_ACTIONS = frozenset({"up", "down", "init"})
 
 
 @dataclass
@@ -57,11 +64,20 @@ def _parse_iso(d: str) -> date | None:
         return None
 
 
-def recent_actions(limit: int = _MAX_ITEMS) -> list[AnalystActionFeedItem]:
+def recent_actions(
+    limit: int = _MAX_ITEMS,
+    actions: frozenset[str] | set[str] | None = None,
+) -> list[AnalystActionFeedItem]:
     """Flatten + rank the most recent analyst actions across the pool.
 
     Reads `stock_fundamentals_service._CACHE` (L1). Returns at most
     `limit` items, newest first, filtered to the last `_MAX_AGE_DAYS`.
+
+    `actions`: when given, keep only items whose `action` is in the set
+    (e.g. `CHANGE_ACTIONS` for upgrades/downgrades/initiations). The
+    filter is applied BEFORE the `limit` truncation so the cap bounds the
+    filtered stream - critical because Maintain rows outnumber genuine
+    changes ~25:1 and would otherwise fill the whole window.
     """
     # Lazy import: avoid a heavy import at module load + keep the
     # dependency direction one-way (services → this, not this → services
@@ -74,8 +90,8 @@ def recent_actions(limit: int = _MAX_ITEMS) -> list[AnalystActionFeedItem]:
     # Snapshot the cache values; _CACHE may be mutated concurrently by a
     # fetch on another thread. dict.values() over a list copy is safe.
     for fund in list(sfs._CACHE.values()):
-        actions = getattr(fund, "analyst_actions", None) or []
-        if not actions:
+        fund_actions = getattr(fund, "analyst_actions", None) or []
+        if not fund_actions:
             continue
         ticker = getattr(fund, "ticker", "") or ""
         # Fundamentals carries only the ticker — the company name lives
@@ -83,7 +99,10 @@ def recent_actions(limit: int = _MAX_ITEMS) -> list[AnalystActionFeedItem]:
         # the API endpoint enrich names via a single batched query (it
         # has the DB session; this service stays cache-only).
         name = ticker
-        for a in actions:
+        for a in fund_actions:
+            act = getattr(a, "action", "") or ""
+            if actions is not None and act not in actions:
+                continue
             d = _parse_iso(getattr(a, "date", "") or "")
             if d is None or d < cutoff:
                 continue
@@ -96,7 +115,7 @@ def recent_actions(limit: int = _MAX_ITEMS) -> list[AnalystActionFeedItem]:
                     firm=getattr(a, "firm", "") or "",
                     to_grade=getattr(a, "to_grade", "") or "",
                     from_grade=getattr(a, "from_grade", "") or "",
-                    action=getattr(a, "action", "") or "",
+                    action=act,
                     current_price_target=getattr(a, "current_price_target", None),
                     prior_price_target=getattr(a, "prior_price_target", None),
                     price_target_action=getattr(a, "price_target_action", None),

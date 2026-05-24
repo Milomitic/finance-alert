@@ -62,7 +62,14 @@ def get_analyst_actions(
     newest first. Aggregated from the in-memory L1 fundamentals cache
     (see `analyst_actions_feed`), then enriched with company names via a
     single batched query against the Stock table."""
-    items = analyst_actions_feed.recent_actions(limit=max(1, min(limit, 100)))
+    # Filter to genuine rating CHANGES (up/down/init) on the backend so the
+    # `limit` bounds the changes stream - not the Maintain-dominated raw feed.
+    # (The frontend also filters, but that ran AFTER the limit, leaving only a
+    # couple of changes when 40 maintains crowded the window.)
+    items = analyst_actions_feed.recent_actions(
+        limit=max(1, min(limit, 100)),
+        actions=analyst_actions_feed.CHANGE_ACTIONS,
+    )
     if not items:
         return []
     # Batch-resolve ticker → name in one query instead of N.

@@ -3,9 +3,17 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 
 import type { Alert } from "@/api/types";
-import { AlertDetailDialog } from "@/components/AlertDetailDialog";
 import { AlertNatureChip } from "@/components/AlertChips";
+import { AlertDetailDialog } from "@/components/AlertDetailDialog";
 import { StockIdentity } from "@/components/dashboard/StockIdentity";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { isDelayedDetection } from "@/lib/alertDates";
 import { TONE_BG, getAlertKindMeta } from "@/lib/alertMeta";
 import { cn } from "@/lib/utils";
@@ -15,134 +23,149 @@ interface Props {
 }
 
 /**
- * Was: wrapped in a Card with an "Alert recenti" CardHeader. The
- * surrounding AlertsCompactPanel column already has its own "FEED"
- * header so the inner Card produced a redundant double-frame and a
- * duplicated subtitle. Now renders raw — caller's column header is
- * the only label.
+ * Dashboard "FEED" — most recent alerts, newest first.
+ *
+ * Rebuilt as a real <Table> (was a flex <ul>) so its columns align
+ * vertically and match the sibling "TOP STOCKS" table in the same panel:
+ * Titolo · Natura · Regola · Conf. · Prezzo · Data. A flex list gives each
+ * row its own widths, so the chips never lined up; a table shares one
+ * width per column across all rows, which is exactly the alignment the
+ * user asked for. Row click opens the detail dialog; the ticker is a Link
+ * that navigates to the stock page (and stops row propagation).
  */
 export function RecentAlertsFeed({ alerts }: Props) {
   const [openDetail, setOpenDetail] = useState<Alert | null>(null);
 
+  if (alerts.length === 0) {
+    return (
+      <div className="p-6 text-center text-sm text-muted-foreground">
+        Nessun alert recente. Esegui uno scan da{" "}
+        <span className="underline">/alerts</span> per generarli.
+      </div>
+    );
+  }
+
   return (
     <>
-      <div>
-        {alerts.length === 0 ? (
-          <div className="p-6 text-center text-sm text-muted-foreground">
-            Nessun alert recente. Esegui uno scan da{" "}
-            <span className="underline">/alerts</span> per generarli.
-          </div>
-        ) : (
-            <ul className="divide-y">
-              {alerts.map((a) => {
-                const meta = getAlertKindMeta(a.rule_kind);
-                const Icon = meta.icon;
-                return (
-                  <li
-                    key={a.id}
-                    className="px-3 py-2 cursor-pointer hover:bg-accent transition-colors flex items-center gap-2 min-w-0"
-                    onClick={() => setOpenDetail(a)}
-                  >
-                    {/* Tone-colored kind chip with icon — replaces the
-                        previous emoji-only marker; consistent with the rest
-                        of the alert UI surfaces (table, history card, dialog) */}
-                    <span
-                      className={cn(
-                        "inline-flex items-center justify-center h-6 w-6 rounded shrink-0",
-                        TONE_BG[meta.tone],
-                      )}
-                      title={meta.label}
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead className="text-xs">Titolo</TableHead>
+            <TableHead className="text-xs">Natura</TableHead>
+            <TableHead className="text-xs">Regola</TableHead>
+            <TableHead className="text-xs text-right">Conf.</TableHead>
+            <TableHead className="text-xs text-right">Prezzo</TableHead>
+            <TableHead className="text-xs text-right pr-4">Data</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {alerts.map((a) => {
+            const meta = getAlertKindMeta(a.rule_kind);
+            const Icon = meta.icon;
+            const delayed = isDelayedDetection(a.triggered_at, a.signal_date);
+            const conf = (a.snapshot as Record<string, unknown> | undefined)?.confidence;
+            const pct =
+              typeof conf === "number"
+                ? Math.max(0, Math.min(100, Math.round(conf)))
+                : null;
+            const confTxt =
+              pct == null
+                ? ""
+                : pct >= 70
+                  ? "text-emerald-600 dark:text-emerald-400"
+                  : pct >= 50
+                    ? "text-amber-600 dark:text-amber-400"
+                    : "text-rose-600 dark:text-rose-400";
+            return (
+              <TableRow
+                key={a.id}
+                className="cursor-pointer hover:bg-accent/30"
+                onClick={() => setOpenDetail(a)}
+              >
+                {/* Titolo — identity; ticker links out and stops the row click.
+                    max-w caps a very long name so it truncates instead of
+                    blowing out the column width. */}
+                <TableCell className="py-2">
+                  {a.ticker ? (
+                    <Link
+                      to={`/stocks/${encodeURIComponent(a.ticker)}`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="flex items-center gap-2 min-w-0 max-w-[200px] hover:underline"
                     >
-                      <Icon className="h-3.5 w-3.5" />
-                    </span>
-                    {/* Identity block matches Top Movers / 52w / Top Stocks /
-                        Top Picks: logo + ticker bold + name muted truncated.
-                        The Link wraps the identity so the row stays clickable
-                        for the detail dialog while ticker click navigates to
-                        the stock page. */}
-                    {a.ticker ? (
-                      <Link
-                        to={`/stocks/${encodeURIComponent(a.ticker)}`}
-                        onClick={(e) => e.stopPropagation()}
-                        className="flex items-center gap-2 hover:underline min-w-0 flex-1"
-                      >
-                        <StockIdentity ticker={a.ticker} name={a.name} />
-                      </Link>
-                    ) : (
-                      <span className="font-medium min-w-[60px]">—</span>
+                      <StockIdentity ticker={a.ticker} name={a.name} />
+                    </Link>
+                  ) : (
+                    <span className="font-medium">—</span>
+                  )}
+                </TableCell>
+                {/* Natura — continuazione/inversione chip (signals only;
+                    renders nothing for non-signal alerts). */}
+                <TableCell className="py-2">
+                  <AlertNatureChip alert={a} size="sm" />
+                </TableCell>
+                {/* Regola — canonical kind chip; identical markup to
+                    TopStocksTable so the two tables read the same. */}
+                <TableCell className="py-2">
+                  <span
+                    className={cn(
+                      "inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold whitespace-nowrap",
+                      TONE_BG[meta.tone],
                     )}
-                    {/* Nature chip (continuazione vs inversione) - renders
-                        only for signal alerts; null otherwise. Mirrors the
-                        new Natura column on the alerts-page table. */}
-                    <AlertNatureChip alert={a} size="sm" className="shrink-0" />
+                    title={meta.label}
+                  >
+                    <Icon className="h-3 w-3 shrink-0" />
+                    {meta.label}
+                  </span>
+                </TableCell>
+                {/* Confidenza — colored by conviction; em dash when absent. */}
+                <TableCell className="py-2 text-right">
+                  {pct == null ? (
+                    <span className="text-muted-foreground">—</span>
+                  ) : (
                     <span
-                      className={cn(
-                        "px-2 py-0.5 rounded text-xs font-semibold shrink-0",
-                        TONE_BG[meta.tone],
-                      )}
+                      className={cn("text-xs font-semibold tabular-nums", confTxt)}
+                      title={`Confidenza ${pct}%`}
                     >
-                      {meta.label}
+                      {pct}%
                     </span>
-                    {/* Confidence % - signals carry it in the snapshot;
-                        colored by conviction (rose<50, amber 50-69,
-                        emerald>=70), matching the table's Confidenza cell. */}
-                    {(() => {
-                      const conf = (a.snapshot as Record<string, unknown> | undefined)?.confidence;
-                      if (typeof conf !== "number") return null;
-                      const pct = Math.max(0, Math.min(100, Math.round(conf)));
-                      const txt =
-                        pct >= 70
-                          ? "text-emerald-600 dark:text-emerald-400"
-                          : pct >= 50
-                            ? "text-amber-600 dark:text-amber-400"
-                            : "text-rose-600 dark:text-rose-400";
-                      return (
-                        <span
-                          className={cn("text-xs font-semibold tabular-nums shrink-0", txt)}
-                          title={`Confidenza ${pct}%`}
-                        >
-                          {pct}%
-                        </span>
-                      );
-                    })()}
-                    <span className="text-sm tabular-nums shrink-0">${a.trigger_price}</span>
-                    {/* Date cell: signal_date is the primary "when did the
-                        market do the thing"; detection time is secondary.
-                        Orange clock chip flags ≥1-day-delayed detection. */}
-                    {(() => {
-                      const delayed = isDelayedDetection(a.triggered_at, a.signal_date);
-                      return (
-                        <span
-                          className="ml-auto text-xs text-muted-foreground tabular-nums inline-flex items-center gap-1"
-                          title={
-                            a.signal_date
-                              ? `Segnale: ${a.signal_date} · Rilevato: ${new Date(a.triggered_at).toLocaleString("it-IT")}`
-                              : new Date(a.triggered_at).toLocaleString("it-IT")
-                          }
-                        >
-                          {delayed && (
-                            <Clock className="h-3 w-3 text-amber-600 dark:text-amber-400" />
-                          )}
-                          {a.signal_date
-                            ? new Date(a.signal_date).toLocaleDateString("it-IT", {
-                                day: "2-digit",
-                                month: "2-digit",
-                              })
-                            : new Date(a.triggered_at).toLocaleString("it-IT", {
-                                day: "2-digit",
-                                month: "2-digit",
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })}
-                        </span>
-                      );
-                    })()}
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-      </div>
+                  )}
+                </TableCell>
+                {/* Prezzo */}
+                <TableCell className="py-2 text-right tabular-nums font-semibold">
+                  ${a.trigger_price}
+                </TableCell>
+                {/* Data — signal_date primary; orange clock flags a lagged
+                    detection (>=1 day after the market bar). */}
+                <TableCell className="py-2 text-right pr-4">
+                  <span
+                    className="inline-flex items-center justify-end gap-1 text-xs text-muted-foreground tabular-nums whitespace-nowrap"
+                    title={
+                      a.signal_date
+                        ? `Segnale: ${a.signal_date} · Rilevato: ${new Date(a.triggered_at).toLocaleString("it-IT")}`
+                        : new Date(a.triggered_at).toLocaleString("it-IT")
+                    }
+                  >
+                    {delayed && (
+                      <Clock className="h-3 w-3 text-amber-600 dark:text-amber-400" />
+                    )}
+                    {a.signal_date
+                      ? new Date(a.signal_date).toLocaleDateString("it-IT", {
+                          day: "2-digit",
+                          month: "2-digit",
+                        })
+                      : new Date(a.triggered_at).toLocaleString("it-IT", {
+                          day: "2-digit",
+                          month: "2-digit",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                  </span>
+                </TableCell>
+              </TableRow>
+            );
+          })}
+        </TableBody>
+      </Table>
       <AlertDetailDialog alert={openDetail} onClose={() => setOpenDetail(null)} />
     </>
   );
