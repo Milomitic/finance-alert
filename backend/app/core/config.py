@@ -32,6 +32,16 @@ class Settings(BaseSettings):
     # Stops the first scan after a deploy/backfill from flooding the feed with
     # months-old setups (the ~260-bar window contains a year of history).
     signal_max_age_days: int = 7
+    # Dedup cooldown: a "state" detector (trend_pullback, sr_flip, oversold,
+    # high52, structure_break, chart_pattern, adx_confirmation, volume_breakout)
+    # stamps signal_date on the LATEST bar, so the same ongoing setup would mint
+    # a new (stock, name, signal_date) every day the condition holds -> a stream
+    # of near-duplicate alerts differing only in price. Within this many days of
+    # an existing same-(stock, signal, direction) alert we treat the detection
+    # as the SAME setup: refresh the live alert in place (or respect an archive)
+    # instead of inserting a duplicate. The anchor moves forward on each refresh,
+    # so an indefinitely-persistent setup stays a single living alert.
+    signal_dedup_cooldown_days: int = 14
     # Quality gates to cut false positives (both default ON; override in .env).
     # Regime gate: drop trend-following signals whose direction contradicts the
     # prevailing EMA200-slope trend (reversal/fundamental detectors are exempt).

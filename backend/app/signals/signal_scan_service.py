@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import json
-from datetime import date
+from datetime import UTC, date, datetime
 
 import pandas as pd
 from loguru import logger
@@ -103,16 +103,6 @@ def evaluate_signals(db: Session, stock: Stock, ohlcv: pd.DataFrame) -> int:
         if sig_date is not None and last_bar_date is not None \
                 and (last_bar_date - sig_date).days > settings.signal_max_age_days:
             continue
-        # Dedup: same (stock, signal, signal_date) already emitted -> skip.
-        exists = db.execute(
-            select(Alert.id).where(
-                Alert.stock_id == stock.id,
-                Alert.signal_name == m.name,
-                Alert.signal_date == sig_date,
-            ).limit(1)
-        ).scalars().first()
-        if exists is not None:
-            continue
         ann = {"levels": list(m.annotations.get("levels", [])),
                "points": list(m.annotations.get("points", []))}
         inv = m.invalidation or {}
@@ -126,6 +116,32 @@ def evaluate_signals(db: Session, stock: Stock, ohlcv: pd.DataFrame) -> int:
             "annotations": ann, "atr": _atr,
             "horizon": classify_horizon(m.name, m.chain),
         }
+        # Cooldown + refresh dedup. Several "state" detectors stamp signal_date
+        # on the LATEST bar, so the same ongoing setup would otherwise mint a new
+        # (stock, name, signal_date) every day the condition holds -> a stream of
+        # near-duplicate alerts differing only in price. Instead: find the most
+        # recent same-(stock, signal) alert; if it shares the direction and sits
+        # within the cooldown window, treat this detection as the SAME setup.
+        prior = db.execute(
+            select(Alert)
+            .where(Alert.stock_id == stock.id, Alert.signal_name == m.name)
+            .order_by(Alert.signal_date.desc().nullslast(), Alert.triggered_at.desc())
+            .limit(1)
+        ).scalars().first()
+        if prior is not None and _snapshot_tone(prior.snapshot) == m.tone \
+                and _within_cooldown(prior.signal_date, sig_date):
+            if prior.archived_at is None:
+                # Same ongoing setup -> refresh the live alert with the latest
+                # price/snapshot in place. signal_date + triggered_at both move
+                # forward together so the anchor advances (a persistent setup
+                # stays ONE alert) without faking a delayed-detection gap.
+                prior.trigger_price = last_close
+                prior.signal_date = sig_date
+                prior.snapshot = json.dumps(snapshot)
+                prior.triggered_at = datetime.now(UTC)
+            # Archived within the window: respect the user's archive, don't
+            # resurrect it. Either way, no new row.
+            continue
         db.add(Alert(
             stock_id=stock.id, trigger_price=last_close,
             signal_date=sig_date, signal_name=m.name,
@@ -133,6 +149,24 @@ def evaluate_signals(db: Session, stock: Stock, ohlcv: pd.DataFrame) -> int:
         ))
         added += 1
     return added
+
+
+def _snapshot_tone(snapshot_str: str | None) -> str | None:
+    """Read the stored tone from an Alert.snapshot JSON blob (None on any
+    parse failure -- never raises, so dedup can't be derailed by a bad row)."""
+    try:
+        return json.loads(snapshot_str).get("tone") if snapshot_str else None
+    except (ValueError, TypeError, AttributeError):
+        return None
+
+
+def _within_cooldown(prior_date: date | None, sig_date: date | None) -> bool:
+    """True when `sig_date` falls within the dedup cooldown window AFTER
+    `prior_date`. Two NULL-dated signals share one slot (legacy exact-match
+    behavior); a NULL on only one side never collapses."""
+    if prior_date is None or sig_date is None:
+        return prior_date is None and sig_date is None
+    return 0 <= (sig_date - prior_date).days <= settings.signal_dedup_cooldown_days
 
 
 def _detector_for(name: str):
