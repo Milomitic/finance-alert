@@ -9,6 +9,7 @@ class ConfluenceComponentOut(BaseModel):
     signal_name: str
     confidence: float
     tone: str
+    horizon: str
     signal_date: str | None = None
 
 
@@ -22,4 +23,6 @@ class ConfluenceOut(BaseModel):
     bull_strength: float
     bear_strength: float
     contested: bool
+    multi_horizon: bool
+    horizons: list[str]
     components: list[ConfluenceComponentOut]

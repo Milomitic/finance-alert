@@ -58,6 +58,9 @@ export function ConfluenceCard({ limit = 8 }: { limit?: number }) {
                         conteso
                       </span>
                     )}
+                    {c.multi_horizon && (
+                      <Layers className="h-3 w-3 text-indigo-500 dark:text-indigo-400 shrink-0" aria-label="Multi-orizzonte" />
+                    )}
                     <div className="ml-auto flex items-center gap-1.5 shrink-0">
                       <div className="h-1.5 w-16 rounded-full bg-muted overflow-hidden">
                         <div

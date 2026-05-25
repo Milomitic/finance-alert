@@ -13,11 +13,11 @@ def _stock(db, ticker):
     return s
 
 
-def _add(db, stock_id, name, conf, tone):
+def _add(db, stock_id, name, conf, tone, horizon="medium"):
     db.add(Alert(
         stock_id=stock_id, trigger_price=10, signal_date=date.today(),
         signal_name=name,
-        snapshot=json.dumps({"tone": tone, "confidence": conf, "chain": []}),
+        snapshot=json.dumps({"tone": tone, "confidence": conf, "chain": [], "horizon": horizon}),
     ))
 
 
@@ -88,3 +88,36 @@ def test_stale_signals_excluded_by_window(db):
                  snapshot=json.dumps({"tone": "bull", "confidence": 80, "chain": []})))
     db.commit()
     assert compute_confluence(db, days=7) == []
+
+
+def test_multi_horizon_flag_set_when_prevailing_spans_two_horizons(db):
+    s = _stock(db, "MHX")
+    _add(db, s.id, "trend_pullback", 90, "bull", horizon="long")
+    _add(db, s.id, "candle_reversal", 70, "bull", horizon="short")
+    db.commit()
+    c = compute_confluence(db, days=30)[0]
+    assert c.multi_horizon is True
+    assert c.horizons == ["short", "long"]
+
+
+def test_multi_horizon_false_when_single_horizon(db):
+    s = _stock(db, "MHY")
+    _add(db, s.id, "trend_pullback", 90, "bull", horizon="long")
+    _add(db, s.id, "high52_momentum", 70, "bull", horizon="long")
+    db.commit()
+    c = compute_confluence(db, days=30)[0]
+    assert c.multi_horizon is False
+    assert c.horizons == ["long"]
+
+
+def test_multi_horizon_only_counts_prevailing_direction(db):
+    # bull is prevailing (stronger); a lone bear of a different horizon must
+    # NOT make it multi-horizon.
+    s = _stock(db, "MHZ")
+    _add(db, s.id, "trend_pullback", 95, "bull", horizon="long")
+    _add(db, s.id, "high52_momentum", 90, "bull", horizon="long")
+    _add(db, s.id, "candle_reversal", 60, "bear", horizon="short")
+    db.commit()
+    c = compute_confluence(db, days=30)[0]
+    assert c.direction == "bull"
+    assert c.multi_horizon is False  # both bull components are "long"

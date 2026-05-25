@@ -40,6 +40,7 @@ class ConfluenceComponent:
     signal_name: str
     confidence: float
     tone: str               # "bull" | "bear"
+    horizon: str            # "short" | "medium" | "long"
     signal_date: str | None
 
 
@@ -53,6 +54,12 @@ class ConfluenceCluster:
     bull_strength: float
     bear_strength: float
     contested: bool
+    # True when the agreeing (prevailing-direction) components span >= 2
+    # distinct horizons (e.g. a long-term trend + a short-term trigger that
+    # concur) -- the "timeframes aligned" setup. INFORMATIONAL: it does NOT
+    # boost strength until a backtest validates that such clusters outperform.
+    multi_horizon: bool
+    horizons: list[str]     # distinct horizons among prevailing components
     components: list[ConfluenceComponent]
 
 
@@ -69,9 +76,10 @@ def compute_confluence(db: Session, *, days: int | None = None) -> list[Confluen
     cutoff = datetime.now(UTC).date() - timedelta(days=window)
     conf_col = cast(func.json_extract(Alert.snapshot, "$.confidence"), Float)
     tone_col = func.json_extract(Alert.snapshot, "$.tone")
+    hz_col = func.json_extract(Alert.snapshot, "$.horizon")
     rows = db.execute(
         select(Alert.id, Stock.ticker, Stock.name, Alert.signal_name,
-               Alert.signal_date, conf_col, tone_col)
+               Alert.signal_date, conf_col, tone_col, hz_col)
         .join(Stock, Stock.id == Alert.stock_id)
         .where(Alert.signal_name.is_not(None))
         .where(Alert.archived_at.is_(None))
@@ -80,10 +88,11 @@ def compute_confluence(db: Session, *, days: int | None = None) -> list[Confluen
 
     by_ticker: dict[str, list[tuple]] = defaultdict(list)
     names: dict[str, str | None] = {}
-    for aid, ticker, name, sname, sdate, conf, tone in rows:
+    for aid, ticker, name, sname, sdate, conf, tone, hz in rows:
         if conf is None or tone not in ("bull", "bear") or not sname:
             continue
-        by_ticker[ticker].append((aid, sname, sdate, float(conf), tone))
+        hz = hz if hz in ("short", "medium", "long") else "medium"
+        by_ticker[ticker].append((aid, sname, sdate, float(conf), tone, hz))
         names[ticker] = name
 
     clusters: list[ConfluenceCluster] = []
@@ -97,19 +106,25 @@ def compute_confluence(db: Session, *, days: int | None = None) -> list[Confluen
         direction = "bull" if bs >= rs else "bear"
         strength = max(bs, rs)
         contested = bool(bull and bear and abs(bs - rs) < _CONTESTED_GAP)
+        # Multi-horizon over the PREVAILING-direction components only.
+        prevailing = bull if direction == "bull" else bear
+        _order = {"short": 0, "medium": 1, "long": 2}
+        horizons = sorted({c[5] for c in prevailing}, key=lambda h: _order.get(h, 1))
+        multi_horizon = len(horizons) >= 2
         comps = [
             ConfluenceComponent(
                 alert_id=aid, rule_kind=f"signal:{sname}", signal_name=sname,
-                confidence=round(conf, 1), tone=tone,
+                confidence=round(conf, 1), tone=tone, horizon=hz,
                 signal_date=(str(sdate)[:10] if sdate else None),
             )
-            for (aid, sname, sdate, conf, tone) in sorted(items, key=lambda c: c[3], reverse=True)
+            for (aid, sname, sdate, conf, tone, hz) in sorted(items, key=lambda c: c[3], reverse=True)
         ]
         clusters.append(ConfluenceCluster(
             ticker=ticker, name=names.get(ticker), direction=direction,
             strength=round(strength, 1), n_signals=len(items),
             bull_strength=round(bs, 1), bear_strength=round(rs, 1),
-            contested=contested, components=comps,
+            contested=contested, multi_horizon=multi_horizon, horizons=horizons,
+            components=comps,
         ))
 
     # Strength saturates at 100 for strong multi-signal clusters; break ties

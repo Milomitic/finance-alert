@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, Swords, TrendingDown, TrendingUp } from "lucide-react";
+import { ChevronDown, ChevronRight, Layers, Swords, TrendingDown, TrendingUp } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 
@@ -17,6 +17,8 @@ import { cn } from "@/lib/utils";
 function dirClass(dir: string): string {
   return dir === "bull" ? TONE_BG.bullish : dir === "bear" ? TONE_BG.bearish : TONE_BG.neutral;
 }
+
+const HZ_LABEL: Record<string, string> = { short: "breve", medium: "medio", long: "lungo" };
 
 export function ConfluenceView({ clusters }: { clusters: Confluence[] }) {
   const [open, setOpen] = useState<Set<string>>(new Set());
@@ -78,6 +80,15 @@ export function ConfluenceView({ clusters }: { clusters: Confluence[] }) {
                 >
                   <Swords className="h-3 w-3" />
                   Conteso
+                </span>
+              )}
+              {c.multi_horizon && (
+                <span
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold shrink-0 bg-indigo-100 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300"
+                  title={`Timeframe allineati: ${c.horizons.map((h) => HZ_LABEL[h] ?? h).join(" + ")} concordano`}
+                >
+                  <Layers className="h-3 w-3" />
+                  Multi-orizzonte
                 </span>
               )}
               <span className="text-xs text-muted-foreground shrink-0">{c.n_signals} segnali</span>

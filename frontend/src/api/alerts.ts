@@ -7,6 +7,7 @@ export interface ConfluenceComponent {
   signal_name: string;
   confidence: number;
   tone: string;
+  horizon: string;
   signal_date: string | null;
 }
 
@@ -19,6 +20,8 @@ export interface Confluence {
   bull_strength: number;
   bear_strength: number;
   contested: boolean;
+  multi_horizon: boolean;
+  horizons: string[];
   components: ConfluenceComponent[];
 }
 
