@@ -21,6 +21,12 @@ from app.models import Alert, KpiSnapshot
 
 _CONF_BUCKETS = [(60, 70), (70, 80), (80, 90), (90, 101)]
 
+# Below this many measured outcomes the historical calibration is too thin to
+# trust -- mirrors the per-cell floor used by the frontend calibratedProbability.
+_CALIB_MIN_N = 50
+# Hours after which the latest scan is considered stale (daily cadence expected).
+_SCAN_STALE_HOURS = 36
+
 
 def _cbucket(c: float) -> str | None:
     for lo, hi in _CONF_BUCKETS:
@@ -122,6 +128,104 @@ def record_daily_rollup(db: Session, *, days: int = 365, window: int = 20) -> No
     }
     db.add(KpiSnapshot(kind="daily_rollup", metrics=json.dumps(metrics)))
     db.commit()
+
+
+def compute_flags(scans: list[dict], rollups: list[dict]) -> list[dict]:
+    """Derive health flags for the monitoring panel from the recent KPI series.
+
+    Pure over the passed-in lists (newest-first, as returned by `recent`). Each
+    flag is `{level: error|warn|ok, code, title, detail}`. The result is sorted
+    errors-first so the panel renders a triage list. Three flag families:
+      1. scan freshness + sanity (latest scan row),
+      2. data-source health (latest scan's per-source counters),
+      3. calibration maturity (latest daily rollup).
+    """
+    flags: list[dict] = []
+
+    # 1. Scan freshness + sanity --------------------------------------
+    if not scans:
+        flags.append({
+            "level": "warn", "code": "no_scans",
+            "title": "Nessuno scan recente",
+            "detail": "Nessun KPI di scan nel periodo: il motore non ha girato o la cattura KPI non parte.",
+        })
+    else:
+        latest = scans[0]
+        m = latest.get("metrics", {})
+        age_h: float | None = None
+        try:
+            ts = datetime.fromisoformat(latest["captured_at"])
+            if ts.tzinfo is None:
+                ts = ts.replace(tzinfo=UTC)
+            age_h = (datetime.now(UTC) - ts).total_seconds() / 3600
+        except (ValueError, KeyError, TypeError):
+            age_h = None
+        if age_h is not None and age_h > _SCAN_STALE_HOURS:
+            flags.append({
+                "level": "warn", "code": "scan_stale",
+                "title": "Scan non recente",
+                "detail": f"Ultimo scan ~{age_h:.0f}h fa (atteso giornaliero).",
+            })
+        scanned = m.get("stocks_scanned") or 0
+        skipped = m.get("stocks_skipped") or 0
+        if scanned == 0:
+            flags.append({
+                "level": "error", "code": "scan_empty",
+                "title": "Ultimo scan a vuoto",
+                "detail": "0 titoli analizzati nell'ultimo scan.",
+            })
+        tot = scanned + skipped
+        if tot and skipped / tot > 0.5:
+            flags.append({
+                "level": "warn", "code": "high_skip",
+                "title": "Molti titoli saltati",
+                "detail": f"{skipped}/{tot} titoli saltati nell'ultimo scan ({skipped / tot * 100:.0f}%).",
+            })
+
+    # 2. Data-source health (latest scan's sources) ------------------
+    src = (scans[0].get("metrics", {}).get("data_sources") if scans else None) or []
+    for s in src:
+        h = s.get("health")
+        if h in ("down", "degraded"):
+            sr = s.get("success_rate")
+            srpct = f"{sr * 100:.0f}%" if isinstance(sr, (int, float)) else "n/d"
+            flags.append({
+                "level": "error" if h == "down" else "warn",
+                "code": f"src_{s.get('source')}_{s.get('op')}",
+                "title": f"Fonte {s.get('source')}/{s.get('op')}: {h}",
+                "detail": f"Tasso di successo {srpct} ({s.get('success', 0)} ok / {s.get('failure', 0)} ko).",
+            })
+
+    # 3. Calibration maturity (latest rollup) ------------------------
+    if not rollups:
+        flags.append({
+            "level": "warn", "code": "no_rollup",
+            "title": "Nessun rollup giornaliero",
+            "detail": "Il cron di calibrazione non ha ancora prodotto dati.",
+        })
+    else:
+        cal = rollups[0].get("metrics", {}).get("calibration", {})
+        total_n = sum((b.get("count") or 0) for b in (cal.get("by_confidence") or []))
+        if total_n < _CALIB_MIN_N:
+            flags.append({
+                "level": "warn", "code": "calib_immature",
+                "title": "Calibrazione immatura",
+                "detail": (
+                    f"Solo {total_n} esiti misurati (soglia {_CALIB_MIN_N}): "
+                    "le probabilità storiche sono ancora poco affidabili."
+                ),
+            })
+
+    if not flags:
+        flags.append({
+            "level": "ok", "code": "healthy",
+            "title": "Tutto regolare",
+            "detail": "Nessuna anomalia rilevata su scan, fonti dati e calibrazione.",
+        })
+
+    order = {"error": 0, "warn": 1, "ok": 2}
+    flags.sort(key=lambda f: order.get(f["level"], 3))
+    return flags
 
 
 def recent(db: Session, *, kind: str, days: int = 90, limit: int = 200) -> list[dict]:

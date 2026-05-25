@@ -44,3 +44,68 @@ def test_recent_filters_by_kind(db):
     db.commit()
     assert len(kpi_service.recent(db, kind="scan", days=1)) == 1
     assert len(kpi_service.recent(db, kind="daily_rollup", days=1)) == 1
+
+
+# --- compute_flags ---------------------------------------------------
+
+def _now_iso():
+    from datetime import UTC, datetime
+    return datetime.now(UTC).isoformat()
+
+
+def _healthy_scan():
+    return {
+        "id": 1, "captured_at": _now_iso(), "scope": None,
+        "metrics": {
+            "stocks_scanned": 1000, "stocks_skipped": 10, "alerts_fired": 30,
+            "data_sources": [{"source": "yfinance", "op": "ohlcv", "success": 990,
+                              "failure": 5, "success_rate": 0.99, "health": "ok"}],
+        },
+    }
+
+
+def _mature_rollup():
+    return {
+        "id": 1, "captured_at": _now_iso(), "scope": None,
+        "metrics": {"calibration": {"by_confidence": [
+            {"label": "60-69", "count": 40}, {"label": "70-79", "count": 30}]}},
+    }
+
+
+def test_compute_flags_healthy():
+    flags = kpi_service.compute_flags([_healthy_scan()], [_mature_rollup()])
+    assert len(flags) == 1
+    assert flags[0]["level"] == "ok" and flags[0]["code"] == "healthy"
+
+
+def test_compute_flags_no_scans_no_rollup():
+    flags = kpi_service.compute_flags([], [])
+    codes = {f["code"] for f in flags}
+    assert "no_scans" in codes and "no_rollup" in codes
+
+
+def test_compute_flags_empty_scan_is_error_first():
+    scan = _healthy_scan()
+    scan["metrics"]["stocks_scanned"] = 0
+    flags = kpi_service.compute_flags([scan], [_mature_rollup()])
+    assert flags[0]["level"] == "error" and flags[0]["code"] == "scan_empty"
+
+
+def test_compute_flags_source_down_and_immature_calibration():
+    scan = _healthy_scan()
+    scan["metrics"]["data_sources"][0].update(health="down", success_rate=0.10)
+    rollup = _mature_rollup()
+    rollup["metrics"]["calibration"]["by_confidence"] = [{"label": "60-69", "count": 5}]
+    flags = kpi_service.compute_flags([scan], [rollup])
+    codes = {f["code"]: f["level"] for f in flags}
+    assert codes.get("src_yfinance_ohlcv") == "error"
+    assert codes.get("calib_immature") == "warn"
+    # errors sort before warns
+    assert flags[0]["level"] == "error"
+
+
+def test_compute_flags_high_skip_ratio():
+    scan = _healthy_scan()
+    scan["metrics"].update(stocks_scanned=100, stocks_skipped=400)
+    flags = kpi_service.compute_flags([scan], [_mature_rollup()])
+    assert any(f["code"] == "high_skip" for f in flags)

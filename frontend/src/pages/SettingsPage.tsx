@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { useMemo, useState } from "react";
 
+import { EngineHealthPanel } from "@/components/EngineHealthPanel";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { SectionTitle } from "@/components/ui/section-title";
@@ -52,6 +53,7 @@ export default function SettingsPage() {
         </p>
       </header>
 
+      <EngineHealthPanel />
       <RulePerformancePanel />
       <CalibrationPanel />
       <ScanLogPanel />
