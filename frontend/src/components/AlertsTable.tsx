@@ -33,8 +33,8 @@ const ALERTS_COLS = [
   { id: "catena",      label: "Catena" },
   { id: "natura",      label: "Natura" },
   { id: "tono",        label: "Tono" },
-  { id: "prezzo",      label: "Prezzo" },
   { id: "confidenza",  label: "Confidenza" },
+  { id: "prezzo",      label: "Prezzo" },
 ] as const;
 
 interface Props {
@@ -142,12 +142,29 @@ export function AlertsTable({
     setMenuOpen(true);
   }
 
-  // Embedded mode: 4 fixed columns (data_segnale, regola, tono, prezzo).
-  // Non-embedded: checkbox + titolo always visible (2) + up to 7 toggleable.
-  // colSpan for the empty-state row must match visible column count.
-  const colSpan = embedded
-    ? 4
-    : 2 + ALERTS_COLS.filter((c) => isVisible(c.id)).length;
+  // Per-column visibility resolved ONCE so the header and body stay in
+  // lockstep. Embedded mode (the per-ticker history card) shows a fixed
+  // compact set — Rilevato | Regola | Tono | Confidenza | Prezzo — while the
+  // full alerts page honours the column-visibility menu. (Previous embedded
+  // bug: the signal_date CELL rendered but its HEADER was gated `!embedded`,
+  // so every header sat one column right of its data. Deriving both from the
+  // same flag makes that drift impossible.)
+  const showCheckbox = !embedded;
+  const showDataSegnale = !embedded && isVisible("data_segnale");
+  const showRilevato = embedded || isVisible("rilevato");
+  const showTitolo = !embedded;
+  const showRegola = embedded || isVisible("regola");
+  const showCatena = !embedded && isVisible("catena");
+  const showNatura = !embedded && isVisible("natura");
+  const showTono = embedded || isVisible("tono");
+  const showConfidenza = embedded || isVisible("confidenza");
+  const showPrezzo = embedded || isVisible("prezzo");
+
+  // colSpan for the empty-state row must match the visible column count.
+  const colSpan = [
+    showCheckbox, showDataSegnale, showRilevato, showTitolo, showRegola,
+    showCatena, showNatura, showTono, showConfidenza, showPrezzo,
+  ].filter(Boolean).length;
 
   // Per user spec: header cells at 1rem (text-base), body rows at
   // 0.875rem (text-sm) — uniform across all cells. Table root sits at
@@ -171,7 +188,7 @@ export function AlertsTable({
         {/* Right-click anywhere on the header row opens the column-visibility
             menu (non-embedded only). The menu positions itself at the cursor. */}
         <TableRow onContextMenu={embedded ? undefined : openColumnMenu}>
-          {!embedded && (
+          {showCheckbox && (
             <TableHead className="w-8 text-base">
               <Checkbox
                 checked={allSelected}
@@ -179,7 +196,7 @@ export function AlertsTable({
               />
             </TableHead>
           )}
-          {!embedded && isVisible("data_segnale") && (
+          {showDataSegnale && (
             onSort ? (
               <SortableHeader
                 column="signal_date"
@@ -195,7 +212,7 @@ export function AlertsTable({
               </TableHead>
             )
           )}
-          {!embedded && isVisible("rilevato") && (
+          {showRilevato && (
             onSort ? (
               <SortableHeader
                 column="triggered_at"
@@ -211,7 +228,7 @@ export function AlertsTable({
               </TableHead>
             )
           )}
-          {!embedded && (
+          {showTitolo && (
             /* Titolo column: logo + ticker (top) / company name (below),
                like the dashboard cards. Holds the inline ticker/name search.
                Always visible — identity column. */
@@ -255,38 +272,23 @@ export function AlertsTable({
               </TableHead>
             )
           )}
-          {/* Embedded always shows Regola; non-embedded gates on isVisible */}
-          {(embedded || isVisible("regola")) && (
+          {showRegola && (
             <TableHead className="text-base">Regola</TableHead>
           )}
-          {!embedded && isVisible("catena") && (
+          {showCatena && (
             <TableHead className="text-base">Catena</TableHead>
           )}
-          {!embedded && isVisible("natura") && (
+          {showNatura && (
             <TableHead className="text-base" title="Natura del segnale: continuazione del trend o inversione">
               Natura
             </TableHead>
           )}
-          {(embedded || isVisible("tono")) && (
+          {showTono && (
             <TableHead className="text-base" title="Direzione semantica dell'alert (rialzista / ribassista / neutra)">
               Tono
             </TableHead>
           )}
-          {(embedded || isVisible("prezzo")) && (
-            !embedded && onSort ? (
-              <SortableHeader
-                column="trigger_price"
-                label="Prezzo"
-                align="right"
-                sortBy={sortBy}
-                sortDir={sortDir}
-                onSort={onSort}
-              />
-            ) : (
-              <TableHead className="text-base text-right">Prezzo</TableHead>
-            )
-          )}
-          {!embedded && isVisible("confidenza") && (
+          {showConfidenza && (
             onSort ? (
               <SortableHeader
                 column="confidence"
@@ -300,6 +302,20 @@ export function AlertsTable({
               <TableHead className="text-base" title="Confidenza del segnale (0-100)">
                 Confidenza
               </TableHead>
+            )
+          )}
+          {showPrezzo && (
+            !embedded && onSort ? (
+              <SortableHeader
+                column="trigger_price"
+                label="Prezzo"
+                align="right"
+                sortBy={sortBy}
+                sortDir={sortDir}
+                onSort={onSort}
+              />
+            ) : (
+              <TableHead className="text-base text-right">Prezzo</TableHead>
             )
           )}
         </TableRow>
@@ -319,7 +335,7 @@ export function AlertsTable({
         )}
         {alerts.map((a) => (
           <TableRow key={a.id} className="cursor-pointer" onClick={() => onRowClick(a)}>
-            {!embedded && (
+            {showCheckbox && (
               <TableCell onClick={(e) => e.stopPropagation()}>
                 <Checkbox
                   checked={selectedIds.has(a.id)}
@@ -327,8 +343,8 @@ export function AlertsTable({
                 />
               </TableCell>
             )}
-            {/* Signal date — toggleable, hidden in embedded mode via !embedded check */}
-            {(embedded || isVisible("data_segnale")) && (
+            {/* Data segnale — non-embedded, toggleable */}
+            {showDataSegnale && (
               <TableCell className="font-semibold tabular-nums">
                 {a.signal_date ? (
                   formatShortDate(a.signal_date)
@@ -342,8 +358,8 @@ export function AlertsTable({
                 )}
               </TableCell>
             )}
-            {/* Detection timestamp — non-embedded, toggleable */}
-            {!embedded && isVisible("rilevato") && (
+            {/* Rilevato (detection timestamp) — first column in embedded mode */}
+            {showRilevato && (
               <TableCell className="text-muted-foreground tabular-nums">
                 {(() => {
                   const delayed = isDelayedDetection(a.triggered_at, a.signal_date);
@@ -366,7 +382,7 @@ export function AlertsTable({
                 })()}
               </TableCell>
             )}
-            {!embedded && (
+            {showTitolo && (
               /* Titolo cell: always visible (identity column). */
               <TableCell>
                 <div className="flex items-center gap-2 min-w-0">
@@ -396,14 +412,12 @@ export function AlertsTable({
                 </div>
               </TableCell>
             )}
-            {/* Regola — embedded always shows; non-embedded toggleable */}
-            {(embedded || isVisible("regola")) && (
+            {showRegola && (
               <TableCell>
                 <AlertKindChip alert={a} />
               </TableCell>
             )}
-            {/* Catena — non-embedded, toggleable */}
-            {!embedded && isVisible("catena") && (
+            {showCatena && (
               <TableCell className="max-w-[260px]">
                 {(() => {
                   const chain = (a.snapshot as Record<string, unknown> | undefined)?.chain;
@@ -420,33 +434,24 @@ export function AlertsTable({
                 })()}
               </TableCell>
             )}
-            {/* Tono — embedded always shows; non-embedded toggleable */}
-            {/* Natura - continuazione vs inversione, non-embedded toggleable */}
-            {!embedded && isVisible("natura") && (
+            {showNatura && (
               <TableCell>
                 <AlertNatureCell alert={a} size="sm" />
               </TableCell>
             )}
-            {(embedded || isVisible("tono")) && (
+            {showTono && (
               <TableCell>
                 <AlertToneCell alert={a} />
               </TableCell>
             )}
-            {/* Prezzo — embedded always shows; non-embedded toggleable */}
-            {(embedded || isVisible("prezzo")) && (
-              <TableCell className="text-right tabular-nums font-semibold">
-                ${a.trigger_price}
-              </TableCell>
-            )}
-            {/* Confidenza — non-embedded, toggleable */}
-            {!embedded && isVisible("confidenza") && (
+            {/* Confidenza — left of Prezzo. Signal alerts carry confidence
+                (0-100) in the snapshot; show it as a coloured percentage
+                (rose < 50, amber 50-69, emerald >= 70) with a reliability bar
+                on the full page. Embedded (narrow card) shows just the % to
+                save width. Non-signal / price alerts have no confidence. */}
+            {showConfidenza && (
               <TableCell>
                 {(() => {
-                  // Signal alerts carry confidence (0-100) in the snapshot.
-                  // Show it as a percentage + a reliability bar coloured by
-                  // value (rose < 50, amber 50-69, emerald >= 70) so the
-                  // table reads conviction at a glance. Non-signal/price
-                  // alerts have no confidence -> em dash.
                   const conf = (a.snapshot as Record<string, unknown> | undefined)?.confidence;
                   if (typeof conf !== "number") {
                     return <span className="text-muted-foreground">—</span>;
@@ -465,12 +470,19 @@ export function AlertsTable({
                       <span className={cn("text-sm font-semibold tabular-nums w-10 text-right", txt)}>
                         {pct}%
                       </span>
-                      <div className="h-2 w-16 rounded-full bg-muted overflow-hidden">
-                        <div className={cn("h-full rounded-full", bar)} style={{ width: `${pct}%` }} />
-                      </div>
+                      {!embedded && (
+                        <div className="h-2 w-16 rounded-full bg-muted overflow-hidden">
+                          <div className={cn("h-full rounded-full", bar)} style={{ width: `${pct}%` }} />
+                        </div>
+                      )}
                     </div>
                   );
                 })()}
+              </TableCell>
+            )}
+            {showPrezzo && (
+              <TableCell className="text-right tabular-nums font-semibold">
+                ${a.trigger_price}
               </TableCell>
             )}
           </TableRow>

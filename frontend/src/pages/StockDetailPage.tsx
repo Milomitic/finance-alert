@@ -250,16 +250,16 @@ export default function StockDetailPage() {
           and scrolls internally when there are more rows than fit.
           The profile is the page's lead content and dictates the row
           height; the alerts card adapts. Stacks vertically below `lg`. */}
-      <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-3 lg:h-[340px]">
-        {/* CompanyOverview is prose (natural height on mobile — never
-            give it a fixed height or it clips). AlertsHistory scrolls
-            internally so it needs a concrete mobile height, else its
-            `flex-1 min-h-0` pane collapses to 0 without the row's
-            `lg:h-[340px]`. */}
+      <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-3 lg:h-[300px]">
+        {/* Both cards fill the fixed row height (h-full inside each): the
+            profile's prose scrolls internally if its condensed summary still
+            overflows, the alerts card scrolls its rows. AlertsHistory needs a
+            concrete mobile height too, else its `flex-1 min-h-0` pane collapses
+            to 0 without the row's `lg:h-[300px]`. */}
         <div className="lg:h-full lg:min-h-0">
           <CompanyOverviewCard ticker={ticker} stock={d.stock} />
         </div>
-        <div className="h-[340px] lg:h-full lg:min-h-0">
+        <div className="h-[300px] lg:h-full lg:min-h-0">
           <StockAlertsHistoryCard alerts={d.alerts_history} />
         </div>
       </div>

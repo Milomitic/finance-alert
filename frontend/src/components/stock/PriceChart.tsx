@@ -42,6 +42,12 @@ function dateToTime(d: string): UTCTimestamp {
   return (Date.parse(d) / 1000) as UTCTimestamp;
 }
 
+// Breathing room (in bars) kept beyond the first/last data point. Doubles as
+// the right-side resting offset AND the hard pan/zoom bound on each edge: the
+// user can never scroll/zoom so far that more than this many empty bars show
+// past either end, and a candle at an extreme is never glued to the border.
+const EDGE_MARGIN_BARS = 6;
+
 /** Format a bar's ISO date for the tooltip. Intraday timeframes show
  *  date+time so the user can tell which 30m candle they're on; daily+
  *  show just the date.
@@ -211,6 +217,10 @@ export function PriceChart({
       rightPriceScale: { borderColor: "rgba(0,0,0,0.1)" },
       timeScale: {
         borderColor: "rgba(0,0,0,0.1)",
+        // Resting margin to the right of the last bar so the latest candle is
+        // never glued to the border. The pan/zoom clamp (below) keeps the
+        // symmetric bound on both edges.
+        rightOffset: EDGE_MARGIN_BARS,
         // Intraday (30m / 1h) — show wall-clock time on the axis so
         // the user reads "14:30" instead of just the date. Daily+
         // timeframes keep the date-only axis. Toggled via the
@@ -310,6 +320,42 @@ export function PriceChart({
     };
     chart.subscribeCrosshairMove(crosshairHandler);
 
+    // Pan/zoom bounds: clamp the visible logical range to
+    // [-EDGE_MARGIN_BARS, lastBar + EDGE_MARGIN_BARS] so the user can't scroll
+    // or zoom out into the empty void beyond the data, while a few bars of
+    // margin always remain past each extreme. Preserves the window width when
+    // clamping one edge (so the zoom level holds, the view just stops sliding);
+    // when over-zoomed-out past the full span it caps to the full span + both
+    // margins. `clamping` guards against the re-entrant event that
+    // setVisibleLogicalRange fires.
+    const tScale = chart.timeScale();
+    let clamping = false;
+    const clampRange = () => {
+      if (clamping) return;
+      const n = ohlcvRef.current.length;
+      if (n < 2) return;
+      const r = tScale.getVisibleLogicalRange();
+      if (!r) return;
+      const minFrom = -EDGE_MARGIN_BARS;
+      const maxTo = n - 1 + EDGE_MARGIN_BARS;
+      // `Logical` is a branded number; widen to number for the arithmetic and
+      // let the (number-accepting) setVisibleLogicalRange take it back.
+      let from: number = r.from;
+      let to: number = r.to;
+      const width = to - from;
+      if (from < minFrom) { from = minFrom; to = from + width; }
+      if (to > maxTo) { to = maxTo; from = to - width; }
+      // Over-zoomed past the full span → cap both edges (zoom-out limit).
+      if (from < minFrom) from = minFrom;
+      if (to > maxTo) to = maxTo;
+      if (from !== r.from || to !== r.to) {
+        clamping = true;
+        tScale.setVisibleLogicalRange({ from, to });
+        clamping = false;
+      }
+    };
+    tScale.subscribeVisibleLogicalRangeChange(clampRange);
+
     // Register with the chart-sync orchestrator so pan/zoom AND the
     // crosshair propagate to the RSI / MACD sub-panels. Passing the
     // candle series lets the sync read the hovered price and anchor the
@@ -321,6 +367,7 @@ export function PriceChart({
       unregister?.();
       chart.unsubscribeClick(clickHandler);
       chart.unsubscribeCrosshairMove(crosshairHandler);
+      tScale.unsubscribeVisibleLogicalRangeChange(clampRange);
       chart.remove();
       chartRef.current = null;
       candleRef.current = null;
@@ -381,7 +428,9 @@ export function PriceChart({
     if (n !== null && ohlcv.length > n) {
       ts.setVisibleLogicalRange({
         from: ohlcv.length - n,
-        to: ohlcv.length - 1,
+        // Include the right margin so the latest candle isn't glued to the
+        // border (matches rightOffset + the pan/zoom clamp bound).
+        to: ohlcv.length - 1 + EDGE_MARGIN_BARS,
       });
     } else {
       ts.fitContent();

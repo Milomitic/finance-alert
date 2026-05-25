@@ -69,10 +69,11 @@ export function CompanyOverviewCard({ ticker, stock }: Props) {
   const ceo = profile?.ceo ?? null;
   const founded = profile?.founded ?? null;
 
-  // Pre-split the description into paragraphs once. Memoized so the heavy
-  // regex work doesn't run on every render (description doesn't change).
+  // Condense the (often 6+ sentence) yfinance summary to a tight blurb, then
+  // pre-split into paragraphs once. Memoized so the regex work doesn't run on
+  // every render (description doesn't change).
   const paragraphs = useMemo(
-    () => (description ? splitIntoParagraphs(description) : []),
+    () => (description ? splitIntoParagraphs(condenseSummary(description)) : []),
     [description],
   );
 
@@ -100,8 +101,8 @@ export function CompanyOverviewCard({ ticker, stock }: Props) {
   }
 
   return (
-    <Card className="overflow-hidden">
-      <CardContent className="p-4 sm:p-5">
+    <Card className="overflow-hidden lg:h-full lg:flex lg:flex-col">
+      <CardContent className="p-4 sm:p-5 lg:flex-1 lg:min-h-0 lg:flex lg:flex-col">
         <SectionTitle icon={Building2} label="Profilo società" />
 
         {/* Two-column body. The card's max height is driven by the right
@@ -113,7 +114,7 @@ export function CompanyOverviewCard({ ticker, stock }: Props) {
             when its content exceeds the row height.
             On mobile (<lg) the columns stack and the description flows
             naturally — no absolute trick needed. */}
-        <div className="mt-4 grid grid-cols-1 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)] gap-5 lg:gap-8">
+        <div className="mt-4 lg:flex-1 lg:min-h-0 grid grid-cols-1 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)] gap-5 lg:gap-8">
           {/* ── Description ──────────────────────────────────────────── */}
           <div className="min-w-0 lg:relative">
             <div
@@ -285,6 +286,20 @@ const TRANSITION_HINTS = [
   /^it (was|is) (incorporated|founded|headquartered)\b/i,
   /^as of\b/i,
 ];
+
+/* Trim the long yfinance summary to a concise lead (first N sentences) so the
+ * fixed-height card shows a readable blurb instead of a scroll-heavy wall.
+ * Appends an ellipsis when content was dropped. */
+const _SUMMARY_MAX_SENTENCES = 3;
+
+function condenseSummary(text: string): string {
+  const sentences = text
+    .split(/(?<=[.?!])\s+(?=[A-Z])/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (sentences.length <= _SUMMARY_MAX_SENTENCES) return text.trim();
+  return `${sentences.slice(0, _SUMMARY_MAX_SENTENCES).join(" ")} …`;
+}
 
 function splitIntoParagraphs(text: string): string[] {
   // Sentence split — naive but adequate. We keep the period attached.
