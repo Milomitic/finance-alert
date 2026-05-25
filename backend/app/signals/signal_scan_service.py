@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.models import Alert, Stock
 from app.signals.context import build_context
+from app.signals.horizon import classify_horizon
 from app.signals.detectors.registry import DETECTORS
 from app.signals.runner import detect_signals
 
@@ -123,6 +124,7 @@ def evaluate_signals(db: Session, stock: Stock, ohlcv: pd.DataFrame) -> int:
             "factors": m.factors, "invalidation": m.invalidation,
             "sources": getattr(_detector_for(m.name), "sources", []),
             "annotations": ann, "atr": _atr,
+            "horizon": classify_horizon(m.name, m.chain),
         }
         db.add(Alert(
             stock_id=stock.id, trigger_price=last_close,

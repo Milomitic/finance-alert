@@ -101,7 +101,10 @@ export function buildPlaybook(
   // Volatility anchor (absolute price units). Fallback keeps every formula uniform.
   const atr = typeof s.atr === "number" && s.atr > 0 ? s.atr : entry * 0.02;
 
-  const hz = classifyHorizon(name ?? null, (s.chain ?? []) as { date?: string }[]);
+  // Prefer the horizon stamped at scan time (shared source of truth); fall
+  // back to local classification only for legacy alerts that predate it.
+  const hz: Horizon = (s.horizon as Horizon | undefined)
+    ?? classifyHorizon(name ?? null, (s.chain ?? []) as { date?: string }[]);
   const P = HZ[hz];
 
   // Stop: structural, floored at floor*ATR AND capped at STOP_CAP_ATR*ATR.

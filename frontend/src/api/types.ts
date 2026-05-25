@@ -123,6 +123,10 @@ export interface SignalSnapshot {
    *  Playbook stop floor + target cap to volatility. Null on legacy alerts
    *  produced before ATR was added to the snapshot. */
   atr?: number | null;
+  /** Signal time-horizon, classified at scan time (shared source of truth
+   *  with the backend confluence + calibration services). Absent on legacy
+   *  alerts -> the playbook recomputes it locally. */
+  horizon?: "short" | "medium" | "long";
 }
 
 export interface AlertList {
