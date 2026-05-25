@@ -73,7 +73,11 @@ def evaluate_signals(db: Session, stock: Stock, ohlcv: pd.DataFrame) -> int:
     last_bar_date = _to_date(str(ohlcv["date"].iloc[-1]))
     # Prevailing trend (EMA200 slope) for the regime gate + a date->row map for
     # the follow-through check. Both computed once per ticker.
-    trend_sign = build_context(ohlcv).trend_sign
+    _ctx = build_context(ohlcv)
+    trend_sign = _ctx.trend_sign
+    # ATR at the signal bar: lets the frontend Trade Playbook anchor the stop
+    # floor + target cap to volatility (validated 2026-05-25). NaN-guarded.
+    _atr = float(_ctx.atr) if (_ctx.atr is not None and _ctx.atr == _ctx.atr) else None
     idx_by_date = {str(d)[:10]: i for i, d in enumerate(ohlcv["date"])}
     added = 0
     for m in detect_signals(ohlcv, db=db, stock=stock):
@@ -118,7 +122,7 @@ def evaluate_signals(db: Session, stock: Stock, ohlcv: pd.DataFrame) -> int:
             "tone": m.tone, "confidence": m.confidence, "chain": m.chain,
             "factors": m.factors, "invalidation": m.invalidation,
             "sources": getattr(_detector_for(m.name), "sources", []),
-            "annotations": ann,
+            "annotations": ann, "atr": _atr,
         }
         db.add(Alert(
             stock_id=stock.id, trigger_price=last_close,

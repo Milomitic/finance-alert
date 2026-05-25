@@ -58,8 +58,9 @@ export function PlaybookView({ playbook }: { playbook: Playbook }) {
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
         <div className="rounded-md border border-border/60 px-2.5 py-1.5">
-          <span className="text-muted-foreground">Durata attesa: </span>
-          <span className="font-medium">{p.duration}</span>
+          <span className="text-muted-foreground">Orizzonte </span>
+          <span className="font-medium">{p.horizon}</span>
+          <span className="text-muted-foreground"> - tenuta {p.duration}</span>
         </div>
         <div className="rounded-md border border-border/60 px-2.5 py-1.5">
           <span className="text-muted-foreground">Rischio: </span>

@@ -119,6 +119,10 @@ export interface SignalSnapshot {
   invalidation?: { level?: number; reason?: string } | null;
   sources?: string[];
   annotations?: { levels: SignalLevel[]; points: SignalPoint[] };
+  /** ATR at the signal bar (absolute price units). Anchors the Trade
+   *  Playbook stop floor + target cap to volatility. Null on legacy alerts
+   *  produced before ATR was added to the snapshot. */
+  atr?: number | null;
 }
 
 export interface AlertList {
