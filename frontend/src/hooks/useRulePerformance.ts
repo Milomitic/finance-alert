@@ -66,6 +66,24 @@ export interface Calibration {
   backtest_seed: CalibrationSeed | null;
 }
 
+export interface CalibrationCurve {
+  window?: number;
+  by_horizon?: Record<string, CalibrationSeedCell>;
+  by_confidence?: Record<string, CalibrationSeedCell>;
+  by_confidence_horizon?: Record<string, CalibrationSeedCell>;
+  by_nature?: Record<string, CalibrationSeedCell>;
+}
+
+/** Lightweight calibration curve (backtest seed only, no heavy recompute) used
+ *  to annotate any signal with a calibrated probability. Cached aggressively. */
+export function useCalibrationCurve() {
+  return useQuery({
+    queryKey: ["calibration-curve"],
+    queryFn: () => api<CalibrationCurve>("/api/rule-performance/calibration-curve"),
+    staleTime: 60 * 60 * 1000,
+  });
+}
+
 /** Realized directional hit-rate + forward return bucketed by confidence and
  *  by nature, at a fixed horizon. Matures over forward time. */
 export function useCalibration(days = 365, horizon = 20) {

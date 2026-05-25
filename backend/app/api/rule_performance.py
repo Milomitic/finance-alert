@@ -107,3 +107,13 @@ def get_calibration(
         by_horizon=[CalibrationBucketOut(**vars(b)) for b in c.by_horizon],
         backtest_seed=load_calibration_seed(),
     )
+
+
+@router.get("/calibration-curve")
+def get_calibration_curve(
+    _user: User = Depends(get_current_user),
+) -> dict:
+    """Lightweight: the backtest calibration seed only (hit-rate by confidence x
+    horizon), no heavy per-alert recompute. Used to annotate any signal with a
+    'calibrated probability'. Empty dict when no seed file is present."""
+    return load_calibration_seed() or {}

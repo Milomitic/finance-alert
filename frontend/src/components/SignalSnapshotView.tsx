@@ -4,6 +4,8 @@ import type { SignalSnapshot } from "@/api/types";
 import { TONE_TEXT, type AlertTone } from "@/lib/alertMeta";
 import { cn } from "@/lib/utils";
 import { glossForStep } from "@/lib/signalInterpretation";
+import { calibratedProbability } from "@/lib/calibratedProbability";
+import { useCalibrationCurve } from "@/hooks/useRulePerformance";
 
 /* Source badge configuration for non-technical hybrid chain steps. */
 const SOURCE_BADGE: Record<
@@ -79,6 +81,8 @@ export function SignalSnapshotView({
   const tone: AlertTone =
     s.tone === "bull" ? "bullish" : s.tone === "bear" ? "bearish" : "neutral";
   const confidence = typeof s.confidence === "number" ? Math.round(s.confidence) : null;
+  const { data: calCurve } = useCalibrationCurve();
+  const cp = calibratedProbability(s.confidence, s.horizon, calCurve);
   const chain = Array.isArray(s.chain) ? s.chain : [];
   const isHybrid = chain.some(
     (step) => typeof step.source === "string" && step.source in SOURCE_BADGE,
@@ -116,6 +120,17 @@ export function SignalSnapshotView({
                 <div className={cn("h-full rounded-full", barColor)} style={{ width: `${confidence}%` }} />
               </div>
               <span className={cn("text-sm font-bold tabular-nums", TONE_TEXT[tone])}>{confidence}%</span>
+            </div>
+          )}
+
+          {cp && (
+            <div
+              className="flex items-center gap-2 text-[11px] text-muted-foreground -mt-2.5"
+              title={`Hit-rate storico (backtest, base: ${cp.basis}, n=${cp.n}). Probabilita che il prezzo si muova nel verso del segnale entro l'orizzonte. Stima educativa, migliora col tempo.`}
+            >
+              <span className="uppercase tracking-wider font-semibold">Prob. storica</span>
+              <span className="font-bold tabular-nums text-foreground">~ {Math.round(cp.prob * 100)}%</span>
+              <span className="opacity-70">({cp.basis})</span>
             </div>
           )}
 
