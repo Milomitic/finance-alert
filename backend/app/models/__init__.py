@@ -3,6 +3,7 @@ from app.models.alert import Alert
 from app.models.catalog_log import CatalogRefreshLog
 from app.models.fetch_cache import FetchCache
 from app.models.index import Index, StockIndex
+from app.models.kpi_snapshot import KpiSnapshot
 from app.models.institutional import (
     Institutional,
     InstitutionalFiling,
@@ -31,6 +32,7 @@ __all__ = [
     "Alert",
     "PriceAlert",
     "ScanRun",
+    "KpiSnapshot",
     "FetchCache",
     "MacroSeries",
     "MacroObservation",

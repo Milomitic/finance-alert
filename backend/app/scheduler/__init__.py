@@ -19,6 +19,7 @@ from app.scheduler.jobs.refresh_institutionals import run_refresh_institutionals
 from app.scheduler.jobs.refresh_premarket import run_refresh_premarket
 from app.scheduler.jobs.refresh_sec_13f import run_refresh_sec_13f
 from app.scheduler.jobs.scan_alerts import run_scan_alerts
+from app.scheduler.jobs.kpi_rollup import run_kpi_rollup
 from app.scheduler.jobs.send_digest import run_send_digest
 from app.services.scheduler_metrics import install_listener as _install_scheduler_listener
 
@@ -62,6 +63,14 @@ def get_scheduler() -> BackgroundScheduler:
                 day_of_week="*", hour=settings.digest_hour, minute=settings.digest_minute
             ),
             id="send_digest",
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+        )
+        _scheduler.add_job(
+            run_kpi_rollup,
+            trigger=CronTrigger(day_of_week="*", hour=23, minute=0),
+            id="kpi_rollup",
             replace_existing=True,
             max_instances=1,
             coalesce=True,

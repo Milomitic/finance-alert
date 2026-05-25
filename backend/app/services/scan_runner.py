@@ -414,6 +414,12 @@ def run_tracked_scan(
         run.phase = None
         run.completed_at = datetime.now(UTC)
         db.commit()
+        # Capture per-scan KPIs (best-effort; never break the scan).
+        try:
+            from app.services import kpi_service
+            kpi_service.record_scan_kpis(db, run)
+        except Exception as kpi_exc:  # noqa: BLE001
+            logger.warning(f"[scan_runner] KPI capture failed (non-fatal): {kpi_exc}")
         logger.info(
             f"[scan_runner] ScanRun {run.id} success: "
             f"scanned={result.stocks_scanned} alerts={result.alerts_fired}"
