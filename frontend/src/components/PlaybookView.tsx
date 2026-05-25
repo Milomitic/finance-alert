@@ -51,7 +51,7 @@ export function PlaybookView({ playbook }: { playbook: Playbook }) {
       </div>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
         <Cell label="Entry" value={`$${price(p.entry)}`} />
-        <Cell label="Stop" value={`$${price(p.stop)}`} hint={`-${p.stopPct.toFixed(1)}%`} tone="rose" />
+        <Cell label="Stop" value={`$${price(p.stop)}`} hint={`-${p.stopPct.toFixed(1)}%${p.stopCapped ? " - cap vol." : ""}`} tone="rose" />
         {p.targets.map((t) => (
           <Cell key={t.label} label={`${t.label} - R:R ${t.rr.toFixed(1)}`} value={`$${price(t.price)}`} tone="emerald" />
         ))}

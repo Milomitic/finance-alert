@@ -47,10 +47,18 @@ farther "runner" target (1.5x TP1 distance, capped), not separately validated.
 - `components/PlaybookView.tsx` — surface horizon.
 - Data: one-off ATR backfill into existing active snapshots.
 
-## Known characteristics / follow-ups
-- Wide-structural-stop trend signals (trend_pullback/high52 vs far EMA200)
-  keep their wide stop -> tiny position -> TP1 R:R can be < 1 (honest, by the
-  floor-only choice). Optional: revisit a stop cap for the wide tail.
-- Span can downgrade a strong-prior trend signal to "short" if its cross is
-  recent. Faithful to the validated model; optional: clamp span within +/-1
-  class of the detector prior, then re-validate.
+## Refinement validations (2026-05-25, on the enriched backtest cache)
+- **Stop cap (ADOPTED):** swept floor-only vs cap 3..10*ATR. Capping is
+  expectancy-neutral-to-slightly-positive (floor-only +0.048R -> cap6 +0.055R,
+  test) but tight caps (3-4*ATR) buy that with a 68% stop-out rate (cost-
+  fragile). Adopted a MODERATE cap = **8*ATR**: bites only the catastrophic
+  wide tail (~40% structural stops -> ~16%), bounds loss + fixes R:R<1, leaves
+  normal ~2-3*ATR stops untouched, stop-out ~59.8% (vs 58.1% floor-only). The
+  cap is risk-management/UX, not alpha (the +0.007R is within noise/costs).
+  Execution stop may now differ from the structural invalidation on the wide
+  tail -> flagged "cap vol." in the UI. `stopCapped` on the Playbook.
+- **Horizon-prior clamp (REJECTED):** clamping the span class to within +/-1
+  of the detector prior left total expectancy flat (+0.048 -> +0.047R) but the
+  94 reclassified signals got WORSE (+0.012R -> -0.107R). The span "quirk"
+  (recent-cross trend -> short) is correct signal: a just-crossed setup with an
+  immediate pullback behaves short-term. Kept span-based classification.

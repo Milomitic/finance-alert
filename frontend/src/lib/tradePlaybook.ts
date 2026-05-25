@@ -14,6 +14,7 @@ export interface Playbook {
   entry: number;
   stop: number;
   stopPct: number;
+  stopCapped: boolean;
   targets: PlaybookTarget[];
   duration: string;
   riskBudgetPct: number;
@@ -25,6 +26,10 @@ export interface Playbook {
 const RISK_FLOOR = 0.5;
 const RISK_CEIL = 1.5;
 const MAX_LEVERAGE = 3;
+// Bound the catastrophic wide tail (e.g. trend vs a far EMA200, ~40% stops)
+// to STOP_CAP_ATR*ATR. Validated 2026-05-25 as expectancy-neutral while
+// limiting loss + fixing R:R<1; most structural stops (~2-3 ATR) are untouched.
+const STOP_CAP_ATR = 8;
 
 /* Per-horizon geometry, VALIDATED by backtest (2026-05-25): replay over the
    pool, train/test split on DISJOINT stocks, usability-constrained to
@@ -99,10 +104,13 @@ export function buildPlaybook(
   const hz = classifyHorizon(name ?? null, (s.chain ?? []) as { date?: string }[]);
   const P = HZ[hz];
 
-  // Stop: structural, floored at floor*ATR. `entry - sign*R` also self-corrects
-  // the side if a detector ever placed the invalidation on the wrong side.
-  const R = Math.max(Math.abs(entry - structStop), P.floor * atr);
+  // Stop: structural, floored at floor*ATR AND capped at STOP_CAP_ATR*ATR.
+  // `entry - sign*R` also self-corrects the side if a detector ever placed the
+  // invalidation on the wrong side.
+  const structDist = Math.abs(entry - structStop);
+  const R = Math.min(Math.max(structDist, P.floor * atr), STOP_CAP_ATR * atr);
   if (R <= 0) return null;
+  const stopCapped = structDist > STOP_CAP_ATR * atr; // cap binds -> execution stop tighter than the structural invalidation
   const stop = entry - sign * R;
   const stopPct = (R / entry) * 100;
 
@@ -133,7 +141,7 @@ export function buildPlaybook(
   const conviction = conf >= 75 ? "ingresso" : conf >= 60 ? "ingresso prudente" : "osserva";
 
   return {
-    side, action, conviction, horizon: P.label, entry, stop, stopPct, targets,
+    side, action, conviction, horizon: P.label, entry, stop, stopPct, stopCapped, targets,
     duration: P.duration, riskBudgetPct, positionPct, leverage, leverageNote,
   };
 }
