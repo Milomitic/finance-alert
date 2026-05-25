@@ -57,3 +57,19 @@ loses that and the chart markers stop making sense. Confluence is expressed by
 ## Unchanged
 Individual signals, their chains/charts/playbooks/invalidations, per-type
 calibration, and dedup. Confluence is strictly additive.
+
+## Multi-horizon refinement (2026-05-25, validated)
+Horizon is now a first-class snapshot attribute (`app/signals/horizon.py`,
+stamped at scan). A cluster whose PREVAILING-direction components span >= 2
+horizons is flagged `multi_horizon` (+ `horizons` mix) and badged in the UI.
+
+**Validation (backtest, forward 30d, direction-adjusted, test on disjoint
+stocks):** multi-horizon clusters outperform mono — but ASYMMETRICALLY:
+- BULL: +2.40% vs +1.60% (delta **+0.80%**, win 55% vs 53%) -> real edge.
+- BEAR: -2.49% vs -2.16% (delta -0.33%) -> no edge (shorts are negative-
+  expectancy in this survivorship-biased universe; multi-horizon doesn't help).
+
+**Decision:** badge is informational + honest (direction-aware tooltip). The
+only "boost" is a **ranking tiebreaker**: at equal (saturated) strength, bull
+multi-horizon clusters rank first. No numeric strength inflation (saturates
++ gaming trap); no boost on the bear side (data advises against it).

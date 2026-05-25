@@ -127,7 +127,11 @@ def compute_confluence(db: Session, *, days: int | None = None) -> list[Confluen
             components=comps,
         ))
 
-    # Strength saturates at 100 for strong multi-signal clusters; break ties
-    # by the number of concurring signals so deeper confluence ranks higher.
-    clusters.sort(key=lambda c: (c.strength, c.n_signals), reverse=True)
+    # Strength saturates at 100, so rank ties by: (1) bull multi-horizon
+    # clusters first -- backtest-validated to drift ~+0.8%/30d more than mono
+    # (the edge is bull-only; bears get no priority); then (2) signal count.
+    clusters.sort(
+        key=lambda c: (c.strength, c.multi_horizon and c.direction == "bull", c.n_signals),
+        reverse=True,
+    )
     return clusters

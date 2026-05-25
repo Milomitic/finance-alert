@@ -85,7 +85,11 @@ export function ConfluenceView({ clusters }: { clusters: Confluence[] }) {
               {c.multi_horizon && (
                 <span
                   className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold shrink-0 bg-indigo-100 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300"
-                  title={`Timeframe allineati: ${c.horizons.map((h) => HZ_LABEL[h] ?? h).join(" + ")} concordano`}
+                  title={
+                    c.direction === "bull"
+                      ? `Timeframe allineati al rialzo (${c.horizons.map((h) => HZ_LABEL[h] ?? h).join(" + ")}): storicamente ~+0.8% in piu a 30g vs mono-orizzonte`
+                      : `Timeframe allineati (${c.horizons.map((h) => HZ_LABEL[h] ?? h).join(" + ")}) - nessun vantaggio validato sui ribassi`
+                  }
                 >
                   <Layers className="h-3 w-3" />
                   Multi-orizzonte
