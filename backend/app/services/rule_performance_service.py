@@ -141,20 +141,34 @@ def _load_bars(
     return out
 
 
-def _snapshot_tone_conf(snap: str | None) -> tuple[str | None, float | None]:
-    """Parse (tone, confidence) from an alert snapshot. The snapshot carries the
-    signal's own bull/bear tone -- the reliable source -- instead of the stale
-    name->tone map (kept above only for backward reference)."""
+def _snapshot_tone_conf(snap: str | None) -> tuple[str | None, float | None, str | None]:
+    """Parse (tone, confidence, horizon) from an alert snapshot. The snapshot
+    carries the signal's own bull/bear tone -- the reliable source -- instead of
+    the stale name->tone map (kept above only for backward reference)."""
     if not snap:
-        return None, None
+        return None, None, None
     try:
         d = json.loads(snap)
     except (ValueError, TypeError):
-        return None, None
+        return None, None, None
     tone = d.get("tone")
     conf = d.get("confidence")
+    hz = d.get("horizon")
     return (tone if tone in ("bull", "bear") else None,
-            float(conf) if isinstance(conf, (int, float)) else None)
+            float(conf) if isinstance(conf, (int, float)) else None,
+            hz if hz in ("short", "medium", "long") else None)
+
+
+def load_calibration_seed() -> dict | None:
+    """Backtest-derived calibration reference (hit-rate + forward return by
+    confidence x horizon), used to populate the panel immediately while the
+    live, maturing calibration accumulates. None if the seed file is absent."""
+    import pathlib
+    fp = pathlib.Path(__file__).resolve().parent.parent / "data" / "calibration_seed.json"
+    try:
+        return json.loads(fp.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
 
 
 def _directional_hit(tone: str | None, ret: float) -> bool | None:
@@ -192,7 +206,7 @@ def compute_performance(
             continue
         kind = f"signal:{alert.signal_name}"
         sig_d = alert.signal_date or alert.triggered_at.date()
-        tone, _ = _snapshot_tone_conf(alert.snapshot)
+        tone, _, _ = _snapshot_tone_conf(alert.snapshot)
         by_kind.setdefault(kind, []).append((alert.stock_id, sig_d, tone))
         stock_ids.add(alert.stock_id)
     if not by_kind:
@@ -253,6 +267,7 @@ class Calibration:
     window: int
     by_confidence: list["CalibrationBucket"]
     by_nature: list["CalibrationBucket"]
+    by_horizon: list["CalibrationBucket"]
 
 
 def compute_calibration(db: Session, *, days: int = 365, window: int = 20) -> Calibration:
@@ -274,6 +289,7 @@ def compute_calibration(db: Session, *, days: int = 365, window: int = 20) -> Ca
 
     conf_acc: dict[str, list[tuple[float, bool | None]]] = {}
     nat_acc: dict[str, list[tuple[float, bool | None]]] = {}
+    hz_acc: dict[str, list[tuple[float, bool | None]]] = {}
 
     def conf_label(c: float) -> str | None:
         for lo, hi in _CONF_BUCKETS:
@@ -284,7 +300,7 @@ def compute_calibration(db: Session, *, days: int = 365, window: int = 20) -> Ca
     for a in rows:
         if not a.signal_name:
             continue
-        tone, conf = _snapshot_tone_conf(a.snapshot)
+        tone, conf, hz = _snapshot_tone_conf(a.snapshot)
         sig_d = a.signal_date or a.triggered_at.date()
         fwd = _forward_close(bars_by_stock, a.stock_id, sig_d, window)
         if fwd is None:
@@ -304,6 +320,8 @@ def compute_calibration(db: Session, *, days: int = 365, window: int = 20) -> Ca
         )
         if nat:
             nat_acc.setdefault(nat, []).append((ret, hit))
+        if hz:
+            hz_acc.setdefault(hz, []).append((ret, hit))
 
     def mk(label: str, items: list[tuple[float, bool | None]]) -> CalibrationBucket:
         rets = [r for r, _ in items]
@@ -318,4 +336,6 @@ def compute_calibration(db: Session, *, days: int = 365, window: int = 20) -> Ca
 
     by_conf = [mk(f"{lo}-{hi - 1}", conf_acc.get(f"{lo}-{hi - 1}", [])) for lo, hi in _CONF_BUCKETS]
     by_nat = [mk(n, nat_acc.get(n, [])) for n in ("continuazione", "inversione")]
-    return Calibration(days=days, window=window, by_confidence=by_conf, by_nature=by_nat)
+    by_hz = [mk(h, hz_acc.get(h, [])) for h in ("short", "medium", "long")]
+    return Calibration(days=days, window=window, by_confidence=by_conf,
+                       by_nature=by_nat, by_horizon=by_hz)

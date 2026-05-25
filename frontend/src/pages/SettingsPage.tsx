@@ -727,20 +727,62 @@ function CalibrationPanel() {
             <Loader2 className="h-4 w-4 animate-spin" />
             Calcolo calibrazione...
           </div>
-        ) : matured === 0 ? (
-          <div className="py-6 text-center text-sm text-muted-foreground">
-            Esiti non ancora maturi: la calibrazione richiede circa {horizon} giorni di
-            borsa dopo ogni segnale. Si popolera man mano che gli alert maturano.
-          </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <CalTable title="Per confidenza" rows={c!.by_confidence} pct={pct} ret={ret} />
-            <CalTable title="Per natura" rows={c!.by_nature} pct={pct} ret={ret} />
+          <div className="space-y-4">
+            {matured > 0 ? (
+              <div>
+                <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold mb-1">
+                  Live - esiti maturati: {matured} (orizzonte {horizon}g)
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <CalTable title="Per confidenza" rows={c!.by_confidence} pct={pct} ret={ret} />
+                  <CalTable title="Per orizzonte" rows={c!.by_horizon} pct={pct} ret={ret} />
+                  <CalTable title="Per natura" rows={c!.by_nature} pct={pct} ret={ret} />
+                </div>
+              </div>
+            ) : (
+              <div className="text-xs text-muted-foreground">
+                Esiti live non ancora maturi (~{horizon}g di borsa dopo ogni segnale);
+                si popolano col tempo. Sotto, il riferimento da backtest.
+              </div>
+            )}
+            {c?.backtest_seed && (
+              <div>
+                <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold mb-1">
+                  Riferimento backtest - forward {c.backtest_seed.window}g, direction-adjusted
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <CalTable title="Per confidenza" rows={seedRows(c.backtest_seed.by_confidence, ["60-69", "70-79", "80-89", "90-100"])} pct={pct} ret={ret} />
+                  <CalTable title="Per orizzonte" rows={seedRows(c.backtest_seed.by_horizon, ["short", "medium", "long"], HZ_IT)} pct={pct} ret={ret} />
+                  <CalTable title="Per natura" rows={seedRows(c.backtest_seed.by_nature, ["continuazione", "inversione"])} pct={pct} ret={ret} />
+                </div>
+              </div>
+            )}
           </div>
         )}
       </CardContent>
     </Card>
   );
+}
+
+const HZ_IT: Record<string, string> = { short: "Breve", medium: "Medio", long: "Lungo" };
+
+/** Adapt a backtest-seed Record<label, cell> into CalTable rows in a fixed
+ *  order (mean_pct in the seed is already in %, so it's passed straight). */
+function seedRows(
+  rec: Record<string, { count: number; hit_rate: number | null; mean_pct: number | null }>,
+  order: string[],
+  labels?: Record<string, string>,
+): { label: string; count: number; hit_rate: number | null; mean_pct: number | null }[] {
+  return order.map((k) => {
+    const cell = rec?.[k];
+    return {
+      label: labels?.[k] ?? k,
+      count: cell?.count ?? 0,
+      hit_rate: cell?.hit_rate ?? null,
+      mean_pct: cell?.mean_pct ?? null,
+    };
+  });
 }
 
 function CalTable({

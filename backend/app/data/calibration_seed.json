@@ -1,0 +1,116 @@
+{
+  "window": 20,
+  "by_horizon": {
+    "short": {
+      "count": 22441,
+      "hit_rate": 0.494,
+      "mean_pct": -0.113
+    },
+    "medium": {
+      "count": 6555,
+      "hit_rate": 0.495,
+      "mean_pct": -0.029
+    },
+    "long": {
+      "count": 14170,
+      "hit_rate": 0.525,
+      "mean_pct": 0.361
+    }
+  },
+  "by_confidence": {
+    "60-69": {
+      "count": 11169,
+      "hit_rate": 0.498,
+      "mean_pct": -0.206
+    },
+    "70-79": {
+      "count": 14938,
+      "hit_rate": 0.497,
+      "mean_pct": 0.065
+    },
+    "80-89": {
+      "count": 8166,
+      "hit_rate": 0.512,
+      "mean_pct": 0.074
+    },
+    "90-100": {
+      "count": 8893,
+      "hit_rate": 0.518,
+      "mean_pct": 0.352
+    }
+  },
+  "by_confidence_horizon": {
+    "60-69|short": {
+      "count": 5316,
+      "hit_rate": 0.485,
+      "mean_pct": -0.244
+    },
+    "60-69|medium": {
+      "count": 3486,
+      "hit_rate": 0.502,
+      "mean_pct": -0.225
+    },
+    "60-69|long": {
+      "count": 2367,
+      "hit_rate": 0.522,
+      "mean_pct": -0.094
+    },
+    "70-79|short": {
+      "count": 10942,
+      "hit_rate": 0.498,
+      "mean_pct": 0.051
+    },
+    "70-79|medium": {
+      "count": 1624,
+      "hit_rate": 0.47,
+      "mean_pct": -0.032
+    },
+    "70-79|long": {
+      "count": 2372,
+      "hit_rate": 0.513,
+      "mean_pct": 0.192
+    },
+    "80-89|short": {
+      "count": 3354,
+      "hit_rate": 0.501,
+      "mean_pct": -0.141
+    },
+    "80-89|medium": {
+      "count": 750,
+      "hit_rate": 0.495,
+      "mean_pct": 0.382
+    },
+    "80-89|long": {
+      "count": 4062,
+      "hit_rate": 0.524,
+      "mean_pct": 0.194
+    },
+    "90-100|short": {
+      "count": 2829,
+      "hit_rate": 0.491,
+      "mean_pct": -0.47
+    },
+    "90-100|medium": {
+      "count": 695,
+      "hit_rate": 0.519,
+      "mean_pct": 0.515
+    },
+    "90-100|long": {
+      "count": 5369,
+      "hit_rate": 0.532,
+      "mean_pct": 0.764
+    }
+  },
+  "by_nature": {
+    "continuazione": {
+      "count": 27596,
+      "hit_rate": 0.511,
+      "mean_pct": 0.177
+    },
+    "inversione": {
+      "count": 15326,
+      "hit_rate": 0.492,
+      "mean_pct": -0.155
+    }
+  }
+}

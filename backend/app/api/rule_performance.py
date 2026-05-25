@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
 from app.models import User
-from app.services.rule_performance_service import compute_calibration, compute_performance
+from app.services.rule_performance_service import compute_calibration, compute_performance, load_calibration_seed
 from pydantic import BaseModel
 
 router = APIRouter(prefix="/api/rule-performance", tags=["rule-performance"])
@@ -85,6 +85,8 @@ class CalibrationOut(BaseModel):
     window: int
     by_confidence: list[CalibrationBucketOut]
     by_nature: list[CalibrationBucketOut]
+    by_horizon: list[CalibrationBucketOut]
+    backtest_seed: dict | None = None
 
 
 @router.get("/calibration", response_model=CalibrationOut)
@@ -102,4 +104,6 @@ def get_calibration(
         window=c.window,
         by_confidence=[CalibrationBucketOut(**vars(b)) for b in c.by_confidence],
         by_nature=[CalibrationBucketOut(**vars(b)) for b in c.by_nature],
+        by_horizon=[CalibrationBucketOut(**vars(b)) for b in c.by_horizon],
+        backtest_seed=load_calibration_seed(),
     )

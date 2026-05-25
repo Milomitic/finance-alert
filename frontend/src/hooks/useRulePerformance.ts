@@ -43,11 +43,27 @@ export interface CalibrationBucket {
   median_pct: number | null;
 }
 
+export interface CalibrationSeedCell {
+  count: number;
+  hit_rate: number | null;
+  mean_pct: number | null;
+}
+export interface CalibrationSeed {
+  window: number;
+  by_horizon: Record<string, CalibrationSeedCell>;
+  by_confidence: Record<string, CalibrationSeedCell>;
+  by_confidence_horizon: Record<string, CalibrationSeedCell>;
+  by_nature: Record<string, CalibrationSeedCell>;
+}
 export interface Calibration {
   days: number;
   window: number;
   by_confidence: CalibrationBucket[];
   by_nature: CalibrationBucket[];
+  by_horizon: CalibrationBucket[];
+  /** Backtest-derived reference (populates the panel immediately while live
+   *  calibration matures). Null if the seed file is absent. */
+  backtest_seed: CalibrationSeed | null;
 }
 
 /** Realized directional hit-rate + forward return bucketed by confidence and
