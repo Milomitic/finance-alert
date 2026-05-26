@@ -321,12 +321,20 @@ export interface Mover {
    *  the reader whether today's volume is unusual. Same value as on
    *  `VolumeSpike` / `TopVolume`. Optional. */
   vol_ratio?: number | null;
+  /** Cumulative share volume over the window (SUM of daily volumes) —
+   *  shown in the 1S (5d) / 1M (20d) movers tabs where "today's volume"
+   *  is meaningless. Optional — older snapshots predate these. */
+  vol_5d?: number | null;
+  vol_20d?: number | null;
   /** USD notional turnover (vol_today × USD price). Powers the volume
    *  card's "Controvalore" view. Optional — older snapshots lack it. */
   dollar_volume?: number | null;
   /** Latest persisted composite score (0-100). Optional — null when
    *  the score service hasn't yet processed the stock. */
   composite?: number | null;
+  /** Listing exchange (NASDAQ / NYSE / HKEX / ...). The movers card scopes
+   *  the intraday volume projection to US-session exchanges only. */
+  exchange?: string | null;
 }
 
 export interface VolumeSpike extends Mover {

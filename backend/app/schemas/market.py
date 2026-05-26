@@ -67,10 +67,16 @@ class MoverOut(BaseModel):
     # snapshot payloads without these keys still validate.
     vol_today: int | None = None
     vol_ratio: float | None = None
+    # Cumulative window volumes (period totals) for the 1S/1M movers tabs.
+    vol_5d: int | None = None
+    vol_20d: int | None = None
     # USD notional turnover (vol_today × USD price). Powers the volume
     # card's "Controvalore" ranking. Optional for back-compat.
     dollar_volume: float | None = None
     composite: float | None = None
+    # Listing exchange — frontend scopes the intraday volume projection to
+    # US-session exchanges (HK/EU bars are already full-day at snapshot time).
+    exchange: str | None = None
 
 
 class VolumeSpikeOut(MoverOut):

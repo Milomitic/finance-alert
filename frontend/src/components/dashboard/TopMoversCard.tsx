@@ -49,6 +49,13 @@ interface WindowedMovers {
 const MAX_LIVE_TICKERS = 120;
 const ROWS_PER_COL = 8;
 
+// Exchanges that follow the US intraday-volume curve used by `projectVolRatio`.
+// Only these get the partial-day → end-of-day volume PROJECTION. A Hong Kong
+// (or European) listing is already a complete trading day by the time the
+// US-session snapshot runs, so projecting it would inflate the figure — those
+// rows show their definitive volume instead.
+const US_SESSION_EXCHANGES = new Set(["NASDAQ", "NYSE", "NYSE Arca"]);
+
 function getWindowed(movers: MoversBlock, w: Window): WindowedMovers {
   if (w === "1w") {
     return {
@@ -67,9 +74,12 @@ function getWindowed(movers: MoversBlock, w: Window): WindowedMovers {
   return { gainers: movers.gainers, losers: movers.losers, field: "change_pct" };
 }
 
-function MoverRow({ m, field, live, computedAt, livePrice }: {
+function MoverRow({ m, field, window, live, computedAt, livePrice }: {
   m: Mover;
   field: WindowedMovers["field"];
+  /** Active window — drives WHICH volume to show: today's (1d, projected
+   *  to EOD for US names) vs the period total (1w → vol_5d, 1m → vol_20d). */
+  window: Window;
   /** When true, colour by the value's own sign (a stock can flip
    *  gainer↔loser intraday so the column it lands in no longer
    *  dictates the colour). EOD windows keep the static sign. */
@@ -86,16 +96,51 @@ function MoverRow({ m, field, live, computedAt, livePrice }: {
   const color = positive
     ? "text-green-600 dark:text-green-400"
     : "text-red-600 dark:text-red-400";
-  const volToday = m.vol_today ?? null;
-  const rawVolRatio = m.vol_ratio ?? null;
-  // Project the snapshot's raw vol_ratio to end-of-day when we're
-  // inside the US session. Outside session (or first ~30 min) the
-  // helper returns `projected:false` and we just show the raw value.
-  const projVol = projectVolRatio(rawVolRatio, computedAt);
-  const displayVolRatio = projVol?.value ?? null;
-  const isProjected = !!projVol?.projected;
   const composite = m.composite ?? null;
   const displayPrice = livePrice ?? m.last_close ?? null;
+
+  // ── Window-aware volume ────────────────────────────────────────────────
+  // 1d  → today's share volume; PROJECTED to end-of-day (with "~") for
+  //       US-session names that are still mid-session, definitive otherwise.
+  // 1w  → vol_5d  (sum of the last 5 daily volumes) — a period total, final.
+  // 1m  → vol_20d (sum of the last 20 daily volumes) — a period total, final.
+  // The "× vs 20d avg" multiplier only makes sense for the single-day view,
+  // so it's shown for 1d only.
+  const isUS = m.exchange != null && US_SESSION_EXCHANGES.has(m.exchange);
+  let volValue: number | null;
+  let volEstimated = false;            // → render a "~" prefix on the volume
+  let multiplier: number | null = null; // the "× vs media" badge (1d only)
+  let multiplierEstimated = false;
+  if (window === "1d") {
+    const rawVol = m.vol_today ?? null;
+    // Only US-session names follow the projection curve; HK/EU bars are
+    // already a full day at snapshot time → show them as-is.
+    const proj = isUS ? projectVolRatio(m.vol_ratio ?? null, computedAt) : null;
+    if (proj?.projected && proj.fraction > 0) {
+      volValue = rawVol != null ? Math.round(rawVol / proj.fraction) : null;
+      volEstimated = true;
+      multiplier = proj.value;
+      multiplierEstimated = true;
+    } else {
+      volValue = rawVol;
+      multiplier = m.vol_ratio ?? null; // definitive (closed market / non-US)
+    }
+  } else if (window === "1w") {
+    volValue = m.vol_5d ?? null;
+  } else {
+    volValue = m.vol_20d ?? null;
+  }
+  const volWindowLabel = window === "1d" ? "oggi" : window === "1w" ? "5 giorni" : "20 giorni";
+  const volTitle =
+    volValue != null
+      ? `Volume ${volWindowLabel}: ${volValue.toLocaleString("it-IT")} share${
+          volEstimated ? " (stima fine giornata, definitiva a chiusura)" : ""
+        }${
+          multiplier != null
+            ? ` · ${multiplierEstimated ? "~" : ""}${multiplier.toFixed(2)}× la media a 20 giorni`
+            : ""
+        }`
+      : "Volume non disponibile";
   return (
     <li className="border-b border-border/40 last:border-b-0">
       <Link
@@ -151,45 +196,32 @@ function MoverRow({ m, field, live, computedAt, livePrice }: {
             noTween
           />
         </span>
-        {/* Volume + multiplier — "12.4M (3.2×)". Font bumped 11→13px
-            per user feedback: the figure was visually subordinate to
-            % change but it carries comparable signal weight ("how
-            unusual is today's activity"). The multiplier is
-            INTRADAY-PROJECTED when the snapshot is partial-day — see
-            `projectVolRatio` for the curve. We mark projected values
-            with a "~" prefix so the user reads it as an estimate. */}
+        {/* Volume — window-aware: today's share volume (1d, projected to
+            end-of-day with "~" for US names still mid-session) or the period
+            TOTAL (1w → 5-day sum, 1m → 20-day sum). The "× vs 20d avg"
+            multiplier is a single-day concept, so it's shown only in 1d.
+            A "~" prefix on either marks an estimate that finalizes at close. */}
         <span
           className="shrink-0 text-[12.5px] tabular-nums text-muted-foreground/90 min-w-[92px] text-right"
-          title={
-            volToday != null
-              ? `Volume oggi: ${volToday.toLocaleString("it-IT")} share${
-                  displayVolRatio != null
-                    ? ` · ${
-                        isProjected
-                          ? `proiezione fine giornata ~${displayVolRatio.toFixed(2)}× (scalato da ${projVol?.fraction ? Math.round(projVol.fraction * 100) : 0}% sessione)`
-                          : `${displayVolRatio.toFixed(2)}× la media a 20 giorni`
-                      }`
-                    : ""
-                }`
-              : "Volume non disponibile"
-          }
+          title={volTitle}
         >
           <span className="font-semibold text-foreground/80">
-            {fmtVolume(volToday)}
+            {volEstimated ? "~" : ""}
+            {fmtVolume(volValue)}
           </span>
-          {displayVolRatio != null && (
+          {window === "1d" && multiplier != null && (
             <span
               className={cn(
                 "ml-1",
-                displayVolRatio >= 3
+                multiplier >= 3
                   ? "text-orange-700 dark:text-orange-300 font-semibold"
-                  : displayVolRatio >= 2
+                  : multiplier >= 2
                   ? "text-foreground/70"
                   : "text-muted-foreground/70",
               )}
             >
-              ({isProjected ? "~" : ""}
-              {displayVolRatio.toFixed(1)}×)
+              ({multiplierEstimated ? "~" : ""}
+              {multiplier.toFixed(1)}×)
             </span>
           )}
         </span>
@@ -400,6 +432,7 @@ export function TopMoversCard({ movers, computedAt }: Props) {
                         key={m.ticker}
                         m={m}
                         field={data.field}
+                        window={window}
                         live={liveActive && liveMap.has(m.ticker)}
                         computedAt={computedAt}
                         livePrice={

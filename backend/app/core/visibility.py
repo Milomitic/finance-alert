@@ -32,14 +32,18 @@ from app.models import Stock
 # never surfaced individually in the UI.
 HIDDEN_COUNTRIES: frozenset[str] = frozenset({"CN", "JP", "KR"})
 
-# US listings are ALWAYS surfaced regardless of domicile. A Chinese or
-# Japanese company trading as a NASDAQ / NYSE ADR (BIDU, PDD, TM, LI,
-# DQ, ...) is liquid and individually tradable, so the country-based
-# hide does not apply to it. Exchange labels match the catalog
-# convention (see catalog_refresh_service / source_catalog). This is the
-# standing rule: "stock cinesi/giapponesi quotate NASDAQ o NYSE devono
-# essere visibili e generare segnali".
-US_LISTED_EXCHANGES: frozenset[str] = frozenset({"NASDAQ", "NYSE", "NYSE Arca"})
+# Listings on these exchanges are ALWAYS surfaced regardless of domicile,
+# overriding the country-based hide:
+#   - US (NASDAQ / NYSE / NYSE Arca): a CN/JP company trading as a US ADR
+#     (BIDU, PDD, TM, LI, DQ, ...) is liquid and individually tradable.
+#   - HK (HKEX): the user's watchlist holds Hong Kong-listed Chinese names
+#     (9988.HK Alibaba, 0700.HK Tencent, 3690.HK Meituan, ...) imported from
+#     eToro — they must be navigable AND signal-generating. Mainland China
+#     (SSE/SZSE), Tokyo (JPX) and Korea (KRX) listings stay breadth-only.
+# Exchange labels match the catalog convention (see catalog_refresh_service /
+# source_catalog). This is the standing rule: "le stock cinesi quotate ...
+# devono essere visibili e generare segnali".
+SURFACED_EXCHANGES: frozenset[str] = frozenset({"NASDAQ", "NYSE", "NYSE Arca", "HKEX"})
 
 
 def visible_country_clause():
@@ -53,8 +57,8 @@ def visible_country_clause():
     return or_(
         Stock.country.is_(None),
         ~Stock.country.in_(HIDDEN_COUNTRIES),
-        # US-listed ADRs of CN/JP/KR companies stay visible.
-        Stock.exchange.in_(US_LISTED_EXCHANGES),
+        # US-listed ADRs + HK-listed names of CN/JP/KR companies stay visible.
+        Stock.exchange.in_(SURFACED_EXCHANGES),
     )
 
 
@@ -63,10 +67,11 @@ def is_visible_country(country: str | None, exchange: str | None = None) -> bool
     that already have a `country` value in memory (e.g. filtering an
     in-memory metrics list before passing to mover/treemap aggregators).
 
-    `exchange`, when supplied, applies the US-listed exception: a stock
-    on NASDAQ / NYSE is always visible regardless of its domicile."""
+    `exchange`, when supplied, applies the surfaced-exchange exception: a
+    stock on NASDAQ / NYSE / NYSE Arca / HKEX is always visible regardless
+    of its domicile."""
     if country is None:
         return True
-    if exchange is not None and exchange in US_LISTED_EXCHANGES:
+    if exchange is not None and exchange in SURFACED_EXCHANGES:
         return True
     return country.upper() not in HIDDEN_COUNTRIES

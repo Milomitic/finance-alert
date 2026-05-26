@@ -63,6 +63,11 @@ class StockMetrics:
     sparkline: list[float] = field(default_factory=list)  # last 30 closes for per-row UI sparklines
     change_pct_5d: float | None = None    # ~1 week (5 trading days)
     change_pct_20d: float | None = None   # ~1 month (20 trading days)
+    # Cumulative share volume over the window (SUM of daily volumes). The
+    # movers card shows these in the 1S/1M tabs — "today's volume" is
+    # meaningless for a multi-day window; the user wants the period total.
+    vol_5d: int | None = None             # sum of last 5 daily volumes
+    vol_20d: int | None = None            # sum of last 20 daily volumes
     # ISO-2 country, used to exclude hidden countries (CN/JP/KR) from
     # the user-facing aggregates (movers/treemap/sectors/top-picks).
     # Default None for legacy callers / test fixtures.
@@ -149,6 +154,11 @@ def compute_stock_metrics(
     vol_today = int(volume.iloc[-1])
     vol_avg_20 = float(volume.tail(20).mean()) if n >= 20 else None
     vol_ratio = (vol_today / vol_avg_20) if vol_avg_20 and vol_avg_20 > 0 else None
+    # Cumulative window volume (SUM, not average) — the 1S/1M movers tabs
+    # show the period total instead of a single day. n >= 21 is guaranteed
+    # by the early return, so tail(5)/tail(20) are always full windows.
+    vol_5d = int(volume.tail(5).sum())
+    vol_20d = int(volume.tail(20).sum())
 
     # Realized volatility — annualized stddev of daily returns over the
     # last ~60 sessions. Ranks high-beta names + leveraged ETFs to the
@@ -192,6 +202,8 @@ def compute_stock_metrics(
         change_pct=change_pct,
         change_pct_5d=change_pct_5d,
         change_pct_20d=change_pct_20d,
+        vol_5d=vol_5d,
+        vol_20d=vol_20d,
         ema50=ema50,
         ema200=ema200,
         rsi14=rsi14,
@@ -475,6 +487,15 @@ def build_movers(
             "sparkline": m.sparkline,
             "vol_today": m.vol_today,
             "vol_ratio": round(m.vol_ratio, 2) if m.vol_ratio is not None else None,
+            # Cumulative window volumes for the 1S/1M tabs (period totals).
+            "vol_5d": m.vol_5d,
+            "vol_20d": m.vol_20d,
+            # Listing exchange — the frontend uses it to scope the intraday
+            # volume PROJECTION to US-session names only. A Hong Kong stock's
+            # bar is already a complete day by the time the US-session
+            # snapshot runs, so projecting it against the US curve inflated
+            # it ~3× ("sballato"); HK/EU rows now show their definitive volume.
+            "exchange": m.exchange,
             # Dollar (notional) turnover in USD — vol_today × USD price.
             # Powers the "Controvalore" view of the volume card; None when
             # either share count or price is missing.
@@ -639,25 +660,34 @@ def _load_metrics(db: Session) -> tuple[list[StockMetrics], list[tuple[str, str]
         if m is not None:
             metrics.append(m)
 
-    # Stale-row guard: if a stock's last bar is older than the catalog's
-    # freshest available date, null out its change_pct fields so it
-    # can't appear in gainers/losers/treemap with a stale "yesterday's
-    # move" misrepresented as today's. Other metrics (RSI/EMA/52w/vol)
-    # survive — they're per-window aggregates where one missing day at
-    # the tail doesn't meaningfully distort the value. Concretely:
-    # without this, PLUG with bar through 2026-05-13 (close=3.96, prev
-    # close=3.56 = +11.24%) was crowning the gainers list even though
-    # today's live price was -2.4% from yesterday. Now the row's
-    # change_pct = None and PLUG drops off the movers cards until the
-    # next scan picks up today's bar.
-    bar_dates = [m.last_bar_date for m in metrics if m.last_bar_date is not None]
-    if bar_dates:
-        freshest_date = max(bar_dates)
-        for m in metrics:
-            if m.last_bar_date is not None and m.last_bar_date < freshest_date:
-                m.change_pct = None
-                m.change_pct_5d = None
-                m.change_pct_20d = None
+    # Stale-row guard, computed PER EXCHANGE (per market). If a stock's last
+    # bar lags its OWN exchange's freshest available date, null its change_pct
+    # fields so it can't appear in gainers/losers/treemap with a stale
+    # "yesterday's move" misrepresented as today's. Other metrics
+    # (RSI/EMA/52w/vol) survive — they're per-window aggregates where one
+    # missing tail day doesn't meaningfully distort the value.
+    #
+    # Why per-exchange and NOT a single global max date: markets close at
+    # different times. HK (UTC+8) closes ~8h before the US, so on the scan
+    # day HKEX bars are dated "today" while perfectly-fresh NYSE/NASDAQ bars
+    # are still "yesterday". A global max would flag EVERY non-HK stock as
+    # stale and null its change_pct — which left the 1w/1m movers showing
+    # only Hong Kong names. Comparing each stock to its own exchange's
+    # freshest bar keeps the real laggards (e.g. PLUG dropped by a yfinance
+    # batch) dropping while cross-timezone leaders don't nuke each other.
+    freshest_by_exchange: dict[str | None, date] = {}
+    for m in metrics:
+        if m.last_bar_date is None:
+            continue
+        cur = freshest_by_exchange.get(m.exchange)
+        if cur is None or m.last_bar_date > cur:
+            freshest_by_exchange[m.exchange] = m.last_bar_date
+    for m in metrics:
+        fresh = freshest_by_exchange.get(m.exchange)
+        if m.last_bar_date is not None and fresh is not None and m.last_bar_date < fresh:
+            m.change_pct = None
+            m.change_pct_5d = None
+            m.change_pct_20d = None
     return metrics, indices
 
 
