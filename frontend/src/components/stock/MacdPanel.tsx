@@ -6,6 +6,7 @@ import {
 
 import type { IndicatorPoint } from "@/api/types";
 import type { RegisterChart } from "@/hooks/useChartSync";
+import { installRangeClamp } from "@/lib/chartClamp";
 
 interface Props {
   line: IndicatorPoint[];
@@ -33,6 +34,8 @@ export function MacdPanel({ line, signal, hist, color = "#ef4444", width = 2, on
   const lineRef = useRef<ISeriesApi<"Line"> | null>(null);
   const signalRef = useRef<ISeriesApi<"Line"> | null>(null);
   const histRef = useRef<ISeriesApi<"Histogram"> | null>(null);
+  // Live bar count (MACD drops the warm-up bars) read by the pan/zoom clamp.
+  const nBarsRef = useRef(0);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -71,8 +74,14 @@ export function MacdPanel({ line, signal, hist, color = "#ef4444", width = 2, on
       lineStyle: 2,
       axisLabelVisible: false,
     });
+    // Pan/zoom clamp — same bound as the price chart so this panel stops at
+    // its margins instead of overshooting when the synced price chart is
+    // dragged past the edge. Reads its own (warm-up-trimmed) bar count.
+    const detachClamp = installRangeClamp(chart, () => nBarsRef.current);
+
     const unregister = onReady?.(chart, { series: lineRef.current ?? undefined });
     return () => {
+      detachClamp();
       unregister?.();
       chart.remove();
       chartRef.current = null;
@@ -90,8 +99,10 @@ export function MacdPanel({ line, signal, hist, color = "#ef4444", width = 2, on
 
   useEffect(() => {
     if (!lineRef.current || !signalRef.current || !histRef.current) return;
+    const linePoints = line.filter((p) => p.value !== null);
+    nBarsRef.current = linePoints.length;
     lineRef.current.setData(
-      line.filter((p) => p.value !== null).map((p) => ({ time: dateToTime(p.date), value: p.value as number })),
+      linePoints.map((p) => ({ time: dateToTime(p.date), value: p.value as number })),
     );
     signalRef.current.setData(
       signal.filter((p) => p.value !== null).map((p) => ({ time: dateToTime(p.date), value: p.value as number })),

@@ -6,6 +6,7 @@ import {
 
 import type { IndicatorPoint } from "@/api/types";
 import type { RegisterChart } from "@/hooks/useChartSync";
+import { installRangeClamp } from "@/lib/chartClamp";
 
 interface Props {
   rsi14: IndicatorPoint[];
@@ -50,6 +51,8 @@ export function RsiPanel({ rsi14, color = "#7c3aed", width = 2, onReady }: Props
   const neutralRef = useRef<ISeriesApi<"Baseline"> | null>(null);
   const overboughtRef = useRef<ISeriesApi<"Baseline"> | null>(null);
   const oversoldRef = useRef<ISeriesApi<"Baseline"> | null>(null);
+  // Live bar count (RSI drops the warm-up bars) read by the pan/zoom clamp.
+  const nBarsRef = useRef(0);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -144,8 +147,14 @@ export function RsiPanel({ rsi14, color = "#7c3aed", width = 2, onReady }: Props
       price: 50, color: "rgba(100,116,139,0.4)", lineWidth: 1, lineStyle: 1, axisLabelVisible: false,
     });
 
+    // Pan/zoom clamp — same bound as the price chart so this panel stops at
+    // its margins instead of overshooting when the synced price chart is
+    // dragged past the edge. Reads its own (warm-up-trimmed) bar count.
+    const detachClamp = installRangeClamp(chart, () => nBarsRef.current);
+
     const unregister = onReady?.(chart, { series: lineRef.current ?? undefined });
     return () => {
+      detachClamp();
       unregister?.();
       chart.remove();
       chartRef.current = null;
@@ -188,6 +197,7 @@ export function RsiPanel({ rsi14, color = "#7c3aed", width = 2, onReady }: Props
       || !oversoldRef.current
     ) return;
     const points = rsi14.filter((p) => p.value !== null);
+    nBarsRef.current = points.length;
     const times = points.map((p) => dateToTime(p.date));
     lineRef.current.setData(
       points.map((p) => ({ time: dateToTime(p.date), value: p.value as number })),

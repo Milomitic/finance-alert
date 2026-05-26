@@ -4,13 +4,12 @@ import { type AlertListParams } from "@/api/alerts";
 import type { Alert } from "@/api/types";
 import { AlertDetailDialog } from "@/components/AlertDetailDialog";
 import { AlertFilters } from "@/components/AlertFilters";
+import { AlertsInsightCard } from "@/components/AlertsInsightCard";
 import { AlertsTable } from "@/components/AlertsTable";
-import { ConfluenceView } from "@/components/ConfluenceView";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useAlertsList, useConfluence } from "@/hooks/useAlerts";
 import { useBulkAlerts } from "@/hooks/useAlertMutations";
-import { cn } from "@/lib/utils";
 
 const PAGE_SIZE = 50;
 
@@ -33,7 +32,6 @@ export default function AlertsPage() {
   const [openDetail, setOpenDetail] = useState<Alert | null>(null);
   const [sortBy, setSortBy] = useState("triggered_at");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
-  const [view, setView] = useState<"list" | "confluence">("list");
 
   const list = useAlertsList({
     ...filters,
@@ -52,7 +50,9 @@ export default function AlertsPage() {
     }
     setPage(0);
   };
-  const conf = useConfluence(7, view === "confluence");
+  // Confluence is always fetched now (no more view toggle) — it feeds the
+  // insight card that sits above the table.
+  const conf = useConfluence(7);
   const bulk = useBulkAlerts();
 
   const items = list.data?.items ?? [];
@@ -78,38 +78,20 @@ export default function AlertsPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-end justify-between gap-3 flex-wrap">
-        <div>
-          <h2 className="text-2xl font-semibold">Alerts</h2>
-          <p className="text-sm text-muted-foreground">
-            {view === "list"
-              ? `${total} alert totali con i filtri attuali`
-              : `${conf.data?.length ?? 0} confluenze attive (2+ segnali concordi)`}
-          </p>
-        </div>
-        <div className="inline-flex rounded-md border overflow-hidden shrink-0">
-          <button
-            type="button"
-            onClick={() => setView("list")}
-            className={cn("px-3 py-1.5 text-sm font-medium", view === "list" ? "bg-primary text-primary-foreground" : "hover:bg-accent")}
-          >
-            Lista
-          </button>
-          <button
-            type="button"
-            onClick={() => setView("confluence")}
-            className={cn("px-3 py-1.5 text-sm font-medium border-l", view === "confluence" ? "bg-primary text-primary-foreground" : "hover:bg-accent")}
-          >
-            Confluenza
-          </button>
-        </div>
+      <div>
+        <h2 className="text-2xl font-semibold">Alerts</h2>
+        <p className="text-sm text-muted-foreground">
+          {total} alert totali con i filtri attuali
+        </p>
       </div>
 
-      {view === "list" && (
-        <AlertFilters value={filters} onChange={(v) => { setPage(0); setFilters(v); }} />
-      )}
+      <AlertFilters value={filters} onChange={(v) => { setPage(0); setFilters(v); }} />
 
-      {view === "list" && selectedIds.size > 0 && (
+      {/* Confluence digest — always visible above the table (replaced the old
+          list/confluence view toggle). */}
+      <AlertsInsightCard clusters={conf.data ?? []} loading={conf.isLoading} />
+
+      {selectedIds.size > 0 && (
         <Card>
           <CardContent className="flex items-center gap-2 p-3">
             <span className="text-sm">{selectedIds.size} selezionati</span>
@@ -125,13 +107,7 @@ export default function AlertsPage() {
               ticker/name search input in its header stays visible and
               the user can adjust the query that's filtering things to
               empty. The empty-state message renders inside the tbody. */}
-          {view === "confluence" ? (
-            conf.isLoading ? (
-              <div className="p-6 text-sm text-muted-foreground">Caricamento…</div>
-            ) : (
-              <ConfluenceView clusters={conf.data ?? []} />
-            )
-          ) : list.isLoading ? (
+          {list.isLoading ? (
             <div className="p-6 text-sm text-muted-foreground">Caricamento…</div>
           ) : (
             <AlertsTable
@@ -153,7 +129,7 @@ export default function AlertsPage() {
         </CardContent>
       </Card>
 
-      {view === "list" && totalPages > 1 && (
+      {totalPages > 1 && (
         <div className="flex items-center justify-between text-sm">
           <span>Pagina {page + 1} di {totalPages}</span>
           <div className="flex gap-2">

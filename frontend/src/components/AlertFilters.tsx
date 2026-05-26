@@ -148,6 +148,10 @@ export function AlertFilters({ value, onChange }: Props) {
           }
         />
 
+        {/* Filters laid out horizontally (responsive grid) so the card stays
+            short — was a tall vertical stack. Wraps to 2-3 cols on narrow
+            viewports, single row on lg+. */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         <div>
           <Label className="text-xs uppercase tracking-wider text-muted-foreground">
             Archivio
@@ -267,6 +271,7 @@ export function AlertFilters({ value, onChange }: Props) {
             />
             <span className="text-xs text-muted-foreground">/ 100</span>
           </div>
+        </div>
         </div>
 
         {/* Active-filter chip row — shows what's applied so the user can
