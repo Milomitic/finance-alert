@@ -65,6 +65,27 @@ def clamp01(x: float) -> float:
     return max(0.0, min(1.0, x))
 
 
+def soft01(x: float, ref: float) -> float:
+    """Saturating strength score in [0, 1) that NEVER reaches 1.0.
+
+    Replaces the old `clamp01(x / ref)` for magnitude-style "strength" factors.
+    The hard clamp pinned every reading >= ref to exactly 1.0, so a merely-
+    sufficient signal and an extreme one scored identically — the main reason
+    so many alerts maxed out at confidence 100. This curve keeps a gradient:
+
+        x = ref      -> 0.80   (meets the old "full" bar: strong, not maxed)
+        x = 2*ref    -> 0.89
+        x = 4*ref    -> 0.94
+        x -> inf     -> 1.0    (asymptote, never reached)
+        x = ref/2    -> 0.67   (sub-threshold readings fall off faster)
+
+    So two signals that both used to hit 1.0 now separate by their real
+    magnitude, and the factor can never on its own force a perfect score."""
+    if x <= 0 or ref <= 0:
+        return 0.0
+    return x / (x + 0.25 * ref)
+
+
 def trend_maturity_factor(age: int | None) -> float:
     """Backtest-derived favorability of a trend-following entry by trend age
     (bars since the EMA50/EMA200 cross). Forward 21d returns peaked mid-life
@@ -81,8 +102,24 @@ def trend_maturity_factor(age: int | None) -> float:
     return 0.35
 
 
+# Top-of-scale reserve. The raw weighted mean is passed through unchanged up
+# to _CONF_KNEE; above it, [_CONF_KNEE, 1.0] is linearly compressed into
+# [_CONF_KNEE, _CONF_MAX]. So a "perfect" factor set tops out at _CONF_MAX
+# (95) — never 100, which is treated as theoretical, unreachable perfection —
+# and strong-but-not-perfect signals spread across the upper band instead of
+# all pinning at 100. Leaving the sub-knee region untouched keeps the emission
+# floor (settings.signal_min_confidence = 60) unaffected: no signal that used
+# to qualify is silently dropped by the reshape.
+_CONF_KNEE = 0.72
+_CONF_MAX = 0.95
+
+
 def score(factors: dict[str, float], weights: dict[str, float]) -> int:
-    """Weighted mean of [0,1] factors -> 0..100 int."""
+    """Weighted mean of [0,1] factors, with the top of the scale reserved
+    (see _CONF_KNEE / _CONF_MAX), returned as a 0..100 int."""
     num = sum(clamp01(factors.get(k, 0.0)) * w for k, w in weights.items())
     den = sum(weights.values()) or 1.0
-    return round(100.0 * num / den)
+    raw = num / den
+    if raw > _CONF_KNEE:
+        raw = _CONF_KNEE + (_CONF_MAX - _CONF_KNEE) * (raw - _CONF_KNEE) / (1.0 - _CONF_KNEE)
+    return round(100.0 * raw)

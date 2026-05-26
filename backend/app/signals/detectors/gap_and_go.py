@@ -7,7 +7,7 @@ from __future__ import annotations
 import pandas as pd
 
 from app.signals.context import SignalContext
-from app.signals.detectors.base import SignalMatch, clamp01, find_after, score
+from app.signals.detectors.base import SignalMatch, find_after, score, soft01
 from app.signals.events import Event
 
 _VOL_WINDOW_DAYS = 2
@@ -37,8 +37,8 @@ class GapAndGo:
             or (vol_after.magnitude if vol_after else None) or 0.0
         trend_aligned = (ctx.trend_sign > 0 and tone == "bull") or (ctx.trend_sign < 0 and tone == "bear")
         factors = {
-            "gap_size": clamp01((gap.magnitude or 0.0) / 0.05),     # 5% gap = full
-            "volume_strength": clamp01((vol_mag - 1.0) / 2.0),      # 3x avg = full
+            "gap_size": soft01(gap.magnitude or 0.0, 0.05),     # 5% gap = strong
+            "volume_strength": soft01(vol_mag - 1.0, 2.0),      # 3x avg = strong
             "trend_alignment": 1.0 if trend_aligned else 0.5,
         }
         conf = score(factors, {"gap_size": 1.0, "volume_strength": 1.0, "trend_alignment": 0.6})

@@ -10,8 +10,11 @@ existing Alert rows and can be tuned/removed freely.
 Design (agreed 2026-05-24):
   - window   = active alerts: not archived, signal_date within `days`
                (default settings.signal_max_age_days = 7).
-  - strength = max(confidence) + BONUS*(n-1), capped at 100, per direction.
-               Rewards confluence without a weak signal diluting a strong one.
+  - strength = max(confidence) + diminishing-returns bonus toward a reserved
+               ceiling (<100), per direction. Each extra concurring signal
+               closes half the remaining gap, so confluence is rewarded
+               without a weak signal diluting a strong one and without the old
+               flat "+8 capped at 100" pinning ~half the clusters at the max.
   - direction= the stronger side (bull vs bear).
   - contested= both sides present AND their strengths are within CONTESTED_GAP.
   - a cluster needs >= 2 active signals (a lone signal is not a confluence).
@@ -28,7 +31,12 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.models import Alert, Stock
 
-_BONUS = 8.0          # confidence points added per extra concurring signal
+# Confluence strength = base + diminishing-returns bonus toward a reserved
+# ceiling. CEIL < 100 so a cluster never reads "perfect"; DECAY=0.5 means each
+# extra concurring signal closes half the remaining gap (n=2 → +1/2, n=3 → +3/4,
+# n=4 → +7/8, ... asymptote CEIL). Replaces the old flat "+8 capped at 100".
+_CONFLUENCE_CEIL = 98.0
+_CONFLUENCE_DECAY = 0.5
 _CONTESTED_GAP = 25.0  # bull/bear strengths closer than this -> "contested"
 _MIN_SIGNALS = 2       # a confluence requires at least two agreeing detectors
 
@@ -66,7 +74,10 @@ class ConfluenceCluster:
 def _dir_strength(confs: list[float]) -> float:
     if not confs:
         return 0.0
-    return min(100.0, max(confs) + _BONUS * (len(confs) - 1))
+    base = max(confs)
+    n = len(confs)
+    # Diminishing-returns bonus toward a reserved ceiling (never reaches 100).
+    return base + (_CONFLUENCE_CEIL - base) * (1.0 - _CONFLUENCE_DECAY ** (n - 1))
 
 
 def compute_confluence(db: Session, *, days: int | None = None) -> list[ConfluenceCluster]:

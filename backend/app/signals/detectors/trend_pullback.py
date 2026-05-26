@@ -9,7 +9,7 @@ import pandas as pd
 from app.indicators.ema import ema
 from app.signals.context import SignalContext
 from app.core.config import settings
-from app.signals.detectors.base import SignalMatch, clamp01, score, trend_maturity_factor
+from app.signals.detectors.base import SignalMatch, score, soft01, trend_maturity_factor
 from app.signals.events import Event
 
 _FAST = 50
@@ -52,7 +52,7 @@ class TrendPullback:
         spread = abs(ef.iloc[last] - es.iloc[last]) / close.iloc[last]
         trend_aligned = (ctx.trend_sign > 0 and tone == "bull") or (ctx.trend_sign < 0 and tone == "bear")
         factors = {
-            "trend_strength": clamp01(spread / _TREND_SPREAD_REF),
+            "trend_strength": soft01(spread, _TREND_SPREAD_REF),
             "trend_alignment": 1.0 if trend_aligned else 0.4,
             "resume": 1.0 if resumed else 0.0,
             "trend_maturity": trend_maturity_factor(ctx.trend_age),

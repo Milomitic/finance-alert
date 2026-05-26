@@ -9,7 +9,7 @@ from __future__ import annotations
 import pandas as pd
 
 from app.signals.context import SignalContext
-from app.signals.detectors.base import SignalMatch, clamp01, score
+from app.signals.detectors.base import SignalMatch, score, soft01
 from app.signals.pivots import find_pivots
 
 _PIVOT_W = 3
@@ -50,7 +50,7 @@ class StructureBreak:
             return None
         if not broke or protected <= 0:
             return None
-        magnitude = clamp01(abs(last - protected) / (ctx.atr or (protected * 0.02)) / 3.0) \
+        magnitude = soft01(abs(last - protected) / (ctx.atr or (protected * 0.02)), 3.0) \
             if (ctx.atr or protected) else 0.0
         factors = {
             "break_decisiveness": magnitude,

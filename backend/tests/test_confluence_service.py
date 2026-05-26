@@ -32,8 +32,8 @@ def test_groups_same_direction_and_scores(db):
     assert c.ticker == "AAA"
     assert c.direction == "bear"
     assert c.n_signals == 2
-    # max(80) + 8*(2-1) = 88
-    assert c.strength == 88.0
+    # Diminishing-returns bonus toward CEIL=98: base 80 + (98-80)*(1-0.5^1) = 89
+    assert c.strength == 89.0
     assert c.contested is False
 
 
@@ -66,15 +66,29 @@ def test_not_contested_when_one_side_dominates(db):
     assert c.contested is False
 
 
-def test_strength_caps_at_100(db):
+def test_strength_never_reaches_100(db):
     s = _stock(db, "EEE")
     for nm, cf in [("trend_pullback", 98), ("squeeze_expansion", 90), ("high52_momentum", 85)]:
         _add(db, s.id, nm, cf, "bull")
     db.commit()
     c = compute_confluence(db, days=30)[0]
-    # 98 + 8*2 = 114 -> capped 100
-    assert c.strength == 100.0
+    # base=max(98)=CEIL → gap to ceiling is 0, so strength stays 98 (the
+    # asymptotic ceiling); confluence strength is bounded below 100 by design.
+    assert c.strength == 98.0
+    assert c.strength < 100.0
     assert c.n_signals == 3
+
+
+def test_strength_grows_with_confluence_below_ceiling(db):
+    """More concurring signals push strength UP toward (never past) the ceiling."""
+    s2 = _stock(db, "EE2")
+    for nm in ["trend_pullback", "squeeze_expansion", "high52_momentum", "sr_flip"]:
+        _add(db, s2.id, nm, 70, "bull")
+    db.commit()
+    c = compute_confluence(db, days=30)[0]
+    # base 70; n=4 → 70 + (98-70)*(1-0.5^3) = 70 + 28*0.875 = 94.5
+    assert c.strength == 94.5
+    assert c.strength < 98.0
 
 
 def test_stale_signals_excluded_by_window(db):

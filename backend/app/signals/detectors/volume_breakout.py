@@ -7,7 +7,7 @@ import pandas as pd
 
 from app.signals.context import SignalContext
 from app.core.config import settings
-from app.signals.detectors.base import SignalMatch, clamp01, find_after, score, trend_maturity_factor
+from app.signals.detectors.base import SignalMatch, find_after, score, soft01, trend_maturity_factor
 from app.signals.events import Event
 
 # How many calendar days after a breakout a volume spike may still confirm it.
@@ -58,8 +58,8 @@ class VolumeBreakout:
         # vol_mag is >= 2.0 by construction and volume_strength effectively spans
         # [0.5, 1.0] rather than the full [0, 1].
         factors = {
-            "breakout_strength": clamp01((bo.magnitude or 0.0) / _BREAKOUT_REF_PCT),
-            "volume_strength": clamp01((vol_mag - 1.0) / _VOL_EXCESS_REF),
+            "breakout_strength": soft01(bo.magnitude or 0.0, _BREAKOUT_REF_PCT),
+            "volume_strength": soft01(vol_mag - 1.0, _VOL_EXCESS_REF),
             "trend_alignment": 1.0 if trend_aligned else _TREND_MISALIGN_FLOOR,
             "trend_maturity": trend_maturity_factor(ctx.trend_age),
         }

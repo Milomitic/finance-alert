@@ -25,7 +25,7 @@ from __future__ import annotations
 import pandas as pd
 
 from app.signals.context import SignalContext
-from app.signals.detectors.base import SignalMatch, clamp01, find_after, score
+from app.signals.detectors.base import SignalMatch, clamp01, find_after, score, soft01
 from app.signals.events import Event
 
 # Maximum calendar days after the earnings date to look for confirmation.
@@ -119,8 +119,8 @@ class Pead:
             # Gate factor (not in weights): surprise strength validates the premise.
             # Kept in factors dict for transparency / frontend display.
             "surprise_strength": clamp01(surprise_mag),
-            "gap_size": clamp01(gap_mag / 0.04),       # 4% gap = full
-            "volume_strength": clamp01((vol_mag - 1.0) / 2.0),  # 3x avg = full
+            "gap_size": soft01(gap_mag, 0.04),       # 4% gap = strong
+            "volume_strength": soft01(vol_mag - 1.0, 2.0),  # 3x avg = strong
         }
         conf = score(
             factors,
