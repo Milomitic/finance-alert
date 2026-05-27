@@ -181,7 +181,7 @@ function AssetRow({ asset }: { asset: LiveAsset }) {
             (e.g. ES=F at 22:00 UTC for ^GSPC). The two are mutually
             exclusive — `using_futures` only sets when cash isn't OPEN. */}
       <div className="shrink-0 min-w-0 flex items-center gap-1.5">
-        <span className="text-[14px] font-semibold truncate leading-tight">
+        <span className="text-[15px] font-semibold truncate leading-tight">
           {asset.name}
         </span>
         {isLive && (
@@ -218,7 +218,7 @@ function AssetRow({ asset }: { asset: LiveAsset }) {
       {/* Price + change inline */}
       <div className="text-right shrink-0 flex items-baseline gap-1.5 leading-tight">
         {hasError ? (
-          <span className="text-[14px] font-bold tabular-nums">
+          <span className="text-[15px] font-bold tabular-nums">
             <Tooltip>
               <TooltipTrigger asChild>
                 <span className="text-muted-foreground/60 cursor-help">—</span>
@@ -232,14 +232,14 @@ function AssetRow({ asset }: { asset: LiveAsset }) {
           <FlashValue
             value={price}
             format={fmtPrice}
-            className="text-[14px] font-bold tabular-nums"
+            className="text-[15px] font-bold tabular-nums"
             noTween
             showArrow
           />
         )}
         <span
           className={cn(
-            "text-[12px] font-semibold tabular-nums tracking-tight w-[52px] text-right",
+            "text-[13px] font-semibold tabular-nums tracking-tight w-[56px] text-right",
             changeColor(changePct),
           )}
         >
@@ -255,7 +255,7 @@ function AssetRow({ asset }: { asset: LiveAsset }) {
  *  the row component because both columns render multiple categories. */
 function CategoryHeader({ category }: { category: LiveAsset["category"] }) {
   return (
-    <div className="shrink-0 px-1.5 pt-2 pb-1 text-[11px] uppercase tracking-[0.16em] text-muted-foreground/70 font-semibold">
+    <div className="shrink-0 px-1.5 pt-2 pb-1 text-[12px] uppercase tracking-[0.16em] text-muted-foreground/70 font-semibold">
       {CATEGORY_LABEL[category]}
     </div>
   );
