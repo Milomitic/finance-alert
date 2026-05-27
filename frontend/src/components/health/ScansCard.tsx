@@ -12,11 +12,11 @@ const STATUS_BADGE: Record<
     Icon: React.ComponentType<{ className?: string }>;
   }
 > = {
-  success: { label: "Success", classes: "bg-emerald-50 text-emerald-700 border-emerald-200", Icon: CheckCircle2 },
-  ok: { label: "Success", classes: "bg-emerald-50 text-emerald-700 border-emerald-200", Icon: CheckCircle2 },
-  running: { label: "Running", classes: "bg-sky-50 text-sky-700 border-sky-200", Icon: Loader2 },
-  failed: { label: "Failed", classes: "bg-red-50 text-red-700 border-red-200", Icon: XCircle },
-  error: { label: "Failed", classes: "bg-red-50 text-red-700 border-red-200", Icon: XCircle },
+  success: { label: "Success", classes: "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/60", Icon: CheckCircle2 },
+  ok: { label: "Success", classes: "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/60", Icon: CheckCircle2 },
+  running: { label: "Running", classes: "bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 border-sky-200 dark:border-sky-800/60", Icon: Loader2 },
+  failed: { label: "Failed", classes: "bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800/60", Icon: XCircle },
+  error: { label: "Failed", classes: "bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800/60", Icon: XCircle },
 };
 
 function fmtDuration(s: number | null): string {
@@ -129,7 +129,7 @@ export default function ScansCard({ scans }: Props) {
               )}
               {last.error_message && (
                 <div
-                  className="text-[11px] text-red-700/90 mt-1.5 truncate font-mono"
+                  className="text-[11px] text-red-700/90 dark:text-red-400/90 mt-1.5 truncate font-mono"
                   title={last.error_message}
                 >
                   ✗ {last.error_message}

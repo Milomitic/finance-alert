@@ -53,7 +53,7 @@ export default function SchedulerCard({ jobs }: Props) {
           </span>
         </div>
         {errors > 0 && (
-          <div className="text-xs text-red-700 mt-1">
+          <div className="text-xs text-red-700 dark:text-red-400 mt-1">
             ⚠ {errors} job in errore — verifica scheduler
           </div>
         )}
@@ -86,14 +86,14 @@ export default function SchedulerCard({ jobs }: Props) {
                   {j.job_id} · {ago(j.last_run_at)}
                 </div>
                 {j.last_error && (
-                  <div className="text-[11px] text-red-700/80 mt-0.5 truncate" title={j.last_error}>
+                  <div className="text-[11px] text-red-700/80 dark:text-red-400/80 mt-0.5 truncate" title={j.last_error}>
                     ✗ {j.last_error}
                   </div>
                 )}
               </div>
               <div className="text-right text-[11px] text-muted-foreground tabular-nums shrink-0">
-                <div className="text-emerald-700 font-medium">{j.runs}</div>
-                {j.errors > 0 && <div className="text-red-700">{j.errors} err</div>}
+                <div className="text-emerald-700 dark:text-emerald-400 font-medium">{j.runs}</div>
+                {j.errors > 0 && <div className="text-red-700 dark:text-red-400">{j.errors} err</div>}
               </div>
             </div>
           );

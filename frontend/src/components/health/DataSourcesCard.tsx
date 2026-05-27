@@ -45,28 +45,28 @@ const HEALTH_META: Record<
     label: "Operativa",
     dot: "bg-emerald-500",
     bar: "bg-emerald-500",
-    chip: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    chip: "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/60",
     Icon: CheckCircle2,
   },
   degraded: {
     label: "Degradata",
     dot: "bg-amber-500",
     bar: "bg-amber-500",
-    chip: "bg-amber-50 text-amber-700 border-amber-200",
+    chip: "bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800/60",
     Icon: AlertTriangle,
   },
   failing: {
     label: "In errore",
     dot: "bg-rose-500",
     bar: "bg-rose-500",
-    chip: "bg-rose-50 text-rose-700 border-rose-200",
+    chip: "bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800/60",
     Icon: XCircle,
   },
   idle: {
     label: "Inattiva",
-    dot: "bg-slate-300",
-    bar: "bg-slate-300",
-    chip: "bg-slate-50 text-slate-600 border-slate-200",
+    dot: "bg-slate-300 dark:bg-slate-600",
+    bar: "bg-slate-300 dark:bg-slate-600",
+    chip: "bg-slate-50 dark:bg-slate-800/60 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700",
     Icon: Circle,
   },
 };
@@ -81,9 +81,9 @@ const ROLE_LABEL: Record<string, string> = {
   scheduled: "Pianificata",
 };
 const ROLE_TONE: Record<string, string> = {
-  primary: "bg-sky-50 text-sky-700 border-sky-200",
-  fallback: "bg-violet-50 text-violet-700 border-violet-200",
-  scheduled: "bg-slate-100 text-slate-600 border-slate-200",
+  primary: "bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 border-sky-200 dark:border-sky-800/60",
+  fallback: "bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300 border-violet-200 dark:border-violet-800/60",
+  scheduled: "bg-slate-100 dark:bg-slate-800/60 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700",
 };
 
 /* Cluster taxonomy. `ops` lists the data_source_metrics `op` values that
@@ -101,28 +101,28 @@ const CATEGORIES: {
   ops: string[];
 }[] = [
   { key: "market", label: "Prezzi & quote", desc: "OHLCV · capitalizzazione · quote live",
-    Icon: CandlestickChart, tint: "bg-sky-50 text-sky-600 border-sky-200",
+    Icon: CandlestickChart, tint: "bg-sky-50 dark:bg-sky-950/40 text-sky-600 dark:text-sky-300 border-sky-200 dark:border-sky-800/60",
     ops: ["ohlcv", "market_cap", "live_quote"] },
   { key: "fundamentals", label: "Fondamentali", desc: "Income statement · info · micro-dati",
-    Icon: FileSpreadsheet, tint: "bg-indigo-50 text-indigo-600 border-indigo-200",
+    Icon: FileSpreadsheet, tint: "bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800/60",
     ops: ["fundamentals"] },
   { key: "news", label: "News", desc: "Articoli e headline per ticker",
-    Icon: Newspaper, tint: "bg-cyan-50 text-cyan-600 border-cyan-200",
+    Icon: Newspaper, tint: "bg-cyan-50 dark:bg-cyan-950/40 text-cyan-600 dark:text-cyan-300 border-cyan-200 dark:border-cyan-800/60",
     ops: ["news"] },
   { key: "analyst", label: "Analisti", desc: "Upgrade/downgrade · recommendation · target",
-    Icon: Gavel, tint: "bg-violet-50 text-violet-600 border-violet-200",
+    Icon: Gavel, tint: "bg-violet-50 dark:bg-violet-950/40 text-violet-600 dark:text-violet-300 border-violet-200 dark:border-violet-800/60",
     ops: ["upgrades", "recommendation", "analyst"] },
   { key: "earnings", label: "Earnings", desc: "EPS / revenue: stime e dati effettivi",
-    Icon: CalendarClock, tint: "bg-emerald-50 text-emerald-600 border-emerald-200",
+    Icon: CalendarClock, tint: "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/60",
     ops: ["earnings"] },
   { key: "macro", label: "Macro", desc: "Serie FRED · consensus calendario",
-    Icon: Globe, tint: "bg-amber-50 text-amber-600 border-amber-200",
+    Icon: Globe, tint: "bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-300 border-amber-200 dark:border-amber-800/60",
     ops: ["macro", "consensus"] },
   { key: "institutional", label: "Istituzionali", desc: "Filing 13F dei fondi",
-    Icon: Building2, tint: "bg-rose-50 text-rose-600 border-rose-200",
+    Icon: Building2, tint: "bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-300 border-rose-200 dark:border-rose-800/60",
     ops: ["filings"] },
   { key: "premarket", label: "Pre-market", desc: "Volume di pre-apertura",
-    Icon: Sunrise, tint: "bg-orange-50 text-orange-600 border-orange-200",
+    Icon: Sunrise, tint: "bg-orange-50 dark:bg-orange-950/40 text-orange-600 dark:text-orange-300 border-orange-200 dark:border-orange-800/60",
     ops: ["premarket"] },
 ];
 
@@ -137,7 +137,7 @@ const OTHER_CAT = {
   label: "Altre fonti",
   desc: "Operazioni non ancora classificate",
   Icon: Database,
-  tint: "bg-slate-50 text-slate-600 border-slate-200",
+  tint: "bg-slate-50 dark:bg-slate-800/60 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700",
   ops: [] as string[],
 };
 
@@ -201,11 +201,11 @@ function SourceRow({ m }: { m: DataSourceMetric }) {
       <div className="mt-0.5 pl-4 text-[11px] text-muted-foreground tabular-nums">
         {total > 0 ? (
           <>
-            <span className="text-emerald-700 font-medium">{m.success}</span> ok
+            <span className="text-emerald-700 dark:text-emerald-400 font-medium">{m.success}</span> ok
             {m.failure > 0 && (
               <>
                 {" · "}
-                <span className="text-rose-700 font-medium">{m.failure}</span> ko
+                <span className="text-rose-700 dark:text-rose-400 font-medium">{m.failure}</span> ko
               </>
             )}
             {m.success_rate >= 0 && <> · {(m.success_rate * 100).toFixed(0)}%</>}
@@ -226,7 +226,7 @@ function SourceRow({ m }: { m: DataSourceMetric }) {
         </div>
       )}
       {m.last_failure_reason && h !== "healthy" && (
-        <div className="mt-1 pl-4 text-[10.5px] text-rose-700/80 truncate font-mono" title={m.last_failure_reason}>
+        <div className="mt-1 pl-4 text-[10.5px] text-rose-700/80 dark:text-rose-400/80 truncate font-mono" title={m.last_failure_reason}>
           ✗ {m.last_failure_reason}
         </div>
       )}
@@ -396,8 +396,8 @@ export default function DataSourcesCard({ metrics, yfinanceBreaker }: Props) {
             className={cn(
               "inline-flex items-center gap-1.5 px-2.5 py-0.5 text-[11px] font-medium rounded-full border",
               breakerOpen
-                ? "bg-rose-50 text-rose-700 border-rose-200"
-                : "bg-emerald-50 text-emerald-700 border-emerald-200",
+                ? "bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800/60"
+                : "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/60",
             )}
             title="Circuit breaker yfinance — quando aperto, gli scan saltano il provider primario"
           >

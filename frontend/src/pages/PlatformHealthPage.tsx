@@ -31,25 +31,25 @@ const STATUS_INFO: Record<
     label: "Tutti i sistemi operativi",
     desc: "Nessuna anomalia rilevata negli ultimi minuti.",
     Icon: CheckCircle2,
-    bg: "bg-emerald-50",
-    fg: "text-emerald-700",
-    border: "border-emerald-200",
+    bg: "bg-emerald-50 dark:bg-emerald-950/40",
+    fg: "text-emerald-700 dark:text-emerald-300",
+    border: "border-emerald-200 dark:border-emerald-800/60",
   },
   degraded: {
     label: "Servizi degradati",
     desc: "Una sorgente fallback/scheduled o un job è fuori servizio, ma le sorgenti primarie funzionano — nessun impatto bloccante.",
     Icon: AlertTriangle,
-    bg: "bg-amber-50",
-    fg: "text-amber-700",
-    border: "border-amber-200",
+    bg: "bg-amber-50 dark:bg-amber-950/40",
+    fg: "text-amber-700 dark:text-amber-300",
+    border: "border-amber-200 dark:border-amber-800/60",
   },
   outage: {
     label: "Outage in corso",
     desc: "Una sorgente dati PRIMARIA è in errore critico (o il breaker yfinance è aperto / uno scan è bloccato) — verifica subito.",
     Icon: XCircle,
-    bg: "bg-red-50",
-    fg: "text-red-700",
-    border: "border-red-200",
+    bg: "bg-red-50 dark:bg-red-950/40",
+    fg: "text-red-700 dark:text-red-300",
+    border: "border-red-200 dark:border-red-800/60",
   },
 };
 
@@ -182,7 +182,7 @@ export default function PlatformHealthPage() {
               disabled={refreshing}
               className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border text-sm font-medium transition-colors ${
                 refreshing
-                  ? "bg-sky-50 text-sky-700 border-sky-200 cursor-wait"
+                  ? "bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 border-sky-200 dark:border-sky-800/60 cursor-wait"
                   : "bg-background text-foreground border-border hover:bg-muted"
               }`}
               title={
@@ -204,8 +204,8 @@ export default function PlatformHealthPage() {
             <div
               className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border text-sm font-medium ${
                 connected
-                  ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                  : "bg-amber-50 text-amber-700 border-amber-200"
+                  ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/60"
+                  : "bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800/60"
               }`}
               title={
                 connected

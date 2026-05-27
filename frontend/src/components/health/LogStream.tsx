@@ -10,18 +10,18 @@ type Props = {
 };
 
 const LEVEL_TONE: Record<string, string> = {
-  DEBUG: "text-slate-500",
-  INFO: "text-sky-700",
-  SUCCESS: "text-emerald-700",
-  WARNING: "text-amber-700",
-  ERROR: "text-red-700",
-  CRITICAL: "text-red-800 font-bold",
+  DEBUG: "text-slate-500 dark:text-slate-400",
+  INFO: "text-sky-700 dark:text-sky-300",
+  SUCCESS: "text-emerald-700 dark:text-emerald-300",
+  WARNING: "text-amber-700 dark:text-amber-300",
+  ERROR: "text-red-700 dark:text-red-300",
+  CRITICAL: "text-red-800 dark:text-red-300 font-bold",
 };
 
 const LEVEL_BG: Record<string, string> = {
-  WARNING: "bg-amber-50 border-l-amber-500",
-  ERROR: "bg-red-50 border-l-red-500",
-  CRITICAL: "bg-red-100 border-l-red-700",
+  WARNING: "bg-amber-50 dark:bg-amber-950/30 border-l-amber-500",
+  ERROR: "bg-red-50 dark:bg-red-950/30 border-l-red-500",
+  CRITICAL: "bg-red-100 dark:bg-red-950/50 border-l-red-700 dark:border-l-red-500",
 };
 
 const LEVEL_ICON: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -82,19 +82,19 @@ export default function LogStream({
           </h2>
           <div className="flex items-center gap-3 text-xs text-muted-foreground">
             {(counts.ERROR ?? 0) + (counts.CRITICAL ?? 0) > 0 && (
-              <span className="inline-flex items-center gap-1 text-red-700">
+              <span className="inline-flex items-center gap-1 text-red-700 dark:text-red-400">
                 <AlertCircle className="h-3.5 w-3.5" />
                 {(counts.ERROR ?? 0) + (counts.CRITICAL ?? 0)} errori
               </span>
             )}
             {counts.WARNING > 0 && (
-              <span className="inline-flex items-center gap-1 text-amber-700">
+              <span className="inline-flex items-center gap-1 text-amber-700 dark:text-amber-400">
                 <AlertTriangle className="h-3.5 w-3.5" />
                 {counts.WARNING} warning
               </span>
             )}
             {paused && (
-              <span className="text-amber-700">⏸ Stream in pausa</span>
+              <span className="text-amber-700 dark:text-amber-400">⏸ Stream in pausa</span>
             )}
           </div>
         </div>
