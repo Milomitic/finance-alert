@@ -1,4 +1,4 @@
-import { Layers, TrendingDown, TrendingUp } from "lucide-react";
+import { Layers, Swords, TrendingDown, TrendingUp } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { StockIdentity } from "@/components/dashboard/StockIdentity";
@@ -48,46 +48,59 @@ export function ConfluenceRows({ limit = 8 }: { limit?: number }) {
               title={`${c.name ?? c.ticker} — ${c.n_signals} segnali concordi · direzione ${dirWord.toLowerCase()} · forza ${pct}/100${c.multi_horizon ? " · multi-orizzonte" : ""}${c.contested ? " · conteso" : ""}`}
             >
               <StockIdentity ticker={c.ticker} name={c.name} />
-              <span
-                className={cn(
-                  "inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[11px] font-semibold shrink-0",
-                  tone,
-                )}
-                title={`${c.n_signals} segnali concordi · direzione ${dirWord.toLowerCase()}`}
-              >
-                <DirIcon className="h-3 w-3" />
-                {dirWord} {c.n_signals}
-              </span>
-              {c.multi_horizon && (
-                <Layers
-                  className="h-3.5 w-3.5 text-indigo-500 dark:text-indigo-400 shrink-0"
-                  aria-label="Multi-orizzonte"
-                />
-              )}
-              {c.contested && (
-                <span
-                  className="text-[10px] font-semibold text-amber-600 dark:text-amber-400 shrink-0"
-                  title="Segnali contrastanti sulla direzione opposta"
-                >
-                  conteso
-                </span>
-              )}
-              <div className="flex items-center gap-1.5 shrink-0">
-                <div className="h-1.5 w-10 rounded-full bg-muted overflow-hidden">
-                  <div
+              {/* Fixed-width meta cluster → the Long/Short pill, the flag
+                  icons, the bar and the score all line up vertically across
+                  rows regardless of word width ("Short" vs "Long") or whether
+                  the flag icons are present. */}
+              <div className="shrink-0 flex items-center gap-2">
+                {/* Direction + concurring count — fixed-width, left-aligned
+                    cell so every "Long/Short" starts at the same x. */}
+                <span className="w-[72px] shrink-0">
+                  <span
                     className={cn(
-                      "h-full rounded-full",
-                      c.direction === "bull" ? "bg-emerald-500" : "bg-rose-500",
+                      "inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[11px] font-semibold",
+                      tone,
                     )}
-                    style={{ width: `${pct}%` }}
-                  />
-                </div>
-                <span
-                  className="text-sm font-bold tabular-nums w-7 text-right"
-                  title="Forza della confluenza (0–100)"
-                >
-                  {pct}
+                    title={`${c.n_signals} segnali concordi · direzione ${dirWord.toLowerCase()}`}
+                  >
+                    <DirIcon className="h-3 w-3" />
+                    {dirWord} {c.n_signals}
+                  </span>
                 </span>
+                {/* Flag icons — fixed-width slot so present/absent doesn't
+                    shift the bar/score columns. */}
+                <span className="w-8 shrink-0 flex items-center gap-0.5">
+                  {c.multi_horizon && (
+                    <Layers
+                      className="h-3.5 w-3.5 text-indigo-500 dark:text-indigo-400"
+                      aria-label="Multi-orizzonte"
+                    />
+                  )}
+                  {c.contested && (
+                    <Swords
+                      className="h-3.5 w-3.5 text-amber-500"
+                      aria-label="Conteso (segnali contrastanti sulla direzione opposta)"
+                    />
+                  )}
+                </span>
+                {/* Strength bar + score. */}
+                <div className="flex items-center gap-1.5">
+                  <div className="h-1.5 w-10 rounded-full bg-muted overflow-hidden">
+                    <div
+                      className={cn(
+                        "h-full rounded-full",
+                        c.direction === "bull" ? "bg-emerald-500" : "bg-rose-500",
+                      )}
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                  <span
+                    className="text-sm font-bold tabular-nums w-7 text-right"
+                    title="Forza della confluenza (0–100)"
+                  >
+                    {pct}
+                  </span>
+                </div>
               </div>
             </Link>
           </li>
