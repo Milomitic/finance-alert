@@ -46,7 +46,7 @@ export function AlertsCompactPanel({
         <div className="shrink-0 flex items-center gap-3 border-b px-3 bg-muted/30 py-2">
           <SectionTitle
             icon={Bell}
-            label="Alerts"
+            label="Segnali"
             right={
               <span className="text-[11px] bg-amber-100 dark:bg-amber-900/40 text-amber-900 dark:text-amber-200 px-2 py-0.5 rounded-full font-semibold whitespace-nowrap">
                 {alertsLast24h} ult. 24h · {deltaLabel}

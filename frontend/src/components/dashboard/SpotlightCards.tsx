@@ -210,7 +210,7 @@ export function SpotlightCards() {
     ? [{
         ticker: mostAlertedCard.ticker,
         name: undefined,
-        subtitle: `${mostAlertedCard.alerts_count ?? 0} alert ult. 7gg`,
+        subtitle: `${mostAlertedCard.alerts_count ?? 0} segnali ult. 7gg`,
         subtitleColor: "text-amber-600 dark:text-amber-400",
         sparkline: mostAlertedCard.sparkline,
         trend: "neutral",
@@ -228,9 +228,9 @@ export function SpotlightCards() {
       <ListCard label="Volume spikes" icon={Zap}
         accent="text-blue-600 dark:text-blue-400"
         items={volItems} emptyText="Nessun volume spike" />
-      <ListCard label="Most alerted 7d" icon={Bell}
+      <ListCard label="Più segnalati 7gg" icon={Bell}
         accent="text-amber-600 dark:text-amber-400"
-        items={mostAlertedItems} emptyText="Nessun alert negli ultimi 7gg" />
+        items={mostAlertedItems} emptyText="Nessun segnale negli ultimi 7gg" />
     </div>
   );
 }

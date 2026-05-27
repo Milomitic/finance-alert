@@ -254,7 +254,7 @@ function ScanTrend({ scans }: { scans: KpiSnapshot<KpiScanMetrics>[] }) {
   return (
     <div>
       <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold mb-1.5">
-        Alert per scan — ultimi {series.length}
+        Segnali per scan — ultimi {series.length}
       </div>
       <div className="flex items-end gap-0.5 h-16">
         {series.map((s) => {
@@ -271,7 +271,7 @@ function ScanTrend({ scans }: { scans: KpiSnapshot<KpiScanMetrics>[] }) {
               key={s.id}
               className="flex-1 min-w-[3px] bg-emerald-500/70 hover:bg-emerald-500 rounded-t"
               style={{ height: `${Math.max(hPct, 2)}%` }}
-              title={`${when} · ${fired} alert · ${s.metrics.stocks_scanned ?? "?"} titoli`}
+              title={`${when} · ${fired} segnali · ${s.metrics.stocks_scanned ?? "?"} titoli`}
             />
           );
         })}

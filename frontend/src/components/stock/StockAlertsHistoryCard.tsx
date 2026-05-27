@@ -87,7 +87,7 @@ export function StockAlertsHistoryCard({ alerts }: Props) {
           {/* Header strip: title + aggregate stats (bull/bear/last30d) */}
           <SectionTitle
             icon={History}
-            label={`Alert storici per questo ticker (${stats.total})`}
+            label={`Segnali storici per questo ticker (${stats.total})`}
             className="mb-3 shrink-0"
             right={
               stats.total > 0 ? (
@@ -95,7 +95,7 @@ export function StockAlertsHistoryCard({ alerts }: Props) {
                   {stats.last30d > 0 && (
                     <span
                       className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-muted/70"
-                      title="Alert generati negli ultimi 30 giorni"
+                      title="Segnali generati negli ultimi 30 giorni"
                     >
                       <span className="text-muted-foreground">30d:</span>
                       <span className="font-bold tabular-nums">{stats.last30d}</span>
@@ -104,7 +104,7 @@ export function StockAlertsHistoryCard({ alerts }: Props) {
                   {stats.bullish > 0 && (
                     <span
                       className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-200"
-                      title="Alert con tono bullish (RSI oversold, golden cross, breakout, ecc.)"
+                      title="Segnali con tono bullish (RSI oversold, golden cross, breakout, ecc.)"
                     >
                       <TrendingUp className="h-3 w-3" />
                       <span className="font-bold tabular-nums">{stats.bullish}</span>
@@ -113,7 +113,7 @@ export function StockAlertsHistoryCard({ alerts }: Props) {
                   {stats.bearish > 0 && (
                     <span
                       className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-rose-100 dark:bg-rose-900/40 text-rose-800 dark:text-rose-200"
-                      title="Alert con tono bearish (RSI overbought, death cross, ecc.)"
+                      title="Segnali con tono bearish (RSI overbought, death cross, ecc.)"
                     >
                       <TrendingDown className="h-3 w-3" />
                       <span className="font-bold tabular-nums">{stats.bearish}</span>
@@ -127,10 +127,10 @@ export function StockAlertsHistoryCard({ alerts }: Props) {
           {sorted.length === 0 ? (
             <div className="flex-1 flex items-center justify-center text-center text-sm text-muted-foreground">
               <div>
-                Nessun alert mai generato per questo ticker.
+                Nessun segnale mai generato per questo ticker.
                 <div className="text-xs mt-1 opacity-75">
                   Quando una regola si attiva sui dati di questo titolo,
-                  l'alert comparirà qui in cima.
+                  il segnale comparirà qui in cima.
                 </div>
               </div>
             </div>

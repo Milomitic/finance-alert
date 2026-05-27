@@ -79,9 +79,9 @@ export default function AlertsPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="text-2xl font-semibold">Alerts</h2>
+        <h2 className="text-2xl font-semibold">Segnali</h2>
         <p className="text-sm text-muted-foreground">
-          {total} alert totali con i filtri attuali
+          {total} segnali totali con i filtri attuali
         </p>
       </div>
 

@@ -100,7 +100,7 @@ function RulePerformancePanel() {
           </div>
         ) : items.length === 0 ? (
           <div className="py-8 text-center text-sm text-muted-foreground">
-            Nessun alert nel periodo — esegui uno scan per generare
+            Nessun segnale nel periodo — esegui uno scan per generare
             dati di efficacia.
           </div>
         ) : (
@@ -251,7 +251,7 @@ function ScanLogPanel() {
                 className="bg-background border rounded px-2 py-0.5 text-xs"
               >
                 <option value="">Tutti</option>
-                <option value="alerts_scan">Alert scan</option>
+                <option value="alerts_scan">Scan segnali</option>
                 <option value="score_recompute">Score recompute</option>
               </select>
             </div>
@@ -299,7 +299,7 @@ function ScanLogPanel() {
                     Fasi
                   </th>
                   <th className="text-right px-2 py-2 font-semibold">Stock</th>
-                  <th className="text-right px-2 py-2 font-semibold">Alert</th>
+                  <th className="text-right px-2 py-2 font-semibold">Segnali</th>
                 </tr>
               </thead>
               <tbody>

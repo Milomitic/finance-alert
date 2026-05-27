@@ -67,7 +67,7 @@ export function TopStocksTable({ data }: Props) {
             <TableHead className="text-xs">Stock</TableHead>
             <TableHead className="text-xs">Natura</TableHead>
             <TableHead className="text-xs">Regola top</TableHead>
-            <TableHead className="text-xs text-right pr-4">Alert</TableHead>
+            <TableHead className="text-xs text-right pr-4">Segnali</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>

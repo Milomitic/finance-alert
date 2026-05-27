@@ -52,7 +52,7 @@ export function AlertsByDayChart({ data, compact = false }: Props) {
     <Card>
       {!compact && (
         <CardHeader>
-          <CardTitle className="text-base">Alert per giorno (ultimi 30gg)</CardTitle>
+          <CardTitle className="text-base">Segnali per giorno (ultimi 30gg)</CardTitle>
         </CardHeader>
       )}
       <CardContent>

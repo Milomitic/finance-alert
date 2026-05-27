@@ -47,7 +47,7 @@ const NAV: NavEntry[] = [
   // Rules used to be a separate page; now lives in the AlertsPage right
   // sidebar so the user composes rules + reviews their alerts in one
   // surface. The /rules route was removed.
-  { to: "/alerts", label: "Alerts", icon: Bell, enabled: true },
+  { to: "/alerts", label: "Segnali", icon: Bell, enabled: true },
   { to: "/health", label: "Salute", icon: HeartPulse, enabled: true },
   { to: "/settings", label: "Impostazioni", icon: Settings, enabled: true },
 ];

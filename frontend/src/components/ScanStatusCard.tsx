@@ -131,7 +131,7 @@ export function ScanStatusCard({ status, isFetching }: Props) {
           <PlayCircle className="h-5 w-5" />
           <span>
             Nessuno scan ancora eseguito. Clicca <strong>Esegui scan ora</strong> per
-            generare il primo set di alert.
+            generare il primo set di segnali.
           </span>
         </CardContent>
       </Card>
@@ -318,7 +318,7 @@ export function ScanStatusCard({ status, isFetching }: Props) {
                   : "bg-muted/50",
               )}
             >
-              <div className="text-muted-foreground">Alert generati</div>
+              <div className="text-muted-foreground">Segnali generati</div>
               <div className="font-semibold tabular-nums">
                 {status.alerts_fired ?? 0}
               </div>

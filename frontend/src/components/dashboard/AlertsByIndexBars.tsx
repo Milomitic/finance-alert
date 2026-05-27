@@ -22,7 +22,7 @@ export function AlertsByIndexBars({ data }: Props) {
       <div className="px-4 py-8 flex flex-col items-center justify-center text-center min-h-[100px]">
         <BarChart3 className="h-6 w-6 text-muted-foreground mb-2" />
         <div className="text-sm text-muted-foreground">
-          Nessun alert nei 30 giorni.
+          Nessun segnale nei 30 giorni.
         </div>
       </div>
     );

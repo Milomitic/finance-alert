@@ -30,7 +30,7 @@ export function useBulkAlerts() {
       action: "mark_read" | "mark_unread" | "archive" | "unarchive";
     }) => alerts.bulk(vars.ids, vars.action),
     onSuccess: (data) => {
-      toast.success(`${data.affected} alert aggiornati`);
+      toast.success(`${data.affected} segnali aggiornati`);
       qc.invalidateQueries({ queryKey: ["alerts"] });
       qc.invalidateQueries({ queryKey: ["alerts", "unread-count"] });
     },
@@ -123,7 +123,7 @@ export function useSendDigest() {
     onSuccess: (data) => {
       if (data.sent) {
         toast.success(
-          `Digest Telegram inviato — ${data.alerts_count} alert riepilogati`,
+          `Digest Telegram inviato — ${data.alerts_count} segnali riepilogati`,
           { duration: 5000 },
         );
       } else if (data.reason === "telegram_disabled") {
@@ -131,7 +131,7 @@ export function useSendDigest() {
           "Telegram non configurato (TELEGRAM_BOT_TOKEN o CHAT_ID mancanti in .env)",
         );
       } else if (data.reason === "no_alerts") {
-        toast.info("Nessun alert nelle ultime 24h — nessun digest da inviare");
+        toast.info("Nessun segnale nelle ultime 24h — nessun digest da inviare");
       } else {
         toast.info(`Digest non inviato: ${data.reason ?? "motivo sconosciuto"}`);
       }

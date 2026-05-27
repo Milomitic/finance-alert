@@ -194,7 +194,7 @@ export function AlertDetailDialog({ alert, onClose }: Props) {
             )}
           </DialogTitle>
           <DialogDescription className="sr-only">
-            Dettagli alert {meta.label} per {alert.ticker ?? "ticker sconosciuto"}.
+            Dettagli segnale {meta.label} per {alert.ticker ?? "ticker sconosciuto"}.
           </DialogDescription>
         </DialogHeader>
 
@@ -269,7 +269,7 @@ export function AlertDetailDialog({ alert, onClose }: Props) {
                 </div>
                 <div
                   className="text-xs text-muted-foreground italic mt-0.5"
-                  title="Alert legacy creato prima della data segnale"
+                  title="Segnale legacy creato prima della data segnale"
                 >
                   legacy
                 </div>
@@ -311,7 +311,7 @@ export function AlertDetailDialog({ alert, onClose }: Props) {
             </pre>
           ) : (
             <div className="rounded-lg border border-dashed border-border/60 p-3 text-xs text-muted-foreground italic text-center">
-              Nessun dato di snapshot per questo alert.
+              Nessun dato di snapshot per questo segnale.
             </div>
           )}
 

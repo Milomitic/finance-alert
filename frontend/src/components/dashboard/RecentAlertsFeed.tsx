@@ -38,7 +38,7 @@ export function RecentAlertsFeed({ alerts }: Props) {
   if (alerts.length === 0) {
     return (
       <div className="p-6 text-center text-sm text-muted-foreground">
-        Nessun alert recente. Esegui uno scan da{" "}
+        Nessun segnale recente. Esegui uno scan da{" "}
         <span className="underline">/alerts</span> per generarli.
       </div>
     );

@@ -62,7 +62,7 @@ function DashboardSkeleton() {
         <CardSkeleton label="VALUTAZIONI ANALISTI" rows={8} strongHeader />
       </div>
       {/* Alerts panel — single-row, fixed height. */}
-      <CardSkeleton label="ALERTS" rows={8} strongHeader className="lg:h-[420px]" />
+      <CardSkeleton label="SEGNALI" rows={8} strongHeader className="lg:h-[420px]" />
       {/* Footer (DataSources). */}
       <CardSkeleton label="DATA SOURCES" rows={3} className="h-[120px]" />
     </div>
