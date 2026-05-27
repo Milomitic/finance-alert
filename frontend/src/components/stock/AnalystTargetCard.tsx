@@ -427,19 +427,28 @@ function ActionsList({ actions }: { actions: AnalystAction[] }) {
                 </span>
               )
             )}
-            {/* Grade chip — buy/hold/sell tone */}
-            <span
-              className={cn(
-                "px-1.5 py-0.5 rounded font-semibold shrink-0",
-                TONE_CLASSES[tone],
-              )}
-            >
-              {a.to_grade || "—"}
+            {/* Grade chip — in a FIXED-WIDTH, left-aligned slot so the
+                buy/hold/sell labels line up into a column across every row
+                (the firm is flex-1, so without a fixed slot the grade's x
+                drifts with the price width). Long grades truncate; full text
+                stays on hover. */}
+            <span className="shrink-0 w-[4.75rem] flex justify-start">
+              <span
+                className={cn(
+                  "px-1.5 py-0.5 rounded font-semibold truncate max-w-full",
+                  TONE_CLASSES[tone],
+                )}
+                title={a.to_grade || undefined}
+              >
+                {a.to_grade || "—"}
+              </span>
             </span>
-            {/* Price target chip — directly adjacent to the grade so they
-                read as a "rating + target" unit. Renders only when the
-                API gave us a target. */}
-            <PriceTargetChip a={a} />
+            {/* Price target — FIXED-WIDTH, right-aligned slot so the $targets
+                form a clean column (a 1- vs 2-digit price no longer shifts the
+                whole group). Reads as a "rating + target" unit with the grade. */}
+            <span className="shrink-0 w-14 flex justify-end">
+              <PriceTargetChip a={a} />
+            </span>
             {/* `whitespace-nowrap` is the critical bit: without it, dates
                 like "11 mag" can break between the day and the month when
                 the row is squeezed (sidebar narrows on lg→md, or a long

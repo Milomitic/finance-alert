@@ -39,21 +39,21 @@ function DashboardSkeleton() {
         <CardSkeleton label="MERCATI LIVE" rows={4} strongHeader className="h-[120px]" />
         <CardSkeleton className="h-[120px]" rows={3} />
       </div>
-      {/* Row 2: outer [3fr_2fr]; inner [1fr_1fr] (breadth + movers);
-          right cell = pre-market — mirrors the real row template. */}
-      <div className="grid gap-3 lg:grid-cols-[3fr_2fr]">
-        <div className="grid gap-3 lg:grid-cols-[1fr_1fr]">
-          <CardSkeleton label="BREADTH PER INDICE" rows={8} strongHeader className="h-[400px]" />
+      {/* Row 2: Volumi + 52w (top-left pair) + TopMovers, with pre-market
+          on the right — mirrors the real row template. */}
+      <div className="grid gap-3 lg:grid-cols-[3fr_2fr] lg:h-[440px]">
+        <div className="grid gap-3 lg:grid-cols-3">
+          <CardSkeleton label="VOLUMI" rows={8} strongHeader className="h-[400px]" />
+          <CardSkeleton label="52 SETTIMANE" rows={8} strongHeader className="h-[400px]" />
           <CardSkeleton label="TOP MOVERS" rows={8} strongHeader className="h-[400px]" />
         </div>
         <CardSkeleton label="PRE-MARKET USA" rows={8} strongHeader className="h-[400px]" />
       </div>
-      {/* 4-col mini cards row (lg:h-[520px]). */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 lg:h-[520px]">
+      {/* Lower row: breadth (wide, bottom-left) + RSI + Sectors (lg:h-[520px]). */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-[2fr_1fr_1fr] gap-3 lg:h-[520px]">
+        <CardSkeleton label="BREADTH PER INDICE" rows={8} strongHeader />
         <CardSkeleton label="RSI DISTRIBUTION" rows={6} strongHeader />
         <CardSkeleton label="SETTORI" rows={6} strongHeader />
-        <CardSkeleton label="VOLUMI" rows={6} strongHeader />
-        <CardSkeleton label="52 SETTIMANE" rows={6} strongHeader />
       </div>
       {/* Discovery row: [2fr_1fr_1fr] at lg+. */}
       <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr_1fr] gap-3 lg:h-[420px]">
@@ -232,25 +232,32 @@ export default function HomePage() {
               pre-market card in on the right (same 2fr as MERCATI
               LIVE upstairs); inner `[1fr_1fr]` splits Breadth +
               TopMovers evenly within the left 3fr. */}
+      {/* Row 2 (prominent): Volumi maggiori + 52w-events promoted to the
+          top-left pair, with TopMovers (+ pre-market when available) on the
+          right. The breadth matrix moved DOWN to the row below. */}
       {hidePremarket ? (
-        <div className="grid gap-3 lg:grid-cols-[3fr_2fr]">
-          <BreadthMatrixTable data={m.by_index} />
-          <TopMoversCard movers={m.movers} computedAt={m.computed_at} />
+        <div className="grid gap-3 lg:grid-cols-[3fr_2fr] lg:h-[440px]">
+          <div className="grid gap-3 lg:grid-cols-[1fr_1fr] min-h-0">
+            <div className="h-[440px] lg:h-full min-h-0"><LiveVolumeMoversCard movers={m.movers} computedAt={m.computed_at} /></div>
+            <div className="h-[440px] lg:h-full min-h-0"><FiftyTwoWeekVolCard movers={m.movers} /></div>
+          </div>
+          <div className="h-[440px] lg:h-full min-h-0"><TopMoversCard movers={m.movers} computedAt={m.computed_at} /></div>
         </div>
       ) : (
-        <div className="grid gap-3 lg:grid-cols-[3fr_2fr]">
-          <div className="grid gap-3 lg:grid-cols-[1fr_1fr]">
-            <BreadthMatrixTable data={m.by_index} />
-            <TopMoversCard movers={m.movers} computedAt={m.computed_at} />
+        <div className="grid gap-3 lg:grid-cols-[3fr_2fr] lg:h-[440px]">
+          <div className="grid gap-3 lg:grid-cols-3 min-h-0">
+            <div className="h-[440px] lg:h-full min-h-0"><LiveVolumeMoversCard movers={m.movers} computedAt={m.computed_at} /></div>
+            <div className="h-[440px] lg:h-full min-h-0"><FiftyTwoWeekVolCard movers={m.movers} /></div>
+            <div className="h-[440px] lg:h-full min-h-0"><TopMoversCard movers={m.movers} computedAt={m.computed_at} /></div>
           </div>
-          <PremarketMoversCard />
+          <div className="h-[440px] lg:h-full min-h-0"><PremarketMoversCard /></div>
         </div>
       )}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 lg:h-[520px]">
+      {/* Lower row: breadth matrix (bottom-left, wide 2fr) + RSI + Sectors. */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-[2fr_1fr_1fr] gap-3 lg:h-[520px]">
+        <div className="h-[440px] lg:h-full min-h-0"><BreadthMatrixTable data={m.by_index} /></div>
         <div className="h-[440px] lg:h-full min-h-0"><RsiHistogramCard rsi={m.rsi_distribution} indices={m.by_index} /></div>
         <div className="h-[440px] lg:h-full min-h-0"><SectorsHeatmapCard sectors={m.sectors} /></div>
-        <div className="h-[440px] lg:h-full min-h-0"><LiveVolumeMoversCard movers={m.movers} computedAt={m.computed_at} /></div>
-        <div className="h-[440px] lg:h-full min-h-0"><FiftyTwoWeekVolCard movers={m.movers} /></div>
       </div>
       {/* Alerts (left) + Top Picks (right) on the same row. The two are
           complementary: alerts is "what just happened that needs your
