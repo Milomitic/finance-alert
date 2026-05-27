@@ -158,7 +158,6 @@ def get_summary(
         kpis=KpiSummaryOut(
             alerts_last_24h=kpi.alerts_last_24h,
             alerts_prev_24h=kpi.alerts_prev_24h,
-            alerts_unread=kpi.alerts_unread,
             stocks_monitored=kpi.stocks_monitored,
             indices_count=kpi.indices_count,
             last_scan=last_scan,

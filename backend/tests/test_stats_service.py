@@ -66,17 +66,6 @@ def test_kpi_alerts_prev_24h_window(db: Session) -> None:
     assert summary.alerts_prev_24h == 2
 
 
-def test_kpi_unread_excludes_archived_and_read(db: Session) -> None:
-    stock = _seed_baseline(db)
-    _make_alert(db, stock, age_hours=2)
-    a_read = _make_alert(db, stock, age_hours=2)
-    a_read.read_at = datetime.now(timezone.utc)
-    db.commit()
-    _make_alert(db, stock, age_hours=2, archived=True)
-    summary = get_kpi_summary(db)
-    assert summary.alerts_unread == 1
-
-
 def test_kpi_stocks_and_indices_counts(db: Session) -> None:
     from app.models import Index
     db.add(Stock(ticker="AAPL", exchange="NASDAQ", name="Apple"))

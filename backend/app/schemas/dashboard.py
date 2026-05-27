@@ -11,7 +11,6 @@ class KpiSummaryOut(BaseModel):
 
     alerts_last_24h: int
     alerts_prev_24h: int
-    alerts_unread: int
     stocks_monitored: int
     indices_count: int
     last_scan: ScanStatusOut | None

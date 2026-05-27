@@ -18,7 +18,6 @@ from app.services.alert_service import derive_rule_kind
 class KpiSummary:
     alerts_last_24h: int
     alerts_prev_24h: int
-    alerts_unread: int
     stocks_monitored: int
     indices_count: int
 
@@ -87,20 +86,12 @@ def get_kpi_summary(db: Session) -> KpiSummary:
         )
     ).scalar_one()
 
-    unread = db.execute(
-        select(func.count(Alert.id)).where(
-            Alert.read_at.is_(None),
-            Alert.archived_at.is_(None),
-        )
-    ).scalar_one()
-
     stocks_count = db.execute(select(func.count(Stock.id))).scalar_one()
     indices_count = db.execute(select(func.count(Index.id))).scalar_one()
 
     return KpiSummary(
         alerts_last_24h=int(last_24h),
         alerts_prev_24h=int(prev_24h),
-        alerts_unread=int(unread),
         stocks_monitored=int(stocks_count),
         indices_count=int(indices_count),
     )

@@ -205,7 +205,6 @@ export interface ScanStopResultInfo {
 export interface KpiSummary {
   alerts_last_24h: number;
   alerts_prev_24h: number;
-  alerts_unread: number;
   stocks_monitored: number;
   indices_count: number;
   last_scan: ScanStatusInfo | null;
