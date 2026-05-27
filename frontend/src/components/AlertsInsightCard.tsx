@@ -2,22 +2,22 @@ import { Gauge, Layers, Network, Swords, TrendingDown, TrendingUp } from "lucide
 import { Link } from "react-router-dom";
 
 import type { Confluence } from "@/api/alerts";
+import { StockIdentity } from "@/components/dashboard/StockIdentity";
+import { StockLogo } from "@/components/dashboard/StockLogo";
 import { Card, CardContent } from "@/components/ui/card";
 import { SectionTitle } from "@/components/ui/section-title";
 import { getAlertKindMeta } from "@/lib/alertMeta";
 import { cn } from "@/lib/utils";
 
 /* ─── AlertsInsightCard ──────────────────────────────────────────────────
- * Two-column confluence digest above the alerts table (replaced the old
- * list/confluence view toggle).
+ * Confluence digest above the alerts table.
  *
- *   Col 1 — Top 10 per forza: which tickers have the strongest multi-signal
- *           agreement (the ranking lens).
- *   Col 2 — Posizionamento: long/short split, key counts, the strongest
- *           cluster per side, the horizon mix, and which detectors are
- *           actually driving the current confluences (the aggregate lens).
+ *   - Top strip: the strongest long + short cluster (directional extremes).
+ *   - Left:  Top 10 per forza — strongest multi-signal agreement (ranking).
+ *   - Right: aggregate posture — long/short split, key counts, plus the
+ *            horizon mix and which detectors are driving the confluences.
  *
- * Both lenses derive from the SAME `clusters` payload (one fetch). */
+ * Every lens derives from the SAME `clusters` payload (one fetch). */
 
 const HZ_LABEL: Record<string, string> = { short: "Breve", medium: "Medio", long: "Lungo" };
 const HZ_ORDER = ["short", "medium", "long"] as const;
@@ -41,16 +41,13 @@ function DirPill({ direction, className }: { direction: string; className?: stri
   );
 }
 
-/* Rounded strength bar with a muted track + direction-tinted gradient fill. */
-function StrengthBar({ value, bull, width = "w-20" }: { value: number; bull: boolean; width?: string }) {
+/* Rounded strength bar: muted track + direction-tinted gradient fill. */
+function StrengthBar({ value, bull, width = "w-16" }: { value: number; bull: boolean; width?: string }) {
   const pct = Math.max(2, Math.min(100, value));
   return (
     <div className={cn("h-2 rounded-full bg-muted/70 overflow-hidden", width)}>
       <div
-        className={cn(
-          "h-full rounded-full bg-gradient-to-r",
-          bull ? "from-emerald-400 to-emerald-600" : "from-rose-400 to-rose-600",
-        )}
+        className={cn("h-full rounded-full bg-gradient-to-r", bull ? "from-emerald-400 to-emerald-600" : "from-rose-400 to-rose-600")}
         style={{ width: `${pct}%` }}
       />
     </div>
@@ -64,21 +61,49 @@ function TopRow({ c, rank }: { c: Confluence; rank: number }) {
     <li>
       <Link
         to={`/stocks/${encodeURIComponent(c.ticker)}`}
-        className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-accent/50 transition-colors min-w-0"
+        className="flex items-center gap-2 px-2 py-1 rounded-md hover:bg-accent/50 transition-colors min-w-0"
         title={`${c.name ?? c.ticker} · forza ${pct} · ${c.n_signals} segnali${c.multi_horizon ? " · multi-orizzonte" : ""}${c.contested ? " · conteso" : ""}`}
       >
         <span className="w-4 shrink-0 text-right text-[11px] font-mono tabular-nums text-muted-foreground/60">{rank}</span>
-        <span className="font-bold text-sm shrink-0">{c.ticker}</span>
+        <StockIdentity ticker={c.ticker} name={c.name} />
         <DirPill direction={c.direction} />
         {c.multi_horizon && <Layers className="h-3 w-3 shrink-0 text-indigo-500" aria-label="Multi-orizzonte" />}
         {c.contested && <Swords className="h-3 w-3 shrink-0 text-amber-500" aria-label="Conteso" />}
-        <span className="text-[10px] text-muted-foreground/80 shrink-0 ml-0.5 tabular-nums">{c.n_signals} seg.</span>
-        <div className="ml-auto flex items-center gap-2 shrink-0">
-          <StrengthBar value={pct} bull={bull} />
-          <span className="text-xs font-semibold tabular-nums w-7 text-right">{pct}</span>
-        </div>
+        <span className="text-[10px] text-muted-foreground/80 shrink-0 tabular-nums">{c.n_signals} seg.</span>
+        <StrengthBar value={pct} bull={bull} />
+        <span className="text-xs font-semibold tabular-nums w-7 text-right shrink-0">{pct}</span>
       </Link>
     </li>
+  );
+}
+
+/* Directional extreme — the strongest cluster on one side. Compact bordered
+   cell for the top strip. */
+function ExtremeCell({ label, c }: { label: string; c: Confluence | undefined }) {
+  if (!c) {
+    return (
+      <div className="flex items-center gap-2 rounded-lg border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+        <span className="uppercase tracking-wider text-[10px]">{label}</span>
+        <span className="ml-auto">—</span>
+      </div>
+    );
+  }
+  const bull = c.direction === "bull";
+  return (
+    <Link
+      to={`/stocks/${encodeURIComponent(c.ticker)}`}
+      className="flex items-center gap-2 rounded-lg border bg-muted/30 px-3 py-2 hover:bg-accent/40 transition-colors min-w-0"
+      title={`${c.ticker} · forza ${Math.round(c.strength)} · ${c.n_signals} segnali`}
+    >
+      <span className="uppercase tracking-wider text-[10px] text-muted-foreground shrink-0">{label}</span>
+      <StockLogo ticker={c.ticker} size="xs" />
+      <span className="font-bold text-sm shrink-0">{c.ticker}</span>
+      {c.name && <span className="text-[10px] text-muted-foreground truncate min-w-0">{c.name}</span>}
+      <DirPill direction={c.direction} className="ml-auto" />
+      <span className={cn("font-bold tabular-nums shrink-0", bull ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400")}>
+        {Math.round(c.strength)}
+      </span>
+    </Link>
   );
 }
 
@@ -108,28 +133,8 @@ function SubHeader({ children }: { children: React.ReactNode }) {
   );
 }
 
-function StrongestRow({ label, c }: { label: string; c: Confluence | undefined }) {
-  if (!c) return null;
-  const bull = c.direction === "bull";
-  return (
-    <Link
-      to={`/stocks/${encodeURIComponent(c.ticker)}`}
-      className="flex items-center gap-2 text-xs px-1.5 py-1 rounded-md hover:bg-accent/50"
-      title={`${c.ticker} · forza ${Math.round(c.strength)} · ${c.n_signals} segnali`}
-    >
-      <span className="text-muted-foreground shrink-0 w-16">{label}</span>
-      <span className="font-bold shrink-0">{c.ticker}</span>
-      <DirPill direction={c.direction} />
-      <span className={cn("ml-auto font-semibold tabular-nums", bull ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400")}>
-        {Math.round(c.strength)}
-      </span>
-    </Link>
-  );
-}
-
-/* Horizon mix: how many clusters involve each timeframe (a multi-horizon
-   cluster counts in several). A quick read of "are these confluences
-   short-term triggers or long-term structure?". */
+/* Horizon mix: how many clusters involve each timeframe (multi-horizon
+   clusters count in several) — "trigger di breve vs struttura di lungo". */
 function HorizonMix({ clusters }: { clusters: Confluence[] }) {
   const counts: Record<string, number> = { short: 0, medium: 0, long: 0 };
   for (const c of clusters) for (const h of c.horizons) if (h in counts) counts[h] += 1;
@@ -149,9 +154,7 @@ function HorizonMix({ clusters }: { clusters: Confluence[] }) {
   );
 }
 
-/* Which detectors are driving the current confluences (top 5 by how many
-   confluence components they contribute). Surfaces "what kind of agreement"
-   is forming right now. */
+/* Top-5 detectors by how many confluence components they contribute. */
 function DetectorMix({ clusters }: { clusters: Confluence[] }) {
   const counts = new Map<string, number>();
   for (const c of clusters) for (const comp of c.components) {
@@ -181,7 +184,6 @@ function DetectorMix({ clusters }: { clusters: Confluence[] }) {
 }
 
 export function AlertsInsightCard({ clusters, loading }: { clusters: Confluence[]; loading?: boolean }) {
-  // Backend returns clusters sorted by strength desc.
   const top10 = clusters.slice(0, 10);
   const bull = clusters.filter((c) => c.direction === "bull");
   const bear = clusters.filter((c) => c.direction === "bear");
@@ -206,63 +208,58 @@ export function AlertsInsightCard({ clusters, loading }: { clusters: Confluence[
             Nessuna confluenza attiva: servono almeno 2 segnali concordi sullo stesso titolo.
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-7 gap-y-5">
-            {/* ── Col 1 — Top 10 by strength ─────────────────────────── */}
-            <div className="min-w-0">
-              <SubHeader>Top 10 per forza</SubHeader>
-              <ul className="space-y-0.5">
-                {top10.map((c, i) => (
-                  <TopRow key={`${c.ticker}-${c.direction}`} c={c} rank={i + 1} />
-                ))}
-              </ul>
+          <>
+            {/* Directional extremes — both on one row, top-left. */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-w-3xl mb-4">
+              <ExtremeCell label="Top long" c={bull[0]} />
+              <ExtremeCell label="Top short" c={bear[0]} />
             </div>
 
-            {/* ── Col 2 — Aggregate posture ──────────────────────────── */}
-            <div className="min-w-0 md:border-l md:border-border/50 md:pl-7 space-y-4">
-              {/* Long vs short split */}
-              <div>
-                <SubHeader>Posizionamento</SubHeader>
-                <div className="flex items-center justify-between text-xs mb-1">
-                  <span className="font-semibold text-emerald-600 dark:text-emerald-400">{nBull} long · {bullPct}%</span>
-                  <span className="font-semibold text-rose-600 dark:text-rose-400">{100 - bullPct}% · {nBear} short</span>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-7 gap-y-5 items-stretch">
+              {/* Col 1 — Top 10 by strength (logo + ticker + name) */}
+              <div className="min-w-0">
+                <SubHeader>Top 10 per forza</SubHeader>
+                <ul className="space-y-0.5">
+                  {top10.map((c, i) => (
+                    <TopRow key={`${c.ticker}-${c.direction}`} c={c} rank={i + 1} />
+                  ))}
+                </ul>
+              </div>
+
+              {/* Col 2 — aggregate posture */}
+              <div className="min-w-0 md:border-l md:border-border/50 md:pl-7 space-y-4">
+                <div>
+                  <SubHeader>Posizionamento</SubHeader>
+                  <div className="flex items-center justify-between text-xs mb-1">
+                    <span className="font-semibold text-emerald-600 dark:text-emerald-400">{nBull} long · {bullPct}%</span>
+                    <span className="font-semibold text-rose-600 dark:text-rose-400">{100 - bullPct}% · {nBear} short</span>
+                  </div>
+                  <div className="flex h-2.5 rounded-full overflow-hidden bg-muted">
+                    <div className="bg-emerald-500" style={{ width: `${bullPct}%` }} />
+                    <div className="bg-rose-500" style={{ width: `${100 - bullPct}%` }} />
+                  </div>
                 </div>
-                <div className="flex h-2.5 rounded-full overflow-hidden bg-muted">
-                  <div className="bg-emerald-500" style={{ width: `${bullPct}%` }} />
-                  <div className="bg-rose-500" style={{ width: `${100 - bullPct}%` }} />
+
+                <div className="grid grid-cols-3 gap-2">
+                  <StatCell icon={Layers} label="Multi-orizz." value={String(multiH)} tone={multiH > 0 ? "text-indigo-600 dark:text-indigo-400" : undefined} />
+                  <StatCell icon={Swords} label="Contese" value={String(contested)} tone={contested > 0 ? "text-amber-600 dark:text-amber-400" : undefined} />
+                  <StatCell icon={Gauge} label="Forza media" value={String(avgStrength)} />
                 </div>
-              </div>
 
-              {/* Key counts */}
-              <div className="grid grid-cols-3 gap-2">
-                <StatCell icon={Layers} label="Multi-orizz." value={String(multiH)}
-                  tone={multiH > 0 ? "text-indigo-600 dark:text-indigo-400" : undefined} />
-                <StatCell icon={Swords} label="Contese" value={String(contested)}
-                  tone={contested > 0 ? "text-amber-600 dark:text-amber-400" : undefined} />
-                <StatCell icon={Gauge} label="Forza media" value={String(avgStrength)} />
-              </div>
-
-              {/* Strongest per side */}
-              <div>
-                <SubHeader>Estremi direzionali</SubHeader>
-                <div className="space-y-0.5">
-                  <StrongestRow label="Top long" c={bull[0]} />
-                  <StrongestRow label="Top short" c={bear[0]} />
+                {/* Horizon mix + detector mix — two columns on the same row. */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-5 gap-y-3">
+                  <div>
+                    <SubHeader>Orizzonti coinvolti</SubHeader>
+                    <HorizonMix clusters={clusters} />
+                  </div>
+                  <div>
+                    <SubHeader>Detector più attivi</SubHeader>
+                    <DetectorMix clusters={clusters} />
+                  </div>
                 </div>
-              </div>
-
-              {/* Horizon mix */}
-              <div>
-                <SubHeader>Orizzonti coinvolti</SubHeader>
-                <HorizonMix clusters={clusters} />
-              </div>
-
-              {/* Detector mix */}
-              <div>
-                <SubHeader>Detector più attivi</SubHeader>
-                <DetectorMix clusters={clusters} />
               </div>
             </div>
-          </div>
+          </>
         )}
       </CardContent>
     </Card>
