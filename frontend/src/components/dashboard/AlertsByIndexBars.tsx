@@ -32,11 +32,16 @@ export function AlertsByIndexBars({ data }: Props) {
   // 100%; the rest scale proportionally. min 4% so even tiny counts
   // remain visible (a 0.5%-wide bar reads as nothing).
   const max = Math.max(...data.map((d) => d.alert_count));
+  // Total across all indices → each row's SHARE of the 30-day alert flow,
+  // so the user sees concentration ("SPX500 is 58% of everything") not just
+  // the raw count.
+  const total = data.reduce((s, d) => s + d.alert_count, 0);
   return (
     <ul className="divide-y divide-border/40">
       {data.map((d) => {
         const meta = getIndexMeta(d.index_code);
         const widthPct = max > 0 ? Math.max(4, (d.alert_count / max) * 100) : 0;
+        const share = total > 0 ? Math.round((d.alert_count / total) * 100) : 0;
         return (
           <li key={d.index_code}>
             <Link
@@ -69,9 +74,15 @@ export function AlertsByIndexBars({ data }: Props) {
                     />
                   </div>
                 </div>
-                <span className="font-bold tabular-nums shrink-0 w-[36px] text-right">
-                  {d.alert_count}
-                </span>
+                <div className="shrink-0 w-[46px] text-right leading-tight">
+                  <div className="font-bold tabular-nums">{d.alert_count}</div>
+                  <div
+                    className="text-[10px] text-muted-foreground tabular-nums"
+                    title={`${share}% dei segnali degli ultimi 30 giorni`}
+                  >
+                    {share}%
+                  </div>
+                </div>
               </div>
             </Link>
           </li>
