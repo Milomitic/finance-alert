@@ -136,11 +136,14 @@ export function RsiPanel({ rsi14, color = "#7c3aed", width = 2, onReady }: Props
         priceRange: { minValue: 0, maxValue: 100 },
       }),
     });
+    // No `title` on the 30/70 lines: the axis already shows "30.00"/"70.00"
+    // (axisLabelVisible), so a separate "30"/"70" label was redundant and
+    // overlapped the plot. Keep the axis value, drop the on-chart label.
     lineRef.current.createPriceLine({
-      price: 30, color: "#fb923c", lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: "30",
+      price: 30, color: "#fb923c", lineWidth: 1, lineStyle: 2, axisLabelVisible: true,
     });
     lineRef.current.createPriceLine({
-      price: 70, color: "#dc2626", lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: "70",
+      price: 70, color: "#dc2626", lineWidth: 1, lineStyle: 2, axisLabelVisible: true,
     });
     lineRef.current.createPriceLine({
       price: 50, color: "rgba(100,116,139,0.4)", lineWidth: 1, lineStyle: 1, axisLabelVisible: false,
