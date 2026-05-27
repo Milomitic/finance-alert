@@ -3,7 +3,7 @@ from datetime import UTC, date, datetime
 from typing import Any
 
 import sqlalchemy
-from sqlalchemy import Float, and_, asc, desc, func, or_, select, update
+from sqlalchemy import Float, asc, desc, func, or_, select, update
 from sqlalchemy.orm import Session
 
 from app.models import Alert, Stock
@@ -60,7 +60,6 @@ def _apply_filters(
     rule_kind: str | None = None,
     date_from: date | None = None,
     date_to: date | None = None,
-    read: bool | None = None,
     archived: bool | None = None,
     tone: str | None = None,
     confidence_min: float | None = None,
@@ -86,10 +85,6 @@ def _apply_filters(
         stmt = stmt.where(Alert.triggered_at >= date_from)
     if date_to:
         stmt = stmt.where(Alert.triggered_at < date_to)
-    if read is True:
-        stmt = stmt.where(Alert.read_at.isnot(None))
-    elif read is False:
-        stmt = stmt.where(Alert.read_at.is_(None))
     if archived is True:
         stmt = stmt.where(Alert.archived_at.isnot(None))
     elif archived is False:
@@ -116,7 +111,6 @@ def list_alerts(
     rule_kind: str | None = None,
     date_from: date | None = None,
     date_to: date | None = None,
-    read: bool | None = None,
     archived: bool | None = False,
     tone: str | None = None,
     confidence_min: float | None = None,
@@ -143,7 +137,6 @@ def list_alerts(
         rule_kind=rule_kind,
         date_from=date_from,
         date_to=date_to,
-        read=read,
         archived=archived,
         tone=tone,
         confidence_min=confidence_min,
@@ -183,16 +176,12 @@ def get_alert(db: Session, alert_id: int) -> Alert | None:
 
 
 def patch_alert(
-    db: Session, alert_id: int, *, read: bool | None = None, archived: bool | None = None
+    db: Session, alert_id: int, *, archived: bool | None = None
 ) -> Alert | None:
     a = get_alert(db, alert_id)
     if a is None:
         return None
     now = datetime.now(UTC)
-    if read is True:
-        a.read_at = now
-    elif read is False:
-        a.read_at = None
     if archived is True:
         a.archived_at = now
     elif archived is False:
@@ -203,15 +192,11 @@ def patch_alert(
 
 
 def bulk_action(db: Session, ids: list[int], action: str) -> int:
-    """Apply bulk action (mark_read, mark_unread, archive, unarchive). Returns affected count."""
+    """Apply bulk action (archive, unarchive). Returns affected count."""
     if not ids:
         return 0
     now = datetime.now(UTC)
-    if action == "mark_read":
-        stmt = update(Alert).where(Alert.id.in_(ids)).values(read_at=now)
-    elif action == "mark_unread":
-        stmt = update(Alert).where(Alert.id.in_(ids)).values(read_at=None)
-    elif action == "archive":
+    if action == "archive":
         stmt = update(Alert).where(Alert.id.in_(ids)).values(archived_at=now)
     elif action == "unarchive":
         stmt = update(Alert).where(Alert.id.in_(ids)).values(archived_at=None)
@@ -220,13 +205,3 @@ def bulk_action(db: Session, ids: list[int], action: str) -> int:
     res = db.execute(stmt)
     db.commit()
     return res.rowcount or 0
-
-
-def unread_count(db: Session) -> int:
-    return int(
-        db.execute(
-            select(func.count(Alert.id)).where(
-                and_(Alert.read_at.is_(None), Alert.archived_at.is_(None))
-            )
-        ).scalar_one()
-    )

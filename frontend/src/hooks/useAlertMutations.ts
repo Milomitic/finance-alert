@@ -10,29 +10,16 @@ function describeError(err: unknown, fallback: string): string {
   return fallback;
 }
 
-export function usePatchAlert() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (vars: { id: number; read?: boolean; archived?: boolean }) =>
-      alerts.patch(vars.id, { read: vars.read, archived: vars.archived }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["alerts"] });
-      qc.invalidateQueries({ queryKey: ["alerts", "unread-count"] });
-    },
-  });
-}
-
 export function useBulkAlerts() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (vars: {
       ids: number[];
-      action: "mark_read" | "mark_unread" | "archive" | "unarchive";
+      action: "archive" | "unarchive";
     }) => alerts.bulk(vars.ids, vars.action),
     onSuccess: (data) => {
       toast.success(`${data.affected} segnali aggiornati`);
       qc.invalidateQueries({ queryKey: ["alerts"] });
-      qc.invalidateQueries({ queryKey: ["alerts", "unread-count"] });
     },
   });
 }
