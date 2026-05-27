@@ -254,24 +254,33 @@ Both? Do both.
 
 ---
 
-## Catalog has duplicate ticker rows
+## Catalog ticker rows — duplicates RESOLVED (2026-05)
 
-59 tickers (AAPL, AMZN, UCG.MI, etc.) have **two rows** in the `stocks` table
-because two ingestion paths inserted the same logical ticker. Code that looks
-up a stock by ticker MUST tolerate this:
+**Historical note:** 59 tickers (AAPL, AMZN, UCG.MI, etc.) used to have **two
+rows** in the `stocks` table because two ingestion paths inserted the same
+logical ticker. **These duplicates have since been deduped** — as of 2026-05
+the live DB has 1049 stock rows / 1049 distinct `(ticker, exchange)` groups
+(verified read-only), and a `UniqueConstraint("ticker", "exchange")` on the
+table now prevents the problem from recurring.
+
+The defensive read-path pattern below is no longer strictly necessary, but it
+remains **harmless and recommended** as belt-and-suspenders — keep using it on
+read paths so a future ingestion bug can't resurface `MultipleResultsFound`:
 
 ```python
-# WRONG — will raise MultipleResultsFound
+# WRONG — would raise MultipleResultsFound if a dup ever sneaks back in
 stock = db.execute(select(Stock).where(Stock.ticker == ticker)).scalar_one_or_none()
 
-# RIGHT — picks any matching row, all are equivalent for read-only paths
+# RIGHT — picks any matching row, all equivalent for read-only paths
 stock = db.execute(
     select(Stock).where(Stock.ticker == ticker).limit(1)
 ).scalars().first()
 ```
 
-The dedup of these rows is queued as a separate background task. Until then,
-treat duplicates as a fact of life on read paths.
+A defensive, idempotent dedup migration (`128c69e4701a_dedup_stock_rows`,
+no-op on the current clean DB) was authored on branch
+`worktree-agent-a75ca023d8660c670` but **not merged** — it's redundant with the
+unique constraint. Resurrect that branch only if duplicates ever reappear.
 
 ---
 
