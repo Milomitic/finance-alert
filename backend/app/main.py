@@ -51,6 +51,7 @@ def _cleanup_orphan_scans() -> None:
 
     from app.core.db import SessionLocal
     from app.models import ScanRun
+    from app.scheduler.jobs.cleanup_orphan_scans_job import _STALE_AFTER_MINUTES
     from sqlalchemy import select
 
     with SessionLocal() as db:
@@ -60,11 +61,23 @@ def _cleanup_orphan_scans() -> None:
         if not orphans:
             return
         now = datetime.now(UTC)
+        closed_ids: list[int] = []
+        kept_ids: list[int] = []
         for r in orphans:
             ref = r.last_progress_at or r.started_at
             if ref is not None and ref.tzinfo is None:
                 ref = ref.replace(tzinfo=UTC)
-            elapsed_min = int((now - ref).total_seconds() / 60) if ref else 0
+            elapsed_min = int((now - ref).total_seconds() / 60) if ref else 999
+            # Heartbeat-aware: a 'running' row with a RECENT heartbeat is
+            # likely still alive in an EXTERNAL process (e.g. a scoped backfill
+            # launched outside uvicorn). Restarting uvicorn must NOT false-fail
+            # it — the row's heartbeat keeps advancing and the scan completes
+            # and self-marks 'success'. Only close genuinely-stale rows here;
+            # the periodic cleanup_orphan_scans_job catches any that go stale
+            # later. (Same _STALE_AFTER_MINUTES threshold so the two agree.)
+            if elapsed_min < _STALE_AFTER_MINUTES:
+                kept_ids.append(r.id)
+                continue
             r.status = "failed"
             r.phase = None
             r.error_message = (
@@ -72,11 +85,18 @@ def _cleanup_orphan_scans() -> None:
                 "Cleanup automatico all'avvio."
             )
             r.completed_at = now
+            closed_ids.append(r.id)
         db.commit()
-        logger.warning(
-            f"[startup] cleaned up {len(orphans)} orphan ScanRun row(s) "
-            f"(ids={[r.id for r in orphans]})"
-        )
+        if closed_ids:
+            logger.warning(
+                f"[startup] cleaned up {len(closed_ids)} orphan ScanRun row(s) "
+                f"(ids={closed_ids})"
+            )
+        if kept_ids:
+            logger.info(
+                f"[startup] left {len(kept_ids)} ScanRun(s) running — recent "
+                f"heartbeat, likely an external-process scan (ids={kept_ids})"
+            )
 
 
 def _hydrate_fetch_caches() -> None:
