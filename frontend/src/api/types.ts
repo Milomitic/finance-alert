@@ -135,10 +135,6 @@ export interface AlertList {
   has_more: boolean;
 }
 
-export interface UnreadCount {
-  count: number;
-}
-
 export interface DigestResult {
   sent: boolean;
   alerts_count: number;

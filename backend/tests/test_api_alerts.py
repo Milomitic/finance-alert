@@ -70,11 +70,11 @@ def test_list_alerts_default_excludes_archived(client: TestClient, db: Session) 
     assert resp.json()["total"] == 1
 
 
-def test_patch_marks_read(client: TestClient, db: Session) -> None:
+def test_patch_archives(client: TestClient, db: Session) -> None:
     alerts = _seed_alerts(db, n=1)
-    resp = client.patch(f"/api/alerts/{alerts[0].id}", json={"read": True})
+    resp = client.patch(f"/api/alerts/{alerts[0].id}", json={"archived": True})
     assert resp.status_code == 200
-    assert resp.json()["read_at"] is not None
+    assert resp.json()["archived_at"] is not None
 
 
 def test_bulk_archive(client: TestClient, db: Session) -> None:
@@ -86,13 +86,6 @@ def test_bulk_archive(client: TestClient, db: Session) -> None:
     db.expire_all()
     for a in db.query(Alert).all():
         assert a.archived_at is not None
-
-
-def test_unread_count(client: TestClient, db: Session) -> None:
-    _seed_alerts(db, n=3)
-    resp = client.get("/api/alerts/unread-count")
-    assert resp.status_code == 200
-    assert resp.json()["count"] == 3
 
 
 def test_export_csv(client: TestClient, db: Session) -> None:

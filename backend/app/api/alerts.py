@@ -1,4 +1,4 @@
-"""Alerts API: list/patch/bulk/unread-count/export/scan/send-digest."""
+"""Alerts API: list/patch/bulk/export/scan/send-digest."""
 import csv
 import io
 from datetime import date
@@ -25,7 +25,6 @@ from app.schemas.alert import (
     ScanRequest,
     ScanStatusOut,
     ScanStopResult,
-    UnreadCountOut,
 )
 from app.schemas.confluence import ConfluenceOut
 from app.services import alert_service, confluence_service
@@ -337,7 +336,6 @@ def list_alerts(
     rule_kind: str | None = None,
     date_from: date | None = None,
     date_to: date | None = None,
-    read: bool | None = None,
     archived: bool | None = False,
     tone: str | None = None,
     confidence_min: float | None = None,
@@ -383,7 +381,6 @@ def list_alerts(
         rule_kind=rule_kind,
         date_from=date_from,
         date_to=date_to,
-        read=read,
         archived=archived,
         tone=tone,
         confidence_min=confidence_min,
@@ -412,13 +409,6 @@ def get_confluence(
     window = max(1, min(days, 30))
     clusters = confluence_service.compute_confluence(db, days=window)
     return [ConfluenceOut.model_validate(c) for c in clusters]
-
-
-@router.get("/unread-count", response_model=UnreadCountOut)
-def get_unread_count(
-    db: Session = Depends(get_db), _user: User = Depends(get_current_user)
-) -> UnreadCountOut:
-    return UnreadCountOut(count=alert_service.unread_count(db))
 
 
 # A scan is considered "stale" (worker likely dead) if no heartbeat for this
@@ -550,7 +540,6 @@ def export_csv(
     rule_kind: str | None = None,
     date_from: date | None = None,
     date_to: date | None = None,
-    read: bool | None = None,
     archived: bool | None = False,
     db: Session = Depends(get_db),
     _user: User = Depends(get_current_user),
@@ -561,7 +550,6 @@ def export_csv(
         rule_kind=rule_kind,
         date_from=date_from,
         date_to=date_to,
-        read=read,
         archived=archived,
         limit=10000,
         offset=0,
@@ -598,7 +586,7 @@ def patch(
     db: Session = Depends(get_db),
     _user: User = Depends(get_current_user),
 ) -> AlertOut:
-    a = alert_service.patch_alert(db, alert_id, read=payload.read, archived=payload.archived)
+    a = alert_service.patch_alert(db, alert_id, archived=payload.archived)
     if a is None:
         raise HTTPException(status_code=404, detail="Alert not found")
     # Resolve ticker + rule_kind for AlertOut
