@@ -31,6 +31,14 @@ N_FAILURES = 5
 WINDOW_SECONDS = 60.0
 # How long the breaker stays open before allowing a probe call.
 COOLDOWN_SECONDS = 5 * 60.0
+# How long a granted half-open probe may stay "in flight" before it's treated
+# as ABANDONED and a fresh probe is allowed. The half-open slot is meant for a
+# single caller that reports back (record_success/record_failure), but some
+# callers only READ is_open() to gate (probes' skip_yfinance, call_protected)
+# and never report — which would otherwise leak the slot and wedge the breaker
+# in half-open forever. A real probe (one yfinance call) resolves in well under
+# this window, so a slot older than it is provably abandoned. (Bug fix 2026-05.)
+HALF_OPEN_PROBE_TIMEOUT = 30.0
 
 
 @dataclass
@@ -38,6 +46,7 @@ class _State:
     failures: list[float] = field(default_factory=list)   # timestamps
     opened_at: float | None = None
     half_open_in_flight: bool = False
+    half_open_at: float | None = None   # when the current half-open probe was granted
 
 
 _state = _State()
@@ -54,12 +63,27 @@ def is_open() -> bool:
     with _lock:
         if _state.opened_at is None:
             return False
+        now = time.time()
         # Cooldown elapsed → allow a single probe (half-open).
-        if (time.time() - _state.opened_at) >= COOLDOWN_SECONDS:
+        if (now - _state.opened_at) >= COOLDOWN_SECONDS:
+            # A probe is "in flight" only if it was granted RECENTLY. If the
+            # granted caller never reported back within HALF_OPEN_PROBE_TIMEOUT
+            # (a leaked slot — e.g. a probe that only gated on is_open()), the
+            # slot is abandoned: grant a fresh probe so the breaker can recover
+            # instead of wedging in half-open forever.
+            if (
+                _state.half_open_in_flight
+                and _state.half_open_at is not None
+                and (now - _state.half_open_at) < HALF_OPEN_PROBE_TIMEOUT
+            ):
+                return True  # a recent probe is genuinely in flight — block others
             if _state.half_open_in_flight:
-                # Another probe is already being attempted — keep blocking others
-                return True
+                logger.warning(
+                    "[yf-breaker] half-open probe abandoned (no outcome in "
+                    f"{HALF_OPEN_PROBE_TIMEOUT}s) → granting a fresh probe"
+                )
             _state.half_open_in_flight = True
+            _state.half_open_at = now
             logger.info("[yf-breaker] cooldown elapsed → half-open probe allowed")
             return False
         return True
@@ -73,6 +97,7 @@ def record_success() -> None:
         _state.failures.clear()
         _state.opened_at = None
         _state.half_open_in_flight = False
+        _state.half_open_at = None
 
 
 def record_failure(reason: str = "") -> None:
@@ -82,6 +107,7 @@ def record_failure(reason: str = "") -> None:
         if _state.half_open_in_flight:
             # Half-open probe failed → re-open with a fresh cooldown
             _state.half_open_in_flight = False
+            _state.half_open_at = None
             _state.opened_at = now
             logger.warning(f"[yf-breaker] half-open probe failed ({reason}) → re-open for {COOLDOWN_SECONDS}s")
             return
@@ -160,3 +186,4 @@ def reset() -> None:
         _state.failures.clear()
         _state.opened_at = None
         _state.half_open_in_flight = False
+        _state.half_open_at = None

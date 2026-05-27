@@ -30,6 +30,31 @@ def test_record_success_helper_writes_to_metrics():
     assert by_key[("yfinance", "live_quote")].failure == 0
 
 
+def test_successful_yfinance_probe_recovers_breaker():
+    """A successful yfinance probe is live evidence the source is healthy, so a
+    manual 'Aggiorna' (or a scheduled probe) must CLOSE/recover the breaker —
+    not just update the panel counters. (Regression: it used to leave the
+    breaker stuck half-open even after a successful manual refresh.)"""
+    import time
+
+    for _ in range(yfinance_health.N_FAILURES):
+        yfinance_health.record_failure("x")
+    # Cooldown elapsed → the probe is the granted half-open probe.
+    yfinance_health._state.opened_at = time.time() - yfinance_health.COOLDOWN_SECONDS - 1
+    assert yfinance_health.is_open() is False
+    probes._record("yfinance", "live_quote", ok=True)
+    assert yfinance_health.status()["state"] == "closed"
+
+
+def test_non_yfinance_probe_success_does_not_touch_yf_breaker():
+    """A successful finnhub/fred/etc. probe must NOT close the yfinance breaker."""
+    for _ in range(yfinance_health.N_FAILURES):
+        yfinance_health.record_failure("x")
+    assert yfinance_health.is_open() is True
+    probes._record("finnhub", "news", ok=True)
+    assert yfinance_health.is_open() is True
+
+
 def test_record_failure_helper_writes_to_metrics():
     probes._record("marketaux", "news", ok=False, reason="HTTP 503")
     snap = data_source_metrics.snapshot()

@@ -45,6 +45,15 @@ def progress() -> dict:
 def _record(source: str, op: str, ok: bool, reason: str = "") -> None:
     if ok:
         data_source_metrics.record_success(source, op)
+        # A successful yfinance probe is live proof the source is healthy → feed
+        # the circuit breaker so a manual "Aggiorna" (or a scheduled probe)
+        # actively CLOSES/recovers it, not just the panel counters. During the
+        # OPEN cooldown the yfinance probes are skipped (skip_yfinance), so this
+        # only fires when the breaker is closed or half-open-granted — it never
+        # force-closes mid-cooldown.
+        if source == "yfinance":
+            from app.services import yfinance_health
+            yfinance_health.record_success()
     else:
         data_source_metrics.record_failure(source, op, reason=reason[:200])
 
