@@ -8,9 +8,11 @@ import {
   LayoutDashboard,
   LogOut,
   Menu,
+  Moon,
   PanelLeftClose,
   PanelLeftOpen,
   Settings,
+  Sun,
   X,
 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -22,6 +24,7 @@ import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { useLogout, useMe } from "@/hooks/useAuth";
+import { useTheme, type Theme } from "@/hooks/useTheme";
 import { cn } from "@/lib/utils";
 
 interface NavEntry {
@@ -122,11 +125,44 @@ function SidebarBrand() {
   );
 }
 
+/** Light/dark theme switch — lives at the bottom of the menu. Mirrors the
+ *  NavList row styling (same paddings + collapsed icon-only mode) so it reads
+ *  as part of the menu. Sun when dark (→ switch to light), Moon when light. */
+function ThemeToggleButton({
+  theme,
+  onToggle,
+  collapsed = false,
+}: {
+  theme: Theme;
+  onToggle: () => void;
+  collapsed?: boolean;
+}) {
+  const isDark = theme === "dark";
+  const Icon = isDark ? Sun : Moon;
+  const label = isDark ? "Tema chiaro" : "Tema scuro";
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      title={label}
+      aria-label={label}
+      className={cn(
+        "flex items-center rounded text-sm text-foreground hover:bg-accent transition-colors w-full",
+        collapsed ? "justify-center px-0 py-2.5" : "gap-2 px-3 py-2",
+      )}
+    >
+      <Icon className="h-4 w-4 shrink-0" />
+      {!collapsed && label}
+    </button>
+  );
+}
+
 export default function Layout() {
   const me = useMe();
   const logout = useLogout();
   const navigate = useNavigate();
   const location = useLocation();
+  const { theme, toggle: toggleTheme } = useTheme();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   // Desktop sidebar collapse (icon-rail). Persisted so the choice
   // survives reloads. Lazy init reads localStorage once; the effect
@@ -211,6 +247,15 @@ export default function Layout() {
         </div>
         <Separator />
         <NavList collapsed={sidebarCollapsed} />
+        {/* Theme switch pinned to the bottom of the rail (NavList is flex-1). */}
+        <Separator />
+        <div className="p-3">
+          <ThemeToggleButton
+            theme={theme}
+            onToggle={toggleTheme}
+            collapsed={sidebarCollapsed}
+          />
+        </div>
       </aside>
 
       {/* Mobile drawer: overlay + slide-in panel. Rendered only when
@@ -238,6 +283,10 @@ export default function Layout() {
             <Separator />
             <div className="flex-1 overflow-y-auto">
               <NavList onNavigate={() => setMobileNavOpen(false)} />
+            </div>
+            <Separator />
+            <div className="p-3">
+              <ThemeToggleButton theme={theme} onToggle={toggleTheme} />
             </div>
           </aside>
         </div>

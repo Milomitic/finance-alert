@@ -46,8 +46,8 @@ const MOOD_CONFIG: Record<MoodKey, {
   bullish: {
     label: "Bullish",
     icon: <TrendingUp className="h-9 w-9" />,
-    bg: "bg-gradient-to-br from-green-50 via-green-100 to-emerald-200 dark:from-green-950/40 dark:via-green-900/30 dark:to-emerald-900/30 border-green-300/60 dark:border-green-700/60",
-    fg: "text-green-800 dark:text-green-200",
+    bg: "bg-gradient-to-br from-green-50 via-green-100 to-emerald-100 dark:from-green-950/40 dark:via-green-900/30 dark:to-emerald-900/30 border-green-300/60 dark:border-green-700/60",
+    fg: "text-green-900 dark:text-green-100",
     ring: "shadow-[0_0_0_1px_rgba(34,197,94,0.15),0_8px_24px_-8px_rgba(34,197,94,0.25)]",
     dotBg: "bg-green-500",
     help: ACRONYM_HELP.MOOD_BULLISH,
@@ -89,14 +89,22 @@ function deriveMood(indices: IndexBreadth[]): RegionMood {
   const weightedPct = totalN > 0
     ? indices.reduce((s, i) => s + (i.pct_above_ema200 ?? 0) * i.n, 0) / totalN
     : 0;
+  // Medium-term breadth (EMA50), blended 50/50 with the long-term (EMA200)
+  // for the mood decision — mirrors the backend derive_mood blend. EMA50 is
+  // more responsive, so the mood reflects medium-term participation too, not
+  // just the slow 200. (pct_above_ema200 is still reported for the EMA200 label.)
+  const weightedPct50 = totalN > 0
+    ? indices.reduce((s, i) => s + (i.pct_above_ema50 ?? 0) * i.n, 0) / totalN
+    : 0;
+  const breadth = 0.5 * weightedPct + 0.5 * weightedPct50;
   const advancers = indices.reduce((s, i) => s + i.advancers, 0);
   const decliners = indices.reduce((s, i) => s + i.decliners, 0);
   const weightedChange = totalN > 0
     ? indices.reduce((s, i) => s + (i.avg_change_pct ?? 0) * i.n, 0) / totalN
     : 0;
   let mood: MoodKey = "neutral";
-  if (weightedPct >= 60 && advancers > decliners) mood = "bullish";
-  else if (weightedPct <= 40 && decliners > advancers) mood = "bearish";
+  if (breadth >= 60 && advancers > decliners) mood = "bullish";
+  else if (breadth <= 40 && decliners > advancers) mood = "bearish";
   return { mood, pct_above_ema200: weightedPct, advancers, decliners, avg_change: weightedChange, total_stocks: totalN };
 }
 

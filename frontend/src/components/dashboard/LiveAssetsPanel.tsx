@@ -88,14 +88,6 @@ const SYMBOL_ICON: Record<string, IconRender> = {
   "ETH-USD": { Component: EthereumIcon, color: "text-indigo-500 dark:text-indigo-400" },
 };
 
-/** Small label above each category group when the list is rendered with
- *  visual separators between sections. */
-const CATEGORY_LABEL: Record<LiveAsset["category"], string> = {
-  index: "Indici",
-  commodity: "Materie prime",
-  crypto: "Crypto",
-};
-
 function fmtPrice(v: number | null | undefined): string {
   if (v == null || !Number.isFinite(v)) return "—";
   // Crypto can be < $1 (small cap altcoins); commodities + indices are
@@ -251,15 +243,6 @@ function AssetRow({ asset }: { asset: LiveAsset }) {
   );
 }
 
-/** Subtle uppercase divider above each category section. Separated from
- *  the row component because both columns render multiple categories. */
-function CategoryHeader({ category }: { category: LiveAsset["category"] }) {
-  return (
-    <div className="shrink-0 px-1.5 pt-2 pb-1 text-[12px] uppercase tracking-[0.16em] text-muted-foreground/70 font-semibold">
-      {CATEGORY_LABEL[category]}
-    </div>
-  );
-}
 
 /* ─── Card ────────────────────────────────────────────────────────────── */
 
@@ -353,7 +336,10 @@ function Column({
           className="flex flex-col min-h-0"
           style={{ flexGrow: g.rows.length / totalRows, flexBasis: 0 }}
         >
-          <CategoryHeader category={g.category} />
+          {/* Category headers (INDICI / MATERIE PRIME / CRYPTO) removed per
+              user request — the rows reclaim that vertical space (taller rows).
+              The left column is all indices and the right column is
+              commodities + crypto, so the grouping still reads spatially. */}
           <ul className="flex flex-col flex-1 min-h-0">
             {g.rows.map((asset) => (
               <AssetRow key={asset.symbol} asset={asset} />
