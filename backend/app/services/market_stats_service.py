@@ -223,18 +223,34 @@ def compute_stock_metrics(
     )
 
 
-def derive_mood(pct_above_ema200: float, advancers: int, decliners: int) -> str:
-    """Bullish: pct_above_ema200 >= 60 AND advancers > decliners.
-    Bearish:  pct_above_ema200 <= 40 AND decliners > advancers.
+def derive_mood(
+    pct_above_ema200: float,
+    advancers: int,
+    decliners: int,
+    pct_above_ema50: float | None = None,
+) -> str:
+    """Bullish: breadth >= 60 AND advancers > decliners.
+    Bearish:  breadth <= 40 AND decliners > advancers.
     Otherwise neutral.
 
-    May 2026: arg renamed from `pct_above_sma200` to `pct_above_ema200`
-    when the moving-average lineage flipped from SMA to EMA. Semantics
-    identical — both measure "% of catalog trading above the 200-bar
-    moving average" as a breadth indicator."""
-    if pct_above_ema200 >= 60 and advancers > decliners:
+    `breadth` blends long-term (EMA200) and medium-term (EMA50) participation
+    when EMA50 is supplied: `0.5*ema200 + 0.5*ema50`. EMA50 is more responsive,
+    so a market where most names have reclaimed their 50-EMA but the slower 200
+    hasn't caught up still reads as warming up (and the reverse cools it) —
+    rather than the mood lagging entirely on the 200. When `pct_above_ema50` is
+    None the breadth is the EMA200 figure alone (back-compat for old callers).
+
+    May 2026: arg renamed from `pct_above_sma200` to `pct_above_ema200` when the
+    moving-average lineage flipped SMA→EMA. 2026-05 (later): added the EMA50
+    blend per user request to factor medium-term breadth into the mood."""
+    breadth = (
+        pct_above_ema200
+        if pct_above_ema50 is None
+        else 0.5 * pct_above_ema200 + 0.5 * pct_above_ema50
+    )
+    if breadth >= 60 and advancers > decliners:
         return "bullish"
-    if pct_above_ema200 <= 40 and decliners > advancers:
+    if breadth <= 40 and decliners > advancers:
         return "bearish"
     return "neutral"
 
@@ -276,7 +292,7 @@ def aggregate_global(metrics: list[StockMetrics]) -> dict:
     near_high = sum(1 for m in metrics if m.near_52w_high)
     near_low = sum(1 for m in metrics if m.near_52w_low)
 
-    mood = derive_mood(pct_above_ema200, advancers, decliners)
+    mood = derive_mood(pct_above_ema200, advancers, decliners, pct_above_ema50)
     return {
         "stocks_total": stocks_total,
         "stocks_with_data": len(full_data),
