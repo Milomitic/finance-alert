@@ -2,6 +2,7 @@ import { Bell } from "lucide-react";
 
 import type { Alert, AlertsByIndexPoint, TopStock } from "@/api/types";
 import { AlertsByIndexBars } from "@/components/dashboard/AlertsByIndexBars";
+import { ConfluenceRows } from "@/components/dashboard/ConfluenceCard";
 import { RecentAlertsFeed } from "@/components/dashboard/RecentAlertsFeed";
 import { TopStocksTable } from "@/components/dashboard/TopStocksTable";
 import { Card, CardContent } from "@/components/ui/card";
@@ -16,17 +17,18 @@ interface Props {
 }
 
 const COLUMNS: { key: string; label: string }[] = [
+  { key: "confluence", label: "Top confluenze" },
   { key: "top", label: "Top stocks" },
   { key: "feed", label: "Feed" },
   { key: "byindex", label: "Per indice" },
 ];
 
 /**
- * Was: a 3-tab card (Top stocks / Feed / Per indice). The user
- * preferred to see all three at once, so the tabs collapsed into
- * three side-by-side columns. The "Per indice" column shipped in
- * Fase 3E and now displays the real per-index alert breakdown
- * (count of alerts in the last 30 days per index, descending).
+ * Was: a 3-tab card (Top stocks / Feed / Per indice), then 3 side-by-side
+ * columns. 2026-05: absorbed the former standalone "Top confluenze" card as
+ * a FOURTH column on the left (4 equal columns → the original three each
+ * shrink proportionally to ~75% width). Each column is a flex-col with a
+ * fixed header and a scrollable body so the card height stays predictable.
  */
 export function AlertsCompactPanel({
   topStocks,
@@ -65,7 +67,7 @@ export function AlertsCompactPanel({
             flex-col with a fixed header and a scrollable body so the
             card height stays predictable (matches Top Picks beside it)
             even when Feed has many items. */}
-        <div className="flex-1 min-h-0 grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-border/40">
+        <div className="flex-1 min-h-0 grid grid-cols-1 md:grid-cols-4 divide-y md:divide-y-0 md:divide-x divide-border/40">
           {COLUMNS.map((col) => (
             <div key={col.key} className="flex flex-col min-h-0 min-w-0">
               <div className="shrink-0 px-3 py-1.5 text-[11.5px] uppercase tracking-[0.16em] font-bold text-muted-foreground border-b bg-muted/40">
@@ -73,9 +75,10 @@ export function AlertsCompactPanel({
               </div>
               {/* Mobile: natural flow capped at 55vh so a long Feed
                   doesn't run away — the page scrolls. md+: fixed-height
-                  pane with its own scroll (keeps the 3 columns aligned
+                  pane with its own scroll (keeps the 4 columns aligned
                   to the card height). */}
               <div className="max-h-[55vh] overflow-y-auto md:max-h-none md:flex-1 md:min-h-0">
+                {col.key === "confluence" && <ConfluenceRows />}
                 {col.key === "top" && <TopStocksTable data={topStocks} />}
                 {col.key === "feed" && <RecentAlertsFeed alerts={recentAlerts} />}
                 {col.key === "byindex" && <AlertsByIndexBars data={alertsByIndex} />}

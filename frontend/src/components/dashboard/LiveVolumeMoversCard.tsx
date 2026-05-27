@@ -146,7 +146,7 @@ export function LiveVolumeMoversCard({ movers, computedAt }: Props) {
             Nessun dato di volume per oggi.
           </div>
         ) : (
-          <ul className="flex-1 overflow-y-auto divide-y divide-border/40">
+          <ul className="divide-y divide-border/40">
             {rows.map((r) => {
               const live = liveByTicker.get(r.ticker);
               const displayPrice = live?.price ?? r.last_close ?? null;

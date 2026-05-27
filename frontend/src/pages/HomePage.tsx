@@ -8,7 +8,6 @@ import { LiveVolumeMoversCard } from "@/components/dashboard/LiveVolumeMoversCar
 import { MarketTickerTape } from "@/components/dashboard/MarketTickerTape";
 import { PremarketMoversCard } from "@/components/dashboard/PremarketMoversCard";
 import { AnalystActionsCard } from "@/components/dashboard/AnalystActionsCard";
-import { ConfluenceCard } from "@/components/dashboard/ConfluenceCard";
 import { ScanHeaderButton } from "@/components/dashboard/ScanHeaderButton";
 import { TopMoversCard } from "@/components/dashboard/TopMoversCard";
 import { TopPicksCard } from "@/components/dashboard/TopPicksCard";
@@ -235,22 +234,28 @@ export default function HomePage() {
       {/* Row 2 (prominent): Volumi maggiori + 52w-events promoted to the
           top-left pair, with TopMovers (+ pre-market when available) on the
           right. The breadth matrix moved DOWN to the row below. */}
+      {/* Spotlight row. No fixed height: each card flows to its (capped)
+          content and the grid's default `items-stretch` equalizes all
+          cards to the tallest one — so there are no internal scrollbars
+          and no card is taller than its content needs (snug uniform
+          height). See the cards' internals: their lists are natural-height
+          (no flex-1/overflow) precisely so this auto-equalization works. */}
       {hidePremarket ? (
-        <div className="grid gap-3 lg:grid-cols-[3fr_2fr] lg:h-[440px]">
-          <div className="grid gap-3 lg:grid-cols-[1fr_1fr] min-h-0">
-            <div className="h-[440px] lg:h-full min-h-0"><LiveVolumeMoversCard movers={m.movers} computedAt={m.computed_at} /></div>
-            <div className="h-[440px] lg:h-full min-h-0"><FiftyTwoWeekVolCard movers={m.movers} /></div>
+        <div className="grid gap-3 lg:grid-cols-[3fr_2fr] items-stretch">
+          <div className="grid gap-3 lg:grid-cols-[1fr_1fr]">
+            <div className="min-w-0"><LiveVolumeMoversCard movers={m.movers} computedAt={m.computed_at} /></div>
+            <div className="min-w-0"><FiftyTwoWeekVolCard movers={m.movers} /></div>
           </div>
-          <div className="h-[440px] lg:h-full min-h-0"><TopMoversCard movers={m.movers} computedAt={m.computed_at} /></div>
+          <div className="min-w-0"><TopMoversCard movers={m.movers} computedAt={m.computed_at} /></div>
         </div>
       ) : (
-        <div className="grid gap-3 lg:grid-cols-[3fr_2fr] lg:h-[440px]">
-          <div className="grid gap-3 lg:grid-cols-3 min-h-0">
-            <div className="h-[440px] lg:h-full min-h-0"><LiveVolumeMoversCard movers={m.movers} computedAt={m.computed_at} /></div>
-            <div className="h-[440px] lg:h-full min-h-0"><FiftyTwoWeekVolCard movers={m.movers} /></div>
-            <div className="h-[440px] lg:h-full min-h-0"><TopMoversCard movers={m.movers} computedAt={m.computed_at} /></div>
+        <div className="grid gap-3 lg:grid-cols-[3fr_2fr] items-stretch">
+          <div className="grid gap-3 lg:grid-cols-3">
+            <div className="min-w-0"><LiveVolumeMoversCard movers={m.movers} computedAt={m.computed_at} /></div>
+            <div className="min-w-0"><FiftyTwoWeekVolCard movers={m.movers} /></div>
+            <div className="min-w-0"><TopMoversCard movers={m.movers} computedAt={m.computed_at} /></div>
           </div>
-          <div className="h-[440px] lg:h-full min-h-0"><PremarketMoversCard /></div>
+          <div className="min-w-0"><PremarketMoversCard /></div>
         </div>
       )}
       {/* Lower row: breadth matrix (bottom-left, wide 2fr) + RSI + Sectors. */}
@@ -315,9 +320,6 @@ export default function HomePage() {
           />
         </div>
       )}
-      <div className="lg:h-[340px]">
-        <ConfluenceCard />
-      </div>
     </div>
   );
 }

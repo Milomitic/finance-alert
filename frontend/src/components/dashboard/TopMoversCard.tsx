@@ -47,7 +47,7 @@ interface WindowedMovers {
 // bounded superset captures ~all realistic intraday movers without
 // live-quoting the whole ~1100-name catalog.
 const MAX_LIVE_TICKERS = 120;
-const ROWS_PER_COL = 8;
+const ROWS_PER_COL = 9;
 
 // Exchanges that follow the US intraday-volume curve used by `projectVolRatio`.
 // Only these get the partial-day → end-of-day volume PROJECTION. A Hong Kong
@@ -413,20 +413,22 @@ export function TopMoversCard({ movers, computedAt }: Props) {
         </div>
 
         {/* Two columns side-by-side. `divide-x` paints a 1px vertical
-            border between them; each column flexes its rows
-            independently. */}
-        <div className="flex-1 min-h-0 grid grid-cols-2 divide-x divide-border/40">
+            border between them. Natural height (no flex-1/overflow): the
+            lists are capped at ROWS_PER_COL so they flow to content and the
+            card grows to fit — the dashboard grid then equalizes all three
+            spotlight cards to the tallest, with no internal scroll. */}
+        <div className="grid grid-cols-2 divide-x divide-border/40">
           {(["gainers", "losers"] as const).map((side) => {
             const list = side === "gainers" ? data.gainers : data.losers;
             return (
-              <div key={side} className="flex flex-col min-h-0 min-w-0">
+              <div key={side} className="flex flex-col min-w-0">
                 <ColumnHeader side={side} />
                 {list.length === 0 ? (
                   <div className="flex-1 flex items-center justify-center p-4 text-xs text-muted-foreground">
                     Nessun dato
                   </div>
                 ) : (
-                  <ul className="flex-1 overflow-y-auto">
+                  <ul>
                     {list.slice(0, ROWS_PER_COL).map((m) => (
                       <MoverRow
                         key={m.ticker}

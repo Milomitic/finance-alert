@@ -8,33 +8,31 @@ import { useConfluence } from "@/hooks/useAlerts";
 import { TONE_BG } from "@/lib/alertMeta";
 import { cn } from "@/lib/utils";
 
-/* Dashboard "Top confluenze": the strongest active multi-signal clusters
- * (>=2 detectors agreeing on one ticker). Compact, read-only — clicking a
- * row opens the stock page. Mirrors the confluence view on /alerts. */
-export function ConfluenceCard({ limit = 8 }: { limit?: number }) {
+/* Inner list of the strongest active multi-signal clusters (>=2 detectors
+ * agreeing on one ticker). Natural height (no internal scroll) so it can be
+ * dropped into any scroll container — standalone in ConfluenceCard, or as a
+ * column inside the Segnali panel. Read-only; clicking a row opens the
+ * stock page. */
+export function ConfluenceRows({ limit = 8 }: { limit?: number }) {
   const q = useConfluence(7, true);
   const items = (q.data ?? []).slice(0, limit);
+  if (q.isLoading) {
+    return (
+      <div className="px-3 py-6 text-center text-xs text-muted-foreground">
+        Caricamento…
+      </div>
+    );
+  }
+  if (items.length === 0) {
+    return (
+      <div className="px-4 py-6 text-center text-xs text-muted-foreground">
+        Nessuna confluenza attiva.
+      </div>
+    );
+  }
   return (
-    <Card className="h-full overflow-hidden flex flex-col">
-      <CardContent className="p-0 flex-1 min-h-0 flex flex-col">
-        <div className="shrink-0 px-3 py-2 border-b bg-muted/30">
-          <SectionTitle
-            icon={Layers}
-            label="Top confluenze"
-            right={<span className="text-xs text-muted-foreground">2+ segnali concordi</span>}
-          />
-        </div>
-        {q.isLoading ? (
-          <div className="flex-1 flex items-center justify-center text-xs text-muted-foreground">
-            Caricamento…
-          </div>
-        ) : items.length === 0 ? (
-          <div className="flex-1 flex items-center justify-center px-4 text-center text-xs text-muted-foreground">
-            Nessuna confluenza attiva.
-          </div>
-        ) : (
-          <ul className="flex-1 min-h-0 overflow-y-auto divide-y">
-            {items.map((c) => {
+    <ul className="divide-y">
+      {items.map((c) => {
               const DirIcon = c.direction === "bull" ? TrendingUp : TrendingDown;
               const tone = c.direction === "bull" ? TONE_BG.bullish : TONE_BG.bearish;
               const pct = Math.round(c.strength);
@@ -75,7 +73,26 @@ export function ConfluenceCard({ limit = 8 }: { limit?: number }) {
               );
             })}
           </ul>
-        )}
+  );
+}
+
+/* Standalone dashboard card wrapping ConfluenceRows in a Card + header with
+ * its own scroll. Kept for reuse; the dashboard now renders the rows as a
+ * column inside the Segnali panel (AlertsCompactPanel) instead. */
+export function ConfluenceCard({ limit = 8 }: { limit?: number }) {
+  return (
+    <Card className="h-full overflow-hidden flex flex-col">
+      <CardContent className="p-0 flex-1 min-h-0 flex flex-col">
+        <div className="shrink-0 px-3 py-2 border-b bg-muted/30">
+          <SectionTitle
+            icon={Layers}
+            label="Top confluenze"
+            right={<span className="text-xs text-muted-foreground">2+ segnali concordi</span>}
+          />
+        </div>
+        <div className="flex-1 min-h-0 overflow-y-auto">
+          <ConfluenceRows limit={limit} />
+        </div>
       </CardContent>
     </Card>
   );

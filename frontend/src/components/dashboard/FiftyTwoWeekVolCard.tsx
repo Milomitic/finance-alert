@@ -144,9 +144,9 @@ export function FiftyTwoWeekVolCard({ movers }: Props) {
           <SectionTitle icon={LineChart} label="52w & volume events" />
         </div>
 
-        <div className="flex-1 min-h-0 grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-border/40">
+        <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-border/40">
           {/* Column 1: 52w events */}
-          <div className="flex flex-col min-h-0 min-w-0">
+          <div className="flex flex-col min-w-0">
             <ColumnHeader
               label={`52w events · ${movers.new_52w_high.length} highs · ${movers.new_52w_low.length} lows`}
             />
@@ -155,7 +155,7 @@ export function FiftyTwoWeekVolCard({ movers }: Props) {
                 Nessun evento
               </div>
             ) : (
-              <ul className="flex-1 overflow-y-auto">
+              <ul>
                 {highs.map((m: Mover) => (
                   <SparkRow
                     key={`h-${m.ticker}`}
@@ -183,14 +183,14 @@ export function FiftyTwoWeekVolCard({ movers }: Props) {
           </div>
 
           {/* Column 2: Volume spikes */}
-          <div className="flex flex-col min-h-0 min-w-0">
+          <div className="flex flex-col min-w-0">
             <ColumnHeader label={`Volume spikes · ${movers.volume_spikes.length}`} />
             {spikes.length === 0 ? (
               <div className="flex-1 flex items-center justify-center p-4 text-xs text-muted-foreground">
                 Nessuno spike
               </div>
             ) : (
-              <ul className="flex-1 overflow-y-auto">
+              <ul>
                 {spikes.map((m: VolumeSpike) => {
                   const change = m.change_pct ?? 0;
                   const tone = change > 0 ? "pos" : change < 0 ? "neg" : "neutral";
