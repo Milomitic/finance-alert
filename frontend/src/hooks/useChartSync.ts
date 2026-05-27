@@ -3,6 +3,8 @@ import type {
   IChartApi, ISeriesApi, LogicalRange, MouseEventParams, SeriesType,
 } from "lightweight-charts";
 
+import { clampLogicalRange } from "@/lib/chartClamp";
+
 /* ─── useChartSync — keep multiple lightweight-charts panes in lockstep ──────
  *
  * Each chart registers itself once (optionally with a representative
@@ -44,9 +46,16 @@ export type RegisterChart = (
   chart: IChartApi,
   /** Representative series of this pane (candles / RSI line / MACD line).
    *  Required for crosshair sync — it's the series we read the hovered
-   *  value from AND the target series `setCrosshairPosition` anchors to. */
-  opts?: { series?: ISeriesApi<SeriesType> },
+   *  value from AND the target series `setCrosshairPosition` anchors to.
+   *  `getBarCount` (read live) lets the sync clamp pan/zoom to this pane's
+   *  own data extent — see the pan-clamp note below. */
+  opts?: { series?: ISeriesApi<SeriesType>; getBarCount?: () => number },
 ) => () => void;
+
+interface ChartEntry {
+  series?: ISeriesApi<SeriesType>;
+  getBarCount?: () => number;
+}
 
 /** Two ranges are "the same" when their endpoints differ by less than
  *  1/100 of a bar. Strict equality fails because lightweight-charts'
@@ -59,7 +68,7 @@ function rangeEqual(a: LogicalRange, b: LogicalRange): boolean {
 const ECHO_GUARD_MS = 50;
 
 export function useChartSync(): RegisterChart {
-  const charts = useRef<Map<IChartApi, ISeriesApi<SeriesType> | undefined>>(new Map());
+  const charts = useRef<Map<IChartApi, ChartEntry>>(new Map());
   // Currently-propagating chart, if any. Echoes from other charts that
   // arrive during the propagation window are ignored — they're either
   // lightweight-charts' own dispatch of the value we just set, or a
@@ -71,8 +80,8 @@ export function useChartSync(): RegisterChart {
   const chOriginator = useRef<IChartApi | null>(null);
   const chGuardTimer = useRef<number | null>(null);
 
-  return useCallback((chart: IChartApi, opts?: { series?: ISeriesApi<SeriesType> }) => {
-    charts.current.set(chart, opts?.series);
+  return useCallback((chart: IChartApi, opts?: { series?: ISeriesApi<SeriesType>; getBarCount?: () => number }) => {
+    charts.current.set(chart, { series: opts?.series, getBarCount: opts?.getBarCount });
 
     // ── 1. Time-scale (pan/zoom) sync ──────────────────────────────────
     const handler = (range: LogicalRange | null) => {
@@ -87,12 +96,36 @@ export function useChartSync(): RegisterChart {
         window.clearTimeout(guardTimer.current);
       }
 
-      charts.current.forEach((_series, other) => {
+      // Pan/zoom clamp lives HERE, not per-chart. Clamp the originating pane
+      // to its own bounds, then propagate a copy clamped to EACH target's own
+      // bounds. Both happen inside this guarded cycle, so the
+      // setVisibleLogicalRange calls re-enter as echoes (originator === chart
+      // for the self-clamp, !== chart for targets) and never spawn a second
+      // propagation — eliminating the per-frame clamp feedback ("shuttering")
+      // that three independent per-chart clamps produced with their differing
+      // (warm-up-trimmed) bar counts.
+      const selfN = charts.current.get(chart)?.getBarCount?.() ?? 0;
+      const selfClamped = clampLogicalRange(range.from, range.to, selfN);
+      let effective: { from: number; to: number } = range;
+      if (selfClamped) {
+        effective = selfClamped;
+        if (!rangeEqual(selfClamped as LogicalRange, range)) {
+          try {
+            chart.timeScale().setVisibleLogicalRange(selfClamped as unknown as LogicalRange);
+          } catch {
+            // dead chart during teardown — ignore.
+          }
+        }
+      }
+
+      charts.current.forEach((entry, other) => {
         if (other === chart) return;
+        const n = entry.getBarCount?.() ?? 0;
+        const tgt = clampLogicalRange(effective.from, effective.to, n) ?? effective;
         try {
           const cur = other.timeScale().getVisibleLogicalRange();
-          if (cur && rangeEqual(cur, range)) return;
-          other.timeScale().setVisibleLogicalRange(range);
+          if (cur && rangeEqual(cur, tgt as LogicalRange)) return;
+          other.timeScale().setVisibleLogicalRange(tgt as unknown as LogicalRange);
         } catch {
           // Defensive: chart was removed during a tear-down race;
           // lightweight-charts throws on dead instances. The registry
@@ -124,7 +157,7 @@ export function useChartSync(): RegisterChart {
       // histogram series expose value. Missing → fall back to 0 (the
       // vertical line still lands at the right time, the horizontal one
       // just sits at the bottom).
-      const selfSeries = charts.current.get(chart);
+      const selfSeries = charts.current.get(chart)?.series;
       const srcData = selfSeries ? param.seriesData.get(selfSeries) : undefined;
       let price = 0;
       if (srcData) {
@@ -132,7 +165,8 @@ export function useChartSync(): RegisterChart {
         else if ("close" in srcData && typeof srcData.close === "number") price = srcData.close;
       }
 
-      charts.current.forEach((series, other) => {
+      charts.current.forEach((entry, other) => {
+        const series = entry.series;
         if (other === chart || !series) return;
         try {
           if (param.time != null) other.setCrosshairPosition(price, param.time, series);

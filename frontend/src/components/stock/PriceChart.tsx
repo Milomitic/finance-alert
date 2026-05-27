@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 import type { IndicatorPoint, IndicatorSeries, OhlcvBar, PriceAlert } from "@/api/types";
 import type { IndicatorStyle } from "@/components/stock/IndicatorToggles";
 import type { RegisterChart } from "@/hooks/useChartSync";
-import { EDGE_MARGIN_BARS, installRangeClamp } from "@/lib/chartClamp";
+import { EDGE_MARGIN_BARS } from "@/lib/chartClamp";
 import { defaultVisibleBars } from "@/lib/timeframeZoom";
 
 interface Props {
@@ -315,25 +315,21 @@ export function PriceChart({
     };
     chart.subscribeCrosshairMove(crosshairHandler);
 
-    // Pan/zoom bounds — clamp the visible range to [-margin, lastBar+margin]
-    // so the user can't scroll/zoom into the void beyond the data. Shared with
-    // the RSI/MACD panels (lib/chartClamp) so all three panes stop at their own
-    // edge together; without it the sync would push the price chart's raw
-    // (pre-clamp) range onto the sub-panels and they'd overshoot.
-    const detachClamp = installRangeClamp(chart, () => ohlcvRef.current.length);
-
     // Register with the chart-sync orchestrator so pan/zoom AND the
-    // crosshair propagate to the RSI / MACD sub-panels. Passing the
-    // candle series lets the sync read the hovered price and anchor the
-    // shared vertical line on the other panes. The cleanup the registrar
-    // returns is called on unmount to detach the listeners cleanly.
-    const unregister = onReady?.(chart, { series: candleRef.current ?? undefined });
+    // crosshair propagate to the RSI / MACD sub-panels. Passing the candle
+    // series lets the sync read the hovered price; passing `getBarCount` lets
+    // the sync CLAMP pan/zoom to this pane's data extent (the clamp lives in
+    // the sync, not per-chart, to avoid the inter-pane feedback judder — see
+    // useChartSync). The returned cleanup detaches the listeners on unmount.
+    const unregister = onReady?.(chart, {
+      series: candleRef.current ?? undefined,
+      getBarCount: () => ohlcvRef.current.length,
+    });
 
     return () => {
       unregister?.();
       chart.unsubscribeClick(clickHandler);
       chart.unsubscribeCrosshairMove(crosshairHandler);
-      detachClamp();
       chart.remove();
       chartRef.current = null;
       candleRef.current = null;

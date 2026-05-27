@@ -6,7 +6,6 @@ import {
 
 import type { IndicatorPoint } from "@/api/types";
 import type { RegisterChart } from "@/hooks/useChartSync";
-import { installRangeClamp } from "@/lib/chartClamp";
 
 interface Props {
   line: IndicatorPoint[];
@@ -74,14 +73,14 @@ export function MacdPanel({ line, signal, hist, color = "#ef4444", width = 2, on
       lineStyle: 2,
       axisLabelVisible: false,
     });
-    // Pan/zoom clamp — same bound as the price chart so this panel stops at
-    // its margins instead of overshooting when the synced price chart is
-    // dragged past the edge. Reads its own (warm-up-trimmed) bar count.
-    const detachClamp = installRangeClamp(chart, () => nBarsRef.current);
-
-    const unregister = onReady?.(chart, { series: lineRef.current ?? undefined });
+    // `getBarCount` lets the sync clamp pan/zoom to THIS panel's own
+    // (warm-up-trimmed) extent — clamping is centralized in useChartSync to
+    // avoid the inter-pane feedback judder.
+    const unregister = onReady?.(chart, {
+      series: lineRef.current ?? undefined,
+      getBarCount: () => nBarsRef.current,
+    });
     return () => {
-      detachClamp();
       unregister?.();
       chart.remove();
       chartRef.current = null;
