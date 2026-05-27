@@ -2,7 +2,6 @@ import { Gauge, Layers, Network, Swords, TrendingDown, TrendingUp } from "lucide
 import { Link } from "react-router-dom";
 
 import type { Confluence } from "@/api/alerts";
-import { StockIdentity } from "@/components/dashboard/StockIdentity";
 import { StockLogo } from "@/components/dashboard/StockLogo";
 import { Card, CardContent } from "@/components/ui/card";
 import { SectionTitle } from "@/components/ui/section-title";
@@ -21,6 +20,28 @@ import { cn } from "@/lib/utils";
 
 const HZ_LABEL: Record<string, string> = { short: "Breve", medium: "Medio", long: "Lungo" };
 const HZ_ORDER = ["short", "medium", "long"] as const;
+
+/** Compact per-horizon letter chip (B/M/L) for the Top-10 Orizzonte column.
+ *  Plain string-literal classes so Tailwind's purger keeps them. */
+const HZ_CHIP: Record<string, { letter: string; label: string; cls: string }> = {
+  short:  { letter: "B", label: "Breve", cls: "bg-violet-100 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300" },
+  medium: { letter: "M", label: "Medio", cls: "bg-sky-100 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300" },
+  long:   { letter: "L", label: "Lungo", cls: "bg-teal-100 text-teal-700 dark:bg-teal-950/50 dark:text-teal-300" },
+};
+
+function HorizonChips({ horizons }: { horizons: string[] }) {
+  const ordered = HZ_ORDER.filter((h) => horizons.includes(h));
+  if (ordered.length === 0) return <span className="text-muted-foreground/50">—</span>;
+  return (
+    <div className="flex gap-0.5">
+      {ordered.map((h) => (
+        <span key={h} className={cn("px-1 rounded text-[10px] font-bold leading-tight", HZ_CHIP[h].cls)} title={HZ_CHIP[h].label}>
+          {HZ_CHIP[h].letter}
+        </span>
+      ))}
+    </div>
+  );
+}
 
 function DirPill({ direction, className }: { direction: string; className?: string }) {
   const bull = direction === "bull";
@@ -54,24 +75,63 @@ function StrengthBar({ value, bull, width = "w-16" }: { value: number; bull: boo
   );
 }
 
+/** Column header for the Top-10 table — fixed widths match TopRow's cells so
+ *  the columns line up (the Titolo cell is flex-1 in both). */
+function TopHeader() {
+  return (
+    <div className="flex items-center gap-2 px-2 pb-1.5 mb-1 border-b border-border/40 text-[10px] uppercase tracking-wider text-muted-foreground/70 font-semibold">
+      <span className="w-4 shrink-0" />
+      <span className="flex-1 min-w-0">Titolo</span>
+      <span className="w-[4.25rem] shrink-0">Tono</span>
+      <span className="w-12 shrink-0" title="Orizzonti coinvolti">Orizz.</span>
+      <span className="w-8 shrink-0 text-right" title="Confidenza del segnale più forte del cluster">Conf</span>
+      <span className="w-8 shrink-0 text-right" title="Numero di segnali concordi">Seg</span>
+      <span className="w-[5.25rem] shrink-0 text-right">Forza</span>
+    </div>
+  );
+}
+
 function TopRow({ c, rank }: { c: Confluence; rank: number }) {
   const pct = Math.round(c.strength);
   const bull = c.direction === "bull";
+  const maxConf = c.components[0]?.confidence != null ? Math.round(c.components[0].confidence) : null;
   return (
     <li>
       <Link
         to={`/stocks/${encodeURIComponent(c.ticker)}`}
         className="flex items-center gap-2 px-2 py-1 rounded-md hover:bg-accent/50 transition-colors min-w-0"
-        title={`${c.name ?? c.ticker} · forza ${pct} · ${c.n_signals} segnali${c.multi_horizon ? " · multi-orizzonte" : ""}${c.contested ? " · conteso" : ""}`}
+        title={`${c.name ?? c.ticker} · forza ${pct} · conf ${maxConf ?? "—"} · ${c.n_signals} segnali${c.multi_horizon ? " · multi-orizzonte" : ""}${c.contested ? " · conteso" : ""}`}
       >
-        <span className="w-4 shrink-0 text-right text-[11px] font-mono tabular-nums text-muted-foreground/60">{rank}</span>
-        <StockIdentity ticker={c.ticker} name={c.name} />
-        <DirPill direction={c.direction} />
-        {c.multi_horizon && <Layers className="h-3 w-3 shrink-0 text-indigo-500" aria-label="Multi-orizzonte" />}
-        {c.contested && <Swords className="h-3 w-3 shrink-0 text-amber-500" aria-label="Conteso" />}
-        <span className="text-[10px] text-muted-foreground/80 shrink-0 tabular-nums">{c.n_signals} seg.</span>
-        <StrengthBar value={pct} bull={bull} />
-        <span className="text-xs font-semibold tabular-nums w-7 text-right shrink-0">{pct}</span>
+        <span className="w-4 shrink-0 text-right text-xs font-mono tabular-nums text-muted-foreground/60">{rank}</span>
+        {/* Titolo — logo + ticker + name in ONE flex-1 cell so the meta columns
+            align with the header. */}
+        <div className="flex-1 min-w-0 flex items-center gap-2">
+          <StockLogo ticker={c.ticker} size="xs" />
+          <div className="min-w-0">
+            <div className="text-sm font-bold tabular-nums leading-tight">{c.ticker}</div>
+            {c.name && (
+              <div className="text-[11px] text-muted-foreground truncate leading-tight" title={c.name}>{c.name}</div>
+            )}
+          </div>
+        </div>
+        {/* Tono (+ contested flag) */}
+        <div className="w-[4.25rem] shrink-0 flex items-center gap-1">
+          <DirPill direction={c.direction} />
+          {c.contested && <Swords className="h-3 w-3 shrink-0 text-amber-500" aria-label="Conteso" />}
+        </div>
+        {/* Orizzonte span */}
+        <div className="w-12 shrink-0"><HorizonChips horizons={c.horizons} /></div>
+        {/* Confidenza max (strongest component) */}
+        <span className="w-8 shrink-0 text-right text-xs font-semibold tabular-nums text-muted-foreground">
+          {maxConf ?? "—"}
+        </span>
+        {/* Segnali */}
+        <span className="w-8 shrink-0 text-right text-[11px] text-muted-foreground/80 tabular-nums">{c.n_signals}</span>
+        {/* Forza (bar + value) */}
+        <div className="w-[5.25rem] shrink-0 flex items-center justify-end gap-1.5">
+          <StrengthBar value={pct} bull={bull} width="w-12" />
+          <span className="text-sm font-semibold tabular-nums w-7 text-right">{pct}</span>
+        </div>
       </Link>
     </li>
   );
@@ -83,7 +143,7 @@ function ExtremeCell({ label, c }: { label: string; c: Confluence | undefined })
   if (!c) {
     return (
       <div className="flex items-center gap-2 rounded-lg border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-        <span className="uppercase tracking-wider text-[10px]">{label}</span>
+        <span className="uppercase tracking-wider text-[11px]">{label}</span>
         <span className="ml-auto">—</span>
       </div>
     );
@@ -95,10 +155,10 @@ function ExtremeCell({ label, c }: { label: string; c: Confluence | undefined })
       className="flex items-center gap-2 rounded-lg border bg-muted/30 px-3 py-2 hover:bg-accent/40 transition-colors min-w-0"
       title={`${c.ticker} · forza ${Math.round(c.strength)} · ${c.n_signals} segnali`}
     >
-      <span className="uppercase tracking-wider text-[10px] text-muted-foreground shrink-0">{label}</span>
+      <span className="uppercase tracking-wider text-[11px] text-muted-foreground shrink-0">{label}</span>
       <StockLogo ticker={c.ticker} size="xs" />
       <span className="font-bold text-sm shrink-0">{c.ticker}</span>
-      {c.name && <span className="text-[10px] text-muted-foreground truncate min-w-0">{c.name}</span>}
+      {c.name && <span className="text-[11px] text-muted-foreground truncate min-w-0">{c.name}</span>}
       <DirPill direction={c.direction} className="ml-auto" />
       <span className={cn("font-bold tabular-nums shrink-0", bull ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400")}>
         {Math.round(c.strength)}
@@ -115,18 +175,18 @@ function StatCell({ icon: Icon, label, value, tone }: {
 }) {
   return (
     <div className="rounded-lg border bg-muted/30 px-2.5 py-2">
-      <div className="flex items-center gap-1 text-[9.5px] uppercase tracking-wider text-muted-foreground/80">
-        <Icon className="h-3 w-3" />
+      <div className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-muted-foreground/80">
+        <Icon className="h-3.5 w-3.5" />
         <span className="truncate">{label}</span>
       </div>
-      <div className={cn("text-lg font-bold tabular-nums leading-tight mt-0.5", tone)}>{value}</div>
+      <div className={cn("text-xl font-bold tabular-nums leading-tight mt-0.5", tone)}>{value}</div>
     </div>
   );
 }
 
 function SubHeader({ children }: { children: React.ReactNode }) {
   return (
-    <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold mb-1.5 flex items-center gap-2">
+    <div className="text-xs uppercase tracking-wider text-muted-foreground font-semibold mb-1.5 flex items-center gap-2">
       <span className="shrink-0">{children}</span>
       <span className="h-px flex-1 bg-border/60" />
     </div>
@@ -142,8 +202,8 @@ function HorizonMix({ clusters }: { clusters: Confluence[] }) {
   return (
     <div className="space-y-1.5">
       {HZ_ORDER.map((h) => (
-        <div key={h} className="flex items-center gap-2 text-xs">
-          <span className="w-12 shrink-0 text-muted-foreground">{HZ_LABEL[h]}</span>
+        <div key={h} className="flex items-center gap-2 text-[13px]">
+          <span className="w-14 shrink-0 text-muted-foreground">{HZ_LABEL[h]}</span>
           <div className="flex-1 h-2 rounded-full bg-muted/70 overflow-hidden">
             <div className="h-full rounded-full bg-indigo-400 dark:bg-indigo-500" style={{ width: `${(counts[h] / max) * 100}%` }} />
           </div>
@@ -169,7 +229,7 @@ function DetectorMix({ clusters }: { clusters: Confluence[] }) {
         const meta = getAlertKindMeta(kind);
         const Icon = meta.icon;
         return (
-          <div key={kind} className="flex items-center gap-2 text-xs">
+          <div key={kind} className="flex items-center gap-2 text-[13px]">
             <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
             <span className="w-28 shrink-0 truncate" title={meta.label}>{meta.label}</span>
             <div className="flex-1 h-2 rounded-full bg-muted/70 overflow-hidden">
@@ -219,6 +279,7 @@ export function AlertsInsightCard({ clusters, loading }: { clusters: Confluence[
               {/* Col 1 — Top 10 by strength (logo + ticker + name) */}
               <div className="min-w-0">
                 <SubHeader>Top 10 per forza</SubHeader>
+                <TopHeader />
                 <ul className="space-y-0.5">
                   {top10.map((c, i) => (
                     <TopRow key={`${c.ticker}-${c.direction}`} c={c} rank={i + 1} />
@@ -230,9 +291,20 @@ export function AlertsInsightCard({ clusters, loading }: { clusters: Confluence[
               <div className="min-w-0 md:border-l md:border-border/50 md:pl-7 space-y-4">
                 <div>
                   <SubHeader>Posizionamento</SubHeader>
-                  <div className="flex items-center justify-between text-xs mb-1">
-                    <span className="font-semibold text-emerald-600 dark:text-emerald-400">{nBull} long · {bullPct}%</span>
-                    <span className="font-semibold text-rose-600 dark:text-rose-400">{100 - bullPct}% · {nBear} short</span>
+                  {/* Each label spans (and centers over) its own bar segment. */}
+                  <div className="flex text-[13px] mb-1">
+                    <span
+                      className="text-center font-semibold text-emerald-600 dark:text-emerald-400 whitespace-nowrap"
+                      style={{ width: `${bullPct}%` }}
+                    >
+                      {nBull} long · {bullPct}%
+                    </span>
+                    <span
+                      className="text-center font-semibold text-rose-600 dark:text-rose-400 whitespace-nowrap"
+                      style={{ width: `${100 - bullPct}%` }}
+                    >
+                      {100 - bullPct}% · {nBear} short
+                    </span>
                   </div>
                   <div className="flex h-2.5 rounded-full overflow-hidden bg-muted">
                     <div className="bg-emerald-500" style={{ width: `${bullPct}%` }} />
