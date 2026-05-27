@@ -79,6 +79,21 @@ def test_strength_never_reaches_100(db):
     assert c.n_signals == 3
 
 
+def test_legacy_confidence_100_is_capped_at_ceiling(db):
+    """A legacy snapshot storing confidence=100 (predating the score() reshape)
+    must NOT leak a strength above the confluence ceiling. Before the cap, base
+    = max(100) and the bonus term could push strength to 99 (n=2) or leave it at
+    100 (n=1 prevailing); now base is clamped to CEIL first."""
+    s = _stock(db, "EE3")
+    _add(db, s.id, "trend_pullback", 100, "bull")   # legacy perfect score
+    _add(db, s.id, "squeeze_expansion", 95, "bull")
+    db.commit()
+    c = compute_confluence(db, days=30)[0]
+    # base = min(100, 98) = 98; n=2 → 98 + (98-98)*... = 98 (pinned at ceiling)
+    assert c.strength == 98.0
+    assert c.strength < 100.0
+
+
 def test_strength_grows_with_confluence_below_ceiling(db):
     """More concurring signals push strength UP toward (never past) the ceiling."""
     s2 = _stock(db, "EE2")

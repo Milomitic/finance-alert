@@ -74,7 +74,11 @@ class ConfluenceCluster:
 def _dir_strength(confs: list[float]) -> float:
     if not confs:
         return 0.0
-    base = max(confs)
+    # Cap the base at the ceiling so legacy snapshots that stored a raw
+    # confidence of 100 (predating the score() reshape) can't leak a perfect
+    # strength through the n=1 path, where the bonus term below is exactly 0
+    # and the function would otherwise return `max(confs)` unchanged.
+    base = min(max(confs), _CONFLUENCE_CEIL)
     n = len(confs)
     # Diminishing-returns bonus toward a reserved ceiling (never reaches 100).
     return base + (_CONFLUENCE_CEIL - base) * (1.0 - _CONFLUENCE_DECAY ** (n - 1))
