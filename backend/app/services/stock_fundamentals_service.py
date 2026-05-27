@@ -7,6 +7,7 @@ Ticker.insider_transactions). Bundling them into one fetch + 24h TTL cache
 amortises the cost across every UI subview that needs any of these fields.
 """
 import math
+import random
 import time
 from dataclasses import dataclass, field
 from threading import Lock
@@ -1421,6 +1422,38 @@ def _yf_fetch_with_retry(ticker: str) -> dict:
 
 # ── fetch orchestration ───────────────────────────────────────────────────────
 
+# Min-interval throttle on REAL upstream fetches (rate-limit insurance).
+#
+# Rationale: `score_service.recompute_all` iterates ~1049 stocks and, on a
+# cold/expired fundamentals cache, can fire thousands of sequential yfinance
+# sub-requests back-to-back with no spacing — the single biggest source of
+# 429/ban risk in the app (see the data-source audit). Throttling HERE (the
+# fresh-fetch choke point, reached only on an L1+L2 cache MISS) rather than in
+# the recompute loop means:
+#   - warm-cache runs pay ZERO (cache hits never enter this function), so the
+#     normal post-scan recompute + the manual "Ricalcola score" stay fast;
+#   - EVERY caller is protected (detail page, sector pre-pass, scoring loop…),
+#     not just one loop;
+#   - an ISOLATED fetch after idle doesn't wait at all — only back-to-back
+#     bursts get spaced to >= _MIN_FETCH_INTERVAL apart.
+_MIN_FETCH_INTERVAL = 0.15  # seconds between consecutive upstream fetches
+_FETCH_GATE_LOCK = Lock()
+_last_fetch_monotonic = 0.0
+
+
+def _throttle_upstream_fetch() -> None:
+    """Block until >= _MIN_FETCH_INTERVAL (plus small jitter) has elapsed since
+    the previous upstream fetch, so a tight loop can't burst Yahoo. No-op for
+    isolated calls (idle longer than the interval)."""
+    global _last_fetch_monotonic
+    with _FETCH_GATE_LOCK:
+        now = time.monotonic()
+        wait = _MIN_FETCH_INTERVAL - (now - _last_fetch_monotonic)
+        if wait > 0:
+            # Jitter avoids a lock-step cadence that some WAFs flag as botlike.
+            time.sleep(wait + random.uniform(0.0, 0.05))
+        _last_fetch_monotonic = time.monotonic()
+
 
 def _fetch_fresh(ticker: str) -> Fundamentals:
     from app.services import yfinance_health
@@ -1431,6 +1464,9 @@ def _fetch_fresh(ticker: str) -> Fundamentals:
         f.error = "yfinance circuit breaker is open (rate-limited); try again later"
         logger.info(f"[fundamentals] breaker OPEN — returning empty payload for {ticker}")
         return f
+
+    # Space out real upstream fetches (cache miss only — see _throttle docstring).
+    _throttle_upstream_fetch()
 
     saw_success = False
     def _maybe_record(exc: Exception | None) -> None:
