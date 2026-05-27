@@ -33,9 +33,17 @@ const ALERTS_COLS = [
   { id: "catena",      label: "Catena" },
   { id: "natura",      label: "Natura" },
   { id: "tono",        label: "Tono" },
+  { id: "orizzonte",   label: "Orizzonte" },
   { id: "confidenza",  label: "Confidenza" },
-  { id: "prezzo",      label: "Prezzo" },
 ] as const;
+
+/** Horizon label + tone classes (plain string-literal Record so Tailwind's
+ *  purger keeps the classes — see CLAUDE.md tone-class rule). */
+const HORIZON_META: Record<string, { label: string; cls: string }> = {
+  short:  { label: "Breve", cls: "bg-violet-100 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300" },
+  medium: { label: "Medio", cls: "bg-sky-100 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300" },
+  long:   { label: "Lungo", cls: "bg-teal-100 text-teal-700 dark:bg-teal-950/50 dark:text-teal-300" },
+};
 
 interface Props {
   alerts: Alert[];
@@ -157,13 +165,13 @@ export function AlertsTable({
   const showCatena = !embedded && isVisible("catena");
   const showNatura = !embedded && isVisible("natura");
   const showTono = embedded || isVisible("tono");
+  const showOrizzonte = embedded || isVisible("orizzonte");
   const showConfidenza = embedded || isVisible("confidenza");
-  const showPrezzo = embedded || isVisible("prezzo");
 
   // colSpan for the empty-state row must match the visible column count.
   const colSpan = [
     showCheckbox, showDataSegnale, showRilevato, showTitolo, showRegola,
-    showCatena, showNatura, showTono, showConfidenza, showPrezzo,
+    showCatena, showNatura, showTono, showOrizzonte, showConfidenza,
   ].filter(Boolean).length;
 
   // Per user spec: header cells at 1rem (text-base), body rows at
@@ -217,13 +225,13 @@ export function AlertsTable({
               <SortableHeader
                 column="triggered_at"
                 label="Rilevato"
-                title="Quando il sistema ha registrato l'alert"
+                title="Quando il sistema ha registrato il segnale"
                 sortBy={sortBy}
                 sortDir={sortDir}
                 onSort={onSort}
               />
             ) : (
-              <TableHead className="text-base" title="Quando il sistema ha registrato l'alert">
+              <TableHead className="text-base" title="Quando il sistema ha registrato il segnale">
                 Rilevato
               </TableHead>
             )
@@ -284,8 +292,13 @@ export function AlertsTable({
             </TableHead>
           )}
           {showTono && (
-            <TableHead className="text-base" title="Direzione semantica dell'alert (rialzista / ribassista / neutra)">
+            <TableHead className="text-base" title="Direzione semantica del segnale (rialzista / ribassista / neutra)">
               Tono
+            </TableHead>
+          )}
+          {showOrizzonte && (
+            <TableHead className="text-base" title="Orizzonte temporale del segnale (breve / medio / lungo)">
+              Orizzonte
             </TableHead>
           )}
           {showConfidenza && (
@@ -304,20 +317,6 @@ export function AlertsTable({
               </TableHead>
             )
           )}
-          {showPrezzo && (
-            !embedded && onSort ? (
-              <SortableHeader
-                column="trigger_price"
-                label="Prezzo"
-                align="right"
-                sortBy={sortBy}
-                sortDir={sortDir}
-                onSort={onSort}
-              />
-            ) : (
-              <TableHead className="text-base text-right">Prezzo</TableHead>
-            )
-          )}
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -329,7 +328,7 @@ export function AlertsTable({
             >
               {q.trim()
                 ? `Nessun risultato per "${q}".`
-                : "Nessun alert con questi filtri."}
+                : "Nessun segnale con questi filtri."}
             </TableCell>
           </TableRow>
         )}
@@ -351,7 +350,7 @@ export function AlertsTable({
                 ) : (
                   <span
                     className="text-muted-foreground italic font-normal"
-                    title="Alert legacy creato prima dell'introduzione della data segnale"
+                    title="Segnale legacy creato prima dell'introduzione della data segnale"
                   >
                     —
                   </span>
@@ -444,7 +443,23 @@ export function AlertsTable({
                 <AlertToneCell alert={a} />
               </TableCell>
             )}
-            {/* Confidenza — left of Prezzo. Signal alerts carry confidence
+            {/* Orizzonte — temporal horizon of the signal (breve/medio/lungo),
+                from snapshot.horizon. Non-signal / legacy rows show an em dash. */}
+            {showOrizzonte && (
+              <TableCell>
+                {(() => {
+                  const hz = (a.snapshot as Record<string, unknown> | undefined)?.horizon;
+                  const meta = typeof hz === "string" ? HORIZON_META[hz] : undefined;
+                  if (!meta) return <span className="text-muted-foreground">—</span>;
+                  return (
+                    <span className={cn("inline-block px-1.5 py-0.5 rounded text-xs font-medium", meta.cls)}>
+                      {meta.label}
+                    </span>
+                  );
+                })()}
+              </TableCell>
+            )}
+            {/* Confidenza. Signal alerts carry confidence
                 (0-100) in the snapshot; show it as a coloured percentage
                 (rose < 50, amber 50-69, emerald >= 70) with a reliability bar
                 on the full page. Embedded (narrow card) shows just the % to
@@ -478,11 +493,6 @@ export function AlertsTable({
                     </div>
                   );
                 })()}
-              </TableCell>
-            )}
-            {showPrezzo && (
-              <TableCell className="text-right tabular-nums font-semibold">
-                ${a.trigger_price}
               </TableCell>
             )}
           </TableRow>
