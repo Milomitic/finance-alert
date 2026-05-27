@@ -95,7 +95,7 @@ export function TopStocksTable({ data }: Props) {
                   {nature ? (
                     <span
                       className={cn(
-                        "inline-flex items-center rounded px-1.5 py-0.5 text-[11px] font-semibold whitespace-nowrap",
+                        "inline-flex items-center rounded px-1.5 py-0.5 text-xs font-semibold whitespace-nowrap",
                         NATURE_BG[nature],
                       )}
                       title={`Natura del segnale: ${NATURE_LABEL[nature].toLowerCase()}`}
@@ -112,7 +112,7 @@ export function TopStocksTable({ data }: Props) {
                   {meta && Icon ? (
                     <span
                       className={cn(
-                        "inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold whitespace-nowrap",
+                        "inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold whitespace-nowrap",
                         TONE_BG[meta.tone],
                       )}
                       title={`Regola più frequente: ${meta.label}`}

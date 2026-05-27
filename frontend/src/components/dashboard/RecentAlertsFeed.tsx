@@ -112,7 +112,7 @@ export function RecentAlertsFeed({ alerts }: Props) {
                     <span className="text-muted-foreground">—</span>
                   ) : (
                     <span
-                      className={cn("text-xs font-semibold tabular-nums", confTxt)}
+                      className={cn("text-[13px] font-semibold tabular-nums", confTxt)}
                       title={`Confidenza ${pct}%`}
                     >
                       {pct}%
@@ -127,7 +127,7 @@ export function RecentAlertsFeed({ alerts }: Props) {
                     detection (>=1 day after the market bar). */}
                 <TableCell className="py-2 text-right pr-4">
                   <span
-                    className="inline-flex items-center justify-end gap-1 text-xs text-muted-foreground tabular-nums whitespace-nowrap"
+                    className="inline-flex items-center justify-end gap-1 text-[13px] text-muted-foreground tabular-nums whitespace-nowrap"
                     title={
                       a.signal_date
                         ? `Segnale: ${a.signal_date} · Rilevato: ${new Date(a.triggered_at).toLocaleString("it-IT")}`

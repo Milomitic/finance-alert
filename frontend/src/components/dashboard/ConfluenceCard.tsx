@@ -33,46 +33,79 @@ export function ConfluenceRows({ limit = 8 }: { limit?: number }) {
   return (
     <ul className="divide-y">
       {items.map((c) => {
-              const DirIcon = c.direction === "bull" ? TrendingUp : TrendingDown;
-              const tone = c.direction === "bull" ? TONE_BG.bullish : TONE_BG.bearish;
-              const pct = Math.round(c.strength);
-              return (
-                <li key={c.ticker}>
-                  <Link
-                    to={`/stocks/${encodeURIComponent(c.ticker)}`}
-                    className="flex items-center gap-2 px-3 py-1.5 hover:bg-accent/30 min-w-0"
-                    title={c.name ?? c.ticker}
+        const DirIcon = c.direction === "bull" ? TrendingUp : TrendingDown;
+        const tone = c.direction === "bull" ? TONE_BG.bullish : TONE_BG.bearish;
+        const pct = Math.round(c.strength);
+        const dirWord = c.direction === "bull" ? "Long" : "Short";
+        return (
+          <li key={c.ticker}>
+            <Link
+              to={`/stocks/${encodeURIComponent(c.ticker)}`}
+              className="block px-3 py-2 hover:bg-accent/30 transition-colors min-w-0"
+              title={`${c.name ?? c.ticker} — ${c.n_signals} segnali concordi, direzione ${dirWord.toLowerCase()}, forza ${pct}/100`}
+            >
+              {/* Line 1: identity + direction + flags + strength score. */}
+              <div className="flex items-center gap-2 min-w-0">
+                <StockLogo ticker={c.ticker} size="xs" />
+                <span className="font-bold text-sm tabular-nums shrink-0">{c.ticker}</span>
+                <span
+                  className={cn(
+                    "inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[11px] font-semibold shrink-0",
+                    tone,
+                  )}
+                  title={`Direzione prevalente: ${c.direction === "bull" ? "rialzista (Long)" : "ribassista (Short)"}`}
+                >
+                  <DirIcon className="h-3 w-3" />
+                  {dirWord}
+                </span>
+                {c.multi_horizon && (
+                  <Layers
+                    className="h-3.5 w-3.5 text-indigo-500 dark:text-indigo-400 shrink-0"
+                    aria-label="Multi-orizzonte"
+                  />
+                )}
+                {c.contested && (
+                  <span
+                    className="text-[10px] font-semibold text-amber-600 dark:text-amber-400 shrink-0"
+                    title="Segnali contrastanti anche sulla direzione opposta"
                   >
-                    <StockLogo ticker={c.ticker} size="xs" />
-                    <span className="font-bold text-[13px] tabular-nums shrink-0 w-[56px] truncate">
-                      {c.ticker}
-                    </span>
-                    <span className={cn("inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold shrink-0", tone)}>
-                      <DirIcon className="h-2.5 w-2.5" />
-                      {c.n_signals}
-                    </span>
-                    {c.contested && (
-                      <span className="text-[9px] font-semibold text-amber-600 dark:text-amber-400 shrink-0">
-                        conteso
-                      </span>
-                    )}
-                    {c.multi_horizon && (
-                      <Layers className="h-3 w-3 text-indigo-500 dark:text-indigo-400 shrink-0" aria-label="Multi-orizzonte" />
-                    )}
-                    <div className="ml-auto flex items-center gap-1.5 shrink-0">
-                      <div className="h-1.5 w-16 rounded-full bg-muted overflow-hidden">
-                        <div
-                          className={cn("h-full rounded-full", c.direction === "bull" ? "bg-emerald-500" : "bg-rose-500")}
-                          style={{ width: `${pct}%` }}
-                        />
-                      </div>
-                      <span className="text-xs font-semibold tabular-nums w-7 text-right">{pct}</span>
-                    </div>
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
+                    conteso
+                  </span>
+                )}
+                <span
+                  className="ml-auto text-sm font-bold tabular-nums shrink-0"
+                  title="Forza della confluenza (0–100)"
+                >
+                  {pct}
+                </span>
+              </div>
+              {/* Line 2: full company name + concurring-signal count. */}
+              <div className="flex items-center gap-2 mt-0.5 min-w-0">
+                <span
+                  className="text-[11px] text-muted-foreground truncate min-w-0 flex-1"
+                  title={c.name ?? c.ticker}
+                >
+                  {c.name ?? "—"}
+                </span>
+                <span className="text-[11px] text-muted-foreground tabular-nums shrink-0">
+                  {c.n_signals} segnali
+                </span>
+              </div>
+              {/* Strength bar */}
+              <div className="mt-1 h-1.5 rounded-full bg-muted overflow-hidden">
+                <div
+                  className={cn(
+                    "h-full rounded-full",
+                    c.direction === "bull" ? "bg-emerald-500" : "bg-rose-500",
+                  )}
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+            </Link>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 

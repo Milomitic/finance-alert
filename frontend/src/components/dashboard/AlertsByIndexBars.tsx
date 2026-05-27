@@ -44,7 +44,7 @@ export function AlertsByIndexBars({ data }: Props) {
               className="block px-3 py-1.5 hover:bg-accent/30 transition-colors"
               title={`${meta.fullName} — filtra screener`}
             >
-              <div className="flex items-center gap-2 text-[12.5px]">
+              <div className="flex items-center gap-2 text-sm">
                 {meta.countryCode && (
                   <img
                     src={`/flags/${meta.countryCode}.svg`}

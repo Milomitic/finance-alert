@@ -35,12 +35,7 @@ export function AlertsCompactPanel({
   recentAlerts,
   alertsByIndex,
   alertsLast24h,
-  alertsPrev24h,
 }: Props) {
-  const delta = alertsLast24h - alertsPrev24h;
-  const deltaLabel =
-    delta === 0 ? "= ieri" : `${delta > 0 ? "+" : ""}${delta} vs ieri`;
-
   return (
     <Card className="md:h-full overflow-hidden flex flex-col">
       <CardContent className="p-0 flex-1 min-h-0 flex flex-col">
@@ -50,8 +45,11 @@ export function AlertsCompactPanel({
             icon={Bell}
             label="Segnali"
             right={
-              <span className="text-[11px] bg-amber-100 dark:bg-amber-900/40 text-amber-900 dark:text-amber-200 px-2 py-0.5 rounded-full font-semibold whitespace-nowrap">
-                {alertsLast24h} ult. 24h · {deltaLabel}
+              <span
+                className="text-xs bg-amber-100 dark:bg-amber-900/40 text-amber-900 dark:text-amber-200 px-2 py-0.5 rounded-full font-semibold whitespace-nowrap"
+                title="Nuovi segnali rilevati nelle ultime 24 ore"
+              >
+                {alertsLast24h} nuovi segnali · 24h
               </span>
             }
           />
@@ -70,7 +68,7 @@ export function AlertsCompactPanel({
         <div className="flex-1 min-h-0 grid grid-cols-1 md:grid-cols-4 divide-y md:divide-y-0 md:divide-x divide-border/40">
           {COLUMNS.map((col) => (
             <div key={col.key} className="flex flex-col min-h-0 min-w-0">
-              <div className="shrink-0 px-3 py-1.5 text-[11.5px] uppercase tracking-[0.16em] font-bold text-muted-foreground border-b bg-muted/40">
+              <div className="shrink-0 px-3 py-1.5 text-xs uppercase tracking-[0.16em] font-bold text-muted-foreground border-b bg-muted/40">
                 {col.label}
               </div>
               {/* Mobile: natural flow capped at 55vh so a long Feed

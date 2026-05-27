@@ -36,7 +36,7 @@ export function StockIdentity({ ticker, name }: Props) {
         </div>
         {name && (
           <div
-            className="text-[10px] text-muted-foreground truncate leading-tight"
+            className="text-[11px] text-muted-foreground truncate leading-tight"
             title={name}
           >
             {name}
