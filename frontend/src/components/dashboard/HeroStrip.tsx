@@ -30,7 +30,7 @@ interface Props {
  */
 export function HeroStrip({ global, byIndex }: Props) {
   return (
-    <div className="grid gap-3 lg:grid-cols-[3fr_2fr] lg:h-[340px]">
+    <div className="grid gap-3 lg:grid-cols-[5fr_4fr] lg:h-[340px]">
       <div className="h-full min-h-0">
         <MoodCard global={global} byIndex={byIndex} />
       </div>

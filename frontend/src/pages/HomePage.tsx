@@ -241,7 +241,7 @@ export default function HomePage() {
           height). See the cards' internals: their lists are natural-height
           (no flex-1/overflow) precisely so this auto-equalization works. */}
       {hidePremarket ? (
-        <div className="grid gap-3 lg:grid-cols-[3fr_2fr] items-stretch">
+        <div className="grid gap-3 lg:grid-cols-[5fr_4fr] items-stretch">
           <div className="grid gap-3 lg:grid-cols-[1fr_1fr]">
             <div className="min-w-0"><FiftyTwoWeekVolCard movers={m.movers} /></div>
             <div className="min-w-0"><LiveVolumeMoversCard movers={m.movers} computedAt={m.computed_at} /></div>
@@ -249,7 +249,7 @@ export default function HomePage() {
           <div className="min-w-0"><TopMoversCard movers={m.movers} computedAt={m.computed_at} /></div>
         </div>
       ) : (
-        <div className="grid gap-3 lg:grid-cols-[3fr_2fr] items-stretch">
+        <div className="grid gap-3 lg:grid-cols-[5fr_4fr] items-stretch">
           <div className="grid gap-3 lg:grid-cols-3">
             <div className="min-w-0"><FiftyTwoWeekVolCard movers={m.movers} /></div>
             <div className="min-w-0"><LiveVolumeMoversCard movers={m.movers} computedAt={m.computed_at} /></div>

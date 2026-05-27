@@ -74,7 +74,7 @@ function getWindowed(movers: MoversBlock, w: Window): WindowedMovers {
   return { gainers: movers.gainers, losers: movers.losers, field: "change_pct" };
 }
 
-function MoverRow({ m, field, window, live, computedAt, livePrice }: {
+function MoverRow({ m, field, window, live, computedAt, livePrice, livePulse }: {
   m: Mover;
   field: WindowedMovers["field"];
   /** Active window — drives WHICH volume to show: today's (1d, projected
@@ -90,6 +90,10 @@ function MoverRow({ m, field, window, live, computedAt, livePrice }: {
   /** Optional live price from the 15s batch poller, overlaid on top of
    *  the snapshot's `last_close`. Undefined → fall back to last_close. */
   livePrice?: number | null;
+  /** True when this row is being polled live AND its market is open/pre —
+   *  drives the pulsing green dot next to the ticker (same as the Volumi
+   *  maggiori card). */
+  livePulse?: boolean;
 }) {
   const v = m[field] ?? null;
   const positive = v != null ? v >= 0 : true;
@@ -143,90 +147,74 @@ function MoverRow({ m, field, window, live, computedAt, livePrice }: {
       : "Volume non disponibile";
   return (
     <li className="border-b border-border/40 last:border-b-0">
+      {/* One fixed-column grid per row — same column-per-info-type layout as
+          the Volumi maggiori card, so price / %change / volume / multiplier /
+          score line up vertically across every row. The identity cell flexes
+          (minmax(0,1fr)) and truncates first when the column narrows. */}
       <Link
         to={`/stocks/${encodeURIComponent(m.ticker)}`}
-        className="flex items-center gap-1.5 px-2 py-1.5 hover:bg-accent/30 transition-colors min-w-0"
+        className="grid grid-cols-[minmax(0,1fr)_58px_60px_56px_46px_auto] items-center gap-1.5 px-2 py-1.5 hover:bg-accent/30 transition-colors"
       >
-        {/* Identity — flexes; will truncate first when the row narrows. */}
-        <StockIdentity ticker={m.ticker} name={m.name} />
-        {/* Live/last price — between identity and % change so the eye
-            reads "ticker → price → % move" left-to-right. When 1G is
-            active and the polled overlay has a fresh price for this
-            ticker we use that; otherwise we fall back to the snapshot's
-            last_close. Wrapped in FlashValue → Wall-Street-tape flash
-            (green uptick / rose downtick) on every polling refresh.
-            `noTween` because list rows are many and simultaneous
-            number-tweens would look noisy; flash alone is enough. */}
-        <span
-          className="shrink-0 text-[13px] font-semibold tabular-nums text-foreground/85 w-[58px] text-right"
-          title={
-            livePrice != null
-              ? "Prezzo live (polling 15s)"
-              : "Ultima chiusura disponibile"
-          }
-        >
-          <FlashValue
-            value={displayPrice}
-            format={(p) => `$${p.toFixed(2)}`}
-            noTween
-          />
-        </span>
-        {/* % change — headline metric. Also flash-tinted on live
-            updates: in 1G mode `change_pct` is overlaid from the
-            polled quote, so the cell ticks each 15s like a real
-            tape. The base sign-color (green/red) stays as the
-            steady-state; the flash briefly overrides during the
-            tween window per Wall-Street convention (a downtick on a
-            positive % still shows rose for ~700ms then settles back
-            to green). */}
-        <span
-          className={cn(
-            "shrink-0 text-sm font-semibold tabular-nums w-[66px] text-right",
-            color,
+        {/* Col 1: identity + per-row live-poll dot. A classic pulsing green
+            dot sits right of the ticker for every row whose 15s polling is
+            active AND whose market is open/pre — surfaces "this price is
+            live" at a glance (same treatment as the Volumi maggiori card). */}
+        <div className="flex items-center gap-1.5 min-w-0">
+          <StockIdentity ticker={m.ticker} name={m.name} />
+          {livePulse && (
+            <span
+              className="relative inline-flex h-2 w-2 shrink-0"
+              title="Pollato live (refresh ogni 15s)"
+              aria-label="live"
+            >
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-75" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+            </span>
           )}
-          title={
-            live
-              ? "Variazione % giornaliera (live)"
-              : "Variazione % nella finestra selezionata"
-          }
-        >
-          <FlashValue
-            value={v}
-            format={(p) => `${p >= 0 ? "+" : ""}${p.toFixed(2)}%`}
-            noTween
-          />
-        </span>
-        {/* Volume — window-aware: today's share volume (1d, projected to
-            end-of-day with "~" for US names still mid-session) or the period
-            TOTAL (1w → 5-day sum, 1m → 20-day sum). The "× vs 20d avg"
-            multiplier is a single-day concept, so it's shown only in 1d.
-            A "~" prefix on either marks an estimate that finalizes at close. */}
+        </div>
+        {/* Col 2: live/last price. FlashValue → Wall-Street-tape tint on each
+            15s refresh; `noTween` keeps a long list calm. */}
         <span
-          className="shrink-0 text-[12.5px] tabular-nums text-muted-foreground/90 min-w-[92px] text-right"
+          className="text-[13px] font-semibold tabular-nums text-foreground/85 text-right"
+          title={livePrice != null ? "Prezzo live (polling 15s)" : "Ultima chiusura disponibile"}
+        >
+          <FlashValue value={displayPrice} format={(p) => `$${p.toFixed(2)}`} noTween />
+        </span>
+        {/* Col 3: % change — headline metric, sign-coloured. */}
+        <span
+          className={cn("text-sm font-semibold tabular-nums text-right", color)}
+          title={live ? "Variazione % giornaliera (live)" : "Variazione % nella finestra selezionata"}
+        >
+          <FlashValue value={v} format={(p) => `${p >= 0 ? "+" : ""}${p.toFixed(2)}%`} noTween />
+        </span>
+        {/* Col 4: volume (number only — multiplier moved to its own column so
+            the columns stay aligned). Window-aware per volValue above. */}
+        <span
+          className="text-[12.5px] tabular-nums text-right font-semibold text-foreground/80"
           title={volTitle}
         >
-          <span className="font-semibold text-foreground/80">
-            {volEstimated ? "~" : ""}
-            {fmtVolume(volValue)}
-          </span>
-          {window === "1d" && multiplier != null && (
+          {volEstimated ? "~" : ""}
+          {fmtVolume(volValue)}
+        </span>
+        {/* Col 5: × vs 20d-avg multiplier (1d only; empty cell otherwise so
+            the score column never shifts between windows). */}
+        <span className="text-[11px] font-mono tabular-nums text-center" title={volTitle}>
+          {window === "1d" && multiplier != null ? (
             <span
               className={cn(
-                "ml-1",
                 multiplier >= 3
                   ? "text-orange-700 dark:text-orange-300 font-semibold"
                   : multiplier >= 2
-                  ? "text-foreground/70"
-                  : "text-muted-foreground/70",
+                    ? "text-foreground/70"
+                    : "text-muted-foreground/60",
               )}
             >
-              ({multiplierEstimated ? "~" : ""}
-              {multiplier.toFixed(1)}×)
+              {multiplierEstimated ? "~" : ""}
+              {multiplier.toFixed(1)}×
             </span>
-          )}
+          ) : null}
         </span>
-        {/* Composite score chip — reuses the shared chip so the
-            visual vocabulary matches LiveVolumeMoversCard exactly. */}
+        {/* Col 6: composite score chip — shared component, same as Volumi. */}
         <ScoreChip score={composite} />
       </Link>
     </li>
@@ -326,12 +314,17 @@ export function TopMoversCard({ movers, computedAt }: Props) {
   // only change_pct (which dictated re-ranking) and the price column
   // didn't exist.
   const liveMap = useMemo(() => {
-    const map = new Map<string, { change_pct: number; price: number | null }>();
+    const map = new Map<
+      string,
+      { change_pct: number; price: number | null; is_open: boolean }
+    >();
     for (const q of liveQ.data?.quotes ?? []) {
       if (q.change_pct != null) {
         map.set(q.ticker, {
           change_pct: q.change_pct,
           price: q.price ?? null,
+          // OPEN and PRE both carry a fresh live/pre-market price → pulse dot.
+          is_open: q.market_state === "OPEN" || q.market_state === "PRE",
         });
       }
     }
@@ -429,19 +422,21 @@ export function TopMoversCard({ movers, computedAt }: Props) {
                   </div>
                 ) : (
                   <ul>
-                    {list.slice(0, ROWS_PER_COL).map((m) => (
-                      <MoverRow
-                        key={m.ticker}
-                        m={m}
-                        field={data.field}
-                        window={window}
-                        live={liveActive && liveMap.has(m.ticker)}
-                        computedAt={computedAt}
-                        livePrice={
-                          liveActive ? liveMap.get(m.ticker)?.price ?? null : null
-                        }
-                      />
-                    ))}
+                    {list.slice(0, ROWS_PER_COL).map((m) => {
+                      const lq = liveActive ? liveMap.get(m.ticker) : undefined;
+                      return (
+                        <MoverRow
+                          key={m.ticker}
+                          m={m}
+                          field={data.field}
+                          window={window}
+                          live={liveActive && liveMap.has(m.ticker)}
+                          computedAt={computedAt}
+                          livePrice={lq?.price ?? null}
+                          livePulse={!!lq?.is_open && lq?.price != null}
+                        />
+                      );
+                    })}
                   </ul>
                 )}
               </div>
