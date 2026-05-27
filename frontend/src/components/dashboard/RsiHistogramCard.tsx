@@ -57,19 +57,20 @@ export function RsiHistogramCard({ rsi, indices }: Props) {
   const visibleIndices = indices.filter((i) => !excluded.has(i.code));
 
   return (
-    <Card className="h-full overflow-hidden">
-      <CardContent className="p-4 flex flex-col h-full min-h-0">
-        <SectionTitle
-          icon={BarChart2}
-          label="RSI distribution per indice"
-          right={
-            <span className="text-[10px] text-muted-foreground">
-              click su legenda per nascondere/mostrare
-            </span>
-          }
-          className="mb-2"
-        />
-
+    <Card className="h-full overflow-hidden flex flex-col">
+      <CardContent className="p-0 flex-1 min-h-0 flex flex-col">
+        <div className="shrink-0 px-3 py-2 border-b bg-muted/30">
+          <SectionTitle
+            icon={BarChart2}
+            label="RSI distribution per indice"
+            right={
+              <span className="text-[10px] text-muted-foreground">
+                click su legenda per nascondere/mostrare
+              </span>
+            }
+          />
+        </div>
+        <div className="flex-1 min-h-0 flex flex-col p-4">
         {/* Custom checkbox legend (above chart) */}
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mb-2">
           {indices.map((idx) => {
@@ -130,6 +131,7 @@ export function RsiHistogramCard({ rsi, indices }: Props) {
         </div>
         <div className="text-[10px] text-muted-foreground mt-2 italic">
           Y = numero di stock per ciascun bin RSI(14). Bins 0-30 = oversold, 70-100 = overbought.
+        </div>
         </div>
       </CardContent>
     </Card>

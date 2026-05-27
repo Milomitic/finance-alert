@@ -22,17 +22,15 @@ function bgFor(change: number): string {
 
 export function SectorsHeatmapCard({ sectors }: Props) {
   return (
-    <Card className="h-full overflow-hidden">
-      <CardContent className="p-4 flex flex-col h-full min-h-0">
-        <SectionTitle
-          icon={LayoutGrid}
-          label="Sectors (Avg Δ%)"
-          className="mb-2 shrink-0"
-        />
+    <Card className="h-full overflow-hidden flex flex-col">
+      <CardContent className="p-0 flex-1 min-h-0 flex flex-col">
+        <div className="shrink-0 px-3 py-2 border-b bg-muted/30">
+          <SectionTitle icon={LayoutGrid} label="Sectors (Avg Δ%)" />
+        </div>
         {sectors.length === 0 ? (
           <div className="text-sm text-muted-foreground text-center py-6">Nessun settore</div>
         ) : (
-          <div className="flex-1 min-h-0 overflow-y-auto">
+          <div className="flex-1 min-h-0 overflow-y-auto p-2">
           {/* Re-balanced: sector name takes the bulk of the row, % stays
               right-aligned with a fixed width tinted by sign. The previous
               w-[60%] on the % cell forced the heatmap blob to be wider than

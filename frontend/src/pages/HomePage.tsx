@@ -243,16 +243,16 @@ export default function HomePage() {
       {hidePremarket ? (
         <div className="grid gap-3 lg:grid-cols-[3fr_2fr] items-stretch">
           <div className="grid gap-3 lg:grid-cols-[1fr_1fr]">
-            <div className="min-w-0"><LiveVolumeMoversCard movers={m.movers} computedAt={m.computed_at} /></div>
             <div className="min-w-0"><FiftyTwoWeekVolCard movers={m.movers} /></div>
+            <div className="min-w-0"><LiveVolumeMoversCard movers={m.movers} computedAt={m.computed_at} /></div>
           </div>
           <div className="min-w-0"><TopMoversCard movers={m.movers} computedAt={m.computed_at} /></div>
         </div>
       ) : (
         <div className="grid gap-3 lg:grid-cols-[3fr_2fr] items-stretch">
           <div className="grid gap-3 lg:grid-cols-3">
-            <div className="min-w-0"><LiveVolumeMoversCard movers={m.movers} computedAt={m.computed_at} /></div>
             <div className="min-w-0"><FiftyTwoWeekVolCard movers={m.movers} /></div>
+            <div className="min-w-0"><LiveVolumeMoversCard movers={m.movers} computedAt={m.computed_at} /></div>
             <div className="min-w-0"><TopMoversCard movers={m.movers} computedAt={m.computed_at} /></div>
           </div>
           <div className="min-w-0"><PremarketMoversCard /></div>

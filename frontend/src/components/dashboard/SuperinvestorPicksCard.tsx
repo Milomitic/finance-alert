@@ -37,20 +37,22 @@ export function SuperinvestorPicksCard() {
 
   return (
     <Card className="h-full overflow-hidden flex flex-col">
-      <CardContent className="p-3 flex-1 min-h-0 flex flex-col">
-        <SectionTitle
-          icon={Building2}
-          label="Top picks superinvestor"
-          className="mb-2"
-          right={
-            <Link
-              to="/institutionals"
-              className="text-xs text-muted-foreground hover:text-foreground hover:underline"
-            >
-              vedi tutti →
-            </Link>
-          }
-        />
+      <CardContent className="p-0 flex-1 min-h-0 flex flex-col">
+        <div className="shrink-0 px-3 py-2 border-b bg-muted/30">
+          <SectionTitle
+            icon={Building2}
+            label="Top picks superinvestor"
+            right={
+              <Link
+                to="/institutionals"
+                className="text-xs text-muted-foreground hover:text-foreground hover:underline"
+              >
+                vedi tutti →
+              </Link>
+            }
+          />
+        </div>
+        <div className="flex-1 min-h-0 flex flex-col p-3">
         {q.isLoading ? (
           <div className="space-y-1.5 flex-1">
             {Array.from({ length: 8 }).map((_, i) => (
@@ -115,6 +117,7 @@ export function SuperinvestorPicksCard() {
             Nessun dato — esegui il seed dei portafogli.
           </div>
         )}
+        </div>
       </CardContent>
     </Card>
   );
