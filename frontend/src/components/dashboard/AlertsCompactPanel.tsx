@@ -37,7 +37,7 @@ export function AlertsCompactPanel({
   alertsLast24h,
 }: Props) {
   return (
-    <Card className="md:h-full overflow-hidden flex flex-col">
+    <Card className="lg:h-full overflow-hidden flex flex-col">
       <CardContent className="p-0 flex-1 min-h-0 flex flex-col">
         {/* Header — title + 24h badge + "Vedi tutti" link. */}
         <div className="shrink-0 flex items-center gap-3 border-b px-3 bg-muted/30 py-2">
@@ -65,17 +65,23 @@ export function AlertsCompactPanel({
             flex-col with a fixed header and a scrollable body so the
             card height stays predictable (matches Top Picks beside it)
             even when Feed has many items. */}
-        <div className="flex-1 min-h-0 grid grid-cols-1 md:grid-cols-4 divide-y md:divide-y-0 md:divide-x divide-border/40">
+        {/* Column count steps up with width: 1 (phone) → 2 (sm tablet) →
+            4 (lg desktop). Going straight from 1→4 at md crammed four
+            fixed-px-celled tables into ~180px each on tablets; the 2-up
+            intermediate keeps each readable until there's room for all
+            four. The fixed-height + divide-x behavior aligns to lg (where
+            the 4-col row lives) so the card grows naturally below that. */}
+        <div className="flex-1 min-h-0 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x lg:divide-y-0 lg:divide-x divide-border/40">
           {COLUMNS.map((col) => (
             <div key={col.key} className="flex flex-col min-h-0 min-w-0">
               <div className="shrink-0 px-3 py-1.5 text-xs uppercase tracking-[0.16em] font-bold text-muted-foreground border-b bg-muted/40">
                 {col.label}
               </div>
-              {/* Mobile: natural flow capped at 55vh so a long Feed
-                  doesn't run away — the page scrolls. md+: fixed-height
+              {/* Mobile/tablet: natural flow capped at 55vh so a long Feed
+                  doesn't run away — the page scrolls. lg+: fixed-height
                   pane with its own scroll (keeps the 4 columns aligned
                   to the card height). */}
-              <div className="max-h-[55vh] overflow-y-auto md:max-h-none md:flex-1 md:min-h-0">
+              <div className="max-h-[55vh] overflow-y-auto lg:max-h-none lg:flex-1 lg:min-h-0">
                 {col.key === "confluence" && <ConfluenceRows />}
                 {col.key === "top" && <TopStocksTable data={topStocks} />}
                 {col.key === "feed" && <RecentAlertsFeed alerts={recentAlerts} />}
