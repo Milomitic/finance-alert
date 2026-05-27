@@ -124,6 +124,39 @@ def probe_yfinance_fundamentals() -> None:
         _record("yfinance", "fundamentals", False, repr(exc))
 
 
+def probe_yfinance_recommendation() -> None:
+    """Analyst-consensus probe: `Ticker.recommendations` (buy/hold/sell
+    buckets). yfinance is the PRIMARY for consensus — surfacing it here
+    makes the Finnhub/Nasdaq rows read as fallbacks behind a working
+    primary instead of standing alone. Slow endpoint → slow cadence."""
+    try:
+        import yfinance as yf
+        rec = yf.Ticker(_PROBE_TICKER).recommendations
+        ok = rec is not None and getattr(rec, "empty", True) is False
+        _record(
+            "yfinance", "recommendation", ok,
+            "" if ok else "empty recommendations",
+        )
+    except Exception as exc:  # noqa: BLE001
+        _record("yfinance", "recommendation", False, repr(exc))
+
+
+def probe_yfinance_earnings() -> None:
+    """Earnings probe: `Ticker.earnings_dates` (upcoming + past dates with
+    EPS estimate/actual). yfinance is the PRIMARY for earnings; Finnhub +
+    Twelve Data are the fallbacks behind it. Slow endpoint → slow cadence."""
+    try:
+        import yfinance as yf
+        ed = yf.Ticker(_PROBE_TICKER).earnings_dates
+        ok = ed is not None and getattr(ed, "empty", True) is False
+        _record(
+            "yfinance", "earnings", ok,
+            "" if ok else "empty earnings_dates",
+        )
+    except Exception as exc:  # noqa: BLE001
+        _record("yfinance", "earnings", False, repr(exc))
+
+
 def probe_finnhub_earnings() -> None:
     """Earnings-calendar 1-day window probe."""
     from app.core.config import settings
@@ -504,6 +537,8 @@ FAST_PROBES: list[Callable[[], None]] = [
 SLOW_PROBES: list[Callable[[], None]] = [
     probe_yfinance_ohlcv,
     probe_yfinance_fundamentals,
+    probe_yfinance_recommendation,
+    probe_yfinance_earnings,
     probe_marketaux_news,
     # Finnhub news + upgrade-downgrade — both internally smart-elide
     # (skip if breaker open or last success < 4h), so even at 30 min

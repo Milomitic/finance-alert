@@ -49,6 +49,18 @@ KNOWN_SOURCES: list[SourceSpec] = [
     SourceSpec("yfinance", "news", "Yahoo Finance — News", "primary",
                per_minute=None, per_day=None,
                notes="Ticker.news. Probe ogni 5 min."),
+    SourceSpec("yfinance", "recommendation", "Yahoo Finance — Analyst consensus", "primary",
+               per_minute=None, per_day=None,
+               notes=("Ticker.recommendations (buy/hold/sell) + upgrades_downgrades "
+                      "+ price target — PRIMARIO per il consensus analisti. Finnhub "
+                      "(recommendation trends) e Nasdaq (consensus) sono i fallback "
+                      "dietro di esso, attivati solo se yfinance torna vuoto/stale. "
+                      "Probe ogni 30 min.")),
+    SourceSpec("yfinance", "earnings", "Yahoo Finance — Earnings", "primary",
+               per_minute=None, per_day=None,
+               notes=("Ticker.earnings_dates — date + EPS attesi/effettivi. PRIMARIO "
+                      "per gli earnings; Finnhub e Twelve Data sono i fallback dietro "
+                      "di esso. Probe ogni 30 min.")),
 
     # ── Fallbacks ──
     # NOTE: no fallback for OHLCV. Stooq required an API key (May 2026)
