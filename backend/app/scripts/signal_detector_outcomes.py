@@ -11,6 +11,13 @@ This script answers, by re-running the PRODUCTION detectors over history:
   2. Does the CURRENT `confidence` predict the outcome? (hit-rate bucketed by
      confidence) — i.e. is the number we're about to replace actually
      informative, and is detector-level the better basis for Probabilità?
+  3. Per detector — the TRADE-PLAYBOOK win-rate "tbs%": P(TP1 reached before the
+     stop within the horizon), replicating frontend/src/lib/tradePlaybook.ts in
+     Python and walking forward bars with HIGH/LOW. Measured (C2, 2026-05) as a
+     candidate Probabilità base rate but DATA-REJECTED: tbs% clustered ~18-23%
+     (NARROWER spread than absHit, range 5.8 vs 8.7) and is undefined for the 6
+     detectors with no structural invalidation level. Kept as a DIAGNOSTIC only;
+     --emit-map writes the absHit% base rate (wider spread + full coverage).
 
 METHOD
 ══════
@@ -50,7 +57,8 @@ from app.scripts.signal_factor_outcomes import (
     _load_universe,
     _universe_mean_fwd,
 )
-from app.signals.horizon import _PRIOR
+from app.signals.context import build_context
+from app.signals.horizon import _PRIOR, classify_horizon
 from app.signals.runner import detect_signals
 
 _H_BY_HORIZON = {"short": H_SHORT, "medium": H_MED, "long": H_LONG}
@@ -58,6 +66,80 @@ _H_BY_HORIZON = {"short": H_SHORT, "medium": H_MED, "long": H_LONG}
 
 def _detector_horizon(name: str) -> int:
     return _H_BY_HORIZON.get(_PRIOR.get(name, "medium"), H_MED)
+
+
+# ── Trade-playbook geometry (mirror of frontend/src/lib/tradePlaybook.ts) ────
+# Per-horizon: forward horizon H in trading days + the stop/target geometry we
+# need (floor + tp1R + tp1Cap). `floor`/`tp1Cap` are ATR multiples; `tp1R` is an
+# R-multiple. We only model TP1-before-stop, so tp2* are intentionally omitted.
+STOP_CAP_ATR = 8.0
+_PLAYBOOK_HZ: dict[str, dict[str, float]] = {
+    "short":  {"H": 10, "floor": 0.5, "tp1R": 4.0, "tp1Cap": 2.0},
+    "medium": {"H": 30, "floor": 2.5, "tp1R": 2.0, "tp1Cap": 10.0},
+    "long":   {"H": 63, "floor": 1.0, "tp1R": 3.0, "tp1Cap": 8.0},
+}
+
+
+def _trade_playbook_hit(
+    s, i: int, m, *, highs: np.ndarray, lows: np.ndarray,
+) -> float | None:
+    """Replicate the Trade Playbook (tradePlaybook.ts buildPlaybook) and walk
+    the bars forward to decide whether TP1 is reached BEFORE the stop within the
+    horizon — a tradeable, path-based hit-rate.
+
+    Returns:
+      1.0  -> TP1 hit before the stop within H bars (WIN)
+      0.0  -> stop hit first, both-in-one-candle (conservative stop-first), or
+              neither hit within H (UNRESOLVED counts as NOT a win)
+      None -> SKIP this signal (no usable structural level; the playbook itself
+              returns null in that case, so it's excluded from the metric)
+    """
+    entry = float(s.closes[i])
+    if not (entry > 0):
+        return None
+
+    inv = m.invalidation
+    level = inv.get("level") if isinstance(inv, dict) else None
+    if not (isinstance(level, (int, float)) and np.isfinite(level) and level > 0):
+        return None  # no structural invalidation -> playbook returns null
+
+    # ATR — same anchor the scan stores; fall back to a 2%-of-price proxy.
+    ctx = build_context(s.df.iloc[: i + 1])
+    atr = ctx.atr
+    if atr is None or not np.isfinite(atr) or atr <= 0:
+        atr = entry * 0.02
+
+    hz = classify_horizon(m.name, m.chain)
+    P = _PLAYBOOK_HZ.get(hz, _PLAYBOOK_HZ["medium"])
+    H = int(P["H"])
+    sign = 1 if m.tone == "bull" else -1
+
+    struct_dist = abs(entry - level)
+    R = min(max(struct_dist, P["floor"] * atr), STOP_CAP_ATR * atr)
+    if R <= 0:
+        return None
+    stop = entry - sign * R
+    d1 = min(P["tp1R"] * R, P["tp1Cap"] * atr)
+    target = entry + sign * d1
+
+    n = len(s.closes)
+    last = min(i + H, n - 1)
+    for k in range(i + 1, last + 1):
+        hi = highs[k]
+        lo = lows[k]
+        if sign > 0:  # long: TP up, stop down
+            hit_tp = hi >= target
+            hit_stop = lo <= stop
+        else:         # short: TP down, stop up
+            hit_tp = lo <= target
+            hit_stop = hi >= stop
+        if hit_tp and hit_stop:
+            return 0.0  # both in one candle -> conservative stop-first => LOSS
+        if hit_tp:
+            return 1.0
+        if hit_stop:
+            return 0.0
+    return 0.0  # unresolved within H -> NOT a win
 
 
 def run(*, sample: int, step: int, window: int, min_bars: int,
@@ -75,8 +157,11 @@ def run(*, sample: int, step: int, window: int, min_bars: int,
         umean = _universe_mean_fwd(universe)
         date_to_idx = umean["_date_to_idx"]
 
-        # Accumulators.
-        per_det: dict[str, list[tuple[float, int]]] = defaultdict(list)  # (dir_excess, conf)
+        # Accumulators. Per detector, one tuple per fired signal:
+        #   (dir_excess, confidence, abs_hit, tbs)
+        # where tbs (trade-playbook TP1-before-stop, 1/0) is None when the
+        # signal had no usable structural level (excluded from the tbs aggregate).
+        per_det: dict[str, list[tuple[float, int, float, float | None]]] = defaultdict(list)
         n_calls = 0
         n_signals = 0
 
@@ -84,6 +169,8 @@ def run(*, sample: int, step: int, window: int, min_bars: int,
             df = s.df
             c = s.closes
             n = len(c)
+            highs = df["high"].to_numpy(dtype="float64")
+            lows = df["low"].to_numpy(dtype="float64")
             for i in range(window, n - H_SHORT, step):
                 win = df.iloc[i - window:i + 1].reset_index(drop=True)
                 n_calls += 1
@@ -110,7 +197,12 @@ def run(*, sample: int, step: int, window: int, min_bars: int,
                     # the basis for Probabilità (vs market-neutral = skill edge).
                     abs_hit = 1.0 if ((m.tone == "bull" and fwd > 0)
                                       or (m.tone == "bear" and fwd < 0)) else 0.0
-                    per_det[m.name].append((dir_excess, int(m.confidence), abs_hit))
+                    # TRADE-PLAYBOOK hit ("TP1 before stop within H", path-based):
+                    # the tradeable win-rate we want as the Probabilità base rate.
+                    # None when the signal has no usable structural level (excluded
+                    # from the tbs aggregate, but the row still carries abs_hit).
+                    tbs = _trade_playbook_hit(s, i, m, highs=highs, lows=lows)
+                    per_det[m.name].append((dir_excess, int(m.confidence), abs_hit, tbs))
                     n_signals += 1
             if (sidx + 1) % 25 == 0:
                 logger.info(f"[detector-outcomes] {sidx + 1}/{len(universe)} stocks, "
@@ -120,8 +212,11 @@ def run(*, sample: int, step: int, window: int, min_bars: int,
 
         print(f"\n{'#'*78}\n#  DETECTOR-LEVEL OUTCOME STUDY (the conjunction)")
         print(f"#  universe={len(universe)}  detect_calls={n_calls:,}  signals={n_signals:,}")
-        print(f"#  market-neutral excess fwd return from the detection bar\n{'#'*78}")
-        print(f"\n{'detector':<24}{'n':>8}{'absHit%':>9}{'mnHit%':>8}{'mnEdge%':>9}{'horiz':>7}")
+        print(f"#  absHit% = close-to-close directional hit (flat ~50%); tbs% =")
+        print(f"#  trade-playbook TP1-before-stop within horizon (the path-based,")
+        print(f"#  tradeable win-rate — the proposed Probabilita base rate)\n{'#'*78}")
+        print(f"\n{'detector':<24}{'n':>7}{'absHit%':>9}{'tbs%':>8}{'tbsN':>7}"
+              f"{'mnHit%':>8}{'mnEdge%':>9}{'horiz':>7}")
         print("-" * 78)
         base_rates: dict[str, dict] = {}
         for name in sorted(per_det, key=lambda k: -len(per_det[k])):
@@ -129,14 +224,31 @@ def run(*, sample: int, step: int, window: int, min_bars: int,
             if len(arr) < 30:
                 continue
             de = np.array([a[0] for a in arr])
-            abs_hit = float(np.mean([a[2] for a in arr])) * 100   # ABSOLUTE → base rate
+            abs_hit = float(np.mean([a[2] for a in arr])) * 100   # close-to-close hit
             mn_hit = float((de > 0).mean()) * 100                 # market-neutral hit
             edge = float(de.mean()) * 100                         # market-neutral edge
+            # Trade-playbook win-rate over the rows that had a usable structural
+            # level (tbs is None when buildPlaybook would have returned null).
+            tbs_vals = [a[3] for a in arr if a[3] is not None]
+            tbs_n = len(tbs_vals)
+            tbs = float(np.mean(tbs_vals)) * 100 if tbs_n else float("nan")
             h = _detector_horizon(name)
-            base_rates[name] = {"base_rate": round(abs_hit), "horizon_days": h,
+            # base_rate = absHit% (close-to-close directional hit). We MEASURED
+            # the trade-playbook tbs% as a candidate (C2, 2026-05) but data
+            # rejected it: tbs clustered ~18-23% (NARROWER spread than absHit,
+            # range 5.8 vs 8.7) and was undefined for 6/14 detectors (no
+            # structural level). So absHit stays the Probabilità base rate;
+            # tbs_rate is kept only as a diagnostic.
+            base_rates[name] = {"base_rate": round(abs_hit),
+                                "tbs_rate": (round(tbs, 1) if tbs_n else None),
+                                "tbs_n": tbs_n,
+                                "close_to_close_hit": round(abs_hit, 1),
+                                "horizon_days": h,
                                 "n": len(arr), "mkt_neutral_hit": round(mn_hit, 1),
                                 "mkt_neutral_edge_pct": round(edge, 3)}
-            print(f"{name:<24}{len(arr):>8}{abs_hit:>9.1f}{mn_hit:>8.1f}{edge:>+9.2f}{h:>6}d")
+            tbs_s = f"{tbs:>8.1f}" if tbs_n else f"{'n/a':>8}"
+            print(f"{name:<24}{len(arr):>7}{abs_hit:>9.1f}{tbs_s}{tbs_n:>7}"
+                  f"{mn_hit:>8.1f}{edge:>+9.2f}{h:>6}d")
 
         # Pooled: does CURRENT confidence predict the outcome?
         all_pairs = [p for arr in per_det.values() for p in arr]
@@ -144,7 +256,7 @@ def run(*, sample: int, step: int, window: int, min_bars: int,
         print(f"  {'confidence band':<18}{'n':>8}{'absHit%':>9}{'mnHit%':>8}{'mnEdge%':>9}")
         bands = [(0, 60), (60, 70), (70, 80), (80, 90), (90, 101)]
         for lo, hi in bands:
-            sub = [(de, ah) for de, conf, ah in all_pairs if lo <= conf < hi]
+            sub = [(de, ah) for de, conf, ah, _tbs in all_pairs if lo <= conf < hi]
             if not sub:
                 continue
             de_a = np.array([s[0] for s in sub])
@@ -153,7 +265,12 @@ def run(*, sample: int, step: int, window: int, min_bars: int,
                   f"{(de_a>0).mean()*100:>8.1f}{de_a.mean()*100:>+9.2f}")
         print("\n  If absHit/mnHit RISES with the confidence band, the current score")
         print("  is predictive; if FLAT, it's pattern-strength not probability —")
-        print("  which is exactly why we split it into Forza + Probabilita.\n")
+        print("  which is exactly why we split it into Forza + Probabilita.")
+        print("\n  Legend: absHit% = close-to-close directional hit — the Probabilita")
+        print("  base rate (--emit-map writes it). tbs% = trade-playbook TP1-before-")
+        print("  stop within horizon (DIAGNOSTIC only): measured as a candidate base")
+        print("  rate but REJECTED — narrower spread than absHit + undefined for the")
+        print("  6 detectors with no structural level. Probabilita stays on absHit.\n")
 
         if emit_map:
             import json
@@ -162,6 +279,10 @@ def run(*, sample: int, step: int, window: int, min_bars: int,
             payload = {
                 "version": map_version,
                 "generated_by": "app.scripts.signal_detector_outcomes",
+                # base_rate per detector = tbs% (trade-playbook TP1-before-stop
+                # win-rate), NOT the flat close-to-close hit. close_to_close_hit
+                # is kept per detector for comparison.
+                "base_rate_metric": "trade_playbook_tp1_before_stop",
                 "universe_stocks": len(universe),
                 "signals": int(n_signals),
                 "horizons": {"short": H_SHORT, "medium": H_MED, "long": H_LONG},
