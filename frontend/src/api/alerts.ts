@@ -49,9 +49,6 @@ export interface AlertListParams {
   /** Minimum Probabilità (historical hit-rate) 0-100. Only alerts with
    *  probability >= this are returned. */
   probability_min?: number;
-  /** Legacy minimum confidence score 0-100. Kept as a fallback — the backend
-   *  still accepts it, but the UI now drives `strength_min`. */
-  confidence_min?: number;
   /** Signal nature: 'continuazione' | 'inversione'. */
   nature?: string;
   date_from?: string; // ISO date
@@ -71,7 +68,6 @@ function toQuery(params: AlertListParams): string {
   if (params.tone) sp.set("tone", params.tone);
   if (params.strength_min !== undefined) sp.set("strength_min", String(params.strength_min));
   if (params.probability_min !== undefined) sp.set("probability_min", String(params.probability_min));
-  if (params.confidence_min !== undefined) sp.set("confidence_min", String(params.confidence_min));
   if (params.nature) sp.set("nature", params.nature);
   if (params.date_from) sp.set("date_from", params.date_from);
   if (params.date_to) sp.set("date_to", params.date_to);

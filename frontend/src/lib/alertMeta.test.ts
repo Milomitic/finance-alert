@@ -13,7 +13,7 @@ function signalAlert(over: Partial<Alert> = {}): Alert {
     id: 1, rule_id: null, rule_kind: "signal:volume_breakout", stock_id: 1,
     ticker: "AAA", name: "AAA Co", triggered_at: "2026-05-01T00:00:00Z",
     signal_date: "2026-05-01", trigger_price: 10,
-    snapshot: { tone: "bull", confidence: 82, chain: [{ date: "2026-05-01", label: "Breakout bull", detail: "" }] },
+    snapshot: { tone: "bull", strength: 82, chain: [{ date: "2026-05-01", label: "Breakout bull", detail: "" }] },
     read_at: null, archived_at: null, ...over,
   } as Alert;
 }
@@ -32,7 +32,7 @@ describe("signal alert metadata", () => {
   });
 
   it("derives a bearish tone from snapshot.tone", () => {
-    const meta = getAlertMeta(signalAlert({ snapshot: { tone: "bear", confidence: 70, chain: [] } }));
+    const meta = getAlertMeta(signalAlert({ snapshot: { tone: "bear", strength: 70, chain: [] } }));
     expect(meta.tone).toBe("bearish");
   });
 
@@ -47,9 +47,9 @@ describe("signal alert metadata", () => {
     expect(h).toContain("2 eventi");
   });
 
-  it("snapshotForza prefers strength, falls back to confidence", () => {
-    expect(snapshotForza({ strength: 80, confidence: 60 })).toBe(80);
-    expect(snapshotForza({ confidence: 65 })).toBe(65); // legacy alert
+  it("snapshotForza reads strength, null when absent", () => {
+    expect(snapshotForza({ strength: 80 })).toBe(80);
+    expect(snapshotForza({ confidence: 65 })).toBeNull(); // confidence no longer a fallback
     expect(snapshotForza({})).toBeNull();
     expect(snapshotForza(null)).toBeNull();
   });

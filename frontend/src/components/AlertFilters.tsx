@@ -125,7 +125,6 @@ export function AlertFilters({ value, onChange }: Props) {
     (value.tone ? 1 : 0) +
     (value.strength_min != null ? 1 : 0) +
     (value.probability_min != null ? 1 : 0) +
-    (value.confidence_min != null ? 1 : 0) +
     (value.nature ? 1 : 0);
 
   return (
@@ -247,7 +246,7 @@ export function AlertFilters({ value, onChange }: Props) {
         </div>
 
         {/* Forza minima — number input 0-100. Drives the API `strength_min`
-            param (the new primary; `confidence_min` is the legacy fallback). */}
+            param. */}
         <div>
           <Label className="text-xs uppercase tracking-wider text-muted-foreground">
             Forza minima
@@ -397,18 +396,6 @@ export function AlertFilters({ value, onChange }: Props) {
                   </>
                 }
                 onClear={() => onChange({ ...value, probability_min: undefined })}
-                className="bg-muted text-foreground border-border"
-              />
-            )}
-            {value.confidence_min != null && (
-              <FilterChip
-                label={
-                  <>
-                    <span className="text-muted-foreground/80">Confidenza ≥</span>{" "}
-                    {value.confidence_min}%
-                  </>
-                }
-                onClear={() => onChange({ ...value, confidence_min: undefined })}
                 className="bg-muted text-foreground border-border"
               />
             )}

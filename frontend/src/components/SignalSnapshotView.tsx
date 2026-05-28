@@ -10,8 +10,6 @@ import {
 } from "@/lib/alertMeta";
 import { cn } from "@/lib/utils";
 import { glossForStep } from "@/lib/signalInterpretation";
-import { calibratedProbability } from "@/lib/calibratedProbability";
-import { useCalibrationCurve } from "@/hooks/useRulePerformance";
 
 /* Source badge configuration for non-technical hybrid chain steps. */
 const SOURCE_BADGE: Record<
@@ -87,15 +85,10 @@ export function SignalSnapshotView({
   const s = snapshot as Partial<SignalSnapshot>;
   const tone: AlertTone =
     s.tone === "bull" ? "bullish" : s.tone === "bear" ? "bearish" : "neutral";
-  // Forza = pattern strength (primary: snapshot.strength; fallback: confidence).
+  // Forza = pattern strength (snapshot.strength). Probabilità = historical
+  // hit-rate (snapshot.probability). Both are first-class backend fields.
   const forza = snapshotForza(snapshot);
-  // Probabilità = historical hit-rate. Primary: snapshot.probability (backend
-  // two-score model). Legacy fallback: the client-computed calibratedProbability.
-  const probability = snapshotProbabilita(snapshot);
-  const { data: calCurve } = useCalibrationCurve();
-  const legacyCp =
-    probability == null ? calibratedProbability(s.confidence, s.horizon, calCurve) : null;
-  const probPct = probability ?? (legacyCp ? Math.round(legacyCp.prob * 100) : null);
+  const probPct = snapshotProbabilita(snapshot);
   const chain = Array.isArray(s.chain) ? s.chain : [];
   const isHybrid = chain.some(
     (step) => typeof step.source === "string" && step.source in SOURCE_BADGE,
@@ -141,17 +134,9 @@ export function SignalSnapshotView({
             </div>
           )}
 
-          {/* Probabilità — historical hit-rate, neutral/info (slate/sky). The
-              "~" prefix on the legacy (client-derived) estimate signals it's
-              approximate; the backend value is shown exact. */}
-          <div
-            className="flex items-center gap-3"
-            title={
-              legacyCp
-                ? `${PROBABILITA_TOOLTIP} Stima storica (backtest, base: ${legacyCp.basis}, n=${legacyCp.n}).`
-                : PROBABILITA_TOOLTIP
-            }
-          >
+          {/* Probabilità — historical hit-rate, neutral/info (slate/sky).
+              Shows the backend value, or "n/d" when truly absent. */}
+          <div className="flex items-center gap-3" title={PROBABILITA_TOOLTIP}>
             <span className="w-[4.5rem] shrink-0 text-[11px] uppercase tracking-wider text-sky-700/80 dark:text-sky-300/80 font-semibold">
               Probabilità
             </span>
@@ -161,7 +146,7 @@ export function SignalSnapshotView({
               )}
             </div>
             <span className="text-sm font-bold tabular-nums w-10 text-right text-sky-700 dark:text-sky-300">
-              {probPct != null ? `${legacyCp ? "~" : ""}${probPct}%` : "n/d"}
+              {probPct != null ? `${probPct}%` : "n/d"}
             </span>
           </div>
 

@@ -128,14 +128,9 @@ export function buildPlaybook(
     { label: "Target 2", price: entry + sign * d2, rr: d2 / R },
   ];
 
-  // Position sizing scales with Forza (pattern strength). Prefer the new
-  // `strength`; fall back to the legacy `confidence` alias, then a 60 default.
-  const conf =
-    typeof s.strength === "number"
-      ? s.strength
-      : typeof s.confidence === "number"
-        ? s.confidence
-        : 60;
+  // Position sizing scales with Forza (pattern strength). `strength` is always
+  // present now; default to 60 only for a malformed/absent snapshot.
+  const conf = typeof s.strength === "number" ? s.strength : 60;
   const t = Math.max(0, Math.min(1, (conf - 60) / 40));
   const riskBudgetPct = RISK_FLOOR + t * (RISK_CEIL - RISK_FLOOR);
   // Risk-based size: position fraction = risk budget / stop distance (both pct).

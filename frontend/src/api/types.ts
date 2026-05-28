@@ -118,19 +118,15 @@ export interface SignalPoint { date: string; price: number; }
 export interface SignalSnapshot {
   tone: "bull" | "bear";
   /** Pattern STRENGTH (0..100) → rendered as "Forza" in the signal's tone
-   *  color. The primary first-class metric since the two-score split.
-   *  Optional only because legacy alerts predate it → UI falls back to
-   *  `confidence`. */
+   *  color. First-class metric since the two-score split; always emitted by
+   *  the backend (legacy alerts were backfilled). Optional on the type only
+   *  for defensive parsing of malformed snapshots. */
   strength?: number;
   /** Empirical historical hit-rate (0..100) → rendered as "Probabilità" in a
-   *  neutral/info treatment. Replaces the client-computed "Prob. storica"
-   *  (lib/calibratedProbability.ts). Optional: legacy alerts lack it → UI
-   *  falls back to calibratedProbability(...) or shows "n/d". */
+   *  neutral/info treatment. Always emitted by the backend (legacy alerts were
+   *  backfilled); UI shows "n/d" only if it's truly absent. Optional on the
+   *  type only for defensive parsing. */
   probability?: number;
-  /** Transitional alias of `strength` (still written by the backend during
-   *  the migration window). Do NOT rely on it as the primary value — use it
-   *  only as the Forza fallback for legacy alerts. */
-  confidence: number; // 0..100
   chain: SignalChainStep[];
   factors?: Record<string, number>;
   invalidation?: { level?: number; reason?: string } | null;

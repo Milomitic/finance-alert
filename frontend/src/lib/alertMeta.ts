@@ -156,9 +156,9 @@ export const TONE_LABEL: Record<AlertTone, string> = {
 /* ─── Forza / Probabilità — the two-score signal model ──────────────────── */
 /* Since the confidence→(Forza, Probabilità) split, every signal carries two
  * first-class metrics. `Forza` = pattern strength (tone-colored); `Probabilità`
- * = historical hit-rate "di accadimento" (neutral/info-colored). The helpers
- * below centralise the legacy fallbacks so every surface reads them the same
- * way. */
+ * = historical hit-rate "di accadimento" (neutral/info-colored). Both are
+ * always emitted by the backend (legacy alerts were backfilled), so the
+ * helpers below simply read them — no legacy confidence/calibration fallback. */
 
 /** Tooltip copy for Probabilità — surfaced everywhere the metric appears so
  *  users understand it's an educational estimate, not a guarantee. */
@@ -166,22 +166,17 @@ export const PROBABILITA_TOOLTIP =
   "Tasso storico di accadimento di segnali simili (orizzonte) — non una garanzia.";
 
 /** Forza (pattern strength) for a signal snapshot.
- *  Primary: `snapshot.strength`. Legacy fallback: `snapshot.confidence`
- *  (the transitional alias). Null when neither is a number. */
+ *  Reads `snapshot.strength`; null when it's not a number. */
 export function snapshotForza(
   snap: Record<string, unknown> | null | undefined,
 ): number | null {
   if (!snap) return null;
   const s = snap["strength"];
-  if (typeof s === "number") return Math.round(s);
-  const c = snap["confidence"];
-  return typeof c === "number" ? Math.round(c) : null;
+  return typeof s === "number" ? Math.round(s) : null;
 }
 
-/** Probabilità (historical hit-rate) for a signal snapshot, when the backend
- *  emitted it. Returns null for legacy alerts lacking it — callers that have a
- *  calibration curve fall back to `calibratedProbability(...)`, else show
- *  "n/d". */
+/** Probabilità (historical hit-rate) for a signal snapshot.
+ *  Reads `snapshot.probability`; null when it's not a number. */
 export function snapshotProbabilita(
   snap: Record<string, unknown> | null | undefined,
 ): number | null {
