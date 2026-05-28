@@ -19,12 +19,20 @@ from app.signals.events import Event
 class SignalMatch:
     name: str
     tone: str                       # "bull" | "bear"
-    confidence: int                 # 0..100
+    confidence: int                 # 0..100 — DEPRECATED transitional alias of
+                                    # `strength`; removed once all 17 detectors +
+                                    # scan + UI migrate to the two-score model.
     signal_date: str                # ISO — date of the chain's last event
     chain: list[dict]               # [{date, label, detail}]
     invalidation: dict | None       # {"level": float, "reason": str}
     factors: dict[str, float] = field(default_factory=dict)
     annotations: dict = field(default_factory=lambda: {"levels": [], "points": []})
+    # Two-score model (confidence redesign): Forza = pattern strength
+    # (score_v2 over per-factor curves), Probabilità = empirical hit-rate "di
+    # accadimento" (calibration_map). Default to neutral so un-migrated
+    # detectors keep working during the incremental migration.
+    strength: int = 0               # "Forza" 0..100
+    probability: int = 50           # "Probabilità" 0..100
 
 
 class SignalDetector(Protocol):

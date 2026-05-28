@@ -31,6 +31,21 @@ def test_fires_on_golden_cross_pullback_resume():
                for s in m.chain)
 
 
+def test_two_score_model_wired():
+    """Migrated to the Forza/Probabilità model: strength is the soft-min-capped
+    score_v2 (guardrail ≤ 93), probability is the calibration hit-rate (in band),
+    and confidence stays a transitional alias of strength."""
+    df = _golden_then_pullback()
+    m = TrendPullback().detect(extract_events(df), df, build_context(df))
+    assert m is not None
+    assert 0 < m.strength <= 93           # Forza, guardrail-capped
+    assert m.confidence == m.strength     # transitional alias
+    assert 5 <= m.probability <= 95       # Probabilità in band
+    # soft-min property: Forza cannot exceed the trend_strength factor + delta.
+    ts = m.factors["trend_strength"]
+    assert m.strength <= round(100 * (ts + 0.12)) + 1
+
+
 def test_silent_on_flat_series():
     rows = [{"date": f"2026-{1 + i // 28:02d}-{1 + i % 28:02d}", "open": 100,
              "high": 101, "low": 99, "close": 100, "volume": 1000} for i in range(210)]
