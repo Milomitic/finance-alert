@@ -29,6 +29,23 @@ def test_fires_on_beat_gap_volume():
         assert "source" not in step
 
 
+def test_two_score_model_on_fire():
+    events = [
+        Event("2026-02-10", "earnings_surprise", "bull", magnitude=0.6,
+              payload={"surprise_pct": 0.15}, source="earnings"),
+        Event("2026-02-10", "gap", "bull", magnitude=0.04, payload={"gap_pct": 0.04}),
+        Event("2026-02-10", "volume_spike", None, magnitude=3.0, payload={}),
+    ]
+    m = Pead().detect(events, _df(), build_context(_df()))
+    assert isinstance(m, SignalMatch)
+    # Forza: bounded, never pinned at the top of the scale.
+    assert 0 < m.strength <= 93
+    # confidence is the transitional alias of strength during the migration.
+    assert m.confidence == m.strength
+    # Probabilità: empirical hit-rate within the calibrated [floor, ceil].
+    assert 5 <= m.probability <= 95
+
+
 def test_silent_earnings_without_confirmation():
     events = [Event("2026-02-10", "earnings_surprise", "bull", magnitude=0.6,
                     payload={"surprise_pct": 0.15}, source="earnings")]

@@ -21,8 +21,9 @@ from __future__ import annotations
 
 import pandas as pd
 
+from app.signals.calibration_map import get_calibration
 from app.signals.context import SignalContext
-from app.signals.detectors.base import SignalMatch, clamp01, find_after, score
+from app.signals.detectors.base import SignalMatch, clamp01, concave, find_after, score_v2
 from app.signals.events import Event
 
 # Calendar days after the insider cluster to look for confirmation.
@@ -30,6 +31,13 @@ _CONF_WINDOW_DAYS = 30
 
 # Max distance from support level to last close to count as "near support".
 _SUPPORT_PROXIMITY_PCT = 0.03
+
+# Forza anchors. rsi_confirmation is clamp01(rsi_mag) (already 0..1).
+# support_proximity is 1 - gap_pct/0.03 — a 0..1 proximity (1 = exactly on the
+# level). Both live in 0..1: raw value at curve-contribution 0.45 / 0.75 / 0.88
+# + saturating ceil.
+_RSI_CONFIRMATION_ANCHORS = (0.20, 0.40, 0.60, 0.80)
+_SUPPORT_PROXIMITY_ANCHORS = (0.50, 0.80, 0.95, 0.99)
 
 
 class InsiderBuy:
@@ -103,13 +111,19 @@ class InsiderBuy:
         factors: dict[str, float] = {
             # Gate factor: insider cluster magnitude (not in weighted score).
             "cluster_magnitude": clamp01(cluster_mag),
-            "rsi_confirmation": clamp01(rsi_mag),
-            "support_proximity": clamp01(best_proximity),
+            "rsi_confirmation": concave(clamp01(rsi_mag), _RSI_CONFIRMATION_ANCHORS),
+            "support_proximity": concave(clamp01(best_proximity), _SUPPORT_PROXIMITY_ANCHORS),
         }
-        conf = score(
-            factors,
-            {"rsi_confirmation": 1.0, "support_proximity": 0.8},
+        weights = {"rsi_confirmation": 1.0, "support_proximity": 0.8}
+        # Forza: soft-min over the genuine STRENGTH factors (rsi_confirmation +
+        # support_proximity); cluster_magnitude is a gate prerequisite, excluded
+        # from both the weights and the cap.
+        strength = score_v2(
+            factors, weights,
+            strength_keys={"rsi_confirmation", "support_proximity"},
         )
+        # Probabilità: empirical hit-rate "di accadimento" for this detector.
+        probability = get_calibration().probability(self.name, factors)
 
         # Use the confirmation date as signal_date (more recent = more current).
         if rsi_conf is not None and support_evt is not None:
@@ -170,7 +184,9 @@ class InsiderBuy:
         return SignalMatch(
             name=self.name,
             tone=self.tone,
-            confidence=conf,
+            confidence=strength,
+            strength=strength,
+            probability=probability,
             signal_date=signal_date,
             chain=chain,
             invalidation=invalidation,

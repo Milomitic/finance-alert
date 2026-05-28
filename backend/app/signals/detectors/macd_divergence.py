@@ -7,12 +7,17 @@ from __future__ import annotations
 
 import pandas as pd
 
+from app.signals.calibration_map import get_calibration
 from app.signals.context import SignalContext
-from app.signals.detectors.base import SignalMatch, clamp01, score
+from app.signals.detectors.base import SignalMatch, concave, score_v2
 from app.signals.events import Event
 
 _COUNTER_TREND = 1.0
 _WITH_TREND = 0.5
+# Forza anchors for divergence_amplitude. `d.magnitude` is ALREADY a 0..1
+# normalized amplitude (clamp01(d.magnitude)), so anchors live in 0..1:
+# raw value at curve-contribution 0.45 / 0.75 / 0.88 + saturating ceil.
+_AMPLITUDE_ANCHORS = (0.30, 0.55, 0.75, 0.90)
 
 
 class MacdDivergence:
@@ -31,10 +36,17 @@ class MacdDivergence:
         tone = d.direction or "bull"
         counter = (tone == "bull" and ctx.trend_sign <= 0) or (tone == "bear" and ctx.trend_sign >= 0)
         factors = {
-            "divergence_amplitude": clamp01(d.magnitude or 0.0),
+            "divergence_amplitude": concave(d.magnitude or 0.0, _AMPLITUDE_ANCHORS),
             "trend_context": _COUNTER_TREND if counter else _WITH_TREND,
         }
-        conf = score(factors, {"divergence_amplitude": 1.0, "trend_context": 1.0})
+        weights = {"divergence_amplitude": 1.0, "trend_context": 1.0}
+        # Forza: soft-min over the genuine STRENGTH factor only
+        # (divergence_amplitude); trend_context is a context modulator, excluded
+        # from the cap so a mediocre divergence can't be laundered to a high
+        # score by being counter-trend.
+        strength = score_v2(factors, weights, strength_keys={"divergence_amplitude"})
+        # Probabilità: empirical hit-rate "di accadimento" for this detector.
+        probability = get_calibration().probability(self.name, factors)
         pivots = d.payload.get("pivot_dates") or [d.date, d.date]
         chain = [
             {"date": pivots[0], "label": "Primo estremo di prezzo", "detail": "minimo/massimo iniziale"},
@@ -45,6 +57,7 @@ class MacdDivergence:
                          for row in ohlcv.itertuples(index=False)}
         points = [{"date": dt, "price": close_by_date[dt]}
                   for dt in pivots if dt in close_by_date]
-        return SignalMatch(name=self.name, tone=tone, confidence=conf,
+        return SignalMatch(name=self.name, tone=tone, confidence=strength,
+                           strength=strength, probability=probability,
                            signal_date=d.date, chain=chain, invalidation=None, factors=factors,
                            annotations={"levels": [], "points": points})

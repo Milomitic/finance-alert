@@ -20,6 +20,18 @@ def test_fires_from_bull_macd_divergence():
     assert any("divergen" in s["label"].lower() for s in m.chain)
 
 
+def test_two_score_model_bull_macd_divergence():
+    """Forza (strength) is a bounded soft-min score; confidence aliases it;
+    Probabilità sits in the empirical 5..95 band."""
+    events = [Event("2026-02-10", "macd_divergence", "bull", magnitude=0.6,
+                    payload={"pivot_dates": ["2026-01-20", "2026-02-10"]})]
+    m = MacdDivergence().detect(events, _df(), build_context(_df()))
+    assert m is not None
+    assert 0 < m.strength <= 93
+    assert m.confidence == m.strength
+    assert 5 <= m.probability <= 95
+
+
 def test_silent_without_event():
     assert MacdDivergence().detect([], _df(), build_context(_df())) is None
 

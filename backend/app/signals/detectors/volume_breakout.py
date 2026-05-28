@@ -7,15 +7,23 @@ import pandas as pd
 
 from app.signals.context import SignalContext
 from app.core.config import settings
-from app.signals.detectors.base import SignalMatch, find_after, score, soft01, trend_maturity_factor
+from app.signals.calibration_map import get_calibration
+from app.signals.detectors.base import (
+    SignalMatch, concave, find_after, log_saturate, score_v2, trend_maturity_factor,
+)
 from app.signals.events import Event
 
 # How many calendar days after a breakout a volume spike may still confirm it.
 _CONFIRM_WINDOW_DAYS = 4
-# Confidence reference points. Each factor is normalised to [0,1] then weighted.
-_BREAKOUT_REF_PCT = 0.05      # a close this fraction above the broken level => full
-_VOL_EXCESS_REF = 2.0         # volume this many x ABOVE its average (i.e. 3x avg) => full
 _TREND_MISALIGN_FLOOR = 0.4   # a signal against the prevailing trend keeps this much credit
+# Forza anchors for breakout_strength = (close-level)/level, i.e. the % a bar
+# closed above the broken Donchian high. (a45, a75, a88, ceil) in those raw %
+# units: 1.5% over the level reads as a modest break, 8% as the level that
+# genuinely predicts continuation; the tail saturates by ~15%.
+_BREAKOUT_ANCHORS = (0.015, 0.04, 0.08, 0.15)
+# Forza ceil for volume_strength: the curve receives (vol/avg - 1.0) (excess
+# over the average), so ceil=9.0 means a 10x-average spike maps to ~0.85.
+_VOL_EXCESS_CEIL = 9.0
 _FACTOR_WEIGHTS = {
     "breakout_strength": 1.0,
     "volume_strength": 1.2,
@@ -55,16 +63,28 @@ class VolumeBreakout:
         tone = bo.direction or "bull"
         trend_aligned = (ctx.trend_sign > 0 and tone == "bull") or (ctx.trend_sign < 0 and tone == "bear")
         # NOTE: extract_volume_spike only emits when volume >= 2x its average, so
-        # vol_mag is >= 2.0 by construction and volume_strength effectively spans
-        # [0.5, 1.0] rather than the full [0, 1].
+        # vol_mag is >= 2.0 by construction and volume_strength starts partway up
+        # its curve rather than at 0.
         factors = {
-            "breakout_strength": soft01(bo.magnitude or 0.0, _BREAKOUT_REF_PCT),
-            "volume_strength": soft01(vol_mag - 1.0, _VOL_EXCESS_REF),
+            # breakout_strength: bo.magnitude == (close-level)/level (% over the
+            # broken high) → bounded concave curve in those % units.
+            "breakout_strength": concave(bo.magnitude or 0.0, _BREAKOUT_ANCHORS),
+            # volume_strength: vol_mag == vol/avg (unbounded ratio); pass the
+            # EXCESS over average (vol_mag-1.0) into the log-saturating curve.
+            "volume_strength": log_saturate(max(0.0, vol_mag - 1.0), _VOL_EXCESS_CEIL),
             "trend_alignment": 1.0 if trend_aligned else _TREND_MISALIGN_FLOOR,
             "trend_maturity": trend_maturity_factor(ctx.trend_age),
         }
-        conf = score(factors, {**_FACTOR_WEIGHTS,
-                               "trend_maturity": settings.signal_trend_maturity_weight})
+        weights = {**_FACTOR_WEIGHTS,
+                   "trend_maturity": settings.signal_trend_maturity_weight}
+        # Forza: soft-min over the two genuine STRENGTH factors (breakout +
+        # volume); trend_alignment and trend_maturity are context modulators,
+        # excluded from the cap so a mediocre break can't be laundered to a high
+        # score by alignment/maturity riding over it.
+        strength = score_v2(factors, weights,
+                            strength_keys={"breakout_strength", "volume_strength"})
+        # Probabilità: empirical hit-rate "di accadimento" for this detector.
+        probability = get_calibration().probability(self.name, factors)
         confirm_date = confirming.date
         chain = [
             {"date": bo.date, "label": f"Breakout {tone}",
@@ -83,7 +103,8 @@ class VolumeBreakout:
             if isinstance(bo_level, (int, float)) else []
         )
         return SignalMatch(
-            name=self.name, tone=tone, confidence=conf, signal_date=confirm_date,
+            name=self.name, tone=tone, confidence=strength,
+            strength=strength, probability=probability, signal_date=confirm_date,
             chain=chain, invalidation=invalidation, factors=factors,
             annotations={"levels": primary_levels, "points": []},
         )

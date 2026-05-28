@@ -21,6 +21,11 @@ def test_double_bottom_fires_after_neckline_break():
     assert isinstance(m, SignalMatch) and m.tone == "bull" and m.confidence > 0
     assert any("doppio" in s["label"].lower() or "double" in s["label"].lower()
                or "neckline" in s["detail"].lower() for s in m.chain)
+    # Two-score model: Forza in range, confidence is the alias of strength,
+    # Probabilità within the empirical band.
+    assert 0 < m.strength <= 93
+    assert m.confidence == m.strength
+    assert 5 <= m.probability <= 95
 
 
 def test_silent_before_neckline_break():

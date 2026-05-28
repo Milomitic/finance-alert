@@ -8,11 +8,16 @@ from __future__ import annotations
 
 import pandas as pd
 
+from app.signals.calibration_map import get_calibration
 from app.signals.context import SignalContext
-from app.signals.detectors.base import SignalMatch, score, soft01
+from app.signals.detectors.base import SignalMatch, concave, score_v2
 from app.signals.pivots import find_pivots
 
 _PIVOT_W = 3
+# Forza anchor for break_decisiveness = |close - protected| / ATR, a raw
+# ATR-multiple: a break that clears the protected swing by ~2x ATR is decisive
+# (→ ~0.88); a marginal 0.5x ATR poke is weak (→ ~0.45). Ceil 4x sets the tail.
+_BREAK_DECISIVENESS_ANCHORS = (0.5, 1.0, 2.0, 4.0)
 
 
 class StructureBreak:
@@ -50,13 +55,18 @@ class StructureBreak:
             return None
         if not broke or protected <= 0:
             return None
-        magnitude = soft01(abs(last - protected) / (ctx.atr or (protected * 0.02)), 3.0) \
+        excess_over_atr = (abs(last - protected) / (ctx.atr or (protected * 0.02))) \
             if (ctx.atr or protected) else 0.0
         factors = {
-            "break_decisiveness": magnitude,
+            "break_decisiveness": concave(excess_over_atr, _BREAK_DECISIVENESS_ANCHORS),
             "structure": 1.0,
         }
-        conf = score(factors, {"break_decisiveness": 1.0})
+        # Forza: the only genuine strength factor is break_decisiveness; the
+        # always-1.0 `structure` gate is excluded from the soft-min cap.
+        strength = score_v2(factors, {"break_decisiveness": 1.0},
+                            strength_keys={"break_decisiveness"})
+        # Probabilità: empirical hit-rate "di accadimento" for this detector.
+        probability = get_calibration().probability(self.name, factors)
         last_date = str(ohlcv["date"].iloc[-1])[:10]
         kind_txt = "ribassista (rotto l'ultimo minimo crescente)" if tone == "bear" \
             else "rialzista (rotto l'ultimo massimo decrescente)"
@@ -73,7 +83,8 @@ class StructureBreak:
         invalidation = {"level": protected,
                         "reason": "ripristino della struttura precedente"}
         level_kind = "support" if tone == "bull" else "resistance"
-        return SignalMatch(name=self.name, tone=tone, confidence=conf,
+        return SignalMatch(name=self.name, tone=tone, confidence=strength,
+                           strength=strength, probability=probability,
                            signal_date=last_date, chain=chain,
                            invalidation=invalidation, factors=factors,
                            annotations={"levels": [{"label": "Livello protetto",

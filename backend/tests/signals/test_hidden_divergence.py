@@ -21,6 +21,19 @@ def test_fires_bull_hidden_in_uptrend():
                for s in m.chain)
 
 
+def test_two_score_model_bull_hidden():
+    """Forza (strength) is a bounded soft-min score; confidence aliases it;
+    Probabilità sits in the empirical 5..95 band."""
+    df = _uptrend_df()
+    events = [Event("2026-02-10", "hidden_divergence", "bull", magnitude=0.5,
+                    payload={"rsi": [45.0, 38.0]})]
+    m = HiddenDivergence().detect(events, df, build_context(df))
+    assert m is not None
+    assert 0 < m.strength <= 93
+    assert m.confidence == m.strength
+    assert 5 <= m.probability <= 95
+
+
 def test_silent_without_event():
     df = _uptrend_df()
     assert HiddenDivergence().detect([], df, build_context(df)) is None

@@ -1,0 +1,112 @@
+{
+  "version": "2026-05-28",
+  "generated_by": "app.scripts.signal_detector_outcomes",
+  "universe_stocks": 300,
+  "signals": 78084,
+  "horizons": {
+    "short": 5,
+    "medium": 21,
+    "long": 63
+  },
+  "detectors": {
+    "adx_confirmation": {
+      "base_rate": 50,
+      "horizon_days": 63,
+      "n": 13820,
+      "mkt_neutral_hit": 49.3,
+      "mkt_neutral_edge_pct": -0.243
+    },
+    "squeeze_expansion": {
+      "base_rate": 48,
+      "horizon_days": 21,
+      "n": 11215,
+      "mkt_neutral_hit": 48.7,
+      "mkt_neutral_edge_pct": -0.191
+    },
+    "candle_reversal": {
+      "base_rate": 48,
+      "horizon_days": 5,
+      "n": 10899,
+      "mkt_neutral_hit": 49.0,
+      "mkt_neutral_edge_pct": -0.1
+    },
+    "trend_pullback": {
+      "base_rate": 50,
+      "horizon_days": 63,
+      "n": 6191,
+      "mkt_neutral_hit": 49.8,
+      "mkt_neutral_edge_pct": 0.078
+    },
+    "oversold_reversal": {
+      "base_rate": 52,
+      "horizon_days": 21,
+      "n": 5865,
+      "mkt_neutral_hit": 50.0,
+      "mkt_neutral_edge_pct": -0.033
+    },
+    "sr_flip": {
+      "base_rate": 50,
+      "horizon_days": 21,
+      "n": 5423,
+      "mkt_neutral_hit": 49.7,
+      "mkt_neutral_edge_pct": -0.186
+    },
+    "gap_and_go": {
+      "base_rate": 52,
+      "horizon_days": 5,
+      "n": 5363,
+      "mkt_neutral_hit": 51.4,
+      "mkt_neutral_edge_pct": 0.11
+    },
+    "chart_pattern": {
+      "base_rate": 49,
+      "horizon_days": 21,
+      "n": 3701,
+      "mkt_neutral_hit": 49.5,
+      "mkt_neutral_edge_pct": -0.148
+    },
+    "volume_breakout": {
+      "base_rate": 50,
+      "horizon_days": 21,
+      "n": 3302,
+      "mkt_neutral_hit": 51.5,
+      "mkt_neutral_edge_pct": 0.255
+    },
+    "rsi_divergence": {
+      "base_rate": 52,
+      "horizon_days": 21,
+      "n": 3036,
+      "mkt_neutral_hit": 51.8,
+      "mkt_neutral_edge_pct": 0.314
+    },
+    "macd_divergence": {
+      "base_rate": 51,
+      "horizon_days": 21,
+      "n": 3028,
+      "mkt_neutral_hit": 51.5,
+      "mkt_neutral_edge_pct": 0.235
+    },
+    "hidden_divergence": {
+      "base_rate": 49,
+      "horizon_days": 21,
+      "n": 2638,
+      "mkt_neutral_hit": 49.1,
+      "mkt_neutral_edge_pct": -0.15
+    },
+    "high52_momentum": {
+      "base_rate": 55,
+      "horizon_days": 63,
+      "n": 2325,
+      "mkt_neutral_hit": 48.1,
+      "mkt_neutral_edge_pct": -0.29
+    },
+    "structure_break": {
+      "base_rate": 45,
+      "horizon_days": 63,
+      "n": 1278,
+      "mkt_neutral_hit": 46.6,
+      "mkt_neutral_edge_pct": -1.46
+    }
+  },
+  "factor_adjustments": {}
+}

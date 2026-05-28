@@ -28,6 +28,21 @@ def test_fires_on_upgrade_with_breakout():
         assert "source" not in step
 
 
+def test_two_score_model_upgrade_with_breakout():
+    """Forza (strength) is a bounded soft-min score; confidence aliases it;
+    Probabilità sits in the empirical 5..95 band."""
+    events = [
+        Event("2026-02-10", "analyst_change", "bull", magnitude=0.6,
+              payload={"firm": "X", "to_grade": "Buy"}, source="analyst"),
+        Event("2026-02-11", "breakout", "bull", magnitude=0.04, payload={"level": 105.0}),
+    ]
+    m = AnalystMomentum().detect(events, _df(), build_context(_df()))
+    assert m is not None
+    assert 0 < m.strength <= 93
+    assert m.confidence == m.strength
+    assert 5 <= m.probability <= 95
+
+
 def test_silent_upgrade_without_confirmation():
     events = [Event("2026-02-10", "analyst_change", "bull", magnitude=0.6,
                     payload={"firm": "X"}, source="analyst")]

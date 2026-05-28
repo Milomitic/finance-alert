@@ -25,11 +25,21 @@ from __future__ import annotations
 import pandas as pd
 
 from app.signals.context import SignalContext
-from app.signals.detectors.base import SignalMatch, clamp01, find_after, score, soft01
+from app.signals.calibration_map import get_calibration
+from app.signals.detectors.base import (
+    SignalMatch, clamp01, concave, find_after, log_saturate, score_v2,
+)
 from app.signals.events import Event
 
 # Maximum calendar days after the earnings date to look for confirmation.
 _CONF_WINDOW_DAYS = 3
+# Forza anchors for gap_size = confirming gap magnitude (fraction of prior
+# close). (a45, a75, a88, ceil): 2% modest, 9% the level that genuinely
+# predicts drift; tail saturates by ~15%.
+_GAP_ANCHORS = (0.02, 0.05, 0.09, 0.15)
+# Forza ceil for volume_strength: the curve receives (vol/avg - 1.0); ceil=9.0
+# maps a 10x-average spike to ~0.85.
+_VOL_EXCESS_CEIL = 9.0
 
 
 def _closes_in_direction(ohlcv: pd.DataFrame, iso_date: str, tone: str) -> bool:
@@ -119,13 +129,21 @@ class Pead:
             # Gate factor (not in weights): surprise strength validates the premise.
             # Kept in factors dict for transparency / frontend display.
             "surprise_strength": clamp01(surprise_mag),
-            "gap_size": soft01(gap_mag, 0.04),       # 4% gap = strong
-            "volume_strength": soft01(vol_mag - 1.0, 2.0),  # 3x avg = strong
+            # gap_size: confirming gap as a fraction of prior close → bounded
+            # concave curve in those % units.
+            "gap_size": concave(gap_mag, _GAP_ANCHORS),
+            # volume_strength: vol_mag == vol/avg (unbounded ratio); pass the
+            # EXCESS over average into the log-saturating curve.
+            "volume_strength": log_saturate(max(0.0, vol_mag - 1.0), _VOL_EXCESS_CEIL),
         }
-        conf = score(
-            factors,
-            {"gap_size": 1.0, "volume_strength": 0.8},  # surprise is gate, not weighted
-        )
+        weights = {"gap_size": 1.0, "volume_strength": 0.8}  # surprise is gate, not weighted
+        # Forza: soft-min over the two genuine STRENGTH factors (gap + volume).
+        # surprise_strength is a gate (always validated by the time we reach
+        # here) and is excluded from both the weights and the cap.
+        strength = score_v2(factors, weights,
+                            strength_keys={"gap_size", "volume_strength"})
+        # Probabilità: empirical hit-rate "di accadimento" for this detector.
+        probability = get_calibration().probability(self.name, factors)
 
         sp = surprise.payload.get("surprise_pct")
         sp_txt = f"{sp:+.1f}%" if isinstance(sp, (int, float)) else "n/d"
@@ -164,7 +182,9 @@ class Pead:
         return SignalMatch(
             name=self.name,
             tone=tone,
-            confidence=conf,
+            confidence=strength,
+            strength=strength,
+            probability=probability,
             signal_date=signal_date,
             chain=chain,
             invalidation=invalidation,

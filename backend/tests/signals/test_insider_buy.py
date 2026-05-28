@@ -29,6 +29,21 @@ def test_fires_on_cluster_with_oversold():
         assert "source" not in step
 
 
+def test_two_score_model_cluster_with_oversold():
+    """Forza (strength) is a bounded soft-min score; confidence aliases it;
+    Probabilità sits in the empirical 5..95 band."""
+    events = [
+        Event("2026-02-10", "insider_cluster", "bull", magnitude=0.7,
+              payload={"n_buyers": 3, "total_shares": 50000}, source="insider"),
+        Event("2026-02-10", "rsi_extreme", "bull", magnitude=0.6, payload={"rsi": 24.0}),
+    ]
+    m = InsiderBuy().detect(events, _df(), build_context(_df()))
+    assert m is not None
+    assert 0 < m.strength <= 93
+    assert m.confidence == m.strength
+    assert 5 <= m.probability <= 95
+
+
 def test_silent_cluster_without_confirmation():
     events = [Event("2026-02-10", "insider_cluster", "bull", magnitude=0.7,
                     payload={"n_buyers": 3}, source="insider")]

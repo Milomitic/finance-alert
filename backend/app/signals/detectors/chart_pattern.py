@@ -5,9 +5,15 @@ from __future__ import annotations
 
 import pandas as pd
 
+from app.signals.calibration_map import get_calibration
 from app.signals.context import SignalContext
-from app.signals.detectors.base import SignalMatch, clamp01, score
+from app.signals.detectors.base import SignalMatch, clamp01, concave, score_v2
 from app.signals.events import Event
+
+# Forza anchor for pattern_amplitude = the chart_pattern event magnitude
+# (already 0..1; the extractor hard-codes ~0.6 for many patterns). Anchors live
+# in those 0..1 units: a 0.80-amplitude pattern reads strong (→ ~0.88).
+_PATTERN_AMPLITUDE_ANCHORS = (0.40, 0.65, 0.80, 0.92)
 
 _PATTERN_IT = {
     "double_bottom": "Doppio minimo",
@@ -43,10 +49,15 @@ class ChartPattern:
         if not broke:
             return None
         factors = {
-            "pattern_amplitude": clamp01(p.magnitude or 0.0),
+            "pattern_amplitude": concave(clamp01(p.magnitude or 0.0), _PATTERN_AMPLITUDE_ANCHORS),
             "neckline_break": 1.0,   # gate (display only)
         }
-        conf = score(factors, {"pattern_amplitude": 1.0})
+        # Forza: pattern_amplitude is the only genuine strength factor; the
+        # always-1.0 neckline_break gate is excluded from the soft-min cap.
+        strength = score_v2(factors, {"pattern_amplitude": 1.0},
+                            strength_keys={"pattern_amplitude"})
+        # Probabilità: empirical hit-rate "di accadimento" for this detector.
+        probability = get_calibration().probability(self.name, factors)
         pat = p.payload.get("pattern", "pattern")
         last_date = str(ohlcv["date"].iloc[-1])[:10]
         chain = [
@@ -63,7 +74,8 @@ class ChartPattern:
             "points": [{"date": str(pt["date"])[:10], "price": float(pt["price"])}
                        for pt in pts if isinstance(pt.get("price"), (int, float))],
         }
-        return SignalMatch(name=self.name, tone=tone, confidence=conf,
+        return SignalMatch(name=self.name, tone=tone, confidence=strength,
+                           strength=strength, probability=probability,
                            signal_date=last_date, chain=chain,
                            invalidation=invalidation, factors=factors,
                            annotations=annotations)

@@ -25,8 +25,9 @@ from __future__ import annotations
 
 import pandas as pd
 
+from app.signals.calibration_map import get_calibration
 from app.signals.context import SignalContext
-from app.signals.detectors.base import SignalMatch, clamp01, find_after, score
+from app.signals.detectors.base import SignalMatch, clamp01, concave, find_after, score_v2
 from app.signals.events import Event
 
 # Calendar days after the analyst action to look for technical confirmation.
@@ -34,6 +35,12 @@ _CONF_WINDOW_DAYS = 5
 
 # A breakout of this size (fraction of price) is treated as "full" strength.
 _BREAKOUT_FULL = 0.04
+
+# Forza anchors for technical_strength. The raw value passed to the curve is
+# clamp01(tech_mag / _BREAKOUT_FULL) — ALREADY a 0..1 normalized breakout ratio
+# (a 4% breakout => 1.0) — so anchors live in 0..1: raw value at curve-
+# contribution 0.45 / 0.75 / 0.88 + saturating ceil.
+_TECH_STRENGTH_ANCHORS = (0.3, 0.55, 0.75, 0.9)
 
 
 class AnalystMomentum:
@@ -86,9 +93,16 @@ class AnalystMomentum:
             # Gate: the analyst action is a prerequisite, not a strength factor.
             "upgrade_present": 1.0,
             # Weighted: how strong is the confirming technical move?
-            "technical_strength": clamp01(tech_mag / _BREAKOUT_FULL),
+            "technical_strength": concave(
+                clamp01(tech_mag / _BREAKOUT_FULL), _TECH_STRENGTH_ANCHORS),
         }
-        conf = score(factors, {"technical_strength": 1.0})
+        weights = {"technical_strength": 1.0}
+        # Forza: soft-min over the genuine STRENGTH factor only
+        # (technical_strength); upgrade_present is a gate (always 1.0) and is
+        # excluded from both the weights and the cap.
+        strength = score_v2(factors, weights, strength_keys={"technical_strength"})
+        # Probabilità: empirical hit-rate "di accadimento" for this detector.
+        probability = get_calibration().probability(self.name, factors)
 
         signal_date = tech_evt.date
 
@@ -147,7 +161,9 @@ class AnalystMomentum:
         return SignalMatch(
             name=self.name,
             tone=tone,
-            confidence=conf,
+            confidence=strength,
+            strength=strength,
+            probability=probability,
             signal_date=signal_date,
             chain=chain,
             invalidation=invalidation,
