@@ -426,3 +426,56 @@ shouldn't poison the cache for 24h across restarts.
 The third in-memory cache (`live_quote_service`) is **NOT** backed by L2
 because its TTL is 10 seconds — a 30s-old quote is worse than re-fetching,
 and the persistence overhead would dominate.
+
+---
+
+## Scoring architecture: 3 orthogonal lenses (2026-05 redesign)
+
+Three INDEPENDENT lenses — keep them decoupled (a mid-2026 cleanup removed the
+cross-lens leakage; don't re-introduce it):
+
+1. **Qualità** — `score_service.py` composite, now **PURE fundamental** (5
+   pillars: profitability/sustainability/growth/value/sentiment, `PILLAR_WEIGHTS`
+   sum 1.0). The **Momentum pillar was REMOVED** (price-action belongs to the
+   Tecnico lens). `StockScore.momentum` column kept nullable but always `None`;
+   `_momentum()` retained-but-unused. Recomputed by `score_service.recompute_all`
+   (called inside `run_tracked_scan`, NOT by `scan_universe`).
+2. **Tecnico** — `technical_score_service.py`: continuous price-action posture.
+   OWNS all momentum/price-action. Do NOT let signals nudge its composite (the
+   old ±5pp nudge was removed; the `signals` field is informational only).
+3. **Segnali** — the 17 detectors. Each signal carries **Forza** + **Probabilità**
+   — NOT `confidence` (that single score was split; the `confidence` field is a
+   TRANSITIONAL alias of `strength`, being retired).
+
+### Signal scoring (`app/signals/detectors/base.py`)
+- **Forza** = `score_v2(factors, weights, strength_keys)`: weighted mean capped by
+  a soft-min over the STRENGTH factors → `min(arith, min(strengths)+0.12, 0.99)`.
+  Kills "mediocrity laundering". EXCLUDE context factors (trend_alignment /
+  trend_maturity / gates) from `strength_keys`. Ceiling **0.99** — reachable only
+  by exceptional signals; 100 never.
+- Per-factor curves: `concave(x, anchors)` (bounded) / `log_saturate(x, ceil)`
+  (unbounded ratios, e.g. volume). ⚠️ anchors are per-detector and must be in the
+  **UNITS OF THE VALUE PASSED TO THE CURVE** — read the factor formula (e.g. a
+  `clamp01((ADX-25)/75)` factor takes 0..1, NOT raw ADX).
+- **Probabilità** = `calibration_map.get_calibration().probability(name, factors)`
+  → per-detector base rate (+ bounded factor adjustments) from
+  `app/data/signal_calibration.json`. Empirical hit-rate "di accadimento" (~45-55:
+  single-name technicals are near coin-flips). Degrades to neutral 50 if the
+  artifact is missing.
+- Snapshot stores `strength` + `probability`; emission gate is on Forza
+  (`settings.signal_min_confidence` = the min-Forza bar).
+
+### Calibration data — read-only studies, regenerate when wanted
+- `python -m app.scripts.signal_factor_outcomes` — per-FACTOR forward-outcome study.
+- `python -m app.scripts.signal_detector_outcomes --emit-map` — per-DETECTOR base
+  rates → writes `app/data/signal_calibration.json`. Both no-look-ahead over 10y
+  `ohlcv_daily`; the confidence/Forza was validated against these (current
+  `confidence` shown ~flat vs realised outcome — the reason for the split).
+- Design spec: `docs/superpowers/specs/2026-05-28-signal-strength-probability-split-design.md`.
+
+### One-off scan / recompute outside the API (e.g. after a scoring change)
+Stop uvicorn FIRST (sole SQLite writer → avoids "database is locked"), run with
+`cd backend && PYTHONPATH=. ./.venv/Scripts/python.exe <script>`, then restart +
+verify `/api/health`. `scan_universe` uses STORED OHLCV (fast, no network) and
+fires signals only — it does NOT recompute the composite; `recompute_all` does
+(reads fundamentals from the L2 cache, ~minutes for the 1490-stock universe).
