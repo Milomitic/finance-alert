@@ -8,11 +8,16 @@ from __future__ import annotations
 
 import pandas as pd
 
+from app.signals.calibration_map import get_calibration
 from app.signals.context import SignalContext
-from app.signals.detectors.base import SignalMatch, clamp01, score
+from app.signals.detectors.base import SignalMatch, concave, score_v2
 from app.signals.events import Event
 
 _NEAR_PCT = 0.03
+# Forza: candle_strength is the candle body/range ratio, already in [0, 1].
+# Anchors live in that 0..1 unit. A near-marubozu engulfing (~0.96 body/range)
+# is the empirically-strong reading -> 0.88; an ordinary 0.8 body sits mid-band.
+_CANDLE_STRENGTH_ANCHORS = (0.75, 0.90, 0.96, 0.99)
 
 _PATTERN_IT = {
     "hammer": "Hammer", "shooting_star": "Shooting star",
@@ -45,10 +50,15 @@ class CandleReversal:
             return None
         pattern = cdl.payload.get("pattern", "candle")
         factors = {
-            "candle_strength": clamp01(cdl.magnitude or 0.0),
+            "candle_strength": concave(cdl.magnitude or 0.0, _CANDLE_STRENGTH_ANCHORS),
             "at_level": 1.0,   # gate (display only)
         }
-        conf = score(factors, {"candle_strength": 1.0})
+        weights = {"candle_strength": 1.0}
+        # Forza: soft-min over the single STRENGTH factor (candle_strength);
+        # at_level is a gate (always 1.0), excluded so it can't inflate the floor.
+        strength = score_v2(factors, weights, strength_keys={"candle_strength"})
+        # Probabilità: empirical hit-rate "di accadimento" for this detector.
+        probability = get_calibration().probability(self.name, factors)
         nearest = min((lv for lv in levels if lv), key=lambda lv: abs(last - lv))
         loc = "supporto" if tone == "bull" else "resistenza"
         chain = [
@@ -60,7 +70,8 @@ class CandleReversal:
         invalidation = {"level": float(nearest), "reason": f"rottura del {loc}"}
         level_kind = "support" if tone == "bull" else "resistance"
         level_label = "Supporto" if tone == "bull" else "Resistenza"
-        return SignalMatch(name=self.name, tone=tone, confidence=conf,
+        return SignalMatch(name=self.name, tone=tone, confidence=strength,
+                           strength=strength, probability=probability,
                            signal_date=cdl.date, chain=chain,
                            invalidation=invalidation, factors=factors,
                            annotations={"levels": [{"label": level_label,

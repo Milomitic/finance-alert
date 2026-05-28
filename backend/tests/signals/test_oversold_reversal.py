@@ -33,6 +33,20 @@ def test_silent_without_rsi_extreme():
     assert OversoldReversal().detect(only_sr, df, build_context(df)) is None
 
 
+def test_two_score_wiring_on_fire():
+    df = _df(96.5)
+    events = [
+        Event("2026-02-10", "rsi_extreme", "bull", magnitude=0.5,
+              payload={"rsi": 22.0, "period": 14}),
+        Event("2026-02-05", "sr_level", None, payload={"kind": "support", "level": 96.0}),
+    ]
+    m = OversoldReversal().detect(events, df, build_context(df))
+    assert m is not None
+    assert 0 < m.strength <= 93
+    assert m.confidence == m.strength
+    assert 5 <= m.probability <= 95
+
+
 def test_oversold_reversal_annotations_has_primary_level():
     df = _df(96.5)
     events = [

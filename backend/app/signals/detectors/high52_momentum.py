@@ -5,13 +5,19 @@ from __future__ import annotations
 
 import pandas as pd
 
+from app.signals.calibration_map import get_calibration
 from app.signals.context import SignalContext
 from app.core.config import settings
-from app.signals.detectors.base import SignalMatch, clamp01, score, trend_maturity_factor
+from app.signals.detectors.base import SignalMatch, clamp01, concave, score_v2, trend_maturity_factor
 from app.signals.events import Event
 
 _WINDOW = 252
 _NEAR_THRESHOLD = 0.97
+# Forza: proximity is the raw price/52w-high ratio (last / hi_52), which lives
+# in ~[0.97, 1.0] once the detector's _NEAR_THRESHOLD gate has passed. Anchors
+# live in that ratio unit: at the 52w high (~0.999) the momentum anomaly is
+# strongest (-> 0.88); merely 0.985 of the high sits at the low anchor (0.45).
+_PROXIMITY_ANCHORS = (0.985, 0.995, 0.999, 1.0)
 
 
 class High52Momentum:
@@ -42,17 +48,25 @@ class High52Momentum:
         rng = hi_52 - lo_52
         momentum = clamp01((last - lo_52) / rng) if rng > 0 else 0.0
         factors = {
-            "proximity": clamp01((proximity - _NEAR_THRESHOLD) / (1.0 - _NEAR_THRESHOLD)),
+            "proximity": concave(proximity, _PROXIMITY_ANCHORS),
             "trend": 1.0 if ctx.trend_sign > 0 else 0.0,
             "momentum": momentum,
             "confirmation": 1.0,
             "trend_maturity": trend_maturity_factor(ctx.trend_age),
         }
+        # `momentum` is empirically saturated / uninformative for this anomaly,
+        # so it is kept in `factors` for display but DROPPED from the weights.
         # `trend` and `confirmation` are gate conditions - kept in `factors` as
         # displayed evidence but excluded from score weights to avoid inflating
         # the floor.
-        conf = score(factors, {"proximity": 1.0, "momentum": 0.8,
-                               "trend_maturity": settings.signal_trend_maturity_weight})
+        weights = {"proximity": 1.0,
+                   "trend_maturity": settings.signal_trend_maturity_weight}
+        # Forza: soft-min over the single STRENGTH factor (proximity); momentum
+        # (saturated, dropped) and trend_maturity (a context modulator) are
+        # excluded from strength_keys so a mediocre proximity can't be laundered.
+        strength = score_v2(factors, weights, strength_keys={"proximity"})
+        # Probabilità: empirical hit-rate "di accadimento" for this detector.
+        probability = get_calibration().probability(self.name, factors)
         last_date = str(ohlcv["date"].iloc[-1])[:10]
         chain = [
             {"date": last_date, "label": "Vicino al massimo 52 settimane",
@@ -63,7 +77,8 @@ class High52Momentum:
              "detail": "momentum corroborato da rottura o spike di volume"},
         ]
         invalidation = {"level": lo_52, "reason": "rottura del minimo a 52 settimane"}
-        return SignalMatch(name=self.name, tone="bull", confidence=conf,
+        return SignalMatch(name=self.name, tone="bull", confidence=strength,
+                           strength=strength, probability=probability,
                            signal_date=last_date, chain=chain,
                            invalidation=invalidation, factors=factors,
                            annotations={"levels": [{"label": "Max 52 settimane",

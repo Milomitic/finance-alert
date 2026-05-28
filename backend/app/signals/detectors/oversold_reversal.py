@@ -7,11 +7,17 @@ from __future__ import annotations
 
 import pandas as pd
 
+from app.signals.calibration_map import get_calibration
 from app.signals.context import SignalContext
-from app.signals.detectors.base import SignalMatch, clamp01, score
+from app.signals.detectors.base import SignalMatch, clamp01, concave, score_v2
 from app.signals.events import Event
 
 _NEAR_PCT = 0.03   # within 3% of the level counts as "at" the level
+# Forza: rsi_extremity is already a normalized [0, 1] distance past the 30/70
+# threshold (clamp01((30-rsi)/25) for bull). Anchors live in that 0..1 unit.
+# A deep oversold RSI≈10 -> extremity 0.80 = the empirically-strong reading
+# (-> 0.88); a mild extremity 0.30 (RSI≈22.5) sits at the low anchor (-> 0.45).
+_RSI_EXTREMITY_ANCHORS = (0.3, 0.55, 0.8, 1.0)
 
 
 class OversoldReversal:
@@ -52,11 +58,17 @@ class OversoldReversal:
         else:
             extremity = 0.0
         factors = {
-            "rsi_extremity": extremity,
+            "rsi_extremity": concave(extremity, _RSI_EXTREMITY_ANCHORS),
             "at_level": 1.0,   # gate, kept for display
             "turn": 1.0,       # gate, kept for display
         }
-        conf = score(factors, {"rsi_extremity": 1.0})
+        weights = {"rsi_extremity": 1.0}
+        # Forza: soft-min over the single STRENGTH factor (rsi_extremity);
+        # at_level + turn are gates (always 1.0), excluded from the weights so
+        # they can't inflate the floor.
+        strength = score_v2(factors, weights, strength_keys={"rsi_extremity"})
+        # Probabilità: empirical hit-rate "di accadimento" for this detector.
+        probability = get_calibration().probability(self.name, factors)
         nearest = min((lv for lv in levels if lv), key=lambda lv: abs(last - lv))
         chain = [
             {"date": ext.date, "label": f"RSI {'ipervenduto' if tone == 'bull' else 'ipercomprato'}",
@@ -68,7 +80,8 @@ class OversoldReversal:
                         "reason": f"rottura del {'supporto' if tone == 'bull' else 'resistenza'}"}
         level_kind = "support" if tone == "bull" else "resistance"
         level_label = "Supporto" if tone == "bull" else "Resistenza"
-        return SignalMatch(name=self.name, tone=tone, confidence=conf,
+        return SignalMatch(name=self.name, tone=tone, confidence=strength,
+                           strength=strength, probability=probability,
                            signal_date=_last_date(ohlcv), chain=chain,
                            invalidation=invalidation, factors=factors,
                            annotations={"levels": [{"label": level_label,

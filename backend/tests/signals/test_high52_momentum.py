@@ -34,6 +34,15 @@ def test_silent_near_high_without_confirmation():
     assert High52Momentum().detect([], df, build_context(df)) is None
 
 
+def test_two_score_wiring_on_fire():
+    df = _near_52w_high_uptrend()
+    m = High52Momentum().detect(extract_events(df), df, build_context(df))
+    assert m is not None
+    assert 0 < m.strength <= 93
+    assert m.confidence == m.strength
+    assert 5 <= m.probability <= 95
+
+
 def test_high52_momentum_annotations_has_resistance_level():
     df = _near_52w_high_uptrend()
     m = High52Momentum().detect(extract_events(df), df, build_context(df))

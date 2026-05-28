@@ -34,6 +34,20 @@ def test_silent_candle_away_from_level():
     assert CandleReversal().detect(events, df, build_context(df)) is None
 
 
+def test_two_score_wiring_on_fire():
+    df = _df(96.5)
+    events = [
+        Event("2026-02-10", "candle_reversal", "bull", magnitude=0.8,
+              payload={"pattern": "hammer"}),
+        Event("2026-02-05", "sr_level", None, payload={"kind": "support", "level": 96.0}),
+    ]
+    m = CandleReversal().detect(events, df, build_context(df))
+    assert m is not None
+    assert 0 < m.strength <= 93
+    assert m.confidence == m.strength
+    assert 5 <= m.probability <= 95
+
+
 def test_candle_reversal_annotations_has_primary_level():
     df = _df(96.5)
     events = [
