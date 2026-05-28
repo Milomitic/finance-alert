@@ -60,7 +60,8 @@ def _detector_horizon(name: str) -> int:
     return _H_BY_HORIZON.get(_PRIOR.get(name, "medium"), H_MED)
 
 
-def run(*, sample: int, step: int, window: int, min_bars: int) -> None:
+def run(*, sample: int, step: int, window: int, min_bars: int,
+        emit_map: bool = False, map_version: str = "1") -> None:
     from app.core.db import SessionLocal
 
     db = SessionLocal()
@@ -104,7 +105,12 @@ def run(*, sample: int, step: int, window: int, min_bars: int) -> None:
                     fwd = c[i + h] / c[i] - 1.0
                     excess = fwd - mean
                     dir_excess = excess if m.tone == "bull" else -excess
-                    per_det[m.name].append((dir_excess, int(m.confidence)))
+                    # ABSOLUTE directional hit ("di accadimento"): did the move
+                    # go the signalled way, regardless of the market? This is
+                    # the basis for Probabilità (vs market-neutral = skill edge).
+                    abs_hit = 1.0 if ((m.tone == "bull" and fwd > 0)
+                                      or (m.tone == "bear" and fwd < 0)) else 0.0
+                    per_det[m.name].append((dir_excess, int(m.confidence), abs_hit))
                     n_signals += 1
             if (sidx + 1) % 25 == 0:
                 logger.info(f"[detector-outcomes] {sidx + 1}/{len(universe)} stocks, "
@@ -115,33 +121,60 @@ def run(*, sample: int, step: int, window: int, min_bars: int) -> None:
         print(f"\n{'#'*78}\n#  DETECTOR-LEVEL OUTCOME STUDY (the conjunction)")
         print(f"#  universe={len(universe)}  detect_calls={n_calls:,}  signals={n_signals:,}")
         print(f"#  market-neutral excess fwd return from the detection bar\n{'#'*78}")
-        print(f"\n{'detector':<24}{'n':>8}{'hit%':>8}{'edge%':>9}{'horizon':>9}")
+        print(f"\n{'detector':<24}{'n':>8}{'absHit%':>9}{'mnHit%':>8}{'mnEdge%':>9}{'horiz':>7}")
         print("-" * 78)
-        rows = []
+        base_rates: dict[str, dict] = {}
         for name in sorted(per_det, key=lambda k: -len(per_det[k])):
             arr = per_det[name]
             if len(arr) < 30:
                 continue
             de = np.array([a[0] for a in arr])
-            hit = float((de > 0).mean()) * 100
-            edge = float(de.mean()) * 100
-            rows.append((name, len(arr), hit, edge))
-            print(f"{name:<24}{len(arr):>8}{hit:>8.1f}{edge:>+9.2f}{_detector_horizon(name):>8}d")
+            abs_hit = float(np.mean([a[2] for a in arr])) * 100   # ABSOLUTE → base rate
+            mn_hit = float((de > 0).mean()) * 100                 # market-neutral hit
+            edge = float(de.mean()) * 100                         # market-neutral edge
+            h = _detector_horizon(name)
+            base_rates[name] = {"base_rate": round(abs_hit), "horizon_days": h,
+                                "n": len(arr), "mkt_neutral_hit": round(mn_hit, 1),
+                                "mkt_neutral_edge_pct": round(edge, 3)}
+            print(f"{name:<24}{len(arr):>8}{abs_hit:>9.1f}{mn_hit:>8.1f}{edge:>+9.2f}{h:>6}d")
 
         # Pooled: does CURRENT confidence predict the outcome?
         all_pairs = [p for arr in per_det.values() for p in arr]
         print(f"\n{'='*78}\n  IS CURRENT `confidence` PREDICTIVE?  (pooled, n={len(all_pairs):,})\n{'='*78}")
-        print(f"  {'confidence band':<18}{'n':>8}{'hit%':>8}{'edge%':>9}")
+        print(f"  {'confidence band':<18}{'n':>8}{'absHit%':>9}{'mnHit%':>8}{'mnEdge%':>9}")
         bands = [(0, 60), (60, 70), (70, 80), (80, 90), (90, 101)]
         for lo, hi in bands:
-            sub = [de for de, conf in all_pairs if lo <= conf < hi]
+            sub = [(de, ah) for de, conf, ah in all_pairs if lo <= conf < hi]
             if not sub:
                 continue
-            a = np.array(sub)
-            print(f"  [{lo:>3},{hi:>3})        {len(a):>8}{(a>0).mean()*100:>8.1f}{a.mean()*100:>+9.2f}")
-        print("\n  If hit% RISES with the confidence band, the current score is")
-        print("  predictive; if FLAT, it's measuring pattern-strength not probability")
-        print("  — which is exactly why we split it into Forza + Probabilita.\n")
+            de_a = np.array([s[0] for s in sub])
+            ah_a = np.array([s[1] for s in sub])
+            print(f"  [{lo:>3},{hi:>3})        {len(sub):>8}{ah_a.mean()*100:>9.1f}"
+                  f"{(de_a>0).mean()*100:>8.1f}{de_a.mean()*100:>+9.2f}")
+        print("\n  If absHit/mnHit RISES with the confidence band, the current score")
+        print("  is predictive; if FLAT, it's pattern-strength not probability —")
+        print("  which is exactly why we split it into Forza + Probabilita.\n")
+
+        if emit_map:
+            import json
+            from pathlib import Path
+
+            payload = {
+                "version": map_version,
+                "generated_by": "app.scripts.signal_detector_outcomes",
+                "universe_stocks": len(universe),
+                "signals": int(n_signals),
+                "horizons": {"short": H_SHORT, "medium": H_MED, "long": H_LONG},
+                "detectors": base_rates,
+                # Per-factor adjustment points (raw -> +/- pts). Empty in v1: the
+                # marginal-factor study showed mostly-flat effects, so the
+                # detector base rate dominates. Populated in a follow-up.
+                "factor_adjustments": {},
+            }
+            out_path = Path(__file__).resolve().parents[1] / "data" / "signal_calibration.json"
+            out_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+            print(f"  [emit-map] wrote {out_path} "
+                  f"({len(base_rates)} detectors, {n_signals:,} signals)\n")
     finally:
         db.close()
 
@@ -152,5 +185,9 @@ if __name__ == "__main__":
     ap.add_argument("--step", type=int, default=42)
     ap.add_argument("--window", type=int, default=500)
     ap.add_argument("--min-bars", type=int, default=1000)
+    ap.add_argument("--emit-map", action="store_true",
+                    help="write app/data/signal_calibration.json from the base rates")
+    ap.add_argument("--map-version", type=str, default="1")
     args = ap.parse_args()
-    run(sample=args.sample, step=args.step, window=args.window, min_bars=args.min_bars)
+    run(sample=args.sample, step=args.step, window=args.window, min_bars=args.min_bars,
+        emit_map=args.emit_map, map_version=args.map_version)

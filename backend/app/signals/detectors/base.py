@@ -225,3 +225,57 @@ def score_v2(
     if strengths:
         arith = min(arith, min(strengths) + delta)
     return round(100.0 * min(arith, guardrail))
+
+
+# ── Probabilità ("di accadimento") — empirical occurrence likelihood ─────────
+# Unlike Forza (pattern strength), Probabilità is grounded in REALISED outcomes:
+# a detector's historical absolute directional hit-rate (base rate) plus small,
+# bounded per-factor adjustments where a factor measurably shifts the odds. See
+# docs/superpowers/specs/2026-05-28-signal-strength-probability-split-design.md.
+_PROB_MAX_ADJ = 8.0       # cap on the summed factor adjustments (base rate dominates)
+_PROB_FLOOR = 5.0
+_PROB_CEIL = 95.0
+
+
+def interp_adjustment(raw: float, points: list[tuple[float, float]]) -> float:
+    """Piecewise-linear lookup of a factor's raw value into (raw, adjustment)
+    points. Below the first point → first adj; above the last → last adj;
+    between → linear. Empty → 0.0. Points need not be pre-sorted."""
+    if not points:
+        return 0.0
+    pts = sorted(points)
+    if raw <= pts[0][0]:
+        return pts[0][1]
+    if raw >= pts[-1][0]:
+        return pts[-1][1]
+    for i in range(1, len(pts)):
+        x0, y0 = pts[i - 1]
+        x1, y1 = pts[i]
+        if raw <= x1:
+            return y0 if x1 == x0 else y0 + (y1 - y0) * (raw - x0) / (x1 - x0)
+    return pts[-1][1]
+
+
+def probability_from_factors(
+    base_rate: float,
+    factors: dict[str, float],
+    adj_table: dict[str, list[tuple[float, float]]],
+    *,
+    max_total_adj: float = _PROB_MAX_ADJ,
+    floor: float = _PROB_FLOOR,
+    ceil: float = _PROB_CEIL,
+) -> int:
+    """Probabilità as a 0..100 int: detector `base_rate` + a bounded sum of
+    per-factor adjustments, clamped to [floor, ceil].
+
+    `adj_table` maps a factor key to its (raw, adjustment) interpolation points;
+    factors absent from the table contribute 0. The summed adjustment is capped
+    at ±`max_total_adj` so the empirically-measured detector base rate dominates
+    (the marginal-factor study showed most per-factor effects are small)."""
+    total = 0.0
+    for k, raw in factors.items():
+        pts = adj_table.get(k)
+        if pts:
+            total += interp_adjustment(raw, pts)
+    total = max(-max_total_adj, min(max_total_adj, total))
+    return round(max(floor, min(ceil, base_rate + total)))
