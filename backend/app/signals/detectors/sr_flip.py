@@ -7,12 +7,16 @@ from __future__ import annotations
 
 import pandas as pd
 
+from app.signals.calibration_map import get_calibration
 from app.signals.context import SignalContext
-from app.signals.detectors.base import SignalMatch, clamp01, score
+from app.signals.detectors.base import SignalMatch, concave, score_v2
 from app.signals.events import Event
 
 _BREAK_MARGIN = 0.01
 _RETEST_PCT = 0.025
+# Forza: retest_proximity is already 0..1 (1 = exactly at the level). 0.95 ≈
+# within 0.125% of it — a genuinely tight retest, not just "in the zone".
+_RETEST_ANCHORS = (0.6, 0.85, 0.95, 0.99)
 
 
 class SRFlip:
@@ -47,15 +51,17 @@ class SRFlip:
                 tone = "bear"
             if not (broke and retested and held):
                 continue
-            proximity = clamp01(1.0 - abs(last - level) / (level * _RETEST_PCT)) if level else 0.0
+            proximity_raw = (1.0 - abs(last - level) / (level * _RETEST_PCT)) if level else 0.0
             trend_aligned = (ctx.trend_sign > 0 and tone == "bull") or (ctx.trend_sign < 0 and tone == "bear")
             factors = {
-                "retest_proximity": proximity,
+                "retest_proximity": concave(proximity_raw, _RETEST_ANCHORS),
                 "trend_alignment": 1.0 if trend_aligned else 0.5,
                 "break": 1.0,
                 "hold": 1.0,
             }
-            conf = score(factors, {"retest_proximity": 1.0, "trend_alignment": 0.8})
+            weights = {"retest_proximity": 1.0, "trend_alignment": 0.8}
+            strength = score_v2(factors, weights, strength_keys={"retest_proximity"})
+            probability = get_calibration().probability(self.name, factors)
             last_date = str(ohlcv["date"].iloc[-1])[:10]
             new_role = "supporto" if tone == "bull" else "resistenza"
             # The break and the retest are DISTINCT moments: price crossed the
@@ -81,7 +87,8 @@ class SRFlip:
                             "reason": f"ritorno oltre il livello {level:.2f} (flip fallito)"}
             level_kind = "support" if tone == "bull" else "resistance"
             level_label = "Supporto (ex resistenza)" if tone == "bull" else "Resistenza (ex supporto)"
-            return SignalMatch(name=self.name, tone=tone, confidence=conf,
+            return SignalMatch(name=self.name, tone=tone, confidence=strength,
+                               strength=strength, probability=probability,
                                signal_date=last_date, chain=chain,
                                invalidation=invalidation, factors=factors,
                                annotations={"levels": [{"label": level_label,
