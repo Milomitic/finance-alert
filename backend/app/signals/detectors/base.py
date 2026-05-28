@@ -1,6 +1,7 @@
 """Detector contract + SignalMatch + temporal-sequence helpers."""
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from datetime import date as _date
 from typing import Protocol
@@ -86,6 +87,67 @@ def soft01(x: float, ref: float) -> float:
     return x / (x + 0.25 * ref)
 
 
+# ── Per-factor calibration curves (confidence redesign, Phase A) ─────────────
+# These replace the global soft01/clamp01 shaping. Each factor is mapped onto
+# the curve that fits its NATURE, with anchor points placed at data-grounded raw
+# values (from app.scripts.signal_factor_outcomes — the raw level at which the
+# realised forward hit-rate crosses 52/56/60%). This makes a factor reach the
+# top of its range only when its underlying parameter genuinely predicts, not
+# merely when it's statistically rare.
+
+# Asymptote shared by `concave`: no single factor may pin the combined score.
+_CONCAVE_CEIL = 0.92
+
+
+def concave(x: float, anchors: tuple[float, float, float, float]) -> float:
+    """Piecewise-linear-then-saturating curve in [0, 0.92) for bounded
+    "strength" magnitude factors (candle body/range, breakout %, EMA spread, …).
+
+    anchors = (a45, a75, a88, ceil): the RAW factor values that should map to
+    contributions 0.45 / 0.75 / 0.88, plus `ceil` setting the decay scale of the
+    saturating tail. Semantics: contribution 0.88 == "the parameter is at the
+    level that empirically predicts" (not "the 99th percentile of rarity").
+
+    Shape:
+        x <= 0      -> 0.0
+        0  .. a45   -> linear up to 0.45
+        a45 .. a75  -> linear up to 0.75
+        a75 .. a88  -> linear up to 0.88
+        x  >  a88   -> 0.92 - 0.04*exp(-(x-a88)/(ceil-a88))   (asymptote 0.92)
+    The tail is continuous at (a88, 0.88) and approaches but never reaches 0.92.
+    """
+    a45, a75, a88, ceil = anchors
+    if x <= 0 or a45 <= 0:
+        return 0.0
+    if x <= a45:
+        return 0.45 * (x / a45)
+    if x <= a75 and a75 > a45:
+        return 0.45 + 0.30 * (x - a45) / (a75 - a45)
+    if x <= a88 and a88 > a75:
+        return 0.75 + 0.13 * (x - a75) / (a88 - a75)
+    scale = (ceil - a88) if ceil > a88 else max(a88, 1e-9)
+    # Keep the gap strictly positive: for extreme x the exp underflows to 0.0,
+    # which would let the curve touch the 0.92 asymptote exactly. The epsilon
+    # preserves the "never pins the score" invariant in float arithmetic.
+    gap = max(0.04 * math.exp(-(x - a88) / scale), 1e-9)
+    return _CONCAVE_CEIL - gap
+
+
+def log_saturate(x: float, ceil: float, target: float = 0.85) -> float:
+    """Logarithmic saturation in [0, 1] for UNBOUNDED ratio factors (volume vs
+    average, very large gaps). Linear in log-space: equal multiplicative steps
+    give equal contribution steps, matching how a 10x vs 5x volume "feels".
+
+        f(x) = target * ln(1+x) / ln(1+ceil),  clamped to 1.0
+        f(0) = 0 ;  f(ceil) = target ;  f keeps rising past ceil toward 1.0.
+
+    `ceil` is the raw value deemed "strong" (maps to `target`, default 0.85); a
+    genuine monster beyond it still earns extra credit up to 1.0."""
+    if x <= 0 or ceil <= 0:
+        return 0.0
+    return min(1.0, target * math.log1p(x) / math.log1p(ceil))
+
+
 def trend_maturity_factor(age: int | None) -> float:
     """Backtest-derived favorability of a trend-following entry by trend age
     (bars since the EMA50/EMA200 cross). Forward 21d returns peaked mid-life
@@ -123,3 +185,43 @@ def score(factors: dict[str, float], weights: dict[str, float]) -> int:
     if raw > _CONF_KNEE:
         raw = _CONF_KNEE + (_CONF_MAX - _CONF_KNEE) * (raw - _CONF_KNEE) / (1.0 - _CONF_KNEE)
     return round(100.0 * raw)
+
+
+# Combiner v2 (confidence redesign). Detectors opt in one at a time; until then
+# they keep calling score(). The soft-min cap replaces the global knee: instead
+# of compressing the TOP of the weighted mean, it bounds the result by the
+# WEAKEST strength factor, so confidence can't be manufactured by a saturated
+# context factor riding over a mediocre one ("mediocrity laundering").
+_V2_DELTA = 0.12          # how far strong factors may lift the score past the weakest
+_V2_GUARDRAIL = 0.93      # defensive top clamp (per-factor curves already cap ~0.92)
+
+
+def score_v2(
+    factors: dict[str, float],
+    weights: dict[str, float],
+    strength_keys: set[str],
+    *,
+    delta: float = _V2_DELTA,
+    guardrail: float = _V2_GUARDRAIL,
+) -> int:
+    """Weighted mean of [0,1] factors, capped by a soft-min over the detector's
+    STRENGTH factors, returned as a 0..100 int.
+
+        arith  = Σ(f_i·w_i) / Σ(w_i)                      # all weighted factors
+        m      = min(f_i for i in strength_keys present)  # genuine strength only
+        score  = min(arith, m + delta, guardrail)
+
+    `strength_keys` lists the factors that represent real signal strength;
+    context modulators (trend_alignment, trend_maturity) are deliberately
+    EXCLUDED so their weakness isn't double-counted (it already lives in their
+    floor) — they contribute additively via `arith` but never pull the cap.
+    A score ≥ 0.85 therefore requires every strength factor ≥ 0.85−delta."""
+    num = sum(clamp01(factors.get(k, 0.0)) * w for k, w in weights.items())
+    den = sum(weights.values()) or 1.0
+    arith = num / den
+    strengths = [
+        clamp01(factors[k]) for k in strength_keys if k in weights and k in factors
+    ]
+    if strengths:
+        arith = min(arith, min(strengths) + delta)
+    return round(100.0 * min(arith, guardrail))
