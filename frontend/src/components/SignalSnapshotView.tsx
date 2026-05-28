@@ -1,7 +1,13 @@
 import { BadgeDollarSign, BookOpen, CalendarClock, ShieldAlert, Users } from "lucide-react";
 
 import type { SignalSnapshot } from "@/api/types";
-import { TONE_TEXT, type AlertTone } from "@/lib/alertMeta";
+import {
+  PROBABILITA_TOOLTIP,
+  TONE_TEXT,
+  snapshotForza,
+  snapshotProbabilita,
+  type AlertTone,
+} from "@/lib/alertMeta";
 import { cn } from "@/lib/utils";
 import { glossForStep } from "@/lib/signalInterpretation";
 import { calibratedProbability } from "@/lib/calibratedProbability";
@@ -29,8 +35,9 @@ const SOURCE_BADGE: Record<
   },
 };
 
-/* Human labels for the per-detector confidence sub-factors. Keep in sync with
-   the factors dicts in the backend signal detectors. */
+/* Human labels for the per-detector strength sub-factors (the components that
+   compose Forza). Keep in sync with the factors dicts in the backend signal
+   detectors. */
 const FACTOR_LABELS: Record<string, string> = {
   breakout_strength: "Forza breakout",
   volume_strength: "Forza volume",
@@ -80,9 +87,15 @@ export function SignalSnapshotView({
   const s = snapshot as Partial<SignalSnapshot>;
   const tone: AlertTone =
     s.tone === "bull" ? "bullish" : s.tone === "bear" ? "bearish" : "neutral";
-  const confidence = typeof s.confidence === "number" ? Math.round(s.confidence) : null;
+  // Forza = pattern strength (primary: snapshot.strength; fallback: confidence).
+  const forza = snapshotForza(snapshot);
+  // Probabilità = historical hit-rate. Primary: snapshot.probability (backend
+  // two-score model). Legacy fallback: the client-computed calibratedProbability.
+  const probability = snapshotProbabilita(snapshot);
   const { data: calCurve } = useCalibrationCurve();
-  const cp = calibratedProbability(s.confidence, s.horizon, calCurve);
+  const legacyCp =
+    probability == null ? calibratedProbability(s.confidence, s.horizon, calCurve) : null;
+  const probPct = probability ?? (legacyCp ? Math.round(legacyCp.prob * 100) : null);
   const chain = Array.isArray(s.chain) ? s.chain : [];
   const isHybrid = chain.some(
     (step) => typeof step.source === "string" && step.source in SOURCE_BADGE,
@@ -109,35 +122,53 @@ export function SignalSnapshotView({
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-[1.6fr_1fr] gap-x-6 gap-y-5">
-        {/* Right column (desktop): confidence + the factors that compose it */}
+        {/* Right column (desktop): Forza + Probabilità + the factors that
+            compose the strength. Two distinct metrics: Forza = pattern
+            strength in the signal's tone color; Probabilità = historical
+            hit-rate in a neutral/info (slate/sky) treatment so they read as
+            different things. */}
         <div className="space-y-4 md:order-2">
-          {confidence != null && (
+          {/* Forza — pattern strength, tone-colored. */}
+          {forza != null && (
             <div className="flex items-center gap-3">
-              <span className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
-                Confidenza
+              <span className="w-[4.5rem] shrink-0 text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
+                Forza
               </span>
               <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
-                <div className={cn("h-full rounded-full", barColor)} style={{ width: `${confidence}%` }} />
+                <div className={cn("h-full rounded-full", barColor)} style={{ width: `${forza}%` }} />
               </div>
-              <span className={cn("text-sm font-bold tabular-nums", TONE_TEXT[tone])}>{confidence}%</span>
+              <span className={cn("text-sm font-bold tabular-nums w-10 text-right", TONE_TEXT[tone])}>{forza}%</span>
             </div>
           )}
 
-          {cp && (
-            <div
-              className="flex items-center gap-2 text-[11px] text-muted-foreground -mt-2.5"
-              title={`Hit-rate storico (backtest, base: ${cp.basis}, n=${cp.n}). Probabilita che il prezzo si muova nel verso del segnale entro l'orizzonte. Stima educativa, migliora col tempo.`}
-            >
-              <span className="uppercase tracking-wider font-semibold">Prob. storica</span>
-              <span className="font-bold tabular-nums text-foreground">~ {Math.round(cp.prob * 100)}%</span>
-              <span className="opacity-70">({cp.basis})</span>
+          {/* Probabilità — historical hit-rate, neutral/info (slate/sky). The
+              "~" prefix on the legacy (client-derived) estimate signals it's
+              approximate; the backend value is shown exact. */}
+          <div
+            className="flex items-center gap-3"
+            title={
+              legacyCp
+                ? `${PROBABILITA_TOOLTIP} Stima storica (backtest, base: ${legacyCp.basis}, n=${legacyCp.n}).`
+                : PROBABILITA_TOOLTIP
+            }
+          >
+            <span className="w-[4.5rem] shrink-0 text-[11px] uppercase tracking-wider text-sky-700/80 dark:text-sky-300/80 font-semibold">
+              Probabilità
+            </span>
+            <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
+              {probPct != null && (
+                <div className="h-full rounded-full bg-sky-500 dark:bg-sky-400" style={{ width: `${probPct}%` }} />
+              )}
             </div>
-          )}
+            <span className="text-sm font-bold tabular-nums w-10 text-right text-sky-700 dark:text-sky-300">
+              {probPct != null ? `${legacyCp ? "~" : ""}${probPct}%` : "n/d"}
+            </span>
+          </div>
 
           {Object.keys(factors).length > 0 && (
             <div>
               <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">
-                Fattori di confidenza
+                Fattori di forza
               </div>
               <div className="space-y-1.5">
                 {Object.entries(factors).map(([k, v]) => {

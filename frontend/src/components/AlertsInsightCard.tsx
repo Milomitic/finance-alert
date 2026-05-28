@@ -84,9 +84,9 @@ function TopHeader() {
       <span className="flex-1 min-w-0">Titolo</span>
       <span className="w-[4.25rem] shrink-0">Tono</span>
       <span className="w-12 shrink-0" title="Orizzonti coinvolti">Orizz.</span>
-      <span className="w-8 shrink-0 text-right" title="Confidenza del segnale più forte del cluster">Conf</span>
+      <span className="w-9 shrink-0 text-right" title="Forza del segnale più forte del cluster">Forza max</span>
       <span className="w-8 shrink-0 text-right" title="Numero di segnali concordi">Seg</span>
-      <span className="w-[5.25rem] shrink-0 text-right">Forza</span>
+      <span className="w-[5.25rem] shrink-0 text-right" title="Forza aggregata della confluenza">Forza</span>
     </div>
   );
 }
@@ -94,13 +94,18 @@ function TopHeader() {
 function TopRow({ c, rank }: { c: Confluence; rank: number }) {
   const pct = Math.round(c.strength);
   const bull = c.direction === "bull";
-  const maxConf = c.components[0]?.confidence != null ? Math.round(c.components[0].confidence) : null;
+  // Strongest component's Forza (prefer `strength`, legacy fallback `confidence`).
+  const top = c.components[0];
+  const maxForza =
+    top != null && (top.strength != null || top.confidence != null)
+      ? Math.round(top.strength ?? top.confidence)
+      : null;
   return (
     <li>
       <Link
         to={`/stocks/${encodeURIComponent(c.ticker)}`}
         className="flex items-center gap-2 px-2 py-1 rounded-md hover:bg-accent/50 transition-colors min-w-0"
-        title={`${c.name ?? c.ticker} · forza ${pct} · conf ${maxConf ?? "—"} · ${c.n_signals} segnali${c.multi_horizon ? " · multi-orizzonte" : ""}${c.contested ? " · conteso" : ""}`}
+        title={`${c.name ?? c.ticker} · forza confluenza ${pct} · forza max ${maxForza ?? "—"} · ${c.n_signals} segnali${c.multi_horizon ? " · multi-orizzonte" : ""}${c.contested ? " · conteso" : ""}`}
       >
         <span className="w-4 shrink-0 text-right text-xs font-mono tabular-nums text-muted-foreground/60">{rank}</span>
         {/* Titolo — logo + ticker + name in ONE flex-1 cell so the meta columns
@@ -121,9 +126,9 @@ function TopRow({ c, rank }: { c: Confluence; rank: number }) {
         </div>
         {/* Orizzonte span */}
         <div className="w-12 shrink-0"><HorizonChips horizons={c.horizons} /></div>
-        {/* Confidenza max (strongest component) */}
-        <span className="w-8 shrink-0 text-right text-xs font-semibold tabular-nums text-muted-foreground">
-          {maxConf ?? "—"}
+        {/* Forza max (strongest component) */}
+        <span className="w-9 shrink-0 text-right text-xs font-semibold tabular-nums text-muted-foreground">
+          {maxForza ?? "—"}
         </span>
         {/* Segnali */}
         <span className="w-8 shrink-0 text-right text-[11px] text-muted-foreground/80 tabular-nums">{c.n_signals}</span>

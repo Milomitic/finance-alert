@@ -22,10 +22,13 @@ import {
   formatShortDate,
   isDelayedDetection,
 } from "@/lib/alertDates";
+import { PROBABILITA_TOOLTIP, snapshotForza, snapshotProbabilita } from "@/lib/alertMeta";
 import { cn } from "@/lib/utils";
 
 /** Toggleable columns for the non-embedded alerts table.
- *  Checkbox + Titolo are always-on (identity + selection). */
+ *  Checkbox + Titolo are always-on (identity + selection).
+ *  The old single "Confidenza" column was split into "Forza" (pattern
+ *  strength, tone-colored) + "Prob." (historical hit-rate, neutral). */
 const ALERTS_COLS = [
   { id: "data_segnale", label: "Data segnale" },
   { id: "rilevato",    label: "Rilevato" },
@@ -34,7 +37,8 @@ const ALERTS_COLS = [
   { id: "natura",      label: "Natura" },
   { id: "tono",        label: "Tono" },
   { id: "orizzonte",   label: "Orizzonte" },
-  { id: "confidenza",  label: "Confidenza" },
+  { id: "forza",       label: "Forza" },
+  { id: "probabilita", label: "Prob." },
 ] as const;
 
 /** Horizon label + tone classes (plain string-literal Record so Tailwind's
@@ -152,7 +156,7 @@ export function AlertsTable({
 
   // Per-column visibility resolved ONCE so the header and body stay in
   // lockstep. Embedded mode (the per-ticker history card) shows a fixed
-  // compact set — Rilevato | Regola | Tono | Confidenza | Prezzo — while the
+  // compact set — Rilevato | Regola | Tono | Forza | Prob. | Prezzo — while the
   // full alerts page honours the column-visibility menu. (Previous embedded
   // bug: the signal_date CELL rendered but its HEADER was gated `!embedded`,
   // so every header sat one column right of its data. Deriving both from the
@@ -166,12 +170,13 @@ export function AlertsTable({
   const showNatura = !embedded && isVisible("natura");
   const showTono = embedded || isVisible("tono");
   const showOrizzonte = embedded || isVisible("orizzonte");
-  const showConfidenza = embedded || isVisible("confidenza");
+  const showForza = embedded || isVisible("forza");
+  const showProbabilita = embedded || isVisible("probabilita");
 
   // colSpan for the empty-state row must match the visible column count.
   const colSpan = [
     showCheckbox, showDataSegnale, showRilevato, showTitolo, showRegola,
-    showCatena, showNatura, showTono, showOrizzonte, showConfidenza,
+    showCatena, showNatura, showTono, showOrizzonte, showForza, showProbabilita,
   ].filter(Boolean).length;
 
   // Per user spec: header cells at 1rem (text-base), body rows at
@@ -301,19 +306,37 @@ export function AlertsTable({
               Orizzonte
             </TableHead>
           )}
-          {showConfidenza && (
+          {showForza && (
             onSort ? (
               <SortableHeader
-                column="confidence"
-                label="Confidenza"
-                title="Confidenza del segnale (0-100)"
+                column="strength"
+                label="Forza"
+                align="right"
+                title="Forza del pattern (0-100)"
                 sortBy={sortBy}
                 sortDir={sortDir}
                 onSort={onSort}
               />
             ) : (
-              <TableHead className="text-base" title="Confidenza del segnale (0-100)">
-                Confidenza
+              <TableHead className="text-base text-right" title="Forza del pattern (0-100)">
+                Forza
+              </TableHead>
+            )
+          )}
+          {showProbabilita && (
+            onSort ? (
+              <SortableHeader
+                column="probability"
+                label="Prob."
+                align="right"
+                title={PROBABILITA_TOOLTIP}
+                sortBy={sortBy}
+                sortDir={sortDir}
+                onSort={onSort}
+              />
+            ) : (
+              <TableHead className="text-base text-right" title={PROBABILITA_TOOLTIP}>
+                Prob.
               </TableHead>
             )
           )}
@@ -459,19 +482,18 @@ export function AlertsTable({
                 })()}
               </TableCell>
             )}
-            {/* Confidenza. Signal alerts carry confidence
-                (0-100) in the snapshot; show it as a coloured percentage
-                (rose < 50, amber 50-69, emerald >= 70) with a reliability bar
-                on the full page. Embedded (narrow card) shows just the % to
-                save width. Non-signal / price alerts have no confidence. */}
-            {showConfidenza && (
+            {/* Forza — pattern strength (0-100). Coloured percentage
+                (rose < 50, amber 50-69, emerald >= 70) with a strength bar on
+                the full page. Embedded (narrow card) shows just the % to save
+                width. Non-signal / price alerts have no Forza → em dash. */}
+            {showForza && (
               <TableCell>
                 {(() => {
-                  const conf = (a.snapshot as Record<string, unknown> | undefined)?.confidence;
-                  if (typeof conf !== "number") {
-                    return <span className="text-muted-foreground">—</span>;
+                  const forza = snapshotForza(a.snapshot as Record<string, unknown> | undefined);
+                  if (forza == null) {
+                    return <div className="text-right"><span className="text-muted-foreground">—</span></div>;
                   }
-                  const pct = Math.max(0, Math.min(100, Math.round(conf)));
+                  const pct = Math.max(0, Math.min(100, forza));
                   const bar =
                     pct >= 70 ? "bg-emerald-500" : pct >= 50 ? "bg-amber-500" : "bg-rose-500";
                   const txt =
@@ -481,13 +503,40 @@ export function AlertsTable({
                         ? "text-amber-600 dark:text-amber-400"
                         : "text-rose-600 dark:text-rose-400";
                   return (
-                    <div className="flex items-center gap-2" title={`Confidenza ${pct}%`}>
+                    <div className="flex items-center justify-end gap-2" title={`Forza ${pct}%`}>
                       <span className={cn("text-sm font-semibold tabular-nums w-10 text-right", txt)}>
                         {pct}%
                       </span>
                       {!embedded && (
                         <div className="h-2 w-16 rounded-full bg-muted overflow-hidden">
                           <div className={cn("h-full rounded-full", bar)} style={{ width: `${pct}%` }} />
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+              </TableCell>
+            )}
+            {/* Probabilità — historical hit-rate (0-100). Rendered in a NEUTRAL
+                info treatment (slate text / sky bar) so it reads as a different
+                axis from the tone-colored Forza. Legacy alerts lacking it show
+                an em dash. */}
+            {showProbabilita && (
+              <TableCell>
+                {(() => {
+                  const prob = snapshotProbabilita(a.snapshot as Record<string, unknown> | undefined);
+                  if (prob == null) {
+                    return <div className="text-right"><span className="text-muted-foreground">—</span></div>;
+                  }
+                  const pct = Math.max(0, Math.min(100, prob));
+                  return (
+                    <div className="flex items-center justify-end gap-2" title={`Probabilità ${pct}% — ${PROBABILITA_TOOLTIP}`}>
+                      <span className="text-sm font-semibold tabular-nums w-10 text-right text-slate-700 dark:text-slate-300">
+                        {pct}%
+                      </span>
+                      {!embedded && (
+                        <div className="h-2 w-16 rounded-full bg-muted overflow-hidden">
+                          <div className="h-full rounded-full bg-sky-500 dark:bg-sky-400" style={{ width: `${pct}%` }} />
                         </div>
                       )}
                     </div>

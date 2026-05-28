@@ -15,6 +15,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { isDelayedDetection } from "@/lib/alertDates";
+import { PROBABILITA_TOOLTIP, snapshotForza, snapshotProbabilita } from "@/lib/alertMeta";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -26,7 +27,7 @@ interface Props {
  *
  * Rebuilt as a real <Table> (was a flex <ul>) so its columns align
  * vertically and match the sibling "TOP STOCKS" table in the same panel:
- * Titolo · Natura · Regola · Conf. · Prezzo · Data. A flex list gives each
+ * Titolo · Natura · Regola · Forza · Prob. · Prezzo · Data. A flex list gives each
  * row its own widths, so the chips never lined up; a table shares one
  * width per column across all rows, which is exactly the alignment the
  * user asked for. Row click opens the detail dialog; the ticker is a Link
@@ -52,7 +53,8 @@ export function RecentAlertsFeed({ alerts }: Props) {
             <TableHead className="text-xs">Titolo</TableHead>
             <TableHead className="text-xs">Natura</TableHead>
             <TableHead className="text-xs">Regola</TableHead>
-            <TableHead className="text-xs text-right">Conf.</TableHead>
+            <TableHead className="text-xs text-right" title="Forza del pattern (0-100)">Forza</TableHead>
+            <TableHead className="text-xs text-right" title={PROBABILITA_TOOLTIP}>Prob.</TableHead>
             <TableHead className="text-xs text-right">Prezzo</TableHead>
             <TableHead className="text-xs text-right pr-4">Data</TableHead>
           </TableRow>
@@ -60,19 +62,17 @@ export function RecentAlertsFeed({ alerts }: Props) {
         <TableBody>
           {alerts.map((a) => {
             const delayed = isDelayedDetection(a.triggered_at, a.signal_date);
-            const conf = (a.snapshot as Record<string, unknown> | undefined)?.confidence;
-            const pct =
-              typeof conf === "number"
-                ? Math.max(0, Math.min(100, Math.round(conf)))
-                : null;
-            const confTxt =
-              pct == null
+            const snap = a.snapshot as Record<string, unknown> | undefined;
+            const forza = snapshotForza(snap);
+            const forzaTxt =
+              forza == null
                 ? ""
-                : pct >= 70
+                : forza >= 70
                   ? "text-emerald-600 dark:text-emerald-400"
-                  : pct >= 50
+                  : forza >= 50
                     ? "text-amber-600 dark:text-amber-400"
                     : "text-rose-600 dark:text-rose-400";
+            const prob = snapshotProbabilita(snap);
             return (
               <TableRow
                 key={a.id}
@@ -106,16 +106,30 @@ export function RecentAlertsFeed({ alerts }: Props) {
                 <TableCell className="py-2">
                   <AlertKindChip alert={a} size="sm" />
                 </TableCell>
-                {/* Confidenza — colored by conviction; em dash when absent. */}
+                {/* Forza — pattern strength, colored by conviction; em dash when absent. */}
                 <TableCell className="py-2 text-right">
-                  {pct == null ? (
+                  {forza == null ? (
                     <span className="text-muted-foreground">—</span>
                   ) : (
                     <span
-                      className={cn("text-[13px] font-semibold tabular-nums", confTxt)}
-                      title={`Confidenza ${pct}%`}
+                      className={cn("text-[13px] font-semibold tabular-nums", forzaTxt)}
+                      title={`Forza ${forza}%`}
                     >
-                      {pct}%
+                      {forza}%
+                    </span>
+                  )}
+                </TableCell>
+                {/* Probabilità — historical hit-rate, neutral/info (slate); em
+                    dash for legacy alerts lacking it. */}
+                <TableCell className="py-2 text-right">
+                  {prob == null ? (
+                    <span className="text-muted-foreground">—</span>
+                  ) : (
+                    <span
+                      className="text-[13px] font-semibold tabular-nums text-slate-700 dark:text-slate-300"
+                      title={`Probabilità ${prob}% — ${PROBABILITA_TOOLTIP}`}
+                    >
+                      {prob}%
                     </span>
                   )}
                 </TableCell>

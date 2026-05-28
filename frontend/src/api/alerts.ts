@@ -5,7 +5,13 @@ export interface ConfluenceComponent {
   alert_id: number;
   rule_kind: string;
   signal_name: string;
+  /** Per-signal Forza (pattern strength). Optional `strength` is the new
+   *  primary; `confidence` stays as the legacy fallback (transitional alias). */
+  strength?: number;
   confidence: number;
+  /** Per-signal Probabilità (historical hit-rate). Optional — absent on
+   *  legacy clusters whose components predate the two-score split. */
+  probability?: number;
   tone: string;
   horizon: string;
   signal_date: string | null;
@@ -37,7 +43,14 @@ export interface AlertListParams {
   rule_kind?: string;
   /** Tone filter: "bull" or "bear". Matched against snapshot.tone. */
   tone?: string;
-  /** Minimum confidence score 0-100. Only alerts with confidence >= this are returned. */
+  /** Minimum Forza (pattern strength) 0-100. Only alerts with strength >= this
+   *  are returned. The new primary strength filter. */
+  strength_min?: number;
+  /** Minimum Probabilità (historical hit-rate) 0-100. Only alerts with
+   *  probability >= this are returned. */
+  probability_min?: number;
+  /** Legacy minimum confidence score 0-100. Kept as a fallback — the backend
+   *  still accepts it, but the UI now drives `strength_min`. */
   confidence_min?: number;
   /** Signal nature: 'continuazione' | 'inversione'. */
   nature?: string;
@@ -56,6 +69,8 @@ function toQuery(params: AlertListParams): string {
   if (params.q) sp.set("q", params.q);
   if (params.rule_kind) sp.set("rule_kind", params.rule_kind);
   if (params.tone) sp.set("tone", params.tone);
+  if (params.strength_min !== undefined) sp.set("strength_min", String(params.strength_min));
+  if (params.probability_min !== undefined) sp.set("probability_min", String(params.probability_min));
   if (params.confidence_min !== undefined) sp.set("confidence_min", String(params.confidence_min));
   if (params.nature) sp.set("nature", params.nature);
   if (params.date_from) sp.set("date_from", params.date_from);

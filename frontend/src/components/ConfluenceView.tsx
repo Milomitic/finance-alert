@@ -11,9 +11,9 @@ import { cn } from "@/lib/utils";
  * Renders confluence clusters (active signals grouped by ticker+direction).
  * One expandable row per ticker: identity + prevailing direction + strength
  * bar + signal count + "Conteso" badge when bull/bear disagree. Expanding
- * lists the component signals as tone-colored chips (friendly label +
- * confidence), each linking to the stock page. The individual alerts are
- * untouched — this is a read-only confluence lens. */
+ * lists the component signals as tone-colored chips (friendly label + Forza),
+ * each linking to the stock page. The individual alerts are untouched — this
+ * is a read-only confluence lens. */
 function dirClass(dir: string): string {
   return dir === "bull" ? TONE_BG.bullish : dir === "bear" ? TONE_BG.bearish : TONE_BG.neutral;
 }
@@ -112,16 +112,19 @@ export function ConfluenceView({ clusters }: { clusters: Confluence[] }) {
                   const meta = getAlertKindMeta(comp.rule_kind);
                   const Icon = meta.icon;
                   const ctone = comp.tone === "bull" ? TONE_BG.bullish : TONE_BG.bearish;
+                  // Per-signal Forza: prefer `strength`, fall back to the
+                  // legacy `confidence` alias on older clusters.
+                  const forza = Math.round(comp.strength ?? comp.confidence);
                   return (
                     <Link
                       key={comp.alert_id}
                       to={`/stocks/${encodeURIComponent(c.ticker)}`}
                       className={cn("inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold hover:underline", ctone)}
-                      title={`${meta.label} · confidenza ${comp.confidence}%`}
+                      title={`${meta.label} · forza ${forza}%`}
                     >
                       <Icon className="h-2.5 w-2.5" />
                       {meta.label}
-                      <span className="opacity-70">{Math.round(comp.confidence)}%</span>
+                      <span className="opacity-70">{forza}%</span>
                     </Link>
                   );
                 })}

@@ -153,21 +153,62 @@ export const TONE_LABEL: Record<AlertTone, string> = {
   neutral: "Neutro",
 };
 
+/* ─── Forza / Probabilità — the two-score signal model ──────────────────── */
+/* Since the confidence→(Forza, Probabilità) split, every signal carries two
+ * first-class metrics. `Forza` = pattern strength (tone-colored); `Probabilità`
+ * = historical hit-rate "di accadimento" (neutral/info-colored). The helpers
+ * below centralise the legacy fallbacks so every surface reads them the same
+ * way. */
+
+/** Tooltip copy for Probabilità — surfaced everywhere the metric appears so
+ *  users understand it's an educational estimate, not a guarantee. */
+export const PROBABILITA_TOOLTIP =
+  "Tasso storico di accadimento di segnali simili (orizzonte) — non una garanzia.";
+
+/** Forza (pattern strength) for a signal snapshot.
+ *  Primary: `snapshot.strength`. Legacy fallback: `snapshot.confidence`
+ *  (the transitional alias). Null when neither is a number. */
+export function snapshotForza(
+  snap: Record<string, unknown> | null | undefined,
+): number | null {
+  if (!snap) return null;
+  const s = snap["strength"];
+  if (typeof s === "number") return Math.round(s);
+  const c = snap["confidence"];
+  return typeof c === "number" ? Math.round(c) : null;
+}
+
+/** Probabilità (historical hit-rate) for a signal snapshot, when the backend
+ *  emitted it. Returns null for legacy alerts lacking it — callers that have a
+ *  calibration curve fall back to `calibratedProbability(...)`, else show
+ *  "n/d". */
+export function snapshotProbabilita(
+  snap: Record<string, unknown> | null | undefined,
+): number | null {
+  if (!snap) return null;
+  const p = snap["probability"];
+  return typeof p === "number" ? Math.round(p) : null;
+}
+
 /** One-line "headline" summary for a snapshot — the single most
- *  informative value the row can show. For signal alerts, shows the
- *  confidence score and chain length. Returns null for unknown kinds —
- *  caller renders nothing instead of an empty placeholder. */
+ *  informative value the row can show. For signal alerts, shows Forza,
+ *  Probabilità (when present) and the chain length. Returns null for unknown
+ *  kinds — caller renders nothing instead of an empty placeholder. */
 export function getSnapshotHeadline(
   rule_kind: string | null | undefined,
   snap: Record<string, unknown> | null | undefined,
 ): string | null {
   if (!snap) return null;
   if (isSignalKind(rule_kind)) {
-    const conf = snap["confidence"];
+    const forza = snapshotForza(snap);
+    const prob = snapshotProbabilita(snap);
     const chain = snap["chain"];
     const nEvents = Array.isArray(chain) ? chain.length : 0;
-    const confTxt = typeof conf === "number" ? `Confidenza ${Math.round(conf)}%` : "Segnale";
-    return nEvents > 0 ? `${confTxt} - ${nEvents} eventi` : confTxt;
+    const parts: string[] = [];
+    if (forza != null) parts.push(`Forza ${forza}%`);
+    if (prob != null) parts.push(`Probabilità ${prob}%`);
+    const head = parts.length > 0 ? parts.join(" · ") : "Segnale";
+    return nEvents > 0 ? `${head} - ${nEvents} eventi` : head;
   }
   return null;
 }

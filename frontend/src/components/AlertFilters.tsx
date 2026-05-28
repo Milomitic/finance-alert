@@ -12,6 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { SectionTitle } from "@/components/ui/section-title";
+import { PROBABILITA_TOOLTIP } from "@/lib/alertMeta";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -122,6 +123,8 @@ export function AlertFilters({ value, onChange }: Props) {
     (status === "archived" ? 1 : 0) +
     (value.rule_kind ? 1 : 0) +
     (value.tone ? 1 : 0) +
+    (value.strength_min != null ? 1 : 0) +
+    (value.probability_min != null ? 1 : 0) +
     (value.confidence_min != null ? 1 : 0) +
     (value.nature ? 1 : 0);
 
@@ -151,7 +154,7 @@ export function AlertFilters({ value, onChange }: Props) {
         {/* Filters laid out horizontally (responsive grid) so the card stays
             short — was a tall vertical stack. Wraps to 2-3 cols on narrow
             viewports, single row on lg+. */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <div>
           <Label className="text-xs uppercase tracking-wider text-muted-foreground">
             Archivio
@@ -243,10 +246,11 @@ export function AlertFilters({ value, onChange }: Props) {
           </Select>
         </div>
 
-        {/* Confidenza minima — number input 0-100. */}
+        {/* Forza minima — number input 0-100. Drives the API `strength_min`
+            param (the new primary; `confidence_min` is the legacy fallback). */}
         <div>
           <Label className="text-xs uppercase tracking-wider text-muted-foreground">
-            Confidenza minima
+            Forza minima
           </Label>
           <div className="mt-1 inline-flex items-center gap-1.5 h-9 px-2 rounded border border-input w-full">
             <input
@@ -255,16 +259,49 @@ export function AlertFilters({ value, onChange }: Props) {
               max={100}
               step={5}
               placeholder="—"
-              value={value.confidence_min ?? ""}
+              value={value.strength_min ?? ""}
               onChange={(e) => {
                 const raw = e.target.value;
                 if (raw === "") {
-                  onChange({ ...value, confidence_min: undefined });
+                  onChange({ ...value, strength_min: undefined });
                   return;
                 }
                 const n = Number(raw);
                 if (Number.isFinite(n) && n >= 0 && n <= 100) {
-                  onChange({ ...value, confidence_min: n });
+                  onChange({ ...value, strength_min: n });
+                }
+              }}
+              className="flex-1 bg-transparent text-sm tabular-nums focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+            />
+            <span className="text-xs text-muted-foreground">/ 100</span>
+          </div>
+        </div>
+
+        {/* Probabilità minima — number input 0-100. Drives `probability_min`. */}
+        <div>
+          <Label
+            className="text-xs uppercase tracking-wider text-muted-foreground"
+            title={PROBABILITA_TOOLTIP}
+          >
+            Probabilità minima
+          </Label>
+          <div className="mt-1 inline-flex items-center gap-1.5 h-9 px-2 rounded border border-input w-full">
+            <input
+              type="number"
+              min={0}
+              max={100}
+              step={5}
+              placeholder="—"
+              value={value.probability_min ?? ""}
+              onChange={(e) => {
+                const raw = e.target.value;
+                if (raw === "") {
+                  onChange({ ...value, probability_min: undefined });
+                  return;
+                }
+                const n = Number(raw);
+                if (Number.isFinite(n) && n >= 0 && n <= 100) {
+                  onChange({ ...value, probability_min: n });
                 }
               }}
               className="flex-1 bg-transparent text-sm tabular-nums focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
@@ -337,6 +374,30 @@ export function AlertFilters({ value, onChange }: Props) {
                     ? "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 border-emerald-200/70 dark:border-emerald-800/60"
                     : "bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300 border-rose-200/70 dark:border-rose-800/60"
                 }
+              />
+            )}
+            {value.strength_min != null && (
+              <FilterChip
+                label={
+                  <>
+                    <span className="text-muted-foreground/80">Forza ≥</span>{" "}
+                    {value.strength_min}%
+                  </>
+                }
+                onClear={() => onChange({ ...value, strength_min: undefined })}
+                className="bg-muted text-foreground border-border"
+              />
+            )}
+            {value.probability_min != null && (
+              <FilterChip
+                label={
+                  <>
+                    <span className="text-muted-foreground/80">Probabilità ≥</span>{" "}
+                    {value.probability_min}%
+                  </>
+                }
+                onClear={() => onChange({ ...value, probability_min: undefined })}
+                className="bg-muted text-foreground border-border"
               />
             )}
             {value.confidence_min != null && (

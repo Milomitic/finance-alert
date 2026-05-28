@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { Alert } from "@/api/types";
-import { getAlertMeta, getSnapshotHeadline, isSignalKind } from "@/lib/alertMeta";
+import {
+  getAlertMeta,
+  getSnapshotHeadline,
+  isSignalKind,
+  snapshotForza,
+  snapshotProbabilita,
+} from "@/lib/alertMeta";
 
 function signalAlert(over: Partial<Alert> = {}): Alert {
   return {
@@ -30,9 +36,27 @@ describe("signal alert metadata", () => {
     expect(meta.tone).toBe("bearish");
   });
 
-  it("headline summarises confidence + chain length", () => {
-    const h = getSnapshotHeadline("signal:volume_breakout",
-      { confidence: 82, chain: [{ date: "x", label: "y" }, { date: "z", label: "w" }] });
-    expect(h).toContain("82");
+  it("headline summarises Forza + Probabilità + chain length", () => {
+    const h = getSnapshotHeadline("signal:volume_breakout", {
+      strength: 82,
+      probability: 57,
+      chain: [{ date: "x", label: "y" }, { date: "z", label: "w" }],
+    });
+    expect(h).toContain("Forza 82%");
+    expect(h).toContain("Probabilità 57%");
+    expect(h).toContain("2 eventi");
+  });
+
+  it("snapshotForza prefers strength, falls back to confidence", () => {
+    expect(snapshotForza({ strength: 80, confidence: 60 })).toBe(80);
+    expect(snapshotForza({ confidence: 65 })).toBe(65); // legacy alert
+    expect(snapshotForza({})).toBeNull();
+    expect(snapshotForza(null)).toBeNull();
+  });
+
+  it("snapshotProbabilita reads probability, null when absent", () => {
+    expect(snapshotProbabilita({ probability: 54 })).toBe(54);
+    expect(snapshotProbabilita({ strength: 80 })).toBeNull(); // legacy: no probability
+    expect(snapshotProbabilita(null)).toBeNull();
   });
 });
