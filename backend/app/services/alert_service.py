@@ -21,6 +21,15 @@ _SORTABLE: dict[str, Any] = {
     "confidence": sqlalchemy.cast(
         func.json_extract(Alert.snapshot, "$.confidence"), Float
     ),
+    # Two-score model. "strength" (Forza) = COALESCE($.strength, $.confidence) so
+    # legacy alerts (confidence-only) still sort. "probability" (Probabilita).
+    "strength": func.coalesce(
+        sqlalchemy.cast(func.json_extract(Alert.snapshot, "$.strength"), Float),
+        sqlalchemy.cast(func.json_extract(Alert.snapshot, "$.confidence"), Float),
+    ),
+    "probability": sqlalchemy.cast(
+        func.json_extract(Alert.snapshot, "$.probability"), Float
+    ),
     "tone": func.json_extract(Alert.snapshot, "$.tone"),
 }
 _SORTABLE_KEYS = frozenset(_SORTABLE)
@@ -63,6 +72,8 @@ def _apply_filters(
     archived: bool | None = None,
     tone: str | None = None,
     confidence_min: float | None = None,
+    strength_min: float | None = None,
+    probability_min: float | None = None,
     nature: str | None = None,
 ):
     if ticker:
@@ -96,6 +107,18 @@ def _apply_filters(
             sqlalchemy.cast(func.json_extract(Alert.snapshot, "$.confidence"), Float)
             >= confidence_min
         )
+    if strength_min is not None:
+        stmt = stmt.where(
+            func.coalesce(
+                sqlalchemy.cast(func.json_extract(Alert.snapshot, "$.strength"), Float),
+                sqlalchemy.cast(func.json_extract(Alert.snapshot, "$.confidence"), Float),
+            ) >= strength_min
+        )
+    if probability_min is not None:
+        stmt = stmt.where(
+            sqlalchemy.cast(func.json_extract(Alert.snapshot, "$.probability"), Float)
+            >= probability_min
+        )
     if nature == "continuazione":
         stmt = stmt.where(Alert.signal_name.in_(_CONTINUATION_SIGNALS))
     elif nature == "inversione":
@@ -114,6 +137,8 @@ def list_alerts(
     archived: bool | None = False,
     tone: str | None = None,
     confidence_min: float | None = None,
+    strength_min: float | None = None,
+    probability_min: float | None = None,
     nature: str | None = None,
     limit: int = 50,
     offset: int = 0,
@@ -140,6 +165,8 @@ def list_alerts(
         archived=archived,
         tone=tone,
         confidence_min=confidence_min,
+        strength_min=strength_min,
+        probability_min=probability_min,
         nature=nature,
     )
     count_stmt = select(func.count()).select_from(base.subquery())

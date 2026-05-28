@@ -339,6 +339,8 @@ def list_alerts(
     archived: bool | None = False,
     tone: str | None = None,
     confidence_min: float | None = None,
+    strength_min: float | None = None,
+    probability_min: float | None = None,
     nature: str | None = None,
     limit: int = 50,
     offset: int = 0,
@@ -369,6 +371,10 @@ def list_alerts(
             status_code=422,
             detail="confidence_min must be in [0, 100]",
         )
+    if strength_min is not None and not (0.0 <= strength_min <= 100.0):
+        raise HTTPException(status_code=422, detail="strength_min must be in [0, 100]")
+    if probability_min is not None and not (0.0 <= probability_min <= 100.0):
+        raise HTTPException(status_code=422, detail="probability_min must be in [0, 100]")
     if nature is not None and nature not in ("continuazione", "inversione"):
         raise HTTPException(
             status_code=422,
@@ -384,6 +390,8 @@ def list_alerts(
         archived=archived,
         tone=tone,
         confidence_min=confidence_min,
+        strength_min=strength_min,
+        probability_min=probability_min,
         nature=nature,
         limit=limit,
         offset=offset,
