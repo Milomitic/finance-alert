@@ -406,25 +406,24 @@ def test_pillar_dropped_when_all_components_missing():
 # ---------------------------------------------------------------------------
 
 def test_renormalize_skips_missing_pillars():
-    """V3.2 has 6 pillars: profitability, sustainability, growth,
-    value, momentum, sentiment. PILLAR_WEIGHTS sum to 1.0. When one
-    pillar is None, renormalisation rescales the rest proportionally."""
+    """V4 has 5 PURE-FUNDAMENTAL pillars: profitability, sustainability,
+    growth, value, sentiment (momentum removed → TechnicalScore lens).
+    PILLAR_WEIGHTS sum to 1.0. When one pillar is None, renormalisation
+    rescales the rest proportionally."""
     sub = {
         "profitability": 80.0,
         "sustainability": 70.0,
         "growth": 60.0,
         "value": 50.0,
-        "momentum": 70.0,
         "sentiment": None,
     }
     w = _renormalize_weights(sub)
     assert w["sentiment"] == 0.0
     assert sum(w.values()) == pytest.approx(1.0, abs=1e-9)
-    # profitability weight 0.15 / sum-of-present-weights
+    # profitability weight / sum-of-present-weights
     present_total = (
         PILLAR_WEIGHTS["profitability"] + PILLAR_WEIGHTS["sustainability"]
         + PILLAR_WEIGHTS["growth"] + PILLAR_WEIGHTS["value"]
-        + PILLAR_WEIGHTS["momentum"]
     )
     assert w["profitability"] == pytest.approx(
         PILLAR_WEIGHTS["profitability"] / present_total, abs=1e-9
@@ -528,56 +527,71 @@ def test_build_score_all_pillars_present():
     )
     assert 70.0 <= cs.composite <= 100.0
     assert all(v is not None for v in cs.sub_scores.values())
-    for pillar in ("profitability", "sustainability", "growth", "value", "momentum", "sentiment"):
+    for pillar in ("profitability", "sustainability", "growth", "value", "sentiment"):
         assert pillar in cs.breakdown
     assert "weights_used" in cs.breakdown
 
 
 def test_build_score_missing_pillar_renormalises():
+    """Isolate a SINGLE pillar and verify the composite equals that pillar's
+    renormalised (weight→1.0) value times the bounded risk overlay.
+
+    Momentum used to be the only-from-closes pillar, but it was removed
+    (3-lens cleanup). Sentiment is now the cleanest single-pillar lane: with
+    no fundamentals/micro, only news_count + news_polarity feed the score,
+    so sentiment is the ONLY non-None pillar (profitability/sustainability/
+    growth/value all return None without fundamentals)."""
     closes = _strong_uptrend_closes()
-    cs = _build_score(_stock(), None, closes, news_count=None)
-    # Only momentum should be non-None.
-    assert cs.sub_scores["momentum"] is not None
+    cs = _build_score(_stock(), None, closes, news_count=25, news_polarity=70.0)
+    # Only sentiment should be non-None.
+    assert cs.sub_scores["sentiment"] is not None
     assert cs.sub_scores["profitability"] is None
     assert cs.sub_scores["sustainability"] is None
     assert cs.sub_scores["growth"] is None
     assert cs.sub_scores["value"] is None
-    assert cs.sub_scores["sentiment"] is None
-    # M2: composite = renormalised momentum-only * bounded risk overlay.
+    # Exactly one pillar present → renormalised weight is 1.0.
+    assert sum(1 for v in cs.sub_scores.values() if v is not None) == 1
+    # M2: composite = renormalised sentiment-only * bounded risk overlay.
     rf = cs.breakdown["_meta_global"]["risk_adjust"]["factor"]
     assert cs.composite == pytest.approx(
-        min(100.0, cs.sub_scores["momentum"] * rf), abs=0.1
+        min(100.0, cs.sub_scores["sentiment"] * rf), abs=0.1
     )
 
 
 def test_build_score_exposes_global_coverage():
     """QW5: breakdown carries a _meta_global confidence block, and each
     present pillar's _meta carries its component coverage. Additive only
-    — composite must equal the momentum-only renormalised value (same
-    invariant as test_build_score_missing_pillar_renormalises)."""
+    — composite must equal the single-pillar renormalised value (same
+    invariant as test_build_score_missing_pillar_renormalises).
+
+    Sentiment is the isolated single pillar (see that test's docstring):
+    only news inputs are supplied, so it's the sole non-None pillar."""
     closes = _strong_uptrend_closes()
-    cs = _build_score(_stock(), None, closes, news_count=None)
+    cs = _build_score(_stock(), None, closes, news_count=25, news_polarity=70.0)
     mg = cs.breakdown["_meta_global"]
     assert 0.0 <= mg["coverage"] <= 1.0
-    assert mg["pillars_total"] == 6
-    # Only momentum had data → exactly 1 pillar present, low global coverage.
+    assert mg["pillars_total"] == 5
+    # Only sentiment had data → exactly 1 pillar present, low global coverage.
     assert mg["pillars_present"] == 1
     assert mg["coverage"] < 0.5
     # Per-pillar coverage present on the pillar that scored.
-    assert 0.0 < cs.breakdown["momentum"]["_meta"]["coverage"] <= 1.0
-    # Composite = renormalised momentum-only * bounded M2 risk overlay.
+    assert 0.0 < cs.breakdown["sentiment"]["_meta"]["coverage"] <= 1.0
+    # Composite = renormalised sentiment-only * bounded M2 risk overlay.
     rf = cs.breakdown["_meta_global"]["risk_adjust"]["factor"]
     assert cs.composite == pytest.approx(
-        min(100.0, cs.sub_scores["momentum"] * rf), abs=0.1
+        min(100.0, cs.sub_scores["sentiment"] * rf), abs=0.1
     )
 
 
 def _mk_cs(stock_id: int, composite: float, tier: str, vote: int) -> _ComputedScore:
     from datetime import datetime, timezone
+    # sub_scores content is irrelevant to _apply_turnover_control (it only
+    # reads composite/risk_tier/breakdown); use a live pillar key now that
+    # "momentum" is gone from the composite.
     return _ComputedScore(
         stock_id=stock_id,
         composite=composite,
-        sub_scores={"momentum": composite},
+        sub_scores={"growth": composite},
         risk_tier=tier,
         breakdown={"risk_inputs": {"risk_vote": vote}, "_meta_global": {}},
         computed_at=datetime.now(timezone.utc),
@@ -637,14 +651,13 @@ def _seed_scored(db: Session, sector: str, comps: list[float]) -> list[Stock]:
         bd = {
             "growth": {"_meta": {"coverage": 1.0}},
             "value": {"_meta": {"coverage": 1.0}},
-            "momentum": {"_meta": {"coverage": 1.0}},
             "profitability": {"_meta": {"coverage": 1.0}},
             "sustainability": {"_meta": {"coverage": 1.0}},
             "sentiment": {"_meta": {"coverage": 1.0}},
             "_meta_global": {"risk_adjust": {"factor": 1.0}},
         }
         db.add(StockScore(
-            stock_id=s.id, composite=c, growth=c, value=c, momentum=c,
+            stock_id=s.id, composite=c, growth=c, value=c,
             profitability=c, sustainability=c, sentiment=c,
             risk_tier="moderate",
             computed_at=_dt.datetime.now(_dt.timezone.utc),

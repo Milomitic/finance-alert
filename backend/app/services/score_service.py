@@ -66,24 +66,24 @@ from app.services.stock_fundamentals_service import (
 # Pillar weights (composite-level) and risk tier set.
 # ---------------------------------------------------------------------------
 
-# V3.2 6-pillar framework: Quality has been split into Profitability
-# (magnitude — ROE/ROA/margins) and Sustainability (durability — debt,
-# liquidity, cash quality, earnings stability, dividend safety). Pesi
-# riequilibrati sopra il 100% per dare più voce al "regge nel tempo?":
-#   - Profitability: 0.15 (era 0.25 fuso con Sustainability)
-#   - Sustainability: 0.15 (nuovo pilastro durability)
-#   - Growth: 0.23 (era 0.25, lieve sgonfiamento per fare spazio)
-#   - Value: 0.13 (era 0.15)
-#   - Momentum: 0.20 (invariato)
-#   - Sentiment: 0.14 (era 0.15)
-# Total = 1.00.
+# V4 — PURE-FUNDAMENTAL composite (3-lens cleanup, 2026-05): the Momentum
+# pillar was REMOVED. Price-action (trend / momentum / structure / RSI / MACD)
+# is the job of the separate TechnicalScore lens; mixing a 0.20 momentum pillar
+# into the "is this a good company?" score double-counted that lens and muddied
+# the question. The 5 remaining fundamental pillars are renormalised to 1.0
+# (old 0.80 base ÷ itself), preserving their relative ordering:
+#   - Profitability: 0.19 (was 0.15)
+#   - Sustainability: 0.19 (was 0.15)
+#   - Growth:        0.28 (was 0.23)
+#   - Value:         0.16 (was 0.13)
+#   - Sentiment:     0.18 (was 0.14)
+# Total = 1.00. (Momentum 0.20 dropped → lives only in TechnicalScore.)
 PILLAR_WEIGHTS: dict[str, float] = {
-    "profitability": 0.15,
-    "sustainability": 0.15,
-    "growth": 0.23,
-    "value": 0.13,
-    "momentum": 0.20,
-    "sentiment": 0.14,
+    "profitability": 0.19,
+    "sustainability": 0.19,
+    "growth": 0.28,
+    "value": 0.16,
+    "sentiment": 0.18,
 }
 
 RISK_TIERS: tuple[str, ...] = ("conservative", "moderate", "aggressive")
@@ -1854,7 +1854,9 @@ def _build_score(
     su_score, _, su_break = _sustainability(stock, fundamentals, sector_stats)
     g_score, _, g_break = _growth(stock, fundamentals, sector_stats)
     v_score, _, v_break = _value(stock, micro, last_close, sector_stats)
-    m_score, _, m_break = _momentum(stock, micro, closes, ohlcv_df)
+    # Momentum pillar REMOVED (3-lens cleanup): price-action lives in
+    # TechnicalScore, not in the fundamental composite. `_momentum` is retained
+    # (unused here) so its tests/diagnostics still resolve.
     s_score, _, s_break = _sentiment(
         stock, fundamentals, last_close,
         news_polarity=news_polarity, news_count=news_count,
@@ -1865,7 +1867,6 @@ def _build_score(
         "sustainability": su_score,
         "growth": g_score,
         "value": v_score,
-        "momentum": m_score,
         "sentiment": s_score,
     }
     weights = _renormalize_weights(sub)
@@ -1888,7 +1889,6 @@ def _build_score(
         "sustainability": su_break,
         "growth": g_break,
         "value": v_break,
-        "momentum": m_break,
         "sentiment": s_break,
         "weights_used": {k: _safe_round(v, 4) for k, v in weights.items()},
         # QW5 — global confidence/coverage. Weighted (by nominal pillar
@@ -1908,7 +1908,6 @@ def _build_score(
                         ("sustainability", su_break),
                         ("growth", g_break),
                         ("value", v_break),
-                        ("momentum", m_break),
                         ("sentiment", s_break),
                     )
                 ),
@@ -2065,7 +2064,7 @@ def compute_score(
         sustainability=cs.sub_scores["sustainability"],
         growth=cs.sub_scores["growth"],
         value=cs.sub_scores["value"],
-        momentum=cs.sub_scores["momentum"],
+        momentum=cs.sub_scores.get("momentum"),  # None — pillar removed (lives in TechnicalScore)
         sentiment=cs.sub_scores["sentiment"],
         risk_tier=cs.risk_tier,
         computed_at=cs.computed_at,
@@ -2257,8 +2256,7 @@ class RecomputeCancelled(Exception):
 # v1 (the v1-vs-xs Spearman diagnostic) before any cutover.
 _XS_MIN_SECTOR_N = 8
 _XS_PILLARS = (
-    "profitability", "sustainability", "growth", "value",
-    "momentum", "sentiment",
+    "profitability", "sustainability", "growth", "value", "sentiment",
 )
 
 
