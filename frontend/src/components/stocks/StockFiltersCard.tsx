@@ -31,7 +31,6 @@ export interface FiltersState {
   sustainabilityMin: number | null;
   growthMin: number | null;
   valueMin: number | null;
-  momentumMin: number | null;
   sentimentMin: number | null;
   /** Technical composite minimum 0-100, or null. */
   techMin: number | null;
@@ -189,7 +188,6 @@ export function StockFiltersCard({ state, onChange, filters }: Props) {
     (state.sustainabilityMin != null ? 1 : 0) +
     (state.growthMin != null ? 1 : 0) +
     (state.valueMin != null ? 1 : 0) +
-    (state.momentumMin != null ? 1 : 0) +
     (state.sentimentMin != null ? 1 : 0);
 
   const totalActive =
@@ -208,7 +206,7 @@ export function StockFiltersCard({ state, onChange, filters }: Props) {
       indexCodes: [], sectors: [], industries: [], exchanges: [], countries: [],
       riskTiers: [], minScore: null, scoreMax: null,
       profitabilityMin: null, sustainabilityMin: null, growthMin: null,
-      valueMin: null, momentumMin: null, sentimentMin: null,
+      valueMin: null, sentimentMin: null,
       techMin: null, postures: [],
     });
 
@@ -217,7 +215,7 @@ export function StockFiltersCard({ state, onChange, filters }: Props) {
       kind === "minScore" || kind === "scoreMax" ||
       kind === "profitabilityMin" || kind === "sustainabilityMin" ||
       kind === "growthMin" || kind === "valueMin" ||
-      kind === "momentumMin" || kind === "sentimentMin"
+      kind === "sentimentMin"
     ) {
       onChange({ ...state, [kind]: null });
       return;
@@ -394,11 +392,6 @@ export function StockFiltersCard({ state, onChange, filters }: Props) {
               onChange={(v) => onChange({ ...state, valueMin: v })}
             />
             <PillarInput
-              label={CATEGORY_LABEL.momentum}
-              value={state.momentumMin}
-              onChange={(v) => onChange({ ...state, momentumMin: v })}
-            />
-            <PillarInput
               label={CATEGORY_LABEL.sentiment}
               value={state.sentimentMin}
               onChange={(v) => onChange({ ...state, sentimentMin: v })}
@@ -527,12 +520,6 @@ export function StockFiltersCard({ state, onChange, filters }: Props) {
               <Badge variant="secondary" className="text-xs gap-1 pr-1">
                 <span className="text-muted-foreground/80">Valore ≥</span> {state.valueMin}
                 <button onClick={() => onChange({ ...state, valueMin: null })} className="ml-0.5 rounded hover:bg-background/60 p-0.5" aria-label="Rimuovi soglia valore"><X className="h-3 w-3" /></button>
-              </Badge>
-            )}
-            {state.momentumMin != null && (
-              <Badge variant="secondary" className="text-xs gap-1 pr-1">
-                <span className="text-muted-foreground/80">Momentum ≥</span> {state.momentumMin}
-                <button onClick={() => onChange({ ...state, momentumMin: null })} className="ml-0.5 rounded hover:bg-background/60 p-0.5" aria-label="Rimuovi soglia momentum"><X className="h-3 w-3" /></button>
               </Badge>
             )}
             {state.sentimentMin != null && (

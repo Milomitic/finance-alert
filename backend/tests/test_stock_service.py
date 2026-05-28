@@ -172,12 +172,15 @@ def test_filter_by_score_max_and_min_score_range(db: Session) -> None:
 
 # ── pillar min filters ───────────────────────────────────────────────────────
 
-def test_filter_by_momentum_min(db: Session) -> None:
-    _seed_scored(db, "P1", momentum=90.0)
-    _seed_scored(db, "P2", momentum=50.0)
-    _seed_scored(db, "P3", momentum=20.0)
+def test_filter_by_sustainability_min(db: Session) -> None:
+    # (Was test_filter_by_momentum_min — momentum left the FUNDAMENTAL
+    # composite, so the momentum_min screener filter was retired. Repointed
+    # to a live pillar to keep single-pillar-min coverage.)
+    _seed_scored(db, "P1", sustainability=90.0)
+    _seed_scored(db, "P2", sustainability=50.0)
+    _seed_scored(db, "P3", sustainability=20.0)
 
-    page = search_stocks(db, StockFilter(momentum_min=60.0))
+    page = search_stocks(db, StockFilter(sustainability_min=60.0))
     assert [i.stock.ticker for i in page.items] == ["P1"]
 
 
@@ -191,11 +194,13 @@ def test_filter_by_profitability_min(db: Session) -> None:
 
 def test_filter_by_multiple_pillar_mins(db: Session) -> None:
     """Only stocks meeting ALL pillar minimums should be returned."""
-    _seed_scored(db, "GOOD", momentum=80.0, value=75.0, growth=70.0)
-    _seed_scored(db, "BAD_M", momentum=30.0, value=75.0, growth=70.0)
-    _seed_scored(db, "BAD_V", momentum=80.0, value=20.0, growth=70.0)
+    # (momentum swapped for sustainability — momentum left the FUNDAMENTAL
+    # composite; this still exercises the multi-pillar AND semantics.)
+    _seed_scored(db, "GOOD", sustainability=80.0, value=75.0, growth=70.0)
+    _seed_scored(db, "BAD_M", sustainability=30.0, value=75.0, growth=70.0)
+    _seed_scored(db, "BAD_V", sustainability=80.0, value=20.0, growth=70.0)
 
-    page = search_stocks(db, StockFilter(momentum_min=60.0, value_min=60.0, growth_min=60.0))
+    page = search_stocks(db, StockFilter(sustainability_min=60.0, value_min=60.0, growth_min=60.0))
     assert [i.stock.ticker for i in page.items] == ["GOOD"]
 
 

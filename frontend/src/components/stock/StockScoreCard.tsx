@@ -321,7 +321,6 @@ const PILLAR_ORDER: Array<keyof StockScore["sub_scores"]> = [
   "sustainability",
   "growth",
   "value",
-  "momentum",
   "sentiment",
 ];
 
@@ -720,9 +719,11 @@ export function StockScoreCard({ ticker }: Props) {
         </div>
       </div>
 
-      {/* 6 pillar bars in a 2-column grid - splits Profittabilità +
+      {/* 5 fundamental pillar bars in a 2-column grid - splits Profittabilità +
           Sostenibilità from the V3.2 refactor onto the left, leaves
-          Growth + Value + Momentum + Sentiment on a balanced layout. */}
+          Growth + Value + Sentiment on a balanced layout. The Momentum pillar
+          was dropped: the composite is now pure-fundamental and price-action
+          lives entirely in the separate Technical score card. */}
       <div className="mt-2 border-t border-border/40 pt-2 grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-0.5">
         {PILLAR_ORDER.map((pillar) => (
           <SubScoreRow

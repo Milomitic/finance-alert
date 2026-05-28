@@ -23,7 +23,6 @@ ScoreCategory = Literal[
     "sustainability",
     "growth",
     "value",
-    "momentum",
     "sentiment",
 ]
 

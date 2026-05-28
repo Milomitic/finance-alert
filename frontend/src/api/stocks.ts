@@ -24,7 +24,6 @@ export type StockSortBy =
   | "sustainability"
   | "growth"
   | "value"
-  | "momentum"
   | "sentiment"
   | "tech_composite"
   | "tech_trend"
@@ -52,7 +51,6 @@ export interface SearchParams {
   sustainability_min?: number;
   growth_min?: number;
   value_min?: number;
-  momentum_min?: number;
   sentiment_min?: number;
   /** Technical composite range (0-100). */
   tech_min?: number;
@@ -80,7 +78,6 @@ function toQuery(params: SearchParams): string {
   if (params.sustainability_min !== undefined) sp.set("sustainability_min", String(params.sustainability_min));
   if (params.growth_min !== undefined) sp.set("growth_min", String(params.growth_min));
   if (params.value_min !== undefined) sp.set("value_min", String(params.value_min));
-  if (params.momentum_min !== undefined) sp.set("momentum_min", String(params.momentum_min));
   if (params.sentiment_min !== undefined) sp.set("sentiment_min", String(params.sentiment_min));
   if (params.tech_min !== undefined) sp.set("tech_min", String(params.tech_min));
   if (params.tech_max !== undefined) sp.set("tech_max", String(params.tech_max));

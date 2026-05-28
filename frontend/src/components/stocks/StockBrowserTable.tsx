@@ -32,7 +32,6 @@ const SCREENER_COLS = [
   { id: "sustainability", label: "Sostenibilità" },
   { id: "growth",         label: "Crescita" },
   { id: "value",          label: "Valore" },
-  { id: "momentum",       label: "Momentum" },
   { id: "sentiment",      label: "Sentiment" },
   { id: "tech_composite",  label: "Tecnico" },
   { id: "tech_trend",      label: "T-Trend" },
@@ -407,9 +406,6 @@ export function StockBrowserTable({ items, sortBy, sortDir, onSortChange, q, onQ
                 {isVisible("value") && (
                   <SortableHeader column="value" label="Valore" align="right" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} />
                 )}
-                {isVisible("momentum") && (
-                  <SortableHeader column="momentum" label="Mom." align="right" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} />
-                )}
                 {isVisible("sentiment") && (
                   <SortableHeader column="sentiment" label="Sent." align="right" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} />
                 )}
@@ -528,7 +524,7 @@ export function StockBrowserTable({ items, sortBy, sortDir, onSortChange, q, onQ
                         {item.score.composite != null ? item.score.composite.toFixed(1) : "—"}
                       </td>
                     )}
-                    {(["profitability", "sustainability", "growth", "value", "momentum", "sentiment"] as const).map((pillar) => {
+                    {(["profitability", "sustainability", "growth", "value", "sentiment"] as const).map((pillar) => {
                       if (!isVisible(pillar)) return null;
                       const v = item.score[pillar];
                       return (

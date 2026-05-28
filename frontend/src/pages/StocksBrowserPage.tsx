@@ -140,7 +140,6 @@ export default function StocksBrowserPage() {
     sustainabilityMin: parseNullableScore(searchParams.get("sustainability_min")),
     growthMin: parseNullableScore(searchParams.get("growth_min")),
     valueMin: parseNullableScore(searchParams.get("value_min")),
-    momentumMin: parseNullableScore(searchParams.get("momentum_min")),
     sentimentMin: parseNullableScore(searchParams.get("sentiment_min")),
     techMin: parseNullableScore(searchParams.get("tech_min")),
     postures: parseListParam(searchParams, "posture").filter((v) => ["Forte", "Neutro", "Debole"].includes(v)),
@@ -170,7 +169,6 @@ export default function StocksBrowserPage() {
     if (state.sustainabilityMin != null) sp.set("sustainability_min", String(state.sustainabilityMin));
     if (state.growthMin != null) sp.set("growth_min", String(state.growthMin));
     if (state.valueMin != null) sp.set("value_min", String(state.valueMin));
-    if (state.momentumMin != null) sp.set("momentum_min", String(state.momentumMin));
     if (state.sentimentMin != null) sp.set("sentiment_min", String(state.sentimentMin));
     if (state.techMin != null) sp.set("tech_min", String(state.techMin));
     state.postures.forEach((v) => sp.append("posture", v));
@@ -222,7 +220,6 @@ export default function StocksBrowserPage() {
     sustainability_min: state.sustainabilityMin ?? undefined,
     growth_min: state.growthMin ?? undefined,
     value_min: state.valueMin ?? undefined,
-    momentum_min: state.momentumMin ?? undefined,
     sentiment_min: state.sentimentMin ?? undefined,
     tech_min: state.techMin ?? undefined,
     posture: state.postures.length > 0 ? state.postures : undefined,

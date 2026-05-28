@@ -35,7 +35,6 @@ export function useStockSearch(params: SearchParams) {
       effective.sustainability_min ?? "",
       effective.growth_min ?? "",
       effective.value_min ?? "",
-      effective.momentum_min ?? "",
       effective.sentiment_min ?? "",
       effective.sort_by ?? "ticker",
       effective.sort_dir ?? "asc",

@@ -26,7 +26,11 @@ export interface StockSearchItem {
     sustainability: number | null;
     growth: number | null;
     value: number | null;
-    momentum: number | null;
+    /** FUNDAMENTAL momentum pillar — dropped from the composite (now
+     *  pure-fundamental). Always null; kept optional for back-compat with
+     *  any consumer that still reads it. Price-action momentum lives on
+     *  `technical.momentum` (the "T-Mom" screener column) instead. */
+    momentum?: number | null;
     sentiment: number | null;
   };
   technical: {

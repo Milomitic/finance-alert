@@ -55,7 +55,6 @@ class StockFilter:
     sustainability_min: float | None = None
     growth_min: float | None = None
     value_min: float | None = None
-    momentum_min: float | None = None
     sentiment_min: float | None = None
     # Technical score (continuous) filters.
     tech_min: float | None = None
@@ -170,8 +169,6 @@ def _apply_filter(stmt, f: StockFilter):
         stmt = stmt.where(StockScore.growth >= f.growth_min)
     if f.value_min is not None:
         stmt = stmt.where(StockScore.value >= f.value_min)
-    if f.momentum_min is not None:
-        stmt = stmt.where(StockScore.momentum >= f.momentum_min)
     if f.sentiment_min is not None:
         stmt = stmt.where(StockScore.sentiment >= f.sentiment_min)
     if f.tech_min is not None:

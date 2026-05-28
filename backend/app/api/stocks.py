@@ -58,7 +58,6 @@ def search(
     sustainability_min: float | None = None,
     growth_min: float | None = None,
     value_min: float | None = None,
-    momentum_min: float | None = None,
     sentiment_min: float | None = None,
     tech_min: float | None = None,
     tech_max: float | None = None,
@@ -91,7 +90,6 @@ def search(
     _validate_score_param(sustainability_min, "sustainability_min")
     _validate_score_param(growth_min, "growth_min")
     _validate_score_param(value_min, "value_min")
-    _validate_score_param(momentum_min, "momentum_min")
     _validate_score_param(sentiment_min, "sentiment_min")
     _validate_score_param(tech_min, "tech_min")
     _validate_score_param(tech_max, "tech_max")
@@ -119,7 +117,6 @@ def search(
             sustainability_min=sustainability_min,
             growth_min=growth_min,
             value_min=value_min,
-            momentum_min=momentum_min,
             sentiment_min=sentiment_min,
             tech_min=tech_min,
             tech_max=tech_max,
