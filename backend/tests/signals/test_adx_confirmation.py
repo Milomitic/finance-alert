@@ -22,7 +22,7 @@ def test_fires_strong_trend_with_breakout():
     assert any("adx" in s["label"].lower() or "trend" in s["label"].lower() for s in m.chain)
     # Two-score model: Forza in range, confidence is the alias of strength,
     # Probabilità within the empirical band.
-    assert 0 < m.strength <= 93
+    assert 0 < m.strength <= 99
     assert m.confidence == m.strength
     assert 5 <= m.probability <= 95
 

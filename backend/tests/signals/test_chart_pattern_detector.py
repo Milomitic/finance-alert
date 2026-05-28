@@ -23,7 +23,7 @@ def test_double_bottom_fires_after_neckline_break():
                or "neckline" in s["detail"].lower() for s in m.chain)
     # Two-score model: Forza in range, confidence is the alias of strength,
     # Probabilità within the empirical band.
-    assert 0 < m.strength <= 93
+    assert 0 < m.strength <= 99
     assert m.confidence == m.strength
     assert 5 <= m.probability <= 95
 

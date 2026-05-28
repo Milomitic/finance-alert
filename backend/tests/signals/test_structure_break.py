@@ -34,7 +34,7 @@ def test_bear_choch_breaks_last_higher_low():
     assert any("struttura" in s["label"].lower() for s in m.chain)
     # Two-score model: Forza in range, confidence is the alias of strength,
     # Probabilità within the empirical band.
-    assert 0 < m.strength <= 93
+    assert 0 < m.strength <= 99
     assert m.confidence == m.strength
     assert 5 <= m.probability <= 95
 

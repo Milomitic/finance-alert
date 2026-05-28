@@ -27,7 +27,7 @@ def test_two_score_model_bull_macd_divergence():
                     payload={"pivot_dates": ["2026-01-20", "2026-02-10"]})]
     m = MacdDivergence().detect(events, _df(), build_context(_df()))
     assert m is not None
-    assert 0 < m.strength <= 93
+    assert 0 < m.strength <= 99
     assert m.confidence == m.strength
     assert 5 <= m.probability <= 95
 

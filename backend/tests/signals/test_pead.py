@@ -39,7 +39,7 @@ def test_two_score_model_on_fire():
     m = Pead().detect(events, _df(), build_context(_df()))
     assert isinstance(m, SignalMatch)
     # Forza: bounded, never pinned at the top of the scale.
-    assert 0 < m.strength <= 93
+    assert 0 < m.strength <= 99
     # confidence is the transitional alias of strength during the migration.
     assert m.confidence == m.strength
     # Probabilità: empirical hit-rate within the calibrated [floor, ceil].

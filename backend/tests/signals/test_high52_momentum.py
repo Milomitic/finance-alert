@@ -38,7 +38,7 @@ def test_two_score_wiring_on_fire():
     df = _near_52w_high_uptrend()
     m = High52Momentum().detect(extract_events(df), df, build_context(df))
     assert m is not None
-    assert 0 < m.strength <= 93
+    assert 0 < m.strength <= 99
     assert m.confidence == m.strength
     assert 5 <= m.probability <= 95
 

@@ -44,10 +44,11 @@ class TestScoreV2SoftMin:
         result = score_v2(factors, weights, strength_keys={"f1", "f2"})
         assert result >= 88
 
-    def test_guardrail_caps_at_93(self):
+    def test_guardrail_caps_at_99(self):
+        # 99 is the top — reachable only when every factor is maxed; 100 never.
         factors = {"f1": 1.0, "f2": 1.0}
         weights = {"f1": 1.0, "f2": 1.0}
-        assert score_v2(factors, weights, strength_keys={"f1", "f2"}) == 93
+        assert score_v2(factors, weights, strength_keys={"f1", "f2"}) == 99
 
     def test_no_strength_keys_falls_back_to_weighted_mean(self):
         factors = {"a": 0.6, "b": 0.6}

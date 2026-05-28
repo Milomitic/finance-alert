@@ -103,8 +103,13 @@ def soft01(x: float, ref: float) -> float:
 # top of its range only when its underlying parameter genuinely predicts, not
 # merely when it's statistically rare.
 
-# Asymptote shared by `concave`: no single factor may pin the combined score.
-_CONCAVE_CEIL = 0.92
+# Asymptote shared by `concave`: the top of a factor's contribution. Set to 0.99
+# (not 1.0) and approached only for EXTREME raw values — so a genuine "monster"
+# factor can carry the combined score toward 99, while 100 stays unreachable.
+_CONCAVE_CEIL = 0.99
+# Contribution at the `a88` anchor (kept at 0.88 so the sub-monster band is
+# unchanged); the saturating tail rises from here toward _CONCAVE_CEIL.
+_CONCAVE_A88 = 0.88
 
 
 def concave(x: float, anchors: tuple[float, float, float, float]) -> float:
@@ -134,10 +139,11 @@ def concave(x: float, anchors: tuple[float, float, float, float]) -> float:
     if x <= a88 and a88 > a75:
         return 0.75 + 0.13 * (x - a75) / (a88 - a75)
     scale = (ceil - a88) if ceil > a88 else max(a88, 1e-9)
+    # Tail rises from (a88, _CONCAVE_A88) toward the _CONCAVE_CEIL asymptote.
     # Keep the gap strictly positive: for extreme x the exp underflows to 0.0,
-    # which would let the curve touch the 0.92 asymptote exactly. The epsilon
-    # preserves the "never pins the score" invariant in float arithmetic.
-    gap = max(0.04 * math.exp(-(x - a88) / scale), 1e-9)
+    # which would let the curve touch the asymptote exactly. The epsilon
+    # preserves the "never quite reaches the ceiling" invariant in float math.
+    gap = max((_CONCAVE_CEIL - _CONCAVE_A88) * math.exp(-(x - a88) / scale), 1e-9)
     return _CONCAVE_CEIL - gap
 
 
@@ -201,7 +207,7 @@ def score(factors: dict[str, float], weights: dict[str, float]) -> int:
 # WEAKEST strength factor, so confidence can't be manufactured by a saturated
 # context factor riding over a mediocre one ("mediocrity laundering").
 _V2_DELTA = 0.12          # how far strong factors may lift the score past the weakest
-_V2_GUARDRAIL = 0.93      # defensive top clamp (per-factor curves already cap ~0.92)
+_V2_GUARDRAIL = 0.99      # top clamp: 99 reachable only by exceptional signals; 100 never
 
 
 def score_v2(

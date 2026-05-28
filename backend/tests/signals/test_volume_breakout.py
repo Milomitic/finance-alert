@@ -26,7 +26,7 @@ def test_two_score_model_on_fire():
     m = VolumeBreakout().detect(extract_events(df), df, build_context(df))
     assert m is not None
     # Forza: bounded, never pinned at the top of the scale.
-    assert 0 < m.strength <= 93
+    assert 0 < m.strength <= 99
     # confidence is the transitional alias of strength during the migration.
     assert m.confidence == m.strength
     # Probabilità: empirical hit-rate within the calibrated [floor, ceil].

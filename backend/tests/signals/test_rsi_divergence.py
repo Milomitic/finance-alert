@@ -28,7 +28,7 @@ def test_two_score_model_bull_divergence():
     df = pd.DataFrame(rows)
     m = RsiDivergence().detect(events, df, build_context(df))
     assert m is not None
-    assert 0 < m.strength <= 93
+    assert 0 < m.strength <= 99
     assert m.confidence == m.strength
     assert 5 <= m.probability <= 95
 

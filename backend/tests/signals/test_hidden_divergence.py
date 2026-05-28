@@ -29,7 +29,7 @@ def test_two_score_model_bull_hidden():
                     payload={"rsi": [45.0, 38.0]})]
     m = HiddenDivergence().detect(events, df, build_context(df))
     assert m is not None
-    assert 0 < m.strength <= 93
+    assert 0 < m.strength <= 99
     assert m.confidence == m.strength
     assert 5 <= m.probability <= 95
 

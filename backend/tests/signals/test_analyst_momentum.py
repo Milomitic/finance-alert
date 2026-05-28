@@ -38,7 +38,7 @@ def test_two_score_model_upgrade_with_breakout():
     ]
     m = AnalystMomentum().detect(events, _df(), build_context(_df()))
     assert m is not None
-    assert 0 < m.strength <= 93
+    assert 0 < m.strength <= 99
     assert m.confidence == m.strength
     assert 5 <= m.probability <= 95
 

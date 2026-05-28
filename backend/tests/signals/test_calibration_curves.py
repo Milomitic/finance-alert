@@ -33,15 +33,17 @@ class TestConcave:
         assert all(ys[i] <= ys[i + 1] + 1e-12 for i in range(len(ys) - 1))
 
     def test_never_reaches_ceiling_value(self):
-        # Asymptote at 0.92 — even an extreme reading stays strictly below it.
-        assert concave(1e9, ANCH) < 0.92
+        # Asymptote at 0.99 — even an extreme reading stays strictly below it
+        # (100 is unreachable; 99 only approached by genuine monsters).
+        assert concave(1e9, ANCH) < 0.99
         assert concave(1e9, ANCH) > 0.88
 
     def test_ceiling_anchor_in_top_band(self):
-        # At the `ceil` anchor the curve is past 0.88 but not yet at 0.92.
+        # At the `ceil` anchor (the "monster" level) the curve is past 0.88 and
+        # climbing toward 0.99 — beyond it is reserved for the truly extreme.
         _a45, _a75, _a88, ceil = ANCH
         v = concave(ceil, ANCH)
-        assert 0.88 < v < 0.92
+        assert 0.88 < v < 0.99
 
     def test_midpoint_below_45_for_subthreshold(self):
         # A raw value half-way to the first anchor should score well under 0.45.
