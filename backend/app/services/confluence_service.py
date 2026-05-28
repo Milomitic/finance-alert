@@ -89,7 +89,13 @@ def compute_confluence(db: Session, *, days: int | None = None) -> list[Confluen
     + strongest first. `days` overrides the active-window length."""
     window = days if days is not None else getattr(settings, "signal_max_age_days", 7)
     cutoff = datetime.now(UTC).date() - timedelta(days=window)
-    conf_col = cast(func.json_extract(Alert.snapshot, "$.confidence"), Float)
+    # Confluence strength now aggregates Forza. Read $.strength, falling back to
+    # $.confidence for legacy snapshots written before the two-score model (and
+    # so it survives the eventual removal of the transitional confidence alias).
+    conf_col = func.coalesce(
+        cast(func.json_extract(Alert.snapshot, "$.strength"), Float),
+        cast(func.json_extract(Alert.snapshot, "$.confidence"), Float),
+    )
     tone_col = func.json_extract(Alert.snapshot, "$.tone")
     hz_col = func.json_extract(Alert.snapshot, "$.horizon")
     rows = db.execute(

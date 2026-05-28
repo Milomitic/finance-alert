@@ -82,7 +82,10 @@ def evaluate_signals(db: Session, stock: Stock, ohlcv: pd.DataFrame) -> int:
     idx_by_date = {str(d)[:10]: i for i, d in enumerate(ohlcv["date"])}
     added = 0
     for m in detect_signals(ohlcv, db=db, stock=stock):
-        if m.confidence < settings.signal_min_confidence:
+        # Emission gate now on Forza (strength). `signal_min_confidence` is the
+        # min-Forza bar; note calibrated Forza runs lower than the old confidence,
+        # so the same 60 admits fewer, individually-stronger signals (revisit).
+        if m.strength < settings.signal_min_confidence:
             continue
         # Step 1 -- regime gate: a trend-following signal must agree with the
         # prevailing trend; contradicting it is the dominant false-positive
@@ -110,7 +113,13 @@ def evaluate_signals(db: Session, stock: Stock, ohlcv: pd.DataFrame) -> int:
         if isinstance(inv_level, (int, float)) and not any(l.get("kind") == "stop" for l in ann["levels"]):
             ann["levels"].append({"label": "Stop / invalidazione", "price": float(inv_level), "kind": "stop"})
         snapshot = {
-            "tone": m.tone, "confidence": m.confidence, "chain": m.chain,
+            "tone": m.tone,
+            # Two-score model: Forza (pattern strength) + Probabilita (hit-rate
+            # "di accadimento"). `confidence` retained as a transitional alias of
+            # strength so legacy readers keep working until the UI swaps over.
+            "strength": m.strength, "probability": m.probability,
+            "confidence": m.confidence,
+            "chain": m.chain,
             "factors": m.factors, "invalidation": m.invalidation,
             "sources": getattr(_detector_for(m.name), "sources", []),
             "annotations": ann, "atr": _atr,
