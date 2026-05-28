@@ -178,6 +178,28 @@ Mark un-derivable legacy rows so the UI shows "n/d" rather than a wrong number.
   Probabilità distribution (centred near the empirical base rates, monotone-ish
   vs realised hit where measurable).
 
+## Broader architecture: 3-lens cleanup (approved 2026-05-28)
+
+Mid-implementation review confirmed the scoring stack is a SOUND 3-lens model
+(all three add orthogonal value) but with blurred boundaries. Cleanup approved:
+
+| Lens | Question | Owner | Fix |
+|---|---|---|---|
+| **Qualità** (fundamental) | good company to own? | `StockScore`/Composite | **(A)** make it PURELY fundamental: drop the Momentum pillar (price-action duplicated the Tecnico lens), renormalise the remaining 5 pillars |
+| **Tecnico** (price-action) | healthy posture now? | `TechnicalScore` | **(B)** remove the ±5pp signal nudge (`technical_score_service.py:199-201`) — composite = pure 5-dim; `signals` field kept informational only |
+| **Segnali** (events) | trigger now, how strong/likely? | detectors | **(C)** Forza + Probabilità (this spec). UNIFY Probabilità with the existing `frontend/src/lib/calibratedProbability.ts` ("Prob. storica") + calibration — do NOT add a parallel number |
+
+The Forza:Probabilità (signal) distinction mirrors Qualità:Tecnico (stock) — the
+architecture becomes consistent across both levels once the lenses stop leaking
+into each other. Execution order: **B (trivial) → A (moderate) → C (the signal
+redesign, B1a–B3)**.
+
+Note on (A): the Momentum pillar's price-action info is NOT lost — it lives in
+the Tecnico lens (own column already in the screener). Removing it from the
+fundamental composite sharpens "is this a good company?" and ends the
+double-count. The composite re-ranks (a recompute), screener `momentum_min`
+filter + "Momentum" column + "top by momentum" category retire or move to Tecnico.
+
 ## Open questions / future work
 
 - Probability granularity: v1 detector-base-rate + factor adjustments. Future:
