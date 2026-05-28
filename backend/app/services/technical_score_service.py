@@ -192,13 +192,13 @@ def finalize(db: Session, partials: dict[int, dict]) -> int:
             "rel_strength": rel,
         }
         composite = sum(_WEIGHTS[k] * dims[k] for k in _WEIGHTS)
+        # Signals are their OWN lens (Forza / Probabilità) — the technical
+        # composite stays PURELY price-action and is NOT nudged by them (that
+        # used to add ±5pp and made a transient signal leak into the continuous
+        # posture). The latest signal's confidence is kept only as an
+        # informational reference in the `signals` field.
         fac = facets.get(sid)
-        signals_val = None
-        if fac is not None:
-            signals_val = round(fac["confidence"], 1)
-            nudge = _clamp((fac["confidence"] - 60.0) / 40.0) * 5.0
-            sign = 1.0 if fac["tone"] == "bull" else -1.0 if fac["tone"] == "bear" else 0.0
-            composite = max(0.0, min(100.0, composite + sign * nudge))
+        signals_val = round(fac["confidence"], 1) if fac is not None else None
         posture = "Forte" if composite >= 66 else "Neutro" if composite >= 40 else "Debole"
         db.merge(TechnicalScore(
             stock_id=sid,

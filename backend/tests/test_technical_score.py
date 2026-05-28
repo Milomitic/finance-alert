@@ -52,3 +52,38 @@ def test_finalize_ranks_rel_strength_and_upserts(db):
 
 def test_finalize_empty_is_noop(db):
     assert svc.finalize(db, {}) == 0
+
+
+def test_composite_not_nudged_by_recent_signal(db):
+    """Lens decoupling: the TechnicalScore composite is PURE price-action — the
+    5-dim weighted average — and must NOT be bumped by a recent signal's
+    confidence. (Signals are their own lens; the `signals` field stays as an
+    informational reference only.) Regression: it used to add ±5pp."""
+    import datetime
+    import json
+
+    from app.models import Alert
+
+    s = Stock(ticker="TNUDGE", exchange="NASDAQ", name="N", country="US")
+    db.add(s)
+    db.flush()
+    p = svc.partial_for(_df([100 + i for i in range(120)]))
+    assert p is not None
+    # Pure composite: single stock → rel_strength 50, weighted avg of dims.
+    dims = {"trend": p["trend"], "momentum": p["momentum"],
+            "structure": p["structure"], "volume": p["volume"], "rel_strength": 50.0}
+    expected = round(sum(svc._WEIGHTS[k] * dims[k] for k in svc._WEIGHTS), 1)
+    # A strong recent BULL signal that previously would have nudged +~4.4pp.
+    db.add(Alert(
+        stock_id=s.id, signal_name="volume_breakout", trigger_price=100.0,
+        triggered_at=datetime.datetime.now(datetime.timezone.utc),
+        signal_date=datetime.date.today(),
+        snapshot=json.dumps({"tone": "bull", "confidence": 95}),
+    ))
+    db.flush()
+    svc.finalize(db, {s.id: p})
+    db.commit()
+    ts = db.get(TechnicalScore, s.id)
+    assert ts is not None
+    assert ts.composite == expected          # pure — NOT expected + nudge
+    assert ts.signals == 95.0                # still surfaced as a reference
