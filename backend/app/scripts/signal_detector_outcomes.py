@@ -202,7 +202,7 @@ def run(*, sample: int, step: int, window: int, min_bars: int,
                     # None when the signal has no usable structural level (excluded
                     # from the tbs aggregate, but the row still carries abs_hit).
                     tbs = _trade_playbook_hit(s, i, m, highs=highs, lows=lows)
-                    per_det[m.name].append((dir_excess, int(m.confidence), abs_hit, tbs))
+                    per_det[m.name].append((dir_excess, int(m.strength), abs_hit, tbs))
                     n_signals += 1
             if (sidx + 1) % 25 == 0:
                 logger.info(f"[detector-outcomes] {sidx + 1}/{len(universe)} stocks, "

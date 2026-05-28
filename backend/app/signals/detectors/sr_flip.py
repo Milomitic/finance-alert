@@ -87,7 +87,7 @@ class SRFlip:
                             "reason": f"ritorno oltre il livello {level:.2f} (flip fallito)"}
             level_kind = "support" if tone == "bull" else "resistance"
             level_label = "Supporto (ex resistenza)" if tone == "bull" else "Resistenza (ex supporto)"
-            return SignalMatch(name=self.name, tone=tone, confidence=strength,
+            return SignalMatch(name=self.name, tone=tone,
                                strength=strength, probability=probability,
                                signal_date=last_date, chain=chain,
                                invalidation=invalidation, factors=factors,

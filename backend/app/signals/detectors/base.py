@@ -19,9 +19,6 @@ from app.signals.events import Event
 class SignalMatch:
     name: str
     tone: str                       # "bull" | "bear"
-    confidence: int                 # 0..100 — DEPRECATED transitional alias of
-                                    # `strength`; removed once all 17 detectors +
-                                    # scan + UI migrate to the two-score model.
     signal_date: str                # ISO — date of the chain's last event
     chain: list[dict]               # [{date, label, detail}]
     invalidation: dict | None       # {"level": float, "reason": str}

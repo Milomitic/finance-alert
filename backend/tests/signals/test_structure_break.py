@@ -30,12 +30,10 @@ def _uptrend_then_break_down():
 def test_bear_choch_breaks_last_higher_low():
     df = _uptrend_then_break_down()
     m = StructureBreak().detect([], df, build_context(df))
-    assert isinstance(m, SignalMatch) and m.tone == "bear" and m.confidence > 0
+    assert isinstance(m, SignalMatch) and m.tone == "bear" and m.strength > 0
     assert any("struttura" in s["label"].lower() for s in m.chain)
-    # Two-score model: Forza in range, confidence is the alias of strength,
-    # Probabilità within the empirical band.
+    # Two-score model: Forza in range, Probabilità within the empirical band.
     assert 0 < m.strength <= 99
-    assert m.confidence == m.strength
     assert 5 <= m.probability <= 95
 
 

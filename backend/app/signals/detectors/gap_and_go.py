@@ -68,6 +68,6 @@ class GapAndGo:
             {"date": gap.date, "label": "Conferma volume",
              "detail": f"{vol_mag:.1f}x la media: gap partecipato"},
         ]
-        return SignalMatch(name=self.name, tone=tone, confidence=strength,
+        return SignalMatch(name=self.name, tone=tone,
                            strength=strength, probability=probability,
                            signal_date=gap.date, chain=chain, invalidation=None, factors=factors)

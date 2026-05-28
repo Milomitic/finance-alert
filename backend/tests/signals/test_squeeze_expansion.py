@@ -17,7 +17,7 @@ def test_fires_on_squeeze_then_expansion():
              "high": 101, "low": 99, "close": 100, "volume": 1000} for i in range(40)]
     df = pd.DataFrame(rows)
     m = SqueezeExpansion().detect(_events_squeeze_then_expansion(), df, build_context(df))
-    assert isinstance(m, SignalMatch) and m.tone == "bull" and m.confidence > 0
+    assert isinstance(m, SignalMatch) and m.tone == "bull" and m.strength > 0
     assert any("squeeze" in s["label"].lower() or "compressione" in s["label"].lower()
                for s in m.chain)
 

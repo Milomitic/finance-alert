@@ -103,7 +103,7 @@ class VolumeBreakout:
             if isinstance(bo_level, (int, float)) else []
         )
         return SignalMatch(
-            name=self.name, tone=tone, confidence=strength,
+            name=self.name, tone=tone,
             strength=strength, probability=probability, signal_date=confirm_date,
             chain=chain, invalidation=invalidation, factors=factors,
             annotations={"levels": primary_levels, "points": []},

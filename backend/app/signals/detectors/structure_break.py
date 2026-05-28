@@ -83,7 +83,7 @@ class StructureBreak:
         invalidation = {"level": protected,
                         "reason": "ripristino della struttura precedente"}
         level_kind = "support" if tone == "bull" else "resistance"
-        return SignalMatch(name=self.name, tone=tone, confidence=strength,
+        return SignalMatch(name=self.name, tone=tone,
                            strength=strength, probability=probability,
                            signal_date=last_date, chain=chain,
                            invalidation=invalidation, factors=factors,

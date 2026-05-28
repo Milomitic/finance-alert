@@ -16,21 +16,20 @@ def test_fires_bull_hidden_in_uptrend():
     events = [Event("2026-02-10", "hidden_divergence", "bull", magnitude=0.5,
                     payload={"rsi": [45.0, 38.0]})]
     m = HiddenDivergence().detect(events, df, build_context(df))
-    assert isinstance(m, SignalMatch) and m.tone == "bull" and m.confidence > 0
+    assert isinstance(m, SignalMatch) and m.tone == "bull" and m.strength > 0
     assert any("divergen" in s["label"].lower() or "continuaz" in s["label"].lower()
                for s in m.chain)
 
 
 def test_two_score_model_bull_hidden():
-    """Forza (strength) is a bounded soft-min score; confidence aliases it;
-    Probabilità sits in the empirical 5..95 band."""
+    """Forza (strength) is a bounded soft-min score; Probabilità sits in the
+    empirical 5..95 band."""
     df = _uptrend_df()
     events = [Event("2026-02-10", "hidden_divergence", "bull", magnitude=0.5,
                     payload={"rsi": [45.0, 38.0]})]
     m = HiddenDivergence().detect(events, df, build_context(df))
     assert m is not None
     assert 0 < m.strength <= 99
-    assert m.confidence == m.strength
     assert 5 <= m.probability <= 95
 
 

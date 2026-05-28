@@ -16,7 +16,7 @@ def _series(breakout=True, with_volume=True):
 def test_fires_when_breakout_confirmed_by_volume():
     df = _series(breakout=True, with_volume=True)
     m = VolumeBreakout().detect(extract_events(df), df, build_context(df))
-    assert m is not None and m.tone == "bull" and m.confidence > 0
+    assert m is not None and m.tone == "bull" and m.strength > 0
     assert any(s["label"].lower().startswith("breakout") for s in m.chain)
     assert any("volume" in s["label"].lower() for s in m.chain)
 
@@ -27,8 +27,6 @@ def test_two_score_model_on_fire():
     assert m is not None
     # Forza: bounded, never pinned at the top of the scale.
     assert 0 < m.strength <= 99
-    # confidence is the transitional alias of strength during the migration.
-    assert m.confidence == m.strength
     # Probabilità: empirical hit-rate within the calibrated [floor, ceil].
     assert 5 <= m.probability <= 95
 

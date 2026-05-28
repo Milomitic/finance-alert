@@ -70,7 +70,7 @@ class CandleReversal:
         invalidation = {"level": float(nearest), "reason": f"rottura del {loc}"}
         level_kind = "support" if tone == "bull" else "resistance"
         level_label = "Supporto" if tone == "bull" else "Resistenza"
-        return SignalMatch(name=self.name, tone=tone, confidence=strength,
+        return SignalMatch(name=self.name, tone=tone,
                            strength=strength, probability=probability,
                            signal_date=cdl.date, chain=chain,
                            invalidation=invalidation, factors=factors,

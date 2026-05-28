@@ -115,10 +115,9 @@ def evaluate_signals(db: Session, stock: Stock, ohlcv: pd.DataFrame) -> int:
         snapshot = {
             "tone": m.tone,
             # Two-score model: Forza (pattern strength) + Probabilita (hit-rate
-            # "di accadimento"). `confidence` retained as a transitional alias of
-            # strength so legacy readers keep working until the UI swaps over.
+            # "di accadimento"). Legacy snapshots may still carry a `confidence`
+            # alias of strength; readers coalesce $.strength/$.confidence for those.
             "strength": m.strength, "probability": m.probability,
-            "confidence": m.confidence,
             "chain": m.chain,
             "factors": m.factors, "invalidation": m.invalidation,
             "sources": getattr(_detector_for(m.name), "sources", []),

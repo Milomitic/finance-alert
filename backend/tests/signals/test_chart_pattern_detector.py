@@ -18,13 +18,11 @@ def test_double_bottom_fires_after_neckline_break():
     events = [Event("2026-02-10", "chart_pattern", "bull", magnitude=0.5,
                     payload={"pattern": "double_bottom", "neckline": 100.0})]
     m = ChartPattern().detect(events, df, build_context(df))
-    assert isinstance(m, SignalMatch) and m.tone == "bull" and m.confidence > 0
+    assert isinstance(m, SignalMatch) and m.tone == "bull" and m.strength > 0
     assert any("doppio" in s["label"].lower() or "double" in s["label"].lower()
                or "neckline" in s["detail"].lower() for s in m.chain)
-    # Two-score model: Forza in range, confidence is the alias of strength,
-    # Probabilità within the empirical band.
+    # Two-score model: Forza in range, Probabilità within the empirical band.
     assert 0 < m.strength <= 99
-    assert m.confidence == m.strength
     assert 5 <= m.probability <= 95
 
 

@@ -20,7 +20,7 @@ def test_fires_on_cluster_with_oversold():
         Event("2026-02-10", "rsi_extreme", "bull", magnitude=0.6, payload={"rsi": 24.0}),
     ]
     m = InsiderBuy().detect(events, _df(), build_context(_df()))
-    assert isinstance(m, SignalMatch) and m.tone == "bull" and m.confidence > 0
+    assert isinstance(m, SignalMatch) and m.tone == "bull" and m.strength > 0
     assert any("insider" in s["label"].lower() for s in m.chain)
     # Non-technical (first) chain step must carry source="insider".
     assert m.chain[0].get("source") == "insider"
@@ -30,8 +30,8 @@ def test_fires_on_cluster_with_oversold():
 
 
 def test_two_score_model_cluster_with_oversold():
-    """Forza (strength) is a bounded soft-min score; confidence aliases it;
-    Probabilità sits in the empirical 5..95 band."""
+    """Forza (strength) is a bounded soft-min score; Probabilità sits in the
+    empirical 5..95 band."""
     events = [
         Event("2026-02-10", "insider_cluster", "bull", magnitude=0.7,
               payload={"n_buyers": 3, "total_shares": 50000}, source="insider"),
@@ -40,7 +40,6 @@ def test_two_score_model_cluster_with_oversold():
     m = InsiderBuy().detect(events, _df(), build_context(_df()))
     assert m is not None
     assert 0 < m.strength <= 99
-    assert m.confidence == m.strength
     assert 5 <= m.probability <= 95
 
 
@@ -60,7 +59,7 @@ def test_fires_on_cluster_with_support():
               payload={"kind": "support", "level": 96.0}),
     ]
     m = InsiderBuy().detect(events, _df(last_close=96.5), build_context(_df(last_close=96.5)))
-    assert isinstance(m, SignalMatch) and m.tone == "bull" and m.confidence > 0
+    assert isinstance(m, SignalMatch) and m.tone == "bull" and m.strength > 0
 
 
 def test_silent_when_no_insider_cluster():

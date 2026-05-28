@@ -81,7 +81,7 @@ class TrendPullback:
         ]
         invalidation = {"level": float(es.iloc[last]),
                         "reason": f"chiusura oltre EMA{_SLOW} contro il trend"}
-        return SignalMatch(name=self.name, tone=tone, confidence=strength,
+        return SignalMatch(name=self.name, tone=tone,
                            strength=strength, probability=probability,
                            signal_date=_last_date(ohlcv), chain=chain,
                            invalidation=invalidation, factors=factors)

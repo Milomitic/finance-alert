@@ -55,7 +55,7 @@ class SqueezeExpansion:
             {"date": exp.date, "label": f"Espansione {tone}",
              "detail": "le bande si riaprono: rilascio nel verso del trend"},
         ]
-        return SignalMatch(name=self.name, tone=tone, confidence=strength,
+        return SignalMatch(name=self.name, tone=tone,
                            strength=strength, probability=probability,
                            signal_date=exp.date, chain=chain, invalidation=None,
                            factors=factors)

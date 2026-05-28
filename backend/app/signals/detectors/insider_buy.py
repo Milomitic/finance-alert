@@ -184,7 +184,6 @@ class InsiderBuy:
         return SignalMatch(
             name=self.name,
             tone=self.tone,
-            confidence=strength,
             strength=strength,
             probability=probability,
             signal_date=signal_date,

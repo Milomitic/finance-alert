@@ -19,7 +19,7 @@ def _df(prices):
 
 
 def _match(signal_date, *, tone="bull", name="volume_breakout", invalidation=None):
-    return SignalMatch(name=name, tone=tone, confidence=90, signal_date=signal_date,
+    return SignalMatch(name=name, tone=tone, strength=90, signal_date=signal_date,
                        chain=[], invalidation=invalidation, factors={})
 
 

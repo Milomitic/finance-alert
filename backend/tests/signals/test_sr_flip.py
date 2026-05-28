@@ -19,7 +19,7 @@ def test_bull_flip_break_then_hold_above_old_resistance():
     events = [Event("2026-02-05", "sr_level", None,
                     payload={"kind": "resistance", "level": 100.0})]
     m = SRFlip().detect(events, df, build_context(df))
-    assert isinstance(m, SignalMatch) and m.tone == "bull" and m.confidence > 0
+    assert isinstance(m, SignalMatch) and m.tone == "bull" and m.strength > 0
     assert any("flip" in s["label"].lower() or "polarit" in s["label"].lower()
                or "supporto" in s["label"].lower() for s in m.chain)
 

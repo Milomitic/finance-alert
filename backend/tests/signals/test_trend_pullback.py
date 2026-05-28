@@ -26,20 +26,19 @@ def _golden_then_pullback():
 def test_fires_on_golden_cross_pullback_resume():
     df = _golden_then_pullback()
     m = TrendPullback().detect(extract_events(df), df, build_context(df))
-    assert m is not None and m.tone == "bull" and m.confidence > 0
+    assert m is not None and m.tone == "bull" and m.strength > 0
     assert any("cross" in s["label"].lower() or "incrocio" in s["label"].lower()
                for s in m.chain)
 
 
 def test_two_score_model_wired():
     """Migrated to the Forza/Probabilità model: strength is the soft-min-capped
-    score_v2 (guardrail ≤ 99), probability is the calibration hit-rate (in band),
-    and confidence stays a transitional alias of strength."""
+    score_v2 (guardrail ≤ 99), probability is the calibration hit-rate (in
+    band)."""
     df = _golden_then_pullback()
     m = TrendPullback().detect(extract_events(df), df, build_context(df))
     assert m is not None
     assert 0 < m.strength <= 99           # Forza, guardrail-capped
-    assert m.confidence == m.strength     # transitional alias
     assert 5 <= m.probability <= 95       # Probabilità in band
     # soft-min property: Forza cannot exceed the trend_strength factor + delta.
     ts = m.factors["trend_strength"]

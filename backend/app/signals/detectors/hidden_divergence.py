@@ -66,7 +66,7 @@ class HiddenDivergence:
                          for row in ohlcv.itertuples(index=False)}
         points = [{"date": dt, "price": close_by_date[dt]}
                   for dt in pivots if dt in close_by_date]
-        return SignalMatch(name=self.name, tone=tone, confidence=strength,
+        return SignalMatch(name=self.name, tone=tone,
                            strength=strength, probability=probability,
                            signal_date=d.date, chain=chain, invalidation=None,
                            factors=factors,

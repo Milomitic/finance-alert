@@ -74,7 +74,7 @@ class ChartPattern:
             "points": [{"date": str(pt["date"])[:10], "price": float(pt["price"])}
                        for pt in pts if isinstance(pt.get("price"), (int, float))],
         }
-        return SignalMatch(name=self.name, tone=tone, confidence=strength,
+        return SignalMatch(name=self.name, tone=tone,
                            strength=strength, probability=probability,
                            signal_date=last_date, chain=chain,
                            invalidation=invalidation, factors=factors,

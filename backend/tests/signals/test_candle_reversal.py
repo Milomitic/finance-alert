@@ -22,7 +22,7 @@ def test_fires_bull_candle_at_support():
         Event("2026-02-05", "sr_level", None, payload={"kind": "support", "level": 96.0}),
     ]
     m = CandleReversal().detect(events, df, build_context(df))
-    assert isinstance(m, SignalMatch) and m.tone == "bull" and m.confidence > 0
+    assert isinstance(m, SignalMatch) and m.tone == "bull" and m.strength > 0
     assert any("hammer" in s["detail"].lower() or "candela" in s["label"].lower()
                for s in m.chain)
 
@@ -44,7 +44,6 @@ def test_two_score_wiring_on_fire():
     m = CandleReversal().detect(events, df, build_context(df))
     assert m is not None
     assert 0 < m.strength <= 99
-    assert m.confidence == m.strength
     assert 5 <= m.probability <= 95
 
 

@@ -62,6 +62,6 @@ class AdxConfirmation:
             {"date": a.date, "label": "Conferma breakout",
              "detail": "rottura nel verso del trend"},
         ]
-        return SignalMatch(name=self.name, tone=tone, confidence=strength,
+        return SignalMatch(name=self.name, tone=tone,
                            strength=strength, probability=probability,
                            signal_date=a.date, chain=chain, invalidation=None, factors=factors)

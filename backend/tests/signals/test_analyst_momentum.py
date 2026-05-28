@@ -18,7 +18,7 @@ def test_fires_on_upgrade_with_breakout():
         Event("2026-02-11", "breakout", "bull", magnitude=0.04, payload={"level": 105.0}),
     ]
     m = AnalystMomentum().detect(events, _df(), build_context(_df()))
-    assert isinstance(m, SignalMatch) and m.tone == "bull" and m.confidence > 0
+    assert isinstance(m, SignalMatch) and m.tone == "bull" and m.strength > 0
     assert any("analist" in s["label"].lower() or "upgrade" in s["label"].lower()
                or "rating" in s["label"].lower() for s in m.chain)
     # Non-technical (first) chain step must carry source="analyst".
@@ -29,8 +29,8 @@ def test_fires_on_upgrade_with_breakout():
 
 
 def test_two_score_model_upgrade_with_breakout():
-    """Forza (strength) is a bounded soft-min score; confidence aliases it;
-    Probabilità sits in the empirical 5..95 band."""
+    """Forza (strength) is a bounded soft-min score; Probabilità sits in the
+    empirical 5..95 band."""
     events = [
         Event("2026-02-10", "analyst_change", "bull", magnitude=0.6,
               payload={"firm": "X", "to_grade": "Buy"}, source="analyst"),
@@ -39,7 +39,6 @@ def test_two_score_model_upgrade_with_breakout():
     m = AnalystMomentum().detect(events, _df(), build_context(_df()))
     assert m is not None
     assert 0 < m.strength <= 99
-    assert m.confidence == m.strength
     assert 5 <= m.probability <= 95
 
 
@@ -56,7 +55,7 @@ def test_fires_on_downgrade_with_bearish_breakout():
         Event("2026-02-12", "breakout", "bear", magnitude=0.05, payload={"level": 95.0}),
     ]
     m = AnalystMomentum().detect(events, _df(), build_context(_df()))
-    assert isinstance(m, SignalMatch) and m.tone == "bear" and m.confidence > 0
+    assert isinstance(m, SignalMatch) and m.tone == "bear" and m.strength > 0
 
 
 def test_fires_on_upgrade_with_ema_cross():

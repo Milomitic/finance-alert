@@ -18,12 +18,10 @@ def test_fires_strong_trend_with_breakout():
         Event("2026-02-10", "breakout", "bull", magnitude=0.04, payload={"level": 105.0}),
     ]
     m = AdxConfirmation().detect(events, _df(), build_context(_df()))
-    assert isinstance(m, SignalMatch) and m.tone == "bull" and m.confidence > 0
+    assert isinstance(m, SignalMatch) and m.tone == "bull" and m.strength > 0
     assert any("adx" in s["label"].lower() or "trend" in s["label"].lower() for s in m.chain)
-    # Two-score model: Forza in range, confidence is the alias of strength,
-    # Probabilità within the empirical band.
+    # Two-score model: Forza in range, Probabilità within the empirical band.
     assert 0 < m.strength <= 99
-    assert m.confidence == m.strength
     assert 5 <= m.probability <= 95
 
 

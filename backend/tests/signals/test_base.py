@@ -16,7 +16,7 @@ def test_find_after_respects_order_and_window():
 
 
 def test_signalmatch_is_constructible():
-    m = SignalMatch(name="x", tone="bull", confidence=70, signal_date="2026-05-02",
+    m = SignalMatch(name="x", tone="bull", strength=70, signal_date="2026-05-02",
                     chain=[{"date": "2026-05-01", "label": "Breakout", "detail": ""}],
                     invalidation=None, factors={"f": 1.0})
-    assert m.confidence == 70
+    assert m.strength == 70

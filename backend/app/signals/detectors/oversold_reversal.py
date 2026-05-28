@@ -80,7 +80,7 @@ class OversoldReversal:
                         "reason": f"rottura del {'supporto' if tone == 'bull' else 'resistenza'}"}
         level_kind = "support" if tone == "bull" else "resistance"
         level_label = "Supporto" if tone == "bull" else "Resistenza"
-        return SignalMatch(name=self.name, tone=tone, confidence=strength,
+        return SignalMatch(name=self.name, tone=tone,
                            strength=strength, probability=probability,
                            signal_date=_last_date(ohlcv), chain=chain,
                            invalidation=invalidation, factors=factors,

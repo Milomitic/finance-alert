@@ -161,7 +161,6 @@ class AnalystMomentum:
         return SignalMatch(
             name=self.name,
             tone=tone,
-            confidence=strength,
             strength=strength,
             probability=probability,
             signal_date=signal_date,
