@@ -206,12 +206,15 @@ export function InstitutionalHoldersCard({ ticker }: Props) {
             </ul>
             {/* Besides the latest transactions above, the same data as
                 an infographic: WHO holds this stock and in what
-                measure — bar = position value, colour = weight in
-                that fund's portfolio. */}
+                measure — bar length = the holder's portfolio WEIGHT
+                (the % shown next to it), so a tiny-weight mega-fund no
+                longer fills the whole bar just because its dollar
+                position is the largest. */}
             <div className="mt-3 border-t border-border/40 pt-3">
               <AllocationBars
                 title="Quote per istituzione (incl. storiche)"
                 max={10}
+                metric="weight"
                 items={allocItems}
               />
             </div>

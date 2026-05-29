@@ -328,12 +328,15 @@ export default function InstitutionalDetailPage() {
       </div>
 
       {/* Portfolio-composition infographic: who/what this fund holds
-          and in what measure (bar = position value, colour = weight). */}
+          and in what measure. Bar length = position WEIGHT (% of the
+          book), which is the natural way to compare positions within a
+          single portfolio. */}
       <Card>
         <CardContent className="p-3">
           <AllocationBars
             title="Composizione portafoglio — top posizioni"
             max={12}
+            metric="weight"
             emptyHint="Nessuna posizione tracciata per questo periodo."
             items={holdings.map((h) => ({
               key: h.ticker,

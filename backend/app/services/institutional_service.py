@@ -251,6 +251,15 @@ def compute_qoq_deltas(
 
     The 2% noise threshold avoids tagging rebalance dust as "add".
     Returns the number of holdings updated.
+
+    ⚠️ "new" requires a PRIOR filing as evidence. When this is the
+    fund's first (and only) filing in our snapshot there is no baseline,
+    so we genuinely *cannot tell* whether a position is newly opened or
+    has been held for years — we leave `action=None` (unknown) rather
+    than asserting "new". Asserting "new" on first filings was the bug
+    that made every SEC-13F mega-fund (Vanguard, BlackRock, State
+    Street, …) show "Nuovo" on literally every holding — see the
+    institutional-holders UI fix.
     """
     prev = db.execute(
         select(InstitutionalFiling)
@@ -268,10 +277,14 @@ def compute_qoq_deltas(
     ).scalars().all()
 
     if prev is None:
-        # First filing: no Q/Q to compute. Mark all positions as "new"
-        # if shares > 0, and "hold" otherwise (defensive).
+        # First filing: no Q/Q baseline to compare against. We CANNOT
+        # know whether a position is newly opened or long-held, so we
+        # must NOT label it "new" — leave it unknown (None). (Previously
+        # this branch stamped every position "new", which made every
+        # single-filing SEC-13F fund show "Nuovo" on every holding.)
         for h in cur_holdings:
-            h.action = "new" if (h.shares or 0) > 0 else "hold"
+            h.action = None
+            h.qoq_change_pct = None
         db.flush()
         return len(cur_holdings)
 
@@ -846,6 +859,50 @@ def get_aggregate_stats(
 # Per-stock card: which superinvestors hold this ticker?
 # ---------------------------------------------------------------------------
 
+def _substantiated_new(
+    db: Session,
+    pairs: Iterable[tuple[int, date]],
+) -> set[int]:
+    """Return the subset of institutional_ids whose "new" label can be
+    TRUSTED — i.e. the fund has at least one filing strictly older than
+    the holding's own period, so "first appearance in this filing" is a
+    real, observed transition rather than just "the only filing we have".
+
+    Many funds in our snapshot (every SEC-13F mega-fund — Vanguard,
+    BlackRock, State Street, Fidelity, …) have exactly ONE filing. On a
+    first filing there is no baseline, so a position labelled "new" is
+    actually "unknown" — it may have been held for years. Surfacing
+    "Nuovo" on all of them is misleading (it was the reported bug:
+    "NUOVO appears on almost every row"). This guard lets the read paths
+    demote those unsubstantiated "new" labels to None.
+
+    `pairs` is (institutional_id, period_end_date) for the rows we're
+    about to return; we only probe those funds, keeping the query cheap.
+    """
+    pairs = list(pairs)
+    if not pairs:
+        return set()
+    inst_ids = {iid for iid, _ in pairs}
+    # Earliest filing period per institutional (single grouped query).
+    earliest_by_inst: dict[int, date] = {}
+    for iid, earliest in db.execute(
+        select(
+            InstitutionalFiling.institutional_id,
+            func.min(InstitutionalFiling.period_end_date),
+        )
+        .where(InstitutionalFiling.institutional_id.in_(inst_ids))
+        .group_by(InstitutionalFiling.institutional_id)
+    ).all():
+        earliest_by_inst[iid] = earliest
+    # "new" is trustworthy iff the fund filed BEFORE this holding's period.
+    return {
+        iid
+        for iid, period in pairs
+        if (earliest := earliest_by_inst.get(iid)) is not None
+        and earliest < period
+    }
+
+
 @dataclass
 class TickerHolder:
     institutional_id: int
@@ -929,11 +986,19 @@ def holders_for_ticker(
         .limit(limit)
     ).all()
 
+    # Demote unsubstantiated "new" labels (single-filing funds have no
+    # baseline → "Nuovo" is misleading). See `_substantiated_new`.
+    trusted_new = _substantiated_new(
+        db, ((r[0], r[5]) for r in rows if r[10] == "new")
+    )
+
     out: list[TickerHolder] = []
     for (
         inst_id, slug, name, manager_name, type_, period_end,
         shares, value_usd, portfolio_pct, qoq_change_pct, action,
     ) in rows:
+        if action == "new" and inst_id not in trusted_new:
+            action = None
         out.append(
             TickerHolder(
                 institutional_id=inst_id,
@@ -1028,6 +1093,11 @@ def historical_holders_for_ticker(
         .limit(limit + len(exclude_ids))
     ).all()
 
+    # Same "new"-substantiation guard as the current-holder path.
+    trusted_new = _substantiated_new(
+        db, ((r[0], r[5]) for r in rows if r[10] == "new")
+    )
+
     out: list[TickerHolder] = []
     for (
         inst_id, slug, name, manager_name, type_, period_end,
@@ -1035,6 +1105,8 @@ def historical_holders_for_ticker(
     ) in rows:
         if inst_id in exclude_ids:
             continue
+        if action == "new" and inst_id not in trusted_new:
+            action = None
         out.append(
             TickerHolder(
                 institutional_id=inst_id,

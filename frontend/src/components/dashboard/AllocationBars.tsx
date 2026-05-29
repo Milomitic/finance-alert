@@ -3,12 +3,23 @@ import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
 
 /**
- * Shared institutional-allocation infographic. Dual-encoded horizontal
- * bars:
- *   - bar LENGTH  ∝ position value (value_usd, normalised to the
- *     largest shown) → "how much capital";
- *   - bar COLOUR  by portfolio weight (% of the holder's book) →
- *     "how much conviction".
+ * Shared institutional-allocation infographic — compact horizontal
+ * bars, one per holder/position. Single, self-explanatory encoding:
+ *
+ *   - bar LENGTH ∝ the holder's PORTFOLIO WEIGHT (% of their book),
+ *     normalised to the largest weight shown → "how much conviction";
+ *   - bar COLOUR by the same weight bucket, reinforcing length (so a
+ *     0.1%-weight position can NEVER look like a dominant holding — the
+ *     earlier "bar = $ value" encoding made a tiny-weight Vanguard fill
+ *     the whole bar just because its dollar position was the largest).
+ *
+ * The dollar value is still shown as a secondary number next to the
+ * weight; it is no longer what drives the bar. Pass `metric="value"`
+ * to restore the legacy dollar-length behaviour if ever needed.
+ *
+ * Layout: each row is a single grid line —
+ *   [ dot · name (· action) | bar | weight% · $value ]
+ * so the name, its bar, and its numbers all sit on the SAME row.
  *
  * Reused on the stock-detail "Superinvestor / fondi" card (who holds
  * THIS stock) and the institution-detail page (a fund's portfolio
@@ -22,10 +33,11 @@ export interface AllocItem {
   key: string;
   label: string;
   href?: string;
-  /** Position value in USD (bar length). */
+  /** Position value in USD (shown as a secondary number; only drives
+   *  bar length when `metric="value"`). */
   valueUsd: number | null;
-  /** Weight = % of the holder's portfolio (bar colour + label). Already
-   *  in percent units (e.g. 3.2 == 3.2%), matching the API fields. */
+  /** Weight = % of the holder's portfolio (drives bar length + colour
+   *  by default). Already in percent units (e.g. 3.2 == 3.2%). */
   pct: number | null;
   /** Optional 13F action chip (new/add/reduce/sold_out/hold). */
   action?: string | null;
@@ -67,21 +79,55 @@ const _ACTION_LABEL: Record<string, string> = {
   sold_out: "Uscito", hold: "Hold",
 };
 
+type Metric = "weight" | "value";
+
 interface Props {
   title: string;
   items: AllocItem[];
-  /** How many bars to render (top by value). Default 10. */
+  /** How many bars to render. Default 10. */
   max?: number;
+  /** What the bar LENGTH encodes. Default "weight" (% of the holder's
+   *  portfolio) — the number shown next to the bar. "value" restores
+   *  the legacy dollar-length behaviour. */
+  metric?: Metric;
   /** Optional one-liner shown when there are no items. */
   emptyHint?: string;
 }
 
-export function AllocationBars({ title, items, max = 10, emptyHint }: Props) {
+export function AllocationBars({
+  title,
+  items,
+  max = 10,
+  metric = "weight",
+  emptyHint,
+}: Props) {
+  // Bar length is driven by `metric`; sorting follows the same metric so
+  // the longest bar is always on top (no "biggest bar in the middle"
+  // confusion). Rows with neither figure are dropped.
+  const barOf = (i: AllocItem): number =>
+    metric === "weight" ? i.pct ?? 0 : i.valueUsd ?? 0;
+
   const sorted = [...items]
     .filter((i) => (i.valueUsd ?? 0) > 0 || i.pct != null)
-    .sort((a, b) => (b.valueUsd ?? 0) - (a.valueUsd ?? 0))
+    .sort((a, b) => barOf(b) - barOf(a))
     .slice(0, max);
-  const maxVal = Math.max(1, ...sorted.map((i) => i.valueUsd ?? 0));
+  const maxBar = Math.max(
+    metric === "weight" ? 0.0001 : 1,
+    ...sorted.map((i) => barOf(i)),
+  );
+
+  const caption =
+    metric === "weight"
+      ? "barra = peso nel portafoglio del fondo"
+      : "barra = valore · colore = peso ptf";
+
+  /* One grid template shared by every row so the three tracks
+   * (name · bar · numbers) align by construction.
+   *   name  : minmax(0,1fr) → truncates instead of overflowing
+   *   bar   : 1.4fr flexible track
+   *   nums  : auto, right-aligned, tabular */
+  const ROW =
+    "grid grid-cols-[minmax(0,1fr)_1.4fr_auto] items-center gap-2.5";
 
   return (
     <div className="min-w-0">
@@ -89,69 +135,64 @@ export function AllocationBars({ title, items, max = 10, emptyHint }: Props) {
         <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
           {title}
         </span>
-        {/* Dual-encoding legend so the reader knows length≠weight. */}
-        <span className="text-[10px] text-muted-foreground/80">
-          barra = valore · colore = peso ptf
-        </span>
+        <span className="text-[10px] text-muted-foreground/80">{caption}</span>
       </div>
       {sorted.length === 0 ? (
         <div className="py-3 text-center text-xs text-muted-foreground">
           {emptyHint ?? "Nessun dato"}
         </div>
       ) : (
-        <ul className="space-y-2.5">
+        <ul className="space-y-1.5">
           {sorted.map((it) => {
             const tone = weightTone(it.pct);
-            // min 3% so a tiny-but-present position stays visible.
-            const w = Math.max(
-              3,
-              Math.round(((it.valueUsd ?? 0) / maxVal) * 100),
-            );
+            // min 4% so a tiny-but-present position stays visible.
+            const w = Math.max(4, Math.round((barOf(it) / maxBar) * 100));
             const nameEl = it.href ? (
               <Link
                 to={it.href}
-                className="font-semibold truncate hover:underline"
+                className="truncate font-semibold hover:underline"
                 title={it.label}
               >
                 {it.label}
               </Link>
             ) : (
-              <span className="font-semibold truncate" title={it.label}>
+              <span className="truncate font-semibold" title={it.label}>
                 {it.label}
               </span>
             );
             return (
-              <li key={it.key} className="min-w-0">
-                <div className="flex items-baseline justify-between gap-2 text-[12px] leading-tight">
-                  <span className="min-w-0 flex items-center gap-1.5">
+              <li key={it.key} className={cn(ROW, "text-[12px] leading-tight")}>
+                {/* Track 1: dot + name (+ action chip) */}
+                <span className="flex min-w-0 items-center gap-1.5">
+                  <span
+                    className={cn("h-2 w-2 shrink-0 rounded-[1px]", tone.dot)}
+                  />
+                  {nameEl}
+                  {it.action && _ACTION_LABEL[it.action] && (
                     <span
-                      className={cn("h-2 w-2 rounded-[1px] shrink-0", tone.dot)}
-                    />
-                    {nameEl}
-                    {it.action && _ACTION_LABEL[it.action] && (
-                      <span
-                        className={cn(
-                          "shrink-0 text-[10px] uppercase tracking-wider",
-                          _ACTION_TONE[it.action] ?? "text-muted-foreground",
-                        )}
-                      >
-                        {_ACTION_LABEL[it.action]}
-                      </span>
-                    )}
-                  </span>
-                  <span className="shrink-0 tabular-nums text-muted-foreground">
-                    <span className="text-foreground font-medium">
-                      {fmtPct(it.pct)}
-                    </span>{" "}
-                    · {fmtBig(it.valueUsd)}
-                  </span>
-                </div>
-                <div className="mt-1.5 h-2 w-full rounded-full bg-muted/60 overflow-hidden">
-                  <div
-                    className={cn("h-full rounded-full", tone.bar)}
+                      className={cn(
+                        "shrink-0 text-[10px] uppercase tracking-wider",
+                        _ACTION_TONE[it.action] ?? "text-muted-foreground",
+                      )}
+                    >
+                      {_ACTION_LABEL[it.action]}
+                    </span>
+                  )}
+                </span>
+                {/* Track 2: the bar, same row as name + numbers */}
+                <span className="h-2 w-full overflow-hidden rounded-full bg-muted/60">
+                  <span
+                    className={cn("block h-full rounded-full", tone.bar)}
                     style={{ width: `${w}%` }}
                   />
-                </div>
+                </span>
+                {/* Track 3: weight% · $value, right-aligned */}
+                <span className="shrink-0 whitespace-nowrap tabular-nums text-muted-foreground">
+                  <span className="font-medium text-foreground">
+                    {fmtPct(it.pct)}
+                  </span>{" "}
+                  · {fmtBig(it.valueUsd)}
+                </span>
               </li>
             );
           })}
