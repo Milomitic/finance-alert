@@ -121,13 +121,15 @@ export function AllocationBars({
       ? "barra = peso nel portafoglio del fondo"
       : "barra = valore · colore = peso ptf";
 
-  /* One grid template shared by every row so the three tracks
-   * (name · bar · numbers) align by construction.
-   *   name  : minmax(0,1fr) → truncates instead of overflowing
-   *   bar   : 1.4fr flexible track
-   *   nums  : auto, right-aligned, tabular */
+  /* One grid template shared by every row so all four tracks line up by
+   * column — the action chip lives in its OWN column (was inline after the
+   * name, so it floated to a different x on every row).
+   *   name   : minmax(0,1fr) → truncates instead of overflowing
+   *   action : fixed 4.5rem → REDUCE/ADD/USCITO start at the same x
+   *   bar    : fixed 7rem → narrower bars, all the same width
+   *   nums   : auto, right-aligned, tabular */
   const ROW =
-    "grid grid-cols-[minmax(0,1fr)_1.4fr_auto] items-center gap-2.5";
+    "grid grid-cols-[minmax(0,1fr)_4.5rem_7rem_auto] items-center gap-3";
 
   return (
     <div className="min-w-0">
@@ -150,43 +152,44 @@ export function AllocationBars({
             const nameEl = it.href ? (
               <Link
                 to={it.href}
-                className="truncate font-semibold hover:underline"
+                className="truncate text-sm font-semibold hover:underline"
                 title={it.label}
               >
                 {it.label}
               </Link>
             ) : (
-              <span className="truncate font-semibold" title={it.label}>
+              <span className="truncate text-sm font-semibold" title={it.label}>
                 {it.label}
               </span>
             );
             return (
               <li key={it.key} className={cn(ROW, "text-[12px] leading-tight")}>
-                {/* Track 1: dot + name (+ action chip) */}
+                {/* Col 1: dot + name */}
                 <span className="flex min-w-0 items-center gap-1.5">
                   <span
                     className={cn("h-2 w-2 shrink-0 rounded-[1px]", tone.dot)}
                   />
                   {nameEl}
-                  {it.action && _ACTION_LABEL[it.action] && (
-                    <span
-                      className={cn(
-                        "shrink-0 text-[10px] uppercase tracking-wider",
-                        _ACTION_TONE[it.action] ?? "text-muted-foreground",
-                      )}
-                    >
-                      {_ACTION_LABEL[it.action]}
-                    </span>
-                  )}
                 </span>
-                {/* Track 2: the bar, same row as name + numbers */}
+                {/* Col 2: action chip — own column, so labels align */}
+                <span
+                  className={cn(
+                    "truncate text-[10px] uppercase tracking-wider",
+                    it.action && _ACTION_TONE[it.action]
+                      ? _ACTION_TONE[it.action]
+                      : "text-muted-foreground",
+                  )}
+                >
+                  {it.action ? _ACTION_LABEL[it.action] ?? "" : ""}
+                </span>
+                {/* Col 3: bar (fixed-width track → narrower + aligned) */}
                 <span className="h-2 w-full overflow-hidden rounded-full bg-muted/60">
                   <span
                     className={cn("block h-full rounded-full", tone.bar)}
                     style={{ width: `${w}%` }}
                   />
                 </span>
-                {/* Track 3: weight% · $value, right-aligned */}
+                {/* Col 4: weight% · $value, right-aligned */}
                 <span className="shrink-0 whitespace-nowrap tabular-nums text-muted-foreground">
                   <span className="font-medium text-foreground">
                     {fmtPct(it.pct)}
