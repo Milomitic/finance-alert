@@ -21,7 +21,7 @@ const COLORS: Record<string, string> = {
   SP500:   "#3b82f6",
   NDX:     "#06b6d4",
   DJI:     "#1e40af",
-  EUSTX50: "#10b981",
+  EUSTX50: "#1ed760",
   FTSEMIB: "#84cc16",
   // SSE50 color removed 2026-05 along with the index itself.
   HSI30:   "#ec4899",

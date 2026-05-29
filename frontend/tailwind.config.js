@@ -10,6 +10,32 @@ export default {
   			sm: 'calc(var(--radius) - 4px)'
   		},
   		colors: {
+  			emerald: {
+  				50: '#e6f9ee',
+  				100: '#c3f0d6',
+  				200: '#8fe3b4',
+  				300: '#57d98f',
+  				400: '#2ecf74',
+  				500: '#1ed760',
+  				600: '#17b551',
+  				700: '#128f41',
+  				800: '#0f7536',
+  				900: '#0d5e2d',
+  				950: '#06351a'
+  			},
+  			green: {
+  				50: '#e6f9ee',
+  				100: '#c3f0d6',
+  				200: '#8fe3b4',
+  				300: '#57d98f',
+  				400: '#2ecf74',
+  				500: '#1ed760',
+  				600: '#17b551',
+  				700: '#128f41',
+  				800: '#0f7536',
+  				900: '#0d5e2d',
+  				950: '#06351a'
+  			},
   			background: 'hsl(var(--background))',
   			foreground: 'hsl(var(--foreground))',
   			card: {

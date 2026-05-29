@@ -14,9 +14,9 @@ interface Props {
 }
 
 function colorFor(change: number): string {
-  if (change >= 2.0) return "#16a34a";
-  if (change >= 1.0) return "#22c55e";
-  if (change >= 0.0) return "#86efac";
+  if (change >= 2.0) return "#17b551";
+  if (change >= 1.0) return "#1ed760";
+  if (change >= 0.0) return "#8fe3b4";
   if (change >= -1.0) return "#fca5a5";
   if (change >= -2.0) return "#ef4444";
   return "#dc2626";

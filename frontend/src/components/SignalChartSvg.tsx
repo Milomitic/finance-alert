@@ -26,12 +26,12 @@ const PAD_B = 28;
 const LEVEL_STYLE: Record<string, { stroke: string; dash?: string }> = {
   neckline: { stroke: "#6366f1" },
   breakout: { stroke: "#0ea5e9" },
-  support: { stroke: "#16a34a" },
+  support: { stroke: "#17b551" },
   resistance: { stroke: "#dc2626" },
   stop: { stroke: "#d97706", dash: "4 3" },
 };
 
-const UP = "#16a34a";
+const UP = "#17b551";
 const DOWN = "#dc2626";
 const GRID = "#94a3b8";
 

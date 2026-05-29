@@ -38,7 +38,7 @@ export function HeaderSparkline({ closes, up }: { closes: number[]; up: boolean 
     .join(" ");
   // Fill area under the line for stronger background presence
   const areaPath = `M0,${H} L${points} L${W},${H} Z`;
-  const stroke = up ? "#16a34a" : "#dc2626";
+  const stroke = up ? "#17b551" : "#dc2626";
   return (
     <svg
       className="absolute inset-0 w-full h-full pointer-events-none"

@@ -46,7 +46,7 @@ function RowSparkline({ values, trend }: { values: number[]; trend: "up" | "down
       return `${x.toFixed(2)},${y.toFixed(2)}`;
     })
     .join(" ");
-  const stroke = trend === "up" ? "#16a34a" : trend === "down" ? "#dc2626" : "#94a3b8";
+  const stroke = trend === "up" ? "#17b551" : trend === "down" ? "#dc2626" : "#94a3b8";
   // gradId must be unique per render; we derive a short hash from the values
   // so two rows with the same series share the same gradient (cheap).
   const gradId = `spark-${trend}-${values.length}-${Math.round(values[0] * 1000)}`;

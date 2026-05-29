@@ -1035,7 +1035,7 @@ function MacroMiniBars({
             y={y}
             width={w}
             height={Math.max(h, 0.5)}
-            fill={p.value >= 0 ? "#10b981" : "#f43f5e"}
+            fill={p.value >= 0 ? "#1ed760" : "#f43f5e"}
             opacity={i === pts.length - 1 ? 1 : 0.7}
           />
         );

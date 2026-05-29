@@ -208,7 +208,7 @@ function MiniSpark({ closes, up }: { closes: number[]; up: boolean }) {
       <polyline
         points={points}
         fill="none"
-        stroke={up ? "#16a34a" : "#dc2626"}
+        stroke={up ? "#17b551" : "#dc2626"}
         strokeWidth={1.3}
         strokeLinejoin="round"
         strokeLinecap="round"

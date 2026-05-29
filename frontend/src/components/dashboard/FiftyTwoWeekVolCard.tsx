@@ -54,7 +54,7 @@ function SparkRow({
     )
     .join(" ");
   const trendStroke =
-    rightTone === "pos" ? "#16a34a" : rightTone === "neg" ? "#dc2626" : "#737373";
+    rightTone === "pos" ? "#17b551" : rightTone === "neg" ? "#dc2626" : "#737373";
   const toneCls =
     rightTone === "pos"
       ? "text-emerald-600 dark:text-emerald-400"

@@ -233,9 +233,9 @@ export function PriceChart({
     chartRef.current = chart;
 
     candleRef.current = chart.addCandlestickSeries({
-      upColor: "#16a34a", downColor: "#dc2626",
-      borderUpColor: "#16a34a", borderDownColor: "#dc2626",
-      wickUpColor: "#16a34a", wickDownColor: "#dc2626",
+      upColor: "#17b551", downColor: "#dc2626",
+      borderUpColor: "#17b551", borderDownColor: "#dc2626",
+      wickUpColor: "#17b551", wickDownColor: "#dc2626",
       // Native lastValue badge: the price is now ONE of the price-scale
       // badges, integrated with and anti-overlap-stacked against the
       // EMA/BB badges (no more separate floating DOM overlay that could
@@ -454,7 +454,7 @@ export function PriceChart({
       .map((pa) =>
         series.createPriceLine({
           price: pa.target_price,
-          color: pa.direction === "above" ? "#16a34a" : "#dc2626",
+          color: pa.direction === "above" ? "#17b551" : "#dc2626",
           lineWidth: 1,
           lineStyle: 2,
           axisLabelVisible: true,

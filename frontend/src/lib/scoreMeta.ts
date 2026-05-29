@@ -74,7 +74,7 @@ export const SCORE_HEX: Record<ScoreTone, string> = {
   weak: "#f43f5e", // rose-500
   mediocre: "#f59e0b", // amber-500
   good: "#0ea5e9", // sky-500
-  excellent: "#10b981", // emerald-500
+  excellent: "#1ed760", // emerald-500 (Spotify green)
 };
 
 const TONE_LABEL: Record<ScoreTone, string> = {

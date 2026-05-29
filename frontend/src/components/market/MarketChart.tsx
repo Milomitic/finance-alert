@@ -85,11 +85,11 @@ export function MarketChart({
     });
     chartRef.current = chart;
     candleRef.current = chart.addCandlestickSeries({
-      upColor: "#16a34a",
+      upColor: "#17b551",
       downColor: "#dc2626",
-      borderUpColor: "#16a34a",
+      borderUpColor: "#17b551",
       borderDownColor: "#dc2626",
-      wickUpColor: "#16a34a",
+      wickUpColor: "#17b551",
       wickDownColor: "#dc2626",
     });
     ema20Ref.current = chart.addLineSeries({ priceLineVisible: false, lastValueVisible: true });

@@ -108,7 +108,7 @@ function describeIndicator(
 
 const COLOR_PALETTE = [
   "#3b82f6", "#06b6d4", "#0ea5e9", "#7c3aed", "#a855f7", "#ec4899",
-  "#ef4444", "#f59e0b", "#eab308", "#16a34a", "#10b981", "#64748b",
+  "#ef4444", "#f59e0b", "#eab308", "#17b551", "#2ecf74", "#64748b",
 ];
 
 function StyleEditor({
