@@ -128,8 +128,8 @@ export function StockHeader({ stock, kpis, ohlcv }: Props) {
 
           {/* Identity */}
           <div className="min-w-0">
-            <div className="flex items-baseline gap-3 flex-wrap">
-              <span className="text-4xl sm:text-5xl font-bold tracking-tight tabular-nums leading-none">
+            <div className="flex flex-col gap-1">
+              <span className="text-3xl sm:text-4xl font-bold tracking-tight tabular-nums leading-none">
                 {stock.ticker}
               </span>
               <span className="text-xl text-foreground/80 font-medium truncate" title={stock.name}>
