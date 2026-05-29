@@ -81,6 +81,15 @@ These are the reasons the guardrails exist — every one was a change that
   a candidate (C2, 2026-05), it clustered ~18–23% (NARROWER spread than `absHit`,
   range 5.8 vs 8.7) and was undefined for 6/14 detectors with no structural
   level. Rejected; `absHit%` stayed.
+- **Per-signal calibration MODEL DATA-REJECTED for Probabilità (D1, 2026-05-29).**
+  `fit_signal_calibration.py` fit isotonic(Forza→P) + L2-logistic on [detector,
+  factors, Forza, horizon, regime] over 78k signals and validated OOS on BOTH a
+  stock-disjoint split AND a temporal holdout. Both models came in **≤ baseline
+  Brier** (isotonic −1.6%/−1.1%, logistic ~0%) with reliability flat at ~50% —
+  the features add NO out-of-sample discriminating power over the per-detector
+  base rate. Kept the base rate. Lesson: with a near-coin-flip signal, more model
+  = more overfit, not more edge. Re-run the validator to re-test; adopt only if a
+  future feature genuinely clears the bar.
 - **The single `confidence` score was shown ~FLAT vs realised outcome**
   (hit-rate by band: <60→51%, 60–70→49%, 70–80→49%, 80–90→52%, 90+→54%). That
   flatness is *why* it was split into Forza + Probabilità.
