@@ -52,7 +52,8 @@ const NAV: NavEntry[] = [
   // surface. The /rules route was removed.
   { to: "/alerts", label: "Segnali", icon: Bell, enabled: true },
   { to: "/health", label: "Salute", icon: HeartPulse, enabled: true },
-  { to: "/settings", label: "Impostazioni", icon: Settings, enabled: true },
+  // "Impostazioni" intentionally NOT here — it's pinned to the sidebar footer
+  // (see SidebarFooter) next to the theme toggle, so both stay visible.
 ];
 
 /** The nav link list — shared verbatim by the desktop sidebar and the
@@ -69,7 +70,7 @@ function NavList({
   collapsed?: boolean;
 }) {
   return (
-    <nav className="flex flex-1 flex-col gap-1 p-3">
+    <nav className="flex flex-1 flex-col gap-1 p-3 overflow-y-auto min-h-0">
       {NAV.map((entry) => {
         const Icon = entry.icon;
         const base = cn(
@@ -125,17 +126,15 @@ function SidebarBrand() {
   );
 }
 
-/** Light/dark theme switch — lives at the bottom of the menu. Mirrors the
- *  NavList row styling (same paddings + collapsed icon-only mode) so it reads
- *  as part of the menu. Sun when dark (→ switch to light), Moon when light. */
+/** Light/dark theme switch — icon-only (no text label), lives in the sidebar
+ *  footer. Sun when dark (→ switch to light), Moon when light. The accessible
+ *  name lives on title/aria-label so the icon alone stays unambiguous. */
 function ThemeToggleButton({
   theme,
   onToggle,
-  collapsed = false,
 }: {
   theme: Theme;
   onToggle: () => void;
-  collapsed?: boolean;
 }) {
   const isDark = theme === "dark";
   const Icon = isDark ? Sun : Moon;
@@ -146,14 +145,55 @@ function ThemeToggleButton({
       onClick={onToggle}
       title={label}
       aria-label={label}
-      className={cn(
-        "flex items-center rounded text-sm text-foreground hover:bg-accent transition-colors w-full",
-        collapsed ? "justify-center px-0 py-2.5" : "gap-2 px-3 py-2",
-      )}
+      className="flex items-center justify-center rounded p-2 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
     >
       <Icon className="h-4 w-4 shrink-0" />
-      {!collapsed && label}
     </button>
+  );
+}
+
+/** Sidebar footer pinned below the nav: the Impostazioni link (moved out of the
+ *  main nav so it sits with the theme control), and on a new line below it —
+ *  right-aligned — the icon-only theme toggle. Always visible because the shell
+ *  is a fixed-height column with the scroll on the nav, not the whole page. */
+function SidebarFooter({
+  theme,
+  onToggle,
+  collapsed = false,
+  onNavigate,
+}: {
+  theme: Theme;
+  onToggle: () => void;
+  collapsed?: boolean;
+  onNavigate?: () => void;
+}) {
+  const base = cn(
+    "flex items-center rounded text-sm transition-colors",
+    collapsed ? "justify-center px-0 py-2.5" : "gap-2 px-3 py-2",
+  );
+  return (
+    <div className="p-3 flex flex-col gap-1">
+      <NavLink
+        to="/settings"
+        onClick={onNavigate}
+        title={collapsed ? "Impostazioni" : undefined}
+        aria-label={collapsed ? "Impostazioni" : undefined}
+        className={({ isActive }) =>
+          cn(
+            base,
+            isActive
+              ? "bg-primary text-primary-foreground"
+              : "text-foreground hover:bg-accent",
+          )
+        }
+      >
+        <Settings className="h-4 w-4 shrink-0" />
+        {!collapsed && "Impostazioni"}
+      </NavLink>
+      <div className={cn("flex", collapsed ? "justify-center" : "justify-end")}>
+        <ThemeToggleButton theme={theme} onToggle={onToggle} />
+      </div>
+    </div>
   );
 }
 
@@ -205,7 +245,7 @@ export default function Layout() {
   };
 
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="flex h-screen overflow-hidden bg-background">
       {/* Desktop sidebar — hidden below lg; the mobile drawer below
           replaces it on phones/tablets. Collapses to a w-16 icon rail
           via the toggle; the width animates while labels swap in/out. */}
@@ -247,15 +287,14 @@ export default function Layout() {
         </div>
         <Separator />
         <NavList collapsed={sidebarCollapsed} />
-        {/* Theme switch pinned to the bottom of the rail (NavList is flex-1). */}
+        {/* Impostazioni + theme toggle pinned to the bottom of the rail
+            (NavList is flex-1 and scrolls; this footer stays visible). */}
         <Separator />
-        <div className="p-3">
-          <ThemeToggleButton
-            theme={theme}
-            onToggle={toggleTheme}
-            collapsed={sidebarCollapsed}
-          />
-        </div>
+        <SidebarFooter
+          theme={theme}
+          onToggle={toggleTheme}
+          collapsed={sidebarCollapsed}
+        />
       </aside>
 
       {/* Mobile drawer: overlay + slide-in panel. Rendered only when
@@ -285,9 +324,11 @@ export default function Layout() {
               <NavList onNavigate={() => setMobileNavOpen(false)} />
             </div>
             <Separator />
-            <div className="p-3">
-              <ThemeToggleButton theme={theme} onToggle={toggleTheme} />
-            </div>
+            <SidebarFooter
+              theme={theme}
+              onToggle={toggleTheme}
+              onNavigate={() => setMobileNavOpen(false)}
+            />
           </aside>
         </div>
       )}
