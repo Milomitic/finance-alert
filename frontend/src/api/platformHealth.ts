@@ -19,6 +19,10 @@ export type DataSourceMetric = {
   health: "healthy" | "degraded" | "failing" | "idle" | string;
   calls_last_minute: number | null;
   calls_last_day: number | null;
+  /** Lowercase substrings that identify this source's log lines (module or
+   *  message). Used to filter the live-log table when a source is clicked.
+   *  Optional for back-compat with older API responses. */
+  log_match?: string[];
 };
 
 export type SchedulerJobStat = {

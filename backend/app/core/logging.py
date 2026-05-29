@@ -55,23 +55,35 @@ def configure_logging() -> None:
         level="DEBUG",
         format="{message}",
     )
-    # Rehydrate the ring buffer from the newest on-disk log file so the live-log
-    # view isn't empty right after a restart. Without this, the UI's per-source
-    # filter shows nothing until a fresh scan emits new lines — even though the
-    # source-failure WARNINGs (e.g. "[finnhub] HTTP 403") are right there in
-    # app.log. Read only the file's tail (last ~600KB) to keep startup cheap;
-    # the leading partial line just fails the regex and is skipped.
+
+
+def hydrate_log_buffer_from_disk() -> None:
+    """Pre-fill the ring buffer from the newest on-disk log file so the live-log
+    view isn't empty right after a restart. Without this, the UI's per-source
+    filter shows nothing until a fresh scan emits new lines — even though the
+    source-failure WARNINGs (e.g. "[finnhub] HTTP 403") are right there in
+    app.log. Read only the file's tail (~600KB) to keep startup cheap; the
+    leading partial line just fails the regex and is skipped.
+
+    Call this ONCE at real app startup (from the lifespan) — NOT from
+    `configure_logging`, which tests invoke repeatedly (re-hydrating would
+    re-import historical lines, including prior test markers)."""
+    # Never pull production log history into the buffer during tests — the
+    # TestClient lifespan would otherwise re-import old lines (incl. previous
+    # test markers) into the shared singleton buffer and pollute assertions.
+    if "PYTEST_CURRENT_TEST" in os.environ:
+        return
+    logs_dir = Path("./data/logs")
     try:
-        files = sorted(
-            glob.glob(str(logs_dir / "app*.log")), key=os.path.getmtime
-        )
-        if files:
-            with open(files[-1], "rb") as fh:
-                fh.seek(0, os.SEEK_END)
-                size = fh.tell()
-                fh.seek(max(0, size - 600_000))
-                tail = fh.read().decode("utf-8", errors="replace")
-            n = log_buffer.hydrate_from_lines(tail.splitlines())
-            logger.info(f"[logging] rehydrated {n} log records from {files[-1]}")
+        files = sorted(glob.glob(str(logs_dir / "app*.log")), key=os.path.getmtime)
+        if not files:
+            return
+        with open(files[-1], "rb") as fh:
+            fh.seek(0, os.SEEK_END)
+            size = fh.tell()
+            fh.seek(max(0, size - 600_000))
+            tail = fh.read().decode("utf-8", errors="replace")
+        n = log_buffer.hydrate_from_lines(tail.splitlines())
+        logger.info(f"[logging] rehydrated {n} log records from {files[-1]}")
     except Exception as exc:  # noqa: BLE001 — hydration is best-effort
         logger.warning(f"[logging] buffer rehydration skipped: {exc}")

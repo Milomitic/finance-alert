@@ -96,6 +96,7 @@ def _sources_payload() -> list[dict]:
             "health": s.health,
             "calls_last_minute": s.calls_last_minute,
             "calls_last_day": s.calls_last_day,
+            "log_match": s.log_match,
         }
         for s in source_catalog.full_snapshot()
     ]

@@ -123,6 +123,32 @@ KNOWN_SOURCES: list[SourceSpec] = [
 ]
 
 
+# Explicit log-match tokens per source (lowercase substrings matched against a
+# log record's module OR message). The UI's "click a source → filter the live
+# log" feature uses these instead of just the raw source key, because the
+# source name alone under-matches: yfinance logs come from the `yfinance_health`
+# breaker, `stock_fundamentals_service`/`stock_news_service` ("[fund]"/"[news]"),
+# and carry "yahoo 503" / "upstream yfinance.*" messages. Tokens are kept
+# SPECIFIC to avoid cross-source bleed (e.g. never a bare "sec" — it matches
+# "second"/"section"). Sources not listed default to [source].
+_LOG_MATCH_TOKENS: dict[str, list[str]] = {
+    "yfinance": ["yfinance", "yahoo"],
+    "finnhub": ["finnhub"],
+    "twelvedata": ["twelvedata", "twelve data"],
+    "marketaux": ["marketaux"],
+    "nasdaq": ["nasdaq"],
+    "fred": ["fred"],
+    "forexfactory": ["forexfactory", "forex"],
+    "sec_13f": ["sec_13f", "edgar", "13f", "institutional"],
+}
+
+
+def log_match_tokens(source: str) -> list[str]:
+    """Substrings (lowercase) that identify a source's log lines by module or
+    message. Defaults to the source key itself."""
+    return _LOG_MATCH_TOKENS.get(source, [source])
+
+
 @dataclass
 class SourceWithUsage:
     """Catalog entry + live metrics + rate-limit usage snapshot."""
@@ -133,6 +159,8 @@ class SourceWithUsage:
     per_minute_limit: int | None
     per_day_limit: int | None
     notes: str
+    # Lowercase substrings that match this source's log lines (module|message).
+    log_match: list[str]
     # Live counters (None when the source has never been called)
     success: int
     failure: int
@@ -186,6 +214,7 @@ def full_snapshot() -> list[SourceWithUsage]:
             per_minute_limit=spec.per_minute,
             per_day_limit=spec.per_day,
             notes=spec.notes,
+            log_match=log_match_tokens(spec.source),
             success=m.success, failure=m.failure,
             success_rate=m.success_rate,
             last_success_at=m.last_success_at,

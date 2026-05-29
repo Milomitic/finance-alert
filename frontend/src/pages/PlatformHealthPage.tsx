@@ -74,10 +74,12 @@ export default function PlatformHealthPage() {
   // Clicking a data source in the "Fonti dati" card filters the live-log
   // table to that source and scrolls it into view, so its errors (e.g. a
   // Finnhub HTTP 403) are immediately visible.
-  const [sourceFilter, setSourceFilter] = useState<string | null>(null);
+  const [sourceFilter, setSourceFilter] = useState<
+    { label: string; tokens: string[] } | null
+  >(null);
   const logStreamRef = useRef<HTMLDivElement>(null);
-  const selectSource = (source: string) => {
-    setSourceFilter(source);
+  const selectSource = (label: string, tokens: string[]) => {
+    setSourceFilter({ label, tokens });
     logStreamRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 

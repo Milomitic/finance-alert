@@ -25,6 +25,9 @@ class DataSourceMetricOut(BaseModel):
     health: str                        # "healthy" | "degraded" | "failing" | "idle"
     calls_last_minute: int | None
     calls_last_day: int | None
+    # Lowercase substrings that identify this source's log lines (module or
+    # message). The UI's "click a source → filter live logs" uses these.
+    log_match: list[str] = []
 
 
 class SchedulerJobStatOut(BaseModel):

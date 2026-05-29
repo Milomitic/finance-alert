@@ -7,9 +7,12 @@ type Props = {
   paused: boolean;
   onTogglePause: () => void;
   onClear: () => void;
-  /** When set, the list is additionally filtered to this data source and the
-   * level threshold is lifted so its errors/warnings/info all show. */
-  sourceFilter?: string | null;
+  /** When set, the list is additionally filtered to this data source (a record
+   * passes if any of `tokens` is a substring of its module or message) and the
+   * level threshold is lifted so its errors/warnings/info all show. `tokens`
+   * are explicit per-source match strings from the backend (e.g. yfinance →
+   * ["yfinance","yahoo"]) so coverage isn't limited to the bare source name. */
+  sourceFilter?: { label: string; tokens: string[] } | null;
   onClearSourceFilter?: () => void;
 };
 
@@ -60,17 +63,19 @@ export default function LogStream({
     // so its ERROR/WARNING/INFO (e.g. an HTTP 403) all surface — the default
     // WARNING+ bar would otherwise hide INFO-level diagnostics for the source.
     const threshold = sourceFilter ? 0 : LEVEL_ORDER[levelFilter] ?? 0;
-    const src = sourceFilter ? sourceFilter.toLowerCase() : null;
+    const srcTokens = sourceFilter
+      ? sourceFilter.tokens.map((t) => t.toLowerCase()).filter(Boolean)
+      : null;
     const pass = records.filter((r) => {
       if (threshold && (LEVEL_ORDER[r.level] ?? 0) < threshold) return false;
       if (moduleFilter && !r.module.includes(moduleFilter)) return false;
       if (searchFilter && !r.message.includes(searchFilter)) return false;
-      if (
-        src &&
-        !r.module.toLowerCase().includes(src) &&
-        !r.message.toLowerCase().includes(src)
-      )
-        return false;
+      if (srcTokens && srcTokens.length) {
+        const mod = r.module.toLowerCase();
+        const msg = r.message.toLowerCase();
+        const hit = srcTokens.some((t) => mod.includes(t) || msg.includes(t));
+        if (!hit) return false;
+      }
       return true;
     });
     // Newest-first: most recent record at the top of the visible list.
@@ -121,7 +126,7 @@ export default function LogStream({
               title="Rimuovi il filtro per fonte"
             >
               <Filter className="h-3.5 w-3.5" />
-              Fonte: <span className="font-semibold">{sourceFilter}</span>
+              Fonte: <span className="font-semibold">{sourceFilter.label}</span>
               <X className="h-3.5 w-3.5" />
             </button>
           )}

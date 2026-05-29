@@ -23,7 +23,7 @@ type Props = {
   metrics: DataSourceMetric[];
   yfinanceBreaker: Record<string, unknown>;
   /** Clicking a source row scrolls to + filters the live-log table to it. */
-  onSelectSource?: (source: string) => void;
+  onSelectSource?: (label: string, tokens: string[]) => void;
 };
 
 type Health = "healthy" | "degraded" | "failing" | "idle";
@@ -186,23 +186,25 @@ function SourceRow({
   onSelect,
 }: {
   m: DataSourceMetric;
-  onSelect?: (source: string) => void;
+  onSelect?: (label: string, tokens: string[]) => void;
 }) {
   const h = normHealth(m.health);
   const meta = HEALTH_META[h];
   const total = m.success + m.failure;
   const clickable = !!onSelect;
+  // Explicit match tokens from the backend (fall back to the source key).
+  const tokens = m.log_match && m.log_match.length ? m.log_match : [m.source];
   return (
     <div
       role={clickable ? "button" : undefined}
       tabIndex={clickable ? 0 : undefined}
-      onClick={clickable ? () => onSelect!(m.source) : undefined}
+      onClick={clickable ? () => onSelect!(m.source, tokens) : undefined}
       onKeyDown={
         clickable
           ? (e) => {
               if (e.key === "Enter" || e.key === " ") {
                 e.preventDefault();
-                onSelect!(m.source);
+                onSelect!(m.source, tokens);
               }
             }
           : undefined
@@ -276,7 +278,7 @@ function ClusterCard({
   cat: (typeof CATEGORIES)[number] | typeof OTHER_CAT;
   sources: DataSourceMetric[];
   index: number;
-  onSelectSource?: (source: string) => void;
+  onSelectSource?: (label: string, tokens: string[]) => void;
 }) {
   const roll = rollup(sources);
   const meta = HEALTH_META[roll];

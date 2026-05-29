@@ -29,7 +29,7 @@ from app.api import scores as scores_router
 from app.api import sectors as sectors_router
 from app.api import stocks as stocks_router
 from app.core.errors import UpstreamError
-from app.core.logging import configure_logging
+from app.core.logging import configure_logging, hydrate_log_buffer_from_disk
 from app.scheduler import get_scheduler, start_scheduler, stop_scheduler
 
 configure_logging()
@@ -149,6 +149,9 @@ def _warm_premarket_on_boot() -> None:
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     _cleanup_orphan_scans()
     _hydrate_fetch_caches()
+    # Pre-fill the live-log ring buffer from the on-disk log tail so the
+    # Salute log view (and its per-source filter) survives restarts.
+    hydrate_log_buffer_from_disk()
     start_scheduler()
     _warm_premarket_on_boot()
     try:
