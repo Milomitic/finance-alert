@@ -69,7 +69,7 @@ export function StockTechnicalCard({ ticker }: { ticker: string | undefined }) {
               </span>
               <span className="text-xs text-muted-foreground">/ 100 composito</span>
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-1">
               {DIMS.map((d) => {
                 const v = data[d.key];
                 const pct = v != null ? Math.max(0, Math.min(100, v)) : 0;

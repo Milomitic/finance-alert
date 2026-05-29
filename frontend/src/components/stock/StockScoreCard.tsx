@@ -576,11 +576,15 @@ function CardShell({
   onRefresh,
   isFetching,
   updatedAt,
+  headerRight,
 }: {
   children: React.ReactNode;
   onRefresh?: () => void;
   isFetching?: boolean;
   updatedAt?: number | string | null;
+  /** Extra node rendered in the header's right cluster, before the
+   *  "aggiornato …" label + refresh button (e.g. the Confidence chip). */
+  headerRight?: React.ReactNode;
 }) {
   return (
     <Card>
@@ -591,7 +595,8 @@ function CardShell({
           className="mb-2"
           right={
             onRefresh ? (
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-2">
+                {headerRight}
                 <CardUpdatedAt updatedAt={updatedAt} />
                 <button
                   type="button"
@@ -676,15 +681,38 @@ export function StockScoreCard({ ticker }: Props) {
   const composite = data.composite;
   const compTone = scoreColor(composite);
 
+  // QW5 confidence/coverage chip — moved to the header row (next to the
+  // "aggiornato …" label). The composite is renormalised over whatever factors
+  // had data, so two scores aren't strictly comparable; this surfaces how much
+  // real data it rests on. Read defensively (older cached rows lack it).
+  const mg = (data.breakdown as Record<string, unknown> | undefined)
+    ?._meta_global as
+    | { coverage?: number; pillars_present?: number; pillars_total?: number }
+    | undefined;
+  const confidenceChip =
+    mg && typeof mg.coverage === "number" ? (
+      <span
+        className="text-[10px] tabular-nums text-muted-foreground"
+        title={`Confidence: lo score poggia sul ${Math.round(mg.coverage * 100)}% del peso fattoriale nominale (${mg.pillars_present ?? "?"}/${mg.pillars_total ?? 6} pilastri con dati). Più basso = score basato su pochi input, da interpretare con cautela.`}
+      >
+        Confidence {Math.round(mg.coverage * 100)}%
+      </span>
+    ) : null;
+
   return (
-    <CardShell onRefresh={onRefresh} isFetching={isRecomputing} updatedAt={data?.computed_at}>
+    <CardShell
+      onRefresh={onRefresh}
+      isFetching={isRecomputing}
+      updatedAt={data?.computed_at}
+      headerRight={confidenceChip}
+    >
       {/* Gauge + composite number — gauge shrunk 180->130 to give the
           card a much shorter footprint per user feedback. The label
           ("Buono"/"Ottimo"/...) was moved next to the risk chip
           horizontally so the gauge area stays vertically tight. */}
       <div className="flex items-center justify-center gap-3">
         <div className="relative shrink-0">
-          <ScoreGauge score={composite} size={112} />
+          <ScoreGauge score={composite} size={100} />
           <div className="absolute inset-0 flex flex-col items-center justify-end pb-0.5">
             <span
               className={cn(
@@ -727,31 +755,6 @@ export function StockScoreCard({ ticker }: Props) {
         ))}
       </div>
 
-      {/* Footer — confidence/coverage only. The "aggiornato …" timestamp is
-          already shown in the card header, so the old "Calcolato …" row was
-          dropped. Confidence stays small + muted (no green/amber/red tone). */}
-      {(() => {
-        // QW5 — confidence/coverage. The composite is renormalised over
-        // whatever factors had data, so two scores aren't strictly comparable;
-        // surface how much real data this one rests on. Read defensively
-        // (older cached rows lack it).
-        const mg = (data.breakdown as Record<string, unknown> | undefined)
-          ?._meta_global as
-          | { coverage?: number; pillars_present?: number; pillars_total?: number }
-          | undefined;
-        if (!mg || typeof mg.coverage !== "number") return null;
-        const pct = Math.round(mg.coverage * 100);
-        return (
-          <div className="mt-2 pt-2 border-t border-border/40 flex justify-end">
-            <span
-              className="text-[10px] tabular-nums text-muted-foreground"
-              title={`Confidence: lo score poggia sul ${pct}% del peso fattoriale nominale (${mg.pillars_present ?? "?"}/${mg.pillars_total ?? 6} pilastri con dati). Più basso = score basato su pochi input, da interpretare con cautela.`}
-            >
-              Confidence {pct}%
-            </span>
-          </div>
-        );
-      })()}
     </CardShell>
   );
 }
