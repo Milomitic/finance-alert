@@ -6,6 +6,7 @@ import type { LiveQuote, OhlcvBar, PriceAlert } from "@/api/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { CardSkeleton } from "@/components/ui/card-skeleton";
 import { useChartSync } from "@/hooks/useChartSync";
+import { liveExtendIndicators } from "@/lib/liveIndicators";
 import { useCreatePriceAlert, useStockPriceAlerts } from "@/hooks/useStockPriceAlerts";
 import { useLiveQuote } from "@/hooks/useLiveQuote";
 import { useStockDetail } from "@/hooks/useStockDetail";
@@ -132,6 +133,14 @@ export default function StockDetailPage() {
     () => mergeLiveQuoteIntoOhlcv(detail.data?.ohlcv ?? [], live.data, range),
     [detail.data?.ohlcv, live.data, range],
   );
+  // Extend the backend (EOD) indicator series with a live tail so EMA / BB /
+  // RSI / MACD reach the same in-session candle the chart shows. Patches only
+  // the last point — history is left exactly as the backend computed it.
+  const liveIndicators = useMemo(
+    () =>
+      detail.data ? liveExtendIndicators(detail.data.indicators, mergedOhlcv) : null,
+    [detail.data, mergedOhlcv],
+  );
 
   const [indicators, setIndicators] = useState<IndicatorState>(DEFAULT_INDICATOR_STATE);
   const [mode, setMode] = useState<DrawingMode>("none");
@@ -223,6 +232,8 @@ export default function StockDetailPage() {
   }
 
   const d = detail.data;
+  // Live-extended indicator series (falls back to the raw backend series).
+  const ind = liveIndicators ?? d.indicators;
   const priceAlerts: PriceAlert[] = priceAlertsQuery.data ?? [];
   const lastClose = d.kpis.last_close ?? 0;
 
@@ -366,7 +377,7 @@ export default function StockDetailPage() {
                 <PriceChart
                   key={range}
                   ohlcv={mergedOhlcv}
-                  indicators={d.indicators}
+                  indicators={ind}
                   styles={{
                     ema20: indicators.ema20,
                     ema50: indicators.ema50,
@@ -397,7 +408,7 @@ export default function StockDetailPage() {
                 >
                   <RsiPanel
                     key={range}
-                    rsi14={d.indicators.rsi14}
+                    rsi14={ind.rsi14}
                     color={indicators.rsi.color}
                     width={indicators.rsi.width}
                     onReady={registerChart}
@@ -424,9 +435,9 @@ export default function StockDetailPage() {
                 >
                   <MacdPanel
                     key={range}
-                    line={d.indicators.macd_line ?? []}
-                    signal={d.indicators.macd_signal ?? []}
-                    hist={d.indicators.macd_hist ?? []}
+                    line={ind.macd_line ?? []}
+                    signal={ind.macd_signal ?? []}
+                    hist={ind.macd_hist ?? []}
                     color={indicators.macd.color}
                     width={indicators.macd.width}
                     onReady={registerChart}
