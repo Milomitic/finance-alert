@@ -230,14 +230,20 @@ export default function StockDetailPage() {
 
   return (
     <div className="space-y-3">
-      {/* Top hero — StockHeader spans full width now. The Analyst card was
-          relocated to the data-row below (4th column) so the hero stays
-          purely identity/price-trend focused. */}
-      <StockHeader
-        stock={d.stock}
-        kpis={d.kpis}
-        ohlcv={mergedOhlcv}
-      />
+      {/* Top hero row (test layout): identity/price header on the left, with
+          the Stock score + Technical score cards beside it on the right.
+          `card principale — card score — card score tecnico`. items-start so
+          the short header keeps its natural height next to the taller score
+          cards. */}
+      <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr_1fr] gap-3 items-start">
+        <StockHeader
+          stock={d.stock}
+          kpis={d.kpis}
+          ohlcv={mergedOhlcv}
+        />
+        <StockScoreCard ticker={ticker} />
+        <StockTechnicalCard ticker={ticker} />
+      </div>
 
       {/* ETF components — renders only for ETFs (null for equities), so
           for a fund it sits right under the hero as the lead content:
@@ -432,8 +438,7 @@ export default function StockDetailPage() {
         </Card>
 
         <div className="space-y-3">
-          <StockScoreCard ticker={ticker} />
-          <StockTechnicalCard ticker={ticker} />
+          {/* Stock score + Technical score moved up to the hero row. */}
           <TechnicalKpiCard ticker={ticker} />
           {/* Institutional / superinvestor holders sit ABOVE insiders
               (per user spec): the conviction signal from a 13F-tracked
