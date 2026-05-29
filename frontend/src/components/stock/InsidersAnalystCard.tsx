@@ -330,7 +330,7 @@ export function InsidersAnalystCard({ ticker }: Props) {
                   ultime {latest.length}
                 </span>
               )}
-              <CardUpdatedAt updatedAt={q.dataUpdatedAt} />
+              <CardUpdatedAt updatedAt={q.data?.fetched_at} />
               <CardRefreshButton
                 onClick={refresh}
                 busy={isRefreshing}

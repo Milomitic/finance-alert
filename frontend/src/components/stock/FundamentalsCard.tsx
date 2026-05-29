@@ -636,7 +636,7 @@ export function FundamentalsCard({ ticker }: Props) {
                   {f.next_eps_estimate != null && <> · est ${f.next_eps_estimate.toFixed(2)}</>}
                 </span>
               ) : null}
-              <CardUpdatedAt updatedAt={q.dataUpdatedAt} />
+              <CardUpdatedAt updatedAt={q.data?.fetched_at} />
               <CardRefreshButton
                 onClick={refresh}
                 busy={isRefreshing}

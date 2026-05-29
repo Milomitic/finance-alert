@@ -507,6 +507,10 @@ export interface StockNewsItem {
 
 export interface StockNews {
   items: StockNewsItem[];
+  /** Epoch-seconds timestamp of the upstream fetch (true data age). Null when
+   *  the items were never persisted to the L2 cache. Feeds the "aggiornato …"
+   *  label. */
+  fetched_at?: number | null;
 }
 
 export interface PriceAlert {
@@ -745,6 +749,9 @@ export interface Fundamentals {
   analyst_ratings: AnalystRating[];
   analyst_actions: AnalystAction[];
   price_target: AnalystPriceTarget;
+  /** Epoch-seconds timestamp of the upstream fetch (true data age, from the
+   *  L1/L2 cache row). Feeds the "aggiornato …" label. */
+  fetched_at?: number | null;
   error: string | null;
 }
 

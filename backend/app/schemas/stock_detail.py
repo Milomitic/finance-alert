@@ -265,6 +265,10 @@ class FundamentalsOut(BaseModel):
     price_target: AnalystPriceTargetOut = AnalystPriceTargetOut(
         current=None, low=None, mean=None, median=None, high=None
     )
+    # Epoch-seconds timestamp of when this payload was actually fetched upstream
+    # (from the L1/L2 cache row, not the client request time). Drives the
+    # "aggiornato …" freshness label so it reflects true data age across reloads.
+    fetched_at: float | None = None
     error: str | None = None
 
 
@@ -353,3 +357,7 @@ class StockNewsItemOut(BaseModel):
 
 class StockNewsOut(BaseModel):
     items: list[StockNewsItemOut]
+    # Epoch-seconds timestamp of the upstream fetch (from the L2 cache row).
+    # None when the items were never persisted (e.g. an L1-only error fallback).
+    # Drives the "aggiornato …" freshness label.
+    fetched_at: float | None = None

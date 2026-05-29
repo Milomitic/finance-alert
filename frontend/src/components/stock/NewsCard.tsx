@@ -152,7 +152,7 @@ export function NewsCard({ ticker }: Props) {
               <span className="text-xs text-muted-foreground italic">
                 yfinance · cache 1h
               </span>
-              <CardUpdatedAt updatedAt={q.dataUpdatedAt} />
+              <CardUpdatedAt updatedAt={q.data?.fetched_at} />
               <CardRefreshButton
                 onClick={refresh}
                 busy={isRefreshing}

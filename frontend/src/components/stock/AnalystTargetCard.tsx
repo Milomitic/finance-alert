@@ -502,7 +502,7 @@ export function AnalystTargetCard({ ticker }: Props) {
 
   const refreshBtn = (
     <div className="flex items-center gap-1.5">
-      <CardUpdatedAt updatedAt={q.dataUpdatedAt} />
+      <CardUpdatedAt updatedAt={q.data?.fetched_at} />
       <CardRefreshButton
         onClick={refresh}
         busy={isRefreshing}

@@ -24,8 +24,8 @@ from app.schemas.stock_detail import (
     OhlcvBarOut, StockDetailOut, StockKpisOut, StockNewsItemOut, StockNewsOut,
 )
 from app.services import (
-    etf_holdings_service, live_quote_service, news_analyst_extractor,
-    stock_detail_service, stock_fundamentals_service,
+    etf_holdings_service, fetch_cache_store, live_quote_service,
+    news_analyst_extractor, stock_detail_service, stock_fundamentals_service,
     stock_news_service,
 )
 from app.core.errors import UpstreamError
@@ -366,6 +366,7 @@ def get_stock_news(
     ticker: str,
     limit: int = 5,
     force: bool = Query(False),
+    db: Session = Depends(get_db),
     _user: User = Depends(get_current_user),
 ) -> StockNewsOut:
     """Fetch up to `limit` news items, most-recent-first.
@@ -386,7 +387,14 @@ def get_stock_news(
         raise HTTPException(
             status_code=502, detail=f"Aggiornamento news fallito: {e}"
         ) from e
-    return StockNewsOut(items=[StockNewsItemOut(**n) for n in items])
+    # True upstream-fetch time from the L2 row (None when items were never
+    # persisted, e.g. an L1-only empty fallback) → "aggiornato …" label.
+    fetched_at = fetch_cache_store.read_fetched_at(
+        db, ticker, fetch_cache_store.KIND_NEWS
+    )
+    return StockNewsOut(
+        items=[StockNewsItemOut(**n) for n in items], fetched_at=fetched_at
+    )
 
 
 @router.get("/{ticker}/fundamentals", response_model=FundamentalsOut)
@@ -447,6 +455,7 @@ def get_stock_fundamentals(
         analyst_ratings=[AnalystRatingOut(**r.__dict__) for r in f.analyst_ratings],
         analyst_actions=[AnalystActionOut(**a.__dict__) for a in merged_actions],
         price_target=AnalystPriceTargetOut(**f.price_target.__dict__),
+        fetched_at=f.fetched_at or None,
         error=f.error,
     )
 

@@ -25,7 +25,7 @@ const POSTURE_CLS: Record<string, string> = {
 /** Continuous technical evaluation card (composite + dimensions + posture),
  *  the technical twin of StockScoreCard. */
 export function StockTechnicalCard({ ticker }: { ticker: string | undefined }) {
-  const { data, isLoading, noScoreYet, dataUpdatedAt } = useStockTechnical(ticker);
+  const { data, isLoading, noScoreYet } = useStockTechnical(ticker);
   const { refresh, isRefreshing, refreshError } = useCardRefresh({
     queryKey: ["stock-technical", ticker],
     mutationFn: () => scores.recomputeTechnicalForStock(ticker!),
@@ -43,7 +43,7 @@ export function StockTechnicalCard({ ticker }: { ticker: string | undefined }) {
                 {data.posture}
               </span>
             )}
-            <CardUpdatedAt updatedAt={dataUpdatedAt} />
+            <CardUpdatedAt updatedAt={data?.computed_at} />
             <CardRefreshButton
               onClick={refresh}
               busy={isRefreshing}

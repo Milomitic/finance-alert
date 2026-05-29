@@ -274,6 +274,23 @@ def read_news(
     return items if isinstance(items, list) else None
 
 
+def read_fetched_at(db: Session, ticker: str, kind: str) -> float | None:
+    """Epoch-seconds timestamp of the L2 row for (ticker, kind), regardless of
+    freshness (TTL is NOT enforced — callers want to DISPLAY the data's age, not
+    gate on it). None when no row exists. Used to surface true data age in the
+    UI's "aggiornato …" label so it survives page reloads."""
+    fetched = db.execute(
+        select(FetchCache.fetched_at)
+        .where(FetchCache.ticker == ticker, FetchCache.kind == kind)
+        .limit(1)
+    ).scalars().first()
+    if fetched is None:
+        return None
+    if fetched.tzinfo is None:
+        fetched = fetched.replace(tzinfo=UTC)
+    return fetched.timestamp()
+
+
 # ─── Hydration helpers (used at startup) ────────────────────────────────────
 
 def hydrate_all_fundamentals(

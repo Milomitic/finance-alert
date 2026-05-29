@@ -594,7 +594,7 @@ function CardShell({
   children: React.ReactNode;
   onRefresh?: () => void;
   isFetching?: boolean;
-  updatedAt?: number;
+  updatedAt?: number | string | null;
 }) {
   return (
     <Card>
@@ -637,7 +637,7 @@ function CardShell({
 /* ─── Main component ────────────────────────────────────────────────────── */
 
 export function StockScoreCard({ ticker }: Props) {
-  const { data, isLoading, isError, noScoreYet, recompute, isRecomputing, dataUpdatedAt } =
+  const { data, isLoading, isError, noScoreYet, recompute, isRecomputing } =
     useStockScore(ticker);
 
   // The refresh button forces a backend recompute (POST /score/recompute)
@@ -668,7 +668,7 @@ export function StockScoreCard({ ticker }: Props) {
 
   if (noScoreYet) {
     return (
-      <CardShell onRefresh={onRefresh} isFetching={isRecomputing} updatedAt={dataUpdatedAt}>
+      <CardShell onRefresh={onRefresh} isFetching={isRecomputing} updatedAt={data?.computed_at}>
         <div className="py-6 text-center text-xs text-muted-foreground leading-relaxed">
           Score non ancora calcolato per questo ticker — sarà disponibile al
           prossimo scan.
@@ -679,7 +679,7 @@ export function StockScoreCard({ ticker }: Props) {
 
   if (isError || !data) {
     return (
-      <CardShell onRefresh={onRefresh} isFetching={isRecomputing} updatedAt={dataUpdatedAt}>
+      <CardShell onRefresh={onRefresh} isFetching={isRecomputing} updatedAt={data?.computed_at}>
         <div className="py-6 text-center text-xs text-muted-foreground">
           Errore nel caricamento dello score.
         </div>
@@ -691,7 +691,7 @@ export function StockScoreCard({ ticker }: Props) {
   const compTone = scoreColor(composite);
 
   return (
-    <CardShell onRefresh={onRefresh} isFetching={isRecomputing} updatedAt={dataUpdatedAt}>
+    <CardShell onRefresh={onRefresh} isFetching={isRecomputing} updatedAt={data?.computed_at}>
       {/* Gauge + composite number — gauge shrunk 180->130 to give the
           card a much shorter footprint per user feedback. The label
           ("Buono"/"Ottimo"/...) was moved next to the risk chip
