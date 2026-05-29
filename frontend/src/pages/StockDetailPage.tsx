@@ -277,7 +277,7 @@ export default function StockDetailPage() {
           <CompanyOverviewCard ticker={ticker} stock={d.stock} />
         </div>
         <div className="h-[300px] lg:h-full lg:min-h-0">
-          <StockAlertsHistoryCard alerts={d.alerts_history} />
+          <StockAlertsHistoryCard alerts={d.alerts_history} ticker={ticker} />
         </div>
       </div>
 

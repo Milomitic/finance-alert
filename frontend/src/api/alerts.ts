@@ -105,6 +105,14 @@ export const alerts = {
    *  close inline). Idempotent — safe to call when nothing is running. */
   scanStop: () =>
     api<ScanStopResultInfo>("/api/alerts/scan/stop", { method: "POST" }),
+  /** Synchronously run the signal engine for ONE stock over its stored OHLCV
+   *  and persist new signal alerts. Returns {added, total}. Used by the
+   *  per-stock "processa segnali" button on the detail page. */
+  scanStock: (ticker: string) =>
+    api<{ added: number; total: number }>(
+      `/api/alerts/scan-stock/${encodeURIComponent(ticker)}`,
+      { method: "POST" },
+    ),
   sendDigest: () =>
     api<DigestResult>("/api/alerts/send-digest", {
       method: "POST",

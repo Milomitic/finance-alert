@@ -1,15 +1,23 @@
 import { History, TrendingDown, TrendingUp } from "lucide-react";
 import { useMemo, useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 
+import { alerts as alertsApi } from "@/api/alerts";
+import { ApiError } from "@/api/client";
 import type { Alert } from "@/api/types";
 import { AlertDetailDialog } from "@/components/AlertDetailDialog";
 import { AlertsTable } from "@/components/AlertsTable";
+import { CardErrorOverlay } from "@/components/stock/CardErrorOverlay";
+import { CardRefreshButton } from "@/components/stock/CardRefreshButton";
 import { Card, CardContent } from "@/components/ui/card";
 import { SectionTitle } from "@/components/ui/section-title";
 import { getAlertMeta } from "@/lib/alertMeta";
 
 interface Props {
   alerts: Alert[];
+  /** Ticker — needed to run the per-stock signal scan + invalidate the detail
+   *  query so the freshly-generated signals appear. */
+  ticker: string;
 }
 
 /* ─── Aggregate stats (header strip) ────────────────────────────────────── */
@@ -56,8 +64,18 @@ function computeStats(alerts: Alert[]): AlertStats {
  * The aggregate stats strip (bull/bear/30d counts) stays at the top
  * since it's distinct context that the alerts page doesn't show.
  */
-export function StockAlertsHistoryCard({ alerts }: Props) {
+export function StockAlertsHistoryCard({ alerts, ticker }: Props) {
   const [open, setOpen] = useState<Alert | null>(null);
+  const qc = useQueryClient();
+  // Per-stock signal scan: runs the engine over this ticker's stored OHLCV and
+  // persists new signal alerts, then invalidates the detail query so the table
+  // below reflects them. Mirrors the other per-card refresh buttons.
+  const scan = useMutation<{ added: number; total: number }, ApiError, void>({
+    mutationFn: () => alertsApi.scanStock(ticker),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["stock-detail", ticker] });
+    },
+  });
 
   // Sort by triggered_at desc — backend should already order, but defensive.
   const sorted = useMemo(
@@ -90,8 +108,9 @@ export function StockAlertsHistoryCard({ alerts }: Props) {
             label={`Segnali storici per questo ticker (${stats.total})`}
             className="mb-3 shrink-0"
             right={
-              stats.total > 0 ? (
-                <div className="flex items-center gap-2 flex-wrap text-[13px]">
+              <div className="flex items-center gap-2 flex-wrap text-[13px]">
+                {stats.total > 0 && (
+                  <>
                   {stats.last30d > 0 && (
                     <span
                       className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-muted/70"
@@ -119,12 +138,26 @@ export function StockAlertsHistoryCard({ alerts }: Props) {
                       <span className="font-bold tabular-nums">{stats.bearish}</span>
                     </span>
                   )}
-                </div>
-              ) : undefined
+                  </>
+                )}
+                <CardRefreshButton
+                  onClick={() => scan.mutate()}
+                  busy={scan.isPending}
+                  title="Processa i segnali per questo ticker"
+                />
+              </div>
             }
           />
 
-          {sorted.length === 0 ? (
+          {scan.error ? (
+            <div className="flex-1 min-h-0 flex items-center justify-center">
+              <CardErrorOverlay
+                error={scan.error}
+                onRetry={() => scan.mutate()}
+                retrying={scan.isPending}
+              />
+            </div>
+          ) : sorted.length === 0 ? (
             <div className="flex-1 flex items-center justify-center text-center text-sm text-muted-foreground">
               <div>
                 Nessun segnale mai generato per questo ticker.

@@ -1,7 +1,7 @@
 """Tests for Alerts API."""
 import csv
 import io
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
 from app.main import app
-from app.models import Alert, Stock, User
+from app.models import Alert, OhlcvDaily, Stock, User
 
 
 @pytest.fixture
@@ -111,6 +111,41 @@ def test_scan_accepted(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> N
     monkeypatch.setattr("app.api.alerts._run_scan_in_background", lambda _ids: None)
     resp = client.post("/api/alerts/scan", json={})
     assert resp.status_code == 202
+
+
+def test_scan_stock_signals_returns_counts(client: TestClient, db: Session) -> None:
+    """POST /api/alerts/scan-stock/{ticker} runs the engine synchronously over
+    stored OHLCV and returns {added, total}."""
+    stock = Stock(ticker="AAPL", exchange="NASDAQ", name="Apple")
+    db.add(stock)
+    db.flush()
+    base = date(2026, 1, 1)
+    price = 100.0
+    for i in range(40):
+        price += 0.5
+        db.add(OhlcvDaily(
+            stock_id=stock.id, date=base + timedelta(days=i),
+            open=price, high=price + 1, low=price - 1, close=price, volume=1_000_000,
+        ))
+    db.commit()
+    resp = client.post("/api/alerts/scan-stock/AAPL")
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert "added" in body and "total" in body
+    assert body["added"] >= 0 and body["total"] >= 0
+
+
+def test_scan_stock_signals_insufficient_history_422(client: TestClient, db: Session) -> None:
+    stock = Stock(ticker="ZZZ", exchange="NASDAQ", name="Z")
+    db.add(stock)
+    db.commit()
+    resp = client.post("/api/alerts/scan-stock/ZZZ")
+    assert resp.status_code == 422
+
+
+def test_scan_stock_signals_unknown_ticker_404(client: TestClient) -> None:
+    resp = client.post("/api/alerts/scan-stock/NOPE")
+    assert resp.status_code == 404
 
 
 def test_send_digest_endpoint_no_alerts(

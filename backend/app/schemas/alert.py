@@ -80,6 +80,15 @@ class ScanAccepted(BaseModel):
     accepted: bool = True
 
 
+class StockSignalScanOut(BaseModel):
+    """Result of a synchronous single-stock signal scan (the per-stock
+    'process signals' button on the detail page). `added` = new signal alerts
+    created this run; `total` = active (non-archived) signal alerts the stock
+    now has."""
+    added: int
+    total: int
+
+
 class DigestResultOut(BaseModel):
     sent: bool
     alerts_count: int

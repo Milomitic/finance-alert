@@ -6,13 +6,13 @@ from datetime import date
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 from loguru import logger
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db, require_json
 from app.core.db import SessionLocal
 from app.core.errors import UpstreamError
-from app.models import ScanRun, Stock, User
+from app.models import Alert, ScanRun, Stock, User
 from app.models.scan_run import KIND_ALERTS_SCAN
 from app.schemas.alert import (
     AlertListOut,
@@ -25,6 +25,7 @@ from app.schemas.alert import (
     ScanRequest,
     ScanStatusOut,
     ScanStopResult,
+    StockSignalScanOut,
 )
 from app.schemas.confluence import ConfluenceOut
 from app.services import alert_service, confluence_service
@@ -643,6 +644,49 @@ def trigger_scan(
 ) -> ScanAccepted:
     background.add_task(_run_scan_in_background, payload.stock_ids)
     return ScanAccepted(accepted=True)
+
+
+@router.post("/scan-stock/{ticker}", response_model=StockSignalScanOut)
+def scan_stock_signals(
+    ticker: str,
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+) -> StockSignalScanOut:
+    """Synchronously run the signal engine for ONE stock using its stored
+    OHLCV (no network) and persist any new signal alerts. Powers the per-stock
+    "processa segnali" button on the stock-detail signals card — the user gets
+    immediate feedback instead of waiting for the next universe scan.
+
+    Returns the count of newly-created alerts + the stock's current active
+    signal-alert total. The detail page invalidates its query on success so the
+    "Segnali storici" table reflects the new rows.
+    """
+    # Lazy imports: the scan helpers pull in pandas + the detector registry,
+    # which we don't want at module import time for the lightweight alerts API.
+    from app.services.scan_service import _load_ohlcv
+    from app.signals.signal_scan_service import evaluate_signals
+
+    # Catalog has duplicate ticker rows (CLAUDE.md) — pick any.
+    stock = db.execute(
+        select(Stock).where(Stock.ticker == ticker).limit(1)
+    ).scalars().first()
+    if stock is None:
+        raise HTTPException(status_code=404, detail=f"Ticker not found: {ticker}")
+
+    ohlcv = _load_ohlcv(db, stock.id)
+    if ohlcv is None or len(ohlcv) < 2:
+        raise HTTPException(
+            status_code=422,
+            detail="Storico prezzi insufficiente per processare i segnali",
+        )
+    added = evaluate_signals(db, stock, ohlcv)
+    db.commit()
+    total = db.execute(
+        select(func.count())
+        .select_from(Alert)
+        .where(Alert.stock_id == stock.id, Alert.archived_at.is_(None))
+    ).scalar() or 0
+    return StockSignalScanOut(added=added, total=int(total))
 
 
 @router.post(
