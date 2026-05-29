@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, AlertTriangle, XCircle, Wifi, WifiOff, RefreshCw } from "lucide-react";
 import {
@@ -70,6 +70,16 @@ export default function PlatformHealthPage() {
   // Prefer the live snapshot from SSE; fall back to REST until first event.
   const health = snapshot ?? initialHealth ?? null;
   const [paused, setPaused] = useState(false);
+
+  // Clicking a data source in the "Fonti dati" card filters the live-log
+  // table to that source and scrolls it into view, so its errors (e.g. a
+  // Finnhub HTTP 403) are immediately visible.
+  const [sourceFilter, setSourceFilter] = useState<string | null>(null);
+  const logStreamRef = useRef<HTMLDivElement>(null);
+  const selectSource = (source: string) => {
+    setSourceFilter(source);
+    logStreamRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
 
   // Manual refresh: triggers all probes server-side and invalidates the
   // local query cache so the next /health snapshot reflects the run.
@@ -254,6 +264,7 @@ export default function PlatformHealthPage() {
         <DataSourcesCard
           metrics={health.data_sources}
           yfinanceBreaker={health.yfinance_breaker}
+          onSelectSource={selectSource}
         />
       )}
 
@@ -266,12 +277,16 @@ export default function PlatformHealthPage() {
         </div>
       )}
 
-      <LogStream
-        records={logs}
-        paused={paused}
-        onTogglePause={() => setPaused((p) => !p)}
-        onClear={() => setLogs([])}
-      />
+      <div ref={logStreamRef} className="scroll-mt-4">
+        <LogStream
+          records={logs}
+          paused={paused}
+          onTogglePause={() => setPaused((p) => !p)}
+          onClear={() => setLogs([])}
+          sourceFilter={sourceFilter}
+          onClearSourceFilter={() => setSourceFilter(null)}
+        />
+      </div>
     </div>
   );
 }

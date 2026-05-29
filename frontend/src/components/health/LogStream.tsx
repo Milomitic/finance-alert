@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Pause, Play, Trash2, AlertTriangle, AlertCircle, Info, Bug } from "lucide-react";
+import { Pause, Play, Trash2, AlertTriangle, AlertCircle, Info, Bug, Filter, X } from "lucide-react";
 import type { LogRecord } from "@/api/platformHealth";
 
 type Props = {
@@ -7,6 +7,10 @@ type Props = {
   paused: boolean;
   onTogglePause: () => void;
   onClear: () => void;
+  /** When set, the list is additionally filtered to this data source and the
+   * level threshold is lifted so its errors/warnings/info all show. */
+  sourceFilter?: string | null;
+  onClearSourceFilter?: () => void;
 };
 
 const LEVEL_TONE: Record<string, string> = {
@@ -42,6 +46,8 @@ export default function LogStream({
   paused,
   onTogglePause,
   onClear,
+  sourceFilter,
+  onClearSourceFilter,
 }: Props) {
   // Default filter: hide noisy INFO from the live view (per user request).
   // The full buffer is still available via the dropdown.
@@ -50,17 +56,27 @@ export default function LogStream({
   const [searchFilter, setSearchFilter] = useState("");
 
   const filtered = useMemo(() => {
-    const threshold = LEVEL_ORDER[levelFilter] ?? 0;
+    // When drilling into a specific source, lift the level threshold to ALL
+    // so its ERROR/WARNING/INFO (e.g. an HTTP 403) all surface — the default
+    // WARNING+ bar would otherwise hide INFO-level diagnostics for the source.
+    const threshold = sourceFilter ? 0 : LEVEL_ORDER[levelFilter] ?? 0;
+    const src = sourceFilter ? sourceFilter.toLowerCase() : null;
     const pass = records.filter((r) => {
       if (threshold && (LEVEL_ORDER[r.level] ?? 0) < threshold) return false;
       if (moduleFilter && !r.module.includes(moduleFilter)) return false;
       if (searchFilter && !r.message.includes(searchFilter)) return false;
+      if (
+        src &&
+        !r.module.toLowerCase().includes(src) &&
+        !r.message.toLowerCase().includes(src)
+      )
+        return false;
       return true;
     });
     // Newest-first: most recent record at the top of the visible list.
     // We slice BEFORE reversing so we keep the latest 500 (not the oldest).
     return pass.slice(-500).reverse();
-  }, [records, levelFilter, moduleFilter, searchFilter]);
+  }, [records, levelFilter, moduleFilter, searchFilter, sourceFilter]);
 
   // Counts per level — used in the chip row so the operator can see at a
   // glance "how much red is in the buffer" without scrolling.
@@ -97,6 +113,18 @@ export default function LogStream({
               <span className="text-amber-700 dark:text-amber-400">⏸ Stream in pausa</span>
             )}
           </div>
+          {sourceFilter && (
+            <button
+              type="button"
+              onClick={onClearSourceFilter}
+              className="inline-flex items-center gap-1.5 rounded-full border border-sky-200 dark:border-sky-800/60 bg-sky-50 dark:bg-sky-950/40 px-2.5 py-1 text-xs font-medium text-sky-700 dark:text-sky-300 hover:bg-sky-100 dark:hover:bg-sky-900/50 transition-colors"
+              title="Rimuovi il filtro per fonte"
+            >
+              <Filter className="h-3.5 w-3.5" />
+              Fonte: <span className="font-semibold">{sourceFilter}</span>
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
         </div>
         <div className="flex items-center gap-2 text-sm">
           <select

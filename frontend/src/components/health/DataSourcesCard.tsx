@@ -22,6 +22,8 @@ import { cn } from "@/lib/utils";
 type Props = {
   metrics: DataSourceMetric[];
   yfinanceBreaker: Record<string, unknown>;
+  /** Clicking a source row scrolls to + filters the live-log table to it. */
+  onSelectSource?: (source: string) => void;
 };
 
 type Health = "healthy" | "degraded" | "failing" | "idle";
@@ -177,13 +179,42 @@ function RateLimitBar({ used, limit, unit }: { used: number; limit: number; unit
   );
 }
 
-/* One source line inside a cluster card. */
-function SourceRow({ m }: { m: DataSourceMetric }) {
+/* One source line inside a cluster card. Clickable when `onSelect` is
+ * provided — scrolls to + filters the live-log table to this source. */
+function SourceRow({
+  m,
+  onSelect,
+}: {
+  m: DataSourceMetric;
+  onSelect?: (source: string) => void;
+}) {
   const h = normHealth(m.health);
   const meta = HEALTH_META[h];
   const total = m.success + m.failure;
+  const clickable = !!onSelect;
   return (
-    <div className="px-3 py-2 border-t first:border-t-0 border-border/60 hover:bg-muted/30 transition-colors">
+    <div
+      role={clickable ? "button" : undefined}
+      tabIndex={clickable ? 0 : undefined}
+      onClick={clickable ? () => onSelect!(m.source) : undefined}
+      onKeyDown={
+        clickable
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onSelect!(m.source);
+              }
+            }
+          : undefined
+      }
+      title={clickable ? `Filtra i log live su "${m.source}"` : undefined}
+      className={cn(
+        "px-3 py-2 border-t first:border-t-0 border-border/60 transition-colors",
+        clickable
+          ? "cursor-pointer hover:bg-sky-50/60 dark:hover:bg-sky-950/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60 focus-visible:ring-inset"
+          : "hover:bg-muted/30",
+      )}
+    >
       <div className="flex items-center gap-2 min-w-0">
         <span className={cn("h-2 w-2 rounded-full shrink-0", meta.dot)} title={meta.label} />
         <span className="text-[13px] font-medium truncate" title={m.notes || m.label}>
@@ -240,10 +271,12 @@ function ClusterCard({
   cat,
   sources,
   index,
+  onSelectSource,
 }: {
   cat: (typeof CATEGORIES)[number] | typeof OTHER_CAT;
   sources: DataSourceMetric[];
   index: number;
+  onSelectSource?: (source: string) => void;
 }) {
   const roll = rollup(sources);
   const meta = HEALTH_META[roll];
@@ -294,7 +327,7 @@ function ClusterCard({
       </div>
       <div className="flex-1">
         {sources.map((m) => (
-          <SourceRow key={`${m.source}.${m.op}`} m={m} />
+          <SourceRow key={`${m.source}.${m.op}`} m={m} onSelect={onSelectSource} />
         ))}
       </div>
     </div>
@@ -354,7 +387,7 @@ function SummaryStrip({
   );
 }
 
-export default function DataSourcesCard({ metrics, yfinanceBreaker }: Props) {
+export default function DataSourcesCard({ metrics, yfinanceBreaker, onSelectSource }: Props) {
   const breakerState = String(yfinanceBreaker.state ?? "closed").toLowerCase();
   const breakerOpen = breakerState === "open" || breakerState === "half_open";
 
@@ -417,7 +450,13 @@ export default function DataSourcesCard({ metrics, yfinanceBreaker }: Props) {
             <SummaryStrip counts={counts} total={total} />
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
               {ordered.map(({ cat, sources }, i) => (
-                <ClusterCard key={cat.key} cat={cat} sources={sources} index={i} />
+                <ClusterCard
+                  key={cat.key}
+                  cat={cat}
+                  sources={sources}
+                  index={i}
+                  onSelectSource={onSelectSource}
+                />
               ))}
             </div>
           </>
