@@ -6,6 +6,7 @@ import type {
   StockScore,
 } from "@/api/types";
 import { Card, CardContent } from "@/components/ui/card";
+import { CardUpdatedAt } from "@/components/stock/CardUpdatedAt";
 import { SectionTitle } from "@/components/ui/section-title";
 import {
   Tooltip,
@@ -588,10 +589,12 @@ function CardShell({
   children,
   onRefresh,
   isFetching,
+  updatedAt,
 }: {
   children: React.ReactNode;
   onRefresh?: () => void;
   isFetching?: boolean;
+  updatedAt?: number;
 }) {
   return (
     <Card>
@@ -602,23 +605,26 @@ function CardShell({
           className="mb-2"
           right={
             onRefresh ? (
-              <button
-                type="button"
-                onClick={onRefresh}
-                disabled={isFetching}
-                className={cn(
-                  "p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors disabled:opacity-50",
-                )}
-                title="Ricarica score"
-                aria-label="Ricarica score"
-              >
-                <RefreshCw
+              <div className="flex items-center gap-1.5">
+                <CardUpdatedAt updatedAt={updatedAt} />
+                <button
+                  type="button"
+                  onClick={onRefresh}
+                  disabled={isFetching}
                   className={cn(
-                    "h-3.5 w-3.5",
-                    isFetching && "animate-spin",
+                    "p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors disabled:opacity-50",
                   )}
-                />
-              </button>
+                  title="Ricarica score"
+                  aria-label="Ricarica score"
+                >
+                  <RefreshCw
+                    className={cn(
+                      "h-3.5 w-3.5",
+                      isFetching && "animate-spin",
+                    )}
+                  />
+                </button>
+              </div>
             ) : undefined
           }
         />
@@ -631,7 +637,7 @@ function CardShell({
 /* ─── Main component ────────────────────────────────────────────────────── */
 
 export function StockScoreCard({ ticker }: Props) {
-  const { data, isLoading, isError, noScoreYet, recompute, isRecomputing } =
+  const { data, isLoading, isError, noScoreYet, recompute, isRecomputing, dataUpdatedAt } =
     useStockScore(ticker);
 
   // The refresh button forces a backend recompute (POST /score/recompute)
@@ -662,7 +668,7 @@ export function StockScoreCard({ ticker }: Props) {
 
   if (noScoreYet) {
     return (
-      <CardShell onRefresh={onRefresh} isFetching={isRecomputing}>
+      <CardShell onRefresh={onRefresh} isFetching={isRecomputing} updatedAt={dataUpdatedAt}>
         <div className="py-6 text-center text-xs text-muted-foreground leading-relaxed">
           Score non ancora calcolato per questo ticker — sarà disponibile al
           prossimo scan.
@@ -673,7 +679,7 @@ export function StockScoreCard({ ticker }: Props) {
 
   if (isError || !data) {
     return (
-      <CardShell onRefresh={onRefresh} isFetching={isRecomputing}>
+      <CardShell onRefresh={onRefresh} isFetching={isRecomputing} updatedAt={dataUpdatedAt}>
         <div className="py-6 text-center text-xs text-muted-foreground">
           Errore nel caricamento dello score.
         </div>
@@ -685,7 +691,7 @@ export function StockScoreCard({ ticker }: Props) {
   const compTone = scoreColor(composite);
 
   return (
-    <CardShell onRefresh={onRefresh} isFetching={isRecomputing}>
+    <CardShell onRefresh={onRefresh} isFetching={isRecomputing} updatedAt={dataUpdatedAt}>
       {/* Gauge + composite number — gauge shrunk 180->130 to give the
           card a much shorter footprint per user feedback. The label
           ("Buono"/"Ottimo"/...) was moved next to the risk chip

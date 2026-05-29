@@ -25,6 +25,8 @@ export interface UseStockScoreResult {
   /** True while the recompute mutation is in-flight. Bound to the refresh
    *  button's `disabled` + spinner state. */
   isRecomputing: boolean;
+  /** ms timestamp of the last cache write — drives the "aggiornato …" label. */
+  dataUpdatedAt: number;
 }
 
 export function useStockScore(ticker: string | undefined): UseStockScoreResult {
@@ -69,5 +71,7 @@ export function useStockScore(ticker: string | undefined): UseStockScoreResult {
     refetch: () => query.refetch(),
     recompute: () => recomputeMutation.mutate(),
     isRecomputing: recomputeMutation.isPending,
+    /** ms timestamp of the last cache write — drives the "aggiornato …" label. */
+    dataUpdatedAt: query.dataUpdatedAt,
   };
 }

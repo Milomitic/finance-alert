@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { SectionTitle } from "@/components/ui/section-title";
 import { CardErrorOverlay } from "@/components/stock/CardErrorOverlay";
 import { CardRefreshButton } from "@/components/stock/CardRefreshButton";
+import { CardUpdatedAt } from "@/components/stock/CardUpdatedAt";
 import { useCardRefresh } from "@/hooks/useCardRefresh";
 import { useStockFundamentals } from "@/hooks/useStockFundamentals";
 import { cn } from "@/lib/utils";
@@ -500,11 +501,14 @@ export function AnalystTargetCard({ ticker }: Props) {
   }
 
   const refreshBtn = (
-    <CardRefreshButton
-      onClick={refresh}
-      busy={isRefreshing}
-      title="Aggiorna dati analisti"
-    />
+    <div className="flex items-center gap-1.5">
+      <CardUpdatedAt updatedAt={q.dataUpdatedAt} />
+      <CardRefreshButton
+        onClick={refresh}
+        busy={isRefreshing}
+        title="Aggiorna dati analisti"
+      />
+    </div>
   );
 
   if (refreshError) {

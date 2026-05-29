@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { SectionTitle } from "@/components/ui/section-title";
 import { CardErrorOverlay } from "@/components/stock/CardErrorOverlay";
 import { CardRefreshButton } from "@/components/stock/CardRefreshButton";
+import { CardUpdatedAt } from "@/components/stock/CardUpdatedAt";
 import { useCardRefresh } from "@/hooks/useCardRefresh";
 import { useStockNews } from "@/hooks/useStockNews";
 import { cn } from "@/lib/utils";
@@ -151,6 +152,7 @@ export function NewsCard({ ticker }: Props) {
               <span className="text-xs text-muted-foreground italic">
                 yfinance · cache 1h
               </span>
+              <CardUpdatedAt updatedAt={q.dataUpdatedAt} />
               <CardRefreshButton
                 onClick={refresh}
                 busy={isRefreshing}

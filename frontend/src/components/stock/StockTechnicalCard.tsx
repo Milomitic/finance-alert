@@ -2,6 +2,7 @@ import { scores } from "@/api/scores";
 import { Card, CardContent } from "@/components/ui/card";
 import { CardErrorOverlay } from "@/components/stock/CardErrorOverlay";
 import { CardRefreshButton } from "@/components/stock/CardRefreshButton";
+import { CardUpdatedAt } from "@/components/stock/CardUpdatedAt";
 import { useCardRefresh } from "@/hooks/useCardRefresh";
 import { useStockTechnical } from "@/hooks/useStockTechnical";
 import { scoreColor } from "@/lib/scoreMeta";
@@ -24,7 +25,7 @@ const POSTURE_CLS: Record<string, string> = {
 /** Continuous technical evaluation card (composite + dimensions + posture),
  *  the technical twin of StockScoreCard. */
 export function StockTechnicalCard({ ticker }: { ticker: string | undefined }) {
-  const { data, isLoading, noScoreYet } = useStockTechnical(ticker);
+  const { data, isLoading, noScoreYet, dataUpdatedAt } = useStockTechnical(ticker);
   const { refresh, isRefreshing, refreshError } = useCardRefresh({
     queryKey: ["stock-technical", ticker],
     mutationFn: () => scores.recomputeTechnicalForStock(ticker!),
@@ -42,6 +43,7 @@ export function StockTechnicalCard({ ticker }: { ticker: string | undefined }) {
                 {data.posture}
               </span>
             )}
+            <CardUpdatedAt updatedAt={dataUpdatedAt} />
             <CardRefreshButton
               onClick={refresh}
               busy={isRefreshing}

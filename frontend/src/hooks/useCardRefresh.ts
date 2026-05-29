@@ -1,6 +1,13 @@
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQueryClient, type QueryKey } from "@tanstack/react-query";
 
 import { ApiError } from "@/api/client";
+
+/** Keep the spinner visible for at least this long after a refresh starts.
+ *  Some refreshes (e.g. the technical recompute, which only reads stored OHLCV)
+ *  finish in a few ms — without a floor the spinner would flash imperceptibly
+ *  and the click would feel like a no-op. */
+const MIN_SPINNER_MS = 600;
 
 /** Shared per-card "force refresh" primitive for the stock detail page.
  *
@@ -39,9 +46,28 @@ export function useCardRefresh<T>(opts: {
       qc.setQueryData(opts.queryKey, fresh);
     },
   });
+
+  // Minimum-visible spinner: `minBusy` is forced true on refresh() and cleared
+  // after MIN_SPINNER_MS, so the icon spins long enough to be seen.
+  const [minBusy, setMinBusy] = useState(false);
+  const timerRef = useRef<number | null>(null);
+  useEffect(
+    () => () => {
+      if (timerRef.current) window.clearTimeout(timerRef.current);
+    },
+    [],
+  );
+
+  const refresh = () => {
+    setMinBusy(true);
+    if (timerRef.current) window.clearTimeout(timerRef.current);
+    timerRef.current = window.setTimeout(() => setMinBusy(false), MIN_SPINNER_MS);
+    mutation.mutate();
+  };
+
   return {
-    refresh: () => mutation.mutate(),
-    isRefreshing: mutation.isPending,
+    refresh,
+    isRefreshing: mutation.isPending || minBusy,
     refreshError: mutation.error ?? null,
     resetRefreshError: () => mutation.reset(),
   };

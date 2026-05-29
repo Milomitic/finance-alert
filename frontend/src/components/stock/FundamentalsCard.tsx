@@ -13,6 +13,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { SectionTitle } from "@/components/ui/section-title";
 import { CardErrorOverlay } from "@/components/stock/CardErrorOverlay";
 import { CardRefreshButton } from "@/components/stock/CardRefreshButton";
+import { CardUpdatedAt } from "@/components/stock/CardUpdatedAt";
 import { useCardRefresh } from "@/hooks/useCardRefresh";
 import { useStockFundamentals } from "@/hooks/useStockFundamentals";
 import { cn } from "@/lib/utils";
@@ -635,6 +636,7 @@ export function FundamentalsCard({ ticker }: Props) {
                   {f.next_eps_estimate != null && <> · est ${f.next_eps_estimate.toFixed(2)}</>}
                 </span>
               ) : null}
+              <CardUpdatedAt updatedAt={q.dataUpdatedAt} />
               <CardRefreshButton
                 onClick={refresh}
                 busy={isRefreshing}

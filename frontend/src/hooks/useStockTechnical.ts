@@ -24,5 +24,7 @@ export function useStockTechnical(ticker: string | undefined) {
     isLoading: query.isLoading,
     isError: query.isError && !noScoreYet,
     noScoreYet,
+    /** ms timestamp of the last cache write — drives the "aggiornato …" label. */
+    dataUpdatedAt: query.dataUpdatedAt,
   };
 }
