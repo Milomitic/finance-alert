@@ -213,20 +213,6 @@ interface Props {
 }
 
 
-/* ─── Time helpers ──────────────────────────────────────────────────────── */
-
-function formatRelative(iso: string): string {
-  const ts = new Date(iso).getTime();
-  const diffMin = (Date.now() - ts) / (1000 * 60);
-  if (diffMin < 1) return "ora";
-  if (diffMin < 60) return `${Math.max(1, Math.round(diffMin))} min fa`;
-  const diffH = diffMin / 60;
-  if (diffH < 24) return `${Math.round(diffH)}h fa`;
-  const diffD = diffH / 24;
-  if (diffD < 30) return `${Math.round(diffD)}g fa`;
-  return `${Math.round(diffD / 30)} mesi fa`;
-}
-
 /* ─── Composite score gauge (semicircle SVG) ────────────────────────────── */
 /* Pure SVG arc, 180°, 0–100. Single solid color picked from the score's tone
  * (rose / amber / sky / emerald) so the visual matches the number color and
@@ -698,7 +684,7 @@ export function StockScoreCard({ ticker }: Props) {
           horizontally so the gauge area stays vertically tight. */}
       <div className="flex items-center justify-center gap-3">
         <div className="relative shrink-0">
-          <ScoreGauge score={composite} size={130} />
+          <ScoreGauge score={composite} size={112} />
           <div className="absolute inset-0 flex flex-col items-center justify-end pb-0.5">
             <span
               className={cn(
@@ -741,38 +727,31 @@ export function StockScoreCard({ ticker }: Props) {
         ))}
       </div>
 
-      {/* Footer */}
-      <div className="mt-2 pt-2 border-t border-border/40 flex items-center justify-between text-[12px] text-muted-foreground">
-        <span title={new Date(data.computed_at).toLocaleString("it-IT")}>
-          Calcolato {formatRelative(data.computed_at)}
-        </span>
-        {(() => {
-          // QW5 — confidence/coverage. The composite is renormalised
-          // over whatever factors had data, so two scores aren't
-          // strictly comparable; surface how much real data this one
-          // rests on. Read defensively (older cached rows lack it).
-          const mg = (data.breakdown as Record<string, unknown> | undefined)
-            ?._meta_global as
-            | { coverage?: number; pillars_present?: number; pillars_total?: number }
-            | undefined;
-          if (!mg || typeof mg.coverage !== "number") return null;
-          const pct = Math.round(mg.coverage * 100);
-          const tone =
-            pct >= 80
-              ? "text-emerald-600 dark:text-emerald-400"
-              : pct >= 55
-                ? "text-amber-600 dark:text-amber-400"
-                : "text-rose-600 dark:text-rose-400";
-          return (
+      {/* Footer — confidence/coverage only. The "aggiornato …" timestamp is
+          already shown in the card header, so the old "Calcolato …" row was
+          dropped. Confidence stays small + muted (no green/amber/red tone). */}
+      {(() => {
+        // QW5 — confidence/coverage. The composite is renormalised over
+        // whatever factors had data, so two scores aren't strictly comparable;
+        // surface how much real data this one rests on. Read defensively
+        // (older cached rows lack it).
+        const mg = (data.breakdown as Record<string, unknown> | undefined)
+          ?._meta_global as
+          | { coverage?: number; pillars_present?: number; pillars_total?: number }
+          | undefined;
+        if (!mg || typeof mg.coverage !== "number") return null;
+        const pct = Math.round(mg.coverage * 100);
+        return (
+          <div className="mt-2 pt-2 border-t border-border/40 flex justify-end">
             <span
-              className={cn("tabular-nums", tone)}
+              className="text-[10px] tabular-nums text-muted-foreground"
               title={`Confidence: lo score poggia sul ${pct}% del peso fattoriale nominale (${mg.pillars_present ?? "?"}/${mg.pillars_total ?? 6} pilastri con dati). Più basso = score basato su pochi input, da interpretare con cautela.`}
             >
               Confidence {pct}%
             </span>
-          );
-        })()}
-      </div>
+          </div>
+        );
+      })()}
     </CardShell>
   );
 }

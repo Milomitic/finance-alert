@@ -246,7 +246,7 @@ export default function StockDetailPage() {
           `card principale — card score — card score tecnico`. items-start so
           the short header keeps its natural height next to the taller score
           cards. */}
-      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,340px)_minmax(0,340px)] gap-3 items-stretch">
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,380px)_minmax(0,380px)] gap-3 items-stretch">
         <StockHeader
           stock={d.stock}
           kpis={d.kpis}

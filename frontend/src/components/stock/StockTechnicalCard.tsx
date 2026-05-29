@@ -32,7 +32,7 @@ export function StockTechnicalCard({ ticker }: { ticker: string | undefined }) {
   });
   return (
     <Card>
-      <CardContent className="p-4 space-y-3">
+      <CardContent className="p-3 space-y-2.5">
         <div className="flex items-center justify-between">
           <span className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
             Valutazione tecnica

@@ -119,7 +119,7 @@ export function StockHeader({ stock, kpis, ohlcv }: Props) {
       <HeaderSparkline closes={closes} up={sparkUp} />
       <div className={cn("absolute left-0 top-0 bottom-0 w-1.5 z-10", tone.stripe)} aria-hidden />
       {/* Smaller padding now that the KPI strip is gone */}
-      <CardContent className="relative z-10 p-5 pl-7">
+      <CardContent className="relative z-10 h-full flex flex-col justify-center p-4 pl-7">
         <div className="flex items-center gap-6 flex-wrap">
           {/* Logo (V3.3: flag spostata dentro il tag exchange) */}
           <div className="flex flex-col items-center gap-2 shrink-0">
