@@ -79,3 +79,34 @@ class LogRecordOut(BaseModel):
     line: int
     message: str
     exception: str | None = None
+
+
+class SignalDriftRowOut(BaseModel):
+    """One detector's drift verdict: realised recent hit-rate vs the calibrated
+    base rate, with the Wilson band that decides significance. All rates are
+    percentages (0..100)."""
+    detector: str
+    n_matured: int                 # matured signal alerts in the recent window
+    recent_hit_rate: float         # realised hit-rate over those matured alerts
+    base_rate: float               # calibrated base rate (signal_calibration.json)
+    delta: float                   # recent_hit_rate - base_rate (signed)
+    ci_low: float                  # Wilson lower bound on recent_hit_rate
+    ci_high: float                 # Wilson upper bound on recent_hit_rate
+    drift_flag: bool               # base_rate outside [ci_low, ci_high] AND n>=min_n
+    direction: str                 # "decaying" | "improving" | "stable"
+    horizon_days: int              # detector's forward horizon (trading days)
+
+
+class SignalDriftSummaryOut(BaseModel):
+    n_detectors: int               # detectors with >=1 matured alert in window
+    n_flagged: int
+    n_decaying: int
+    n_improving: int
+    window_days: int               # rolling window of matured alerts (calendar)
+    min_n: int                     # min matured-sample size before a flag
+    computed_at: str               # ISO-8601 UTC
+
+
+class SignalDriftOut(BaseModel):
+    summary: SignalDriftSummaryOut
+    detectors: list[SignalDriftRowOut]   # sorted by descending |delta|

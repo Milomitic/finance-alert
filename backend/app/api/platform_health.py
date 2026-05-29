@@ -21,8 +21,9 @@ from app.schemas.platform import (
     PlatformHealthOut,
     RecentScanOut,
     SchedulerJobStatOut,
+    SignalDriftOut,
 )
-from app.services import cache_metrics, source_catalog, yfinance_health
+from app.services import cache_metrics, signal_drift_service, source_catalog, yfinance_health
 from app.services.scheduler_metrics import _INSTANCE as scheduler_metrics
 
 router = APIRouter(prefix="/api/platform", tags=["platform"])
@@ -112,6 +113,34 @@ def health_snapshot(
         scans=_recent_scans(db),
         cache=cache_metrics.snapshot(),
     )
+
+
+@router.get("/signal-drift", response_model=SignalDriftOut)
+def signal_drift(
+    window_days: Annotated[int, Query(ge=7, le=365)] = 90,
+    min_n: Annotated[int, Query(ge=1, le=500)] = 30,
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+) -> SignalDriftOut:
+    """Per-detector signal DRIFT / DECAY monitor (read-only, computed on demand).
+
+    Compares each detector's REALISED recent hit-rate (over MATURED signal
+    alerts whose horizon has fully elapsed, scored against stored OHLCV the same
+    way the calibration was) against its CALIBRATED base rate, and flags drift
+    when the base rate falls outside the recent rate's Wilson 95% confidence
+    interval (and the matured sample clears `min_n`). Tells us WHEN to retune a
+    detector on evidence, instead of continuously. Sorted by descending |delta|.
+
+      window_days  rolling window of matured alerts to measure (calendar days)
+      min_n        minimum matured sample before a detector can be flagged
+    """
+    rows = signal_drift_service.compute_signal_drift(
+        db, window_days=window_days, min_n=min_n
+    )
+    summary = signal_drift_service.drift_summary(
+        rows, window_days=window_days, min_n=min_n
+    )
+    return SignalDriftOut(summary=summary, detectors=rows)
 
 
 @router.post("/probes/run", status_code=202)
