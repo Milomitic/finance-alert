@@ -118,7 +118,7 @@ export function StockHeader({ stock, kpis, ohlcv }: Props) {
       <div className={cn("absolute left-0 top-0 bottom-0 w-1.5 z-10", tone.stripe)} aria-hidden />
       {/* Smaller padding now that the KPI strip is gone */}
       <CardContent className="relative z-10 p-5 pl-7">
-        <div className="flex items-start gap-6 flex-wrap">
+        <div className="flex items-center gap-6 flex-wrap">
           {/* Logo (V3.3: flag spostata dentro il tag exchange) */}
           <div className="flex flex-col items-center gap-2 shrink-0">
             <div className="rounded-2xl bg-white dark:bg-zinc-900 border border-border/60 p-2 shadow-sm">
@@ -127,7 +127,7 @@ export function StockHeader({ stock, kpis, ohlcv }: Props) {
           </div>
 
           {/* Identity */}
-          <div className="min-w-0 flex-1">
+          <div className="min-w-0">
             <div className="flex items-baseline gap-3 flex-wrap">
               <span className="text-4xl sm:text-5xl font-bold tracking-tight tabular-nums leading-none">
                 {stock.ticker}
@@ -168,8 +168,9 @@ export function StockHeader({ stock, kpis, ohlcv }: Props) {
             </div>
           </div>
 
-          {/* Price block */}
-          <div className="text-right tabular-nums shrink-0 flex flex-col gap-1 items-end">
+          {/* Price block — moved next to the identity (left-aligned), both
+              vertically centered via the row's items-center. */}
+          <div className="text-left tabular-nums shrink-0 flex flex-col gap-1 items-start">
             {displayPrice != null && (
               <>
                 <div className="flex items-center gap-1.5 text-sm uppercase tracking-wide">
