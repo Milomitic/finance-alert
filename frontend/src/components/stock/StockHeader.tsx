@@ -121,22 +121,23 @@ export function StockHeader({ stock, kpis, ohlcv }: Props) {
       {/* Smaller padding now that the KPI strip is gone */}
       <CardContent className="relative z-10 h-full flex flex-col justify-center p-4 pl-7">
         <div className="flex items-center gap-6 flex-wrap">
-          {/* Logo (V3.3: flag spostata dentro il tag exchange) */}
-          <div className="flex flex-col items-center gap-2 shrink-0">
-            <div className="rounded-2xl bg-white dark:bg-zinc-900 border border-border/60 p-2 shadow-sm">
-              <StockLogo ticker={stock.ticker} size="md" />
-            </div>
-          </div>
-
-          {/* Identity */}
+          {/* Identity column: logo aligned + vertically centered with the
+              ticker/name on one row; the exchange/sector tags sit BELOW. */}
           <div className="min-w-0">
-            <div className="flex flex-col gap-1">
-              <span className="text-3xl sm:text-4xl font-bold tracking-tight tabular-nums leading-none">
-                {stock.ticker}
-              </span>
-              <span className="text-xl text-foreground/80 font-medium truncate" title={stock.name}>
-                {stock.name}
-              </span>
+            <div className="flex items-center gap-4">
+              {/* Logo (flag lives inside the exchange tag below) */}
+              <div className="rounded-2xl bg-white dark:bg-zinc-900 border border-border/60 p-2 shadow-sm shrink-0">
+                <StockLogo ticker={stock.ticker} size="md" />
+              </div>
+              {/* Ticker + name */}
+              <div className="min-w-0 flex flex-col gap-1">
+                <span className="text-3xl sm:text-4xl font-bold tracking-tight tabular-nums leading-none">
+                  {stock.ticker}
+                </span>
+                <span className="text-xl text-foreground/80 font-medium truncate" title={stock.name}>
+                  {stock.name}
+                </span>
+              </div>
             </div>
             <div className="flex items-center gap-2 mt-3 flex-wrap">
               {/* Exchange / indice di riferimento — cliccabile: porta allo
