@@ -41,7 +41,7 @@ const NAV: NavEntry[] = [
   // the per-sector detail page. Grid icon to telegraph the
   // "everything at a glance" function (vs ListChecks' to-do flavor
   // that the old Watchlists entry carried).
-  { to: "/sectors", label: "Settori", icon: Grid3x3, enabled: true },
+  { to: "/sectors", label: "Esplora", icon: Grid3x3, enabled: true },
   // /stocks route stays; the page is conceptually a screener (filters +
   // ranking) so that's the label. Filter icon to telegraph the function.
   { to: "/stocks", label: "Screener", icon: Filter, enabled: true },
@@ -74,7 +74,7 @@ function NavList({
       {NAV.map((entry) => {
         const Icon = entry.icon;
         const base = cn(
-          "flex items-center rounded text-sm transition-colors",
+          "flex items-center rounded text-base transition-colors",
           collapsed ? "justify-center px-0 py-2.5" : "gap-2 px-3 py-2",
         );
         if (!entry.enabled) {
@@ -168,7 +168,7 @@ function SidebarFooter({
   onNavigate?: () => void;
 }) {
   const base = cn(
-    "flex items-center rounded text-sm transition-colors",
+    "flex items-center rounded text-base transition-colors",
     collapsed ? "justify-center px-0 py-2.5" : "gap-2 px-3 py-2",
   );
   return (
