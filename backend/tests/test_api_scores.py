@@ -268,6 +268,71 @@ def test_recompute_unauthenticated_returns_401(db: Session):
         app.dependency_overrides.clear()
 
 
+# ---------------------------------------------------------------------------
+# POST /api/stocks/{ticker}/technical/recompute
+# ---------------------------------------------------------------------------
+
+
+def _technical_client(db: Session, *, bars: int) -> tuple[TestClient, int]:
+    """Seed one stock with `bars` OHLCV rows and return an authed client +
+    the stock id. A gently rising series gives partial_for valid dimensions."""
+    user = User(username="tester", password_hash="x")
+    db.add(user)
+    db.flush()
+    stock = Stock(ticker="TEC", exchange="NMS", name="Tec Inc")
+    db.add(stock)
+    db.flush()
+    base = date(2026, 1, 1)
+    price = 100.0
+    for i in range(bars):
+        price += 0.5
+        db.add(OhlcvDaily(
+            stock_id=stock.id, date=base + timedelta(days=i),
+            open=price, high=price + 1, low=price - 1, close=price,
+            volume=1_000_000,
+        ))
+    db.commit()
+    app.dependency_overrides[get_db] = lambda: db
+    app.dependency_overrides[get_current_user] = lambda: user
+    return TestClient(app), stock.id
+
+
+def test_recompute_technical_returns_fresh_and_persists(db: Session):
+    from app.models import TechnicalScore
+    client, stock_id = _technical_client(db, bars=60)
+    try:
+        resp = client.post("/api/stocks/TEC/technical/recompute")
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["ticker"] == "TEC"
+        assert isinstance(body["composite"], (int, float))
+        assert body["posture"] in ("Forte", "Neutro", "Debole")
+        # Persisted exactly one row.
+        rows = db.query(TechnicalScore).filter_by(stock_id=stock_id).all()
+        assert len(rows) == 1
+        assert rows[0].composite == body["composite"]
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_recompute_technical_insufficient_history_422(db: Session):
+    client, _ = _technical_client(db, bars=5)
+    try:
+        resp = client.post("/api/stocks/TEC/technical/recompute")
+        assert resp.status_code == 422
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_recompute_technical_unknown_ticker_404(db: Session):
+    client, _ = _technical_client(db, bars=60)
+    try:
+        resp = client.post("/api/stocks/NOPE/technical/recompute")
+        assert resp.status_code == 404
+    finally:
+        app.dependency_overrides.clear()
+
+
 def test_recompute_tolerates_fundamentals_refresh_failure(
     seeded_client: TestClient, db: Session, monkeypatch: pytest.MonkeyPatch
 ):

@@ -18,7 +18,7 @@ from app.indicators.adx import adx
 from app.indicators.ema import ema
 from app.indicators.macd import macd
 from app.indicators.rsi import rsi
-from app.models import Alert, TechnicalScore
+from app.models import Alert, OhlcvDaily, TechnicalScore
 
 # Composite weights for the five price dimensions (must sum to 1.0).
 _WEIGHTS = {
@@ -218,3 +218,84 @@ def finalize(db: Session, partials: dict[int, dict]) -> int:
         ))
         count += 1
     return count
+
+
+def recompute_one(db: Session, stock_id: int) -> TechnicalScore | None:
+    """Recompute ONE stock's technical score from stored OHLCV and upsert it.
+
+    Used by the per-card "refresh" button on the stock detail page when the
+    scan-time score is missing or stale. Returns the persisted row, or None
+    if there isn't enough stored history to compute the price dimensions.
+
+    Difference vs `finalize`: the cross-sectional relative-strength percentile
+    is NOT recomputed (that requires the whole universe). The previously-
+    persisted `rel_strength` is reused; absent a prior row it defaults to the
+    neutral 50th percentile. Everything else (the four price dims, the signals
+    facet, composite + posture) is recomputed exactly as `finalize` does.
+    """
+    rows = (
+        db.execute(
+            select(OhlcvDaily)
+            .where(OhlcvDaily.stock_id == stock_id)
+            .order_by(OhlcvDaily.date.asc())
+        )
+        .scalars()
+        .all()
+    )
+    if not rows:
+        return None
+    rows = rows[-260:]
+    ohlcv = pd.DataFrame(
+        {
+            "date": [r.date for r in rows],
+            "open": [float(r.open) for r in rows],
+            "high": [float(r.high) for r in rows],
+            "low": [float(r.low) for r in rows],
+            "close": [float(r.close) for r in rows],
+            "volume": [int(r.volume) for r in rows],
+        }
+    )
+    p = partial_for(ohlcv)
+    if p is None:
+        return None
+
+    existing = db.execute(
+        select(TechnicalScore).where(TechnicalScore.stock_id == stock_id).limit(1)
+    ).scalars().first()
+    rel = (
+        existing.rel_strength
+        if existing is not None and existing.rel_strength is not None
+        else 50.0
+    )
+    dims = {
+        "trend": p["trend"],
+        "momentum": p["momentum"],
+        "structure": p["structure"],
+        "volume": p["volume"],
+        "rel_strength": rel,
+    }
+    composite = sum(_WEIGHTS[k] * dims[k] for k in _WEIGHTS)
+    fac = _recent_signal_facets(db, [stock_id]).get(stock_id)
+    signals_val = round(fac["confidence"], 1) if fac is not None else None
+    posture = "Forte" if composite >= 66 else "Neutro" if composite >= 40 else "Debole"
+    now = datetime.now(timezone.utc)
+    db.merge(TechnicalScore(
+        stock_id=stock_id,
+        composite=round(composite, 1),
+        trend=round(dims["trend"], 1),
+        momentum=round(dims["momentum"], 1),
+        structure=round(dims["structure"], 1),
+        volume=round(dims["volume"], 1),
+        rel_strength=round(rel, 1),
+        signals=signals_val,
+        posture=posture,
+        computed_at=now,
+        breakdown=json.dumps({
+            "dims": {k: round(dims[k], 1) for k in dims},
+            "blended_return": p.get("blended_return"),
+        }),
+    ))
+    db.commit()
+    return db.execute(
+        select(TechnicalScore).where(TechnicalScore.stock_id == stock_id).limit(1)
+    ).scalars().first()

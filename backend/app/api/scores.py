@@ -28,7 +28,11 @@ from app.schemas.score import (
     TopPickItemOut,
     TopPicksOut,
 )
-from app.services import score_service, stock_fundamentals_service
+from app.services import (
+    score_service,
+    stock_fundamentals_service,
+    technical_score_service,
+)
 from app.services.scan_status import build_scan_status_out
 
 router = APIRouter(prefix="/api", tags=["scores"])
@@ -127,6 +131,49 @@ def get_stock_technical(
         raise HTTPException(
             status_code=404,
             detail="Technical score not yet computed (wait for the next scan)",
+        )
+    return TechnicalScoreOut(
+        stock_id=ts.stock_id,
+        ticker=stock.ticker,
+        composite=ts.composite,
+        trend=ts.trend,
+        momentum=ts.momentum,
+        structure=ts.structure,
+        volume=ts.volume,
+        rel_strength=ts.rel_strength,
+        signals=ts.signals,
+        posture=ts.posture,
+        computed_at=ts.computed_at,
+    )
+
+
+@router.post("/stocks/{ticker}/technical/recompute", response_model=TechnicalScoreOut)
+def recompute_stock_technical(
+    ticker: str,
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+) -> TechnicalScoreOut:
+    """Force a single-stock technical-score recomputation from stored OHLCV and
+    return the fresh row.
+
+    Why this endpoint exists: the GET reads the persisted `technical_scores`
+    row (last refreshed by the periodic scan's finalize pass). If a stock was
+    skipped at scan time (too little history then, malformed bar, etc.) the row
+    can be missing or stale. This is the per-card "refresh" escape hatch on the
+    detail page. The cross-sectional relative-strength percentile is reused from
+    the prior row (it needs the whole universe); the four price dimensions are
+    recomputed from the latest stored bars.
+    """
+    stock = db.execute(
+        select(Stock).where(Stock.ticker == ticker).limit(1)
+    ).scalars().first()
+    if stock is None:
+        raise HTTPException(status_code=404, detail=f"Ticker not found: {ticker}")
+    ts = technical_score_service.recompute_one(db, stock.id)
+    if ts is None:
+        raise HTTPException(
+            status_code=422,
+            detail="Storico prezzi insufficiente per calcolare lo score tecnico",
         )
     return TechnicalScoreOut(
         stock_id=ts.stock_id,

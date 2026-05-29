@@ -4,6 +4,7 @@ from typing import Any
 
 from loguru import logger
 
+from app.core.errors import UpstreamUnavailable
 from app.services.news_sentiment import classify_title
 
 NEWS_TTL = timedelta(hours=1)
@@ -83,33 +84,40 @@ def _normalize_yf_item(raw: dict) -> dict[str, Any] | None:
     }
 
 
-def get_news(ticker: str, limit: int = 5) -> list[dict[str, Any]]:
+def get_news(
+    ticker: str, limit: int = 5, *, force_refresh: bool = False
+) -> list[dict[str, Any]]:
     """Fetch news for a ticker. Two-tier cache (L1 in-memory, L2 fetch_cache).
-    Returns [] on any error.
+    Returns [] on any error — EXCEPT when `force_refresh=True`, in which case a
+    primary-source (yfinance) failure raises `UpstreamUnavailable` so the
+    per-card refresh button can surface the error text.
+
+    `force_refresh=True` also bypasses both cache layers and re-fetches upstream.
 
     Items are sorted **descending** by published_at (most recent first) so
     the UI can render them in chronological order without doing a sort pass.
     Items missing a published_at are pushed to the end (least useful).
     """
     now = datetime.now(UTC)
-    # L1 — fast in-memory check
-    cached = _CACHE.get(ticker)
-    if cached and (now - cached[0]) < NEWS_TTL:
-        return cached[1][:limit]
+    if not force_refresh:
+        # L1 — fast in-memory check
+        cached = _CACHE.get(ticker)
+        if cached and (now - cached[0]) < NEWS_TTL:
+            return cached[1][:limit]
 
-    # L2 — DB cache (survives restart). Lazy import to keep this module
-    # importable without the SQLAlchemy machinery for unit tests.
-    try:
-        from app.core.db import SessionLocal
-        from app.services import fetch_cache_store
-        ttl_sec = int(NEWS_TTL.total_seconds())
-        with SessionLocal() as db:
-            l2 = fetch_cache_store.read_news(db, ticker, ttl_sec)
-        if l2 is not None:
-            _CACHE[ticker] = (now, l2)
-            return l2[:limit]
-    except Exception as exc:  # noqa: BLE001
-        logger.warning(f"[news] L2 read failed for {ticker}: {exc}")
+        # L2 — DB cache (survives restart). Lazy import to keep this module
+        # importable without the SQLAlchemy machinery for unit tests.
+        try:
+            from app.core.db import SessionLocal
+            from app.services import fetch_cache_store
+            ttl_sec = int(NEWS_TTL.total_seconds())
+            with SessionLocal() as db:
+                l2 = fetch_cache_store.read_news(db, ticker, ttl_sec)
+            if l2 is not None:
+                _CACHE[ticker] = (now, l2)
+                return l2[:limit]
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(f"[news] L2 read failed for {ticker}: {exc}")
 
     # Both layers missed → upstream fetch
     from app.services import data_source_metrics
@@ -122,6 +130,12 @@ def get_news(ticker: str, limit: int = 5) -> list[dict[str, Any]]:
         data_source_metrics.record_failure(
             "yfinance", "news", reason=str(exc)[:200]
         )
+        if force_refresh:
+            # User-initiated forced refresh: surface the failure so the card can
+            # render the error text instead of silently caching an empty list.
+            raise UpstreamUnavailable(
+                str(exc)[:200], source="yfinance", op="news"
+            ) from exc
         # Cache empty result in L1 only to avoid hammering on failure.
         # Don't persist failures to L2 — a transient yfinance outage shouldn't
         # poison the cache for an hour across restarts.

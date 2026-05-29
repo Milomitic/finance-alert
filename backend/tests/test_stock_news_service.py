@@ -109,6 +109,28 @@ def test_get_news_fallback_on_yfinance_error(monkeypatch):
     assert items == []
 
 
+def test_get_news_force_refresh_raises_on_yfinance_error(monkeypatch):
+    """A forced refresh surfaces the upstream failure (so the card can show the
+    error text) instead of silently returning []."""
+    import pytest
+
+    from app.core.errors import UpstreamUnavailable
+
+    stock_news_service.clear_cache()
+
+    class BoomTicker:
+        def __init__(self, t): pass
+        @property
+        def news(self):
+            raise RuntimeError("network down")
+
+    fake_module = type("M", (), {"Ticker": BoomTicker})
+    monkeypatch.setitem(__import__("sys").modules, "yfinance", fake_module)
+
+    with pytest.raises(UpstreamUnavailable):
+        stock_news_service.get_news("AAPL", force_refresh=True)
+
+
 def test_falls_back_to_marketaux_when_yfinance_empty(monkeypatch):
     """Se yfinance ritorna 0 headline e Finnhub torna vuoto, il
     service prova Marketaux come ultima fallback.

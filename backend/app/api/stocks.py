@@ -365,6 +365,7 @@ def get_ohlcv_window(
 def get_stock_news(
     ticker: str,
     limit: int = 5,
+    force: bool = Query(False),
     _user: User = Depends(get_current_user),
 ) -> StockNewsOut:
     """Fetch up to `limit` news items, most-recent-first.
@@ -373,21 +374,35 @@ def get_stock_news(
     so a UI that wants to render a long scrollable list isn't artificially
     truncated; the cache layer means the wider limit doesn't cost extra
     upstream calls.
+
+    `force=true` bypasses both cache layers and re-fetches upstream; an upstream
+    failure is surfaced as HTTP 502 so the per-card refresh button can show it.
     """
     if limit < 1 or limit > 50:
         raise HTTPException(status_code=422, detail="limit must be 1..50")
-    items = stock_news_service.get_news(ticker, limit=limit)
+    try:
+        items = stock_news_service.get_news(ticker, limit=limit, force_refresh=force)
+    except UpstreamError as e:
+        raise HTTPException(
+            status_code=502, detail=f"Aggiornamento news fallito: {e}"
+        ) from e
     return StockNewsOut(items=[StockNewsItemOut(**n) for n in items])
 
 
 @router.get("/{ticker}/fundamentals", response_model=FundamentalsOut)
 def get_stock_fundamentals(
     ticker: str,
+    force: bool = Query(False),
     db: Session = Depends(get_db),
     _user: User = Depends(get_current_user),
 ) -> FundamentalsOut:
     """Annual revenue/net income/EPS + earnings history with surprise %.
-    Cached 24h; non-fatal on yfinance failure (returns empty payload)."""
+    Cached 24h; non-fatal on yfinance failure (returns empty payload).
+
+    `force=true` bypasses both cache layers and re-fetches upstream. On a forced
+    refresh an upstream error is surfaced as HTTP 502 (so the per-card refresh
+    button can show the error text), instead of the normal silent empty payload.
+    """
     # Catalog has duplicate ticker rows for ~tens of names (see CLAUDE.md).
     # `.limit(1).scalars().first()` is the safe pattern; `scalar_one_or_none`
     # raises MultipleResultsFound on those duplicates.
@@ -396,7 +411,11 @@ def get_stock_fundamentals(
     ).scalars().first()
     if stock is None:
         raise HTTPException(status_code=404, detail=f"Ticker not found: {ticker}")
-    f = stock_fundamentals_service.get_fundamentals(ticker)
+    f = stock_fundamentals_service.get_fundamentals(ticker, force_refresh=force)
+    if force and f.error:
+        # Forced refresh that failed upstream → surface the error so the card
+        # can render it (the un-forced path keeps returning the empty payload).
+        raise HTTPException(status_code=502, detail=f"Aggiornamento dati fallito: {f.error}")
     # Augment yfinance's structured analyst actions with mentions parsed
     # from news headlines — yfinance's upgrades_downgrades feed lags the
     # news cycle for many tickers. The merger dedupes by (firm, ±3-day
