@@ -174,8 +174,9 @@ export function StockHeader({ stock, kpis, ohlcv }: Props) {
           </div>
 
           {/* Price block — moved next to the identity (left-aligned), both
-              vertically centered via the row's items-center. */}
-          <div className="text-left tabular-nums shrink-0 flex flex-col gap-1 items-start">
+              vertically centered via the row's items-center. Extra left margin
+              gives a bit more breathing room between the name and the price. */}
+          <div className="text-left tabular-nums shrink-0 flex flex-col gap-1 items-start sm:ml-6">
             {displayPrice != null && (
               <>
                 <div className="flex items-center gap-1.5 text-sm uppercase tracking-wide">
