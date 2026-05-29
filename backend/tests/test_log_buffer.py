@@ -88,3 +88,34 @@ def test_subscribe_callback_exception_does_not_break_others():
     buf.append_record({"ts": 0, "level": "INFO", "module": "m",
                        "function": "f", "line": 1, "message": "a"})
     assert len(good_seen) == 1
+
+
+def test_hydrate_from_lines_parses_default_loguru_format():
+    """Rehydration parses on-disk default-format lines into buffer records,
+    skips continuation/garbage lines, and the result is filterable by source
+    token (module substring) like live records."""
+    buf = LogBuffer(maxlen=100)
+    lines = [
+        "2026-05-29 19:12:29.658 | WARNING  | app.services.finnhub_news_service:fetch_company_news:333 - [finnhub] /company-news HTTP 403 for DUP.PA",
+        "    raise SomeError(...)  <-- traceback continuation, no timestamp",
+        "2026-05-29 19:12:14.193 | WARNING  | app.services.nasdaq_analyst_service:_trip_breaker:125 - [nasdaq] analyst circuit breaker OPEN — HTTP 403",
+    ]
+    n = buf.hydrate_from_lines(lines)
+    assert n == 2  # garbage continuation line skipped
+    fin = buf.get_snapshot(module="finnhub")
+    assert len(fin) == 1 and "403" in fin[0]["message"]
+    assert fin[0]["level"] == "WARNING"
+    # Source-token match also works against the message body.
+    nas = buf.get_snapshot(search="nasdaq")
+    assert len(nas) == 1
+
+
+def test_hydrate_prepends_before_existing_records():
+    buf = LogBuffer(maxlen=100)
+    buf.append_record({"ts": 9e9, "level": "INFO", "module": "m",
+                       "function": "f", "line": 1, "message": "runtime"})
+    buf.hydrate_from_lines([
+        "2026-05-29 19:12:29.658 | INFO     | app.x:y:1 - historical",
+    ])
+    msgs = [r["message"] for r in buf.get_snapshot()]
+    assert msgs == ["historical", "runtime"]  # chronological: history first
