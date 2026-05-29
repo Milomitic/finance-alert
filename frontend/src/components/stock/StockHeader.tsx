@@ -1,3 +1,5 @@
+import { Link } from "react-router-dom";
+
 import type { OhlcvBar, Stock, StockKpis } from "@/api/types";
 import { MarketStateBadge } from "@/components/dashboard/MarketStateBadge";
 import { StockLogo } from "@/components/dashboard/StockLogo";
@@ -137,11 +139,14 @@ export function StockHeader({ stock, kpis, ohlcv }: Props) {
               </span>
             </div>
             <div className="flex items-center gap-2 mt-3 flex-wrap">
-              {/* V3.3: bandiera del paese ora dentro il tag exchange.
-                  Compatto verticalmente (non più riga sotto il logo) e
-                  semanticamente corretto: la bandiera identifica il
-                  listing, che è proprietà dell'exchange. */}
-              <span className="inline-flex items-center gap-1.5 rounded-md bg-muted/70 dark:bg-muted/40 px-2.5 py-1 text-sm font-medium">
+              {/* Exchange / indice di riferimento — cliccabile: porta allo
+                  screener filtrato per questa borsa. La bandiera del paese
+                  vive dentro il tag (il listing è proprietà dell'exchange). */}
+              <Link
+                to={`/stocks?exchange=${encodeURIComponent(stock.exchange)}`}
+                title={`Vedi i titoli su ${stock.exchange}`}
+                className="inline-flex items-center gap-1.5 rounded-md bg-muted/70 dark:bg-muted/40 hover:bg-muted px-2.5 py-1 text-sm font-medium transition-colors"
+              >
                 {flag && (
                   <img
                     src={`/flags/${flag}.svg`}
@@ -154,16 +159,16 @@ export function StockHeader({ stock, kpis, ohlcv }: Props) {
                   />
                 )}
                 {stock.exchange}
-              </span>
+              </Link>
+              {/* Settore — cliccabile: porta alla pagina di dettaglio settore. */}
               {stock.sector && (
-                <span className="inline-flex items-center rounded-md bg-muted/70 dark:bg-muted/40 px-2.5 py-1 text-sm font-medium">
+                <Link
+                  to={`/sectors/${encodeURIComponent(stock.sector)}`}
+                  title={`Vedi il settore ${stock.sector}`}
+                  className="inline-flex items-center rounded-md bg-muted/70 dark:bg-muted/40 hover:bg-muted px-2.5 py-1 text-sm font-medium transition-colors"
+                >
                   {stock.sector}
-                </span>
-              )}
-              {stock.industry && (
-                <span className="text-sm text-muted-foreground truncate max-w-[420px]">
-                  {stock.industry}
-                </span>
+                </Link>
               )}
             </div>
           </div>
