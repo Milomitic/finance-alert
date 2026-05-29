@@ -1,8 +1,12 @@
 import { ExternalLink, Newspaper, TrendingDown, TrendingUp } from "lucide-react";
 
+import { stocks } from "@/api/stocks";
 import type { StockNewsItem } from "@/api/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { SectionTitle } from "@/components/ui/section-title";
+import { CardErrorOverlay } from "@/components/stock/CardErrorOverlay";
+import { CardRefreshButton } from "@/components/stock/CardRefreshButton";
+import { useCardRefresh } from "@/hooks/useCardRefresh";
 import { useStockNews } from "@/hooks/useStockNews";
 import { cn } from "@/lib/utils";
 
@@ -96,6 +100,10 @@ export function NewsCard({ ticker }: Props) {
   // overflow-y-auto) can absorb a long list. yfinance typically returns
   // 10–20 items, so 25 is a safe ceiling that still respects the cache.
   const q = useStockNews(ticker, 25);
+  const { refresh, isRefreshing, refreshError } = useCardRefresh({
+    queryKey: ["stock-news", ticker, 25],
+    mutationFn: () => stocks.news(ticker, 25, { force: true }),
+  });
   const items = q.data?.items ?? [];
 
   // Defensive client-side sort — backend already orders desc, but if a future
@@ -143,6 +151,11 @@ export function NewsCard({ ticker }: Props) {
               <span className="text-xs text-muted-foreground italic">
                 yfinance · cache 1h
               </span>
+              <CardRefreshButton
+                onClick={refresh}
+                busy={isRefreshing}
+                title="Aggiorna news"
+              />
             </div>
           }
         />
@@ -152,7 +165,13 @@ export function NewsCard({ ticker }: Props) {
             scroll inside the card so it never leaks into siblings.
             pr-1 prevents items from sitting under the scrollbar gutter. */}
         <div className="flex-1 min-h-0 overflow-y-auto pr-1 -mr-1">
-          {q.isLoading ? (
+          {refreshError ? (
+            <CardErrorOverlay
+              error={refreshError}
+              onRetry={refresh}
+              retrying={isRefreshing}
+            />
+          ) : q.isLoading ? (
             <div className="space-y-3">
               {[0, 1, 2, 3].map((i) => (
                 <div key={i} className="space-y-1.5">

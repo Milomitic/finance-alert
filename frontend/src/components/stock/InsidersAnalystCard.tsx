@@ -1,8 +1,12 @@
 import { Briefcase } from "lucide-react";
 
+import { stocks } from "@/api/stocks";
 import type { InsiderTransaction } from "@/api/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { SectionTitle } from "@/components/ui/section-title";
+import { CardErrorOverlay } from "@/components/stock/CardErrorOverlay";
+import { CardRefreshButton } from "@/components/stock/CardRefreshButton";
+import { useCardRefresh } from "@/hooks/useCardRefresh";
 import { useStockFundamentals } from "@/hooks/useStockFundamentals";
 import { cn } from "@/lib/utils";
 
@@ -276,6 +280,10 @@ function InsiderRow({ t }: { t: InsiderTransaction }) {
  */
 export function InsidersAnalystCard({ ticker }: Props) {
   const q = useStockFundamentals(ticker);
+  const { refresh, isRefreshing, refreshError } = useCardRefresh({
+    queryKey: ["stocks", ticker, "fundamentals"],
+    mutationFn: () => stocks.fundamentals(ticker, { force: true }),
+  });
 
   if (q.isLoading) {
     return (
@@ -315,14 +323,27 @@ export function InsidersAnalystCard({ ticker }: Props) {
           label="Insider transactions"
           className="mb-2"
           right={
-            latest.length > 0 ? (
-              <span className="text-xs text-muted-foreground tabular-nums">
-                ultime {latest.length}
-              </span>
-            ) : undefined
+            <div className="flex items-center gap-2">
+              {latest.length > 0 && (
+                <span className="text-xs text-muted-foreground tabular-nums">
+                  ultime {latest.length}
+                </span>
+              )}
+              <CardRefreshButton
+                onClick={refresh}
+                busy={isRefreshing}
+                title="Aggiorna transazioni insider"
+              />
+            </div>
           }
         />
-        {latest.length === 0 ? (
+        {refreshError ? (
+          <CardErrorOverlay
+            error={refreshError}
+            onRetry={refresh}
+            retrying={isRefreshing}
+          />
+        ) : latest.length === 0 ? (
           <div className="text-sm text-muted-foreground text-center py-3">
             Nessuna transazione insider direzionale recente
             <span className="block text-[10.5px] text-muted-foreground/70 mt-1">

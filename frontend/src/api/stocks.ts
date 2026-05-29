@@ -1,6 +1,7 @@
 import { api } from "./client";
 import type {
   FilterOptions,
+  Fundamentals,
   OhlcvBar,
   Stock,
   StockDetail,
@@ -100,9 +101,20 @@ export const stocks = {
     api<StockDetail>(
       `/api/stocks/${encodeURIComponent(ticker)}/detail?range=${range}`
     ),
-  news: (ticker: string, limit = 5) =>
+  /** `force=true` bypasses the backend cache and re-fetches upstream; an
+   *  upstream failure surfaces as a 502 ApiError (used by the card refresh). */
+  fundamentals: (ticker: string, opts: { force?: boolean } = {}) =>
+    api<Fundamentals>(
+      `/api/stocks/${encodeURIComponent(ticker)}/fundamentals${
+        opts.force ? "?force=true" : ""
+      }`
+    ),
+  /** `force=true` bypasses the cache + raises on upstream failure (502). */
+  news: (ticker: string, limit = 5, opts: { force?: boolean } = {}) =>
     api<StockNews>(
-      `/api/stocks/${encodeURIComponent(ticker)}/news?limit=${limit}`
+      `/api/stocks/${encodeURIComponent(ticker)}/news?limit=${limit}${
+        opts.force ? "&force=true" : ""
+      }`
     ),
   ohlcv: (ticker: string, bars = 120) =>
     api<OhlcvBar[]>(

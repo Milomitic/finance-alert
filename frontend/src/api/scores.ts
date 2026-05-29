@@ -45,6 +45,20 @@ export const scores = {
       { method: "POST" },
     ),
   /**
+   * Force a single-stock technical-score recomputation from stored OHLCV and
+   * persist it. Used by the "refresh" button on the technical card when the
+   * scan-time score is missing or stale. Returns the freshly persisted score.
+   *
+   * Note: the cross-sectional relative-strength percentile is reused from the
+   * prior row (recomputing it needs the whole universe); the four price
+   * dimensions are recomputed from the latest stored bars.
+   */
+  recomputeTechnicalForStock: (ticker: string) =>
+    api<TechnicalScoreDetail>(
+      `/api/stocks/${encodeURIComponent(ticker)}/technical/recompute`,
+      { method: "POST" },
+    ),
+  /**
    * Trigger a background recompute of every stock's composite score. Returns
    * 202 immediately; live progress is exposed by `recomputeStatus()` and
    * rendered in the persistent toast (mirror of the alert-scan flow).

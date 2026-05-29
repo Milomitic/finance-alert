@@ -1,4 +1,8 @@
+import { scores } from "@/api/scores";
 import { Card, CardContent } from "@/components/ui/card";
+import { CardErrorOverlay } from "@/components/stock/CardErrorOverlay";
+import { CardRefreshButton } from "@/components/stock/CardRefreshButton";
+import { useCardRefresh } from "@/hooks/useCardRefresh";
 import { useStockTechnical } from "@/hooks/useStockTechnical";
 import { scoreColor } from "@/lib/scoreMeta";
 import { cn } from "@/lib/utils";
@@ -21,6 +25,10 @@ const POSTURE_CLS: Record<string, string> = {
  *  the technical twin of StockScoreCard. */
 export function StockTechnicalCard({ ticker }: { ticker: string | undefined }) {
   const { data, isLoading, noScoreYet } = useStockTechnical(ticker);
+  const { refresh, isRefreshing, refreshError } = useCardRefresh({
+    queryKey: ["stock-technical", ticker],
+    mutationFn: () => scores.recomputeTechnicalForStock(ticker!),
+  });
   return (
     <Card>
       <CardContent className="p-4 space-y-3">
@@ -28,13 +36,26 @@ export function StockTechnicalCard({ ticker }: { ticker: string | undefined }) {
           <span className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
             Valutazione tecnica
           </span>
-          {data && (
-            <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold", POSTURE_CLS[data.posture] ?? "bg-muted text-muted-foreground")}>
-              {data.posture}
-            </span>
-          )}
+          <div className="flex items-center gap-2">
+            {data && (
+              <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold", POSTURE_CLS[data.posture] ?? "bg-muted text-muted-foreground")}>
+                {data.posture}
+              </span>
+            )}
+            <CardRefreshButton
+              onClick={refresh}
+              busy={isRefreshing}
+              title="Ricalcola score tecnico"
+            />
+          </div>
         </div>
-        {isLoading ? (
+        {refreshError ? (
+          <CardErrorOverlay
+            error={refreshError}
+            onRetry={refresh}
+            retrying={isRefreshing}
+          />
+        ) : isLoading ? (
           <div className="text-xs text-muted-foreground italic">Caricamento...</div>
         ) : noScoreYet || !data ? (
           <div className="text-xs text-muted-foreground italic">Punteggio tecnico non ancora calcolato.</div>

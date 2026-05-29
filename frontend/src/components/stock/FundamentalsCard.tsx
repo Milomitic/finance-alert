@@ -5,11 +5,15 @@ import {
   ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
 
+import { stocks } from "@/api/stocks";
 import type {
   FundamentalsAnnual, FundamentalsEarnings, FundamentalsQuarterly,
 } from "@/api/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { SectionTitle } from "@/components/ui/section-title";
+import { CardErrorOverlay } from "@/components/stock/CardErrorOverlay";
+import { CardRefreshButton } from "@/components/stock/CardRefreshButton";
+import { useCardRefresh } from "@/hooks/useCardRefresh";
 import { useStockFundamentals } from "@/hooks/useStockFundamentals";
 import { cn } from "@/lib/utils";
 
@@ -534,6 +538,10 @@ type TabKey = "annual" | "quarterly";
 
 export function FundamentalsCard({ ticker }: Props) {
   const q = useStockFundamentals(ticker);
+  const { refresh, isRefreshing, refreshError } = useCardRefresh({
+    queryKey: ["stocks", ticker, "fundamentals"],
+    mutationFn: () => stocks.fundamentals(ticker, { force: true }),
+  });
   // Default tab is now "quarterly" — the user reads quarterly results more
   // frequently than annual (earnings season cadence is the dominant info
   // flow), and the upcoming-earnings forecast row only renders here.
@@ -616,62 +624,79 @@ export function FundamentalsCard({ ticker }: Props) {
           label="Fundamentals"
           className="mb-2 shrink-0"
           right={
-            f.next_earnings_date ? (
-              <span
-                className="inline-flex items-center gap-1 text-sm px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-950/30 border border-blue-200/60 dark:border-blue-900/40 text-blue-700 dark:text-blue-300"
-                title={`Prossima earnings — EPS atteso: ${f.next_eps_estimate != null ? `$${f.next_eps_estimate.toFixed(2)}` : "—"}`}
-              >
-                <CalendarClock className="h-3 w-3" />
-                {shortDate(f.next_earnings_date)}
-                {f.next_eps_estimate != null && <> · est ${f.next_eps_estimate.toFixed(2)}</>}
-              </span>
-            ) : undefined
+            <div className="flex items-center gap-2">
+              {f.next_earnings_date ? (
+                <span
+                  className="inline-flex items-center gap-1 text-sm px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-950/30 border border-blue-200/60 dark:border-blue-900/40 text-blue-700 dark:text-blue-300"
+                  title={`Prossima earnings — EPS atteso: ${f.next_eps_estimate != null ? `$${f.next_eps_estimate.toFixed(2)}` : "—"}`}
+                >
+                  <CalendarClock className="h-3 w-3" />
+                  {shortDate(f.next_earnings_date)}
+                  {f.next_eps_estimate != null && <> · est ${f.next_eps_estimate.toFixed(2)}</>}
+                </span>
+              ) : null}
+              <CardRefreshButton
+                onClick={refresh}
+                busy={isRefreshing}
+                title="Aggiorna fundamentals"
+              />
+            </div>
           }
         />
 
-        {/* Tab strip — plain buttons, no Radix */}
-        <div className="inline-flex items-center gap-1 mb-2 shrink-0 self-start rounded-md bg-muted/50 p-0.5">
-          {([
-            { key: "annual" as const, label: "Annuale", enabled: hasAnnual },
-            { key: "quarterly" as const, label: "Trimestrale", enabled: hasQuarterly },
-          ]).map((t) => (
-            <button
-              key={t.key}
-              type="button"
-              disabled={!t.enabled}
-              onClick={() => setTab(t.key)}
-              className={cn(
-                "h-6 px-3 text-sm rounded font-medium transition-colors",
-                effective === t.key
-                  ? "bg-background shadow-sm"
-                  : "text-muted-foreground hover:text-foreground",
-                !t.enabled && "opacity-40 cursor-not-allowed",
-              )}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
+        {refreshError ? (
+          <CardErrorOverlay
+            error={refreshError}
+            onRetry={refresh}
+            retrying={isRefreshing}
+          />
+        ) : (
+          <>
+            {/* Tab strip — plain buttons, no Radix */}
+            <div className="inline-flex items-center gap-1 mb-2 shrink-0 self-start rounded-md bg-muted/50 p-0.5">
+              {([
+                { key: "annual" as const, label: "Annuale", enabled: hasAnnual },
+                { key: "quarterly" as const, label: "Trimestrale", enabled: hasQuarterly },
+              ]).map((t) => (
+                <button
+                  key={t.key}
+                  type="button"
+                  disabled={!t.enabled}
+                  onClick={() => setTab(t.key)}
+                  className={cn(
+                    "h-6 px-3 text-sm rounded font-medium transition-colors",
+                    effective === t.key
+                      ? "bg-background shadow-sm"
+                      : "text-muted-foreground hover:text-foreground",
+                    !t.enabled && "opacity-40 cursor-not-allowed",
+                  )}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
 
-        {/* Body — chart (fixed 200px shrink-0) + table fills remaining row
-            space and scrolls internally. Required because the parent grid
-            now caps the row at `lg:h-[640px]` (StockDetailPage); without
-            this chain the table would overflow the card's bottom edge. */}
-        <div className="flex-1 min-h-0 flex flex-col">
-          {effective === "annual" && hasAnnual && (
-            <AnnualTabBody annual={f.annual} earnings={f.earnings} />
-          )}
-          {effective === "quarterly" && hasQuarterly && (
-            <QuarterlyTabBody
-              quarterly={f.quarterly}
-              earnings={f.earnings}
-              nextEarningsDate={f.next_earnings_date}
-              nextEarningsWhen={f.next_earnings_when ?? null}
-              nextEpsEstimate={f.next_eps_estimate}
-              nextRevenueEstimate={f.next_revenue_estimate}
-            />
-          )}
-        </div>
+            {/* Body — chart (fixed 200px shrink-0) + table fills remaining row
+                space and scrolls internally. Required because the parent grid
+                now caps the row at `lg:h-[640px]` (StockDetailPage); without
+                this chain the table would overflow the card's bottom edge. */}
+            <div className="flex-1 min-h-0 flex flex-col">
+              {effective === "annual" && hasAnnual && (
+                <AnnualTabBody annual={f.annual} earnings={f.earnings} />
+              )}
+              {effective === "quarterly" && hasQuarterly && (
+                <QuarterlyTabBody
+                  quarterly={f.quarterly}
+                  earnings={f.earnings}
+                  nextEarningsDate={f.next_earnings_date}
+                  nextEarningsWhen={f.next_earnings_when ?? null}
+                  nextEpsEstimate={f.next_eps_estimate}
+                  nextRevenueEstimate={f.next_revenue_estimate}
+                />
+              )}
+            </div>
+          </>
+        )}
       </CardContent>
     </Card>
   );

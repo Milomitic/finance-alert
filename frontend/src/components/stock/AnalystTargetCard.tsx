@@ -1,8 +1,12 @@
 import { ArrowDown, ArrowRight, ArrowUp, Sparkles, Target, TrendingUp } from "lucide-react";
 
+import { stocks } from "@/api/stocks";
 import type { AnalystAction, AnalystPriceTarget, AnalystRating } from "@/api/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { SectionTitle } from "@/components/ui/section-title";
+import { CardErrorOverlay } from "@/components/stock/CardErrorOverlay";
+import { CardRefreshButton } from "@/components/stock/CardRefreshButton";
+import { useCardRefresh } from "@/hooks/useCardRefresh";
 import { useStockFundamentals } from "@/hooks/useStockFundamentals";
 import { cn } from "@/lib/utils";
 
@@ -479,6 +483,10 @@ function ActionsList({ actions }: { actions: AnalystAction[] }) {
  */
 export function AnalystTargetCard({ ticker }: Props) {
   const q = useStockFundamentals(ticker);
+  const { refresh, isRefreshing, refreshError } = useCardRefresh({
+    queryKey: ["stocks", ticker, "fundamentals"],
+    mutationFn: () => stocks.fundamentals(ticker, { force: true }),
+  });
 
   if (q.isLoading) {
     return (
@@ -486,6 +494,29 @@ export function AnalystTargetCard({ ticker }: Props) {
         <CardContent className="p-4 h-full flex flex-col">
           <SectionTitle icon={Target} label="Analyst" className="mb-2" />
           <div className="flex-1 animate-pulse bg-muted/40 rounded" />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const refreshBtn = (
+    <CardRefreshButton
+      onClick={refresh}
+      busy={isRefreshing}
+      title="Aggiorna dati analisti"
+    />
+  );
+
+  if (refreshError) {
+    return (
+      <Card className="h-full">
+        <CardContent className="p-4 h-full flex flex-col">
+          <SectionTitle icon={Target} label="Analyst" className="mb-2" right={refreshBtn} />
+          <CardErrorOverlay
+            error={refreshError}
+            onRetry={refresh}
+            retrying={isRefreshing}
+          />
         </CardContent>
       </Card>
     );
@@ -503,7 +534,7 @@ export function AnalystTargetCard({ ticker }: Props) {
     return (
       <Card className="h-full">
         <CardContent className="p-4 h-full flex flex-col">
-          <SectionTitle icon={Target} label="Analyst" className="mb-2" />
+          <SectionTitle icon={Target} label="Analyst" className="mb-2" right={refreshBtn} />
           <div className="flex-1 flex items-center justify-center text-[13px] text-muted-foreground text-center px-2">
             Nessuna stima analista disponibile.
           </div>
@@ -521,7 +552,7 @@ export function AnalystTargetCard({ ticker }: Props) {
           this card resilient: the price-target bar and ratings bar are fixed
           (shrink-0), only the actions list scrolls when there are many rows. */}
       <CardContent className="p-4 h-full flex flex-col gap-2 min-h-0">
-        <SectionTitle icon={Target} label="Analyst" className="shrink-0" />
+        <SectionTitle icon={Target} label="Analyst" className="shrink-0" right={refreshBtn} />
 
         {hasPT && pt && (
           <div className="shrink-0">
