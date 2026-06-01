@@ -241,19 +241,22 @@ export default function StockDetailPage() {
 
   return (
     <div className="space-y-3">
-      {/* Top hero row (test layout): identity/price header on the left, with
-          the Stock score + Technical score cards beside it on the right.
-          `card principale — card score — card score tecnico`. items-start so
-          the short header keeps its natural height next to the taller score
-          cards. */}
-      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,380px)_minmax(0,380px)] gap-3 items-stretch">
+      {/* Top hero row: identity/price header (left, 2fr) + the Stock score and
+          Technical score cards sharing the right column (1fr, split 50/50).
+          The [2fr_1fr] template MATCHES the Company-overview / Segnali row
+          below, so the right rail (score+tech above, Segnali below) lines up
+          by column — the two score cards together span exactly the Segnali
+          card's width. */}
+      <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-3 items-stretch">
         <StockHeader
           stock={d.stock}
           kpis={d.kpis}
           ohlcv={mergedOhlcv}
         />
-        <StockScoreCard ticker={ticker} />
-        <StockTechnicalCard ticker={ticker} />
+        <div className="grid grid-cols-2 gap-3 items-stretch">
+          <StockScoreCard ticker={ticker} />
+          <StockTechnicalCard ticker={ticker} />
+        </div>
       </div>
 
       {/* ETF components — renders only for ETFs (null for equities), so
