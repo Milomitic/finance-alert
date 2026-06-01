@@ -1,6 +1,6 @@
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Database, Layers } from "lucide-react";
-import type { PlatformHealth } from "@/api/platformHealth";
+import type { PlatformHealth, CacheKindStat } from "@/api/platformHealth";
 
 type Props = { cache: PlatformHealth["cache"] };
 
@@ -18,38 +18,71 @@ function fmtSize(mb: number): string {
   return `${(mb / 1024).toFixed(2)} GB`;
 }
 
-function CacheSection({
-  title,
-  l1,
-  l2,
+/** One freshness row for a cache tier. "ultimo aggiornamento" (newest) is the
+ * headline freshness figure — when the most recent fetch landed; "più vecchio"
+ * (oldest) is the staleness tail. */
+function TierRow({
+  tier,
+  subtitle,
+  newestAgeS,
   oldestAgeS,
 }: {
-  title: string;
-  l1: number;
-  l2: number;
+  tier: "L1" | "L2";
+  subtitle: string;
+  newestAgeS: number | null;
   oldestAgeS: number | null;
 }) {
-  const coverage = l2 > 0 ? Math.min(100, (l1 / l2) * 100) : 0;
+  return (
+    <div className="flex items-baseline justify-between gap-2 tabular-nums">
+      <span className="text-[11px] text-muted-foreground inline-flex items-baseline gap-1.5">
+        <span className="font-semibold text-foreground/80">{tier}</span>
+        <span className="text-[10px]">{subtitle}</span>
+      </span>
+      <span className="text-[11px] text-muted-foreground inline-flex items-baseline gap-1.5">
+        <span>
+          agg.{" "}
+          <span className="font-mono text-foreground/90">{fmtAge(newestAgeS)}</span> fa
+        </span>
+        <span className="text-[10px] opacity-70">
+          · meno fresco <span className="font-mono">{fmtAge(oldestAgeS)}</span>
+        </span>
+      </span>
+    </div>
+  );
+}
+
+function CacheSection({ title, k }: { title: string; k: CacheKindStat }) {
+  const coverage = k.l2_entries > 0 ? Math.min(100, (k.l1_entries / k.l2_entries) * 100) : 0;
   return (
     <div className="space-y-2 py-3 px-4 border-b last:border-b-0">
       <div className="flex items-center justify-between">
         <span className="text-sm font-medium">{title}</span>
         <span className="text-xs text-muted-foreground tabular-nums">
-          {l1} L1 · {l2} L2
+          {k.l1_entries} L1 · {k.l2_entries} L2
         </span>
       </div>
-      {l2 > 0 && (
+      {k.l2_entries > 0 && (
         <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
           <div
             className="h-full bg-sky-500 transition-all"
             style={{ width: `${coverage}%` }}
-            title={`L1 covers ${coverage.toFixed(0)}% of L2`}
+            title={`L1 copre ${coverage.toFixed(0)}% di L2`}
           />
         </div>
       )}
-      <div className="flex items-center justify-between text-[11px] text-muted-foreground tabular-nums">
-        <span>Oldest entry</span>
-        <span className="font-mono">{fmtAge(oldestAgeS)}</span>
+      <div className="space-y-1 pt-0.5">
+        <TierRow
+          tier="L1"
+          subtitle="in memoria"
+          newestAgeS={k.newest_age_s}
+          oldestAgeS={k.oldest_age_s}
+        />
+        <TierRow
+          tier="L2"
+          subtitle="persistente"
+          newestAgeS={k.l2_newest_age_s}
+          oldestAgeS={k.l2_oldest_age_s}
+        />
       </div>
     </div>
   );
@@ -72,18 +105,8 @@ export default function CacheCard({ cache }: Props) {
         </div>
       </CardHeader>
       <CardContent className="p-0 text-sm">
-        <CacheSection
-          title="Fundamentals"
-          l1={cache.fundamentals.l1_entries}
-          l2={cache.fundamentals.l2_entries}
-          oldestAgeS={cache.fundamentals.oldest_age_s}
-        />
-        <CacheSection
-          title="News"
-          l1={cache.news.l1_entries}
-          l2={cache.news.l2_entries}
-          oldestAgeS={cache.news.oldest_age_s}
-        />
+        <CacheSection title="Fundamentals" k={cache.fundamentals} />
+        <CacheSection title="News" k={cache.news} />
         <div className="py-3 px-4 bg-muted/10">
           <div className="flex items-center justify-between">
             <span className="text-sm font-medium inline-flex items-center gap-1.5">

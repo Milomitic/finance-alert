@@ -52,7 +52,12 @@ export type RecentScan = {
 export type CacheKindStat = {
   l1_entries: number;
   l2_entries: number;
+  // L1 (in-process) freshness — resets on restart.
   oldest_age_s: number | null;
+  newest_age_s: number | null;
+  // L2 (persisted fetch_cache) freshness — survives restarts.
+  l2_oldest_age_s: number | null;
+  l2_newest_age_s: number | null;
 };
 
 export type PlatformHealth = {

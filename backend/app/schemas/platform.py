@@ -57,7 +57,12 @@ class RecentScanOut(BaseModel):
 class CacheKindStatOut(BaseModel):
     l1_entries: int
     l2_entries: int
+    # L1 (in-process) freshness: oldest = staleness tail, newest = freshness head.
     oldest_age_s: float | None
+    newest_age_s: float | None = None
+    # L2 (persisted fetch_cache) freshness — survives restarts.
+    l2_oldest_age_s: float | None = None
+    l2_newest_age_s: float | None = None
 
 
 class CacheStatsOut(BaseModel):
