@@ -891,7 +891,14 @@ def _growth(stock: Stock, fundamentals: Fundamentals | None, sector_stats: Secto
 
     components: list[_Component] = []
 
-    # --- Revenue & earnings YoY (sector-aware blend) ----------------------
+    # --- Revenue & earnings growth (sector-aware blend) -------------------
+    # NOTE: micro.revenue_growth / micro.earnings_growth now carry the
+    # CURRENT-FY PROJECTED growth (analyst-estimate-inclusive: reported
+    # quarters + consensus for the not-yet-reported quarters vs prior-FY
+    # actual) when available, falling back to trailing YoY only when the
+    # projection is absent. The sector medians are aggregated from the same
+    # fields, so this stays apples-to-apples. See stock_fundamentals_service
+    # `_fetch_fresh` (prefer-the-projection block) for where the swap happens.
     rg = micro.revenue_growth if micro else None
     components.append(_Component(
         "revenue_growth", rg,

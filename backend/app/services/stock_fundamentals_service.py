@@ -176,9 +176,22 @@ class MicroData:
     free_cashflow: float | None = None
     operating_cashflow: float | None = None
     # ── Growth ─────────────────────────────────────────────────────────
-    revenue_growth: float | None = None              # Rev YoY (fraction)
-    earnings_growth: float | None = None             # EPS YoY (fraction)
+    # NOTE: as of the current-FY-projection change, `revenue_growth` and
+    # `earnings_growth` mean "current-fiscal-year PROJECTED growth"
+    # (analyst-estimate-inclusive: reported quarters + consensus for the
+    # quarters not yet reported, vs prior-FY actual) WHEN that projection is
+    # available — falling back to the trailing-YoY figure only when it isn't.
+    # The raw projection (yfinance earnings_estimate/revenue_estimate `0y`
+    # row's `growth`) is preserved in *_growth_curr_fy below for transparency.
+    revenue_growth: float | None = None              # Rev growth: curr-FY projected, trailing-YoY fallback
+    earnings_growth: float | None = None             # EPS growth: curr-FY projected, trailing-YoY fallback
     revenue_quarterly_growth: float | None = None    # Rev QoQ (fraction)
+    # Raw current-FY consensus growth from yfinance's estimate tables
+    # (`0y` row `growth`, a fraction). None when the tables are absent /
+    # empty / NaN — in which case the *_growth fields keep the trailing YoY.
+    # Kept separate for debugging + so the semantics shift above is auditable.
+    eps_growth_curr_fy: float | None = None
+    revenue_growth_curr_fy: float | None = None
     # Annualized CAGR over ~5y (computed by us — yfinance doesn't expose
     # multi-year growth). None when <2.5y of history or non-positive
     # endpoints (CAGR is undefined across a sign flip).
@@ -879,6 +892,45 @@ def _grossly_diverges(provided: float, derived: float) -> bool:
     return abs(provided) > 3.0 * abs(derived) + 0.05
 
 
+def _fy_growth_from_estimate_df(df: Any) -> float | None:
+    """Extract the current-fiscal-year consensus growth from a yfinance
+    `earnings_estimate` / `revenue_estimate` DataFrame.
+
+    Those tables are indexed by period (`0q` / `+1q` / `0y` / `+1y`) with a
+    `growth` column. The `0y` row's `growth` is the consensus CURRENT-FY
+    growth — analyst full-year estimate (reported quarters + estimates for
+    the quarters not yet reported) vs the prior-FY actual, as a fraction
+    (e.g. 0.1734 = +17.3%). That is exactly the projected figure we want.
+
+    Best-effort: returns None when the table is missing/empty, lacks the
+    `0y` row or the `growth` column, or the value is NaN / non-numeric.
+    Never raises.
+    """
+    try:
+        if df is None or not hasattr(df, "loc") or getattr(df, "empty", False):
+            return None
+        if "growth" not in getattr(df, "columns", []):
+            return None
+        if "0y" not in df.index:
+            return None
+        return _safe_float(df.loc["0y", "growth"])
+    except Exception:  # noqa: BLE001 — parse/shape failures are non-fatal
+        return None
+
+
+def _fy_growth_estimates(
+    earnings_estimate: Any, revenue_estimate: Any
+) -> tuple[float | None, float | None]:
+    """Return (eps_curr_fy_growth, revenue_curr_fy_growth) read from the
+    yfinance estimate DataFrames. Each is the `0y` row's `growth` (current-FY
+    consensus growth, a fraction) or None when unavailable. Best-effort —
+    swallows any parse/network artifact and degrades to (None, None)."""
+    return (
+        _fy_growth_from_estimate_df(earnings_estimate),
+        _fy_growth_from_estimate_df(revenue_estimate),
+    )
+
+
 def _fill_growth_fallbacks(f: "Fundamentals") -> None:
     """Make the three growth metrics consistent with the EPS/revenue
     history shown in the same fundamentals card.
@@ -1327,6 +1379,8 @@ def _do_yf_call(ticker: str) -> dict:
         "recommendations": None,
         "analyst_price_targets": None,
         "upgrades_downgrades": None,
+        "earnings_estimate": None,
+        "revenue_estimate": None,
     }
     try:
         out["income_stmt"] = t.income_stmt
@@ -1384,6 +1438,20 @@ def _do_yf_call(ticker: str) -> dict:
         if isinstance(normalized, (RateLimitError, UpstreamTimeout)):
             raise normalized from exc
         logger.debug(f"[fund] upgrades_downgrades {ticker}: {exc}")
+    try:
+        out["earnings_estimate"] = t.earnings_estimate
+    except Exception as exc:  # noqa: BLE001
+        normalized = _normalize_yf_error(exc)
+        if isinstance(normalized, (RateLimitError, UpstreamTimeout)):
+            raise normalized from exc
+        logger.debug(f"[fund] earnings_estimate {ticker}: {exc}")
+    try:
+        out["revenue_estimate"] = t.revenue_estimate
+    except Exception as exc:  # noqa: BLE001
+        normalized = _normalize_yf_error(exc)
+        if isinstance(normalized, (RateLimitError, UpstreamTimeout)):
+            raise normalized from exc
+        logger.debug(f"[fund] revenue_estimate {ticker}: {exc}")
     return out
 
 
@@ -1538,6 +1606,19 @@ def _fetch_fresh(ticker: str) -> Fundamentals:
         except Exception as e:
             logger.debug(f"[fund] info {ticker}: {e}")
             _maybe_record(e)
+        # Current-FY projected growth — read the consensus `0y` growth from
+        # yfinance's earnings_estimate / revenue_estimate tables. Stored raw
+        # on micro for transparency; the prefer-logic below promotes them
+        # over the trailing-YoY figure. Best-effort (the helper swallows
+        # missing/empty/NaN tables → None) so it never blocks the build.
+        try:
+            eps_fy, rev_fy = _fy_growth_estimates(
+                raw.get("earnings_estimate"), raw.get("revenue_estimate")
+            )
+            f.micro.eps_growth_curr_fy = eps_fy
+            f.micro.revenue_growth_curr_fy = rev_fy
+        except Exception as e:
+            logger.debug(f"[fund] fy-growth estimates {ticker}: {e}")
         # Growth fallback — derive EPS YoY/QoQ + Rev YoY from the
         # historical series when yfinance's `info` left them null
         # (common for non-US / thin-coverage tickers). Runs AFTER
@@ -1547,6 +1628,20 @@ def _fetch_fresh(ticker: str) -> Fundamentals:
             _fill_growth_fallbacks(f)
         except Exception as e:
             logger.debug(f"[fund] growth fallback {ticker}: {e}")
+        # Prefer the current-FY PROJECTION over trailing YoY. Runs AFTER the
+        # reconcile pass so the projection wins: the projected figure is
+        # estimates-inclusive (reported quarters + consensus for the not-yet-
+        # reported quarters vs prior-FY actual) and is the metric the Growth
+        # scoring pillar should grade on. The reconciled trailing-YoY value
+        # remains the fallback whenever the projection is unavailable.
+        # Overwriting micro.{earnings,revenue}_growth here means BOTH the
+        # per-stock Growth components AND the sector medians (aggregated from
+        # these same fields by sector_stats_service) use the projected figure
+        # automatically — apples-to-apples, with no score_service change.
+        if f.micro.eps_growth_curr_fy is not None:
+            f.micro.earnings_growth = f.micro.eps_growth_curr_fy
+        if f.micro.revenue_growth_curr_fy is not None:
+            f.micro.revenue_growth = f.micro.revenue_growth_curr_fy
         try:
             # Pull more candidates upstream than the UI shows because the
             # significance filter can drop a chunk of rows (gifts, admin

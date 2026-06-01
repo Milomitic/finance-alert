@@ -22,7 +22,10 @@ def test_write_then_read_roundtrips_fundamentals(db: Session):
         next_earnings_date="2026-08-07",
         next_eps_estimate=1.43,
         next_revenue_estimate=90_000_000_000.0,
-        micro=MicroData(trailing_pe=27.5, return_on_equity=1.41),
+        micro=MicroData(
+            trailing_pe=27.5, return_on_equity=1.41,
+            eps_growth_curr_fy=0.173, revenue_growth_curr_fy=0.149,
+        ),
         price_target=AnalystPriceTarget(
             current=210.0, low=180.0, mean=240.0, median=235.0, high=300.0,
         ),
@@ -44,6 +47,9 @@ def test_write_then_read_roundtrips_fundamentals(db: Session):
     # Nested dataclass: must be reconstructed, not a dict
     assert isinstance(out.micro, MicroData)
     assert out.micro.trailing_pe == 27.5
+    # New current-FY projection fields round-trip through L2.
+    assert out.micro.eps_growth_curr_fy == 0.173
+    assert out.micro.revenue_growth_curr_fy == 0.149
     assert isinstance(out.price_target, AnalystPriceTarget)
     assert out.price_target.mean == 240.0
     assert len(out.analyst_actions) == 1

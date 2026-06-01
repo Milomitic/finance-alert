@@ -101,6 +101,77 @@ def test_hydrate_l1_from_db_returns_loaded_and_skipped_counts(db):
     assert result == (0, 0)
 
 
+def _raw_payload(**overrides):
+    """A complete raw-fetch dict (the shape `_do_yf_call` / `_yf_fetch_with_retry`
+    return) with every endpoint None unless overridden."""
+    base = {
+        "income_stmt": None,
+        "quarterly_income_stmt": None,
+        "earnings_dates": None,
+        "info": None,
+        "insider_transactions": None,
+        "recommendations": None,
+        "analyst_price_targets": None,
+        "upgrades_downgrades": None,
+        "earnings_estimate": None,
+        "revenue_estimate": None,
+    }
+    base.update(overrides)
+    return base
+
+
+def test_curr_fy_projection_overrides_trailing_yoy(monkeypatch):
+    """When the estimate tables yield a 0y growth, micro.earnings_growth /
+    micro.revenue_growth end up equal to the PROJECTED value — not the
+    trailing-YoY value yfinance's info gave."""
+    import pandas as pd
+
+    from app.services import stock_fundamentals_service as svc
+    from app.services import yfinance_health
+
+    yfinance_health.reset()
+
+    eps_est = pd.DataFrame({"growth": [0.30]}, index=["0y"])
+    rev_est = pd.DataFrame({"growth": [0.25]}, index=["0y"])
+    # info gives trailing YoY of +5% / +6% — should be overridden.
+    info = {"earningsGrowth": 0.05, "revenueGrowth": 0.06}
+
+    monkeypatch.setattr(
+        svc, "_yf_fetch_with_retry",
+        lambda _t: _raw_payload(info=info, earnings_estimate=eps_est, revenue_estimate=rev_est),
+    )
+
+    f = svc._fetch_fresh("AAPL")
+    # Raw projection stored for transparency …
+    assert f.micro.eps_growth_curr_fy == 0.30
+    assert f.micro.revenue_growth_curr_fy == 0.25
+    # … and it WON the swap over trailing YoY.
+    assert f.micro.earnings_growth == 0.30
+    assert f.micro.revenue_growth == 0.25
+
+
+def test_trailing_yoy_kept_when_projection_absent(monkeypatch):
+    """No estimate tables → curr-FY fields stay None and the trailing/
+    reconciled YoY from info flows through unchanged."""
+    from app.services import stock_fundamentals_service as svc
+    from app.services import yfinance_health
+
+    yfinance_health.reset()
+
+    info = {"earningsGrowth": 0.05, "revenueGrowth": 0.06}
+    monkeypatch.setattr(
+        svc, "_yf_fetch_with_retry",
+        lambda _t: _raw_payload(info=info),  # no estimate tables
+    )
+
+    f = svc._fetch_fresh("AAPL")
+    assert f.micro.eps_growth_curr_fy is None
+    assert f.micro.revenue_growth_curr_fy is None
+    # Trailing YoY preserved (no reported series to reconcile against).
+    assert f.micro.earnings_growth == 0.05
+    assert f.micro.revenue_growth == 0.06
+
+
 def test_breaker_records_failure_on_each_retry_attempt(monkeypatch):
     """The retry loop must inform yfinance_health on every attempt failure,
     not just the final exhaustion. Without this, with retries=3 the breaker

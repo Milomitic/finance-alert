@@ -1,5 +1,8 @@
 """`_fill_growth_fallbacks` derives EPS YoY/QoQ + Rev YoY from the
 historical series when yfinance's `info` left them null."""
+import numpy as np
+import pandas as pd
+
 from app.services.stock_fundamentals_service import (
     AnnualPoint,
     EarningsPoint,
@@ -8,8 +11,24 @@ from app.services.stock_fundamentals_service import (
     QuarterlyPoint,
     _cagr_5y,
     _fill_growth_fallbacks,
+    _fy_growth_estimates,
+    _fy_growth_from_estimate_df,
     _growth,
 )
+
+
+def _estimate_df(growth_by_period: dict[str, float | None]) -> pd.DataFrame:
+    """Build a yfinance-shaped estimate DataFrame: indexed by period
+    (0q/+1q/0y/+1y) with a `growth` column (plus a noise column to prove
+    we read the right one)."""
+    periods = list(growth_by_period.keys())
+    return pd.DataFrame(
+        {
+            "avg": [1.0] * len(periods),
+            "growth": [growth_by_period[p] for p in periods],
+        },
+        index=periods,
+    )
 
 
 def _eps(date: str, reported: float | None) -> EarningsPoint:
@@ -226,3 +245,50 @@ def test_fill_computes_qoq_revenue_and_5y_cagrs():
     assert f.micro.revenue_growth_5y > 0
     assert f.micro.earnings_growth_5y is not None
     assert f.micro.earnings_growth_5y > 0
+
+
+# ── Current-FY projected-growth extraction (_fy_growth_estimates) ──────────
+
+def test_fy_growth_reads_0y_row_growth():
+    """The `0y` row's `growth` column is the current-FY consensus growth."""
+    df = _estimate_df({"0q": 0.05, "+1q": 0.06, "0y": 0.1734, "+1y": 0.21})
+    assert _fy_growth_from_estimate_df(df) == 0.1734
+
+
+def test_fy_growth_estimates_pairs_eps_and_revenue():
+    eps_df = _estimate_df({"0y": 0.173})
+    rev_df = _estimate_df({"0y": 0.149})
+    eps_fy, rev_fy = _fy_growth_estimates(eps_df, rev_df)
+    assert eps_fy == 0.173
+    assert rev_fy == 0.149
+
+
+def test_fy_growth_none_on_missing_table():
+    assert _fy_growth_from_estimate_df(None) is None
+    eps_fy, rev_fy = _fy_growth_estimates(None, None)
+    assert eps_fy is None and rev_fy is None
+
+
+def test_fy_growth_none_on_empty_df():
+    assert _fy_growth_from_estimate_df(pd.DataFrame()) is None
+
+
+def test_fy_growth_none_when_0y_row_absent():
+    # Only quarterly rows, no full-year row.
+    df = _estimate_df({"0q": 0.05, "+1q": 0.06})
+    assert _fy_growth_from_estimate_df(df) is None
+
+
+def test_fy_growth_none_when_growth_column_absent():
+    df = pd.DataFrame({"avg": [1.0]}, index=["0y"])
+    assert _fy_growth_from_estimate_df(df) is None
+
+
+def test_fy_growth_none_on_nan():
+    df = _estimate_df({"0y": np.nan})
+    assert _fy_growth_from_estimate_df(df) is None
+
+
+def test_fy_growth_none_on_non_numeric():
+    df = _estimate_df({"0y": None})
+    assert _fy_growth_from_estimate_df(df) is None
