@@ -226,25 +226,29 @@ interface Props {
 interface GaugeProps {
   score: number;
   size?: number;
+  /** Sector-average composite — drawn as a reference tick on the arc. */
+  sectorAvg?: number | null;
 }
 
-function ScoreGauge({ score, size = 180 }: GaugeProps) {
+function ScoreGauge({ score, size = 180, sectorAvg }: GaugeProps) {
   const cx = size / 2;
   const cy = size / 2;
-  const radius = size / 2 - 12; // 12px stroke + tiny padding
-  const stroke = 12;
+  const stroke = 11;
+  const radius = size / 2 - stroke / 2 - 2; // keep the round caps inside the box
   const clamped = Math.max(0, Math.min(100, score));
-  // Arc spans 180° (left half-circle): angle 0 at the left, 180 at the right.
-  // We sweep `pct` of that range from the left end.
-  // SVG: pathLength + stroke-dasharray gives us a clean way to render a partial arc.
-  // Build a half-circle path going from (cx - r, cy) clockwise to (cx + r, cy).
-  const startX = cx - radius;
-  const startY = cy;
-  const endX = cx + radius;
-  const endY = cy;
-  // We use pathLength=100 so dasharray maps directly to percent.
-  const dashLen = clamped;
   const fillColor = scoreHex(score);
+
+  // Map a 0..100 value to its point on the 180° arc (π at 0 → 0 at 100).
+  // Exact trig (no dasharray) so the fill ENDS precisely at the score angle —
+  // the old pathLength+dasharray + round-cap bled a few % past the value.
+  const pointAt = (pct: number) => {
+    const ang = Math.PI * (1 - Math.max(0, Math.min(100, pct)) / 100);
+    return { x: cx + Math.cos(ang) * radius, y: cy - Math.sin(ang) * radius };
+  };
+  const start = pointAt(0);
+  const end = pointAt(100);
+  const fillEnd = pointAt(clamped);
+  const valuePt = fillEnd;
 
   return (
     <svg
@@ -255,9 +259,9 @@ function ScoreGauge({ score, size = 180 }: GaugeProps) {
       role="img"
       aria-label={`Score ${score.toFixed(1)} su 100`}
     >
-      {/* Track */}
+      {/* Track (full semicircle) */}
       <path
-        d={`M ${startX} ${startY} A ${radius} ${radius} 0 0 1 ${endX} ${endY}`}
+        d={`M ${start.x} ${start.y} A ${radius} ${radius} 0 0 1 ${end.x} ${end.y}`}
         fill="none"
         stroke="currentColor"
         strokeOpacity={0.12}
@@ -265,24 +269,23 @@ function ScoreGauge({ score, size = 180 }: GaugeProps) {
         strokeLinecap="round"
         className="text-foreground"
       />
-      {/* Fill */}
-      <path
-        d={`M ${startX} ${startY} A ${radius} ${radius} 0 0 1 ${endX} ${endY}`}
-        fill="none"
-        stroke={fillColor}
-        strokeWidth={stroke}
-        strokeLinecap="round"
-        pathLength={100}
-        strokeDasharray={`${dashLen} 100`}
-        style={{ transition: "stroke-dasharray 400ms ease-out" }}
-      />
-      {/* Tick marks at 40 / 60 / 80 — the threshold boundaries */}
+      {/* Fill — explicit sub-arc ending exactly at the score angle */}
+      {clamped > 0.5 && (
+        <path
+          d={`M ${start.x} ${start.y} A ${radius} ${radius} 0 0 1 ${fillEnd.x} ${fillEnd.y}`}
+          fill="none"
+          stroke={fillColor}
+          strokeWidth={stroke}
+          strokeLinecap="round"
+        />
+      )}
+      {/* Threshold ticks at 40 / 60 / 80 */}
       {[40, 60, 80].map((t) => {
-        const angle = Math.PI * (1 - t / 100); // π at 0, 0 at 100
-        const tx = cx + Math.cos(angle) * radius;
-        const ty = cy - Math.sin(angle) * radius;
-        const tx2 = cx + Math.cos(angle) * (radius - stroke / 2 - 2);
-        const ty2 = cy - Math.sin(angle) * (radius - stroke / 2 - 2);
+        const angle = Math.PI * (1 - t / 100);
+        const tx = cx + Math.cos(angle) * (radius + stroke / 2);
+        const ty = cy - Math.sin(angle) * (radius + stroke / 2);
+        const tx2 = cx + Math.cos(angle) * (radius - stroke / 2);
+        const ty2 = cy - Math.sin(angle) * (radius - stroke / 2);
         return (
           <line
             key={t}
@@ -291,12 +294,44 @@ function ScoreGauge({ score, size = 180 }: GaugeProps) {
             x2={tx2}
             y2={ty2}
             stroke="currentColor"
-            strokeOpacity={0.35}
+            strokeOpacity={0.3}
             strokeWidth={1}
             className="text-foreground"
           />
         );
       })}
+      {/* Sector-average reference: a bold tick straddling the arc at the
+          sector mean, so the user sees this stock vs its peers at a glance. */}
+      {sectorAvg != null && (() => {
+        const ang = Math.PI * (1 - Math.max(0, Math.min(100, sectorAvg)) / 100);
+        const r1 = radius + stroke / 2 + 3;
+        const r2 = radius - stroke / 2 - 3;
+        return (
+          <line
+            x1={cx + Math.cos(ang) * r1}
+            y1={cy - Math.sin(ang) * r1}
+            x2={cx + Math.cos(ang) * r2}
+            y2={cy - Math.sin(ang) * r2}
+            stroke="currentColor"
+            strokeWidth={2}
+            strokeLinecap="round"
+            className="text-foreground/70"
+          >
+            <title>{`Media settore: ${sectorAvg.toFixed(1)}`}</title>
+          </line>
+        );
+      })()}
+      {/* Value dot — pinpoints the exact score on the arc */}
+      {clamped > 0.5 && (
+        <circle
+          cx={valuePt.x}
+          cy={valuePt.y}
+          r={stroke / 2 + 1}
+          fill={fillColor}
+          stroke="hsl(var(--card))"
+          strokeWidth={2}
+        />
+      )}
     </svg>
   );
 }
@@ -712,7 +747,7 @@ export function StockScoreCard({ ticker }: Props) {
           horizontally so the gauge area stays vertically tight. */}
       <div className="flex items-center justify-center gap-3">
         <div className="relative shrink-0">
-          <ScoreGauge score={composite} size={100} />
+          <ScoreGauge score={composite} size={96} sectorAvg={data.sector_avg} />
           <div className="absolute inset-0 flex flex-col items-center justify-end pb-0.5">
             <span
               className={cn(
@@ -724,7 +759,7 @@ export function StockScoreCard({ ticker }: Props) {
             </span>
           </div>
         </div>
-        <div className="flex flex-col items-start gap-1.5">
+        <div className="flex flex-col items-start gap-1">
           <span className="text-[12px] uppercase tracking-wider text-muted-foreground">
             {scoreLabel(composite)}
           </span>
@@ -736,6 +771,18 @@ export function StockScoreCard({ ticker }: Props) {
           >
             {RISK_LABEL[data.risk_tier]}
           </span>
+          {data.sector_avg != null && (
+            <span
+              className="mt-0.5 inline-flex items-center gap-1 text-[10px] text-muted-foreground"
+              title={`Media composito del settore (${data.sector_avg.toFixed(1)}) — la tacca sul gauge`}
+            >
+              <span className="h-2 w-0.5 rounded-sm bg-foreground/70" />
+              media settore{" "}
+              <span className="font-semibold tabular-nums text-foreground/80">
+                {data.sector_avg.toFixed(1)}
+              </span>
+            </span>
+          )}
         </div>
       </div>
 

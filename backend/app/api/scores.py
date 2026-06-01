@@ -9,7 +9,7 @@ from typing import Annotated, get_args
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from loguru import logger
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
@@ -36,6 +36,21 @@ from app.services import (
 from app.services.scan_status import build_scan_status_out
 
 router = APIRouter(prefix="/api", tags=["scores"])
+
+
+def _sector_avg_composite(db: Session, sector: str | None) -> float | None:
+    """Average composite score across all scored stocks in `sector` — the
+    gauge's 'media settore' reference marker. None when the sector is
+    unknown/empty or has no scored peers."""
+    if not sector:
+        return None
+    val = db.execute(
+        select(func.avg(StockScore.composite))
+        .select_from(StockScore)
+        .join(Stock, Stock.id == StockScore.stock_id)
+        .where(Stock.sector == sector)
+    ).scalar()
+    return round(float(val), 1) if val is not None else None
 
 
 _VALID_RISK = set(get_args(RiskTier))
@@ -103,6 +118,7 @@ def get_stock_score(
         risk_tier=score.risk_tier,  # type: ignore[arg-type]
         computed_at=score.computed_at,
         breakdown=breakdown,
+        sector_avg=_sector_avg_composite(db, stock.sector),
     )
 
 
@@ -268,6 +284,7 @@ def recompute_stock_score(
         risk_tier=new_score.risk_tier,  # type: ignore[arg-type]
         computed_at=new_score.computed_at,
         breakdown=breakdown,
+        sector_avg=_sector_avg_composite(db, stock.sector),
     )
 
 

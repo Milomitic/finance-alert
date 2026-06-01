@@ -68,6 +68,14 @@ export function StockTechnicalCard({ ticker }: { ticker: string | undefined }) {
                 {data.composite.toFixed(0)}
               </span>
               <span className="text-xs text-muted-foreground">/ 100 composito</span>
+              {data.signals != null && (
+                <span className="ml-auto self-center text-[11px] text-muted-foreground">
+                  Segnale recente: confidenza{" "}
+                  <span className="font-semibold text-foreground/80">
+                    {data.signals.toFixed(0)}%
+                  </span>
+                </span>
+              )}
             </div>
             <div className="space-y-1">
               {DIMS.map((d) => {
@@ -86,11 +94,6 @@ export function StockTechnicalCard({ ticker }: { ticker: string | undefined }) {
                 );
               })}
             </div>
-            {data.signals != null && (
-              <div className="text-[11px] text-muted-foreground">
-                Segnale recente: confidenza {data.signals.toFixed(0)}%
-              </div>
-            )}
           </>
         )}
       </CardContent>

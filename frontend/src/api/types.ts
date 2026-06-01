@@ -877,6 +877,9 @@ export interface StockScore {
   risk_tier: RiskTier;
   computed_at: string;
   breakdown: ScoreBreakdown;
+  /** Average composite of all scored stocks in this stock's sector — the
+   *  gauge's "media settore" reference marker. Null when unavailable. */
+  sector_avg?: number | null;
 }
 
 export interface TopPickItem {

@@ -47,6 +47,9 @@ class StockScoreOut(BaseModel):
     risk_tier: RiskTier
     computed_at: datetime
     breakdown: dict[str, Any]
+    # Average composite of all scored stocks in this stock's sector — drives the
+    # gauge's "media settore" reference marker. None when sector unknown/empty.
+    sector_avg: float | None = None
 
     @field_serializer("computed_at")
     def _serialize_computed_at(self, value: datetime) -> str:
