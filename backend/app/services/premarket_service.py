@@ -216,10 +216,23 @@ def premarket_quote(ticker: str) -> tuple[float, float] | None:
     try:
         import yfinance as yf
 
+        # NOTE: no group_by="ticker" here. For a SINGLE ticker that yields
+        # columns ('AAPL','Close') → `"Close" in df` is False and
+        # _premarket_from_frame bails (the bug that left the detail header on
+        # the stale close). Modern yfinance (1.3.x) still returns 2-level
+        # columns even without group_by — (field, ticker) — so collapse to a
+        # flat single-ticker frame below.
         df = yf.download(
             ticker, period="5d", interval="5m", prepost=True,
-            group_by="ticker", auto_adjust=False, progress=False, threads=False,
+            auto_adjust=False, progress=False, threads=False,
         )
+        if df is not None and getattr(df.columns, "nlevels", 1) > 1:
+            if ticker in set(df.columns.get_level_values(-1)):
+                df = df.xs(ticker, axis=1, level=-1)   # (field, ticker)
+            elif ticker in set(df.columns.get_level_values(0)):
+                df = df.xs(ticker, axis=1, level=0)    # (ticker, field)
+            else:
+                df = df.droplevel(0, axis=1)           # last resort
         res = _premarket_from_frame(df)
         if res is not None:
             pm_price, prev_close, _vol = res
