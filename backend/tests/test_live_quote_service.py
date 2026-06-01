@@ -1,6 +1,6 @@
 """Tests for live_quote_service."""
 import time
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 import pytest
 
@@ -265,3 +265,43 @@ def test_breaker_open_uses_eod_fallback(db, monkeypatch: pytest.MonkeyPatch) -> 
     assert q.market_state == "CLOSED"
     assert q.change_abs == pytest.approx(4.5)
     assert q.change_pct == pytest.approx(4.5)
+
+
+def _patch_premarket(monkeypatch, fi, *, last_two):
+    """Force the pre-market path: market closed + in the US pre-market window,
+    with a stubbed latest-two-bars (date, last_close, prev_close)."""
+    class FakeTicker:
+        def __init__(self, _t):
+            self.fast_info = fi
+    monkeypatch.setattr("yfinance.Ticker", FakeTicker)
+    monkeypatch.setattr("app.services.live_quote_service._is_market_open", lambda *_a, **_k: False)
+    monkeypatch.setattr("app.services.live_quote_service._is_premarket", lambda *_a, **_k: True)
+    monkeypatch.setattr("app.services.live_quote_service._market_today", lambda _t: date(2026, 6, 1))
+    monkeypatch.setattr("app.services.live_quote_service._latest_two_bars", lambda _t: last_two)
+    monkeypatch.setattr("app.services.live_quote_service._provisional_today", lambda *_a, **_k: None)
+    monkeypatch.setattr("app.services.live_quote_service._override_prev_close_from_ohlcv", lambda _t, _l: None)
+
+
+def test_premarket_echo_of_last_close_is_not_PRE(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Pre-market lastPrice ≈ our last charted close (no real trade yet) must NOT
+    light the PRE badge — even when yfinance's previousClose lags a day (which
+    used to falsely trigger the prev-based guard → phantom duplicate candle)."""
+    fi = _fake_fast_info({"lastPrice": 100.02, "previousClose": 95.0, "currency": "USD"})
+    _patch_premarket(monkeypatch, fi, last_two=(date(2026, 5, 30), 100.0, 98.0))
+    q = live_quote_service.get_quote("AAPL", force_refresh=True)
+    assert q.market_state != "PRE"        # no phantom PRE
+    assert q.price == 100.0               # the real last close, not the echo
+    assert q.as_of_date == "2026-05-30"   # yesterday → chart won't append a today bar
+
+
+def test_premarket_real_move_is_PRE_vs_last_close(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A genuine pre-market price (differs from our last close > EPS) lights PRE
+    and reports the move vs the ACTUAL last close (so header + chart agree)."""
+    fi = _fake_fast_info({"lastPrice": 103.0, "previousClose": 95.0, "currency": "USD"})
+    _patch_premarket(monkeypatch, fi, last_two=(date(2026, 5, 30), 100.0, 98.0))
+    q = live_quote_service.get_quote("AAPL", force_refresh=True)
+    assert q.market_state == "PRE"
+    assert q.price == 103.0               # the live pre-market price
+    assert q.prev_close == 100.0          # change anchored on the actual last close
+    assert q.change_abs is not None and abs(q.change_abs - 3.0) < 1e-6
+    assert q.as_of_date == "2026-06-01"   # today → distinct candle

@@ -545,16 +545,29 @@ def _fetch_fresh(ticker: str, *, allow_remote_today_fetch: bool = True) -> LiveQ
             #     reliable pre-open (the `_override` machinery exists for
             #     the DIFFERENT problem of wrong previousClose during
             #     sharp INTRADAY moves, which doesn't apply pre-market).
-            # Guard: if lastPrice ≈ previousClose (no real pre-market
-            # trade yet, yfinance echoes the prior close), fall back to
-            # the EOD close-to-close rather than report a misleading ~0%.
+            # Phantom pre-market candle guard. yfinance fast_info during the
+            # pre-market window frequently ECHOES the prior session's close as
+            # `lastPrice` (no real pre-market trade yet), while its
+            # `previousClose` can lag a day — so the old `abs(last-prev)/prev`
+            # test read *yesterday's daily move* as a "pre-market move", lit the
+            # PRE badge, and reported a price that merely duplicates the last
+            # charted close → two identical candles + a "live" price that never
+            # moves. Anchor the decision on OUR latest charted close instead:
+            # only treat this as a live pre-market quote when `last` actually
+            # DIFFERS from that close (> EPS). Reused below for the closed path.
+            two = _latest_two_bars(ticker)
+            db_last_close = two[1] if two is not None else None
             if (
                 _is_premarket(ticker)
-                and last is not None and prev is not None and prev > 0
-                and abs(last - prev) / prev > _PREMARKET_EPS
+                and last is not None
+                and db_last_close is not None and db_last_close > 0
+                and abs(last - db_last_close) / db_last_close > _PREMARKET_EPS
             ):
                 last_eff = last
-                prev_effective = prev
+                # Change = pre-market price vs the ACTUAL last close (the bar
+                # the chart shows) so the header move and the chart candle
+                # agree — and the appended candle is genuinely distinct.
+                prev_effective = db_last_close
                 state = "PRE"
                 as_of = today
             else:
@@ -564,7 +577,6 @@ def _fetch_fresh(ticker: str, *, allow_remote_today_fetch: bool = True) -> LiveQ
                 # with today's close — official daily bar if published,
                 # else the last intraday tick — so the chart/header keep
                 # showing today instead of snapping back to yesterday.
-                two = _latest_two_bars(ticker)
                 db_has_today = two is not None and two[0] == today
                 if two is not None and db_has_today:
                     last_eff, prev_effective = two[1], two[2]
