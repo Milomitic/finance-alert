@@ -3,7 +3,7 @@ into the dashboard market_snapshot payload."""
 import json
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 
 import pandas as pd
 from sqlalchemy import select
@@ -638,13 +638,29 @@ def _load_metrics(db: Session) -> tuple[list[StockMetrics], list[tuple[str, str]
 
     stocks = db.execute(select(Stock)).scalars().all()
 
-    # Bulk-load OHLCV for all stocks (one query, ordered by stock+date)
+    # Bulk-load OHLCV for all stocks in ONE query. Two optimisations over the
+    # naive `select(OhlcvDaily)` it replaces — which loaded the FULL multi-year
+    # history as hydrated ORM objects (~3.4M rows / ~32s on the live DB) only to
+    # use the last 252 bars per stock:
+    #   1. date floor — only the trailing ~400 calendar days (≥252 trading bars,
+    #      the 52w window) → drops ~90% of the rows;
+    #   2. lightweight column select — Row tuples, not ORM objects.
+    # Together ~32s → ~1.5s, which is the bulk of the post-scan
+    # "market_snapshot" (breadth) phase the progress bar sits on. A stock with
+    # no bar in the window is genuinely stale/delisted and is omitted from
+    # breadth (its 252-bar window would otherwise be years-old, stale data).
+    cutoff = date.today() - timedelta(days=400)
     ohlcv_rows = db.execute(
-        select(OhlcvDaily).order_by(OhlcvDaily.stock_id, OhlcvDaily.date)
-    ).scalars().all()
+        select(
+            OhlcvDaily.stock_id, OhlcvDaily.date, OhlcvDaily.open,
+            OhlcvDaily.high, OhlcvDaily.low, OhlcvDaily.close, OhlcvDaily.volume,
+        )
+        .where(OhlcvDaily.date >= cutoff)
+        .order_by(OhlcvDaily.stock_id, OhlcvDaily.date)
+    ).all()
     by_stock: dict[int, list] = defaultdict(list)
     for r in ohlcv_rows:
-        by_stock[r.stock_id].append(r)
+        by_stock[r[0]].append(r)  # r = (stock_id, date, open, high, low, close, volume)
 
     metrics: list[StockMetrics] = []
     for stock in stocks:
@@ -654,12 +670,12 @@ def _load_metrics(db: Session) -> tuple[list[StockMetrics], list[tuple[str, str]
         # Take last 252 bars to match 52w window
         rows = rows[-252:]
         ohlcv = pd.DataFrame({
-            "date": [r.date for r in rows],
-            "open": [float(r.open) for r in rows],
-            "high": [float(r.high) for r in rows],
-            "low": [float(r.low) for r in rows],
-            "close": [float(r.close) for r in rows],
-            "volume": [int(r.volume) for r in rows],
+            "date": [r[1] for r in rows],
+            "open": [float(r[2]) for r in rows],
+            "high": [float(r[3]) for r in rows],
+            "low": [float(r[4]) for r in rows],
+            "close": [float(r[5]) for r in rows],
+            "volume": [int(r[6]) for r in rows],
         })
         m = compute_stock_metrics(
             stock_id=stock.id,
