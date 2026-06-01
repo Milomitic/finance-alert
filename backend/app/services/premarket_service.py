@@ -193,6 +193,44 @@ def _premarket_from_frame(df) -> tuple[float, float, int | None] | None:
     return float(closes[pm_i]), prev_close, pm_volume
 
 
+# Single-ticker pre-market quote cache (ticker → (fetched_at, result)).
+# The stock-detail live-quote header polls every ~15s; a 60s TTL keeps the
+# prepost download to ~1/min per viewed ticker. Negative results are cached
+# too, so thin names with no pre-market bar don't refetch every poll.
+_SINGLE_TTL = timedelta(seconds=60)
+_SINGLE_CACHE: dict[str, tuple[datetime, tuple[float, float] | None]] = {}
+
+
+def premarket_quote(ticker: str) -> tuple[float, float] | None:
+    """(premarket_price, prev_regular_close) for ONE US ticker via a 5m prepost
+    frame — the SAME source the homepage pre-market movers use, so the
+    stock-detail header agrees with them. yfinance `fast_info` does NOT expose
+    extended-hours prices (it echoes the prior regular close), which is why the
+    detail header needs this. None when there's no usable pre-market bar or the
+    fetch fails. Cached ~60s."""
+    now = datetime.now(UTC)
+    cached = _SINGLE_CACHE.get(ticker)
+    if cached is not None and (now - cached[0]) < _SINGLE_TTL:
+        return cached[1]
+    result: tuple[float, float] | None = None
+    try:
+        import yfinance as yf
+
+        df = yf.download(
+            ticker, period="5d", interval="5m", prepost=True,
+            group_by="ticker", auto_adjust=False, progress=False, threads=False,
+        )
+        res = _premarket_from_frame(df)
+        if res is not None:
+            pm_price, prev_close, _vol = res
+            result = (float(pm_price), float(prev_close))
+    except Exception as exc:  # noqa: BLE001 — best-effort enrichment
+        logger.debug(f"[premarket] single quote {ticker} failed: {exc}")
+        result = None
+    _SINGLE_CACHE[ticker] = (now, result)
+    return result
+
+
 _NASDAQ_INFO_URL = (
     "https://api.nasdaq.com/api/quote/{sym}/info?assetclass=stocks"
 )

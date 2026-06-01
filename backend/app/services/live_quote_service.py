@@ -557,17 +557,38 @@ def _fetch_fresh(ticker: str, *, allow_remote_today_fetch: bool = True) -> LiveQ
             # DIFFERS from that close (> EPS). Reused below for the closed path.
             two = _latest_two_bars(ticker)
             db_last_close = two[1] if two is not None else None
+
+            # fast_info.lastPrice does NOT expose extended-hours — during the
+            # pre-market window it echoes the prior regular close. So pull the
+            # REAL pre-market price from the same 5m-prepost source the homepage
+            # movers use (header + movers then agree). Gated on
+            # allow_remote_today_fetch so the batch path never fires one
+            # download per ticker.
+            pre_price: float | None = None
+            pre_prev: float | None = None
+            if allow_remote_today_fetch and _is_premarket(ticker):
+                from app.services import premarket_service
+                pm = premarket_service.premarket_quote(ticker)
+                if pm is not None:
+                    pre_price, pre_prev = pm
+
+            # Pre-market candidate: the dedicated prepost price when available,
+            # else fast_info.lastPrice. Only declare PRE when it genuinely
+            # DIFFERS from our last charted close (> EPS) — kills the phantom
+            # duplicate candle when fast_info just echoes that close.
+            cand_pre = pre_price if pre_price is not None else last
             if (
                 _is_premarket(ticker)
-                and last is not None
+                and cand_pre is not None
                 and db_last_close is not None and db_last_close > 0
-                and abs(last - db_last_close) / db_last_close > _PREMARKET_EPS
+                and abs(cand_pre - db_last_close) / db_last_close > _PREMARKET_EPS
             ):
-                last_eff = last
-                # Change = pre-market price vs the ACTUAL last close (the bar
-                # the chart shows) so the header move and the chart candle
-                # agree — and the appended candle is genuinely distinct.
-                prev_effective = db_last_close
+                last_eff = cand_pre
+                # Denominator: the prepost source's own prior close (so the %
+                # matches the movers card) when we used it; else the last close.
+                prev_effective = (
+                    pre_prev if (pre_price is not None and pre_prev) else db_last_close
+                )
                 state = "PRE"
                 as_of = today
             else:

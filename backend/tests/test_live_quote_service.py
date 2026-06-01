@@ -267,9 +267,10 @@ def test_breaker_open_uses_eod_fallback(db, monkeypatch: pytest.MonkeyPatch) -> 
     assert q.change_pct == pytest.approx(4.5)
 
 
-def _patch_premarket(monkeypatch, fi, *, last_two):
+def _patch_premarket(monkeypatch, fi, *, last_two, pre=None):
     """Force the pre-market path: market closed + in the US pre-market window,
-    with a stubbed latest-two-bars (date, last_close, prev_close)."""
+    with a stubbed latest-two-bars (date, last_close, prev_close). `pre` stubs
+    premarket_service.premarket_quote → (pm_price, pm_prev_close) | None."""
     class FakeTicker:
         def __init__(self, _t):
             self.fast_info = fi
@@ -280,6 +281,8 @@ def _patch_premarket(monkeypatch, fi, *, last_two):
     monkeypatch.setattr("app.services.live_quote_service._latest_two_bars", lambda _t: last_two)
     monkeypatch.setattr("app.services.live_quote_service._provisional_today", lambda *_a, **_k: None)
     monkeypatch.setattr("app.services.live_quote_service._override_prev_close_from_ohlcv", lambda _t, _l: None)
+    # By default no dedicated prepost quote → falls back to fast_info.lastPrice.
+    monkeypatch.setattr("app.services.premarket_service.premarket_quote", lambda _t: pre)
 
 
 def test_premarket_echo_of_last_close_is_not_PRE(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -305,3 +308,25 @@ def test_premarket_real_move_is_PRE_vs_last_close(monkeypatch: pytest.MonkeyPatc
     assert q.prev_close == 100.0          # change anchored on the actual last close
     assert q.change_abs is not None and abs(q.change_abs - 3.0) < 1e-6
     assert q.as_of_date == "2026-06-01"   # today → distinct candle
+
+
+def test_premarket_uses_prepost_price_when_fastinfo_echoes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The real bug: fast_info echoes the last close (no extended-hours), but
+    the dedicated 5m-prepost source (same as the homepage movers) has the real
+    pre-market price. The header must show THAT price + its prior-close
+    denominator, not the stale echo."""
+    fi = _fake_fast_info({"lastPrice": 100.0, "previousClose": 100.0, "currency": "USD"})
+    _patch_premarket(
+        monkeypatch, fi,
+        last_two=(date(2026, 5, 30), 100.0, 98.0),
+        pre=(108.0, 100.0),  # prepost price 108 vs prior close 100
+    )
+    q = live_quote_service.get_quote("AAPL", force_refresh=True)
+    assert q.market_state == "PRE"
+    assert q.price == 108.0               # the real pre-market price, not the echo
+    assert q.prev_close == 100.0          # prepost source's own prior close
+    assert q.change_abs is not None and abs(q.change_abs - 8.0) < 1e-6
+    assert q.change_pct is not None and abs(q.change_pct - 8.0) < 1e-6
+    assert q.as_of_date == "2026-06-01"
