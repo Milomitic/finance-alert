@@ -168,12 +168,22 @@ def status() -> dict:
         _prune_old(now)
         if _state.opened_at is not None:
             seconds_until_probe = max(0.0, COOLDOWN_SECONDS - (now - _state.opened_at))
-            return {
+            out = {
                 "state": "half_open" if _state.half_open_in_flight else "open",
                 "opened_at": _state.opened_at,
                 "seconds_until_probe": round(seconds_until_probe, 1),
+                # Absolute epoch (UTC seconds) when the cooldown lifts and a
+                # half-open probe is allowed. The UI counts down against this so
+                # the figure stays accurate between health polls. In half-open
+                # this is already in the past (cooldown elapsed → probing now).
+                "blocked_until": _state.opened_at + COOLDOWN_SECONDS,
                 "failures_in_window": len(_state.failures),
             }
+            if _state.half_open_in_flight and _state.half_open_at is not None:
+                # When the in-flight probe is treated as abandoned and a fresh
+                # probe is granted — the UI shows this as the half-open deadline.
+                out["probe_deadline"] = _state.half_open_at + HALF_OPEN_PROBE_TIMEOUT
+            return out
         return {
             "state": "closed",
             "failures_in_window": len(_state.failures),

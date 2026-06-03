@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   AlertTriangle,
@@ -389,10 +390,104 @@ function SummaryStrip({
   );
 }
 
-export default function DataSourcesCard({ metrics, yfinanceBreaker, onSelectSource }: Props) {
-  const breakerState = String(yfinanceBreaker.state ?? "closed").toLowerCase();
-  const breakerOpen = breakerState === "open" || breakerState === "half_open";
+/* ─── yfinance circuit-breaker chip ───────────────────────────────────
+ *
+ * Shows the breaker state and, when it's tripped, WHEN the block lifts.
+ * The backend sends an absolute `blocked_until` (UTC epoch seconds); we
+ * count down against it locally on a 1s tick so the figure stays accurate
+ * between the 5s health polls (and doesn't freeze/jump). Half-open means
+ * the cooldown already elapsed and a probe is mid-flight — there we show
+ * the probe timeout instead. */
+const BREAKER_LABEL: Record<string, string> = {
+  closed: "chiuso",
+  open: "aperto",
+  half_open: "semi-aperto",
+};
 
+function fmtRemaining(sec: number): string {
+  const s = Math.max(0, Math.ceil(sec));
+  if (s >= 60) return `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, "0")}s`;
+  return `${s}s`;
+}
+
+function fmtClock(epochSec: number): string {
+  return new Date(epochSec * 1000).toLocaleTimeString("it-IT", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+}
+
+function BreakerChip({ breaker }: { breaker: Record<string, unknown> }) {
+  const state = String(breaker.state ?? "closed").toLowerCase();
+  const isOpen = state === "open";
+  const isHalfOpen = state === "half_open";
+  const active = isOpen || isHalfOpen;
+
+  // Local 1s ticker — only while the breaker is tripped — for a smooth
+  // countdown that doesn't depend on the health-poll cadence.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!active) return;
+    setNow(Date.now());
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [active]);
+
+  const blockedUntil = typeof breaker.blocked_until === "number" ? breaker.blocked_until : null;
+  const probeDeadline = typeof breaker.probe_deadline === "number" ? breaker.probe_deadline : null;
+  const nowSec = now / 1000;
+
+  // Tone: open → rose (blocked), half-open → amber (recovering/probing),
+  // closed → emerald. Literal class strings so Tailwind's purger keeps them.
+  const tone = isOpen
+    ? "bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800/60"
+    : isHalfOpen
+    ? "bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800/60"
+    : "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/60";
+
+  let detail: React.ReactNode = null;
+  if (isOpen && blockedUntil != null) {
+    const remaining = blockedUntil - nowSec;
+    detail =
+      remaining > 0 ? (
+        <>
+          {" · sblocco tra "}
+          <span className="tabular-nums font-semibold">{fmtRemaining(remaining)}</span>
+          {` (alle ${fmtClock(blockedUntil)})`}
+        </>
+      ) : (
+        <> · sblocco imminente…</>
+      );
+  } else if (isHalfOpen) {
+    const remaining = probeDeadline != null ? probeDeadline - nowSec : null;
+    detail = (
+      <>
+        {" · verifica in corso"}
+        {remaining != null && remaining > 0 && (
+          <span className="tabular-nums"> (timeout {fmtRemaining(remaining)})</span>
+        )}
+      </>
+    );
+  }
+
+  const Icon = active ? ShieldAlert : ShieldCheck;
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1.5 px-2.5 py-0.5 text-[11px] font-medium rounded-full border",
+        tone,
+      )}
+      title="Circuit breaker yfinance — quando aperto, gli scan saltano il provider primario"
+    >
+      <Icon className="h-3.5 w-3.5" />
+      Breaker yfinance: {BREAKER_LABEL[state] ?? state}
+      {detail}
+    </span>
+  );
+}
+
+export default function DataSourcesCard({ metrics, yfinanceBreaker, onSelectSource }: Props) {
   // Bucket every metric into its cluster, preserving CATEGORIES order.
   const buckets = new Map<CatKey, DataSourceMetric[]>();
   for (const m of metrics) {
@@ -427,18 +522,7 @@ export default function DataSourcesCard({ metrics, yfinanceBreaker, onSelectSour
               {operational}/{metrics.length} operative
             </span>
           </CardTitle>
-          <span
-            className={cn(
-              "inline-flex items-center gap-1.5 px-2.5 py-0.5 text-[11px] font-medium rounded-full border",
-              breakerOpen
-                ? "bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800/60"
-                : "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/60",
-            )}
-            title="Circuit breaker yfinance — quando aperto, gli scan saltano il provider primario"
-          >
-            {breakerOpen ? <ShieldAlert className="h-3.5 w-3.5" /> : <ShieldCheck className="h-3.5 w-3.5" />}
-            Breaker yfinance: {breakerState}
-          </span>
+          <BreakerChip breaker={yfinanceBreaker} />
         </div>
       </CardHeader>
       <CardContent className="p-4 space-y-4">

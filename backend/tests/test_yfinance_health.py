@@ -89,3 +89,21 @@ def test_status_reflects_open_state() -> None:
     s = yfinance_health.status()
     assert s["state"] == "open"
     assert s["seconds_until_probe"] > 0
+    # Absolute unblock instant exposed for the UI countdown — must be in the
+    # future and consistent with the relative figure.
+    assert s["blocked_until"] > time.time()
+    assert s["blocked_until"] == s["opened_at"] + yfinance_health.COOLDOWN_SECONDS
+
+
+def test_status_half_open_exposes_probe_deadline() -> None:
+    for _ in range(yfinance_health.N_FAILURES):
+        yfinance_health.record_failure("x")
+    # Rewind so the cooldown has elapsed, then grant a half-open probe.
+    yfinance_health._state.opened_at = time.time() - yfinance_health.COOLDOWN_SECONDS - 1
+    assert yfinance_health.is_open() is False  # grants the half-open probe
+    s = yfinance_health.status()
+    assert s["state"] == "half_open"
+    # Cooldown already elapsed → unblock instant is in the past.
+    assert s["blocked_until"] <= time.time()
+    # Probe deadline is in the future (when a stalled probe is retried).
+    assert s["probe_deadline"] > time.time()
