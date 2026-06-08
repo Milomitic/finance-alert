@@ -110,6 +110,10 @@ export interface SignalChainStep {
   /** Present only on the non-technical (fundamental) leg of a hybrid signal.
    *  Values: "earnings" | "analyst" | "insider". Technical legs omit this key. */
   source?: string;
+  /** "confirmation" for co-temporal reinforcing steps appended by chain
+   *  enrichment (EMA reject, RSI rollover, volume, MACD cross, …). The primary
+   *  cause steps omit this key. */
+  kind?: string;
 }
 
 export interface SignalLevel { label: string; price: number; kind: string; }

@@ -41,7 +41,11 @@ def _parse(d: object) -> date | None:
 def classify_horizon(name: str | None, chain: list[dict] | None) -> Horizon:
     """Return 'short' | 'medium' | 'long' for a signal from its chain span
     (primary) + detector prior (fallback)."""
-    dates = sorted({d for d in (_parse(c.get("date")) for c in (chain or [])) if d is not None})
+    # Co-temporal confirmation steps (kind="confirmation") are appended near the
+    # signal bar by chain_enrichment; they must NOT pull the span in and shift
+    # the timeframe label. Span over the detector's own cause steps only.
+    cause = [c for c in (chain or []) if c.get("kind") != "confirmation"]
+    dates = sorted({d for d in (_parse(c.get("date")) for c in cause) if d is not None})
     if len(dates) >= 2:
         span = (dates[-1] - dates[0]).days
         return "short" if span <= 7 else "medium" if span <= 35 else "long"
