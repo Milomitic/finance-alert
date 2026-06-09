@@ -500,6 +500,29 @@ predictive claim. The one cross-signal feature with a prior backtest edge is
 `multi_horizon` (~+0.8%/30d, bull only) — the only thing that may justify a
 future target/conviction tweak.
 
+### Engine Quality v1 (2026-06): outcome warehouse + honest surfacing
+Spec: `docs/superpowers/specs/2026-06-09-engine-quality-v1-design.md`. All
+SURFACING + SUBSTRATE — none of it changes the composite/Probabilità/targets.
+
+- **`signal_outcomes` warehouse** (`app/models/signal_outcome.py`,
+  `signal_outcome_service.mature_outcomes`): append-only labeled forward
+  outcomes (abs_hit + market-neutral + causal regime), the SINGLE forward-hit
+  source of truth. Matured at scan end (best-effort) once a horizon elapses;
+  idempotent on `alert_id`. One-off (re)build: stop uvicorn, run
+  `app.scripts.backfill_signal_outcomes` (prints a parity report). This is the
+  substrate every later validation (walk-forward CV, regime, ranking, score IC,
+  recalibration) should query instead of re-replaying OHLCV.
+- **Beta-stripped skill + honesty tags** (`calibration_map.skill/edge_pct/
+  quality_tag`, `GET /api/alerts/signal-calibration`): the UI shows market-
+  neutral `skill` + a `coinflip`/`negative`/`edge` tag (keyed on SKILL not
+  base_rate — a high base that's pure beta reads `coinflip`). Probabilità still
+  uses base_rate; skill is display/ranking-only.
+- **Qualità score percentile + `quality_extras`** (`scores._composite_
+  percentiles`, `score_service.quality_extras`): sector/universe percentile +
+  governance/analyst signals are INFORMATIONAL (read-time, cache-only). Do NOT
+  weight any of these into the composite without the score-IC backtest
+  (roadmap #9) over persisted score_history + point-in-time fundamentals.
+
 ### One-off scan / recompute outside the API (e.g. after a scoring change)
 Stop uvicorn FIRST (sole SQLite writer → avoids "database is locked"), run with
 `cd backend && PYTHONPATH=. ./.venv/Scripts/python.exe <script>`, then restart +

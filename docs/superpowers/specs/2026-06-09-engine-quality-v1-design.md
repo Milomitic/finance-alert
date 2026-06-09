@@ -1,7 +1,9 @@
 # Engine Quality v1 — Design
 
 **Date:** 2026-06-09
-**Status:** Approved to implement (user: proceed without further approvals; implement the whole block, propose value-adds along the way).
+**Status:** SHIPPED. A (skill) ✓, B (honesty markers + drift line) ✓, C (sector/universe percentile) ✓, D (signal_outcomes warehouse + maturation, applied to live DB) ✓. Capstone: Qualità governance+analyst surfacing (informational) ✓. All surfacing + substrate — no production composite/Probabilità/target flip; weighting any new signal still requires the score-IC backtest (roadmap #9).
+
+> **Next on the roadmap (not yet built):** #9 score_history + IC backtest (the gate that lets Qualità-v2 / regime / ranking signals earn a weight), then purged walk-forward CV, regime-conditioned base rates, cross-sectional signal-rank — each validated on the now-persistent signal_outcomes warehouse before any score/target change.
 
 First slice of the engine-improvement roadmap (`docs/superpowers/specs/` workflow synthesis). Grounded in this session's empirical findings: single-name technicals are ~coin-flips, `confirmation_count` has no edge, `multi_horizon` is a weak directional marker. The theme of v1 is **honesty + substrate**: stop crediting market beta as skill, surface the coin-flip/negative-edge reality, frame scores cross-sectionally, and build the persistent outcome store that makes every later improvement cheap and validatable.
 
