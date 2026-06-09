@@ -11,6 +11,7 @@ import {
 import { cn } from "@/lib/utils";
 import { glossForStep } from "@/lib/signalInterpretation";
 import { useSignalCalibration } from "@/hooks/useSignalCalibration";
+import { useSignalDrift } from "@/hooks/useSignalDrift";
 
 /* Source badge configuration for non-technical hybrid chain steps. */
 const SOURCE_BADGE: Record<
@@ -90,6 +91,11 @@ export function SignalSnapshotView({
   const s = snapshot as Partial<SignalSnapshot>;
   const { data: calTable } = useSignalCalibration();
   const cal = detector ? calTable?.detectors?.[detector] : undefined;
+  const { data: driftMap } = useSignalDrift();
+  // Only surface drift when it's statistically flagged (base rate outside the
+  // recent Wilson CI AND the matured sample cleared the floor) — avoids noise.
+  const drift = detector ? driftMap?.get(detector) : undefined;
+  const driftFlagged = drift?.drift_flag ? drift : undefined;
   const tone: AlertTone =
     s.tone === "bull" ? "bullish" : s.tone === "bear" ? "bearish" : "neutral";
   // Forza = pattern strength (snapshot.strength). Probabilità = historical
@@ -186,6 +192,25 @@ export function SignalSnapshotView({
                   skill {Math.round(cal.skill)}%{cal.n != null ? ` · n ${cal.n.toLocaleString("it-IT")}` : ""}
                 </span>
               )}
+            </div>
+          )}
+
+          {/* Drift line: realised recent hit-rate vs the calibrated base, shown
+              only when statistically flagged (Wilson-CI + n>=30 gated backend). */}
+          {driftFlagged && (
+            <div
+              className={cn(
+                "flex items-center gap-1.5 pl-[5.5rem] -mt-1 text-[11px] tabular-nums",
+                driftFlagged.delta < 0
+                  ? "text-rose-600 dark:text-rose-400"
+                  : "text-emerald-600 dark:text-emerald-400",
+              )}
+              title={`Hit-rate recente sui segnali maturati (${driftFlagged.n_matured}) vs base storico calibrato`}
+            >
+              {driftFlagged.delta < 0 ? "▼ in calo" : "▲ in salita"}:{" "}
+              {Math.round(driftFlagged.recent_hit_rate)}% recenti vs{" "}
+              {Math.round(driftFlagged.base_rate)}% storico
+              <span className="text-muted-foreground/70">(n {driftFlagged.n_matured})</span>
             </div>
           )}
 

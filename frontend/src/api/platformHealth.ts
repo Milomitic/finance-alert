@@ -88,6 +88,24 @@ export async function fetchHealth(): Promise<PlatformHealth> {
   return r.json();
 }
 
+/** One detector's drift verdict (realised recent hit-rate vs calibrated base). */
+export type SignalDriftRow = {
+  detector: string;
+  n_matured: number;
+  recent_hit_rate: number;
+  base_rate: number;
+  delta: number;
+  ci_low: number;
+  ci_high: number;
+  drift_flag: boolean;
+};
+
+export async function fetchSignalDrift(): Promise<{ detectors: SignalDriftRow[] }> {
+  const r = await fetch("/api/platform/signal-drift", { credentials: "include" });
+  if (!r.ok) throw new Error(`signal-drift ${r.status}`);
+  return r.json();
+}
+
 export async function runProbesNow(): Promise<{ accepted: boolean }> {
   const r = await fetch("/api/platform/probes/run", {
     method: "POST",
