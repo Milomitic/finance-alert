@@ -105,7 +105,7 @@ function TopRow({ c, rank }: { c: Confluence; rank: number }) {
       <Link
         to={`/stocks/${encodeURIComponent(c.ticker)}`}
         className="flex items-center gap-2 px-2 py-1 rounded-md hover:bg-accent/50 transition-colors min-w-0"
-        title={`${c.name ?? c.ticker} · forza confluenza ${pct} · forza max ${maxForza ?? "—"} · ${c.n_signals} segnali${c.multi_horizon ? " · multi-orizzonte" : ""}${c.contested ? " · conteso" : ""}`}
+        title={`${c.name ?? c.ticker} · forza confluenza ${pct} · forza max ${maxForza ?? "—"} · ${c.n_signals} segnali${c.effective_n != null ? ` (${c.effective_n} indip.)` : ""}${c.multi_horizon ? " · multi-orizzonte" : ""}${c.contested ? " · conteso" : ""}`}
       >
         <span className="w-4 shrink-0 text-right text-xs font-mono tabular-nums text-muted-foreground/60">{rank}</span>
         {/* Titolo — logo + ticker + name in ONE flex-1 cell so the meta columns

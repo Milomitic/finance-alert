@@ -23,6 +23,9 @@ export interface Confluence {
   direction: string;        // prevailing side: "bull" | "bear"
   strength: number;
   n_signals: number;
+  /** De-correlated independent-evidence count (distinct detector families +
+   *  small same-family discount). ≤ n_signals; what drives `strength`. */
+  effective_n?: number;
   bull_strength: number;
   bear_strength: number;
   contested: boolean;
