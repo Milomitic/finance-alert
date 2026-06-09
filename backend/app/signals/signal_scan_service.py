@@ -124,6 +124,7 @@ def evaluate_signals(db: Session, stock: Stock, ohlcv: pd.DataFrame) -> int:
             "annotations": ann, "atr": _atr,
             "horizon": classify_horizon(m.name, m.chain),
         }
+        now_iso = datetime.now(UTC).isoformat()
         # Cooldown + refresh dedup. Several "state" detectors stamp signal_date
         # on the LATEST bar, so the same ongoing setup would otherwise mint a new
         # (stock, name, signal_date) every day the condition holds -> a stream of
@@ -139,10 +140,23 @@ def evaluate_signals(db: Session, stock: Stock, ohlcv: pd.DataFrame) -> int:
         if prior is not None and _snapshot_tone(prior.snapshot) == m.tone \
                 and _within_cooldown(prior.signal_date, sig_date):
             if prior.archived_at is None:
-                # Same ongoing setup -> refresh the live alert with the latest
-                # price/snapshot in place. signal_date + triggered_at both move
-                # forward together so the anchor advances (a persistent setup
-                # stays ONE alert) without faking a delayed-detection gap.
+                # Same ongoing setup -> refresh the live alert IN PLACE with the
+                # latest recomputed snapshot. The whole snapshot is replaced (not
+                # appended), so we mark provenance so a later revision is never
+                # mistaken for the original-emission analysis: PRESERVE the
+                # original `first_emitted_at` and stamp `amended_at` = now.
+                # signal_date + triggered_at advance together (the anchor moves
+                # forward) without faking a delayed-detection gap.
+                try:
+                    _prior_snap = json.loads(prior.snapshot) if prior.snapshot else {}
+                except (ValueError, TypeError):
+                    _prior_snap = {}
+                snapshot["first_emitted_at"] = (
+                    _prior_snap.get("first_emitted_at")
+                    or (prior.triggered_at.isoformat() if prior.triggered_at else now_iso)
+                )
+                snapshot["amended_at"] = now_iso
+                snapshot["amend_count"] = int(_prior_snap.get("amend_count") or 0) + 1
                 prior.trigger_price = last_close
                 prior.signal_date = sig_date
                 prior.snapshot = json.dumps(snapshot)
@@ -150,6 +164,9 @@ def evaluate_signals(db: Session, stock: Stock, ohlcv: pd.DataFrame) -> int:
             # Archived within the window: respect the user's archive, don't
             # resurrect it. Either way, no new row.
             continue
+        # New alert: pin the original emission timestamp (never overwritten by
+        # later refreshes), no amendment yet.
+        snapshot["first_emitted_at"] = now_iso
         db.add(Alert(
             stock_id=stock.id, trigger_price=last_close,
             signal_date=sig_date, signal_name=m.name,

@@ -127,6 +127,27 @@ def test_cooldown_refreshes_existing_alert_in_place(db, monkeypatch):
     assert rows[0].id == prior.id
     assert rows[0].signal_date == date(2026, 5, 1)   # anchor moved forward
     assert float(rows[0].trigger_price) == 110.0     # refreshed to last close
+    # Provenance: the refresh is a post-creation amendment → amended_at is set,
+    # and the ORIGINAL emission time is preserved (the seeded prior had no
+    # first_emitted_at, so it falls back to the prior's triggered_at).
+    snap = json.loads(rows[0].snapshot)
+    assert snap.get("amended_at") is not None
+    assert snap.get("first_emitted_at") is not None
+    assert (snap.get("amend_count") or 0) >= 1
+
+
+def test_new_alert_pins_first_emitted_at_without_amendment(db, monkeypatch):
+    """A freshly-created alert carries first_emitted_at and is NOT marked amended."""
+    _relax(monkeypatch)
+    s = Stock(ticker="PROV_NEW", exchange="NASDAQ", name="Prov", country="US")
+    db.add(s); db.flush()
+    evaluate_signals(db, s, _confirmed_df())
+    db.commit()
+    a = db.query(Alert).filter(Alert.stock_id == s.id,
+                               Alert.signal_name == "volume_breakout").first()
+    snap = json.loads(a.snapshot)
+    assert snap.get("first_emitted_at") is not None
+    assert "amended_at" not in snap
 
 
 def test_cooldown_respects_archived_alert(db, monkeypatch):

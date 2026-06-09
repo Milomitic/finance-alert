@@ -5,6 +5,7 @@ import {
   Clock,
   Code2,
   DollarSign,
+  Pencil,
   ShieldAlert,
 } from "lucide-react";
 import { useState } from "react";
@@ -122,6 +123,13 @@ export function AlertDetailDialog({ alert, onClose }: Props) {
   const isArchived = alert.archived_at != null;
   const delayed = isDelayedDetection(alert.triggered_at, alert.signal_date);
   const delta = daysBetween(alert.triggered_at, alert.signal_date);
+  // Provenance: a snapshot revised after first emission (by a later scan or
+  // an enrichment pass) carries `amended_at`. Surface it so the displayed
+  // content — incl. confirmation steps appended later — is never mistaken for
+  // analysis available at the original emission (`first_emitted_at`).
+  const prov = alert.snapshot as { amended_at?: string; first_emitted_at?: string };
+  const amendedAt = typeof prov.amended_at === "string" ? prov.amended_at : null;
+  const firstEmittedAt = typeof prov.first_emitted_at === "string" ? prov.first_emitted_at : null;
   const inv =
     (alert.snapshot as { invalidation?: { level?: number; reason?: string } | null })
       .invalidation ?? null;
@@ -170,6 +178,17 @@ export function AlertDetailDialog({ alert, onClose }: Props) {
               {delayed && delta != null && (
                 <div className="text-[10px] text-amber-700 dark:text-amber-300 italic mt-0.5">
                   +{delta}g vs segnale
+                </div>
+              )}
+              {amendedAt && (
+                <div
+                  className="mt-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60"
+                  title={`Snapshot rivisto da uno scan successivo il ${formatAbsolute(amendedAt)}${
+                    firstEmittedAt ? ` · emesso originariamente il ${formatAbsolute(firstEmittedAt)}` : ""
+                  }. La catena riflette l'ultima revisione: eventi aggiunti dopo non risalgono alla data di emissione originale.`}
+                >
+                  <Pencil className="h-2.5 w-2.5" />
+                  Rivisto {formatRelative(amendedAt)}
                 </div>
               )}
             </div>

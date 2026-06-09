@@ -18,6 +18,7 @@ Run with uvicorn STOPPED (sole SQLite writer):
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 
@@ -32,6 +33,7 @@ from app.signals.events_fundamental import gather_events
 def main() -> None:
     scanned = 0
     updated = 0
+    now_iso = datetime.now(UTC).isoformat()
     with dbm.SessionLocal() as db:
         alerts = db.execute(
             select(Alert).where(
@@ -90,11 +92,28 @@ def main() -> None:
             if "confirmation_count" in enriched.factors:
                 new_factors["confirmation_count"] = enriched.factors["confirmation_count"]
 
-            changed = (enriched.chain != snap["chain"]) or (new_factors != (snap.get("factors") or {}))
-            if not changed:
+            snap_changed = False
+            if enriched.chain != snap.get("chain"):
+                snap["chain"] = enriched.chain
+                snap_changed = True
+            if new_factors != (snap.get("factors") or {}):
+                snap["factors"] = new_factors
+                snap_changed = True
+            # Provenance (honesty): a chain carrying confirmation steps was
+            # enriched AFTER the original emission, so mark it amended and pin
+            # the original emission time (best proxy = the alert's triggered_at).
+            # Idempotent: only set when missing, so re-runs don't bump the stamp.
+            if any(s.get("kind") == "confirmation" for s in enriched.chain):
+                if "first_emitted_at" not in snap:
+                    snap["first_emitted_at"] = (
+                        a.triggered_at.isoformat() if a.triggered_at else None
+                    )
+                    snap_changed = True
+                if "amended_at" not in snap:
+                    snap["amended_at"] = now_iso
+                    snap_changed = True
+            if not snap_changed:
                 continue
-            snap["chain"] = enriched.chain
-            snap["factors"] = new_factors
             a.snapshot = json.dumps(snap)
             updated += 1
 
