@@ -14,6 +14,7 @@ from app.models.market_snapshot import MarketSnapshot
 from app.models.ohlcv import OhlcvDaily
 from app.models.price_alert import PriceAlert
 from app.models.scan_run import ScanRun
+from app.models.signal_outcome import SignalOutcome
 from app.models.stock import Stock
 from app.models.stock_score import StockScore
 from app.models.technical_score import TechnicalScore
@@ -32,6 +33,7 @@ __all__ = [
     "Alert",
     "PriceAlert",
     "ScanRun",
+    "SignalOutcome",
     "KpiSnapshot",
     "FetchCache",
     "MacroSeries",

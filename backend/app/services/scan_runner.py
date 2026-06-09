@@ -420,6 +420,13 @@ def run_tracked_scan(
             kpi_service.record_scan_kpis(db, run)
         except Exception as kpi_exc:  # noqa: BLE001
             logger.warning(f"[scan_runner] KPI capture failed (non-fatal): {kpi_exc}")
+        # Mature any signal alerts whose horizon has now elapsed into the
+        # signal_outcomes warehouse (best-effort; never break the scan).
+        try:
+            from app.services import signal_outcome_service
+            signal_outcome_service.mature_outcomes(db)
+        except Exception as out_exc:  # noqa: BLE001
+            logger.warning(f"[scan_runner] outcome maturation failed (non-fatal): {out_exc}")
         logger.info(
             f"[scan_runner] ScanRun {run.id} success: "
             f"scanned={result.stocks_scanned} alerts={result.alerts_fired}"
