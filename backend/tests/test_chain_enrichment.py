@@ -88,6 +88,25 @@ def test_confirmation_count_bounded_at_one():
     assert out.factors["confirmation_count"] == 1.0  # min(4,3)/3
 
 
+def test_chain_is_chronological_after_enrichment():
+    # Cause steps dated AFTER some confirmations (the sr_flip case): the merged
+    # chain must come out oldest → newest so the Catena + chart markers agree.
+    df = _ohlcv()
+    last = df["date"].iloc[-1]            # newest bar
+    older = df["date"].iloc[-5]          # within window, earlier
+    m = SignalMatch(
+        name="sr_flip", tone="bear", signal_date=last,
+        chain=[{"date": last, "label": "Rottura supporto", "detail": "x"},
+               {"date": last, "label": "Flip di polarità", "detail": "y"}],
+        invalidation=None, factors={}, strength=80, probability=55,
+    )
+    events = [Event(older, "macd_cross", "bear", magnitude=1.0)]  # confirmation BEFORE the cause
+    out = enrich_chain(m, events, df)
+    dates = [s["date"] for s in out.chain]
+    assert dates == sorted(dates)  # non-decreasing
+    assert dates[0] == older       # the older confirmation leads the chain
+
+
 def test_dedup_one_step_per_type_keeps_closest_to_signal():
     df = _ohlcv()
     last = df["date"].iloc[-1]

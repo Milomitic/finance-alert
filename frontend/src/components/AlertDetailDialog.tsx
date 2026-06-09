@@ -129,7 +129,7 @@ export function AlertDetailDialog({ alert, onClose }: Props) {
 
   return (
     <Dialog open={alert !== null} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-4xl p-0 overflow-hidden">
+      <DialogContent className="sm:max-w-4xl p-0 max-h-[90vh] overflow-y-auto">
         <DialogHeader
           className={cn("p-5 pb-4 space-y-2 border-l-4", TONE_BORDER_LEFT[meta.tone])}
         >

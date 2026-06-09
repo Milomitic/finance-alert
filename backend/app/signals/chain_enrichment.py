@@ -181,7 +181,11 @@ def enrich_chain(
     appended = [step for _, step in best.values()]
     appended.sort(key=lambda s: s["date"])
     appended = appended[:max_appends]
-    new_chain = list(match.chain) + appended
+    # ONE chronological chain (oldest → newest): merge cause + confirmation
+    # steps and stable-sort by date, so the numbered Catena AND the chart
+    # markers read in time order. Stable sort keeps same-date cause steps before
+    # same-date confirmations (cause steps come first in the merged list).
+    new_chain = sorted([*match.chain, *appended], key=lambda s: str(s.get("date") or "")[:10])
     new_factors = dict(match.factors)
     # Bounded: saturates at 3 distinct confirmation kinds so a wall of correlated
     # events can't run away. Stays OUT of every detector's strength_keys (Phase 3
