@@ -50,6 +50,13 @@ class StockScoreOut(BaseModel):
     # Average composite of all scored stocks in this stock's sector — drives the
     # gauge's "media settore" reference marker. None when sector unknown/empty.
     sector_avg: float | None = None
+    # Percentile rank (0-100, higher = better) of this composite within the
+    # stock's SECTOR / the whole scored UNIVERSE, + the sector peer count. A 72
+    # is meaningless absolutely; "9th pct in Tech vs 80th in Utilities" is the
+    # decision-useful framing. None when no peers / unknown sector.
+    sector_percentile: int | None = None
+    universe_percentile: int | None = None
+    peer_n: int | None = None
 
     @field_serializer("computed_at")
     def _serialize_computed_at(self, value: datetime) -> str:

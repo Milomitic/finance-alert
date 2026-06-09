@@ -53,6 +53,47 @@ def _sector_avg_composite(db: Session, sector: str | None) -> float | None:
     return round(float(val), 1) if val is not None else None
 
 
+def _composite_percentiles(
+    db: Session, sector: str | None, composite: float | None
+) -> dict[str, int | None]:
+    """Percentile rank (0-100, higher = better) of `composite` within the
+    stock's SECTOR and the whole scored UNIVERSE, plus the sector peer count.
+    Percentile = share of peers with composite <= this one. Cheap (counts over
+    the indexed composite). Returns (sector_pct, universe_pct, peer_n); each
+    None when there are no peers (or unknown sector)."""
+    if composite is None:
+        return {"sector_percentile": None, "universe_percentile": None, "peer_n": None}
+    uni_total = db.execute(select(func.count()).select_from(StockScore)).scalar() or 0
+    universe_pct: int | None = None
+    if uni_total:
+        uni_le = db.execute(
+            select(func.count()).select_from(StockScore)
+            .where(StockScore.composite <= composite)
+        ).scalar() or 0
+        universe_pct = round(100.0 * uni_le / uni_total)
+
+    sector_pct: int | None = None
+    peer_n: int | None = None
+    if sector:
+        peer_n = db.execute(
+            select(func.count()).select_from(StockScore)
+            .join(Stock, Stock.id == StockScore.stock_id)
+            .where(Stock.sector == sector)
+        ).scalar() or 0
+        if peer_n:
+            sec_le = db.execute(
+                select(func.count()).select_from(StockScore)
+                .join(Stock, Stock.id == StockScore.stock_id)
+                .where(Stock.sector == sector, StockScore.composite <= composite)
+            ).scalar() or 0
+            sector_pct = round(100.0 * sec_le / peer_n)
+    return {
+        "sector_percentile": sector_pct,
+        "universe_percentile": universe_pct,
+        "peer_n": peer_n or None,
+    }
+
+
 _VALID_RISK = set(get_args(RiskTier))
 _VALID_CATEGORY = set(get_args(ScoreCategory))
 
@@ -119,6 +160,7 @@ def get_stock_score(
         computed_at=score.computed_at,
         breakdown=breakdown,
         sector_avg=_sector_avg_composite(db, stock.sector),
+        **_composite_percentiles(db, stock.sector, score.composite),
     )
 
 
@@ -285,6 +327,7 @@ def recompute_stock_score(
         computed_at=new_score.computed_at,
         breakdown=breakdown,
         sector_avg=_sector_avg_composite(db, stock.sector),
+        **_composite_percentiles(db, stock.sector, new_score.composite),
     )
 
 

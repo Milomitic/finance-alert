@@ -783,6 +783,25 @@ export function StockScoreCard({ ticker }: Props) {
               </span>
             </span>
           )}
+          {data.sector_percentile != null && (
+            <span
+              className="mt-0.5 text-[10px] text-muted-foreground"
+              title={
+                `Percentile nel settore: ${data.sector_percentile}° (più alto = migliore)` +
+                (data.universe_percentile != null ? ` · ${data.universe_percentile}° nell'universo` : "") +
+                (data.peer_n != null && data.peer_n < 8 ? " · campione esiguo" : "")
+              }
+            >
+              Top{" "}
+              <span className="font-semibold tabular-nums text-foreground/80">
+                {Math.max(1, 100 - data.sector_percentile)}%
+              </span>{" "}
+              del settore
+              {data.peer_n != null && (
+                <span className="text-muted-foreground/70"> (n={data.peer_n})</span>
+              )}
+            </span>
+          )}
         </div>
       </div>
 

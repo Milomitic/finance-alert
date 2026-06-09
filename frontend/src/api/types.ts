@@ -884,6 +884,11 @@ export interface StockScore {
   /** Average composite of all scored stocks in this stock's sector — the
    *  gauge's "media settore" reference marker. Null when unavailable. */
   sector_avg?: number | null;
+  /** Percentile rank (0-100, higher = better) of this composite within the
+   *  stock's sector / the whole universe, + the sector peer count. */
+  sector_percentile?: number | null;
+  universe_percentile?: number | null;
+  peer_n?: number | null;
 }
 
 export interface TopPickItem {
