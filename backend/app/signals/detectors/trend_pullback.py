@@ -15,7 +15,12 @@ from app.signals.events import Event
 
 _FAST = 50
 _SLOW = 200
+# Pullback "touch" tolerance around the fast EMA. Floor (1.5%) preserved; in a
+# high-vol name we LOOSEN it to k·ATR/EMA so a genuine test isn't missed, and in
+# a low-vol name the floor still applies. ATR-relative tracks the regime instead
+# of a fixed % (spec Phase 2c).
 _PULLBACK_TOL = 0.015
+_PULLBACK_ATR_K = 0.5
 # Forza anchors for the EMA50/EMA200 spread (|spread|/close): raw value at
 # curve-contribution 0.45 / 0.75 / 0.88 + saturating ceil. Distribution-
 # grounded (p50≈6%, p90≈14%, p99≈30%); a 30%+ spread = a decisively strong
@@ -45,11 +50,16 @@ class TrendPullback:
         if pd.isna(fast_now) or fast_now == 0:
             return None
         recent = range(max(0, last - 20), last + 1)
+        # ATR-relative touch tolerance, floored at the legacy 1.5% so it only
+        # ever LOOSENS for high-vol names (never tightens below the floor).
+        tol = _PULLBACK_TOL
+        if ctx.atr and fast_now:
+            tol = max(_PULLBACK_TOL, (ctx.atr * _PULLBACK_ATR_K) / fast_now)
         if tone == "bull":
-            tagged = any(close.iloc[i] <= ef.iloc[i] * (1 + _PULLBACK_TOL) for i in recent)
+            tagged = any(close.iloc[i] <= ef.iloc[i] * (1 + tol) for i in recent)
             resumed = close.iloc[last] > fast_now
         else:
-            tagged = any(close.iloc[i] >= ef.iloc[i] * (1 - _PULLBACK_TOL) for i in recent)
+            tagged = any(close.iloc[i] >= ef.iloc[i] * (1 - tol) for i in recent)
             resumed = close.iloc[last] < fast_now
         if not (tagged and resumed):
             return None

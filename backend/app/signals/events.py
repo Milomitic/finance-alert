@@ -391,8 +391,92 @@ def extract_macd_divergence(
 # module error whenever candles.py is the first module touched. The lazy
 # wrapper defers the import until the lambda is actually called, at which
 # point both modules are fully initialized.
+def extract_ema_interaction(
+    ohlcv: pd.DataFrame, *, fast: int = 50, slow: int = 200, k: float = 0.5,
+    atr_period: int = 14,
+) -> list[Event]:
+    """Emit `ema_reject` when price RETURNS to a moving average and is REJECTED
+    in the trend direction — the canonical pullback-continuation tell (the
+    user's "ritorno verso EMA200 + rifiuto/ritorno giù").
+
+    bear: coming from BELOW the EMA, the bar's high reaches within ``k*ATR`` of
+    the EMA (or pierces it) but the close finishes back below it on a down bar.
+    bull mirrors. Proximity is ATR-scaled so "near the EMA" tracks the
+    volatility regime instead of a fixed %. At most one event per bar, slow EMA
+    (e.g. EMA200) preferred over fast.
+    """
+    n = len(ohlcv)
+    if n < slow + 2:
+        return []
+    close = ohlcv["close"].astype(float).reset_index(drop=True)
+    high = ohlcv["high"].astype(float).reset_index(drop=True)
+    low = ohlcv["low"].astype(float).reset_index(drop=True)
+    openp = ohlcv["open"].astype(float).reset_index(drop=True)
+    dates = ohlcv["date"].reset_index(drop=True)
+    ef = ema(close, fast).reset_index(drop=True)
+    es = ema(close, slow).reset_index(drop=True)
+    a = atr(ohlcv, atr_period).reset_index(drop=True)
+    out: list[Event] = []
+    for i in range(1, n):
+        ai = a.iloc[i]
+        if pd.isna(ai) or ai <= 0:
+            continue
+        band = k * ai
+        for e_series, ma_name in ((es, f"ema{slow}"), (ef, f"ema{fast}")):
+            e, ep = e_series.iloc[i], e_series.iloc[i - 1]
+            if pd.isna(e) or pd.isna(ep):
+                continue
+            # bear: was below the EMA, high tested it (within band / pierce),
+            # closed back below on a down bar → rejection down.
+            if (close.iloc[i - 1] < ep and high.iloc[i] >= e - band
+                    and close.iloc[i] < e and close.iloc[i] < openp.iloc[i]):
+                out.append(Event(_iso(dates.iloc[i]), "ema_reject", "bear",
+                                 magnitude=float(abs(close.iloc[i] - e) / ai),
+                                 payload={"ma": ma_name}))
+                break
+            # bull mirror.
+            if (close.iloc[i - 1] > ep and low.iloc[i] <= e + band
+                    and close.iloc[i] > e and close.iloc[i] > openp.iloc[i]):
+                out.append(Event(_iso(dates.iloc[i]), "ema_reject", "bull",
+                                 magnitude=float(abs(close.iloc[i] - e) / ai),
+                                 payload={"ma": ma_name}))
+                break
+    return out
+
+
+def extract_swing_pivot(ohlcv: pd.DataFrame, *, width: int = 5) -> list[Event]:
+    """Emit a continuation-structure `swing_pivot`: a fresh LOWER-HIGH (bear) or
+    HIGHER-LOW (bull) — the pullback-exhaustion tell that precedes a full
+    structure break. Uses find_pivots; confirmation lags `width` bars (intrinsic
+    to pivot confirmation, noted in the chain detail)."""
+    n = len(ohlcv)
+    if n < 2 * width + 3:
+        return []
+    high = ohlcv["high"].astype(float).reset_index(drop=True)
+    low = ohlcv["low"].astype(float).reset_index(drop=True)
+    dates = ohlcv["date"].reset_index(drop=True)
+    out: list[Event] = []
+    highs = find_pivots(high, width, kind="high")
+    for j in range(1, len(highs)):
+        pa, pb = highs[j - 1], highs[j]
+        if high.iloc[pb] < high.iloc[pa] and high.iloc[pa]:
+            out.append(Event(_iso(dates.iloc[pb]), "swing_pivot", "bear",
+                             magnitude=float((high.iloc[pa] - high.iloc[pb]) / high.iloc[pa]),
+                             payload={"kind": "lower_high"}))
+    lows = find_pivots(low, width, kind="low")
+    for j in range(1, len(lows)):
+        pa, pb = lows[j - 1], lows[j]
+        if low.iloc[pb] > low.iloc[pa] and low.iloc[pa]:
+            out.append(Event(_iso(dates.iloc[pb]), "swing_pivot", "bull",
+                             magnitude=float((low.iloc[pb] - low.iloc[pa]) / low.iloc[pa]),
+                             payload={"kind": "higher_low"}))
+    return out
+
+
 EXTRACTORS = [
     lambda df: extract_breakout(df, lookback=20),
+    lambda df: extract_ema_interaction(df, fast=50, slow=200, k=0.5),
+    lambda df: extract_swing_pivot(df, width=5),
     lambda df: extract_volume_spike(df, avg_period=20, k=2.0),
     lambda df: extract_ema_cross(df, fast=50, slow=200),
     lambda df: extract_rsi_divergence(df, period=14, pivot_w=5, max_gap=60),
