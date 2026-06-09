@@ -427,6 +427,13 @@ def run_tracked_scan(
             signal_outcome_service.mature_outcomes(db)
         except Exception as out_exc:  # noqa: BLE001
             logger.warning(f"[scan_runner] outcome maturation failed (non-fatal): {out_exc}")
+        # Snapshot the day's composites into score_history (best-effort; the
+        # substrate for the score-IC backtest). Idempotent per day.
+        try:
+            from app.services import score_history_service
+            score_history_service.capture(db)
+        except Exception as sh_exc:  # noqa: BLE001
+            logger.warning(f"[scan_runner] score-history capture failed (non-fatal): {sh_exc}")
         logger.info(
             f"[scan_runner] ScanRun {run.id} success: "
             f"scanned={result.stocks_scanned} alerts={result.alerts_fired}"
