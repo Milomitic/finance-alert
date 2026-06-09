@@ -57,6 +57,10 @@ class StockScoreOut(BaseModel):
     sector_percentile: int | None = None
     universe_percentile: int | None = None
     peer_n: int | None = None
+    # Read-time INFORMATIONAL enrichment (governance + analyst signals) — not
+    # part of the composite. {governance:{audit,board,compensation,overall},
+    # analyst:{recommendation_mean,n_analysts,price_target,target_upside_pct}}.
+    quality_extras: dict | None = None
 
     @field_serializer("computed_at")
     def _serialize_computed_at(self, value: datetime) -> str:

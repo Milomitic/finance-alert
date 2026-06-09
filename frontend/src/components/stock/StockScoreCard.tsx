@@ -660,6 +660,49 @@ function CardShell({
   );
 }
 
+/* Informational governance + analyst row (Engine Quality v1 capstone). NOT part
+   of the composite — surfaces already-loaded signals; weighting them awaits the
+   score-IC backtest. Governance risks are 1 (best) .. 10 (worst). */
+function QualityExtrasRow({ extras }: { extras?: StockScore["quality_extras"] }) {
+  if (!extras) return null;
+  const gov = extras.governance ?? null;
+  const an = extras.analyst ?? null;
+  const govItems = gov
+    ? ([["Audit", gov.audit], ["CdA", gov.board], ["Comp.", gov.compensation], ["Tot.", gov.overall]] as const)
+        .filter(([, v]) => v != null)
+    : [];
+  if (!govItems.length && !an) return null;
+  const govTone = (v: number) => (v <= 3 ? "text-emerald-600 dark:text-emerald-400" : v >= 7 ? "text-rose-600 dark:text-rose-400" : "text-amber-600 dark:text-amber-400");
+  return (
+    <div className="mt-2 border-t border-border/40 pt-2 space-y-1 text-[11px]"
+      title="Informativo — non incide sul composito (la ponderazione attende la validazione IC)">
+      {an && (
+        <div className="flex items-center gap-2 flex-wrap text-muted-foreground">
+          <span className="uppercase tracking-wider text-[10px] font-semibold">Analisti</span>
+          {an.recommendation_mean != null && (
+            <span title="Consenso 1 (strong buy) – 5 (sell)">rec <span className="font-semibold tabular-nums text-foreground/80">{an.recommendation_mean.toFixed(2)}</span></span>
+          )}
+          {an.n_analysts != null && <span className="text-muted-foreground/70">· {an.n_analysts} analisti</span>}
+          {an.target_upside_pct != null && (
+            <span className={cn("font-semibold tabular-nums", an.target_upside_pct >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400")}
+              title={`Target medio ${an.price_target?.toFixed(2)} vs prezzo`}>
+              {an.target_upside_pct >= 0 ? "+" : ""}{an.target_upside_pct}% al target
+            </span>
+          )}
+        </div>
+      )}
+      {govItems.length > 0 && (
+        <div className="flex items-center gap-2 flex-wrap text-muted-foreground">
+          <span className="uppercase tracking-wider text-[10px] font-semibold" title="Rischio governance: 1 (migliore) – 10 (peggiore)">Governance</span>
+          {govItems.map(([label, v]) => (
+            <span key={label}>{label} <span className={cn("font-semibold tabular-nums", govTone(v as number))}>{v}</span></span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ─── Main component ────────────────────────────────────────────────────── */
 
 export function StockScoreCard({ ticker }: Props) {
@@ -820,6 +863,8 @@ export function StockScoreCard({ ticker }: Props) {
           />
         ))}
       </div>
+
+      <QualityExtrasRow extras={data.quality_extras} />
 
     </CardShell>
   );

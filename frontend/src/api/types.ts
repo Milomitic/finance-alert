@@ -889,6 +889,17 @@ export interface StockScore {
   sector_percentile?: number | null;
   universe_percentile?: number | null;
   peer_n?: number | null;
+  /** Read-time informational enrichment (NOT part of the composite): governance
+   *  risk sub-scores (1=best..10=worst) + analyst consensus/target. */
+  quality_extras?: {
+    governance?: { audit?: number; board?: number; compensation?: number; overall?: number } | null;
+    analyst?: {
+      recommendation_mean?: number;
+      n_analysts?: number;
+      price_target?: number;
+      target_upside_pct?: number;
+    } | null;
+  } | null;
 }
 
 export interface TopPickItem {

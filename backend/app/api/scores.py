@@ -53,6 +53,26 @@ def _sector_avg_composite(db: Session, sector: str | None) -> float | None:
     return round(float(val), 1) if val is not None else None
 
 
+def _quality_extras(db: Session, stock: Stock) -> dict | None:
+    """Read-time informational enrichment (governance + analyst signals) from
+    the cached fundamentals (no network, no composite change). None on miss."""
+    try:
+        f = stock_fundamentals_service.get_fundamentals_cached(db, stock.ticker)
+    except Exception:  # noqa: BLE001 — never let enrichment break the score read
+        return None
+    if f is None:
+        return None
+    last_close = db.execute(
+        select(OhlcvDaily.close)
+        .where(OhlcvDaily.stock_id == stock.id)
+        .order_by(OhlcvDaily.date.desc())
+        .limit(1)
+    ).scalar()
+    return score_service.quality_extras(
+        f, float(last_close) if last_close is not None else None
+    )
+
+
 def _composite_percentiles(
     db: Session, sector: str | None, composite: float | None
 ) -> dict[str, int | None]:
@@ -161,6 +181,7 @@ def get_stock_score(
         breakdown=breakdown,
         sector_avg=_sector_avg_composite(db, stock.sector),
         **_composite_percentiles(db, stock.sector, score.composite),
+        quality_extras=_quality_extras(db, stock),
     )
 
 
@@ -328,6 +349,7 @@ def recompute_stock_score(
         breakdown=breakdown,
         sector_avg=_sector_avg_composite(db, stock.sector),
         **_composite_percentiles(db, stock.sector, new_score.composite),
+        quality_extras=_quality_extras(db, stock),
     )
 
 
