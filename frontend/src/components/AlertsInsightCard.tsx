@@ -119,10 +119,19 @@ function TopRow({ c, rank }: { c: Confluence; rank: number }) {
             )}
           </div>
         </div>
-        {/* Tono (+ contested flag) */}
+        {/* Tono (+ contested flag + bull multi-horizon conviction) */}
         <div className="w-[4.25rem] shrink-0 flex items-center gap-1">
           <DirPill direction={c.direction} />
           {c.contested && <Swords className="h-3 w-3 shrink-0 text-amber-500" aria-label="Conteso" />}
+          {c.direction === "bull" && c.multi_horizon && (
+            <TrendingUp
+              className="h-3 w-3 shrink-0 text-emerald-500"
+              aria-label="Convinzione: multi-orizzonte rialzista"
+              // Data note: mh-bull has a positive directional DRIFT edge
+              // (study 2026-06-09) — a conviction/selection signal, NOT a
+              // wider target (reach is not improved). Informational only.
+            />
+          )}
         </div>
         {/* Orizzonte span */}
         <div className="w-12 shrink-0"><HorizonChips horizons={c.horizons} /></div>
