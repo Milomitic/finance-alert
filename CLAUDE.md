@@ -473,6 +473,33 @@ cross-lens leakage; don't re-introduce it):
   `confidence` shown ~flat vs realised outcome — the reason for the split).
 - Design spec: `docs/superpowers/specs/2026-05-28-signal-strength-probability-split-design.md`.
 
+### Chain enrichment + `confirmation_count` is DISPLAY-ONLY by design (2026-06)
+`app/signals/chain_enrichment.py` appends co-temporal, same-tone confirmation
+events (EMA reject, MACD cross, candle rejection, RSI rollover, volume,
+lower-high/higher-low) to a technical detector's Catena, tagged
+`kind="confirmation"`, and stamps a bounded `factors["confirmation_count"]`.
+Wired in `runner.detect_signals`; runs for the 14 technical detectors in
+`ENRICHABLE`; each detector excludes its OWN trigger event (`_OWN_EVENT_TYPES`)
+so it never re-counts the event it fired on.
+
+**`confirmation_count` does NOT move Forza/Probabilità — and that's validated,
+not an oversight.** The `confirmation_outcomes` study (14.5k signals,
+no-look-ahead) showed forward hit-rate is ~flat across 0/1/2/3 confirmations
+(49.9/49.9/49.1%) and *worse* for the divergence family. So: it stays out of
+every detector's `strength_keys`, `factor_adjustments` has no
+`confirmation_count` entry, and there is no per-alert confluence Forza boost.
+**Do NOT re-add a confirmation/confluence → score bonus without a NEW study
+showing edge** (mirrors the "read/unread removed, don't re-add" rule). Findings:
+`docs/superpowers/specs/2026-06-09-confirmation-outcome-study-findings.md`.
+
+Confluence aggregation (`confluence_service`) IS de-correlated by detector
+FAMILY (`_FAMILY` / `_effective_n`): N correlated same-family signals count
+~1.3, not N. `ConfluenceCluster.effective_n` is the de-correlated count (≤
+`n_signals`). This only ever *lowers* inflated confluence; it makes no
+predictive claim. The one cross-signal feature with a prior backtest edge is
+`multi_horizon` (~+0.8%/30d, bull only) — the only thing that may justify a
+future target/conviction tweak.
+
 ### One-off scan / recompute outside the API (e.g. after a scoring change)
 Stop uvicorn FIRST (sole SQLite writer → avoids "database is locked"), run with
 `cd backend && PYTHONPATH=. ./.venv/Scripts/python.exe <script>`, then restart +

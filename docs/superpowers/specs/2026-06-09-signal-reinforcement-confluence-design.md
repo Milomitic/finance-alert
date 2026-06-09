@@ -1,7 +1,7 @@
 # Signal Reinforcement & Confluence — Design
 
 **Date:** 2026-06-09
-**Status:** Phases 1, 2 shipped. Phase 3a shipped. **Phases 3b/3c/4 revised by evidence — see below.**
+**Status:** COMPLETE. Phases 1, 2, 3a shipped. Phases 3b/3c/4 **closed without implementation** — rejected by the data checkpoint (user chose to stop at the evidence; reinforcement is shown as context, scores/targets stay outcome-grounded).
 **Scope decision (user):** Implement *everything, phased* (1 → 2 → 3 → 4) with a review checkpoint between phases. Phases 3–4 touch backtest-validated scoring/targets and are gated behind their own checkpoint + re-validation.
 
 > **⚠ Evidence-based revision (2026-06-09).** The Phase-3 data checkpoint ran
