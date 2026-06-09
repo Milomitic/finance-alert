@@ -83,6 +83,23 @@ function toQuery(params: AlertListParams): string {
   return s ? `?${s}` : "";
 }
 
+/** Per-detector calibration facts (Engine Quality v1). Detector-level, so a
+ *  single fetch covers every alert of that detector. */
+export interface DetectorCalibration {
+  base_rate: number;
+  /** Market-neutral hit-rate (beta-stripped) — the honest "skill". null if the
+   *  artifact lacks it. */
+  skill: number | null;
+  edge_pct: number | null;
+  n: number | null;
+  horizon_days: number | null;
+  tag: "coinflip" | "negative" | "edge" | null;
+}
+export interface SignalCalibrationTable {
+  version: string | null;
+  detectors: Record<string, DetectorCalibration>;
+}
+
 export const alerts = {
   list: (params: AlertListParams = {}) =>
     api<AlertList>(`/api/alerts${toQuery(params)}`),
@@ -122,6 +139,10 @@ export const alerts = {
       body: "{}",
     }),
   scanStatus: () => api<ScanStatusInfo>("/api/alerts/scan-status"),
+  /** Per-detector calibration table (base_rate, beta-stripped skill, edge_pct,
+   *  n, honesty tag). Detector-level + ~static, so cache it aggressively. */
+  signalCalibration: () =>
+    api<SignalCalibrationTable>("/api/alerts/signal-calibration"),
   /** Confluence clusters: active signal alerts grouped by ticker+direction,
    *  strongest first. `days` = active-window length (default 7). */
   confluence: (days = 7) =>

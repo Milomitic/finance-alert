@@ -317,7 +317,11 @@ export function AlertDetailDialog({ alert, onClose }: Props) {
             </div>
           )}
           {isSignalKind(alert.rule_kind) ? (
-            <SignalSnapshotView snapshot={alert.snapshot ?? {}} showInvalidation={false} />
+            <SignalSnapshotView
+              snapshot={alert.snapshot ?? {}}
+              showInvalidation={false}
+              detector={(alert.rule_kind ?? "").replace(/^signal:/, "") || undefined}
+            />
           ) : hasResolvedRows ? (
             <div className="rounded-lg border border-border/60 px-3 py-1">
               {resolution.rows.map((r) => (

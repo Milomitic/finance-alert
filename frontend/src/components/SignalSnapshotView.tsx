@@ -10,6 +10,7 @@ import {
 } from "@/lib/alertMeta";
 import { cn } from "@/lib/utils";
 import { glossForStep } from "@/lib/signalInterpretation";
+import { useSignalCalibration } from "@/hooks/useSignalCalibration";
 
 /* Source badge configuration for non-technical hybrid chain steps. */
 const SOURCE_BADGE: Record<
@@ -78,11 +79,17 @@ const FACTOR_LABELS: Record<string, string> = {
 export function SignalSnapshotView({
   snapshot,
   showInvalidation = true,
+  detector,
 }: {
   snapshot: Record<string, unknown>;
   showInvalidation?: boolean;
+  /** Detector name (from the alert's rule_kind) — used to look up the
+   *  beta-stripped skill + honesty tag from the calibration table. */
+  detector?: string;
 }) {
   const s = snapshot as Partial<SignalSnapshot>;
+  const { data: calTable } = useSignalCalibration();
+  const cal = detector ? calTable?.detectors?.[detector] : undefined;
   const tone: AlertTone =
     s.tone === "bull" ? "bullish" : s.tone === "bear" ? "bearish" : "neutral";
   // Forza = pattern strength (snapshot.strength). Probabilità = historical
@@ -149,6 +156,38 @@ export function SignalSnapshotView({
               {probPct != null ? `${probPct}%` : "n/d"}
             </span>
           </div>
+
+          {/* Honesty row: beta-stripped skill + a calibration tag. Most
+              single-name technicals are historically ~coin-flips; this surfaces
+              that truth instead of implying edge from the absolute hit-rate. */}
+          {cal && (
+            <div className="flex items-center gap-2 flex-wrap pl-[5.5rem] -mt-2">
+              {cal.tag === "coinflip" && (
+                <span className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60"
+                  title="Storicamente ~50/50 al netto del mercato: nessun edge direzionale dimostrato">
+                  ≈50/50 storico
+                </span>
+              )}
+              {cal.tag === "negative" && (
+                <span className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800/60"
+                  title={`Edge storico NEGATIVO al netto del mercato (${cal.edge_pct?.toFixed(2)}%): segnale anti-predittivo`}>
+                  edge storico negativo
+                </span>
+              )}
+              {cal.tag === "edge" && (
+                <span className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60"
+                  title="Edge storico positivo al netto del mercato (beta-stripped)">
+                  edge storico
+                </span>
+              )}
+              {cal.skill != null && (
+                <span className="text-[11px] text-muted-foreground tabular-nums"
+                  title="Hit-rate storico al netto del movimento di mercato (skill, beta-stripped). La Probabilità sopra include invece il beta di mercato.">
+                  skill {Math.round(cal.skill)}%{cal.n != null ? ` · n ${cal.n.toLocaleString("it-IT")}` : ""}
+                </span>
+              )}
+            </div>
+          )}
 
           {Object.keys(factors).length > 0 && (
             <div>
