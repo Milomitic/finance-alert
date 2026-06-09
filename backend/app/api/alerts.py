@@ -458,6 +458,23 @@ def scan_status(
     return _build_scan_status(latest)
 
 
+@router.get("/signal-calibration")
+def signal_calibration(_user: User = Depends(get_current_user)) -> dict:
+    """Per-detector calibration facts for the UI: base_rate (absolute hit),
+    skill (market-neutral hit — beta-stripped), edge_pct, sample n, horizon, and
+    an honesty `tag` (coinflip / negative / edge).
+
+    Detector-LEVEL (identical for every alert of a detector), so it's served as
+    a lookup — always reflects the current artifact, no per-alert storage and no
+    backfill. The signal-detail UI joins on the alert's signal_name to show the
+    skill view + honesty marker next to Probabilità.
+    """
+    from app.signals.calibration_map import get_calibration
+
+    cal = get_calibration()
+    return {"version": cal.version, "detectors": cal.all_detector_stats()}
+
+
 @router.post("/scan/stop", response_model=ScanStopResult)
 def stop_scan(
     db: Session = Depends(get_db), _user: User = Depends(get_current_user)
