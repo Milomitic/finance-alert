@@ -219,8 +219,16 @@ Each phase is independently shippable and reversible; Phases 3–4 require the e
 
 ---
 
-## 12. Open questions for the user
+## 12. Decisions (resolved)
 
-1. **Phase-1 scope of detectors:** start enrichment on `trend_pullback` only, or all `_TREND_FOLLOWING_SIGNALS` from the outset? (Recommend: `trend_pullback` first, then widen.)
-2. **`MaRejection` detector:** include the dedicated detector in Phase 2, or keep the EMA reject as a *chain confirmation only* until Phase 3 proves it adds independent edge? (Recommend: chain-only first; promote to detector if calibration shows edge.)
-3. **Multi-timeframe (§8 stretch):** in scope now as a 5th phase, or explicitly deferred? (Recommend: deferred follow-up.)
+1. **Detector scope — GENERAL.** The reinforcement concept is not pullback-specific: enrichment runs on the **whole technical detector family** (14 detectors: trend_pullback, volume_breakout, high52_momentum, squeeze_expansion, gap_and_go, adx_confirmation, sr_flip, structure_break, rsi_divergence, macd_divergence, hidden_divergence, oversold_reversal, candle_reversal, chart_pattern). Pure-fundamental detectors (pead/analyst_momentum/insider_buy) are excluded (hybrid chains, different confirmation semantics — a later pass can cover them). Each detector excludes its OWN trigger event type(s) from its confirmations (`_OWN_EVENT_TYPES`) so it never re-counts the event it fired on — chain-level de-correlation, the display-layer analogue of Phase 3's bucket de-correlation.
+2. **`MaRejection` detector:** chain-confirmation only for now; promote to a dedicated detector iff Phase-3 calibration shows independent edge.
+3. **Multi-timeframe (§8 stretch):** deferred follow-up, out of the initial 4-phase scope.
+
+### Validated generality (2026-06-09, sweep over 400 stocks)
+Enrichment rate by detector: adx_confirmation 86%, squeeze_expansion 99%,
+candle_reversal 76%, oversold_reversal 82%, trend_pullback 92%, gap_and_go
+100%, rsi_divergence 100%, sr_flip 92%, volume_breakout 99%, … ; fundamentals
+0% (correctly excluded). The "Rifiuto su EMA200/EMA50" confirmation chains
+across many setups (rsi_divergence, squeeze_expansion, trend_pullback,
+oversold_reversal, …), not just the motivating META pullback.

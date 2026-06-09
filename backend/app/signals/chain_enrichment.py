@@ -23,9 +23,40 @@ import pandas as pd
 from app.signals.detectors.base import SignalMatch
 from app.signals.events import Event
 
-# Detectors whose chains we enrich. Start narrow (the user's example) and widen
-# once validated; keep in sync with the spec's Phase-1 scope decision.
-ENRICHABLE = {"trend_pullback"}
+# Detectors whose chains we enrich. The reinforcement concept is GENERAL — any
+# technical continuation/reversal setup benefits from showing its co-temporal
+# confirmations — so this covers the whole technical family, not just the
+# pullback that motivated it. (Pure-fundamental detectors — pead /
+# analyst_momentum / insider_buy — are excluded: their chains are hybrid with
+# source badges and a different confirmation semantics; a separate pass can
+# enrich those later.)
+ENRICHABLE = {
+    "trend_pullback", "volume_breakout", "high52_momentum", "squeeze_expansion",
+    "gap_and_go", "adx_confirmation", "sr_flip", "structure_break",
+    "rsi_divergence", "macd_divergence", "hidden_divergence",
+    "oversold_reversal", "candle_reversal", "chart_pattern",
+}
+
+# Per-detector trigger event types to EXCLUDE from its own confirmations, so a
+# detector never re-counts the very event it fired on (chain-level
+# de-correlation). Only types that also appear in _CONFIRMATION_TYPES actually
+# matter; the rest are documented for clarity. trend_pullback fires on
+# `ema_cross`, NOT `ema_reject` — so an EMA reject legitimately reinforces it.
+_OWN_EVENT_TYPES: dict[str, set[str]] = {
+    "trend_pullback": {"ema_cross"},
+    "volume_breakout": {"breakout", "volume_spike"},
+    "gap_and_go": {"gap", "volume_spike"},
+    "adx_confirmation": {"adx_trend", "breakout"},
+    "oversold_reversal": {"rsi_extreme", "sr_level"},
+    "candle_reversal": {"candle_reversal", "sr_level"},
+    "rsi_divergence": {"rsi_divergence"},
+    "hidden_divergence": {"hidden_divergence"},
+    "macd_divergence": {"macd_divergence"},
+    "squeeze_expansion": {"bb_squeeze", "bb_expansion"},
+    "structure_break": {"swing_pivot"},
+    "chart_pattern": {"swing_pivot"},
+    "sr_flip": {"sr_level"},
+}
 
 # Direction-tagged confirmation event types we recognise as reinforcing a
 # continuation thesis. volume_spike carries no direction → tone is derived from
@@ -117,9 +148,10 @@ def enrich_chain(
     # makes confirmation_count count distinct KINDS, not repeats — the honest
     # measure and the one Phase-3 de-correlation wants.
     best: dict[str, tuple[int, dict]] = {}  # type -> (bar_index, step)
+    own = _OWN_EVENT_TYPES.get(match.name, set())  # the detector's own trigger(s)
 
     for ev in events:
-        if ev.type not in _CONFIRMATION_TYPES:
+        if ev.type not in _CONFIRMATION_TYPES or ev.type in own:
             continue
         day = str(ev.date)[:10]
         ei = idx_of.get(day)

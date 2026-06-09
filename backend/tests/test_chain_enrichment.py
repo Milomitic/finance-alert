@@ -110,6 +110,48 @@ def test_no_confirmations_leaves_match_unchanged():
     assert "confirmation_count" not in out.factors
 
 
+def test_enrichment_is_general_across_detectors():
+    # The concept is general: a non-trend_pullback continuation setup
+    # (volume_breakout) gets the same co-temporal confirmation treatment.
+    df = _ohlcv()
+    last = df["date"].iloc[-1]
+    m = SignalMatch(
+        name="volume_breakout", tone="bear", signal_date=last,
+        chain=[{"date": last, "label": "Breakout ribassista", "detail": "x"}],
+        invalidation=None, factors={}, strength=70, probability=55,
+    )
+    events = [Event(last, "macd_cross", "bear", magnitude=1.0)]
+    out = enrich_chain(m, events, df)
+    assert any(s.get("kind") == "confirmation" for s in out.chain)
+    assert out.factors["confirmation_count"] == 1 / 3
+
+
+def test_detector_does_not_recount_its_own_trigger_event():
+    # oversold_reversal fires on rsi_extreme; an rsi_extreme event must NOT be
+    # appended as a "confirmation" of itself (chain-level de-correlation).
+    df = _ohlcv()
+    last = df["date"].iloc[-1]
+    m = SignalMatch(
+        name="oversold_reversal", tone="bull", signal_date=last,
+        chain=[{"date": last, "label": "RSI ipervenduto al supporto", "detail": "x"}],
+        invalidation=None, factors={}, strength=65, probability=52,
+    )
+    # An up-bar volume + the detector's own rsi_extreme, both co-temporal.
+    up = pd.DataFrame([
+        {"date": d, "open": 100.0, "high": 103.0, "low": 99.0, "close": 102.0, "volume": 1_000_000}
+        for d in df["date"]
+    ])
+    events = [
+        Event(last, "rsi_extreme", "bull", magnitude=0.8),   # own trigger → excluded
+        Event(last, "volume_spike", None, magnitude=3.0),    # up-bar → bull confirmation
+    ]
+    out = enrich_chain(m, events, up)
+    conf = [s for s in out.chain if s.get("kind") == "confirmation"]
+    labels = " ".join(s["label"] for s in conf)
+    assert "Volume" in labels          # volume confirmation kept
+    assert "RSI" not in labels         # own rsi_extreme NOT re-counted
+
+
 def test_horizon_ignores_confirmation_steps():
     # A long trend_pullback (cross months before the signal) must STAY long even
     # though a confirmation step lands on the signal date.
