@@ -32,8 +32,11 @@ def test_groups_same_direction_and_scores(db):
     assert c.ticker == "AAA"
     assert c.direction == "bear"
     assert c.n_signals == 2
-    # Diminishing-returns bonus toward CEIL=98: base 80 + (98-80)*(1-0.5^1) = 89
-    assert c.strength == 89.0
+    # Both are the 'trend' family → DE-CORRELATED to n_eff = 1 + 0.15 = 1.15,
+    # so the bonus is small: base 80 + (98-80)*(1-0.5^0.15) ≈ 81.8 (a raw
+    # count of 2 would have given 89.0).
+    assert c.effective_n == 1.15
+    assert round(c.strength, 1) == 81.8
     assert c.contested is False
 
 
@@ -95,15 +98,36 @@ def test_legacy_confidence_100_is_capped_at_ceiling(db):
 
 
 def test_strength_grows_with_confluence_below_ceiling(db):
-    """More concurring signals push strength UP toward (never past) the ceiling."""
+    """More concurring signals push strength UP toward (never past) the ceiling
+    — but DE-CORRELATED: these four are all the 'trend' family, so they count
+    ~1.45 effective, not 4. base 70; n_eff = 1 + 0.15*3 = 1.45 →
+    70 + (98-70)*(1-0.5^0.45) ≈ 77.5 (NOT the 94.5 a raw count would give)."""
     s2 = _stock(db, "EE2")
     for nm in ["trend_pullback", "squeeze_expansion", "high52_momentum", "sr_flip"]:
         _add(db, s2.id, nm, 70, "bull")
     db.commit()
     c = compute_confluence(db, days=30)[0]
-    # base 70; n=4 → 70 + (98-70)*(1-0.5^3) = 70 + 28*0.875 = 94.5
-    assert c.strength == 94.5
+    assert c.n_signals == 4
+    assert c.effective_n == 1.45
+    assert round(c.strength, 1) == 77.5
     assert c.strength < 98.0
+
+
+def test_decorrelation_distinct_families_beat_same_family(db):
+    """Same confidences: 3 DISTINCT-family signals must yield a HIGHER
+    confluence strength than 3 SAME-family ones (independent evidence > one
+    piece counted thrice)."""
+    same = _stock(db, "SAME")
+    for nm in ["trend_pullback", "volume_breakout", "adx_confirmation"]:  # all 'trend'
+        _add(db, same.id, nm, 70, "bull")
+    diff = _stock(db, "DIFF")
+    for nm in ["trend_pullback", "rsi_divergence", "candle_reversal"]:  # 3 families
+        _add(db, diff.id, nm, 70, "bull")
+    db.commit()
+    by_ticker = {c.ticker: c for c in compute_confluence(db, days=30)}
+    assert by_ticker["SAME"].effective_n == 1.30   # 1 + 0.15*2
+    assert by_ticker["DIFF"].effective_n == 3.0
+    assert by_ticker["DIFF"].strength > by_ticker["SAME"].strength
 
 
 def test_stale_signals_excluded_by_window(db):

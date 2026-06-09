@@ -59,6 +59,9 @@ class ConfluenceCluster:
     direction: str          # prevailing side: "bull" | "bear"
     strength: float
     n_signals: int
+    # De-correlated independent-evidence count among the prevailing-direction
+    # components (distinct families + a small same-family discount). ≤ n_signals.
+    effective_n: float
     bull_strength: float
     bear_strength: float
     contested: bool
@@ -71,17 +74,50 @@ class ConfluenceCluster:
     components: list[ConfluenceComponent]
 
 
-def _dir_strength(confs: list[float]) -> float:
-    if not confs:
+# Correlation families — detectors keying off the SAME underlying substrate
+# count as largely ONE piece of evidence, not N. Without this, three EMA-trend
+# bears (trend_pullback + adx_confirmation + structure_break …) would inflate
+# confluence ~3x off one signal — the cross-detector version of the "mediocrity
+# laundering" score_v2 was built to prevent. Conservative buckets (lump the
+# whole trend-following family) so confluence never over-credits.
+_FAMILY: dict[str, str] = {
+    "trend_pullback": "trend", "volume_breakout": "trend", "adx_confirmation": "trend",
+    "high52_momentum": "trend", "structure_break": "trend", "squeeze_expansion": "trend",
+    "gap_and_go": "trend", "sr_flip": "trend",
+    "rsi_divergence": "divergence", "macd_divergence": "divergence",
+    "hidden_divergence": "divergence",
+    "oversold_reversal": "level", "candle_reversal": "level",
+    "chart_pattern": "pattern",
+    "pead": "fundamental", "analyst_momentum": "fundamental", "insider_buy": "fundamental",
+}
+# Weight of each EXTRA member within a family (the first counts 1.0). 0.15 →
+# three same-family signals count 1.30 effective, not 3.
+_SAME_FAMILY_WEIGHT = 0.15
+
+
+def _effective_n(names: list[str]) -> float:
+    """Independent-evidence count: distinct families + a small discount for
+    extra same-family members. 3 correlated → ~1.3; 3 distinct → 3.0."""
+    if not names:
+        return 0.0
+    fams = [_FAMILY.get(n, n) for n in names]  # unknown detector → its own family
+    distinct = len(set(fams))
+    return distinct + _SAME_FAMILY_WEIGHT * (len(fams) - distinct)
+
+
+def _dir_strength(comps: list[tuple[float, str]]) -> float:
+    """Aggregate confluence strength from (confidence, detector_name) pairs.
+    Diminishing-returns bonus toward a reserved ceiling, driven by the
+    DE-CORRELATED effective count so correlated detectors don't inflate it."""
+    if not comps:
         return 0.0
     # Cap the base at the ceiling so legacy snapshots that stored a raw
     # confidence of 100 (predating the score() reshape) can't leak a perfect
-    # strength through the n=1 path, where the bonus term below is exactly 0
-    # and the function would otherwise return `max(confs)` unchanged.
-    base = min(max(confs), _CONFLUENCE_CEIL)
-    n = len(confs)
-    # Diminishing-returns bonus toward a reserved ceiling (never reaches 100).
-    return base + (_CONFLUENCE_CEIL - base) * (1.0 - _CONFLUENCE_DECAY ** (n - 1))
+    # strength through the n_eff=1 path, where the bonus term is exactly 0 and
+    # the function would otherwise return `max(confs)` unchanged.
+    base = min(max(c for c, _ in comps), _CONFLUENCE_CEIL)
+    n_eff = _effective_n([name for _, name in comps])
+    return base + (_CONFLUENCE_CEIL - base) * (1.0 - _CONFLUENCE_DECAY ** (n_eff - 1))
 
 
 def compute_confluence(db: Session, *, days: int | None = None) -> list[ConfluenceCluster]:
@@ -122,8 +158,8 @@ def compute_confluence(db: Session, *, days: int | None = None) -> list[Confluen
             continue
         bull = [c for c in items if c[4] == "bull"]
         bear = [c for c in items if c[4] == "bear"]
-        bs = _dir_strength([c[3] for c in bull])
-        rs = _dir_strength([c[3] for c in bear])
+        bs = _dir_strength([(c[3], c[1]) for c in bull])
+        rs = _dir_strength([(c[3], c[1]) for c in bear])
         direction = "bull" if bs >= rs else "bear"
         strength = max(bs, rs)
         contested = bool(bull and bear and abs(bs - rs) < _CONTESTED_GAP)
@@ -132,6 +168,8 @@ def compute_confluence(db: Session, *, days: int | None = None) -> list[Confluen
         _order = {"short": 0, "medium": 1, "long": 2}
         horizons = sorted({c[5] for c in prevailing}, key=lambda h: _order.get(h, 1))
         multi_horizon = len(horizons) >= 2
+        # De-correlated independent-evidence count among prevailing components.
+        eff_n = _effective_n([c[1] for c in prevailing])
         comps = [
             ConfluenceComponent(
                 alert_id=aid, rule_kind=f"signal:{sname}", signal_name=sname,
@@ -143,6 +181,7 @@ def compute_confluence(db: Session, *, days: int | None = None) -> list[Confluen
         clusters.append(ConfluenceCluster(
             ticker=ticker, name=names.get(ticker), direction=direction,
             strength=round(strength, 1), n_signals=len(items),
+            effective_n=round(eff_n, 2),
             bull_strength=round(bs, 1), bear_strength=round(rs, 1),
             contested=contested, multi_horizon=multi_horizon, horizons=horizons,
             components=comps,
