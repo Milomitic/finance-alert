@@ -1,8 +1,19 @@
 # Signal Reinforcement & Confluence — Design
 
 **Date:** 2026-06-09
-**Status:** Draft for review
+**Status:** Phases 1, 2 shipped. Phase 3a shipped. **Phases 3b/3c/4 revised by evidence — see below.**
 **Scope decision (user):** Implement *everything, phased* (1 → 2 → 3 → 4) with a review checkpoint between phases. Phases 3–4 touch backtest-validated scoring/targets and are gated behind their own checkpoint + re-validation.
+
+> **⚠ Evidence-based revision (2026-06-09).** The Phase-3 data checkpoint ran
+> (`confirmation_outcomes`, 14,531 signals) and **rejected** the core
+> hypothesis: more co-temporal confirmations do NOT predict a higher forward
+> hit-rate (pooled absHit ~50% flat across 1/2/3 confirmations; *worse* for the
+> divergence family). Consequences, per
+> `2026-06-09-confirmation-outcome-study-findings.md`:
+> - **3c**: NO `confirmation_count → Probabilità` adjustment (would be unjustified, and backwards for divergences). `confirmation_count` stays **display-only**.
+> - **3b**: NO per-alert `effective_forza` boost from confirmation/confluence count (manufactures false conviction).
+> - **3a kept**: de-correlated confluence strength — a conservative aggregation/display that only ever *lowers* inflated confluence; makes no predictive claim.
+> - **Phase 4**: targets key ONLY off the already-validated `multi_horizon` signal, never raw confirmation/confluence count.
 
 ---
 
