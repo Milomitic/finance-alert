@@ -338,6 +338,29 @@ def _reset_today_fetch_budget(*, tokens: int) -> None:
         _TODAY_FETCH_BUDGET["tokens"] = tokens
 
 
+def _session_ended_today(ticker: str) -> bool:
+    """True iff TODAY (exchange-local) is a weekday whose regular session has
+    already ENDED — i.e. we are in the post-close gap of a real trading day.
+    False on weekends and before/at the close, so fast_info's lastPrice can
+    never be mislabeled as a fresh "today" when no session happened (its
+    after-hours drift on a Friday would otherwise leak into Saturday).
+    Holidays degrade safely: lastPrice then equals the prior close and the
+    caller's echo guard rejects it."""
+    region = _exchange_region(ticker)
+    hours = _MARKET_HOURS_LOCAL.get(region)
+    if hours is None:
+        return False
+    tzname, _open_hm, (ch, cm) = hours
+    tz = _TZ_CACHE.get(tzname)
+    if tz is None:
+        tz = _TZ_CACHE[tzname] = ZoneInfo(tzname)
+    local_now = datetime.now(tz)
+    if local_now.weekday() >= 5:
+        return False
+    close_dt = local_now.replace(hour=ch, minute=cm, second=0, microsecond=0)
+    return local_now >= close_dt
+
+
 def _provisional_today(
     ticker: str, currency: str | None, today: date, allow_fetch: bool,
 ) -> tuple[float, float] | None:
@@ -648,6 +671,23 @@ def _fetch_fresh(ticker: str, *, allow_remote_today_fetch: bool = True) -> LiveQ
                     )
                     if prov is not None:
                         last_eff, prev_effective = prov
+                        as_of = today
+                    elif (
+                        two is not None
+                        and _session_ended_today(ticker)
+                        and last is not None
+                        and two[1] is not None and two[1] > 0
+                        and abs(last - two[1]) / two[1] > _PREMARKET_EPS
+                    ):
+                        # Post-close gap, no tick/official bar yet: fast_info's
+                        # lastPrice IS today's session price after the bell —
+                        # free + instant for the whole movers pool (the budgeted
+                        # official fetch alone converged too slowly; user report
+                        # 2026-06-10). Guards: a real trading day whose session
+                        # ended (_session_ended_today) + the price must DIFFER
+                        # from the prior close (echo guard). The official bar /
+                        # next scan refine it later.
+                        last_eff, prev_effective = last, two[1]
                         as_of = today
                     elif two is not None:
                         # No "today" available → genuine last close (yesterday).

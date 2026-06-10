@@ -258,6 +258,15 @@ def test_quote_when_market_closed_uses_eod_pair(
         "app.services.live_quote_service._is_premarket",
         lambda *_args, **_kw: False,
     )
+    # Pin OUTSIDE the post-close gap (weekend / pre-open / DB already has
+    # today): there the settled EOD pair must always beat the drift quote.
+    # The complementary case — session ended TODAY but the DB only has
+    # yesterday → fast_info lastPrice serves as today's provisional close —
+    # is asserted in test_live_quote_service.py (post-close gap tests).
+    monkeypatch.setattr(
+        "app.services.live_quote_service._session_ended_today",
+        lambda *_args, **_kw: False,
+    )
     live_quote_service.clear_cache()
     q = live_quote_service.get_quote("MU")
     assert q.market_state == "CLOSED"

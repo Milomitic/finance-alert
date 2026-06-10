@@ -467,3 +467,63 @@ def test_provisional_today_allow_fetch_bypasses_budget(monkeypatch) -> None:
     live_quote_service._reset_today_fetch_budget(tokens=0)  # empty bucket
     # Single-quote path (allow_fetch=True) is unaffected by the budget.
     assert live_quote_service._provisional_today("SNDK", None, today, True) == (104.0, 100.0)
+
+
+# ── Post-close gap, instant source: fast_info lastPrice ──────────────────
+# After the bell fast_info's lastPrice IS today's session price (Yahoo keeps
+# the last trade). When the DB lacks today and no tick/official bar is
+# available yet, that price must be served as today's provisional close —
+# covering the WHOLE movers pool in one cycle (the 10/min official-bar
+# budget alone left rows on yesterday for up to ~12 minutes — user report
+# 2026-06-10 22:31).
+
+def _patch_closed_gap(monkeypatch, *, last_price: float, db_close: float,
+                      session_ended: bool) -> None:
+    fi = _fake_fast_info({"lastPrice": last_price, "previousClose": db_close})
+    class FakeTicker:
+        def __init__(self, _t: str) -> None:
+            self.fast_info = fi
+    monkeypatch.setattr("yfinance.Ticker", FakeTicker)
+    monkeypatch.setattr(live_quote_service, "_is_market_open",
+                        lambda t, now_utc=None: False)
+    monkeypatch.setattr(live_quote_service, "_is_premarket", lambda t: False)
+    monkeypatch.setattr(live_quote_service, "_latest_two_bars",
+                        lambda t: (date(2026, 6, 9), db_close, 98.0))
+    monkeypatch.setattr(live_quote_service, "_provisional_today",
+                        lambda *a, **kw: None)
+    monkeypatch.setattr(live_quote_service, "_session_ended_today",
+                        lambda t: session_ended)
+    monkeypatch.setattr(live_quote_service, "_override_prev_close_from_ohlcv",
+                        lambda *a, **kw: None)
+    monkeypatch.setattr(live_quote_service, "_eod_pair_from_ohlcv",
+                        lambda *a, **kw: None)
+
+
+def test_postclose_gap_serves_fastinfo_last_as_today(monkeypatch) -> None:
+    _patch_closed_gap(monkeypatch, last_price=103.0, db_close=100.0,
+                      session_ended=True)
+    q = live_quote_service.get_quote("SNDK", force_refresh=True)
+    assert q.price == 103.0
+    assert q.prev_close == 100.0
+    assert q.change_pct == pytest.approx(3.0)
+    assert q.as_of_date == date.today().isoformat() or q.as_of_date is not None
+    assert q.market_state == "CLOSED"
+
+
+def test_postclose_gap_weekend_guard_keeps_yesterday(monkeypatch) -> None:
+    # Saturday: lastPrice may carry Friday post-market drift — must NOT be
+    # labeled as a new "today". _session_ended_today is False on weekends.
+    _patch_closed_gap(monkeypatch, last_price=103.0, db_close=100.0,
+                      session_ended=False)
+    q = live_quote_service.get_quote("SNDK", force_refresh=True)
+    assert q.price == 100.0           # genuine last close (yesterday)
+    assert q.as_of_date == "2026-06-09"
+
+
+def test_postclose_gap_echo_guard_keeps_yesterday(monkeypatch) -> None:
+    # lastPrice == DB close → indistinguishable from a stale echo → yesterday.
+    _patch_closed_gap(monkeypatch, last_price=100.0, db_close=100.0,
+                      session_ended=True)
+    q = live_quote_service.get_quote("SNDK", force_refresh=True)
+    assert q.price == 100.0
+    assert q.as_of_date == "2026-06-09"
