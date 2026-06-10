@@ -5,6 +5,7 @@ stock endpoint returns the persisted breakdown verbatim — the UI walks the
 dict to render component bars without re-fetching upstream data.
 """
 import json
+from datetime import date, timedelta
 from typing import Annotated, get_args
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
@@ -16,12 +17,23 @@ from app.api.deps import get_current_user, get_db
 from app.core.db import SessionLocal
 from app.core.errors import UpstreamError
 from app.core.visibility import visible_country_clause
-from app.models import OhlcvDaily, ScanRun, Stock, StockScore, TechnicalScore, User
+from app.models import (
+    OhlcvDaily,
+    ScanRun,
+    ScoreHistory,
+    Stock,
+    StockScore,
+    TechnicalScore,
+    User,
+)
 from app.models.scan_run import KIND_SCORE_RECOMPUTE
 from app.schemas.alert import ScanAccepted, ScanStatusOut, ScanStopResult
 from app.schemas.score import (
     RiskTier,
     ScoreCategory,
+    ScoreHistoryOut,
+    ScoreHistoryPoint,
+    ScoreLens,
     StockScoreOut,
     SubScoresOut,
     TechnicalScoreOut,
@@ -182,6 +194,46 @@ def get_stock_score(
         sector_avg=_sector_avg_composite(db, stock.sector),
         **_composite_percentiles(db, stock.sector, score.composite),
         quality_extras=_quality_extras(db, stock),
+    )
+
+
+@router.get("/stocks/{ticker}/score-history", response_model=ScoreHistoryOut)
+def get_stock_score_history(
+    ticker: str,
+    lens: Annotated[ScoreLens, Query()] = "qualita",
+    days: Annotated[int, Query(ge=7, le=365)] = 180,
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+) -> ScoreHistoryOut:
+    """Daily composite snapshots for one lens, ascending, capped to the last
+    `days` days. Empty `points` (not 404) when no history has been captured
+    yet — the score_history table only accrues forward, so a freshly added
+    ticker legitimately has 0-1 points and the UI degrades gracefully.
+    """
+    # Defensive read-path pattern (CLAUDE.md) — pick any matching row.
+    stock = db.execute(
+        select(Stock).where(Stock.ticker == ticker.upper()).limit(1)
+    ).scalars().first()
+    if stock is None:
+        raise HTTPException(status_code=404, detail=f"Ticker not found: {ticker}")
+
+    cutoff = date.today() - timedelta(days=days)
+    rows = db.execute(
+        select(ScoreHistory.captured_on, ScoreHistory.composite)
+        .where(
+            ScoreHistory.stock_id == stock.id,
+            ScoreHistory.lens == lens,
+            ScoreHistory.captured_on >= cutoff,
+        )
+        .order_by(ScoreHistory.captured_on.asc())
+    ).all()
+    return ScoreHistoryOut(
+        ticker=stock.ticker,
+        lens=lens,
+        points=[
+            ScoreHistoryPoint(date=captured_on, composite=composite)
+            for captured_on, composite in rows
+        ],
     )
 
 

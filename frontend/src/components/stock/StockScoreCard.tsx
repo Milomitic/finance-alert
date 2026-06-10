@@ -14,6 +14,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { useMarketMultiTfKpis, useStockMultiTfKpis } from "@/hooks/useMultiTfKpis";
+import { useScoreHistory } from "@/hooks/useScoreHistory";
 import { useStockScore } from "@/hooks/useStockScore";
 import {
   CATEGORY_LABEL,
@@ -333,6 +334,71 @@ function ScoreGauge({ score, size = 180, sectorAvg }: GaugeProps) {
         />
       )}
     </svg>
+  );
+}
+
+/* ─── Score-history sparkline ───────────────────────────────────────────── */
+/* Tiny inline polyline of the daily composite snapshots (score_history,
+ * captured once per scan day). The table only accrues FORWARD — today it
+ * holds 1-2 days — so with <2 points a line is meaningless and we show a
+ * muted "storico da N giorno/i" label instead. Pure SVG, no chart lib. */
+
+function ScoreSparkline({ ticker }: { ticker: string }) {
+  const { data } = useScoreHistory(ticker);
+  if (!data) return null; // loading / error → no placeholder, the card stands alone
+  const points = data.points;
+  const tooltip = `Andamento composito (${points.length} giorni)`;
+  if (points.length < 2) {
+    return (
+      <span
+        className="mt-0.5 text-[10px] italic text-muted-foreground/70"
+        title={tooltip}
+      >
+        storico da {points.length} {points.length === 1 ? "giorno" : "giorni"}
+      </span>
+    );
+  }
+  const w = 96;
+  const h = 28;
+  const pad = 3;
+  const comps = points.map((p) => p.composite);
+  const min = Math.min(...comps);
+  const max = Math.max(...comps);
+  const span = max - min;
+  const x = (i: number) => pad + (i / (points.length - 1)) * (w - pad * 2);
+  // Flat series → centered horizontal line instead of pinning to an edge.
+  const y = (c: number) =>
+    h - pad - (span === 0 ? 0.5 : (c - min) / span) * (h - pad * 2);
+  const polyPoints = points
+    .map((p, i) => `${x(i).toFixed(1)},${y(p.composite).toFixed(1)}`)
+    .join(" ");
+  const lastIdx = points.length - 1;
+  return (
+    <span className="mt-0.5 inline-flex text-muted-foreground/70" title={tooltip}>
+      <svg
+        width={w}
+        height={h}
+        viewBox={`0 0 ${w} ${h}`}
+        role="img"
+        aria-label={tooltip}
+      >
+        <polyline
+          points={polyPoints}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={1.5}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        {/* Last point dot — anchors the eye on "today". */}
+        <circle
+          cx={x(lastIdx)}
+          cy={y(points[lastIdx].composite)}
+          r={2}
+          fill="currentColor"
+        />
+      </svg>
+    </span>
   );
 }
 
@@ -845,6 +911,7 @@ export function StockScoreCard({ ticker }: Props) {
               )}
             </span>
           )}
+          <ScoreSparkline ticker={ticker} />
         </div>
       </div>
 

@@ -919,6 +919,25 @@ export interface TopPicks {
   items: TopPickItem[];
 }
 
+/** Score lens for the daily history snapshots (score_history table). */
+export type ScoreLens = "qualita" | "tecnico";
+
+/** One daily composite snapshot, captured at scan end. */
+export interface ScoreHistoryPoint {
+  /** ISO YYYY-MM-DD of the snapshot day. */
+  date: string;
+  composite: number;
+}
+
+/** Composite time series for one (ticker, lens), ascending by date.
+ *  The table only accrues forward — `points` may legitimately hold 0-1
+ *  entries for a while; the UI must degrade gracefully. */
+export interface ScoreHistoryOut {
+  ticker: string;
+  lens: ScoreLens;
+  points: ScoreHistoryPoint[];
+}
+
 // === Economic calendar ===
 
 /** Macro-event importance tier. Drives chip color and the importance filter
