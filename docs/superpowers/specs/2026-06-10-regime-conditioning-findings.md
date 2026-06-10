@@ -58,5 +58,19 @@ flagged the tone↔regime mechanical correlation. Skew check reproduced the
 predicted 47.2% @63d. The 300-stock confirmation run was cancelled — more
 data cannot fix a structural bias.
 
-## Addendum — median-benchmark result
-(filled after the run)
+## Addendum — median-benchmark run: NOT completed, verdict unaffected
+The `--benchmark median` confirmation replay was attempted 3× and killed each
+time mid-run by environment factors (a machine reboot at 09:50, then manual
+process kills), never by the harness. **The rejection does NOT depend on it**:
+the artifact is established by (a) the tone≡regime construction, (b) the
+zero-skill null matching the observation (−5.6pp structural of the −9.5pp
+observed, P(beat EW mean)=47.2% @63d measured on real data), and (c) the
+residual being unattributable to regime under tone≡regime. The median run
+would only have quantified residual TONE asymmetry — interesting, optional,
+runnable overnight via:
+```
+cd backend && PYTHONPATH=. ./.venv/Scripts/python.exe -u -m app.scripts.regime_conditioned_outcomes \
+  --sample 50 --step 10 --holdout-frac 0.30 --benchmark median \
+  --out app/data/regime_conditioned_study_median50.json
+```
+(~25 min; needs the machine awake and unmolested.)
