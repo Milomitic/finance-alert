@@ -13,17 +13,26 @@ For each detector we compare two numbers:
                            absolute close-to-close directional hit, per
                            `signal_detector_outcomes`). Source of truth:
                            `calibration_map.get_calibration().base_rate(name)`.
-  • recent_hit_rate      — the REALISED hit-rate over the recent window, measured
-                           the SAME way the calibration was: for each MATURED
-                           signal alert, did the close move from the trigger bar
-                           over the detector's horizon go the signalled way
-                           (tone)? Computed off STORED `ohlcv_daily` only — no
-                           network.
+  • recent_hit_rate      — the REALISED hit-rate over the recent window, read
+                           straight from the `signal_outcomes` warehouse: one
+                           row per MATURED signal alert with `abs_hit` labeled
+                           by `signal_outcome_service.mature_outcomes` using
+                           the SAME absolute close-to-close definition the
+                           calibration was built on (parity-checked at
+                           backfill). A cheap GROUP BY — no OHLCV replay.
 
 A "matured" alert is one whose horizon has fully elapsed: the bar
 `horizon_days` trading bars after the trigger bar exists in stored OHLCV (so a
-forward close is available — the only thing that "looks past" the signal). This
-mirrors the harness's `fwd = c[i + h] / c[i]` exactly, in trading-day bars.
+forward close is available — the only thing that "looks past" the signal).
+
+FRESHNESS CONTRACT
+══════════════════
+Outcome rows are written by `mature_outcomes` at the END OF EACH SCAN (and by
+the one-off backfill script). So the drift window reflects the warehouse "as
+of the last scan": an alert whose horizon elapsed between scans only becomes
+visible here once the next scan matures it. That lag (at most one scan
+interval) is acceptable and by design — drift is a slow-moving retune monitor,
+not a live feed.
 
 THE DRIFT DECISION (why a Wilson band, not a raw delta)
 ═══════════════════════════════════════════════════════
@@ -56,14 +65,13 @@ rest of the platform UI. Read-only: no writes, no migrations.
 """
 from __future__ import annotations
 
-import json
 import math
 from datetime import UTC, date, datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.models import Alert, OhlcvDaily
+from app.models import Alert, SignalOutcome
 from app.signals.calibration_map import get_calibration
 from app.signals.horizon import _PRIOR
 
@@ -116,80 +124,6 @@ def wilson_interval(hits: int, n: int, z: float = _DEFAULT_Z) -> tuple[float, fl
     return max(0.0, center - margin), min(1.0, center + margin)
 
 
-def _parse_tone(snapshot: str | None) -> str | None:
-    """The signal's bull/bear tone from its snapshot JSON — the reliable source
-    (mirrors rule_performance_service._snapshot_tone_conf). None if unusable."""
-    if not snapshot:
-        return None
-    try:
-        d = json.loads(snapshot)
-    except (ValueError, TypeError):
-        return None
-    tone = d.get("tone")
-    return tone if tone in ("bull", "bear") else None
-
-
-def _load_bars(db: Session, stock_ids: set[int]) -> dict[int, list[OhlcvDaily]]:
-    """Bulk-load OHLCV bars for the requested stocks, ascending by date.
-    Returns {stock_id: [bars oldest-first]} (mirrors rule_performance_service)."""
-    if not stock_ids:
-        return {}
-    rows = (
-        db.execute(
-            select(OhlcvDaily)
-            .where(OhlcvDaily.stock_id.in_(stock_ids))
-            .order_by(OhlcvDaily.stock_id, OhlcvDaily.date)
-        )
-        .scalars()
-        .all()
-    )
-    out: dict[int, list[OhlcvDaily]] = {}
-    for r in rows:
-        out.setdefault(r.stock_id, []).append(r)
-    return out
-
-
-def _forward_hit(
-    bars: list[OhlcvDaily] | None,
-    signal_date: date,
-    horizon_days: int,
-    tone: str,
-) -> bool | None:
-    """Has this signal MATURED, and if so did it hit?
-
-    Locate the trigger bar (first bar at/after `signal_date`), walk
-    `horizon_days` TRADING bars forward, and compare closes the way the
-    calibration measured base_rate (absolute close-to-close direction):
-        bull → forward close > trigger close
-        bear → forward close < trigger close
-
-    Returns:
-      True / False — matured (forward bar exists) and hit / missed
-      None         — NOT matured yet (horizon hasn't elapsed: no forward bar),
-                     or the data is unusable (no bars / non-positive price /
-                     trigger bar after all stored bars)
-    """
-    if not bars:
-        return None
-    trigger_idx = None
-    for i, b in enumerate(bars):
-        if b.date >= signal_date:
-            trigger_idx = i
-            break
-    if trigger_idx is None:
-        return None  # signal_date is after every stored bar
-    forward_idx = trigger_idx + horizon_days
-    if forward_idx >= len(bars):
-        return None  # horizon not fully elapsed in stored data → not matured
-    sc = float(bars[trigger_idx].close)
-    fc = float(bars[forward_idx].close)
-    if sc <= 0:
-        return None
-    if tone == "bull":
-        return fc > sc
-    return fc < sc  # bear
-
-
 def compute_signal_drift(
     db: Session,
     *,
@@ -199,51 +133,39 @@ def compute_signal_drift(
 ) -> list[dict]:
     """Per-detector drift table over the recent window of MATURED signal alerts.
 
-    For each detector with >=1 matured alert in the window, compute the realised
-    recent hit-rate, its Wilson CI, the calibrated base rate, and a drift flag
-    (base rate outside the CI AND n>=min_n). Returns dicts sorted by descending
-    |delta|. Read-only.
+    For each detector with >=1 matured outcome in the window, compute the
+    realised recent hit-rate, its Wilson CI, the calibrated base rate, and a
+    drift flag (base rate outside the CI AND n>=min_n). Returns dicts sorted by
+    descending |delta|. Read-only.
     """
     cal = get_calibration()
 
-    # Candidate alerts: signal-engine alerts whose signal_date falls in the
-    # recent window. Use signal_date (the bar the rule matched) — the horizon
-    # clock starts there, not at wall-clock triggered_at. Exclude archived
-    # (user-flagged irrelevant) and legacy rows with no signal_date.
+    # Matured outcomes whose signal_date falls in the recent window, straight
+    # from the signal_outcomes warehouse (maturation already enforced the
+    # horizon-elapsed + usable-tone/price rules at write time). Use signal_date
+    # (the bar the rule matched) — the horizon clock starts there, not at
+    # wall-clock triggered_at. Join alerts only to exclude archived
+    # (user-flagged irrelevant) rows.
     cutoff = date.today() - timedelta(days=window_days)
-    rows = db.execute(
-        select(Alert).where(
-            Alert.signal_name.is_not(None),
-            Alert.signal_date.is_not(None),
-            Alert.signal_date >= cutoff,
+    grouped = db.execute(
+        select(
+            SignalOutcome.detector,
+            func.count(SignalOutcome.id),
+            func.sum(SignalOutcome.abs_hit),
+        )
+        .join(Alert, Alert.id == SignalOutcome.alert_id)
+        .where(
+            SignalOutcome.signal_date >= cutoff,
             Alert.archived_at.is_(None),
         )
-    ).scalars().all()
-
-    bars_by_stock = _load_bars(db, {a.stock_id for a in rows})
-
-    # Per detector: [hits, n_matured]
-    acc: dict[str, list[int]] = {}
-    for a in rows:
-        name = a.signal_name
-        sig_d = a.signal_date
-        if not name or sig_d is None:  # the query filters both, but narrow here too
-            continue
-        tone = _parse_tone(a.snapshot)
-        if tone is None:
-            continue  # no directional expectation → can't score a hit
-        h = _horizon_days(name)
-        hit = _forward_hit(bars_by_stock.get(a.stock_id), sig_d, h, tone)
-        if hit is None:
-            continue  # not matured yet (or unusable data) → excluded
-        bucket = acc.setdefault(name, [0, 0])
-        bucket[0] += int(hit)
-        bucket[1] += 1
+        .group_by(SignalOutcome.detector)
+    ).all()
 
     out: list[dict] = []
-    for name, (hits, n) in acc.items():
-        if n == 0:
+    for name, n, hits in grouped:
+        if not n:
             continue
+        hits = int(hits or 0)
         recent = hits / n * 100.0
         base = cal.base_rate(name)  # percentage (0..100), default 50
         lo_p, hi_p = wilson_interval(hits, n, z)
