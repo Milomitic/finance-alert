@@ -67,19 +67,48 @@ def _wilson(hits: int, n: int) -> tuple[float, float]:
     return (max(0.0, centre - half), min(1.0, centre + half))
 
 
+def _universe_fwd_medians(universe, horizons) -> dict[int, dict]:
+    """Per horizon: {date: MEDIAN forward return across the universe}. Unlike the
+    mean, the median is a tone-SYMMETRIC benchmark: under zero skill, bull-tone
+    P(beat median) = bear-tone P(lag median) = 50%. The mean is right-skew-biased
+    (P(beat EW mean @63d) ≈ 47%), which fabricates a tone/regime split for any
+    detector whose tone correlates with the regime label (the trend_pullback
+    artifact found by the adversarial verification)."""
+    out: dict[int, dict] = {}
+    for h in sorted(set(horizons)):
+        by_date: dict = defaultdict(list)
+        for s in universe:
+            c = s.closes
+            if len(c) <= h:
+                continue
+            c0, cH = c[:-h], c[h:]
+            ok = c0 > 0
+            rets = cH[ok] / c0[ok] - 1.0
+            for d, r in zip(np.asarray(s.dates, dtype=object)[:-h][ok], rets):
+                by_date[d].append(float(r))
+        out[h] = {d: float(np.median(v)) for d, v in by_date.items() if len(v) >= 10}
+    return out
+
+
 def run(*, sample: int, step: int, window: int, min_bars: int, holdout_frac: float,
-        out: str = "app/data/regime_conditioned_study.json") -> None:
+        out: str = "app/data/regime_conditioned_study.json",
+        benchmark: str = "mean") -> None:
     from app.core.db import SessionLocal
 
     db = SessionLocal()
     try:
         universe = _load_universe(db, min_bars=min_bars, sample=sample)
-        logger.info(f"[regime] {len(universe)} stocks")
+        logger.info(f"[regime] {len(universe)} stocks (benchmark={benchmark})")
         if not universe:
             print("No eligible stocks.")
             return
         umean = _universe_mean_fwd(universe)
         date_to_idx = umean["_date_to_idx"]
+        umed: dict[int, dict] = {}
+        if benchmark == "median":
+            from app.scripts.signal_factor_outcomes import H_LONG, H_MED
+            umed = _universe_fwd_medians(universe, [H_SHORT, H_MED, H_LONG])
+            logger.info("[regime] per-date universe medians ready")
 
         all_dates = sorted({d for s in universe for d in s.dates})
         cutoff = all_dates[int(len(all_dates) * (1 - holdout_frac))]
@@ -108,11 +137,14 @@ def run(*, sample: int, step: int, window: int, min_bars: int, holdout_frac: flo
                     h = _detector_horizon(m.name)
                     if i + h >= n or c[i] <= 0:
                         continue
-                    mean = umean[h][di] if di is not None else np.nan
-                    if not np.isfinite(mean):
+                    if benchmark == "median":
+                        bench = umed.get(h, {}).get(s.dates[i], np.nan)
+                    else:
+                        bench = umean[h][di] if di is not None else np.nan
+                    if not np.isfinite(bench):
                         continue
                     fwd = c[i + h] / c[i] - 1.0
-                    dir_excess = (fwd - mean) if m.tone == "bull" else -(fwd - mean)
+                    dir_excess = (fwd - bench) if m.tone == "bull" else -(fwd - bench)
                     per[(m.name, regime, period)].append(1 if dir_excess > 0 else 0)
                     n_signals += 1
             if (sidx + 1) % 25 == 0:
@@ -175,6 +207,7 @@ if __name__ == "__main__":
     ap.add_argument("--min-bars", type=int, default=400)
     ap.add_argument("--holdout-frac", type=float, default=0.30)
     ap.add_argument("--out", type=str, default="app/data/regime_conditioned_study.json")
+    ap.add_argument("--benchmark", type=str, choices=("mean", "median"), default="mean")
     a = ap.parse_args()
     run(sample=a.sample, step=a.step, window=a.window, min_bars=a.min_bars,
-        holdout_frac=a.holdout_frac, out=a.out)
+        holdout_frac=a.holdout_frac, out=a.out, benchmark=a.benchmark)

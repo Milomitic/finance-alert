@@ -110,14 +110,30 @@ class CalibrationMap:
         """Per-detector stats keyed by detector name (for the calibration API)."""
         return {name: self.detector_stats(name) for name in self._detectors}
 
-    def probability(self, detector: str, factors: dict[str, float]) -> int:
+    def regime_base_rate(self, detector: str, regime: str | None) -> float | None:
+        """Per-regime base rate, if the artifact carries a regime-conditioned
+        record for (detector, regime). None otherwise — which makes the whole
+        regime mechanism DORMANT until a validated study writes a `regime`
+        block into signal_calibration.json (see #8 / trend_pullback gates)."""
+        if not regime:
+            return None
+        rec = self._detectors.get(detector)
+        if not rec:
+            return None
+        sub = (rec.get("regime") or {}).get(regime) or {}
+        br = sub.get("base_rate")
+        return float(br) if br is not None else None
+
+    def probability(self, detector: str, factors: dict[str, float],
+                    regime: str | None = None) -> int:
         # Local import avoids a circular import at module load (base imports
         # nothing from here, but keep the dependency one-directional + lazy).
         from app.signals.detectors.base import probability_from_factors
 
-        return probability_from_factors(
-            self.base_rate(detector), factors, self.adj_table(detector)
-        )
+        base = self.regime_base_rate(detector, regime)
+        if base is None:
+            base = self.base_rate(detector)
+        return probability_from_factors(base, factors, self.adj_table(detector))
 
 
 def load_calibration(path: Path = _DEFAULT_PATH) -> CalibrationMap:

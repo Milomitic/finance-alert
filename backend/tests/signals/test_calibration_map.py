@@ -125,3 +125,47 @@ class TestLoadCalibration:
         p.write_text(json.dumps(DATA), encoding="utf-8")
         m = load_calibration(p)
         assert m.base_rate("oversold_reversal") == 56.0
+
+
+REGIME_DATA = {
+    "version": "test-regime",
+    "detectors": {
+        # regime-conditioned record (the #8 trend_pullback shape): per-regime
+        # base rates override the flat base ONLY when the regime is known.
+        "trend_pullback": {
+            "base_rate": 50, "horizon_days": 21, "n": 4400,
+            "regime": {
+                "bull": {"base_rate": 46, "n": 3059},
+                "bear": {"base_rate": 55, "n": 1340},
+            },
+        },
+        # un-conditioned detector: regime must be a no-op
+        "gap_and_go": {"base_rate": 49, "horizon_days": 5, "n": 5000},
+    },
+}
+
+
+class TestRegimeConditioning:
+    def test_regime_base_rate_present(self):
+        m = CalibrationMap(REGIME_DATA)
+        assert m.regime_base_rate("trend_pullback", "bear") == 55.0
+        assert m.regime_base_rate("trend_pullback", "bull") == 46.0
+
+    def test_regime_base_rate_absent(self):
+        m = CalibrationMap(REGIME_DATA)
+        assert m.regime_base_rate("gap_and_go", "bull") is None  # no regime block
+        assert m.regime_base_rate("trend_pullback", None) is None
+        assert m.regime_base_rate("nope", "bear") is None
+
+    def test_probability_uses_regime_base_when_available(self):
+        m = CalibrationMap(REGIME_DATA)
+        assert m.probability("trend_pullback", {}) == 50           # flat
+        assert m.probability("trend_pullback", {}, regime="bear") == 55
+        assert m.probability("trend_pullback", {}, regime="bull") == 46
+
+    def test_probability_dormant_without_regime_block(self):
+        # The mechanism must be a byte-identical no-op for detectors without a
+        # regime record (today: ALL of them, until the #8 gates pass).
+        m = CalibrationMap(REGIME_DATA)
+        assert m.probability("gap_and_go", {}, regime="bear") == m.probability("gap_and_go", {})
+        assert m.probability("trend_pullback", {}, regime=None) == 50

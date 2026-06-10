@@ -123,6 +123,9 @@ def evaluate_signals(db: Session, stock: Stock, ohlcv: pd.DataFrame) -> int:
             "sources": getattr(_detector_for(m.name), "sources", []),
             "annotations": ann, "atr": _atr,
             "horizon": classify_horizon(m.name, m.chain),
+            # Fire-time market regime (close vs EMA200) — audit trail for the
+            # regime-conditioned Probabilita (#8); null on <200-bar histories.
+            "regime_at_fire": m.regime,
         }
         now_iso = datetime.now(UTC).isoformat()
         # Cooldown + refresh dedup. Several "state" detectors stamp signal_date

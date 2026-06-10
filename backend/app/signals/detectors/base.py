@@ -30,6 +30,9 @@ class SignalMatch:
     # detectors keep working during the incremental migration.
     strength: int = 0               # "Forza" 0..100
     probability: int = 50           # "Probabilità" 0..100
+    # Market regime at fire time ("bull"/"bear" via close vs EMA200; None when
+    # <200 bars). Stamped by the runner; persisted in the snapshot for audit.
+    regime: str | None = None
 
 
 class SignalDetector(Protocol):
