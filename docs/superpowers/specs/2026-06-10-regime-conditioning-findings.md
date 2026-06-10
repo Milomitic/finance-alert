@@ -58,19 +58,29 @@ flagged the tone↔regime mechanical correlation. Skew check reproduced the
 predicted 47.2% @63d. The 300-stock confirmation run was cancelled — more
 data cannot fix a structural bias.
 
-## Addendum — median-benchmark run: NOT completed, verdict unaffected
-The `--benchmark median` confirmation replay was attempted 3× and killed each
-time mid-run by environment factors (a machine reboot at 09:50, then manual
-process kills), never by the harness. **The rejection does NOT depend on it**:
-the artifact is established by (a) the tone≡regime construction, (b) the
-zero-skill null matching the observation (−5.6pp structural of the −9.5pp
-observed, P(beat EW mean)=47.2% @63d measured on real data), and (c) the
-residual being unattributable to regime under tone≡regime. The median run
-would only have quantified residual TONE asymmetry — interesting, optional,
-runnable overnight via:
-```
-cd backend && PYTHONPATH=. ./.venv/Scripts/python.exe -u -m app.scripts.regime_conditioned_outcomes \
-  --sample 50 --step 10 --holdout-frac 0.30 --benchmark median \
-  --out app/data/regime_conditioned_study_median50.json
-```
-(~25 min; needs the machine awake and unmolested.)
+## Addendum — median-benchmark run: COMPLETED, artifact 100% CONFIRMED
+The `--benchmark median` replay (tone-symmetric: exactly 50/50 under zero
+skill) completed 2026-06-10 (4th attempt; same fast-50 config, 56,560 signals).
+
+**trend_pullback's "regime effect" collapsed exactly as the artifact theory
+predicted:**
+
+| benchmark | bull% | bear% | Δ | CIsep | OOSΔ |
+|---|---|---|---|---|---|
+| mean (original claim) | 45.9 | 55.4 | **−9.5** | **YES** | −7.6 (stable) |
+| **median (symmetric)** | 49.7 | 52.8 | **−3.2** | **no** | −1.9 (shrinking) |
+
+The mean benchmark fabricated ~6.3pp of the 9.5pp; the residual −3.2pp has no
+CI separation and halves out-of-sample. **Case closed: no credible regime
+effect for trend_pullback — or any detector — under an honest metric.**
+
+One footnote, handled with the discipline this study taught: under the median
+benchmark a DIFFERENT lone CI-hit appears (hidden_divergence +8.5, CIsep YES,
+OOS +4.3). Recorded, NOT pursued: (a) 1 CI-hit among 13 detectors ≈ the 0.65
+expected by chance, and the fact that the "significant one" CHANGES IDENTITY
+across metric variants is itself the signature of multiple-testing noise;
+(b) hidden divergence is a trend-continuation pattern, so its tone also
+correlates with the regime label (same attribution problem); (c) the OOS delta
+halves; (d) n_bear=609 is the thinnest technical cell. If anyone ever wants to
+chase it: full gate cascade required (300-stock confirm + adversarial
+verification), with this footnote as the prior.

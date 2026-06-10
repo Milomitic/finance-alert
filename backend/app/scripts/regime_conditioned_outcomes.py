@@ -151,7 +151,7 @@ def run(*, sample: int, step: int, window: int, min_bars: int, holdout_frac: flo
                 logger.info(f"[regime] {sidx + 1}/{len(universe)} stocks, {n_signals:,} signals")
 
         detectors = sorted({k[0] for k in per})
-        out: dict[str, dict] = {}
+        results: dict[str, dict] = {}
         print(f"\n{'#'*92}\n#  REGIME-CONDITIONED SKILL  (market-neutral hit; bull/bear = close vs EMA200)")
         print(f"#  universe={len(universe)}  signals={n_signals:,}  OOS cutoff={cutoff}\n{'#'*92}")
         print(f"{'detector':<22}{'bull%':>7}{'bear%':>7}{'Δ(b-b)':>8}{'CIsep':>6}"
@@ -180,7 +180,7 @@ def run(*, sample: int, step: int, window: int, min_bars: int, holdout_frac: flo
                         and np.sign(d_train) == np.sign(d_hold) and d_train != 0)
             print(f"{det:<22}{pB:>7.1f}{pb:>7.1f}{pB - pb:>+8.1f}{('YES' if ci_sep else '·'):>6}"
                   f"{len(bull):>7}{len(bear):>7}{100 * d_hold:>+7.1f}{('same' if oos_sign else 'FLIP'):>8}")
-            out[det] = {
+            results[det] = {
                 "bull_hit": round(pB, 2), "bear_hit": round(pb, 2),
                 "delta": round(pB - pb, 2), "ci_separated": bool(ci_sep),
                 "n_bull": len(bull), "n_bear": len(bear),
@@ -190,7 +190,7 @@ def run(*, sample: int, step: int, window: int, min_bars: int, holdout_frac: flo
             }
 
         out_path = Path(out)
-        out_path.write_text(json.dumps(out, indent=2))
+        out_path.write_text(json.dumps(results, indent=2))
         print(f"\n[dump] {out_path}  ({len(out)} detectors)")
         print("\nA regime effect is CREDIBLE only if: CIsep=YES AND OOSsign=same AND "
               "|Δ| material. Anything else = noise → ship the null (no per-regime "
