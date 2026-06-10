@@ -2,12 +2,16 @@
 
 Covers:
   - the Wilson-interval helper (known values, n=0 sentinel, widening at small n);
-  - the service over SYNTHETIC alerts + ohlcv:
+  - the service over SYNTHETIC alerts + ohlcv run through the REAL maturation
+    pipeline (`signal_outcome_service.mature_outcomes` → `signal_outcomes`
+    warehouse → drift):
       * a detector whose recent matured alerts mostly WORKED → high recent rate
         and (vs a low base rate, clearing the Wilson band) flagged "improving";
       * one that mostly FAILED → low recent rate, flagged "decaying";
       * a small-n case with an extreme deviation that must NOT flag;
       * not-yet-matured alerts are excluded;
+      * alerts not yet matured INTO THE WAREHOUSE are invisible to drift
+        (the "as of the last scan" freshness contract);
   - the read-only endpoint (auth + envelope shape).
 
 Calibration is monkeypatched onto a `CalibrationMap` we control so the test
@@ -26,6 +30,7 @@ from app.api.deps import get_current_user, get_db
 from app.main import app
 from app.models import Alert, OhlcvDaily, Stock, User
 from app.services import signal_drift_service as drift
+from app.services import signal_outcome_service as sos
 from app.signals.calibration_map import CalibrationMap
 
 # --------------------------------------------------------------------------- #
@@ -160,6 +165,7 @@ def test_detector_that_mostly_worked_is_improving(db: Session, monkeypatch):
         )
         _mk_alert(db, s.id, "volume_breakout", "bull", sig_d)
     db.commit()
+    sos.mature_outcomes(db)  # the real production pipeline: warehouse → drift
 
     rows = drift.compute_signal_drift(db, window_days=90, min_n=30)
     assert len(rows) == 1
@@ -191,6 +197,7 @@ def test_detector_that_mostly_failed_is_decaying(db: Session, monkeypatch):
         )
         _mk_alert(db, s.id, "oversold_reversal", "bull", sig_d)
     db.commit()
+    sos.mature_outcomes(db)  # the real production pipeline: warehouse → drift
 
     rows = drift.compute_signal_drift(db, window_days=90, min_n=30)
     assert len(rows) == 1
@@ -219,6 +226,7 @@ def test_small_sample_does_not_flag_despite_extreme_deviation(db: Session, monke
         )
         _mk_alert(db, s.id, "gap_and_go", "bull", sig_d)
     db.commit()
+    sos.mature_outcomes(db)  # the real production pipeline: warehouse → drift
 
     rows = drift.compute_signal_drift(db, window_days=90, min_n=30)
     assert len(rows) == 1
@@ -245,6 +253,7 @@ def test_small_sample_below_min_n_even_if_wilson_would_exclude(db: Session, monk
         )
         _mk_alert(db, s.id, "rsi_divergence", "bull", sig_d)
     db.commit()
+    sos.mature_outcomes(db)  # the real production pipeline: warehouse → drift
 
     rows = drift.compute_signal_drift(db, window_days=90, min_n=30)
     r = rows[0]
@@ -284,12 +293,38 @@ def test_not_yet_matured_alerts_are_excluded(db: Session, monkeypatch):
                           close=100, volume=1000))  # trigger == last bar
         _mk_alert(db, s.id, "candle_reversal", "bull", last)
     db.commit()
+    sos.mature_outcomes(db)  # the real production pipeline: warehouse → drift
 
     rows = drift.compute_signal_drift(db, window_days=90, min_n=30)
     r = next(x for x in rows if x["detector"] == "candle_reversal")
     # Only the 32 matured alerts count; the 10 immature ones are dropped.
     assert r["n_matured"] == 32
     assert r["recent_hit_rate"] == pytest.approx(100.0, abs=0.1)
+
+
+def test_drift_reads_the_warehouse_not_raw_ohlcv(db: Session, monkeypatch):
+    """Freshness contract: drift is served from the `signal_outcomes` warehouse
+    (populated by `mature_outcomes` at scan end), NOT by replaying OHLCV. Alerts
+    whose outcomes haven't been matured into the warehouse yet are invisible —
+    the window reflects "as of the last scan", and that lag is by design."""
+    hz = 5
+    _patch_calibration(monkeypatch, {"volume_breakout": 50.0}, horizon_days=hz)
+    start = date.today() - timedelta(days=40)
+    for k in range(35):
+        s = _mk_stock(db, f"FRESH{k}")
+        sig_d = _mk_bars(db, s.id, start=start, n_bars=hz + 2, trigger_offset=0,
+                         horizon_days=hz, hit=True, tone="bull")
+        _mk_alert(db, s.id, "volume_breakout", "bull", sig_d)
+    db.commit()
+
+    # No mature_outcomes() yet → warehouse empty → drift sees nothing.
+    assert drift.compute_signal_drift(db, window_days=90, min_n=30) == []
+
+    # After the scan-end maturation pass, the same alerts are visible.
+    sos.mature_outcomes(db)
+    rows = drift.compute_signal_drift(db, window_days=90, min_n=30)
+    assert len(rows) == 1
+    assert rows[0]["n_matured"] == 35
 
 
 def test_archived_and_out_of_window_alerts_excluded(db: Session, monkeypatch):
@@ -315,6 +350,7 @@ def test_archived_and_out_of_window_alerts_excluded(db: Session, monkeypatch):
     a.archived_at = datetime.now(UTC)
     db.add(a)
     db.commit()
+    sos.mature_outcomes(db)  # the real production pipeline: warehouse → drift
 
     rows = drift.compute_signal_drift(db, window_days=90, min_n=30)
     assert rows == []
@@ -341,6 +377,7 @@ def test_rows_sorted_by_abs_delta(db: Session, monkeypatch):
                          horizon_days=hz, hit=(k < 17), tone="bull")
         _mk_alert(db, s.id, "small_move", "bull", sig_d)
     db.commit()
+    sos.mature_outcomes(db)  # the real production pipeline: warehouse → drift
 
     rows = drift.compute_signal_drift(db, window_days=90, min_n=30)
     assert [r["detector"] for r in rows] == ["big_move", "small_move"]
@@ -407,6 +444,7 @@ def test_signal_drift_endpoint_returns_rows(client: TestClient, db: Session, mon
                          horizon_days=hz, hit=True, tone="bull")
         _mk_alert(db, s.id, "volume_breakout", "bull", sig_d)
     db.commit()
+    sos.mature_outcomes(db)
 
     r = client.get("/api/platform/signal-drift?window_days=90&min_n=30")
     assert r.status_code == 200

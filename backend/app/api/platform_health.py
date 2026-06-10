@@ -126,11 +126,13 @@ def signal_drift(
     """Per-detector signal DRIFT / DECAY monitor (read-only, computed on demand).
 
     Compares each detector's REALISED recent hit-rate (over MATURED signal
-    alerts whose horizon has fully elapsed, scored against stored OHLCV the same
-    way the calibration was) against its CALIBRATED base rate, and flags drift
-    when the base rate falls outside the recent rate's Wilson 95% confidence
-    interval (and the matured sample clears `min_n`). Tells us WHEN to retune a
-    detector on evidence, instead of continuously. Sorted by descending |delta|.
+    alerts, read from the `signal_outcomes` warehouse — `abs_hit` is labeled
+    with the same definition the calibration was built on) against its
+    CALIBRATED base rate, and flags drift when the base rate falls outside the
+    recent rate's Wilson 95% confidence interval (and the matured sample clears
+    `min_n`). Tells us WHEN to retune a detector on evidence, instead of
+    continuously. Sorted by descending |delta|. Outcomes mature at scan end, so
+    the window reflects the warehouse "as of the last scan".
 
       window_days  rolling window of matured alerts to measure (calendar days)
       min_n        minimum matured sample before a detector can be flagged

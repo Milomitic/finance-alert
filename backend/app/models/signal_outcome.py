@@ -3,7 +3,8 @@
 Append-only (mirrors KpiSnapshot): one row per signal alert, written ONCE its
 forward horizon has fully elapsed in stored ohlcv_daily (so the forward close
 exists — the only thing that "looks past" the signal). This collapses the three
-near-duplicate forward-hit implementations (signal_drift_service._forward_hit,
+near-duplicate forward-hit implementations (signal_drift_service._forward_hit —
+since deleted, the drift monitor now reads this table —
 signal_detector_outcomes._trade_playbook_hit, rule_performance_service) into one
 source of truth, and turns every later validation (walk-forward CV, regime
 conditioning, ranking, recalibration, score IC) from a multi-minute OHLCV replay
