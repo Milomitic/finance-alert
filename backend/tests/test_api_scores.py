@@ -626,3 +626,121 @@ def test_top_picks_unauthenticated_401(db: Session):
         assert resp.status_code == 401
     finally:
         app.dependency_overrides.clear()
+
+
+# ---------------------------------------------------------------------------
+# GET /api/stocks/{ticker}/score-history
+# ---------------------------------------------------------------------------
+
+from app.models import ScoreHistory
+
+
+def _seed_history(
+    db: Session, stock_id: int, lens: str, days_ago_to_composite: dict[int, float]
+) -> None:
+    """Insert one ScoreHistory row per (days_ago → composite) entry, anchored
+    to today so the endpoint's rolling `days` window math is deterministic."""
+    today = date.today()
+    for days_ago, composite in days_ago_to_composite.items():
+        db.add(ScoreHistory(
+            stock_id=stock_id,
+            lens=lens,
+            captured_on=today - timedelta(days=days_ago),
+            composite=composite,
+            pillars="{}",
+        ))
+    db.commit()
+
+
+def test_score_history_returns_points_ascending(seeded_client: TestClient, db: Session):
+    aaa = db.query(Stock).filter_by(ticker="AAA").one()
+    # Deliberately seeded out of chronological order — the endpoint must sort.
+    _seed_history(db, aaa.id, "qualita", {1: 81.0, 5: 79.0, 3: 80.0})
+    resp = seeded_client.get("/api/stocks/AAA/score-history")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["ticker"] == "AAA"
+    assert data["lens"] == "qualita"
+    today = date.today()
+    assert data["points"] == [
+        {"date": (today - timedelta(days=5)).isoformat(), "composite": 79.0},
+        {"date": (today - timedelta(days=3)).isoformat(), "composite": 80.0},
+        {"date": (today - timedelta(days=1)).isoformat(), "composite": 81.0},
+    ]
+
+
+def test_score_history_filters_by_lens(seeded_client: TestClient, db: Session):
+    aaa = db.query(Stock).filter_by(ticker="AAA").one()
+    _seed_history(db, aaa.id, "qualita", {2: 70.0})
+    _seed_history(db, aaa.id, "tecnico", {2: 40.0, 1: 42.0})
+    # Default lens is qualita — the tecnico rows must not leak in.
+    resp = seeded_client.get("/api/stocks/AAA/score-history")
+    assert resp.status_code == 200
+    assert [p["composite"] for p in resp.json()["points"]] == [70.0]
+    # Explicit tecnico returns only that lens.
+    resp = seeded_client.get("/api/stocks/AAA/score-history?lens=tecnico")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["lens"] == "tecnico"
+    assert [p["composite"] for p in data["points"]] == [40.0, 42.0]
+
+
+def test_score_history_invalid_lens_422(seeded_client: TestClient):
+    resp = seeded_client.get("/api/stocks/AAA/score-history?lens=bogus")
+    assert resp.status_code == 422
+
+
+def test_score_history_days_window(seeded_client: TestClient, db: Session):
+    aaa = db.query(Stock).filter_by(ticker="AAA").one()
+    _seed_history(db, aaa.id, "qualita", {200: 60.0, 10: 75.0})
+    # Default window (180d) drops the 200-days-ago point.
+    resp = seeded_client.get("/api/stocks/AAA/score-history")
+    assert [p["composite"] for p in resp.json()["points"]] == [75.0]
+    # Widest window (365d) includes both.
+    resp = seeded_client.get("/api/stocks/AAA/score-history?days=365")
+    assert [p["composite"] for p in resp.json()["points"]] == [60.0, 75.0]
+    # Narrowest window (7d) excludes everything seeded here.
+    resp = seeded_client.get("/api/stocks/AAA/score-history?days=7")
+    assert resp.json()["points"] == []
+
+
+def test_score_history_days_bounds_422(seeded_client: TestClient):
+    assert seeded_client.get("/api/stocks/AAA/score-history?days=6").status_code == 422
+    assert seeded_client.get("/api/stocks/AAA/score-history?days=366").status_code == 422
+
+
+def test_score_history_lowercase_ticker_resolves(seeded_client: TestClient, db: Session):
+    """The path param is upper-cased before the Stock lookup."""
+    aaa = db.query(Stock).filter_by(ticker="AAA").one()
+    _seed_history(db, aaa.id, "qualita", {1: 81.0})
+    resp = seeded_client.get("/api/stocks/aaa/score-history")
+    assert resp.status_code == 200
+    assert resp.json()["ticker"] == "AAA"
+
+
+def test_score_history_unknown_ticker_404(seeded_client: TestClient):
+    resp = seeded_client.get("/api/stocks/NOPE/score-history")
+    assert resp.status_code == 404
+    assert "not found" in resp.json()["detail"].lower()
+
+
+def test_score_history_no_rows_returns_empty_points(seeded_client: TestClient):
+    """Known ticker, zero captured snapshots → 200 with points: [] (NOT 404):
+    the table only accrues forward, so 'no history yet' is a normal state."""
+    resp = seeded_client.get("/api/stocks/AAA/score-history")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["ticker"] == "AAA"
+    assert data["points"] == []
+
+
+def test_score_history_unauthenticated_401(db: Session):
+    db.add(Stock(ticker="X", exchange="NMS", name="X"))
+    db.commit()
+    app.dependency_overrides[get_db] = lambda: db
+    try:
+        client = TestClient(app)
+        resp = client.get("/api/stocks/X/score-history")
+        assert resp.status_code == 401
+    finally:
+        app.dependency_overrides.clear()

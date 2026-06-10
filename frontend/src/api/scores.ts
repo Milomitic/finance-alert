@@ -4,6 +4,8 @@ import type {
   ScanStatusInfo,
   ScanStopResultInfo,
   ScoreCategory,
+  ScoreHistoryOut,
+  ScoreLens,
   StockScore,
   TechnicalScoreDetail,
   TopPicks,
@@ -30,6 +32,15 @@ export const scores = {
     api<StockScore>(`/api/stocks/${encodeURIComponent(ticker)}/score`),
   technicalForStock: (ticker: string) =>
     api<TechnicalScoreDetail>(`/api/stocks/${encodeURIComponent(ticker)}/technical`),
+  /**
+   * Daily composite snapshots (score_history) for one lens, ascending,
+   * capped to the last `days` days (7-365). Feeds the sparkline on the
+   * score card; `points` may hold 0-1 entries while history accrues.
+   */
+  scoreHistory: (ticker: string, lens: ScoreLens = "qualita", days = 180) =>
+    api<ScoreHistoryOut>(
+      `/api/stocks/${encodeURIComponent(ticker)}/score-history?lens=${lens}&days=${days}`,
+    ),
   /**
    * Force a fresh score recomputation for one stock and persist it. Used by
    * the "refresh score" button on the detail page when the persisted score

@@ -6,13 +6,14 @@ component layout — and the UI doesn't need a static type for it (it just
 iterates components and renders bars). The strict shapes on composite +
 sub_scores + risk_tier are what frontend code depends on.
 """
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, field_serializer
 
 
 RiskTier = Literal["conservative", "moderate", "aggressive"]
+ScoreLens = Literal["qualita", "tecnico"]
 # V3.2 splits Quality into Profitability + Sustainability. The legacy
 # `quality` slot is preserved (computed as the average of the two new
 # pillars) so old top-picks queries and saved bookmarks keep working.
@@ -94,6 +95,22 @@ class TopPicksOut(BaseModel):
     category: ScoreCategory
     risk: RiskTier | None = None
     items: list[TopPickItemOut]
+
+
+class ScoreHistoryPoint(BaseModel):
+    """One daily composite snapshot from `score_history`."""
+    date: date
+    composite: float
+
+
+class ScoreHistoryOut(BaseModel):
+    """Composite time series for one (ticker, lens), ascending by date.
+    `points` is [] for tickers with no captured history yet — the table only
+    accrues forward (one snapshot per scan day), so the UI must degrade
+    gracefully with few points."""
+    ticker: str
+    lens: ScoreLens
+    points: list[ScoreHistoryPoint]
 
 
 class TechnicalScoreOut(BaseModel):
