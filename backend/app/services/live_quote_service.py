@@ -661,12 +661,48 @@ def _fetch_fresh(ticker: str, *, allow_remote_today_fetch: bool = True) -> LiveQ
     return quote
 
 
+# Last GOOD live quote per ticker (market_state OPEN/PRE + real price), kept
+# beyond the 10s TTL. Courtesy fallback: a transient yfinance failure (or the
+# breaker's EOD fallback) DURING the session must not degrade a row to
+# market_state="CLOSED" — that hid the live dot and silently swapped the live
+# price for EOD numbers (the top-movers "missing dot" report, 2026-06-10).
+_LAST_LIVE: dict[str, LiveQuote] = {}
+
+
+def _today_session_open_epoch(ticker: str) -> float | None:
+    """Epoch of TODAY's session open in the ticker's exchange-local tz.
+    None when the region is unknown. Used to gate the courtesy fallback to
+    quotes fetched in the CURRENT session ("dallo stesso giorno da quando
+    apre la borsa")."""
+    region = _exchange_region(ticker)
+    hours = _MARKET_HOURS_LOCAL.get(region)
+    if hours is None:
+        return None
+    tzname, (oh, om), _close = hours
+    tz = _TZ_CACHE.get(tzname)
+    if tz is None:
+        tz = _TZ_CACHE[tzname] = ZoneInfo(tzname)
+    local_now = datetime.now(tz)
+    open_dt = local_now.replace(hour=oh, minute=om, second=0, microsecond=0)
+    return open_dt.timestamp()
+
+
+def _is_live_quote(q: LiveQuote) -> bool:
+    return q.error is None and q.price is not None and q.market_state in ("OPEN", "PRE")
+
+
 def get_quote(
     ticker: str, *, force_refresh: bool = False, allow_remote_today_fetch: bool = True,
 ) -> LiveQuote:
     """Cached single-ticker quote (TTL 10s). Force-refresh bypasses cache.
     `allow_remote_today_fetch=False` (used by the batch path) skips the
-    on-demand official-today-bar fetch."""
+    on-demand official-today-bar fetch.
+
+    Degraded-fetch courtesy: when the fresh fetch is NOT a live quote (error,
+    empty payload, or the breaker's EOD fallback labeled CLOSED) while the
+    exchange is OPEN right now, serve the last GOOD live quote from the SAME
+    session instead — still marked OPEN. The degraded quote is not cached in
+    that case, so the next poll retries immediately."""
     now = time.time()
     if not force_refresh:
         with _CACHE_LOCK:
@@ -674,6 +710,20 @@ def get_quote(
             if cached is not None and (now - cached.fetched_at) < _TTL_SECONDS:
                 return cached
     fresh = _fetch_fresh(ticker, allow_remote_today_fetch=allow_remote_today_fetch)
+    if _is_live_quote(fresh):
+        with _CACHE_LOCK:
+            _CACHE[ticker] = fresh
+            _LAST_LIVE[ticker] = fresh
+        return fresh
+    # Degraded (or legitimately-closed) quote. Courtesy only while the
+    # exchange is open: after the close the EOD fallback IS the truth.
+    if _is_market_open(ticker):
+        with _CACHE_LOCK:
+            last_live = _LAST_LIVE.get(ticker)
+        open_epoch = _today_session_open_epoch(ticker)
+        if (last_live is not None and open_epoch is not None
+                and last_live.fetched_at >= open_epoch):
+            return last_live
     with _CACHE_LOCK:
         _CACHE[ticker] = fresh
     return fresh
@@ -720,5 +770,13 @@ def get_quotes_batch(tickers: list[str]) -> dict[str, LiveQuote]:
 
 def clear_cache() -> None:
     """For tests."""
+    with _CACHE_LOCK:
+        _CACHE.clear()
+        _LAST_LIVE.clear()
+
+
+def clear_cache_l1_only() -> None:
+    """For tests: expire the TTL cache but KEEP the last-live courtesy store
+    (simulates the 10s TTL lapsing between polls within the same session)."""
     with _CACHE_LOCK:
         _CACHE.clear()

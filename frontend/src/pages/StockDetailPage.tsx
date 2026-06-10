@@ -133,6 +133,20 @@ export default function StockDetailPage() {
     () => mergeLiveQuoteIntoOhlcv(detail.data?.ohlcv ?? [], live.data, range),
     [detail.data?.ohlcv, live.data, range],
   );
+  // Stale-intraday detection: last sub-daily bar older than 3 calendar days
+  // while the (DB-served) daily feed is fine → upstream intraday gap. The
+  // banner above the chart names the cutoff date instead of letting the
+  // chart silently end days in the past.
+  const staleIntradayDate = useMemo(() => {
+    if (!(range === "5m" || range === "30m" || range === "1h")) return null;
+    const last = mergedOhlcv[mergedOhlcv.length - 1];
+    if (!last?.date) return null;
+    const lastMs = new Date(last.date).getTime();
+    if (!Number.isFinite(lastMs)) return null;
+    const ageDays = (Date.now() - lastMs) / 86_400_000;
+    if (ageDays <= 3) return null;
+    return new Date(lastMs).toLocaleDateString("it-IT", { day: "numeric", month: "short" });
+  }, [mergedOhlcv, range]);
   // Extend the backend (EOD) indicator series with a live tail so EMA / BB /
   // RSI / MACD reach the same in-session candle the chart shows. Patches only
   // the last point — history is left exactly as the backend computed it.
@@ -363,6 +377,24 @@ export default function StockDetailPage() {
               </div>
             </div>
 
+            {/* Stale-intraday banner: yfinance's intraday endpoint can stop
+                serving a symbol while the daily feed stays healthy (observed
+                on VSCO, frozen at June 1 upstream). Without this notice the
+                chart silently shows days-old candles. >3 calendar days
+                tolerates a normal weekend gap (~2.7d Fri close → Mon open). */}
+            {staleIntradayDate && (
+              <div className="mb-2 flex items-center gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-600 dark:text-amber-400">
+                <span>
+                  Dati intraday non disponibili dopo il {staleIntradayDate} (fonte dati).
+                </span>
+                <button
+                  className="underline underline-offset-2 hover:opacity-80"
+                  onClick={() => setSearchParams({ range: "1d" })}
+                >
+                  Passa a 1G per dati aggiornati
+                </button>
+              </div>
+            )}
             {/* Price chart — resizable; defaults to 460px */}
             {mergedOhlcv.length < 2 ? (
               <div className="h-[460px] flex items-center justify-center text-sm text-muted-foreground border border-border/50 rounded-md">

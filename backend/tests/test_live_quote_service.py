@@ -330,3 +330,100 @@ def test_premarket_uses_prepost_price_when_fastinfo_echoes(
     assert q.change_abs is not None and abs(q.change_abs - 8.0) < 1e-6
     assert q.change_pct is not None and abs(q.change_pct - 8.0) < 1e-6
     assert q.as_of_date == "2026-06-01"
+
+
+# ── Courtesy last-live cache ─────────────────────────────────────────────
+# A transient yfinance failure during the session must NOT degrade a row to
+# the EOD fallback (market_state "CLOSED" → live dot hidden, EOD numbers
+# shown silently). If we hold a GOOD live quote fetched in the SAME session
+# (after today's open), serve that instead — still marked OPEN.
+
+def _live_quote(ticker: str, *, price: float, fetched_at: float,
+                state: str = "OPEN") -> live_quote_service.LiveQuote:
+    return live_quote_service.LiveQuote(
+        ticker=ticker, price=price, prev_close=price - 1.0,
+        change_abs=1.0, change_pct=1.0, market_state=state,
+        fetched_at=fetched_at, error=None,
+    )
+
+
+def _degraded_quote(ticker: str) -> live_quote_service.LiveQuote:
+    return live_quote_service.LiveQuote(
+        ticker=ticker, price=None, market_state=None,
+        fetched_at=time.time(), error="boom",
+    )
+
+
+def test_courtesy_serves_same_session_live_on_fetch_failure(monkeypatch) -> None:
+    now = time.time()
+    # A good live fetch populates _LAST_LIVE...
+    monkeypatch.setattr(live_quote_service, "_fetch_fresh",
+                        lambda t, **kw: _live_quote(t, price=10.5, fetched_at=now))
+    monkeypatch.setattr(live_quote_service, "_is_market_open", lambda t, now_utc=None: True)
+    monkeypatch.setattr(live_quote_service, "_today_session_open_epoch",
+                        lambda t: now - 3600)  # session opened 1h ago
+    q1 = live_quote_service.get_quote("ACME")
+    assert q1.price == 10.5 and q1.market_state == "OPEN"
+
+    # ...then the next fetch FAILS → courtesy serves the same-session live.
+    live_quote_service.clear_cache_l1_only()  # expire the 10s TTL path
+    monkeypatch.setattr(live_quote_service, "_fetch_fresh",
+                        lambda t, **kw: _degraded_quote(t))
+    q2 = live_quote_service.get_quote("ACME")
+    assert q2.price == 10.5
+    assert q2.market_state == "OPEN"
+    assert q2.error is None
+
+
+def test_courtesy_not_served_when_market_closed(monkeypatch) -> None:
+    now = time.time()
+    monkeypatch.setattr(live_quote_service, "_fetch_fresh",
+                        lambda t, **kw: _live_quote(t, price=10.5, fetched_at=now))
+    monkeypatch.setattr(live_quote_service, "_is_market_open", lambda t, now_utc=None: True)
+    monkeypatch.setattr(live_quote_service, "_today_session_open_epoch",
+                        lambda t: now - 3600)
+    live_quote_service.get_quote("ACME")
+
+    live_quote_service.clear_cache_l1_only()
+    # Market now CLOSED → the degraded/EOD quote is the truth, no courtesy.
+    monkeypatch.setattr(live_quote_service, "_is_market_open", lambda t, now_utc=None: False)
+    monkeypatch.setattr(live_quote_service, "_fetch_fresh",
+                        lambda t, **kw: _degraded_quote(t))
+    q = live_quote_service.get_quote("ACME")
+    assert q.price is None and q.error == "boom"
+
+
+def test_courtesy_not_served_for_stale_previous_session(monkeypatch) -> None:
+    now = time.time()
+    # Last live is from BEFORE today's open (e.g. yesterday) → not courtesy-able.
+    monkeypatch.setattr(live_quote_service, "_fetch_fresh",
+                        lambda t, **kw: _live_quote(t, price=9.9, fetched_at=now - 86400))
+    monkeypatch.setattr(live_quote_service, "_is_market_open", lambda t, now_utc=None: True)
+    monkeypatch.setattr(live_quote_service, "_today_session_open_epoch",
+                        lambda t: now - 3600)
+    live_quote_service.get_quote("ACME")
+
+    live_quote_service.clear_cache_l1_only()
+    monkeypatch.setattr(live_quote_service, "_fetch_fresh",
+                        lambda t, **kw: _degraded_quote(t))
+    q = live_quote_service.get_quote("ACME")
+    assert q.error == "boom"  # degraded quote returned, no stale courtesy
+
+
+def test_courtesy_covers_breaker_eod_fallback_during_open_hours(monkeypatch) -> None:
+    now = time.time()
+    monkeypatch.setattr(live_quote_service, "_fetch_fresh",
+                        lambda t, **kw: _live_quote(t, price=20.0, fetched_at=now))
+    monkeypatch.setattr(live_quote_service, "_is_market_open", lambda t, now_utc=None: True)
+    monkeypatch.setattr(live_quote_service, "_today_session_open_epoch",
+                        lambda t: now - 3600)
+    live_quote_service.get_quote("ACME")
+
+    live_quote_service.clear_cache_l1_only()
+    # Breaker-open path returns an EOD fallback labeled CLOSED (price set,
+    # error None) DURING open hours → courtesy must still kick in.
+    monkeypatch.setattr(
+        live_quote_service, "_fetch_fresh",
+        lambda t, **kw: _live_quote(t, price=19.0, fetched_at=time.time(), state="CLOSED"))
+    q = live_quote_service.get_quote("ACME")
+    assert q.price == 20.0 and q.market_state == "OPEN"
