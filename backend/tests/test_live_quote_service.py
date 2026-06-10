@@ -427,3 +427,43 @@ def test_courtesy_covers_breaker_eod_fallback_during_open_hours(monkeypatch) -> 
         lambda t, **kw: _live_quote(t, price=19.0, fetched_at=time.time(), state="CLOSED"))
     q = live_quote_service.get_quote("ACME")
     assert q.price == 20.0 and q.market_state == "OPEN"
+
+
+# ── Post-close gap: batch path must converge to TODAY without a scan ─────
+# User report (SANDISK): close D-1=100, +3% during day D, after the bell the
+# movers showed 100 (prior close) until a scan ran. The batch path passed
+# allow_remote_today_fetch=False and the in-memory tick dies on restart, so
+# nothing could fill "today". Now: tick first (free), else a BUDGETED
+# official-bar fetch (token bucket) so ~all names converge within minutes.
+
+def test_provisional_today_prefers_free_tick_no_official_call(monkeypatch) -> None:
+    today = date(2026, 6, 8)
+    live_quote_service._remember_intraday("SNDK", today, 103.0, 100.0)
+    def _boom(*a, **kw):
+        raise AssertionError("official fetch must not fire when a tick exists")
+    monkeypatch.setattr(live_quote_service, "_today_official_bar", _boom)
+    prov = live_quote_service._provisional_today("SNDK", None, today, False)
+    assert prov == (103.0, 100.0)
+
+
+def test_provisional_today_budgeted_official_when_no_tick(monkeypatch) -> None:
+    today = date(2026, 6, 8)
+    calls: list[str] = []
+    monkeypatch.setattr(
+        live_quote_service, "_today_official_bar",
+        lambda t, d, c: calls.append(t) or (103.5, 100.0))
+    live_quote_service._reset_today_fetch_budget(tokens=2)
+    assert live_quote_service._provisional_today("SNDK", None, today, False) == (103.5, 100.0)
+    assert live_quote_service._provisional_today("WDC", None, today, False) == (103.5, 100.0)
+    # Budget exhausted → third ticker gets None this cycle (next refill covers it)
+    assert live_quote_service._provisional_today("MU", None, today, False) is None
+    assert calls == ["SNDK", "WDC"]
+
+
+def test_provisional_today_allow_fetch_bypasses_budget(monkeypatch) -> None:
+    today = date(2026, 6, 8)
+    monkeypatch.setattr(
+        live_quote_service, "_today_official_bar", lambda t, d, c: (104.0, 100.0))
+    live_quote_service._reset_today_fetch_budget(tokens=0)  # empty bucket
+    # Single-quote path (allow_fetch=True) is unaffected by the budget.
+    assert live_quote_service._provisional_today("SNDK", None, today, True) == (104.0, 100.0)

@@ -307,12 +307,48 @@ def _today_official_bar(
         return None
 
 
+# Token bucket for the BATCH path's official today-bar fetches in the
+# post-close gap. The batch path historically passed allow_fetch=False to
+# avoid ~120 history() calls at once after the bell — but that meant a
+# backend restart (which wipes the in-memory intraday tick) left the movers
+# stuck on YESTERDAY's close until the next scan (the SANDISK report,
+# 2026-06-10). A small budget (refilled per minute) lets the pool converge
+# to today's official close within minutes, without the thundering herd;
+# _TODAY_BAR_CACHE day-caches hits and 5-min-caches misses.
+_TODAY_FETCH_BUDGET = {"window_ts": 0.0, "tokens": 0}
+_TODAY_FETCH_BUDGET_PER_MIN = 10
+
+
+def _take_today_fetch_token() -> bool:
+    now = time.time()
+    with _TODAY_BAR_LOCK:
+        if now - _TODAY_FETCH_BUDGET["window_ts"] > 60.0:
+            _TODAY_FETCH_BUDGET["window_ts"] = now
+            _TODAY_FETCH_BUDGET["tokens"] = _TODAY_FETCH_BUDGET_PER_MIN
+        if _TODAY_FETCH_BUDGET["tokens"] > 0:
+            _TODAY_FETCH_BUDGET["tokens"] -= 1
+            return True
+    return False
+
+
+def _reset_today_fetch_budget(*, tokens: int) -> None:
+    """For tests: pin the bucket to an exact token count (fresh window)."""
+    with _TODAY_BAR_LOCK:
+        _TODAY_FETCH_BUDGET["window_ts"] = time.time()
+        _TODAY_FETCH_BUDGET["tokens"] = tokens
+
+
 def _provisional_today(
     ticker: str, currency: str | None, today: date, allow_fetch: bool,
 ) -> tuple[float, float] | None:
-    """(today_close, prior_close) for the post-close gap: the official
-    daily bar if published (only when `allow_fetch`), else the last
-    intraday tick seen while OPEN today. None if neither is available."""
+    """(today_close, prior_close) for the post-close gap.
+
+    Single-quote path (`allow_fetch=True`): official daily bar first (most
+    accurate), else the last intraday tick seen while OPEN today.
+    Batch path (`allow_fetch=False`): the FREE in-memory tick first, else a
+    BUDGETED official-bar fetch (token bucket above) — covers the
+    restart/never-polled cases without hammering yfinance. None when neither
+    source can say anything about today."""
     if allow_fetch:
         official = _today_official_bar(ticker, today, currency)
         if official is not None:
@@ -321,6 +357,10 @@ def _provisional_today(
         snap = _LAST_INTRADAY.get(ticker)
     if snap and snap.get("date") == today:
         return snap["price"], snap["prev_close"]
+    if not allow_fetch and _take_today_fetch_token():
+        official = _today_official_bar(ticker, today, currency)
+        if official is not None:
+            return official
     return None
 
 
@@ -773,6 +813,10 @@ def clear_cache() -> None:
     with _CACHE_LOCK:
         _CACHE.clear()
         _LAST_LIVE.clear()
+    with _LAST_INTRADAY_LOCK:
+        _LAST_INTRADAY.clear()
+    with _TODAY_BAR_LOCK:
+        _TODAY_BAR_CACHE.clear()
 
 
 def clear_cache_l1_only() -> None:
