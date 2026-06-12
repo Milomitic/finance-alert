@@ -1,6 +1,6 @@
 import { Flame } from "lucide-react";
 import { Link } from "react-router-dom";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import type { Mover, MoversBlock } from "@/api/types";
 import {
@@ -17,6 +17,7 @@ import { FlashValue } from "@/components/ui/FlashValue";
 import { SectionTitle } from "@/components/ui/section-title";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useLiveQuotes } from "@/hooks/useLiveQuote";
+import { useFlipList } from "@/hooks/useFlipList";
 import { projectVolRatio } from "@/lib/intradayVolume";
 import { cn } from "@/lib/utils";
 
@@ -74,7 +75,7 @@ function getWindowed(movers: MoversBlock, w: Window): WindowedMovers {
   return { gainers: movers.gainers, losers: movers.losers, field: "change_pct" };
 }
 
-function MoverRow({ m, field, window, live, computedAt, livePrice, livePulse }: {
+function MoverRow({ m, field, window, live, computedAt, livePrice, livePulse, flipRef }: {
   m: Mover;
   field: WindowedMovers["field"];
   /** Active window — drives WHICH volume to show: today's (1d, projected
@@ -94,6 +95,8 @@ function MoverRow({ m, field, window, live, computedAt, livePrice, livePulse }: 
    *  drives the pulsing green dot next to the ticker (same as the Volumi
    *  maggiori card). */
   livePulse?: boolean;
+  /** FLIP register-ref from useFlipList — animates rank changes. */
+  flipRef?: (el: HTMLElement | null) => void;
 }) {
   const v = m[field] ?? null;
   const positive = v != null ? v >= 0 : true;
@@ -146,7 +149,7 @@ function MoverRow({ m, field, window, live, computedAt, livePrice, livePulse }: 
         }`
       : "Volume non disponibile";
   return (
-    <li className="border-b border-border/40 last:border-b-0">
+    <li ref={flipRef} className="border-b border-border/40 last:border-b-0">
       {/* One fixed-column grid per row — same column-per-info-type layout as
           the Volumi maggiori card, so price / %change / volume / multiplier /
           score line up vertically across every row. The identity cell flexes
@@ -265,8 +268,30 @@ function ColumnHeader({ side }: { side: Side }) {
  * board is vanishingly rare, so the bounded superset captures ~all
  * realistic intraday movers. 1S/1M stay pure EOD.
  */
+/* Last LIVE-ranked board, persisted per browser session. On a hard reload
+ * the movers payload renders instantly with the EOD/stale ranking while the
+ * first 15s live batch is still in flight (~2s) — the user saw "yesterday's
+ * board" flash before the live re-rank snapped in. Seeding the initial
+ * render from this snapshot (max 10 min old) makes reloads visually
+ * continuous; the first live batch then takes over with a FLIP slide. */
+const SNAP_KEY = "topmovers-live-board-v1";
+
+function readBoardSnapshot(): WindowedMovers | null {
+  try {
+    const raw = sessionStorage.getItem(SNAP_KEY);
+    if (!raw) return null;
+    const s = JSON.parse(raw) as { ts: number; data: WindowedMovers };
+    if (!s?.data?.gainers || Date.now() - s.ts > 10 * 60_000) return null;
+    return s.data;
+  } catch {
+    return null;
+  }
+}
+
 export function TopMoversCard({ movers, computedAt }: Props) {
   const [window, setWindow] = useState<Window>("1d");
+  const [boardSeed] = useState(readBoardSnapshot);
+  const registerFlip = useFlipList();
   const isLive = window === "1d";
 
   // Live candidate pool: the union of EVERY EOD mover list — not just
@@ -340,6 +365,9 @@ export function TopMoversCard({ movers, computedAt }: Props) {
 
   const data = useMemo<WindowedMovers>(() => {
     if (!isLive) return getWindowed(movers, window);
+    // Reload continuity: until the first live batch resolves, show the last
+    // live board from this session instead of the stale EOD ranking.
+    if (liveMap.size === 0 && boardSeed) return boardSeed;
     // Combined pool from EVERY mover list (same union as the live
     // candidate pool) so a name that wasn't an EOD top-gainer but
     // moves intraday can climb into the displayed list. Effective
@@ -391,7 +419,23 @@ export function TopMoversCard({ movers, computedAt }: Props) {
       .filter((m) => !topGainers.has(m.ticker))
       .sort((a, b) => (a.change_pct as number) - (b.change_pct as number));
     return { gainers, losers, field: "change_pct" };
-  }, [isLive, movers, window, liveMap, liveQ.data]);
+  }, [isLive, movers, window, liveMap, liveQ.data, boardSeed]);
+
+  // Persist the live-ranked board for reload continuity (trimmed to the
+  // visible rows; sessionStorage = per-tab, dies with the browser session).
+  useEffect(() => {
+    if (!isLive || liveMap.size === 0) return;
+    try {
+      sessionStorage.setItem(SNAP_KEY, JSON.stringify({
+        ts: Date.now(),
+        data: {
+          gainers: data.gainers.slice(0, ROWS_PER_COL),
+          losers: data.losers.slice(0, ROWS_PER_COL),
+          field: data.field,
+        },
+      }));
+    } catch { /* storage full/blocked — cosmetic feature, ignore */ }
+  }, [data, isLive, liveMap.size]);
 
   const liveActive = isLive && liveMap.size > 0;
   // Aggregate market phase across the polled quotes → LIVE / PRE / Closed
@@ -446,6 +490,7 @@ export function TopMoversCard({ movers, computedAt }: Props) {
                       return (
                         <MoverRow
                           key={m.ticker}
+                          flipRef={registerFlip(side + ':' + m.ticker)}
                           m={m}
                           field={data.field}
                           window={window}
