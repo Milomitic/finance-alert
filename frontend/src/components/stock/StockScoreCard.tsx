@@ -339,22 +339,26 @@ function ScoreGauge({ score, size = 180, sectorAvg }: GaugeProps) {
 
 /* ─── Score-history sparkline ───────────────────────────────────────────── */
 /* Tiny inline polyline of the daily composite snapshots (score_history,
- * captured once per scan day). The table only accrues FORWARD — today it
- * holds 1-2 days — so with <2 points a line is meaningless and we show a
- * muted "storico da N giorno/i" label instead. Pure SVG, no chart lib. */
+ * captured once per scan day). The table only accrues FORWARD, so for the
+ * first days a polyline is just a floating segment with no readable trend
+ * (user-reported "sembra un bug") — below MIN_SPARK_DAYS we show a labeled
+ * placeholder instead, and the line itself ships with a "score Ng" label +
+ * colored Δ so it's self-explanatory. Pure SVG, no chart lib. */
+
+const MIN_SPARK_DAYS = 5;
 
 function ScoreSparkline({ ticker }: { ticker: string }) {
   const { data } = useScoreHistory(ticker);
   if (!data) return null; // loading / error → no placeholder, the card stands alone
   const points = data.points;
-  const tooltip = `Andamento composito (${points.length} giorni)`;
-  if (points.length < 2) {
+  if (points.length === 0) return null;
+  if (points.length < MIN_SPARK_DAYS) {
     return (
       <span
         className="mt-0.5 text-[10px] italic text-muted-foreground/70"
-        title={tooltip}
+        title={`Andamento giornaliero dello score — il grafico appare dopo ${MIN_SPARK_DAYS} giorni di storico`}
       >
-        storico da {points.length} {points.length === 1 ? "giorno" : "giorni"}
+        storico score: {points.length}/{MIN_SPARK_DAYS} giorni
       </span>
     );
   }
@@ -365,6 +369,8 @@ function ScoreSparkline({ ticker }: { ticker: string }) {
   const min = Math.min(...comps);
   const max = Math.max(...comps);
   const span = max - min;
+  const delta = comps[comps.length - 1] - comps[0];
+  const tooltip = `Andamento dello score composito negli ultimi ${points.length} giorni (Δ ${delta >= 0 ? "+" : ""}${delta.toFixed(1)})`;
   const x = (i: number) => pad + (i / (points.length - 1)) * (w - pad * 2);
   // Flat series → centered horizontal line instead of pinning to an edge.
   const y = (c: number) =>
@@ -374,7 +380,10 @@ function ScoreSparkline({ ticker }: { ticker: string }) {
     .join(" ");
   const lastIdx = points.length - 1;
   return (
-    <span className="mt-0.5 inline-flex text-muted-foreground/70" title={tooltip}>
+    <span
+      className="mt-0.5 inline-flex items-center gap-1.5 text-muted-foreground/70"
+      title={tooltip}
+    >
       <svg
         width={w}
         height={h}
@@ -398,6 +407,20 @@ function ScoreSparkline({ ticker }: { ticker: string }) {
           fill="currentColor"
         />
       </svg>
+      {/* Identity label + first-to-last Δ — what the floating line lacked. */}
+      <span className="flex flex-col leading-tight text-[9px]">
+        <span>score {points.length}g</span>
+        <span
+          className={
+            delta >= 0
+              ? "text-emerald-600 dark:text-emerald-400"
+              : "text-rose-600 dark:text-rose-400"
+          }
+        >
+          {delta >= 0 ? "+" : ""}
+          {delta.toFixed(1)}
+        </span>
+      </span>
     </span>
   );
 }
