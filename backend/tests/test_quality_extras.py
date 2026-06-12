@@ -8,7 +8,7 @@ from app.services.score_service import quality_extras
 
 
 def _f(**micro):
-    pt = SimpleNamespace(current_price_target=micro.pop("target", None))
+    pt = SimpleNamespace(mean=micro.pop("target", None), current=None)
     return SimpleNamespace(micro=SimpleNamespace(**{
         "audit_risk": None, "board_risk": None, "compensation_risk": None,
         "overall_risk": None, "recommendation_mean": None,

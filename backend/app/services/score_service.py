@@ -2637,7 +2637,15 @@ def quality_extras(fundamentals, current_price: float | None = None) -> dict | N
             analyst["recommendation_mean"] = round(float(m.recommendation_mean), 2)
         if m.number_of_analyst_opinions is not None:
             analyst["n_analysts"] = int(m.number_of_analyst_opinions)
-    target = getattr(pt, "current_price_target", None) if pt is not None else None
+    # Consensus mean first (the card's "target medio"), then the latest
+    # single-analyst target. NB: the fields are `mean`/`current` on
+    # AnalystPriceTarget — the old read of a non-existent
+    # `current_price_target` attr silently yielded None forever.
+    target = None
+    if pt is not None:
+        target = getattr(pt, "mean", None)
+        if target is None:
+            target = getattr(pt, "current", None)
     if target is not None:
         analyst["price_target"] = round(float(target), 2)
         if current_price and current_price > 0:

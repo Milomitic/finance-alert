@@ -1266,7 +1266,7 @@ def _extract_ratings(rec_df: Any) -> list[AnalystRating]:
     return out
 
 
-def _extract_actions(df: Any, limit: int = 12) -> list[AnalystAction]:
+def _extract_actions(df: Any, limit: int = 12, *, scale: float = 1.0) -> list[AnalystAction]:
     """yfinance Ticker.upgrades_downgrades returns a DataFrame indexed by
     GradeDate. Recent yfinance versions add 3 columns beyond the original
     Firm/ToGrade/FromGrade/Action: priceTargetAction, currentPriceTarget,
@@ -1288,6 +1288,10 @@ def _extract_actions(df: Any, limit: int = 12) -> list[AnalystAction]:
         # warnings on older versions.
         cur_pt = _safe_float(row.get("currentPriceTarget")) if has_price_target_cols else None
         prior_pt = _safe_float(row.get("priorPriceTarget")) if has_price_target_cols else None
+        if cur_pt is not None:
+            cur_pt *= scale
+        if prior_pt is not None:
+            prior_pt *= scale
         pt_action_raw = row.get("priceTargetAction") if has_price_target_cols else None
         pt_action = (
             str(pt_action_raw).strip() if pt_action_raw is not None and str(pt_action_raw).strip() else None
@@ -1305,15 +1309,18 @@ def _extract_actions(df: Any, limit: int = 12) -> list[AnalystAction]:
     return out
 
 
-def _extract_price_target(pt: Any) -> AnalystPriceTarget:
+def _extract_price_target(pt: Any, *, scale: float = 1.0) -> AnalystPriceTarget:
     if not pt or not isinstance(pt, dict):
         return AnalystPriceTarget(current=None, low=None, mean=None, median=None, high=None)
+    def _s(v: Any) -> float | None:
+        f = _safe_float(v)
+        return f * scale if f is not None else None
     return AnalystPriceTarget(
-        current=_safe_float(pt.get("current")),
-        low=_safe_float(pt.get("low")),
-        mean=_safe_float(pt.get("mean")),
-        median=_safe_float(pt.get("median")),
-        high=_safe_float(pt.get("high")),
+        current=_s(pt.get("current")),
+        low=_s(pt.get("low")),
+        mean=_s(pt.get("mean")),
+        median=_s(pt.get("median")),
+        high=_s(pt.get("high")),
     )
 
 
@@ -1593,6 +1600,13 @@ def _fetch_fresh(ticker: str) -> Fundamentals:
             _merge_finnhub_revenue(ticker, f)
         except Exception as e:
             logger.debug(f"[fund] finnhub revenue merge {ticker}: {e}")
+        # LSE listings quote in PENCE (currency GBp/GBX). yfinance's analyst
+        # price targets come back in that SAME unit while our quote/chart
+        # paths normalize prices to POUNDS — unscaled, the analyst card
+        # showed a "4276" target next to a 39.40 price (HLMA.L, 2026-06-11).
+        # Applied to the yfinance-sourced target extractions below; the
+        # Nasdaq fallback is untouched (US source, already major units).
+        pence_scale = 1.0
         try:
             # Single info() call — both micro fundamentals and the company
             # profile come from the same dict, so pulling them together
@@ -1600,6 +1614,8 @@ def _fetch_fresh(ticker: str) -> Fundamentals:
             info = raw.get("info")
             f.micro = _extract_micro(info)
             f.profile = _extract_profile(info)
+            if isinstance(info, dict) and info.get("currency") in ("GBp", "GBX"):
+                pence_scale = 0.01
             if any(getattr(f.micro, k) is not None for k in vars(f.micro)): saw_success = True
             if f.profile.long_business_summary or f.profile.website:
                 saw_success = True
@@ -1716,7 +1732,7 @@ def _fetch_fresh(ticker: str) -> Fundamentals:
             except Exception as e:  # noqa: BLE001 — fallback is non-fatal
                 logger.debug(f"[fund] nasdaq ratings fallback {ticker}: {e}")
         try:
-            f.price_target = _extract_price_target(raw.get("analyst_price_targets"))
+            f.price_target = _extract_price_target(raw.get("analyst_price_targets"), scale=pence_scale)
             if f.price_target.mean is not None: saw_success = True
         except Exception as e:
             logger.debug(f"[fund] price_target {ticker}: {e}")
@@ -1745,7 +1761,7 @@ def _fetch_fresh(ticker: str) -> Fundamentals:
             except Exception as e:  # noqa: BLE001 — fallback is non-fatal
                 logger.debug(f"[fund] nasdaq price-target fallback {ticker}: {e}")
         try:
-            f.analyst_actions = _extract_actions(raw.get("upgrades_downgrades"))
+            f.analyst_actions = _extract_actions(raw.get("upgrades_downgrades"), scale=pence_scale)
             if f.analyst_actions: saw_success = True
         except Exception as e:
             logger.debug(f"[fund] upgrades_downgrades {ticker}: {e}")
