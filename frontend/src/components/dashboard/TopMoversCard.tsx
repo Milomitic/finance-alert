@@ -316,15 +316,22 @@ export function TopMoversCard({ movers, computedAt }: Props) {
   const liveMap = useMemo(() => {
     const map = new Map<
       string,
-      { change_pct: number; price: number | null; is_open: boolean }
+      { change_pct: number; price: number | null; is_open: boolean; fresh: boolean }
     >();
+    const todayISO = new Date().toISOString().slice(0, 10);
     for (const q of liveQ.data?.quotes ?? []) {
       if (q.change_pct != null) {
+        const isOpen = q.market_state === "OPEN" || q.market_state === "PRE";
         map.set(q.ticker, {
           change_pct: q.change_pct,
           price: q.price ?? null,
           // OPEN and PRE both carry a fresh live/pre-market price → pulse dot.
-          is_open: q.market_state === "OPEN" || q.market_state === "PRE",
+          is_open: isOpen,
+          // TODAY's data (live session or post-close provisional). A failed
+          // fetch degrades to the EOD fallback carrying YESTERDAY's change
+          // (as_of < today, state CLOSED) — that must never be ranked as if
+          // it were a live move (the frozen-at-the-open report, 2026-06-11).
+          fresh: isOpen || q.as_of_date === todayISO,
         });
       }
     }
@@ -340,6 +347,7 @@ export function TopMoversCard({ movers, computedAt }: Props) {
     // row render; sorting is by change_pct only.)
     const seen = new Set<string>();
     const pool: Mover[] = [];
+    const freshPool: Mover[] = [];
     const lists: (Mover[] | undefined)[] = [
       movers.gainers, movers.losers,
       movers.gainers_5d, movers.losers_5d,
@@ -357,9 +365,20 @@ export function TopMoversCard({ movers, computedAt }: Props) {
         seen.add(m.ticker);
         const overlay = liveMap.get(m.ticker);
         pool.push(overlay != null ? { ...m, change_pct: overlay.change_pct } : m);
+        if (overlay?.fresh) {
+          freshPool.push({ ...m, change_pct: overlay.change_pct });
+        }
       }
     }
-    const withChange = pool.filter((m) => m.change_pct != null);
+    // While the session is OPEN, rank ONLY rows with TODAY's data: at the
+    // bell most fetches are still EOD fallbacks carrying yesterday's ±6%
+    // d/d change, which would dominate today's real ±1% early moves and
+    // freeze the board on yesterday's set. The fresh subset grows poll by
+    // poll (15s); until the FIRST fresh quote arrives we keep the full EOD
+    // pool so the card never flashes empty.
+    const anyOpen = (liveQ.data?.quotes ?? []).some((q) => q.market_state === "OPEN");
+    const ranked = anyOpen && freshPool.length > 0 ? freshPool : pool;
+    const withChange = ranked.filter((m) => m.change_pct != null);
     const gainers = [...withChange].sort(
       (a, b) => (b.change_pct as number) - (a.change_pct as number),
     );
@@ -372,7 +391,7 @@ export function TopMoversCard({ movers, computedAt }: Props) {
       .filter((m) => !topGainers.has(m.ticker))
       .sort((a, b) => (a.change_pct as number) - (b.change_pct as number));
     return { gainers, losers, field: "change_pct" };
-  }, [isLive, movers, window, liveMap]);
+  }, [isLive, movers, window, liveMap, liveQ.data]);
 
   const liveActive = isLive && liveMap.size > 0;
   // Aggregate market phase across the polled quotes → LIVE / PRE / Closed
