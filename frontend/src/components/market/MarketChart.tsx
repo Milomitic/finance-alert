@@ -1,13 +1,15 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ColorType,
   CrosshairMode,
   createChart,
   type IChartApi,
   type ISeriesApi,
+  type Time,
   type UTCTimestamp,
 } from "lightweight-charts";
 
+import { OhlcLegend, barToLegend, type LegendDatum } from "@/components/chart/ohlcLegend";
 import type { IndicatorStyle } from "@/components/stock/IndicatorToggles";
 import type { RegisterChart } from "@/hooks/useChartSync";
 import type { MarketDetailBar, MarketIndicatorPoint, MarketIndicators } from "@/hooks/useMarketDetail";
@@ -52,6 +54,14 @@ export function MarketChart({
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const candleRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
+  // OHLC legend machinery — same pattern as PriceChart (shared renderer in
+  // components/chart/ohlcLegend). Refs because the crosshair handler is
+  // registered once at chart mount and must not close over stale snapshots.
+  const barsByTimeRef = useRef<Map<number, MarketDetailBar & { idx: number }>>(new Map());
+  const barsRef = useRef<MarketDetailBar[]>([]);
+  const timeframeRef = useRef<string | undefined>(timeframe);
+  const latestLegendRef = useRef<LegendDatum | null>(null);
+  const [legend, setLegend] = useState<LegendDatum | null>(null);
   const ema20Ref = useRef<ISeriesApi<"Line"> | null>(null);
   const ema50Ref = useRef<ISeriesApi<"Line"> | null>(null);
   const ema200Ref = useRef<ISeriesApi<"Line"> | null>(null);
@@ -119,6 +129,23 @@ export function MarketChart({
     });
     ro.observe(el);
 
+    // Crosshair → legend: hovered bar while over a candle, latest bar when
+    // the cursor leaves the plot (the corner always shows something).
+    const crosshairHandler = (param: { time?: Time }) => {
+      if (!param.time) {
+        setLegend(latestLegendRef.current);
+        return;
+      }
+      const bar = barsByTimeRef.current.get(param.time as number);
+      if (!bar) {
+        setLegend(latestLegendRef.current);
+        return;
+      }
+      const prevBar = bar.idx > 0 ? barsRef.current[bar.idx - 1] : null;
+      setLegend(barToLegend(bar, prevBar, timeframeRef.current));
+    };
+    chart.subscribeCrosshairMove(crosshairHandler);
+
     const unregister = onReady?.(chart);
 
     return () => {
@@ -140,6 +167,20 @@ export function MarketChart({
   useEffect(() => {
     const candle = candleRef.current;
     if (!candle) return;
+    // Keep the legend lookups in sync with the data (handler closes over
+    // refs registered at mount).
+    timeframeRef.current = timeframe;
+    barsRef.current = bars;
+    const map = new Map<number, MarketDetailBar & { idx: number }>();
+    bars.forEach((b, idx) => {
+      map.set(dateToTime(b.date) as unknown as number, { ...b, idx });
+    });
+    barsByTimeRef.current = map;
+    const lastBar = bars[bars.length - 1];
+    const prevOfLast = bars.length > 1 ? bars[bars.length - 2] : null;
+    const latest = lastBar ? barToLegend(lastBar, prevOfLast, timeframe) : null;
+    latestLegendRef.current = latest;
+    setLegend(latest);
     candle.setData(
       bars.map((b) => ({
         time: dateToTime(b.date),
@@ -219,5 +260,9 @@ export function MarketChart({
     bbLowerRef.current.setData(pointsToChartData(indicators.bb_lower));
   }, [indicators?.bb_upper, indicators?.bb_middle, indicators?.bb_lower, styles?.bb]);
 
-  return <div ref={containerRef} className="h-full w-full" />;
+  return (
+    <div ref={containerRef} className="h-full w-full relative">
+      <OhlcLegend legend={legend} />
+    </div>
+  );
 }

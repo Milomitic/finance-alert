@@ -4,8 +4,7 @@ import {
   type IChartApi, type ISeriesApi, type Time, type UTCTimestamp,
 } from "lightweight-charts";
 
-import { cn } from "@/lib/utils";
-
+import { OhlcLegend, barToLegend, type LegendDatum } from "@/components/chart/ohlcLegend";
 import type { IndicatorPoint, IndicatorSeries, OhlcvBar, PriceAlert } from "@/api/types";
 import type { IndicatorStyle } from "@/components/stock/IndicatorToggles";
 import type { RegisterChart } from "@/hooks/useChartSync";
@@ -43,101 +42,11 @@ function dateToTime(d: string): UTCTimestamp {
   return (Date.parse(d) / 1000) as UTCTimestamp;
 }
 
-/** Format a bar's ISO date for the tooltip. Intraday timeframes show
- *  date+time so the user can tell which 30m candle they're on; daily+
- *  show just the date.
- */
-function formatBarDate(iso: string, timeframe: string | undefined): string {
-  const isIntraday = timeframe === "5m" || timeframe === "30m" || timeframe === "1h";
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return iso;
-  // Force UTC formatting so the tooltip matches the X-axis ticks.
-  // Lightweight-charts renders the time scale in UTC by default
-  // (it doesn't auto-convert to the user's locale tz). Without
-  // `timeZone: "UTC"` the tooltip showed Europe/Rome time (e.g.
-  // "21:30") while the axis below showed UTC (e.g. "19:30"), so
-  // hovering a candle gave a 2h-shifted date — the user's report.
-  const dateStr = d.toLocaleDateString("it-IT", {
-    day: "2-digit", month: "2-digit", year: "2-digit",
-    timeZone: "UTC",
-  });
-  if (!isIntraday) return dateStr;
-  const timeStr = d.toLocaleTimeString("it-IT", {
-    hour: "2-digit", minute: "2-digit",
-    timeZone: "UTC",
-  });
-  return `${dateStr} ${timeStr}`;
-}
-
-/** Compact volume formatting: 12.34M / 1.23B / 987K / 12,345. */
-function fmtVolume(v: number): string {
-  if (v >= 1e9) return `${(v / 1e9).toFixed(2)}B`;
-  if (v >= 1e6) return `${(v / 1e6).toFixed(2)}M`;
-  if (v >= 1e3) return `${(v / 1e3).toFixed(0)}K`;
-  return v.toLocaleString();
-}
-
-/** Decimals adapt to the price magnitude — penny stocks need 4
- *  digits to avoid a meaningful 0.0234 collapsing to "0.02". */
-function fmtPrice(v: number): string {
-  return v.toFixed(v < 1 ? 4 : 2);
-}
-
 function pointsToChartData(points: IndicatorPoint[] | undefined) {
   if (!points) return [];
   return points
     .filter((p) => p.value !== null)
     .map((p) => ({ time: dateToTime(p.date), value: p.value as number }));
-}
-
-/** OHLC legend datum. Rendered as a FIXED legend in the chart's
- *  top-left corner (no cursor-following popup): it shows the latest
- *  bar by default and the hovered bar while the crosshair is over a
- *  candle — the classic TradingView legend, so nothing ever occludes
- *  the candles under the cursor. */
-interface LegendDatum {
-  date: string;    // formatted "DD/MM/YY HH:MM" or "DD/MM/YYYY"
-  open: number;
-  high: number;
-  low: number;
-  close: number;
-  volume: number;
-  // Bar-over-bar variation: this bar's close vs the PREVIOUS bar's
-  // close. This is the canonical D/D return on daily bars, the
-  // 30m-over-30m return on intraday. Reverted from the previous
-  // intra-candle (close-vs-open) interpretation per user feedback —
-  // they want the same "vs previous close" reading as the page-header
-  // chip, not a redundant view of the candle's body.
-  changePct: number | null;
-  // True when this bar's close is at-or-above its OWN open (= visually
-  // green candle body). Drives the close-cell color in the tooltip;
-  // independent from `changePct` since the new `changePct` could be
-  // positive even on a bar that closed below its open (e.g. the bar
-  // gapped UP at open and faded back, but still ended above the
-  // previous day's close).
-  isUp: boolean;
-}
-
-/** Build a legend datum from a bar + its predecessor (for the Δ%). */
-function barToLegend(
-  bar: OhlcvBar,
-  prevBar: OhlcvBar | null,
-  timeframe: string | undefined,
-): LegendDatum {
-  const changePct =
-    prevBar && prevBar.close !== 0
-      ? ((bar.close - prevBar.close) / prevBar.close) * 100
-      : null;
-  return {
-    date: formatBarDate(bar.date, timeframe),
-    open: bar.open,
-    high: bar.high,
-    low: bar.low,
-    close: bar.close,
-    volume: bar.volume,
-    changePct,
-    isUp: bar.close >= bar.open,
-  };
 }
 
 export function PriceChart({
@@ -526,52 +435,12 @@ export function PriceChart({
     };
   }, [trendDrawings]);
 
-  // Color helper for the up/down values in the legend.
-  const upTone = "text-emerald-700 dark:text-emerald-300";
-  const downTone = "text-red-700 dark:text-red-300";
-
   return (
     <div ref={containerRef} className="w-full h-full relative">
-      {/* Fixed top-left legend (replaces the cursor-following popup): the
-          OHLCV of the latest bar by default, the hovered bar on
-          crosshair-move. Sits in the chart's top-left corner — under the
-          toolbar's indicators row — and never occludes the candles.
-          Two lines: O/H/L/C on top, Vol + Δ% below (no date — it's
-          already on the time axis under the cursor). */}
-      {legend && (
-        <div className="absolute top-2 left-2 z-10 pointer-events-none rounded-md border bg-card/85 backdrop-blur-sm px-3 py-1.5 font-mono tabular-nums shadow-sm text-sm leading-snug">
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-0.5">
-            <span>
-              <span className="text-muted-foreground">O</span> {fmtPrice(legend.open)}
-            </span>
-            <span>
-              <span className="text-muted-foreground">H</span>{" "}
-              <span className={upTone}>{fmtPrice(legend.high)}</span>
-            </span>
-            <span>
-              <span className="text-muted-foreground">L</span>{" "}
-              <span className={downTone}>{fmtPrice(legend.low)}</span>
-            </span>
-            <span>
-              <span className="text-muted-foreground">C</span>{" "}
-              <span className={cn("font-semibold", legend.isUp ? upTone : downTone)}>
-                {fmtPrice(legend.close)}
-              </span>
-            </span>
-          </div>
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-0.5 mt-1">
-            <span>
-              <span className="text-muted-foreground">Vol</span> {fmtVolume(legend.volume)}
-            </span>
-            {legend.changePct !== null && (
-              <span className={cn("font-semibold", legend.changePct >= 0 ? upTone : downTone)}>
-                {legend.changePct >= 0 ? "+" : ""}
-                {legend.changePct.toFixed(2)}%
-              </span>
-            )}
-          </div>
-        </div>
-      )}
+      {/* Fixed top-left OHLCV legend — shared with MarketChart (see
+          components/chart/ohlcLegend): latest bar idle, hovered bar on
+          crosshair-move; never occludes the candles. */}
+      <OhlcLegend legend={legend} />
     </div>
   );
 }
