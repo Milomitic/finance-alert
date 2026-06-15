@@ -249,12 +249,17 @@ export default function HomePage() {
           <div className="min-w-0"><TopMoversCard movers={m.movers} computedAt={m.computed_at} /></div>
         </div>
       ) : (
-        <div className="grid gap-3 lg:grid-cols-[5fr_4fr] items-stretch">
-          <div className="grid gap-3 lg:grid-cols-3">
-            <div className="min-w-0"><FiftyTwoWeekVolCard movers={m.movers} /></div>
-            <div className="min-w-0"><LiveVolumeMoversCard movers={m.movers} computedAt={m.computed_at} /></div>
-            <div className="min-w-0"><TopMoversCard movers={m.movers} computedAt={m.computed_at} /></div>
-          </div>
+        // Flat 4-column grid with CONTENT-PROPORTIONAL widths. The old
+        // [5fr_4fr] crammed the three left cards into equal thirds while
+        // pre-market alone took 4/9 — so the two-up TopMovers (gainers +
+        // losers sub-columns) was squeezed to ~18% and its rows overflowed
+        // into each other. The two dense two-column cards (TopMovers,
+        // pre-market) now get the most room; the single-column Volumi the
+        // least.
+        <div className="grid gap-3 lg:grid-cols-[minmax(0,2.2fr)_minmax(0,2fr)_minmax(0,2.9fr)_minmax(0,2.9fr)] items-stretch">
+          <div className="min-w-0"><FiftyTwoWeekVolCard movers={m.movers} /></div>
+          <div className="min-w-0"><LiveVolumeMoversCard movers={m.movers} computedAt={m.computed_at} /></div>
+          <div className="min-w-0"><TopMoversCard movers={m.movers} computedAt={m.computed_at} /></div>
           <div className="min-w-0"><PremarketMoversCard /></div>
         </div>
       )}

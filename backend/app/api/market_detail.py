@@ -37,6 +37,15 @@ _LIVE_META: dict[str, tuple[str, str, str | None]] = {
     symbol: (name, category, flag)
     for (symbol, name, category, flag, _) in LIVE_ASSET_DEFINITIONS
 }
+# Also accept the index E-mini FUTURES symbols (ES=F, NQ=F, …) as valid
+# detail targets: the dashboard's "Mercati live" card links the row to the
+# futures contract when it's showing the after-hours futures price, so the
+# detail must resolve the same instrument (otherwise the card's ~30.5k
+# Nasdaq futures price would open a ~25k cash-index detail — the mismatch
+# the user reported). Labeled "(futures)" + the index's category/flag.
+for _sym, _name, _cat, _flag, _fut in LIVE_ASSET_DEFINITIONS:
+    if _fut and _fut not in _LIVE_META:
+        _LIVE_META[_fut] = (f"{_name} (futures)", _cat, _flag)
 
 
 class OhlcvBarOut(BaseModel):

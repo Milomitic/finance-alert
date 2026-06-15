@@ -156,7 +156,7 @@ function MoverRow({ m, field, window, live, computedAt, livePrice, livePulse, fl
           (minmax(0,1fr)) and truncates first when the column narrows. */}
       <Link
         to={`/stocks/${encodeURIComponent(m.ticker)}`}
-        className="grid grid-cols-[minmax(0,1fr)_58px_60px_56px_46px_auto] items-center gap-1.5 px-2 py-1.5 hover:bg-accent/30 transition-colors"
+        className="grid grid-cols-[minmax(0,1fr)_46px_52px_48px_30px_auto] items-center gap-1 px-1.5 py-1.5 hover:bg-accent/30 transition-colors"
       >
         {/* Col 1: identity + per-row live-poll dot. A classic pulsing green
             dot sits right of the ticker for every row whose 15s polling is
@@ -477,7 +477,7 @@ export function TopMoversCard({ movers, computedAt }: Props) {
           {(["gainers", "losers"] as const).map((side) => {
             const list = side === "gainers" ? data.gainers : data.losers;
             return (
-              <div key={side} className="flex flex-col min-w-0">
+              <div key={side} className="flex flex-col min-w-0 overflow-x-hidden">
                 <ColumnHeader side={side} />
                 {list.length === 0 ? (
                   <div className="flex-1 flex items-center justify-center p-4 text-xs text-muted-foreground">

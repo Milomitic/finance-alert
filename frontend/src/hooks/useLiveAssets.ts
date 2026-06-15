@@ -20,11 +20,16 @@ export interface LiveAsset {
    *  just omits the sparkline in that case. */
   history: number[] | null;
   /** When true, the `quote.price` is sourced from the index's E-mini
-   *  futures contract (cash market closed → fallback). UI renders a
-   *  small "FUT" badge so the user knows the price isn't the cash
-   *  close. Default false / undefined for cash quotes and rows
-   *  without a futures pair. */
+   *  futures contract (cash market closed → fallback). */
   using_futures?: boolean;
+  /** yfinance symbol the DISPLAYED quote came from — the futures contract
+   *  when `using_futures`, else the cash symbol. The detail link uses this
+   *  so the detail page shows the same instrument/price as the card. */
+  quote_symbol?: string;
+  /** True when the displayed price updates in real time right now
+   *  (category-aware: crypto 24/7, futures on the Globex session, cash
+   *  during exchange hours). Drives the live dot. */
+  is_live?: boolean;
 }
 
 export interface LiveAssetsResponse {

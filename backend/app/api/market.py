@@ -43,12 +43,20 @@ class LiveAsset(BaseModel):
     # When True, the `quote` field is sourced from the index's E-mini
     # futures contract (e.g. ES=F for ^GSPC) because the cash market
     # was closed at request time. Futures trade nearly 24h on CME
-    # Globex so they're our after-hours signal. Frontend renders a
-    # small "FUT" badge so the user knows the price isn't the cash
-    # close anymore. Default False = the row shows the cash quote
-    # (most rows: commodities, crypto, indices during regular hours,
-    # and indices without a paired futures symbol).
+    # Globex so they're our after-hours signal. Default False = the row
+    # shows the cash quote (most rows: commodities, crypto, indices
+    # during regular hours, and indices without a paired futures pair).
     using_futures: bool = False
+    # The yfinance symbol the DISPLAYED quote actually came from — the
+    # futures contract when `using_futures`, else the cash symbol. The
+    # dashboard links the row's detail page to THIS so the detail shows
+    # the same instrument/price the card shows (no more cash↔futures
+    # price mismatch when the cash market is closed).
+    quote_symbol: str = ""
+    # True when the displayed price is updating in REAL TIME right now —
+    # category-aware (crypto 24/7; futures on the Globex ~23h session;
+    # cash indices during their exchange hours). Drives the live dot.
+    is_live: bool = False
 
 
 class LiveAssetsOut(BaseModel):
@@ -91,6 +99,36 @@ LIVE_ASSET_DEFINITIONS: list[tuple[str, str, str, str | None, str | None]] = [
 ]
 
 
+def _globex_session_live(now: datetime) -> bool:
+    """Approximate whether the CME Globex futures session is open at `now`
+    (UTC). Globex runs Sun 22:00 → Fri 22:00 UTC with a ~60-min daily break
+    around 21:00-22:00 UTC. Good enough for a "is this price live" dot — not
+    an order-routing calendar (holidays not modeled)."""
+    wd = now.weekday()  # Mon=0 .. Sun=6
+    mins = now.hour * 60 + now.minute
+    if wd == 5:                       # Saturday — closed all day
+        return False
+    if wd == 4 and mins >= 22 * 60:   # Friday after 22:00 UTC
+        return False
+    if wd == 6 and mins < 22 * 60:    # Sunday before 22:00 UTC (reopen)
+        return False
+    if 21 * 60 <= mins < 22 * 60:     # daily maintenance break
+        return False
+    return True
+
+
+def _quote_is_live(category: str, using_futures: bool, cash_q, now: datetime) -> bool:
+    """Is the DISPLAYED price updating in real time right now? Category-aware:
+    crypto trades 24/7; commodities (=F) and index futures follow the Globex
+    session; a cash index is live only during its exchange's regular hours
+    (the quote's own market_state)."""
+    if category == "crypto":
+        return True
+    if category == "commodity" or using_futures:
+        return _globex_session_live(now)
+    return bool(cash_q and cash_q.market_state == "OPEN" and cash_q.error is None)
+
+
 @router.get("/live-assets", response_model=LiveAssetsOut)
 def get_live_assets(_user: User = Depends(get_current_user)) -> LiveAssetsOut:
     """Curated live snapshots of indices / commodities / crypto for the
@@ -113,6 +151,7 @@ def get_live_assets(_user: User = Depends(get_current_user)) -> LiveAssetsOut:
     # Single batch call for cash + futures symbols — minimizes the
     # roundtrip to live_quote_service.get_quotes_batch which itself
     # fans out to yfinance.
+    now_utc = datetime.now(UTC)
     cash_symbols = [d[0] for d in LIVE_ASSET_DEFINITIONS]
     futures_symbols = [d[4] for d in LIVE_ASSET_DEFINITIONS if d[4]]
     all_symbols = cash_symbols + futures_symbols
@@ -139,6 +178,13 @@ def get_live_assets(_user: User = Depends(get_current_user)) -> LiveAssetsOut:
                 effective_q = futures_q
                 use_futures = True
 
+        quote_symbol = futures_symbol if (use_futures and futures_symbol) else symbol
+        is_live = (
+            _quote_is_live(category, use_futures, cash_q, now_utc)
+            and effective_q is not None
+            and effective_q.price is not None
+            and effective_q.error is None
+        )
         out.append(LiveAsset(
             symbol=symbol,
             name=name,
@@ -147,6 +193,8 @@ def get_live_assets(_user: User = Depends(get_current_user)) -> LiveAssetsOut:
             quote=LiveQuoteOut(**effective_q.__dict__) if effective_q else None,
             history=histories.get(symbol),
             using_futures=use_futures,
+            quote_symbol=quote_symbol,
+            is_live=is_live,
         ))
     return LiveAssetsOut(assets=out)
 

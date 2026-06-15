@@ -120,8 +120,11 @@ function AssetRow({ asset }: { asset: LiveAsset }) {
   const q = asset.quote;
   const price = q?.price ?? null;
   const changePct = q?.change_pct ?? null;
-  const isLive = q?.market_state === "OPEN" && q?.error == null;
   const hasError = q == null || q.error != null || q.price == null;
+  // Real-time dot: the backend decides per category (crypto 24/7, futures
+  // on the Globex session, cash during exchange hours) — covers the
+  // after-hours futures rows the old "market_state === OPEN" missed.
+  const isLive = !!asset.is_live && !hasError;
 
   // Sparkline trend: based on the change vs. first historical close
   // (so the visual matches the visible series, not just the last
@@ -140,7 +143,7 @@ function AssetRow({ asset }: { asset: LiveAsset }) {
   return (
     <li className="flex-1 flex min-h-0">
       <Link
-        to={`/markets/${encodeURIComponent(asset.symbol)}`}
+        to={`/markets/${encodeURIComponent(asset.quote_symbol || asset.symbol)}`}
         className={cn(
           "flex-1 flex items-center gap-2 px-1.5 rounded transition-colors min-h-0",
           "hover:bg-muted/50",
@@ -166,12 +169,12 @@ function AssetRow({ asset }: { asset: LiveAsset }) {
         )}
       </span>
 
-      {/* Identity: name + live dot + futures badge.
-          - The pulsing emerald dot fires when the cash market is OPEN.
-          - The "FUT" amber badge fires when the cash market is CLOSED
-            and the price comes from the E-mini futures contract instead
-            (e.g. ES=F at 22:00 UTC for ^GSPC). The two are mutually
-            exclusive — `using_futures` only sets when cash isn't OPEN. */}
+      {/* Identity: name + real-time dot. The pulsing emerald dot fires
+          whenever the displayed price updates live — cash session for
+          regular-hours indices, the Globex futures session for the
+          after-hours index/commodity rows, 24/7 for crypto. (The old
+          amber "FUT" badge was dropped: the futures price IS the live
+          price after the cash close, so it gets the same live dot.) */}
       <div className="shrink-0 min-w-0 flex items-center gap-1.5">
         <span className="text-[15px] font-semibold truncate leading-tight">
           {asset.name}
@@ -179,18 +182,14 @@ function AssetRow({ asset }: { asset: LiveAsset }) {
         {isLive && (
           <span
             className="relative inline-flex h-1.5 w-1.5 shrink-0"
-            title="Mercato aperto · prezzo live"
+            title={
+              asset.using_futures
+                ? "Prezzo live dal contratto futures"
+                : "Mercato aperto · prezzo live"
+            }
           >
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60" />
             <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500" />
-          </span>
-        )}
-        {asset.using_futures && (
-          <span
-            className="shrink-0 px-1 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-200"
-            title="Cash market chiuso · prezzo dal contratto futures"
-          >
-            FUT
           </span>
         )}
       </div>
