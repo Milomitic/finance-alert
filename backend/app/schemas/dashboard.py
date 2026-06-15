@@ -85,6 +85,10 @@ class AnalystActionOut(BaseModel):
     # rating (firm holds the grade but moves the target).
     price_target_action: str | None = None
     from_news: bool = False
+    # Latest stored close of the stock (same major unit as the target —
+    # both pence→pounds scaled for .L). Lets the dashboard show the target's
+    # implied upside vs the current price. None when no OHLCV is stored.
+    current_price: float | None = None
 
 
 class PremarketMoverOut(BaseModel):

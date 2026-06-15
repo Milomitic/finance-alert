@@ -19,6 +19,10 @@ export type AnalystAction = {
    *  "Maintains" | "Initiates" | null. Distinct from `action` (a
    *  Maintain rating can pair with a target Raise). */
   price_target_action?: string | null;
+  /** Latest stored close of the stock (same major unit as the target).
+   *  Lets the card show the target's implied upside vs current price.
+   *  null when the stock has no stored OHLCV. */
+  current_price?: number | null;
   from_news: boolean;
 };
 

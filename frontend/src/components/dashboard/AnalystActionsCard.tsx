@@ -108,6 +108,30 @@ function PriceTargetChip({ a }: { a: AnalystAction }) {
   );
 }
 
+/* Target upside vs current price: (target / current − 1). Shown immediately
+ * right of the target chip so the user reads "where the target sits relative
+ * to today" without mental math. Colored by sign (green above price, red
+ * below). Renders nothing when either number is missing/non-positive. */
+function TargetUpsideChip({ a }: { a: AnalystAction }) {
+  const target = posTarget(a.current_price_target);
+  const cur = a.current_price;
+  if (target == null || cur == null || cur <= 0) return null;
+  const pct = (target / cur - 1) * 100;
+  const up = pct >= 0;
+  return (
+    <span
+      className={cn(
+        "shrink-0 w-[52px] text-right tabular-nums text-[11px] font-semibold",
+        up ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400",
+      )}
+      title={`Target ${up ? "sopra" : "sotto"} il prezzo attuale ($${cur.toFixed(2)}) del ${Math.abs(pct).toFixed(1)}%`}
+    >
+      {up ? "+" : ""}
+      {pct.toFixed(1)}%
+    </span>
+  );
+}
+
 function fmtDate(iso: string): string {
   const d = new Date(iso + "T00:00:00");
   if (Number.isNaN(d.getTime())) return iso;
@@ -148,6 +172,7 @@ function ActionRow({ a }: { a: AnalystAction }) {
             stock-detail Analyst card's style. */}
         <GradeChip from={a.from_grade} to={a.to_grade} />
         <PriceTargetChip a={a} />
+        <TargetUpsideChip a={a} />
 
         <span className="shrink-0 w-10 text-right text-[10px] text-muted-foreground tabular-nums whitespace-nowrap">
           {fmtDate(a.date)}

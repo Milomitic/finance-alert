@@ -1,11 +1,11 @@
 """Single BFF endpoint that aggregates KPI + chart + top + feed + system status."""
 from fastapi import APIRouter, BackgroundTasks, Depends
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
 from app.core.db import SessionLocal
-from app.models import ScanRun, Stock, User
+from app.models import OhlcvDaily, ScanRun, Stock, User
 from app.schemas.alert import AlertOut, ScanStatusOut
 from app.schemas.dashboard import (
     AlertsByDayPointOut,
@@ -79,6 +79,26 @@ def get_analyst_actions(
             select(Stock.ticker, Stock.name).where(Stock.ticker.in_(tickers))
         ).all()
     )
+    # Batch-resolve ticker → latest stored close (for the target's implied
+    # upside vs current price). One correlated query for the ~N involved
+    # tickers — each stock's most-recent ohlcv_daily bar.
+    price_map = {
+        t: float(c)
+        for t, c in db.execute(
+            select(Stock.ticker, OhlcvDaily.close)
+            .join(OhlcvDaily, OhlcvDaily.stock_id == Stock.id)
+            .where(
+                Stock.ticker.in_(tickers),
+                OhlcvDaily.date == (
+                    select(func.max(OhlcvDaily.date))
+                    .where(OhlcvDaily.stock_id == Stock.id)
+                    .correlate(Stock)   # correlate ONLY the outer Stock, keep
+                    .scalar_subquery()  # OhlcvDaily in the subquery's FROM
+                ),
+            )
+        ).all()
+        if c is not None
+    }
     return [
         AnalystActionOut(
             ticker=it.ticker,
@@ -92,6 +112,7 @@ def get_analyst_actions(
             prior_price_target=it.prior_price_target,
             price_target_action=it.price_target_action,
             from_news=it.from_news,
+            current_price=price_map.get(it.ticker),
         )
         for it in items
     ]
