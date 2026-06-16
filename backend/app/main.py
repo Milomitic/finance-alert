@@ -145,6 +145,59 @@ def _warm_premarket_on_boot() -> None:
         logger.warning(f"[startup] premarket warm skipped: {exc}")
 
 
+def _catch_up_scan_on_boot() -> None:
+    """Local-first timeliness fix. The in-process scan cron only fires while
+    the backend is running, so on a desktop machine that's off overnight the
+    nightly scan is silently missed and signals surface days late (only on the
+    user's next manual scan — the "rilevato in ritardo" complaint). On boot,
+    if the last SUCCESSFUL scan is older than settings.scan_startup_stale_hours,
+    kick a full scan in a daemon thread so opening the app detects the signals
+    from the days the machine was off — without blocking startup."""
+    import os
+    from datetime import UTC, datetime, timedelta
+
+    from app.core.config import settings
+
+    # Never kick a real universe scan from a test's TestClient lifespan.
+    if os.environ.get("PYTEST_CURRENT_TEST"):
+        return
+    stale_hours = settings.scan_startup_stale_hours
+    if stale_hours <= 0:
+        return
+    try:
+        from sqlalchemy import desc, select
+
+        from app.core.db import SessionLocal
+        from app.models import ScanRun
+
+        with SessionLocal() as db:
+            last = db.execute(
+                select(ScanRun)
+                .where(ScanRun.status == "success")
+                .order_by(desc(ScanRun.completed_at))
+                .limit(1)
+            ).scalars().first()
+        fresh = False
+        if last is not None and last.completed_at is not None:
+            done = last.completed_at
+            if done.tzinfo is None:
+                done = done.replace(tzinfo=UTC)
+            fresh = (datetime.now(UTC) - done) < timedelta(hours=stale_hours)
+        if fresh:
+            logger.info("[startup] last scan is fresh — skipping catch-up")
+            return
+
+        from app.scheduler.jobs.scan_alerts import run_scan_alerts
+        logger.info("[startup] last scan stale/absent — kicking catch-up scan")
+        threading.Thread(
+            target=run_scan_alerts,
+            name="scan-boot-catchup",
+            daemon=True,
+        ).start()
+    except Exception as exc:  # noqa: BLE001 — never block startup
+        logger.warning(f"[startup] catch-up scan skipped: {exc}")
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     _cleanup_orphan_scans()
@@ -154,6 +207,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     hydrate_log_buffer_from_disk()
     start_scheduler()
     _warm_premarket_on_boot()
+    _catch_up_scan_on_boot()
     try:
         yield
     finally:

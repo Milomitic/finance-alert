@@ -10,8 +10,8 @@ from app.services.ohlcv_service import fetch_and_upsert, latest_ohlcv_date
 from app.services.scan_runner import run_tracked_scan
 
 
-def run_scan_alerts() -> None:
-    logger.info("[scan_alerts] job: starting")
+def run_scan_alerts(trigger: str = "cron") -> None:
+    logger.info(f"[scan_alerts] job: starting (trigger={trigger})")
     db = SessionLocal()
     try:
         # Step 1: fetch OHLCV for all stocks (chunked)
@@ -44,7 +44,7 @@ def run_scan_alerts() -> None:
                 # continue with next chunk
 
         # Step 2: evaluate rules + fire alerts (tracked via ScanRun)
-        run_tracked_scan(db, trigger="cron")
+        run_tracked_scan(db, trigger=trigger)
     finally:
         db.close()
     logger.info("[scan_alerts] job: done")

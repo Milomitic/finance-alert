@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.models import Alert, Stock
+from app.models import Alert, ScanRun, Stock
 from app.signals.context import build_context
 from app.signals.horizon import classify_horizon
 from app.signals.detectors.registry import DETECTORS
@@ -67,9 +67,47 @@ def _follow_through_ok(m, ohlcv: pd.DataFrame, idx_by_date: dict[str, int]) -> b
     return True
 
 
-def evaluate_signals(db: Session, stock: Stock, ohlcv: pd.DataFrame) -> int:
+_MAX_AGE_RELAX_CAP = 14  # never relax the recency window beyond this many days
+
+
+def effective_max_age_days(db: Session) -> int:
+    """Scan-gap-aware recency window. The base `signal_max_age_days` (7) drops
+    setups older than a week so the first scan after a deploy doesn't flood the
+    feed. But on a local-first app scans can be days apart — so a legitimately
+    recent setup that completed DURING a scan outage would be silently dropped
+    when the next scan finally runs (the "signals disappear" half of the
+    rilevato-in-ritardo problem). Relax the window to cover the gap since the
+    previous successful scan (+2 days margin), capped so we still don't flood
+    with month-old setups. On a normal daily cadence the gap is ~1 day → no
+    change from the base 7."""
+    from sqlalchemy import desc
+
+    base = settings.signal_max_age_days
+    last = db.execute(
+        select(ScanRun.completed_at)
+        .where(ScanRun.status == "success")
+        .order_by(desc(ScanRun.completed_at))
+        .limit(1)
+    ).scalar()
+    if last is None:
+        return base
+    last_d = last.date() if hasattr(last, "date") else None
+    if last_d is None:
+        return base
+    gap_days = max(0, (date.today() - last_d).days)
+    return min(max(base, gap_days + 2), _MAX_AGE_RELAX_CAP)
+
+
+def evaluate_signals(
+    db: Session, stock: Stock, ohlcv: pd.DataFrame, *, max_age_days: int | None = None,
+) -> int:
     """Detect signals for `stock` and add Alert rows for new ones above the
-    confidence threshold. Returns the count added. Caller commits."""
+    confidence threshold. Returns the count added. Caller commits.
+
+    `max_age_days`: recency window override (default: settings.signal_max_age_days).
+    The scan loop passes the scan-gap-aware value from effective_max_age_days()
+    so signals that completed during a scan outage aren't hard-dropped."""
+    age_limit = max_age_days if max_age_days is not None else settings.signal_max_age_days
     last_close = float(ohlcv["close"].iloc[-1])
     last_bar_date = _to_date(str(ohlcv["date"].iloc[-1]))
     # Prevailing trend (EMA200 slope) for the regime gate + a date->row map for
@@ -104,7 +142,7 @@ def evaluate_signals(db: Session, stock: Stock, ohlcv: pd.DataFrame) -> int:
         # (the ~260-bar window holds a year of history; without this the first
         # scan would surface months-old signals as if fresh).
         if sig_date is not None and last_bar_date is not None \
-                and (last_bar_date - sig_date).days > settings.signal_max_age_days:
+                and (last_bar_date - sig_date).days > age_limit:
             continue
         ann = {"levels": list(m.annotations.get("levels", [])),
                "points": list(m.annotations.get("points", []))}

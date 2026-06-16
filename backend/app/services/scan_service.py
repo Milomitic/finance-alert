@@ -12,7 +12,10 @@ from sqlalchemy.orm import Session
 
 from app.core.visibility import visible_country_clause
 from app.models import Alert, OhlcvDaily, Stock
-from app.signals.signal_scan_service import evaluate_signals
+from app.signals.signal_scan_service import (
+    effective_max_age_days,
+    evaluate_signals,
+)
 from app.services import technical_score_service
 
 
@@ -87,6 +90,10 @@ def scan_universe(
         .all()
     )
     total = len(stocks)
+    # Scan-gap-aware recency window, computed ONCE (the previous successful
+    # scan's age) — so signals that completed during a multi-day scan outage
+    # aren't hard-dropped by the 7-day guard. Normal daily cadence → still 7.
+    eff_max_age = effective_max_age_days(db)
 
     if on_progress:
         on_progress(0, total, result, None)
@@ -113,7 +120,9 @@ def scan_universe(
 
         # Signal engine — the only alert source.
         try:
-            result.alerts_fired += evaluate_signals(db, stock, ohlcv)
+            result.alerts_fired += evaluate_signals(
+                db, stock, ohlcv, max_age_days=eff_max_age
+            )
         except Exception as e:  # noqa: BLE001
             logger.warning(f"[scan] signals failed for {stock.ticker}: {e}")
 

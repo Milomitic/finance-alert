@@ -24,6 +24,18 @@ class Settings(BaseSettings):
     digest_minute: int = 0
     scan_hour: int = 23
     scan_minute: int = 30
+    # Extra weekday scan tick (besides the nightly one) so a pattern that
+    # completes at a market close is detected the same evening WHILE the app
+    # is open — not only at the 23:30 tick. After the EU close (~17:30 CET).
+    scan_hour_2: int = 18
+    scan_minute_2: int = 30
+    # Local-first catch-up: this is a desktop app, so the in-process cron only
+    # fires while the backend is actually running — overnight/off-hours ticks
+    # are silently missed, and signals then surface days late (only on the
+    # user's next manual scan). On boot, if the last successful scan is older
+    # than this many hours, auto-run a scan so opening the app detects the
+    # signals from the days the machine was off. 0 disables.
+    scan_startup_stale_hours: int = 16
     # Signal engine: minimum confidence (0-100) for a detected signal to
     # become an alert. Below this the signal is computed but not surfaced.
     signal_min_confidence: int = 60

@@ -57,6 +57,21 @@ def get_scheduler() -> BackgroundScheduler:
             max_instances=1,
             coalesce=True,
         )
+        # Extra weekday evening tick after the EU close so a pattern that
+        # completed at today's close is detected this evening (while the app
+        # is open) instead of waiting for the 23:30 tick. Cheap: scan_universe
+        # uses STORED OHLCV and the fetch step is smart-incremental.
+        _scheduler.add_job(
+            run_scan_alerts,
+            trigger=CronTrigger(
+                day_of_week="mon-fri",
+                hour=settings.scan_hour_2, minute=settings.scan_minute_2,
+            ),
+            id="scan_alerts_eu_close",
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+        )
         _scheduler.add_job(
             run_send_digest,
             trigger=CronTrigger(
