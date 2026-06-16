@@ -764,7 +764,7 @@ function QualityExtrasRow({ extras }: { extras?: StockScore["quality_extras"] })
   const govTone = (v: number) => (v <= 3 ? "text-emerald-600 dark:text-emerald-400" : v >= 7 ? "text-rose-600 dark:text-rose-400" : "text-amber-600 dark:text-amber-400");
   return (
     <div className="mt-2 border-t border-border/40 pt-2 space-y-1 text-[11px]"
-      title="Informativo — non incide sul composito (la ponderazione attende la validazione IC)">
+      title="Dati informativi (governance + analisti): mostrati come contesto, NON entrano nel punteggio Qualità qui sopra.">
       {an && (
         <div className="flex items-center gap-2 flex-wrap text-muted-foreground">
           <span className="uppercase tracking-wider text-[10px] font-semibold">Analisti</span>
