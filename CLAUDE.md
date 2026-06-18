@@ -276,6 +276,20 @@ needs). Method:
 - Composite percentiles / breadth recompute on the next scan; nothing else
   needed. To prune again, the approach is reproducible from this note.
 
+### Dot-ticker fix + Berkshire dedup → 999 (2026-06-19)
+
+Three index members had **no OHLCV** because their `ticker` (used directly as
+the yfinance download symbol) was in dot format yfinance rejects. Renamed to the
+correct symbols and 10y-backfilled: **BRK.B→BRK-B, BF.B→BF-B, BT.A→BT-A.L**
+(LSE needs the `.L` suffix + dash). The BRK rename revealed Berkshire was
+**double-listed** — a working `BRK-B` already existed on NYSE (id 8, the correct
+exchange, with alert history). Consolidated onto id 8 (moved its S&P 500
+membership over, deleted the redundant NASDAQ dup). So the universe is now
+**999 unique** stocks (the 1000th was the Berkshire duplicate), all with OHLCV.
+Breadth `stocks_with_data` shows ~996 because 3 recent NASDAQ listings (PURR/Q/
+LBRX) have <200 bars — `has_full_data` needs ≥200 for a meaningful EMA200; this
+small gap is normal, not a bug.
+
 ---
 
 ## Catalog ticker rows — duplicates RESOLVED (2026-05)
