@@ -764,6 +764,10 @@ def recompute_snapshot(db: Session, *, scan_run_id: int | None = None) -> Market
         "treemap": build_treemap(visible_metrics),
     }
 
+    # Persist the per-stock metrics so the screener can filter + sort on them
+    # (RSI, EMA position, change%, 52w, volume). Same data, previously discarded.
+    _persist_stock_metrics(db, metrics)
+
     snap = MarketSnapshot(
         id=1,
         computed_at=datetime.now(UTC),
@@ -775,6 +779,43 @@ def recompute_snapshot(db: Session, *, scan_run_id: int | None = None) -> Market
     db.merge(snap)
     db.commit()
     return snap
+
+
+def _persist_stock_metrics(db: Session, metrics: list[StockMetrics]) -> None:
+    """Refresh the `stock_metrics` table from the just-computed per-stock metrics.
+
+    Full replace each scan: one row per stock that has a close; stocks without a
+    close get no row, so the screener's LEFT JOIN keeps them visible with NULL
+    metrics. The DELETE+INSERT runs inside recompute_snapshot's transaction, so
+    concurrent readers see the previous snapshot until commit (no empty window).
+    """
+    from sqlalchemy import delete as sa_delete
+    from sqlalchemy import insert as sa_insert
+
+    from app.models.stock_metrics import StockMetrics as StockMetricsModel
+
+    now = datetime.now(UTC)
+    rows = [
+        {
+            "stock_id": m.stock_id,
+            "computed_at": now,
+            "last_close": m.last_close,
+            "change_pct": m.change_pct,
+            "ema50": m.ema50,
+            "ema200": m.ema200,
+            "rsi14": m.rsi14,
+            "high_252": m.high_252,
+            "low_252": m.low_252,
+            "vol_today": m.vol_today,
+            "vol_avg_20": m.vol_avg_20,
+            "vol_ratio": m.vol_ratio,
+        }
+        for m in metrics
+        if m.last_close is not None
+    ]
+    db.execute(sa_delete(StockMetricsModel))
+    if rows:
+        db.execute(sa_insert(StockMetricsModel), rows)
 
 
 def get_latest_snapshot(db: Session) -> MarketSnapshot | None:

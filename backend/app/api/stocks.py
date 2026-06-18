@@ -12,8 +12,8 @@ from app.api.deps import get_current_user, get_db
 from app.models import OhlcvDaily, Stock, User
 from app.schemas.alert import AlertOut
 from app.schemas.stock import (
-    FilterOptionsOut, IndexOptionOut, StockOut, StockScoreRefOut,
-    StockSearchItemOut, StockSearchOut, TechnicalScoreRefOut,
+    FilterOptionsOut, IndexOptionOut, StockMetricsRefOut, StockOut,
+    StockScoreRefOut, StockSearchItemOut, StockSearchOut, TechnicalScoreRefOut,
 )
 from app.schemas.stock_detail import (
     AnalystActionOut, AnalystPriceTargetOut, AnalystRatingOut,
@@ -62,6 +62,21 @@ def search(
     tech_min: float | None = None,
     tech_max: float | None = None,
     posture: Annotated[list[str] | None, Query()] = None,
+    price_min: float | None = None,
+    price_max: float | None = None,
+    change_min: float | None = None,
+    change_max: float | None = None,
+    rsi_min: float | None = None,
+    rsi_max: float | None = None,
+    above_ema50: bool = False,
+    above_ema200: bool = False,
+    near_52w_high: bool = False,
+    near_52w_low: bool = False,
+    vol_spike: bool = False,
+    volume_min: float | None = None,
+    market_cap_min: float | None = None,
+    market_cap_max: float | None = None,
+    has_signals: bool = False,
     sort_by: str = "ticker",
     sort_dir: str = "asc",
     limit: int = 50,
@@ -93,6 +108,8 @@ def search(
     _validate_score_param(sentiment_min, "sentiment_min")
     _validate_score_param(tech_min, "tech_min")
     _validate_score_param(tech_max, "tech_max")
+    _validate_score_param(rsi_min, "rsi_min")
+    _validate_score_param(rsi_max, "rsi_max")
     if posture:
         valid_post = {"Forte", "Neutro", "Debole"}
         badp = [x for x in posture if x not in valid_post]
@@ -121,6 +138,21 @@ def search(
             tech_min=tech_min,
             tech_max=tech_max,
             postures=posture or [],
+            price_min=price_min,
+            price_max=price_max,
+            change_min=change_min,
+            change_max=change_max,
+            rsi_min=rsi_min,
+            rsi_max=rsi_max,
+            above_ema50=above_ema50,
+            above_ema200=above_ema200,
+            near_52w_high=near_52w_high,
+            near_52w_low=near_52w_low,
+            vol_spike=vol_spike,
+            volume_min=volume_min,
+            market_cap_min=market_cap_min,
+            market_cap_max=market_cap_max,
+            has_signals=has_signals,
             sort_by=sort_by,
             sort_dir=sort_dir,
             limit=limit,
@@ -150,6 +182,16 @@ def search(
                     rel_strength=item.technical.rel_strength,
                     signals=item.technical.signals,
                     posture=item.technical.posture,
+                ),
+                metrics=StockMetricsRefOut(
+                    last_close=item.metrics.last_close,
+                    change_pct=item.metrics.change_pct,
+                    ema50=item.metrics.ema50,
+                    ema200=item.metrics.ema200,
+                    rsi14=item.metrics.rsi14,
+                    high_252=item.metrics.high_252,
+                    low_252=item.metrics.low_252,
+                    vol_ratio=item.metrics.vol_ratio,
                 ),
             )
             for item in page.items

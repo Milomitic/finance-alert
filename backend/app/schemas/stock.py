@@ -44,6 +44,19 @@ class TechnicalScoreRefOut(BaseModel):
     posture: str | None = None
 
 
+class StockMetricsRefOut(BaseModel):
+    """EOD price/volume metrics on the screener row (from stock_metrics). All
+    None when the stock has no metrics row yet. Mirrors StockMetricsRef."""
+    last_close: float | None = None
+    change_pct: float | None = None
+    ema50: float | None = None
+    ema200: float | None = None
+    rsi14: float | None = None
+    high_252: float | None = None
+    low_252: float | None = None
+    vol_ratio: float | None = None
+
+
 class StockSearchItemOut(BaseModel):
     """A row in the screener result. Carries the Stock anagrafica + the
     optional score join. Splitting score into a sub-object (vs flattening
@@ -52,6 +65,7 @@ class StockSearchItemOut(BaseModel):
     stock: StockOut
     score: StockScoreRefOut
     technical: TechnicalScoreRefOut = TechnicalScoreRefOut()
+    metrics: StockMetricsRefOut = StockMetricsRefOut()
 
 
 class StockSearchOut(BaseModel):

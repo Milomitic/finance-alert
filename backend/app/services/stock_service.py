@@ -1,16 +1,25 @@
 """Stock search and filter options."""
 from dataclasses import dataclass, field
 
-from sqlalchemy import distinct, func, or_, select
+from sqlalchemy import and_, distinct, exists, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.visibility import visible_country_clause
-from app.models import Index, Stock, StockIndex, StockScore, TechnicalScore
+from app.models import (
+    Alert,
+    Index,
+    Stock,
+    StockIndex,
+    StockMetrics,
+    StockScore,
+    TechnicalScore,
+)
 
 # Allowed sort columns; whitelist guards against SQL injection / typos.
 # Columns from JOINed tables (`composite`, `risk_tier`) are sortable too —
-# the search query LEFT JOINs stock_scores so screener users can rank by
-# composite directly. `change_pct` stays client-only (no Stock-side column).
+# the search query LEFT JOINs stock_scores / technical_scores / stock_metrics
+# so screener users can rank by score, technical posture, or EOD price metrics
+# (price/change%/RSI/volume) directly server-side.
 SORTABLE_COLUMNS: dict[str, object] = {
     "ticker": Stock.ticker,
     "name": Stock.name,
@@ -31,6 +40,12 @@ SORTABLE_COLUMNS: dict[str, object] = {
     "tech_structure": TechnicalScore.structure,
     "tech_volume": TechnicalScore.volume,
     "tech_rel_strength": TechnicalScore.rel_strength,
+    # EOD price/volume metrics (from stock_metrics). `change_pct` is now a real
+    # server-side column, retiring the old client-only re-sort hack.
+    "price": StockMetrics.last_close,
+    "change_pct": StockMetrics.change_pct,
+    "rsi14": StockMetrics.rsi14,
+    "vol_ratio": StockMetrics.vol_ratio,
 }
 
 
@@ -60,6 +75,23 @@ class StockFilter:
     tech_min: float | None = None
     tech_max: float | None = None
     postures: list[str] = field(default_factory=list)
+    # EOD price/volume metric filters (from stock_metrics; require a metrics row,
+    # i.e. a stock with a close + enough bars for the given indicator).
+    price_min: float | None = None
+    price_max: float | None = None
+    change_min: float | None = None   # daily % change lower bound
+    change_max: float | None = None
+    rsi_min: float | None = None
+    rsi_max: float | None = None
+    above_ema50: bool = False         # last_close > ema50
+    above_ema200: bool = False
+    near_52w_high: bool = False       # last_close >= 0.95 * high_252
+    near_52w_low: bool = False        # last_close <= 1.05 * low_252
+    vol_spike: bool = False           # vol_ratio > 2.0
+    volume_min: float | None = None   # today's share volume lower bound
+    market_cap_min: float | None = None
+    market_cap_max: float | None = None
+    has_signals: bool = False         # has >=1 active (non-archived) alert
     sort_by: str = "ticker"
     sort_dir: str = "asc"
     limit: int = 50
@@ -95,11 +127,26 @@ class StockTechRef:
 
 
 @dataclass
+class StockMetricsRef:
+    """EOD price/volume metrics surfaced on the screener row (from stock_metrics).
+    All None when the stock has no metrics row yet (no close / too few bars)."""
+    last_close: float | None = None
+    change_pct: float | None = None
+    ema50: float | None = None
+    ema200: float | None = None
+    rsi14: float | None = None
+    high_252: float | None = None
+    low_252: float | None = None
+    vol_ratio: float | None = None
+
+
+@dataclass
 class StockSearchItem:
-    """Stock + optional fundamental + technical score data for the screener."""
+    """Stock + optional fundamental + technical score + EOD metrics for the screener."""
     stock: Stock
     score: StockScoreRef
     technical: StockTechRef = field(default_factory=StockTechRef)
+    metrics: StockMetricsRef = field(default_factory=StockMetricsRef)
 
 
 @dataclass
@@ -177,6 +224,43 @@ def _apply_filter(stmt, f: StockFilter):
         stmt = stmt.where(TechnicalScore.composite <= f.tech_max)
     if f.postures:
         stmt = stmt.where(TechnicalScore.posture.in_(f.postures))
+    # EOD price/volume metric filters (stock_metrics). A predicate that
+    # references a NULL metric (e.g. above_ema200 when ema200 is NULL) excludes
+    # the row — correct, since we can't confirm the condition without the value.
+    if f.price_min is not None:
+        stmt = stmt.where(StockMetrics.last_close >= f.price_min)
+    if f.price_max is not None:
+        stmt = stmt.where(StockMetrics.last_close <= f.price_max)
+    if f.change_min is not None:
+        stmt = stmt.where(StockMetrics.change_pct >= f.change_min)
+    if f.change_max is not None:
+        stmt = stmt.where(StockMetrics.change_pct <= f.change_max)
+    if f.rsi_min is not None:
+        stmt = stmt.where(StockMetrics.rsi14 >= f.rsi_min)
+    if f.rsi_max is not None:
+        stmt = stmt.where(StockMetrics.rsi14 <= f.rsi_max)
+    if f.above_ema50:
+        stmt = stmt.where(StockMetrics.last_close > StockMetrics.ema50)
+    if f.above_ema200:
+        stmt = stmt.where(StockMetrics.last_close > StockMetrics.ema200)
+    if f.near_52w_high:
+        stmt = stmt.where(StockMetrics.last_close >= 0.95 * StockMetrics.high_252)
+    if f.near_52w_low:
+        stmt = stmt.where(StockMetrics.last_close <= 1.05 * StockMetrics.low_252)
+    if f.vol_spike:
+        stmt = stmt.where(StockMetrics.vol_ratio > 2.0)
+    if f.volume_min is not None:
+        stmt = stmt.where(StockMetrics.vol_today >= f.volume_min)
+    if f.market_cap_min is not None:
+        stmt = stmt.where(Stock.market_cap >= f.market_cap_min)
+    if f.market_cap_max is not None:
+        stmt = stmt.where(Stock.market_cap <= f.market_cap_max)
+    if f.has_signals:
+        stmt = stmt.where(
+            exists().where(
+                and_(Alert.stock_id == Stock.id, Alert.archived_at.is_(None))
+            )
+        )
     return stmt
 
 
@@ -226,9 +310,17 @@ def search_stocks(db: Session, f: StockFilter) -> StockPage:
         TechnicalScore.rel_strength.label("tech_rel_strength"),
         TechnicalScore.signals.label("tech_signals"),
         TechnicalScore.posture.label("tech_posture"),
+        StockMetrics.last_close.label("m_last_close"),
+        StockMetrics.change_pct.label("m_change_pct"),
+        StockMetrics.ema50.label("m_ema50"),
+        StockMetrics.ema200.label("m_ema200"),
+        StockMetrics.rsi14.label("m_rsi14"),
+        StockMetrics.high_252.label("m_high_252"),
+        StockMetrics.low_252.label("m_low_252"),
+        StockMetrics.vol_ratio.label("m_vol_ratio"),
     ).outerjoin(StockScore, StockScore.stock_id == Stock.id).outerjoin(
         TechnicalScore, TechnicalScore.stock_id == Stock.id
-    )
+    ).outerjoin(StockMetrics, StockMetrics.stock_id == Stock.id)
     base = _apply_filter(base, f)
 
     # COUNT must be over the same FROM clause (with the JOIN + filters
@@ -261,6 +353,16 @@ def search_stocks(db: Session, f: StockFilter) -> StockPage:
                 rel_strength=row[14],
                 signals=row[15],
                 posture=row[16],
+            ),
+            metrics=StockMetricsRef(
+                last_close=row[17],
+                change_pct=row[18],
+                ema50=row[19],
+                ema200=row[20],
+                rsi14=row[21],
+                high_252=row[22],
+                low_252=row[23],
+                vol_ratio=row[24],
             ),
         )
         for row in rows[:limit]
