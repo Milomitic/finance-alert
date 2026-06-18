@@ -1,5 +1,6 @@
 import { Globe2, Minus, TrendingDown, TrendingUp } from "lucide-react";
 import type { ReactNode } from "react";
+import { Link } from "react-router-dom";
 
 import type { IndexBreadth, MarketGlobal } from "@/api/types";
 import { Card, CardContent } from "@/components/ui/card";
@@ -129,16 +130,17 @@ function IndexPill({ idx }: { idx: IndexBreadth }) {
     change < 0 ? "text-red-700 dark:text-red-300" :
     "text-muted-foreground";
   return (
-    <span
-      className="inline-flex items-center gap-1 rounded bg-background/70 dark:bg-black/30 px-2 py-0.5 text-xs tabular-nums whitespace-nowrap"
-      title={`${meta.fullName} · ${idx.n} stocks`}
+    <Link
+      to={`/stocks?index=${encodeURIComponent(idx.code)}`}
+      className="inline-flex items-center gap-1 rounded bg-background/70 dark:bg-black/30 px-2 py-0.5 text-xs tabular-nums whitespace-nowrap cursor-pointer hover:bg-background dark:hover:bg-black/50 hover:ring-1 hover:ring-sky-400/50 transition-colors"
+      title={`${meta.fullName} · ${idx.n} stocks — click per filtrare lo screener`}
     >
       <span className="font-bold">{meta.displayCode || idx.code}</span>
       <span className="opacity-60">{sma == null ? "—" : `${sma.toFixed(0)}%`}</span>
       <span className={cn("font-semibold", changeColor)}>
         {change == null ? "—" : `${change >= 0 ? "+" : ""}${change.toFixed(2)}%`}
       </span>
-    </span>
+    </Link>
   );
 }
 
