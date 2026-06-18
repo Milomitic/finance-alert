@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Pause, Play, Trash2, AlertTriangle, AlertCircle, Info, Bug, Filter, X } from "lucide-react";
 import type { LogRecord } from "@/api/platformHealth";
 
@@ -58,15 +58,35 @@ export default function LogStream({
   const [moduleFilter, setModuleFilter] = useState("");
   const [searchFilter, setSearchFilter] = useState("");
 
+  // Drilling into a source should surface ALL of its levels (an HTTP 403 may be
+  // logged at INFO), so applying a source filter switches the level dropdown to
+  // "ALL" — and resets to the WARNING+ default when cleared. This keeps the
+  // dropdown HONEST: it reflects what's actually shown instead of silently
+  // overriding the threshold while still displaying "WARNING+". The level then
+  // applies normally (intersected with the source), so re-picking WARNING+
+  // narrows a source view to just its warnings.
+  useEffect(() => {
+    setLevelFilter(sourceFilter ? "ALL" : "WARNING");
+  }, [sourceFilter]);
+
+  // Pause = freeze the visible buffer so the tail stops jumping while you read.
+  // Snapshot the records ONLY when `paused` toggles (not on every incoming
+  // record), so the underlying SSE buffer keeps filling in the background and
+  // we instantly catch up on resume. The header's "in buffer" count stays live
+  // off `records`, so it's clear the stream is still receiving while paused.
+  const [frozen, setFrozen] = useState<LogRecord[] | null>(null);
+  useEffect(() => {
+    setFrozen(paused ? records : null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paused]);
+  const viewRecords = paused ? (frozen ?? records) : records;
+
   const filtered = useMemo(() => {
-    // When drilling into a specific source, lift the level threshold to ALL
-    // so its ERROR/WARNING/INFO (e.g. an HTTP 403) all surface — the default
-    // WARNING+ bar would otherwise hide INFO-level diagnostics for the source.
-    const threshold = sourceFilter ? 0 : LEVEL_ORDER[levelFilter] ?? 0;
+    const threshold = LEVEL_ORDER[levelFilter] ?? 0;
     const srcTokens = sourceFilter
       ? sourceFilter.tokens.map((t) => t.toLowerCase()).filter(Boolean)
       : null;
-    const pass = records.filter((r) => {
+    const pass = viewRecords.filter((r) => {
       if (threshold && (LEVEL_ORDER[r.level] ?? 0) < threshold) return false;
       if (moduleFilter && !r.module.includes(moduleFilter)) return false;
       if (searchFilter && !r.message.includes(searchFilter)) return false;
@@ -81,7 +101,7 @@ export default function LogStream({
     // Newest-first: most recent record at the top of the visible list.
     // We slice BEFORE reversing so we keep the latest 500 (not the oldest).
     return pass.slice(-500).reverse();
-  }, [records, levelFilter, moduleFilter, searchFilter, sourceFilter]);
+  }, [viewRecords, levelFilter, moduleFilter, searchFilter, sourceFilter]);
 
   // Counts per level — used in the chip row so the operator can see at a
   // glance "how much red is in the buffer" without scrolling.
