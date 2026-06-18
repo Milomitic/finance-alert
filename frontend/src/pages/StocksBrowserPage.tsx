@@ -25,6 +25,11 @@ type PageSize = (typeof PAGE_SIZES)[number];
 
 const VALID_SORT_BY = new Set<StockSortBy>([
   "ticker", "name", "market_cap", "sector", "industry", "exchange", "composite",
+  "profitability", "sustainability", "growth", "value", "sentiment",
+  "tech_composite", "tech_trend", "tech_momentum", "tech_structure",
+  "tech_volume", "tech_rel_strength",
+  // Phase A: metrics-backed server-sortable columns.
+  "price", "change_pct", "rsi14", "vol_ratio",
 ]);
 
 const VALID_RISK = new Set(["conservative", "moderate", "aggressive"] as const);
@@ -51,8 +56,21 @@ function parseNullableScore(raw: string | null): number | null {
 // Keep backward-compat alias used below
 const parseMinScore = parseNullableScore;
 
+/** Parse an arbitrary nullable number (no 0-100 clamp). Used for the
+ *  unbounded ranges: price, Δ% (can be negative), market cap, volume, RSI. */
+function parseNullableNumber(raw: string | null): number | null {
+  if (raw == null || raw === "") return null;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : null;
+}
+
+/** A URL bool param is "active" only when literally "true" (matches the
+ *  serializer below). */
+function parseBoolParam(raw: string | null): boolean {
+  return raw === "true";
+}
+
 function parseSortBy(raw: string | null): TableSortKey {
-  if (raw === "change_pct") return "change_pct";
   if (raw && VALID_SORT_BY.has(raw as StockSortBy)) return raw as StockSortBy;
   return "ticker";
 }
@@ -143,6 +161,21 @@ export default function StocksBrowserPage() {
     sentimentMin: parseNullableScore(searchParams.get("sentiment_min")),
     techMin: parseNullableScore(searchParams.get("tech_min")),
     postures: parseListParam(searchParams, "posture").filter((v) => ["Forte", "Neutro", "Debole"].includes(v)),
+    marketCapMin: parseNullableNumber(searchParams.get("market_cap_min")),
+    marketCapMax: parseNullableNumber(searchParams.get("market_cap_max")),
+    rsiMin: parseNullableScore(searchParams.get("rsi_min")),
+    rsiMax: parseNullableScore(searchParams.get("rsi_max")),
+    aboveEma50: parseBoolParam(searchParams.get("above_ema50")),
+    aboveEma200: parseBoolParam(searchParams.get("above_ema200")),
+    near52wHigh: parseBoolParam(searchParams.get("near_52w_high")),
+    near52wLow: parseBoolParam(searchParams.get("near_52w_low")),
+    hasSignals: parseBoolParam(searchParams.get("has_signals")),
+    priceMin: parseNullableNumber(searchParams.get("price_min")),
+    priceMax: parseNullableNumber(searchParams.get("price_max")),
+    changeMin: parseNullableNumber(searchParams.get("change_min")),
+    changeMax: parseNullableNumber(searchParams.get("change_max")),
+    volSpike: parseBoolParam(searchParams.get("vol_spike")),
+    volumeMin: parseNullableNumber(searchParams.get("volume_min")),
   }));
   const [sortBy, setSortBy] = useState<TableSortKey>(() =>
     parseSortBy(searchParams.get("sort_by")),
@@ -172,6 +205,21 @@ export default function StocksBrowserPage() {
     if (state.sentimentMin != null) sp.set("sentiment_min", String(state.sentimentMin));
     if (state.techMin != null) sp.set("tech_min", String(state.techMin));
     state.postures.forEach((v) => sp.append("posture", v));
+    if (state.marketCapMin != null) sp.set("market_cap_min", String(state.marketCapMin));
+    if (state.marketCapMax != null) sp.set("market_cap_max", String(state.marketCapMax));
+    if (state.rsiMin != null) sp.set("rsi_min", String(state.rsiMin));
+    if (state.rsiMax != null) sp.set("rsi_max", String(state.rsiMax));
+    if (state.aboveEma50) sp.set("above_ema50", "true");
+    if (state.aboveEma200) sp.set("above_ema200", "true");
+    if (state.near52wHigh) sp.set("near_52w_high", "true");
+    if (state.near52wLow) sp.set("near_52w_low", "true");
+    if (state.hasSignals) sp.set("has_signals", "true");
+    if (state.priceMin != null) sp.set("price_min", String(state.priceMin));
+    if (state.priceMax != null) sp.set("price_max", String(state.priceMax));
+    if (state.changeMin != null) sp.set("change_min", String(state.changeMin));
+    if (state.changeMax != null) sp.set("change_max", String(state.changeMax));
+    if (state.volSpike) sp.set("vol_spike", "true");
+    if (state.volumeMin != null) sp.set("volume_min", String(state.volumeMin));
     if (sortBy !== "ticker") sp.set("sort_by", sortBy);
     if (sortDir !== "asc") sp.set("sort_dir", sortDir);
     if (pageSize !== 50) sp.set("page_size", String(pageSize));
@@ -194,6 +242,13 @@ export default function StocksBrowserPage() {
     }
   };
 
+  // Breadth-tile click handler. The tile already resolved toggle semantics
+  // (it sends either the predicate patch or its cleared form), so we just
+  // merge into state — the URL-mirror useEffect resets paging.
+  const handleTileFilter = (patch: Partial<FiltersState>) => {
+    setState((prev) => ({ ...prev, ...patch }));
+  };
+
   const market = useMarketSummary();
   const singleIndexCode = state.indexCodes.length === 1 ? state.indexCodes[0] : null;
   const singleIndexBreadth = singleIndexCode
@@ -201,11 +256,10 @@ export default function StocksBrowserPage() {
     : null;
 
   const filtersQ = useStockFilters();
-  // change_pct isn't a server-sortable column; when the user picks it we
-  // ask the server for ticker-asc and let the table re-order the page
-  // client-side. This is documented in the table component.
-  const serverSortBy: StockSortBy = sortBy === "change_pct" ? "ticker" : sortBy;
-  const serverSortDir: SortDir = sortBy === "change_pct" ? "asc" : sortDir;
+  // As of Phase A every column the table sorts on (incl. change_pct) is
+  // server-sortable via the stock_metrics join — no more client-side sort
+  // hack. sortBy is a TableSortKey which is now a strict subset of
+  // StockSortBy, so it forwards directly.
   const searchQ = useStockSearch({
     q: q.trim() || undefined,
     index: state.indexCodes.length > 0 ? state.indexCodes : undefined,
@@ -223,8 +277,23 @@ export default function StocksBrowserPage() {
     sentiment_min: state.sentimentMin ?? undefined,
     tech_min: state.techMin ?? undefined,
     posture: state.postures.length > 0 ? state.postures : undefined,
-    sort_by: serverSortBy,
-    sort_dir: serverSortDir,
+    market_cap_min: state.marketCapMin ?? undefined,
+    market_cap_max: state.marketCapMax ?? undefined,
+    rsi_min: state.rsiMin ?? undefined,
+    rsi_max: state.rsiMax ?? undefined,
+    above_ema50: state.aboveEma50 || undefined,
+    above_ema200: state.aboveEma200 || undefined,
+    near_52w_high: state.near52wHigh || undefined,
+    near_52w_low: state.near52wLow || undefined,
+    has_signals: state.hasSignals || undefined,
+    price_min: state.priceMin ?? undefined,
+    price_max: state.priceMax ?? undefined,
+    change_min: state.changeMin ?? undefined,
+    change_max: state.changeMax ?? undefined,
+    vol_spike: state.volSpike || undefined,
+    volume_min: state.volumeMin ?? undefined,
+    sort_by: sortBy,
+    sort_dir: sortDir,
     limit: pageSize,
     offset: page * pageSize,
   });
@@ -258,9 +327,14 @@ export default function StocksBrowserPage() {
         filters={filtersQ.data}
       />
 
-      {/* Index panorama header (shown when exactly 1 index is selected) */}
+      {/* Index panorama header (shown when exactly 1 index is selected).
+          Its breadth tiles are clickable filter toggles wired to FiltersState. */}
       {singleIndexBreadth && (
-        <IndexPanoramaCard data={singleIndexBreadth} />
+        <IndexPanoramaCard
+          data={singleIndexBreadth}
+          filters={state}
+          onTileFilter={handleTileFilter}
+        />
       )}
 
       {/* Toolbar above the table: page-size + top pagination. The page-size

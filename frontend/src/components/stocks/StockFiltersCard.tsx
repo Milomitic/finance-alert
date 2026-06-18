@@ -1,4 +1,5 @@
 import { ChevronDown, Filter, X } from "lucide-react";
+import { type ReactNode, useCallback, useEffect, useState } from "react";
 
 import type { FilterOptions } from "@/api/types";
 import { Badge } from "@/components/ui/badge";
@@ -36,6 +37,30 @@ export interface FiltersState {
   techMin: number | null;
   /** Technical posture filter (Forte / Neutro / Debole). Empty = no filter. */
   postures: string[];
+  // --- Fondamentali: market cap range (absolute dollars, null = no bound) ---
+  marketCapMin: number | null;
+  marketCapMax: number | null;
+  // --- Tecnici (EOD metrics) ---
+  /** RSI-14 range 0-100, or null = no bound. */
+  rsiMin: number | null;
+  rsiMax: number | null;
+  /** Bool toggles. False = inactive (no predicate sent). */
+  aboveEma50: boolean;
+  aboveEma200: boolean;
+  near52wHigh: boolean;
+  near52wLow: boolean;
+  hasSignals: boolean;
+  // --- Prezzo & Volume (EOD metrics) ---
+  /** Price range in listing currency, or null = no bound. */
+  priceMin: number | null;
+  priceMax: number | null;
+  /** Daily % change range (can be negative), or null = no bound. */
+  changeMin: number | null;
+  changeMax: number | null;
+  /** Volume spike: vol_ratio > 2×. */
+  volSpike: boolean;
+  /** Minimum today's volume (share count), or null. */
+  volumeMin: number | null;
 }
 
 interface Props {
@@ -173,6 +198,172 @@ function PillarInput({
   );
 }
 
+/** Generic min–max number range with a label. Used for ranges that aren't
+ *  the bounded 0-100 score inputs (price, Δ%, market cap, RSI, volume).
+ *  `allowNegative` lets the Δ% range accept negatives; otherwise values are
+ *  clamped to ≥ 0. Each bound is independent (either can be null). */
+function NumberRange({
+  label,
+  min,
+  max,
+  onMinChange,
+  onMaxChange,
+  step = 1,
+  allowNegative = false,
+  minPlaceholder = "min",
+  maxPlaceholder = "max",
+  suffix,
+  width = "w-14",
+}: {
+  label: string;
+  min: number | null;
+  max: number | null;
+  onMinChange: (v: number | null) => void;
+  onMaxChange: (v: number | null) => void;
+  step?: number;
+  allowNegative?: boolean;
+  minPlaceholder?: string;
+  maxPlaceholder?: string;
+  suffix?: string;
+  width?: string;
+}) {
+  const parse = (raw: string, set: (v: number | null) => void) => {
+    if (raw === "") { set(null); return; }
+    const n = Number(raw);
+    if (!Number.isFinite(n)) return;
+    if (!allowNegative && n < 0) return;
+    set(n);
+  };
+  const inputCls =
+    "bg-transparent text-sm tabular-nums focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none";
+  return (
+    <div className="inline-flex items-center gap-1 h-9 px-2 rounded border border-input">
+      <span className="text-xs text-muted-foreground">{label}</span>
+      <input
+        type="number"
+        step={step}
+        placeholder={minPlaceholder}
+        value={min ?? ""}
+        onChange={(e) => parse(e.target.value, onMinChange)}
+        className={cn(inputCls, width)}
+      />
+      <span className="text-xs text-muted-foreground">–</span>
+      <input
+        type="number"
+        step={step}
+        placeholder={maxPlaceholder}
+        value={max ?? ""}
+        onChange={(e) => parse(e.target.value, onMaxChange)}
+        className={cn(inputCls, width)}
+      />
+      {suffix && <span className="text-xs text-muted-foreground">{suffix}</span>}
+    </div>
+  );
+}
+
+/** Single bool toggle rendered as a pill button. Active = primary fill. */
+function ToggleChip({
+  label,
+  active,
+  onToggle,
+}: {
+  label: string;
+  active: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      className={cn(
+        "h-9 px-3 rounded border text-sm font-medium transition-colors",
+        active
+          ? "bg-primary text-primary-foreground border-primary"
+          : "border-input text-muted-foreground hover:bg-muted",
+      )}
+    >
+      {label}
+    </button>
+  );
+}
+
+/** Keys for the 4 collapsible filter areas. Open/closed state persists in
+ *  localStorage under `screenerFilterAreas`. */
+type AreaKey = "mercato" | "fondamentali" | "tecnici" | "prezzoVolume";
+
+const AREA_DEFAULT_OPEN: Record<AreaKey, boolean> = {
+  mercato: true,
+  fondamentali: false,
+  tecnici: false,
+  prezzoVolume: false,
+};
+
+const AREAS_STORAGE_KEY = "screenerFilterAreas";
+
+function useFilterAreas() {
+  const [open, setOpen] = useState<Record<AreaKey, boolean>>(() => {
+    try {
+      const raw = localStorage.getItem(AREAS_STORAGE_KEY);
+      if (raw) return { ...AREA_DEFAULT_OPEN, ...JSON.parse(raw) };
+    } catch { /* ignore */ }
+    return AREA_DEFAULT_OPEN;
+  });
+  useEffect(() => {
+    try { localStorage.setItem(AREAS_STORAGE_KEY, JSON.stringify(open)); } catch { /* ignore */ }
+  }, [open]);
+  const toggle = useCallback((k: AreaKey) => {
+    setOpen((prev) => ({ ...prev, [k]: !prev[k] }));
+  }, []);
+  return { open, toggle };
+}
+
+/** A labeled, collapsible filter section. The header shows a count badge of
+ *  active filters inside it and a chevron; the body holds the controls. */
+function CollapsibleArea({
+  title,
+  activeCount,
+  isOpen,
+  onToggle,
+  children,
+}: {
+  title: string;
+  activeCount: number;
+  isOpen: boolean;
+  onToggle: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <div className="rounded-md border border-border/60">
+      <button
+        type="button"
+        onClick={onToggle}
+        className="flex w-full items-center gap-2 px-3 py-2 text-left"
+        aria-expanded={isOpen}
+      >
+        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+          {title}
+        </span>
+        {activeCount > 0 && (
+          <Badge variant="secondary" className="h-4 px-1 text-[10px]">
+            {activeCount}
+          </Badge>
+        )}
+        <ChevronDown
+          className={cn(
+            "ml-auto h-4 w-4 text-muted-foreground transition-transform",
+            isOpen && "rotate-180",
+          )}
+        />
+      </button>
+      {isOpen && (
+        <div className="px-3 pb-3 pt-1">
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function StockFiltersCard({ state, onChange, filters }: Props) {
   const indexOptions = (filters?.indices ?? []).map((i) => ({
     value: i.code,
@@ -183,6 +374,10 @@ export function StockFiltersCard({ state, onChange, filters }: Props) {
   const exchangeOptions = (filters?.exchanges ?? []).map((e) => ({ value: e, label: e }));
   const countryOptions = (filters?.countries ?? []).map((c) => ({ value: c, label: c }));
 
+  const { open: areaOpen, toggle: toggleArea } = useFilterAreas();
+
+  const set = (patch: Partial<FiltersState>) => onChange({ ...state, ...patch });
+
   const pillarActiveCount =
     (state.profitabilityMin != null ? 1 : 0) +
     (state.sustainabilityMin != null ? 1 : 0) +
@@ -190,16 +385,39 @@ export function StockFiltersCard({ state, onChange, filters }: Props) {
     (state.valueMin != null ? 1 : 0) +
     (state.sentimentMin != null ? 1 : 0);
 
-  const totalActive =
-    state.indexCodes.length +
-    state.sectors.length +
-    state.industries.length +
-    state.exchanges.length +
-    state.countries.length +
-    state.riskTiers.length +
+  // Per-area active counts (drive the badge on each collapsible header).
+  const mercatoActive =
+    state.indexCodes.length + state.sectors.length + state.industries.length +
+    state.exchanges.length + state.countries.length;
+
+  const fondamentaliActive =
     (state.minScore != null ? 1 : 0) +
     (state.scoreMax != null ? 1 : 0) +
-    pillarActiveCount;
+    state.riskTiers.length +
+    pillarActiveCount +
+    (state.marketCapMin != null ? 1 : 0) +
+    (state.marketCapMax != null ? 1 : 0);
+
+  const tecniciActive =
+    (state.techMin != null ? 1 : 0) +
+    state.postures.length +
+    (state.rsiMin != null ? 1 : 0) +
+    (state.rsiMax != null ? 1 : 0) +
+    (state.aboveEma50 ? 1 : 0) +
+    (state.aboveEma200 ? 1 : 0) +
+    (state.near52wHigh ? 1 : 0) +
+    (state.near52wLow ? 1 : 0) +
+    (state.hasSignals ? 1 : 0);
+
+  const prezzoVolumeActive =
+    (state.priceMin != null ? 1 : 0) +
+    (state.priceMax != null ? 1 : 0) +
+    (state.changeMin != null ? 1 : 0) +
+    (state.changeMax != null ? 1 : 0) +
+    (state.volSpike ? 1 : 0) +
+    (state.volumeMin != null ? 1 : 0);
+
+  const totalActive = mercatoActive + fondamentaliActive + tecniciActive + prezzoVolumeActive;
 
   const clearAll = () =>
     onChange({
@@ -208,30 +426,45 @@ export function StockFiltersCard({ state, onChange, filters }: Props) {
       profitabilityMin: null, sustainabilityMin: null, growthMin: null,
       valueMin: null, sentimentMin: null,
       techMin: null, postures: [],
+      marketCapMin: null, marketCapMax: null,
+      rsiMin: null, rsiMax: null,
+      aboveEma50: false, aboveEma200: false, near52wHigh: false, near52wLow: false,
+      hasSignals: false,
+      priceMin: null, priceMax: null, changeMin: null, changeMax: null,
+      volSpike: false, volumeMin: null,
     });
 
   const removeChip = (kind: keyof FiltersState, value: string) => {
-    if (
-      kind === "minScore" || kind === "scoreMax" ||
-      kind === "profitabilityMin" || kind === "sustainabilityMin" ||
-      kind === "growthMin" || kind === "valueMin" ||
-      kind === "sentimentMin"
-    ) {
-      onChange({ ...state, [kind]: null });
-      return;
-    }
     if (kind === "riskTiers") {
       onChange({ ...state, riskTiers: state.riskTiers.filter((v) => v !== value) });
       return;
     }
-    onChange({ ...state, [kind]: (state[kind] as string[]).filter((v) => v !== value) });
+    if (
+      kind === "indexCodes" || kind === "sectors" || kind === "industries" ||
+      kind === "exchanges" || kind === "countries" || kind === "postures"
+    ) {
+      onChange({ ...state, [kind]: (state[kind] as string[]).filter((v) => v !== value) });
+      return;
+    }
+    // Everything else is a scalar/bool filter → reset to its empty value.
+    const isBool =
+      kind === "aboveEma50" || kind === "aboveEma200" ||
+      kind === "near52wHigh" || kind === "near52wLow" ||
+      kind === "hasSignals" || kind === "volSpike";
+    onChange({ ...state, [kind]: isBool ? false : null });
   };
+
+  // Market cap is stored in absolute dollars but entered/displayed in
+  // billions. These helpers convert at the input boundary only.
+  const mcToBillions = (v: number | null) => (v == null ? null : v / 1e9);
+  const mcFromBillions = (v: number | null) => (v == null ? null : v * 1e9);
 
   return (
     <Card>
       <CardContent className="p-4 space-y-3">
-        <div className="flex items-center gap-2 flex-wrap">
-          <div className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground mr-1">
+        {/* Header row: label + total badge + global reset. */}
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground">
             <Filter className="h-4 w-4" />
             <span>Filtri</span>
             {totalActive > 0 && (
@@ -240,164 +473,268 @@ export function StockFiltersCard({ state, onChange, filters }: Props) {
               </Badge>
             )}
           </div>
-          <MultiSelect
-            label="Indice"
-            options={indexOptions}
-            selected={state.indexCodes}
-            onChange={(v) => onChange({ ...state, indexCodes: v })}
-          />
-          <MultiSelect
-            label="Settore"
-            options={sectorOptions}
-            selected={state.sectors}
-            onChange={(v) => onChange({ ...state, sectors: v })}
-          />
-          <MultiSelect
-            label="Industry"
-            options={industryOptions}
-            selected={state.industries}
-            onChange={(v) => onChange({ ...state, industries: v })}
-          />
-          <MultiSelect
-            label="Exchange"
-            options={exchangeOptions}
-            selected={state.exchanges}
-            onChange={(v) => onChange({ ...state, exchanges: v })}
-          />
-          <MultiSelect
-            label="Paese"
-            options={countryOptions}
-            selected={state.countries}
-            onChange={(v) => onChange({ ...state, countries: v })}
-          />
-          <MultiSelect
-            label="Rischio"
-            options={RISK_OPTIONS}
-            selected={state.riskTiers}
-            onChange={(v) => onChange({ ...state, riskTiers: v as FiltersState["riskTiers"] })}
-          />
-          {/* Composite score range: min + max inline. Kept without a popover
-              since they're just two numbers and popover overhead is unwarranted. */}
-          <div className="inline-flex items-center gap-1 h-9 px-2 rounded border border-input">
-            <span className="text-xs text-muted-foreground">Score</span>
-            <input
-              type="number"
-              min={0}
-              max={100}
-              step={5}
-              placeholder="min"
-              value={state.minScore ?? ""}
-              onChange={(e) => {
-                const raw = e.target.value;
-                if (raw === "") { onChange({ ...state, minScore: null }); return; }
-                const n = Number(raw);
-                if (Number.isFinite(n) && n >= 0 && n <= 100) onChange({ ...state, minScore: n });
-              }}
-              className="w-10 bg-transparent text-sm tabular-nums focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-            />
-            <span className="text-xs text-muted-foreground">–</span>
-            <input
-              type="number"
-              min={0}
-              max={100}
-              step={5}
-              placeholder="max"
-              value={state.scoreMax ?? ""}
-              onChange={(e) => {
-                const raw = e.target.value;
-                if (raw === "") { onChange({ ...state, scoreMax: null }); return; }
-                const n = Number(raw);
-                if (Number.isFinite(n) && n >= 0 && n <= 100) onChange({ ...state, scoreMax: n });
-              }}
-              className="w-10 bg-transparent text-sm tabular-nums focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-            />
-          </div>
-          <div className="inline-flex items-center gap-1 h-9 px-2 rounded border border-input">
-            <span className="text-xs text-muted-foreground">Tecnico</span>
-            <input
-              type="number"
-              min={0}
-              max={100}
-              step={5}
-              placeholder="min"
-              value={state.techMin ?? ""}
-              onChange={(e) => {
-                const raw = e.target.value;
-                if (raw === "") { onChange({ ...state, techMin: null }); return; }
-                const n = Number(raw);
-                if (Number.isFinite(n) && n >= 0 && n <= 100) onChange({ ...state, techMin: n });
-              }}
-              className="w-10 bg-transparent text-sm tabular-nums focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-            />
-          </div>
-          <div className="inline-flex items-center gap-1 h-9 px-2 rounded border border-input">
-            <span className="text-xs text-muted-foreground">Postura</span>
-            {(["Forte", "Neutro", "Debole"] as const).map((pp) => {
-              const on = state.postures.includes(pp);
-              return (
-                <button
-                  key={pp}
-                  type="button"
-                  onClick={() => onChange({ ...state, postures: on ? state.postures.filter((x) => x !== pp) : [...state.postures, pp] })}
-                  className={cn("px-1.5 py-0.5 rounded text-xs font-medium", on ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted")}
-                >
-                  {pp}
-                </button>
-              );
-            })}
-          </div>
           {totalActive > 0 && (
             <Button
               variant="ghost"
               size="sm"
               onClick={clearAll}
-              className="h-9 text-sm text-muted-foreground ml-auto"
+              className="h-8 text-sm text-muted-foreground ml-auto"
             >
               <X className="h-3.5 w-3.5 mr-1" /> Reset
             </Button>
           )}
         </div>
 
-        {/* Per-pillar minimum scores sub-section. Shown as a compact 2-col grid. */}
-        <div className="pt-2 border-t border-border/40">
-          <div className="flex items-center gap-1.5 mb-2">
-            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              Punteggi pillar
-            </span>
-            {pillarActiveCount > 0 && (
-              <Badge variant="secondary" className="h-4 px-1 text-[10px]">
-                {pillarActiveCount}
-              </Badge>
-            )}
+        {/* ─── Area 1: Mercato (classification) ─── */}
+        <CollapsibleArea
+          title="Mercato"
+          activeCount={mercatoActive}
+          isOpen={areaOpen.mercato}
+          onToggle={() => toggleArea("mercato")}
+        >
+          <div className="flex items-center gap-2 flex-wrap">
+            <MultiSelect
+              label="Indice"
+              options={indexOptions}
+              selected={state.indexCodes}
+              onChange={(v) => set({ indexCodes: v })}
+            />
+            <MultiSelect
+              label="Settore"
+              options={sectorOptions}
+              selected={state.sectors}
+              onChange={(v) => set({ sectors: v })}
+            />
+            <MultiSelect
+              label="Industry"
+              options={industryOptions}
+              selected={state.industries}
+              onChange={(v) => set({ industries: v })}
+            />
+            <MultiSelect
+              label="Exchange"
+              options={exchangeOptions}
+              selected={state.exchanges}
+              onChange={(v) => set({ exchanges: v })}
+            />
+            <MultiSelect
+              label="Paese"
+              options={countryOptions}
+              selected={state.countries}
+              onChange={(v) => set({ countries: v })}
+            />
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-1.5">
-            <PillarInput
-              label={CATEGORY_LABEL.profitability}
-              value={state.profitabilityMin}
-              onChange={(v) => onChange({ ...state, profitabilityMin: v })}
+        </CollapsibleArea>
+
+        {/* ─── Area 2: Fondamentali ─── */}
+        <CollapsibleArea
+          title="Fondamentali"
+          activeCount={fondamentaliActive}
+          isOpen={areaOpen.fondamentali}
+          onToggle={() => toggleArea("fondamentali")}
+        >
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Composite score range: min + max inline. */}
+            <div className="inline-flex items-center gap-1 h-9 px-2 rounded border border-input">
+              <span className="text-xs text-muted-foreground">Score</span>
+              <input
+                type="number"
+                min={0}
+                max={100}
+                step={5}
+                placeholder="min"
+                value={state.minScore ?? ""}
+                onChange={(e) => {
+                  const raw = e.target.value;
+                  if (raw === "") { set({ minScore: null }); return; }
+                  const n = Number(raw);
+                  if (Number.isFinite(n) && n >= 0 && n <= 100) set({ minScore: n });
+                }}
+                className="w-10 bg-transparent text-sm tabular-nums focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+              />
+              <span className="text-xs text-muted-foreground">–</span>
+              <input
+                type="number"
+                min={0}
+                max={100}
+                step={5}
+                placeholder="max"
+                value={state.scoreMax ?? ""}
+                onChange={(e) => {
+                  const raw = e.target.value;
+                  if (raw === "") { set({ scoreMax: null }); return; }
+                  const n = Number(raw);
+                  if (Number.isFinite(n) && n >= 0 && n <= 100) set({ scoreMax: n });
+                }}
+                className="w-10 bg-transparent text-sm tabular-nums focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+              />
+            </div>
+            <MultiSelect
+              label="Rischio"
+              options={RISK_OPTIONS}
+              selected={state.riskTiers}
+              onChange={(v) => set({ riskTiers: v as FiltersState["riskTiers"] })}
             />
-            <PillarInput
-              label={CATEGORY_LABEL.sustainability}
-              value={state.sustainabilityMin}
-              onChange={(v) => onChange({ ...state, sustainabilityMin: v })}
-            />
-            <PillarInput
-              label={CATEGORY_LABEL.growth}
-              value={state.growthMin}
-              onChange={(v) => onChange({ ...state, growthMin: v })}
-            />
-            <PillarInput
-              label={CATEGORY_LABEL.value}
-              value={state.valueMin}
-              onChange={(v) => onChange({ ...state, valueMin: v })}
-            />
-            <PillarInput
-              label={CATEGORY_LABEL.sentiment}
-              value={state.sentimentMin}
-              onChange={(v) => onChange({ ...state, sentimentMin: v })}
+            {/* Market cap range — entered in billions, stored in absolute $. */}
+            <NumberRange
+              label="Mkt cap"
+              suffix="B$"
+              step={1}
+              min={mcToBillions(state.marketCapMin)}
+              max={mcToBillions(state.marketCapMax)}
+              onMinChange={(v) => set({ marketCapMin: mcFromBillions(v) })}
+              onMaxChange={(v) => set({ marketCapMax: mcFromBillions(v) })}
             />
           </div>
-        </div>
+          {/* Per-pillar minimum scores grid. */}
+          <div className="mt-3 pt-3 border-t border-border/40">
+            <div className="flex items-center gap-1.5 mb-2">
+              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                Punteggi pillar
+              </span>
+              {pillarActiveCount > 0 && (
+                <Badge variant="secondary" className="h-4 px-1 text-[10px]">
+                  {pillarActiveCount}
+                </Badge>
+              )}
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-1.5">
+              <PillarInput
+                label={CATEGORY_LABEL.profitability}
+                value={state.profitabilityMin}
+                onChange={(v) => set({ profitabilityMin: v })}
+              />
+              <PillarInput
+                label={CATEGORY_LABEL.sustainability}
+                value={state.sustainabilityMin}
+                onChange={(v) => set({ sustainabilityMin: v })}
+              />
+              <PillarInput
+                label={CATEGORY_LABEL.growth}
+                value={state.growthMin}
+                onChange={(v) => set({ growthMin: v })}
+              />
+              <PillarInput
+                label={CATEGORY_LABEL.value}
+                value={state.valueMin}
+                onChange={(v) => set({ valueMin: v })}
+              />
+              <PillarInput
+                label={CATEGORY_LABEL.sentiment}
+                value={state.sentimentMin}
+                onChange={(v) => set({ sentimentMin: v })}
+              />
+            </div>
+          </div>
+        </CollapsibleArea>
+
+        {/* ─── Area 3: Tecnici ─── */}
+        <CollapsibleArea
+          title="Tecnici"
+          activeCount={tecniciActive}
+          isOpen={areaOpen.tecnici}
+          onToggle={() => toggleArea("tecnici")}
+        >
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="inline-flex items-center gap-1 h-9 px-2 rounded border border-input">
+              <span className="text-xs text-muted-foreground">Tecnico</span>
+              <input
+                type="number"
+                min={0}
+                max={100}
+                step={5}
+                placeholder="min"
+                value={state.techMin ?? ""}
+                onChange={(e) => {
+                  const raw = e.target.value;
+                  if (raw === "") { set({ techMin: null }); return; }
+                  const n = Number(raw);
+                  if (Number.isFinite(n) && n >= 0 && n <= 100) set({ techMin: n });
+                }}
+                className="w-10 bg-transparent text-sm tabular-nums focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+              />
+            </div>
+            <div className="inline-flex items-center gap-1 h-9 px-2 rounded border border-input">
+              <span className="text-xs text-muted-foreground">Postura</span>
+              {(["Forte", "Neutro", "Debole"] as const).map((pp) => {
+                const on = state.postures.includes(pp);
+                return (
+                  <button
+                    key={pp}
+                    type="button"
+                    onClick={() => set({ postures: on ? state.postures.filter((x) => x !== pp) : [...state.postures, pp] })}
+                    className={cn("px-1.5 py-0.5 rounded text-xs font-medium", on ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted")}
+                  >
+                    {pp}
+                  </button>
+                );
+              })}
+            </div>
+            {/* RSI 0-100 range. */}
+            <NumberRange
+              label="RSI"
+              step={1}
+              min={state.rsiMin}
+              max={state.rsiMax}
+              onMinChange={(v) => set({ rsiMin: v == null ? null : Math.min(100, Math.max(0, v)) })}
+              onMaxChange={(v) => set({ rsiMax: v == null ? null : Math.min(100, Math.max(0, v)) })}
+              width="w-12"
+            />
+            <ToggleChip label="sopra EMA200" active={state.aboveEma200} onToggle={() => set({ aboveEma200: !state.aboveEma200 })} />
+            <ToggleChip label="sopra EMA50" active={state.aboveEma50} onToggle={() => set({ aboveEma50: !state.aboveEma50 })} />
+            <ToggleChip label="vicino max 52s" active={state.near52wHigh} onToggle={() => set({ near52wHigh: !state.near52wHigh })} />
+            <ToggleChip label="vicino min 52s" active={state.near52wLow} onToggle={() => set({ near52wLow: !state.near52wLow })} />
+            <ToggleChip label="con segnali" active={state.hasSignals} onToggle={() => set({ hasSignals: !state.hasSignals })} />
+          </div>
+        </CollapsibleArea>
+
+        {/* ─── Area 4: Prezzo & Volume ─── */}
+        <CollapsibleArea
+          title="Prezzo & Volume"
+          activeCount={prezzoVolumeActive}
+          isOpen={areaOpen.prezzoVolume}
+          onToggle={() => toggleArea("prezzoVolume")}
+        >
+          <div className="flex items-center gap-2 flex-wrap">
+            <NumberRange
+              label="Prezzo"
+              step={1}
+              min={state.priceMin}
+              max={state.priceMax}
+              onMinChange={(v) => set({ priceMin: v })}
+              onMaxChange={(v) => set({ priceMax: v })}
+            />
+            <NumberRange
+              label="Δ%"
+              step={0.5}
+              allowNegative
+              min={state.changeMin}
+              max={state.changeMax}
+              onMinChange={(v) => set({ changeMin: v })}
+              onMaxChange={(v) => set({ changeMax: v })}
+              width="w-12"
+            />
+            <ToggleChip label="vol spike >2×" active={state.volSpike} onToggle={() => set({ volSpike: !state.volSpike })} />
+            {/* Volume min (share count). Wide-ish single input. */}
+            <div className="inline-flex items-center gap-1 h-9 px-2 rounded border border-input">
+              <span className="text-xs text-muted-foreground">Vol min</span>
+              <input
+                type="number"
+                min={0}
+                step={100000}
+                placeholder="azioni"
+                value={state.volumeMin ?? ""}
+                onChange={(e) => {
+                  const raw = e.target.value;
+                  if (raw === "") { set({ volumeMin: null }); return; }
+                  const n = Number(raw);
+                  if (Number.isFinite(n) && n >= 0) set({ volumeMin: n });
+                }}
+                className="w-20 bg-transparent text-sm tabular-nums focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+              />
+            </div>
+          </div>
+        </CollapsibleArea>
 
         {totalActive > 0 && (
           <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-border/50">
@@ -526,6 +863,108 @@ export function StockFiltersCard({ state, onChange, filters }: Props) {
               <Badge variant="secondary" className="text-xs gap-1 pr-1">
                 <span className="text-muted-foreground/80">Sentiment ≥</span> {state.sentimentMin}
                 <button onClick={() => onChange({ ...state, sentimentMin: null })} className="ml-0.5 rounded hover:bg-background/60 p-0.5" aria-label="Rimuovi soglia sentiment"><X className="h-3 w-3" /></button>
+              </Badge>
+            )}
+            {state.marketCapMin != null && (
+              <Badge variant="secondary" className="text-xs gap-1 pr-1">
+                <span className="text-muted-foreground/80">Mkt cap ≥</span> {(state.marketCapMin / 1e9).toFixed(0)}B$
+                <button onClick={() => removeChip("marketCapMin", "")} className="ml-0.5 rounded hover:bg-background/60 p-0.5" aria-label="Rimuovi soglia market cap minima"><X className="h-3 w-3" /></button>
+              </Badge>
+            )}
+            {state.marketCapMax != null && (
+              <Badge variant="secondary" className="text-xs gap-1 pr-1">
+                <span className="text-muted-foreground/80">Mkt cap ≤</span> {(state.marketCapMax / 1e9).toFixed(0)}B$
+                <button onClick={() => removeChip("marketCapMax", "")} className="ml-0.5 rounded hover:bg-background/60 p-0.5" aria-label="Rimuovi soglia market cap massima"><X className="h-3 w-3" /></button>
+              </Badge>
+            )}
+            {state.techMin != null && (
+              <Badge variant="secondary" className="text-xs gap-1 pr-1">
+                <span className="text-muted-foreground/80">Tecnico ≥</span> {state.techMin}
+                <button onClick={() => removeChip("techMin", "")} className="ml-0.5 rounded hover:bg-background/60 p-0.5" aria-label="Rimuovi soglia tecnico"><X className="h-3 w-3" /></button>
+              </Badge>
+            )}
+            {state.postures.map((v) => (
+              <Badge key={`p-${v}`} variant="secondary" className="text-xs gap-1 pr-1">
+                <span className="text-muted-foreground/80">Postura:</span> {v}
+                <button onClick={() => removeChip("postures", v)} className="ml-0.5 rounded hover:bg-background/60 p-0.5" aria-label={`Rimuovi postura ${v}`}><X className="h-3 w-3" /></button>
+              </Badge>
+            ))}
+            {state.rsiMin != null && (
+              <Badge variant="secondary" className="text-xs gap-1 pr-1">
+                <span className="text-muted-foreground/80">RSI ≥</span> {state.rsiMin}
+                <button onClick={() => removeChip("rsiMin", "")} className="ml-0.5 rounded hover:bg-background/60 p-0.5" aria-label="Rimuovi soglia RSI minima"><X className="h-3 w-3" /></button>
+              </Badge>
+            )}
+            {state.rsiMax != null && (
+              <Badge variant="secondary" className="text-xs gap-1 pr-1">
+                <span className="text-muted-foreground/80">RSI ≤</span> {state.rsiMax}
+                <button onClick={() => removeChip("rsiMax", "")} className="ml-0.5 rounded hover:bg-background/60 p-0.5" aria-label="Rimuovi soglia RSI massima"><X className="h-3 w-3" /></button>
+              </Badge>
+            )}
+            {state.aboveEma200 && (
+              <Badge variant="secondary" className="text-xs gap-1 pr-1">
+                sopra EMA200
+                <button onClick={() => removeChip("aboveEma200", "")} className="ml-0.5 rounded hover:bg-background/60 p-0.5" aria-label="Rimuovi filtro sopra EMA200"><X className="h-3 w-3" /></button>
+              </Badge>
+            )}
+            {state.aboveEma50 && (
+              <Badge variant="secondary" className="text-xs gap-1 pr-1">
+                sopra EMA50
+                <button onClick={() => removeChip("aboveEma50", "")} className="ml-0.5 rounded hover:bg-background/60 p-0.5" aria-label="Rimuovi filtro sopra EMA50"><X className="h-3 w-3" /></button>
+              </Badge>
+            )}
+            {state.near52wHigh && (
+              <Badge variant="secondary" className="text-xs gap-1 pr-1">
+                vicino max 52s
+                <button onClick={() => removeChip("near52wHigh", "")} className="ml-0.5 rounded hover:bg-background/60 p-0.5" aria-label="Rimuovi filtro vicino massimo 52 settimane"><X className="h-3 w-3" /></button>
+              </Badge>
+            )}
+            {state.near52wLow && (
+              <Badge variant="secondary" className="text-xs gap-1 pr-1">
+                vicino min 52s
+                <button onClick={() => removeChip("near52wLow", "")} className="ml-0.5 rounded hover:bg-background/60 p-0.5" aria-label="Rimuovi filtro vicino minimo 52 settimane"><X className="h-3 w-3" /></button>
+              </Badge>
+            )}
+            {state.hasSignals && (
+              <Badge variant="secondary" className="text-xs gap-1 pr-1">
+                con segnali
+                <button onClick={() => removeChip("hasSignals", "")} className="ml-0.5 rounded hover:bg-background/60 p-0.5" aria-label="Rimuovi filtro con segnali"><X className="h-3 w-3" /></button>
+              </Badge>
+            )}
+            {state.priceMin != null && (
+              <Badge variant="secondary" className="text-xs gap-1 pr-1">
+                <span className="text-muted-foreground/80">Prezzo ≥</span> {state.priceMin}
+                <button onClick={() => removeChip("priceMin", "")} className="ml-0.5 rounded hover:bg-background/60 p-0.5" aria-label="Rimuovi soglia prezzo minima"><X className="h-3 w-3" /></button>
+              </Badge>
+            )}
+            {state.priceMax != null && (
+              <Badge variant="secondary" className="text-xs gap-1 pr-1">
+                <span className="text-muted-foreground/80">Prezzo ≤</span> {state.priceMax}
+                <button onClick={() => removeChip("priceMax", "")} className="ml-0.5 rounded hover:bg-background/60 p-0.5" aria-label="Rimuovi soglia prezzo massima"><X className="h-3 w-3" /></button>
+              </Badge>
+            )}
+            {state.changeMin != null && (
+              <Badge variant="secondary" className="text-xs gap-1 pr-1">
+                <span className="text-muted-foreground/80">Δ% ≥</span> {state.changeMin}
+                <button onClick={() => removeChip("changeMin", "")} className="ml-0.5 rounded hover:bg-background/60 p-0.5" aria-label="Rimuovi soglia variazione minima"><X className="h-3 w-3" /></button>
+              </Badge>
+            )}
+            {state.changeMax != null && (
+              <Badge variant="secondary" className="text-xs gap-1 pr-1">
+                <span className="text-muted-foreground/80">Δ% ≤</span> {state.changeMax}
+                <button onClick={() => removeChip("changeMax", "")} className="ml-0.5 rounded hover:bg-background/60 p-0.5" aria-label="Rimuovi soglia variazione massima"><X className="h-3 w-3" /></button>
+              </Badge>
+            )}
+            {state.volSpike && (
+              <Badge variant="secondary" className="text-xs gap-1 pr-1">
+                vol spike &gt;2×
+                <button onClick={() => removeChip("volSpike", "")} className="ml-0.5 rounded hover:bg-background/60 p-0.5" aria-label="Rimuovi filtro volume spike"><X className="h-3 w-3" /></button>
+              </Badge>
+            )}
+            {state.volumeMin != null && (
+              <Badge variant="secondary" className="text-xs gap-1 pr-1">
+                <span className="text-muted-foreground/80">Vol ≥</span> {state.volumeMin.toLocaleString()}
+                <button onClick={() => removeChip("volumeMin", "")} className="ml-0.5 rounded hover:bg-background/60 p-0.5" aria-label="Rimuovi soglia volume minima"><X className="h-3 w-3" /></button>
               </Badge>
             )}
           </div>

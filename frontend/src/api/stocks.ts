@@ -10,9 +10,9 @@ import type {
 } from "./types";
 
 /** Server-sortable columns. Must match backend `SORTABLE_COLUMNS` whitelist
- *  in stock_service.py. `change_pct` is NOT here — it's a client-side-only
- *  sort because the value comes from the market-stats snapshot, not the
- *  Stock table. */
+ *  in stock_service.py. As of Phase A the metrics columns (price /
+ *  change_pct / rsi14 / vol_ratio) are server-sortable too — the old
+ *  client-side `change_pct` sort hack is retired. */
 export type StockSortBy =
   | "ticker"
   | "name"
@@ -31,7 +31,11 @@ export type StockSortBy =
   | "tech_momentum"
   | "tech_structure"
   | "tech_volume"
-  | "tech_rel_strength";
+  | "tech_rel_strength"
+  | "price"
+  | "change_pct"
+  | "rsi14"
+  | "vol_ratio";
 export type SortDir = "asc" | "desc";
 
 export interface SearchParams {
@@ -58,6 +62,27 @@ export interface SearchParams {
   tech_max?: number;
   /** Technical posture filter (Forte / Neutro / Debole). */
   posture?: string[];
+  /** Fundamental: market-cap range in absolute dollars (Stock.market_cap). */
+  market_cap_min?: number;
+  market_cap_max?: number;
+  /** Technical (from stock_metrics, EOD): RSI-14 range 0-100. */
+  rsi_min?: number;
+  rsi_max?: number;
+  /** Technical bool predicates (present+true applies; absent = no filter). */
+  above_ema50?: boolean;
+  above_ema200?: boolean;
+  near_52w_high?: boolean;
+  near_52w_low?: boolean;
+  has_signals?: boolean;
+  /** Price & volume (from stock_metrics, EOD). */
+  price_min?: number;
+  price_max?: number;
+  change_min?: number;
+  change_max?: number;
+  /** Volume spike: vol_ratio > 2.0. */
+  vol_spike?: boolean;
+  /** Minimum today's volume (share count). */
+  volume_min?: number;
   sort_by?: StockSortBy;
   sort_dir?: SortDir;
   limit?: number;
@@ -83,6 +108,24 @@ function toQuery(params: SearchParams): string {
   if (params.tech_min !== undefined) sp.set("tech_min", String(params.tech_min));
   if (params.tech_max !== undefined) sp.set("tech_max", String(params.tech_max));
   for (const v of params.posture ?? []) sp.append("posture", v);
+  // Fundamental: market cap range (absolute dollars).
+  if (params.market_cap_min !== undefined) sp.set("market_cap_min", String(params.market_cap_min));
+  if (params.market_cap_max !== undefined) sp.set("market_cap_max", String(params.market_cap_max));
+  // Technical (stock_metrics): RSI range + bool predicates.
+  if (params.rsi_min !== undefined) sp.set("rsi_min", String(params.rsi_min));
+  if (params.rsi_max !== undefined) sp.set("rsi_max", String(params.rsi_max));
+  if (params.above_ema50) sp.set("above_ema50", "true");
+  if (params.above_ema200) sp.set("above_ema200", "true");
+  if (params.near_52w_high) sp.set("near_52w_high", "true");
+  if (params.near_52w_low) sp.set("near_52w_low", "true");
+  if (params.has_signals) sp.set("has_signals", "true");
+  // Price & volume (stock_metrics).
+  if (params.price_min !== undefined) sp.set("price_min", String(params.price_min));
+  if (params.price_max !== undefined) sp.set("price_max", String(params.price_max));
+  if (params.change_min !== undefined) sp.set("change_min", String(params.change_min));
+  if (params.change_max !== undefined) sp.set("change_max", String(params.change_max));
+  if (params.vol_spike) sp.set("vol_spike", "true");
+  if (params.volume_min !== undefined) sp.set("volume_min", String(params.volume_min));
   if (params.sort_by) sp.set("sort_by", params.sort_by);
   if (params.sort_dir) sp.set("sort_dir", params.sort_dir);
   if (params.limit !== undefined) sp.set("limit", String(params.limit));

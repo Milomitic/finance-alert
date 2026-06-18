@@ -27,6 +27,8 @@ const SCREENER_COLS = [
   { id: "prezzo",         label: "Prezzo" },
   { id: "market_cap",     label: "Mkt Cap" },
   { id: "delta_pct",      label: "Δ%" },
+  { id: "rsi",            label: "RSI" },
+  { id: "vol_ratio",      label: "Vol×" },
   { id: "score",          label: "Score" },
   { id: "profitability",  label: "Profittabilità" },
   { id: "sustainability", label: "Sostenibilità" },
@@ -47,18 +49,20 @@ const SCREENER_COLS = [
 const MOBILE_SORT_OPTIONS: { key: TableSortKey; label: string }[] = [
   { key: "ticker", label: "Ticker" },
   { key: "composite", label: "Score" },
+  { key: "price", label: "Prezzo" },
   { key: "change_pct", label: "Δ%" },
+  { key: "rsi14", label: "RSI" },
+  { key: "vol_ratio", label: "Vol×" },
   { key: "market_cap", label: "Mkt Cap" },
   { key: "sector", label: "Settore" },
   { key: "industry", label: "Industry" },
   { key: "exchange", label: "Exchange" },
 ];
 
-/** All sortable columns the table renders. `change_pct` is client-side only
- *  (Δ% comes from the market-stats snapshot, not the Stock table) — the
- *  others map to `StockSortBy` and are sorted server-side across the full
- *  result set. */
-export type TableSortKey = StockSortBy | "change_pct";
+/** All sortable columns the table renders. As of Phase A every key maps to a
+ *  server-sortable `StockSortBy` column (incl. change_pct, now backed by the
+ *  stock_metrics join) — no client-side sort fallback remains. */
+export type TableSortKey = StockSortBy;
 
 interface Props {
   items: StockSearchItem[];
@@ -157,8 +161,10 @@ export function StockBrowserTable({ items, sortBy, sortDir, onSortChange, q, onQ
     setMenuOpen(true);
   }
   // Build ticker -> {change_pct, last_close, currency} maps from the
-  // snapshot's treemap data. Single iteration produces all three so
-  // every row's Prezzo + Δ% cells render without a per-ticker lookup.
+  // snapshot's treemap data. As of Phase A the per-row `item.metrics` block
+  // is the primary source for change_pct / last_close; the treemap remains
+  // the only source of listing CURRENCY (metrics doesn't carry it) and a
+  // fallback for the price/change values on stocks lacking a metrics row.
   const { changeByTicker, closeByTicker, currencyByTicker } = useMemo(() => {
     const ch = new Map<string, number>();
     const cl = new Map<string, number>();
@@ -172,19 +178,16 @@ export function StockBrowserTable({ items, sortBy, sortDir, onSortChange, q, onQ
     return { changeByTicker: ch, closeByTicker: cl, currencyByTicker: cc };
   }, [market.data]);
 
-  // change_pct is sorted client-side over the current page. Server-sorted
-  // columns arrive already ordered, so we leave `items` untouched.
-  const displayItems = useMemo(() => {
-    if (sortBy !== "change_pct") return items;
-    const dir = sortDir;
-    return [...items].sort((a, b) => {
-      const av = changeByTicker.get(a.stock.ticker) ?? -Infinity;
-      const bv = changeByTicker.get(b.stock.ticker) ?? -Infinity;
-      if (av < bv) return dir === "asc" ? -1 : 1;
-      if (av > bv) return dir === "asc" ? 1 : -1;
-      return 0;
-    });
-  }, [items, sortBy, sortDir, changeByTicker]);
+  // Per-row accessors that prefer the server `metrics` block (EOD, exact),
+  // falling back to the market-summary treemap when absent.
+  const rowChange = (item: StockSearchItem): number | undefined =>
+    item.metrics?.change_pct ?? changeByTicker.get(item.stock.ticker);
+  const rowClose = (item: StockSearchItem): number | undefined =>
+    item.metrics?.last_close ?? closeByTicker.get(item.stock.ticker);
+
+  // Sorting is fully server-side now (incl. change_pct via stock_metrics) —
+  // render items in the order the API returned them.
+  const displayItems = items;
 
   // The empty-state used to early-return a different layout, but that
   // hid the Ticker-header search input — making it impossible to
@@ -250,7 +253,7 @@ export function StockBrowserTable({ items, sortBy, sortDir, onSortChange, q, onQ
             <ul className="divide-y divide-border/50">
               {displayItems.map((item) => {
                 const s = item.stock;
-                const change = changeByTicker.get(s.ticker);
+                const change = rowChange(item);
                 const flag = getStockFlagCode(s.country, s.ticker);
                 const changeColor = change == null
                   ? "text-muted-foreground"
@@ -281,8 +284,18 @@ export function StockBrowserTable({ items, sortBy, sortDir, onSortChange, q, onQ
                           Δ {change == null ? "—" : `${change >= 0 ? "+" : ""}${change.toFixed(2)}%`}
                         </span>
                         <span className="text-muted-foreground">
-                          {fmtClose(closeByTicker.get(s.ticker), currencyByTicker.get(s.ticker) ?? s.currency ?? undefined)}
+                          {fmtClose(rowClose(item), currencyByTicker.get(s.ticker) ?? s.currency ?? undefined)}
                         </span>
+                        {item.metrics?.rsi14 != null && (
+                          <span className="text-muted-foreground">
+                            RSI {item.metrics.rsi14.toFixed(0)}
+                          </span>
+                        )}
+                        {item.metrics?.vol_ratio != null && (
+                          <span className="text-muted-foreground">
+                            {item.metrics.vol_ratio.toFixed(1)}×
+                          </span>
+                        )}
                         <span className="text-muted-foreground">
                           MC {fmtMc(s.market_cap)}
                         </span>
@@ -381,15 +394,19 @@ export function StockBrowserTable({ items, sortBy, sortDir, onSortChange, q, onQ
                   <SortableHeader column="industry" label="Industry" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} />
                 )}
                 {isVisible("prezzo") && (
-                  <th className="px-3 py-1.5 text-right text-base">
-                    <span className="uppercase tracking-wide font-semibold">Prezzo</span>
-                  </th>
+                  <SortableHeader column="price" label="Prezzo" align="right" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} />
                 )}
                 {isVisible("market_cap") && (
                   <SortableHeader column="market_cap" label="Mkt Cap" align="right" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} />
                 )}
                 {isVisible("delta_pct") && (
-                  <SortableHeader column="change_pct" label="Δ%" align="right" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} clientOnly />
+                  <SortableHeader column="change_pct" label="Δ%" align="right" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} />
+                )}
+                {isVisible("rsi") && (
+                  <SortableHeader column="rsi14" label="RSI" align="right" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} />
+                )}
+                {isVisible("vol_ratio") && (
+                  <SortableHeader column="vol_ratio" label="Vol×" align="right" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} />
                 )}
                 {isVisible("score") && (
                   <SortableHeader column="composite" label="Score" align="right" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} />
@@ -448,7 +465,7 @@ export function StockBrowserTable({ items, sortBy, sortDir, onSortChange, q, onQ
               )}
               {displayItems.map((item) => {
                 const s = item.stock;
-                const change = changeByTicker.get(s.ticker);
+                const change = rowChange(item);
                 const flag = getStockFlagCode(s.country, s.ticker);
                 const changeColor = change == null
                   ? "text-muted-foreground"
@@ -458,6 +475,8 @@ export function StockBrowserTable({ items, sortBy, sortDir, onSortChange, q, onQ
                 const compositeCls = item.score.composite != null
                   ? scoreColor(item.score.composite)
                   : "text-muted-foreground";
+                const rsi = item.metrics?.rsi14;
+                const volRatio = item.metrics?.vol_ratio;
                 return (
                   <tr
                     key={s.id}
@@ -508,7 +527,7 @@ export function StockBrowserTable({ items, sortBy, sortDir, onSortChange, q, onQ
                     )}
                     {isVisible("prezzo") && (
                       <td className="px-3 py-1.5 text-right font-semibold">
-                        {fmtClose(closeByTicker.get(s.ticker), currencyByTicker.get(s.ticker) ?? s.currency ?? undefined)}
+                        {fmtClose(rowClose(item), currencyByTicker.get(s.ticker) ?? s.currency ?? undefined)}
                       </td>
                     )}
                     {isVisible("market_cap") && (
@@ -517,6 +536,25 @@ export function StockBrowserTable({ items, sortBy, sortDir, onSortChange, q, onQ
                     {isVisible("delta_pct") && (
                       <td className={cn("px-3 py-1.5 text-right", changeColor)}>
                         {change == null ? "—" : `${change >= 0 ? "+" : ""}${change.toFixed(2)}%`}
+                      </td>
+                    )}
+                    {isVisible("rsi") && (
+                      <td className={cn(
+                        "px-3 py-1.5 text-right tabular-nums",
+                        rsi == null ? "text-muted-foreground"
+                          : rsi >= 70 ? "text-red-600 dark:text-red-400"
+                          : rsi <= 30 ? "text-amber-600 dark:text-amber-400"
+                          : "",
+                      )}>
+                        {rsi == null ? "—" : rsi.toFixed(0)}
+                      </td>
+                    )}
+                    {isVisible("vol_ratio") && (
+                      <td className={cn(
+                        "px-3 py-1.5 text-right tabular-nums",
+                        volRatio != null && volRatio > 2 ? "text-amber-600 dark:text-amber-400 font-semibold" : "text-muted-foreground",
+                      )}>
+                        {volRatio == null ? "—" : `${volRatio.toFixed(1)}×`}
                       </td>
                     )}
                     {isVisible("score") && (

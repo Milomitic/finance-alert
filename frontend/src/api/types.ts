@@ -43,6 +43,20 @@ export interface StockSearchItem {
     signals: number | null;
     posture: string | null;
   };
+  /** EOD per-stock metrics joined from `stock_metrics` (as of the last
+   *  scan). Powers the table's RSI / Δ% / Vol× columns and the price/volume
+   *  + technical filters. Optional for back-compat with pre-Phase-A
+   *  responses; every field is null when the stock lacks enough bars. */
+  metrics?: {
+    last_close: number | null;
+    change_pct: number | null;
+    ema50: number | null;
+    ema200: number | null;
+    rsi14: number | null;
+    high_252: number | null;
+    low_252: number | null;
+    vol_ratio: number | null;
+  } | null;
 }
 
 export interface StockSearch {

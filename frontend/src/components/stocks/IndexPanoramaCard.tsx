@@ -4,6 +4,7 @@ import {
 } from "lucide-react";
 
 import type { IndexBreadth } from "@/api/types";
+import type { FiltersState } from "@/components/stocks/StockFiltersCard";
 import { Card, CardContent } from "@/components/ui/card";
 import { ACRONYM_HELP } from "@/lib/acronymHelp";
 import { getIndexMeta } from "@/lib/indexMeta";
@@ -11,6 +12,12 @@ import { cn } from "@/lib/utils";
 
 interface Props {
   data: IndexBreadth;
+  /** Current filter state — drives the "active" highlight on each tile. */
+  filters?: FiltersState;
+  /** Toggle a tile's filter. The patch carries the predicate to merge;
+   *  toggle semantics (clear if already active) are resolved here against
+   *  `filters`. Omit to render the tiles as non-interactive (back-compat). */
+  onTileFilter?: (patch: Partial<FiltersState>) => void;
 }
 
 function fmtPct(v: number | null): string {
@@ -36,9 +43,18 @@ interface KpiTile {
   icon: typeof Building2;
   help: string;
   tone?: "default" | "good" | "warn" | "bad";
+  /** When present, the tile is a clickable filter toggle. `patch` is the
+   *  predicate to apply; `isActive` reads the current filter state to render
+   *  the highlight + decide whether a click sets or clears. */
+  filter?: {
+    patch: Partial<FiltersState>;
+    isActive: (f: FiltersState) => boolean;
+    /** The cleared form of the patch (used when toggling off). */
+    clear: Partial<FiltersState>;
+  };
 }
 
-export function IndexPanoramaCard({ data }: Props) {
+export function IndexPanoramaCard({ data, filters, onTileFilter }: Props) {
   const meta = getIndexMeta(data.code);
   const mood = deriveMood(data);
   const moodIcon = mood === "bullish" ? TrendingUp : mood === "bearish" ? TrendingDown : Minus;
@@ -79,6 +95,11 @@ export function IndexPanoramaCard({ data }: Props) {
       tone: data.pct_above_ema200 == null ? "default" :
             data.pct_above_ema200 >= 60 ? "good" :
             data.pct_above_ema200 <= 40 ? "bad" : "default",
+      filter: {
+        patch: { aboveEma200: true },
+        clear: { aboveEma200: false },
+        isActive: (f) => f.aboveEma200,
+      },
     },
     {
       label: "% > EMA50",
@@ -88,6 +109,11 @@ export function IndexPanoramaCard({ data }: Props) {
       tone: data.pct_above_ema50 == null ? "default" :
             data.pct_above_ema50 >= 60 ? "good" :
             data.pct_above_ema50 <= 40 ? "bad" : "default",
+      filter: {
+        patch: { aboveEma50: true },
+        clear: { aboveEma50: false },
+        isActive: (f) => f.aboveEma50,
+      },
     },
     {
       label: "Avg Δ%",
@@ -104,6 +130,12 @@ export function IndexPanoramaCard({ data }: Props) {
       icon: Scale,
       help: ACRONYM_HELP.AD_RATIO,
       tone: data.advancers > data.decliners ? "good" : data.advancers < data.decliners ? "bad" : "default",
+      // Advancers = Δ% > 0 → change_min = 0.
+      filter: {
+        patch: { changeMin: 0 },
+        clear: { changeMin: null },
+        isActive: (f) => f.changeMin === 0,
+      },
     },
     {
       label: "RSI < 30",
@@ -111,6 +143,11 @@ export function IndexPanoramaCard({ data }: Props) {
       icon: ArrowDownToLine,
       help: ACRONYM_HELP.RSI_OVERSOLD,
       tone: data.rsi_oversold_count > 0 ? "warn" : "default",
+      filter: {
+        patch: { rsiMax: 30 },
+        clear: { rsiMax: null },
+        isActive: (f) => f.rsiMax === 30,
+      },
     },
     {
       label: "RSI > 70",
@@ -118,12 +155,33 @@ export function IndexPanoramaCard({ data }: Props) {
       icon: ArrowUpToLine,
       help: ACRONYM_HELP.RSI_OVERBOUGHT,
       tone: data.rsi_overbought_count > 0 ? "bad" : "default",
+      filter: {
+        patch: { rsiMin: 70 },
+        clear: { rsiMin: null },
+        isActive: (f) => f.rsiMin === 70,
+      },
     },
     {
-      label: "52w Hi/Lo",
-      value: `${data.new_52w_highs}/${data.new_52w_lows}`,
+      label: "52W Hi",
+      value: String(data.new_52w_highs),
       icon: TrendingUp,
-      help: `Nuovi massimi/minimi a 52 settimane registrati oggi`,
+      help: ACRONYM_HELP.NEW_52W_HIGH,
+      filter: {
+        patch: { near52wHigh: true },
+        clear: { near52wHigh: false },
+        isActive: (f) => f.near52wHigh,
+      },
+    },
+    {
+      label: "52W Lo",
+      value: String(data.new_52w_lows),
+      icon: TrendingDown,
+      help: ACRONYM_HELP.NEW_52W_LOW,
+      filter: {
+        patch: { near52wLow: true },
+        clear: { near52wLow: false },
+        isActive: (f) => f.near52wLow,
+      },
     },
     {
       label: "Vol×",
@@ -131,6 +189,11 @@ export function IndexPanoramaCard({ data }: Props) {
       icon: Zap,
       help: ACRONYM_HELP.VOL_SPIKE,
       tone: data.volume_spikes_count > 0 ? "warn" : "default",
+      filter: {
+        patch: { volSpike: true },
+        clear: { volSpike: false },
+        isActive: (f) => f.volSpike,
+      },
     },
   ];
 
@@ -168,20 +231,54 @@ export function IndexPanoramaCard({ data }: Props) {
           </span>
         </div>
 
-        {/* KPI grid */}
-        <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-9 gap-2">
+        {/* KPI grid — 10 tiles (N stocks + 9 metric/breadth tiles, of which 8
+            are clickable filter toggles). */}
+        <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-10 gap-2">
           {tiles.map((t) => {
             const Icon = t.icon;
             const fg = t.tone ? TONE_FG[t.tone] : "";
-            return (
-              <div
-                key={t.label}
-                className="bg-background/70 dark:bg-black/30 rounded-md p-2.5 text-center border border-white/40 dark:border-white/5 cursor-help"
-                title={t.help}
-              >
+            // A tile is interactive only when it has a filter mapping AND the
+            // parent wired a handler. N stocks / Avg Δ% stay static.
+            const clickable = !!t.filter && !!onTileFilter;
+            const active = !!(t.filter && filters && t.filter.isActive(filters));
+            const inner = (
+              <>
                 <Icon className="h-3.5 w-3.5 text-muted-foreground/60 mx-auto mb-1" />
                 <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{t.label}</div>
                 <div className={cn("text-lg font-bold tabular-nums mt-0.5", fg)}>{t.value}</div>
+              </>
+            );
+            const baseCls =
+              "bg-background/70 dark:bg-black/30 rounded-md p-2.5 text-center border transition-colors";
+            if (clickable) {
+              return (
+                <button
+                  key={t.label}
+                  type="button"
+                  title={t.help}
+                  aria-pressed={active}
+                  onClick={() =>
+                    onTileFilter!(active ? t.filter!.clear : t.filter!.patch)
+                  }
+                  className={cn(
+                    baseCls,
+                    "cursor-pointer hover:border-primary/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                    active
+                      ? "border-primary ring-1 ring-primary bg-primary/10"
+                      : "border-white/40 dark:border-white/5",
+                  )}
+                >
+                  {inner}
+                </button>
+              );
+            }
+            return (
+              <div
+                key={t.label}
+                className={cn(baseCls, "border-white/40 dark:border-white/5 cursor-help")}
+                title={t.help}
+              >
+                {inner}
               </div>
             );
           })}
@@ -189,7 +286,9 @@ export function IndexPanoramaCard({ data }: Props) {
 
         {/* Footer hint */}
         <div className="text-[11px] text-muted-foreground mt-3 italic">
-          Hover sui tile per la spiegazione · stock di {data.code} listati sotto
+          {onTileFilter
+            ? "Clicca un tile per filtrare la tabella · hover per la spiegazione"
+            : "Hover sui tile per la spiegazione"} · stock di {data.code} listati sotto
         </div>
       </CardContent>
     </Card>
