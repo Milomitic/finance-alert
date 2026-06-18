@@ -63,6 +63,45 @@ def test_record_failure_helper_writes_to_metrics():
     assert "503" in (by_key[("marketaux", "news")].last_failure_reason or "")
 
 
+def test_record_failure_emits_warning_log_with_source_token():
+    """A probe failure must ALSO emit a WARNING to the log buffer — the metrics
+    counter alone turns the source card red, but the 'Log live' panel reads a
+    SEPARATE channel (logger). Without this, clicking a failing source filtered
+    the logs to an empty result. The message must contain the source name so the
+    per-source token filter (e.g. ['yfinance','yahoo']) matches it."""
+    from loguru import logger
+
+    captured: list[dict] = []
+    sink_id = logger.add(
+        lambda msg: captured.append(msg.record),
+        level="WARNING",
+    )
+    try:
+        probes._record("yfinance", "fundamentals", ok=False, reason="HTTPError 403")
+    finally:
+        logger.remove(sink_id)
+
+    warnings = [r for r in captured if r["level"].name == "WARNING"]
+    assert len(warnings) == 1
+    msg = warnings[0]["message"]
+    assert "yfinance" in msg          # matches the per-source token filter
+    assert "fundamentals" in msg      # the specific op
+    assert "403" in msg               # the failure reason hint
+
+
+def test_record_success_emits_no_warning_log():
+    """The success path must stay quiet — only failures reach the log buffer."""
+    from loguru import logger
+
+    captured: list[dict] = []
+    sink_id = logger.add(lambda msg: captured.append(msg.record), level="WARNING")
+    try:
+        probes._record("yfinance", "live_quote", ok=True)
+    finally:
+        logger.remove(sink_id)
+    assert [r for r in captured if r["level"].name == "WARNING"] == []
+
+
 def test_run_fast_probes_invokes_all_probes_when_breaker_closed():
     """With breaker closed, every probe in FAST_PROBES runs once."""
     calls: list[str] = []

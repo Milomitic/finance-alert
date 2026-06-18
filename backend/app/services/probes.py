@@ -56,6 +56,15 @@ def _record(source: str, op: str, ok: bool, reason: str = "") -> None:
             yfinance_health.record_success()
     else:
         data_source_metrics.record_failure(source, op, reason=reason[:200])
+        # Also emit a WARNING to the log buffer. The counter above turns the
+        # source card red, but the "Log live" panel reads a SEPARATE channel
+        # (logger -> log_buffer), so without this a failing source had no
+        # inspectable log line — clicking the red card filtered the logs to an
+        # empty result. The source name is in the message so the per-source
+        # token filter (e.g. ["yfinance","yahoo"]) matches. Probe failures only
+        # reach this branch when a probe actually RAN and failed (disabled
+        # no-key fallbacks return earlier), so this never cries wolf.
+        logger.warning(f"[probe] {source}.{op} failed: {reason[:200] or 'unknown'}")
 
 
 # ─── individual probes ───────────────────────────────────────────────
