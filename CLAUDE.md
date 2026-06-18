@@ -254,6 +254,30 @@ Both? Do both.
 
 ---
 
+## Universe pruned 1494 → 1000 (2026-06-18)
+
+The stock universe was trimmed to **1000** to cut recurring fetch/scan load
+(per-stock cost is ~O(#stocks); the universe was over-broad for the user's
+needs). Method:
+
+- **Kept (mandatory):** all 811 index members (`stock_indices`), the eToro
+  hand-picks, and any `price_alerts` name.
+- **Trimmable pool:** the 655 non-index-but-already-alerted names. Ranked by a
+  **liquidity-weighted composite** = 0.55·(avg-30-bar dollar turnover, FX→USD)
+  + 0.30·(engine = avg of `stock_scores.composite` + `technical_scores.composite`)
+  + 0.15·(data-completeness: market_cap/sector/industry/country/fundamentals-cache).
+  Kept the top 161, **cut the bottom 494**.
+- **Cascade-deleted** across `ohlcv_daily` (~1.08M rows), `alerts`,
+  `signal_outcomes`, `stock_scores`, `technical_scores`, `score_history`,
+  `fetch_cache` (by ticker, with a dual-listing collision guard),
+  `institutional_holdings`. `VACUUM` reclaimed ~155 MB (DB 496 → 341 MB).
+- **Pre-prune backup:** `backend/data/app.db.pre-prune-2026-06-18.bak` (full
+  496 MB snapshot — delete once you're confident the prune is good).
+- Composite percentiles / breadth recompute on the next scan; nothing else
+  needed. To prune again, the approach is reproducible from this note.
+
+---
+
 ## Catalog ticker rows — duplicates RESOLVED (2026-05)
 
 **Historical note:** 59 tickers (AAPL, AMZN, UCG.MI, etc.) used to have **two
@@ -528,4 +552,4 @@ Stop uvicorn FIRST (sole SQLite writer → avoids "database is locked"), run wit
 `cd backend && PYTHONPATH=. ./.venv/Scripts/python.exe <script>`, then restart +
 verify `/api/health`. `scan_universe` uses STORED OHLCV (fast, no network) and
 fires signals only — it does NOT recompute the composite; `recompute_all` does
-(reads fundamentals from the L2 cache, ~minutes for the 1490-stock universe).
+(reads fundamentals from the L2 cache, ~minutes for the ~1000-stock universe).
