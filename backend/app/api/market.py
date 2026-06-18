@@ -7,21 +7,67 @@ from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
-from app.models import User
+from app.models import Stock, User
 from app.schemas.market import MarketSummaryOut
 from app.schemas.stock_detail import LiveQuoteOut
 from app.services import (
     live_quote_service,
     live_sparkline_service,
+    live_universe_sweep_service,
     market_stats_service,
 )
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
 STALE_THRESHOLD = timedelta(hours=24)
+
+
+# ─── Universe-wide live movers (feeds the dashboard 1G candidate pool) ───────
+class LiveMoverOut(BaseModel):
+    ticker: str
+    name: str | None = None
+    change_pct: float
+    price: float | None = None
+
+
+class LiveMoversOut(BaseModel):
+    gainers: list[LiveMoverOut]
+    losers: list[LiveMoverOut]
+    swept: int  # how many universe tickers currently have a fresh live quote
+
+
+@router.get("/live-movers", response_model=LiveMoversOut)
+def get_live_movers(
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+) -> LiveMoversOut:
+    """Top intraday movers across the WHOLE visible universe, from the rotating
+    live sweep (live_universe_sweep_service). The dashboard merges these tickers
+    into its 1G candidate pool so a genuine intraday mover that wasn't an EOD
+    mover still surfaces. Empty until the sweep has staged some open-market
+    quotes (a few ticks after boot during market hours)."""
+    data = live_universe_sweep_service.get_live_movers()
+    tickers = {r["ticker"] for r in data["gainers"]} | {r["ticker"] for r in data["losers"]}
+    name_map = dict(
+        db.execute(select(Stock.ticker, Stock.name).where(Stock.ticker.in_(tickers))).all()
+    ) if tickers else {}
+
+    def _rows(rows: list[dict]) -> list[LiveMoverOut]:
+        return [
+            LiveMoverOut(
+                ticker=r["ticker"], name=name_map.get(r["ticker"]),
+                change_pct=r["change_pct"], price=r.get("price"),
+            )
+            for r in rows
+        ]
+
+    return LiveMoversOut(
+        gainers=_rows(data["gainers"]), losers=_rows(data["losers"]), swept=data["swept"]
+    )
 
 
 # ─── Live assets panel ─────────────────────────────────────────────────────

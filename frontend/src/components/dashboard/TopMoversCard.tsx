@@ -17,6 +17,7 @@ import { FlashValue } from "@/components/ui/FlashValue";
 import { SectionTitle } from "@/components/ui/section-title";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useLiveQuotes } from "@/hooks/useLiveQuote";
+import { useLiveUniverseMovers } from "@/hooks/useLiveUniverseMovers";
 import { useFlipList } from "@/hooks/useFlipList";
 import { projectVolRatio } from "@/lib/intradayVolume";
 import { cn } from "@/lib/utils";
@@ -294,6 +295,23 @@ export function TopMoversCard({ movers, computedAt }: Props) {
   const registerFlip = useFlipList();
   const isLive = window === "1d";
 
+  // Universe-wide live movers (backend rotating sweep). Merged into BOTH the
+  // candidate pool (so they get live-polled) AND the ranking pool (so a genuine
+  // intraday mover that was NOT an EOD mover is actually eligible to rank).
+  const liveUniQ = useLiveUniverseMovers(isLive);
+  const liveUniverseMovers = useMemo<Mover[]>(() => {
+    if (!isLive || !liveUniQ.data) return [];
+    return [...liveUniQ.data.gainers, ...liveUniQ.data.losers].map((lm) => ({
+      ticker: lm.ticker,
+      name: lm.name ?? lm.ticker,
+      index: null,
+      sector: null,
+      change_pct: lm.change_pct,
+      last_close: lm.price ?? 0,
+      prev_close: null,
+    }));
+  }, [isLive, liveUniQ.data]);
+
   // Live candidate pool: the union of EVERY EOD mover list — not just
   // the displayed 1G gainers/losers. Polling only the already-shown
   // names froze the live ranking (a stock outside the top-8 could
@@ -309,6 +327,10 @@ export function TopMoversCard({ movers, computedAt }: Props) {
     const seen = new Set<string>();
     const out: string[] = [];
     const lists: (Mover[] | undefined)[] = [
+      // FIRST so they survive the MAX_LIVE_TICKERS cap: the universe-wide
+      // live movers are the whole point — a real intraday mover that wasn't
+      // an EOD candidate.
+      liveUniverseMovers,
       movers.gainers, movers.losers,
       movers.gainers_5d, movers.losers_5d,
       movers.gainers_20d, movers.losers_20d,
@@ -328,7 +350,7 @@ export function TopMoversCard({ movers, computedAt }: Props) {
       }
     }
     return out.slice(0, MAX_LIVE_TICKERS);
-  }, [isLive, movers]);
+  }, [isLive, movers, liveUniverseMovers]);
 
   // 15s batch poll (server-cached 10s). Disabled on 1S/1M so we don't
   // burn quota for windows that can't use live prices anyway.
@@ -377,6 +399,10 @@ export function TopMoversCard({ movers, computedAt }: Props) {
     const pool: Mover[] = [];
     const freshPool: Mover[] = [];
     const lists: (Mover[] | undefined)[] = [
+      // Universe-wide live movers FIRST — so a genuine intraday mover that
+      // was never an EOD candidate is eligible to rank (its live change% is
+      // overlaid from liveMap below, same as any pool entry).
+      liveUniverseMovers,
       movers.gainers, movers.losers,
       movers.gainers_5d, movers.losers_5d,
       movers.gainers_20d, movers.losers_20d,
@@ -419,7 +445,7 @@ export function TopMoversCard({ movers, computedAt }: Props) {
       .filter((m) => !topGainers.has(m.ticker))
       .sort((a, b) => (a.change_pct as number) - (b.change_pct as number));
     return { gainers, losers, field: "change_pct" };
-  }, [isLive, movers, window, liveMap, liveQ.data, boardSeed]);
+  }, [isLive, movers, window, liveMap, liveQ.data, boardSeed, liveUniverseMovers]);
 
   // Persist the live-ranked board for reload continuity (trimmed to the
   // visible rows; sessionStorage = per-tab, dies with the browser session).

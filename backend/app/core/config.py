@@ -36,6 +36,20 @@ class Settings(BaseSettings):
     # than this many hours, auto-run a scan so opening the app detects the
     # signals from the days the machine was off. 0 disables.
     scan_startup_stale_hours: int = 16
+    # Live universe-wide top-movers sweep (dashboard 1G). The board's live
+    # re-rank only polls a bounded candidate pool, so a genuine intraday mover
+    # that wasn't an EOD mover is invisible. A ROTATING sweep stages live
+    # change% for the whole universe a chunk at a time — gentle on yfinance:
+    # only open-market tickers are fetched, `chunk` names per `seconds` tick,
+    # full coverage in ~(universe/chunk × seconds). Entries expire after
+    # `stale_seconds`. 0 seconds disables the sweep.
+    live_movers_sweep_seconds: int = 75
+    live_movers_chunk: int = 200
+    live_movers_stale_seconds: int = 900   # 15 min
+    # Top-N gainers + N losers surfaced from the sweep. 30+30=60 leaves room
+    # under the FE's 120-ticker candidate cap for the EOD lists too (so the
+    # board mixes the true live universe movers with the familiar EOD names).
+    live_movers_top_n: int = 30
     # Signal engine: minimum confidence (0-100) for a detected signal to
     # become an alert. Below this the signal is computed but not surfaced.
     signal_min_confidence: int = 60

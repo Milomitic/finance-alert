@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.interval import IntervalTrigger
 from loguru import logger
 
 from app.core.config import settings
@@ -19,6 +20,7 @@ from app.scheduler.jobs.refresh_institutionals import run_refresh_institutionals
 from app.scheduler.jobs.refresh_premarket import run_refresh_premarket
 from app.scheduler.jobs.refresh_sec_13f import run_refresh_sec_13f
 from app.scheduler.jobs.scan_alerts import run_scan_alerts
+from app.scheduler.jobs.live_movers_sweep import run_live_universe_sweep
 from app.scheduler.jobs.kpi_rollup import run_kpi_rollup
 from app.scheduler.jobs.send_digest import run_send_digest
 from app.services.scheduler_metrics import install_listener as _install_scheduler_listener
@@ -72,6 +74,19 @@ def get_scheduler() -> BackgroundScheduler:
             max_instances=1,
             coalesce=True,
         )
+        # Universe-wide live top-movers sweep — one rotating chunk per tick so
+        # the dashboard 1G board can surface genuine intraday movers from the
+        # whole universe (not just the EOD candidate pool). Self-gates to
+        # open-market tickers, so off-hours ticks are no-ops. 0 disables.
+        if settings.live_movers_sweep_seconds > 0:
+            _scheduler.add_job(
+                run_live_universe_sweep,
+                trigger=IntervalTrigger(seconds=settings.live_movers_sweep_seconds),
+                id="live_movers_sweep",
+                replace_existing=True,
+                max_instances=1,
+                coalesce=True,
+            )
         _scheduler.add_job(
             run_send_digest,
             trigger=CronTrigger(
