@@ -6,11 +6,26 @@ from sqlalchemy import select
 
 from app.core.db import SessionLocal
 from app.models import Stock
+from app.services import scan_lock
 from app.services.ohlcv_service import fetch_and_upsert, latest_ohlcv_date
 from app.services.scan_runner import run_tracked_scan
 
 
 def run_scan_alerts(trigger: str = "cron") -> None:
+    # Single-scan guard: a scan is a multi-minute single-writer (chunked
+    # fetch_and_upsert + recompute) and SQLite can't take two at once — a manual
+    # scan overlapping the boot catch-up surfaced 'database is locked'. Skip if a
+    # scan already holds the slot rather than start a second concurrent writer.
+    with scan_lock.scan_slot() as acquired:
+        if not acquired:
+            logger.info(
+                f"[scan_alerts] another scan already running — skipping (trigger={trigger})"
+            )
+            return
+        _run_scan_alerts_locked(trigger)
+
+
+def _run_scan_alerts_locked(trigger: str) -> None:
     logger.info(f"[scan_alerts] job: starting (trigger={trigger})")
     db = SessionLocal()
     try:

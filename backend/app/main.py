@@ -187,6 +187,16 @@ def _catch_up_scan_on_boot() -> None:
             logger.info("[startup] last scan is fresh — skipping catch-up")
             return
 
+        # Don't pile a catch-up on top of a scan the user already kicked: two
+        # concurrent scans both run fetch_and_upsert and deadlock SQLite
+        # ('database is locked'). run_scan_alerts also guards via the slot, but
+        # skipping here avoids even spawning a thread that would immediately bail.
+        from app.services import scan_lock
+
+        if scan_lock.is_running():
+            logger.info("[startup] a scan is already running — skipping catch-up")
+            return
+
         from app.scheduler.jobs.scan_alerts import run_scan_alerts
         logger.info("[startup] last scan stale/absent — kicking catch-up scan")
         threading.Thread(

@@ -23,6 +23,11 @@ if engine.dialect.name == "sqlite":
         cursor.execute("PRAGMA journal_mode=WAL")
         cursor.execute("PRAGMA foreign_keys=ON")
         cursor.execute("PRAGMA synchronous=NORMAL")
+        # Wait up to 15s for a write lock instead of failing instantly. With WAL
+        # this lets the small periodic writers (cleanup_orphan_scans, the live
+        # sweep) wait out a scan's brief write bursts rather than raise
+        # 'database is locked'. Defense-in-depth behind the single-scan mutex.
+        cursor.execute("PRAGMA busy_timeout=15000")
         cursor.close()
 
 

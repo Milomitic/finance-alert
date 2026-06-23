@@ -37,6 +37,19 @@ router = APIRouter(prefix="/api/alerts", tags=["alerts"])
 
 
 def _run_scan_in_background(stock_ids: list[int] | None) -> None:
+    """Manual scan entry. Single-scan guard FIRST: skip (no ScanRun row created)
+    if a scan is already running, so we never start a 2nd concurrent SQLite
+    writer ('database is locked'); otherwise run it holding the slot."""
+    from app.services import scan_lock
+
+    with scan_lock.scan_slot() as acquired:
+        if not acquired:
+            logger.info("[scan] manual scan skipped — another scan already running")
+            return
+        _run_scan_in_background_locked(stock_ids)
+
+
+def _run_scan_in_background_locked(stock_ids: list[int] | None) -> None:
     """Manual-trigger scan: track via ScanRun with sub-phased fetch + evaluate.
 
     Phase taxonomy (colon-delimited so existing frontend parsing extends
