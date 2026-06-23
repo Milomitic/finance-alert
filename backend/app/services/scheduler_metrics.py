@@ -9,7 +9,8 @@ start/end in a single event — we approximate by recording the
 scheduled_run_time delta. For our purposes (visual indicator) this is
 plenty; we are not building a profiler.
 """
-from dataclasses import dataclass, asdict
+import os
+from dataclasses import asdict, dataclass, fields
 from threading import Lock
 from time import time
 
@@ -19,6 +20,12 @@ from apscheduler.events import (
     EVENT_JOB_MISSED,
 )
 from loguru import logger
+
+from app.core import persist_json
+
+# Persist job stats across restarts so the Salute "Scheduler" card keeps each
+# job's last run/result/error instead of showing "never run" until it refires.
+_STATE_FILE = persist_json.data_path("scheduler_metrics.json")
 
 
 @dataclass
@@ -55,6 +62,7 @@ class SchedulerMetrics:
                     s.last_error = repr(event.exception) if event.exception else "unknown"
                 elif event.code == EVENT_JOB_MISSED:
                     s.last_result = "missed"
+            self._persist()
         except Exception as exc:  # noqa: BLE001 — listener must not raise
             logger.warning(f"[scheduler_metrics] listener failed: {exc!r}")
 
@@ -65,6 +73,38 @@ class SchedulerMetrics:
     def snapshot_dict(self) -> list[dict]:
         """Same as snapshot() but as plain dicts (for JSON serialization)."""
         return [asdict(s) for s in self.snapshot()]
+
+    def to_dict(self) -> dict[str, dict]:
+        """Serialize stats keyed by job_id (pure; no IO)."""
+        with self._lock:
+            return {jid: asdict(s) for jid, s in self._stats.items()}
+
+    def from_dict(self, data: dict) -> int:
+        """Load stats from a serialized dict (pure; no IO). Returns count loaded."""
+        known = {f.name for f in fields(JobStat)}
+        with self._lock:
+            for jid, d in data.items():
+                if not isinstance(d, dict):
+                    continue
+                clean = {k: v for k, v in d.items() if k in known}
+                clean["job_id"] = jid
+                self._stats[jid] = JobStat(**clean)
+            return len(self._stats)
+
+    def load_from_disk(self) -> int:
+        """Rehydrate job stats from disk at boot. No-op under pytest."""
+        if os.environ.get("PYTEST_CURRENT_TEST"):
+            return 0
+        data = persist_json.read_json(_STATE_FILE)
+        if not data:
+            return 0
+        return self.from_dict(data)
+
+    def _persist(self) -> None:
+        """Write job stats to disk (called on each scheduler event). No-op under pytest."""
+        if os.environ.get("PYTEST_CURRENT_TEST"):
+            return
+        persist_json.write_json(_STATE_FILE, self.to_dict())
 
 
 _INSTANCE = SchedulerMetrics()

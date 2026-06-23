@@ -215,6 +215,13 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     # Pre-fill the live-log ring buffer from the on-disk log tail so the
     # Salute log view (and its per-source filter) survives restarts.
     hydrate_log_buffer_from_disk()
+    # Restore operational state so a kill+restart doesn't blank the Salute page:
+    # data-source health/outage counters, scheduler job history, and the yfinance
+    # breaker (the 4 fallback breakers already persist via breakers.json).
+    from app.services import data_source_metrics, scheduler_metrics, yfinance_health
+    data_source_metrics.load_from_disk()
+    scheduler_metrics._INSTANCE.load_from_disk()
+    yfinance_health.load_from_disk()
     start_scheduler()
     _warm_premarket_on_boot()
     _catch_up_scan_on_boot()

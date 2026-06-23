@@ -27,10 +27,13 @@ Sources currently tracked:
 - forexfactory.consensus — ForexFactory macro consensus
 - sec_13f.filings     — SEC EDGAR 13F filings scraper
 """
+import os
 import time
 from collections import deque
 from dataclasses import dataclass, field
 from threading import Lock
+
+from app.core import persist_json
 
 # How many recent call timestamps to keep per (source, op). 200 covers a
 # Marketaux daily window (100/day with margin) and ~3min of Finnhub-pace
@@ -52,9 +55,70 @@ class _Counter:
 _counters: dict[str, _Counter] = {}
 _lock = Lock()
 
+# Persist health counters across restarts so the Salute page (outage status,
+# last-error hints, last-success ages) survives a kill+restart instead of
+# resetting to Idle. Throttled write-through; the `recent_calls` rate-limit ring
+# is intentionally NOT persisted (short rolling window — fine to start empty).
+_STATE_FILE = persist_json.data_path("source_metrics.json")
+_FLUSH_INTERVAL = 5.0  # seconds — at most one disk write per this interval
+_last_flush = 0.0
+
 
 def _key(source: str, op: str) -> str:
     return f"{source}.{op}"
+
+
+def _serialize_locked() -> dict[str, dict]:
+    """Snapshot the persistable counter fields. Caller holds `_lock`."""
+    return {
+        key: {
+            "success": c.success,
+            "failure": c.failure,
+            "last_success_at": c.last_success_at,
+            "last_failure_at": c.last_failure_at,
+            "last_failure_reason": c.last_failure_reason,
+        }
+        for key, c in _counters.items()
+    }
+
+
+def hydrate_from_dict(data: dict) -> int:
+    """Load counters from a serialized dict (pure; no IO). Returns count loaded."""
+    with _lock:
+        for key, d in data.items():
+            if not isinstance(d, dict):
+                continue
+            c = _counters.setdefault(key, _Counter())
+            c.success = int(d.get("success") or 0)
+            c.failure = int(d.get("failure") or 0)
+            c.last_success_at = d.get("last_success_at")
+            c.last_failure_at = d.get("last_failure_at")
+            c.last_failure_reason = d.get("last_failure_reason")
+        return len(_counters)
+
+
+def load_from_disk() -> int:
+    """Rehydrate counters from the on-disk state file at boot. No-op under pytest."""
+    if os.environ.get("PYTEST_CURRENT_TEST"):
+        return 0
+    data = persist_json.read_json(_STATE_FILE)
+    if not data:
+        return 0
+    return hydrate_from_dict(data)
+
+
+def _persist_if_due() -> None:
+    """Throttled write-through of the counters. No-op under pytest."""
+    if os.environ.get("PYTEST_CURRENT_TEST"):
+        return
+    global _last_flush
+    now = time.time()
+    with _lock:
+        if now - _last_flush < _FLUSH_INTERVAL:
+            return
+        _last_flush = now
+        data = _serialize_locked()
+    persist_json.write_json(_STATE_FILE, data)
 
 
 def record_success(source: str, op: str, count: int = 1) -> None:
@@ -68,6 +132,7 @@ def record_success(source: str, op: str, count: int = 1) -> None:
         # calls_in_window() for rate-limit usage indicators.
         for _ in range(count):
             c.recent_calls.append(now)
+    _persist_if_due()
 
 
 def record_failure(source: str, op: str, reason: str = "", count: int = 1) -> None:
@@ -83,6 +148,7 @@ def record_failure(source: str, op: str, reason: str = "", count: int = 1) -> No
             c.last_failure_reason = reason[:200]
         for _ in range(count):
             c.recent_calls.append(now)
+    _persist_if_due()
 
 
 def seconds_since_last_success(source: str, op: str) -> float | None:

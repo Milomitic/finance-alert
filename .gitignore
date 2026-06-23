@@ -22,6 +22,8 @@ backend/data/logs/
 # Runtime state — persistent circuit-breaker timestamps + cached upstream
 # payloads (regenerated on demand, machine-specific, not source of truth)
 backend/data/breakers.json
+backend/data/source_metrics.json
+backend/data/scheduler_metrics.json
 backend/data/ff_calendar.xml
 # Stray repo-root /data — sometimes created by scripts run from the wrong
 # cwd (worktree edge case). Belongs nowhere in git, ever.

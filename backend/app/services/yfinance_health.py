@@ -16,14 +16,25 @@ Half-Open → Closed on success, → Open on failure.
 
 This is in-process (single uvicorn worker assumption — fine for local-first).
 """
+import os
 import time
 from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
 from threading import Lock
 from typing import Callable, TypeVar
 
 from loguru import logger
 
+from app.core import breaker_state
+
 T = TypeVar("T")
+
+# Persist the yfinance breaker's open state across restarts (the 4 fallback
+# breakers already do this via breaker_state). Reuses the same JSON store under
+# this key so an OPEN breaker stays open — with its remaining cooldown — after a
+# kill+restart instead of reopening on the first call and re-discovering the
+# rate-limit. Persistence is skipped under pytest to avoid touching the file.
+_BREAKER_KEY = "yfinance"
 
 
 # How many recent failures (within WINDOW_SECONDS) trip the breaker.
@@ -89,36 +100,73 @@ def is_open() -> bool:
         return True
 
 
+def _persist_open(opened_at: float, reason: str) -> None:
+    """Persist the breaker-open timestamp so it survives a restart. No-op under pytest."""
+    if os.environ.get("PYTEST_CURRENT_TEST"):
+        return
+    until = datetime.fromtimestamp(opened_at, UTC) + timedelta(seconds=COOLDOWN_SECONDS)
+    breaker_state.save(_BREAKER_KEY, until, reason=(reason or "")[:200])
+
+
+def _persist_clear() -> None:
+    """Drop the persisted open state when the breaker closes. No-op under pytest."""
+    if os.environ.get("PYTEST_CURRENT_TEST"):
+        return
+    breaker_state.clear(_BREAKER_KEY)
+
+
+def load_from_disk() -> bool:
+    """At boot, restore an OPEN breaker from disk (with its remaining cooldown).
+    Returns True if a still-open breaker was restored. No-op under pytest."""
+    if os.environ.get("PYTEST_CURRENT_TEST"):
+        return False
+    until = breaker_state.load(_BREAKER_KEY)  # None if absent or cooldown elapsed
+    if until is None:
+        return False
+    with _lock:
+        _state.opened_at = (until - timedelta(seconds=COOLDOWN_SECONDS)).timestamp()
+    logger.info(f"[yf-breaker] restored OPEN from disk (cooldown until {until.isoformat()})")
+    return True
+
+
 def record_success() -> None:
     """Mark a successful yfinance call. Closes the breaker if it was half-open."""
     with _lock:
-        if _state.opened_at is not None:
+        was_open = _state.opened_at is not None
+        if was_open:
             logger.info("[yf-breaker] success after open → closing")
         _state.failures.clear()
         _state.opened_at = None
         _state.half_open_in_flight = False
         _state.half_open_at = None
+    if was_open:
+        _persist_clear()  # only touch disk on a real open→closed transition
 
 
 def record_failure(reason: str = "") -> None:
     """Mark a yfinance failure. May trip the breaker."""
     now = time.time()
+    opened_now = False
     with _lock:
         if _state.half_open_in_flight:
             # Half-open probe failed → re-open with a fresh cooldown
             _state.half_open_in_flight = False
             _state.half_open_at = None
             _state.opened_at = now
+            opened_now = True
             logger.warning(f"[yf-breaker] half-open probe failed ({reason}) → re-open for {COOLDOWN_SECONDS}s")
-            return
-        _prune_old(now)
-        _state.failures.append(now)
-        if _state.opened_at is None and len(_state.failures) >= N_FAILURES:
-            _state.opened_at = now
-            logger.warning(
-                f"[yf-breaker] {len(_state.failures)} failures in {WINDOW_SECONDS}s "
-                f"({reason}) → OPEN for {COOLDOWN_SECONDS}s"
-            )
+        else:
+            _prune_old(now)
+            _state.failures.append(now)
+            if _state.opened_at is None and len(_state.failures) >= N_FAILURES:
+                _state.opened_at = now
+                opened_now = True
+                logger.warning(
+                    f"[yf-breaker] {len(_state.failures)} failures in {WINDOW_SECONDS}s "
+                    f"({reason}) → OPEN for {COOLDOWN_SECONDS}s"
+                )
+    if opened_now:
+        _persist_open(now, reason)
 
 
 def is_rate_limit_error(exc: BaseException) -> bool:
