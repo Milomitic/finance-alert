@@ -8,7 +8,7 @@ from app.core.db import SessionLocal
 from app.models import Stock
 from app.services import scan_lock
 from app.services.ohlcv_service import fetch_and_upsert, latest_ohlcv_date
-from app.services.scan_runner import run_tracked_scan
+from app.services.scan_runner import bump_heartbeat, create_scan_run, run_tracked_scan
 
 
 def run_scan_alerts(trigger: str = "cron") -> None:
@@ -35,6 +35,19 @@ def _run_scan_alerts_locked(trigger: str) -> None:
             logger.info("[scan_alerts] no stocks in catalog; skipping")
             return
 
+        # Create the ScanRun row NOW, before the (multi-minute) fetch loop,
+        # instead of only once run_tracked_scan() starts the evaluate phase.
+        # Without this, GET /scan-status keeps reporting the PREVIOUS
+        # (already-completed) run for the entire fetch step — a manual scan
+        # click that lands in that window gets silently skipped by
+        # scan_lock (see run_scan_alerts above), and the frontend's
+        # optimistic "running" patch then reverts to that stale completed
+        # row, firing a false "Scan completato: nessun nuovo alert" toast
+        # for a click that never actually ran anything (2026-07-01 bug).
+        run = create_scan_run(db, trigger=trigger, phase="fetching:planning")
+        run.progress_total = len(all_stocks)
+        db.commit()
+
         chunk_size = 100
         for i in range(0, len(all_stocks), chunk_size):
             chunk = all_stocks[i : i + chunk_size]
@@ -50,6 +63,9 @@ def _run_scan_alerts_locked(trigger: str) -> None:
                 for s in chunk
             )
             period = "10y" if needs_backfill else "1mo"
+            run.phase = "fetching:backfill" if needs_backfill else "fetching:incremental"
+            run.current_target = chunk[0].ticker if len(chunk) == 1 else f"{chunk[0].ticker} +{len(chunk) - 1}"
+            bump_heartbeat(db, run)
             try:
                 fetch_and_upsert(db, chunk, period=period)
                 db.commit()
@@ -57,9 +73,11 @@ def _run_scan_alerts_locked(trigger: str) -> None:
                 logger.exception(f"[scan_alerts] chunk fetch crashed: {e}")
                 db.rollback()
                 # continue with next chunk
+            run.progress_done = min(i + chunk_size, len(all_stocks))
+            bump_heartbeat(db, run)
 
-        # Step 2: evaluate rules + fire alerts (tracked via ScanRun)
-        run_tracked_scan(db, trigger=trigger)
+        # Step 2: evaluate rules + fire alerts (reuses the same ScanRun row)
+        run_tracked_scan(db, trigger=trigger, existing_run=run)
     finally:
         db.close()
     logger.info("[scan_alerts] job: done")

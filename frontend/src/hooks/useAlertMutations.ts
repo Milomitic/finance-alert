@@ -28,7 +28,21 @@ export function useTriggerScan() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: () => alerts.scan(),
-    onSuccess: () => {
+    onSuccess: (data) => {
+      // `accepted: false` means the backend's single-scan mutex was already
+      // held (cron / boot catch-up / another manual click) and silently
+      // skipped this click — nothing new was started. Don't claim otherwise,
+      // and don't optimistically patch the cache to "running": the next
+      // poll already reflects the OTHER scan that's genuinely in progress
+      // (or its stale completed state), and patching here would risk firing
+      // a false "Scan completato" toast for a click that did nothing.
+      if (!data.accepted) {
+        toast.info(
+          "Uno scan è già in corso — vedi la notifica in basso a destra",
+        );
+        qc.invalidateQueries({ queryKey: ["alerts", "scan-status"] });
+        return;
+      }
       toast.success(
         "Scan avviato in background — la card sotto mostrerà il progresso live",
         { duration: 5000 },

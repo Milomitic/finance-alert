@@ -672,6 +672,17 @@ def trigger_scan(
     background: BackgroundTasks,
     _user: User = Depends(get_current_user),
 ) -> ScanAccepted:
+    # Best-effort pre-check: if a scan already holds the slot (cron, boot
+    # catch-up, or another manual trigger), `_run_scan_in_background` would
+    # just skip silently — the click would look "accepted" but do nothing.
+    # Report that upfront so the frontend doesn't show a false "scan avviato"
+    # toast (see the 2026-07-01 investigation: a boot catch-up scan running
+    # is invisible to the caller, and the optimistic UI misreads the skip as
+    # an instant completion of the user's own click).
+    from app.services import scan_lock
+
+    if scan_lock.is_running():
+        return ScanAccepted(accepted=False)
     background.add_task(_run_scan_in_background, payload.stock_ids)
     return ScanAccepted(accepted=True)
 
