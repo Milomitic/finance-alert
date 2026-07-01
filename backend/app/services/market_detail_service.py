@@ -235,7 +235,16 @@ def _fetch_fresh(symbol: str, range_key: str) -> MarketDetailDC | None:
 
 def get_detail(symbol: str, range_key: str) -> MarketDetailDC | None:
     """Cached entry point. Returns None when yfinance has no data for
-    the symbol (caller should 404)."""
+    the symbol AND no previously-fetched value exists (caller should 404).
+
+    A failed fetch (rate-limit, transient network blip) does NOT overwrite
+    the cache: doing so used to store `None` for the full 15min TTL, turning
+    one transient "Too Many Requests" into a guaranteed 404 for anyone
+    opening that index/commodity/crypto page for the next 15 minutes — even
+    long after yfinance recovered. Instead we serve the last known-good
+    value (even if stale) on failure, mirroring the "never persist error
+    rows" rule the fundamentals/news caches already follow (see CLAUDE.md).
+    """
     if range_key not in _RANGE_TO_YF:
         range_key = "1y"
     key = (symbol, range_key)
@@ -245,9 +254,18 @@ def get_detail(symbol: str, range_key: str) -> MarketDetailDC | None:
         if entry is not None and (now - entry[0]) < _TTL_SECONDS:
             return entry[1]
     fresh = _fetch_fresh(symbol, range_key)
+    if fresh is not None:
+        with _CACHE_LOCK:
+            _CACHE[key] = (now, fresh)
+        return fresh
     with _CACHE_LOCK:
-        _CACHE[key] = (now, fresh)
-    return fresh
+        stale = _CACHE.get(key)
+    if stale is not None and stale[1] is not None:
+        logger.info(
+            f"[market_detail] fetch failed for {symbol}/{range_key} — serving stale cache"
+        )
+        return stale[1]
+    return None
 
 
 def clear_cache() -> None:
