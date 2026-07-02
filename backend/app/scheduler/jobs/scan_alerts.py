@@ -7,7 +7,7 @@ from sqlalchemy import select
 from app.core.db import SessionLocal
 from app.models import Stock
 from app.services import scan_lock
-from app.services.ohlcv_service import fetch_and_upsert, latest_ohlcv_date
+from app.services.ohlcv_service import fetch_and_upsert, latest_ohlcv_dates_bulk
 from app.services.scan_runner import bump_heartbeat, create_scan_run, run_tracked_scan
 
 
@@ -48,33 +48,79 @@ def _run_scan_alerts_locked(trigger: str) -> None:
         run.progress_total = len(all_stocks)
         db.commit()
 
+        # Per-stock incremental/backfill split — ported from the manual scan
+        # path. The old logic decided per CHUNK: one stale stock sent the whole
+        # 100-stock chunk down period="10y", re-downloading + re-upserting
+        # ~2520 bars for the ~99 fresh stocks too (the boot catch-up hit this
+        # constantly). It also called latest_ohlcv_date TWICE per stock; the
+        # single bulk GROUP BY below replaces all those point queries.
+        # History is append-only either way (_upsert_one_stock is a pure
+        # ON CONFLICT upsert): the split changes cost, never data.
+        latest_dates = latest_ohlcv_dates_bulk(db, [s.id for s in all_stocks])
+        cutoff = date.today() - timedelta(days=30)
+        incremental = [
+            s for s in all_stocks
+            if latest_dates.get(s.id) is not None and latest_dates[s.id] >= cutoff
+        ]
+        backfill = [
+            s for s in all_stocks
+            if latest_dates.get(s.id) is None or latest_dates[s.id] < cutoff
+        ]
+        # Sort the incremental population by latest bar date so each chunk's
+        # start=min(latest)+1 is tight for ALL its members (stocks of similar
+        # staleness land together → minimal over-fetch). The manual path can't
+        # reorder (its chunks follow the UI progress order); the cron path has
+        # no such constraint.
+        incremental.sort(key=lambda s: latest_dates[s.id])
+        logger.info(
+            f"[scan_alerts] fetch plan: {len(incremental)} incremental · "
+            f"{len(backfill)} backfill (10y)"
+        )
+
         chunk_size = 100
-        for i in range(0, len(all_stocks), chunk_size):
-            chunk = all_stocks[i : i + chunk_size]
-            # Determine period per chunk: deep backfill ('10y' = ~2520 trading
-            # days) when any stock is empty/stale, otherwise cheap '1mo'
-            # incremental. Ten years lets the 5Y chart range work out of
-            # the box AND leaves headroom for long-window indicators
-            # (SMA200, MACD 26/52/18) at any view.
-            cutoff = date.today() - timedelta(days=30)
-            needs_backfill = any(
-                latest_ohlcv_date(db, s.id) is None
-                or latest_ohlcv_date(db, s.id) < cutoff
-                for s in chunk
-            )
-            period = "10y" if needs_backfill else "1mo"
-            run.phase = "fetching:backfill" if needs_backfill else "fetching:incremental"
-            run.current_target = chunk[0].ticker if len(chunk) == 1 else f"{chunk[0].ticker} +{len(chunk) - 1}"
-            bump_heartbeat(db, run)
-            try:
-                fetch_and_upsert(db, chunk, period=period)
-                db.commit()
-            except Exception as e:  # noqa: BLE001
-                logger.exception(f"[scan_alerts] chunk fetch crashed: {e}")
-                db.rollback()
-                # continue with next chunk
-            run.progress_done = min(i + chunk_size, len(all_stocks))
-            bump_heartbeat(db, run)
+        today = date.today()
+        done = 0
+        for stocks_list, phase, use_start in (
+            (incremental, "fetching:incremental", True),
+            (backfill, "fetching:backfill", False),
+        ):
+            for i in range(0, len(stocks_list), chunk_size):
+                chunk = stocks_list[i : i + chunk_size]
+                # SMART-SKIP: if every stock in the chunk already has today's
+                # bar, start would be in the future — yfinance would return an
+                # empty frame. Advance progress without the network call.
+                if use_start:
+                    start = min(latest_dates[s.id] for s in chunk) + timedelta(days=1)
+                    if start > today:
+                        done += len(chunk)
+                        run.progress_done = done
+                        bump_heartbeat(db, run)
+                        continue
+                run.phase = phase
+                run.current_target = (
+                    chunk[0].ticker if len(chunk) == 1
+                    else f"{chunk[0].ticker} +{len(chunk) - 1}"
+                )
+                bump_heartbeat(db, run)
+                try:
+                    if use_start:
+                        # SMART-INCREMENTAL: only the bars after the oldest
+                        # already-stored date in the chunk; the upsert absorbs
+                        # the few duplicate bars of fresher members.
+                        fetch_and_upsert(db, chunk, start=start)
+                    else:
+                        # Deep backfill ('10y' ≈ 2520 trading days): 5Y chart
+                        # range + long-window indicators (SMA200, MACD 26/52/18)
+                        # out of the box. Only stocks that are empty/stale.
+                        fetch_and_upsert(db, chunk, period="10y")
+                    db.commit()
+                except Exception as e:  # noqa: BLE001
+                    logger.exception(f"[scan_alerts] chunk fetch crashed: {e}")
+                    db.rollback()
+                    # continue with next chunk
+                done += len(chunk)
+                run.progress_done = done
+                bump_heartbeat(db, run)
 
         # Step 2: evaluate rules + fire alerts (reuses the same ScanRun row)
         run_tracked_scan(db, trigger=trigger, existing_run=run)
