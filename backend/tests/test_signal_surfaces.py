@@ -85,11 +85,9 @@ def test_digest_labels_signal_alert_not_unknown(db):
     assert "unknown" not in text, (
         f"Digest must not label signal alert as 'unknown'. Got:\n{text}"
     )
-    # The kind should appear either as the literal "signal:volume_breakout"
-    # (used as a fallback label) or the signal name should be surfaced somehow.
-    # We assert the digest does NOT say "unknown" and that it references the
-    # stock ticker (sanity) and the signal name or its prefix.
+    # Since the B3-2 rewrite the digest maps signal names to friendly Italian
+    # labels (mirroring frontend/src/lib/alertMeta.ts SIGNAL_META).
     assert "SIGDIG" in text
-    assert "volume_breakout" in text or "signal:" in text, (
-        f"Digest must reference the signal kind. Got:\n{text}"
+    assert "Volume Breakout" in text, (
+        f"Digest must reference the signal kind via its label. Got:\n{text}"
     )

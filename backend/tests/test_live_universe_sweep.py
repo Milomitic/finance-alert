@@ -58,3 +58,22 @@ def test_refresh_chunk_no_open_tickers_no_fetch(db):
         return {}
     n = sweep.refresh_chunk(db, batch_fn=fake_batch, is_open=lambda t: False)
     assert n == 0 and called["n"] == 0  # never hit yfinance when all closed
+
+
+def test_sweep_job_runs_intraday_price_eval_even_if_sweep_fails(monkeypatch):
+    """The scheduler tick piggybacks evaluate_intraday; a sweep crash must
+    not prevent the price-alert evaluation (and vice versa: neither may
+    propagate out of the job)."""
+    from app.scheduler.jobs import live_movers_sweep as job
+
+    monkeypatch.setattr(
+        job.live_universe_sweep_service, "refresh_chunk",
+        lambda db: (_ for _ in ()).throw(RuntimeError("sweep boom")),
+    )
+    called = {"n": 0}
+    monkeypatch.setattr(
+        job.price_alert_service, "evaluate_intraday",
+        lambda db: called.__setitem__("n", called["n"] + 1),
+    )
+    job.run_live_universe_sweep()  # must not raise
+    assert called["n"] == 1
