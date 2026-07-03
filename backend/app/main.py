@@ -381,7 +381,7 @@ def redownload_ohlcv(
     """
     from app.core.db import SessionLocal
     from app.models import OhlcvDaily, Stock
-    from app.services import yfinance_health
+    from app.services import scan_lock, yfinance_health
     from app.services.ohlcv_service import fetch_and_upsert
     from sqlalchemy import delete, select
 
@@ -391,48 +391,74 @@ def redownload_ohlcv(
             detail="period must be one of 1y/2y/5y/10y/max",
         )
 
-    db = SessionLocal()
-    try:
-        stocks = db.execute(
-            select(Stock).order_by(Stock.market_cap.desc().nullslast())
-        ).scalars().all()
-        if limit:
-            stocks = stocks[:limit]
+    # Same single-scan slot as the scan entry points: this is an equally heavy
+    # single-writer (bulk DELETE + chunked 10y refetch). Running it beside a
+    # live scan recreates the 'database is locked' contention the mutex fixed.
+    with scan_lock.scan_slot() as acquired:
+        if not acquired:
+            raise HTTPException(
+                status_code=409,
+                detail="uno scan è in corso — riprova al termine",
+            )
+        # Never destroy data we provably can't re-download: if the breaker is
+        # already open, refuse up front (previously the wipe committed FIRST,
+        # so a breaker-open request left every targeted stock with zero bars).
+        if yfinance_health.is_open():
+            raise HTTPException(
+                status_code=503,
+                detail="yfinance breaker aperto — riprova più tardi",
+            )
 
-        # Wipe existing OHLCV for the targeted stocks. The next fetch will
-        # rebuild with the new period.
-        stock_ids = [s.id for s in stocks]
-        if stock_ids:
-            db.execute(delete(OhlcvDaily).where(OhlcvDaily.stock_id.in_(stock_ids)))
-            db.commit()
+        db = SessionLocal()
+        try:
+            stocks = db.execute(
+                select(Stock).order_by(Stock.market_cap.desc().nullslast())
+            ).scalars().all()
+            if limit:
+                stocks = stocks[:limit]
 
-        # Re-fetch in chunks. Mirrors the scan-path chunk size + breaker check.
-        chunk_size = 100
-        ok = err = 0
-        breaker_aborted_at: int | None = None
-        for i in range(0, len(stocks), chunk_size):
-            if yfinance_health.is_open():
-                breaker_aborted_at = i
-                break
-            chunk = stocks[i : i + chunk_size]
-            try:
-                fetch_and_upsert(db, chunk, period=period)
-                db.commit()
-                ok += len(chunk)
-            except Exception as exc:  # noqa: BLE001
-                logger.warning(f"[redownload-ohlcv] chunk failed: {exc}")
-                db.rollback()
-                err += len(chunk)
-        return {
-            "total_stocks": len(stocks),
-            "succeeded": ok,
-            "errors": err,
-            "breaker_aborted_at": breaker_aborted_at,
-            "period_used": period,
-            "yfinance_breaker": yfinance_health.status(),
-        }
-    finally:
-        db.close()
+            # Wipe + refetch PER CHUNK, inside one transaction per chunk: a
+            # crash/breaker-abort strands at most one chunk without bars (and
+            # a failed chunk's delete is rolled back with it), instead of the
+            # old global upfront wipe that left the WHOLE catalog empty when
+            # the loop aborted early.
+            chunk_size = 100
+            ok = err = 0
+            breaker_aborted_at: int | None = None
+            for i in range(0, len(stocks), chunk_size):
+                if yfinance_health.is_open():
+                    breaker_aborted_at = i
+                    break
+                chunk = stocks[i : i + chunk_size]
+                try:
+                    db.execute(delete(OhlcvDaily).where(
+                        OhlcvDaily.stock_id.in_([s.id for s in chunk])
+                    ))
+                    res = fetch_and_upsert(db, chunk, period=period)
+                    if res.stocks_succeeded == 0:
+                        # Whole-chunk failure (fetch_and_upsert swallows batch
+                        # errors into the result) — roll the DELETE back too,
+                        # keeping the old bars instead of stranding the chunk.
+                        db.rollback()
+                        err += len(chunk)
+                        continue
+                    db.commit()
+                    ok += res.stocks_succeeded
+                    err += res.stocks_failed
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning(f"[redownload-ohlcv] chunk failed: {exc}")
+                    db.rollback()
+                    err += len(chunk)
+            return {
+                "total_stocks": len(stocks),
+                "succeeded": ok,
+                "errors": err,
+                "breaker_aborted_at": breaker_aborted_at,
+                "period_used": period,
+                "yfinance_breaker": yfinance_health.status(),
+            }
+        finally:
+            db.close()
 
 
 @app.get("/api/health/data-sources")

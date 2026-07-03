@@ -65,10 +65,6 @@ def _get_yfinance_native_currency(ticker: str) -> str | None:
     Stock.currency uniformly to 'GBP' for both GBp-priced and GBP-priced
     LSE stocks. Only the raw yfinance currency keeps the distinction we
     need for the pence/pounds scaling decision.
-
-    Wrapped in a try/except so any failure returns None and the caller
-    can fail-safe (don't scale -- pass-through). Better unscaled than
-    incorrectly scaled.
     """
     try:
         import yfinance as yf
@@ -78,6 +74,36 @@ def _get_yfinance_native_currency(ticker: str) -> str | None:
     except Exception as e:  # noqa: BLE001
         logger.debug(f"[ohlcv] _get_yfinance_native_currency({ticker}): {e}")
         return None
+
+
+# Successful currency lookups, memoized for the process lifetime — a listing's
+# quote currency doesn't change. Failures are NOT cached (retry next fetch).
+_CURRENCY_CACHE: dict[str, str] = {}
+
+
+def _native_currency_for_scaling(ticker: str) -> tuple[str | None, bool]:
+    """Resolve the native currency for the pence→pounds scaling decision.
+
+    Returns (currency, ok):
+    - Non-LSE tickers can never be GBp/GBX → (None, True) with NO network
+      call. This kills ~1 metadata HTTP round-trip per stock per fetch for
+      ~97% of the universe (fast_info.currency triggers a real request).
+    - LSE (.L) tickers: memoized fast_info lookup. On lookup failure we
+      FAIL CLOSED → (None, False): the caller must skip the stock this
+      cycle. Failing open here stored raw pence (100× too high) over
+      previously-correct pounds rows whenever the lookup transiently
+      failed for a genuinely GBp-priced stock.
+    """
+    if not ticker.upper().endswith(".L"):
+        return None, True
+    cached = _CURRENCY_CACHE.get(ticker)
+    if cached is not None:
+        return cached, True
+    currency = _get_yfinance_native_currency(ticker)
+    if currency is None:
+        return None, False
+    _CURRENCY_CACHE[ticker] = currency
+    return currency, True
 
 
 def _yf_download(tickers: list[str], **kwargs: Any) -> pd.DataFrame:
@@ -113,6 +139,22 @@ def _extract_ticker_frame(df: pd.DataFrame, ticker: str) -> pd.DataFrame | None:
     return frame
 
 
+# SQLite upsert via INSERT ... ON CONFLICT. Module-level so the statement is
+# compiled once, and executed as ONE executemany per stock (see _upsert_one_stock).
+_UPSERT_STMT = text(
+    """
+    INSERT INTO ohlcv_daily (stock_id, date, open, high, low, close, volume)
+    VALUES (:stock_id, :date, :open, :high, :low, :close, :volume)
+    ON CONFLICT(stock_id, date) DO UPDATE SET
+        open = excluded.open,
+        high = excluded.high,
+        low = excluded.low,
+        close = excluded.close,
+        volume = excluded.volume
+    """
+)
+
+
 def _upsert_one_stock(db: Session, stock: Stock, frame: pd.DataFrame) -> tuple[int, int]:
     """Upsert OHLCV rows for one stock. Returns (inserted, updated).
 
@@ -126,9 +168,16 @@ def _upsert_one_stock(db: Session, stock: Stock, frame: pd.DataFrame) -> tuple[i
     """
     inserted = 0
     updated = 0
-    # Look up yfinance's native currency once per stock. Fails to None on
-    # any error -> caller passes through (no scaling, fail-safe).
-    native_currency = _get_yfinance_native_currency(stock.ticker)
+    # Resolve the pence/pounds scaling decision. Non-LSE tickers skip the
+    # metadata HTTP call entirely; a failed lookup on a .L ticker aborts this
+    # stock's upsert (fail CLOSED — see _native_currency_for_scaling).
+    native_currency, currency_ok = _native_currency_for_scaling(stock.ticker)
+    if not currency_ok:
+        logger.warning(
+            f"[ohlcv] currency lookup failed for {stock.ticker} — skipping upsert "
+            "this cycle (pence/pounds ambiguity; will retry next fetch)"
+        )
+        return 0, 0
     # The latest date in the frame. yfinance routinely returns the most
     # recent bar with O/H/L populated but Close=NaN — the session hasn't
     # "settled" yet at the data provider (very common for Asian markets
@@ -164,6 +213,7 @@ def _upsert_one_stock(db: Session, stock: Stock, frame: pd.DataFrame) -> tuple[i
     except Exception:  # noqa: BLE001 — never block ingestion on this guard
         _skip_today = False
 
+    rows: list[dict] = []
     for ts, row in frame.iterrows():
         d = ts.date() if isinstance(ts, pd.Timestamp) else ts
         # Intraday "today" bar while market open → skip (see above).
@@ -200,21 +250,7 @@ def _upsert_one_stock(db: Session, stock: Stock, frame: pd.DataFrame) -> tuple[i
             else:
                 logger.warning(msg)
             continue
-        # SQLite upsert via INSERT ... ON CONFLICT
-        stmt = text(
-            """
-            INSERT INTO ohlcv_daily (stock_id, date, open, high, low, close, volume)
-            VALUES (:stock_id, :date, :open, :high, :low, :close, :volume)
-            ON CONFLICT(stock_id, date) DO UPDATE SET
-                open = excluded.open,
-                high = excluded.high,
-                low = excluded.low,
-                close = excluded.close,
-                volume = excluded.volume
-            """
-        )
-        db.execute(
-            stmt,
+        rows.append(
             {
                 "stock_id": stock.id,
                 "date": d,
@@ -225,8 +261,12 @@ def _upsert_one_stock(db: Session, stock: Stock, frame: pd.DataFrame) -> tuple[i
                 "volume": int(row["Volume"]) if not pd.isna(row["Volume"]) else 0,
             },
         )
+    # One executemany per stock instead of one execute per bar: a 10y backfill
+    # is ~2520 bars/stock — the per-row roundtrips dominated backfill wall-time.
+    if rows:
+        db.execute(_UPSERT_STMT, rows)
         # Approximation: count as "inserted" — for analytics not strictly accurate.
-        inserted += 1
+        inserted = len(rows)
     return inserted, updated
 
 
@@ -281,6 +321,17 @@ def fetch_and_upsert(
     try:
         df = _yf_download(tickers, **yf_kwargs)
     except Exception as e:  # noqa: BLE001
+        # Feed the Salute per-source counters on BATCH-wide failures too —
+        # previously only per-ticker misses were counted, so the yfinance.ohlcv
+        # row froze exactly during real outages. (The breaker-open early-return
+        # above stays metrics-silent by design: the breaker has its own card,
+        # and counting skipped batches would poison the success rate.)
+        from app.services import data_source_metrics
+        data_source_metrics.record_failure(
+            "yfinance", "ohlcv",
+            reason=f"yf.download batch failed: {e}"[:200],
+            count=len(stocks),
+        )
         if yfinance_health.is_rate_limit_error(e):
             yfinance_health.record_failure(f"yf.download: {e}")
             logger.warning(

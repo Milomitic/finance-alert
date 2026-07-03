@@ -23,6 +23,15 @@ from app.models import OhlcvDaily, Stock
 from app.services import ohlcv_service
 
 
+@pytest.fixture(autouse=True)
+def _clear_currency_memo():
+    """Successful lookups are memoized per ticker for the process lifetime;
+    keep tests order-independent."""
+    ohlcv_service._CURRENCY_CACHE.clear()
+    yield
+    ohlcv_service._CURRENCY_CACHE.clear()
+
+
 # ---- _normalize_minor_unit_value (pure helper) -----------------
 
 def test_gbp_lowercase_p_scales_to_pounds() -> None:
@@ -146,9 +155,12 @@ def test_upsert_passes_through_when_yfinance_returns_gbp_uppercase(db: Session) 
     assert float(bar.close) == 29.40  # unchanged
 
 
-def test_upsert_fails_safe_when_yfinance_currency_unavailable(db: Session) -> None:
-    """If yfinance lookup fails (returns None), pass-through (don't scale).
-    Better to have unscaled values than wrong-scaled ones."""
+def test_upsert_fails_closed_when_yfinance_currency_unavailable(db: Session) -> None:
+    """If the currency lookup fails for a .L ticker, SKIP the stock this cycle
+    (fail CLOSED). The old fail-open pass-through stored raw pence — 100× too
+    high — over previously-correct pounds rows whenever the lookup transiently
+    failed for a genuinely GBp-priced stock. Skipping costs one scan cycle;
+    the next fetch retries the lookup (failures are not memoized)."""
     stock = Stock(ticker="UNKNOWN.L", exchange="LSE", name="Unknown",
                   sector="Misc", country="GB", currency="GBP")
     db.add(stock); db.commit()
@@ -156,11 +168,9 @@ def test_upsert_fails_safe_when_yfinance_currency_unavailable(db: Session) -> No
     frame = _make_pence_frame()
 
     with patch.object(ohlcv_service, "_get_yfinance_native_currency", return_value=None):
-        ohlcv_service._upsert_one_stock(db, stock, frame)
+        ins, _ = ohlcv_service._upsert_one_stock(db, stock, frame)
         db.commit()
 
+    assert ins == 0
     bar = db.query(OhlcvDaily).filter(OhlcvDaily.stock_id == stock.id).first()
-    # Frame's first close was 322.5 -- left as is (will be flagged as buggy
-    # by next audit run, then either picked up by the migration or by a
-    # subsequent re-fetch where yfinance is reachable).
-    assert float(bar.close) == 322.5
+    assert bar is None  # nothing written — no pence/pounds gamble

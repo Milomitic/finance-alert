@@ -69,10 +69,14 @@ class LiveQuote:
 # Tuple is (iana_tz_name, (open_h, open_m), (close_h, close_m)) — local.
 _MARKET_HOURS_LOCAL: dict[str, tuple[str, tuple[int, int], tuple[int, int]]] = {
     "US": ("America/New_York", (9, 30), (16, 0)),    # NYSE / Nasdaq
-    "UK": ("Europe/London",    (8, 0), (16, 30)),    # LSE (.L)
+    "UK": ("Europe/London",    (8, 0), (16, 30)),    # LSE (.L / .IL)
     "EU": ("Europe/Berlin",    (9, 0), (17, 30)),    # Xetra / EuroNext (.MI/.DE/...)
     "HK": ("Asia/Hong_Kong",   (9, 30), (16, 0)),    # HKEX (.HK), lunch break ignored
     "CN": ("Asia/Shanghai",    (9, 30), (15, 0)),    # SSE/SZSE (.SS/.SZ), lunch ignored
+    "JP": ("Asia/Tokyo",       (9, 0), (15, 0)),     # TSE (.T), lunch ignored
+    "KR": ("Asia/Seoul",       (9, 0), (15, 30)),    # KRX (.KS)
+    "NO": ("Europe/Oslo",      (9, 0), (16, 30)),    # Oslo Børs (.OL)
+    "AU": ("Australia/Sydney", (10, 0), (16, 0)),    # ASX (.AX)
 }
 
 # ZoneInfo objects are cheap but not free to construct; cache per name.
@@ -87,9 +91,15 @@ def _tz(name: str) -> ZoneInfo:
 
 
 def _exchange_region(ticker: str) -> str:
-    """Map a ticker to one of the regions in _MARKET_HOURS_UTC."""
+    """Map a ticker to one of the regions in _MARKET_HOURS_LOCAL.
+
+    An unmapped suffix falling through to "US" is not cosmetic: the daily-bar
+    ingest's unsettled-today-bar guard keys off _is_market_open, so a Tokyo
+    stock judged on New York hours could persist an in-flight session as a
+    settled close. Keep this map covering every exchange in the catalog.
+    """
     suffix = ticker.split(".")[-1].upper() if "." in ticker else ""
-    if suffix == "L":
+    if suffix in ("L", "IL"):     # LSE + London IOB
         return "UK"
     if suffix in ("MI", "DE", "PA", "AS", "MC", "SW", "BR", "HE", "CO", "IR"):
         return "EU"
@@ -97,6 +107,14 @@ def _exchange_region(ticker: str) -> str:
         return "HK"
     if suffix in ("SS", "SZ"):
         return "CN"
+    if suffix == "T":
+        return "JP"
+    if suffix == "KS":
+        return "KR"
+    if suffix == "OL":
+        return "NO"
+    if suffix == "AX":
+        return "AU"
     return "US"
 
 
