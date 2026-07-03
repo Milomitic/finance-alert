@@ -12,6 +12,7 @@ import {
 import { useMemo, useState } from "react";
 
 import { EngineHealthPanel } from "@/components/EngineHealthPanel";
+import { DetectorPerformancePanel } from "@/components/settings/DetectorPerformancePanel";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { SectionTitle } from "@/components/ui/section-title";
@@ -56,6 +57,7 @@ export default function SettingsPage() {
       <EngineHealthPanel />
       <RulePerformancePanel />
       <CalibrationPanel />
+      <DetectorPerformancePanel />
       <ScanLogPanel />
       <CatalogRefreshPanel />
     </div>

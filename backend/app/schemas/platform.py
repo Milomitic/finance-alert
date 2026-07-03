@@ -118,3 +118,41 @@ class SignalDriftSummaryOut(BaseModel):
 class SignalDriftOut(BaseModel):
     summary: SignalDriftSummaryOut
     detectors: list[SignalDriftRowOut]   # sorted by descending |delta|
+
+
+class DetectorPerfCellOut(BaseModel):
+    """One aggregation bucket of matured outcomes (a breakdown value, or the
+    detector total when key == "totale"). All rates are percentages (0..100)."""
+    key: str                             # bucket label: "bull"/"bear"/"<60"/"n/d"/...
+    n: int                               # matured outcome rows in the bucket
+    abs_hit_rate: float                  # absolute directional hit-rate
+    mkt_neutral_hit_rate: float | None   # over rows with a market-neutral label; None if none
+    avg_fwd_return: float                # mean forward return over the horizon (%)
+    low_confidence: bool                 # n < min_n → thin evidence, render muted
+
+
+class DetectorPerfRowOut(BaseModel):
+    """One detector's totals + the three orthogonal breakdowns."""
+    detector: str
+    total: DetectorPerfCellOut
+    by_regime: list[DetectorPerfCellOut]     # bull / bear / flat / n-d (null regime)
+    by_tone: list[DetectorPerfCellOut]       # bull / bear
+    by_strength: list[DetectorPerfCellOut]   # <60 / 60-74 / >=75 / n-d (null strength)
+
+
+class DetectorPerfMetaOut(BaseModel):
+    """Coverage honesty header: the warehouse is young, entire detectors are
+    still absent (63d horizons mature months after their signals) — the UI
+    must SAY so instead of implying complete coverage."""
+    total_rows: int                # matured outcome rows aggregated
+    n_detectors: int               # detectors with >=1 matured outcome
+    n_detectors_universe: int      # the full detector universe (17)
+    date_min: str | None           # earliest signal_date covered (ISO)
+    date_max: str | None           # latest signal_date covered (ISO)
+    min_n: int                     # per-cell low_confidence threshold
+    computed_at: str               # ISO-8601 UTC
+
+
+class DetectorPerformanceOut(BaseModel):
+    meta: DetectorPerfMetaOut
+    detectors: list[DetectorPerfRowOut]   # sorted by descending total n
