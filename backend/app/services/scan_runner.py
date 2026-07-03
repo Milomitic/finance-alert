@@ -9,9 +9,11 @@ from contextlib import contextmanager
 from datetime import UTC, datetime
 
 from loguru import logger
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.models import ScanRun
+from app.core.config import settings
+from app.models import Alert, ScanRun
 from app.services import scan_cancel
 from app.services.scan_service import ScanCancelled, ScanResult, scan_universe
 
@@ -219,6 +221,19 @@ def run_tracked_scan(
     def cancel_check() -> bool:
         return scan_cancel.is_cancel_requested(run_id_for_cancel)
 
+    # Baseline for the optional per-signal Telegram push: alerts with
+    # id > this are the NEW rows fired by this run. Deliberately excludes
+    # dedup-REFRESHED alerts (updated in place) — they were already pushed
+    # when first emitted, re-pushing the same living setup daily is noise.
+    push_baseline_alert_id: int | None = None
+    if settings.telegram_push_per_signal:
+        try:
+            push_baseline_alert_id = int(
+                db.execute(select(func.max(Alert.id))).scalar() or 0
+            )
+        except Exception:  # noqa: BLE001 — push is best-effort from the start
+            push_baseline_alert_id = None
+
     try:
         # B4: progress_every dropped from 10 → 5 (May 2026). At 1132 stocks
         # that's 226 heartbeats instead of 113 — ~2× DB writes, but each is a
@@ -414,6 +429,27 @@ def run_tracked_scan(
         run.phase = None
         run.completed_at = datetime.now(UTC)
         db.commit()
+        # Optional per-signal instant Telegram push (best-effort: a Telegram
+        # problem must NEVER fail a successful scan). Only the NEW signal
+        # alerts of THIS run (id > baseline) are considered; the strength
+        # threshold + the enable flag are enforced inside notify_signal_alerts.
+        if push_baseline_alert_id is not None and result.alerts_fired:
+            try:
+                from app.services import notifier_service
+
+                new_alerts = list(
+                    db.execute(
+                        select(Alert)
+                        .where(Alert.id > push_baseline_alert_id)
+                        .where(Alert.signal_name.isnot(None))
+                    ).scalars()
+                )
+                if new_alerts:
+                    notifier_service.notify_signal_alerts(db, new_alerts)
+            except Exception as push_exc:  # noqa: BLE001
+                logger.warning(
+                    f"[scan_runner] per-signal push failed (non-fatal): {push_exc}"
+                )
         # Capture per-scan KPIs (best-effort; never break the scan).
         try:
             from app.services import kpi_service

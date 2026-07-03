@@ -20,6 +20,13 @@ class Settings(BaseSettings):
     telegram_bot_token: str = ""
     telegram_chat_id: str = ""
     telegram_delivery_mode: str = "digest"  # only "digest" implemented in Fase 2
+    # Push Telegram istantaneo per-segnale (oltre al digest giornaliero).
+    # OFF di default: quando ON, a fine scan viene inviato UN messaggio
+    # compatto con i segnali della scansione la cui Forza (snapshot
+    # strength) >= telegram_push_min_strength. Vedi
+    # notifier_service.notify_signal_alerts.
+    telegram_push_per_signal: bool = False
+    telegram_push_min_strength: int = 75
     digest_hour: int = 8
     digest_minute: int = 0
     scan_hour: int = 23
