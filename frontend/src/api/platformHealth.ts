@@ -106,6 +106,53 @@ export async function fetchSignalDrift(): Promise<{ detectors: SignalDriftRow[] 
   return r.json();
 }
 
+/** One aggregation bucket of matured outcomes (breakdown value, or the
+ *  detector total when key === "totale"). Rates are percentages (0..100). */
+export type DetectorPerfCell = {
+  key: string;
+  n: number;
+  abs_hit_rate: number;
+  /** Over rows with a market-neutral label only; null when none have one. */
+  mkt_neutral_hit_rate: number | null;
+  avg_fwd_return: number;
+  /** n < min_n → thin evidence, render muted with an "n<30" chip. */
+  low_confidence: boolean;
+};
+
+/** One detector's totals + the three orthogonal breakdowns. */
+export type DetectorPerfRow = {
+  detector: string;
+  total: DetectorPerfCell;
+  by_regime: DetectorPerfCell[]; // bull / bear / flat / n-d
+  by_tone: DetectorPerfCell[]; // bull / bear
+  by_strength: DetectorPerfCell[]; // <60 / 60-74 / >=75 / n-d
+};
+
+/** Coverage honesty header: the warehouse is young and partial — the UI must
+ *  say so instead of implying complete coverage. */
+export type DetectorPerfMeta = {
+  total_rows: number;
+  n_detectors: number;
+  n_detectors_universe: number; // 17
+  date_min: string | null;
+  date_max: string | null;
+  min_n: number;
+  computed_at: string;
+};
+
+export type DetectorPerformance = {
+  meta: DetectorPerfMeta;
+  detectors: DetectorPerfRow[]; // sorted by descending total n
+};
+
+export async function fetchDetectorPerformance(): Promise<DetectorPerformance> {
+  const r = await fetch("/api/platform/detector-performance", {
+    credentials: "include",
+  });
+  if (!r.ok) throw new Error(`detector-performance ${r.status}`);
+  return r.json();
+}
+
 export async function runProbesNow(): Promise<{ accepted: boolean }> {
   const r = await fetch("/api/platform/probes/run", {
     method: "POST",

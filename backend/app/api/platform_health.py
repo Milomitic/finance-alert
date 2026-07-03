@@ -17,13 +17,20 @@ from app.api.deps import get_current_user, get_db
 from app.core.log_buffer import _INSTANCE as log_buffer
 from app.models import Alert, ScanRun, User
 from app.schemas.platform import (
+    DetectorPerformanceOut,
     LogRecordOut,
     PlatformHealthOut,
     RecentScanOut,
     SchedulerJobStatOut,
     SignalDriftOut,
 )
-from app.services import cache_metrics, signal_drift_service, source_catalog, yfinance_health
+from app.services import (
+    cache_metrics,
+    detector_performance_service,
+    signal_drift_service,
+    source_catalog,
+    yfinance_health,
+)
 from app.services.scheduler_metrics import _INSTANCE as scheduler_metrics
 
 router = APIRouter(prefix="/api/platform", tags=["platform"])
@@ -144,6 +151,32 @@ def signal_drift(
         rows, window_days=window_days, min_n=min_n
     )
     return SignalDriftOut(summary=summary, detectors=rows)
+
+
+@router.get("/detector-performance", response_model=DetectorPerformanceOut)
+def detector_performance(
+    min_n: Annotated[int, Query(ge=1, le=500)] = 30,
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+) -> DetectorPerformanceOut:
+    """Detector performance explorer (read-only, computed on demand).
+
+    Aggregates the `signal_outcomes` warehouse into a per-detector cube:
+    overall totals plus breakdowns by regime-at-signal (bull/bear/n-d), tone
+    (bull/bear) and Forza band (<60 / 60-74 / >=75 / n-d). Per cell: n,
+    absolute hit-rate, market-neutral hit-rate and mean forward return, with a
+    `low_confidence` honesty flag when n < min_n (default 30 — the same floor
+    the drift monitor uses). The `meta` envelope states the warehouse's actual
+    coverage (rows, detectors present vs the 17-detector universe, date range)
+    because long-horizon outcomes mature months after their signals — the UI
+    must surface the partial coverage rather than imply completeness.
+
+      min_n   per-cell sample floor below which a cell is flagged low_confidence
+    """
+    data = detector_performance_service.compute_detector_performance(
+        db, min_n=min_n
+    )
+    return DetectorPerformanceOut(**data)
 
 
 @router.post("/probes/run", status_code=202)
