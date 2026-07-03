@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import json
 from collections import defaultdict
-from datetime import date
+from datetime import date, timedelta
 
 import numpy as np
 from loguru import logger
@@ -58,14 +58,13 @@ def _snapshot_fields(snapshot: str | None) -> tuple[str | None, int | None, int 
     )
 
 
-def _load_universe_closes(db: Session) -> dict[int, tuple[np.ndarray, np.ndarray]]:
-    """Per stock: (dates[], closes[]) ascending. Lightweight column select."""
-    rows = db.execute(
-        select(OhlcvDaily.stock_id, OhlcvDaily.date, OhlcvDaily.close)
-        .order_by(OhlcvDaily.stock_id, OhlcvDaily.date)
-    ).all()
+def _rows_to_arrays(
+    rows: list[tuple[int, object, float]], keep: set[int] | None = None
+) -> dict[int, tuple[np.ndarray, np.ndarray]]:
     by_stock: dict[int, list[tuple[date, float]]] = defaultdict(list)
     for sid, d, c in rows:
+        if keep is not None and sid not in keep:
+            continue
         dd = _to_date(d)
         if dd is not None and c is not None:
             by_stock[sid].append((dd, float(c)))
@@ -75,6 +74,43 @@ def _load_universe_closes(db: Session) -> dict[int, tuple[np.ndarray, np.ndarray
         cs = np.array([x[1] for x in seq], dtype="float64")
         out[sid] = (ds, cs)
     return out
+
+
+def _load_universe_closes(
+    db: Session, *, since: date | None = None
+) -> dict[int, tuple[np.ndarray, np.ndarray]]:
+    """Per stock: (dates[], closes[]) ascending. Lightweight column select.
+
+    `since` trims the load to `date >= since` for the market-neutral benchmark:
+    the universe forward-mean at a trigger date pairs each bar positionally with
+    the one H ahead, and trimming only the *pre-trigger* tail leaves that pairing
+    (and every mean at a pending trigger date) numerically identical — while
+    turning a full-table scan into a ~90-day slice on the incremental path."""
+    stmt = select(OhlcvDaily.stock_id, OhlcvDaily.date, OhlcvDaily.close)
+    if since is not None:
+        stmt = stmt.where(OhlcvDaily.date >= since)
+    rows = db.execute(stmt.order_by(OhlcvDaily.stock_id, OhlcvDaily.date)).all()
+    return _rows_to_arrays(rows)
+
+
+def _load_stock_closes(
+    db: Session, stock_ids: set[int]
+) -> dict[int, tuple[np.ndarray, np.ndarray]]:
+    """Full-history (dates[], closes[]) for ONLY the given stocks. Used for the
+    per-alert entry/forward/trigger lookups and the causal regime EMA200 — which
+    needs each stock's COMPLETE series to converge, so it cannot be windowed.
+    On the incremental scan path `stock_ids` is just the handful of stocks whose
+    alerts matured this cycle; on the one-off backfill it is the whole universe."""
+    if not stock_ids:
+        return {}
+    stmt = select(OhlcvDaily.stock_id, OhlcvDaily.date, OhlcvDaily.close)
+    # SQLite caps bound params at 999. Past that (backfill: pending == universe)
+    # skip the IN clause and load all rows, then keep only the wanted stocks.
+    load_all = len(stock_ids) > 900
+    if not load_all:
+        stmt = stmt.where(OhlcvDaily.stock_id.in_(stock_ids))
+    rows = db.execute(stmt.order_by(OhlcvDaily.stock_id, OhlcvDaily.date)).all()
+    return _rows_to_arrays(rows, keep=stock_ids if load_all else None)
 
 
 def _universe_fwd_means(
@@ -133,10 +169,21 @@ def mature_outcomes(db: Session, *, commit: bool = True) -> int:
     if not pending:
         return 0
 
-    closes = _load_universe_closes(db)
+    # Per-alert exact series (entry/forward/trigger + regime EMA200) for ONLY
+    # the pending stocks — a handful on the incremental scan path. Full history
+    # because the EMA needs a long warmup to converge to the same value the
+    # backfill path produces.
+    pending_sids = {a.stock_id for a in pending}
+    closes = _load_stock_closes(db, pending_sids)
+
+    # Universe market-neutral benchmark: all stocks, but only the date window the
+    # pending triggers reach (exact — see _load_universe_closes). This is the
+    # load that used to scan the entire 2.4M-row table at every scan end.
+    min_td = min(a.signal_date for a in pending)
+    uni_closes = _load_universe_closes(db, since=min_td - timedelta(days=10))
     horizons = {_horizon_days(a.signal_name) for a in pending}
     means_by_h: dict[int, dict[date, float]] = {
-        h: _universe_fwd_means(closes, h) for h in horizons
+        h: _universe_fwd_means(uni_closes, h) for h in horizons
     }
     ema_cache: dict[int, np.ndarray] = {}
 

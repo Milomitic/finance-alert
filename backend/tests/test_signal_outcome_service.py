@@ -53,6 +53,42 @@ def test_matures_one_row_with_abs_hit_and_is_idempotent(db, monkeypatch):
     assert sos.mature_outcomes(db) == 0
 
 
+def test_windowed_universe_mean_matches_full_load(db, monkeypatch):
+    """The windowed universe load (date >= min_trigger - buffer) must yield the
+    SAME market-neutral benchmark at the trigger date as a full-history load —
+    this is the core exactness claim of the mature_outcomes windowing."""
+    monkeypatch.setattr(sos, "_horizon_days", lambda _d: 3)
+    # Two stocks, 60 bars each; signal near the end (idx 50) so the windowed
+    # load trims ~40 pre-trigger bars while keeping the forward window.
+    s1 = Stock(ticker="UNIVA", exchange="NASDAQ", name="A", country="US")
+    s2 = Stock(ticker="UNIVB", exchange="NASDAQ", name="B", country="US")
+    db.add_all([s1, s2]); db.flush()
+    d0 = date(2026, 1, 1)
+    for s, base in ((s1, 10.0), (s2, 50.0)):
+        for i in range(60):
+            c = base + i  # steady rise
+            db.add(OhlcvDaily(stock_id=s.id, date=d0 + timedelta(days=i),
+                              open=c, high=c + 1, low=c - 1, close=c, volume=1_000_000))
+    sig_day = d0 + timedelta(days=50)
+    db.add(Alert(stock_id=s1.id, trigger_price=60.0, signal_date=sig_day,
+                 signal_name="trend_pullback",
+                 snapshot=json.dumps({"tone": "bull", "strength": 70, "probability": 55})))
+    db.commit()
+
+    # Windowed value (what mature_outcomes actually stores).
+    sos.mature_outcomes(db)
+    row = db.execute(select(SignalOutcome)).scalars().one()
+    windowed_mean = row.universe_mean_fwd
+
+    # Full-history value: same computation without the `since` window.
+    full = sos._load_universe_closes(db)
+    full_means = sos._universe_fwd_means(full, 3)
+    assert windowed_mean is not None
+    assert full_means[sig_day] == windowed_mean          # exact, not approximate
+    assert row.regime_at_signal in ("bull", "bear")      # EMA used full history
+    assert row.mkt_neutral_excess is not None
+
+
 def test_not_matured_when_horizon_not_elapsed(db, monkeypatch):
     # Horizon 5 but only 2 bars after the signal → not matured, no row.
     monkeypatch.setattr(sos, "_horizon_days", lambda _d: 5)

@@ -47,6 +47,17 @@ def _ensure_secret_key() -> Iterator[None]:
         settings.secret_key = original
 
 
+@pytest.fixture(autouse=True)
+def _clear_process_memos() -> Iterator[None]:
+    """Reset process-global in-memory caches between tests. Each test gets a
+    fresh in-memory engine, so a module-level memo (e.g. rule_performance's
+    forward-return cache) must not leak a prior test's result into the next."""
+    from app.services import rule_performance_service
+    rule_performance_service._MEMO.clear()
+    yield
+    rule_performance_service._MEMO.clear()
+
+
 @pytest.fixture
 def db(monkeypatch: pytest.MonkeyPatch) -> Iterator[Session]:
     engine = create_engine(

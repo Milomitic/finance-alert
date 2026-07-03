@@ -218,3 +218,50 @@ def test_sorted_by_total_alerts_desc(db):
     rows = compute_performance(db, days=365)
     assert rows[0].total_alerts >= rows[1].total_alerts
     assert rows[0].rule_kind == "signal:golden_cross"
+
+
+# ---------------------------------------------------------------------------
+# Optimization guardrails: windowed load correctness + memo invalidation
+# ---------------------------------------------------------------------------
+
+def test_windowed_load_ignores_bars_before_signal(db):
+    """The windowed bar load (date >= min signal_date) must not shift the
+    forward-return index: deep history BEFORE the signal is irrelevant and the
+    forward close must still be measured from the signal bar, not bars[0]."""
+    s = _make_stock(db, "PERFB")
+    # 100 bars of pre-signal history at price 50, then the signal window rising
+    # 100 → 110. If windowing wrongly anchored at the first loaded bar, the
+    # forward return would be computed off the price-50 history.
+    hist_start = date(2025, 8, 1)
+    _add_bars(db, s.id, hist_start, [50.0] * 100)
+    sig_date = hist_start + timedelta(days=100)
+    _add_bars(db, s.id, sig_date, [100.0] + [110.0] * 24)
+
+    _make_alert(db, s.id, "rsi_oversold", sig_date, tone="bull")
+    db.commit()
+
+    rows = compute_performance(db, days=365, windows=(1,))
+    s1 = rows[0].stats[1]
+    assert s1.count == 1
+    # +10% off the signal bar (100 → 110), NOT off the price-50 history.
+    assert s1.mean_pct is not None and abs(s1.mean_pct - 10.0) < 1e-6
+
+
+def test_memo_invalidates_on_new_alert(db):
+    """A second call with the same args returns the memoized result; adding an
+    alert flips the mutation token so the next call recomputes."""
+    s = _make_stock(db, "PERFC")
+    sig_date = date(2026, 1, 2)
+    _add_bars(db, s.id, sig_date, [100.0] * 25)
+    _make_alert(db, s.id, "golden_cross", sig_date)
+    db.commit()
+
+    first = compute_performance(db, days=365)
+    again = compute_performance(db, days=365)
+    assert again is first  # identical object → served from the memo
+
+    _make_alert(db, s.id, "golden_cross", sig_date)
+    db.commit()
+    after = compute_performance(db, days=365)
+    assert after is not first          # token changed → recomputed
+    assert after[0].total_alerts == 2  # picks up the new alert

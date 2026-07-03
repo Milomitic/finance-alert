@@ -37,12 +37,13 @@ Caveats
 """
 from __future__ import annotations
 
+import bisect
 import json
 import statistics
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models import Alert, OhlcvDaily
@@ -91,8 +92,17 @@ class RulePerformance:
     stats: dict[int, WindowStats]  # window_days → stats
 
 
+@dataclass(frozen=True)
+class _StockBars:
+    """Parallel date/close arrays for one stock, ascending by date. Kept as
+    plain lists (not ORM entities) so the forward-return math touches only the
+    two columns it needs and can bisect the date axis."""
+    dates: list[date]
+    closes: list[float]
+
+
 def _forward_close(
-    bars_by_stock: dict[int, list[OhlcvDaily]],
+    bars_by_stock: dict[int, _StockBars],
     stock_id: int,
     signal_date: date,
     window_days: int,
@@ -104,41 +114,58 @@ def _forward_close(
     bars = bars_by_stock.get(stock_id)
     if not bars:
         return None
-    # Bars are pre-sorted ascending by date in `_load_bars`.
-    # Find the first bar at or after signal_date.
-    signal_idx = None
-    for i, b in enumerate(bars):
-        if b.date >= signal_date:
-            signal_idx = i
-            break
-    if signal_idx is None:
-        return None
+    # Bars are pre-sorted ascending by date in `_load_bars`. bisect_left finds
+    # the first bar at or after signal_date in O(log n) — the same index the old
+    # linear scan produced, without the per-alert full-list walk.
+    signal_idx = bisect.bisect_left(bars.dates, signal_date)
     forward_idx = signal_idx + window_days
-    if forward_idx >= len(bars):
+    if forward_idx >= len(bars.dates):
         return None
-    return float(bars[signal_idx].close), float(bars[forward_idx].close)
+    return bars.closes[signal_idx], bars.closes[forward_idx]
 
 
-def _load_bars(
-    db: Session, stock_ids: set[int]
-) -> dict[int, list[OhlcvDaily]]:
-    """Bulk-load OHLCV bars for the requested stocks, ordered ascending
-    by date. Returns dict stock_id → list of bars (oldest first)."""
-    if not stock_ids:
-        return {}
-    rows = (
-        db.execute(
-            select(OhlcvDaily)
-            .where(OhlcvDaily.stock_id.in_(stock_ids))
-            .order_by(OhlcvDaily.stock_id, OhlcvDaily.date)
+def _load_bars(db: Session, *, since: date | None = None) -> dict[int, _StockBars]:
+    """Column-projected OHLCV load for the forward-return math, windowed to
+    `date >= since`. Loading only (stock_id, date, close) from the date window
+    the alerts actually reach — instead of every ORM column of the full 10y
+    history for ~900 stocks — cuts this from ~2.25M rows/26s to sub-second.
+
+    No stock-id filter: windowing already bounds the row count (~universe ×
+    window trading days), and dropping the `IN (...)` clause sidesteps SQLite's
+    999-bound-parameter limit. Stocks without alerts are simply never queried."""
+    stmt = select(OhlcvDaily.stock_id, OhlcvDaily.date, OhlcvDaily.close)
+    if since is not None:
+        stmt = stmt.where(OhlcvDaily.date >= since)
+    stmt = stmt.order_by(OhlcvDaily.stock_id, OhlcvDaily.date)
+    dates: dict[int, list[date]] = {}
+    closes: dict[int, list[float]] = {}
+    for sid, d, c in db.execute(stmt).all():
+        dates.setdefault(sid, []).append(d)
+        closes.setdefault(sid, []).append(float(c))
+    return {sid: _StockBars(dates[sid], closes[sid]) for sid in dates}
+
+
+# In-process memo: compute_performance/compute_calibration are hit repeatedly by
+# the Settings-page hooks, and the underlying data only changes at scan time.
+# Keyed by call args; invalidated by a cheap mutation fingerprint (see below).
+_MEMO: dict[tuple, tuple[tuple, object]] = {}
+
+
+def _mutation_token(db: Session, cutoff: datetime) -> tuple:
+    """Cheap fingerprint of everything that can change the stats: the newest
+    alert id, the count of live (non-archived) in-window signal alerts, and the
+    newest bar date. A scan (new alerts + new bars), a fresh alert, or a user
+    archival each flips at least one component → the memo misses and recomputes."""
+    max_alert = db.execute(select(func.max(Alert.id))).scalar()
+    live_count = db.execute(
+        select(func.count(Alert.id)).where(
+            Alert.triggered_at >= cutoff,
+            Alert.archived_at.is_(None),
+            Alert.signal_name.is_not(None),
         )
-        .scalars()
-        .all()
-    )
-    out: dict[int, list[OhlcvDaily]] = {}
-    for r in rows:
-        out.setdefault(r.stock_id, []).append(r)
-    return out
+    ).scalar()
+    max_bar = db.execute(select(func.max(OhlcvDaily.date))).scalar()
+    return (max_alert, live_count, max_bar)
 
 
 def _snapshot_tone_conf(snap: str | None) -> tuple[str | None, float | None, str | None]:
@@ -187,8 +214,22 @@ def compute_performance(
     windows: tuple[int, ...] = (1, 5, 20),
 ) -> list[RulePerformance]:
     """Forward-return stats per signal_name over `days`. Directional hit-rate
-    uses each alert's OWN snapshot tone (bull/bear), not a static name map."""
+    uses each alert's OWN snapshot tone (bull/bear), not a static name map.
+    Memoized on a mutation fingerprint (recomputes only after a scan/archival)."""
     cutoff = datetime.now(UTC) - timedelta(days=days)
+    key = ("perf", days, windows)
+    token = _mutation_token(db, cutoff)
+    hit = _MEMO.get(key)
+    if hit is not None and hit[0] == token:
+        return hit[1]  # type: ignore[return-value]
+    out = _compute_performance(db, cutoff, windows)
+    _MEMO[key] = (token, out)
+    return out
+
+
+def _compute_performance(
+    db: Session, cutoff: datetime, windows: tuple[int, ...]
+) -> list[RulePerformance]:
     rows = db.execute(
         select(Alert).where(
             Alert.triggered_at >= cutoff,
@@ -200,7 +241,7 @@ def compute_performance(
         return []
 
     by_kind: dict[str, list[tuple[int, date, str | None]]] = {}
-    stock_ids: set[int] = set()
+    min_signal_date: date | None = None
     for alert in rows:
         if not alert.signal_name:
             continue
@@ -208,11 +249,12 @@ def compute_performance(
         sig_d = alert.signal_date or alert.triggered_at.date()
         tone, _, _ = _snapshot_tone_conf(alert.snapshot)
         by_kind.setdefault(kind, []).append((alert.stock_id, sig_d, tone))
-        stock_ids.add(alert.stock_id)
+        if min_signal_date is None or sig_d < min_signal_date:
+            min_signal_date = sig_d
     if not by_kind:
         return []
 
-    bars_by_stock = _load_bars(db, stock_ids)
+    bars_by_stock = _load_bars(db, since=min_signal_date)
     out: list[RulePerformance] = []
     for kind, signals in by_kind.items():
         tones = [t for *_, t in signals if t]
@@ -274,10 +316,24 @@ def compute_calibration(db: Session, *, days: int = 365, window: int = 20) -> Ca
     """Does higher confidence -> higher realized hit-rate? Buckets emitted
     alerts by confidence and by nature, computing directional hit-rate + mean/
     median forward return at one horizon. Survivorship-aware: tracks our own
-    emitted alerts forward (delisted tickers simply lack forward bars)."""
+    emitted alerts forward (delisted tickers simply lack forward bars).
+    Memoized on the same mutation fingerprint as compute_performance."""
+    cutoff = datetime.now(UTC) - timedelta(days=days)
+    key = ("calib", days, window)
+    token = _mutation_token(db, cutoff)
+    hit = _MEMO.get(key)
+    if hit is not None and hit[0] == token:
+        return hit[1]  # type: ignore[return-value]
+    out = _compute_calibration(db, cutoff, days, window)
+    _MEMO[key] = (token, out)
+    return out
+
+
+def _compute_calibration(
+    db: Session, cutoff: datetime, days: int, window: int
+) -> Calibration:
     from app.services.alert_service import _CONTINUATION_SIGNALS, _REVERSAL_SIGNALS
 
-    cutoff = datetime.now(UTC) - timedelta(days=days)
     rows = db.execute(
         select(Alert).where(
             Alert.triggered_at >= cutoff,
@@ -285,7 +341,10 @@ def compute_calibration(db: Session, *, days: int = 365, window: int = 20) -> Ca
             Alert.signal_name.is_not(None),
         )
     ).scalars().all()
-    bars_by_stock = _load_bars(db, {a.stock_id for a in rows})
+    min_signal_date = min(
+        (a.signal_date or a.triggered_at.date() for a in rows), default=None
+    )
+    bars_by_stock = _load_bars(db, since=min_signal_date)
 
     conf_acc: dict[str, list[tuple[float, bool | None]]] = {}
     nat_acc: dict[str, list[tuple[float, bool | None]]] = {}
