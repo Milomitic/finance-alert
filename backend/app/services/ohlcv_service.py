@@ -33,6 +33,67 @@ class FetchResult:
     stocks_succeeded: int = 0
     stocks_failed: int = 0
     failed_tickers: list[str] | None = None
+    # Stocks whose stored history was wiped + refetched at 10y because the
+    # incoming bars were on a different price basis (stock split — see
+    # PriceBasisMismatch).
+    stocks_rebased: int = 0
+
+
+class PriceBasisMismatch(Exception):
+    """The freshly-downloaded bar for a date we already hold differs from the
+    stored close by a split-like factor.
+
+    Yahoo back-adjusts its RAW prices for splits (auto_adjust=False only skips
+    dividend adjustment), so after a split every historical bar it serves is
+    divided by the split ratio — while our stored, never-re-downloaded history
+    still carries the old basis. Upserting the incremental frame would splice
+    two incompatible price scales into one series and wreck every indicator.
+    The overlap-by-one-session fetch (start = min(latest)) guarantees each
+    incremental frame re-requests a bar we already hold, so the mismatch is
+    detected on the very first post-split fetch and the caller re-downloads
+    the stock's full history on the new basis instead.
+    """
+
+    def __init__(self, ticker: str, on_date: date, stored: float, incoming: float):
+        self.ticker = ticker
+        self.on_date = on_date
+        self.stored = stored
+        self.incoming = incoming
+        ratio = stored / incoming if incoming else float("inf")
+        super().__init__(
+            f"{ticker} {on_date}: stored close {stored} vs downloaded {incoming} "
+            f"(ratio {ratio:.3f}) — price basis changed (split?)"
+        )
+
+
+# A same-date close may legitimately differ a little (self-heal of a bar that
+# slipped past the market-open guard: an in-flight close is rarely >25% off the
+# settled one). Beyond these bounds the difference is a basis change: the
+# smallest real split is 3:2 (ratio 1.5 / 0.667), safely outside the band.
+_BASIS_RATIO_LOW = 0.75
+_BASIS_RATIO_HIGH = 1.33
+
+
+def _check_price_basis(db: Session, stock: Stock, rows: list[dict]) -> None:
+    """Raise PriceBasisMismatch if the earliest incoming bar overlaps a stored
+    bar on a different price basis. No-op when there is no overlap (fresh
+    backfill of an empty stock) or the stored close matches within the band."""
+    if not rows:
+        return
+    first = rows[0]
+    stored = db.execute(
+        text("SELECT close FROM ohlcv_daily WHERE stock_id = :sid AND date = :d"),
+        {"sid": stock.id, "d": first["date"]},
+    ).scalar()
+    if stored is None:
+        return
+    stored_f = float(stored)
+    incoming = float(first["close"])
+    if incoming <= 0 or stored_f <= 0:
+        return
+    ratio = stored_f / incoming
+    if ratio < _BASIS_RATIO_LOW or ratio > _BASIS_RATIO_HIGH:
+        raise PriceBasisMismatch(stock.ticker, first["date"], stored_f, incoming)
 
 
 def _normalize_minor_unit_value(currency: str | None, value: float | None) -> float | None:
@@ -261,6 +322,11 @@ def _upsert_one_stock(db: Session, stock: Stock, frame: pd.DataFrame) -> tuple[i
                 "volume": int(row["Volume"]) if not pd.isna(row["Volume"]) else 0,
             },
         )
+    # Split guard: if the earliest incoming bar overlaps a stored bar on a
+    # different price basis, abort BEFORE writing anything — the caller
+    # re-downloads the full history instead of splicing two scales.
+    rows.sort(key=lambda r: r["date"])
+    _check_price_basis(db, stock, rows)
     # One executemany per stock instead of one execute per bar: a 10y backfill
     # is ~2520 bars/stock — the per-row roundtrips dominated backfill wall-time.
     if rows:
@@ -347,14 +413,31 @@ def fetch_and_upsert(
         frame = _extract_ticker_frame(df, stock.ticker)
         if frame is None:
             logger.warning(f"[ohlcv] no data for {stock.ticker}")
+            # Dead-ticker quarantine bookkeeping: consecutive all-empty fetches.
+            # Persisted by the caller's per-chunk commit.
+            stock.ohlcv_nodata_streak = (stock.ohlcv_nodata_streak or 0) + 1
+            stock.ohlcv_last_nodata_at = date.today()
             result.stocks_failed += 1
             result.failed_tickers.append(stock.ticker)
             continue
         try:
             inserted, updated = _upsert_one_stock(db, stock, frame)
+            if stock.ohlcv_nodata_streak:
+                stock.ohlcv_nodata_streak = 0  # any data → alive again
             result.rows_inserted += inserted
             result.rows_updated += updated
             result.stocks_succeeded += 1
+        except PriceBasisMismatch as e:
+            logger.warning(f"[ohlcv] price-basis mismatch (split?): {e} — rebasing full history")
+            try:
+                ins = _rebase_full_history(db, stock)
+                result.rows_inserted += ins
+                result.stocks_succeeded += 1
+                result.stocks_rebased += 1
+            except Exception as re_err:  # noqa: BLE001
+                logger.exception(f"[ohlcv] rebase failed for {stock.ticker}: {re_err}")
+                result.stocks_failed += 1
+                result.failed_tickers.append(stock.ticker)
         except Exception as e:  # noqa: BLE001
             logger.exception(f"[ohlcv] upsert failed for {stock.ticker}: {e}")
             result.stocks_failed += 1
@@ -379,6 +462,64 @@ def fetch_and_upsert(
         f"failed={result.stocks_failed} rows={result.rows_inserted}"
     )
     return result
+
+
+def _rebase_full_history(db: Session, stock: Stock) -> int:
+    """Wipe + re-download one stock's full history on the NEW price basis.
+
+    Called when a split is detected: every bar Yahoo now serves is adjusted to
+    the post-split scale, so the only consistent repair is a clean 10y refetch.
+    Delete and re-insert happen in the CALLER's transaction — if the refetch or
+    upsert fails, the caller's rollback restores the old bars (never destroys
+    data it can't replace). Returns rows inserted.
+    """
+    df = _yf_download([stock.ticker], period="10y")
+    frame = _extract_ticker_frame(df, stock.ticker)
+    if frame is None:
+        raise RuntimeError(f"rebase fetch returned no data for {stock.ticker}")
+    db.execute(
+        text("DELETE FROM ohlcv_daily WHERE stock_id = :sid"), {"sid": stock.id}
+    )
+    # After the delete there is no stored overlap bar, so the basis check
+    # inside _upsert_one_stock is a no-op — no recursion risk.
+    inserted, _ = _upsert_one_stock(db, stock, frame)
+    logger.info(
+        f"[ohlcv] rebased {stock.ticker}: full history re-downloaded "
+        f"({inserted} bars on the new price basis)"
+    )
+    return inserted
+
+
+# --- Dead-ticker quarantine -------------------------------------------------
+# A delisted/renamed symbol never gets bars, so it lands in the backfill group
+# of EVERY scan and re-attempts a full 10y download forever — polluting logs
+# and the Salute failure counters (e.g. VSCO "possibly delisted"). After
+# QUARANTINE_STREAK consecutive all-empty fetches the stock is skipped by the
+# scan fetch plans, with a re-probe every REPROBE_DAYS in case the symbol
+# comes back (IPO re-listing, yfinance hiccup, exchange migration).
+QUARANTINE_STREAK = 3
+REPROBE_DAYS = 7
+
+
+def split_quarantined(
+    stocks: list[Stock], today: date | None = None
+) -> tuple[list[Stock], list[Stock]]:
+    """Partition `stocks` into (fetchable, quarantined) per the rule above."""
+    today = today or date.today()
+    fetchable: list[Stock] = []
+    quarantined: list[Stock] = []
+    for s in stocks:
+        streak = s.ohlcv_nodata_streak or 0
+        last = s.ohlcv_last_nodata_at
+        if (
+            streak >= QUARANTINE_STREAK
+            and last is not None
+            and (today - last).days < REPROBE_DAYS
+        ):
+            quarantined.append(s)
+        else:
+            fetchable.append(s)
+    return fetchable, quarantined
 
 
 def latest_ohlcv_date(db: Session, stock_id: int) -> Any | None:

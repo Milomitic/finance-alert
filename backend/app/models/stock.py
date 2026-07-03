@@ -1,7 +1,7 @@
 """Stock model."""
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import BigInteger, Boolean, DateTime, Integer, String, UniqueConstraint, func, text as sa_text
+from sqlalchemy import BigInteger, Boolean, Date, DateTime, Integer, String, UniqueConstraint, func, text as sa_text
 from sqlalchemy import Index as SAIndex
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -35,6 +35,14 @@ class Stock(Base):
     ohlcv_in_pounds: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default=sa_text("0"), default=False,
     )
+    # Dead-ticker quarantine: consecutive OHLCV fetches that returned NO data
+    # at all (delisted/renamed symbols). At >= 3 the stock is skipped by the
+    # scan backfill group (re-probed weekly) instead of re-attempting a 10y
+    # download at every scan forever. Any fetch that returns data resets it.
+    ohlcv_nodata_streak: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default=sa_text("0"), default=0,
+    )
+    ohlcv_last_nodata_at: Mapped[date | None] = mapped_column(Date, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

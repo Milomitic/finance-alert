@@ -94,7 +94,10 @@ def effective_max_age_days(db: Session) -> int:
     last_d = last.date() if hasattr(last, "date") else None
     if last_d is None:
         return base
-    gap_days = max(0, (date.today() - last_d).days)
+    # Same clock on both sides: completed_at is UTC, so "today" must be the
+    # UTC date too. date.today() is LOCAL — between local and UTC midnight
+    # (00:00–02:00 CEST) it ran one day ahead and inflated the gap by 1.
+    gap_days = max(0, (datetime.now(UTC).date() - last_d).days)
     return min(max(base, gap_days + 2), _MAX_AGE_RELAX_CAP)
 
 

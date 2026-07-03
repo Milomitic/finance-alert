@@ -7,7 +7,11 @@ from sqlalchemy import select
 from app.core.db import SessionLocal
 from app.models import Stock
 from app.services import scan_cancel, scan_lock
-from app.services.ohlcv_service import fetch_and_upsert, latest_ohlcv_dates_bulk
+from app.services.ohlcv_service import (
+    fetch_and_upsert,
+    latest_ohlcv_dates_bulk,
+    split_quarantined,
+)
 from app.services.scan_runner import bump_heartbeat, create_scan_run, run_tracked_scan
 
 
@@ -66,6 +70,21 @@ def _run_scan_alerts_locked(trigger: str) -> None:
             s for s in all_stocks
             if latest_dates.get(s.id) is None or latest_dates[s.id] < cutoff
         ]
+        # Dead-ticker quarantine — ONLY for stocks with zero stored bars:
+        # delisted/renamed symbols never get data, so they'd re-attempt a 10y
+        # download at EVERY scan forever. N consecutive all-empty fetches →
+        # skip, weekly re-probe. Stale-but-has-data stocks are never touched.
+        _, quarantined = split_quarantined(
+            [s for s in backfill if latest_dates.get(s.id) is None]
+        )
+        if quarantined:
+            qids = {s.id for s in quarantined}
+            backfill = [s for s in backfill if s.id not in qids]
+            logger.info(
+                f"[scan_alerts] {len(quarantined)} quarantined tickers skipped "
+                f"(weekly re-probe): {[s.ticker for s in quarantined[:5]]}"
+            )
+            run.progress_total = max(0, (run.progress_total or 0) - len(quarantined))
         # Sort the incremental population by latest bar date so each chunk's
         # start=min(latest)+1 is tight for ALL its members (stocks of similar
         # staleness land together → minimal over-fetch). The manual path can't

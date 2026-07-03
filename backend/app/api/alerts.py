@@ -167,6 +167,22 @@ def _run_scan_in_background_locked(stock_ids: list[int] | None) -> None:
             # window is tight for every member (a lone 29-day-stale stock no
             # longer drags ~20 one-day-stale stocks into a month-wide window).
             stocks.sort(key=lambda s: latest_dates.get(s.id) or date.min)
+            # Dead-ticker quarantine — applies ONLY to stocks with zero stored
+            # bars (nothing to evaluate anyway): after N consecutive all-empty
+            # fetches they skip the pointless 10y re-attempt (weekly re-probe).
+            # A stock WITH data is never quarantined here, so a few transient
+            # yfinance misses can't knock a live symbol out of the scan.
+            from app.services.ohlcv_service import split_quarantined
+            _, _quarantined = split_quarantined(
+                [s for s in stocks if latest_dates.get(s.id) is None]
+            )
+            if _quarantined:
+                qids = {s.id for s in _quarantined}
+                stocks = [s for s in stocks if s.id not in qids]
+                logger.info(
+                    f"[scan] {len(_quarantined)} quarantined tickers skipped "
+                    f"(weekly re-probe): {[s.ticker for s in _quarantined[:5]]}"
+                )
             # Count how many stocks fall on each side of the staleness cutoff
             # — surface it in the toast so the user knows whether the chunk
             # loop is mostly the cheap incremental path or the slow backfill
