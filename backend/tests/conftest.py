@@ -1,6 +1,7 @@
 """Pytest fixtures: isolated in-memory DB per test + setup ambiente test.
 
-Due cose succedono globalmente prima di ogni test:
+Quattro cose succedono globalmente prima di ogni test (le prime due storiche,
+le ultime due dal fix B4-2 sui test flaky):
 
 1. `_ensure_secret_key` (autouse) garantisce che `settings.secret_key` sia
    non-vuoto. Il `.env` di sviluppo non lo definisce; senza questa fixture
@@ -16,6 +17,25 @@ Due cose succedono globalmente prima di ogni test:
    (non via `Depends(get_db)`). Senza il monkeypatch, `SessionLocal` punta
    al DB di produzione (`./data/app.db`) che nel cwd di test non esiste,
    producendo `OperationalError: no such table: scan_runs`.
+
+3. `_reset_yfinance_breaker` (autouse) azzera lo stato del circuit breaker
+   yfinance PRIMA e DOPO ogni test. Il breaker è process-global: un test che
+   registrava 5 failure (reali o simulate) lo apriva per tutti i test
+   successivi — `fetch_and_upsert` / `_fetch_fresh` vedevano `is_open()` e
+   saltavano il lavoro, facendo fallire test che in isolamento passavano.
+   Questa era la radice dei 6 flaky storici (test_ohlcv_service ×5 +
+   test_nasdaq_analyst_fallback).
+
+4. `_no_real_network` (autouse) rende IMPOSSIBILE l'I/O di rete reale nei
+   test: patcha i punti d'ingresso upstream (yfinance.download / yfinance.
+   Ticker, l'HTTPAdapter di requests, i transport HTTP di httpx, urllib.
+   request.urlopen) con una funzione che alza AssertionError. I test che
+   mockano più in alto (seam di servizio, `yfinance.Ticker` custom, ecc.)
+   non arrivano mai alla guardia; un test che dimentica il mock fallisce
+   subito con un messaggio chiaro invece di dipendere dalla rete (lento,
+   flaky, e avvelenava il breaker condiviso). NB: il TestClient di
+   starlette usa un transport in-process proprio, NON httpx.HTTPTransport,
+   quindi i test API non sono toccati.
 """
 from collections.abc import Iterator
 
@@ -56,6 +76,57 @@ def _clear_process_memos() -> Iterator[None]:
     rule_performance_service._MEMO.clear()
     yield
     rule_performance_service._MEMO.clear()
+
+
+@pytest.fixture(autouse=True)
+def _reset_yfinance_breaker() -> Iterator[None]:
+    """Stato pulito del breaker yfinance per ogni test (vedi docstring modulo,
+    punto 3). `reset()` è l'API dedicata ai test; non tocca il disco (la
+    persistenza è già no-op sotto PYTEST_CURRENT_TEST)."""
+    from app.services import yfinance_health
+
+    yfinance_health.reset()
+    yield
+    yfinance_health.reset()
+
+
+def _blocked_network_call(*_args, **_kwargs):  # noqa: ANN002, ANN003
+    raise AssertionError(
+        "test attempted real network I/O — mock it "
+        "(patch the service seam, e.g. _yf_download / yfinance.Ticker / "
+        "requests.get / urllib.request.urlopen, before it hits the wire)"
+    )
+
+
+@pytest.fixture(autouse=True)
+def _no_real_network(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Guardia anti-rete (vedi docstring modulo, punto 4). Patcha i punti
+    d'ingresso più BASSI possibile così i mock di livello superiore nei test
+    esistenti restano efficaci e non raggiungono mai la guardia:
+
+    - yfinance.download / yfinance.Ticker: yfinance usa il proprio stack HTTP
+      (curl_cffi), quindi va bloccato alla radice, non a livello requests.
+    - requests.adapters.HTTPAdapter.send: il choke-point di TUTTE le chiamate
+      requests.* (i mock di `requests.get` a livello modulo non ci arrivano).
+    - httpx.HTTPTransport / AsyncHTTPTransport: il transport di rete reale di
+      httpx (il TestClient starlette usa un transport in-process separato).
+    - urllib.request.urlopen: usato da nasdaq_analyst_service e
+      premarket_service.
+    """
+    import urllib.request
+
+    import httpx
+    import requests.adapters
+    import yfinance
+
+    monkeypatch.setattr(yfinance, "download", _blocked_network_call)
+    monkeypatch.setattr(yfinance, "Ticker", _blocked_network_call)
+    monkeypatch.setattr(requests.adapters.HTTPAdapter, "send", _blocked_network_call)
+    monkeypatch.setattr(httpx.HTTPTransport, "handle_request", _blocked_network_call)
+    monkeypatch.setattr(
+        httpx.AsyncHTTPTransport, "handle_async_request", _blocked_network_call
+    )
+    monkeypatch.setattr(urllib.request, "urlopen", _blocked_network_call)
 
 
 @pytest.fixture
