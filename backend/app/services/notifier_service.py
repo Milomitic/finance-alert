@@ -44,6 +44,14 @@ def _telegram_enabled() -> bool:
     return bool(settings.telegram_bot_token) and bool(settings.telegram_chat_id)
 
 
+def _scrub_token(text: str) -> str:
+    """Redact the bot token from any text destined for logs. httpx exception
+    messages include the request URL — which embeds the token — so logging a
+    raw `{e}` would leak the secret to disk AND the Salute live-log UI."""
+    token = settings.telegram_bot_token
+    return text.replace(token, "***") if token else text
+
+
 def _fetch_alerts_last_24h(db: Session) -> list[Alert]:
     cutoff = datetime.now(UTC) - timedelta(hours=24)
     return list(
@@ -132,7 +140,7 @@ def send_daily_digest(db: Session) -> DigestResult:
         )
         resp.raise_for_status()
     except httpx.HTTPError as e:
-        logger.error(f"[notifier] Telegram digest send failed: {e}")
+        logger.error(f"[notifier] Telegram digest send failed: {_scrub_token(str(e))}")
         return DigestResult(sent=False, alerts_count=len(alerts), reason="http_error")
 
     logger.info(f"[notifier] digest sent: {len(alerts)} alerts")

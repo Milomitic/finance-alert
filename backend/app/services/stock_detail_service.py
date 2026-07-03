@@ -266,14 +266,18 @@ def get_detail(db: Session, ticker: str, range_key: str = "1d") -> StockDetail |
     )
     # 52w KPIs always need the daily series — even if the user is
     # viewing a 30m chart we still want "high_52w" reported. Pull
-    # daily bars separately for that.
+    # daily bars separately for that. The KPIs only read the last
+    # ~252 bars, so DESC+LIMIT instead of the full 10y history the
+    # old query materialized as ORM entities on EVERY detail request.
     daily_bars = list(
         db.execute(
             select(OhlcvDaily)
             .where(OhlcvDaily.stock_id == stock.id)
-            .order_by(OhlcvDaily.date.asc())
+            .order_by(OhlcvDaily.date.desc())
+            .limit(260)
         ).scalars()
     )
+    daily_bars.reverse()  # back to ascending date order
     # Convert Bar dataclasses to OhlcvDaily-compatible shape for the
     # ohlcv_view payload. The API serializer just reads .date/.open/etc
     # on each item, so a duck-typed list works.

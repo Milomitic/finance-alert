@@ -5,7 +5,8 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from loguru import logger
@@ -28,8 +29,10 @@ from app.api import scan_log as scan_log_router
 from app.api import scores as scores_router
 from app.api import sectors as sectors_router
 from app.api import stocks as stocks_router
+from app.api.deps import get_current_user
 from app.core.errors import UpstreamError
 from app.core.logging import configure_logging, hydrate_log_buffer_from_disk
+from app.models import User
 from app.scheduler import get_scheduler, start_scheduler, stop_scheduler
 
 configure_logging()
@@ -233,6 +236,11 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(title="Finance Alert", version="0.1.0", lifespan=lifespan)
 
+# Compress every response over 1KB: :8000 serves both the SPA bundle (~1MB of
+# JS) and fat JSON payloads (market-summary ~264KB, stock detail ~1.4MB) that
+# previously travelled uncompressed. gzip cuts these 3-10x for ~ms of CPU.
+app.add_middleware(GZipMiddleware, minimum_size=1024)
+
 
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
@@ -272,6 +280,7 @@ def health() -> dict[str, object]:
 def warmup_fundamentals(
     limit: int | None = None,
     skip_cached: bool = True,
+    _user: User = Depends(get_current_user),
 ) -> dict[str, object]:
     """Iterate the catalog (largest market_cap first) and prefetch fundamentals
     in-process. Honors the yfinance circuit breaker — when it opens we abort
@@ -358,6 +367,7 @@ def warmup_fundamentals(
 def redownload_ohlcv(
     limit: int | None = None,
     period: str = "10y",
+    _user: User = Depends(get_current_user),
 ) -> dict[str, object]:
     """One-shot deep-backfill: wipe + re-fetch OHLCV for every stock at the
     requested yfinance period.
@@ -462,7 +472,7 @@ def redownload_ohlcv(
 
 
 @app.get("/api/health/data-sources")
-def data_sources_health() -> dict[str, object]:
+def data_sources_health(_user: User = Depends(get_current_user)) -> dict[str, object]:
     """Per-source per-operation success/failure counters + breaker state +
     gap-analysis suggestions. Useful to spot when a source needs a fallback."""
     from app.services import data_source_metrics, yfinance_health

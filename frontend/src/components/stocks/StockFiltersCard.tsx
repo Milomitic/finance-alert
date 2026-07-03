@@ -1,4 +1,4 @@
-import { ChevronDown, Filter, X } from "lucide-react";
+import { Bookmark, ChevronDown, Filter, X } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useState } from "react";
 
 import type { FilterOptions } from "@/api/types";
@@ -61,6 +61,135 @@ export interface FiltersState {
   volSpike: boolean;
   /** Minimum today's volume (share count), or null. */
   volumeMin: number | null;
+}
+
+/** The all-clear filter state. Single source of truth for "no filters":
+ *  used by the Reset button AND as the base when applying a saved preset,
+ *  so presets saved before new filter fields were added stay valid. */
+export const EMPTY_FILTERS: FiltersState = {
+  indexCodes: [], sectors: [], industries: [], exchanges: [], countries: [],
+  riskTiers: [], minScore: null, scoreMax: null,
+  profitabilityMin: null, sustainabilityMin: null, growthMin: null,
+  valueMin: null, sentimentMin: null,
+  techMin: null, postures: [],
+  marketCapMin: null, marketCapMax: null,
+  rsiMin: null, rsiMax: null,
+  aboveEma50: false, aboveEma200: false, near52wHigh: false, near52wLow: false,
+  hasSignals: false,
+  priceMin: null, priceMax: null, changeMin: null, changeMax: null,
+  volSpike: false, volumeMin: null,
+};
+
+const PRESETS_KEY = "screenerFilterPresets";
+
+function loadPresets(): Record<string, FiltersState> {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(PRESETS_KEY) ?? "{}");
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+/** Saved filter presets (localStorage): save the current FiltersState under a
+ *  name, re-apply with one click, delete. Applying merges the preset over
+ *  EMPTY_FILTERS so fields added after the preset was saved get sane defaults. */
+function PresetsMenu({
+  state,
+  onChange,
+}: {
+  state: FiltersState;
+  onChange: (next: FiltersState) => void;
+}) {
+  const [presets, setPresets] = useState<Record<string, FiltersState>>(loadPresets);
+  const [name, setName] = useState("");
+  const persist = (next: Record<string, FiltersState>) => {
+    setPresets(next);
+    try {
+      localStorage.setItem(PRESETS_KEY, JSON.stringify(next));
+    } catch {
+      /* storage full/unavailable — presets stay in-memory for the session */
+    }
+  };
+  const save = () => {
+    const n = name.trim();
+    if (!n) return;
+    persist({ ...presets, [n]: state });
+    setName("");
+  };
+  const names = Object.keys(presets).sort((a, b) => a.localeCompare(b));
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5">
+          <Bookmark className="h-3.5 w-3.5" />
+          Preset
+          {names.length > 0 && (
+            <Badge variant="secondary" className="h-4 px-1 text-[10px]">
+              {names.length}
+            </Badge>
+          )}
+          <ChevronDown className="h-3 w-3 opacity-60" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-72 p-0">
+        <div className="px-3 py-2 border-b">
+          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+            Preset filtri
+          </span>
+        </div>
+        <div className="max-h-60 overflow-y-auto p-1">
+          {names.length === 0 ? (
+            <div className="text-xs text-muted-foreground p-3">
+              Nessun preset salvato. Imposta i filtri e salvali qui sotto.
+            </div>
+          ) : (
+            <ul>
+              {names.map((n) => (
+                <li key={n} className="flex items-center gap-1 rounded hover:bg-accent">
+                  <button
+                    type="button"
+                    onClick={() => onChange({ ...EMPTY_FILTERS, ...presets[n] })}
+                    className="flex-1 text-left px-2 py-1.5 text-sm truncate"
+                    title={`Applica il preset "${n}"`}
+                  >
+                    {n}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const next = { ...presets };
+                      delete next[n];
+                      persist(next);
+                    }}
+                    className="p-1 mr-1 rounded hover:bg-background/60 text-muted-foreground"
+                    aria-label={`Elimina preset ${n}`}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+        <div className="flex items-center gap-1.5 p-2 border-t">
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") save();
+            }}
+            placeholder="Nome preset…"
+            className="flex-1 h-8 px-2 text-sm rounded border border-input bg-transparent focus:outline-none"
+          />
+          <Button size="sm" className="h-8 text-xs" onClick={save} disabled={!name.trim()}>
+            Salva
+          </Button>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
 }
 
 interface Props {
@@ -419,20 +548,7 @@ export function StockFiltersCard({ state, onChange, filters }: Props) {
 
   const totalActive = mercatoActive + fondamentaliActive + tecniciActive + prezzoVolumeActive;
 
-  const clearAll = () =>
-    onChange({
-      indexCodes: [], sectors: [], industries: [], exchanges: [], countries: [],
-      riskTiers: [], minScore: null, scoreMax: null,
-      profitabilityMin: null, sustainabilityMin: null, growthMin: null,
-      valueMin: null, sentimentMin: null,
-      techMin: null, postures: [],
-      marketCapMin: null, marketCapMax: null,
-      rsiMin: null, rsiMax: null,
-      aboveEma50: false, aboveEma200: false, near52wHigh: false, near52wLow: false,
-      hasSignals: false,
-      priceMin: null, priceMax: null, changeMin: null, changeMax: null,
-      volSpike: false, volumeMin: null,
-    });
+  const clearAll = () => onChange({ ...EMPTY_FILTERS });
 
   const removeChip = (kind: keyof FiltersState, value: string) => {
     if (kind === "riskTiers") {
@@ -473,6 +589,7 @@ export function StockFiltersCard({ state, onChange, filters }: Props) {
               </Badge>
             )}
           </div>
+          <PresetsMenu state={state} onChange={onChange} />
           {totalActive > 0 && (
             <Button
               variant="ghost"

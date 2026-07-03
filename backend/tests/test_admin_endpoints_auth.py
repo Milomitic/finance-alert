@@ -1,0 +1,35 @@
+"""The app-level admin/diagnostic endpoints must require authentication.
+
+They are defined on `app` directly (not on an APIRouter) and used to bypass the
+cookie check entirely — including POST /api/admin/redownload-ohlcv, which WIPES
+and refetches OHLCV history. /api/health stays public by design (liveness
+probe, exposes nothing sensitive).
+"""
+from fastapi.testclient import TestClient
+
+from app.main import app
+
+
+def _unauthenticated_client(db) -> TestClient:
+    # No dependency overrides: the real cookie check fires.
+    return TestClient(app)
+
+
+def test_admin_redownload_requires_auth(db):
+    r = _unauthenticated_client(db).post("/api/admin/redownload-ohlcv")
+    assert r.status_code == 401
+
+
+def test_admin_warmup_requires_auth(db):
+    r = _unauthenticated_client(db).post("/api/admin/warmup-fundamentals")
+    assert r.status_code == 401
+
+
+def test_data_sources_health_requires_auth(db):
+    r = _unauthenticated_client(db).get("/api/health/data-sources")
+    assert r.status_code == 401
+
+
+def test_health_stays_public(db):
+    r = _unauthenticated_client(db).get("/api/health")
+    assert r.status_code == 200

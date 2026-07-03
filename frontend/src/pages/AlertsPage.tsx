@@ -1,6 +1,7 @@
+import { Download } from "lucide-react";
 import { useState } from "react";
 
-import { type AlertListParams } from "@/api/alerts";
+import { alerts as alertsApi, type AlertListParams } from "@/api/alerts";
 import type { Alert } from "@/api/types";
 import { AlertDetailDialog } from "@/components/AlertDetailDialog";
 import { AlertFilters } from "@/components/AlertFilters";
@@ -78,11 +79,27 @@ export default function AlertsPage() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h2 className="text-2xl font-semibold">Segnali</h2>
-        <p className="text-sm text-muted-foreground">
-          {total} segnali totali con i filtri attuali
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-2xl font-semibold">Segnali</h2>
+          <p className="text-sm text-muted-foreground">
+            {total} segnali totali con i filtri attuali
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            // Same-origin GET with cookie auth: navigating to the URL triggers
+            // the CSV download. Export respects the CURRENT filters (without
+            // pagination — the endpoint streams every matching row).
+            const { limit: _l, offset: _o, ...exportParams } = filters;
+            window.location.assign(alertsApi.exportCsvUrl(exportParams));
+          }}
+          title="Esporta i segnali filtrati in CSV"
+        >
+          <Download className="h-4 w-4 mr-1.5" /> Esporta CSV
+        </Button>
       </div>
 
       <AlertFilters value={filters} onChange={(v) => { setPage(0); setFilters(v); }} />
