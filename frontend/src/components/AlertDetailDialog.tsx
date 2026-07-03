@@ -1,12 +1,14 @@
 import {
   CalendarClock,
   CalendarRange,
+  Check,
   ChevronDown,
   Clock,
   Code2,
   DollarSign,
   Pencil,
   ShieldAlert,
+  X,
 } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router-dom";
@@ -70,6 +72,33 @@ function formatRelative(iso: string): string {
   const diffMo = diffD / 30;
   if (diffMo < 12) return `${Math.round(diffMo)} mesi fa`;
   return `${Math.round(diffMo / 12)} anni fa`;
+}
+
+/** Fallback horizon in trading days per snapshot.horizon bucket — mirrors the
+ *  backend's `_H_BY_HORIZON` (signal_drift_service). Used only when the alert
+ *  hasn't matured yet (no outcome_horizon_days); final fallback is 14. */
+const HORIZON_FALLBACK_DAYS: Record<string, number> = { short: 5, medium: 21, long: 63 };
+
+/** Days until the next earnings release IF it falls inside the signal's
+ *  horizon window, else null (also null for past dates from a stale cache). */
+function earningsProximityDays(a: {
+  next_earnings_date?: string | null;
+  outcome_horizon_days?: number | null;
+  snapshot: Record<string, unknown>;
+}): number | null {
+  if (!a.next_earnings_date) return null;
+  const ts = Date.parse(a.next_earnings_date.slice(0, 10));
+  if (Number.isNaN(ts)) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const days = Math.round((ts - today.getTime()) / 86_400_000);
+  if (days < 0) return null; // già passati (cache non aggiornata) → niente badge
+  const hzKey = (a.snapshot as { horizon?: unknown }).horizon;
+  const horizon =
+    a.outcome_horizon_days ??
+    (typeof hzKey === "string" ? HORIZON_FALLBACK_DAYS[hzKey] : undefined) ??
+    14;
+  return days <= horizon ? days : null;
 }
 
 function SnapshotRow({
@@ -161,6 +190,21 @@ export function AlertDetailDialog({ alert, onClose }: Props) {
                   Archiviato
                 </span>
               )}
+              {(() => {
+                // Earnings-proximity risk flag: la trimestrale cade dentro
+                // l'orizzonte del segnale → volatilità evento in arrivo.
+                const gg = earningsProximityDays(alert);
+                if (gg == null) return null;
+                return (
+                  <span
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60"
+                    title={`Trimestrale il ${alert.next_earnings_date}: cade dentro l'orizzonte del segnale — attesa volatilità da evento.`}
+                  >
+                    <CalendarClock className="h-3 w-3" />
+                    {gg === 0 ? "Earnings oggi" : `Earnings tra ${gg} gg`}
+                  </span>
+                );
+              })()}
             </div>
             <div className="text-right shrink-0 pr-6">
               <div
@@ -296,6 +340,86 @@ export function AlertDetailDialog({ alert, onClose }: Props) {
             )}
           </div>
         </div>
+
+        {/* Esito realizzato — dal warehouse signal_outcomes. Presente solo per
+            segnali con signal_date: maturato → valori reali; altrimenti hint
+            "in maturazione". I legacy senza signal_date non maturano mai →
+            nessuna sezione. */}
+        {isSignalKind(alert.rule_kind) && alert.signal_date && (
+          <div className="px-5 pt-4">
+            <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">
+              Esito realizzato
+            </div>
+            {alert.outcome_hit != null ? (
+              (() => {
+                const hit = alert.outcome_hit;
+                const fwd = alert.outcome_fwd_return;
+                const mkt = alert.outcome_mkt_excess;
+                const hz = alert.outcome_horizon_days;
+                const fmtPct = (v: number) => `${v >= 0 ? "+" : ""}${(v * 100).toFixed(2)}%`;
+                return (
+                  <div
+                    className={cn(
+                      "rounded-lg border p-3 flex items-center gap-5 flex-wrap",
+                      hit
+                        ? "border-emerald-300/70 bg-emerald-50/60 dark:bg-emerald-950/20"
+                        : "border-rose-300/70 bg-rose-50/60 dark:bg-rose-950/20",
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold",
+                        hit
+                          ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300"
+                          : "bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300",
+                      )}
+                    >
+                      {hit ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
+                      {hit ? "Direzione azzeccata" : "Direzione mancata"}
+                    </span>
+                    <div>
+                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+                        Ritorno a {hz ?? "?"} gg
+                      </div>
+                      <div
+                        className={cn(
+                          "font-bold tabular-nums",
+                          fwd != null && fwd >= 0
+                            ? "text-emerald-600 dark:text-emerald-400"
+                            : "text-rose-600 dark:text-rose-400",
+                        )}
+                      >
+                        {fwd != null ? fmtPct(fwd) : "n/d"}
+                      </div>
+                    </div>
+                    {mkt != null && (
+                      <div title="Excess market-neutral: quanto il segnale ha battuto la media dell'universo nella sua direzione, sullo stesso orizzonte.">
+                        <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+                          Excess vs mercato
+                        </div>
+                        <div
+                          className={cn(
+                            "font-bold tabular-nums",
+                            mkt >= 0
+                              ? "text-emerald-600 dark:text-emerald-400"
+                              : "text-rose-600 dark:text-rose-400",
+                          )}
+                        >
+                          {fmtPct(mkt)}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()
+            ) : (
+              <div className="rounded-lg border border-dashed border-border/60 p-3 text-xs text-muted-foreground italic">
+                Esito in corso di maturazione: l'orizzonte del segnale non è ancora
+                trascorso nei dati di mercato.
+              </div>
+            )}
+          </div>
+        )}
 
         {isSignalKind(alert.rule_kind) && (
           <div className="px-5 pt-4">

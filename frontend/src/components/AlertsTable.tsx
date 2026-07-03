@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, ArrowUpDown, Clock } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, Check, Clock, X } from "lucide-react";
 import { type MouseEvent, useState } from "react";
 import { Link } from "react-router-dom";
 
@@ -22,7 +22,7 @@ import {
   formatShortDate,
   isDelayedDetection,
 } from "@/lib/alertDates";
-import { PROBABILITA_TOOLTIP, snapshotForza, snapshotProbabilita } from "@/lib/alertMeta";
+import { PROBABILITA_TOOLTIP, isSignalKind, snapshotForza, snapshotProbabilita } from "@/lib/alertMeta";
 import { cn } from "@/lib/utils";
 
 /** Toggleable columns for the non-embedded alerts table.
@@ -39,6 +39,7 @@ const ALERTS_COLS = [
   { id: "orizzonte",   label: "Orizzonte" },
   { id: "forza",       label: "Forza" },
   { id: "probabilita", label: "Prob." },
+  { id: "esito",       label: "Esito" },
 ] as const;
 
 /** Horizon label + tone classes (plain string-literal Record so Tailwind's
@@ -172,11 +173,13 @@ export function AlertsTable({
   const showOrizzonte = embedded || isVisible("orizzonte");
   const showForza = embedded || isVisible("forza");
   const showProbabilita = embedded || isVisible("probabilita");
+  const showEsito = embedded || isVisible("esito");
 
   // colSpan for the empty-state row must match the visible column count.
   const colSpan = [
     showCheckbox, showDataSegnale, showRilevato, showTitolo, showRegola,
     showCatena, showNatura, showTono, showOrizzonte, showForza, showProbabilita,
+    showEsito,
   ].filter(Boolean).length;
 
   // Per user spec: header cells at 1rem (text-base), body rows at
@@ -339,6 +342,14 @@ export function AlertsTable({
                 Prob.
               </TableHead>
             )
+          )}
+          {showEsito && (
+            <TableHead
+              className="text-base"
+              title="Esito realizzato del segnale all'orizzonte di riferimento: verde = direzione azzeccata, rosso = mancata, … = in maturazione"
+            >
+              Esito
+            </TableHead>
           )}
         </TableRow>
       </TableHeader>
@@ -541,6 +552,50 @@ export function AlertsTable({
                       )}
                     </div>
                   );
+                })()}
+              </TableCell>
+            )}
+            {/* Esito — realized outcome from the signal_outcomes warehouse.
+                Green check chip "+X.X%" on hit, red x chip on miss, muted "…"
+                while the horizon is still maturing, blank for legacy rows
+                without a signal_date (they never mature). */}
+            {showEsito && (
+              <TableCell>
+                {(() => {
+                  const hit = a.outcome_hit;
+                  if (hit != null) {
+                    const fwd = a.outcome_fwd_return;
+                    const pct =
+                      fwd != null ? `${fwd >= 0 ? "+" : ""}${(fwd * 100).toFixed(1)}%` : "";
+                    const hz = a.outcome_horizon_days;
+                    const title = `Esito a ${hz ?? "?"}gg: ${hit ? "direzione azzeccata" : "direzione mancata"}${pct ? ` (${pct})` : ""}`;
+                    return (
+                      <span
+                        className={cn(
+                          "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-semibold tabular-nums",
+                          hit
+                            ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300"
+                            : "bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300",
+                        )}
+                        title={title}
+                      >
+                        {hit ? <Check className="h-3 w-3 shrink-0" /> : <X className="h-3 w-3 shrink-0" />}
+                        {pct}
+                      </span>
+                    );
+                  }
+                  const pending = isSignalKind(a.rule_kind) && !!a.signal_date;
+                  if (pending) {
+                    return (
+                      <span
+                        className="text-muted-foreground"
+                        title="Esito in maturazione: l'orizzonte del segnale non è ancora trascorso"
+                      >
+                        …
+                      </span>
+                    );
+                  }
+                  return null;
                 })()}
               </TableCell>
             )}
