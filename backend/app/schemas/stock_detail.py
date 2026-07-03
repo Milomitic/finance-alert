@@ -2,7 +2,7 @@
 from datetime import date, datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_serializer
 
 from app.schemas.alert import AlertOut
 from app.schemas.stock import StockOut
@@ -21,12 +21,26 @@ class OhlcvBarOut(BaseModel):
     close: float
     volume: int
 
+    # Prices are meaningful to ~4 decimals (sub-cent / pence). Trimming the
+    # float-repr tail here shrinks the ~2600-bar daily payload materially with
+    # no visible change on the chart (compounds with the gzip middleware).
+    @field_serializer("open", "high", "low", "close")
+    def _round_price(self, v: float) -> float:
+        return round(v, 4)
+
 
 class IndicatorPointOut(BaseModel):
     # Same as OhlcvBarOut.date — intraday timestamps preserve hour:min so
     # indicator overlays align with the bars on the chart.
     date: date | datetime
     value: float | None
+
+    # 10 indicator series × ~2600 bars dominate the detail payload; most raw
+    # values are long floats (e.g. MACD 0.12345678901). 4 decimals is beyond
+    # chart precision and cuts ~30% of the bytes.
+    @field_serializer("value")
+    def _round_value(self, v: float | None) -> float | None:
+        return round(v, 4) if v is not None else None
 
 
 class LiveQuoteOut(BaseModel):

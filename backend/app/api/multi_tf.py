@@ -16,6 +16,7 @@ Internally both call `services.timeframe_service.compute_timeframe_kpis`
 with the unified `fetch_bars()` helper that handles the source
 selection automatically.
 """
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -27,6 +28,7 @@ from app.api.market import LIVE_ASSET_DEFINITIONS
 from app.core.visibility import visible_country_clause
 from app.models import Stock, User
 from app.services.timeframe_service import (
+    _INTRADAY,
     VALID_TIMEFRAMES,
     compute_timeframe_kpis,
     fetch_bars,
@@ -62,6 +64,42 @@ class TimeframeKpisOut(BaseModel):
 class MultiTfKpisOut(BaseModel):
     ticker: str
     items: list[TimeframeKpisOut]
+
+
+def _compute_multi_tf(
+    ticker: str, *, db: Session | None = None, stock: Stock | None = None
+) -> list[TimeframeKpisOut]:
+    """KPIs across every timeframe.
+
+    The timeframes were fetched in a serial loop, so a stock detail page paid
+    three back-to-back yfinance round-trips (5m/30m/1h) plus the DB reads. Those
+    intraday fetches are independent network calls → run them concurrently so
+    their latencies overlap instead of summing. DB-backed timeframes stay on the
+    calling thread because the SQLAlchemy Session is not thread-safe; a market
+    symbol (no `db`) hits yfinance for everything and parallelizes all of them."""
+    if db is not None:
+        yf_tfs = [tf for tf in VALID_TIMEFRAMES if tf in _INTRADAY]
+        db_tfs = [tf for tf in VALID_TIMEFRAMES if tf not in _INTRADAY]
+    else:
+        yf_tfs = list(VALID_TIMEFRAMES)
+        db_tfs = []
+
+    results: dict[str, Any] = {}
+    for tf in db_tfs:
+        results[tf] = compute_timeframe_kpis(
+            fetch_bars(ticker=ticker, timeframe=tf, db=db, stock=stock), tf
+        )
+    if yf_tfs:
+        # No db/stock passed → the workers never touch the Session.
+        with ThreadPoolExecutor(max_workers=len(yf_tfs)) as ex:
+            futures = {
+                ex.submit(fetch_bars, ticker=ticker, timeframe=tf): tf
+                for tf in yf_tfs
+            }
+            for fut, tf in futures.items():
+                results[tf] = compute_timeframe_kpis(fut.result(), tf)
+
+    return [_to_out(results[tf]) for tf in VALID_TIMEFRAMES]
 
 
 def _to_out(kpis: Any) -> TimeframeKpisOut:
@@ -116,11 +154,7 @@ def get_stock_multi_tf_kpis(
     stock_orm = db.execute(
         sql_select(Stock).where(Stock.id == stock.id)
     ).scalar_one()
-    items: list[TimeframeKpisOut] = []
-    for tf in VALID_TIMEFRAMES:
-        bars = fetch_bars(ticker=ticker, timeframe=tf, db=db, stock=stock_orm)
-        kpis = compute_timeframe_kpis(bars, tf)
-        items.append(_to_out(kpis))
+    items = _compute_multi_tf(ticker, db=db, stock=stock_orm)
     return MultiTfKpisOut(ticker=ticker, items=items)
 
 
@@ -138,9 +172,5 @@ def get_market_multi_tf_kpis(
     valid_symbols = {d[0] for d in LIVE_ASSET_DEFINITIONS}
     if symbol not in valid_symbols:
         raise HTTPException(status_code=404, detail="Unknown market symbol")
-    items: list[TimeframeKpisOut] = []
-    for tf in VALID_TIMEFRAMES:
-        bars = fetch_bars(ticker=symbol, timeframe=tf)
-        kpis = compute_timeframe_kpis(bars, tf)
-        items.append(_to_out(kpis))
+    items = _compute_multi_tf(symbol)  # no db → all timeframes via yfinance
     return MultiTfKpisOut(ticker=symbol, items=items)
