@@ -1,12 +1,12 @@
 """APScheduler job: nightly alert scan."""
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 from loguru import logger
 from sqlalchemy import select
 
 from app.core.db import SessionLocal
 from app.models import Stock
-from app.services import scan_lock
+from app.services import scan_cancel, scan_lock
 from app.services.ohlcv_service import fetch_and_upsert, latest_ohlcv_dates_bulk
 from app.services.scan_runner import bump_heartbeat, create_scan_run, run_tracked_scan
 
@@ -80,18 +80,35 @@ def _run_scan_alerts_locked(trigger: str) -> None:
         chunk_size = 100
         today = date.today()
         done = 0
+        fetch_failed = 0
         for stocks_list, phase, use_start in (
             (incremental, "fetching:incremental", True),
             (backfill, "fetching:backfill", False),
         ):
             for i in range(0, len(stocks_list), chunk_size):
+                # Cooperative cancel — the Stop button must work during the
+                # multi-minute fetch phase too, not only once evaluate starts
+                # (the manual path already honors this at chunk boundaries).
+                if scan_cancel.is_cancel_requested(run.id):
+                    run.status = "failed"
+                    run.phase = None
+                    run.current_target = None
+                    run.error_message = "Cancellato dall'utente"
+                    run.completed_at = datetime.now(UTC)
+                    db.commit()
+                    scan_cancel.clear(run.id)
+                    return
                 chunk = stocks_list[i : i + chunk_size]
-                # SMART-SKIP: if every stock in the chunk already has today's
-                # bar, start would be in the future — yfinance would return an
-                # empty frame. Advance progress without the network call.
+                # SMART-SKIP: every stock in the chunk already has TODAY's
+                # (settled) bar — nothing new and nothing to revalidate.
+                # Advance progress without the network call.
                 if use_start:
-                    start = min(latest_dates[s.id] for s in chunk) + timedelta(days=1)
-                    if start > today:
+                    # OVERLAP BY ONE SESSION: start at min(latest), not +1, so
+                    # each stock's newest stored bar is re-requested and
+                    # corrected by the idempotent upsert (self-heals a wrongly
+                    # persisted close; keeps weekend windows non-empty).
+                    start = min(latest_dates[s.id] for s in chunk)
+                    if start >= today:
                         done += len(chunk)
                         run.progress_done = done
                         bump_heartbeat(db, run)
@@ -104,15 +121,16 @@ def _run_scan_alerts_locked(trigger: str) -> None:
                 bump_heartbeat(db, run)
                 try:
                     if use_start:
-                        # SMART-INCREMENTAL: only the bars after the oldest
-                        # already-stored date in the chunk; the upsert absorbs
-                        # the few duplicate bars of fresher members.
-                        fetch_and_upsert(db, chunk, start=start)
+                        # SMART-INCREMENTAL: only the bars from the oldest
+                        # already-stored date in the chunk onward; the upsert
+                        # absorbs the few duplicate bars of fresher members.
+                        res = fetch_and_upsert(db, chunk, start=start)
                     else:
                         # Deep backfill ('10y' ≈ 2520 trading days): 5Y chart
                         # range + long-window indicators (SMA200, MACD 26/52/18)
                         # out of the box. Only stocks that are empty/stale.
-                        fetch_and_upsert(db, chunk, period="10y")
+                        res = fetch_and_upsert(db, chunk, period="10y")
+                    fetch_failed += res.stocks_failed
                     db.commit()
                 except Exception as e:  # noqa: BLE001
                     logger.exception(f"[scan_alerts] chunk fetch crashed: {e}")
@@ -121,6 +139,16 @@ def _run_scan_alerts_locked(trigger: str) -> None:
                 done += len(chunk)
                 run.progress_done = done
                 bump_heartbeat(db, run)
+
+        # Surface batch-level fetch failures (e.g. breaker opened mid-loop and
+        # every remaining chunk silently no-opped) instead of discarding the
+        # FetchResult — the scan continues on stored bars, but the operator
+        # should see WHY today's data may be stale.
+        if fetch_failed:
+            logger.warning(
+                f"[scan_alerts] fetch phase: {fetch_failed} stock-fetches failed "
+                "(breaker open or upstream errors) — evaluating on stored bars"
+            )
 
         # Step 2: evaluate rules + fire alerts (reuses the same ScanRun row)
         run_tracked_scan(db, trigger=trigger, existing_run=run)

@@ -160,6 +160,13 @@ def _run_scan_in_background_locked(stock_ids: list[int] | None) -> None:
             # 1132 stocks × 12 chunks that was ~13k indexed queries; now it's
             # a single GROUP BY scan + in-memory dict reads.
             latest_dates = latest_ohlcv_dates_bulk(db, [s.id for s in stocks])
+            # Sort by staleness (no-data first, then oldest→newest latest bar)
+            # BEFORE chunking: chunks become homogeneous — all-backfill or
+            # all-incremental — so mixed chunks stop paying a second HTTP
+            # round-trip, and each incremental chunk's start=min(latest)
+            # window is tight for every member (a lone 29-day-stale stock no
+            # longer drags ~20 one-day-stale stocks into a month-wide window).
+            stocks.sort(key=lambda s: latest_dates.get(s.id) or date.min)
             # Count how many stocks fall on each side of the staleness cutoff
             # — surface it in the toast so the user knows whether the chunk
             # loop is mostly the cheap incremental path or the slow backfill
@@ -263,16 +270,20 @@ def _run_scan_in_background_locked(stock_ids: list[int] | None) -> None:
                 # transparently) — accepting that minor over-fetch is
                 # the price of keeping the batch as a single HTTP call.
                 #
-                # Edge case — `start > today`: every stock in the
-                # sub-batch already has today's bar (or future). yfinance
-                # would return an empty frame, which is wasted work. Guard
-                # by skipping the call entirely in that case.
+                # OVERLAP BY ONE SESSION — `start = min(latest)`, NOT +1: each
+                # stock's newest stored bar is re-requested and corrected by
+                # the idempotent upsert. Self-heals a wrongly-persisted last
+                # bar (e.g. an in-flight close that slipped past the
+                # market-open guard) and keeps weekend windows non-empty
+                # (Friday's bar is included → no batch of false "no data"
+                # failures on Sat/Sun scans). Cost: one duplicate bar per
+                # stock, inside the same batched HTTP call.
                 cursor = i
                 inc_start: date | None = None
                 if incremental_chunk:
                     inc_start = min(
                         latest_dates[s.id] for s in incremental_chunk
-                    ) + timedelta(days=1)
+                    )
 
                 for sub_chunk, sec_per_stock, phase_label, sub_start, sub_period in (
                     (incremental_chunk, INCREMENTAL_SEC_PER_STOCK, "fetching:incremental", inc_start, None),
@@ -280,11 +291,11 @@ def _run_scan_in_background_locked(stock_ids: list[int] | None) -> None:
                 ):
                     if not sub_chunk:
                         continue
-                    # Smart skip — if the sub-batch's start date is in
-                    # the future, every stock is already up to date.
-                    # Advance the cursor + heartbeat without calling
-                    # yfinance, so the bar still progresses honestly.
-                    if sub_start is not None and sub_start > date.today():
+                    # Smart skip — every stock in the sub-batch already has
+                    # TODAY's (settled) bar: nothing new AND nothing to
+                    # revalidate. Advance the cursor + heartbeat without
+                    # calling yfinance, so the bar still progresses honestly.
+                    if sub_start is not None and sub_start >= date.today():
                         end_done = cursor + len(sub_chunk)
                         run.progress_done = end_done
                         bump_heartbeat(db, run)
