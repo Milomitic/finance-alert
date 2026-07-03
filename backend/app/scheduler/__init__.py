@@ -8,6 +8,7 @@ from loguru import logger
 
 from app.core.config import settings
 from app.scheduler.jobs.cleanup_orphan_scans_job import run_cleanup_orphan_scans
+from app.scheduler.jobs.db_backup import run_db_backup
 from app.scheduler.jobs.dedupe_stocks_job import run_dedupe_stocks
 from app.scheduler.jobs.health_probes_job import (
     run_health_probes_fast,
@@ -45,6 +46,18 @@ def get_scheduler() -> BackgroundScheduler:
             run_dedupe_stocks,
             trigger=CronTrigger(day_of_week="sat", hour=3, minute=30),
             id="dedupe_stocks",
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+        )
+        # Nightly DB snapshot (audit B4-1) — 03:30, after the 23:30 scan and
+        # the weekend 03:00 catalog refresh have finished. VACUUM INTO takes a
+        # consistent read-snapshot under WAL (writers not blocked); the job
+        # itself skips with a WARNING if a scan is running.
+        _scheduler.add_job(
+            run_db_backup,
+            trigger=CronTrigger(day_of_week="*", hour=3, minute=30),
+            id="db_backup",
             replace_existing=True,
             max_instances=1,
             coalesce=True,
