@@ -43,6 +43,23 @@ class AlertOut(BaseModel):
     snapshot: dict[str, Any]
     read_at: datetime | None
     archived_at: datetime | None
+    # ── Realised outcome (signal_outcomes warehouse, LEFT JOIN on alert_id) ──
+    # All four are None while the signal's forward horizon hasn't elapsed yet
+    # (the UI shows "in corso" for a signal alert with signal_date + no
+    # outcome) and for legacy/price alerts that never mature.
+    outcome_hit: bool | None = None
+    # Forward return over `outcome_horizon_days` trading days, fraction
+    # (0.0234 = +2.34%). Rounded to 4 decimals by the service.
+    outcome_fwd_return: float | None = None
+    outcome_horizon_days: int | None = None
+    # Tone-signed market-neutral excess vs the universe mean over the same
+    # horizon. None when no universe benchmark was available at maturation.
+    outcome_mkt_excess: float | None = None
+    # Next earnings date from the fundamentals L2/L1 cache (cache-only read —
+    # never a network call on the list path). None when the cache is cold.
+    # The UI shows an amber "Earnings tra N gg" risk badge when this falls
+    # inside the signal's horizon.
+    next_earnings_date: date | None = None
 
     @field_validator("snapshot", mode="before")
     @classmethod

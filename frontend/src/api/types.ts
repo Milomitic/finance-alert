@@ -115,6 +115,23 @@ export interface Alert {
   snapshot: Record<string, unknown>;
   read_at: string | null;
   archived_at: string | null;
+  /** Realized outcome from the signal_outcomes warehouse (LEFT JOIN on
+   *  alert_id). All four are null while the signal's forward horizon hasn't
+   *  elapsed yet — the UI shows "in maturazione" for a signal alert that has
+   *  a signal_date but no outcome — and for legacy/price alerts. */
+  outcome_hit?: boolean | null;
+  /** Forward return over `outcome_horizon_days` trading days, as a FRACTION
+   *  (0.0235 = +2.35%). Rounded to 4 decimals by the backend. */
+  outcome_fwd_return?: number | null;
+  outcome_horizon_days?: number | null;
+  /** Tone-signed market-neutral excess vs the universe mean over the same
+   *  horizon. Null when no universe benchmark was available at maturation. */
+  outcome_mkt_excess?: number | null;
+  /** Next earnings date (ISO YYYY-MM-DD) from the fundamentals cache —
+   *  cache-only read on the backend, null when the cache is cold. Drives the
+   *  amber "Earnings tra N gg" risk badge when it falls inside the signal's
+   *  horizon. */
+  next_earnings_date?: string | null;
 }
 
 export interface SignalChainStep {

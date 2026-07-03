@@ -6,7 +6,7 @@ import sqlalchemy
 from sqlalchemy import Float, asc, desc, func, or_, select, update
 from sqlalchemy.orm import Session
 
-from app.models import Alert, Stock
+from app.models import Alert, SignalOutcome, Stock
 
 # Columns that the caller may request sorting on.
 # confidence/tone live inside Alert.snapshot (SQLite JSON text column) and
@@ -126,6 +126,31 @@ def _apply_filters(
     return stmt
 
 
+def _next_earnings_dates_cached(tickers: set[str]) -> dict[str, date]:
+    """{ticker: next_earnings_date} for the given tickers, CACHE-ONLY.
+
+    Reads `stock_fundamentals_service._CACHE` directly (same pattern as
+    `calendar_service._earnings_for_stock` — see the two-tier-cache note in
+    CLAUDE.md): NEVER triggers a yfinance roundtrip from the alerts list
+    path. A cold/missing cache entry (or an unparsable date) is simply
+    absent from the result → the API field stays null and the UI hides the
+    earnings-proximity badge. Lazy import keeps the alerts module light.
+    """
+    from app.services import stock_fundamentals_service
+
+    out: dict[str, date] = {}
+    for t in tickers:
+        cached = stock_fundamentals_service._CACHE.get(t)
+        raw = cached.next_earnings_date if cached is not None else None
+        if not raw:
+            continue
+        try:
+            out[t] = date.fromisoformat(str(raw)[:10])
+        except (ValueError, TypeError):
+            continue
+    return out
+
+
 def list_alerts(
     db: Session,
     *,
@@ -147,13 +172,22 @@ def list_alerts(
 ) -> tuple[list[dict[str, Any]], int, bool]:
     """List alerts with stock.ticker. Returns (items, total, has_more)."""
     limit = max(1, min(limit, 500))
+    # LEFT OUTER JOIN on the outcome warehouse: at most ONE row per alert
+    # (unique index on signal_outcomes.alert_id), so the join can't fan out
+    # the count or the pagination. Matured signal alerts carry their realised
+    # forward outcome; pending/legacy/price alerts get NULLs.
     base = (
         select(
             Alert,
             Stock.ticker.label("ticker"),
             Stock.name.label("name"),
+            SignalOutcome.abs_hit.label("outcome_abs_hit"),
+            SignalOutcome.fwd_return.label("outcome_fwd_return"),
+            SignalOutcome.horizon_days.label("outcome_horizon_days"),
+            SignalOutcome.mkt_neutral_excess.label("outcome_mkt_excess"),
         )
         .join(Stock, Stock.id == Alert.stock_id)
+        .outerjoin(SignalOutcome, SignalOutcome.alert_id == Alert.id)
     )
     base = _apply_filters(
         base,
@@ -178,8 +212,14 @@ def list_alerts(
         base.order_by(direction(sort_col).nullslast(), Alert.id.desc()).limit(limit + 1).offset(offset)
     ).all()
     has_more = len(rows) > limit
+    page = rows[:limit]
+    # Earnings-proximity substrate: one cache-only dict pass over the page's
+    # distinct tickers (≤ `limit` lookups, no DB, no network).
+    earnings_by_ticker = _next_earnings_dates_cached(
+        {ticker_val for _, ticker_val, *_ in page if ticker_val}
+    )
     items = []
-    for alert, ticker_val, name_val in rows[:limit]:
+    for alert, ticker_val, name_val, o_hit, o_fwd, o_horizon, o_mkt in page:
         items.append(
             {
                 "id": alert.id,
@@ -193,6 +233,16 @@ def list_alerts(
                 "snapshot": alert.snapshot,
                 "read_at": alert.read_at,
                 "archived_at": alert.archived_at,
+                # Realised outcome (signal_outcomes warehouse). All None while
+                # the signal is still maturing (or for legacy/price alerts) —
+                # the UI shows "in corso" for pending signal alerts.
+                "outcome_hit": bool(o_hit) if o_hit is not None else None,
+                "outcome_fwd_return": round(float(o_fwd), 4) if o_fwd is not None else None,
+                "outcome_horizon_days": int(o_horizon) if o_horizon is not None else None,
+                "outcome_mkt_excess": round(float(o_mkt), 4) if o_mkt is not None else None,
+                # Earnings-proximity risk flag (cache-only; null when the
+                # fundamentals cache is cold for the ticker).
+                "next_earnings_date": earnings_by_ticker.get(ticker_val),
             }
         )
     return items, total, has_more
