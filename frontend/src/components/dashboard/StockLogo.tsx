@@ -53,14 +53,48 @@ function logoSources(ticker: string): string[] {
   ].filter((u): u is string => u !== null);
 }
 
+// Per-ticker logo resolution memo, mirrored to sessionStorage so it survives
+// client-side navigation. Value = index of the CDN source that loaded, or -1 =
+// every source 404'd. Without it, scrolling/sorting/paginating a table remounts
+// each row and re-probes the same known-404 URLs — up to 3 external requests per
+// row, over and over. `EXHAUSTED = -1`.
+const RESOLVED_KEY = "stockLogoResolved";
+const EXHAUSTED = -1;
+
+function loadResolved(): Record<string, number> {
+  try {
+    const raw = sessionStorage.getItem(RESOLVED_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+const _resolved: Record<string, number> = loadResolved();
+
+function rememberResolved(ticker: string, idx: number): void {
+  if (_resolved[ticker] === idx) return;
+  _resolved[ticker] = idx;
+  try {
+    sessionStorage.setItem(RESOLVED_KEY, JSON.stringify(_resolved));
+  } catch {
+    /* private mode / quota — the in-memory map still helps for this session */
+  }
+}
+
 export function StockLogo({ ticker, size = "sm" }: Props) {
-  const [srcIdx, setSrcIdx] = useState(0);
-  const [exhausted, setExhausted] = useState(false);
+  // Seed from the memo so a remount skips straight to the known-good source
+  // (or the monogram) instead of re-walking the CDN chain from index 0.
+  const cached = ticker ? _resolved[ticker] : undefined;
+  const [srcIdx, setSrcIdx] = useState(cached != null && cached >= 0 ? cached : 0);
+  const [exhausted, setExhausted] = useState(cached === EXHAUSTED);
 
   // Reset state when ticker changes (e.g. row in a list re-renders with new ticker)
   useEffect(() => {
-    setSrcIdx(0);
-    setExhausted(false);
+    const c = ticker ? _resolved[ticker] : undefined;
+    setSrcIdx(c != null && c >= 0 ? c : 0);
+    setExhausted(c === EXHAUSTED);
   }, [ticker]);
 
   if (!ticker) return null;
@@ -68,6 +102,7 @@ export function StockLogo({ ticker, size = "sm" }: Props) {
   const sources = logoSources(ticker);
 
   if (exhausted) {
+    rememberResolved(ticker, EXHAUSTED);
     // CDN didn't have the logo (common for HK/JP/KR/EU exotic listings).
     // Render a colored monogram pill instead of a generic Building2 icon
     // — keeps the row visually distinguishable and confirms to the user

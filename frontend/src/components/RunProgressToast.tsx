@@ -10,6 +10,7 @@ import { useEffect, useRef, useState } from "react";
 
 import type { ScanStatusInfo } from "@/api/types";
 import { Button } from "@/components/ui/button";
+import { useNowTick } from "@/hooks/useNowTick";
 import { cn } from "@/lib/utils";
 
 /* ─── RunProgressToast — generic persistent progress notification ────────── */
@@ -145,11 +146,12 @@ interface Props {
 }
 
 export function RunProgressToast({ status, labels, onStop, isStopping }: Props) {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const id = window.setInterval(() => setNow(Date.now()), TICK_MS);
-    return () => window.clearInterval(id);
-  }, []);
+  // Visibility-gated tick: this component is mounted globally, and its old
+  // unconditional setInterval kept a 1Hz setState alive in hidden tabs all
+  // day. useNowTick pauses while hidden and catches up instantly on return —
+  // the elapsed label and the 30s auto-dismiss window recompute from
+  // timestamps, so nothing drifts.
+  const now = useNowTick(TICK_MS);
 
   const [dismissedRunId, setDismissedRunId] = useState<number | null>(null);
   const seenRunIdRef = useRef<number | null>(null);

@@ -28,7 +28,11 @@ export function useScoreRecomputeStatus() {
     queryFn: () => scores.recomputeStatus(),
     refetchInterval: (query) => {
       const data = query.state.data;
-      return data?.is_running ? 1_000 : 30_000;
+      if (data?.is_running) return 1_000;   // live progress, even in background
+      // Idle + hidden tab → stop polling. Foreground idle still polls to catch
+      // scheduler-triggered recomputes.
+      if (typeof document !== "undefined" && document.hidden) return false;
+      return 30_000;
     },
     refetchIntervalInBackground: true,
   });

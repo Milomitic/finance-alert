@@ -3,6 +3,18 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "@/api/client";
 import type { LiveQuote } from "@/api/types";
 
+// Poll fast (15s) while a market can move; back off (60s) once we're CONFIDENT
+// it's closed. yfinance's marketState is the signal: only these explicit
+// closed-ish states trigger the back-off — an unknown/null state stays fast so
+// an asset that doesn't report a state is never under-polled during the day.
+const FAST_MS = 15_000;
+const CLOSED_MS = 60_000;
+const CLOSED_STATES = new Set(["CLOSED", "PREPRE", "POSTPOST"]);
+
+function isClosed(state: string | null | undefined): boolean {
+  return state != null && CLOSED_STATES.has(state);
+}
+
 /**
  * Polls the live-quote endpoint for one ticker.
  *
@@ -21,7 +33,8 @@ export function useLiveQuote(ticker: string | undefined, enabled: boolean = true
     queryFn: () =>
       api<LiveQuote>(`/api/stocks/${encodeURIComponent(ticker!)}/quote`),
     enabled: !!ticker && enabled,
-    refetchInterval: 15_000,
+    refetchInterval: (query) =>
+      isClosed(query.state.data?.market_state) ? CLOSED_MS : FAST_MS,
     refetchIntervalInBackground: false,
     // Quotes are stale almost immediately — keep 5s so a route re-render
     // doesn't refetch instantly but a hard navigate does.
@@ -67,8 +80,21 @@ export function useLiveQuotes(tickers: string[], enabled: boolean = true) {
       return { quotes: results.flatMap((r) => r.quotes) };
     },
     enabled: enabled && tickers.length > 0,
-    refetchInterval: 15_000,
+    // Back off only when EVERY quote in the batch is confidently closed (e.g.
+    // overnight/weekend). If any single market is open, keep the fast cadence.
+    refetchInterval: (query) => {
+      const quotes = query.state.data?.quotes ?? [];
+      if (quotes.length === 0) return FAST_MS;
+      return quotes.every((q) => isClosed(q.market_state)) ? CLOSED_MS : FAST_MS;
+    },
     refetchIntervalInBackground: false,
     staleTime: 5_000,
+    // The key embeds the ticker pool, and the 60s universe sweep can shift the
+    // pool membership → new key. Without these, every shift flashed a loading
+    // gap (no data under the new key) and stranded the old entry in cache for
+    // the default 5min gcTime. placeholderData carries the previous batch over
+    // (most tickers overlap); the short gcTime collects the orphaned keys.
+    placeholderData: (prev) => prev,
+    gcTime: 60_000,
   });
 }

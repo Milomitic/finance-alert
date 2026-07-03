@@ -9,11 +9,13 @@ import { alerts } from "@/api/alerts";
  * - 1s when a scan is running (live progress — chosen alongside the backend's
  *   progress_every=5 heartbeats so sub-phase + current_target updates feel
  *   continuous rather than choppy)
- * - 30s when idle (catch externally-triggered scans, e.g. cron)
+ * - 30s when idle in the FOREGROUND (catch externally-triggered scans, e.g.
+ *   cron); no idle polling in a hidden tab — a running scan still polls in the
+ *   background so the progress toast keeps advancing.
  *
  * Side effect: when the latest run transitions running -> success/failed,
- * invalidate the alerts list + unread count + show a toast so the user
- * sees the new alerts without manually refreshing.
+ * invalidate the alerts list + the scan-derived dashboard/market summaries +
+ * show a toast so the user sees the new data without manually refreshing.
  */
 export function useScanStatus() {
   const qc = useQueryClient();
@@ -24,7 +26,11 @@ export function useScanStatus() {
     queryFn: () => alerts.scanStatus(),
     refetchInterval: (query) => {
       const data = query.state.data;
-      return data?.is_running ? 1_000 : 30_000;
+      if (data?.is_running) return 1_000;
+      // Idle: only poll when the tab is visible. A hidden idle tab doesn't need
+      // to catch a cron scan in real time — it will on focus / next visible tick.
+      if (typeof document !== "undefined" && document.hidden) return false;
+      return 30_000;
     },
     refetchIntervalInBackground: true,
   });
@@ -37,6 +43,10 @@ export function useScanStatus() {
     // Detect transition: was running, now success/failed
     if (prev === "running" && next !== "running" && next !== null) {
       qc.invalidateQueries({ queryKey: ["alerts"] });
+      // Breadth, RSI distribution, top movers, etc. are recomputed by the scan
+      // → refresh the dashboard + market summaries exactly when they change,
+      // which is what lets those hooks drop their own aggressive polling.
+      qc.invalidateQueries({ queryKey: ["dashboard"] });
       if (next === "success") {
         const fired = data.alerts_fired ?? 0;
         toast.success(

@@ -1,5 +1,4 @@
-import { useEffect, useState } from "react";
-
+import { useNowTick } from "@/hooks/useNowTick";
 import { cn } from "@/lib/utils";
 
 /** Relative "last updated" label shown to the LEFT of a card's refresh button.
@@ -50,11 +49,8 @@ export function CardUpdatedAt({
   updatedAt: number | string | null | undefined;
   className?: string;
 }) {
-  const [, tick] = useState(0);
-  useEffect(() => {
-    const id = window.setInterval(() => tick((n) => n + 1), 20_000);
-    return () => window.clearInterval(id);
-  }, []);
+  // Visibility-gated 20s tick (pauses in hidden tabs, catches up on return).
+  useNowTick(20_000);
 
   const ms = toMs(updatedAt);
   if (!ms) return null;

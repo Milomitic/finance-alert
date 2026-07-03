@@ -1,4 +1,5 @@
 import { AlertCircle, Clock, RefreshCw } from "lucide-react";
+import { Suspense, lazy } from "react";
 
 import { AlertsCompactPanel } from "@/components/dashboard/AlertsCompactPanel";
 import { BreadthMatrixTable } from "@/components/dashboard/BreadthMatrixTable";
@@ -11,11 +12,19 @@ import { AnalystActionsCard } from "@/components/dashboard/AnalystActionsCard";
 import { ScanHeaderButton } from "@/components/dashboard/ScanHeaderButton";
 import { TopMoversCard } from "@/components/dashboard/TopMoversCard";
 import { TopPicksCard } from "@/components/dashboard/TopPicksCard";
-import { RsiHistogramCard } from "@/components/dashboard/RsiHistogramCard";
 import { SectorsHeatmapCard } from "@/components/dashboard/SectorsHeatmapCard";
 import { SuperinvestorPicksCard } from "@/components/dashboard/SuperinvestorPicksCard";
 import { Card, CardContent } from "@/components/ui/card";
 import { CardSkeleton } from "@/components/ui/card-skeleton";
+
+// The RSI histogram is the ONLY dashboard consumer of recharts (a ~331KB
+// chunk). Lazy-load it so the landing page's critical path ships without the
+// charting library; the card pops in right after first paint.
+const RsiHistogramCard = lazy(() =>
+  import("@/components/dashboard/RsiHistogramCard").then((m) => ({
+    default: m.RsiHistogramCard,
+  })),
+);
 import { useDashboardSummary } from "@/hooks/useDashboardSummary";
 import { useMarketSummary } from "@/hooks/useMarketSummary";
 import { usePremarketMovers } from "@/hooks/usePremarketMovers";
@@ -266,7 +275,11 @@ export default function HomePage() {
       {/* Lower row: breadth matrix (bottom-left, wide 2fr) + RSI + Sectors. */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-[2fr_1fr_1fr] gap-3 lg:h-[520px]">
         <div className="h-[440px] lg:h-full min-h-0"><BreadthMatrixTable data={m.by_index} /></div>
-        <div className="h-[440px] lg:h-full min-h-0"><RsiHistogramCard rsi={m.rsi_distribution} indices={m.by_index} /></div>
+        <div className="h-[440px] lg:h-full min-h-0">
+          <Suspense fallback={<CardSkeleton label="RSI DISTRIBUTION" rows={6} className="h-full" />}>
+            <RsiHistogramCard rsi={m.rsi_distribution} indices={m.by_index} />
+          </Suspense>
+        </div>
         <div className="h-[440px] lg:h-full min-h-0"><SectorsHeatmapCard sectors={m.sectors} /></div>
       </div>
       {/* Alerts (left) + Top Picks (right) on the same row. The two are
