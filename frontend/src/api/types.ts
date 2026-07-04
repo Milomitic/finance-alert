@@ -572,6 +572,57 @@ export interface PriceAlertUpdate {
   note?: string | null;
 }
 
+/** Tracked trade (B3-6): a playbook entry persisted as a position with
+ *  read-time P&L. `last_price`/`unrealized_*` are filled only for OPEN
+ *  positions (`price_source`: "live" quote or "eod" stored-close fallback);
+ *  `realized_*` only for CLOSED ones. The `_abs` figures are null for
+ *  notional-only positions (no `size`). */
+export interface Position {
+  id: number;
+  stock_id: number;
+  ticker: string;
+  name: string | null;
+  alert_id: number | null;
+  side: "long" | "short";
+  entry_price: number;
+  stop_price: number | null;
+  target_price: number | null;
+  size: number | null;
+  opened_at: string;
+  closed_at: string | null;
+  exit_price: number | null;
+  exit_reason: "stop" | "target" | "manual" | null;
+  notes: string | null;
+  last_price: number | null;
+  price_source: "live" | "eod" | null;
+  unrealized_pct: number | null;
+  unrealized_abs: number | null;
+  realized_pct: number | null;
+  realized_abs: number | null;
+}
+
+export interface PositionCreate {
+  ticker: string;
+  side?: "long" | "short";
+  /** Omit to let the backend default to the live/last price. */
+  entry_price?: number | null;
+  stop_price?: number | null;
+  target_price?: number | null;
+  /** Share count; omit for notional-only tracking (P&L in % only). */
+  size?: number | null;
+  alert_id?: number | null;
+  notes?: string | null;
+}
+
+export interface PositionUpdate {
+  /** true → close manually (exit_price defaults to the live/last price). */
+  close?: boolean;
+  exit_price?: number | null;
+  stop_price?: number | null;
+  target_price?: number | null;
+  notes?: string | null;
+}
+
 export type SpotlightCardType = "top_gainer" | "top_loser" | "most_alerted_7d" | "vol_spike";
 
 export interface SpotlightCard {

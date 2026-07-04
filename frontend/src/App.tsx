@@ -18,6 +18,7 @@ const InstitutionalsPage = lazy(() => import("@/pages/InstitutionalsPage"));
 const LoginPage = lazy(() => import("@/pages/LoginPage"));
 const MacroDetailPage = lazy(() => import("@/pages/MacroDetailPage"));
 const PlatformHealthPage = lazy(() => import("@/pages/PlatformHealthPage"));
+const PositionsPage = lazy(() => import("@/pages/PositionsPage"));
 const MarketDetailPage = lazy(() => import("@/pages/MarketDetailPage"));
 const SectorDetailPage = lazy(() => import("@/pages/SectorDetailPage"));
 const SectorsOverviewPage = lazy(() => import("@/pages/SectorsOverviewPage"));
@@ -56,6 +57,9 @@ export default function App() {
               the existing /sectors/:name detail page. */}
           <Route path="/sectors" element={<SectorsOverviewPage />} />
           <Route path="/alerts" element={<AlertsPage />} />
+          {/* Tracked trades (B3-6): playbook entries persisted as positions
+              with live P&L + auto stop/target closing. */}
+          <Route path="/positions" element={<PositionsPage />} />
           <Route path="/health" element={<PlatformHealthPage />} />
           <Route path="/calendar" element={<CalendarPage />} />
           <Route path="/macro/:seriesId" element={<MacroDetailPage />} />
