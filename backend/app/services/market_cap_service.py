@@ -12,6 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import Stock
+from app.services.currency_units import scale_minor_to_major
 
 
 @dataclass
@@ -72,12 +73,9 @@ def _fetch_market_cap(ticker: str) -> int | None:
         return None
     if cap <= 0:
         return None
-    # GBp / GBX (London pence) → divide by 100 to get pounds.
-    if currency in ("GBp", "GBX"):
-        cap = cap / 100.0
-    # Other minor-unit currencies (ZAc cents, ILA agorot, etc.) could be added
-    # here as needed; only GBp showed up in our LSE-heavy catalog.
-    return int(cap)
+    # GBp / GBX (London pence) → /100 to pounds; anything else passes through
+    # (single owner of the rule: currency_units).
+    return int(scale_minor_to_major(currency, cap))
 
 
 def refresh_market_caps(db: Session) -> MarketCapRefreshResult:

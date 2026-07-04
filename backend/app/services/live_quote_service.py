@@ -32,6 +32,8 @@ from zoneinfo import ZoneInfo
 
 from loguru import logger
 
+from app.services.currency_units import is_minor_unit, scale_minor_to_major
+
 
 @dataclass
 class LiveQuote:
@@ -181,14 +183,9 @@ def _safe_int(v: Any) -> int | None:
     return int(f) if f is not None else None
 
 
-def _scale_pence_to_pounds(currency: str | None, value: float | None) -> float | None:
-    """LSE quotes come back as pence + currency='GBp'. Apply same /100 fix
-    as market_cap_service so HSBA.L doesn't show £1359 when it's £13.59."""
-    if value is None:
-        return None
-    if currency in ("GBp", "GBX"):
-        return value / 100.0
-    return value
+# LSE quotes come back as pence + currency='GBp'. The /100 pence→pounds fix
+# (so HSBA.L doesn't show £1359 when it's £13.59) is shared with every other
+# price path via currency_units.scale_minor_to_major — single owner.
 
 
 def _eod_pair_from_ohlcv(ticker: str) -> tuple[float, float] | None:
@@ -315,8 +312,8 @@ def _today_official_bar(
             with _TODAY_BAR_LOCK:
                 _TODAY_BAR_CACHE[ticker] = (today, None, None, now)
             return None
-        close = _scale_pence_to_pounds(currency, float(df["Close"].iloc[-1]))
-        prev = _scale_pence_to_pounds(currency, float(df["Close"].iloc[-2]))
+        close = scale_minor_to_major(currency, float(df["Close"].iloc[-1]))
+        prev = scale_minor_to_major(currency, float(df["Close"].iloc[-2]))
         with _TODAY_BAR_LOCK:
             _TODAY_BAR_CACHE[ticker] = (today, close, prev, now)
         return (close, prev) if close is not None and prev is not None else None
@@ -578,11 +575,11 @@ def _fetch_fresh(ticker: str, *, allow_remote_today_fetch: bool = True) -> LiveQ
             currency = None
 
         # Apply pence→pounds for LSE (.L tickers come back as GBp)
-        last = _scale_pence_to_pounds(currency, last)
-        prev = _scale_pence_to_pounds(currency, prev)
-        day_open = _scale_pence_to_pounds(currency, _safe_float(fi.get("open")))
-        day_high = _scale_pence_to_pounds(currency, _safe_float(fi.get("dayHigh")))
-        day_low = _scale_pence_to_pounds(currency, _safe_float(fi.get("dayLow")))
+        last = scale_minor_to_major(currency, last)
+        prev = scale_minor_to_major(currency, prev)
+        day_open = scale_minor_to_major(currency, _safe_float(fi.get("open")))
+        day_high = scale_minor_to_major(currency, _safe_float(fi.get("dayHigh")))
+        day_low = scale_minor_to_major(currency, _safe_float(fi.get("dayLow")))
 
         # When the market is CLOSED the price under "ULTIMA CHIUSURA"
         # MUST be the actual EOD close (not a post-market drift quote
@@ -733,7 +730,7 @@ def _fetch_fresh(ticker: str, *, allow_remote_today_fetch: bool = True) -> LiveQ
         # quote is driving change_pct, "CLOSED" otherwise. The frontend
         # renders the LIVE badge on "OPEN".
         quote.market_state = state
-        quote.currency = "GBP" if currency in ("GBp", "GBX") else currency
+        quote.currency = "GBP" if is_minor_unit(currency) else currency
 
         if last is not None:
             yfinance_health.record_success()

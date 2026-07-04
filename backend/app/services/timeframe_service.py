@@ -56,6 +56,7 @@ from app.indicators.macd import macd
 from app.indicators.rsi import rsi as rsi_indicator
 from app.indicators.ema import ema as ema_indicator
 from app.models import OhlcvDaily, Stock
+from app.services.currency_units import is_minor_unit
 
 # Canonical fixed periods. Don't adapt these per timeframe — the user
 # explicitly wants the same indicator definition applied across
@@ -195,12 +196,12 @@ def _fetch_yfinance(ticker: str, tf: str) -> list[Bar]:
     # for SOME tickers (the daily path scales them in `ohlcv_service`, but
     # this intraday path used to not — the Y-axis on 30m/1h then showed
     # 545 pence instead of 5.45 pounds, the "×100 bug" the user reported).
-    # Mirror live_quote_service._scale_pence_to_pounds so all three paths
-    # (intraday chart, daily chart, live quote) are unit-consistent.
+    # Shared rule in currency_units so all three paths (intraday chart,
+    # daily chart, live quote) are unit-consistent.
     scale = 1.0
     try:
         currency = t.fast_info.get("currency")
-        if currency in ("GBp", "GBX"):
+        if is_minor_unit(currency):
             scale = 0.01
     except Exception as e:  # noqa: BLE001
         logger.debug(f"[timeframe] currency lookup failed for {ticker}: {e}")

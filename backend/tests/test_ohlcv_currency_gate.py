@@ -14,7 +14,7 @@ from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from app.models import Stock
-from app.services import ohlcv_service
+from app.services import currency_units, ohlcv_service
 
 
 def _frame() -> pd.DataFrame:
@@ -49,7 +49,7 @@ def test_non_lse_ticker_never_calls_currency_lookup(db, monkeypatch):
     def boom(ticker):
         raise AssertionError("currency lookup must not run for non-.L tickers")
 
-    monkeypatch.setattr(ohlcv_service, "_get_yfinance_native_currency", boom)
+    monkeypatch.setattr(currency_units, "get_native_currency", boom)
     stock = _seed(db, "AAPL")
     ins, _ = ohlcv_service._upsert_one_stock(db, stock, _frame())
     db.commit()
@@ -59,9 +59,9 @@ def test_non_lse_ticker_never_calls_currency_lookup(db, monkeypatch):
 
 def test_lse_lookup_failure_fails_closed(db, monkeypatch):
     monkeypatch.setattr(
-        ohlcv_service, "_get_yfinance_native_currency", lambda t: None
+        currency_units, "get_native_currency", lambda t: None
     )
-    ohlcv_service._CURRENCY_CACHE.clear()
+    currency_units._CURRENCY_CACHE.clear()
     stock = _seed(db, "BARC.L", exchange="LSE")
     ins, _ = ohlcv_service._upsert_one_stock(db, stock, _frame())
     db.commit()
@@ -76,12 +76,12 @@ def test_lse_gbp_pence_scaled_and_memoized(db, monkeypatch):
         lookups.append(ticker)
         return "GBp"
 
-    monkeypatch.setattr(ohlcv_service, "_get_yfinance_native_currency", fake_lookup)
-    ohlcv_service._CURRENCY_CACHE.clear()
+    monkeypatch.setattr(currency_units, "get_native_currency", fake_lookup)
+    currency_units._CURRENCY_CACHE.clear()
     stock = _seed(db, "TSCO.L", exchange="LSE")
     ohlcv_service._upsert_one_stock(db, stock, _frame())
     ohlcv_service._upsert_one_stock(db, stock, _frame())  # second fetch
     db.commit()
     assert lookups == ["TSCO.L"]                          # memoized after first
     assert [float(r[1]) for r in _bars(db, stock.id)] == [1.005, 1.015]  # /100
-    ohlcv_service._CURRENCY_CACHE.clear()
+    currency_units._CURRENCY_CACHE.clear()
