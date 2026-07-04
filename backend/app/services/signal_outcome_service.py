@@ -24,7 +24,7 @@ from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import Alert, OhlcvDaily, SignalOutcome
+from app.models import Alert, OhlcvDaily, SignalOutcome, Stock
 from app.services.signal_drift_service import _horizon_days
 
 # EMA span for the causal regime label at the trigger bar.
@@ -77,7 +77,7 @@ def _rows_to_arrays(
 
 
 def _load_universe_closes(
-    db: Session, *, since: date | None = None
+    db: Session, *, since: date | None = None, exclude_etf: bool = False
 ) -> dict[int, tuple[np.ndarray, np.ndarray]]:
     """Per stock: (dates[], closes[]) ascending. Lightweight column select.
 
@@ -85,10 +85,22 @@ def _load_universe_closes(
     the universe forward-mean at a trigger date pairs each bar positionally with
     the one H ahead, and trimming only the *pre-trigger* tail leaves that pairing
     (and every mean at a pending trigger date) numerically identical — while
-    turning a full-table scan into a ~90-day slice on the incremental path."""
+    turning a full-table scan into a ~90-day slice on the incremental path.
+
+    `exclude_etf` drops instrument_type='etf' stocks from the load: the
+    market-neutral benchmark population must be COMPANIES only (a 3x leveraged
+    ETF's ±10% days distort the universe forward-mean every signal is measured
+    against). Per-stock series for an ETF's OWN alerts stay loadable via
+    `_load_stock_closes` — only the benchmark population changes."""
     stmt = select(OhlcvDaily.stock_id, OhlcvDaily.date, OhlcvDaily.close)
     if since is not None:
         stmt = stmt.where(OhlcvDaily.date >= since)
+    if exclude_etf:
+        etf_ids = db.execute(
+            select(Stock.id).where(Stock.instrument_type == "etf")
+        ).scalars().all()
+        if etf_ids:
+            stmt = stmt.where(OhlcvDaily.stock_id.not_in(etf_ids))
     rows = db.execute(stmt.order_by(OhlcvDaily.stock_id, OhlcvDaily.date)).all()
     return _rows_to_arrays(rows)
 
@@ -176,11 +188,14 @@ def mature_outcomes(db: Session, *, commit: bool = True) -> int:
     pending_sids = {a.stock_id for a in pending}
     closes = _load_stock_closes(db, pending_sids)
 
-    # Universe market-neutral benchmark: all stocks, but only the date window the
-    # pending triggers reach (exact — see _load_universe_closes). This is the
-    # load that used to scan the entire 2.4M-row table at every scan end.
+    # Universe market-neutral benchmark: companies only (ETFs excluded — see
+    # _load_universe_closes), and only the date window the pending triggers
+    # reach (exact — see _load_universe_closes). This is the load that used
+    # to scan the entire 2.4M-row table at every scan end.
     min_td = min(a.signal_date for a in pending)
-    uni_closes = _load_universe_closes(db, since=min_td - timedelta(days=10))
+    uni_closes = _load_universe_closes(
+        db, since=min_td - timedelta(days=10), exclude_etf=True
+    )
     horizons = {_horizon_days(a.signal_name) for a in pending}
     means_by_h: dict[int, dict[date, float]] = {
         h: _universe_fwd_means(uni_closes, h) for h in horizons

@@ -44,7 +44,7 @@ from typing import Any
 
 import pandas as pd
 from loguru import logger
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.indicators.adx import adx as adx_indicator
@@ -2466,7 +2466,29 @@ def recompute_all(
     All three default to no-op when omitted — keeps the cron call-sites
     untouched.
     """
-    stocks = db.execute(select(Stock)).scalars().all()
+    all_stocks = db.execute(select(Stock)).scalars().all()
+
+    # ETF/ETN rows carry no meaningful fundamentals — a composite computed
+    # from a near-empty micro payload is noise (the TZA 66.8 case), so the
+    # Qualità lens skips instrument_type='etf' entirely. Besides not writing
+    # a new StockScore row, we DELETE any stale row a pre-flag recompute
+    # left behind: stock_scores is the substrate of the sector/universe
+    # composite percentiles (scores._composite_percentiles) and of the
+    # xs-engine cross-section, so purging here makes ETFs drop out of both
+    # automatically. The Tecnico lens (technical_score_service) still runs
+    # for ETFs — price-action posture is meaningful for them.
+    etf_ids = [s.id for s in all_stocks if s.instrument_type == "etf"]
+    stocks = [s for s in all_stocks if s.instrument_type != "etf"]
+    if etf_ids:
+        purged = db.execute(
+            delete(StockScore).where(StockScore.stock_id.in_(etf_ids))
+        ).rowcount
+        db.commit()
+        if purged:
+            logger.info(
+                f"[score] purged {purged} stale ETF score rows "
+                f"({len(etf_ids)} ETFs skipped by recompute)"
+            )
     total = len(stocks)
 
     # Count unique sectors so the pre-pass progress bar can render
