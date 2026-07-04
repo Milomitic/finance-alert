@@ -27,6 +27,7 @@ from sqlalchemy import (
     Integer,
     String,
     func,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -76,6 +77,14 @@ class SignalOutcome(Base):
 
     strength: Mapped[int | None] = mapped_column(Integer, nullable=True)
     probability: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    # Provenance: "live" = matured from an alert the engine actually fired;
+    # "replay" = historical 10y replay backfill. Consumers must segment on it
+    # (live-vs-replay hit rates are different populations — replay has no
+    # emission-gate survivorship of the live path's exact settings history).
+    source: Mapped[str] = mapped_column(
+        String(8), nullable=False, server_default=text("'live'"), default="live",
+    )
 
     matured_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

@@ -12,6 +12,7 @@ from app.models.institutional import (
 from app.models.macro import MacroObservation, MacroReleaseDate, MacroSeries
 from app.models.market_snapshot import MarketSnapshot
 from app.models.ohlcv import OhlcvDaily
+from app.models.position import Position
 from app.models.price_alert import PriceAlert
 from app.models.scan_run import ScanRun
 from app.models.score_history import ScoreHistory
@@ -34,6 +35,7 @@ __all__ = [
     "OhlcvDaily",
     "MarketSnapshot",
     "Alert",
+    "Position",
     "PriceAlert",
     "ScanRun",
     "SignalOutcome",

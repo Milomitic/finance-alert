@@ -43,6 +43,13 @@ class Stock(Base):
         Integer, nullable=False, server_default=sa_text("0"), default=0,
     )
     ohlcv_last_nodata_at: Mapped[date | None] = mapped_column(Date, nullable=True)
+    # "equity" | "etf" — leveraged/inverse ETFs must not receive fundamental
+    # Qualità scores nor sit inside the market-neutral outcome benchmark.
+    # Flagged by migration 2a137ffef964 for the 24 known NYSE Arca ETF/ETNs.
+    instrument_type: Mapped[str] = mapped_column(
+        String(16), nullable=False, server_default=sa_text("'equity'"),
+        default="equity",
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
