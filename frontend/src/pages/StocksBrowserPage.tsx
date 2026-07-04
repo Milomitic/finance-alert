@@ -85,6 +85,37 @@ function parsePageSize(raw: string | null): PageSize {
   return 50;
 }
 
+/** Stale threshold for the metrics as-of hint: the EOD metrics are persisted
+ *  once per scan (~daily), so anything older than ~26h means a skipped/failed
+ *  scan and the screener's price/RSI/vol columns are a day behind. */
+const METRICS_STALE_MS = 26 * 60 * 60 * 1000;
+
+/** Muted "metriche al HH:MM" hint next to the table header — the shared
+ *  as-of of every stock_metrics row (one computed_at per refresh). Turns
+ *  amber when older than the stale threshold. Hidden when the backend has
+ *  no metrics yet (fresh install / pre-scan). */
+function MetricsAsOf({ iso }: { iso: string | null | undefined }) {
+  if (!iso) return null;
+  const dt = new Date(iso);
+  if (Number.isNaN(dt.getTime())) return null;
+  const stale = Date.now() - dt.getTime() > METRICS_STALE_MS;
+  const time = dt.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" });
+  const sameDay = dt.toDateString() === new Date().toDateString();
+  const label = sameDay
+    ? `metriche al ${time}`
+    : `metriche al ${dt.toLocaleDateString("it-IT", { day: "2-digit", month: "2-digit" })} ${time}`;
+  return (
+    <span
+      className={stale
+        ? "text-xs text-amber-600 dark:text-amber-400"
+        : "text-xs text-muted-foreground"}
+      title="Ultimo aggiornamento delle metriche EOD (persistite a fine scan)"
+    >
+      {label}
+    </span>
+  );
+}
+
 /** Inline pagination strip rendered above AND below the table. Same shape
  *  in both spots so it feels symmetric. Hidden when there's only one page. */
 function PaginationStrip({
@@ -152,6 +183,7 @@ export default function StocksBrowserPage() {
     exchanges: parseListParam(searchParams, "exchange"),
     countries: parseListParam(searchParams, "country"),
     riskTiers: parseRiskList(searchParams),
+    excludeEtf: parseBoolParam(searchParams.get("exclude_etf")),
     minScore: parseMinScore(searchParams.get("min_score")),
     scoreMax: parseNullableScore(searchParams.get("score_max")),
     profitabilityMin: parseNullableScore(searchParams.get("profitability_min")),
@@ -196,6 +228,7 @@ export default function StocksBrowserPage() {
     state.exchanges.forEach((v) => sp.append("exchange", v));
     state.countries.forEach((v) => sp.append("country", v));
     state.riskTiers.forEach((v) => sp.append("risk", v));
+    if (state.excludeEtf) sp.set("exclude_etf", "true");
     if (state.minScore != null) sp.set("min_score", String(state.minScore));
     if (state.scoreMax != null) sp.set("score_max", String(state.scoreMax));
     if (state.profitabilityMin != null) sp.set("profitability_min", String(state.profitabilityMin));
@@ -292,6 +325,7 @@ export default function StocksBrowserPage() {
     change_max: state.changeMax ?? undefined,
     vol_spike: state.volSpike || undefined,
     volume_min: state.volumeMin ?? undefined,
+    exclude_etf: state.excludeEtf || undefined,
     sort_by: sortBy,
     sort_dir: sortDir,
     limit: pageSize,
@@ -356,6 +390,7 @@ export default function StocksBrowserPage() {
               ))}
             </SelectContent>
           </Select>
+          <MetricsAsOf iso={searchQ.data?.metrics_computed_at} />
         </div>
         <PaginationStrip
           page={page}

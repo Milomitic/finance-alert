@@ -79,6 +79,21 @@ interface Props {
   onQueryChange: (v: string) => void;
 }
 
+/** Small "ETF" chip rendered next to the ticker for instrument_type='etf'
+ *  rows. Plain string-literal classes (Tailwind purger contract). ETFs have
+ *  no fundamental Qualità score by design — the chip explains the "—". */
+function EtfBadge({ show }: { show: boolean }) {
+  if (!show) return null;
+  return (
+    <span
+      className="inline-flex items-center px-1 py-0.5 rounded bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-300 text-[9px] font-semibold uppercase tracking-wider shrink-0"
+      title="ETF/ETN — nessuno score fondamentale (Qualità) per design"
+    >
+      ETF
+    </span>
+  );
+}
+
 function fmtMc(v: number | null | undefined): string {
   if (v == null) return "—";
   if (v >= 1e12) return `$${(v / 1e12).toFixed(2)}T`;
@@ -272,6 +287,7 @@ export function StockBrowserTable({ items, sortBy, sortDir, onSortChange, q, onQ
                       <div className="flex items-center gap-2 min-w-0">
                         <StockLogo ticker={s.ticker} size="sm" />
                         <span className="font-semibold shrink-0">{s.ticker}</span>
+                        <EtfBadge show={s.instrument_type === "etf"} />
                         <span className="text-sm text-muted-foreground truncate min-w-0 flex-1">
                           {s.name}
                         </span>
@@ -487,12 +503,15 @@ export function StockBrowserTable({ items, sortBy, sortDir, onSortChange, q, onQ
                       <div className="inline-flex items-center gap-2 min-w-0">
                         <StockLogo ticker={s.ticker} size="sm" />
                         <div className="flex flex-col min-w-0">
-                          <Link
-                            to={`/stocks/${encodeURIComponent(s.ticker)}`}
-                            className="font-semibold hover:underline leading-tight"
-                          >
-                            {s.ticker}
-                          </Link>
+                          <span className="inline-flex items-center gap-1.5">
+                            <Link
+                              to={`/stocks/${encodeURIComponent(s.ticker)}`}
+                              className="font-semibold hover:underline leading-tight"
+                            >
+                              {s.ticker}
+                            </Link>
+                            <EtfBadge show={s.instrument_type === "etf"} />
+                          </span>
                           <span className="text-xs text-muted-foreground truncate max-w-[220px] leading-tight">
                             {s.name}
                           </span>

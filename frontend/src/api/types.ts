@@ -12,6 +12,10 @@ export interface Stock {
   country: string | null;
   currency: string | null;
   market_cap: number | null;
+  /** "equity" | "etf" — ETF/ETN rows carry no fundamental Qualità score
+   *  (excluded by design); the screener badges them. Optional for
+   *  back-compat with cached pre-field responses. */
+  instrument_type?: "equity" | "etf";
 }
 
 /** A row in the screener result. Stock anagrafica plus a join to the
@@ -63,6 +67,9 @@ export interface StockSearch {
   items: StockSearchItem[];
   total: number;
   has_more: boolean;
+  /** As-of (ISO, UTC) of the last stock_metrics refresh — one value for the
+   *  whole table. Null when no scan has persisted metrics yet. */
+  metrics_computed_at?: string | null;
 }
 
 export interface IndexOption {
