@@ -72,10 +72,12 @@ def _clear_process_memos() -> Iterator[None]:
     """Reset process-global in-memory caches between tests. Each test gets a
     fresh in-memory engine, so a module-level memo (e.g. rule_performance's
     forward-return cache) must not leak a prior test's result into the next."""
-    from app.services import rule_performance_service
+    from app.services import market_stats_service, rule_performance_service
     rule_performance_service._MEMO.clear()
+    market_stats_service._PAYLOAD_MEMO.clear()
     yield
     rule_performance_service._MEMO.clear()
+    market_stats_service._PAYLOAD_MEMO.clear()
 
 
 @pytest.fixture(autouse=True)

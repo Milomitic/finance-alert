@@ -20,6 +20,7 @@ from app.scheduler.jobs.refresh_imminent_earnings import run_refresh_imminent_ea
 from app.scheduler.jobs.refresh_institutionals import run_refresh_institutionals
 from app.scheduler.jobs.refresh_premarket import run_refresh_premarket
 from app.scheduler.jobs.refresh_sec_13f import run_refresh_sec_13f
+from app.scheduler.jobs.retention import run_retention
 from app.scheduler.jobs.scan_alerts import run_scan_alerts
 from app.scheduler.jobs.live_movers_sweep import run_live_universe_sweep
 from app.scheduler.jobs.kpi_rollup import run_kpi_rollup
@@ -58,6 +59,18 @@ def get_scheduler() -> BackgroundScheduler:
             run_db_backup,
             trigger=CronTrigger(day_of_week="*", hour=3, minute=30),
             id="db_backup",
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+        )
+        # Weekly retention prune of scan_runs (audit B4-11) — Sunday 04:00,
+        # after the nightly 03:30 backup window and far from the scan hours.
+        # Deletes rows older than 180 days keeping the newest 500 regardless;
+        # skips with a WARNING if a scan is running.
+        _scheduler.add_job(
+            run_retention,
+            trigger=CronTrigger(day_of_week="sun", hour=4, minute=0),
+            id="retention",
             replace_existing=True,
             max_instances=1,
             coalesce=True,

@@ -2,7 +2,6 @@
   GET /api/dashboard/market-summary — pre-computed snapshot (existing)
   GET /api/dashboard/live-assets    — curated live assets panel (new)
 """
-import json
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends
@@ -294,11 +293,14 @@ def get_market_summary(
     db: Session = Depends(get_db),
     _user: User = Depends(get_current_user),
 ) -> MarketSummaryOut:
-    snap = market_stats_service.get_latest_snapshot(db)
+    # Memoized parse (B4-11a): the ~264 KB payload is decoded once per
+    # snapshot, not once per request. The in-place SMA-key migration below
+    # mutates the shared memoized dict — sanctioned: it's idempotent and just
+    # means the rename runs once per process instead of once per request.
+    snap, payload = market_stats_service.get_latest_snapshot_payload(db)
     if snap is None:
         return MarketSummaryOut(available=False, reason="no_scan_yet")
 
-    payload = json.loads(snap.payload)
     # Migrate legacy SMA-named keys before Pydantic validation. Cheap
     # in-place dict-rename, self-healing on the next scan.
     _migrate_sma_keys_in_place(payload)

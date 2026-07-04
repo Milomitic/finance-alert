@@ -821,3 +821,45 @@ def _persist_stock_metrics(db: Session, metrics: list[StockMetrics]) -> None:
 def get_latest_snapshot(db: Session) -> MarketSnapshot | None:
     """Return the live snapshot (id=1) or None if not yet computed."""
     return db.get(MarketSnapshot, 1)
+
+
+# ── Parsed-payload memo (B4-11a) ─────────────────────────────────────────────
+# The snapshot payload is a ~264 KB JSON blob that used to be re-parsed on
+# EVERY request by three consumers (the market-summary endpoint, the spotlight
+# cards, the pre-market candidate pool). Parse it once per snapshot instead:
+# the memo key is (row id, computed_at) — recompute_snapshot writes a fresh
+# computed_at, so a newer snapshot changes the key and naturally replaces the
+# stale entry. Single-entry dict with atomic swap (CPython dict assignment is
+# atomic under the GIL) — safe under FastAPI's threadpool without a lock; the
+# worst race is two threads parsing the same payload once each, last wins.
+_PAYLOAD_MEMO: dict[str, tuple[tuple, dict]] = {}
+
+
+def _parse_payload(raw: str | None) -> dict:
+    """JSON-decode a snapshot payload; absent/corrupt/non-dict → {} (the
+    graceful-degrade convention the spotlight/premarket consumers had)."""
+    try:
+        data = json.loads(raw or "{}")
+    except (ValueError, TypeError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def get_latest_snapshot_payload(db: Session) -> tuple[MarketSnapshot | None, dict]:
+    """(snapshot row, parsed payload) — the payload memoized per snapshot.
+
+    NOTE: the returned dict is SHARED across consumers and requests — treat it
+    as read-only. The one sanctioned exception is the market-summary
+    endpoint's in-place legacy SMA→EMA key migration: it is idempotent, and
+    mutating the memoized dict just means the rename runs once per process
+    per snapshot instead of once per request."""
+    snap = get_latest_snapshot(db)
+    if snap is None:
+        return None, {}
+    key = (snap.id, snap.computed_at)
+    entry = _PAYLOAD_MEMO.get("latest")
+    if entry is not None and entry[0] == key:
+        return snap, entry[1]
+    payload = _parse_payload(snap.payload)
+    _PAYLOAD_MEMO["latest"] = (key, payload)  # atomic swap — see note above
+    return snap, payload
