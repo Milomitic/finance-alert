@@ -1,4 +1,5 @@
 """Stock router."""
+from datetime import timezone
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -77,6 +78,7 @@ def search(
     market_cap_min: float | None = None,
     market_cap_max: float | None = None,
     has_signals: bool = False,
+    exclude_etf: bool = False,
     sort_by: str = "ticker",
     sort_dir: str = "asc",
     limit: int = 50,
@@ -153,6 +155,7 @@ def search(
             market_cap_min=market_cap_min,
             market_cap_max=market_cap_max,
             has_signals=has_signals,
+            exclude_etf=exclude_etf,
             sort_by=sort_by,
             sort_dir=sort_dir,
             limit=limit,
@@ -198,6 +201,15 @@ def search(
         ],
         total=page.total,
         has_more=page.has_more,
+        # SQLite hands back naive datetimes; they were written as UTC
+        # (market_stats persists datetime.now(UTC)) so re-tag before
+        # serializing — the FE staleness math needs the explicit offset.
+        metrics_computed_at=(
+            page.metrics_computed_at.replace(tzinfo=timezone.utc)
+            if page.metrics_computed_at is not None
+            and page.metrics_computed_at.tzinfo is None
+            else page.metrics_computed_at
+        ),
     )
 
 

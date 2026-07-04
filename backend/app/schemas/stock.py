@@ -1,4 +1,5 @@
 """Stock response schemas."""
+from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
@@ -15,6 +16,10 @@ class StockOut(BaseModel):
     country: str | None
     currency: str | None
     market_cap: int | None
+    # "equity" | "etf" — lets the UI badge ETF/ETN rows (they carry no
+    # fundamental Qualità score by design). Defaulted for back-compat with
+    # constructors that predate the column.
+    instrument_type: str = "equity"
 
 
 class StockScoreRefOut(BaseModel):
@@ -72,6 +77,10 @@ class StockSearchOut(BaseModel):
     items: list[StockSearchItemOut]
     total: int
     has_more: bool
+    # As-of of the last stock_metrics refresh (one value for the whole
+    # table — every row of a refresh shares a computed_at). None when no
+    # scan has persisted metrics yet. UTC, ISO-serialized.
+    metrics_computed_at: datetime | None = None
 
 
 class IndexOptionOut(BaseModel):

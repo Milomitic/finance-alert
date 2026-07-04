@@ -1,5 +1,6 @@
 """Stock search and filter options."""
 from dataclasses import dataclass, field
+from datetime import datetime
 
 from sqlalchemy import and_, distinct, exists, func, or_, select
 from sqlalchemy.orm import Session
@@ -92,6 +93,7 @@ class StockFilter:
     market_cap_min: float | None = None
     market_cap_max: float | None = None
     has_signals: bool = False         # has >=1 active (non-archived) alert
+    exclude_etf: bool = False         # drop instrument_type='etf' rows
     sort_by: str = "ticker"
     sort_dir: str = "asc"
     limit: int = 50
@@ -154,6 +156,10 @@ class StockPage:
     items: list[StockSearchItem]
     total: int
     has_more: bool
+    # As-of timestamp of the stock_metrics refresh (all rows share one
+    # computed_at per scan; we surface MAX as the single meta value). None
+    # when the table is empty (no scan has persisted metrics yet).
+    metrics_computed_at: datetime | None = None
 
 
 @dataclass
@@ -261,6 +267,10 @@ def _apply_filter(stmt, f: StockFilter):
                 and_(Alert.stock_id == Stock.id, Alert.archived_at.is_(None))
             )
         )
+    if f.exclude_etf:
+        # ETFs are equities in every other respect (they have metrics +
+        # technical scores) — this is a plain instrument_type predicate.
+        stmt = stmt.where(Stock.instrument_type != "etf")
     return stmt
 
 
@@ -367,7 +377,17 @@ def search_stocks(db: Session, f: StockFilter) -> StockPage:
         )
         for row in rows[:limit]
     ]
-    return StockPage(items=items, total=int(total), has_more=has_more)
+    # Metrics as-of: every stock_metrics row of a refresh shares one
+    # computed_at, so MAX over the table IS the last refresh time. One
+    # aggregate query (~ms) — lets the screener render "metriche al HH:MM"
+    # and flag a stale scan.
+    metrics_computed_at = db.execute(
+        select(func.max(StockMetrics.computed_at))
+    ).scalar()
+    return StockPage(
+        items=items, total=int(total), has_more=has_more,
+        metrics_computed_at=metrics_computed_at,
+    )
 
 
 def get_filter_options(db: Session) -> FilterOptions:

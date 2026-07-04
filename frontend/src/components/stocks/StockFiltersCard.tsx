@@ -22,6 +22,8 @@ export interface FiltersState {
   countries: string[];
   /** Risk-tier filter from stock_scores. Empty = no filter. */
   riskTiers: ("conservative" | "moderate" | "aggressive")[];
+  /** Tipo strumento: true = escludi le righe ETF/ETN (instrument_type='etf'). */
+  excludeEtf: boolean;
   /** Min composite score 0–100, or null = no threshold. When set, unscored
    *  stocks are excluded by the backend. */
   minScore: number | null;
@@ -68,7 +70,7 @@ export interface FiltersState {
  *  so presets saved before new filter fields were added stay valid. */
 export const EMPTY_FILTERS: FiltersState = {
   indexCodes: [], sectors: [], industries: [], exchanges: [], countries: [],
-  riskTiers: [], minScore: null, scoreMax: null,
+  riskTiers: [], excludeEtf: false, minScore: null, scoreMax: null,
   profitabilityMin: null, sustainabilityMin: null, growthMin: null,
   valueMin: null, sentimentMin: null,
   techMin: null, postures: [],
@@ -517,7 +519,8 @@ export function StockFiltersCard({ state, onChange, filters }: Props) {
   // Per-area active counts (drive the badge on each collapsible header).
   const mercatoActive =
     state.indexCodes.length + state.sectors.length + state.industries.length +
-    state.exchanges.length + state.countries.length;
+    state.exchanges.length + state.countries.length +
+    (state.excludeEtf ? 1 : 0);
 
   const fondamentaliActive =
     (state.minScore != null ? 1 : 0) +
@@ -566,7 +569,8 @@ export function StockFiltersCard({ state, onChange, filters }: Props) {
     const isBool =
       kind === "aboveEma50" || kind === "aboveEma200" ||
       kind === "near52wHigh" || kind === "near52wLow" ||
-      kind === "hasSignals" || kind === "volSpike";
+      kind === "hasSignals" || kind === "volSpike" ||
+      kind === "excludeEtf";
     onChange({ ...state, [kind]: isBool ? false : null });
   };
 
@@ -639,6 +643,13 @@ export function StockFiltersCard({ state, onChange, filters }: Props) {
               options={countryOptions}
               selected={state.countries}
               onChange={(v) => set({ countries: v })}
+            />
+            {/* Tipo strumento: gli ETF/ETN (24 prodotti NYSE Arca) non hanno
+                score Qualità per design — questo toggle li nasconde. */}
+            <ToggleChip
+              label="Escludi ETF"
+              active={state.excludeEtf}
+              onToggle={() => set({ excludeEtf: !state.excludeEtf })}
             />
           </div>
         </CollapsibleArea>
@@ -916,6 +927,18 @@ export function StockFiltersCard({ state, onChange, filters }: Props) {
                 </button>
               </Badge>
             ))}
+            {state.excludeEtf && (
+              <Badge variant="secondary" className="text-xs gap-1 pr-1">
+                Escludi ETF
+                <button
+                  onClick={() => removeChip("excludeEtf", "")}
+                  className="ml-0.5 rounded hover:bg-background/60 p-0.5"
+                  aria-label="Rimuovi filtro escludi ETF"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </Badge>
+            )}
             {state.riskTiers.map((v) => (
               <Badge key={`r-${v}`} variant="secondary" className="text-xs gap-1 pr-1">
                 <span className="text-muted-foreground/80">Rischio:</span> {v}

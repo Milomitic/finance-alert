@@ -353,6 +353,13 @@ def recompute_stock_score(
     ).scalars().first()
     if stock is None:
         raise HTTPException(status_code=404, detail=f"Ticker not found: {ticker}")
+    # ETFs are excluded from the Qualità lens (recompute_all skips + purges
+    # them) — this escape hatch must not resurrect a nonsense score row.
+    if stock.instrument_type == "etf":
+        raise HTTPException(
+            status_code=422,
+            detail="Score fondamentale non applicabile agli ETF",
+        )
 
     # Force a fresh fundamentals fetch BEFORE compute_score so it picks up
     # the latest payload. Without this, the L1 might still hold a partial

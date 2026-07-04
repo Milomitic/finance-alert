@@ -83,6 +83,8 @@ export interface SearchParams {
   vol_spike?: boolean;
   /** Minimum today's volume (share count). */
   volume_min?: number;
+  /** Exclude instrument_type='etf' rows (ETF/ETN leveraged products). */
+  exclude_etf?: boolean;
   sort_by?: StockSortBy;
   sort_dir?: SortDir;
   limit?: number;
@@ -126,6 +128,7 @@ function toQuery(params: SearchParams): string {
   if (params.change_max !== undefined) sp.set("change_max", String(params.change_max));
   if (params.vol_spike) sp.set("vol_spike", "true");
   if (params.volume_min !== undefined) sp.set("volume_min", String(params.volume_min));
+  if (params.exclude_etf) sp.set("exclude_etf", "true");
   if (params.sort_by) sp.set("sort_by", params.sort_by);
   if (params.sort_dir) sp.set("sort_dir", params.sort_dir);
   if (params.limit !== undefined) sp.set("limit", String(params.limit));
