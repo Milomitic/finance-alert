@@ -17,6 +17,8 @@ import pandas as pd
 
 from loguru import logger
 
+from app.services.currency_units import is_minor_unit
+
 
 @dataclass
 class AnnualPoint:
@@ -1614,7 +1616,7 @@ def _fetch_fresh(ticker: str) -> Fundamentals:
             info = raw.get("info")
             f.micro = _extract_micro(info)
             f.profile = _extract_profile(info)
-            if isinstance(info, dict) and info.get("currency") in ("GBp", "GBX"):
+            if isinstance(info, dict) and is_minor_unit(info.get("currency")):
                 pence_scale = 0.01
             if any(getattr(f.micro, k) is not None for k in vars(f.micro)): saw_success = True
             if f.profile.long_business_summary or f.profile.website:

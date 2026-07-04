@@ -1,5 +1,5 @@
 """APScheduler job: nightly alert scan."""
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime
 
 from loguru import logger
 from sqlalchemy import select
@@ -7,11 +7,13 @@ from sqlalchemy import select
 from app.core.db import SessionLocal
 from app.models import Stock
 from app.services import scan_cancel, scan_lock
-from app.services.ohlcv_service import (
-    fetch_and_upsert,
-    latest_ohlcv_dates_bulk,
-    split_quarantined,
+from app.services.ohlcv_fetch_plan import (
+    KIND_INCREMENTAL,
+    KIND_SKIP,
+    build_fetch_plan,
+    iter_fetch_chunks,
 )
+from app.services.ohlcv_service import fetch_and_upsert
 from app.services.scan_runner import bump_heartbeat, create_scan_run, run_tracked_scan
 
 
@@ -52,112 +54,76 @@ def _run_scan_alerts_locked(trigger: str) -> None:
         run.progress_total = len(all_stocks)
         db.commit()
 
-        # Per-stock incremental/backfill split — ported from the manual scan
-        # path. The old logic decided per CHUNK: one stale stock sent the whole
-        # 100-stock chunk down period="10y", re-downloading + re-upserting
-        # ~2520 bars for the ~99 fresh stocks too (the boot catch-up hit this
-        # constantly). It also called latest_ohlcv_date TWICE per stock; the
-        # single bulk GROUP BY below replaces all those point queries.
-        # History is append-only either way (_upsert_one_stock is a pure
-        # ON CONFLICT upsert): the split changes cost, never data.
-        latest_dates = latest_ohlcv_dates_bulk(db, [s.id for s in all_stocks])
-        cutoff = date.today() - timedelta(days=30)
-        incremental = [
-            s for s in all_stocks
-            if latest_dates.get(s.id) is not None and latest_dates[s.id] >= cutoff
-        ]
-        backfill = [
-            s for s in all_stocks
-            if latest_dates.get(s.id) is None or latest_dates[s.id] < cutoff
-        ]
-        # Dead-ticker quarantine — ONLY for stocks with zero stored bars:
-        # delisted/renamed symbols never get data, so they'd re-attempt a 10y
-        # download at EVERY scan forever. N consecutive all-empty fetches →
-        # skip, weekly re-probe. Stale-but-has-data stocks are never touched.
-        _, quarantined = split_quarantined(
-            [s for s in backfill if latest_dates.get(s.id) is None]
-        )
-        if quarantined:
-            qids = {s.id for s in quarantined}
-            backfill = [s for s in backfill if s.id not in qids]
+        # Shared planning (ohlcv_fetch_plan): one bulk GROUP BY for staleness,
+        # PER-STOCK incremental/backfill split (one stale stock never drags a
+        # whole chunk down the 10y path), zero-bar dead-ticker quarantine and
+        # staleness sort — same planner as the manual scan endpoint. History
+        # is append-only either way (_upsert_one_stock is a pure ON CONFLICT
+        # upsert): the split changes cost, never data.
+        plan = build_fetch_plan(db, all_stocks)
+        if plan.quarantined:
             logger.info(
-                f"[scan_alerts] {len(quarantined)} quarantined tickers skipped "
-                f"(weekly re-probe): {[s.ticker for s in quarantined[:5]]}"
+                f"[scan_alerts] {len(plan.quarantined)} quarantined tickers skipped "
+                f"(weekly re-probe): {[s.ticker for s in plan.quarantined[:5]]}"
             )
-            run.progress_total = max(0, (run.progress_total or 0) - len(quarantined))
-        # Sort the incremental population by latest bar date so each chunk's
-        # start=min(latest)+1 is tight for ALL its members (stocks of similar
-        # staleness land together → minimal over-fetch). The manual path can't
-        # reorder (its chunks follow the UI progress order); the cron path has
-        # no such constraint.
-        incremental.sort(key=lambda s: latest_dates[s.id])
+            run.progress_total = max(0, (run.progress_total or 0) - len(plan.quarantined))
         logger.info(
-            f"[scan_alerts] fetch plan: {len(incremental)} incremental · "
-            f"{len(backfill)} backfill (10y)"
+            f"[scan_alerts] fetch plan: {len(plan.incremental)} incremental · "
+            f"{len(plan.backfill)} backfill (10y)"
         )
 
-        chunk_size = 100
-        today = date.today()
         done = 0
         fetch_failed = 0
-        for stocks_list, phase, use_start in (
-            (incremental, "fetching:incremental", True),
-            (backfill, "fetching:backfill", False),
-        ):
-            for i in range(0, len(stocks_list), chunk_size):
-                # Cooperative cancel — the Stop button must work during the
-                # multi-minute fetch phase too, not only once evaluate starts
-                # (the manual path already honors this at chunk boundaries).
-                if scan_cancel.is_cancel_requested(run.id):
-                    run.status = "failed"
-                    run.phase = None
-                    run.current_target = None
-                    run.error_message = "Cancellato dall'utente"
-                    run.completed_at = datetime.now(UTC)
-                    db.commit()
-                    scan_cancel.clear(run.id)
-                    return
-                chunk = stocks_list[i : i + chunk_size]
-                # SMART-SKIP: every stock in the chunk already has TODAY's
-                # (settled) bar — nothing new and nothing to revalidate.
-                # Advance progress without the network call.
-                if use_start:
-                    # OVERLAP BY ONE SESSION: start at min(latest), not +1, so
-                    # each stock's newest stored bar is re-requested and
-                    # corrected by the idempotent upsert (self-heals a wrongly
-                    # persisted close; keeps weekend windows non-empty).
-                    start = min(latest_dates[s.id] for s in chunk)
-                    if start >= today:
-                        done += len(chunk)
-                        run.progress_done = done
-                        bump_heartbeat(db, run)
-                        continue
-                run.phase = phase
-                run.current_target = (
-                    chunk[0].ticker if len(chunk) == 1
-                    else f"{chunk[0].ticker} +{len(chunk) - 1}"
-                )
-                bump_heartbeat(db, run)
-                try:
-                    if use_start:
-                        # SMART-INCREMENTAL: only the bars from the oldest
-                        # already-stored date in the chunk onward; the upsert
-                        # absorbs the few duplicate bars of fresher members.
-                        res = fetch_and_upsert(db, chunk, start=start)
-                    else:
-                        # Deep backfill ('10y' ≈ 2520 trading days): 5Y chart
-                        # range + long-window indicators (SMA200, MACD 26/52/18)
-                        # out of the box. Only stocks that are empty/stale.
-                        res = fetch_and_upsert(db, chunk, period="10y")
-                    fetch_failed += res.stocks_failed
-                    db.commit()
-                except Exception as e:  # noqa: BLE001
-                    logger.exception(f"[scan_alerts] chunk fetch crashed: {e}")
-                    db.rollback()
-                    # continue with next chunk
+        # Chunk semantics (overlap-by-one-session start, smart-skip of
+        # all-up-to-date chunks, incremental-then-backfill order) live in
+        # iter_fetch_chunks; this loop keeps only the cron-specific ScanRun
+        # progress/heartbeat/cancel/commit wiring.
+        for chunk, kind, start, period in iter_fetch_chunks(plan, chunk_size=100):
+            # Cooperative cancel — the Stop button must work during the
+            # multi-minute fetch phase too, not only once evaluate starts
+            # (the manual path already honors this at chunk boundaries).
+            if scan_cancel.is_cancel_requested(run.id):
+                run.status = "failed"
+                run.phase = None
+                run.current_target = None
+                run.error_message = "Cancellato dall'utente"
+                run.completed_at = datetime.now(UTC)
+                db.commit()
+                scan_cancel.clear(run.id)
+                return
+            if kind == KIND_SKIP:
+                # Every stock in the chunk already has TODAY's (settled) bar —
+                # advance progress without the network call.
                 done += len(chunk)
                 run.progress_done = done
                 bump_heartbeat(db, run)
+                continue
+            run.phase = f"fetching:{kind}"
+            run.current_target = (
+                chunk[0].ticker if len(chunk) == 1
+                else f"{chunk[0].ticker} +{len(chunk) - 1}"
+            )
+            bump_heartbeat(db, run)
+            try:
+                if kind == KIND_INCREMENTAL:
+                    # SMART-INCREMENTAL: only the bars from the oldest
+                    # already-stored date in the chunk onward; the upsert
+                    # absorbs the few duplicate bars of fresher members.
+                    res = fetch_and_upsert(db, chunk, start=start)
+                else:
+                    # Deep backfill ('10y' ≈ 2520 trading days): 5Y chart
+                    # range + long-window indicators (SMA200, MACD 26/52/18)
+                    # out of the box. Only stocks that are empty/stale.
+                    res = fetch_and_upsert(db, chunk, period=period)
+                fetch_failed += res.stocks_failed
+                db.commit()
+            except Exception as e:  # noqa: BLE001
+                logger.exception(f"[scan_alerts] chunk fetch crashed: {e}")
+                db.rollback()
+                # continue with next chunk
+            done += len(chunk)
+            run.progress_done = done
+            bump_heartbeat(db, run)
 
         # Surface batch-level fetch failures (e.g. breaker opened mid-loop and
         # every remaining chunk silently no-opped) instead of discarding the

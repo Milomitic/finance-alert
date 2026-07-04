@@ -10,6 +10,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.models import OhlcvDaily, Stock
+from app.services import currency_units
 
 
 def _is_bad_price(v: float | None) -> bool:
@@ -96,77 +97,6 @@ def _check_price_basis(db: Session, stock: Stock, rows: list[dict]) -> None:
         raise PriceBasisMismatch(stock.ticker, first["date"], stored_f, incoming)
 
 
-def _normalize_minor_unit_value(currency: str | None, value: float | None) -> float | None:
-    """Scale pence to pounds for LSE quotes.
-
-    yfinance returns LSE-listed stocks (.L) with currency='GBp' or 'GBX'
-    and prices in pence. ohlcv_daily must store pounds so that downstream
-    consumers (chart, indicators, prev_close override, score, alerts)
-    are unit-consistent with live_quote_service.
-
-    Mirror of live_quote_service._scale_pence_to_pounds. Documented in
-    docs/superpowers/specs/2026-05-08-price-units-data-integrity-design.md
-    Phase 2.
-
-    Returns None unchanged. USD / EUR / GBP (already-pounds -- e.g. CPG.L,
-    IHG.L, MTLN.L on the LSE) pass through.
-    """
-    if value is None:
-        return None
-    if currency in ("GBp", "GBX"):
-        return value / 100.0
-    return value
-
-
-def _get_yfinance_native_currency(ticker: str) -> str | None:
-    """Return yfinance's raw `fast_info["currency"]` for a ticker, or None
-    on any error (rate-limit, network, ticker not found, etc.).
-
-    Why query yfinance instead of `Stock.currency`: the catalog normalizes
-    Stock.currency uniformly to 'GBP' for both GBp-priced and GBP-priced
-    LSE stocks. Only the raw yfinance currency keeps the distinction we
-    need for the pence/pounds scaling decision.
-    """
-    try:
-        import yfinance as yf
-        t = yf.Ticker(ticker)
-        fi: Any = t.fast_info
-        return fi.get("currency")
-    except Exception as e:  # noqa: BLE001
-        logger.debug(f"[ohlcv] _get_yfinance_native_currency({ticker}): {e}")
-        return None
-
-
-# Successful currency lookups, memoized for the process lifetime — a listing's
-# quote currency doesn't change. Failures are NOT cached (retry next fetch).
-_CURRENCY_CACHE: dict[str, str] = {}
-
-
-def _native_currency_for_scaling(ticker: str) -> tuple[str | None, bool]:
-    """Resolve the native currency for the pence→pounds scaling decision.
-
-    Returns (currency, ok):
-    - Non-LSE tickers can never be GBp/GBX → (None, True) with NO network
-      call. This kills ~1 metadata HTTP round-trip per stock per fetch for
-      ~97% of the universe (fast_info.currency triggers a real request).
-    - LSE (.L) tickers: memoized fast_info lookup. On lookup failure we
-      FAIL CLOSED → (None, False): the caller must skip the stock this
-      cycle. Failing open here stored raw pence (100× too high) over
-      previously-correct pounds rows whenever the lookup transiently
-      failed for a genuinely GBp-priced stock.
-    """
-    if not ticker.upper().endswith(".L"):
-        return None, True
-    cached = _CURRENCY_CACHE.get(ticker)
-    if cached is not None:
-        return cached, True
-    currency = _get_yfinance_native_currency(ticker)
-    if currency is None:
-        return None, False
-    _CURRENCY_CACHE[ticker] = currency
-    return currency, True
-
-
 def _yf_download(tickers: list[str], **kwargs: Any) -> pd.DataFrame:
     """Wrap yfinance.download for monkeypatching in tests."""
     import yfinance as yf
@@ -221,18 +151,15 @@ def _upsert_one_stock(db: Session, stock: Stock, frame: pd.DataFrame) -> tuple[i
 
     For LSE-listed stocks where yfinance reports currency='GBp' (or 'GBX'),
     O/H/L/C are scaled pence->pounds before INSERT so the table is uniformly
-    in pounds. See docs/superpowers/specs/2026-05-08-price-units-data-integrity-design.md.
-
-    The currency check uses yfinance's raw `fast_info["currency"]` rather
-    than `Stock.currency` because the catalog normalizes Stock.currency
-    to 'GBP' uniformly for both GBp-priced and GBP-priced LSE stocks.
+    in pounds. The scaling decision + fail-closed contract live in
+    `app.services.currency_units` (single owner of the pence/pounds logic).
     """
     inserted = 0
     updated = 0
     # Resolve the pence/pounds scaling decision. Non-LSE tickers skip the
     # metadata HTTP call entirely; a failed lookup on a .L ticker aborts this
-    # stock's upsert (fail CLOSED — see _native_currency_for_scaling).
-    native_currency, currency_ok = _native_currency_for_scaling(stock.ticker)
+    # stock's upsert (fail CLOSED — see currency_units.native_currency_for_scaling).
+    native_currency, currency_ok = currency_units.native_currency_for_scaling(stock.ticker)
     if not currency_ok:
         logger.warning(
             f"[ohlcv] currency lookup failed for {stock.ticker} — skipping upsert "
@@ -285,10 +212,10 @@ def _upsert_one_stock(db: Session, stock: Stock, frame: pd.DataFrame) -> tuple[i
             )
             continue
         # Scale pence->pounds for LSE before INSERT. Pass-through for everything else.
-        open_v = _normalize_minor_unit_value(native_currency, float(row["Open"]))
-        high_v = _normalize_minor_unit_value(native_currency, float(row["High"]))
-        low_v = _normalize_minor_unit_value(native_currency, float(row["Low"]))
-        close_v = _normalize_minor_unit_value(native_currency, float(row["Close"]))
+        open_v = currency_units.scale_minor_to_major(native_currency, float(row["Open"]))
+        high_v = currency_units.scale_minor_to_major(native_currency, float(row["High"]))
+        low_v = currency_units.scale_minor_to_major(native_currency, float(row["Low"]))
+        close_v = currency_units.scale_minor_to_major(native_currency, float(row["Close"]))
         bad_open = _is_bad_price(open_v)
         bad_high = _is_bad_price(high_v)
         bad_low = _is_bad_price(low_v)

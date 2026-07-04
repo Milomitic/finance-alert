@@ -87,10 +87,14 @@ def _run_scan_in_background_locked(stock_ids: list[int] | None) -> None:
     stock during evaluate. The UI surfaces it as a small chip below the
     phase label.
     """
-    from datetime import date, timedelta
+    from datetime import date
 
     from app.services import scan_cancel
-    from app.services.ohlcv_service import latest_ohlcv_dates_bulk
+    from app.services.ohlcv_fetch_plan import (
+        KIND_SKIP,
+        build_fetch_plan,
+        iter_fetch_chunks,
+    )
     from app.services.scan_runner import (
         bump_heartbeat,
         create_scan_run,
@@ -137,15 +141,16 @@ def _run_scan_in_background_locked(stock_ids: list[int] | None) -> None:
             # progress_pulse below interpolates progress_done within each
             # batch so the bar moves smoothly between boundaries.
             chunk_size = 20
-            cutoff = date.today() - timedelta(days=30)
             # Per-stock baseline rates (sec/stock) used by the interpolator
             # to estimate how long each batch should take, so the bar moves
             # at the right pace. Slightly conservative — if the real fetch
             # finishes faster than the estimate, the main thread snaps the
             # final value forward; if slower, the interpolator caps at 95%
             # of the gap so we never overshoot the true count.
-            INCREMENTAL_SEC_PER_STOCK = 0.2  # ~5/sec on warm cache
-            BACKFILL_SEC_PER_STOCK = 1.0     # ~1/sec for 10y of bars
+            SEC_PER_STOCK = {
+                "incremental": 0.2,  # ~5/sec on warm cache
+                "backfill": 1.0,     # ~1/sec for 10y of bars
+            }
 
             # Sub-phase 0b: bulk staleness check. Single GROUP BY query —
             # cheap, but announced explicitly so the user knows what's
@@ -156,54 +161,28 @@ def _run_scan_in_background_locked(stock_ids: list[int] | None) -> None:
             )
             run.progress_done = 60
             db.commit()
-            # B2 — one bulk SELECT replaces N×chunk_size point lookups. For
-            # 1132 stocks × 12 chunks that was ~13k indexed queries; now it's
-            # a single GROUP BY scan + in-memory dict reads.
-            latest_dates = latest_ohlcv_dates_bulk(db, [s.id for s in stocks])
-            # Sort by staleness (no-data first, then oldest→newest latest bar)
-            # BEFORE chunking: chunks become homogeneous — all-backfill or
-            # all-incremental — so mixed chunks stop paying a second HTTP
-            # round-trip, and each incremental chunk's start=min(latest)
-            # window is tight for every member (a lone 29-day-stale stock no
-            # longer drags ~20 one-day-stale stocks into a month-wide window).
-            stocks.sort(key=lambda s: latest_dates.get(s.id) or date.min)
-            # Dead-ticker quarantine — applies ONLY to stocks with zero stored
-            # bars (nothing to evaluate anyway): after N consecutive all-empty
-            # fetches they skip the pointless 10y re-attempt (weekly re-probe).
-            # A stock WITH data is never quarantined here, so a few transient
-            # yfinance misses can't knock a live symbol out of the scan.
-            from app.services.ohlcv_service import split_quarantined
-            _, _quarantined = split_quarantined(
-                [s for s in stocks if latest_dates.get(s.id) is None]
-            )
-            if _quarantined:
-                qids = {s.id for s in _quarantined}
-                stocks = [s for s in stocks if s.id not in qids]
+            # Shared planning (ohlcv_fetch_plan, same planner as the cron
+            # job): one bulk staleness GROUP BY, per-stock incremental/
+            # backfill split on the 30-day cutoff, zero-bar dead-ticker
+            # quarantine, staleness sort so each incremental chunk's
+            # start=min(latest) window is tight for every member.
+            plan = build_fetch_plan(db, stocks)
+            if plan.quarantined:
                 logger.info(
-                    f"[scan] {len(_quarantined)} quarantined tickers skipped "
-                    f"(weekly re-probe): {[s.ticker for s in _quarantined[:5]]}"
+                    f"[scan] {len(plan.quarantined)} quarantined tickers skipped "
+                    f"(weekly re-probe): {[s.ticker for s in plan.quarantined[:5]]}"
                 )
-            # Count how many stocks fall on each side of the staleness cutoff
-            # — surface it in the toast so the user knows whether the chunk
-            # loop is mostly the cheap incremental path or the slow backfill
-            # path before the first chunk even commits.
-            need_backfill_n = sum(
-                1
-                for s in stocks
-                if latest_dates.get(s.id) is None or latest_dates[s.id] < cutoff
-            )
-            need_incremental_n = len(stocks) - need_backfill_n
+            # Surface the incremental/backfill split in the toast so the user
+            # knows whether the chunk loop is mostly the cheap incremental
+            # path or the slow backfill path before the first chunk commits.
+            need_backfill_n = len(plan.backfill)
+            need_incremental_n = len(plan.incremental)
             # Surface "what's the freshest bar we have" so the user knows
             # the baseline before the chunk loop starts. max() across the
             # incremental population tells them "we already have data up
             # to <date>"; the gap to today is roughly how many new bars
             # the smart-incremental path will pull.
-            inc_latest_dates = [
-                latest_dates[s.id]
-                for s in stocks
-                if latest_dates.get(s.id) is not None
-                and latest_dates[s.id] >= cutoff
-            ]
+            inc_latest_dates = [plan.latest_dates[s.id] for s in plan.incremental]
             if inc_latest_dates:
                 global_max = max(inc_latest_dates)
                 gap_days = max(0, (date.today() - global_max).days)
@@ -227,11 +206,21 @@ def _run_scan_in_background_locked(stock_ids: list[int] | None) -> None:
             # atomica di questo passo: stock scaricati / N. Il chunk loop
             # qui sotto avanza progress_done per stock (cursor) e
             # progress_pulse interpola tra i confini dei chunk.
-            run.progress_total = len(stocks)
+            run.progress_total = plan.total
             run.progress_done = 0
             db.commit()
 
-            for i in range(0, len(stocks), chunk_size):
+            # The chunk semantics — homogeneous incremental-then-backfill
+            # chunks (one stale stock never drags fresh stocks down the 10y
+            # path), overlap-by-one-session start=min(latest), smart-skip of
+            # all-up-to-date chunks — live in iter_fetch_chunks (shared with
+            # the cron job). This loop keeps only the manual-scan UI wiring:
+            # progress_pulse interpolation, phase/target labels, cooperative
+            # cancel, per-chunk commit.
+            cursor = 0
+            for chunk, kind, sub_start, sub_period in iter_fetch_chunks(
+                plan, chunk_size
+            ):
                 # Cooperative cancel during fetch phase too — the fetch can take
                 # several minutes for a fresh DB and the user shouldn't have to
                 # wait for evaluate to start before being able to stop the scan.
@@ -245,114 +234,51 @@ def _run_scan_in_background_locked(stock_ids: list[int] | None) -> None:
                     db.commit()
                     scan_cancel.clear(run.id)
                     return
-                chunk = stocks[i : i + chunk_size]
-                # SPLIT BY PERIOD — previously the entire chunk was sent
-                # with `period="10y"` whenever even ONE stock in it needed
-                # backfill, which forced yfinance to re-download 10 years
-                # of bars for the (often ~19) other stocks in the chunk
-                # that only needed "1mo". Big invisible cost on mixed
-                # chunks. By splitting the chunk into two sub-batches and
-                # making two yf.download calls with the right period for
-                # each, fresh stocks never pay the backfill tax.
-                #
-                # The cost is one extra HTTP roundtrip per mixed chunk
-                # (~150-300ms of yfinance overhead). Worth it: a single
-                # over-fetched stock at 10y replays ~2520 bars × ~5ms of
-                # UPSERT = ~12s. Recovering even one such stock per chunk
-                # already pays for the extra roundtrip.
-                incremental_chunk = [
-                    s for s in chunk
-                    if latest_dates.get(s.id) is not None
-                    and latest_dates[s.id] >= cutoff
-                ]
-                backfill_chunk = [
-                    s for s in chunk
-                    if latest_dates.get(s.id) is None
-                    or latest_dates[s.id] < cutoff
-                ]
-
-                # Run sub-batches in order: incremental first (faster,
-                # gives the user immediate progress feedback), then
-                # backfill (slower, dominates wall-time on mixed chunks).
-                # The phase label flips per sub-batch so the toast
-                # accurately announces which path is currently running.
-                #
-                # SMART-INCREMENTAL: instead of `period="1mo"` (which
-                # re-downloads ~22 bars per stock and UPSERTs identical
-                # rows), we pass `start=min(latest_date)+1` so yfinance
-                # returns ONLY the bars after the oldest already-stored
-                # date in the sub-batch. Stocks with newer latest_date
-                # get a few extra bars too (UPSERT handles the dups
-                # transparently) — accepting that minor over-fetch is
-                # the price of keeping the batch as a single HTTP call.
-                #
-                # OVERLAP BY ONE SESSION — `start = min(latest)`, NOT +1: each
-                # stock's newest stored bar is re-requested and corrected by
-                # the idempotent upsert. Self-heals a wrongly-persisted last
-                # bar (e.g. an in-flight close that slipped past the
-                # market-open guard) and keeps weekend windows non-empty
-                # (Friday's bar is included → no batch of false "no data"
-                # failures on Sat/Sun scans). Cost: one duplicate bar per
-                # stock, inside the same batched HTTP call.
-                cursor = i
-                inc_start: date | None = None
-                if incremental_chunk:
-                    inc_start = min(
-                        latest_dates[s.id] for s in incremental_chunk
-                    )
-
-                for sub_chunk, sec_per_stock, phase_label, sub_start, sub_period in (
-                    (incremental_chunk, INCREMENTAL_SEC_PER_STOCK, "fetching:incremental", inc_start, None),
-                    (backfill_chunk,    BACKFILL_SEC_PER_STOCK,    "fetching:backfill",    None,      "10y"),
-                ):
-                    if not sub_chunk:
-                        continue
-                    # Smart skip — every stock in the sub-batch already has
-                    # TODAY's (settled) bar: nothing new AND nothing to
-                    # revalidate. Advance the cursor + heartbeat without
-                    # calling yfinance, so the bar still progresses honestly.
-                    if sub_start is not None and sub_start >= date.today():
-                        end_done = cursor + len(sub_chunk)
-                        run.progress_done = end_done
-                        bump_heartbeat(db, run)
-                        cursor = end_done
-                        continue
-
-                    run.phase = phase_label
-                    tail = len(sub_chunk) - 1
-                    run.current_target = (
-                        sub_chunk[0].ticker if tail == 0
-                        else f"{sub_chunk[0].ticker} +{tail}"
-                    )
-                    db.commit()
-
-                    expected_sec = max(0.5, len(sub_chunk) * sec_per_stock)
-                    end_done = cursor + len(sub_chunk)
-                    try:
-                        with progress_pulse(
-                            run.id,
-                            start_done=cursor,
-                            end_done=end_done,
-                            expected_duration_sec=expected_sec,
-                        ):
-                            if sub_start is not None:
-                                fetch_and_upsert(db, sub_chunk, start=sub_start)
-                            else:
-                                fetch_and_upsert(db, sub_chunk, period=sub_period)
-                        db.commit()
-                    except UpstreamError as e:
-                        logger.warning(
-                            f"[scan] upstream {e.source}.{e.op} failed: {e}"
-                        )
-                        db.rollback()
-                        # continue — next sub-batch / next chunk
-                    except Exception as e:  # noqa: BLE001 — defensive last-resort
-                        logger.exception(f"[scan] unexpected error in fetch chunk: {e}")
-                        db.rollback()
-                        # continue — next sub-batch / next chunk
+                end_done = cursor + len(chunk)
+                if kind == KIND_SKIP:
+                    # Every stock in the chunk already has TODAY's (settled)
+                    # bar: nothing new AND nothing to revalidate. Advance the
+                    # cursor + heartbeat without calling yfinance, so the bar
+                    # still progresses honestly.
                     run.progress_done = end_done
                     bump_heartbeat(db, run)
                     cursor = end_done
+                    continue
+
+                run.phase = f"fetching:{kind}"
+                tail = len(chunk) - 1
+                run.current_target = (
+                    chunk[0].ticker if tail == 0
+                    else f"{chunk[0].ticker} +{tail}"
+                )
+                db.commit()
+
+                expected_sec = max(0.5, len(chunk) * SEC_PER_STOCK[kind])
+                try:
+                    with progress_pulse(
+                        run.id,
+                        start_done=cursor,
+                        end_done=end_done,
+                        expected_duration_sec=expected_sec,
+                    ):
+                        if sub_start is not None:
+                            fetch_and_upsert(db, chunk, start=sub_start)
+                        else:
+                            fetch_and_upsert(db, chunk, period=sub_period)
+                    db.commit()
+                except UpstreamError as e:
+                    logger.warning(
+                        f"[scan] upstream {e.source}.{e.op} failed: {e}"
+                    )
+                    db.rollback()
+                    # continue — next chunk
+                except Exception as e:  # noqa: BLE001 — defensive last-resort
+                    logger.exception(f"[scan] unexpected error in fetch chunk: {e}")
+                    db.rollback()
+                    # continue — next chunk
+                run.progress_done = end_done
+                bump_heartbeat(db, run)
+                cursor = end_done
 
         # Phase 2: evaluate. Start in "loading_rules" — scan_universe flips
         # to "evaluating:scoring" on the first on_progress tick (done=0) so

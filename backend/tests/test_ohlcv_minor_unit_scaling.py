@@ -1,7 +1,7 @@
-"""Tests for ohlcv_service._normalize_minor_unit_value and its application
-in _upsert_one_stock.
+"""Tests for currency_units.scale_minor_to_major and its application
+in ohlcv_service._upsert_one_stock.
 
-The helper mirrors live_quote_service._scale_pence_to_pounds: when the
+The helper is the single shared pence/pounds rule: when the
 yfinance native currency is GBp or GBX, divide by 100 to bring values
 back to pounds. yfinance returns LSE quotes in pence (e.g., HSBA.L = 1359.4)
 which need to be normalized before storage so consumer code (chart,
@@ -20,48 +20,48 @@ import pytest
 from sqlalchemy.orm import Session
 
 from app.models import OhlcvDaily, Stock
-from app.services import ohlcv_service
+from app.services import currency_units, ohlcv_service
 
 
 @pytest.fixture(autouse=True)
 def _clear_currency_memo():
     """Successful lookups are memoized per ticker for the process lifetime;
     keep tests order-independent."""
-    ohlcv_service._CURRENCY_CACHE.clear()
+    currency_units._CURRENCY_CACHE.clear()
     yield
-    ohlcv_service._CURRENCY_CACHE.clear()
+    currency_units._CURRENCY_CACHE.clear()
 
 
-# ---- _normalize_minor_unit_value (pure helper) -----------------
+# ---- scale_minor_to_major (pure helper) ------------------------
 
 def test_gbp_lowercase_p_scales_to_pounds() -> None:
-    assert ohlcv_service._normalize_minor_unit_value("GBp", 1359.4) == pytest.approx(13.594)
+    assert currency_units.scale_minor_to_major("GBp", 1359.4) == pytest.approx(13.594)
 
 
 def test_gbx_uppercase_alias_also_scales() -> None:
-    assert ohlcv_service._normalize_minor_unit_value("GBX", 1000.0) == 10.0
+    assert currency_units.scale_minor_to_major("GBX", 1000.0) == 10.0
 
 
 def test_gbp_uppercase_pounds_passes_through() -> None:
     # Mainboard GBP (e.g., CPG.L, IHG.L) -- already in pounds.
-    assert ohlcv_service._normalize_minor_unit_value("GBP", 13.59) == 13.59
+    assert currency_units.scale_minor_to_major("GBP", 13.59) == 13.59
 
 
 def test_usd_passes_through() -> None:
-    assert ohlcv_service._normalize_minor_unit_value("USD", 150.0) == 150.0
+    assert currency_units.scale_minor_to_major("USD", 150.0) == 150.0
 
 
 def test_none_currency_passes_through() -> None:
     # Defensive: when currency lookup fails, do NOT scale (fail-safe -- better
     # to have unscaled values than incorrectly scaled ones).
-    assert ohlcv_service._normalize_minor_unit_value(None, 150.0) == 150.0
+    assert currency_units.scale_minor_to_major(None, 150.0) == 150.0
 
 
 def test_none_value_returns_none() -> None:
-    assert ohlcv_service._normalize_minor_unit_value("GBp", None) is None
+    assert currency_units.scale_minor_to_major("GBp", None) is None
 
 
-# ---- _get_yfinance_native_currency ------------------------------
+# ---- get_native_currency ----------------------------------------
 
 def test_get_yfinance_native_currency_returns_currency_string() -> None:
     fake_fast_info = MagicMock()
@@ -70,7 +70,7 @@ def test_get_yfinance_native_currency_returns_currency_string() -> None:
     fake_ticker.fast_info = fake_fast_info
 
     with patch("yfinance.Ticker", return_value=fake_ticker):
-        currency = ohlcv_service._get_yfinance_native_currency("IAG.L")
+        currency = currency_units.get_native_currency("IAG.L")
     assert currency == "GBp"
 
 
@@ -78,7 +78,7 @@ def test_get_yfinance_native_currency_returns_none_on_error() -> None:
     """When yfinance throws (rate-limit, network, etc.), helper returns None
     so the caller can fail-safe (don't scale)."""
     with patch("yfinance.Ticker", side_effect=RuntimeError("rate limit")):
-        currency = ohlcv_service._get_yfinance_native_currency("IAG.L")
+        currency = currency_units.get_native_currency("IAG.L")
     assert currency is None
 
 
@@ -104,7 +104,7 @@ def test_upsert_scales_pence_when_yfinance_currency_is_gbp_minor(db: Session) ->
 
     frame = _make_pence_frame()
 
-    with patch.object(ohlcv_service, "_get_yfinance_native_currency", return_value="GBp"):
+    with patch.object(currency_units, "get_native_currency", return_value="GBp"):
         ohlcv_service._upsert_one_stock(db, stock, frame)
         db.commit()
 
@@ -126,7 +126,7 @@ def test_upsert_passes_through_when_yfinance_currency_is_usd(db: Session) -> Non
         "Close": [181.5], "Volume": [50_000_000],
     }, index=pd.date_range("2026-05-01", periods=1, freq="D"))
 
-    with patch.object(ohlcv_service, "_get_yfinance_native_currency", return_value="USD"):
+    with patch.object(currency_units, "get_native_currency", return_value="USD"):
         ohlcv_service._upsert_one_stock(db, stock, frame)
         db.commit()
 
@@ -147,7 +147,7 @@ def test_upsert_passes_through_when_yfinance_returns_gbp_uppercase(db: Session) 
         "Close": [29.40], "Volume": [5_000_000],
     }, index=pd.date_range("2026-05-01", periods=1, freq="D"))
 
-    with patch.object(ohlcv_service, "_get_yfinance_native_currency", return_value="GBP"):
+    with patch.object(currency_units, "get_native_currency", return_value="GBP"):
         ohlcv_service._upsert_one_stock(db, stock, frame)
         db.commit()
 
@@ -167,7 +167,7 @@ def test_upsert_fails_closed_when_yfinance_currency_unavailable(db: Session) -> 
 
     frame = _make_pence_frame()
 
-    with patch.object(ohlcv_service, "_get_yfinance_native_currency", return_value=None):
+    with patch.object(currency_units, "get_native_currency", return_value=None):
         ins, _ = ohlcv_service._upsert_one_stock(db, stock, frame)
         db.commit()
 
