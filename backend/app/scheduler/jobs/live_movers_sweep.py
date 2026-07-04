@@ -13,7 +13,7 @@ best-effort — neither step may break the scheduler loop or the other.
 from loguru import logger
 
 from app.core.db import SessionLocal
-from app.services import live_universe_sweep_service, price_alert_service
+from app.services import live_universe_sweep_service, position_service, price_alert_service
 
 
 def run_live_universe_sweep() -> None:
@@ -30,5 +30,12 @@ def run_live_universe_sweep() -> None:
             price_alert_service.evaluate_intraday(db)
         except Exception as exc:  # noqa: BLE001 — never break the scheduler loop
             logger.warning(f"[live-sweep] intraday price-alert eval failed: {exc}")
+        # Intraday stop/target hit detection for tracked positions — same
+        # bounded piggyback (only tickers with OPEN positions are quoted),
+        # idempotent vs the EOD pass via Position.closed_at.
+        try:
+            position_service.evaluate_intraday_hits(db)
+        except Exception as exc:  # noqa: BLE001 — never break the scheduler loop
+            logger.warning(f"[live-sweep] intraday position hit-check failed: {exc}")
     finally:
         db.close()

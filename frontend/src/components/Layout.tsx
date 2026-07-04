@@ -1,5 +1,6 @@
 import {
   Bell,
+  Briefcase,
   Building2,
   CalendarDays,
   Filter,
@@ -51,6 +52,9 @@ const NAV: NavEntry[] = [
   // sidebar so the user composes rules + reviews their alerts in one
   // surface. The /rules route was removed.
   { to: "/alerts", label: "Segnali", icon: Bell, enabled: true },
+  // Tracked trades: playbook entries persisted as positions with live P&L
+  // and auto stop/target hit detection. Briefcase = "portfolio" flavor.
+  { to: "/positions", label: "Posizioni", icon: Briefcase, enabled: true },
   { to: "/health", label: "Salute", icon: HeartPulse, enabled: true },
   // "Impostazioni" intentionally NOT here — it's pinned to the sidebar footer
   // (see SidebarFooter) next to the theme toggle, so both stay visible.

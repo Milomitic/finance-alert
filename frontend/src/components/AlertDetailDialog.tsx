@@ -18,6 +18,7 @@ import { AlertKindChip, AlertToneChip } from "@/components/AlertChips";
 import { SignalChartSvg } from "@/components/SignalChartSvg";
 import { SignalSnapshotView } from "@/components/SignalSnapshotView";
 import { PlaybookView } from "@/components/PlaybookView";
+import { TrackTradeForm } from "@/components/TrackTradeForm";
 import {
   Dialog,
   DialogContent,
@@ -490,7 +491,19 @@ export function AlertDetailDialog({ alert, onClose }: Props) {
                 Piano operativo
               </div>
               {pb ? (
-                <PlaybookView playbook={pb} />
+                <>
+                  <PlaybookView playbook={pb} />
+                  {/* B3-6: persiste entry/stop/target del piano come
+                      posizione tracciata (P&L live + chiusura automatica
+                      su stop/target). Prefill dal playbook + alert_id. */}
+                  {alert.ticker && (
+                    <TrackTradeForm
+                      ticker={alert.ticker}
+                      alertId={alert.id}
+                      playbook={pb}
+                    />
+                  )}
+                </>
               ) : (
                 <div className="rounded-lg border border-dashed border-border/60 p-3 text-xs text-muted-foreground italic text-center">
                   Piano non disponibile: manca un livello di stop strutturale per questo segnale.

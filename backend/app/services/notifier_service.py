@@ -1,6 +1,6 @@
 """Telegram notifiers — daily digest + optional instant pushes.
 
-Three send surfaces, all sharing the same bot/chat config + scrubbed logging:
+Four send surfaces, all sharing the same bot/chat config + scrubbed logging:
 
 1. `send_daily_digest`   — the 24h summary (cron `send_digest`, manual API).
 2. `notify_signal_alerts` — OPTIONAL per-scan push of strong signals, gated on
@@ -8,6 +8,8 @@ Three send surfaces, all sharing the same bot/chat config + scrubbed logging:
 3. `notify_price_alerts`  — instant push when a price-target alert fires
    intraday (no flag: the user explicitly set the target, being told
    immediately is the whole point).
+4. `notify_position_closed` — instant push when a tracked position auto-closes
+   on a stop/target hit (same no-flag rationale as the price alerts).
 """
 import json
 from dataclasses import dataclass
@@ -357,3 +359,52 @@ def notify_price_alerts(fired: list[tuple[Alert, Stock]]) -> PushResult:
 
     logger.info(f"[notifier] price push sent: {len(fired)} alert(s)")
     return PushResult(sent=True, alerts_count=len(fired), reason="ok")
+
+
+# Exit-reason → emoji for the position push. "manual" never notifies (the
+# user clicked the button themselves) but keep a fallback for safety.
+_EXIT_EMOJI: dict[str, str] = {"stop": "🛑", "target": "🎯"}
+_EXIT_LABEL: dict[str, str] = {"stop": "stop", "target": "target", "manual": "chiusura manuale"}
+
+
+def notify_position_closed(closed: list[tuple[Any, Stock]]) -> PushResult:
+    """Instant push when tracked positions auto-close on a stop/target hit.
+
+    `closed` = [(Position, Stock), ...] from position_service's hit detection.
+    Same contract as `notify_price_alerts`: no opt-in flag by design (the user
+    explicitly opened the position — being told it closed IS the feature),
+    gated only on Telegram config; callers treat it as best-effort.
+    """
+    if not closed:
+        return PushResult(sent=False, reason="no_alerts")
+    if not _telegram_enabled():
+        logger.info("[notifier] position push skipped: Telegram disabled")
+        return PushResult(sent=False, reason="telegram_disabled")
+
+    lines = ["📌 <b>Posizione chiusa</b>", ""]
+    for pos, stock in closed[:PUSH_TOP_N]:
+        emoji = _EXIT_EMOJI.get(pos.exit_reason or "", "•")
+        reason = _EXIT_LABEL.get(pos.exit_reason or "", pos.exit_reason or "?")
+        side = "Long" if pos.side == "long" else "Short"
+        entry = float(pos.entry_price)
+        line = f"{emoji} <b>{stock.ticker}</b> — {side} chiuso su {reason}"
+        if pos.exit_price is not None and entry > 0:
+            exit_p = float(pos.exit_price)
+            sign = 1 if pos.side == "long" else -1
+            pnl = sign * (exit_p - entry) / entry * 100.0
+            line += (
+                f" — entry {_fmt_price(entry)} → exit {_fmt_price(exit_p)}"
+                f" ({pnl:+.1f}%)"
+            )
+        lines.append(line)
+    if len(closed) > PUSH_TOP_N:
+        lines.append(f"... e altre {len(closed) - PUSH_TOP_N}.")
+    lines.append("")
+    lines.append(f"🔗 {settings.public_base_url}/positions")
+
+    text = _truncate("\n".join(lines))
+    if not _send_telegram(text, what="position push"):
+        return PushResult(sent=False, alerts_count=len(closed), reason="http_error")
+
+    logger.info(f"[notifier] position push sent: {len(closed)} position(s)")
+    return PushResult(sent=True, alerts_count=len(closed), reason="ok")
