@@ -423,6 +423,21 @@ def run_tracked_scan(
         except Exception as pa_exc:  # noqa: BLE001
             logger.warning(f"[scan_runner] price alert evaluation failed (non-fatal): {pa_exc}")
 
+        # EOD stop/target hit detection for tracked positions — same
+        # best-effort contract as the price alerts above (the scan already
+        # succeeded), idempotent vs the intraday sweep via Position.closed_at.
+        try:
+            from app.services import position_service
+
+            n_closed = position_service.evaluate_eod_hits(db)
+            if n_closed:
+                logger.info(
+                    f"[scan_runner] {n_closed} position(s) auto-closed on stop/target "
+                    f"for ScanRun {run.id}"
+                )
+        except Exception as pos_exc:  # noqa: BLE001
+            logger.warning(f"[scan_runner] position hit-check failed (non-fatal): {pos_exc}")
+
         # All persisting work done — flip to success + clear phase + stamp completed_at
         # in a single commit so the UI's post-completion 30s window starts cleanly.
         run.status = "success"
