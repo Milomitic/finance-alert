@@ -30,18 +30,35 @@ monitor's convention.
 All rates are PERCENTAGES (0..100) to match the calibration artifact and the
 rest of the platform UI; `avg_fwd_return` is likewise a percentage (the stored
 `fwd_return` is a ratio).
+
+REPLAY SEGMENT (B4-5): the four most-fired 63d detectors have ZERO live
+warehouse rows (first maturations ~mid-August 2026). The historical-replay
+backfill (`app.scripts.backfill_replay_outcomes`) fills that gap — but since
+`signal_outcomes.alert_id` is a non-nullable FK, its output lives in an
+artifact (`app/data/replay_outcomes_summary.json`) instead of table rows.
+This service merges it as a SEPARATE `replay` block in the response: same
+cell shape as the live cube, `low_confidence` stamped at read time against
+the caller's min_n, and NEVER mixed into the live hit rates (the replay has
+no emission-gate survivorship of the live path). Missing artifact → the
+block is None and `meta.replay_available` is False.
 """
 from __future__ import annotations
 
+import json
 from collections import defaultdict
 from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
+from pathlib import Path
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import Alert, SignalOutcome
 from app.signals.horizon import _PRIOR
+
+# Replay artifact written by `app.scripts.backfill_replay_outcomes`.
+# Module-level so tests can monkeypatch it to a tmp path.
+_REPLAY_ARTIFACT = Path(__file__).resolve().parent.parent / "data" / "replay_outcomes_summary.json"
 
 # Honesty floor: cells with fewer matured outcomes than this are flagged
 # `low_confidence` (mirrors signal_drift_service._DEFAULT_MIN_N = 30).
@@ -99,6 +116,53 @@ def _breakdown(
     return [_cell(k, groups[k], min_n) for k in order if k in groups]
 
 
+def _load_replay_summary() -> dict | None:
+    """Read the replay artifact (None on absent/corrupt/empty — the segment
+    simply doesn't render, mirroring calibration_map's degrade-gracefully
+    convention). Read per call, not cached: the file is a few KB and the
+    endpoint is on-demand — consistent with this module's no-caching stance."""
+    try:
+        if not _REPLAY_ARTIFACT.exists():
+            return None
+        data = json.loads(_REPLAY_ARTIFACT.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(data, dict) or not isinstance(data.get("detectors"), dict):
+        return None
+    return data if data["detectors"] else None
+
+
+def _replay_cell(cell: dict, min_n: int) -> dict:
+    """Stamp `low_confidence` on an artifact cell at read time (the artifact
+    stores only the counts/rates — the honesty floor is the caller's)."""
+    return {**cell, "low_confidence": int(cell.get("n", 0)) < min_n}
+
+
+def _replay_block(summary: dict, min_n: int) -> dict:
+    """Shape the artifact into the response's `replay` segment. Detectors
+    sorted by descending total n like the live list."""
+    detectors: list[dict] = []
+    for name, block in sorted(
+        summary["detectors"].items(),
+        key=lambda kv: (-int(kv[1].get("total", {}).get("n", 0)), kv[0]),
+    ):
+        detectors.append({
+            "detector": name,
+            "total": _replay_cell(block.get("total", {"key": "totale", "n": 0}), min_n),
+            "by_regime": [_replay_cell(c, min_n) for c in block.get("by_regime", [])],
+            "by_tone": [_replay_cell(c, min_n) for c in block.get("by_tone", [])],
+            "by_strength": [_replay_cell(c, min_n) for c in block.get("by_strength", [])],
+        })
+    return {
+        "generated_at": summary.get("generated_at"),
+        "n_signals": int(summary.get("n_signals", 0)),
+        "date_min": summary.get("date_min"),
+        "date_max": summary.get("date_max"),
+        "params": summary.get("params"),
+        "detectors": detectors,
+    }
+
+
 def compute_detector_performance(db: Session, *, min_n: int = _DEFAULT_MIN_N) -> dict:
     """The full detector × regime × tone × strength-band performance cube.
 
@@ -141,6 +205,10 @@ def compute_detector_performance(db: Session, *, min_n: int = _DEFAULT_MIN_N) ->
             ),
         })
 
+    # Replay segment (B4-5): additive, clearly labeled, never blended into
+    # the live cells above.
+    replay_summary = _load_replay_summary()
+
     dates = [r.signal_date for r in rows]
     meta = {
         "total_rows": len(rows),
@@ -152,5 +220,10 @@ def compute_detector_performance(db: Session, *, min_n: int = _DEFAULT_MIN_N) ->
         "date_max": max(dates).isoformat() if dates else None,
         "min_n": min_n,
         "computed_at": datetime.now(UTC).isoformat(),
+        "replay_available": replay_summary is not None,
     }
-    return {"meta": meta, "detectors": detectors}
+    return {
+        "meta": meta,
+        "detectors": detectors,
+        "replay": _replay_block(replay_summary, min_n) if replay_summary else None,
+    }
