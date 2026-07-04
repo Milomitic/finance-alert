@@ -279,10 +279,14 @@ def run(*, sample: int, step: int, window: int, min_bars: int,
             payload = {
                 "version": map_version,
                 "generated_by": "app.scripts.signal_detector_outcomes",
-                # base_rate per detector = tbs% (trade-playbook TP1-before-stop
-                # win-rate), NOT the flat close-to-close hit. close_to_close_hit
-                # is kept per detector for comparison.
-                "base_rate_metric": "trade_playbook_tp1_before_stop",
+                # base_rate per detector = round(absHit), the close-to-close
+                # directional hit-rate. The C2 candidate (trade-playbook
+                # TP1-before-stop) was REJECTED by the data (narrower spread,
+                # undefined for 6/14 detectors) — tbs_rate/tbs_n stay only as
+                # diagnostics. This label was stale ("trade_playbook_tp1_
+                # before_stop") until 2026-07-04 while the VALUE was always
+                # absHit; no consumer reads it, but labels shouldn't lie.
+                "base_rate_metric": "close_to_close_abs_hit",
                 "universe_stocks": len(universe),
                 "signals": int(n_signals),
                 "horizons": {"short": H_SHORT, "medium": H_MED, "long": H_LONG},
