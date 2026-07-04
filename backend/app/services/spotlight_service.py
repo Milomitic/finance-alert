@@ -3,7 +3,6 @@
 - 1x most_alerted_7d (from stats_service helper)
 - 1x vol_spike (from market snapshot movers.volume_spikes[0])
 Each card includes a sparkline (last 30 close)."""
-import json
 from typing import Any
 
 from sqlalchemy import select
@@ -38,13 +37,9 @@ def _stock_id_by_ticker(db: Session, ticker: str) -> int | None:
 
 def build(db: Session) -> list[dict[str, Any]]:
     cards: list[dict[str, Any]] = []
-    snap = market_stats_service.get_latest_snapshot(db)
-    payload: dict[str, Any] = {}
-    if snap is not None:
-        try:
-            payload = json.loads(snap.payload)
-        except Exception:
-            payload = {}
+    # Memoized parse (B4-11a) — shared, READ-ONLY payload dict; corrupt/absent
+    # snapshot degrades to {} exactly like the old inline try/except.
+    _snap, payload = market_stats_service.get_latest_snapshot_payload(db)
 
     movers = payload.get("movers", {}) if payload else {}
     gainers = movers.get("gainers", [])

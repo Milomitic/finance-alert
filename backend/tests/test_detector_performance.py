@@ -10,12 +10,15 @@ in test_signal_drift_service.py; this suite tests the aggregation itself):
   - the low_confidence honesty flag (n < min_n per cell, totals included);
   - archived alerts excluded;
   - meta coverage envelope (rows, detectors present vs 17, date range);
-  - the read-only endpoint (auth + envelope shape + empty warehouse).
+  - the read-only endpoint (auth + envelope shape + empty warehouse);
+  - the replay segment (B4-5): artifact merge, read-time low_confidence,
+    graceful degrade on missing/corrupt artifact, live cells untouched.
 """
 from __future__ import annotations
 
 import json
 from datetime import UTC, date, datetime
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -31,6 +34,14 @@ from app.services import detector_performance_service as perf
 # --------------------------------------------------------------------------- #
 
 _SEQ = {"n": 0}
+
+
+@pytest.fixture(autouse=True)
+def _no_replay_artifact(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """Point the replay artifact at a nonexistent tmp file by default, so
+    these tests stay deterministic even when a real artifact has been
+    generated in the repo. Replay tests re-point it at a written file."""
+    monkeypatch.setattr(perf, "_REPLAY_ARTIFACT", tmp_path / "replay_missing.json")
 
 
 def _mk_outcome(
@@ -244,6 +255,102 @@ def test_empty_warehouse(db: Session):
     assert out["meta"]["n_detectors"] == 0
     assert out["meta"]["date_min"] is None
     assert out["meta"]["date_max"] is None
+    # No replay artifact → segment absent, honestly flagged.
+    assert out["meta"]["replay_available"] is False
+    assert out["replay"] is None
+
+
+# --------------------------------------------------------------------------- #
+# Replay segment (B4-5 artifact merge)                                        #
+# --------------------------------------------------------------------------- #
+
+def _write_replay_artifact(path: Path, *, n_total: int = 120) -> dict:
+    """A minimal valid artifact: one 63d detector with a thin bear cell."""
+    def cell(key: str, n: int, hit: float = 55.0) -> dict:
+        return {"key": key, "n": n, "abs_hit_rate": hit,
+                "mkt_neutral_hit_rate": 49.0, "avg_fwd_return": 1.5}
+
+    payload = {
+        "version": "1",
+        "generated_by": "app.scripts.backfill_replay_outcomes",
+        "source": "replay",
+        "generated_at": "2026-07-01T00:00:00+00:00",
+        "params": {"years": 10.0, "step": 42, "window": 500},
+        "universe_stocks": 300,
+        "n_signals": n_total,
+        "date_min": "2016-07-04",
+        "date_max": "2026-03-15",
+        "detectors": {
+            "trend_pullback": {
+                "total": cell("totale", n_total),
+                "by_regime": [cell("bull", n_total - 10), cell("bear", 10)],
+                "by_tone": [cell("bull", n_total)],
+                "by_strength": [cell("60-74", n_total - 5), cell(">=75", 5)],
+            },
+        },
+    }
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    return payload
+
+
+def test_replay_segment_merged_with_read_time_low_confidence(
+    db: Session, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+):
+    artifact = tmp_path / "replay.json"
+    _write_replay_artifact(artifact)
+    monkeypatch.setattr(perf, "_REPLAY_ARTIFACT", artifact)
+    _mk_outcome(db, detector="volume_breakout")  # one live row, untouched
+    db.commit()
+
+    out = perf.compute_detector_performance(db)
+    # Live side untouched by the replay merge.
+    assert [d["detector"] for d in out["detectors"]] == ["volume_breakout"]
+    assert out["meta"]["total_rows"] == 1
+    assert out["meta"]["replay_available"] is True
+
+    r = out["replay"]
+    assert r["n_signals"] == 120
+    assert r["generated_at"] == "2026-07-01T00:00:00+00:00"
+    assert r["date_min"] == "2016-07-04"
+    assert r["params"]["years"] == 10.0
+    row = r["detectors"][0]
+    assert row["detector"] == "trend_pullback"
+    # low_confidence stamped at read time against min_n (default 30).
+    assert row["total"]["n"] == 120
+    assert row["total"]["low_confidence"] is False
+    regimes = _cells_by_key(row["by_regime"])
+    assert regimes["bear"]["n"] == 10
+    assert regimes["bear"]["low_confidence"] is True
+    bands = _cells_by_key(row["by_strength"])
+    assert bands[">=75"]["low_confidence"] is True
+
+
+def test_replay_low_confidence_follows_min_n(
+    db: Session, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+):
+    artifact = tmp_path / "replay.json"
+    _write_replay_artifact(artifact, n_total=120)
+    monkeypatch.setattr(perf, "_REPLAY_ARTIFACT", artifact)
+
+    out = perf.compute_detector_performance(db, min_n=200)
+    assert out["replay"]["detectors"][0]["total"]["low_confidence"] is True
+
+
+def test_corrupt_or_empty_replay_artifact_degrades_gracefully(
+    db: Session, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+):
+    artifact = tmp_path / "replay.json"
+    artifact.write_text("{ not json", encoding="utf-8")
+    monkeypatch.setattr(perf, "_REPLAY_ARTIFACT", artifact)
+    out = perf.compute_detector_performance(db)
+    assert out["meta"]["replay_available"] is False
+    assert out["replay"] is None
+
+    # Valid JSON but no detectors → same degrade (nothing to render).
+    artifact.write_text(json.dumps({"detectors": {}}), encoding="utf-8")
+    out = perf.compute_detector_performance(db)
+    assert out["meta"]["replay_available"] is False
+    assert out["replay"] is None
 
 
 # --------------------------------------------------------------------------- #
@@ -272,10 +379,32 @@ def test_detector_performance_endpoint_shape_empty(client: TestClient):
     r = client.get("/api/platform/detector-performance")
     assert r.status_code == 200
     body = r.json()
-    assert set(body.keys()) == {"meta", "detectors"}
+    assert set(body.keys()) == {"meta", "detectors", "replay"}
     assert body["detectors"] == []
     assert body["meta"]["total_rows"] == 0
     assert body["meta"]["n_detectors_universe"] == 17
+    assert body["meta"]["replay_available"] is False
+    assert body["replay"] is None
+
+
+def test_detector_performance_endpoint_returns_replay_segment(
+    client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+):
+    """The replay block passes response_model validation end-to-end."""
+    artifact = tmp_path / "replay.json"
+    _write_replay_artifact(artifact)
+    monkeypatch.setattr(perf, "_REPLAY_ARTIFACT", artifact)
+
+    r = client.get("/api/platform/detector-performance")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["meta"]["replay_available"] is True
+    row = body["replay"]["detectors"][0]
+    assert row["detector"] == "trend_pullback"
+    assert set(row["total"].keys()) == {
+        "key", "n", "abs_hit_rate", "mkt_neutral_hit_rate",
+        "avg_fwd_return", "low_confidence",
+    }
 
 
 def test_detector_performance_endpoint_returns_cube(client: TestClient, db: Session):

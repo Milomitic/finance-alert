@@ -89,20 +89,16 @@ def _candidate_us_tickers(db: Session) -> list[str]:
     Movers come first so they survive the _CANDIDATE_CAP truncation."""
     from app.services import market_stats_service
 
-    # (1) movers US set, in priority order.
+    # (1) movers US set, in priority order. Memoized parse (B4-11a) —
+    # shared, READ-ONLY payload dict; corrupt/absent snapshot → {}.
     mover_tickers: list[str] = []
-    snap = market_stats_service.get_latest_snapshot(db)
-    if snap is not None:
-        try:
-            payload = json.loads(snap.payload or "{}")
-        except (json.JSONDecodeError, TypeError):
-            payload = {}
-        movers = payload.get("movers") or {}
-        for key in ("top_volume", "gainers", "losers"):
-            for row in movers.get(key, []) or []:
-                t = row.get("ticker")
-                if t:
-                    mover_tickers.append(t)
+    _snap, payload = market_stats_service.get_latest_snapshot_payload(db)
+    movers = payload.get("movers") or {}
+    for key in ("top_volume", "gainers", "losers"):
+        for row in movers.get(key, []) or []:
+            t = row.get("ticker")
+            if t:
+                mover_tickers.append(t)
 
     # (2) broad liquid base: top US catalog names by market cap.
     liquid: list[str] = db.execute(

@@ -151,8 +151,37 @@ class DetectorPerfMetaOut(BaseModel):
     date_max: str | None           # latest signal_date covered (ISO)
     min_n: int                     # per-cell low_confidence threshold
     computed_at: str               # ISO-8601 UTC
+    # True when the historical-replay artifact (B4-5) is present and the
+    # response carries the separate `replay` segment.
+    replay_available: bool = False
+
+
+class DetectorReplayRowOut(BaseModel):
+    """One detector's REPLAY aggregates — same cube shape as the live row,
+    but sourced from the historical-replay artifact (source='replay'), not
+    from matured alerts. Rendered as a separate segment, never merged."""
+    detector: str
+    total: DetectorPerfCellOut
+    by_regime: list[DetectorPerfCellOut]
+    by_tone: list[DetectorPerfCellOut]
+    by_strength: list[DetectorPerfCellOut]
+
+
+class DetectorReplayOut(BaseModel):
+    """Historical-replay segment (app.scripts.backfill_replay_outcomes).
+    A DIFFERENT population from the live warehouse — the replay has no
+    emission-gate survivorship of the live settings history — so the UI must
+    label it 'replay' and never blend it into live hit rates."""
+    generated_at: str | None = None   # artifact generation timestamp (ISO)
+    n_signals: int                    # replayed occurrences aggregated
+    date_min: str | None = None       # earliest observation bar covered (ISO)
+    date_max: str | None = None       # latest observation bar covered (ISO)
+    params: dict | None = None        # replay run parameters (years/step/window/...)
+    detectors: list[DetectorReplayRowOut]   # sorted by descending total n
 
 
 class DetectorPerformanceOut(BaseModel):
     meta: DetectorPerfMetaOut
     detectors: list[DetectorPerfRowOut]   # sorted by descending total n
+    # Present only when the replay artifact exists (meta.replay_available).
+    replay: DetectorReplayOut | None = None
