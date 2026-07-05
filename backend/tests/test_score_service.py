@@ -28,7 +28,6 @@ from app.services.score_service import (
     _classify_risk,
     _quality,
     _growth,
-    _momentum,
     _renormalize_weights,
     _sentiment,
     _value,
@@ -223,40 +222,14 @@ def test_value_missing_micro_returns_none():
 
 
 # ---------------------------------------------------------------------------
-# Momentum
+# Shared price-series helper (was in the deleted Momentum section; still
+# used by the _build_score tests below. The dead `_momentum` pillar + its
+# three tests were removed in the B4-9 cleanup — price-action is scored by
+# the TechnicalScore lens, see test_technical_score.py.)
 # ---------------------------------------------------------------------------
 
 def _strong_uptrend_closes(n: int = 260, start: float = 100.0, drift: float = 0.5) -> pd.Series:
     return pd.Series([start + drift * i for i in range(n)])
-
-
-def _strong_downtrend_closes(n: int = 260, start: float = 200.0, drift: float = -0.5) -> pd.Series:
-    return pd.Series([max(1.0, start + drift * i) for i in range(n)])
-
-
-def test_momentum_strong_uptrend_high_score():
-    closes = _strong_uptrend_closes()
-    micro = MicroData(fifty_two_week_change=0.60, sp500_fifty_two_week_change=0.10)
-    score, _, br = _momentum(_stock(), micro, closes)
-    assert score is not None
-    assert score >= 60.0
-    assert br["change_52w"]["score"] == 100.0
-    assert br["macd"]["score"] == 100.0
-
-
-def test_momentum_strong_downtrend_low_score():
-    closes = _strong_downtrend_closes()
-    micro = MicroData(fifty_two_week_change=-0.40, sp500_fifty_two_week_change=0.10)
-    score, _, br = _momentum(_stock(), micro, closes)
-    assert score is not None
-    assert score < 35.0
-    assert br["macd"]["raw"]["state"] == "bearish_or_flat"
-
-
-def test_momentum_no_inputs_returns_none():
-    score, _, br = _momentum(_stock(), None, None)
-    assert score is None
-    assert br == {}
 
 
 # ---------------------------------------------------------------------------
