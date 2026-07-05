@@ -30,7 +30,7 @@ from app.api import scan_log as scan_log_router
 from app.api import scores as scores_router
 from app.api import sectors as sectors_router
 from app.api import stocks as stocks_router
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, require_json
 from app.core.errors import UpstreamError
 from app.core.logging import configure_logging, hydrate_log_buffer_from_disk
 from app.models import User
@@ -278,7 +278,7 @@ def health() -> dict[str, object]:
     return {"status": "ok", "scheduler_running": get_scheduler().running, "version": app.version}
 
 
-@app.post("/api/admin/warmup-fundamentals")
+@app.post("/api/admin/warmup-fundamentals", dependencies=[Depends(require_json)])
 def warmup_fundamentals(
     limit: int | None = None,
     skip_cached: bool = True,
@@ -365,7 +365,7 @@ def warmup_fundamentals(
         db.close()
 
 
-@app.post("/api/admin/redownload-ohlcv")
+@app.post("/api/admin/redownload-ohlcv", dependencies=[Depends(require_json)])
 def redownload_ohlcv(
     limit: int | None = None,
     period: str = "10y",

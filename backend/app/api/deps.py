@@ -40,12 +40,30 @@ def get_current_user(
     return user
 
 
+def _has_body(request: Request) -> bool:
+    """True if the request advertises a body. HTTP/1.1 requires either
+    Content-Length or Transfer-Encoding for a body to exist; httpx/fetch
+    body-less POSTs send `Content-Length: 0` or omit the header entirely."""
+    if request.headers.get("transfer-encoding"):
+        return True
+    length = request.headers.get("content-length", "").strip()
+    return bool(length) and length != "0"
+
+
 def require_json(request: Request) -> None:
-    """CSRF lite: enforce Content-Type: application/json on mutating routes."""
+    """CSRF lite: enforce Content-Type: application/json on mutating routes.
+
+    Body-less mutations WITHOUT a Content-Type are allowed (POST /scan/stop,
+    DELETE, the admin triggers, ...): the FE client (`frontend/src/api/
+    client.ts`) only stamps the header when a body exists, and this exemption
+    does not reopen the form-CSRF vector — an HTML form submission always
+    carries a Content-Type (x-www-form-urlencoded / multipart / text/plain),
+    so a forged form POST still lands in the 415 branch below.
+    """
     if request.method in {"POST", "PATCH", "PUT", "DELETE"}:
         ctype = request.headers.get("content-type", "").split(";")[0].strip()
-        if request.method == "DELETE" and not ctype:
-            return  # DELETE without body is fine
+        if not ctype and not _has_body(request):
+            return  # body-less mutation (no header, no payload) is fine
         if ctype != "application/json":
             raise HTTPException(
                 status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,

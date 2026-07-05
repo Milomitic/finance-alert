@@ -16,6 +16,13 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     admin_username: str = "admin"
     admin_password_hash: str = ""
+    # Throttling login (B4-11, light): dopo N fallimenti consecutivi per uno
+    # username il login risponde 429 + Retry-After finché non passano
+    # `login_lockout_seconds` dall'ultimo fallimento (finestra sliding).
+    # Stato in-memory: si azzera al riavvio del backend, by design
+    # (local-first, processo singolo). Vedi services/login_throttle.py.
+    login_max_failed_attempts: int = 5
+    login_lockout_seconds: int = 60
     public_base_url: str = "http://localhost:8000"
     telegram_bot_token: str = ""
     telegram_chat_id: str = ""
