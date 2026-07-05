@@ -122,7 +122,11 @@ def patch_position(
     return PositionOut(**position_service.get_position(db, pos.id))
 
 
-@router.delete("/api/positions/{position_id}", status_code=204)
+@router.delete(
+    "/api/positions/{position_id}",
+    status_code=204,
+    dependencies=[Depends(require_json)],
+)
 def delete_position(
     position_id: int,
     db: Session = Depends(get_db),

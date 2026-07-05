@@ -441,7 +441,7 @@ def signal_calibration(_user: User = Depends(get_current_user)) -> dict:
     return {"version": cal.version, "detectors": cal.all_detector_stats()}
 
 
-@router.post("/scan/stop", response_model=ScanStopResult)
+@router.post("/scan/stop", response_model=ScanStopResult, dependencies=[Depends(require_json)])
 def stop_scan(
     db: Session = Depends(get_db), _user: User = Depends(get_current_user)
 ) -> ScanStopResult:
@@ -640,7 +640,11 @@ def trigger_scan(
     return ScanAccepted(accepted=True)
 
 
-@router.post("/scan-stock/{ticker}", response_model=StockSignalScanOut)
+@router.post(
+    "/scan-stock/{ticker}",
+    response_model=StockSignalScanOut,
+    dependencies=[Depends(require_json)],
+)
 def scan_stock_signals(
     ticker: str,
     db: Session = Depends(get_db),

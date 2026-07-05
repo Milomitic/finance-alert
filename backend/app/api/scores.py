@@ -13,7 +13,7 @@ from loguru import logger
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, get_db
+from app.api.deps import get_current_user, get_db, require_json
 from app.core.db import SessionLocal
 from app.core.errors import UpstreamError
 from app.core.visibility import visible_country_clause
@@ -278,7 +278,11 @@ def get_stock_technical(
     )
 
 
-@router.post("/stocks/{ticker}/technical/recompute", response_model=TechnicalScoreOut)
+@router.post(
+    "/stocks/{ticker}/technical/recompute",
+    response_model=TechnicalScoreOut,
+    dependencies=[Depends(require_json)],
+)
 def recompute_stock_technical(
     ticker: str,
     db: Session = Depends(get_db),
@@ -321,7 +325,11 @@ def recompute_stock_technical(
     )
 
 
-@router.post("/stocks/{ticker}/score/recompute", response_model=StockScoreOut)
+@router.post(
+    "/stocks/{ticker}/score/recompute",
+    response_model=StockScoreOut,
+    dependencies=[Depends(require_json)],
+)
 def recompute_stock_score(
     ticker: str,
     db: Session = Depends(get_db),
@@ -437,6 +445,7 @@ def _run_recompute_in_background() -> None:
     "/scores/recompute-all",
     response_model=ScanAccepted,
     status_code=202,
+    dependencies=[Depends(require_json)],
 )
 def trigger_recompute_all(
     background_tasks: BackgroundTasks,
@@ -507,7 +516,11 @@ def recompute_status(
     return build_scan_status_out(latest)
 
 
-@router.post("/scores/recompute-stop", response_model=ScanStopResult)
+@router.post(
+    "/scores/recompute-stop",
+    response_model=ScanStopResult,
+    dependencies=[Depends(require_json)],
+)
 def stop_recompute(
     db: Session = Depends(get_db),
     _user: User = Depends(get_current_user),

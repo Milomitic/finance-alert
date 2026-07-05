@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, get_db
+from app.api.deps import get_current_user, get_db, require_json
 from app.models import PriceAlert, Stock, User
 from app.schemas.price_alert import PriceAlertCreate, PriceAlertOut, PriceAlertUpdate
 from app.services import price_alert_service
@@ -38,6 +38,7 @@ def list_price_alerts(
     "/api/stocks/{ticker}/price-alerts",
     response_model=PriceAlertOut,
     status_code=201,
+    dependencies=[Depends(require_json)],
 )
 def create_price_alert(
     ticker: str,
@@ -56,7 +57,11 @@ def create_price_alert(
     return PriceAlertOut.model_validate(pa, from_attributes=True)
 
 
-@router.patch("/api/price-alerts/{alert_id}", response_model=PriceAlertOut)
+@router.patch(
+    "/api/price-alerts/{alert_id}",
+    response_model=PriceAlertOut,
+    dependencies=[Depends(require_json)],
+)
 def update_price_alert(
     alert_id: int,
     body: PriceAlertUpdate,
@@ -76,7 +81,11 @@ def update_price_alert(
     return PriceAlertOut.model_validate(pa, from_attributes=True)
 
 
-@router.delete("/api/price-alerts/{alert_id}", status_code=204)
+@router.delete(
+    "/api/price-alerts/{alert_id}",
+    status_code=204,
+    dependencies=[Depends(require_json)],
+)
 def delete_price_alert(
     alert_id: int,
     db: Session = Depends(get_db),

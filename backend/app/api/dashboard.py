@@ -3,7 +3,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, get_db
+from app.api.deps import get_current_user, get_db, require_json
 from app.core.db import SessionLocal
 from app.models import OhlcvDaily, ScanRun, Stock, User
 from app.schemas.alert import AlertOut, ScanStatusOut
@@ -147,7 +147,9 @@ def _premarket_refresh_task() -> None:
         db.close()
 
 
-@router.post("/premarket-movers/refresh", status_code=202)
+@router.post(
+    "/premarket-movers/refresh", status_code=202, dependencies=[Depends(require_json)]
+)
 def refresh_premarket_movers(
     background: BackgroundTasks,
     _user: User = Depends(get_current_user),

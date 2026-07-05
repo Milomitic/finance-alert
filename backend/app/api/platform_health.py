@@ -13,7 +13,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, get_db
+from app.api.deps import get_current_user, get_db, require_json
 from app.core.log_buffer import _INSTANCE as log_buffer
 from app.models import Alert, ScanRun, User
 from app.schemas.platform import (
@@ -179,7 +179,7 @@ def detector_performance(
     return DetectorPerformanceOut(**data)
 
 
-@router.post("/probes/run", status_code=202)
+@router.post("/probes/run", status_code=202, dependencies=[Depends(require_json)])
 def run_probes_now(
     background: BackgroundTasks,
     _user: User = Depends(get_current_user),
