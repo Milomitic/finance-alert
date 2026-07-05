@@ -29,48 +29,78 @@ import { useDashboardSummary } from "@/hooks/useDashboardSummary";
 import { useMarketSummary } from "@/hooks/useMarketSummary";
 import { usePremarketMovers } from "@/hooks/usePremarketMovers";
 
+/* ─── Per-row skeletons ─────────────────────────────────────────────────── */
+/* Each market-driven row has its own skeleton that mirrors the loaded
+ * layout EXACTLY — same outer grids, same row heights, same column
+ * templates — so the transition loading→data just fills in content
+ * rather than reflowing the page. They are composed both by the
+ * full-page DashboardSkeleton (first paint, nothing resolved yet) and
+ * individually by the main render when ONLY the market summary is
+ * still in flight (B4-11 de-waterfall: the dashboard no longer blocks
+ * every card behind the slowest of the two summary queries).
+ */
+
+function HeroRowSkeleton() {
+  return (
+    // HeroStrip row: [340px_1fr_200px] split at lg+.
+    <div className="grid gap-3 lg:grid-cols-[340px_1fr_200px]">
+      <CardSkeleton className="h-[120px]" rows={3} />
+      <CardSkeleton label="MERCATI LIVE" rows={4} strongHeader className="h-[120px]" />
+      <CardSkeleton className="h-[120px]" rows={3} />
+    </div>
+  );
+}
+
+function SpotlightRowSkeleton() {
+  return (
+    // Row 2: Volumi + 52w (top-left pair) + TopMovers, with pre-market
+    // on the right — mirrors the real row template.
+    <div className="grid gap-3 lg:grid-cols-[3fr_2fr] lg:h-[440px]">
+      <div className="grid gap-3 lg:grid-cols-3">
+        <CardSkeleton label="VOLUMI" rows={8} strongHeader className="h-[400px]" />
+        <CardSkeleton label="52 SETTIMANE" rows={8} strongHeader className="h-[400px]" />
+        <CardSkeleton label="TOP MOVERS" rows={8} strongHeader className="h-[400px]" />
+      </div>
+      <CardSkeleton label="PRE-MARKET USA" rows={8} strongHeader className="h-[400px]" />
+    </div>
+  );
+}
+
+function BreadthRowSkeleton() {
+  return (
+    // Lower row: breadth (wide, bottom-left) + RSI + Sectors (lg:h-[520px]).
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-[2fr_1fr_1fr] gap-3 lg:h-[520px]">
+      <CardSkeleton label="BREADTH PER INDICE" rows={8} strongHeader />
+      <CardSkeleton label="RSI DISTRIBUTION" rows={6} strongHeader />
+      <CardSkeleton label="SETTORI" rows={6} strongHeader />
+    </div>
+  );
+}
+
+function AlertsPanelSkeleton() {
+  // Alerts panel — single-row, fixed height.
+  return <CardSkeleton label="SEGNALI" rows={8} strongHeader className="lg:h-[420px]" />;
+}
+
 /**
- * First-paint loading skeleton for the dashboard. The structure
- * mirrors the loaded layout EXACTLY — same outer grids, same row
- * heights, same column templates — so the transition loaded→data
- * just fills in content rather than reflowing the page. This was a
- * deliberate replacement of the previous "generic boxes grid"
- * skeleton (3 hero + 1 big + 4 mini) which did NOT match the final
- * structure and caused a visible jump.
+ * First-paint loading skeleton for the dashboard, shown ONLY while BOTH
+ * summary queries are still on their first fetch with nothing cached.
+ * Composed from the per-row skeletons above so the full-page and the
+ * per-section variants can never drift apart structurally.
  */
 function DashboardSkeleton() {
   return (
     <div className="space-y-4">
-      {/* HeroStrip row: [340px_1fr_200px] split at lg+. */}
-      <div className="grid gap-3 lg:grid-cols-[340px_1fr_200px]">
-        <CardSkeleton className="h-[120px]" rows={3} />
-        <CardSkeleton label="MERCATI LIVE" rows={4} strongHeader className="h-[120px]" />
-        <CardSkeleton className="h-[120px]" rows={3} />
-      </div>
-      {/* Row 2: Volumi + 52w (top-left pair) + TopMovers, with pre-market
-          on the right — mirrors the real row template. */}
-      <div className="grid gap-3 lg:grid-cols-[3fr_2fr] lg:h-[440px]">
-        <div className="grid gap-3 lg:grid-cols-3">
-          <CardSkeleton label="VOLUMI" rows={8} strongHeader className="h-[400px]" />
-          <CardSkeleton label="52 SETTIMANE" rows={8} strongHeader className="h-[400px]" />
-          <CardSkeleton label="TOP MOVERS" rows={8} strongHeader className="h-[400px]" />
-        </div>
-        <CardSkeleton label="PRE-MARKET USA" rows={8} strongHeader className="h-[400px]" />
-      </div>
-      {/* Lower row: breadth (wide, bottom-left) + RSI + Sectors (lg:h-[520px]). */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-[2fr_1fr_1fr] gap-3 lg:h-[520px]">
-        <CardSkeleton label="BREADTH PER INDICE" rows={8} strongHeader />
-        <CardSkeleton label="RSI DISTRIBUTION" rows={6} strongHeader />
-        <CardSkeleton label="SETTORI" rows={6} strongHeader />
-      </div>
+      <HeroRowSkeleton />
+      <SpotlightRowSkeleton />
+      <BreadthRowSkeleton />
       {/* Discovery row: [2fr_1fr_1fr] at lg+. */}
       <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr_1fr] gap-3 lg:h-[420px]">
         <CardSkeleton label="TOP PICKS" rows={10} strongHeader />
         <CardSkeleton label="SUPERINVESTOR" rows={8} strongHeader />
         <CardSkeleton label="VALUTAZIONI ANALISTI" rows={8} strongHeader />
       </div>
-      {/* Alerts panel — single-row, fixed height. */}
-      <CardSkeleton label="SEGNALI" rows={8} strongHeader className="lg:h-[420px]" />
+      <AlertsPanelSkeleton />
       {/* Footer (DataSources). */}
       <CardSkeleton label="DATA SOURCES" rows={3} className="h-[120px]" />
     </div>
@@ -129,10 +159,15 @@ export default function HomePage() {
   const premarketQ = usePremarketMovers();
   const hidePremarket = !premarketQ.data?.available;
 
-  // First-paint loading skeleton — mirrors the loaded layout 1:1 so
-  // the transition is a *fill-in*, not a reflow. See DashboardSkeleton
-  // for the structural rationale.
-  if (market.isLoading || summary.isLoading) {
+  // Full-page skeleton ONLY while BOTH summaries are still on their
+  // first load with nothing cached (react-query: `isLoading` =
+  // pending first fetch, no cached data). As soon as EITHER resolves
+  // we render the real layout and let the still-loading half show its
+  // own targeted row skeletons below — previously this was an
+  // `isLoading || isLoading` two-stage waterfall that blocked EVERY
+  // card (including the self-fetching discovery cards) behind the
+  // slower of the two queries.
+  if (market.isLoading && summary.isLoading) {
     return <DashboardSkeleton />;
   }
 
@@ -156,7 +191,11 @@ export default function HomePage() {
     );
   }
 
-  if (!market.data || market.data.available === false) {
+  // The "no scan yet" read is only meaningful once the market query has
+  // actually settled — while it's still in flight `market.data` is
+  // legitimately undefined and we fall through to the layout below,
+  // where the market-driven rows render their own skeletons.
+  if (!market.isLoading && (!market.data || market.data.available === false)) {
     return (
       <div className="space-y-4">
         <MarketUnavailable />
@@ -173,11 +212,15 @@ export default function HomePage() {
     );
   }
 
-  // Happy path — destructure with defaults to satisfy TS (all fields are optional in API type).
+  // Happy path — `m` is undefined while the market summary is still in
+  // flight (dashboard summary already resolved); the market rows below
+  // then show their targeted skeletons. When it IS settled, validate the
+  // payload with the same defaults-check as before (all fields are
+  // optional in the API type).
   // Note: `treemap` is no longer required (the treemap card was removed) but the API
   // continues to populate it; we just don't render it.
   const m = market.data;
-  if (!m.global || !m.by_index || !m.movers || !m.rsi_distribution || !m.sectors) {
+  if (m && (!m.global || !m.by_index || !m.movers || !m.rsi_distribution || !m.sectors)) {
     return <MarketError onRetry={() => market.refetch()} />;
   }
   const nextScanAt = summaryData?.kpis.next_scan_at ?? null;
@@ -194,7 +237,7 @@ export default function HomePage() {
           <h2 className="text-base font-semibold tracking-tight">Dashboard</h2>
           <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
             <Clock className="h-3 w-3" />
-            {m.computed_at && (
+            {m?.computed_at && (
               <span className={m.is_stale ? "text-amber-600 dark:text-amber-400" : ""}>
                 Aggiornato {new Date(m.computed_at).toLocaleString("it-IT", { dateStyle: "short", timeStyle: "short" })}
               </span>
@@ -214,7 +257,15 @@ export default function HomePage() {
             Layout) carries the in-flight progress UI. */}
         <ScanHeaderButton nextScanAt={nextScanAt} />
       </div>
-      <HeroStrip global={m.global} byIndex={m.by_index} />
+      {/* Market-driven rows: each renders its own skeleton while the
+          market summary is still in flight (the inline field guards
+          double as the TS narrowing — past the validation above a
+          settled payload always has all of them). */}
+      {m?.global && m.by_index ? (
+        <HeroStrip global={m.global} byIndex={m.by_index} />
+      ) : (
+        <HeroRowSkeleton />
+      )}
       {/* Row 2: same [3fr_2fr] split as HeroStrip — breadth matrix on
           the left (the wider, table-shaped artifact) + live-volume
           movers on the right (vertical list, narrower, polls live
@@ -249,39 +300,47 @@ export default function HomePage() {
           and no card is taller than its content needs (snug uniform
           height). See the cards' internals: their lists are natural-height
           (no flex-1/overflow) precisely so this auto-equalization works. */}
-      {hidePremarket ? (
-        <div className="grid gap-3 lg:grid-cols-[5fr_4fr] items-stretch">
-          <div className="grid gap-3 lg:grid-cols-[1fr_1fr]">
+      {m?.movers ? (
+        hidePremarket ? (
+          <div className="grid gap-3 lg:grid-cols-[5fr_4fr] items-stretch">
+            <div className="grid gap-3 lg:grid-cols-[1fr_1fr]">
+              <div className="min-w-0"><FiftyTwoWeekVolCard movers={m.movers} /></div>
+              <div className="min-w-0"><LiveVolumeMoversCard movers={m.movers} computedAt={m.computed_at} /></div>
+            </div>
+            <div className="min-w-0"><TopMoversCard movers={m.movers} computedAt={m.computed_at} /></div>
+          </div>
+        ) : (
+          // Flat 4-column grid with CONTENT-PROPORTIONAL widths. The old
+          // [5fr_4fr] crammed the three left cards into equal thirds while
+          // pre-market alone took 4/9 — so the two-up TopMovers (gainers +
+          // losers sub-columns) was squeezed to ~18% and its rows overflowed
+          // into each other. The two dense two-column cards (TopMovers,
+          // pre-market) now get the most room; the single-column Volumi the
+          // least.
+          <div className="grid gap-3 lg:grid-cols-[minmax(0,2.2fr)_minmax(0,2fr)_minmax(0,2.9fr)_minmax(0,2.9fr)] items-stretch">
             <div className="min-w-0"><FiftyTwoWeekVolCard movers={m.movers} /></div>
             <div className="min-w-0"><LiveVolumeMoversCard movers={m.movers} computedAt={m.computed_at} /></div>
+            <div className="min-w-0"><TopMoversCard movers={m.movers} computedAt={m.computed_at} /></div>
+            <div className="min-w-0"><PremarketMoversCard /></div>
           </div>
-          <div className="min-w-0"><TopMoversCard movers={m.movers} computedAt={m.computed_at} /></div>
-        </div>
+        )
       ) : (
-        // Flat 4-column grid with CONTENT-PROPORTIONAL widths. The old
-        // [5fr_4fr] crammed the three left cards into equal thirds while
-        // pre-market alone took 4/9 — so the two-up TopMovers (gainers +
-        // losers sub-columns) was squeezed to ~18% and its rows overflowed
-        // into each other. The two dense two-column cards (TopMovers,
-        // pre-market) now get the most room; the single-column Volumi the
-        // least.
-        <div className="grid gap-3 lg:grid-cols-[minmax(0,2.2fr)_minmax(0,2fr)_minmax(0,2.9fr)_minmax(0,2.9fr)] items-stretch">
-          <div className="min-w-0"><FiftyTwoWeekVolCard movers={m.movers} /></div>
-          <div className="min-w-0"><LiveVolumeMoversCard movers={m.movers} computedAt={m.computed_at} /></div>
-          <div className="min-w-0"><TopMoversCard movers={m.movers} computedAt={m.computed_at} /></div>
-          <div className="min-w-0"><PremarketMoversCard /></div>
-        </div>
+        <SpotlightRowSkeleton />
       )}
       {/* Lower row: breadth matrix (bottom-left, wide 2fr) + RSI + Sectors. */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-[2fr_1fr_1fr] gap-3 lg:h-[520px]">
-        <div className="h-[440px] lg:h-full min-h-0"><BreadthMatrixTable data={m.by_index} /></div>
-        <div className="h-[440px] lg:h-full min-h-0">
-          <Suspense fallback={<CardSkeleton label="RSI DISTRIBUTION" rows={6} className="h-full" />}>
-            <RsiHistogramCard rsi={m.rsi_distribution} indices={m.by_index} />
-          </Suspense>
+      {m?.by_index && m.rsi_distribution && m.sectors ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-[2fr_1fr_1fr] gap-3 lg:h-[520px]">
+          <div className="h-[440px] lg:h-full min-h-0"><BreadthMatrixTable data={m.by_index} /></div>
+          <div className="h-[440px] lg:h-full min-h-0">
+            <Suspense fallback={<CardSkeleton label="RSI DISTRIBUTION" rows={6} className="h-full" />}>
+              <RsiHistogramCard rsi={m.rsi_distribution} indices={m.by_index} />
+            </Suspense>
+          </div>
+          <div className="h-[440px] lg:h-full min-h-0"><SectorsHeatmapCard sectors={m.sectors} /></div>
         </div>
-        <div className="h-[440px] lg:h-full min-h-0"><SectorsHeatmapCard sectors={m.sectors} /></div>
-      </div>
+      ) : (
+        <BreadthRowSkeleton />
+      )}
       {/* Alerts (left) + Top Picks (right) on the same row. The two are
           complementary: alerts is "what just happened that needs your
           attention", top picks is "what looks great right now". Putting them
@@ -327,7 +386,11 @@ export default function HomePage() {
           <AnalystActionsCard />
         </div>
       </div>
-      {summaryData && (
+      {/* Alerts panel: driven by the dashboard summary alone — shows its
+          own skeleton while that query is still in flight instead of
+          holding the whole page hostage. Absent (as before) if the
+          summary settled without data. */}
+      {summaryData ? (
         <div className="lg:h-[420px]">
           <AlertsCompactPanel
             topStocks={summaryData.top_stocks_30d}
@@ -337,7 +400,9 @@ export default function HomePage() {
             alertsPrev24h={summaryData.kpis.alerts_prev_24h}
           />
         </div>
-      )}
+      ) : summary.isLoading ? (
+        <AlertsPanelSkeleton />
+      ) : null}
     </div>
   );
 }
