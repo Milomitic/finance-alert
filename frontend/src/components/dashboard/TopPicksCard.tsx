@@ -50,7 +50,12 @@ function PickRow({ item }: { item: TopPickItem }) {
     // distributes the column height evenly across the 8 rows. Without
     // the `md:` gate, 24 stacked rows (3 tiers × 8) get crushed into
     // the card's fixed height on a phone and the text overlaps.
-    <li className="md:flex-1 md:min-h-0 min-w-0 flex border-b border-border/40 last:border-b-0">
+    // `max-h-11` caps the stretch: a column with FEWER than 8 picks
+    // (Conservative often has 1-2) must not balloon its rows to fill
+    // the column — one 356px-tall row with the content floating
+    // mid-column read as "broken table". Full columns still fill
+    // (8 × 44px ≈ column height); short columns top-align.
+    <li className="md:flex-1 md:max-h-11 md:min-h-0 min-w-0 flex border-b border-border/40 last:border-b-0">
       <Link
         to={`/stocks/${encodeURIComponent(item.ticker)}`}
         className="flex-1 min-w-0 flex items-center gap-2 px-3 py-1.5 hover:bg-accent/30 transition-colors"
