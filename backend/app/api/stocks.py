@@ -503,6 +503,8 @@ def get_stock_fundamentals(
         next_earnings_when=next_earnings_when,
         next_eps_estimate=f.next_eps_estimate,
         next_revenue_estimate=f.next_revenue_estimate,
+        curr_fy_eps_estimate=f.curr_fy_eps_estimate,
+        curr_fy_revenue_estimate=f.curr_fy_revenue_estimate,
         micro=MicroDataOut(**f.micro.__dict__),
         profile=CompanyProfileOut(**f.profile.__dict__),
         insiders=[InsiderTransactionOut(**i.__dict__) for i in f.insiders],

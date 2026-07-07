@@ -220,8 +220,15 @@ function aggregateAnnualEarnings(
 }
 
 function AnnualTabBody({
-  annual, earnings,
-}: { annual: FundamentalsAnnual[]; earnings: FundamentalsEarnings[] }) {
+  annual, earnings, currFyEpsEstimate, currFyRevenueEstimate,
+}: {
+  annual: FundamentalsAnnual[];
+  earnings: FundamentalsEarnings[];
+  /** Consensus full-year EPS/revenue for the FY in progress (yfinance
+   *  estimate tables, `0y` avg). Null on thin-coverage tickers. */
+  currFyEpsEstimate: number | null;
+  currFyRevenueEstimate: number | null;
+}) {
   const annualEarnings = useMemo(() => aggregateAnnualEarnings(earnings), [earnings]);
   const hasEstimate = Array.from(annualEarnings.values()).some((v) => v.eps_est && v.eps_est > 0);
 
@@ -280,6 +287,43 @@ function AnnualTabBody({
             </tr>
           </thead>
           <tbody>
+            {/* Estimate row — the CURRENT fiscal year (in progress), from the
+                analyst consensus. Label = newest actual FY + 1; shown only
+                when we have at least one estimate AND an actual year to
+                anchor the label. Muted + "stima" chip: these are forecasts,
+                not results — Net Inc / EPS GAAP / Surprise stay "—". */}
+            {annualDesc.length > 0 &&
+              (currFyEpsEstimate != null || currFyRevenueEstimate != null) && (() => {
+                const lastActual = annualDesc[0];
+                const currFy = Number(lastActual.fiscal_year_end.slice(0, 4)) + 1;
+                const yoyEst =
+                  currFyRevenueEstimate != null
+                    ? yoy(currFyRevenueEstimate, lastActual.revenue)
+                    : "—";
+                return (
+                  <tr className="border-t border-border/40 bg-muted/20 text-muted-foreground italic">
+                    <td className="px-1.5 py-1 font-mono not-italic">
+                      <span className="inline-flex items-center gap-1">
+                        FY{String(currFy).slice(2, 4)}
+                        <span className="not-italic px-1 py-px rounded border border-blue-400/40 text-blue-500 dark:text-blue-400 text-[9px] uppercase tracking-wider font-semibold">
+                          stima
+                        </span>
+                      </span>
+                    </td>
+                    <td className="px-1.5 py-1 text-right">
+                      {currFyRevenueEstimate != null ? fmtBig(currFyRevenueEstimate) : "—"}
+                    </td>
+                    <td className="px-1.5 py-1 text-right">{yoyEst}</td>
+                    <td className="px-1.5 py-1 text-right">—</td>
+                    <td className="px-1.5 py-1 text-right">—</td>
+                    <td className="px-1.5 py-1 text-right">—</td>
+                    <td className="px-1.5 py-1 text-right font-semibold not-italic">
+                      {currFyEpsEstimate != null ? `$${currFyEpsEstimate.toFixed(2)}` : "—"}
+                    </td>
+                    <td className="px-1.5 py-1 text-right">—</td>
+                  </tr>
+                );
+              })()}
             {annualDesc.map((a) => {
               const year = a.fiscal_year_end.slice(0, 4);
               const agg = annualEarnings.get(year);
@@ -684,7 +728,12 @@ export function FundamentalsCard({ ticker }: Props) {
                 this chain the table would overflow the card's bottom edge. */}
             <div className="flex-1 min-h-0 flex flex-col">
               {effective === "annual" && hasAnnual && (
-                <AnnualTabBody annual={f.annual} earnings={f.earnings} />
+                <AnnualTabBody
+                  annual={f.annual}
+                  earnings={f.earnings}
+                  currFyEpsEstimate={f.curr_fy_eps_estimate ?? null}
+                  currFyRevenueEstimate={f.curr_fy_revenue_estimate ?? null}
+                />
               )}
               {effective === "quarterly" && hasQuarterly && (
                 <QuarterlyTabBody

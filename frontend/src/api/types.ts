@@ -835,6 +835,12 @@ export interface Fundamentals {
    *  when yfinance exposes it. NULL when the field isn't in the
    *  earnings_dates DataFrame (older yfinance versions or missing data). */
   next_revenue_estimate: number | null;
+  /** Consensus full-year EPS/revenue for the CURRENT fiscal year (yfinance
+   *  estimate tables `0y` avg). Drive the estimate row at the top of the
+   *  Fundamentals annual table. Optional: cached pre-existing API payloads
+   *  and thin-coverage tickers lack them. */
+  curr_fy_eps_estimate?: number | null;
+  curr_fy_revenue_estimate?: number | null;
   micro: MicroData;
   /** Optional for back-compat with cached pre-V2 API responses. */
   profile?: CompanyProfile;

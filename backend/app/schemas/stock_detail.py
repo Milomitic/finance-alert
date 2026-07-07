@@ -271,6 +271,11 @@ class FundamentalsOut(BaseModel):
     next_earnings_when: Literal["pre", "after"] | None = None
     next_eps_estimate: float | None = None
     next_revenue_estimate: float | None = None
+    # Current-FY analyst consensus (yfinance estimate tables `0y` avg):
+    # full-year EPS + revenue for the fiscal year in progress. Drives the
+    # estimate row at the top of the Fundamentals annual table.
+    curr_fy_eps_estimate: float | None = None
+    curr_fy_revenue_estimate: float | None = None
     micro: MicroDataOut = MicroDataOut()
     profile: CompanyProfileOut = CompanyProfileOut()
     insiders: list[InsiderTransactionOut] = []

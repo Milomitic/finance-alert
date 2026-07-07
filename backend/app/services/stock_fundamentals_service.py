@@ -264,6 +264,13 @@ class Fundamentals:
     next_earnings_time_utc: str | None = None  # UTC HH:MM
     next_eps_estimate: float | None = None
     next_revenue_estimate: float | None = None
+    # Current-FISCAL-YEAR analyst consensus (yfinance earnings_estimate /
+    # revenue_estimate `0y` row, `avg` column): full-year EPS + revenue
+    # estimates for the FY in progress. Feeds the estimate row at the top of
+    # the Fundamentals annual table. None when the tables are absent (thin
+    # coverage / non-US) — old L2 rows lack the keys and default here too.
+    curr_fy_eps_estimate: float | None = None
+    curr_fy_revenue_estimate: float | None = None
     micro: MicroData = field(default_factory=MicroData)
     profile: CompanyProfile = field(default_factory=CompanyProfile)
     insiders: list[InsiderTransaction] = field(default_factory=list)
@@ -931,6 +938,25 @@ def _fy_growth_estimates(
         _fy_growth_from_estimate_df(earnings_estimate),
         _fy_growth_from_estimate_df(revenue_estimate),
     )
+
+
+def _fy_avg_from_estimate_df(df: Any) -> float | None:
+    """Extract the current-fiscal-year consensus AVERAGE from a yfinance
+    `earnings_estimate` / `revenue_estimate` DataFrame — the `0y` row's `avg`
+    column (mean analyst estimate for the FY in progress: full-year EPS in
+    listing currency, or full-year revenue in absolute units). Same shape
+    tolerance as `_fy_growth_from_estimate_df`: never raises, None on any
+    missing/empty/NaN condition."""
+    try:
+        if df is None or not hasattr(df, "loc") or getattr(df, "empty", False):
+            return None
+        if "avg" not in getattr(df, "columns", []):
+            return None
+        if "0y" not in df.index:
+            return None
+        return _safe_float(df.loc["0y", "avg"])
+    except Exception:  # noqa: BLE001 — parse/shape failures are non-fatal
+        return None
 
 
 def _fill_growth_fallbacks(f: "Fundamentals") -> None:
@@ -1635,6 +1661,14 @@ def _fetch_fresh(ticker: str) -> Fundamentals:
             )
             f.micro.eps_growth_curr_fy = eps_fy
             f.micro.revenue_growth_curr_fy = rev_fy
+            # Same tables, `avg` column: the full-year consensus VALUES for
+            # the FY in progress — the estimate row of the annual table.
+            f.curr_fy_eps_estimate = _fy_avg_from_estimate_df(
+                raw.get("earnings_estimate")
+            )
+            f.curr_fy_revenue_estimate = _fy_avg_from_estimate_df(
+                raw.get("revenue_estimate")
+            )
         except Exception as e:
             logger.debug(f"[fund] fy-growth estimates {ticker}: {e}")
         # Growth fallback — derive EPS YoY/QoQ + Rev YoY from the
