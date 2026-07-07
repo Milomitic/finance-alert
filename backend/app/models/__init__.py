@@ -5,6 +5,7 @@ from app.models.fetch_cache import FetchCache
 from app.models.index import Index, StockIndex
 from app.models.kpi_snapshot import KpiSnapshot
 from app.models.institutional import (
+    CusipTickerMap,
     Institutional,
     InstitutionalFiling,
     InstitutionalHolding,
@@ -48,4 +49,5 @@ __all__ = [
     "Institutional",
     "InstitutionalFiling",
     "InstitutionalHolding",
+    "CusipTickerMap",
 ]

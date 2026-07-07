@@ -108,6 +108,11 @@ class InstitutionalHolding(Base):
     __table_args__ = (
         SAIndex("ix_holdings_ticker", "ticker"),
         SAIndex("ix_holdings_filing", "filing_id"),
+        # Enforced since migration 390120b342e6 (the docstring always promised
+        # it; 108 duplicate groups + dot-ticker collisions were merged there).
+        SAIndex(
+            "uq_inst_holdings_filing_ticker", "filing_id", "ticker", unique=True
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -125,3 +130,24 @@ class InstitutionalHolding(Base):
     action: Mapped[str | None] = mapped_column(String(16), nullable=True)
 
     filing: Mapped[InstitutionalFiling] = relationship(back_populates="holdings")
+
+
+class CusipTickerMap(Base):
+    """Persistent CUSIP→ticker resolution for the SEC 13F scraper.
+
+    Written on every successful resolution (catalog name-match or SEC
+    company_tickers.json second pass) so resolutions are cumulative across
+    runs and survive catalog changes. 35% of the SEC dollar value used to sit
+    under raw 'CUSIP:xxx' placeholders."""
+
+    __tablename__ = "cusip_ticker_map"
+    __table_args__ = (SAIndex("ix_cusip_ticker_map_ticker", "ticker"),)
+
+    cusip: Mapped[str] = mapped_column(String(16), primary_key=True)
+    ticker: Mapped[str] = mapped_column(String(32), nullable=False)
+    # 'catalog' | 'sec_company_tickers' | 'manual'
+    source: Mapped[str] = mapped_column(String(32), nullable=False)
+    issuer_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    resolved_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
