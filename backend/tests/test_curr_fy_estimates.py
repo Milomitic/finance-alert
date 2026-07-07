@@ -51,3 +51,26 @@ def test_old_l2_payload_without_new_fields_defaults_to_none():
     assert isinstance(f, Fundamentals)
     assert f.curr_fy_eps_estimate is None
     assert f.curr_fy_revenue_estimate is None
+
+
+def test_fetch_fresh_populates_curr_fy_estimates(monkeypatch):
+    """End-to-end through _fetch_fresh: a raw yfinance payload carrying the
+    estimate tables must land on Fundamentals.curr_fy_*_estimate. This is the
+    proof that a FORCED refresh (card ↻) populates the new row — the only
+    reason it's missing in the UI is a cached payload older than the fields
+    (fundamentals TTL is 7 days)."""
+    from app.services import stock_fundamentals_service as sfs
+
+    raw = {
+        "earnings_estimate": _estimate_df(avg_0y=7.89),
+        "revenue_estimate": _estimate_df(avg_0y=445.6e9),
+    }
+    monkeypatch.setattr(sfs, "_yf_fetch_with_retry", lambda t: raw)
+    monkeypatch.setattr(sfs, "_throttle_upstream_fetch", lambda: None)
+
+    f = sfs._fetch_fresh("AAPL")
+
+    assert f.curr_fy_eps_estimate == 7.89
+    assert f.curr_fy_revenue_estimate == 445.6e9
+    # And the consensus growth (pre-existing behavior) still reads `growth`.
+    assert f.micro.eps_growth_curr_fy == 0.15
