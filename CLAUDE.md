@@ -561,6 +561,22 @@ SURFACING + SUBSTRATE — none of it changes the composite/Probabilità/targets.
   weight any of these into the composite without the score-IC backtest
   (roadmap #9) over persisted score_history + point-in-time fundamentals.
 
+### Score-IC backtest RUN (2026-07-07) — verdict: NO reweighting is justified
+The roadmap-#9 gate was executed (`app.scripts.score_ic_backtest`, point-in-time
+SEC facts, 552 US stocks, 39 quarterly cross-sections 2010-2026, 20,217 obs;
+report: `app/data/score_ic_report.json`). Result: **no pillar shows a
+statistically significant IC** on forward returns (21/63/126 bars). Growth is
+the only weak positive (IC ~+0.04, t≈1.7 — below significance); profitability
+and sustainability ≈ 0; the equal-weight composite ≈ 0 with a NEGATIVE
+market-neutral decile spread at longer horizons. Value/sentiment were excluded
+honestly (SEC facts are split-unadjusted vs adjusted OHLCV; no filed history of
+analyst estimates). **Operational rule: the Qualità composite is a company-
+quality DESCRIPTOR, not a return predictor — do not reweight pillars or add
+quality_extras weights on alpha grounds, and don't re-run this gate expecting a
+different answer without NEW point-in-time data (e.g. matured score_history
+after 6-12 months of accrual).** Mirrors the confirmation-count rule: no
+score-affecting change without a study showing edge; this study showed none.
+
 ### One-off scan / recompute outside the API (e.g. after a scoring change)
 Stop uvicorn FIRST (sole SQLite writer → avoids "database is locked"), run with
 `cd backend && PYTHONPATH=. ./.venv/Scripts/python.exe <script>`, then restart +
