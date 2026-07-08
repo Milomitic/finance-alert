@@ -64,6 +64,9 @@ export interface FiltersState {
   changeMax: number | null;
   /** Volume spike: vol_ratio > 2×. */
   volSpike: boolean;
+  /** Soglia continua sul vol_ratio (≥, es. 1.5×), or null. Variante
+   *  regolabile del preset fisso volSpike. */
+  volRatioMin: number | null;
   /** Minimum today's volume (share count), or null. */
   volumeMin: number | null;
 }
@@ -82,7 +85,7 @@ export const EMPTY_FILTERS: FiltersState = {
   aboveEma50: false, aboveEma200: false, near52wHigh: false, near52wLow: false,
   signalsWithinDays: null,
   priceMin: null, priceMax: null, changeMin: null, changeMax: null,
-  volSpike: false, volumeMin: null,
+  volSpike: false, volRatioMin: null, volumeMin: null,
 };
 
 /** Le finestre offerte dal filtro "con segnali". 1 = solo l'ultima seduta. */
@@ -573,6 +576,7 @@ export function StockFiltersCard({ state, onChange, filters }: Props) {
     (state.changeMin != null ? 1 : 0) +
     (state.changeMax != null ? 1 : 0) +
     (state.volSpike ? 1 : 0) +
+    (state.volRatioMin != null ? 1 : 0) +
     (state.volumeMin != null ? 1 : 0);
 
   const totalActive = mercatoActive + fondamentaliActive + tecniciActive + prezzoVolumeActive;
@@ -886,6 +890,25 @@ export function StockFiltersCard({ state, onChange, filters }: Props) {
               width="w-12"
             />
             <ToggleChip label="vol spike >2×" active={state.volSpike} onToggle={() => set({ volSpike: !state.volSpike })} />
+            {/* Soglia continua Vol× — la sorella regolabile del preset
+                vol spike (>2×): es. 1.5 = volume ≥ 1.5× la media 20g. */}
+            <div className="inline-flex items-center gap-1 h-9 px-2 rounded border border-input">
+              <span className="text-xs text-muted-foreground">Vol× ≥</span>
+              <input
+                type="number"
+                min={0}
+                step={0.5}
+                placeholder="—"
+                value={state.volRatioMin ?? ""}
+                onChange={(e) => {
+                  const raw = e.target.value;
+                  if (raw === "") { set({ volRatioMin: null }); return; }
+                  const n = Number(raw);
+                  if (Number.isFinite(n) && n >= 0) set({ volRatioMin: n });
+                }}
+                className="w-12 bg-transparent text-sm tabular-nums focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+              />
+            </div>
             {/* Volume min (share count). Wide-ish single input. */}
             <div className="inline-flex items-center gap-1 h-9 px-2 rounded border border-input">
               <span className="text-xs text-muted-foreground">Vol min</span>
@@ -1142,6 +1165,12 @@ export function StockFiltersCard({ state, onChange, filters }: Props) {
               <Badge variant="secondary" className="text-xs gap-1 pr-1">
                 vol spike &gt;2×
                 <button onClick={() => removeChip("volSpike", "")} className="ml-0.5 rounded hover:bg-background/60 p-0.5" aria-label="Rimuovi filtro volume spike"><X className="h-3 w-3" /></button>
+              </Badge>
+            )}
+            {state.volRatioMin != null && (
+              <Badge variant="secondary" className="text-xs gap-1 pr-1">
+                <span className="text-muted-foreground/80">Vol× ≥</span> {state.volRatioMin}
+                <button onClick={() => removeChip("volRatioMin", "")} className="ml-0.5 rounded hover:bg-background/60 p-0.5" aria-label="Rimuovi soglia vol ratio minima"><X className="h-3 w-3" /></button>
               </Badge>
             )}
             {state.volumeMin != null && (

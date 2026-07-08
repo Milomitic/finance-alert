@@ -36,7 +36,10 @@ export type StockSortBy =
   | "change_pct"
   | "rsi14"
   | "vol_ratio"
-  | "vol_today";
+  | "vol_today"
+  /** Espressione SQL server-side: (last_close/high_252 − 1)·100 — ordina
+   *  l'intero universo per distanza dal massimo 52w, non solo la pagina. */
+  | "pct_off_high";
 export type SortDir = "asc" | "desc";
 
 export interface SearchParams {
@@ -86,6 +89,9 @@ export interface SearchParams {
   change_max?: number;
   /** Volume spike: vol_ratio > 2.0. */
   vol_spike?: boolean;
+  /** Soglia continua sul vol_ratio (es. 1.5 = volume ≥ 1.5× la media 20g).
+   *  Variante regolabile del preset fisso vol_spike (>2×). */
+  vol_ratio_min?: number;
   /** Minimum today's volume (share count). */
   volume_min?: number;
   /** Exclude instrument_type='etf' rows (ETF/ETN leveraged products). */
@@ -137,6 +143,7 @@ function toQuery(params: SearchParams): string {
   if (params.change_min !== undefined) sp.set("change_min", String(params.change_min));
   if (params.change_max !== undefined) sp.set("change_max", String(params.change_max));
   if (params.vol_spike) sp.set("vol_spike", "true");
+  if (params.vol_ratio_min !== undefined) sp.set("vol_ratio_min", String(params.vol_ratio_min));
   if (params.volume_min !== undefined) sp.set("volume_min", String(params.volume_min));
   if (params.exclude_etf) sp.set("exclude_etf", "true");
   if (params.sort_by) sp.set("sort_by", params.sort_by);

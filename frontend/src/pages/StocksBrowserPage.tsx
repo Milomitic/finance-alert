@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
-import type { SortDir, StockSortBy } from "@/api/stocks";
+import type { SearchParams, SortDir, StockSortBy } from "@/api/stocks";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -14,6 +14,7 @@ import {
   useColumnVisibility, type ColumnDef,
 } from "@/hooks/useColumnVisibility";
 import { useStockFilters, useStockSearch } from "@/hooks/useStockSearch";
+import { ExportCsvButton } from "@/components/stocks/ExportCsvButton";
 import { IndexPanoramaCard } from "@/components/stocks/IndexPanoramaCard";
 import {
   SCREENER_COLS,
@@ -37,6 +38,8 @@ const VALID_SORT_BY = new Set<StockSortBy>([
   "tech_volume", "tech_rel_strength",
   // Phase A: metrics-backed server-sortable columns.
   "price", "change_pct", "rsi14", "vol_ratio", "vol_today",
+  // Espressione SQL: distanza % dal massimo 52w (SCR-2).
+  "pct_off_high",
 ]);
 
 const VALID_RISK = new Set(["conservative", "moderate", "aggressive"] as const);
@@ -234,6 +237,7 @@ export default function StocksBrowserPage() {
     changeMin: parseNullableNumber(searchParams.get("change_min")),
     changeMax: parseNullableNumber(searchParams.get("change_max")),
     volSpike: parseBoolParam(searchParams.get("vol_spike")),
+    volRatioMin: parseNullableNumber(searchParams.get("vol_ratio_min")),
     volumeMin: parseNullableNumber(searchParams.get("volume_min")),
   }));
   const [sortBy, setSortBy] = useState<TableSortKey>(() =>
@@ -295,6 +299,7 @@ export default function StocksBrowserPage() {
     if (state.changeMin != null) sp.set("change_min", String(state.changeMin));
     if (state.changeMax != null) sp.set("change_max", String(state.changeMax));
     if (state.volSpike) sp.set("vol_spike", "true");
+    if (state.volRatioMin != null) sp.set("vol_ratio_min", String(state.volRatioMin));
     if (state.volumeMin != null) sp.set("volume_min", String(state.volumeMin));
     if (sortBy !== "ticker") sp.set("sort_by", sortBy);
     if (sortDir !== "asc") sp.set("sort_dir", sortDir);
@@ -344,7 +349,11 @@ export default function StocksBrowserPage() {
   // server-sortable via the stock_metrics join — no more client-side sort
   // hack. sortBy is a TableSortKey which is now a strict subset of
   // StockSortBy, so it forwards directly.
-  const searchQ = useStockSearch({
+  // L'oggetto params è estratto in una costante perché lo condividono la
+  // search della pagina E l'export CSV "tutti i filtrati" (che lo rilancia
+  // con limit alto/offset 0) — un divario fra i due esporterebbe righe
+  // diverse da quelle mostrate.
+  const apiParams: SearchParams = {
     q: q.trim() || undefined,
     index: state.indexCodes.length > 0 ? state.indexCodes : undefined,
     sector: state.sectors.length > 0 ? state.sectors : undefined,
@@ -376,13 +385,15 @@ export default function StocksBrowserPage() {
     change_min: state.changeMin ?? undefined,
     change_max: state.changeMax ?? undefined,
     vol_spike: state.volSpike || undefined,
+    vol_ratio_min: state.volRatioMin ?? undefined,
     volume_min: state.volumeMin ?? undefined,
     exclude_etf: state.excludeEtf || undefined,
     sort_by: sortBy,
     sort_dir: sortDir,
     limit: pageSize,
     offset: page * pageSize,
-  });
+  };
+  const searchQ = useStockSearch(apiParams);
 
   const items = searchQ.data?.items ?? [];
   const total = searchQ.data?.total ?? 0;
@@ -448,6 +459,14 @@ export default function StocksBrowserPage() {
             columns={SCREENER_COLS as unknown as ColumnDef[]}
             isVisible={isColumnVisible}
             toggle={toggleColumn}
+          />
+          {/* Export CSV: pagina corrente (dati in memoria) oppure tutti i
+              filtrati (stesso apiParams, limit alto). Valori raw. */}
+          <ExportCsvButton
+            items={items}
+            searchParams={apiParams}
+            total={total}
+            isColumnVisible={isColumnVisible}
           />
           <MetricsAsOf iso={searchQ.data?.metrics_computed_at} />
         </div>

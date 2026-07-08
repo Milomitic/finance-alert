@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, Bell } from "lucide-react";
 import { type MouseEvent, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
@@ -13,6 +13,9 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { TableSearchInput } from "@/components/ui/table-search-input";
+import {
+  useActivePriceAlertStockIds, useOpenPositionStockIds,
+} from "@/hooks/useBookAwareness";
 import { useHolderCounts } from "@/hooks/useInstitutionals";
 import { useMarketSummary } from "@/hooks/useMarketSummary";
 import { RISK_LABEL, RISK_TONE, scoreColor } from "@/lib/scoreMeta";
@@ -60,6 +63,7 @@ const MOBILE_SORT_OPTIONS: { key: TableSortKey; label: string }[] = [
   { key: "rsi14", label: "RSI" },
   { key: "vol_ratio", label: "Vol×" },
   { key: "vol_today", label: "Volume" },
+  { key: "pct_off_high", label: "% da max 52w" },
   { key: "market_cap", label: "Mkt Cap" },
   { key: "sector", label: "Settore" },
   { key: "industry", label: "Industry" },
@@ -153,6 +157,59 @@ function EtfBadge({ show }: { show: boolean }) {
   );
 }
 
+/** Chip "IN POS" accanto al ticker per i titoli con una posizione APERTA.
+ *  Naviga alla pagina Posizioni. Plain string-literal classes (Tailwind
+ *  purger contract). `asLink=false` per i contesti già dentro un <Link>
+ *  (card mobile) dove un anchor annidato sarebbe HTML invalido. */
+function InPositionChip({ show, asLink = true }: { show: boolean; asLink?: boolean }) {
+  if (!show) return null;
+  const cls =
+    "inline-flex items-center px-1 py-0.5 rounded bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-300 text-[9px] font-semibold uppercase tracking-wider shrink-0";
+  const title = "Posizione aperta su questo titolo — vai a Posizioni";
+  if (!asLink) {
+    return <span className={cls} title={title}>IN POS</span>;
+  }
+  return (
+    <Link to="/positions" className={cn(cls, "hover:underline")} title={title}>
+      IN POS
+    </Link>
+  );
+}
+
+/** Campanella accanto al ticker per i titoli con un price alert ATTIVO
+ *  (abilitato, non ancora scattato). Solo glifo, nessun link. */
+function PriceAlertBell({ show }: { show: boolean }) {
+  if (!show) return null;
+  return (
+    <span
+      className="inline-flex shrink-0"
+      title="Price alert attivo su questo titolo"
+      aria-label="Price alert attivo"
+    >
+      <Bell className="h-3 w-3 text-amber-600 dark:text-amber-400" />
+    </span>
+  );
+}
+
+/** Freccia di trend del composite: Δ vs ~7 giorni fa (da score_history).
+ *  Nascosta quando la storia è troppo corta (delta null) o il movimento è
+ *  trascurabile (|Δ| < 0.05, rumore di ricalcolo). Tooltip con il valore. */
+function ScoreTrendArrow({ delta }: { delta: number | null | undefined }) {
+  if (delta == null || Math.abs(delta) < 0.05) return null;
+  const up = delta > 0;
+  return (
+    <span
+      className={cn(
+        "text-[10px] font-semibold align-middle ml-0.5",
+        up ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400",
+      )}
+      title={`Δ score vs ~7 giorni fa: ${up ? "+" : ""}${delta.toFixed(1)}`}
+    >
+      {up ? "▲" : "▼"}
+    </span>
+  );
+}
+
 function fmtMc(v: number | null | undefined): string {
   if (v == null) return "—";
   if (v >= 1e12) return `$${(v / 1e12).toFixed(2)}T`;
@@ -229,6 +286,12 @@ export function StockBrowserTable({
     [items],
   );
   const holderCounts = useHolderCounts(pageTickers);
+
+  // Book-awareness: UNA fetch batch (posizioni aperte) + UNA (price alert
+  // attivi) → Set di stock_id per il chip "IN POS" e la campanella. Vuoti
+  // finché non caricano — i glifi semplicemente non compaiono.
+  const openPositionIds = useOpenPositionStockIds();
+  const priceAlertIds = useActivePriceAlertStockIds();
 
   // Context-menu state for the column-visibility dropdown.
   const [menuOpen, setMenuOpen] = useState(false);
@@ -352,12 +415,16 @@ export function StockBrowserTable({
                         <StockLogo ticker={s.ticker} size="sm" />
                         <span className="font-semibold shrink-0">{s.ticker}</span>
                         <EtfBadge show={s.instrument_type === "etf"} />
+                        {/* asLink=false: la card intera è già un <Link>. */}
+                        <InPositionChip show={openPositionIds.has(s.id)} asLink={false} />
+                        <PriceAlertBell show={priceAlertIds.has(s.id)} />
                         <HolderCountBadge count={holderCounts.data?.[s.ticker]} />
                         <span className="text-sm text-muted-foreground truncate min-w-0 flex-1">
                           {s.name}
                         </span>
                         <span className={cn("text-base font-bold tabular-nums shrink-0", compositeCls)}>
                           {item.score.composite != null ? item.score.composite.toFixed(1) : "—"}
+                          <ScoreTrendArrow delta={item.score.composite_delta_7d} />
                         </span>
                       </div>
                       <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs tabular-nums">
@@ -492,10 +559,12 @@ export function StockBrowserTable({
                 {isVisible("volume") && (
                   <SortableHeader column="vol_today" label="Volume" align="right" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} />
                 )}
-                {/* Colonne derivate lato client (last_close/high_252/ema200 sono
-                    già su ogni riga) — non ordinabili server-side. */}
+                {/* "% da max 52w" è ora ordinabile server-side (chiave
+                    pct_off_high = espressione SQL su last_close/high_252);
+                    il valore in cella resta calcolato client-side dagli
+                    stessi campi. vs EMA200 resta derivata non ordinabile. */}
                 {isVisible("pct_from_high") && (
-                  <th className="px-3 py-1.5 text-right text-base uppercase tracking-wide font-semibold" title="Distanza % dal massimo 52 settimane">% da max 52w</th>
+                  <SortableHeader column="pct_off_high" label="% da max 52w" align="right" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} />
                 )}
                 {isVisible("vs_ema200") && (
                   <th className="px-3 py-1.5 text-right text-base uppercase tracking-wide font-semibold" title="Distanza % dalla EMA200">vs EMA200</th>
@@ -587,6 +656,8 @@ export function StockBrowserTable({
                               {s.ticker}
                             </Link>
                             <EtfBadge show={s.instrument_type === "etf"} />
+                            <InPositionChip show={openPositionIds.has(s.id)} />
+                            <PriceAlertBell show={priceAlertIds.has(s.id)} />
                             <HolderCountBadge count={holderCounts.data?.[s.ticker]} />
                           </span>
                           <span className="text-xs text-muted-foreground truncate max-w-[220px] leading-tight">
@@ -674,6 +745,7 @@ export function StockBrowserTable({
                     {isVisible("score") && (
                       <td className={cn("px-3 py-1.5 text-right font-bold", compositeCls)}>
                         {item.score.composite != null ? item.score.composite.toFixed(1) : "—"}
+                        <ScoreTrendArrow delta={item.score.composite_delta_7d} />
                       </td>
                     )}
                     {(["profitability", "sustainability", "growth", "value", "sentiment"] as const).map((pillar) => {
