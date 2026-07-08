@@ -599,6 +599,11 @@ def export_csv(
     strength_min: float | None = None,
     probability_min: float | None = None,
     nature: str | None = None,
+    # SEG-2 added these to the list endpoint + FE toQuery sends them on every
+    # alert call incl. the export URL — without the passthrough the CSV would
+    # silently ignore exactly the filters the page shows (the SEG-1 bug again).
+    outcome: str | None = None,
+    horizon: str | None = None,
     db: Session = Depends(get_db),
     _user: User = Depends(get_current_user),
 ) -> StreamingResponse:
@@ -615,6 +620,8 @@ def export_csv(
         strength_min=strength_min,
         probability_min=probability_min,
         nature=nature,
+        outcome=outcome,
+        horizon=horizon,
     )
     # The service clamps limit to 500 per call — page through until exhausted
     # (or the safety cap) so the export really covers every matching row.
@@ -633,6 +640,8 @@ def export_csv(
             strength_min=strength_min,
             probability_min=probability_min,
             nature=nature,
+            outcome=outcome,
+            horizon=horizon,
             limit=500,
             offset=offset,
         )
