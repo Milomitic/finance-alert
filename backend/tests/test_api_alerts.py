@@ -70,6 +70,37 @@ def test_list_alerts_default_excludes_archived(client: TestClient, db: Session) 
     assert resp.json()["total"] == 1
 
 
+# ── outcome + horizon list params (SEG-2) ────────────────────────────────────
+
+def test_list_alerts_invalid_outcome_and_horizon_422(client: TestClient, db: Session) -> None:
+    _seed_alerts(db, n=1)
+    assert client.get("/api/alerts?outcome=maybe").status_code == 422
+    assert client.get("/api/alerts?horizon=eterno").status_code == 422
+
+
+def test_list_alerts_filter_by_outcome_and_horizon(client: TestClient, db: Session) -> None:
+    from app.models import SignalOutcome
+
+    alerts = _seed_alerts(db, n=2)
+    # Give both a signal_date + horizon; mature only the first (a hit).
+    for a in alerts:
+        a.signal_date = date(2026, 5, 1)
+        a.snapshot = '{"tone": "bull", "strength": 70, "horizon": "short"}'
+    db.add(SignalOutcome(
+        alert_id=alerts[0].id, stock_id=alerts[0].stock_id,
+        detector="volume_breakout", signal_date=date(2026, 5, 1), tone="bull",
+        horizon_days=10, entry_close=100.0, forward_close=110.0,
+        fwd_return=0.1, abs_hit=1,
+    ))
+    db.commit()
+
+    assert client.get("/api/alerts?outcome=hit").json()["total"] == 1
+    assert client.get("/api/alerts?outcome=miss").json()["total"] == 0
+    assert client.get("/api/alerts?outcome=pending").json()["total"] == 1
+    assert client.get("/api/alerts?horizon=short").json()["total"] == 2
+    assert client.get("/api/alerts?horizon=long").json()["total"] == 0
+
+
 def test_patch_archives(client: TestClient, db: Session) -> None:
     alerts = _seed_alerts(db, n=1)
     resp = client.patch(f"/api/alerts/{alerts[0].id}", json={"archived": True})
