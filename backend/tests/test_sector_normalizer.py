@@ -10,8 +10,11 @@ without DB fixtures. We focus on:
 """
 from app.services.sector_normalizer import (
     CANONICAL_SECTORS,
+    GICS_SECTORS,
     OTHER,
+    YFINANCE_SECTOR_MAP,
     canonical_sector,
+    normalize_sector,
     sector_taxonomy_size,
 )
 
@@ -75,6 +78,46 @@ def test_unknown_label_falls_through_to_other():
     so they still group, but stand out as a map gap on the next audit."""
     assert canonical_sector("Quantum Cheese Logistics") == OTHER
     assert canonical_sector("zzzz-not-real") == OTHER
+
+
+def test_yfinance_map_outputs_are_subset_of_gics_11():
+    """Ogni output della mappa yfinance→GICS DEVE essere uno degli 11
+    settori GICS veri (mai "Other", mai None, mai un frammento yfinance).
+    Guardia contro la ri-frammentazione della tassonomia riparata dalla
+    migration 9405b58cdb90."""
+    assert len(GICS_SECTORS) == 11
+    assert OTHER not in GICS_SECTORS
+    outputs = set(YFINANCE_SECTOR_MAP.values())
+    assert outputs.issubset(set(GICS_SECTORS)), (
+        f"Non-GICS outputs in YFINANCE_SECTOR_MAP: {outputs - set(GICS_SECTORS)}"
+    )
+
+
+def test_yfinance_map_coherent_with_normalize_sector():
+    """La mappa documentale e il motore di normalizzazione devono dare
+    la stessa risposta per ogni label yfinance — se divergono, un
+    ingestion path che usa normalize_sector produce un settore diverso
+    da quello promesso dalla mappa."""
+    for yf_label, gics in YFINANCE_SECTOR_MAP.items():
+        assert normalize_sector(yf_label) == gics, (
+            f"normalize_sector({yf_label!r}) != {gics!r}"
+        )
+
+
+def test_yfinance_divergent_names_collapse():
+    """I 6 nomi yfinance che divergono da GICS (audit Esplora 2026-07)."""
+    assert normalize_sector("Healthcare") == "Health Care"
+    assert normalize_sector("Financial Services") == "Financials"
+    assert normalize_sector("Basic Materials") == "Materials"
+    assert normalize_sector("Consumer Cyclical") == "Consumer Discretionary"
+    assert normalize_sector("Consumer Defensive") == "Consumer Staples"
+    assert normalize_sector("Technology") == "Information Technology"
+
+
+def test_normalize_sector_is_alias_of_canonical_sector():
+    """L'alias pubblico e la funzione storica sono la STESSA funzione —
+    una sola mappa, nessun secondo modulo da tenere in sync."""
+    assert normalize_sector is canonical_sector
 
 
 def test_every_canonical_bucket_is_reachable():

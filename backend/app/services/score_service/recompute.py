@@ -9,6 +9,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.models import Stock, StockScore
+from app.services.sectors_overview_cache import clear_overview_cache
 
 from app.services.score_service.build import compute_score
 from app.services.score_service.common import RecomputeCancelled
@@ -240,6 +241,13 @@ def recompute_all(
     except Exception as exc:  # noqa: BLE001
         logger.warning(f"[score] xs-engine skipped (non-fatal): {exc}")
         db.rollback()
+
+    # Post-recompute hook: drop the memoized /sectors overview payload so
+    # the hub page reflects the fresh composites immediately instead of
+    # serving pre-recompute averages for up to a TTL. The cache lives in
+    # `services.sectors_overview_cache` (not the API router) precisely so
+    # this call doesn't create a service→API import cycle.
+    clear_overview_cache()
 
     logger.info(
         f"[score] recompute_all: ok={ok} failed={failed} (of {total} stocks)"

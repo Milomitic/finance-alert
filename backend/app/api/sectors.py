@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import math
 import statistics
-import time
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Path
@@ -28,7 +27,8 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user, get_db
 from app.core.visibility import visible_country_clause
 from app.models import Stock, StockScore, User
-from app.services import stock_fundamentals_service
+from app.services import sectors_overview_cache, stock_fundamentals_service
+from app.services.sectors_overview_cache import clear_overview_cache  # noqa: F401 — re-export for tests/back-compat
 
 
 router = APIRouter(prefix="/api/sectors", tags=["sectors"])
@@ -299,7 +299,10 @@ def _sector_rollup(db: Session) -> list[SectorSummary]:
     """
     # 1. SQL aggregate: per-sector (stock_count, avg_composite).
     # The DISTINCT on ticker defeats the legacy duplicate-row issue
-    # documented in CLAUDE.md.
+    # documented in CLAUDE.md. Equity-only: ETF/ETN rows carry a sector
+    # label (SPY sat in Financials) but no meaningful fundamentals — a
+    # leveraged ETF's P/E in the sector median would distort the
+    # benchmark real companies are compared against.
     score_rows = db.execute(
         select(
             Stock.sector,
@@ -308,6 +311,7 @@ def _sector_rollup(db: Session) -> list[SectorSummary]:
         )
         .outerjoin(StockScore, StockScore.stock_id == Stock.id)
         .where(visible_country_clause())
+        .where(Stock.instrument_type == "equity")
         .where(Stock.sector.is_not(None))
         .group_by(Stock.sector)
         .order_by(Stock.sector.asc())
@@ -315,10 +319,12 @@ def _sector_rollup(db: Session) -> list[SectorSummary]:
 
     # 2. Collect tickers per sector for the L1-only fundamentals pass.
     # One SELECT for the entire universe, then bucket in Python — beats
-    # N+1 queries (one per sector) on this read path.
+    # N+1 queries (one per sector) on this read path. Same equity-only
+    # filter as above so ETF fundamentals never enter the medians.
     ticker_rows = db.execute(
         select(Stock.sector, Stock.ticker)
         .where(visible_country_clause())
+        .where(Stock.instrument_type == "equity")
         .where(Stock.sector.is_not(None))
     ).all()
     tickers_by_sector: dict[str, set[str]] = {}
@@ -371,6 +377,8 @@ def _industry_rollup(db: Session) -> list[IndustryRow]:
     """
     # Stocks per (industry, sector) — one row per unique ticker via DISTINCT
     # to defeat the legacy duplicate-row issue documented in CLAUDE.md.
+    # Equity-only for the same reason as `_sector_rollup`: ETFs are not
+    # peers of the companies in an industry bucket.
     rows = db.execute(
         select(
             Stock.industry,
@@ -380,6 +388,7 @@ def _industry_rollup(db: Session) -> list[IndustryRow]:
         )
         .outerjoin(StockScore, StockScore.stock_id == Stock.id)
         .where(visible_country_clause())
+        .where(Stock.instrument_type == "equity")
         .where(Stock.industry.is_not(None))
         .group_by(Stock.industry, Stock.sector)
     ).all()
@@ -434,16 +443,6 @@ def list_sectors(db: Session = Depends(get_db), _user: User = Depends(get_curren
     return _sector_rollup(db)
 
 
-# Module-level TTL cache for the overview payload. The data is cheap to
-# compute now (SQL-only + L1-only fundamentals) — typical wall time is
-# ~50-150ms on a warm process — but the hub page is the first stop after
-# login for many sessions, so memoizing it for 60s collapses the dozens
-# of duplicate hits during a single browsing burst (multiple tabs, F5,
-# navigating in-and-out) to a single SQL pass.
-_OVERVIEW_CACHE: dict[str, tuple[float, SectorsOverviewOut]] = {}
-_OVERVIEW_TTL_SECONDS = 60.0
-
-
 @router.get("/overview", response_model=SectorsOverviewOut)
 def sectors_overview(db: Session = Depends(get_db), _user: User = Depends(get_current_user)):
     """One-shot payload for the /sectors hub page.
@@ -454,23 +453,26 @@ def sectors_overview(db: Session = Depends(get_db), _user: User = Depends(get_cu
         L1-only fundamentals, no network).
       - Per-industry table (single SQL GROUP BY via `_industry_rollup`).
 
-    Memoized at the module level with a 60s TTL so the hub-page burst
-    pattern (multiple tabs, F5, in-and-out navigation) doesn't replay
-    the SQL aggregates on every hit. The TTL is intentionally short
-    enough that a fresh `recompute_all` shows up within a minute.
+    Memoized in `services.sectors_overview_cache` with a 60s TTL so the
+    hub-page burst pattern (multiple tabs, F5, in-and-out navigation)
+    doesn't replay the SQL aggregates on every hit. The cache lives in
+    the services layer so `recompute_all` can invalidate it at the end
+    of every recompute without importing this router (see the cache
+    module's docstring for the layering rationale).
     """
-    now = time.time()
-    cached = _OVERVIEW_CACHE.get("default")
+    cached = sectors_overview_cache.get_cached()
     if cached is not None:
-        ts, payload = cached
-        if now - ts < _OVERVIEW_TTL_SECONDS:
-            return payload
+        return cached
 
     sectors = _sector_rollup(db)
     industries = _industry_rollup(db)
+    # Equity-only, mirroring the per-sector cards: without the filter
+    # the ETF rows inflate the "Stock totali" tile relative to the sum
+    # of the sector cards and the gap reads as missing data.
     total_stocks = db.execute(
         select(func.count(func.distinct(Stock.ticker)))
         .where(visible_country_clause())
+        .where(Stock.instrument_type == "equity")
     ).scalar() or 0
     payload = SectorsOverviewOut(
         total_stocks=int(total_stocks),
@@ -479,14 +481,8 @@ def sectors_overview(db: Session = Depends(get_db), _user: User = Depends(get_cu
         sectors=sectors,
         industries=industries,
     )
-    _OVERVIEW_CACHE["default"] = (now, payload)
+    sectors_overview_cache.store(payload)
     return payload
-
-
-def clear_overview_cache() -> None:
-    """For tests + the post-recompute hook. Drops the memoized payload so
-    the next hit recomputes from scratch."""
-    _OVERVIEW_CACHE.clear()
 
 
 @router.get("/{name}/detail", response_model=SectorDetailOut)
@@ -495,9 +491,13 @@ def get_sector_detail(
     db: Session = Depends(get_db),
     _user: User = Depends(get_current_user),
 ):
+    # Equity-only: an ETF with a sector label (SPY in Financials) must
+    # not surface among the sector's peer stocks nor contribute to the
+    # KPI medians below.
     stocks = db.execute(
         select(Stock)
         .where(visible_country_clause())
+        .where(Stock.instrument_type == "equity")
         .where(Stock.sector == name)
         .order_by(Stock.ticker.asc())
     ).scalars().all()
@@ -513,6 +513,19 @@ def get_sector_detail(
     if not unique_stocks:
         raise HTTPException(status_code=404, detail="Sector not found")
 
+    # Bulk-load all scores in ONE SELECT instead of one query per stock
+    # (the old loop issued ~150 SELECTs for Information Technology).
+    # `.scalars().all()` + dict keeps last-row-wins semantics — stock_id
+    # is effectively unique in stock_scores so collisions don't occur.
+    score_by_stock_id = {
+        sc.stock_id: sc
+        for sc in db.execute(
+            select(StockScore).where(
+                StockScore.stock_id.in_([st.id for st in unique_stocks])
+            )
+        ).scalars().all()
+    }
+
     rows = []
     composites = []
     market_caps = []
@@ -520,9 +533,7 @@ def get_sector_detail(
     buckets = [0, 0, 0, 0, 0]
 
     for st in unique_stocks:
-        score = db.execute(
-            select(StockScore).where(StockScore.stock_id == st.id)
-        ).scalar_one_or_none()
+        score = score_by_stock_id.get(st.id)
         row = _build_stock_row(st, score)
         rows.append(row)
         if row.composite is not None:

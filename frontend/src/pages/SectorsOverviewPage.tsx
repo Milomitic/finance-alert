@@ -260,6 +260,18 @@ export default function SectorsOverviewPage() {
     return m;
   }, [data]);
 
+  // Stocks with sector = NULL don't appear in any card, so the sum of
+  // the card counts can undershoot the "Stock totali" tile (es. 938 vs
+  // 890). Surface the gap explicitly as "N non classificati" instead
+  // of letting the user hunt for the missing ~48 — the numbers ARE
+  // coherent, some rows just have no sector data yet (backfillable via
+  // app/scripts/backfill_null_sectors.py).
+  const unclassifiedCount = useMemo(() => {
+    if (!data) return 0;
+    const classified = data.sectors.reduce((acc, s) => acc + s.stock_count, 0);
+    return Math.max(0, data.total_stocks - classified);
+  }, [data]);
+
   // Compute the universe-level avg score (weighted by sector stock count)
   // for the top-row "Score medio universo" tile. Simple average of the
   // sector avgs, weighted by stock count.
@@ -350,6 +362,16 @@ export default function SectorsOverviewPage() {
           icon={Layers}
           label={`Settori (${data.sectors.length})`}
           className="mb-3"
+          right={
+            unclassifiedCount > 0 ? (
+              <span
+                className="text-xs text-muted-foreground"
+                title="Stock senza settore assegnato: non compaiono in nessuna card ma contano nel totale"
+              >
+                ({unclassifiedCount} non classificati)
+              </span>
+            ) : undefined
+          }
         />
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
           {data.sectors.map((s) => (

@@ -139,6 +139,14 @@ def _build_sector_stats(
         if stock.ticker in seen_tickers:
             continue
         seen_tickers.add(stock.ticker)
+        # Equity-only, enforced HERE and not just in recompute_all's
+        # pre-filter: any other caller passing an unfiltered stock list
+        # would otherwise feed ETF fundamentals (SPY/TQQQ P/Es under
+        # their sector label) into the medians that benchmark real
+        # companies in the Value pillar. Defense-in-depth mirror of the
+        # `/api/sectors` equity filters.
+        if stock.instrument_type != "equity":
+            continue
         try:
             funds = stock_fundamentals_service.get_fundamentals(stock.ticker)
         except Exception:  # noqa: BLE001
