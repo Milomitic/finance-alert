@@ -230,7 +230,10 @@ function AnnualTabBody({
   currFyRevenueEstimate: number | null;
 }) {
   const annualEarnings = useMemo(() => aggregateAnnualEarnings(earnings), [earnings]);
-  const hasEstimate = Array.from(annualEarnings.values()).some((v) => v.eps_est && v.eps_est > 0);
+  const hasEstimate =
+    Array.from(annualEarnings.values()).some((v) => v.eps_est && v.eps_est > 0) ||
+    currFyEpsEstimate != null ||
+    currFyRevenueEstimate != null;
 
   // Chart goes oldest → newest (left → right) for readability; the table
   // below goes newest → oldest (most recent at the top) per user request.
@@ -252,6 +255,23 @@ function AnnualTabBody({
       eps_est: agg?.eps_est ?? null,
     };
   });
+  // Extend the chart to the CURRENT fiscal year with the consensus point, so
+  // the dashed estimate series reaches the same FY the table's "stima" row
+  // shows — table and chart must tell one story.
+  if (
+    annualAsc.length > 0 &&
+    (currFyEpsEstimate != null || currFyRevenueEstimate != null)
+  ) {
+    const currFy =
+      Number(annualAsc[annualAsc.length - 1].fiscal_year_end.slice(0, 4)) + 1;
+    chartData.push({
+      label: `FY${String(currFy).slice(2, 4)}`,
+      revenue: null,
+      revenue_est: currFyRevenueEstimate,
+      eps: null,
+      eps_est: currFyEpsEstimate,
+    });
+  }
 
   // Two stacked sections — chart with EXPLICIT pixel height (no flex/grid
   // height-calc dance), table fills remaining space and scrolls. This

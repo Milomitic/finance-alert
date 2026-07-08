@@ -10,6 +10,7 @@ import math
 import random
 import time
 from dataclasses import dataclass, field
+from datetime import date
 from threading import Lock
 from typing import Any
 
@@ -439,7 +440,12 @@ def _extract_earnings(
                 revenue_estimate=rev_est, revenue_reported=rev_rep,
                 time_utc=time_utc,
             ))
-        elif next_date is None:
+        elif next_date is None and d >= str(date.today()):
+            # "Next up" must be TODAY OR LATER. yfinance's earnings_dates
+            # keeps orphan rows — scheduled events whose Reported EPS was
+            # never reconciled (common on small caps) — so without the date
+            # guard a 2-years-old NaN-reported row won as "prossima" and the
+            # header showed 15/05/24 as the upcoming earnings in 2026.
             next_date = d
             next_estimate = est
             next_rev_estimate = rev_est
@@ -940,21 +946,22 @@ def _fy_growth_estimates(
     )
 
 
-def _fy_avg_from_estimate_df(df: Any) -> float | None:
-    """Extract the current-fiscal-year consensus AVERAGE from a yfinance
-    `earnings_estimate` / `revenue_estimate` DataFrame — the `0y` row's `avg`
-    column (mean analyst estimate for the FY in progress: full-year EPS in
-    listing currency, or full-year revenue in absolute units). Same shape
-    tolerance as `_fy_growth_from_estimate_df`: never raises, None on any
+def _fy_avg_from_estimate_df(df: Any, period: str = "0y") -> float | None:
+    """Extract a consensus AVERAGE from a yfinance `earnings_estimate` /
+    `revenue_estimate` DataFrame — the given period row's `avg` column.
+    `0y` = fiscal year in progress (the annual-table estimate row), `0q` =
+    current quarter (fallback for the next-earnings estimate when the
+    earnings_dates row carries none). Same shape tolerance as
+    `_fy_growth_from_estimate_df`: never raises, None on any
     missing/empty/NaN condition."""
     try:
         if df is None or not hasattr(df, "loc") or getattr(df, "empty", False):
             return None
         if "avg" not in getattr(df, "columns", []):
             return None
-        if "0y" not in df.index:
+        if period not in df.index:
             return None
-        return _safe_float(df.loc["0y", "avg"])
+        return _safe_float(df.loc[period, "avg"])
     except Exception:  # noqa: BLE001 — parse/shape failures are non-fatal
         return None
 
@@ -1669,6 +1676,20 @@ def _fetch_fresh(ticker: str) -> Fundamentals:
             f.curr_fy_revenue_estimate = _fy_avg_from_estimate_df(
                 raw.get("revenue_estimate")
             )
+            # Next-quarter fallback: when the earnings_dates "next up" row
+            # carries no estimates (thin coverage / orphan calendar rows),
+            # fill from the same estimate tables' `0q` consensus so the
+            # PROSSIMA row isn't a strip of dashes while the annual row
+            # right below shows a full-year figure.
+            if f.next_earnings_date is not None:
+                if f.next_eps_estimate is None:
+                    f.next_eps_estimate = _fy_avg_from_estimate_df(
+                        raw.get("earnings_estimate"), period="0q"
+                    )
+                if f.next_revenue_estimate is None:
+                    f.next_revenue_estimate = _fy_avg_from_estimate_df(
+                        raw.get("revenue_estimate"), period="0q"
+                    )
         except Exception as e:
             logger.debug(f"[fund] fy-growth estimates {ticker}: {e}")
         # Growth fallback — derive EPS YoY/QoQ + Rev YoY from the

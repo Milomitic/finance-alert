@@ -53,6 +53,66 @@ def test_old_l2_payload_without_new_fields_defaults_to_none():
     assert f.curr_fy_revenue_estimate is None
 
 
+def test_next_earnings_skips_past_orphan_rows(monkeypatch):
+    """yfinance's earnings_dates keeps orphan rows (scheduled events whose
+    Reported EPS was never reconciled). A PAST NaN-reported row must not win
+    as 'prossima' — the bug showed 15/05/24 as the upcoming earnings in 2026."""
+    from datetime import date as _date, timedelta as _td
+
+    from app.services.stock_fundamentals_service import _extract_earnings
+
+    past_orphan = pd.Timestamp(_date.today() - _td(days=700))
+    future_real = pd.Timestamp(_date.today() + _td(days=30))
+    ed = pd.DataFrame(
+        {
+            "EPS Estimate": [0.10, 0.25],
+            "Reported EPS": [float("nan"), float("nan")],
+            "Surprise(%)": [float("nan"), float("nan")],
+        },
+        index=[past_orphan, future_real],
+    )
+    hist, next_date, next_est, _rev, _t = _extract_earnings(ed)
+    assert hist == []                                  # orphan is not history
+    assert next_date == str(future_real.date())        # past row skipped
+    assert next_est == 0.25
+
+
+def test_next_estimate_falls_back_to_0q_consensus(monkeypatch):
+    """When the earnings_dates next row carries no estimates, the PROSSIMA row
+    fills from the estimate tables' 0q consensus (same source as the annual
+    FY row) instead of rendering a strip of dashes."""
+    from datetime import date as _date, timedelta as _td
+
+    from app.services import stock_fundamentals_service as sfs
+
+    future = pd.Timestamp(_date.today() + _td(days=20))
+    ed = pd.DataFrame(
+        {
+            "EPS Estimate": [float("nan")],
+            "Reported EPS": [float("nan")],
+            "Surprise(%)": [float("nan")],
+        },
+        index=[future],
+    )
+    est_df = pd.DataFrame(
+        {"avg": [-0.31, -0.4, -2.02, -1.5], "growth": [0.1, 0.1, 0.1, 0.1]},
+        index=["0q", "+1q", "0y", "+1y"],
+    )
+    raw = {
+        "earnings_dates": ed,
+        "earnings_estimate": est_df,
+        "revenue_estimate": _estimate_df(avg_0y=740e6),
+    }
+    monkeypatch.setattr(sfs, "_yf_fetch_with_retry", lambda t: raw)
+    monkeypatch.setattr(sfs, "_throttle_upstream_fetch", lambda: None)
+
+    f = sfs._fetch_fresh("SMALLCAP")
+
+    assert f.next_earnings_date == str(future.date())
+    assert f.next_eps_estimate == -0.31                # 0q fallback
+    assert f.curr_fy_eps_estimate == -2.02             # 0y row untouched
+
+
 def test_fetch_fresh_populates_curr_fy_estimates(monkeypatch):
     """End-to-end through _fetch_fresh: a raw yfinance payload carrying the
     estimate tables must land on Fundamentals.curr_fy_*_estimate. This is the
