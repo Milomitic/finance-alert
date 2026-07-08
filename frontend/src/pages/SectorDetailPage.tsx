@@ -9,6 +9,7 @@ import {
   Globe2,
   Layers,
   Shield,
+  SlidersHorizontal,
   TrendingDown,
   TrendingUp,
 } from "lucide-react";
@@ -146,8 +147,8 @@ export default function SectorDetailPage() {
   if (q.error || !q.data) {
     return (
       <div className="p-8">
-        <Link to="/" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:underline">
-          <ArrowLeft className="h-4 w-4" /> Indietro
+        <Link to="/sectors" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:underline">
+          <ArrowLeft className="h-4 w-4" /> Settori
         </Link>
         <div className="mt-4 text-red-600">
           Settore non trovato: {decoded}
@@ -179,17 +180,37 @@ export default function SectorDetailPage() {
             </div>
           </div>
         </div>
-        <Link
-          to="/"
-          className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft className="h-4 w-4" /> Dashboard
-        </Link>
+        <div className="flex items-center gap-4">
+          {/* Funnel verso lo screener: pre-filtra /stocks sul settore
+              corrente (il param del browser stock è proprio `sector`). */}
+          <Link
+            to={`/stocks?sector=${encodeURIComponent(decoded)}`}
+            className="inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm hover:bg-accent transition-colors"
+          >
+            <SlidersHorizontal className="h-4 w-4" aria-hidden />
+            Apri nello screener
+          </Link>
+          <Link
+            to="/sectors"
+            className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
+          >
+            <ArrowLeft className="h-4 w-4" /> Settori
+          </Link>
+        </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
         <KpiTile label="Score medio" value={fmtNum(d.kpis.avg_composite, 1)} />
         <KpiTile label="Score mediano" value={fmtNum(d.kpis.median_composite, 1)} />
+        <KpiTile
+          label="Tecnico"
+          value={fmtNum(d.kpis.avg_technical, 1)}
+          hint={
+            d.kpis.technical_count > 0
+              ? `su ${d.kpis.technical_count} stock`
+              : undefined
+          }
+        />
         <KpiTile label="P/E mediano" value={fmtNum(d.kpis.median_pe, 1)} />
         <KpiTile label="P/B mediano" value={fmtNum(d.kpis.median_pb, 2)} />
         <KpiTile label="ROE mediano" value={fmtNum(d.kpis.median_roe, 1, "%")} />
@@ -280,12 +301,17 @@ export default function SectorDetailPage() {
   );
 }
 
-function KpiTile({ label, value }: { label: string; value: string }) {
+function KpiTile({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
     <Card>
       <CardContent className="p-3">
         <div className="text-xs text-muted-foreground truncate" title={label}>{label}</div>
         <div className="text-lg font-semibold tabular-nums mt-1">{value}</div>
+        {hint && (
+          <div className="text-[11px] text-muted-foreground truncate" title={hint}>
+            {hint}
+          </div>
+        )}
       </CardContent>
     </Card>
   );
@@ -435,6 +461,10 @@ function IndustryBreakdownCard({
             {buckets.map((b) => {
               const pct = (b.count / max) * 100;
               const sharePct = total > 0 ? (b.count / total) * 100 : 0;
+              // Funnel verso lo screener: ogni industry apre /stocks
+              // pre-filtrato (param `industry`). Il bucket "(no
+              // industry)" è un'etichetta sintetica, non un filtro.
+              const linkable = b.label !== "(no industry)";
               return (
                 <div
                   key={b.label}
@@ -445,9 +475,19 @@ function IndustryBreakdownCard({
                   // row height and breaking the rhythm.
                   className="grid grid-cols-[1fr_60px_72px] items-center gap-2"
                 >
-                  <span className="text-xs truncate" title={b.label}>
-                    {b.label}
-                  </span>
+                  {linkable ? (
+                    <Link
+                      to={`/stocks?industry=${encodeURIComponent(b.label)}`}
+                      className="text-xs truncate hover:underline hover:text-foreground"
+                      title={`Apri "${b.label}" nello screener`}
+                    >
+                      {b.label}
+                    </Link>
+                  ) : (
+                    <span className="text-xs truncate" title={b.label}>
+                      {b.label}
+                    </span>
+                  )}
                   <div className="h-2 rounded-full bg-muted/40 overflow-hidden">
                     <div
                       className="h-full rounded-full bg-indigo-500/70"

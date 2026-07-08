@@ -54,6 +54,10 @@ export interface SectorKpis {
   stock_count: number;
   avg_composite: number | null;
   median_composite: number | null;
+  /** Lente Tecnico: media dei compositi tecnici del settore (solo gli
+   *  stock che ne hanno uno) + quanti stock contribuiscono alla media. */
+  avg_technical: number | null;
+  technical_count: number;
   median_pe: number | null;
   median_pb: number | null;
   median_roe: number | null;
@@ -94,6 +98,13 @@ export function useSectorDetail(name: string) {
  * dashboard's market-mood tape does for indices.
  */
 
+/** Un punto della sparkline Qualità: media del composito di settore in
+ *  un giorno di cattura di score_history. */
+export interface SectorTrendPoint {
+  date: string;
+  avg: number;
+}
+
 export interface SectorSummary {
   name: string;
   stock_count: number;
@@ -102,6 +113,20 @@ export interface SectorSummary {
   median_pb: number | null;
   median_roe: number | null;
   median_dividend_yield: number | null;
+  /** Lente Tecnico: media compositi tecnici + n stock che la formano. */
+  avg_technical: number | null;
+  technical_count: number;
+  /** Δ% giornaliero del settore, dallo stesso aggregato della heatmap
+   *  dashboard (snapshot di mercato) — null se lo snapshot manca. */
+  change_pct: number | null;
+  /** Segnali (non archiviati) degli ultimi 7 giorni, con split di tono. */
+  signals_7d: number;
+  signals_7d_bull: number;
+  signals_7d_bear: number;
+  /** Ticker SPDR proxy del settore, presente SOLO se esiste in catalogo. */
+  etf_proxy: string | null;
+  /** Trend dello score Qualità (ultime ~30 catture, ascendente). */
+  score_trend: SectorTrendPoint[];
 }
 
 export interface IndustryRow {

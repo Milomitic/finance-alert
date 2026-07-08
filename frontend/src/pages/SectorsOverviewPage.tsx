@@ -1,21 +1,25 @@
 import {
   ArrowRight,
   BarChart3,
+  BellRing,
   Factory,
   Globe2,
   Grid3x3,
   Layers,
+  RefreshCw,
   Sparkles,
 } from "lucide-react";
 import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 import { Card, CardContent } from "@/components/ui/card";
+import { CardSkeleton } from "@/components/ui/card-skeleton";
 import { SectionTitle } from "@/components/ui/section-title";
 import {
   useSectorsOverview,
   type IndustryRow,
   type SectorSummary,
+  type SectorTrendPoint,
 } from "@/hooks/useSectorDetail";
 import {
   getSectorIcon,
@@ -77,6 +81,63 @@ function scoreBgBar(score: number | null | undefined): string {
   return "bg-rose-500";
 }
 
+function changeTone(v: number | null): string {
+  // Plain literal tone classes (Tailwind purger, per CLAUDE.md).
+  if (v === null || !Number.isFinite(v)) return "text-muted-foreground";
+  if (v > 0) return "text-emerald-600 dark:text-emerald-400";
+  if (v < 0) return "text-rose-600 dark:text-rose-400";
+  return "text-muted-foreground";
+}
+
+function fmtChange(v: number | null): string {
+  if (v === null || !Number.isFinite(v)) return "—";
+  return `${v > 0 ? "+" : ""}${v.toFixed(2)}%`;
+}
+
+/* ─── Score-trend sparkline ────────────────────────────────────────────
+ * Mini SVG polyline of the sector's Qualità composite over the last ~30
+ * score_history captures. Stroke tone follows the net direction
+ * (last vs first point). Under 2 points there's no line to draw. */
+function ScoreSparkline({ points }: { points: SectorTrendPoint[] }) {
+  if (points.length < 2) return null;
+  const vals = points.map((p) => p.avg);
+  const min = Math.min(...vals);
+  const max = Math.max(...vals);
+  const span = max - min || 1; // flat series → centered horizontal line
+  const w = 64;
+  const h = 20;
+  const pad = 2;
+  const step = (w - pad * 2) / (vals.length - 1);
+  const pts = vals
+    .map((v, i) => {
+      const x = pad + i * step;
+      const y = h - pad - ((v - min) / span) * (h - pad * 2);
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(" ");
+  const rising = vals[vals.length - 1] >= vals[0];
+  return (
+    <svg
+      width={w}
+      height={h}
+      viewBox={`0 0 ${w} ${h}`}
+      className={rising ? "text-emerald-500" : "text-rose-500"}
+      role="img"
+      aria-label="Trend score Qualità (ultime ~30 rilevazioni)"
+    >
+      <title>Trend score Qualità (ultime ~30 rilevazioni)</title>
+      <polyline
+        points={pts}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
 /* ─── Top summary tile ─────────────────────────────────────────────────── */
 function SummaryTile({
   icon: Icon,
@@ -117,6 +178,17 @@ function SectorTile({ sector }: { sector: SectorSummary }) {
   const iconColor = getSectorIconColor(sector.name);
   const tone = getSectorTone(sector.name);
   const ring = getSectorRing(sector.name);
+  const navigate = useNavigate();
+
+  // The whole tile is a <Link> to the sector detail; the inner chips
+  // (segnali → /alerts, ETF proxy → /stocks/{ticker}) navigate elsewhere.
+  // Nested <a> inside <a> is invalid HTML, so the chips are spans with
+  // role="link" that stopPropagation + navigate imperatively.
+  function goTo(e: React.MouseEvent | React.KeyboardEvent, url: string) {
+    e.preventDefault();
+    e.stopPropagation();
+    navigate(url);
+  }
 
   return (
     <Link
@@ -179,6 +251,38 @@ function SectorTile({ sector }: { sector: SectorSummary }) {
           </div>
         )}
 
+        {/* Lente Tecnico + asse temporale: secondo score piccolo, Δ%
+            giornaliero (dallo snapshot, come la heatmap dashboard) e
+            sparkline del trend Qualità (~30 rilevazioni). */}
+        <div className="flex items-center justify-between gap-2">
+          <div
+            title={
+              sector.avg_technical !== null
+                ? `Score tecnico medio su ${sector.technical_count} stock`
+                : "Nessuno score tecnico disponibile"
+            }
+          >
+            <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-mono mr-1.5">
+              Tecnico
+            </span>
+            <span
+              className={cn(
+                "text-sm font-semibold tabular-nums",
+                scoreColor(sector.avg_technical),
+              )}
+            >
+              {fmtNum(sector.avg_technical, 1)}
+            </span>
+          </div>
+          <span
+            className={cn("text-sm font-semibold tabular-nums", changeTone(sector.change_pct))}
+            title="Variazione media giornaliera del settore (ultimo snapshot)"
+          >
+            {fmtChange(sector.change_pct)}
+          </span>
+          <ScoreSparkline points={sector.score_trend} />
+        </div>
+
         {/* Fundamentals strip (small) */}
         <div className="grid grid-cols-3 gap-2 pt-1">
           <div>
@@ -206,6 +310,45 @@ function SectorTile({ sector }: { sector: SectorSummary }) {
             </div>
           </div>
         </div>
+
+        {/* Chip lente Segnali + proxy ETF. Il chip segnali porta alla
+            pagina /alerts (nessun filtro per settore esiste lì oggi);
+            il chip ETF apre il dettaglio dello SPDR proxy, presente
+            solo quando il ticker esiste in catalogo. */}
+        {(sector.signals_7d > 0 || sector.etf_proxy) && (
+          <div className="flex items-center gap-2 pt-1">
+            {sector.signals_7d > 0 && (
+              <span
+                role="link"
+                tabIndex={0}
+                onClick={(e) => goTo(e, "/alerts")}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") goTo(e, "/alerts");
+                }}
+                className="inline-flex items-center gap-1 rounded-full border bg-muted/40 px-2 py-0.5 text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
+                title={`${sector.signals_7d_bull} rialzisti · ${sector.signals_7d_bear} ribassisti — apri Segnali`}
+              >
+                <BellRing className="h-3 w-3" aria-hidden />
+                {sector.signals_7d} segnali · 7g
+              </span>
+            )}
+            {sector.etf_proxy && (
+              <span
+                role="link"
+                tabIndex={0}
+                onClick={(e) => goTo(e, `/stocks/${encodeURIComponent(sector.etf_proxy!)}`)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter")
+                    goTo(e, `/stocks/${encodeURIComponent(sector.etf_proxy!)}`);
+                }}
+                className="inline-flex items-center gap-1 rounded-full border bg-muted/40 px-2 py-0.5 text-[11px] font-mono text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
+                title={`Apri l'ETF proxy del settore (${sector.etf_proxy})`}
+              >
+                ETF {sector.etf_proxy}
+              </span>
+            )}
+          </div>
+        )}
       </div>
     </Link>
   );
@@ -237,7 +380,7 @@ function IndustryListItem({ industry }: { industry: IndustryRow }) {
 
 /* ─── Page ────────────────────────────────────────────────────────────── */
 export default function SectorsOverviewPage() {
-  const { data, isLoading, isError } = useSectorsOverview();
+  const { data, isLoading, isError, refetch, isFetching } = useSectorsOverview();
   // Industries view-mode toggle: "by-sector" groups under each sector
   // header, "flat" lists all 29 in one ranked list. Default by-sector
   // because that's the most useful entry point on first land — the
@@ -288,14 +431,22 @@ export default function SectorsOverviewPage() {
   }, [data]);
 
   if (isLoading) {
+    // Skeleton strutturato che rispecchia la pagina (4 tile riassuntive
+    // + griglia di card settore) — stesso pattern di SectorDetailPage,
+    // era un semplice "Caricamento…" testuale.
     return (
       <div className="space-y-6">
         <h2 className="text-2xl sm:text-3xl font-semibold tracking-tight">Settori</h2>
-        <Card>
-          <CardContent className="p-6 text-sm text-muted-foreground">
-            Caricamento overview settori…
-          </CardContent>
-        </Card>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <CardSkeleton key={i} rows={2} className="h-[84px]" />
+          ))}
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <CardSkeleton key={i} rows={5} className="h-[220px]" />
+          ))}
+        </div>
       </div>
     );
   }
@@ -305,8 +456,19 @@ export default function SectorsOverviewPage() {
       <div className="space-y-6">
         <h2 className="text-2xl sm:text-3xl font-semibold tracking-tight">Settori</h2>
         <Card>
-          <CardContent className="p-6 text-sm text-destructive">
-            Errore nel caricamento dei dati settoriali.
+          <CardContent className="p-6 space-y-3">
+            <p className="text-sm text-destructive">
+              Errore nel caricamento dei dati settoriali.
+            </p>
+            <button
+              type="button"
+              onClick={() => refetch()}
+              disabled={isFetching}
+              className="inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm hover:bg-accent transition-colors disabled:opacity-50"
+            >
+              <RefreshCw className={cn("h-4 w-4", isFetching && "animate-spin")} aria-hidden />
+              Riprova
+            </button>
           </CardContent>
         </Card>
       </div>
