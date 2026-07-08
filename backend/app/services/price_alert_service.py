@@ -32,6 +32,20 @@ def list_for_stock(db: Session, stock_id: int) -> list[PriceAlert]:
     )
 
 
+def list_all(db: Session, *, active_only: bool = True) -> list[PriceAlert]:
+    """Global listing across all stocks — powers the screener's one-shot
+    "campanella" batch fetch (a per-ticker call per row would be N+1 over
+    the network). `active_only` keeps only alerts still armed: enabled AND
+    not yet triggered (`triggered_at` is the shared idempotency marker of
+    both evaluation paths)."""
+    stmt = select(PriceAlert).order_by(PriceAlert.created_at.desc())
+    if active_only:
+        stmt = stmt.where(
+            PriceAlert.enabled.is_(True), PriceAlert.triggered_at.is_(None)
+        )
+    return list(db.execute(stmt).scalars())
+
+
 def create(
     db: Session,
     stock_id: int,

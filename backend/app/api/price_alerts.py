@@ -23,6 +23,19 @@ def _stock_id_or_404(db: Session, ticker: str) -> int:
     return s.id
 
 
+@router.get("/api/price-alerts", response_model=list[PriceAlertOut])
+def list_all_price_alerts(
+    active: bool = True,
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+) -> list[PriceAlertOut]:
+    """All price alerts in one call — the screener's bell glyph builds a
+    Set of stock_id from this instead of N per-ticker fetches. `active=true`
+    (default) = enabled and not yet triggered; `active=false` = everything."""
+    rows = price_alert_service.list_all(db, active_only=active)
+    return [PriceAlertOut.model_validate(r, from_attributes=True) for r in rows]
+
+
 @router.get("/api/stocks/{ticker}/price-alerts", response_model=list[PriceAlertOut])
 def list_price_alerts(
     ticker: str,

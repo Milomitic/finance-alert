@@ -35,6 +35,9 @@ class StockScoreRefOut(BaseModel):
     # No momentum: the fundamental Momentum pillar was removed from the
     # composite — the DB column is always NULL, so it was dead payload here.
     sentiment: float | None = None
+    # Trend: delta del composite vs lo snapshot score_history (lens qualita)
+    # più recente di almeno 7 giorni fa. None con storia insufficiente.
+    composite_delta_7d: float | None = None
 
 
 class TechnicalScoreRefOut(BaseModel):
