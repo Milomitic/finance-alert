@@ -62,6 +62,22 @@ const TONE_OPTIONS: { value: string; label: string }[] = [
   { value: "bear", label: "Ribassista" },
 ];
 
+// Esito realizzato (warehouse signal_outcomes): direzione azzeccata / mancata /
+// ancora in maturazione. Stesse semantiche della colonna Esito della tabella.
+const OUTCOME_OPTIONS: { value: string; label: string }[] = [
+  { value: "hit", label: "Azzeccato" },
+  { value: "miss", label: "Mancato" },
+  { value: "pending", label: "In maturazione" },
+];
+
+// Orizzonte temporale del segnale (snapshot.horizon) — etichette allineate
+// ai badge Breve/Medio/Lungo della colonna Orizzonte.
+const HORIZON_OPTIONS: { value: string; label: string }[] = [
+  { value: "short", label: "Breve" },
+  { value: "medium", label: "Medio" },
+  { value: "long", label: "Lungo" },
+];
+
 /* ─── Periodo (date_from/date_to) ────────────────────────────────────────
  * Compact period presets over the API's date_from/date_to params (which
  * existed but had no UI control — SEG-1 audit item 5). Presets set
@@ -191,6 +207,14 @@ export function AlertFilters({ value, onChange }: Props) {
     ? (TONE_OPTIONS.find((t) => t.value === value.tone)?.label ?? value.tone)
     : null;
 
+  // Friendly labels for the outcome + horizon filters (chips).
+  const outcomeLabel = value.outcome
+    ? (OUTCOME_OPTIONS.find((o) => o.value === value.outcome)?.label ?? value.outcome)
+    : null;
+  const horizonLabel = value.horizon
+    ? (HORIZON_OPTIONS.find((h) => h.value === value.horizon)?.label ?? value.horizon)
+    : null;
+
   // Count active filters so the header can show a badge. "active" status
   // is the default and not counted; "archived" counts as 1.
   const activeCount =
@@ -202,6 +226,8 @@ export function AlertFilters({ value, onChange }: Props) {
     (value.strength_min != null ? 1 : 0) +
     (value.probability_min != null ? 1 : 0) +
     (value.nature ? 1 : 0) +
+    (value.outcome ? 1 : 0) +
+    (value.horizon ? 1 : 0) +
     (value.date_from || value.date_to ? 1 : 0);
 
   return (
@@ -228,10 +254,10 @@ export function AlertFilters({ value, onChange }: Props) {
         />
 
         {/* Filters laid out horizontally (responsive grid) so the card stays
-            short — was a tall vertical stack. Wraps to 2-4 cols on narrow
-            viewports, single row on xl+ (7 controls since the Periodo
-            select landed). */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3">
+            short — was a tall vertical stack. Wraps to 2-5 cols on narrow
+            viewports, single row on xl+ (9 controls since Esito + Orizzonte
+            landed). */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-9 gap-3">
         <div>
           <Label className="text-xs uppercase tracking-wider text-muted-foreground">
             Archivio
@@ -339,6 +365,57 @@ export function AlertFilters({ value, onChange }: Props) {
               <SelectItem value="tutti">Tutte</SelectItem>
               <SelectItem value="continuazione">Continuazione</SelectItem>
               <SelectItem value="inversione">Inversione</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Esito — realised outcome from signal_outcomes: azzeccato / mancato /
+            in maturazione. "tutti" clears. */}
+        <div>
+          <Label className="text-xs uppercase tracking-wider text-muted-foreground">
+            Esito
+          </Label>
+          <Select
+            value={value.outcome ?? "tutti"}
+            onValueChange={(v) =>
+              onChange({ ...value, outcome: v === "tutti" ? undefined : v })
+            }
+          >
+            <SelectTrigger className="mt-1">
+              <SelectValue placeholder="Tutti" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="tutti">Tutti</SelectItem>
+              {OUTCOME_OPTIONS.map((o) => (
+                <SelectItem key={o.value} value={o.value}>
+                  {o.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Orizzonte — breve / medio / lungo (snapshot.horizon). "tutti" clears. */}
+        <div>
+          <Label className="text-xs uppercase tracking-wider text-muted-foreground">
+            Orizzonte
+          </Label>
+          <Select
+            value={value.horizon ?? "tutti"}
+            onValueChange={(v) =>
+              onChange({ ...value, horizon: v === "tutti" ? undefined : v })
+            }
+          >
+            <SelectTrigger className="mt-1">
+              <SelectValue placeholder="Tutti" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="tutti">Tutti</SelectItem>
+              {HORIZON_OPTIONS.map((h) => (
+                <SelectItem key={h.value} value={h.value}>
+                  {h.label}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
@@ -510,6 +587,30 @@ export function AlertFilters({ value, onChange }: Props) {
                     ? "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 border-emerald-200/70 dark:border-emerald-800/60"
                     : "bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300 border-rose-200/70 dark:border-rose-800/60"
                 }
+              />
+            )}
+            {value.outcome && (
+              <FilterChip
+                label={
+                  <>
+                    <span className="text-muted-foreground/80">Esito:</span>{" "}
+                    {outcomeLabel}
+                  </>
+                }
+                onClear={() => onChange({ ...value, outcome: undefined })}
+                className="bg-muted text-foreground border-border"
+              />
+            )}
+            {value.horizon && (
+              <FilterChip
+                label={
+                  <>
+                    <span className="text-muted-foreground/80">Orizzonte:</span>{" "}
+                    {horizonLabel}
+                  </>
+                }
+                onClear={() => onChange({ ...value, horizon: undefined })}
+                className="bg-muted text-foreground border-border"
               />
             )}
             {value.strength_min != null && (

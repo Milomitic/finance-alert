@@ -54,6 +54,11 @@ export interface AlertListParams {
   probability_min?: number;
   /** Signal nature: 'continuazione' | 'inversione'. */
   nature?: string;
+  /** Realised outcome filter: 'hit' | 'miss' | 'pending' (in maturazione).
+   *  Joined server-side against the signal_outcomes warehouse. */
+  outcome?: string;
+  /** Signal horizon filter: 'short' | 'medium' | 'long' (snapshot.horizon). */
+  horizon?: string;
   date_from?: string; // ISO date (inclusive)
   /** ISO date, INCLUSIVE on the client ("fino al giorno X compreso"). The
    *  backend filter is exclusive (`triggered_at < date_to`), so `toQuery`
@@ -84,6 +89,8 @@ function toQuery(params: AlertListParams): string {
   if (params.strength_min !== undefined) sp.set("strength_min", String(params.strength_min));
   if (params.probability_min !== undefined) sp.set("probability_min", String(params.probability_min));
   if (params.nature) sp.set("nature", params.nature);
+  if (params.outcome) sp.set("outcome", params.outcome);
+  if (params.horizon) sp.set("horizon", params.horizon);
   if (params.date_from) sp.set("date_from", params.date_from);
   if (params.date_to) sp.set("date_to", isoDayAfter(params.date_to));
   if (params.archived !== undefined) sp.set("archived", String(params.archived));

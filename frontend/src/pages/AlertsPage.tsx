@@ -40,6 +40,8 @@ function filtersFromSearch(sp: URLSearchParams): AlertListParams {
     rule_kind: s("rule_kind"),
     tone: s("tone"),
     nature: s("nature"),
+    outcome: s("outcome"),
+    horizon: s("horizon"),
     date_from: s("date_from"),
     date_to: s("date_to"),
     strength_min: numParam(sp, "strength_min"),
@@ -59,6 +61,8 @@ function searchFromState(
   if (filters.rule_kind) sp.set("rule_kind", filters.rule_kind);
   if (filters.tone) sp.set("tone", filters.tone);
   if (filters.nature) sp.set("nature", filters.nature);
+  if (filters.outcome) sp.set("outcome", filters.outcome);
+  if (filters.horizon) sp.set("horizon", filters.horizon);
   if (filters.date_from) sp.set("date_from", filters.date_from);
   if (filters.date_to) sp.set("date_to", filters.date_to);
   if (filters.strength_min != null) sp.set("strength_min", String(filters.strength_min));
