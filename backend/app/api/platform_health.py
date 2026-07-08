@@ -26,6 +26,7 @@ from app.schemas.platform import (
 )
 from app.services import (
     cache_metrics,
+    data_source_metrics,
     detector_performance_service,
     health_rollup,
     signal_drift_service,
@@ -113,6 +114,17 @@ def _sources_payload(sources: list | None = None) -> list[dict]:
     ]
 
 
+def _gap_suggestions() -> list[dict]:
+    """Gap-analysis hints (an op whose EVERY source is failing/degraded →
+    fallback suggestion). Previously served by the dedicated
+    /api/health/data-sources endpoint, which duplicated this snapshot —
+    the endpoint was deleted and its one useful half folded in here."""
+    return [
+        {"op": g.op, "why": g.why, "suggestion": g.suggestion}
+        for g in data_source_metrics.analyse_gaps()
+    ]
+
+
 @router.get("/health", response_model=PlatformHealthOut)
 def health_snapshot(
     db: Session = Depends(get_db),
@@ -137,6 +149,7 @@ def health_snapshot(
         cache=cache_metrics.snapshot(),
         overall=overall,
         reasons=reasons,
+        suggestions=_gap_suggestions(),
     )
 
 
@@ -298,6 +311,7 @@ async def stream(
             "cache": cache_metrics.snapshot(),
             "overall": overall,
             "reasons": reasons,
+            "suggestions": _gap_suggestions(),
         }
         return json.dumps(snap_dict, default=str)
 

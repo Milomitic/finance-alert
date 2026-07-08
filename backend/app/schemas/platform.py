@@ -23,7 +23,9 @@ class DataSourceMetricOut(BaseModel):
     last_failure_at: float | None
     last_failure_reason: str | None
     # "healthy" | "degraded" | "failing" | "unavailable" (plan-gated: all
-    # failures HTTP 403 — slate chip, excluded from the banner rollup) | "idle"
+    # failures HTTP 403 — slate chip, excluded from the banner rollup) |
+    # "idle" | "stale" (no success within the source's expected cadence —
+    # dead cron/probe with frozen-green counters)
     health: str
     calls_last_minute: int | None
     calls_last_day: int | None
@@ -76,10 +78,28 @@ class CacheKindStatOut(BaseModel):
     l2_newest_age_s: float | None = None
 
 
+class OhlcvFreshnessOut(BaseModel):
+    """Freshness of the STORED OHLCV (what scans read): newest bar date +
+    how many stocks have a bar on that date. Memoized 60s server-side."""
+    max_date: str | None = None      # ISO "YYYY-MM-DD"; None on an empty table
+    stocks_at_max: int = 0
+
+
 class CacheStatsOut(BaseModel):
     fundamentals: CacheKindStatOut
     news: CacheKindStatOut
     db: dict   # {"size_mb": float}
+    ohlcv: OhlcvFreshnessOut = OhlcvFreshnessOut()
+
+
+class GapSuggestionOut(BaseModel):
+    """Gap-analysis hint (data_source_metrics.analyse_gaps): an operation
+    whose every source is failing/degraded, with a fallback suggestion.
+    Folded into the platform payload when the dedicated
+    /api/health/data-sources endpoint was deleted (audit 2026-07-08)."""
+    op: str
+    why: str
+    suggestion: str
 
 
 class PlatformHealthOut(BaseModel):
@@ -93,6 +113,8 @@ class PlatformHealthOut(BaseModel):
     # keeps its old derivation only as a fallback for pre-rollup payloads.
     overall: str = "operational"     # "operational" | "degraded" | "outage"
     reasons: list[str] = []          # Italian, human-readable, outage first
+    # Gap-analysis hints — empty when every op has at least one healthy source.
+    suggestions: list[GapSuggestionOut] = []
 
 
 class LogRecordOut(BaseModel):

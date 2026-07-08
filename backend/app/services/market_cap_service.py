@@ -131,16 +131,18 @@ def refresh_market_caps(db: Session) -> MarketCapRefreshResult:
     db.commit()
     if result.stocks_updated > 0:
         _record_yf_outcome(True)
-    # Per-source metrics
+    # Per-source metrics: one per-batch verdict (ok/partial/failed) so the
+    # Salute classifier sees the run's real outcome, not the record order.
     from app.services import data_source_metrics
-    if result.stocks_updated > 0:
-        data_source_metrics.record_success("yfinance", "market_cap", count=result.stocks_updated)
-    if result.stocks_failed > 0:
-        data_source_metrics.record_failure(
-            "yfinance", "market_cap",
-            reason=f"{result.stocks_failed} tickers without market_cap",
-            count=result.stocks_failed,
-        )
+    data_source_metrics.record_batch(
+        "yfinance", "market_cap",
+        succeeded=result.stocks_updated,
+        failed=result.stocks_failed,
+        reason=(
+            f"{result.stocks_failed} tickers without market_cap"
+            if result.stocks_failed > 0 else ""
+        ),
+    )
     logger.info(
         f"[market_cap] refresh complete: updated={result.stocks_updated} "
         f"failed={result.stocks_failed}"

@@ -5,9 +5,11 @@ We record: last_run_at, last_result, last_duration_ms (best-effort),
 last_error, total runs, total errors.
 
 Duration tracking is best-effort because APScheduler doesn't expose
-start/end in a single event — we approximate by recording the
-scheduled_run_time delta. For our purposes (visual indicator) this is
-plenty; we are not building a profiler.
+start/end in a single event — we pair EVENT_JOB_SUBMITTED (executor
+handoff) with the matching EXECUTED/ERROR event per job_id. The delta
+includes any executor queue wait, which is fine for a visual indicator
+("the scan took 4m" / "this job suddenly takes 10× longer"); we are not
+building a profiler.
 """
 import os
 from dataclasses import asdict, dataclass, fields
@@ -18,6 +20,7 @@ from apscheduler.events import (
     EVENT_JOB_ERROR,
     EVENT_JOB_EXECUTED,
     EVENT_JOB_MISSED,
+    EVENT_JOB_SUBMITTED,
 )
 from loguru import logger
 
@@ -42,16 +45,34 @@ class JobStat:
 class SchedulerMetrics:
     def __init__(self) -> None:
         self._stats: dict[str, JobStat] = {}
+        # job_id → submit timestamp (EVENT_JOB_SUBMITTED). Consumed by the
+        # matching EXECUTED/ERROR event to compute last_duration_ms. Not
+        # persisted: an in-flight run doesn't survive a restart anyway.
+        self._started: dict[str, float] = {}
         self._lock = Lock()
 
     def on_event(self, event) -> None:
         """APScheduler listener entry point. `event.code` identifies the
-        event type; we handle EXECUTED, ERROR, MISSED."""
+        event type; we handle SUBMITTED (start-of-run marker for duration),
+        EXECUTED, ERROR, MISSED."""
         try:
             jid = event.job_id
+            if event.code == EVENT_JOB_SUBMITTED:
+                # Start marker only — no stat row mutation, no disk write.
+                with self._lock:
+                    self._started[jid] = time()
+                return
             with self._lock:
                 s = self._stats.setdefault(jid, JobStat(job_id=jid))
-                s.last_run_at = time()
+                now = time()
+                s.last_run_at = now
+                if event.code in (EVENT_JOB_EXECUTED, EVENT_JOB_ERROR):
+                    # Pair with the SUBMITTED marker; a missing marker (e.g.
+                    # restart mid-run, listener attached late) keeps the
+                    # previous duration instead of writing garbage.
+                    started = self._started.pop(jid, None)
+                    if started is not None:
+                        s.last_duration_ms = round((now - started) * 1000.0, 1)
                 if event.code == EVENT_JOB_EXECUTED:
                     s.last_result = "ok"
                     s.runs += 1
@@ -115,5 +136,5 @@ def install_listener(scheduler) -> None:
     Call once at scheduler creation time."""
     scheduler.add_listener(
         _INSTANCE.on_event,
-        EVENT_JOB_EXECUTED | EVENT_JOB_ERROR | EVENT_JOB_MISSED,
+        EVENT_JOB_SUBMITTED | EVENT_JOB_EXECUTED | EVENT_JOB_ERROR | EVENT_JOB_MISSED,
     )

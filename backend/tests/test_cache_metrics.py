@@ -13,7 +13,7 @@ def test_snapshot_shape_on_empty_caches(db):
 
     snap = cache_metrics.snapshot()
 
-    assert set(snap.keys()) == {"fundamentals", "news", "db"}
+    assert set(snap.keys()) == {"fundamentals", "news", "db", "ohlcv"}
     assert snap["fundamentals"]["l1_entries"] == 0
     assert snap["news"]["l1_entries"] == 0
     assert snap["fundamentals"]["oldest_age_s"] is None
@@ -25,6 +25,37 @@ def test_snapshot_shape_on_empty_caches(db):
     assert "l2_oldest_age_s" in snap["fundamentals"]
     assert "l2_newest_age_s" in snap["fundamentals"]
     assert isinstance(snap["db"]["size_mb"], float)
+    # OHLCV freshness row (SAL-2): MAX(date) + count-at-max, memoized 60s.
+    assert set(snap["ohlcv"].keys()) == {"max_date", "stocks_at_max"}
+    assert isinstance(snap["ohlcv"]["stocks_at_max"], int)
+
+
+def test_ohlcv_freshness_reads_max_date_and_count(db):
+    """One bar per stock on the newest date → n = stocks at MAX(date)."""
+    from datetime import date
+
+    from app.models import OhlcvDaily, Stock
+
+    cache_metrics.reset_ohlcv_cache()          # drop any memo from other tests
+    s1 = Stock(ticker="AAA", name="A", exchange="NYSE")
+    s2 = Stock(ticker="BBB", name="B", exchange="NYSE")
+    db.add_all([s1, s2])
+    db.flush()
+    mk = lambda sid, d: OhlcvDaily(  # noqa: E731 — compact fixture row
+        stock_id=sid, date=d, open=1, high=1, low=1, close=1, volume=100,
+    )
+    db.add_all([
+        mk(s1.id, date(2026, 7, 6)),
+        mk(s1.id, date(2026, 7, 7)),
+        mk(s2.id, date(2026, 7, 7)),
+    ])
+    db.commit()
+
+    fresh = cache_metrics._ohlcv_freshness()
+    assert fresh["max_date"] == "2026-07-07"
+    assert fresh["stocks_at_max"] == 2
+
+    cache_metrics.reset_ohlcv_cache()          # don't leak the memo onward
 
 
 def test_snapshot_reflects_l1_entries(db):

@@ -90,6 +90,16 @@ def test_unavailable_source_never_degrades_the_banner() -> None:
     assert reasons == []
 
 
+def test_stale_source_is_degraded_never_outage() -> None:
+    """'stale' (no success within the expected cadence — dead cron/probe with
+    frozen-green counters) degrades the banner for ANY role, but is never an
+    outage: nothing is actively erroring, data is just unconfirmed."""
+    for role in ("primary", "scheduled"):
+        overall, reasons = _rollup(sources=[_src(role, "stale", "Dataroma")])
+        assert overall == "degraded", role
+        assert any("stantia" in r and "Dataroma" in r for r in reasons)
+
+
 def test_stuck_running_scan_is_outage() -> None:
     overall, reasons = _rollup(
         scans=[_scan(status="running", started_minutes_ago=45)]

@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { Pause, Play, Trash2, AlertTriangle, AlertCircle, Info, Bug, Filter, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Pause, Play, Trash2, AlertTriangle, AlertCircle, Info, Bug, Check, Copy, Filter, X } from "lucide-react";
 import type { LogRecord } from "@/api/platformHealth";
 
 type Props = {
@@ -44,6 +44,11 @@ const LEVEL_ORDER: Record<string, number> = {
   DEBUG: 10, INFO: 20, SUCCESS: 25, WARNING: 30, ERROR: 40, CRITICAL: 50,
 };
 
+/** Una riga di log in forma testuale — per la copia negli appunti. */
+function fmtRecord(r: LogRecord): string {
+  return `${new Date(r.ts * 1000).toLocaleTimeString()} ${r.level} ${r.module} ${r.message}`;
+}
+
 export default function LogStream({
   records,
   paused,
@@ -83,13 +88,18 @@ export default function LogStream({
 
   const filtered = useMemo(() => {
     const threshold = LEVEL_ORDER[levelFilter] ?? 0;
+    // Case-insensitive matching on BOTH text filters: log modules are
+    // lowercase snake_case but the operator types "Marketaux"/"HTTP" —
+    // a case-sensitive match silently returned nothing.
+    const modNeedle = moduleFilter.toLowerCase();
+    const searchNeedle = searchFilter.toLowerCase();
     const srcTokens = sourceFilter
       ? sourceFilter.tokens.map((t) => t.toLowerCase()).filter(Boolean)
       : null;
     const pass = viewRecords.filter((r) => {
       if (threshold && (LEVEL_ORDER[r.level] ?? 0) < threshold) return false;
-      if (moduleFilter && !r.module.includes(moduleFilter)) return false;
-      if (searchFilter && !r.message.includes(searchFilter)) return false;
+      if (modNeedle && !r.module.toLowerCase().includes(modNeedle)) return false;
+      if (searchNeedle && !r.message.toLowerCase().includes(searchNeedle)) return false;
       if (srcTokens && srcTokens.length) {
         const mod = r.module.toLowerCase();
         const msg = r.message.toLowerCase();
@@ -102,6 +112,25 @@ export default function LogStream({
     // We slice BEFORE reversing so we keep the latest 500 (not the oldest).
     return pass.slice(-500).reverse();
   }, [viewRecords, levelFilter, moduleFilter, searchFilter, sourceFilter]);
+
+  // "Copia visibili": clipboard con le righe correntemente filtrate
+  // (nell'ordine cronologico originale, non newest-first) + feedback ✓.
+  const [copiedAll, setCopiedAll] = useState(false);
+  const copyResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (copyResetRef.current) clearTimeout(copyResetRef.current);
+  }, []);
+  const copyVisible = async () => {
+    try {
+      const text = [...filtered].reverse().map(fmtRecord).join("\n");
+      await navigator.clipboard.writeText(text);
+      setCopiedAll(true);
+      if (copyResetRef.current) clearTimeout(copyResetRef.current);
+      copyResetRef.current = setTimeout(() => setCopiedAll(false), 1500);
+    } catch {
+      // Clipboard negato (permessi/contesto non sicuro): nessun feedback.
+    }
+  };
 
   // Counts per level — used in the chip row so the operator can see at a
   // glance "how much red is in the buffer" without scrolling.
@@ -121,12 +150,20 @@ export default function LogStream({
               {filtered.length} visibili · {records.length} in buffer
             </span>
           </h2>
-          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+          <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
             {(counts.ERROR ?? 0) + (counts.CRITICAL ?? 0) > 0 && (
-              <span className="inline-flex items-center gap-1 text-red-700 dark:text-red-400">
+              /* Chip cliccabile: porta la soglia a ERROR+ così gli errori
+                 contati sono subito quelli visibili — senza cercare il
+                 dropdown. */
+              <button
+                type="button"
+                onClick={() => setLevelFilter("ERROR")}
+                className="inline-flex items-center gap-1 text-red-700 dark:text-red-400 hover:underline underline-offset-2 cursor-pointer"
+                title="Mostra solo gli errori (imposta il filtro livello a ERROR+)"
+              >
                 <AlertCircle className="h-3.5 w-3.5" />
                 {(counts.ERROR ?? 0) + (counts.CRITICAL ?? 0)} errori
-              </span>
+              </button>
             )}
             {counts.WARNING > 0 && (
               <span className="inline-flex items-center gap-1 text-amber-700 dark:text-amber-400">
@@ -151,7 +188,9 @@ export default function LogStream({
             </button>
           )}
         </div>
-        <div className="flex items-center gap-2 text-sm">
+        {/* flex-wrap: su mobile i controlli scendono su più righe invece di
+            sbordare orizzontalmente. */}
+        <div className="flex items-center gap-2 text-sm flex-wrap">
           <select
             value={levelFilter}
             onChange={(e) => setLevelFilter(e.target.value)}
@@ -178,6 +217,25 @@ export default function LogStream({
             onChange={(e) => setSearchFilter(e.target.value)}
             className="rounded-md border bg-background px-2.5 py-1.5 w-52"
           />
+          <button
+            type="button"
+            onClick={copyVisible}
+            disabled={filtered.length === 0}
+            className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            title={`Copia negli appunti le ${filtered.length} righe visibili`}
+          >
+            {copiedAll ? (
+              <>
+                <Check className="h-4 w-4 text-emerald-600" />
+                <span className="text-xs">Copiato</span>
+              </>
+            ) : (
+              <>
+                <Copy className="h-4 w-4" />
+                <span className="text-xs">Copia visibili</span>
+              </>
+            )}
+          </button>
           <button
             type="button"
             onClick={onTogglePause}
@@ -210,7 +268,7 @@ export default function LogStream({
           return (
             <div
               key={`${r.ts}-${i}`}
-              className={`flex items-start gap-3 px-5 py-1.5 ${borderClass} ${bgClass} hover:bg-muted/40 transition-colors`}
+              className={`group flex items-start gap-3 px-5 py-1.5 ${borderClass} ${bgClass} hover:bg-muted/40 transition-colors`}
             >
               <span className="text-muted-foreground shrink-0 w-[80px] tabular-nums">
                 {new Date(r.ts * 1000).toLocaleTimeString()}
@@ -223,10 +281,28 @@ export default function LogStream({
                 {Icon && <Icon className="h-3.5 w-3.5 shrink-0" />}
                 {r.level}
               </span>
-              <span className="text-muted-foreground shrink-0 w-52 truncate font-normal" title={r.module}>
+              {/* Colonna modulo nascosta sotto sm: su mobile 208px di
+                  snake_case rubavano tutto lo spazio al messaggio (che
+                  resta ispezionabile via title). */}
+              <span
+                className="text-muted-foreground shrink-0 w-52 truncate font-normal hidden sm:block"
+                title={r.module}
+              >
                 {r.module}
               </span>
-              <span className="flex-1 break-all">{r.message}</span>
+              <span className="flex-1 break-all" title={r.module}>{r.message}</span>
+              {/* Copia riga — visibile solo al passaggio del mouse. */}
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText(fmtRecord(r)).catch(() => {});
+                }}
+                className="shrink-0 rounded p-0.5 text-muted-foreground opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-foreground transition-opacity"
+                title="Copia questa riga"
+                aria-label="Copia questa riga di log"
+              >
+                <Copy className="h-3.5 w-3.5" />
+              </button>
             </div>
           );
         })}

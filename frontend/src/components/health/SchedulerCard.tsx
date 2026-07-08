@@ -48,6 +48,18 @@ function ago(ts: number | null): string {
   return `${Math.floor(s / 86400)}g fa`;
 }
 
+/** Durata dell'ultima esecuzione: "850ms" / "4.2s" / "3m 20s" / "1h 05m".
+ *  Popolata dal listener APScheduler (SUBMITTED → EXECUTED/ERROR); utile
+ *  soprattutto per lo scan, dove un raddoppio improvviso è un segnale. */
+function fmtDuration(ms: number | null): string | null {
+  if (ms == null || ms < 0) return null;
+  if (ms < 1000) return `${Math.round(ms)}ms`;
+  const s = ms / 1000;
+  if (s < 60) return `${s.toFixed(1)}s`;
+  if (s < 3600) return `${Math.floor(s / 60)}m ${String(Math.floor(s % 60)).padStart(2, "0")}s`;
+  return `${Math.floor(s / 3600)}h ${String(Math.floor((s % 3600) / 60)).padStart(2, "0")}m`;
+}
+
 /** "tra 12m" / "tra 3h 05m" / "sab 04:00" for the next scheduled fire. */
 function nextRunLabel(ts: number): string {
   const deltaS = Math.floor(ts - Date.now() / 1000);
@@ -149,6 +161,12 @@ export default function SchedulerCard({ jobs }: Props) {
                 </div>
                 <div className="text-[11px] text-muted-foreground font-mono truncate mt-0.5" title={j.trigger ?? undefined}>
                   {j.job_id} · {j.last_run_at != null ? ago(j.last_run_at) : "mai eseguito"}
+                  {fmtDuration(j.last_duration_ms) != null && (
+                    <span title="Durata dell'ultima esecuzione">
+                      {" · ⏱ "}
+                      {fmtDuration(j.last_duration_ms)}
+                    </span>
+                  )}
                 </div>
                 {j.next_run_time != null && !late && (
                   <div className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-1">

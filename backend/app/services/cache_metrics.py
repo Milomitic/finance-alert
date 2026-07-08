@@ -12,6 +12,7 @@ Two freshness axes per kind:
 import time
 from datetime import UTC, datetime
 from pathlib import Path
+from threading import Lock
 
 from sqlalchemy import func, select
 
@@ -86,6 +87,50 @@ def _l2_stats(kind: str) -> dict:
     }
 
 
+# OHLCV data-freshness row for the "Cache & Database" card: MAX(date) over
+# ohlcv_daily + how many stocks have a bar on that date. Cheap (index on
+# date) but called on every 5s SSE snapshot → cached for 60s.
+_OHLCV_TTL_S = 60.0
+_ohlcv_lock = Lock()
+_ohlcv_cache: dict = {"ts": 0.0, "value": None}
+
+
+def _ohlcv_freshness() -> dict:
+    """{"max_date": ISO str | None, "stocks_at_max": int} — cached 60s."""
+    now = time.time()
+    with _ohlcv_lock:
+        cached = _ohlcv_cache["value"]
+        if cached is not None and now - _ohlcv_cache["ts"] < _OHLCV_TTL_S:
+            return cached
+    from app.models import OhlcvDaily
+
+    with _db_module.SessionLocal() as db:
+        max_date = db.execute(select(func.max(OhlcvDaily.date))).scalar_one()
+        n = 0
+        if max_date is not None:
+            n = db.execute(
+                select(func.count()).select_from(OhlcvDaily)
+                .where(OhlcvDaily.date == max_date)
+            ).scalar_one()
+    value = {
+        # SQLite may hand back a date or an ISO string depending on the
+        # driver path — str() normalizes both to "YYYY-MM-DD".
+        "max_date": str(max_date) if max_date is not None else None,
+        "stocks_at_max": int(n or 0),
+    }
+    with _ohlcv_lock:
+        _ohlcv_cache["ts"] = now
+        _ohlcv_cache["value"] = value
+    return value
+
+
+def reset_ohlcv_cache() -> None:
+    """Drop the 60s OHLCV-freshness memo — for tests."""
+    with _ohlcv_lock:
+        _ohlcv_cache["ts"] = 0.0
+        _ohlcv_cache["value"] = None
+
+
 def _db_size_mb() -> float:
     """Return the size of the SQLite file (data/app.db) in MB.
     Returns 0.0 if the file doesn't exist (in-memory SQLite during tests)."""
@@ -108,4 +153,7 @@ def snapshot() -> dict:
             **_l2_stats("news"),
         },
         "db": {"size_mb": _db_size_mb()},
+        # Freshness of the STORED OHLCV (what scans actually read) — one
+        # MAX(date) + count-at-max, memoized 60s (_ohlcv_freshness).
+        "ohlcv": _ohlcv_freshness(),
     }

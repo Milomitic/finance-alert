@@ -61,7 +61,7 @@ def test_health_endpoint_returns_expected_keys(client: TestClient):
     body = r.json()
     assert set(body.keys()) == {
         "data_sources", "yfinance_breaker", "scheduler", "scans", "cache",
-        "overall", "reasons",
+        "overall", "reasons", "suggestions",
     }
     assert isinstance(body["data_sources"], list)
     assert isinstance(body["scheduler"], list)
@@ -69,9 +69,30 @@ def test_health_endpoint_returns_expected_keys(client: TestClient):
     assert "fundamentals" in body["cache"]
     assert "news" in body["cache"]
     assert "db" in body["cache"]
+    # OHLCV freshness row (SAL-2, "Dati" row on the CacheCard).
+    assert "ohlcv" in body["cache"]
+    assert set(body["cache"]["ohlcv"].keys()) == {"max_date", "stocks_at_max"}
     # Server-side rollup (SAL-1): one truth for banner/SSE/Telegram.
     assert body["overall"] in ("operational", "degraded", "outage")
     assert isinstance(body["reasons"], list)
+    # Gap-analysis hints (SAL-2: folded in from the deleted
+    # /api/health/data-sources endpoint). Idle catalog → no suggestions.
+    assert isinstance(body["suggestions"], list)
+
+
+def test_health_suggestions_surface_gap_analysis(client: TestClient):
+    """When an op's ONLY source is failing, the gap-analysis hint rides in
+    the platform payload (the deleted endpoint's useful half)."""
+    from app.services import data_source_metrics
+
+    for _ in range(5):
+        data_source_metrics.record_failure("yfinance", "fundamentals", reason="429")
+    r = client.get("/api/platform/health")
+    assert r.status_code == 200
+    suggestions = r.json()["suggestions"]
+    assert any(s["op"] == "fundamentals" for s in suggestions)
+    hit = next(s for s in suggestions if s["op"] == "fundamentals")
+    assert set(hit.keys()) == {"op", "why", "suggestion"}
 
 
 def test_health_scheduler_lists_registered_jobs_before_first_event(
