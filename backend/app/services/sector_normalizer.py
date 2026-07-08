@@ -49,6 +49,38 @@ CANONICAL_SECTORS: tuple[str, ...] = (
     OTHER,
 )
 
+# The 11 "real" GICS sectors — CANONICAL_SECTORS without the Other
+# fallback bucket. Consumers that want to assert "this label is a true
+# GICS sector" (e.g. the yfinance-ingestion tests, health checks)
+# should compare against this tuple, not CANONICAL_SECTORS.
+GICS_SECTORS: tuple[str, ...] = tuple(
+    s for s in CANONICAL_SECTORS if s != OTHER
+)
+
+# ─── yfinance taxonomy → GICS ──────────────────────────────────────────────
+# yfinance's `Ticker.info["sector"]` uses its own 11-name taxonomy that
+# ALMOST matches GICS but diverges on 6 names. Any ingestion path that
+# writes `Stock.sector` from yfinance data (e.g. the null-sector
+# backfill script) MUST pass through `normalize_sector` — otherwise the
+# DB re-fragments into the split taxonomy the 2026-07 migration
+# (9405b58cdb90) just repaired (17 → 11 sectors). Kept as an explicit
+# named map (instead of only synonym entries) so the divergence is
+# documented and testable in one place.
+YFINANCE_SECTOR_MAP: dict[str, str] = {
+    "Healthcare": HEALTH_CARE,
+    "Financial Services": FINANCIALS,
+    "Basic Materials": MATERIALS,
+    "Consumer Cyclical": CONSUMER_DISCRETIONARY,
+    "Consumer Defensive": CONSUMER_STAPLES,
+    "Technology": INFORMATION_TECHNOLOGY,
+    # Identity for the 5 yfinance names already spelled like GICS.
+    "Communication Services": COMMUNICATION_SERVICES,
+    "Energy": ENERGY,
+    "Industrials": INDUSTRIALS,
+    "Real Estate": REAL_ESTATE,
+    "Utilities": UTILITIES,
+}
+
 # ─── Synonym map ───────────────────────────────────────────────────────────
 # Keys are normalized (lowercase, trimmed) raw inputs; values are the
 # canonical bucket. Built from a manual audit of the actual `sector`
@@ -72,6 +104,7 @@ _SYNONYMS: dict[str, str] = {
 
     # ── Consumer Discretionary ────────────────────────────────────────
     "consumer discretionary": CONSUMER_DISCRETIONARY,
+    "consumer cyclical": CONSUMER_DISCRETIONARY,  # yfinance taxonomy
     "consumer products and services": CONSUMER_DISCRETIONARY,
     "automobiles and parts": CONSUMER_DISCRETIONARY,
     "travel & leisure": CONSUMER_DISCRETIONARY,
@@ -85,6 +118,7 @@ _SYNONYMS: dict[str, str] = {
 
     # ── Consumer Staples ──────────────────────────────────────────────
     "consumer staples": CONSUMER_STAPLES,
+    "consumer defensive": CONSUMER_STAPLES,  # yfinance taxonomy
     "beverages": CONSUMER_STAPLES,
     "food & drug retailing": CONSUMER_STAPLES,
     "food & tobacco": CONSUMER_STAPLES,
@@ -161,6 +195,13 @@ def canonical_sector(raw: str | None) -> str | None:
     if s in _SYNONYMS:
         return _SYNONYMS[s]
     return OTHER
+
+
+# Public alias requested by the 2026-07 Esplora audit: ingestion code
+# (catalog refresh, seed, yfinance backfills) reads better as
+# `normalize_sector(raw)` and external callers shouldn't need to know
+# the historical `canonical_sector` name. Same function, one map.
+normalize_sector = canonical_sector
 
 
 def sector_taxonomy_size() -> int:
