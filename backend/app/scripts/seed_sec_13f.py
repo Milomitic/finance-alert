@@ -77,18 +77,25 @@ def main() -> None:
 
     db = SessionLocal()
     try:
+        # Three-pass CUSIP resolution (map-first → catalog → SEC
+        # company_tickers.json). Maps built once per run; pass-1/2 hits
+        # persisted into cusip_ticker_map for future runs.
         stocks = db.execute(select(Stock)).scalars().all()
-        name_to_ticker = sec_13f_scraper.build_name_to_ticker_map(stocks)
-        total_resolved = 0
-        total_unresolved = 0
+        catalog_map = sec_13f_scraper.build_name_to_ticker_map(stocks)
+        cusip_map = sec_13f_scraper.load_cusip_ticker_map(db)
+        sec_map = sec_13f_scraper.fetch_sec_company_tickers()
+        totals = sec_13f_scraper.ResolutionStats()
         for _, filing in results:
             if filing is None:
                 continue
-            r, u = sec_13f_scraper.resolve_holdings_against_catalog(
-                filing.holdings, name_to_ticker
+            stats, new_resolutions = sec_13f_scraper.resolve_filing_holdings(
+                filing,
+                cusip_map=cusip_map,
+                catalog_map=catalog_map,
+                sec_map=sec_map,
             )
-            total_resolved += r
-            total_unresolved += u
+            sec_13f_scraper.persist_cusip_resolutions(db, new_resolutions)
+            totals.add(stats)
 
         slug_to_type = {f.slug: f.type_ for f in funds}
         summary = institutional_service.persist_scrape_results(
@@ -109,8 +116,10 @@ def main() -> None:
     print(f"  Funds attempted        : {len(results)}")
     print(f"  Successful fetches     : {successes}")
     print(f"  Failed fetches         : {failures}")
-    print(f"  CUSIP names matched    : {total_resolved}")
-    print(f"  CUSIP names unmatched  : {total_unresolved}")
+    print(f"  CUSIP via saved map    : {totals.from_map}")
+    print(f"  CUSIP via catalog      : {totals.from_catalog}")
+    print(f"  CUSIP via SEC tickers  : {totals.from_sec}")
+    print(f"  CUSIP unresolved       : {totals.unresolved}")
     print(f"  Institutionals added   : {summary.institutionals_added}")
     print(f"  Institutionals updated : {summary.institutionals_updated}")
     print(f"  Filings added          : {summary.filings_added}")

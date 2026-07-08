@@ -29,23 +29,32 @@ def run_refresh_sec_13f() -> None:
 
     db = SessionLocal()
     try:
-        # Build name → ticker map ONCE per run (cheap: ~1100 stocks).
-        # Pass to each filing's holdings for CUSIP-placeholder resolution.
+        # Three-pass CUSIP resolution. All maps are built ONCE per run:
+        # pass 0 from the persisted cusip_ticker_map (cumulative), pass 1
+        # from the catalog (~1100 stocks), pass 2 from SEC's
+        # company_tickers.json (ONE HTTP call, cached in-memory for the run).
         stocks = db.execute(select(Stock)).scalars().all()
-        name_to_ticker = sec_13f_scraper.build_name_to_ticker_map(stocks)
-        total_resolved = 0
-        total_unresolved = 0
+        catalog_map = sec_13f_scraper.build_name_to_ticker_map(stocks)
+        cusip_map = sec_13f_scraper.load_cusip_ticker_map(db)
+        sec_map = sec_13f_scraper.fetch_sec_company_tickers()
+        totals = sec_13f_scraper.ResolutionStats()
         for _, filing in results:
             if filing is None:
                 continue
-            r, u = sec_13f_scraper.resolve_holdings_against_catalog(
-                filing.holdings, name_to_ticker
+            stats, new_resolutions = sec_13f_scraper.resolve_filing_holdings(
+                filing,
+                cusip_map=cusip_map,
+                catalog_map=catalog_map,
+                sec_map=sec_map,
             )
-            total_resolved += r
-            total_unresolved += u
+            # Persist pass-1/2 hits so the NEXT run short-circuits on
+            # pass 0 (flush-only; persist_scrape_results owns the commit).
+            sec_13f_scraper.persist_cusip_resolutions(db, new_resolutions)
+            totals.add(stats)
         logger.info(
-            f"[refresh_sec_13f] CUSIP resolution: "
-            f"matched={total_resolved} unmatched={total_unresolved}"
+            f"[refresh_sec_13f] CUSIP resolution: map={totals.from_map} "
+            f"catalog={totals.from_catalog} sec={totals.from_sec} "
+            f"unresolved={totals.unresolved}"
         )
 
         # Type resolver: pick the curated `type_` (institutional / hedge_fund)
