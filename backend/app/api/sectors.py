@@ -15,23 +15,60 @@ where the user already paid the navigation cost.
 """
 from __future__ import annotations
 
+import json
 import math
 import statistics
+from datetime import date, timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Path
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
 from app.core.visibility import visible_country_clause
-from app.models import Stock, StockScore, User
+from app.models import (
+    Alert,
+    MarketSnapshot,
+    ScoreHistory,
+    Stock,
+    StockScore,
+    TechnicalScore,
+    User,
+)
 from app.services import sectors_overview_cache, stock_fundamentals_service
 from app.services.sectors_overview_cache import clear_overview_cache  # noqa: F401 — re-export for tests/back-compat
 
 
 router = APIRouter(prefix="/api/sectors", tags=["sectors"])
+
+
+# GICS sector → SPDR sector-ETF proxy. Static by design (the 11 Select
+# Sector SPDRs are a fixed, well-known family); which of these actually
+# appear on a tile is decided at request time by `_etf_proxies`, which
+# checks the CATALOG — a mapped ticker missing from `stocks` renders no
+# link rather than a dead /stocks/XLRE 404.
+SECTOR_ETF_PROXY: dict[str, str] = {
+    "Energy": "XLE",
+    "Financials": "XLF",
+    "Information Technology": "XLK",
+    "Health Care": "XLV",
+    "Industrials": "XLI",
+    "Consumer Discretionary": "XLY",
+    "Consumer Staples": "XLP",
+    "Materials": "XLB",
+    "Real Estate": "XLRE",
+    "Utilities": "XLU",
+    "Communication Services": "XLC",
+}
+
+
+class SectorTrendPoint(BaseModel):
+    """One point of the per-sector Qualità score sparkline: the average
+    composite across the sector's stocks on one `score_history` capture day."""
+    date: str  # ISO captured_on
+    avg: float
 
 
 class SectorSummary(BaseModel):
@@ -42,6 +79,24 @@ class SectorSummary(BaseModel):
     median_pb: float | None
     median_roe: float | None
     median_dividend_yield: float | None
+    # ── Overview enrichments (ESP-2) ─────────────────────────────────
+    # All defaulted so the legacy GET /api/sectors (bare `_sector_rollup`)
+    # keeps validating without paying for the extra queries — only the
+    # /overview endpoint populates them (inside its 60s TTL cache).
+    # Tecnico lens: avg technical composite + how many stocks carry one.
+    avg_technical: float | None = None
+    technical_count: int = 0
+    # Δ% giornaliero — read from the latest market snapshot's `sectors`
+    # block (same aggregation the dashboard heatmap shows), NOT recomputed.
+    change_pct: float | None = None
+    # Segnali negli ultimi 7 giorni (signal_date-based, non-archived).
+    signals_7d: int = 0
+    signals_7d_bull: int = 0
+    signals_7d_bear: int = 0
+    # SPDR proxy ticker, only when present in the catalog (else None).
+    etf_proxy: str | None = None
+    # Qualità score trend (last ~30 score_history captures, ascending).
+    score_trend: list[SectorTrendPoint] = Field(default_factory=list)
 
 
 class IndustryRow(BaseModel):
@@ -118,6 +173,10 @@ class SectorKpis(BaseModel):
     stock_count: int
     avg_composite: float | None
     median_composite: float | None
+    # Tecnico lens: avg technical composite across the sector's stocks
+    # that have one (+ the count, so the UI can qualify the average).
+    avg_technical: float | None = None
+    technical_count: int = 0
     median_pe: float | None
     median_pb: float | None
     median_roe: float | None
@@ -366,6 +425,156 @@ def _sector_rollup(db: Session) -> list[SectorSummary]:
     return out
 
 
+def _technical_rollup(db: Session) -> dict[str, tuple[int, float]]:
+    """Per-sector Tecnico aggregate: sector → (n, avg technical composite).
+
+    One SQL GROUP BY over `technical_scores` INNER-joined to equity-only
+    visible stocks — INNER because a stock without a technical score has
+    nothing to contribute (unlike the Qualità rollup's outerjoin, where
+    the stock count itself matters). Cheap enough (~1000 rows) to run on
+    every overview recompute inside the 60s TTL cache.
+    """
+    rows = db.execute(
+        select(
+            Stock.sector,
+            func.count(func.distinct(Stock.ticker)),
+            func.avg(TechnicalScore.composite),
+        )
+        .join(TechnicalScore, TechnicalScore.stock_id == Stock.id)
+        .where(visible_country_clause())
+        .where(Stock.instrument_type == "equity")
+        .where(Stock.sector.is_not(None))
+        .group_by(Stock.sector)
+    ).all()
+    return {
+        sector: (int(n or 0), float(avg))
+        for sector, n, avg in rows
+        if sector and avg is not None
+    }
+
+
+def _sector_daily_changes(db: Session) -> dict[str, float]:
+    """Sector → Δ% giornaliero, read from the latest market snapshot.
+
+    The dashboard's sector heatmap shows `payload["sectors"]` computed by
+    `market_stats_service.aggregate_by_sector` at scan time. Re-deriving
+    the same number here would mean re-loading OHLCV for the whole
+    universe — instead we read the persisted block (snapshot-derived by
+    design; a missing/legacy snapshot degrades to an empty map and the
+    tiles simply show no Δ%).
+    """
+    snap = db.get(MarketSnapshot, 1)
+    if snap is None:
+        return {}
+    try:
+        payload = json.loads(snap.payload)
+    except (TypeError, ValueError):
+        return {}
+    out: dict[str, float] = {}
+    for row in payload.get("sectors") or []:
+        name = row.get("sector")
+        chg = row.get("avg_change_pct")
+        if name and isinstance(chg, (int, float)) and _is_finite(chg):
+            out[name] = float(chg)
+    return out
+
+
+def _score_trends(db: Session, *, n_captures: int = 30) -> dict[str, list[SectorTrendPoint]]:
+    """Sector → Qualità composite trend over the last ~30 capture days.
+
+    One GROUP BY (sector, captured_on) over `score_history` (qualita lens
+    only — the Tecnico series belongs to a different lens and mixing them
+    would average apples with oranges). The capture-day window comes from
+    a DISTINCT-dates subquery instead of a wall-clock cutoff so gaps
+    (weekends, skipped scans) don't shrink the sparkline.
+    """
+    recent_days = (
+        select(ScoreHistory.captured_on)
+        .where(ScoreHistory.lens == "qualita")
+        .distinct()
+        .order_by(ScoreHistory.captured_on.desc())
+        .limit(n_captures)
+    )
+    rows = db.execute(
+        select(
+            Stock.sector,
+            ScoreHistory.captured_on,
+            func.avg(ScoreHistory.composite),
+        )
+        .join(Stock, Stock.id == ScoreHistory.stock_id)
+        .where(ScoreHistory.lens == "qualita")
+        .where(ScoreHistory.captured_on.in_(recent_days))
+        .where(visible_country_clause())
+        .where(Stock.instrument_type == "equity")
+        .where(Stock.sector.is_not(None))
+        .group_by(Stock.sector, ScoreHistory.captured_on)
+        .order_by(ScoreHistory.captured_on.asc())
+    ).all()
+    out: dict[str, list[SectorTrendPoint]] = {}
+    for sector, captured_on, avg in rows:
+        if not sector or avg is None:
+            continue
+        out.setdefault(sector, []).append(
+            SectorTrendPoint(date=captured_on.isoformat(), avg=float(avg))
+        )
+    return out
+
+
+def _signals_7d(db: Session, *, today: date | None = None) -> dict[str, dict[str, int]]:
+    """Sector → {"total", "bull", "bear"} signal counts over the last 7 days.
+
+    Window keyed on `signal_date` (the bar where the condition matched,
+    not the wall-clock detection) so a backfilled Monday scan doesn't
+    inflate "this week". Archived alerts excluded — the tile chip links
+    to /alerts whose default view is non-archived, and the two numbers
+    must agree. Tone split via json_extract on the snapshot (same idiom
+    as alert_service); tones other than bull/bear count in the total only.
+    """
+    cutoff = (today or date.today()) - timedelta(days=7)
+    tone_col = func.json_extract(Alert.snapshot, "$.tone")
+    rows = db.execute(
+        select(Stock.sector, tone_col, func.count(Alert.id))
+        .join(Stock, Stock.id == Alert.stock_id)
+        .where(Alert.signal_date >= cutoff)
+        .where(Alert.archived_at.is_(None))
+        .where(visible_country_clause())
+        .where(Stock.instrument_type == "equity")
+        .where(Stock.sector.is_not(None))
+        .group_by(Stock.sector, tone_col)
+    ).all()
+    out: dict[str, dict[str, int]] = {}
+    for sector, tone, count in rows:
+        if not sector:
+            continue
+        entry = out.setdefault(sector, {"total": 0, "bull": 0, "bear": 0})
+        entry["total"] += int(count or 0)
+        if tone in ("bull", "bear"):
+            entry[tone] += int(count or 0)
+    return out
+
+
+def _etf_proxies(db: Session) -> dict[str, str]:
+    """Sector → SPDR proxy ticker, ONLY for tickers present in the catalog.
+
+    The static map is a candidate list, not a truth claim — one IN query
+    against `stocks` decides which proxies are actually navigable via
+    /stocks/{ticker}. No instrument_type filter here: the proxies ARE
+    ETFs and the link goes to the stock detail page, not into any
+    equity-only aggregate.
+    """
+    candidates = set(SECTOR_ETF_PROXY.values())
+    present = {
+        t for (t,) in db.execute(
+            select(Stock.ticker).where(Stock.ticker.in_(candidates))
+        ).all()
+    }
+    return {
+        sector: ticker
+        for sector, ticker in SECTOR_ETF_PROXY.items()
+        if ticker in present
+    }
+
+
 def _industry_rollup(db: Session) -> list[IndustryRow]:
     """Per-industry stock count + avg composite via a single SQL aggregate.
 
@@ -466,6 +675,28 @@ def sectors_overview(db: Session = Depends(get_db), _user: User = Depends(get_cu
 
     sectors = _sector_rollup(db)
     industries = _industry_rollup(db)
+
+    # ESP-2 enrichments — each one is a single query (or a JSON read for
+    # the snapshot Δ%), all memoized together with the payload below so
+    # the 60s cache keeps the hub-page burst pattern to one SQL pass.
+    tech = _technical_rollup(db)
+    changes = _sector_daily_changes(db)
+    trends = _score_trends(db)
+    signals = _signals_7d(db)
+    proxies = _etf_proxies(db)
+    sectors = [
+        s.model_copy(update={
+            "avg_technical": tech[s.name][1] if s.name in tech else None,
+            "technical_count": tech[s.name][0] if s.name in tech else 0,
+            "change_pct": changes.get(s.name),
+            "signals_7d": signals.get(s.name, {}).get("total", 0),
+            "signals_7d_bull": signals.get(s.name, {}).get("bull", 0),
+            "signals_7d_bear": signals.get(s.name, {}).get("bear", 0),
+            "etf_proxy": proxies.get(s.name),
+            "score_trend": trends.get(s.name, []),
+        })
+        for s in sectors
+    ]
     # Equity-only, mirroring the per-sector cards: without the filter
     # the ETF rows inflate the "Stock totali" tile relative to the sum
     # of the sector cards and the gap reads as missing data.
@@ -553,6 +784,16 @@ def get_sector_detail(
     roes = [r.roe for r in rows if r.roe is not None]
     dys = [r.dividend_yield for r in rows if r.dividend_yield is not None]
 
+    # Tecnico lens KPI: one aggregate over the sector's stock ids. Kept
+    # separate from the StockScore bulk-load above — different table,
+    # and the avg must only span stocks that HAVE a technical score.
+    tech_count, tech_avg = db.execute(
+        select(
+            func.count(TechnicalScore.stock_id),
+            func.avg(TechnicalScore.composite),
+        ).where(TechnicalScore.stock_id.in_([st.id for st in unique_stocks]))
+    ).one()
+
     # V3.2 enrichments: distributions across industry / country / risk
     # / market_cap, plus per-pillar averages. All computed in-loop on
     # the already-built `rows` list — no additional fetches.
@@ -577,6 +818,8 @@ def get_sector_detail(
         stock_count=len(rows),
         avg_composite=_safe_mean(composites) if composites else None,
         median_composite=_safe_median(composites) if composites else None,
+        avg_technical=float(tech_avg) if tech_avg is not None else None,
+        technical_count=int(tech_count or 0),
         median_pe=_safe_median(pes) if pes else None,
         median_pb=_safe_median(pbs) if pbs else None,
         median_roe=_safe_median(roes) if roes else None,
