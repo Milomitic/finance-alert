@@ -356,12 +356,16 @@ function PicksCard({
 
 import type { CountBucket, PillarAverages } from "@/hooks/useSectorDetail";
 
+// NB: niente "momentum" qui — il pilastro è stato RIMOSSO dal composito
+// Qualità (lens split 2026-05: la price-action vive nel lens Tecnico).
+// StockScore.momentum è NULL by design per tutto l'universo, quindi la
+// barra renderizzava sempre vuota ("—"). Non re-aggiungerla senza che
+// il backend torni a popolare il campo.
 const PILLAR_LABELS: Array<[keyof PillarAverages, string]> = [
   ["profitability", "Profittabilità"],
   ["sustainability", "Sostenibilità"],
   ["growth", "Crescita"],
   ["value", "Valore"],
-  ["momentum", "Momentum"],
   ["sentiment", "Sentiment"],
 ];
 
