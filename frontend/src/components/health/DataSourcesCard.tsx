@@ -27,7 +27,7 @@ type Props = {
   onSelectSource?: (label: string, tokens: string[]) => void;
 };
 
-type Health = "healthy" | "degraded" | "failing" | "idle";
+type Health = "healthy" | "degraded" | "failing" | "unavailable" | "idle";
 
 /* ─── Fonti dati ──────────────────────────────────────────────────────
  *
@@ -65,6 +65,16 @@ const HEALTH_META: Record<
     chip: "bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800/60",
     Icon: XCircle,
   },
+  // Plan-gated (tutti i fallimenti HTTP 403: endpoint fuori dal piano free,
+  // es. Finnhub upgrade-downgrade, Twelve Data). Slate, NON ambra: è un
+  // fatto di configurazione, non un incidente — e non entra nel banner.
+  unavailable: {
+    label: "Non disponibile",
+    dot: "bg-slate-400 dark:bg-slate-500",
+    bar: "bg-slate-400 dark:bg-slate-500",
+    chip: "bg-slate-100 dark:bg-slate-800/60 text-slate-600 dark:text-slate-300 border-slate-300 dark:border-slate-600",
+    Icon: ShieldAlert,
+  },
   idle: {
     label: "Inattiva",
     dot: "bg-slate-300 dark:bg-slate-600",
@@ -75,7 +85,9 @@ const HEALTH_META: Record<
 };
 
 function normHealth(h: string): Health {
-  return h === "healthy" || h === "degraded" || h === "failing" ? h : "idle";
+  return h === "healthy" || h === "degraded" || h === "failing" || h === "unavailable"
+    ? h
+    : "idle";
 }
 
 const ROLE_LABEL: Record<string, string> = {
@@ -121,9 +133,9 @@ const CATEGORIES: {
   { key: "macro", label: "Macro", desc: "Serie FRED · consensus calendario",
     Icon: Globe, tint: "bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-300 border-amber-200 dark:border-amber-800/60",
     ops: ["macro", "consensus"] },
-  { key: "institutional", label: "Istituzionali", desc: "Filing 13F dei fondi",
+  { key: "institutional", label: "Istituzionali", desc: "Filing 13F · portafogli superinvestor",
     Icon: Building2, tint: "bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-300 border-rose-200 dark:border-rose-800/60",
-    ops: ["filings"] },
+    ops: ["filings", "holdings"] },
   { key: "premarket", label: "Pre-market", desc: "Volume di pre-apertura",
     Icon: Sunrise, tint: "bg-orange-50 dark:bg-orange-950/40 text-orange-600 dark:text-orange-300 border-orange-200 dark:border-orange-800/60",
     ops: ["premarket"] },
@@ -159,6 +171,9 @@ function rollup(sources: DataSourceMetric[]): Health {
   if (sources.every((s) => normHealth(s.health) === "failing")) return "failing";
   if (sources.some((s) => normHealth(s.health) === "failing" || normHealth(s.health) === "degraded"))
     return "degraded";
+  // Solo unavailable/idle rimasti: se almeno una fonte è plan-gated, il
+  // cluster è "non disponibile" (slate), non un incidente.
+  if (sources.some((s) => normHealth(s.health) === "unavailable")) return "unavailable";
   return "idle";
 }
 
@@ -346,16 +361,17 @@ function SummaryStrip({
   counts: Record<Health, number>;
   total: number;
 }) {
-  const order: Health[] = ["healthy", "degraded", "failing", "idle"];
+  const order: Health[] = ["healthy", "degraded", "failing", "unavailable", "idle"];
   const tiles: { key: Health; label: string }[] = [
     { key: "healthy", label: "Operative" },
     { key: "degraded", label: "Degradate" },
     { key: "failing", label: "In errore" },
+    { key: "unavailable", label: "Non disponibili" },
     { key: "idle", label: "Inattive" },
   ];
   return (
     <div className="space-y-3">
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
         {tiles.map((t) => {
           const meta = HEALTH_META[t.key];
           return (
@@ -504,7 +520,7 @@ export default function DataSourcesCard({ metrics, yfinanceBreaker, onSelectSour
   const other = buckets.get("other");
   if (other && other.length) ordered.push({ cat: OTHER_CAT, sources: other });
 
-  const counts: Record<Health, number> = { healthy: 0, degraded: 0, failing: 0, idle: 0 };
+  const counts: Record<Health, number> = { healthy: 0, degraded: 0, failing: 0, unavailable: 0, idle: 0 };
   for (const m of metrics) counts[normHealth(m.health)]++;
   const total = metrics.length || 1;
   const operational = counts.healthy;

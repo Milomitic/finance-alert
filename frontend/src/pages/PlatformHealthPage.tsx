@@ -128,36 +128,53 @@ export default function PlatformHealthPage() {
     }
   };
 
-  // Derive overall status from the health snapshot for the hero banner
+  // Overall status for the hero banner: the SERVER rollup is the single
+  // truth (health_rollup.compute_rollup — same rules everywhere, feeds the
+  // Telegram transition push too). The client derivation below survives
+  // ONLY as fallback for pre-rollup payloads.
   const overall: OverallStatus = useMemo(() => {
     if (!health) return "operational";
+    if (
+      health.overall === "operational" ||
+      health.overall === "degraded" ||
+      health.overall === "outage"
+    ) {
+      return health.overall;
+    }
+    // ── Fallback client derivation (old payloads without `overall`) ──
     const breakerOpen =
       String(health.yfinance_breaker.state ?? "closed").toLowerCase() !== "closed";
     // Outage is reserved for PRIMARY data-path failures. A failing
     // fallback (e.g. Marketaux without an API key) or a failing
     // scheduled source means reduced resilience, NOT a user-visible
-    // outage — the app still serves data off the primary sources. So
-    // only `role === "primary"` failures escalate to red.
+    // outage. Sources in "unavailable" (plan-gated 403) are excluded
+    // from BOTH tiers — a tier limitation is not an incident.
     const failingPrimary = health.data_sources.filter(
       (m) => m.role === "primary" && m.health === "failing"
     ).length;
     const failingNonPrimary = health.data_sources.filter(
       (m) => m.role !== "primary" && m.health === "failing"
     ).length;
+    // error OR missed: a missed tick means the scheduler is falling behind —
+    // the silent-death mode the 13F crons hit for months.
     const erroredJobs = health.scheduler.filter(
-      (j) => j.last_result === "error"
+      (j) => j.last_result === "error" || j.last_result === "missed"
     ).length;
     const runningScanStuck = health.scans.some((s) => {
       if (s.status !== "running" || !s.started_at) return false;
       const elapsedMs = Date.now() - new Date(s.started_at).getTime();
-      // Guardrail: if the diff is negative (clock skew) or implausibly
-      // large (>24h, almost certainly a timezone parsing issue), don't
-      // claim outage on this signal. The 30-min threshold is for genuine
-      // stuck scans where the worker died silently.
-      if (elapsedMs < 0 || elapsedMs > 24 * 3600_000) return false;
+      // Only negative diffs (clock skew) are excluded. The old >24h
+      // guard is GONE: it masked a genuinely multi-day-stuck scan.
+      if (elapsedMs < 0) return false;
       return elapsedMs > 30 * 60_000;
     });
     if (breakerOpen || failingPrimary > 0 || runningScanStuck) return "outage";
+    // Last scan crashed (user-cancelled runs carry the "Cancellato" sentinel).
+    const lastScan = health.scans[0];
+    const lastScanFailed =
+      !!lastScan &&
+      lastScan.status === "failed" &&
+      !(lastScan.error_message ?? "").startsWith("Cancellato");
     const degraded =
       // Any primary source merely degraded (not failing) …
       health.data_sources.some(
@@ -168,13 +185,15 @@ export default function PlatformHealthPage() {
       health.data_sources.some(
         (m) => m.role !== "primary" && m.health === "degraded"
       ) ||
-      // … OR an errored scheduler job.
-      erroredJobs > 0;
+      // … OR an errored/missed scheduler job OR a crashed last scan.
+      erroredJobs > 0 ||
+      lastScanFailed;
     if (degraded) return "degraded";
     return "operational";
   }, [health]);
 
   const status = STATUS_INFO[overall];
+  const reasons = health?.reasons ?? [];
 
   return (
     <div className="mx-auto w-full max-w-[1800px] space-y-8 pb-12">
@@ -250,6 +269,17 @@ export default function PlatformHealthPage() {
             <p className="text-sm text-muted-foreground mt-0.5">
               {status.desc}
             </p>
+            {/* Motivi puntuali dal rollup server-side — il "perché" del
+                banner senza dover scavare nelle card sottostanti. */}
+            {overall !== "operational" && reasons.length > 0 && (
+              <ul className="mt-2 space-y-0.5 text-sm text-muted-foreground list-disc list-inside">
+                {reasons.map((r) => (
+                  <li key={r} className="truncate" title={r}>
+                    {r}
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         </div>
       </header>

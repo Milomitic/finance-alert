@@ -56,3 +56,76 @@ def test_analyse_gaps_silent_when_fallback_healthy() -> None:
     # news has yfinance failing but marketaux healthy → no gap suggestion
     gaps = data_source_metrics.analyse_gaps()
     assert all(g.op != "news" for g in gaps)
+
+
+# ─── "unavailable" classification (SAL-1: plan-gated HTTP 403) ────────────
+
+
+def _single_metric() -> data_source_metrics.SourceMetric:
+    snap = data_source_metrics.snapshot()
+    assert len(snap) == 1
+    return snap[0]
+
+
+def test_all_403_failures_classified_unavailable() -> None:
+    """Plan-gated sources (finnhub upgrades on free tier, twelvedata out of
+    plan) fail with 403 on every call — that's a tier limitation, not an
+    outage, and must read 'unavailable' instead of pinning the banner."""
+    for _ in range(5):
+        data_source_metrics.record_failure("finnhub", "upgrades", reason="HTTP 403")
+    assert _single_metric().health == "unavailable"
+
+
+def test_403_client_error_message_variant_matches() -> None:
+    """raise_for_status-style reasons ('403 Client Error: Forbidden…') count
+    as 403 too — probes and organic call sites word failures differently."""
+    data_source_metrics.record_failure(
+        "twelvedata", "earnings",
+        reason="403 Client Error: Forbidden for url: https://api.twelvedata.com/earnings",
+    )
+    assert _single_metric().health == "unavailable"
+
+
+def test_mixed_403_and_other_failures_stay_failing() -> None:
+    """A single non-403 failure breaks the plan-gated pattern: the source is
+    genuinely erroring, keep the normal classification."""
+    data_source_metrics.record_failure("finnhub", "upgrades", reason="HTTP 403")
+    data_source_metrics.record_failure("finnhub", "upgrades", reason="timeout")
+    assert _single_metric().health == "failing"
+
+
+def test_403_history_with_recent_success_stays_healthy() -> None:
+    """The unavailable override only applies when the classification would
+    be failing/degraded — a recovered source reads healthy as before."""
+    data_source_metrics.record_failure("finnhub", "upgrades", reason="HTTP 403")
+    for _ in range(10):
+        data_source_metrics.record_success("finnhub", "upgrades")
+    assert _single_metric().health == "healthy"
+
+
+def test_403_boundary_no_false_positives() -> None:
+    """\\b-bounded match: '4033' or '1403ms' must NOT count as 403."""
+    data_source_metrics.record_failure("nasdaq", "analyst", reason="HTTP 4033")
+    data_source_metrics.record_failure("nasdaq", "analyst", reason="timeout after 1403ms")
+    assert _single_metric().health == "failing"
+
+
+def test_hydrate_legacy_state_seeds_403_counter() -> None:
+    """Pre-failure_403 state files: when the LAST failure was a 403, assume
+    the (plan-gated) history was homogeneous so the live 'unavailable' fix
+    applies without waiting for months of new failures to accrue."""
+    data_source_metrics.hydrate_from_dict({
+        "finnhub.upgrades": {
+            "success": 0, "failure": 42,
+            "last_failure_at": 1_700_000_000.0,
+            "last_failure_reason": "HTTP 403",
+        },
+        "yfinance.news": {
+            "success": 0, "failure": 7,
+            "last_failure_at": 1_700_000_000.0,
+            "last_failure_reason": "timeout",
+        },
+    })
+    by_key = {(m.source, m.op): m for m in data_source_metrics.snapshot()}
+    assert by_key[("finnhub", "upgrades")].health == "unavailable"
+    assert by_key[("yfinance", "news")].health == "failing"

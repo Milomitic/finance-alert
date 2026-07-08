@@ -279,6 +279,19 @@ def fetch_all_curated() -> list[tuple[ScrapedManager, ScrapedFiling | None]]:
 # HTTP + parsing helpers
 # ---------------------------------------------------------------------------
 
+def _record_metric(ok: bool, reason: str = "") -> None:
+    """Feed the ORGANIC scraper traffic into data_source_metrics under
+    (sec_13f, filings) — same key the 30-min probe uses — so the Salute
+    card reflects the real refresh runs, not just reachability pings
+    (audit 2026-07-08: the cron died for months and the card stayed
+    green off probe traffic alone)."""
+    from app.services import data_source_metrics
+    if ok:
+        data_source_metrics.record_success("sec_13f", "filings")
+    else:
+        data_source_metrics.record_failure("sec_13f", "filings", reason=reason[:200])
+
+
 def _http_get_json(url: str) -> dict | None:
     try:
         resp = requests.get(
@@ -288,10 +301,14 @@ def _http_get_json(url: str) -> dict | None:
         )
         if resp.status_code != 200:
             logger.warning(f"[sec_13f] GET {url} -> {resp.status_code}")
+            _record_metric(False, f"HTTP {resp.status_code}")
             return None
-        return resp.json()
+        payload = resp.json()
+        _record_metric(True)
+        return payload
     except Exception as e:  # noqa: BLE001
         logger.warning(f"[sec_13f] GET {url} failed: {e}")
+        _record_metric(False, str(e))
         return None
 
 
@@ -304,10 +321,13 @@ def _http_get_text(url: str) -> str | None:
         )
         if resp.status_code != 200:
             logger.warning(f"[sec_13f] GET {url} -> {resp.status_code}")
+            _record_metric(False, f"HTTP {resp.status_code}")
             return None
+        _record_metric(True)
         return resp.text
     except Exception as e:  # noqa: BLE001
         logger.warning(f"[sec_13f] GET {url} failed: {e}")
+        _record_metric(False, str(e))
         return None
 
 

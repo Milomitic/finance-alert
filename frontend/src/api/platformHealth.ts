@@ -16,7 +16,9 @@ export type DataSourceMetric = {
   last_success_at: number | null;
   last_failure_at: number | null;
   last_failure_reason: string | null;
-  health: "healthy" | "degraded" | "failing" | "idle" | string;
+  /** "unavailable" = plan-gated (tutti i fallimenti HTTP 403): slate,
+   *  esclusa dalla derivazione del banner degradato. */
+  health: "healthy" | "degraded" | "failing" | "unavailable" | "idle" | string;
   calls_last_minute: number | null;
   calls_last_day: number | null;
   /** Lowercase substrings that identify this source's log lines (module or
@@ -33,6 +35,11 @@ export type SchedulerJobStat = {
   last_error: string | null;
   runs: number;
   errors: number;
+  /** Prossima esecuzione pianificata (epoch s). Assente/null sui payload
+   *  vecchi o quando il job non è più registrato. */
+  next_run_time?: number | null;
+  /** Repr del trigger APScheduler, es. "cron[hour='23', minute='30']". */
+  trigger?: string | null;
 };
 
 export type RecentScan = {
@@ -70,6 +77,11 @@ export type PlatformHealth = {
     news: CacheKindStat;
     db: { size_mb: number };
   };
+  /** Rollup calcolato server-side (health_rollup.compute_rollup). Opzionale
+   *  per retro-compatibilità: sui payload vecchi il banner ricade sulla
+   *  derivazione client. */
+  overall?: "operational" | "degraded" | "outage" | string;
+  reasons?: string[];
 };
 
 export type LogRecord = {

@@ -26,14 +26,24 @@ Sources currently tracked:
 - marketaux.news      — Marketaux fallback when yfinance returns empty
 - forexfactory.consensus — ForexFactory macro consensus
 - sec_13f.filings     — SEC EDGAR 13F filings scraper
+- dataroma.holdings   — Dataroma superinvestor portfolios scraper
 """
 import os
+import re
 import time
 from collections import deque
 from dataclasses import dataclass, field
 from threading import Lock
 
 from app.core import persist_json
+
+# Failure reasons carrying an HTTP 403 mark the call as PLAN-GATED (the
+# upstream understood us fine and said "your tier doesn't include this"):
+# finnhub upgrade-downgrade on the free tier, twelvedata outside the plan…
+# Those sources are classified "unavailable" (slate in the UI, excluded from
+# the degraded-banner rollup) instead of pinning the banner amber forever.
+# \b boundaries so "1403ms" or "HTTP 4033" never match.
+_HTTP_403_RE = re.compile(r"\b403\b")
 
 # How many recent call timestamps to keep per (source, op). 200 covers a
 # Marketaux daily window (100/day with margin) and ~3min of Finnhub-pace
@@ -45,6 +55,10 @@ _RECENT_MAX = 200
 class _Counter:
     success: int = 0
     failure: int = 0
+    # How many of the failures were HTTP 403 (plan-gated). When ALL failures
+    # are 403 the classifier reads the source as "unavailable" — a tier/plan
+    # limitation, not an outage.
+    failure_403: int = 0
     last_success_at: float | None = None
     last_failure_at: float | None = None
     last_failure_reason: str | None = None
@@ -74,6 +88,7 @@ def _serialize_locked() -> dict[str, dict]:
         key: {
             "success": c.success,
             "failure": c.failure,
+            "failure_403": c.failure_403,
             "last_success_at": c.last_success_at,
             "last_failure_at": c.last_failure_at,
             "last_failure_reason": c.last_failure_reason,
@@ -94,6 +109,16 @@ def hydrate_from_dict(data: dict) -> int:
             c.last_success_at = d.get("last_success_at")
             c.last_failure_at = d.get("last_failure_at")
             c.last_failure_reason = d.get("last_failure_reason")
+            if "failure_403" in d:
+                c.failure_403 = int(d.get("failure_403") or 0)
+            elif c.failure > 0 and _HTTP_403_RE.search(c.last_failure_reason or ""):
+                # Legacy state file (pre failure_403): the historical counts
+                # weren't tagged, so an all-403 source (the plan-gated
+                # pattern this exists for) would never flip to
+                # "unavailable". If the LAST failure was a 403, assume the
+                # history was homogeneous — the assumption self-corrects on
+                # the first non-403 failure recorded from now on.
+                c.failure_403 = c.failure
         return len(_counters)
 
 
@@ -142,6 +167,8 @@ def record_failure(source: str, op: str, reason: str = "", count: int = 1) -> No
     with _lock:
         c = _counters.setdefault(_key(source, op), _Counter())
         c.failure += count
+        if _HTTP_403_RE.search(reason or ""):
+            c.failure_403 += count
         c.last_failure_at = now
         if reason:
             # Trim long messages — we only want a hint
@@ -194,7 +221,8 @@ class SourceMetric:
     last_success_at: float | None
     last_failure_at: float | None
     last_failure_reason: str | None
-    health: str                    # "healthy" | "degraded" | "failing" | "idle"
+    # "healthy" | "degraded" | "failing" | "unavailable" | "idle"
+    health: str
 
 
 def _classify(c: _Counter) -> tuple[float, str]:
@@ -212,12 +240,23 @@ def _classify(c: _Counter) -> tuple[float, str]:
         )
     )
     if recent_fail and last_op_was_failure:
-        return rate, "failing"
-    if rate >= 0.85:
-        return rate, "healthy"
-    if rate >= 0.5:
-        return rate, "degraded"
-    return rate, "failing"
+        health = "failing"
+    elif rate >= 0.85:
+        health = "healthy"
+    elif rate >= 0.5:
+        health = "degraded"
+    else:
+        health = "failing"
+    # Plan-gated override: when EVERY failure was an HTTP 403 the upstream is
+    # up but our tier doesn't include the endpoint (finnhub upgrades on the
+    # free plan, twelvedata out of plan). Reclassify a would-be
+    # failing/degraded as "unavailable" so it doesn't pin the Salute banner
+    # amber forever — it's a configuration fact, not an incident. A single
+    # non-403 failure (timeout, 5xx, 429) breaks the pattern and the normal
+    # classification returns.
+    if health in ("failing", "degraded") and c.failure > 0 and c.failure_403 == c.failure:
+        health = "unavailable"
+    return rate, health
 
 
 def snapshot() -> list[SourceMetric]:

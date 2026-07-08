@@ -27,11 +27,11 @@ from app.schemas.platform import (
 from app.services import (
     cache_metrics,
     detector_performance_service,
+    health_rollup,
     signal_drift_service,
     source_catalog,
     yfinance_health,
 )
-from app.services.scheduler_metrics import _INSTANCE as scheduler_metrics
 
 router = APIRouter(prefix="/api/platform", tags=["platform"])
 
@@ -86,9 +86,13 @@ def _recent_scans(db: Session, limit: int = 10) -> list[RecentScanOut]:
     return out
 
 
-def _sources_payload() -> list[dict]:
+def _sources_payload(sources: list | None = None) -> list[dict]:
     """Catalog-enriched data-source snapshot. Includes every known source
-    (idle entries with zero counts) plus rate-limit usage when applicable."""
+    (idle entries with zero counts) plus rate-limit usage when applicable.
+    Accepts a pre-built `full_snapshot()` so callers that also feed the
+    rollup don't snapshot twice."""
+    if sources is None:
+        sources = source_catalog.full_snapshot()
     return [
         {
             "source": s.source, "op": s.op, "label": s.label, "role": s.role,
@@ -105,7 +109,7 @@ def _sources_payload() -> list[dict]:
             "calls_last_day": s.calls_last_day,
             "log_match": s.log_match,
         }
-        for s in source_catalog.full_snapshot()
+        for s in sources
     ]
 
 
@@ -114,12 +118,25 @@ def health_snapshot(
     db: Session = Depends(get_db),
     _user: User = Depends(get_current_user),
 ) -> PlatformHealthOut:
+    sources = source_catalog.full_snapshot()
+    breaker = yfinance_health.status()
+    # Merged view: every REGISTERED job (next_run_time + trigger) joined with
+    # its event stats — jobs are visible BEFORE their first run/error.
+    scheduler_jobs = health_rollup.scheduler_jobs_payload()
+    scans = _recent_scans(db)
+    overall, reasons = health_rollup.compute_rollup(
+        sources=sources, breaker=breaker, scheduler=scheduler_jobs, scans=scans
+    )
+    # Transition push (best-effort, self-gated on state change + cooldown).
+    health_rollup.maybe_notify_transition(overall, reasons)
     return PlatformHealthOut(
-        data_sources=_sources_payload(),
-        yfinance_breaker=yfinance_health.status(),
-        scheduler=[SchedulerJobStatOut(**s) for s in scheduler_metrics.snapshot_dict()],
-        scans=_recent_scans(db),
+        data_sources=_sources_payload(sources),
+        yfinance_breaker=breaker,
+        scheduler=[SchedulerJobStatOut(**s) for s in scheduler_jobs],
+        scans=scans,
         cache=cache_metrics.snapshot(),
+        overall=overall,
+        reasons=reasons,
     )
 
 
@@ -260,12 +277,27 @@ async def stream(
     unsub = log_buffer.subscribe(on_log)
 
     async def _snapshot_payload() -> str:
+        sources = source_catalog.full_snapshot()
+        breaker = yfinance_health.status()
+        scheduler_jobs = health_rollup.scheduler_jobs_payload()
+        scans = _recent_scans(db)
+        overall, reasons = health_rollup.compute_rollup(
+            sources=sources, breaker=breaker,
+            scheduler=scheduler_jobs, scans=scans,
+        )
+        # Same transition push as the REST snapshot — self-gated on state
+        # change + 6h cooldown, so the 5s SSE cadence can't spam Telegram.
+        # Off-loop thread: the (rare) Telegram POST must not block the SSE
+        # event loop for its 10s timeout.
+        await asyncio.to_thread(health_rollup.maybe_notify_transition, overall, reasons)
         snap_dict = {
-            "data_sources": _sources_payload(),
-            "yfinance_breaker": yfinance_health.status(),
-            "scheduler": scheduler_metrics.snapshot_dict(),
-            "scans": [s.model_dump() for s in _recent_scans(db)],
+            "data_sources": _sources_payload(sources),
+            "yfinance_breaker": breaker,
+            "scheduler": scheduler_jobs,
+            "scans": [s.model_dump() for s in scans],
             "cache": cache_metrics.snapshot(),
+            "overall": overall,
+            "reasons": reasons,
         }
         return json.dumps(snap_dict, default=str)
 
