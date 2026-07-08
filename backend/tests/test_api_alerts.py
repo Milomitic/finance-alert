@@ -88,22 +88,130 @@ def test_bulk_archive(client: TestClient, db: Session) -> None:
         assert a.archived_at is not None
 
 
+# Modernised export header: two-score model (tone/strength/probability) +
+# signal_date + realised outcome; the dead read_at axis is gone.
+_EXPORT_HEADER = [
+    "id",
+    "triggered_at",
+    "signal_date",
+    "ticker",
+    "rule_kind",
+    "trigger_price",
+    "tone",
+    "strength",
+    "probability",
+    "outcome_hit",
+    "outcome_fwd_return",
+    "outcome_horizon_days",
+    "outcome_mkt_excess",
+    "archived_at",
+]
+
+
 def test_export_csv(client: TestClient, db: Session) -> None:
     _seed_alerts(db, n=2)
     resp = client.get("/api/alerts/export.csv")
     assert resp.status_code == 200
     assert resp.headers["content-type"].startswith("text/csv")
     rows = list(csv.reader(io.StringIO(resp.text)))
-    assert rows[0] == [
-        "id",
-        "triggered_at",
-        "ticker",
-        "rule_kind",
-        "trigger_price",
-        "read_at",
-        "archived_at",
-    ]
+    assert rows[0] == _EXPORT_HEADER
     assert len(rows) == 3  # header + 2 alerts
+
+
+def test_export_csv_snapshot_columns(client: TestClient, db: Session) -> None:
+    """tone/strength/probability come from the snapshot JSON; legacy rows with
+    confidence-only snapshots fall back to confidence for the strength column."""
+    stock = Stock(ticker="MSFT", exchange="NASDAQ", name="Microsoft")
+    db.add(stock)
+    db.commit()
+    db.add(
+        Alert(
+            signal_name="volume_breakout",
+            stock_id=stock.id,
+            trigger_price=100.0,
+            signal_date=date(2026, 7, 1),
+            snapshot='{"tone": "bull", "strength": 82, "probability": 54}',
+        )
+    )
+    db.add(
+        Alert(
+            signal_name="oversold_reversal",
+            stock_id=stock.id,
+            trigger_price=90.0,
+            snapshot='{"tone": "bear", "confidence": 65}',  # legacy pre-split row
+        )
+    )
+    db.commit()
+    resp = client.get("/api/alerts/export.csv")
+    assert resp.status_code == 200
+    rows = list(csv.reader(io.StringIO(resp.text)))
+    by_kind = {r[4]: r for r in rows[1:]}
+    modern = by_kind["signal:volume_breakout"]
+    assert modern[2] == "2026-07-01"  # signal_date
+    assert modern[6] == "bull"
+    assert modern[7] == "82"
+    assert modern[8] == "54"
+    legacy = by_kind["signal:oversold_reversal"]
+    assert legacy[2] == ""            # no signal_date on legacy rows
+    assert legacy[6] == "bear"
+    assert legacy[7] == "65"          # strength falls back to confidence
+    assert legacy[8] == ""            # no probability pre-split
+
+
+def test_export_csv_respects_filters(client: TestClient, db: Session) -> None:
+    """The export accepts the same filter surface as the list endpoint —
+    q / tone / strength_min / probability_min / nature included (audit
+    2026-07-08: the page sent them but the endpoint dropped them)."""
+    stock_a = Stock(ticker="AAPL", exchange="NASDAQ", name="Apple")
+    stock_b = Stock(ticker="NVDA", exchange="NASDAQ", name="Nvidia")
+    db.add_all([stock_a, stock_b])
+    db.commit()
+    db.add_all(
+        [
+            Alert(
+                signal_name="volume_breakout",
+                stock_id=stock_a.id,
+                trigger_price=100.0,
+                snapshot='{"tone": "bull", "strength": 85, "probability": 55}',
+            ),
+            Alert(
+                signal_name="volume_breakout",
+                stock_id=stock_a.id,
+                trigger_price=101.0,
+                snapshot='{"tone": "bear", "strength": 90, "probability": 52}',
+            ),
+            Alert(
+                signal_name="volume_breakout",
+                stock_id=stock_b.id,
+                trigger_price=500.0,
+                snapshot='{"tone": "bull", "strength": 40, "probability": 48}',
+            ),
+        ]
+    )
+    db.commit()
+
+    # tone + strength_min: only the strong AAPL bull row survives.
+    resp = client.get("/api/alerts/export.csv?tone=bull&strength_min=80")
+    assert resp.status_code == 200
+    rows = list(csv.reader(io.StringIO(resp.text)))
+    assert len(rows) == 2  # header + 1
+    assert rows[1][3] == "AAPL"
+    assert rows[1][6] == "bull"
+
+    # q substring search (company name) narrows to NVDA's single row.
+    resp = client.get("/api/alerts/export.csv?q=nvid")
+    rows = list(csv.reader(io.StringIO(resp.text)))
+    assert len(rows) == 2
+    assert rows[1][3] == "NVDA"
+
+    # probability_min filters on the snapshot probability.
+    resp = client.get("/api/alerts/export.csv?probability_min=50")
+    rows = list(csv.reader(io.StringIO(resp.text)))
+    assert len(rows) == 3  # the 48-probability NVDA row is excluded
+
+    # Invalid tone is rejected with the same 422 the list endpoint returns.
+    resp = client.get("/api/alerts/export.csv?tone=sideways")
+    assert resp.status_code == 422
 
 
 def test_scan_accepted(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:

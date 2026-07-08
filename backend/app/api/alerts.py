@@ -296,6 +296,33 @@ def _run_scan_in_background_locked(stock_ids: list[int] | None) -> None:
 _VALID_TONES = frozenset({"bull", "bear"})
 
 
+def _validate_signal_filters(
+    *,
+    tone: str | None,
+    strength_min: float | None,
+    probability_min: float | None,
+    nature: str | None,
+) -> None:
+    """Shared 422 validation for the snapshot-derived filters. Used by both
+    the list endpoint and the CSV export so the two accept the exact same
+    query surface (the export used to silently ignore these params — the
+    2026-07-08 audit bug: filtered page, unfiltered CSV)."""
+    if tone is not None and tone not in _VALID_TONES:
+        raise HTTPException(
+            status_code=422,
+            detail=f"tone must be one of {sorted(_VALID_TONES)}, got: {tone!r}",
+        )
+    if strength_min is not None and not (0.0 <= strength_min <= 100.0):
+        raise HTTPException(status_code=422, detail="strength_min must be in [0, 100]")
+    if probability_min is not None and not (0.0 <= probability_min <= 100.0):
+        raise HTTPException(status_code=422, detail="probability_min must be in [0, 100]")
+    if nature is not None and nature not in ("continuazione", "inversione"):
+        raise HTTPException(
+            status_code=422,
+            detail="nature must be 'continuazione' or 'inversione'",
+        )
+
+
 @router.get("", response_model=AlertListOut)
 def list_alerts(
     ticker: str | None = None,
@@ -328,24 +355,16 @@ def list_alerts(
             status_code=422,
             detail=f"sort_by must be one of {sorted(_SORTABLE_KEYS)}, got: {sort_by!r}",
         )
-    if tone is not None and tone not in _VALID_TONES:
-        raise HTTPException(
-            status_code=422,
-            detail=f"tone must be one of {sorted(_VALID_TONES)}, got: {tone!r}",
-        )
+    _validate_signal_filters(
+        tone=tone,
+        strength_min=strength_min,
+        probability_min=probability_min,
+        nature=nature,
+    )
     if confidence_min is not None and not (0.0 <= confidence_min <= 100.0):
         raise HTTPException(
             status_code=422,
             detail="confidence_min must be in [0, 100]",
-        )
-    if strength_min is not None and not (0.0 <= strength_min <= 100.0):
-        raise HTTPException(status_code=422, detail="strength_min must be in [0, 100]")
-    if probability_min is not None and not (0.0 <= probability_min <= 100.0):
-        raise HTTPException(status_code=422, detail="probability_min must be in [0, 100]")
-    if nature is not None and nature not in ("continuazione", "inversione"):
-        raise HTTPException(
-            status_code=422,
-            detail="nature must be 'continuazione' or 'inversione'",
         )
     items, total, has_more = alert_service.list_alerts(
         db,
@@ -526,40 +545,124 @@ def stop_scan(
     )
 
 
+# Hard cap on exported rows: the service pages at most 500 rows per query,
+# so the export loops pages up to this bound. Generous enough for any real
+# filtered working set; prevents an unbounded-memory CSV on "export all".
+_EXPORT_MAX_ROWS = 10_000
+
+
+def _snapshot_dict(raw: object) -> dict:
+    """Best-effort parse of Alert.snapshot (Text column → JSON dict).
+    Malformed/legacy payloads degrade to {} instead of breaking the export."""
+    import json
+
+    if isinstance(raw, dict):
+        return raw
+    if isinstance(raw, str) and raw:
+        try:
+            parsed = json.loads(raw)
+            return parsed if isinstance(parsed, dict) else {}
+        except ValueError:
+            return {}
+    return {}
+
+
 @router.get("/export.csv")
 def export_csv(
     ticker: str | None = None,
+    q: str | None = None,
     rule_kind: str | None = None,
     date_from: date | None = None,
     date_to: date | None = None,
     archived: bool | None = False,
+    tone: str | None = None,
+    strength_min: float | None = None,
+    probability_min: float | None = None,
+    nature: str | None = None,
     db: Session = Depends(get_db),
     _user: User = Depends(get_current_user),
 ) -> StreamingResponse:
-    items, _, _ = alert_service.list_alerts(
-        db,
-        ticker=ticker,
-        rule_kind=rule_kind,
-        date_from=date_from,
-        date_to=date_to,
-        archived=archived,
-        limit=10000,
-        offset=0,
+    """Export the alerts matching the CURRENT filters as CSV.
+
+    Accepts the same filter surface as the list endpoint (q / tone /
+    strength_min / probability_min / nature included — the page sends them
+    all), so what the user sees filtered is exactly what lands in the file.
+    Columns follow the two-score model: signal_date + tone + strength +
+    probability + realised outcome; the dead read_at axis was dropped.
+    """
+    _validate_signal_filters(
+        tone=tone,
+        strength_min=strength_min,
+        probability_min=probability_min,
+        nature=nature,
     )
+    # The service clamps limit to 500 per call — page through until exhausted
+    # (or the safety cap) so the export really covers every matching row.
+    items: list[dict] = []
+    offset = 0
+    while len(items) < _EXPORT_MAX_ROWS:
+        page, _, has_more = alert_service.list_alerts(
+            db,
+            ticker=ticker,
+            q=q,
+            rule_kind=rule_kind,
+            date_from=date_from,
+            date_to=date_to,
+            archived=archived,
+            tone=tone,
+            strength_min=strength_min,
+            probability_min=probability_min,
+            nature=nature,
+            limit=500,
+            offset=offset,
+        )
+        items.extend(page)
+        if not has_more:
+            break
+        offset += len(page)
+    items = items[:_EXPORT_MAX_ROWS]
+
     buf = io.StringIO()
     w = csv.writer(buf)
     w.writerow(
-        ["id", "triggered_at", "ticker", "rule_kind", "trigger_price", "read_at", "archived_at"]
+        [
+            "id",
+            "triggered_at",
+            "signal_date",
+            "ticker",
+            "rule_kind",
+            "trigger_price",
+            "tone",
+            "strength",
+            "probability",
+            "outcome_hit",
+            "outcome_fwd_return",
+            "outcome_horizon_days",
+            "outcome_mkt_excess",
+            "archived_at",
+        ]
     )
     for it in items:
+        snap = _snapshot_dict(it["snapshot"])
+        # Forza: prefer the new `strength`, fall back to the transitional
+        # `confidence` alias — same COALESCE the sort/filter paths use.
+        strength = snap.get("strength", snap.get("confidence"))
         w.writerow(
             [
                 it["id"],
                 it["triggered_at"].isoformat() if it["triggered_at"] else "",
+                it["signal_date"].isoformat() if it["signal_date"] else "",
                 it["ticker"],
                 it["rule_kind"],
                 it["trigger_price"],
-                it["read_at"].isoformat() if it["read_at"] else "",
+                snap.get("tone") or "",
+                strength if strength is not None else "",
+                snap.get("probability") if snap.get("probability") is not None else "",
+                # Realised outcome (empty while maturing / for legacy rows).
+                "" if it["outcome_hit"] is None else int(it["outcome_hit"]),
+                it["outcome_fwd_return"] if it["outcome_fwd_return"] is not None else "",
+                it["outcome_horizon_days"] if it["outcome_horizon_days"] is not None else "",
+                it["outcome_mkt_excess"] if it["outcome_mkt_excess"] is not None else "",
                 it["archived_at"].isoformat() if it["archived_at"] else "",
             ]
         )
