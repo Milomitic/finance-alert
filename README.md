@@ -285,7 +285,7 @@ finance-alert/
 │   │   ├── data/seed/               # bundled index-constituent CSVs
 │   │   └── main.py                  # FastAPI app + lifespan (cache hydrate, scheduler)
 │   ├── alembic/versions/            # migrations
-│   ├── tests/                       # pytest suite (~580 tests)
+│   ├── tests/                       # pytest suite (~1,200 tests)
 │   └── data/                        # SQLite DB, logs, runtime state (gitignored)
 ├── frontend/                        # React 19 + Vite SPA
 │   └── src/
@@ -338,7 +338,7 @@ and offline by construction.
 
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — living technical reference (data
   model, flows, caching, scheduler, scoring engine internals)
-- [docs/scoring-algorithm.md](docs/scoring-algorithm.md) — the 6-pillar composite,
+- [docs/scoring-algorithm.md](docs/scoring-algorithm.md) — the Qualità composite (5 pillars),
   per-pillar formulas, and the IC-validation methodology
 - [docs/calendar-page.md](docs/calendar-page.md) — earnings + macro calendar design
 - [CLAUDE.md](CLAUDE.md) — operational playbook (backend restart discipline, dist
