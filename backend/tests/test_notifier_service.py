@@ -412,3 +412,137 @@ def test_scan_runner_push_failure_is_non_fatal(db: Session, monkeypatch: pytest.
     )
     run = scan_runner.run_tracked_scan(db, trigger="manual")
     assert run.status == "success"  # a Telegram crash must never fail the scan
+
+
+# ─── SAL-1: notify_scan_failed + notify_health_transition ────────────────
+
+
+def _health_env(monkeypatch: pytest.MonkeyPatch, *, enabled: bool = True) -> None:
+    monkeypatch.setattr(settings, "telegram_bot_token", "FAKE_TOKEN")
+    monkeypatch.setattr(settings, "telegram_chat_id", "12345")
+    monkeypatch.setattr(settings, "telegram_notify_health", enabled)
+
+
+def test_notify_scan_failed_sends_run_id_and_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.services.notifier_service import notify_scan_failed
+
+    _health_env(monkeypatch)
+    with patch("app.services.notifier_service.httpx.post") as mock_post:
+        mock_post.return_value = MagicMock(raise_for_status=lambda: None, status_code=200)
+        result = notify_scan_failed(42, "database is locked")
+    assert result.sent is True
+    text = mock_post.call_args.kwargs["json"]["text"]
+    assert "Scan fallito" in text
+    assert "#42" in text
+    assert "database is locked" in text
+
+
+def test_notify_scan_failed_gated_on_health_flag(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.services.notifier_service import notify_scan_failed
+
+    _health_env(monkeypatch, enabled=False)
+    with patch("app.services.notifier_service.httpx.post") as mock_post:
+        result = notify_scan_failed(1, "boom")
+    assert result.sent is False
+    assert result.reason == "push_disabled"
+    assert not mock_post.called
+
+
+def test_notify_scan_failed_requires_telegram_config(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.services.notifier_service import notify_scan_failed
+
+    monkeypatch.setattr(settings, "telegram_bot_token", "")
+    monkeypatch.setattr(settings, "telegram_chat_id", "")
+    monkeypatch.setattr(settings, "telegram_notify_health", True)
+    result = notify_scan_failed(1, "boom")
+    assert result.sent is False
+    assert result.reason == "telegram_disabled"
+
+
+def test_notify_health_transition_message_shape(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.services.notifier_service import notify_health_transition
+
+    _health_env(monkeypatch)
+    with patch("app.services.notifier_service.httpx.post") as mock_post:
+        mock_post.return_value = MagicMock(raise_for_status=lambda: None, status_code=200)
+        sent = notify_health_transition(
+            "outage", ["Fonte primaria in errore: Yahoo", "Job scheduler in errore: kpi_rollup"]
+        )
+    assert sent is True
+    text = mock_post.call_args.kwargs["json"]["text"]
+    assert "Outage in corso" in text
+    assert "Yahoo" in text
+    assert "kpi_rollup" in text
+
+
+def test_notify_health_transition_gated_on_flag(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.services.notifier_service import notify_health_transition
+
+    _health_env(monkeypatch, enabled=False)
+    with patch("app.services.notifier_service.httpx.post") as mock_post:
+        assert notify_health_transition("degraded", ["x"]) is False
+    assert not mock_post.called
+
+
+# ─── SAL-1: scan_runner crash path fires notify_scan_failed ──────────────
+
+
+def test_scan_runner_crash_notifies_scan_failed(db: Session, monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.services import notifier_service, scan_runner
+
+    def _crashing_scan(db2, on_progress=None, progress_every=5, cancel_check=None):
+        raise RuntimeError("worker exploded")
+
+    monkeypatch.setattr(scan_runner, "scan_universe", _crashing_scan)
+    calls: list[tuple[int, str]] = []
+    monkeypatch.setattr(
+        notifier_service, "notify_scan_failed",
+        lambda run_id, msg: calls.append((run_id, msg)),
+    )
+    with pytest.raises(RuntimeError):
+        scan_runner.run_tracked_scan(db, trigger="cron")
+    assert len(calls) == 1
+    assert "worker exploded" in calls[0][1]
+
+
+def test_scan_runner_user_cancel_does_not_notify(db: Session, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Being told about your own Stop click is noise — only crashes push."""
+    from app.services import notifier_service, scan_runner
+    from app.services.scan_service import ScanCancelled
+
+    def _cancelled_scan(db2, on_progress=None, progress_every=5, cancel_check=None):
+        raise ScanCancelled("Cancellato dall'utente")
+
+    monkeypatch.setattr(scan_runner, "scan_universe", _cancelled_scan)
+    calls: list = []
+    monkeypatch.setattr(
+        notifier_service, "notify_scan_failed",
+        lambda run_id, msg: calls.append(run_id),
+    )
+    run = scan_runner.run_tracked_scan(db, trigger="manual")
+    assert run is not None
+    assert calls == []
+
+
+def test_scan_runner_notify_crash_is_non_fatal(db: Session, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A Telegram problem in the failure hook must never mask the original
+    scan error (the row is already marked failed before the push)."""
+    from app.models import ScanRun
+    from app.services import notifier_service, scan_runner
+
+    def _crashing_scan(db2, on_progress=None, progress_every=5, cancel_check=None):
+        raise RuntimeError("original error")
+
+    monkeypatch.setattr(scan_runner, "scan_universe", _crashing_scan)
+    monkeypatch.setattr(
+        notifier_service, "notify_scan_failed",
+        lambda run_id, msg: (_ for _ in ()).throw(ConnectionError("telegram down")),
+    )
+    with pytest.raises(RuntimeError, match="original error"):
+        scan_runner.run_tracked_scan(db, trigger="cron")
+    # The run row still ended up marked failed with the ORIGINAL error.
+    from app.core.db import SessionLocal
+    with SessionLocal() as check:
+        row = check.query(ScanRun).order_by(ScanRun.id.desc()).first()
+        assert row.status == "failed"
+        assert "original error" in (row.error_message or "")

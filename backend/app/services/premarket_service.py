@@ -269,10 +269,20 @@ def _nasdaq_premarket_volume(ticker: str) -> int | None:
     yfinance; only the volume column degrades to n/d. Bounded to the
     ~20 displayed names (caller), never the full pool."""
     url = _NASDAQ_INFO_URL.format(sym=urllib.parse.quote(ticker))
+    # Organic traffic feeds the same (nasdaq, premarket) counter the 30-min
+    # probe uses, so the Salute card reflects the real enrichment calls too
+    # (audit 2026-07-08: organic call sites bypassed data_source_metrics).
+    from app.services import data_source_metrics
+    recorded_ok = False
     try:
         req = urllib.request.Request(url, headers=_NASDAQ_HEADERS)
         with urllib.request.urlopen(req, timeout=8) as resp:
             payload = json.loads(resp.read())
+        # HTTP + JSON parse succeeded → the SOURCE is healthy, regardless of
+        # whether we're inside the pre-market window (returning None below
+        # is a semantic no-data, not a source failure).
+        data_source_metrics.record_success("nasdaq", "premarket")
+        recorded_ok = True
         data = payload.get("data") or {}
         status = str(data.get("marketStatus") or "")
         if "pre-market" not in status.lower():
@@ -288,6 +298,12 @@ def _nasdaq_premarket_volume(ticker: str) -> int | None:
         json.JSONDecodeError,
     ) as exc:
         logger.debug(f"[premarket] nasdaq vol {ticker} skipped: {exc}")
+        # A post-parse ValueError/KeyError (schema drift AFTER a good HTTP
+        # round-trip) already counted as success — don't double-record.
+        if not recorded_ok:
+            data_source_metrics.record_failure(
+                "nasdaq", "premarket", reason=str(exc)[:200]
+            )
         return None
 
 

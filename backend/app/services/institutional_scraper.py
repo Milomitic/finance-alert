@@ -196,7 +196,14 @@ def scrape_all_portfolios(
 # ---------------------------------------------------------------------------
 
 def _http_get(url: str) -> str | None:
-    """Single GET with timeout + UA. None on any error."""
+    """Single GET with timeout + UA. None on any error.
+
+    Every call records into `data_source_metrics` under (dataroma, holdings)
+    so the Salute "Fonti dati" card shows the scraper's real health — before
+    this the weekly cron could die silently for months (audit 2026-07-08)
+    with the source card stuck on 'idle'. Lazy import like the neighboring
+    services (finnhub_earnings, fred) to avoid import cycles at startup."""
+    from app.services import data_source_metrics
     try:
         resp = requests.get(
             url,
@@ -207,10 +214,17 @@ def _http_get(url: str) -> str | None:
             logger.warning(
                 f"[institutional_scraper] GET {url} -> {resp.status_code}"
             )
+            data_source_metrics.record_failure(
+                "dataroma", "holdings", reason=f"HTTP {resp.status_code}"
+            )
             return None
+        data_source_metrics.record_success("dataroma", "holdings")
         return resp.text
     except Exception as e:  # noqa: BLE001
         logger.warning(f"[institutional_scraper] GET {url} failed: {e}")
+        data_source_metrics.record_failure(
+            "dataroma", "holdings", reason=str(e)[:200]
+        )
         return None
 
 

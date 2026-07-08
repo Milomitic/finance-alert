@@ -22,7 +22,9 @@ class DataSourceMetricOut(BaseModel):
     last_success_at: float | None
     last_failure_at: float | None
     last_failure_reason: str | None
-    health: str                        # "healthy" | "degraded" | "failing" | "idle"
+    # "healthy" | "degraded" | "failing" | "unavailable" (plan-gated: all
+    # failures HTTP 403 — slate chip, excluded from the banner rollup) | "idle"
+    health: str
     calls_last_minute: int | None
     calls_last_day: int | None
     # Lowercase substrings that identify this source's log lines (module or
@@ -31,6 +33,10 @@ class DataSourceMetricOut(BaseModel):
 
 
 class SchedulerJobStatOut(BaseModel):
+    """One scheduler job: REGISTERED metadata (next_run_time + trigger, from
+    APScheduler's live job list) merged with the event stats. Jobs that have
+    never fired still appear (runs=0, last_* None) — a cron that silently
+    never runs must be visible, not absent (audit 2026-07-08)."""
     job_id: str
     last_run_at: float | None
     last_result: str | None
@@ -38,6 +44,11 @@ class SchedulerJobStatOut(BaseModel):
     last_error: str | None
     runs: int
     errors: int
+    # Next scheduled fire time (epoch seconds). None when the job is not
+    # currently registered (stats-only leftover) or the scheduler is down.
+    next_run_time: float | None = None
+    # Human-readable trigger repr, e.g. "cron[hour='23', minute='30']".
+    trigger: str | None = None
 
 
 class RecentScanOut(BaseModel):
@@ -77,6 +88,11 @@ class PlatformHealthOut(BaseModel):
     scheduler: list[SchedulerJobStatOut]
     scans: list[RecentScanOut]
     cache: CacheStatsOut
+    # Server-side rollup (health_rollup.compute_rollup): one truth for the
+    # banner/SSE/Telegram instead of N client-side derivations. The frontend
+    # keeps its old derivation only as a fallback for pre-rollup payloads.
+    overall: str = "operational"     # "operational" | "degraded" | "outage"
+    reasons: list[str] = []          # Italian, human-readable, outage first
 
 
 class LogRecordOut(BaseModel):

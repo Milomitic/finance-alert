@@ -115,6 +115,13 @@ KNOWN_SOURCES: list[SourceSpec] = [
     SourceSpec("sec_13f", "filings", "SEC EDGAR — 13F filings", "scheduled",
                per_minute=None, per_day=None,
                notes="EDGAR submissions endpoint. Probe ogni 30 min (CIK Berkshire)."),
+    SourceSpec("dataroma", "holdings", "Dataroma — Superinvestors", "scheduled",
+               per_minute=None, per_day=None,
+               notes=("Scrape HTML dei portafogli superinvestor (indice + "
+                      "holdings). Cron sabato 04:00 + catch-up al boot; "
+                      "nessun probe dedicato — solo traffico organico, "
+                      "quindi può restare 'inattiva' per giorni tra un "
+                      "refresh e l'altro.")),
     SourceSpec("nasdaq", "premarket", "Nasdaq — Pre-market volume", "scheduled",
                per_minute=None, per_day=None,
                notes=("Endpoint non ufficiale api.nasdaq.com (no key). "
@@ -140,6 +147,7 @@ _LOG_MATCH_TOKENS: dict[str, list[str]] = {
     "fred": ["fred"],
     "forexfactory": ["forexfactory", "forex"],
     "sec_13f": ["sec_13f", "edgar", "13f", "institutional"],
+    "dataroma": ["dataroma", "institutional_scraper"],
 }
 
 
@@ -168,7 +176,7 @@ class SourceWithUsage:
     last_success_at: float | None
     last_failure_at: float | None
     last_failure_reason: str | None
-    health: str               # "healthy" | "degraded" | "failing" | "idle"
+    health: str               # "healthy" | "degraded" | "failing" | "unavailable" | "idle"
     # Sliding-window usage. Only computed for sources with a declared limit;
     # None for unrestricted sources so the UI can render "—".
     calls_last_minute: int | None

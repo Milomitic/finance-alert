@@ -1,6 +1,6 @@
 """Telegram notifiers — daily digest + optional instant pushes.
 
-Four send surfaces, all sharing the same bot/chat config + scrubbed logging:
+Six send surfaces, all sharing the same bot/chat config + scrubbed logging:
 
 1. `send_daily_digest`   — the 24h summary (cron `send_digest`, manual API).
 2. `notify_signal_alerts` — OPTIONAL per-scan push of strong signals, gated on
@@ -10,6 +10,13 @@ Four send surfaces, all sharing the same bot/chat config + scrubbed logging:
    immediately is the whole point).
 4. `notify_position_closed` — instant push when a tracked position auto-closes
    on a stop/target hit (same no-flag rationale as the price alerts).
+5. `notify_scan_failed` — push when a scan run CRASHES to status='failed'
+   (audit 2026-07-08 observability core). Gated on
+   `settings.telegram_notify_health`; user-cancelled runs never notify.
+6. `notify_health_transition` — push when the platform-health rollup
+   transitions to degraded/outage. Called ONLY via
+   `health_rollup.maybe_notify_transition` (which owns the state-change +
+   6h-cooldown gating); same `telegram_notify_health` flag.
 """
 import json
 from dataclasses import dataclass
@@ -359,6 +366,78 @@ def notify_price_alerts(fired: list[tuple[Alert, Stock]]) -> PushResult:
 
     logger.info(f"[notifier] price push sent: {len(fired)} alert(s)")
     return PushResult(sent=True, alerts_count=len(fired), reason="ok")
+
+
+# ─── Salute piattaforma (audit 2026-07-08) ─────────────────────────────
+
+# Rollup state → banner emoji + Italian label (mirrors the Salute page).
+_HEALTH_STATE_EMOJI: dict[str, str] = {"degraded": "🟠", "outage": "🔴"}
+_HEALTH_STATE_LABEL: dict[str, str] = {
+    "degraded": "Servizi degradati",
+    "outage": "Outage in corso",
+}
+# Max reasons enumerated in a health push message.
+_HEALTH_REASONS_TOP_N = 8
+
+
+def notify_scan_failed(run_id: int, error_message: str | None) -> PushResult:
+    """Instant push when a scan run CRASHES to status='failed'.
+
+    The 13F-crons audit showed failures died silently for months — a failed
+    SCAN is the highest-value single event to surface because everything
+    downstream (signals, scores, outcomes) depends on it. Gated on
+    `settings.telegram_notify_health` (default ON) + Telegram config.
+    Callers (scan_runner's crash path) treat this as best-effort — a
+    Telegram problem must never mask the original scan error."""
+    if not settings.telegram_notify_health:
+        return PushResult(sent=False, reason="push_disabled")
+    if not _telegram_enabled():
+        logger.info("[notifier] scan-failed push skipped: Telegram disabled")
+        return PushResult(sent=False, reason="telegram_disabled")
+
+    detail = (error_message or "errore sconosciuto")[:500]
+    lines = [
+        f"❌ <b>Scan fallito</b> — run #{run_id}",
+        "",
+        f"Errore: {detail}",
+        "",
+        f"🔗 Dettagli: {settings.public_base_url}/health",
+    ]
+    text = _truncate("\n".join(lines))
+    if not _send_telegram(text, what="scan-failed push"):
+        return PushResult(sent=False, reason="http_error")
+    logger.info(f"[notifier] scan-failed push sent for run #{run_id}")
+    return PushResult(sent=True, reason="ok")
+
+
+def notify_health_transition(overall: str, reasons: list[str]) -> bool:
+    """Push the health-rollup TRANSITION to degraded/outage.
+
+    Do NOT call directly from health readers — go through
+    `health_rollup.maybe_notify_transition`, which owns the only-on-change +
+    once-per-6h-per-state gating (this function would happily spam).
+    Returns True when the message was delivered."""
+    if not settings.telegram_notify_health:
+        return False
+    if not _telegram_enabled():
+        logger.info("[notifier] health push skipped: Telegram disabled")
+        return False
+
+    emoji = _HEALTH_STATE_EMOJI.get(overall, "⚠️")
+    label = _HEALTH_STATE_LABEL.get(overall, overall)
+    lines = [f"{emoji} <b>Salute piattaforma: {label}</b>", ""]
+    for r in reasons[:_HEALTH_REASONS_TOP_N]:
+        lines.append(f"• {r}")
+    if len(reasons) > _HEALTH_REASONS_TOP_N:
+        lines.append(f"... e altri {len(reasons) - _HEALTH_REASONS_TOP_N} motivi.")
+    lines.append("")
+    lines.append(f"🔗 {settings.public_base_url}/health")
+
+    text = _truncate("\n".join(lines))
+    if not _send_telegram(text, what="health push"):
+        return False
+    logger.info(f"[notifier] health push sent: {overall} ({len(reasons)} reason(s))")
+    return True
 
 
 # Exit-reason → emoji for the position push. "manual" never notifies (the

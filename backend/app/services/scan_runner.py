@@ -533,6 +533,18 @@ def run_tracked_scan(
                 failed_run.error_message = str(exc)[:1000]
                 failed_run.completed_at = datetime.now(UTC)
                 db2.commit()
+        # Telegram push on the CRASH path only (best-effort: a Telegram
+        # problem must never mask the original scan error). The user-cancel
+        # path above deliberately does NOT notify — being told about your
+        # own click is noise. Gate + config checks live in the notifier.
+        try:
+            from app.services import notifier_service
+
+            notifier_service.notify_scan_failed(run_id, str(exc)[:1000])
+        except Exception as notify_exc:  # noqa: BLE001
+            logger.warning(
+                f"[scan_runner] scan-failed push failed (non-fatal): {notify_exc}"
+            )
         scan_cancel.clear(run_id_for_cancel)
         raise
     # Success path — clear the cancel flag (no-op if never set).

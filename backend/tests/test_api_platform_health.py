@@ -20,6 +20,18 @@ from app.models import User
 from loguru import logger
 
 
+@pytest.fixture(autouse=True)
+def _clean_source_metrics():
+    """data_source_metrics is process-global: earlier test modules may have
+    left failing counters behind, which would leak into the server-side
+    rollup (`overall`) these tests assert on."""
+    from app.services import data_source_metrics
+
+    data_source_metrics.reset()
+    yield
+    data_source_metrics.reset()
+
+
 @pytest.fixture
 def client(db: Session) -> TestClient:
     user = User(username="admin", password_hash="x")
@@ -48,7 +60,8 @@ def test_health_endpoint_returns_expected_keys(client: TestClient):
     assert r.status_code == 200
     body = r.json()
     assert set(body.keys()) == {
-        "data_sources", "yfinance_breaker", "scheduler", "scans", "cache"
+        "data_sources", "yfinance_breaker", "scheduler", "scans", "cache",
+        "overall", "reasons",
     }
     assert isinstance(body["data_sources"], list)
     assert isinstance(body["scheduler"], list)
@@ -56,6 +69,60 @@ def test_health_endpoint_returns_expected_keys(client: TestClient):
     assert "fundamentals" in body["cache"]
     assert "news" in body["cache"]
     assert "db" in body["cache"]
+    # Server-side rollup (SAL-1): one truth for banner/SSE/Telegram.
+    assert body["overall"] in ("operational", "degraded", "outage")
+    assert isinstance(body["reasons"], list)
+
+
+def test_health_scheduler_lists_registered_jobs_before_first_event(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch,
+):
+    """SAL-1 scheduler truth: EVERY registered job appears in the payload —
+    with next_run_time/trigger metadata — even before its first run/error
+    event. Before this, a cron that never fired was invisible (the way the
+    13F refreshes died unnoticed for months)."""
+    # Force a FRESH (never-started) scheduler singleton: earlier tests that
+    # run the app lifespan start+stop the shared one, draining its pending
+    # job list — get_jobs() would return [] and the test would be
+    # order-dependent. monkeypatch restores the old instance afterwards.
+    import app.scheduler as scheduler_mod
+
+    monkeypatch.setattr(scheduler_mod, "_scheduler", None)
+
+    r = client.get("/api/platform/health")
+    assert r.status_code == 200
+    jobs = {j["job_id"]: j for j in r.json()["scheduler"]}
+    # Core cron jobs registered in app/scheduler/__init__.py must be present
+    # even though no scheduler event ever fired in this test process.
+    for expected in ("scan_alerts", "refresh_sec_13f", "refresh_institutionals",
+                     "db_backup", "health_probes_fast"):
+        assert expected in jobs, f"registered job {expected} missing from payload"
+        j = jobs[expected]
+        # Merged shape: stats fields (zeroed) + registration metadata keys.
+        assert j["runs"] == 0
+        assert "next_run_time" in j
+        assert "trigger" in j
+        assert j["trigger"] is not None
+
+
+def test_health_overall_degraded_when_last_scan_failed(client: TestClient, db: Session):
+    """The rollup flags a crashed LAST scan as degraded (a user-cancelled
+    run must not)."""
+    from datetime import UTC, datetime
+
+    from app.models import ScanRun
+
+    run = ScanRun(
+        trigger="cron", status="failed", error_message="boom",
+        started_at=datetime.now(UTC), completed_at=datetime.now(UTC),
+    )
+    db.add(run)
+    db.commit()
+
+    r = client.get("/api/platform/health")
+    body = r.json()
+    assert body["overall"] == "degraded"
+    assert any("Ultimo scan fallito" in reason for reason in body["reasons"])
 
 
 # ---------------------------------------------------------------------------

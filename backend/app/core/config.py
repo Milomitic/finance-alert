@@ -34,6 +34,14 @@ class Settings(BaseSettings):
     # notifier_service.notify_signal_alerts.
     telegram_push_per_signal: bool = False
     telegram_push_min_strength: int = 75
+    # Notifiche Telegram di SALUTE piattaforma (audit 2026-07-08: i cron 13F
+    # sono rimasti morti per mesi senza che nulla lo segnalasse). ON di
+    # default: (a) push quando uno scan termina 'failed' (crash, non cancel
+    # utente), (b) push quando il rollup di salute TRANSITA verso
+    # degraded/outage (solo al cambio di stato, max 1 ogni 6h per stato —
+    # vedi health_rollup.maybe_notify_transition). Richiede comunque
+    # telegram_bot_token + telegram_chat_id configurati.
+    telegram_notify_health: bool = True
     digest_hour: int = 8
     digest_minute: int = 0
     scan_hour: int = 23
