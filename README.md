@@ -6,11 +6,15 @@ machine — no cloud, no network exposure (beyond the optional outbound calls to
 free market-data providers).
 
 What started as a catalog + watchlist tool is now a full personal
-**market-intelligence dashboard**: it ingests ~1,000 global stocks nightly,
-computes a 6-pillar composite **score** per stock, ranks **top picks** and
-**movers**, tracks **superinvestor 13F holdings**, surfaces **pre-market**
-gainers/losers, an **earnings + macro calendar**, **sector** breadth, and an
-**alert engine** with Telegram digests — all behind a single login on your LAN.
+**market-intelligence platform**: it ingests ~1,000 global stocks nightly and
+looks at each one through **three independent lenses** — fundamental **Qualità**,
+price-action **Tecnico**, and a 17-detector **signal engine** whose alerts carry
+an honest Forza + Probabilità pair and get their **realized outcomes** tracked
+in a warehouse. Around that core: top picks & movers, **superinvestor 13F
+tracking** (with quarter-over-quarter deltas), pre-market movers, an earnings +
+macro **calendar**, **sector** drill-downs, **position tracking** with live P&L
+and stop/target hits, and **Telegram** notifications — all behind a single
+login on your LAN.
 
 ---
 
@@ -18,16 +22,17 @@ gainers/losers, an **earnings + macro calendar**, **sector** breadth, and an
 
 | Area | Highlights |
 |---|---|
-| **Dashboard** (`/`) | Market-mood hero, per-index breadth matrix, live top-movers (15s polling), top-volume, RSI histogram, sector heatmap, 52-week/vol stats, US pre-market card, score-based top picks, superinvestor consensus, latest analyst actions |
-| **Scoring** | 6-pillar composite (Profitability · Sustainability · Growth · Value · Momentum · Sentiment), risk-tier classification, EWMA smoothing + turnover control. Weights are **IC-validated** against point-in-time data (see [docs/scoring-algorithm.md](docs/scoring-algorithm.md)) |
-| **Screener** (`/stocks`) | Filter/sort the catalog by score, sector, index, fundamentals |
-| **Stock detail** (`/stocks/:ticker`) | Candlestick chart (lightweight-charts) with adaptive indicators (SMA/EMA/RSI/MACD/BB), multi-timeframe (5m→monthly), fundamentals, valuation, analyst targets + actions, insider transactions, institutional holders, news |
-| **Institutionals** (`/institutionals`) | Superinvestor / fund 13F portfolios (SEC EDGAR), per-stock holders, dual-encoded allocation infographics, historical-holder tracking |
-| **Sectors** (`/sectors`) | Per-sector breadth, valuation, and constituent drill-down |
+| **Dashboard** (`/`) | Market-mood hero, per-index breadth matrix, live top-movers (15s polling, market-hours aware), top-volume, RSI histogram, sector heatmap, 52-week/vol stats, US pre-market card, score-based top picks, superinvestor consensus, latest analyst actions. Cards render progressively as their data arrives |
+| **Scoring** | Three orthogonal lenses: **Qualità** (5-pillar fundamental composite), **Tecnico** (price-action posture), **Segnali** (17 detectors). Risk tiers, EWMA smoothing, turnover control. Every score-affecting change is gated behind a statistical study — see "The three lenses" below |
+| **Screener** (`/stocks`) | Filter/sort ~30 dimensions (score & pillars, tech posture, RSI/EMA/52w/volume EOD metrics, index, sector, ETF toggle), saved filter presets, "N fondi" 13F badge, metrics as-of hint, column manager |
+| **Segnali** (`/alerts`) | The 17-detector signal feed: each alert carries **Forza** (pattern strength) + **Probabilità** (detector base rate), a confirmation chain (Catena), confluence clusters, an **Esito** column with the realized outcome once the horizon matures, earnings-proximity badge, trade playbook, CSV export |
+| **Posizioni** (`/positions`) | "Track this trade" from any playbook: entry/stop/target persisted, live P&L, automatic stop/target hit detection (intraday sweep + EOD) with Telegram notify |
+| **Stock detail** (`/stocks/:ticker`) | Candlestick chart (lightweight-charts) with adaptive indicators (SMA/EMA/RSI/MACD/BB), multi-timeframe (5m→monthly), fundamentals with current-FY estimate row, valuation, analyst targets + actions, insider transactions, institutional holders, news |
+| **Institutionals** (`/institutionals`) | Superinvestor (Dataroma) + fund/hedge-fund 13F portfolios (SEC EDGAR) with quarter-over-quarter deltas (new/add/reduce/sold-out), per-stock holders, filed-date honesty labels, allocation infographics |
+| **Esplora** (`/sectors`) | Per-sector aggregates (11 GICS sectors), industry rollups, constituent drill-down |
 | **Calendar** (`/calendar`) | Upcoming earnings (with EPS/revenue estimates + post-release surprise) and macro releases (FRED + ForexFactory consensus) |
-| **Market detail** (`/market/:symbol`) | Indices, commodities, crypto with live quotes + charts |
-| **Alerts** (`/alerts`) | Configurable technical-signal rules, edge-triggered nightly, on-screen feed + optional Telegram digest |
-| **Platform health** (`/health`) | Live status of every external data source, rate-limit usage, circuit-breaker state |
+| **Market detail** (`/markets/:symbol`) | Indices, commodities, crypto with live quotes + charts |
+| **Salute** (`/health`) | Live status of every external data source, scheduler jobs, circuit-breaker state, live log stream, signal-drift monitor, detector-performance explorer (live + 10y-replay segments) |
 
 ---
 
@@ -69,10 +74,12 @@ just up
 
 Open <http://localhost:5173> and log in with `admin` / your password.
 
-> **First scan** backfills ~250 days of OHLCV for the whole catalog (~5-10 min
+> **First scan** backfills ~10 years of OHLCV for the whole catalog (~10-20 min
 > via yfinance batch download) and computes the first scores. Subsequent nightly
-> scans take 30-90s. The first run may emit many "initial-state" alerts — bulk-
-> archive them in `/alerts`.
+> scans fetch incrementally (seconds of network, ~1-2 min total). The first run
+> may emit many "initial-state" alerts — bulk-archive them in `/alerts`. If the
+> machine was off at scan time, a **boot catch-up** runs the missed scan (and
+> stale institutional refreshes) automatically at the next backend start.
 
 ---
 
@@ -90,7 +97,9 @@ another source).
 | `FRED_API_KEY` | optional | Macro series (CPI, unemployment, rates…) — free from [FRED](https://fred.stlouisfed.org/docs/api/api_key.html) |
 | `FINNHUB_API_KEY` | optional | Earnings actuals + company news + analyst upgrade/downgrade + recommendation trends — free from [Finnhub](https://finnhub.io) (60 req/min) |
 | `MARKETAUX_API_KEY` | optional | News fallback (100 req/day free; quota-guarded + circuit-broken) |
-| `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` | optional | Daily alert digest |
+| `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` | optional | Enables all Telegram surfaces: daily digest, instant price-alert + position-close pushes |
+| `TELEGRAM_PUSH_PER_SIGNAL` | default `false` | Opt-in instant push of strong signals at scan end |
+| `TELEGRAM_PUSH_MIN_STRENGTH` | default `75` | Min Forza for the per-signal push |
 | `SCAN_HOUR` / `SCAN_MINUTE` | default 23:30 | Nightly scan time (Europe/Rome) |
 | `DIGEST_HOUR` / `DIGEST_MINUTE` | default 08:00 | Telegram digest time |
 
@@ -121,7 +130,8 @@ circuit-breaker state).
 | **yfinance** (Yahoo) | Primary: OHLCV, fundamentals, live quotes, news, market cap | No documented limit; protected by a local circuit breaker |
 | **Finnhub** | Earnings actuals + company news + analyst upgrade/downgrade + recommendation buckets (fallbacks when yfinance is stale/empty) | 60 req/min; client-side rate-limiter (30/min organic) + 5-min breaker |
 | **Marketaux** | News fallback (last resort, after yfinance + Finnhub) | 100/day; 12h per-ticker cache + soft 85/day budget + UTC-midnight breaker |
-| **SEC EDGAR** | 13F institutional filings; **point-in-time fundamentals** via XBRL companyfacts (for backtesting/score validation) | Polite ~6 req/s; persistent breaker |
+| **SEC EDGAR** | 13F institutional filings (latest + 5-quarter history, put/call rows excluded, CUSIP→ticker via company_tickers.json with a persistent map); **point-in-time fundamentals** via XBRL companyfacts (for backtesting/score validation) | Polite ~6 req/s; persistent breaker |
+| **Dataroma** | ~80 curated superinvestor portfolios (pre-computed Q/Q actions) | HTML scrape, weekly + boot catch-up |
 | **FRED** | Macro series for the calendar | 120 req/min |
 | **ForexFactory** | Macro consensus (expected values) | XML weekly; 6h on-disk fallback cache |
 | **Nasdaq** (unofficial) | Pre-market volume enrichment | Best-effort, US pre-market window only |
@@ -131,30 +141,43 @@ tripped breaker isn't blanked by a reload.
 
 ---
 
-## The scoring system
+## The three lenses
 
-Each stock gets a **composite score 0-100** = weighted blend of six pillars, each
-itself 0-100 with missing-data renormalization (a pillar with no data is dropped
-and the remaining weights re-normalize):
+Every stock is evaluated through **three deliberately independent lenses** —
+none of them nudges another:
 
-| Pillar | Weight | Measures |
-|---|---|---|
-| Profitability | 0.15 | Margins, ROE/ROA (sector-aware) |
-| Sustainability | 0.15 | Balance-sheet solidity, FCF quality, earnings stability, dividend safety |
-| Growth | 0.23 | Revenue/EPS growth, beat consistency |
-| Value | 0.13 | Valuation multiples vs sector medians |
-| Momentum | 0.20 | 12-1 momentum, trend stack, distance-from-52w-high, RSI, MACD |
-| Sentiment | 0.14 | Analyst consensus + net upgrades + news tone |
+**1 · Qualità** — a fundamental composite 0-100 from five pillars
+(Profitability · Sustainability · Growth · Value · Sentiment), each 0-100 with
+missing-data renormalization and sector-aware benchmarking. Stocks get a
+**risk tier** (conservative / moderate / aggressive); scores are EWMA-smoothed
+with tier hysteresis to control churn. *(The former Momentum pillar was removed
+in the 2026-05 redesign: price action belongs to the Tecnico lens.)*
 
-Stocks are classified into **risk tiers** (conservative / moderate / aggressive).
-Scores are smoothed run-over-run (EWMA) with tier hysteresis to control churn.
+**2 · Tecnico** — a continuous price-action posture score (trend, momentum,
+structure, volume, relative strength) recomputed at every scan. Owns
+everything price-derived.
 
-**Weights are evidence-based, not guessed.** `app/scripts/entry_ic_report.py` is a
-read-only Information-Coefficient harness that measures each signal's predictive
-power (rank-IC vs forward returns, 5/21/63/252-day horizons) against **point-in-time**
-data — OHLCV (always PIT) plus SEC companyfacts for fundamentals. Recent retunes
-(momentum, profitability) were validated OLD-vs-NEW before being committed. Full
-detail: [docs/scoring-algorithm.md](docs/scoring-algorithm.md).
+**3 · Segnali** — 17 detectors (volume breakout, trend+pullback, RSI/MACD
+divergences, squeeze expansion, 52-week momentum, gap-and-go, PEAD, insider
+buys…). Each alert carries two first-class numbers: **Forza** (weighted
+pattern strength with a soft-min anti-mediocrity cap) and **Probabilità**
+(the detector's historical hit-rate from a 10-year, no-look-ahead replay of
+~250k signals — honestly labeled as a base rate, not a per-signal prediction).
+Once an alert's horizon elapses, its **realized outcome** (absolute +
+market-neutral) lands in the `signal_outcomes` warehouse and surfaces in the
+UI as the Esito column and the detector-performance explorer.
+
+**Honesty gates.** No score-affecting change ships without a statistical study
+— and three of the four gates run so far returned **negatives** that shaped
+the product: confirmation counts don't predict outcomes (so they're
+display-only), no Qualità pillar shows significant IC on forward returns (so
+the composite is a quality *descriptor*, not an alpha claim, and is never
+reweighted on alpha grounds), and per-factor Probabilità adjustments failed
+out-of-sample validation (so Probabilità stays a per-detector base rate).
+The studies live in `app/scripts/` (`signal_detector_outcomes`,
+`score_ic_backtest`, `fit_signal_calibration`) and their verdicts are recorded
+in [CLAUDE.md](CLAUDE.md). Full detail:
+[docs/scoring-algorithm.md](docs/scoring-algorithm.md).
 
 ---
 
@@ -165,7 +188,7 @@ detail: [docs/scoring-algorithm.md](docs/scoring-algorithm.md).
 | `just be` | Backend with `--reload` on :8000 |
 | `just fe` | Vite dev server on :5173 (proxies `/api` → :8000) |
 | `just up` | Backend + frontend together |
-| `just test` | `pytest` (backend, ~580 tests) + `vitest --run` (frontend) |
+| `just test` | `pytest` (backend, ~1,200 tests, network-guarded) + `vitest --run` (frontend) |
 | `just lint` | `ruff check` + `pyright` + `eslint` |
 | `just fmt` | `ruff format` + `prettier` |
 | `just migrate "msg"` | Autogenerate an Alembic revision |
@@ -240,21 +263,25 @@ finance-alert/
 │   ├── app/
 │   │   ├── api/                     # routers: auth, dashboard, stocks, scores,
 │   │   │                            #   institutionals, sectors, calendar, market,
-│   │   │                            #   alerts, rules, price_alerts, platform_health…
-│   │   ├── core/                    # config, db, logging, security, breaker_state
+│   │   │                            #   alerts, positions, price_alerts, platform_health…
+│   │   ├── core/                    # config, db, logging, security, persist_json
 │   │   ├── indicators/              # ema, sma, rsi, macd, bb, atr, adx
 │   │   ├── models/                  # SQLAlchemy models
 │   │   ├── schemas/                 # Pydantic schemas
-│   │   ├── services/                # ~60 modules: score_service, market_stats_service,
-│   │   │                            #   stock_fundamentals_service, live_quote_service,
-│   │   │                            #   premarket_service, institutional_service,
-│   │   │                            #   finnhub_*, marketaux_*, sec_*, fred, probes…
-│   │   ├── scheduler/jobs/          # APScheduler: scan_alerts, send_digest,
-│   │   │                            #   refresh_catalog/fred/institutionals/sec_13f/
-│   │   │                            #   premarket/imminent_earnings, health_probes…
-│   │   ├── scripts/                 # bootstrap, seed, set_admin_password,
-│   │   │                            #   entry_ic_report (scoring IC harness),
-│   │   │                            #   remove_sse50, one-off maintenance
+│   │   ├── signals/                 # the 17 detectors + runner, chain enrichment,
+│   │   │                            #   calibration_map (Forza/Probabilità)
+│   │   ├── services/                # ~60 modules: score_service/ (package),
+│   │   │                            #   technical_score_service, signal_outcome_service,
+│   │   │                            #   market_stats_service, stock_fundamentals_service,
+│   │   │                            #   live_quote_service, institutional_service,
+│   │   │                            #   position_service, currency_units, ohlcv_fetch_plan…
+│   │   ├── scheduler/jobs/          # APScheduler: scan_alerts, send_digest, db_backup,
+│   │   │                            #   retention, refresh_catalog/fred/institutionals/
+│   │   │                            #   sec_13f/premarket, live_movers_sweep, probes…
+│   │   ├── scripts/                 # bootstrap, seed, set_admin_password + the
+│   │   │                            #   statistical gates: signal_detector_outcomes,
+│   │   │                            #   score_ic_backtest, fit_signal_calibration,
+│   │   │                            #   backfill_replay_outcomes, backfill_13f_history
 │   │   ├── data/seed/               # bundled index-constituent CSVs
 │   │   └── main.py                  # FastAPI app + lifespan (cache hydrate, scheduler)
 │   ├── alembic/versions/            # migrations
@@ -297,9 +324,13 @@ Recharts · vitest · eslint · prettier
 
 ```bash
 just test                                   # backend + frontend
-cd backend && uv run pytest tests/ -x -q    # backend only (~580 tests, ~40s)
+cd backend && uv run pytest tests/ -x -q    # backend only (~1,200 tests, ~25s)
 cd frontend && npm run build                # type-check + production build
 ```
+
+The backend suite runs with an **anti-network guard** (any accidental real
+HTTP raises) and a per-test circuit-breaker reset — tests are deterministic
+and offline by construction.
 
 ---
 
