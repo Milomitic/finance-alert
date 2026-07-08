@@ -54,6 +54,7 @@ export function useStockSearch(params: SearchParams) {
       effective.change_min ?? "",
       effective.change_max ?? "",
       effective.vol_spike ? "1" : "",
+      effective.vol_ratio_min ?? "",
       effective.volume_min ?? "",
       effective.exclude_etf ? "1" : "",
       effective.sort_by ?? "ticker",

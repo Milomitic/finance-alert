@@ -10,6 +10,9 @@ export const priceAlerts = {
     api<PriceAlert[]>(
       `/api/stocks/${encodeURIComponent(ticker)}/price-alerts`
     ),
+  /** Tutti i price alert ATTIVI (abilitati e non ancora scattati) in una
+   *  sola chiamata — alimenta la campanella dello screener senza N+1. */
+  listActive: () => api<PriceAlert[]>("/api/price-alerts?active=true"),
   create: (ticker: string, body: PriceAlertCreate) =>
     api<PriceAlert>(
       `/api/stocks/${encodeURIComponent(ticker)}/price-alerts`,

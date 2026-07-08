@@ -9,6 +9,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.models import CatalogRefreshLog, Index, Stock, StockIndex
+from app.services.country_normalizer import canonical_country
 from app.services.exchange_codes import canonical_exchange, has_known_suffix
 from app.services.industry_normalizer import canonical_industry
 from app.services.sector_normalizer import canonical_sector
@@ -267,7 +268,11 @@ def refresh_index(db: Session, index_code: str) -> RefreshResult:
                     name=name_val,
                     sector=sector_val,
                     industry=industry_val,
-                    country=str(src["country"]),
+                    # INDEX_SOURCES carries ISO-2 literals already, but the
+                    # normalizer is the boundary contract: a future source
+                    # entry with a full name can't leak into the normalized
+                    # column. See `country_normalizer.py`.
+                    country=canonical_country(str(src["country"])),
                     currency=str(src["currency"]),
                 )
                 db.add(stock)

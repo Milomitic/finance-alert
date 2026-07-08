@@ -35,6 +35,10 @@ export interface StockSearchItem {
      * null). Price-action momentum lives on `technical.momentum` (the
      * "T-Mom" screener column) instead. */
     sentiment: number | null;
+    /** Trend: Δ del composite vs lo snapshot score_history (lens qualita)
+     *  più recente di almeno 7 giorni fa. Null con storia insufficiente.
+     *  Optional per back-compat con risposte cached pre-campo. */
+    composite_delta_7d?: number | null;
   };
   technical: {
     composite: number | null;

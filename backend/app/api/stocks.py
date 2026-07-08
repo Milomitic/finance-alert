@@ -60,6 +60,12 @@ def search(
     growth_min: float | None = None,
     value_min: float | None = None,
     sentiment_min: float | None = None,
+    # Pillar maxes — symmetric caps (0-100, same validation as the mins).
+    profitability_max: float | None = None,
+    sustainability_max: float | None = None,
+    growth_max: float | None = None,
+    value_max: float | None = None,
+    sentiment_max: float | None = None,
     tech_min: float | None = None,
     tech_max: float | None = None,
     posture: Annotated[list[str] | None, Query()] = None,
@@ -74,7 +80,15 @@ def search(
     near_52w_high: bool = False,
     near_52w_low: bool = False,
     vol_spike: bool = False,
+    # Continuous vol_ratio lower bound (≥ 0) — the tunable sibling of the
+    # fixed vol_spike (>2×) preset.
+    vol_ratio_min: Annotated[float | None, Query(ge=0)] = None,
     volume_min: float | None = None,
+    # % dal massimo 52w range: valori tipicamente ≤ 0 (0 = sul massimo).
+    # Nessun clamp — il drawdown può superare -100 solo per dati corrotti,
+    # e un filtro che non matcha nulla è innocuo.
+    pct_off_high_min: float | None = None,
+    pct_off_high_max: float | None = None,
     market_cap_min: float | None = None,
     market_cap_max: float | None = None,
     has_signals: bool = False,
@@ -112,6 +126,11 @@ def search(
     _validate_score_param(growth_min, "growth_min")
     _validate_score_param(value_min, "value_min")
     _validate_score_param(sentiment_min, "sentiment_min")
+    _validate_score_param(profitability_max, "profitability_max")
+    _validate_score_param(sustainability_max, "sustainability_max")
+    _validate_score_param(growth_max, "growth_max")
+    _validate_score_param(value_max, "value_max")
+    _validate_score_param(sentiment_max, "sentiment_max")
     _validate_score_param(tech_min, "tech_min")
     _validate_score_param(tech_max, "tech_max")
     _validate_score_param(rsi_min, "rsi_min")
@@ -141,6 +160,11 @@ def search(
             growth_min=growth_min,
             value_min=value_min,
             sentiment_min=sentiment_min,
+            profitability_max=profitability_max,
+            sustainability_max=sustainability_max,
+            growth_max=growth_max,
+            value_max=value_max,
+            sentiment_max=sentiment_max,
             tech_min=tech_min,
             tech_max=tech_max,
             postures=posture or [],
@@ -155,7 +179,10 @@ def search(
             near_52w_high=near_52w_high,
             near_52w_low=near_52w_low,
             vol_spike=vol_spike,
+            vol_ratio_min=vol_ratio_min,
             volume_min=volume_min,
+            pct_off_high_min=pct_off_high_min,
+            pct_off_high_max=pct_off_high_max,
             market_cap_min=market_cap_min,
             market_cap_max=market_cap_max,
             has_signals=has_signals,
@@ -179,6 +206,7 @@ def search(
                     growth=item.score.growth,
                     value=item.score.value,
                     sentiment=item.score.sentiment,
+                    composite_delta_7d=item.score.composite_delta_7d,
                 ),
                 technical=TechnicalScoreRefOut(
                     composite=item.technical.composite,

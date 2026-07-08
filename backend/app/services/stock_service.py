@@ -9,12 +9,20 @@ from app.core.visibility import visible_country_clause
 from app.models import (
     Alert,
     Index,
+    ScoreHistory,
     Stock,
     StockIndex,
     StockMetrics,
     StockScore,
     TechnicalScore,
 )
+
+# Distanza % dal massimo 52w come espressione SQL: (last_close/high_252 − 1)·100.
+# Valore tipicamente ≤ 0 (0 = sul massimo). Con high_252 NULL o 0 SQLite
+# produce NULL, che i filtri escludono e il sort spinge in fondo (NULLS LAST).
+# Stessa formula del client-side `pctFromHigh` nel FE — qui serve server-side
+# per ordinare/filtrare l'intero universo, non solo la pagina corrente.
+PCT_OFF_HIGH_EXPR = ((StockMetrics.last_close / StockMetrics.high_252) - 1.0) * 100.0
 
 # Allowed sort columns; whitelist guards against SQL injection / typos.
 # Columns from JOINed tables (`composite`, `risk_tier`) are sortable too —
@@ -51,6 +59,9 @@ SORTABLE_COLUMNS: dict[str, object] = {
     "rsi14": StockMetrics.rsi14,
     "vol_ratio": StockMetrics.vol_ratio,
     "vol_today": StockMetrics.vol_today,
+    # SQL expression (not a plain column): % dal massimo 52w. DESC = più
+    # vicini al massimo per primi; ASC = drawdown più profondi per primi.
+    "pct_off_high": PCT_OFF_HIGH_EXPR,
 }
 
 
@@ -76,6 +87,14 @@ class StockFilter:
     growth_min: float | None = None
     value_min: float | None = None
     sentiment_min: float | None = None
+    # Per-pillar MAXIMUM thresholds (0-100) — symmetric with the mins, so a
+    # screen like "value ≤ 40" (expensive names) is expressible. Same NULL
+    # semantics: a stock without the pillar is excluded when the cap is set.
+    profitability_max: float | None = None
+    sustainability_max: float | None = None
+    growth_max: float | None = None
+    value_max: float | None = None
+    sentiment_max: float | None = None
     # Technical score (continuous) filters.
     tech_min: float | None = None
     tech_max: float | None = None
@@ -93,7 +112,14 @@ class StockFilter:
     near_52w_high: bool = False       # last_close >= 0.95 * high_252
     near_52w_low: bool = False        # last_close <= 1.05 * low_252
     vol_spike: bool = False           # vol_ratio > 2.0
+    # Continuous vol_ratio lower bound (vol_spike is the fixed >2.0 preset;
+    # this is the tunable version — e.g. 1.5× for "sopra la media").
+    vol_ratio_min: float | None = None
     volume_min: float | None = None   # today's share volume lower bound
+    # % dal massimo 52w (PCT_OFF_HIGH_EXPR, tipicamente ≤ 0): range numerico.
+    # Es. min=-15, max=-5 = titoli in pullback tra il 5% e il 15% dal massimo.
+    pct_off_high_min: float | None = None
+    pct_off_high_max: float | None = None
     market_cap_min: float | None = None
     market_cap_max: float | None = None
     has_signals: bool = False         # has >=1 active (non-archived) RECENT alert
@@ -122,6 +148,10 @@ class StockScoreRef:
     # composite (see CLAUDE.md) — the column is always NULL, so surfacing it
     # on the screener row was dead payload.
     sentiment: float | None = None
+    # Trend del composite: delta vs lo snapshot `score_history` (lens
+    # qualita) più recente di ALMENO 7 giorni fa. None quando la storia è
+    # troppo corta (< 7 giorni di snapshot) o lo stock non è ancora scorato.
+    composite_delta_7d: float | None = None
 
 
 @dataclass
@@ -239,6 +269,17 @@ def _apply_filter(stmt, f: StockFilter):
         stmt = stmt.where(StockScore.value >= f.value_min)
     if f.sentiment_min is not None:
         stmt = stmt.where(StockScore.sentiment >= f.sentiment_min)
+    # Pillar maxes — symmetric caps (NULL pillar → excluded, same as the mins).
+    if f.profitability_max is not None:
+        stmt = stmt.where(StockScore.profitability <= f.profitability_max)
+    if f.sustainability_max is not None:
+        stmt = stmt.where(StockScore.sustainability <= f.sustainability_max)
+    if f.growth_max is not None:
+        stmt = stmt.where(StockScore.growth <= f.growth_max)
+    if f.value_max is not None:
+        stmt = stmt.where(StockScore.value <= f.value_max)
+    if f.sentiment_max is not None:
+        stmt = stmt.where(StockScore.sentiment <= f.sentiment_max)
     if f.tech_min is not None:
         stmt = stmt.where(TechnicalScore.composite >= f.tech_min)
     if f.tech_max is not None:
@@ -270,8 +311,16 @@ def _apply_filter(stmt, f: StockFilter):
         stmt = stmt.where(StockMetrics.last_close <= 1.05 * StockMetrics.low_252)
     if f.vol_spike:
         stmt = stmt.where(StockMetrics.vol_ratio > 2.0)
+    if f.vol_ratio_min is not None:
+        stmt = stmt.where(StockMetrics.vol_ratio >= f.vol_ratio_min)
     if f.volume_min is not None:
         stmt = stmt.where(StockMetrics.vol_today >= f.volume_min)
+    # % dal massimo 52w: il guard high_252 > 0 evita che una divisione per
+    # zero (SQLite → NULL) o un massimo assurdo produca confronti spuri.
+    if f.pct_off_high_min is not None:
+        stmt = stmt.where(StockMetrics.high_252 > 0, PCT_OFF_HIGH_EXPR >= f.pct_off_high_min)
+    if f.pct_off_high_max is not None:
+        stmt = stmt.where(StockMetrics.high_252 > 0, PCT_OFF_HIGH_EXPR <= f.pct_off_high_max)
     if f.market_cap_min is not None:
         stmt = stmt.where(Stock.market_cap >= f.market_cap_min)
     if f.market_cap_max is not None:
@@ -332,6 +381,38 @@ def search_stocks(db: Session, f: StockFilter) -> StockPage:
     min_score, which require a non-null score by definition.
     """
     limit = max(1, min(f.limit, 500))
+    # ── Score trend (Δ7g): per ogni stock il composite dello snapshot
+    # `score_history` (lens qualita) più recente di ALMENO 7 giorni fa.
+    # Due livelli di subquery (MAX(captured_on) per stock → self-join sul
+    # giorno) COMPILATI dentro la query principale come LEFT JOIN: resta
+    # UNA sola query SQL per la pagina, nessun N+1 per riga (verificato
+    # da un test che conta gli statement). Null-safe: storia troppo corta
+    # → nessuna riga nel join → delta NULL.
+    hist_cutoff = date.today() - timedelta(days=7)
+    hist_latest_day = (
+        select(
+            ScoreHistory.stock_id.label("h_stock_id"),
+            func.max(ScoreHistory.captured_on).label("h_day"),
+        )
+        .where(ScoreHistory.lens == "qualita", ScoreHistory.captured_on <= hist_cutoff)
+        .group_by(ScoreHistory.stock_id)
+        .subquery()
+    )
+    hist_baseline = (
+        select(
+            ScoreHistory.stock_id.label("b_stock_id"),
+            ScoreHistory.composite.label("b_composite"),
+        )
+        .join(
+            hist_latest_day,
+            and_(
+                ScoreHistory.stock_id == hist_latest_day.c.h_stock_id,
+                ScoreHistory.captured_on == hist_latest_day.c.h_day,
+            ),
+        )
+        .where(ScoreHistory.lens == "qualita")
+        .subquery()
+    )
     # SELECT Stock + all score columns needed for the screener row
     base = select(
         Stock,
@@ -360,9 +441,14 @@ def search_stocks(db: Session, f: StockFilter) -> StockPage:
         StockMetrics.vol_ratio.label("m_vol_ratio"),
         StockMetrics.vol_today.label("m_vol_today"),
         StockMetrics.vol_avg_20.label("m_vol_avg_20"),
+        # Δ composite vs ~7 giorni fa (NULL-propagante: composite o baseline
+        # NULL → delta NULL, il FE nasconde la freccia).
+        (StockScore.composite - hist_baseline.c.b_composite).label("composite_delta_7d"),
     ).outerjoin(StockScore, StockScore.stock_id == Stock.id).outerjoin(
         TechnicalScore, TechnicalScore.stock_id == Stock.id
-    ).outerjoin(StockMetrics, StockMetrics.stock_id == Stock.id)
+    ).outerjoin(StockMetrics, StockMetrics.stock_id == Stock.id).outerjoin(
+        hist_baseline, hist_baseline.c.b_stock_id == Stock.id
+    )
     base = _apply_filter(base, f)
 
     # COUNT must be over the same FROM clause (with the JOIN + filters
@@ -384,6 +470,7 @@ def search_stocks(db: Session, f: StockFilter) -> StockPage:
                 growth=row[5],
                 value=row[6],
                 sentiment=row[7],
+                composite_delta_7d=row[26],
             ),
             technical=StockTechRef(
                 composite=row[8],
@@ -424,24 +511,47 @@ def search_stocks(db: Session, f: StockFilter) -> StockPage:
 
 
 def get_filter_options(db: Session) -> FilterOptions:
+    # Ogni distinct() è filtrato su `visible_country_clause()`: senza il
+    # guard i dropdown offrivano paesi catalog-only (CN/JP/KR nascosti) ed
+    # exchange a zero risultati garantiti (JPX/KRX) — opzioni che, scelte,
+    # producevano sempre una tabella vuota perché la search filtra le stesse
+    # righe. I titoli CN su exchange "surfaced" (HKEX, ADR US) restano
+    # visibili, quindi il loro paese può ancora comparire — coerente con la
+    # search.
     exchanges = [
         r[0]
-        for r in db.execute(select(distinct(Stock.exchange)).order_by(Stock.exchange)).all()
+        for r in db.execute(
+            select(distinct(Stock.exchange))
+            .where(visible_country_clause())
+            .order_by(Stock.exchange)
+        ).all()
         if r[0]
     ]
     sectors = [
         r[0]
-        for r in db.execute(select(distinct(Stock.sector)).order_by(Stock.sector)).all()
+        for r in db.execute(
+            select(distinct(Stock.sector))
+            .where(visible_country_clause())
+            .order_by(Stock.sector)
+        ).all()
         if r[0]
     ]
     industries = [
         r[0]
-        for r in db.execute(select(distinct(Stock.industry)).order_by(Stock.industry)).all()
+        for r in db.execute(
+            select(distinct(Stock.industry))
+            .where(visible_country_clause())
+            .order_by(Stock.industry)
+        ).all()
         if r[0]
     ]
     countries = [
         r[0]
-        for r in db.execute(select(distinct(Stock.country)).order_by(Stock.country)).all()
+        for r in db.execute(
+            select(distinct(Stock.country))
+            .where(visible_country_clause())
+            .order_by(Stock.country)
+        ).all()
         if r[0]
     ]
     indices = [
