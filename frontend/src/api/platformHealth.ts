@@ -17,8 +17,10 @@ export type DataSourceMetric = {
   last_failure_at: number | null;
   last_failure_reason: string | null;
   /** "unavailable" = plan-gated (tutti i fallimenti HTTP 403): slate,
-   *  esclusa dalla derivazione del banner degradato. */
-  health: "healthy" | "degraded" | "failing" | "unavailable" | "idle" | string;
+   *  esclusa dalla derivazione del banner degradato.
+   *  "stale" = nessun successo entro la cadenza attesa della fonte
+   *  (cron/probe morto con contatori congelati sul verde). */
+  health: "healthy" | "degraded" | "failing" | "unavailable" | "idle" | "stale" | string;
   calls_last_minute: number | null;
   calls_last_day: number | null;
   /** Lowercase substrings that identify this source's log lines (module or
@@ -67,6 +69,15 @@ export type CacheKindStat = {
   l2_newest_age_s: number | null;
 };
 
+/** Hint di gap-analysis: un'operazione con TUTTE le fonti in errore/degradate
+ *  + il suggerimento di fallback. Prima viveva sul (rimosso) endpoint
+ *  /api/health/data-sources; ora viaggia dentro il payload piattaforma. */
+export type GapSuggestion = {
+  op: string;
+  why: string;
+  suggestion: string;
+};
+
 export type PlatformHealth = {
   data_sources: DataSourceMetric[];
   yfinance_breaker: Record<string, unknown>;
@@ -76,12 +87,18 @@ export type PlatformHealth = {
     fundamentals: CacheKindStat;
     news: CacheKindStat;
     db: { size_mb: number };
+    /** Freschezza dell'OHLCV memorizzato (quello che leggono gli scan):
+     *  data dell'ultima barra + titoli con barra a quella data. Opzionale
+     *  per retro-compatibilità con payload vecchi. */
+    ohlcv?: { max_date: string | null; stocks_at_max: number };
   };
   /** Rollup calcolato server-side (health_rollup.compute_rollup). Opzionale
    *  per retro-compatibilità: sui payload vecchi il banner ricade sulla
    *  derivazione client. */
   overall?: "operational" | "degraded" | "outage" | string;
   reasons?: string[];
+  /** Hint gap-analysis — vuoto quando ogni operazione ha ≥1 fonte sana. */
+  suggestions?: GapSuggestion[];
 };
 
 export type LogRecord = {

@@ -175,6 +175,12 @@ def compute_rollup(
             # NOTE: health == "unavailable" (plan-gated 403) deliberately
             # does NOT reach here — it must not pin the banner amber.
             degraded.append(f"Fonte {s.role} non operativa: {s.label}")
+        elif s.health == "stale":
+            # Age-based downgrade from source_catalog: the source LOOKS ok
+            # but nothing has confirmed it within its expected cadence
+            # (dead cron / dead probe). Degraded for any role — nothing is
+            # actively erroring, so never an outage.
+            degraded.append(f"Fonte senza conferme recenti (stantia): {s.label}")
 
     # Outage 3 — a running scan stuck past the threshold. Only negative
     # elapsed (clock skew) is excluded; the old >24h guard is GONE — it

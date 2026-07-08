@@ -1,5 +1,5 @@
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Database, Layers } from "lucide-react";
+import { CandlestickChart, Database, Layers } from "lucide-react";
 import type { PlatformHealth, CacheKindStat } from "@/api/platformHealth";
 
 type Props = { cache: PlatformHealth["cache"] };
@@ -107,6 +107,32 @@ export default function CacheCard({ cache }: Props) {
       <CardContent className="p-0 text-sm">
         <CacheSection title="Fundamentals" k={cache.fundamentals} />
         <CacheSection title="News" k={cache.news} />
+        {/* Riga "Dati" (SAL-2): freschezza dell'OHLCV memorizzato — la data
+            dell'ultima barra è ciò che gli scan leggono davvero, quindi è il
+            segnale "i dati sono aggiornati?" più diretto della pagina. */}
+        {cache.ohlcv && (
+          <div className="py-3 px-4 border-b">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-sm font-medium inline-flex items-center gap-1.5">
+                <CandlestickChart className="h-4 w-4" />
+                Dati
+              </span>
+              <span className="text-[11px] text-muted-foreground tabular-nums">
+                {cache.ohlcv.max_date != null ? (
+                  <>
+                    OHLCV aggiornati al{" "}
+                    <span className="font-mono text-foreground/90">{cache.ohlcv.max_date}</span>
+                    {" · "}
+                    <span className="font-mono text-foreground/90">{cache.ohlcv.stocks_at_max}</span>
+                    {" titoli"}
+                  </>
+                ) : (
+                  <span className="italic">nessun dato OHLCV</span>
+                )}
+              </span>
+            </div>
+          </div>
+        )}
         <div className="py-3 px-4 bg-muted/10">
           <div className="flex items-center justify-between">
             <span className="text-sm font-medium inline-flex items-center gap-1.5">

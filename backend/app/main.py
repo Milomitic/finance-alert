@@ -529,33 +529,12 @@ def redownload_ohlcv(
             db.close()
 
 
-@app.get("/api/health/data-sources")
-def data_sources_health(_user: User = Depends(get_current_user)) -> dict[str, object]:
-    """Per-source per-operation success/failure counters + breaker state +
-    gap-analysis suggestions. Useful to spot when a source needs a fallback."""
-    from app.services import data_source_metrics, yfinance_health
-    metrics = data_source_metrics.snapshot()
-    return {
-        "yfinance_breaker": yfinance_health.status(),
-        "metrics": [
-            {
-                "source": m.source,
-                "op": m.op,
-                "success": m.success,
-                "failure": m.failure,
-                "success_rate": m.success_rate,
-                "last_success_at": m.last_success_at,
-                "last_failure_at": m.last_failure_at,
-                "last_failure_reason": m.last_failure_reason,
-                "health": m.health,
-            }
-            for m in metrics
-        ],
-        "suggestions": [
-            {"op": g.op, "why": g.why, "suggestion": g.suggestion}
-            for g in data_source_metrics.analyse_gaps()
-        ],
-    }
+# NOTE: the old GET /api/health/data-sources endpoint was DELETED (audit
+# 2026-07-08): it duplicated /api/platform/health's data_sources snapshot
+# with a poorer shape. Its one unique piece — the gap-analysis
+# `suggestions` — now rides inside the platform payload (see
+# app/api/platform_health.py) and renders as a hint strip on the
+# DataSourcesCard.
 
 
 # Serve built frontend in prod-local mode if dist exists.

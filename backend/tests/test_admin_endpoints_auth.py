@@ -25,9 +25,13 @@ def test_admin_warmup_requires_auth(db):
     assert r.status_code == 401
 
 
-def test_data_sources_health_requires_auth(db):
+def test_data_sources_health_endpoint_was_deleted(db):
+    """GET /api/health/data-sources was removed (audit 2026-07-08): it
+    duplicated /api/platform/health's snapshot; its gap-analysis
+    `suggestions` now ride inside the platform payload. Anything still
+    calling the old URL must get a 404, not a resurrected duplicate."""
     r = _unauthenticated_client(db).get("/api/health/data-sources")
-    assert r.status_code == 401
+    assert r.status_code == 404
 
 
 def test_health_stays_public(db):

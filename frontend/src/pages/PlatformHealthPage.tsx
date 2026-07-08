@@ -296,6 +296,7 @@ export default function PlatformHealthPage() {
         <DataSourcesCard
           metrics={health.data_sources}
           yfinanceBreaker={health.yfinance_breaker}
+          suggestions={health.suggestions ?? []}
           onSelectSource={selectSource}
         />
       )}

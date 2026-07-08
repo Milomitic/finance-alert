@@ -59,6 +59,15 @@ class _Counter:
     # are 403 the classifier reads the source as "unavailable" — a tier/plan
     # limitation, not an outage.
     failure_403: int = 0
+    # Outcome of the LAST batch/call on this (source, op): "ok" | "partial" |
+    # "failed". The health classifier keys on THIS (outcome-of-last-batch
+    # semantics) instead of a time-decayed failure window vs a non-decaying
+    # lifetime rate — the old mix made health flip-flop 60s after a failure
+    # while the rate stayed frozen. Single-call sites set ok/failed via
+    # record_success/record_failure; batch sites (ohlcv, market_cap) report
+    # the whole batch at once via record_batch so a partial batch reads
+    # "partial", not whichever of success/failure happened to be recorded last.
+    last_batch: str | None = None
     last_success_at: float | None = None
     last_failure_at: float | None = None
     last_failure_reason: str | None = None
@@ -89,6 +98,7 @@ def _serialize_locked() -> dict[str, dict]:
             "success": c.success,
             "failure": c.failure,
             "failure_403": c.failure_403,
+            "last_batch": c.last_batch,
             "last_success_at": c.last_success_at,
             "last_failure_at": c.last_failure_at,
             "last_failure_reason": c.last_failure_reason,
@@ -109,6 +119,10 @@ def hydrate_from_dict(data: dict) -> int:
             c.last_success_at = d.get("last_success_at")
             c.last_failure_at = d.get("last_failure_at")
             c.last_failure_reason = d.get("last_failure_reason")
+            # Legacy state files predate last_batch → leave None; the
+            # classifier derives an approximation from the event timestamps.
+            if d.get("last_batch") in ("ok", "partial", "failed"):
+                c.last_batch = d["last_batch"]
             if "failure_403" in d:
                 c.failure_403 = int(d.get("failure_403") or 0)
             elif c.failure > 0 and _HTTP_403_RE.search(c.last_failure_reason or ""):
@@ -147,12 +161,18 @@ def _persist_if_due() -> None:
 
 
 def record_success(source: str, op: str, count: int = 1) -> None:
-    """Record `count` successful fetch operations on (source, op)."""
+    """Record `count` successful fetch operations on (source, op).
+
+    For single-call sites this IS the batch: the last-batch verdict flips
+    to "ok". Batched call sites with mixed outcomes must use record_batch
+    instead, or the verdict would reflect only whichever half was recorded
+    last."""
     now = time.time()
     with _lock:
         c = _counters.setdefault(_key(source, op), _Counter())
         c.success += count
         c.last_success_at = now
+        c.last_batch = "ok"
         # Record one timestamp per call (bounded ring buffer); used by
         # calls_in_window() for rate-limit usage indicators.
         for _ in range(count):
@@ -162,7 +182,8 @@ def record_success(source: str, op: str, count: int = 1) -> None:
 
 def record_failure(source: str, op: str, reason: str = "", count: int = 1) -> None:
     """Record `count` failed fetch operations. `reason` is captured for the
-    most recent failure only (the user just needs the latest hint)."""
+    most recent failure only (the user just needs the latest hint). The
+    last-batch verdict flips to "failed" (see record_success)."""
     now = time.time()
     with _lock:
         c = _counters.setdefault(_key(source, op), _Counter())
@@ -170,10 +191,52 @@ def record_failure(source: str, op: str, reason: str = "", count: int = 1) -> No
         if _HTTP_403_RE.search(reason or ""):
             c.failure_403 += count
         c.last_failure_at = now
+        c.last_batch = "failed"
         if reason:
             # Trim long messages — we only want a hint
             c.last_failure_reason = reason[:200]
         for _ in range(count):
+            c.recent_calls.append(now)
+    _persist_if_due()
+
+
+def record_batch(
+    source: str, op: str, *, succeeded: int, failed: int, reason: str = ""
+) -> None:
+    """Record one BATCH outcome atomically (ohlcv/market_cap style call sites
+    that process N tickers per run). Updates the same per-ticker counters as
+    record_success/record_failure, but stamps a single per-batch verdict:
+
+        succeeded>0, failed==0  → "ok"       (classifier: healthy)
+        succeeded>0, failed>0   → "partial"  (classifier: degraded)
+        succeeded==0, failed>0  → "failed"   (classifier: failing)
+        both zero               → no-op (nothing happened)
+
+    Without this, a partial batch recorded as success-then-failure would
+    read "failed" (or "ok" in the reverse order) — the exact ambiguity the
+    outcome-of-last-batch classifier needs resolved at the call site."""
+    if succeeded <= 0 and failed <= 0:
+        return
+    now = time.time()
+    with _lock:
+        c = _counters.setdefault(_key(source, op), _Counter())
+        if succeeded > 0:
+            c.success += succeeded
+            c.last_success_at = now
+        if failed > 0:
+            c.failure += failed
+            if _HTTP_403_RE.search(reason or ""):
+                c.failure_403 += failed
+            c.last_failure_at = now
+            if reason:
+                c.last_failure_reason = reason[:200]
+        if failed <= 0:
+            c.last_batch = "ok"
+        elif succeeded <= 0:
+            c.last_batch = "failed"
+        else:
+            c.last_batch = "partial"
+        for _ in range(succeeded + failed):
             c.recent_calls.append(now)
     _persist_if_due()
 
@@ -226,27 +289,32 @@ class SourceMetric:
 
 
 def _classify(c: _Counter) -> tuple[float, str]:
+    """Outcome-of-last-batch health. The lifetime success_rate is kept as an
+    INFORMATIONAL figure only (rendered in the UI), never as the classifier
+    input: a non-decaying lifetime average mixed with a 60s failure window
+    made health flip-flop — 'failing' for a minute after any failure, then
+    back to whatever the frozen historical rate said."""
     total = c.success + c.failure
     if total == 0:
         return -1.0, "idle"
     rate = c.success / total
-    # Recent-failure window: if the last failure is in the last 60s and there's
-    # no success after it, downgrade health regardless of historical rate.
-    now = time.time()
-    recent_fail = c.last_failure_at is not None and (now - c.last_failure_at) < 60
-    last_op_was_failure = (
-        c.last_failure_at is not None and (
-            c.last_success_at is None or c.last_failure_at > c.last_success_at
+    verdict = c.last_batch
+    if verdict is None:
+        # Legacy persisted state (pre last_batch): approximate the verdict
+        # from event ordering — if the most recent event was a failure the
+        # last batch failed. Self-corrects on the first new record_* call.
+        last_op_was_failure = (
+            c.last_failure_at is not None and (
+                c.last_success_at is None or c.last_failure_at > c.last_success_at
+            )
         )
-    )
-    if recent_fail and last_op_was_failure:
+        verdict = "failed" if last_op_was_failure else "ok"
+    if verdict == "failed":
         health = "failing"
-    elif rate >= 0.85:
-        health = "healthy"
-    elif rate >= 0.5:
+    elif verdict == "partial":
         health = "degraded"
     else:
-        health = "failing"
+        health = "healthy"
     # Plan-gated override: when EVERY failure was an HTTP 403 the upstream is
     # up but our tier doesn't include the endpoint (finnhub upgrades on the
     # free plan, twelvedata out of plan). Reclassify a would-be

@@ -12,6 +12,7 @@ Rate-limit semantics:
 - Both None: no documented limit (yfinance, SEC EDGAR — they just
   start failing when overused).
 """
+import time
 from dataclasses import dataclass
 
 from app.services import data_source_metrics
@@ -28,6 +29,23 @@ class SourceSpec:
     per_minute: int | None
     per_day: int | None
     notes: str = ""
+    # Expected refresh cadence (seconds). A source whose LAST success is
+    # older than cadence × _STALE_GRACE is downgraded healthy → "stale":
+    # the counters say ok but nothing has confirmed the source within its
+    # own rhythm (probe stopped, cron dead, no organic traffic). None =
+    # on-demand source (fallbacks) — never stale by age.
+    expected_cadence_s: float | None = None
+
+
+# Grace multiplier on expected_cadence_s before "stale" fires — a cron that
+# lands a few minutes late (long previous job, scheduler tick) must not flap.
+_STALE_GRACE = 1.5
+
+# Cadence shorthands for the catalog below.
+_H6 = 6 * 3600.0        # primary yfinance ops: probes every 5-30 min + organic
+                        # traffic — 6h without ANY success means something died
+_H2 = 2 * 3600.0        # FRED: refresh cron every 2h (+5-min probe)
+_WEEK = 7 * 86400.0     # SEC 13F / Dataroma: weekly crons
 
 
 # The full inventory. Adding a new source should land here so the UI
@@ -36,31 +54,38 @@ KNOWN_SOURCES: list[SourceSpec] = [
     # ── yfinance (primary for most ops) ──
     SourceSpec("yfinance", "ohlcv", "Yahoo Finance — OHLCV", "primary",
                per_minute=None, per_day=None,
-               notes="Batch downloader. Probe ogni 30 min (heavy)."),
+               notes="Batch downloader. Probe ogni 30 min (heavy).",
+               expected_cadence_s=_H6),
     SourceSpec("yfinance", "fundamentals", "Yahoo Finance — Fundamentals", "primary",
                per_minute=None, per_day=None,
-               notes="Ticker.info — slow. Probe ogni 30 min."),
+               notes="Ticker.info — slow. Probe ogni 30 min.",
+               expected_cadence_s=_H6),
     SourceSpec("yfinance", "market_cap", "Yahoo Finance — Market Cap", "primary",
                per_minute=None, per_day=None,
-               notes="fast_info.market_cap. Probe ogni 5 min."),
+               notes="fast_info.market_cap. Probe ogni 5 min.",
+               expected_cadence_s=_H6),
     SourceSpec("yfinance", "live_quote", "Yahoo Finance — Live Quote", "primary",
                per_minute=None, per_day=None,
-               notes="fast_info polling (10s cache). Probe ogni 5 min."),
+               notes="fast_info polling (10s cache). Probe ogni 5 min.",
+               expected_cadence_s=_H6),
     SourceSpec("yfinance", "news", "Yahoo Finance — News", "primary",
                per_minute=None, per_day=None,
-               notes="Ticker.news. Probe ogni 5 min."),
+               notes="Ticker.news. Probe ogni 5 min.",
+               expected_cadence_s=_H6),
     SourceSpec("yfinance", "recommendation", "Yahoo Finance — Analyst consensus", "primary",
                per_minute=None, per_day=None,
                notes=("Ticker.recommendations (buy/hold/sell) + upgrades_downgrades "
                       "+ price target — PRIMARIO per il consensus analisti. Finnhub "
                       "(recommendation trends) e Nasdaq (consensus) sono i fallback "
                       "dietro di esso, attivati solo se yfinance torna vuoto/stale. "
-                      "Probe ogni 30 min.")),
+                      "Probe ogni 30 min."),
+               expected_cadence_s=_H6),
     SourceSpec("yfinance", "earnings", "Yahoo Finance — Earnings", "primary",
                per_minute=None, per_day=None,
                notes=("Ticker.earnings_dates — date + EPS attesi/effettivi. PRIMARIO "
                       "per gli earnings; Finnhub e Twelve Data sono i fallback dietro "
-                      "di esso. Probe ogni 30 min.")),
+                      "di esso. Probe ogni 30 min."),
+               expected_cadence_s=_H6),
 
     # ── Fallbacks ──
     # NOTE: no fallback for OHLCV. Stooq required an API key (May 2026)
@@ -108,20 +133,23 @@ KNOWN_SOURCES: list[SourceSpec] = [
     # ── Scheduled / macro ──
     SourceSpec("fred", "macro", "FRED — Macro series", "scheduled",
                per_minute=120, per_day=None,
-               notes="FRED. Job ogni 2h + probe ogni 5 min."),
+               notes="FRED. Job ogni 2h + probe ogni 5 min.",
+               expected_cadence_s=_H2),
     SourceSpec("forexfactory", "consensus", "ForexFactory — Macro consensus", "scheduled",
                per_minute=None, per_day=None,
                notes="XML weekly calendar. Probe HEAD ogni 30 min (reachability)."),
     SourceSpec("sec_13f", "filings", "SEC EDGAR — 13F filings", "scheduled",
                per_minute=None, per_day=None,
-               notes="EDGAR submissions endpoint. Probe ogni 30 min (CIK Berkshire)."),
+               notes="EDGAR submissions endpoint. Probe ogni 30 min (CIK Berkshire).",
+               expected_cadence_s=_WEEK),
     SourceSpec("dataroma", "holdings", "Dataroma — Superinvestors", "scheduled",
                per_minute=None, per_day=None,
                notes=("Scrape HTML dei portafogli superinvestor (indice + "
                       "holdings). Cron sabato 04:00 + catch-up al boot; "
                       "nessun probe dedicato — solo traffico organico, "
                       "quindi può restare 'inattiva' per giorni tra un "
-                      "refresh e l'altro.")),
+                      "refresh e l'altro."),
+               expected_cadence_s=_WEEK),
     SourceSpec("nasdaq", "premarket", "Nasdaq — Pre-market volume", "scheduled",
                per_minute=None, per_day=None,
                notes=("Endpoint non ufficiale api.nasdaq.com (no key). "
@@ -176,7 +204,10 @@ class SourceWithUsage:
     last_success_at: float | None
     last_failure_at: float | None
     last_failure_reason: str | None
-    health: str               # "healthy" | "degraded" | "failing" | "unavailable" | "idle"
+    # "healthy" | "degraded" | "failing" | "unavailable" | "idle" | "stale"
+    # ("stale" is applied HERE, not in data_source_metrics: it needs the
+    # per-source expected cadence, which is catalog knowledge).
+    health: str
     # Sliding-window usage. Only computed for sources with a declared limit;
     # None for unrestricted sources so the UI can render "—".
     calls_last_minute: int | None
@@ -202,8 +233,23 @@ def full_snapshot() -> list[SourceWithUsage]:
     }
 
     out: list[SourceWithUsage] = []
+    now = time.time()
     for spec in KNOWN_SOURCES:
         m = live.get((spec.source, spec.op)) or _zero_metric(spec.source, spec.op)
+
+        # Staleness decay: a source that LOOKS healthy but whose last success
+        # is older than its expected cadence (× grace) is downgraded to
+        # "stale" — the dead-cron / dead-probe mode where counters freeze
+        # green forever. Distinct from "failing" (nothing is erroring, data
+        # is just not being confirmed) and from "idle" (never called at all).
+        health = m.health
+        if (
+            spec.expected_cadence_s is not None
+            and health == "healthy"
+            and m.last_success_at is not None
+            and (now - m.last_success_at) > spec.expected_cadence_s * _STALE_GRACE
+        ):
+            health = "stale"
 
         # Only compute usage for sources with a known limit (saves the
         # ring-buffer scan when not needed). Compute the appropriate
@@ -228,7 +274,7 @@ def full_snapshot() -> list[SourceWithUsage]:
             last_success_at=m.last_success_at,
             last_failure_at=m.last_failure_at,
             last_failure_reason=m.last_failure_reason,
-            health=m.health,
+            health=health,
             calls_last_minute=calls_last_minute,
             calls_last_day=calls_last_day,
         ))
