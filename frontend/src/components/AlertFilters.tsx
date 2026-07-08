@@ -1,6 +1,8 @@
 import { Filter, Search, X } from "lucide-react";
+import { useState } from "react";
 
 import type { AlertListParams } from "@/api/alerts";
+import { formatShortDate } from "@/lib/alertDates";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -60,6 +62,43 @@ const TONE_OPTIONS: { value: string; label: string }[] = [
   { value: "bear", label: "Ribassista" },
 ];
 
+/* ─── Periodo (date_from/date_to) ────────────────────────────────────────
+ * Compact period presets over the API's date_from/date_to params (which
+ * existed but had no UI control — SEG-1 audit item 5). Presets set
+ * date_from only; "personalizzato" exposes both bounds as date inputs.
+ * date_to is INCLUSIVE here — the api layer converts to the backend's
+ * exclusive `< date_to` by sending the day after. */
+
+const PERIOD_OPTIONS: { value: string; label: string }[] = [
+  { value: "tutti",  label: "Tutti" },
+  { value: "oggi",   label: "Oggi" },
+  { value: "7g",     label: "Ultimi 7 giorni" },
+  { value: "30g",    label: "Ultimi 30 giorni" },
+  { value: "custom", label: "Personalizzato" },
+];
+
+/** ISO date (YYYY-MM-DD, local calendar) N days ago. */
+function isoDaysAgo(n: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return d.toLocaleDateString("en-CA");
+}
+
+/** Derive the select value from the current params — presets are recognised
+ *  by their exact date_from (so URL-hydrated state round-trips); anything
+ *  else with a bound set reads as "custom". `customFlag` keeps the custom
+ *  inputs visible while the user hasn't typed any date yet. */
+function derivePeriod(p: AlertListParams, customFlag: boolean): string {
+  if (customFlag) return "custom";
+  if (!p.date_from && !p.date_to) return "tutti";
+  if (!p.date_to) {
+    if (p.date_from === isoDaysAgo(0)) return "oggi";
+    if (p.date_from === isoDaysAgo(7)) return "7g";
+    if (p.date_from === isoDaysAgo(30)) return "30g";
+  }
+  return "custom";
+}
+
 /** Small "active filter" chip with an X to clear that single filter. Used
  *  to surface what's currently applied so the user can scan filters at
  *  a glance and dismiss them one at a time. */
@@ -101,7 +140,44 @@ export function AlertFilters({ value, onChange }: Props) {
 
   const status = paramsToStatus(value);
 
+  // "Personalizzato" selected but no date typed yet — keeps the two date
+  // inputs on screen (derivePeriod alone would fall back to "tutti").
+  const [customPeriod, setCustomPeriod] = useState(false);
+  const period = derivePeriod(value, customPeriod);
+
+  const onPeriodChange = (v: string) => {
+    if (v === "custom") {
+      setCustomPeriod(true);
+      return; // keep whatever dates are set; user edits them below
+    }
+    setCustomPeriod(false);
+    if (v === "tutti") {
+      onChange({ ...value, date_from: undefined, date_to: undefined });
+    } else if (v === "oggi") {
+      onChange({ ...value, date_from: isoDaysAgo(0), date_to: undefined });
+    } else if (v === "7g") {
+      onChange({ ...value, date_from: isoDaysAgo(7), date_to: undefined });
+    } else if (v === "30g") {
+      onChange({ ...value, date_from: isoDaysAgo(30), date_to: undefined });
+    }
+  };
+
+  const clearPeriod = () => {
+    setCustomPeriod(false);
+    onChange({ ...value, date_from: undefined, date_to: undefined });
+  };
+
+  // Chip label for the active period. Presets get their friendly label;
+  // custom ranges show the actual bounds.
+  const periodLabel =
+    period === "custom"
+      ? `${value.date_from ? `dal ${formatShortDate(value.date_from)}` : ""}${
+          value.date_from && value.date_to ? " " : ""
+        }${value.date_to ? `al ${formatShortDate(value.date_to)}` : ""}`.trim()
+      : (PERIOD_OPTIONS.find((o) => o.value === period)?.label ?? period);
+
   const reset = () => {
+    setCustomPeriod(false);
     onChange({ archived: false });
   };
 
@@ -125,7 +201,8 @@ export function AlertFilters({ value, onChange }: Props) {
     (value.tone ? 1 : 0) +
     (value.strength_min != null ? 1 : 0) +
     (value.probability_min != null ? 1 : 0) +
-    (value.nature ? 1 : 0);
+    (value.nature ? 1 : 0) +
+    (value.date_from || value.date_to ? 1 : 0);
 
   return (
     <Card>
@@ -151,9 +228,10 @@ export function AlertFilters({ value, onChange }: Props) {
         />
 
         {/* Filters laid out horizontally (responsive grid) so the card stays
-            short — was a tall vertical stack. Wraps to 2-3 cols on narrow
-            viewports, single row on lg+. */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+            short — was a tall vertical stack. Wraps to 2-4 cols on narrow
+            viewports, single row on xl+ (7 controls since the Periodo
+            select landed). */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3">
         <div>
           <Label className="text-xs uppercase tracking-wider text-muted-foreground">
             Archivio
@@ -219,6 +297,26 @@ export function AlertFilters({ value, onChange }: Props) {
               {TONE_OPTIONS.map((t) => (
                 <SelectItem key={t.value} value={t.value}>
                   {t.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Periodo — presets su date_from (Oggi / 7g / 30g) + range custom.
+            "tutti" clears both bounds. */}
+        <div>
+          <Label className="text-xs uppercase tracking-wider text-muted-foreground">
+            Periodo
+          </Label>
+          <Select value={period} onValueChange={onPeriodChange}>
+            <SelectTrigger className="mt-1">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {PERIOD_OPTIONS.map((o) => (
+                <SelectItem key={o.value} value={o.value}>
+                  {o.label}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -310,6 +408,45 @@ export function AlertFilters({ value, onChange }: Props) {
         </div>
         </div>
 
+        {/* Range personalizzato — due date input nativi (dal / al). Visibile
+            solo con Periodo = Personalizzato. "Al" è INCLUSIVO (la
+            conversione all'esclusivo del backend avviene nel layer api). */}
+        {period === "custom" && (
+          <div className="flex items-end gap-3 flex-wrap">
+            <div>
+              <Label className="text-xs uppercase tracking-wider text-muted-foreground">
+                Dal
+              </Label>
+              <input
+                type="date"
+                value={value.date_from ?? ""}
+                max={value.date_to ?? undefined}
+                onChange={(e) =>
+                  onChange({ ...value, date_from: e.target.value || undefined })
+                }
+                className="mt-1 block h-9 px-2 rounded border border-input bg-transparent text-sm tabular-nums focus:outline-none"
+              />
+            </div>
+            <div>
+              <Label className="text-xs uppercase tracking-wider text-muted-foreground">
+                Al
+              </Label>
+              <input
+                type="date"
+                value={value.date_to ?? ""}
+                min={value.date_from ?? undefined}
+                onChange={(e) =>
+                  onChange({ ...value, date_to: e.target.value || undefined })
+                }
+                className="mt-1 block h-9 px-2 rounded border border-input bg-transparent text-sm tabular-nums focus:outline-none"
+              />
+            </div>
+            <span className="text-xs text-muted-foreground italic pb-2">
+              Estremi inclusi; lascia vuoto un campo per un limite aperto.
+            </span>
+          </div>
+        )}
+
         {/* Active-filter chip row — shows what's applied so the user can
             scan filters at a glance and dismiss any one of them by clicking
             its X. Hidden when nothing is filtered. */}
@@ -396,6 +533,18 @@ export function AlertFilters({ value, onChange }: Props) {
                   </>
                 }
                 onClear={() => onChange({ ...value, probability_min: undefined })}
+                className="bg-muted text-foreground border-border"
+              />
+            )}
+            {(value.date_from || value.date_to) && (
+              <FilterChip
+                label={
+                  <>
+                    <span className="text-muted-foreground/80">Periodo:</span>{" "}
+                    {periodLabel}
+                  </>
+                }
+                onClear={clearPeriod}
                 className="bg-muted text-foreground border-border"
               />
             )}

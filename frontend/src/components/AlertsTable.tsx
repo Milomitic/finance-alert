@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, ArrowUpDown, Check, Clock, X } from "lucide-react";
+import { Archive, ArchiveRestore, ArrowDown, ArrowUp, ArrowUpDown, Check, Clock, X } from "lucide-react";
 import { type MouseEvent, useState } from "react";
 import { Link } from "react-router-dom";
 
@@ -77,6 +77,10 @@ interface Props {
   sortDir?: "asc" | "desc";
   /** Called when a sortable header is clicked (non-embedded only). */
   onSort?: (col: string) => void;
+  /** Per-row archive/unarchive action (non-embedded only). When provided, a
+   *  hover-visible icon appears at the row end; clicking it toggles the
+   *  archived state without opening the detail dialog. */
+  onArchiveToggle?: (alert: Alert) => void;
 }
 
 /** Small local sortable column header — same pattern as StockBrowserTable
@@ -138,6 +142,7 @@ export function AlertsTable({
   sortBy = "triggered_at",
   sortDir = "desc",
   onSort,
+  onArchiveToggle,
 }: Props) {
   const allSelected = alerts.length > 0 && alerts.every((a) => selectedIds.has(a.id));
 
@@ -174,12 +179,16 @@ export function AlertsTable({
   const showForza = embedded || isVisible("forza");
   const showProbabilita = embedded || isVisible("probabilita");
   const showEsito = embedded || isVisible("esito");
+  // Archive action column: always-on when the callback is wired (full page),
+  // never in embedded mode — like the checkbox, it's an action, not data,
+  // so it doesn't participate in the column-visibility menu.
+  const showArchive = !embedded && !!onArchiveToggle;
 
   // colSpan for the empty-state row must match the visible column count.
   const colSpan = [
     showCheckbox, showDataSegnale, showRilevato, showTitolo, showRegola,
     showCatena, showNatura, showTono, showOrizzonte, showForza, showProbabilita,
-    showEsito,
+    showEsito, showArchive,
   ].filter(Boolean).length;
 
   // Per user spec: header cells at 1rem (text-base), body rows at
@@ -351,6 +360,10 @@ export function AlertsTable({
               Esito
             </TableHead>
           )}
+          {showArchive && (
+            /* Action column — empty header, fixed narrow width. */
+            <TableHead className="w-10 text-base" aria-label="Azioni" />
+          )}
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -367,7 +380,7 @@ export function AlertsTable({
           </TableRow>
         )}
         {alerts.map((a) => (
-          <TableRow key={a.id} className="cursor-pointer" onClick={() => onRowClick(a)}>
+          <TableRow key={a.id} className="cursor-pointer group" onClick={() => onRowClick(a)}>
             {showCheckbox && (
               <TableCell onClick={(e) => e.stopPropagation()}>
                 <Checkbox
@@ -597,6 +610,26 @@ export function AlertsTable({
                   }
                   return null;
                 })()}
+              </TableCell>
+            )}
+            {/* Archivia/Disarchivia — hover-visible icon at the row end.
+                stopPropagation on the CELL (same pattern as the checkbox
+                cell) so a click never opens the detail dialog. */}
+            {showArchive && (
+              <TableCell onClick={(e) => e.stopPropagation()} className="w-10">
+                <button
+                  type="button"
+                  onClick={() => onArchiveToggle?.(a)}
+                  title={a.archived_at ? "Disarchivia segnale" : "Archivia segnale"}
+                  aria-label={a.archived_at ? "Disarchivia segnale" : "Archivia segnale"}
+                  className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-accent transition-colors opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+                >
+                  {a.archived_at ? (
+                    <ArchiveRestore className="h-4 w-4" />
+                  ) : (
+                    <Archive className="h-4 w-4" />
+                  )}
+                </button>
               </TableCell>
             )}
           </TableRow>

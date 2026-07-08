@@ -77,14 +77,23 @@ export function daysBetween(
   return Math.round(ms / (1000 * 60 * 60 * 24));
 }
 
+/** Calendar-day delta above which detection counts as "in ritardo".
+ *  Was 1 — but the daily scan legitimately lands 1-3 calendar days after
+ *  the bar (weekend ≈ 2 days + one skipped scan), so ~93% of alerts wore
+ *  the orange chip and it stopped meaning anything (alarm fatigue, audit
+ *  2026-07-08). 4+ days can't be explained by a weekend alone → a real
+ *  backfill / outage worth flagging. The exact +Ng delta stays visible in
+ *  the tooltip regardless of the chip. */
+export const DELAYED_DETECTION_MIN_DAYS = 4;
+
 /** True when the system noticed an alert noticeably later than the signal
- *  date (>= 1 calendar day). Used to highlight stale-detection cases in
- *  the UI so a user doesn't think "fresh alert" when the underlying bar
- *  is days old. */
+ *  date (>= DELAYED_DETECTION_MIN_DAYS calendar days). Used to highlight
+ *  stale-detection cases in the UI so a user doesn't think "fresh alert"
+ *  when the underlying bar is days old. */
 export function isDelayedDetection(
   triggeredAt: string | null | undefined,
   signalDate: string | null | undefined,
 ): boolean {
   const d = daysBetween(triggeredAt, signalDate);
-  return d != null && d >= 1;
+  return d != null && d >= DELAYED_DETECTION_MIN_DAYS;
 }

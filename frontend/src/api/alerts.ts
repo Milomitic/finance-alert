@@ -54,13 +54,25 @@ export interface AlertListParams {
   probability_min?: number;
   /** Signal nature: 'continuazione' | 'inversione'. */
   nature?: string;
-  date_from?: string; // ISO date
+  date_from?: string; // ISO date (inclusive)
+  /** ISO date, INCLUSIVE on the client ("fino al giorno X compreso"). The
+   *  backend filter is exclusive (`triggered_at < date_to`), so `toQuery`
+   *  sends the day AFTER at the wire boundary. */
   date_to?: string;
   archived?: boolean;
   limit?: number;
   offset?: number;
   sort_by?: string;
   sort_dir?: "asc" | "desc";
+}
+
+/** Day after an ISO date (local calendar). Used to convert the UI's
+ *  inclusive date_to into the backend's exclusive `< date_to` filter. */
+function isoDayAfter(iso: string): string {
+  const d = new Date(`${iso}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return iso;
+  d.setDate(d.getDate() + 1);
+  return d.toLocaleDateString("en-CA"); // YYYY-MM-DD
 }
 
 function toQuery(params: AlertListParams): string {
@@ -73,7 +85,7 @@ function toQuery(params: AlertListParams): string {
   if (params.probability_min !== undefined) sp.set("probability_min", String(params.probability_min));
   if (params.nature) sp.set("nature", params.nature);
   if (params.date_from) sp.set("date_from", params.date_from);
-  if (params.date_to) sp.set("date_to", params.date_to);
+  if (params.date_to) sp.set("date_to", isoDayAfter(params.date_to));
   if (params.archived !== undefined) sp.set("archived", String(params.archived));
   if (params.limit !== undefined) sp.set("limit", String(params.limit));
   if (params.offset !== undefined) sp.set("offset", String(params.offset));

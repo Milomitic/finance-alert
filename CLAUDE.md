@@ -384,8 +384,11 @@ Every alert has two dates (since commit `e22bec5`):
 - `triggered_at` (DateTime): wall-clock when the row was created
 
 The two diverge meaningfully on backfill / weekend / skipped scans. UI
-distinguishes them via `lib/alertDates.ts:isDelayedDetection` (≥ 1 calendar
-day delta → orange clock chip + "in ritardo" label).
+distinguishes them via `lib/alertDates.ts:isDelayedDetection` (≥ 4 calendar
+days delta → orange clock chip + "in ritardo" label; the threshold was
+raised from 1 in 2026-07 because weekend + normal scan cadence made ~93%
+of alerts wear the chip — alarm fatigue). The exact +Ng delta always stays
+in the tooltip.
 
 Legacy alerts predate the column → `signal_date = null`. UI falls back to
 `triggered_at` and shows "—" or "n/d · legacy" for the signal slot.
