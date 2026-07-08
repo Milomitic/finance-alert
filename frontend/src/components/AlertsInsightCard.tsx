@@ -91,7 +91,15 @@ function TopHeader() {
   );
 }
 
-function TopRow({ c, rank }: { c: Confluence; rank: number }) {
+function TopRow({
+  c,
+  rank,
+  onSelect,
+}: {
+  c: Confluence;
+  rank: number;
+  onSelect?: (ticker: string) => void;
+}) {
   const pct = Math.round(c.strength);
   const bull = c.direction === "bull";
   // Strongest component's Forza (prefer `strength`, legacy fallback `confidence`).
@@ -102,10 +110,21 @@ function TopRow({ c, rank }: { c: Confluence; rank: number }) {
       : null;
   return (
     <li>
-      <Link
-        to={`/stocks/${encodeURIComponent(c.ticker)}`}
-        className="flex items-center gap-2 px-2 py-1 rounded-md hover:bg-accent/50 transition-colors min-w-0"
-        title={`${c.name ?? c.ticker} · forza confluenza ${pct} · forza max ${maxForza ?? "—"} · ${c.n_signals} segnali${c.effective_n != null ? ` (${c.effective_n} indip.)` : ""}${c.multi_horizon ? " · multi-orizzonte" : ""}${c.contested ? " · conteso" : ""}`}
+      {/* Row click = drill-down: filters the alerts table below to this
+          ticker (the row used to be a dead-end nav-only Link). The ticker
+          TEXT keeps the stock-detail navigation, with stopPropagation. */}
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={() => onSelect?.(c.ticker)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onSelect?.(c.ticker);
+          }
+        }}
+        className="flex items-center gap-2 px-2 py-1 rounded-md hover:bg-accent/50 transition-colors min-w-0 cursor-pointer"
+        title={`${c.name ?? c.ticker} · forza confluenza ${pct} · forza max ${maxForza ?? "—"} · ${c.n_signals} segnali${c.effective_n != null ? ` (${c.effective_n} indip.)` : ""}${c.multi_horizon ? " · multi-orizzonte" : ""}${c.contested ? " · conteso" : ""} — clic per filtrare la tabella`}
       >
         <span className="w-4 shrink-0 text-right text-xs font-mono tabular-nums text-muted-foreground/60">{rank}</span>
         {/* Titolo — logo + ticker + name in ONE flex-1 cell so the meta columns
@@ -113,7 +132,14 @@ function TopRow({ c, rank }: { c: Confluence; rank: number }) {
         <div className="flex-1 min-w-0 flex items-center gap-2">
           <StockLogo ticker={c.ticker} size="xs" />
           <div className="min-w-0">
-            <div className="text-sm font-bold tabular-nums leading-tight">{c.ticker}</div>
+            <Link
+              to={`/stocks/${encodeURIComponent(c.ticker)}`}
+              onClick={(e) => e.stopPropagation()}
+              className="text-sm font-bold tabular-nums leading-tight hover:underline block"
+              title={`Vai al dettaglio di ${c.ticker}`}
+            >
+              {c.ticker}
+            </Link>
             {c.name && (
               <div className="text-[11px] text-muted-foreground truncate leading-tight" title={c.name}>{c.name}</div>
             )}
@@ -146,14 +172,23 @@ function TopRow({ c, rank }: { c: Confluence; rank: number }) {
           <StrengthBar value={pct} bull={bull} width="w-12" />
           <span className="text-sm font-semibold tabular-nums w-7 text-right">{pct}</span>
         </div>
-      </Link>
+      </div>
     </li>
   );
 }
 
 /* Directional extreme — the strongest cluster on one side. Compact bordered
-   cell for the top strip. */
-function ExtremeCell({ label, c }: { label: string; c: Confluence | undefined }) {
+   cell for the top strip. Same drill-down semantics as TopRow: cell click
+   filters the table, ticker text navigates to the stock detail. */
+function ExtremeCell({
+  label,
+  c,
+  onSelect,
+}: {
+  label: string;
+  c: Confluence | undefined;
+  onSelect?: (ticker: string) => void;
+}) {
   if (!c) {
     return (
       <div className="flex items-center gap-2 rounded-lg border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
@@ -164,20 +199,35 @@ function ExtremeCell({ label, c }: { label: string; c: Confluence | undefined })
   }
   const bull = c.direction === "bull";
   return (
-    <Link
-      to={`/stocks/${encodeURIComponent(c.ticker)}`}
-      className="flex items-center gap-2 rounded-lg border bg-muted/30 px-3 py-2 hover:bg-accent/40 transition-colors min-w-0"
-      title={`${c.ticker} · forza ${Math.round(c.strength)} · ${c.n_signals} segnali`}
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={() => onSelect?.(c.ticker)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onSelect?.(c.ticker);
+        }
+      }}
+      className="flex items-center gap-2 rounded-lg border bg-muted/30 px-3 py-2 hover:bg-accent/40 transition-colors min-w-0 cursor-pointer"
+      title={`${c.ticker} · forza ${Math.round(c.strength)} · ${c.n_signals} segnali — clic per filtrare la tabella`}
     >
       <span className="uppercase tracking-wider text-[11px] text-muted-foreground shrink-0">{label}</span>
       <StockLogo ticker={c.ticker} size="xs" />
-      <span className="font-bold text-sm shrink-0">{c.ticker}</span>
+      <Link
+        to={`/stocks/${encodeURIComponent(c.ticker)}`}
+        onClick={(e) => e.stopPropagation()}
+        className="font-bold text-sm shrink-0 hover:underline"
+        title={`Vai al dettaglio di ${c.ticker}`}
+      >
+        {c.ticker}
+      </Link>
       {c.name && <span className="text-[11px] text-muted-foreground truncate min-w-0">{c.name}</span>}
       <DirPill direction={c.direction} className="ml-auto" />
       <span className={cn("font-bold tabular-nums shrink-0", bull ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400")}>
         {Math.round(c.strength)}
       </span>
-    </Link>
+    </div>
   );
 }
 
@@ -257,7 +307,17 @@ function DetectorMix({ clusters }: { clusters: Confluence[] }) {
   );
 }
 
-export function AlertsInsightCard({ clusters, loading }: { clusters: Confluence[]; loading?: boolean }) {
+export function AlertsInsightCard({
+  clusters,
+  loading,
+  onTickerSelect,
+}: {
+  clusters: Confluence[];
+  loading?: boolean;
+  /** Drill-down: called with the cluster's ticker so the page can filter
+   *  the alerts table below (SEG-1 audit: rows were dead ends). */
+  onTickerSelect?: (ticker: string) => void;
+}) {
   const top10 = clusters.slice(0, 10);
   const bull = clusters.filter((c) => c.direction === "bull");
   const bear = clusters.filter((c) => c.direction === "bear");
@@ -285,8 +345,8 @@ export function AlertsInsightCard({ clusters, loading }: { clusters: Confluence[
           <>
             {/* Directional extremes — both on one row, top-left. */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-w-3xl mb-4">
-              <ExtremeCell label="Top long" c={bull[0]} />
-              <ExtremeCell label="Top short" c={bear[0]} />
+              <ExtremeCell label="Top long" c={bull[0]} onSelect={onTickerSelect} />
+              <ExtremeCell label="Top short" c={bear[0]} onSelect={onTickerSelect} />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-7 gap-y-5 items-stretch">
@@ -296,7 +356,12 @@ export function AlertsInsightCard({ clusters, loading }: { clusters: Confluence[
                 <TopHeader />
                 <ul className="space-y-0.5">
                   {top10.map((c, i) => (
-                    <TopRow key={`${c.ticker}-${c.direction}`} c={c} rank={i + 1} />
+                    <TopRow
+                      key={`${c.ticker}-${c.direction}`}
+                      c={c}
+                      rank={i + 1}
+                      onSelect={onTickerSelect}
+                    />
                   ))}
                 </ul>
               </div>

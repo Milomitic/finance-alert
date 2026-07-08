@@ -1,4 +1,6 @@
 import {
+  Archive,
+  ArchiveRestore,
   CalendarClock,
   CalendarRange,
   Check,
@@ -20,6 +22,7 @@ import { SignalChartSvg } from "@/components/SignalChartSvg";
 import { SignalSnapshotView } from "@/components/SignalSnapshotView";
 import { PlaybookView } from "@/components/PlaybookView";
 import { TrackTradeForm } from "@/components/TrackTradeForm";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -27,6 +30,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { usePatchAlert } from "@/hooks/useAlertMutations";
 import { useHolderCounts } from "@/hooks/useInstitutionals";
 import { useSignalOhlcv } from "@/hooks/useSignalOhlcv";
 import { daysBetween, isDelayedDetection } from "@/lib/alertDates";
@@ -146,6 +150,9 @@ export function AlertDetailDialog({ alert, onClose }: Props) {
   // Smart-money badge: batch endpoint with a single-ticker "batch".
   // Empty array = disabled query (hooks must run unconditionally).
   const holderCounts = useHolderCounts(alert?.ticker ? [alert.ticker] : []);
+  // Archivia/Disarchivia from the header — patches, then closes the dialog
+  // (the list query is invalidated by the hook, so the row leaves the view).
+  const patchAlert = usePatchAlert();
 
   if (!alert) {
     return <Dialog open={false} onOpenChange={(open) => !open && onClose()} />;
@@ -241,6 +248,35 @@ export function AlertDetailDialog({ alert, onClose }: Props) {
                   Rivisto {formatRelative(amendedAt)}
                 </div>
               )}
+              {/* Archivia/Disarchivia — patcha e chiude. La lista si aggiorna
+                  via invalidazione della query (hook usePatchAlert). */}
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-2 h-7 text-xs"
+                disabled={patchAlert.isPending}
+                onClick={() =>
+                  patchAlert.mutate(
+                    { id: alert.id, archived: !isArchived },
+                    { onSuccess: () => onClose() },
+                  )
+                }
+                title={
+                  isArchived
+                    ? "Ripristina il segnale nella vista principale"
+                    : "Sposta il segnale nell'archivio"
+                }
+              >
+                {isArchived ? (
+                  <>
+                    <ArchiveRestore className="h-3.5 w-3.5 mr-1" /> Disarchivia
+                  </>
+                ) : (
+                  <>
+                    <Archive className="h-3.5 w-3.5 mr-1" /> Archivia
+                  </>
+                )}
+              </Button>
             </div>
           </div>
           <DialogTitle className="text-2xl flex items-baseline gap-2 flex-wrap">

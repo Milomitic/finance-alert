@@ -10,6 +10,23 @@ function describeError(err: unknown, fallback: string): string {
   return fallback;
 }
 
+/** Archive / unarchive a SINGLE alert (the per-row hover icon + the button
+ *  in the detail dialog). Invalidates the alerts list so the row leaves the
+ *  current view immediately (default view excludes archived). */
+export function usePatchAlert() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { id: number; archived: boolean }) =>
+      alerts.patch(vars.id, { archived: vars.archived }),
+    onSuccess: (_data, vars) => {
+      toast.success(vars.archived ? "Segnale archiviato" : "Segnale ripristinato");
+      qc.invalidateQueries({ queryKey: ["alerts"] });
+    },
+    onError: (err) =>
+      toast.error(describeError(err, "Errore aggiornamento segnale")),
+  });
+}
+
 export function useBulkAlerts() {
   const qc = useQueryClient();
   return useMutation({
