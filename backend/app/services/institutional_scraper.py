@@ -79,6 +79,10 @@ class ScrapedFiling:
     code: str
     period_end_date: date | None  # parsed from the page header
     total_value_usd: int | None
+    # Date the filing was PUBLISHED (SEC EDGAR `filingDate`). Only the
+    # SEC 13F path populates it; Dataroma doesn't expose it → stays None
+    # and `institutional_filings.filed_date` persists as NULL.
+    filed_date: date | None = None
     holdings: list[ScrapedHolding] = field(default_factory=list)
 
 

@@ -193,6 +193,9 @@ def upsert_filing(
         row = InstitutionalFiling(
             institutional_id=institutional.id,
             period_end_date=period_end,
+            # SEC path threads EDGAR's filingDate; Dataroma doesn't
+            # expose one → the DTO default (None) persists as NULL.
+            filed_date=filing.filed_date,
             total_value_usd=filing.total_value_usd,
             total_positions=len(filing.holdings) or None,
         )
@@ -208,6 +211,10 @@ def upsert_filing(
     )
     existing.total_value_usd = filing.total_value_usd
     existing.total_positions = len(filing.holdings) or None
+    # Only overwrite with a KNOWN filed_date — a Dataroma re-scrape of a
+    # period must not null out a previously-threaded SEC date.
+    if filing.filed_date is not None:
+        existing.filed_date = filing.filed_date
     db.flush()
     return existing, False
 

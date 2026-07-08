@@ -23,12 +23,15 @@ Aggregation note:
   (Buffett vs Combs vs Weschler at Berkshire). The parser SUMs shares
   + value per CUSIP and emits a single ScrapedHolding per position.
 
-CUSIP→ticker resolution:
-- 13F gives us CUSIP + nameOfIssuer, NOT ticker. We resolve via name
-  match against `Stock.name` in our catalog (normalized: uppercase,
-  strip "INC"/"CORP"/"LLC"). When match fails, ticker is set to
-  the CUSIP itself (rendered as text-only in the UI — same code
-  path as off-catalog Dataroma tickers).
+CUSIP→ticker resolution (three passes — see the resolution section below):
+- 13F gives us CUSIP + nameOfIssuer, NOT ticker. Pass 0 checks the
+  persisted `cusip_ticker_map` table (cumulative across runs); pass 1
+  name-matches against `Stock.name` in our catalog; pass 2 name-matches
+  against SEC's company_tickers.json (~10k registrants, fetched once
+  per refresh run). Successful pass-1/2 hits are written back to
+  `cusip_ticker_map`. When all passes fail, ticker is set to the CUSIP
+  itself (rendered as text-only in the UI — same code path as
+  off-catalog Dataroma tickers).
 
 Q/Q deltas:
 - 13F-HR doesn't include Q/Q deltas in the XML. We compute them at
@@ -200,8 +203,49 @@ def fetch_latest_13f_filing(fund: CuratedFund) -> ScrapedFiling | None:
         code=fund.slug,
         period_end_date=report_date,
         total_value_usd=total_value,
+        filed_date=filing_date,
         holdings=holdings,
     )
+
+
+def fetch_13f_history(
+    fund: CuratedFund, quarters: int = 5
+) -> list[ScrapedFiling]:
+    """Fetch the last `quarters` 13F-HR filings for `fund`, OLDEST-FIRST.
+
+    Oldest-first ordering lets the persist path chain Q/Q deltas
+    naturally (filing k's baseline — filing k-1 — is already in the DB
+    when k is ingested). Filings whose info-table fetch/parse fails are
+    skipped with a warning; the survivors keep their relative order.
+    Used by `app.scripts.backfill_13f_history` (one-shot backfill).
+    """
+    submissions = _http_get_json(_SUBMISSIONS_URL.format(cik=fund.cik))
+    if submissions is None:
+        return []
+    entries = _find_recent_13fs(submissions, limit=quarters)
+
+    out: list[ScrapedFiling] = []
+    for accession, report_date, filing_date in reversed(entries):  # oldest first
+        info_table_xml = _fetch_info_table_xml(fund.cik, accession)
+        if info_table_xml is None:
+            logger.warning(
+                f"[sec_13f] {fund.slug}: info table fetch failed for "
+                f"{accession} (period {report_date}) — skipping"
+            )
+            continue
+        holdings = _aggregate_by_cusip(list(_parse_info_table(info_table_xml)))
+        total_value = sum(h.value_usd or 0 for h in holdings) or None
+        out.append(
+            ScrapedFiling(
+                code=fund.slug,
+                period_end_date=report_date,
+                total_value_usd=total_value,
+                filed_date=filing_date,
+                holdings=holdings,
+            )
+        )
+        time.sleep(_POLITE_DELAY_SEC)
+    return out
 
 
 def fetch_all_curated() -> list[tuple[ScrapedManager, ScrapedFiling | None]]:
@@ -267,11 +311,16 @@ def _http_get_text(url: str) -> str | None:
         return None
 
 
-def _find_latest_13f(submissions: dict) -> tuple[str | None, date | None, date | None]:
-    """Walk submissions["filings"]["recent"] and return the (accession,
-    report_date, filing_date) of the most recent 13F-HR.
+def _find_recent_13fs(
+    submissions: dict, limit: int | None = None
+) -> list[tuple[str, date | None, date | None]]:
+    """Walk submissions["filings"]["recent"] and return up to `limit`
+    (accession, report_date, filing_date) tuples for 13F-HR filings,
+    NEWEST-FIRST (EDGAR's native ordering).
 
-    Returns (None, None, None) if no 13F-HR is in the recent slice.
+    - 13F-HR/A amendments are skipped (would double-count the original).
+    - Restated 13F-HRs for the SAME reportDate are deduped keeping the
+      newest (first encountered) — EDGAR occasionally carries both.
     `recent` is bounded to the last ~1000 filings; for our funds that's
     decades of history, more than enough."""
     recent = submissions.get("filings", {}).get("recent", {})
@@ -280,15 +329,31 @@ def _find_latest_13f(submissions: dict) -> tuple[str | None, date | None, date |
     report_dates: list[str] = recent.get("reportDate", [])
     filing_dates: list[str] = recent.get("filingDate", [])
 
-    # 13F-HR is the standard filer; 13F-HR/A is an amendment (we skip
-    # amendments to avoid double-counting against the original).
+    out: list[tuple[str, date | None, date | None]] = []
+    seen_periods: set[date] = set()
     for i, form in enumerate(forms):
-        if form == "13F-HR":
-            acc = accessions[i] if i < len(accessions) else None
-            rd = _parse_iso_date(report_dates[i] if i < len(report_dates) else "")
-            fd = _parse_iso_date(filing_dates[i] if i < len(filing_dates) else "")
-            return acc, rd, fd
-    return None, None, None
+        if form != "13F-HR":
+            continue
+        acc = accessions[i] if i < len(accessions) else None
+        if not acc:
+            continue
+        rd = _parse_iso_date(report_dates[i] if i < len(report_dates) else "")
+        fd = _parse_iso_date(filing_dates[i] if i < len(filing_dates) else "")
+        if rd is not None:
+            if rd in seen_periods:
+                continue
+            seen_periods.add(rd)
+        out.append((acc, rd, fd))
+        if limit is not None and len(out) >= limit:
+            break
+    return out
+
+
+def _find_latest_13f(submissions: dict) -> tuple[str | None, date | None, date | None]:
+    """Most recent 13F-HR as (accession, report_date, filing_date);
+    (None, None, None) if none is in the recent slice."""
+    entries = _find_recent_13fs(submissions, limit=1)
+    return entries[0] if entries else (None, None, None)
 
 
 def _parse_iso_date(s: str) -> date | None:
@@ -352,11 +417,15 @@ def _parse_info_table(xml_text: str) -> Iterable[ScrapedHolding]:
         logger.warning(f"[sec_13f] XML parse error: {e}")
         return
 
+    skipped_options = 0
     for entry in root.findall(f"{_INFOTABLE_NS}infoTable"):
         try:
             issuer = (entry.findtext(f"{_INFOTABLE_NS}nameOfIssuer") or "").strip()
             cusip = (entry.findtext(f"{_INFOTABLE_NS}cusip") or "").strip()
             value_text = entry.findtext(f"{_INFOTABLE_NS}value") or ""
+            put_call = (
+                entry.findtext(f"{_INFOTABLE_NS}putCall") or ""
+            ).strip().upper()
             shrs_node = entry.find(f"{_INFOTABLE_NS}shrsOrPrnAmt")
             shares_text = ""
             ssh_type = ""
@@ -369,6 +438,13 @@ def _parse_info_table(xml_text: str) -> Iterable[ScrapedHolding]:
             logger.debug(f"[sec_13f] row parse error: {e}")
             continue
 
+        # Skip option rows: <putCall> marks the row as a Put or Call
+        # position (Citadel/Millennium books are full of them). Summing
+        # those as long stock inflated — or inverted — the position; our
+        # schema models LONG SHARE positions only, so drop them.
+        if put_call in ("PUT", "CALL"):
+            skipped_options += 1
+            continue
         # Skip non-share holdings (PRN = principal amount = bonds).
         if ssh_type and ssh_type != "SH":
             continue
@@ -399,6 +475,13 @@ def _parse_info_table(xml_text: str) -> Iterable[ScrapedHolding]:
             qoq_change_pct=None,  # Computed at persistence by Q/Q join
             qoq_change_shares=None,
             action=None,  # Computed at persistence by Q/Q join
+        )
+
+    # Per-filing visibility on how much of the book was options. Logged
+    # once the generator is exhausted (list() in the fetch path does that).
+    if skipped_options:
+        logger.info(
+            f"[sec_13f] skipped {skipped_options} option rows (putCall=Put/Call)"
         )
 
 
@@ -439,8 +522,20 @@ def _compute_portfolio_pct(holdings: list[ScrapedHolding]) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Catalog name match — CUSIP placeholder → real ticker
+# CUSIP placeholder → real ticker resolution (three passes)
+#
+#   Pass 0: `cusip_ticker_map` table — resolutions persisted by earlier
+#           runs; cumulative, survives catalog changes. Checked FIRST.
+#   Pass 1: catalog name match against `Stock.name` (the original path).
+#   Pass 2: SEC's company_tickers.json (every SEC registrant with a
+#           listed ticker, ~10k names) — recovers the ~35% of dollar
+#           value the 999-stock catalog can't name-match.
+#
+# Every pass-1/pass-2 hit is written back to `cusip_ticker_map` so the
+# NEXT run short-circuits on pass 0.
 # ---------------------------------------------------------------------------
+
+_SEC_COMPANY_TICKERS_URL = "https://www.sec.gov/files/company_tickers.json"
 
 _NAME_NORMALIZER_RE = re.compile(r"[^A-Z0-9]+")
 _COMMON_SUFFIXES = (
@@ -448,12 +543,16 @@ _COMMON_SUFFIXES = (
     "LIMITED", "LLC", "PLC", "AG", "SA", "NV", "HOLDINGS", "HOLDING",
     "GROUP", "GRP", "CL", "CLA", "CLB", "CLC", "COM", "ORD", "TRUST",
     "REIT",
+    # 13F `nameOfIssuer` decorations absent from clean registrant titles:
+    # share-class labels, depositary-receipt markers, state-of-incorporation.
+    "CLASS", "SHS", "ADR", "ADS", "SPONSORED", "DEL",
 )
 
 
 def normalize_issuer_name(name: str) -> str:
     """Collapse "Apple Inc." / "APPLE INC" / "Apple Inc Common Stock" to
-    a single canonical form ("APPLE") for matching against `Stock.name`."""
+    a single canonical form ("APPLE") for matching against `Stock.name`
+    or SEC company_tickers.json titles."""
     if not name:
         return ""
     s = name.upper()
@@ -462,6 +561,12 @@ def normalize_issuer_name(name: str) -> str:
     # Tokenize and drop common corporate suffixes.
     tokens = [t for t in _NAME_NORMALIZER_RE.split(s) if t]
     tokens = [t for t in tokens if t not in _COMMON_SUFFIXES]
+    # Drop trailing share-class letters ("ALPHABET C" / "BERKSHIRE
+    # HATHAWAY B" after suffix stripping) so every class normalizes to
+    # the issuer stem. Two classes resolving to the same ticker are
+    # merged afterwards (see `_merge_holdings_by_ticker`).
+    while len(tokens) > 1 and len(tokens[-1]) == 1 and tokens[-1].isalpha():
+        tokens.pop()
     return " ".join(tokens)
 
 
@@ -481,24 +586,173 @@ def build_name_to_ticker_map(stocks_iter: Iterable) -> dict[str, str]:
     return out
 
 
-def resolve_holdings_against_catalog(
-    holdings: list[ScrapedHolding],
-    name_to_ticker: dict[str, str],
-) -> tuple[int, int]:
-    """Mutate `holdings` in place: replace "CUSIP:xxx" placeholders with
-    real catalog tickers when the issuer name matches.
+def fetch_sec_company_tickers() -> dict[str, str]:
+    """Fetch SEC's company_tickers.json and build a normalized-title →
+    ticker map for the second resolution pass.
 
-    Returns (resolved, unresolved) for logging.
+    ONE HTTP call per refresh run — the caller fetches once and passes
+    the map to every filing's resolution. Empty dict on failure (the
+    second pass is silently skipped; pass 0/1 still work).
+
+    The file is ordered by market cap DESC, so on normalized-title
+    collisions (e.g. GOOGL/GOOG both titled "Alphabet Inc.")
+    first-write-wins picks the primary listing.
     """
-    resolved = 0
-    unresolved = 0
-    for h in holdings:
+    data = _http_get_json(_SEC_COMPANY_TICKERS_URL)
+    if not data:
+        logger.warning(
+            "[sec_13f] company_tickers.json fetch failed — "
+            "second-pass CUSIP resolution skipped this run"
+        )
+        return {}
+    out: dict[str, str] = {}
+    for entry in data.values():
+        if not isinstance(entry, dict):
+            continue
+        ticker = str(entry.get("ticker") or "").strip().upper()
+        norm = normalize_issuer_name(str(entry.get("title") or ""))
+        if ticker and norm:
+            out.setdefault(norm, ticker)
+    return out
+
+
+@dataclass
+class ResolutionStats:
+    """Per-pass resolution counters, aggregated across filings for logging."""
+    from_map: int = 0       # pass 0: cusip_ticker_map short-circuit
+    from_catalog: int = 0   # pass 1: Stock.name match
+    from_sec: int = 0       # pass 2: company_tickers.json match
+    unresolved: int = 0     # stays "CUSIP:xxx"
+
+    def add(self, other: "ResolutionStats") -> None:
+        self.from_map += other.from_map
+        self.from_catalog += other.from_catalog
+        self.from_sec += other.from_sec
+        self.unresolved += other.unresolved
+
+
+def resolve_filing_holdings(
+    filing: ScrapedFiling,
+    *,
+    cusip_map: dict[str, str],
+    catalog_map: dict[str, str],
+    sec_map: dict[str, str] | None = None,
+) -> tuple[ResolutionStats, dict[str, tuple[str, str, str]]]:
+    """Resolve a filing's "CUSIP:xxx" placeholders through the three
+    passes, mutating `filing.holdings` in place.
+
+    `cusip_map` is also updated in place with pass-1/2 hits so later
+    filings in the SAME run short-circuit on pass 0 without a DB read.
+
+    Returns (stats, new_resolutions) where new_resolutions maps
+    cusip → (ticker, source, issuer_name) for the rows resolved by
+    pass 1/2 this call — the caller persists them via
+    `persist_cusip_resolutions` so the next run starts from pass 0.
+    """
+    stats = ResolutionStats()
+    new_resolutions: dict[str, tuple[str, str, str]] = {}
+    sec_map = sec_map or {}
+    for h in filing.holdings:
         if not h.ticker.startswith("CUSIP:"):
             continue
+        cusip = h.ticker[len("CUSIP:"):]
+        # Pass 0 — cumulative persisted map.
+        mapped = cusip_map.get(cusip)
+        if mapped:
+            h.ticker = mapped
+            stats.from_map += 1
+            continue
         norm = normalize_issuer_name(h.company_name or "")
-        if norm and norm in name_to_ticker:
-            h.ticker = name_to_ticker[norm]
-            resolved += 1
+        # Pass 1 — catalog name match.
+        ticker = catalog_map.get(norm) if norm else None
+        if ticker:
+            h.ticker = ticker
+            stats.from_catalog += 1
+            new_resolutions[cusip] = (ticker, "catalog", h.company_name or "")
+            cusip_map[cusip] = ticker
+            continue
+        # Pass 2 — SEC company_tickers.json.
+        ticker = sec_map.get(norm) if norm else None
+        if ticker:
+            h.ticker = ticker
+            stats.from_sec += 1
+            new_resolutions[cusip] = (
+                ticker, "sec_company_tickers", h.company_name or ""
+            )
+            cusip_map[cusip] = ticker
+            continue
+        stats.unresolved += 1
+
+    # Distinct CUSIPs can resolve to the SAME ticker (share classes,
+    # multiple listings). UNIQUE(filing_id, ticker) is enforced on the
+    # holdings table, so collapse them before persistence.
+    filing.holdings = _merge_holdings_by_ticker(filing.holdings)
+    return stats, new_resolutions
+
+
+def _merge_holdings_by_ticker(
+    holdings: list[ScrapedHolding],
+) -> list[ScrapedHolding]:
+    """Sum shares/value/pct across holdings that share a ticker after
+    resolution. Preserves input order (first occurrence wins the slot)."""
+    merged: dict[str, ScrapedHolding] = {}
+    for h in holdings:
+        cur = merged.get(h.ticker)
+        if cur is None:
+            merged[h.ticker] = h
+            continue
+        cur.shares = (cur.shares or 0) + (h.shares or 0)
+        cur.value_usd = (cur.value_usd or 0) + (h.value_usd or 0)
+        if cur.portfolio_pct is not None or h.portfolio_pct is not None:
+            cur.portfolio_pct = round(
+                (cur.portfolio_pct or 0.0) + (h.portfolio_pct or 0.0), 4
+            )
+    return list(merged.values())
+
+
+def load_cusip_ticker_map(db) -> dict[str, str]:
+    """Load the persisted cusip → ticker map (pass 0's source of truth).
+
+    Local imports keep this module import-cheap for callers that never
+    touch the DB (tests exercising pure parsing)."""
+    from sqlalchemy import select
+
+    from app.models import CusipTickerMap
+
+    return {
+        row.cusip: row.ticker
+        for row in db.execute(select(CusipTickerMap)).scalars()
+    }
+
+
+def persist_cusip_resolutions(
+    db, new_resolutions: dict[str, tuple[str, str, str]]
+) -> int:
+    """Upsert pass-1/2 resolutions into `cusip_ticker_map` (PK = cusip).
+
+    Flush-only — the surrounding persistence flow owns the commit, so a
+    failed run rolls the map rows back together with the holdings."""
+    from app.models import CusipTickerMap
+
+    if not new_resolutions:
+        return 0
+    written = 0
+    for cusip, (ticker, source, issuer_name) in new_resolutions.items():
+        existing = db.get(CusipTickerMap, cusip)
+        if existing is None:
+            db.add(
+                CusipTickerMap(
+                    cusip=cusip,
+                    ticker=ticker,
+                    source=source,
+                    issuer_name=issuer_name or None,
+                )
+            )
         else:
-            unresolved += 1
-    return resolved, unresolved
+            existing.ticker = ticker
+            existing.source = source
+            if issuer_name:
+                existing.issuer_name = issuer_name
+        written += 1
+    db.flush()
+    return written
