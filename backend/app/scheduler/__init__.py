@@ -138,6 +138,11 @@ def get_scheduler() -> BackgroundScheduler:
             replace_existing=True,
             max_instances=1,
             coalesce=True,
+            # Il PC è tipicamente spento/sospeso alle 04:00 di sabato: se il
+            # processo si risveglia entro 12h dall'orario mancato, il job
+            # parte comunque invece di slittare di una settimana intera.
+            # (Il boot a macchina SPENTA è coperto dal catch-up in main.py.)
+            misfire_grace_time=60 * 60 * 12,
         )
         _scheduler.add_job(
             run_refresh_premarket,
@@ -156,6 +161,8 @@ def get_scheduler() -> BackgroundScheduler:
             replace_existing=True,
             max_instances=1,
             coalesce=True,
+            # Stessa tolleranza misfire del refresh Dataroma qui sopra.
+            misfire_grace_time=60 * 60 * 12,
         )
         # FRED macro refresh — every 2 hours at :15 (offset to avoid the
         # top-of-hour spike that everyone runs cron jobs on). FRED's free

@@ -35,6 +35,7 @@ def run_refresh_institutionals() -> None:
             f"institutionals_updated={summary.institutionals_updated} "
             f"filings_added={summary.filings_added} "
             f"filings_replaced={summary.filings_replaced} "
+            f"filings_skipped_no_period={summary.filings_skipped_no_period} "
             f"holdings={summary.holdings_inserted}"
         )
     except Exception as exc:  # noqa: BLE001

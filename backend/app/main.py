@@ -212,6 +212,61 @@ def _catch_up_scan_on_boot() -> None:
         logger.warning(f"[startup] catch-up scan skipped: {exc}")
 
 
+def _run_institutionals_catchup() -> None:
+    """Thread target for `_catch_up_institutionals_on_boot`: run BOTH weekly
+    refresh jobs, sequentially (SQLite has a single writer — running them
+    concurrently only adds lock churn; the cron spacing sat 04:00/04:30
+    exists for the same reason). One source failing must not block the
+    other, hence the per-job guard."""
+    from app.scheduler.jobs.refresh_institutionals import run_refresh_institutionals
+    from app.scheduler.jobs.refresh_sec_13f import run_refresh_sec_13f
+
+    for job in (run_refresh_institutionals, run_refresh_sec_13f):
+        try:
+            job()
+        except Exception as exc:  # noqa: BLE001 — best-effort catch-up
+            logger.warning(
+                f"[startup] institutionals catch-up job "
+                f"{job.__name__} failed: {exc}"
+            )
+
+
+def _catch_up_institutionals_on_boot() -> None:
+    """Same local-first fix as `_catch_up_scan_on_boot`, for the weekly
+    institutional crons (sat 04:00 Dataroma + 04:30 SEC 13F): on a desktop
+    that's off on Saturday mornings those jobs never fire and the 13F
+    snapshot silently ages. On boot, if the newest `institutional_filings`
+    row is older than 8 days, kick both refresh jobs in a daemon thread —
+    best-effort, never blocking startup. The misfire_grace_time on the two
+    cron registrations covers the laptop-asleep-at-04:00 case; this covers
+    the machine-fully-off case."""
+    import os
+
+    # Never kick real scraper jobs from a test's TestClient lifespan.
+    if os.environ.get("PYTEST_CURRENT_TEST"):
+        return
+    try:
+        from app.core.db import SessionLocal
+        from app.services.institutional_service import filings_refresh_is_stale
+
+        with SessionLocal() as db:
+            if not filings_refresh_is_stale(db):
+                logger.info(
+                    "[startup] institutional filings are fresh — skipping catch-up"
+                )
+                return
+        logger.info(
+            "[startup] institutional filings stale/absent — kicking refresh catch-up"
+        )
+        threading.Thread(
+            target=_run_institutionals_catchup,
+            name="institutionals-boot-catchup",
+            daemon=True,
+        ).start()
+    except Exception as exc:  # noqa: BLE001 — never block startup
+        logger.warning(f"[startup] institutionals catch-up skipped: {exc}")
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     _cleanup_orphan_scans()
@@ -229,6 +284,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     start_scheduler()
     _warm_premarket_on_boot()
     _catch_up_scan_on_boot()
+    _catch_up_institutionals_on_boot()
     try:
         yield
     finally:
