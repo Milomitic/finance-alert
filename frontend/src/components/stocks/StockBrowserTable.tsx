@@ -13,7 +13,6 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { TableSearchInput } from "@/components/ui/table-search-input";
-import { useColumnVisibility } from "@/hooks/useColumnVisibility";
 import { useHolderCounts } from "@/hooks/useInstitutionals";
 import { useMarketSummary } from "@/hooks/useMarketSummary";
 import { RISK_LABEL, RISK_TONE, scoreColor } from "@/lib/scoreMeta";
@@ -21,8 +20,10 @@ import { getStockFlagCode } from "@/lib/stockMeta";
 import { cn } from "@/lib/utils";
 
 /** Toggleable columns for the desktop screener table.
- *  The identity column (Ticker + name) is always-on. */
-const SCREENER_COLS = [
+ *  The identity column (Ticker + name) is always-on.
+ *  Exported so the page can drive the same list from the toolbar
+ *  "Colonne" button (visibility state lives in the page now). */
+export const SCREENER_COLS = [
   { id: "exchange",       label: "Exchange" },
   { id: "settore",        label: "Settore" },
   { id: "industry",       label: "Industry" },
@@ -31,6 +32,9 @@ const SCREENER_COLS = [
   { id: "delta_pct",      label: "Δ%" },
   { id: "rsi",            label: "RSI" },
   { id: "vol_ratio",      label: "Vol×" },
+  { id: "volume",         label: "Volume" },
+  { id: "pct_from_high",  label: "% da max 52w" },
+  { id: "vs_ema200",      label: "vs EMA200" },
   { id: "score",          label: "Score" },
   { id: "profitability",  label: "Profittabilità" },
   { id: "sustainability", label: "Sostenibilità" },
@@ -55,6 +59,7 @@ const MOBILE_SORT_OPTIONS: { key: TableSortKey; label: string }[] = [
   { key: "change_pct", label: "Δ%" },
   { key: "rsi14", label: "RSI" },
   { key: "vol_ratio", label: "Vol×" },
+  { key: "vol_today", label: "Volume" },
   { key: "market_cap", label: "Mkt Cap" },
   { key: "sector", label: "Settore" },
   { key: "industry", label: "Industry" },
@@ -79,6 +84,58 @@ interface Props {
    *  filters card. */
   q: string;
   onQueryChange: (v: string) => void;
+  /** Column visibility — state lives in the PAGE (useColumnVisibility with
+   *  tableId "screener") so the toolbar "Colonne" button and the header
+   *  right-click menu share the same persisted set. */
+  isColumnVisible: (id: string) => boolean;
+  onToggleColumn: (id: string) => void;
+}
+
+/** Volume compatto it-IT: 5.000.000 → "5 Mln". Intl gestisce Mln/Mld senza
+ *  mappe manuali; una cifra decimale basta per distinguere 1,2 Mln da 12 Mln. */
+const VOLUME_FMT = new Intl.NumberFormat("it-IT", {
+  notation: "compact",
+  maximumFractionDigits: 1,
+});
+
+function fmtVol(v: number | null | undefined): string {
+  if (v == null) return "—";
+  return VOLUME_FMT.format(v);
+}
+
+/** % dal massimo 52w = (last_close/high_252 − 1)·100 — sempre ≤ ~0.
+ *  Computed client-side: both fields are already on every screener row. */
+function pctFromHigh(m: StockSearchItem["metrics"]): number | null {
+  if (!m || m.last_close == null || m.high_252 == null || m.high_252 <= 0) return null;
+  return (m.last_close / m.high_252 - 1) * 100;
+}
+
+/** Distanza % dall'EMA200 = (last_close/ema200 − 1)·100. */
+function vsEma200(m: StockSearchItem["metrics"]): number | null {
+  if (!m || m.last_close == null || m.ema200 == null || m.ema200 <= 0) return null;
+  return (m.last_close / m.ema200 - 1) * 100;
+}
+
+/** Tone per "% da max 52w": vicino al massimo = forza (verde), in profondo
+ *  drawdown = rosso. Plain string literals (Tailwind purger contract). */
+function pctFromHighTone(v: number | null): string {
+  if (v == null) return "text-muted-foreground";
+  if (v >= -5) return "text-green-600 dark:text-green-400";
+  if (v <= -20) return "text-red-600 dark:text-red-400";
+  return "";
+}
+
+/** Tone per "vs EMA200": sopra = verde, sotto = rosso. Plain literals. */
+function vsEma200Tone(v: number | null): string {
+  if (v == null) return "text-muted-foreground";
+  if (v > 0) return "text-green-600 dark:text-green-400";
+  if (v < 0) return "text-red-600 dark:text-red-400";
+  return "";
+}
+
+function fmtSignedPct(v: number | null): string {
+  if (v == null) return "—";
+  return `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`;
 }
 
 /** Small "ETF" chip rendered next to the ticker for instrument_type='etf'
@@ -159,7 +216,10 @@ function SortableHeader({
   );
 }
 
-export function StockBrowserTable({ items, sortBy, sortDir, onSortChange, q, onQueryChange }: Props) {
+export function StockBrowserTable({
+  items, sortBy, sortDir, onSortChange, q, onQueryChange,
+  isColumnVisible: isVisible, onToggleColumn: toggle,
+}: Props) {
   const market = useMarketSummary();
 
   // Smart-money badge: ONE batch call for the current page's tickers
@@ -169,12 +229,6 @@ export function StockBrowserTable({ items, sortBy, sortDir, onSortChange, q, onQ
     [items],
   );
   const holderCounts = useHolderCounts(pageTickers);
-
-  // Column visibility for the desktop table variant.
-  const { isVisible, toggle } = useColumnVisibility(
-    "screener",
-    SCREENER_COLS as unknown as { id: string; label: string }[],
-  );
 
   // Context-menu state for the column-visibility dropdown.
   const [menuOpen, setMenuOpen] = useState(false);
@@ -435,6 +489,17 @@ export function StockBrowserTable({ items, sortBy, sortDir, onSortChange, q, onQ
                 {isVisible("vol_ratio") && (
                   <SortableHeader column="vol_ratio" label="Vol×" align="right" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} />
                 )}
+                {isVisible("volume") && (
+                  <SortableHeader column="vol_today" label="Volume" align="right" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} />
+                )}
+                {/* Colonne derivate lato client (last_close/high_252/ema200 sono
+                    già su ogni riga) — non ordinabili server-side. */}
+                {isVisible("pct_from_high") && (
+                  <th className="px-3 py-1.5 text-right text-base uppercase tracking-wide font-semibold" title="Distanza % dal massimo 52 settimane">% da max 52w</th>
+                )}
+                {isVisible("vs_ema200") && (
+                  <th className="px-3 py-1.5 text-right text-base uppercase tracking-wide font-semibold" title="Distanza % dalla EMA200">vs EMA200</th>
+                )}
                 {isVisible("score") && (
                   <SortableHeader column="composite" label="Score" align="right" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} />
                 )}
@@ -586,6 +651,24 @@ export function StockBrowserTable({ items, sortBy, sortDir, onSortChange, q, onQ
                         volRatio != null && volRatio > 2 ? "text-amber-600 dark:text-amber-400 font-semibold" : "text-muted-foreground",
                       )}>
                         {volRatio == null ? "—" : `${volRatio.toFixed(1)}×`}
+                      </td>
+                    )}
+                    {isVisible("volume") && (
+                      <td
+                        className="px-3 py-1.5 text-right tabular-nums text-muted-foreground"
+                        title={item.metrics?.vol_avg_20 != null ? `media 20 sedute: ${fmtVol(item.metrics.vol_avg_20)}` : undefined}
+                      >
+                        {fmtVol(item.metrics?.vol_today)}
+                      </td>
+                    )}
+                    {isVisible("pct_from_high") && (
+                      <td className={cn("px-3 py-1.5 text-right tabular-nums", pctFromHighTone(pctFromHigh(item.metrics)))}>
+                        {fmtSignedPct(pctFromHigh(item.metrics))}
+                      </td>
+                    )}
+                    {isVisible("vs_ema200") && (
+                      <td className={cn("px-3 py-1.5 text-right tabular-nums", vsEma200Tone(vsEma200(item.metrics)))}>
+                        {fmtSignedPct(vsEma200(item.metrics))}
                       </td>
                     )}
                     {isVisible("score") && (

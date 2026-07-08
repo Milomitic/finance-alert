@@ -133,11 +133,48 @@ def _seed_scored(db: Session, ticker: str, **pillars) -> None:
 
 
 def test_search_returns_pillars_and_sorts_by_pillar(db: Session) -> None:
-    _seed_scored(db, "AAA", momentum=90.0, value=10.0)
-    _seed_scored(db, "BBB", momentum=10.0, value=90.0)
-    page = search_stocks(db, StockFilter(sort_by="momentum", sort_dir="desc"))
+    # (Was sort_by="momentum" — that column was retired from SORTABLE_COLUMNS
+    # since the fundamental Momentum pillar is always NULL; repointed to a
+    # live pillar to keep sort-by-pillar coverage.)
+    _seed_scored(db, "AAA", growth=90.0, value=10.0)
+    _seed_scored(db, "BBB", growth=10.0, value=90.0)
+    page = search_stocks(db, StockFilter(sort_by="growth", sort_dir="desc"))
     assert [i.stock.ticker for i in page.items[:2]] == ["AAA", "BBB"]
-    assert page.items[0].score.momentum == 90.0
+    assert page.items[0].score.growth == 90.0
+
+
+def test_momentum_not_sortable_and_not_in_score_ref(db: Session) -> None:
+    """The always-NULL fundamental momentum pillar is dead API surface:
+    removed from SORTABLE_COLUMNS (falls back to ticker) and from the
+    screener score payload."""
+    from app.services.stock_service import SORTABLE_COLUMNS, StockScoreRef
+
+    assert "momentum" not in SORTABLE_COLUMNS
+    assert not hasattr(StockScoreRef(), "momentum")
+    _seed_scored(db, "AAA")
+    _seed_scored(db, "BBB")
+    # Direct service call with the retired key degrades to the ticker sort
+    # (the requested direction still applies to the fallback column).
+    page = search_stocks(db, StockFilter(sort_by="momentum", sort_dir="asc"))
+    assert [i.stock.ticker for i in page.items] == ["AAA", "BBB"]
+
+
+# ── NULLS LAST on ascending sorts ────────────────────────────────────────────
+
+def test_sort_asc_puts_null_scores_last(db: Session) -> None:
+    """SQLite's default NULL ordering is NULLS FIRST on ASC — which used to
+    put every unscored stock on page 1 of any ascending sort. nullslast()
+    must push them after the valued rows."""
+    _seed_scored(db, "SCO1", composite=80.0)
+    _seed_scored(db, "SCO2", composite=20.0)
+    db.add(Stock(ticker="NOSCORE", exchange="NASDAQ", name="Unscored", country="US"))
+    db.commit()
+
+    page = search_stocks(db, StockFilter(sort_by="composite", sort_dir="asc"))
+    assert [i.stock.ticker for i in page.items] == ["SCO2", "SCO1", "NOSCORE"]
+    # Descending keeps NULLs last too (explicit, direction-independent).
+    page = search_stocks(db, StockFilter(sort_by="composite", sort_dir="desc"))
+    assert [i.stock.ticker for i in page.items] == ["SCO1", "SCO2", "NOSCORE"]
 
 
 # ── score_max filter ─────────────────────────────────────────────────────────

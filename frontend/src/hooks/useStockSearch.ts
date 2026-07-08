@@ -48,6 +48,7 @@ export function useStockSearch(params: SearchParams) {
       effective.near_52w_high ? "1" : "",
       effective.near_52w_low ? "1" : "",
       effective.has_signals ? "1" : "",
+      effective.signals_within_days ?? "",
       effective.price_min ?? "",
       effective.price_max ?? "",
       effective.change_min ?? "",

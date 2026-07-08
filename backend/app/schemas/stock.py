@@ -32,7 +32,8 @@ class StockScoreRefOut(BaseModel):
     sustainability: float | None = None
     growth: float | None = None
     value: float | None = None
-    momentum: float | None = None
+    # No momentum: the fundamental Momentum pillar was removed from the
+    # composite — the DB column is always NULL, so it was dead payload here.
     sentiment: float | None = None
 
 
@@ -60,6 +61,9 @@ class StockMetricsRefOut(BaseModel):
     high_252: float | None = None
     low_252: float | None = None
     vol_ratio: float | None = None
+    # Raw volume pair behind vol_ratio: today's share count + 20-bar average.
+    vol_today: float | None = None
+    vol_avg_20: float | None = None
 
 
 class StockSearchItemOut(BaseModel):

@@ -30,11 +30,10 @@ export interface StockSearchItem {
     sustainability: number | null;
     growth: number | null;
     value: number | null;
-    /** FUNDAMENTAL momentum pillar — dropped from the composite (now
-     *  pure-fundamental). Always null; kept optional for back-compat with
-     *  any consumer that still reads it. Price-action momentum lives on
-     *  `technical.momentum` (the "T-Mom" screener column) instead. */
-    momentum?: number | null;
+    /* No momentum field: the FUNDAMENTAL momentum pillar was dropped from
+     * the composite and the API no longer serializes it (it was always
+     * null). Price-action momentum lives on `technical.momentum` (the
+     * "T-Mom" screener column) instead. */
     sentiment: number | null;
   };
   technical: {
@@ -60,6 +59,10 @@ export interface StockSearchItem {
     high_252: number | null;
     low_252: number | null;
     vol_ratio: number | null;
+    /** Raw volume pair behind vol_ratio: today's share count + 20-bar
+     *  average. Optional for back-compat with cached pre-field responses. */
+    vol_today?: number | null;
+    vol_avg_20?: number | null;
   } | null;
 }
 

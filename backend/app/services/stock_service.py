@@ -1,8 +1,8 @@
 """Stock search and filter options."""
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import date, datetime, timedelta
 
-from sqlalchemy import and_, distinct, exists, func, or_, select
+from sqlalchemy import and_, distinct, exists, func, nullslast, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.visibility import visible_country_clause
@@ -33,7 +33,10 @@ SORTABLE_COLUMNS: dict[str, object] = {
     "sustainability": StockScore.sustainability,
     "growth": StockScore.growth,
     "value": StockScore.value,
-    "momentum": StockScore.momentum,
+    # NOTE: no "momentum" here — the fundamental Momentum pillar was removed
+    # (StockScore.momentum is always NULL; price-action momentum lives on the
+    # Tecnico lens as "tech_momentum"). Sorting by an always-NULL column was
+    # dead API surface.
     "sentiment": StockScore.sentiment,
     "tech_composite": TechnicalScore.composite,
     "tech_trend": TechnicalScore.trend,
@@ -47,6 +50,7 @@ SORTABLE_COLUMNS: dict[str, object] = {
     "change_pct": StockMetrics.change_pct,
     "rsi14": StockMetrics.rsi14,
     "vol_ratio": StockMetrics.vol_ratio,
+    "vol_today": StockMetrics.vol_today,
 }
 
 
@@ -92,7 +96,11 @@ class StockFilter:
     volume_min: float | None = None   # today's share volume lower bound
     market_cap_min: float | None = None
     market_cap_max: float | None = None
-    has_signals: bool = False         # has >=1 active (non-archived) alert
+    has_signals: bool = False         # has >=1 active (non-archived) RECENT alert
+    # Recency window for has_signals, in calendar days (validated 1..90 at the
+    # API; clamped defensively here too). The unbounded EXISTS used to match
+    # ~99% of the universe — useless as a screen.
+    signals_within_days: int = 7
     exclude_etf: bool = False         # drop instrument_type='etf' rows
     sort_by: str = "ticker"
     sort_dir: str = "asc"
@@ -110,7 +118,9 @@ class StockScoreRef:
     sustainability: float | None = None
     growth: float | None = None
     value: float | None = None
-    momentum: float | None = None
+    # No momentum field: the fundamental Momentum pillar was removed from the
+    # composite (see CLAUDE.md) — the column is always NULL, so surfacing it
+    # on the screener row was dead payload.
     sentiment: float | None = None
 
 
@@ -140,6 +150,11 @@ class StockMetricsRef:
     high_252: float | None = None
     low_252: float | None = None
     vol_ratio: float | None = None
+    # Raw volume pair behind vol_ratio — today's share count + the 20-bar
+    # average. Filterable via volume_min since Phase A; surfaced so the
+    # screener can render/sort an absolute Volume column too.
+    vol_today: float | None = None
+    vol_avg_20: float | None = None
 
 
 @dataclass
@@ -262,9 +277,22 @@ def _apply_filter(stmt, f: StockFilter):
     if f.market_cap_max is not None:
         stmt = stmt.where(Stock.market_cap <= f.market_cap_max)
     if f.has_signals:
+        # Recency-bound EXISTS: without a time bound this matched 929/938
+        # stocks (any alert EVER fired kept the stock flagged), making the
+        # toggle useless as a screen. Bound on `signal_date` — the bar date
+        # the condition matched — falling back to the `triggered_at` date for
+        # legacy rows that predate the column (dual-timestamp model).
+        days = max(1, min(int(f.signals_within_days or 7), 90))
+        cutoff = date.today() - timedelta(days=days)
         stmt = stmt.where(
             exists().where(
-                and_(Alert.stock_id == Stock.id, Alert.archived_at.is_(None))
+                and_(
+                    Alert.stock_id == Stock.id,
+                    Alert.archived_at.is_(None),
+                    func.coalesce(
+                        Alert.signal_date, func.date(Alert.triggered_at)
+                    ) >= cutoff,
+                )
             )
         )
     if f.exclude_etf:
@@ -285,10 +313,13 @@ def _apply_sort(stmt, f: StockFilter):
     direction = (f.sort_dir or "asc").lower()
     if direction not in ("asc", "desc"):
         direction = "asc"
-    # NULLS-LAST behaviour is a nice-to-have; SQLite doesn't support
-    # `NULLS LAST` as a direct clause but its default for ASC is NULLS FIRST,
-    # for DESC NULLS LAST. We emulate consistent ordering by chaining:
-    primary = col.desc() if direction == "desc" else col.asc()
+    # NULLS LAST on both directions. SQLite treats NULL as smaller than
+    # everything, so a plain ASC sort put every unscored/metricless row on
+    # page 1 of the screener. SQLite has supported the standard `NULLS LAST`
+    # clause since 3.30 (2019) — the old comment claiming otherwise was wrong.
+    # DESC already ends with NULLs by default, but we make it explicit so the
+    # ordering contract is direction-independent.
+    primary = nullslast(col.desc()) if direction == "desc" else nullslast(col.asc())
     if f.sort_by == "ticker":
         return stmt.order_by(primary)
     return stmt.order_by(primary, Stock.ticker.asc())
@@ -310,7 +341,6 @@ def search_stocks(db: Session, f: StockFilter) -> StockPage:
         StockScore.sustainability,
         StockScore.growth,
         StockScore.value,
-        StockScore.momentum,
         StockScore.sentiment,
         TechnicalScore.composite.label("tech_composite"),
         TechnicalScore.trend.label("tech_trend"),
@@ -328,6 +358,8 @@ def search_stocks(db: Session, f: StockFilter) -> StockPage:
         StockMetrics.high_252.label("m_high_252"),
         StockMetrics.low_252.label("m_low_252"),
         StockMetrics.vol_ratio.label("m_vol_ratio"),
+        StockMetrics.vol_today.label("m_vol_today"),
+        StockMetrics.vol_avg_20.label("m_vol_avg_20"),
     ).outerjoin(StockScore, StockScore.stock_id == Stock.id).outerjoin(
         TechnicalScore, TechnicalScore.stock_id == Stock.id
     ).outerjoin(StockMetrics, StockMetrics.stock_id == Stock.id)
@@ -351,28 +383,29 @@ def search_stocks(db: Session, f: StockFilter) -> StockPage:
                 sustainability=row[4],
                 growth=row[5],
                 value=row[6],
-                momentum=row[7],
-                sentiment=row[8],
+                sentiment=row[7],
             ),
             technical=StockTechRef(
-                composite=row[9],
-                trend=row[10],
-                momentum=row[11],
-                structure=row[12],
-                volume=row[13],
-                rel_strength=row[14],
-                signals=row[15],
-                posture=row[16],
+                composite=row[8],
+                trend=row[9],
+                momentum=row[10],
+                structure=row[11],
+                volume=row[12],
+                rel_strength=row[13],
+                signals=row[14],
+                posture=row[15],
             ),
             metrics=StockMetricsRef(
-                last_close=row[17],
-                change_pct=row[18],
-                ema50=row[19],
-                ema200=row[20],
-                rsi14=row[21],
-                high_252=row[22],
-                low_252=row[23],
-                vol_ratio=row[24],
+                last_close=row[16],
+                change_pct=row[17],
+                ema50=row[18],
+                ema200=row[19],
+                rsi14=row[20],
+                high_252=row[21],
+                low_252=row[22],
+                vol_ratio=row[23],
+                vol_today=row[24],
+                vol_avg_20=row[25],
             ),
         )
         for row in rows[:limit]
