@@ -33,11 +33,12 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import UTC, date, datetime, timedelta
 from typing import Iterable, Sequence
 
-from sqlalchemy import delete, func, select
-from sqlalchemy.orm import Session
+from loguru import logger
+from sqlalchemy import case, delete, func, select
+from sqlalchemy.orm import Session, aliased
 
 from app.models import (
     Institutional,
@@ -49,6 +50,58 @@ from app.services.institutional_scraper import (
     ScrapedFiling,
     ScrapedManager,
 )
+
+# Freshness cutoff shared by every latest-filing read path (aggregate stats +
+# per-ticker holders). A fund whose most recent filing is older than this is
+# a dead/dormant snapshot, not current positioning — mixing a 2014 filing
+# into 2026 aggregates was one of the audit-2026-07-07 findings.
+MAX_FILING_AGE_MONTHS = 18
+
+# Dual-class share consolidation for cross-portfolio aggregates. 13F data
+# reports every share class as its own ticker, so e.g. Alphabet conviction
+# splits across GOOG/GOOGL and each half under-counts in most-picked. The
+# map folds secondary classes onto the PRIMARY (most liquid / catalog)
+# ticker before grouping. Dot variants kept defensively even though the
+# repair migration normalized them to dashes.
+_SHARE_CLASS_PRIMARY: dict[str, str] = {
+    "GOOGL": "GOOG",
+    "BRK.A": "BRK-B",
+    "BRK-A": "BRK-B",
+    "BRK.B": "BRK-B",
+    "BF.A": "BF-B",
+    "BF-A": "BF-B",
+    "BF.B": "BF-B",
+    "HEI.A": "HEI",
+    "HEI-A": "HEI",
+    "LEN.B": "LEN",
+    "LEN-B": "LEN",
+}
+
+
+def _freshness_cutoff(months: int = MAX_FILING_AGE_MONTHS) -> date:
+    """Oldest period_end_date still considered 'current'."""
+    return date.today() - timedelta(days=int(30.4 * months))
+
+
+def filings_refresh_is_stale(db: Session, *, max_age_days: int = 8) -> bool:
+    """True when the newest `institutional_filings` row is older than
+    `max_age_days` (or no filings exist at all).
+
+    Used by the boot catch-up in `app.main`: the weekly refresh crons
+    (sat 04:00/04:30) only fire while the backend is running, so on a
+    desktop that's off on Saturday mornings the 13F snapshot silently
+    ages. 8 days = one weekly cadence + 1 day of slack, so a healthy
+    Saturday run never re-triggers on Monday's boot.
+    """
+    last = db.execute(
+        select(func.max(InstitutionalFiling.created_at))
+    ).scalar_one()
+    if last is None:
+        return True
+    # SQLite server_default=now() stores naive datetimes — normalize.
+    if last.tzinfo is None:
+        last = last.replace(tzinfo=UTC)
+    return (datetime.now(UTC) - last) > timedelta(days=max_age_days)
 
 
 # ---------------------------------------------------------------------------
@@ -62,6 +115,10 @@ class UpsertResult:
     filings_added: int
     filings_replaced: int
     holdings_inserted: int
+    # Scrapes whose page header didn't yield a quarter-end date. These are
+    # SKIPPED (not persisted under a synthetic "today") — see
+    # `persist_scrape_results`.
+    filings_skipped_no_period: int = 0
 
 
 def upsert_institutional(
@@ -113,12 +170,19 @@ def upsert_filing(
     re-insert from the scraped data — this is how a "Q1 -> Q1 with
     correction" re-publish (rare but possible) is handled idempotently.
 
-    Returns (filing, created). If period_end_date is None we degrade
-    to a synthetic "today" so the upsert can still proceed; the UI
-    will show this filing labeled with the scrape date instead of the
-    real quarter end.
+    Returns (filing, created). `period_end_date` is REQUIRED: the old
+    behavior of degrading a NULL period to a synthetic "today" minted
+    fake quarter-ends (a scrape date is not a filing period) that then
+    won as "latest filing" in every aggregate — audit 2026-07-07.
+    Callers must skip NULL-period scrapes (see `persist_scrape_results`).
     """
-    period_end = filing.period_end_date or date.today()
+    if filing.period_end_date is None:
+        raise ValueError(
+            "filing.period_end_date is required — NULL-period scrapes "
+            "must be skipped by the caller, not persisted under a "
+            "synthetic date"
+        )
+    period_end = filing.period_end_date
     existing = db.execute(
         select(InstitutionalFiling).where(
             InstitutionalFiling.institutional_id == institutional.id,
@@ -209,6 +273,17 @@ def persist_scrape_results(
     summary = UpsertResult(0, 0, 0, 0, 0)
     for manager, filing in results:
         if filing is None:
+            continue
+        if filing.period_end_date is None:
+            # Header parse failed → no real quarter-end. Persisting under a
+            # synthetic "today" would mint a fake filing that then wins as
+            # "latest" in every aggregate forever (audit 2026-07-07). Skip;
+            # next week's run retries once the page parses again.
+            summary.filings_skipped_no_period += 1
+            logger.warning(
+                f"[institutionals] {manager.slug}: scrape has no "
+                "period_end_date — skipping (not persisting a synthetic date)"
+            )
             continue
         eff_type = type_resolver(manager.slug) if type_resolver else type_
         inst, created = upsert_institutional(
@@ -639,10 +714,23 @@ def get_aggregate_stats(
     All metrics are computed on the LATEST filing per institutional —
     we never mix data across quarters in the same aggregate (would
     double-count a Q4 + Q1 pair for the same fund).
+
+    Honesty guards (audit 2026-07-07):
+    - latest filings older than `MAX_FILING_AGE_MONTHS` are excluded
+      entirely (same cutoff as `holders_for_ticker`) — a fund whose
+      newest snapshot is from 2014 must not mix into 2026 aggregates;
+    - "new" rows in recent-buys require a prior filing as evidence
+      (same rule as `_substantiated_new`) — single-filing funds can't
+      claim "Nuovo";
+    - dual share classes are folded onto the primary ticker in
+      most-picked so GOOG+GOOGL holders count as one name.
     """
     rank, latest = _latest_filings_subq(db)
 
-    # Latest filing IDs per institutional, optionally filtered by type
+    # Latest filing IDs per institutional, optionally filtered by type.
+    # The freshness cutoff drops funds whose LATEST filing is a fossil —
+    # they have nothing current to contribute, so they exit the
+    # aggregate entirely rather than falling back to stale data.
     latest_ids_q = (
         select(InstitutionalFiling.id, Institutional.id, Institutional.name)
         .join(Institutional, Institutional.id == InstitutionalFiling.institutional_id)
@@ -651,6 +739,7 @@ def get_aggregate_stats(
             (latest.c.institutional_id == InstitutionalFiling.institutional_id)
             & (latest.c.max_period == InstitutionalFiling.period_end_date),
         )
+        .where(InstitutionalFiling.period_end_date >= _freshness_cutoff())
     )
     if type_:
         latest_ids_q = latest_ids_q.where(Institutional.type == type_)
@@ -664,9 +753,18 @@ def get_aggregate_stats(
         )
 
     # ---- Most-picked: GROUP BY ticker over the latest filings ----
+    # Share classes are folded onto the primary ticker BEFORE grouping, so
+    # a GOOG holder and a GOOGL holder count as two holders of ONE name
+    # (and a fund holding both classes still counts once — the
+    # COUNT(DISTINCT institutional_id) semantics are preserved).
+    canon_ticker = case(
+        _SHARE_CLASS_PRIMARY,
+        value=InstitutionalHolding.ticker,
+        else_=InstitutionalHolding.ticker,
+    ).label("ticker")
     mp_rows = db.execute(
         select(
-            InstitutionalHolding.ticker,
+            canon_ticker,
             func.max(InstitutionalHolding.company_name).label("company_name"),
             func.count(func.distinct(InstitutionalFiling.institutional_id)).label("holder_count"),
             func.coalesce(func.sum(InstitutionalHolding.value_usd), 0).label("total_value"),
@@ -674,7 +772,7 @@ def get_aggregate_stats(
         )
         .join(InstitutionalFiling, InstitutionalFiling.id == InstitutionalHolding.filing_id)
         .where(InstitutionalHolding.filing_id.in_(latest_filing_ids))
-        .group_by(InstitutionalHolding.ticker)
+        .group_by(canon_ticker)
         .order_by(
             func.count(func.distinct(InstitutionalFiling.institutional_id)).desc(),
             func.coalesce(func.sum(InstitutionalHolding.value_usd), 0).desc(),
@@ -682,13 +780,15 @@ def get_aggregate_stats(
         .limit(most_picked_limit)
     ).all()
 
-    # Per-ticker holder names (top 5 each, for display).
+    # Per-ticker holder names (top 5 each, for display). Uses the same
+    # canonical ticker so GOOGL rows land under GOOG; the dedupe guard
+    # keeps a fund holding both classes from appearing twice.
     top_tickers = [r[0] for r in mp_rows]
     holder_names_by_ticker: dict[str, list[str]] = defaultdict(list)
     if top_tickers:
         name_rows = db.execute(
             select(
-                InstitutionalHolding.ticker,
+                canon_ticker,
                 Institutional.name,
                 InstitutionalHolding.portfolio_pct,
             )
@@ -696,13 +796,14 @@ def get_aggregate_stats(
             .join(Institutional, Institutional.id == InstitutionalFiling.institutional_id)
             .where(
                 InstitutionalHolding.filing_id.in_(latest_filing_ids),
-                InstitutionalHolding.ticker.in_(top_tickers),
+                canon_ticker.in_(top_tickers),
             )
             .order_by(InstitutionalHolding.portfolio_pct.desc().nullslast())
         ).all()
         for ticker, name, _pct in name_rows:
-            if len(holder_names_by_ticker[ticker]) < 5:
-                holder_names_by_ticker[ticker].append(name)
+            names = holder_names_by_ticker[ticker]
+            if name not in names and len(names) < 5:
+                names.append(name)
 
     # Catalog enrichment for top tickers
     catalog_by_ticker: dict[str, tuple[int | None, str | None, str | None]] = {}
@@ -745,7 +846,7 @@ def get_aggregate_stats(
     # similar for sells. Within each action type the same value-DESC
     # ordering applies.
     def _per_action(action: str, limit: int) -> list[ActionAggregate]:
-        rows = db.execute(
+        stmt = (
             select(
                 InstitutionalHolding.ticker,
                 InstitutionalHolding.company_name,
@@ -800,7 +901,27 @@ def get_aggregate_stats(
                 ).desc(),
             )
             .limit(limit)
-        ).all()
+        )
+        if action == "new":
+            # Same rule as `_substantiated_new` (SQL form): "new" is only
+            # trustworthy when the fund has a filing STRICTLY OLDER than
+            # this row's period — otherwise "first appearance" just means
+            # "the only filing we have" and the label is unknown, not new.
+            # Applied here as a hard WHERE so unsubstantiated first-snapshot
+            # rows can never resurface in the buys card even if bad data
+            # (pre-repair action='new' stamps) reappears upstream.
+            prev_filing = aliased(InstitutionalFiling)
+            stmt = stmt.where(
+                select(prev_filing.id)
+                .where(
+                    prev_filing.institutional_id
+                    == InstitutionalFiling.institutional_id,
+                    prev_filing.period_end_date
+                    < InstitutionalFiling.period_end_date,
+                )
+                .exists()
+            )
+        rows = db.execute(stmt).all()
         return [
             ActionAggregate(
                 ticker=ticker, company_name=company_name,
@@ -923,7 +1044,7 @@ def holders_for_ticker(
     ticker: str,
     *,
     limit: int = 25,
-    max_age_months: int = 18,
+    max_age_months: int = MAX_FILING_AGE_MONTHS,
 ) -> list[TickerHolder]:
     """Return the list of institutionals holding `ticker` in their
     latest filing. Used by the InstitutionalHoldersCard above the
@@ -943,10 +1064,8 @@ def holders_for_ticker(
     by default — beyond that the card would bleed into a full-page
     table; UI shows a "view all" link.
     """
-    from datetime import date, timedelta
-
     rank, latest = _latest_filings_subq(db)
-    cutoff = date.today() - timedelta(days=int(30.4 * max_age_months))
+    cutoff = _freshness_cutoff(max_age_months)
     rows = db.execute(
         select(
             Institutional.id,
