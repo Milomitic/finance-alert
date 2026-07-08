@@ -1,11 +1,13 @@
 """Alert query and mutation service."""
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 import sqlalchemy
-from sqlalchemy import Float, asc, desc, func, or_, select, update
+from loguru import logger
+from sqlalchemy import Float, asc, desc, exists, func, or_, select, update
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.models import Alert, SignalOutcome, Stock
 
 # Columns that the caller may request sorting on.
@@ -75,6 +77,8 @@ def _apply_filters(
     strength_min: float | None = None,
     probability_min: float | None = None,
     nature: str | None = None,
+    outcome: str | None = None,
+    horizon: str | None = None,
 ):
     if ticker:
         stmt = stmt.where(func.lower(Stock.ticker) == ticker.lower())
@@ -123,6 +127,26 @@ def _apply_filters(
         stmt = stmt.where(Alert.signal_name.in_(_CONTINUATION_SIGNALS))
     elif nature == "inversione":
         stmt = stmt.where(Alert.signal_name.in_(_REVERSAL_SIGNALS))
+    # Realised-outcome filter. Rides the LEFT OUTER JOIN on signal_outcomes the
+    # list query already carries (at most one row per alert — unique index on
+    # alert_id), so no extra join is introduced here. "pending" mirrors the UI's
+    # "in maturazione" cell: a SIGNAL alert (name + date present) whose outcome
+    # row doesn't exist yet — legacy/price alerts are excluded because they will
+    # never mature.
+    if outcome == "hit":
+        stmt = stmt.where(SignalOutcome.abs_hit == 1)
+    elif outcome == "miss":
+        stmt = stmt.where(SignalOutcome.abs_hit == 0)
+    elif outcome == "pending":
+        stmt = stmt.where(
+            SignalOutcome.alert_id.is_(None),
+            Alert.signal_name.is_not(None),
+            Alert.signal_date.is_not(None),
+        )
+    # Horizon filter: short | medium | long, from snapshot.horizon — same
+    # json_extract shape as the tone filter above.
+    if horizon is not None:
+        stmt = stmt.where(func.json_extract(Alert.snapshot, "$.horizon") == horizon)
     return stmt
 
 
@@ -165,6 +189,8 @@ def list_alerts(
     strength_min: float | None = None,
     probability_min: float | None = None,
     nature: str | None = None,
+    outcome: str | None = None,
+    horizon: str | None = None,
     limit: int = 50,
     offset: int = 0,
     sort_by: str = "triggered_at",
@@ -202,6 +228,8 @@ def list_alerts(
         strength_min=strength_min,
         probability_min=probability_min,
         nature=nature,
+        outcome=outcome,
+        horizon=horizon,
     )
     count_stmt = select(func.count()).select_from(base.subquery())
     total = int(db.execute(count_stmt).scalar_one())
@@ -266,6 +294,40 @@ def patch_alert(
     db.commit()
     db.refresh(a)
     return a
+
+
+def archive_concluded_alerts(db: Session, *, now: datetime | None = None) -> int:
+    """Auto-archive CONCLUDED alerts at scan end. Returns rows archived.
+
+    Concluded = the outcome row exists (the signal matured — its Esito is
+    final) AND the signal_date has left the confluence active window
+    (`settings.signal_max_age_days`, the same 7-day cutoff compute_confluence
+    uses). Such rows are pure history: they can't refresh (freeze post-esito),
+    can't join a confluence cluster, and only clutter the active feed. One
+    UPDATE..WHERE with a correlated EXISTS — the unique ix_signal_outcomes_alert
+    index makes the probe a point lookup and ix_alerts_archived_triggered keeps
+    the active-rows scan tight. Gated by `settings.auto_archive_concluded`;
+    pending outcomes and recent signals are never touched.
+    """
+    if not settings.auto_archive_concluded:
+        return 0
+    now = now or datetime.now(UTC)
+    cutoff = now.date() - timedelta(days=settings.signal_max_age_days)
+    res = db.execute(
+        update(Alert)
+        .where(
+            Alert.archived_at.is_(None),
+            Alert.signal_date.is_not(None),
+            Alert.signal_date < cutoff,
+            exists(select(SignalOutcome.id).where(SignalOutcome.alert_id == Alert.id)),
+        )
+        .values(archived_at=now)
+    )
+    db.commit()
+    n = int(res.rowcount or 0)
+    if n:
+        logger.info(f"[alerts] auto-archived {n} concluded alert(s) older than {cutoff}")
+    return n
 
 
 def bulk_action(db: Session, ids: list[int], action: str) -> int:

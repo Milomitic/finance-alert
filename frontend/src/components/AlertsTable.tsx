@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/table";
 import { TableSearchInput } from "@/components/ui/table-search-input";
 import { useColumnVisibility } from "@/hooks/useColumnVisibility";
+import { useSignalCalibration } from "@/hooks/useSignalCalibration";
 import {
   daysBetween,
   formatShortDate,
@@ -145,6 +146,19 @@ export function AlertsTable({
   onArchiveToggle,
 }: Props) {
   const allSelected = alerts.length > 0 && alerts.every((a) => selectedIds.has(a.id));
+
+  // Per-detector calibration table for the Prob.-cell honesty marker. ONE
+  // cached fetch (react-query staleTime 1h, shared with the signal popup and
+  // the Settings page) — the lookup below is a plain dict access per row.
+  const { data: calibration } = useSignalCalibration();
+
+  /** Honesty tag for an alert's detector (coinflip / negative / edge / null).
+   *  Null while the calibration table is loading or for non-signal alerts. */
+  const calibrationTag = (rule_kind: string | null | undefined) => {
+    if (!calibration || !isSignalKind(rule_kind)) return null;
+    const detector = (rule_kind as string).slice("signal:".length);
+    return calibration.detectors[detector]?.tag ?? null;
+  };
 
   // Column visibility — non-embedded only. Embedded mode has a fixed set
   // of columns (no menu, no toggles).
@@ -553,8 +567,24 @@ export function AlertsTable({
                     return <div className="text-right"><span className="text-muted-foreground">—</span></div>;
                   }
                   const pct = Math.max(0, Math.min(100, prob));
+                  // Honesty marker: tiny amber/red dot when the detector's
+                  // beta-stripped calibration says coinflip / negative — same
+                  // copy as the badge in SignalSnapshotView, in dot form.
+                  const tag = calibrationTag(a.rule_kind);
                   return (
                     <div className="flex items-center justify-end gap-2" title={`Probabilità ${pct}% — ${PROBABILITA_TOOLTIP}`}>
+                      {tag === "coinflip" && (
+                        <span
+                          className="h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0"
+                          title="Storicamente ~50/50 al netto del mercato: nessun edge direzionale dimostrato"
+                        />
+                      )}
+                      {tag === "negative" && (
+                        <span
+                          className="h-1.5 w-1.5 rounded-full bg-rose-500 shrink-0"
+                          title="Edge storico NEGATIVO al netto del mercato: segnale anti-predittivo"
+                        />
+                      )}
                       <span className="text-sm font-semibold tabular-nums w-10 text-right text-slate-700 dark:text-slate-300">
                         {pct}%
                       </span>

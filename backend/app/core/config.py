@@ -90,6 +90,20 @@ class Settings(BaseSettings):
     # instead of inserting a duplicate. The anchor moves forward on each refresh,
     # so an indefinitely-persistent setup stays a single living alert.
     signal_dedup_cooldown_days: int = 14
+    # Chain lifetime cap: a PERSISTENT condition re-arms the dedup cooldown on
+    # every scan, so a living alert could refresh forever and never leave the
+    # confluence window. Once (signal_date - first_emitted_at) exceeds this many
+    # days the chain dies: the refresh stops (no amend, no new row) and a fresh
+    # alert is only inserted when the detector re-fires OUTSIDE the cooldown of
+    # the now-frozen anchor. 28d = two cooldown windows — long enough for a real
+    # multi-week setup, short enough that "always on" conditions stop looping.
+    signal_chain_max_age_days: int = 28
+    # Auto-archive concluded signals at scan end: alerts whose outcome row has
+    # matured AND whose signal_date has left the confluence window
+    # (signal_max_age_days) are archived in one UPDATE, so the active feed only
+    # shows setups that are still actionable. The rows stay queryable via the
+    # "Solo archiviati" filter; flip to False to keep concluded alerts active.
+    auto_archive_concluded: bool = True
     # Quality gates to cut false positives (both default ON; override in .env).
     # Regime gate: drop trend-following signals whose direction contradicts the
     # prevailing EMA200-slope trend (reversal/fundamental detectors are exempt).

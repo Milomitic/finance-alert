@@ -21,7 +21,7 @@ from datetime import date, timedelta
 
 import numpy as np
 from loguru import logger
-from sqlalchemy import select
+from sqlalchemy import exists, select
 from sqlalchemy.orm import Session
 
 from app.models import Alert, OhlcvDaily, SignalOutcome, Stock
@@ -173,11 +173,18 @@ def _trigger_index(dates: np.ndarray, signal_date: date) -> int | None:
 
 def mature_outcomes(db: Session, *, commit: bool = True) -> int:
     """Write outcome rows for newly-matured signal alerts. Returns rows added."""
-    existing = set(db.execute(select(SignalOutcome.alert_id)).scalars().all())
-    alerts = db.execute(
-        select(Alert).where(Alert.signal_name.is_not(None), Alert.signal_date.is_not(None))
-    ).scalars().all()
-    pending = [a for a in alerts if a.id not in existing]
+    # Anti-join in SQL: only alerts WITHOUT an outcome row come back. The old
+    # shape loaded every signal alert + every outcome alert_id into Python and
+    # set-differenced them — O(all history) per scan. NOT EXISTS resolves as a
+    # point probe per alert on the unique ix_signal_outcomes_alert index, and
+    # already-matured alerts never leave the database.
+    pending = list(db.execute(
+        select(Alert).where(
+            Alert.signal_name.is_not(None),
+            Alert.signal_date.is_not(None),
+            ~exists(select(SignalOutcome.id).where(SignalOutcome.alert_id == Alert.id)),
+        )
+    ).scalars())
     if not pending:
         return 0
 

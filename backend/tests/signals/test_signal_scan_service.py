@@ -1,7 +1,7 @@
 import json
 from datetime import UTC, date, datetime
 import pandas as pd
-from app.models import Alert, Stock
+from app.models import Alert, SignalOutcome, Stock
 from app.signals.signal_scan_service import evaluate_signals
 
 
@@ -94,16 +94,32 @@ def _relax(monkeypatch, *, cooldown=14):
     monkeypatch.setattr("app.signals.signal_scan_service.settings.signal_dedup_cooldown_days", cooldown)
 
 
-def _seed_prior(db, stock, *, signal_date, tone="bull", price=50.0, archived=False):
-    """Pre-existing volume_breakout alert to exercise the cooldown branch."""
+def _seed_prior(db, stock, *, signal_date, tone="bull", price=50.0, archived=False,
+                first_emitted=None):
+    """Pre-existing volume_breakout alert to exercise the cooldown branch.
+    `first_emitted` (ISO string) stamps snapshot.first_emitted_at so the
+    chain-lifetime cap can be exercised on a seeded chain."""
+    snap = {"tone": tone, "confidence": 70}
+    if first_emitted is not None:
+        snap["first_emitted_at"] = first_emitted
     a = Alert(
         stock_id=stock.id, trigger_price=price, signal_date=signal_date,
         signal_name="volume_breakout",
-        snapshot=json.dumps({"tone": tone, "confidence": 70}),
+        snapshot=json.dumps(snap),
         archived_at=datetime.now(UTC) if archived else None,
     )
     db.add(a); db.flush()
     return a
+
+
+def _seed_outcome(db, alert):
+    """Matured SignalOutcome row for `alert` (freeze post-esito substrate)."""
+    db.add(SignalOutcome(
+        alert_id=alert.id, stock_id=alert.stock_id, detector=alert.signal_name,
+        signal_date=alert.signal_date, tone="bull", horizon_days=10,
+        entry_close=50.0, forward_close=55.0, fwd_return=0.1, abs_hit=1,
+    ))
+    db.flush()
 
 
 def _vb_rows(db, stock):
@@ -165,6 +181,89 @@ def test_cooldown_respects_archived_alert(db, monkeypatch):
     assert rows[0].id == prior.id
     assert rows[0].archived_at is not None      # left archived, untouched
     assert float(rows[0].trigger_price) == 50.0  # not refreshed
+
+
+# --- Freeze post-esito ------------------------------------------------------
+
+def test_matured_prior_is_frozen_and_new_row_inserted(db, monkeypatch):
+    """Once the prior alert's outcome matured, the refresh must NOT amend it:
+    the Esito describes the frozen bar. The re-detection inserts a NEW row."""
+    _relax(monkeypatch)
+    s = Stock(ticker="CD_FROZEN", exchange="NASDAQ", name="Cd", country="US")
+    db.add(s); db.flush()
+    prior = _seed_prior(db, s, signal_date=date(2026, 4, 28), price=50.0)
+    _seed_outcome(db, prior)
+    db.commit()
+    evaluate_signals(db, s, _confirmed_df())  # volume_breakout signal_date 2026-05-01
+    db.commit()
+    rows = _vb_rows(db, s)
+    assert len(rows) == 2                            # new row, prior NOT refreshed
+    frozen = next(r for r in rows if r.id == prior.id)
+    assert frozen.signal_date == date(2026, 4, 28)   # anchor frozen
+    assert float(frozen.trigger_price) == 50.0       # price frozen
+    assert "amended_at" not in json.loads(frozen.snapshot)
+    fresh = next(r for r in rows if r.id != prior.id)
+    assert fresh.signal_date == date(2026, 5, 1)     # the re-detection, own row
+    assert "amended_at" not in json.loads(fresh.snapshot)
+
+
+def test_unmatured_prior_still_amended(db, monkeypatch):
+    """No outcome row yet → the living-setup refresh amends in place as before
+    (the other side of the freeze boundary)."""
+    _relax(monkeypatch)
+    s = Stock(ticker="CD_LIVE", exchange="NASDAQ", name="Cd", country="US")
+    db.add(s); db.flush()
+    prior = _seed_prior(db, s, signal_date=date(2026, 4, 28), price=50.0)
+    db.commit()
+    evaluate_signals(db, s, _confirmed_df())
+    db.commit()
+    rows = _vb_rows(db, s)
+    assert len(rows) == 1 and rows[0].id == prior.id
+    assert rows[0].signal_date == date(2026, 5, 1)   # amended forward
+
+
+# --- Chain lifetime cap -------------------------------------------------------
+
+def test_chain_dies_past_lifetime_cap(db, monkeypatch):
+    """A chain older than signal_chain_max_age_days stops refreshing: no amend
+    AND no new row — the persistent condition must not re-arm the cooldown
+    forever."""
+    _relax(monkeypatch)
+    monkeypatch.setattr(
+        "app.signals.signal_scan_service.settings.signal_chain_max_age_days", 28)
+    s = Stock(ticker="CD_CAP", exchange="NASDAQ", name="Cd", country="US")
+    db.add(s); db.flush()
+    # sig_date will be 2026-05-01; first emitted 2026-04-02 → 29 days > 28.
+    prior = _seed_prior(db, s, signal_date=date(2026, 4, 28), price=50.0,
+                        first_emitted="2026-04-02T09:00:00+00:00")
+    db.commit()
+    evaluate_signals(db, s, _confirmed_df())
+    db.commit()
+    rows = _vb_rows(db, s)
+    assert len(rows) == 1 and rows[0].id == prior.id   # chain died: no new row
+    assert rows[0].signal_date == date(2026, 4, 28)    # not amended either
+    assert float(rows[0].trigger_price) == 50.0
+
+
+def test_chain_still_refreshes_at_exact_cap(db, monkeypatch):
+    """Boundary: (signal_date - first_emitted) == cap days is NOT past the cap
+    (strictly greater kills the chain) → refresh proceeds."""
+    _relax(monkeypatch)
+    monkeypatch.setattr(
+        "app.signals.signal_scan_service.settings.signal_chain_max_age_days", 28)
+    s = Stock(ticker="CD_CAP_OK", exchange="NASDAQ", name="Cd", country="US")
+    db.add(s); db.flush()
+    # sig_date 2026-05-01; first emitted 2026-04-03 → exactly 28 days.
+    prior = _seed_prior(db, s, signal_date=date(2026, 4, 28), price=50.0,
+                        first_emitted="2026-04-03T09:00:00+00:00")
+    db.commit()
+    evaluate_signals(db, s, _confirmed_df())
+    db.commit()
+    rows = _vb_rows(db, s)
+    assert len(rows) == 1 and rows[0].id == prior.id
+    assert rows[0].signal_date == date(2026, 5, 1)     # amended forward
+    snap = json.loads(rows[0].snapshot)
+    assert snap.get("first_emitted_at") == "2026-04-03T09:00:00+00:00"  # preserved
 
 
 def test_new_alert_after_cooldown_gap(db, monkeypatch):

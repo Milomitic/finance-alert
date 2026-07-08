@@ -478,6 +478,15 @@ def run_tracked_scan(
             signal_outcome_service.mature_outcomes(db)
         except Exception as out_exc:  # noqa: BLE001
             logger.warning(f"[scan_runner] outcome maturation failed (non-fatal): {out_exc}")
+        # Auto-archive concluded alerts (outcome matured + signal_date past the
+        # confluence window). Runs AFTER mature_outcomes so this scan's freshly
+        # matured rows are eligible immediately. Best-effort + gated by
+        # settings.auto_archive_concluded inside the service.
+        try:
+            from app.services import alert_service
+            alert_service.archive_concluded_alerts(db)
+        except Exception as arch_exc:  # noqa: BLE001
+            logger.warning(f"[scan_runner] concluded auto-archive failed (non-fatal): {arch_exc}")
         # Snapshot the day's composites into score_history (best-effort; the
         # substrate for the score-IC backtest). Idempotent per day.
         try:

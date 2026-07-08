@@ -302,6 +302,8 @@ def _validate_signal_filters(
     strength_min: float | None,
     probability_min: float | None,
     nature: str | None,
+    outcome: str | None = None,
+    horizon: str | None = None,
 ) -> None:
     """Shared 422 validation for the snapshot-derived filters. Used by both
     the list endpoint and the CSV export so the two accept the exact same
@@ -321,6 +323,18 @@ def _validate_signal_filters(
             status_code=422,
             detail="nature must be 'continuazione' or 'inversione'",
         )
+    # Realised-outcome + horizon filters (list endpoint only; defaults keep the
+    # export call sites unchanged).
+    if outcome is not None and outcome not in ("hit", "miss", "pending"):
+        raise HTTPException(
+            status_code=422,
+            detail="outcome must be one of 'hit', 'miss', 'pending'",
+        )
+    if horizon is not None and horizon not in ("short", "medium", "long"):
+        raise HTTPException(
+            status_code=422,
+            detail="horizon must be one of 'short', 'medium', 'long'",
+        )
 
 
 @router.get("", response_model=AlertListOut)
@@ -336,6 +350,8 @@ def list_alerts(
     strength_min: float | None = None,
     probability_min: float | None = None,
     nature: str | None = None,
+    outcome: str | None = None,
+    horizon: str | None = None,
     limit: int = 50,
     offset: int = 0,
     sort_by: str = "triggered_at",
@@ -360,6 +376,8 @@ def list_alerts(
         strength_min=strength_min,
         probability_min=probability_min,
         nature=nature,
+        outcome=outcome,
+        horizon=horizon,
     )
     if confidence_min is not None and not (0.0 <= confidence_min <= 100.0):
         raise HTTPException(
@@ -379,6 +397,8 @@ def list_alerts(
         strength_min=strength_min,
         probability_min=probability_min,
         nature=nature,
+        outcome=outcome,
+        horizon=horizon,
         limit=limit,
         offset=offset,
         sort_by=sort_by,

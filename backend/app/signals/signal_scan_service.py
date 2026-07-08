@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.models import Alert, ScanRun, Stock
+from app.models import Alert, ScanRun, SignalOutcome, Stock
 from app.signals.context import build_context
 from app.signals.horizon import classify_horizon
 from app.signals.detectors.registry import DETECTORS
@@ -182,7 +182,31 @@ def evaluate_signals(
             .limit(1)
         ).scalars().first()
         if prior is not None and _snapshot_tone(prior.snapshot) == m.tone \
-                and _within_cooldown(prior.signal_date, sig_date):
+                and _within_cooldown(prior.signal_date, sig_date) \
+                and not _outcome_matured(db, prior.id):
+            # NOTE the freeze-post-esito guard above: once the prior alert has a
+            # matured SignalOutcome row, its Esito describes the FROZEN
+            # signal_date/price — amending it would make the outcome column lie
+            # about a bar the row no longer shows. A matured prior is therefore
+            # immutable history: we fall through and insert a NEW alert row for
+            # the re-detection instead (single indexed lookup on the unique
+            # ix_signal_outcomes_alert, so the cost is one point query).
+            try:
+                _prior_snap = json.loads(prior.snapshot) if prior.snapshot else {}
+            except (ValueError, TypeError):
+                _prior_snap = {}
+            # Chain lifetime cap: a persistent condition re-arms the cooldown on
+            # every scan, so without a cap the chain would refresh forever and
+            # never leave the 7-day confluence window. Once the anchor has moved
+            # more than `signal_chain_max_age_days` past the ORIGINAL emission
+            # (snapshot.first_emitted_at, stamped by the amend-provenance
+            # change), let the chain die: no amend AND no new row — a fresh
+            # alert appears only when the detector re-fires outside the cooldown
+            # of the now-frozen anchor.
+            first_emitted_d = _iso_to_date(_prior_snap.get("first_emitted_at"))
+            if first_emitted_d is not None and sig_date is not None \
+                    and (sig_date - first_emitted_d).days > settings.signal_chain_max_age_days:
+                continue
             if prior.archived_at is None:
                 # Same ongoing setup -> refresh the live alert IN PLACE with the
                 # latest recomputed snapshot. The whole snapshot is replaced (not
@@ -191,10 +215,6 @@ def evaluate_signals(
                 # original `first_emitted_at` and stamp `amended_at` = now.
                 # signal_date + triggered_at advance together (the anchor moves
                 # forward) without faking a delayed-detection gap.
-                try:
-                    _prior_snap = json.loads(prior.snapshot) if prior.snapshot else {}
-                except (ValueError, TypeError):
-                    _prior_snap = {}
                 snapshot["first_emitted_at"] = (
                     _prior_snap.get("first_emitted_at")
                     or (prior.triggered_at.isoformat() if prior.triggered_at else now_iso)
@@ -218,6 +238,27 @@ def evaluate_signals(
         ))
         added += 1
     return added
+
+
+def _iso_to_date(v: object) -> date | None:
+    """Date part of an ISO datetime string (e.g. snapshot.first_emitted_at).
+    None on missing/unparsable input — unlike `_to_date` it never logs, since
+    a legacy snapshot without the key is an expected, silent case."""
+    if not v:
+        return None
+    try:
+        return date.fromisoformat(str(v)[:10])
+    except ValueError:
+        return None
+
+
+def _outcome_matured(db: Session, alert_id: int) -> bool:
+    """True when the alert already has a matured SignalOutcome row. Point query
+    on the unique ix_signal_outcomes_alert index — cheap enough to run once per
+    dedup-candidate signal."""
+    return db.execute(
+        select(SignalOutcome.id).where(SignalOutcome.alert_id == alert_id).limit(1)
+    ).first() is not None
 
 
 def _snapshot_tone(snapshot_str: str | None) -> str | None:

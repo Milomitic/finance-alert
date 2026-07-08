@@ -4,7 +4,7 @@ from datetime import date
 
 import pytest
 
-from app.models import Alert, Stock
+from app.models import Alert, SignalOutcome, Stock
 from app.services.alert_service import list_alerts
 
 
@@ -100,3 +100,73 @@ def test_filter_tone_and_confidence_combined(db):
     items, total, _ = list_alerts(db, tone="bull", confidence_min=80.0)
     assert [i["ticker"] for i in items] == ["A"]
     assert total == 1
+
+
+# ── outcome + horizon filters ────────────────────────────────────────────────
+
+def _seed_with_outcome(db, ticker, *, horizon="short", abs_hit=None):
+    """Signal alert with snapshot.horizon; abs_hit=None leaves it pending
+    (no outcome row), 1/0 writes the matured SignalOutcome row."""
+    s = Stock(ticker=ticker, exchange="NASDAQ", name=ticker, country="US")
+    db.add(s)
+    db.flush()
+    a = Alert(
+        stock_id=s.id,
+        trigger_price=10.0,
+        signal_date=date(2026, 5, 1),
+        signal_name="volume_breakout",
+        snapshot=json.dumps({"tone": "bull", "strength": 70, "horizon": horizon}),
+    )
+    db.add(a)
+    db.flush()
+    if abs_hit is not None:
+        db.add(SignalOutcome(
+            alert_id=a.id, stock_id=s.id, detector="volume_breakout",
+            signal_date=a.signal_date, tone="bull", horizon_days=10,
+            entry_close=10.0, forward_close=11.0, fwd_return=0.1,
+            abs_hit=abs_hit,
+        ))
+    db.commit()
+    return a
+
+
+def test_filter_by_outcome_hit_miss_pending(db):
+    _seed_with_outcome(db, "HIT1", abs_hit=1)
+    _seed_with_outcome(db, "MISS1", abs_hit=0)
+    _seed_with_outcome(db, "PEND1", abs_hit=None)
+
+    items, total, _ = list_alerts(db, outcome="hit")
+    assert [i["ticker"] for i in items] == ["HIT1"] and total == 1
+
+    items, total, _ = list_alerts(db, outcome="miss")
+    assert [i["ticker"] for i in items] == ["MISS1"] and total == 1
+
+    items, total, _ = list_alerts(db, outcome="pending")
+    assert [i["ticker"] for i in items] == ["PEND1"] and total == 1
+
+
+def test_filter_outcome_pending_excludes_legacy_rows(db):
+    """A legacy/price alert (no signal_name/signal_date) never matures, so it
+    must NOT read as 'pending' — pending means 'in maturazione'."""
+    s = Stock(ticker="LEGCY", exchange="NASDAQ", name="Legacy", country="US")
+    db.add(s)
+    db.flush()
+    db.add(Alert(stock_id=s.id, trigger_price=5.0, snapshot=json.dumps({"rsi": 28})))
+    db.commit()
+    _seed_with_outcome(db, "PEND2", abs_hit=None)
+
+    items, total, _ = list_alerts(db, outcome="pending")
+    assert [i["ticker"] for i in items] == ["PEND2"] and total == 1
+
+
+def test_filter_by_horizon(db):
+    _seed_with_outcome(db, "SHRT", horizon="short")
+    _seed_with_outcome(db, "MEDM", horizon="medium")
+    _seed_with_outcome(db, "LONG", horizon="long")
+
+    items, total, _ = list_alerts(db, horizon="medium")
+    assert [i["ticker"] for i in items] == ["MEDM"] and total == 1
+
+    # Combined with outcome: nothing matured yet → hit+medium is empty.
+    items, total, _ = list_alerts(db, horizon="medium", outcome="hit")
+    assert items == [] and total == 0
