@@ -561,6 +561,19 @@ SURFACING + SUBSTRATE — none of it changes the composite/Probabilità/targets.
   weight any of these into the composite without the score-IC backtest
   (roadmap #9) over persisted score_history + point-in-time fundamentals.
 
+### Factor-adjustment fitting RUN (2026-07-08) — verdict: Probabilità stays a per-detector base rate
+The B4-4 gate was executed (`app.scripts.fit_signal_calibration --sample 999`,
+247k replayed signals, two OOS splits: by-stock and temporal old→recent).
+Both candidate models FAILED the adoption bar (≥2% Brier improvement on BOTH
+splits + no log-loss regression + monotone reliability): isotonic ΔBrier
+−0.71%/−0.44% (worse than baseline, non-monotone), logistic +0.04%/−0.16%
+(flat, log-loss regression). **`factor_adjustments` stays `{}` — per-factor
+Probabilità adjustments demonstrably do not improve out-of-sample prediction
+on this data. The UI tooltip (lib/alertMeta.ts PROBABILITA_TOOLTIP) now states
+honestly that Probabilità is the detector's base rate, identical for every
+signal of the same detector. Do NOT re-run this gate expecting a different
+answer without materially new data (e.g. 6-12 months of live outcomes).**
+
 ### Score-IC backtest RUN (2026-07-07) — verdict: NO reweighting is justified
 The roadmap-#9 gate was executed (`app.scripts.score_ic_backtest`, point-in-time
 SEC facts, 552 US stocks, 39 quarterly cross-sections 2010-2026, 20,217 obs;

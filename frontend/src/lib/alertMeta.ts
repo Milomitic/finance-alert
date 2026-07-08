@@ -161,9 +161,16 @@ export const TONE_LABEL: Record<AlertTone, string> = {
  * helpers below simply read them — no legacy confidence/calibration fallback. */
 
 /** Tooltip copy for Probabilità — surfaced everywhere the metric appears so
- *  users understand it's an educational estimate, not a guarantee. */
+ *  users understand it's an educational estimate, not a guarantee.
+ *  Honest labeling (2026-07-08): the value is the DETECTOR's historical base
+ *  rate from the 10y replay — it does not vary per-signal. Per-factor
+ *  adjustments were fitted and REJECTED out-of-sample (no Brier improvement
+ *  on either the stock or temporal split), so claiming per-signal precision
+ *  would be false. */
 export const PROBABILITA_TOOLTIP =
-  "Tasso storico di accadimento di segnali simili (orizzonte) — non una garanzia.";
+  "Tasso storico del detector (replay 10 anni): quanto spesso segnali di questo " +
+  "tipo si sono realizzati sull'orizzonte. È una base rate — uguale per tutti i " +
+  "segnali dello stesso detector, non una previsione del singolo segnale né una garanzia.";
 
 /** Forza (pattern strength) for a signal snapshot.
  *  Reads `snapshot.strength`; null when it's not a number. */
