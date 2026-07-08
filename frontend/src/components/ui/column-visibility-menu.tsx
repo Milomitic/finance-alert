@@ -1,4 +1,6 @@
-import type { ColumnDef } from "@/hooks/useColumnVisibility";
+import { Columns3 } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -7,6 +9,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import type { ColumnDef } from "@/hooks/useColumnVisibility";
 
 interface Props {
   columns: ColumnDef[];
@@ -57,21 +60,66 @@ export function ColumnVisibilityMenu({
           }}
         />
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="min-w-[180px]">
-        <DropdownMenuLabel className="text-xs text-muted-foreground">
-          Colonne visibili
-        </DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        {columns.map((col) => (
-          <DropdownMenuCheckboxItem
-            key={col.id}
-            checked={isVisible(col.id)}
-            onCheckedChange={() => toggle(col.id)}
-          >
-            {col.label}
-          </DropdownMenuCheckboxItem>
-        ))}
-      </DropdownMenuContent>
+      <ColumnMenuContent columns={columns} isVisible={isVisible} toggle={toggle} />
+    </DropdownMenu>
+  );
+}
+
+/** Shared checkbox list rendered by both menu variants (context-menu and
+ *  toolbar button) so the column set can't drift between the two. */
+function ColumnMenuContent({
+  columns,
+  isVisible,
+  toggle,
+}: {
+  columns: ColumnDef[];
+  isVisible: (id: string) => boolean;
+  toggle: (id: string) => void;
+}) {
+  return (
+    <DropdownMenuContent align="start" className="min-w-[180px] max-h-[70vh] overflow-y-auto">
+      <DropdownMenuLabel className="text-xs text-muted-foreground">
+        Colonne visibili
+      </DropdownMenuLabel>
+      <DropdownMenuSeparator />
+      {columns.map((col) => (
+        <DropdownMenuCheckboxItem
+          key={col.id}
+          checked={isVisible(col.id)}
+          onCheckedChange={() => toggle(col.id)}
+        >
+          {col.label}
+        </DropdownMenuCheckboxItem>
+      ))}
+    </DropdownMenuContent>
+  );
+}
+
+/**
+ * Toolbar-button variant of the column-visibility menu: a visible "Colonne"
+ * button (the right-click context menu on the table header remains, but it
+ * was undiscoverable as the ONLY entry point). Shares the checkbox list —
+ * and therefore the persisted visibility state passed in by the caller —
+ * with `ColumnVisibilityMenu`.
+ */
+export function ColumnVisibilityButton({
+  columns,
+  isVisible,
+  toggle,
+}: {
+  columns: ColumnDef[];
+  isVisible: (id: string) => boolean;
+  toggle: (id: string) => void;
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5">
+          <Columns3 className="h-3.5 w-3.5" />
+          Colonne
+        </Button>
+      </DropdownMenuTrigger>
+      <ColumnMenuContent columns={columns} isVisible={isVisible} toggle={toggle} />
     </DropdownMenu>
   );
 }

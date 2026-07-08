@@ -1,15 +1,22 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
 import type { SortDir, StockSortBy } from "@/api/stocks";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
+  ColumnVisibilityButton,
+} from "@/components/ui/column-visibility-menu";
+import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import {
+  useColumnVisibility, type ColumnDef,
+} from "@/hooks/useColumnVisibility";
 import { useStockFilters, useStockSearch } from "@/hooks/useStockSearch";
 import { IndexPanoramaCard } from "@/components/stocks/IndexPanoramaCard";
 import {
+  SCREENER_COLS,
   StockBrowserTable,
   type TableSortKey,
 } from "@/components/stocks/StockBrowserTable";
@@ -29,7 +36,7 @@ const VALID_SORT_BY = new Set<StockSortBy>([
   "tech_composite", "tech_trend", "tech_momentum", "tech_structure",
   "tech_volume", "tech_rel_strength",
   // Phase A: metrics-backed server-sortable columns.
-  "price", "change_pct", "rsi14", "vol_ratio",
+  "price", "change_pct", "rsi14", "vol_ratio", "vol_today",
 ]);
 
 const VALID_RISK = new Set(["conservative", "moderate", "aggressive"] as const);
@@ -68,6 +75,24 @@ function parseNullableNumber(raw: string | null): number | null {
  *  serializer below). */
 function parseBoolParam(raw: string | null): boolean {
   return raw === "true";
+}
+
+/** Signals recency window from the URL: the explicit `signals_within_days`
+ *  param (1..90 int) wins; legacy `has_signals=true` links (pre-window)
+ *  map to the backend default of 7 days; anything else = filter off. */
+function parseSignalsWindow(searchParams: URLSearchParams): number | null {
+  const raw = searchParams.get("signals_within_days");
+  if (raw != null) {
+    const n = Number(raw);
+    if (Number.isInteger(n) && n >= 1 && n <= 90) return n;
+  }
+  return parseBoolParam(searchParams.get("has_signals")) ? 7 : null;
+}
+
+/** 1-based `page` URL param → 0-based internal index. Garbage/absent → 0. */
+function parsePageParam(raw: string | null): number {
+  const n = Number(raw);
+  return Number.isInteger(n) && n >= 1 ? n - 1 : 0;
 }
 
 function parseSortBy(raw: string | null): TableSortKey {
@@ -163,7 +188,9 @@ function PaginationStrip({
 
 export default function StocksBrowserPage() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const [page, setPage] = useState(0);
+  // Page index (0-based) initialized from the URL so back-nav / shared links
+  // land on the same page instead of silently resetting to page 1.
+  const [page, setPage] = useState(() => parsePageParam(searchParams.get("page")));
   const [pageSize, setPageSize] = useState<PageSize>(() =>
     parsePageSize(searchParams.get("page_size")),
   );
@@ -201,7 +228,7 @@ export default function StocksBrowserPage() {
     aboveEma200: parseBoolParam(searchParams.get("above_ema200")),
     near52wHigh: parseBoolParam(searchParams.get("near_52w_high")),
     near52wLow: parseBoolParam(searchParams.get("near_52w_low")),
-    hasSignals: parseBoolParam(searchParams.get("has_signals")),
+    signalsWithinDays: parseSignalsWindow(searchParams),
     priceMin: parseNullableNumber(searchParams.get("price_min")),
     priceMax: parseNullableNumber(searchParams.get("price_max")),
     changeMin: parseNullableNumber(searchParams.get("change_min")),
@@ -216,9 +243,22 @@ export default function StocksBrowserPage() {
     parseSortDir(searchParams.get("sort_dir")),
   );
 
-  // Persist state to URL when it changes (for shareable links). Pagination
-  // resets on every filter / sort / page-size change since the new view
-  // would otherwise overshoot the result set.
+  // Pagination resets when filters / sort / page-size actually CHANGE (the
+  // new view would otherwise overshoot the result set) — but NOT on mount,
+  // or the page parsed from the URL would be clobbered on back-nav.
+  const skipFirstReset = useRef(true);
+  useEffect(() => {
+    if (skipFirstReset.current) {
+      skipFirstReset.current = false;
+      return;
+    }
+    setPage(0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [q, state, sortBy, sortDir, pageSize]);
+
+  // Persist state to URL when it changes (for shareable links). The page
+  // number is serialized too (1-based, omitted on page 1) so back-nav
+  // restores the exact view.
   useEffect(() => {
     const sp = new URLSearchParams();
     if (q.trim()) sp.set("q", q.trim());
@@ -246,7 +286,10 @@ export default function StocksBrowserPage() {
     if (state.aboveEma200) sp.set("above_ema200", "true");
     if (state.near52wHigh) sp.set("near_52w_high", "true");
     if (state.near52wLow) sp.set("near_52w_low", "true");
-    if (state.hasSignals) sp.set("has_signals", "true");
+    if (state.signalsWithinDays != null) {
+      sp.set("has_signals", "true");
+      sp.set("signals_within_days", String(state.signalsWithinDays));
+    }
     if (state.priceMin != null) sp.set("price_min", String(state.priceMin));
     if (state.priceMax != null) sp.set("price_max", String(state.priceMax));
     if (state.changeMin != null) sp.set("change_min", String(state.changeMin));
@@ -256,10 +299,10 @@ export default function StocksBrowserPage() {
     if (sortBy !== "ticker") sp.set("sort_by", sortBy);
     if (sortDir !== "asc") sp.set("sort_dir", sortDir);
     if (pageSize !== 50) sp.set("page_size", String(pageSize));
+    if (page > 0) sp.set("page", String(page + 1));
     setSearchParams(sp, { replace: true });
-    setPage(0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q, state, sortBy, sortDir, pageSize]);
+  }, [q, state, sortBy, sortDir, pageSize, page]);
 
   // Click handler: same column flips direction; new column picks a sensible
   // default (asc for text columns, desc for numeric) and resets paging.
@@ -281,6 +324,14 @@ export default function StocksBrowserPage() {
   const handleTileFilter = (patch: Partial<FiltersState>) => {
     setState((prev) => ({ ...prev, ...patch }));
   };
+
+  // Column show/hide for the desktop table — lifted here so the toolbar
+  // "Colonne" button and the table's header right-click menu share ONE
+  // persisted state (localStorage key "colvis:screener").
+  const { isVisible: isColumnVisible, toggle: toggleColumn } = useColumnVisibility(
+    "screener",
+    SCREENER_COLS as unknown as ColumnDef[],
+  );
 
   const market = useMarketSummary();
   const singleIndexCode = state.indexCodes.length === 1 ? state.indexCodes[0] : null;
@@ -318,7 +369,8 @@ export default function StocksBrowserPage() {
     above_ema200: state.aboveEma200 || undefined,
     near_52w_high: state.near52wHigh || undefined,
     near_52w_low: state.near52wLow || undefined,
-    has_signals: state.hasSignals || undefined,
+    has_signals: state.signalsWithinDays != null || undefined,
+    signals_within_days: state.signalsWithinDays ?? undefined,
     price_min: state.priceMin ?? undefined,
     price_max: state.priceMax ?? undefined,
     change_min: state.changeMin ?? undefined,
@@ -390,6 +442,13 @@ export default function StocksBrowserPage() {
               ))}
             </SelectContent>
           </Select>
+          {/* Entry point visibile per mostrare/nascondere le colonne — il
+              right-click sull'header resta, ma da solo era inscopribile. */}
+          <ColumnVisibilityButton
+            columns={SCREENER_COLS as unknown as ColumnDef[]}
+            isVisible={isColumnVisible}
+            toggle={toggleColumn}
+          />
           <MetricsAsOf iso={searchQ.data?.metrics_computed_at} />
         </div>
         <PaginationStrip
@@ -417,6 +476,8 @@ export default function StocksBrowserPage() {
             onSortChange={handleSortChange}
             q={q}
             onQueryChange={setQ}
+            isColumnVisible={isColumnVisible}
+            onToggleColumn={toggleColumn}
           />
           {/* Bottom pagination — symmetric with the toolbar's. Shows count
               again since this is what the user sees after scrolling through

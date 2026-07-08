@@ -35,7 +35,8 @@ export type StockSortBy =
   | "price"
   | "change_pct"
   | "rsi14"
-  | "vol_ratio";
+  | "vol_ratio"
+  | "vol_today";
 export type SortDir = "asc" | "desc";
 
 export interface SearchParams {
@@ -74,6 +75,10 @@ export interface SearchParams {
   near_52w_high?: boolean;
   near_52w_low?: boolean;
   has_signals?: boolean;
+  /** Recency window (calendar days, 1..90) for has_signals — the backend
+   *  bounds the alert EXISTS on signal_date. Ignored when has_signals is
+   *  absent; backend default 7. */
+  signals_within_days?: number;
   /** Price & volume (from stock_metrics, EOD). */
   price_min?: number;
   price_max?: number;
@@ -120,7 +125,12 @@ function toQuery(params: SearchParams): string {
   if (params.above_ema200) sp.set("above_ema200", "true");
   if (params.near_52w_high) sp.set("near_52w_high", "true");
   if (params.near_52w_low) sp.set("near_52w_low", "true");
-  if (params.has_signals) sp.set("has_signals", "true");
+  if (params.has_signals) {
+    sp.set("has_signals", "true");
+    if (params.signals_within_days !== undefined) {
+      sp.set("signals_within_days", String(params.signals_within_days));
+    }
+  }
   // Price & volume (stock_metrics).
   if (params.price_min !== undefined) sp.set("price_min", String(params.price_min));
   if (params.price_max !== undefined) sp.set("price_max", String(params.price_max));

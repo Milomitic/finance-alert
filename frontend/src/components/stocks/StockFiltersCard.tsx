@@ -51,7 +51,10 @@ export interface FiltersState {
   aboveEma200: boolean;
   near52wHigh: boolean;
   near52wLow: boolean;
-  hasSignals: boolean;
+  /** Finestra "con segnali": null = filtro spento; altrimenti giorni entro
+   *  cui il segnale deve essere scattato (1 = Oggi, 7, 30). Sostituisce il
+   *  vecchio toggle senza limite temporale (che accendeva ~99% dei titoli). */
+  signalsWithinDays: number | null;
   // --- Prezzo & Volume (EOD metrics) ---
   /** Price range in listing currency, or null = no bound. */
   priceMin: number | null;
@@ -77,10 +80,33 @@ export const EMPTY_FILTERS: FiltersState = {
   marketCapMin: null, marketCapMax: null,
   rsiMin: null, rsiMax: null,
   aboveEma50: false, aboveEma200: false, near52wHigh: false, near52wLow: false,
-  hasSignals: false,
+  signalsWithinDays: null,
   priceMin: null, priceMax: null, changeMin: null, changeMax: null,
   volSpike: false, volumeMin: null,
 };
+
+/** Le finestre offerte dal filtro "con segnali". 1 = solo l'ultima seduta. */
+export const SIGNAL_WINDOW_OPTIONS: { days: number; label: string }[] = [
+  { days: 1, label: "Oggi" },
+  { days: 7, label: "7g" },
+  { days: 30, label: "30g" },
+];
+
+function signalsWindowLabel(days: number): string {
+  return SIGNAL_WINDOW_OPTIONS.find((o) => o.days === days)?.label ?? `${days}g`;
+}
+
+/** Merge a saved preset over EMPTY_FILTERS (fields added after the preset was
+ *  saved get sane defaults) and migrate the legacy `hasSignals` boolean to the
+ *  new `signalsWithinDays` window (7 giorni — the closest honest equivalent
+ *  of the old unbounded toggle). */
+function normalizePreset(saved: FiltersState): FiltersState {
+  const legacy = (saved as unknown as { hasSignals?: boolean }).hasSignals;
+  const next: FiltersState = { ...EMPTY_FILTERS, ...saved };
+  if (legacy && next.signalsWithinDays == null) next.signalsWithinDays = 7;
+  delete (next as unknown as { hasSignals?: boolean }).hasSignals;
+  return next;
+}
 
 const PRESETS_KEY = "screenerFilterPresets";
 
@@ -151,7 +177,7 @@ function PresetsMenu({
                 <li key={n} className="flex items-center gap-1 rounded hover:bg-accent">
                   <button
                     type="button"
-                    onClick={() => onChange({ ...EMPTY_FILTERS, ...presets[n] })}
+                    onClick={() => onChange(normalizePreset(presets[n]))}
                     className="flex-1 text-left px-2 py-1.5 text-sm truncate"
                     title={`Applica il preset "${n}"`}
                   >
@@ -539,7 +565,7 @@ export function StockFiltersCard({ state, onChange, filters }: Props) {
     (state.aboveEma200 ? 1 : 0) +
     (state.near52wHigh ? 1 : 0) +
     (state.near52wLow ? 1 : 0) +
-    (state.hasSignals ? 1 : 0);
+    (state.signalsWithinDays != null ? 1 : 0);
 
   const prezzoVolumeActive =
     (state.priceMin != null ? 1 : 0) +
@@ -569,8 +595,7 @@ export function StockFiltersCard({ state, onChange, filters }: Props) {
     const isBool =
       kind === "aboveEma50" || kind === "aboveEma200" ||
       kind === "near52wHigh" || kind === "near52wLow" ||
-      kind === "hasSignals" || kind === "volSpike" ||
-      kind === "excludeEtf";
+      kind === "volSpike" || kind === "excludeEtf";
     onChange({ ...state, [kind]: isBool ? false : null });
   };
 
@@ -812,7 +837,25 @@ export function StockFiltersCard({ state, onChange, filters }: Props) {
             <ToggleChip label="sopra EMA50" active={state.aboveEma50} onToggle={() => set({ aboveEma50: !state.aboveEma50 })} />
             <ToggleChip label="vicino max 52s" active={state.near52wHigh} onToggle={() => set({ near52wHigh: !state.near52wHigh })} />
             <ToggleChip label="vicino min 52s" active={state.near52wLow} onToggle={() => set({ near52wLow: !state.near52wLow })} />
-            <ToggleChip label="con segnali" active={state.hasSignals} onToggle={() => set({ hasSignals: !state.hasSignals })} />
+            {/* "Con segnali" con finestra di recenza — pill group come la
+                Postura. Cliccare la finestra attiva la spegne (toggle). */}
+            <div className="inline-flex items-center gap-1 h-9 px-2 rounded border border-input">
+              <span className="text-xs text-muted-foreground">Segnali</span>
+              {SIGNAL_WINDOW_OPTIONS.map((opt) => {
+                const on = state.signalsWithinDays === opt.days;
+                return (
+                  <button
+                    key={opt.days}
+                    type="button"
+                    onClick={() => set({ signalsWithinDays: on ? null : opt.days })}
+                    title={`Solo titoli con segnali negli ultimi ${opt.days === 1 ? "1 giorno" : `${opt.days} giorni`}`}
+                    className={cn("px-1.5 py-0.5 rounded text-xs font-medium", on ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted")}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </CollapsibleArea>
 
@@ -1065,10 +1108,10 @@ export function StockFiltersCard({ state, onChange, filters }: Props) {
                 <button onClick={() => removeChip("near52wLow", "")} className="ml-0.5 rounded hover:bg-background/60 p-0.5" aria-label="Rimuovi filtro vicino minimo 52 settimane"><X className="h-3 w-3" /></button>
               </Badge>
             )}
-            {state.hasSignals && (
+            {state.signalsWithinDays != null && (
               <Badge variant="secondary" className="text-xs gap-1 pr-1">
-                con segnali
-                <button onClick={() => removeChip("hasSignals", "")} className="ml-0.5 rounded hover:bg-background/60 p-0.5" aria-label="Rimuovi filtro con segnali"><X className="h-3 w-3" /></button>
+                <span className="text-muted-foreground/80">Segnali:</span> {signalsWindowLabel(state.signalsWithinDays)}
+                <button onClick={() => removeChip("signalsWithinDays", "")} className="ml-0.5 rounded hover:bg-background/60 p-0.5" aria-label="Rimuovi filtro con segnali"><X className="h-3 w-3" /></button>
               </Badge>
             )}
             {state.priceMin != null && (
