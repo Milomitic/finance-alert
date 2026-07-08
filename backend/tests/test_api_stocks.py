@@ -136,6 +136,45 @@ def test_search_invalid_sort_by(client: TestClient) -> None:
     assert resp.status_code == 422
 
 
+def test_search_sort_by_momentum_rejected(client: TestClient) -> None:
+    """The always-NULL fundamental momentum pillar was removed from the sort
+    whitelist — the key must now 422 like any unknown column."""
+    resp = client.get("/api/stocks/search?sort_by=momentum")
+    assert resp.status_code == 422
+
+
+def test_search_score_payload_has_no_momentum(client: TestClient) -> None:
+    resp = client.get("/api/stocks/search?q=AA")
+    assert resp.status_code == 200
+    item = resp.json()["items"][0]
+    assert "momentum" not in item["score"]          # dead field removed
+    assert "momentum" in item["technical"]          # Tecnico lens untouched
+    # Volume metrics are now part of the row payload (null without a
+    # stock_metrics row).
+    assert "vol_today" in item["metrics"] and "vol_avg_20" in item["metrics"]
+
+
+def test_search_sort_by_vol_today_accepted(client: TestClient) -> None:
+    resp = client.get("/api/stocks/search?sort_by=vol_today&sort_dir=desc")
+    assert resp.status_code == 200
+
+
+def test_search_signals_within_days_validation(client: TestClient) -> None:
+    """1..90 accepted; 0 and 91 rejected with 422 (FastAPI Query bounds)."""
+    assert client.get(
+        "/api/stocks/search?has_signals=true&signals_within_days=1"
+    ).status_code == 200
+    assert client.get(
+        "/api/stocks/search?has_signals=true&signals_within_days=90"
+    ).status_code == 200
+    assert client.get(
+        "/api/stocks/search?has_signals=true&signals_within_days=0"
+    ).status_code == 422
+    assert client.get(
+        "/api/stocks/search?has_signals=true&signals_within_days=91"
+    ).status_code == 422
+
+
 def test_search_invalid_sort_dir(client: TestClient) -> None:
     resp = client.get("/api/stocks/search?sort_by=ticker&sort_dir=sideways")
     assert resp.status_code == 422

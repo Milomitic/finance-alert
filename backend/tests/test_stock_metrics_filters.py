@@ -111,11 +111,62 @@ def test_market_cap_range(db: Session) -> None:
 
 def test_has_signals(db: Session) -> None:
     ids = _seed(db)
-    db.add(Alert(stock_id=ids["b"], trigger_price=1.0))            # active
+    db.add(Alert(stock_id=ids["b"], trigger_price=1.0))            # active (triggered now)
     arch = Alert(stock_id=ids["c"], trigger_price=1.0, archived_at=NOW)  # archived → excluded
     db.add(arch)
     db.commit()
     assert _tickers(search_stocks(db, StockFilter(has_signals=True))) == ["BBB"]
+
+
+# ── has_signals recency bound ────────────────────────────────────────────────
+# The EXISTS is bounded on signal_date (bar date of the match), falling back
+# to the triggered_at date for legacy rows. Unbounded it matched ~99% of the
+# universe — every stock has SOME alert in its history.
+
+def test_has_signals_excludes_old_signals(db: Session) -> None:
+    from datetime import date, timedelta
+    ids = _seed(db)
+    old = date.today() - timedelta(days=30)
+    db.add(Alert(stock_id=ids["a"], trigger_price=1.0, signal_date=old))
+    db.add(Alert(stock_id=ids["b"], trigger_price=1.0, signal_date=date.today()))
+    db.commit()
+    # Default window (7 days): only the fresh signal survives.
+    assert _tickers(search_stocks(db, StockFilter(has_signals=True))) == ["BBB"]
+    # Widening the window to 60 days re-includes the old one.
+    assert _tickers(search_stocks(
+        db, StockFilter(has_signals=True, signals_within_days=60)
+    )) == ["AAA", "BBB"]
+
+
+def test_has_signals_legacy_null_signal_date_falls_back_to_triggered_at(db: Session) -> None:
+    from datetime import timedelta
+    ids = _seed(db)
+    # Legacy alert: signal_date NULL, triggered long ago → excluded.
+    db.add(Alert(stock_id=ids["a"], trigger_price=1.0,
+                 triggered_at=datetime.now(timezone.utc) - timedelta(days=60)))
+    # Legacy alert triggered now → the triggered_at fallback keeps it.
+    db.add(Alert(stock_id=ids["b"], trigger_price=1.0,
+                 triggered_at=datetime.now(timezone.utc)))
+    db.commit()
+    assert _tickers(search_stocks(db, StockFilter(has_signals=True))) == ["BBB"]
+
+
+def test_has_signals_window_clamped_defensively(db: Session) -> None:
+    """The API validates 1..90 (422); the service clamps out-of-range values
+    instead of emitting a nonsense cutoff when called directly."""
+    from datetime import date, timedelta
+    ids = _seed(db)
+    db.add(Alert(stock_id=ids["a"], trigger_price=1.0,
+                 signal_date=date.today() - timedelta(days=80)))
+    db.commit()
+    # 5000 clamps to 90 → the 80-day-old signal is still inside the window.
+    assert _tickers(search_stocks(
+        db, StockFilter(has_signals=True, signals_within_days=5000)
+    )) == ["AAA"]
+    # 0 clamps to 1 (no crash, tightest window).
+    assert _tickers(search_stocks(
+        db, StockFilter(has_signals=True, signals_within_days=0)
+    )) == []
 
 
 def test_sort_by_price_desc_nulls_last(db: Session) -> None:
@@ -125,10 +176,21 @@ def test_sort_by_price_desc_nulls_last(db: Session) -> None:
     assert ordered[:3] == ["AAA", "CCC", "BBB"]  # 100 > 55 > 10; DDD (NULL) last
 
 
+def test_sort_by_vol_today_desc_and_asc_nulls_last(db: Session) -> None:
+    _seed(db)
+    page = search_stocks(db, StockFilter(sort_by="vol_today", sort_dir="desc"))
+    assert [s.stock.ticker for s in page.items] == ["AAA", "CCC", "BBB", "DDD"]
+    # Ascending must NOT lead with the metricless row (NULLS LAST).
+    page = search_stocks(db, StockFilter(sort_by="vol_today", sort_dir="asc"))
+    assert [s.stock.ticker for s in page.items] == ["BBB", "CCC", "AAA", "DDD"]
+
+
 def test_metrics_in_response(db: Session) -> None:
     _seed(db)
     m = search_stocks(db, StockFilter(q="AAA")).items[0].metrics
     assert m.last_close == 100.0 and m.rsi14 == 75.0 and m.vol_ratio == 5.0
+    # Raw volume pair surfaced for the screener's Volume column.
+    assert m.vol_today == 5_000_000 and m.vol_avg_20 == 1_000_000
 
 
 def test_persist_skips_metricless_and_writes_rows(db: Session) -> None:

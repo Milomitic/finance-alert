@@ -137,8 +137,8 @@ def partial_for(ohlcv: pd.DataFrame) -> dict | None:
 
 
 def _recent_signal_facets(db: Session, stock_ids: list[int]) -> dict[int, dict]:
-    # Best recent signal per stock (last 14 days): max-confidence alert with its
-    # tone, parsed from the snapshot. Feeds the signals badge + a capped nudge.
+    # Best recent signal per stock (last 14 days): max-Forza alert with its
+    # tone, parsed from the snapshot. Feeds the informational `signals` field.
     if not stock_ids:
         return {}
     cutoff = datetime.now(timezone.utc) - timedelta(days=14)
@@ -155,13 +155,20 @@ def _recent_signal_facets(db: Session, stock_ids: list[int]) -> dict[int, dict]:
             d = json.loads(snap) if snap else {}
         except Exception:
             continue
-        conf = d.get("confidence")
+        # Snapshots carry "strength" since the Forza/Probabilità split;
+        # "confidence" is the transitional legacy alias only present on
+        # pre-split rows. Reading only "confidence" left this facet empty
+        # for every post-split alert (0/938 rows populated) — coalesce
+        # strength first, legacy confidence second. Same 0-100 scale.
+        conf = d.get("strength")
+        if not isinstance(conf, (int, float)):
+            conf = d.get("confidence")
         if not isinstance(conf, (int, float)):
             continue
         cur = best.get(sid)
         if cur is None or conf > cur[0]:
             best[sid] = (float(conf), d.get("tone"))
-    return {sid: {"confidence": c, "tone": t} for sid, (c, t) in best.items()}
+    return {sid: {"strength": c, "tone": t} for sid, (c, t) in best.items()}
 
 
 def finalize(db: Session, partials: dict[int, dict]) -> int:
@@ -195,10 +202,10 @@ def finalize(db: Session, partials: dict[int, dict]) -> int:
         # Signals are their OWN lens (Forza / Probabilità) — the technical
         # composite stays PURELY price-action and is NOT nudged by them (that
         # used to add ±5pp and made a transient signal leak into the continuous
-        # posture). The latest signal's confidence is kept only as an
+        # posture). The latest signal's Forza is kept only as an
         # informational reference in the `signals` field.
         fac = facets.get(sid)
-        signals_val = round(fac["confidence"], 1) if fac is not None else None
+        signals_val = round(fac["strength"], 1) if fac is not None else None
         posture = "Forte" if composite >= 66 else "Neutro" if composite >= 40 else "Debole"
         db.merge(TechnicalScore(
             stock_id=sid,

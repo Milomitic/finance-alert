@@ -78,6 +78,10 @@ def search(
     market_cap_min: float | None = None,
     market_cap_max: float | None = None,
     has_signals: bool = False,
+    # Recency window (calendar days) for has_signals — the EXISTS is bounded
+    # on signal_date (triggered_at date for legacy rows). 1..90, default 7;
+    # ignored when has_signals is false.
+    signals_within_days: Annotated[int, Query(ge=1, le=90)] = 7,
     exclude_etf: bool = False,
     sort_by: str = "ticker",
     sort_dir: str = "asc",
@@ -155,6 +159,7 @@ def search(
             market_cap_min=market_cap_min,
             market_cap_max=market_cap_max,
             has_signals=has_signals,
+            signals_within_days=signals_within_days,
             exclude_etf=exclude_etf,
             sort_by=sort_by,
             sort_dir=sort_dir,
@@ -173,7 +178,6 @@ def search(
                     sustainability=item.score.sustainability,
                     growth=item.score.growth,
                     value=item.score.value,
-                    momentum=item.score.momentum,
                     sentiment=item.score.sentiment,
                 ),
                 technical=TechnicalScoreRefOut(
@@ -195,6 +199,8 @@ def search(
                     high_252=item.metrics.high_252,
                     low_252=item.metrics.low_252,
                     vol_ratio=item.metrics.vol_ratio,
+                    vol_today=item.metrics.vol_today,
+                    vol_avg_20=item.metrics.vol_avg_20,
                 ),
             )
             for item in page.items

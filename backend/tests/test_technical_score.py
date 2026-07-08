@@ -87,3 +87,49 @@ def test_composite_not_nudged_by_recent_signal(db):
     assert ts is not None
     assert ts.composite == expected          # pure — NOT expected + nudge
     assert ts.signals == 95.0                # still surfaced as a reference
+
+
+def _alert(db, stock_id: int, snapshot: dict):
+    import datetime
+    import json
+
+    from app.models import Alert
+
+    db.add(Alert(
+        stock_id=stock_id, signal_name="volume_breakout", trigger_price=100.0,
+        triggered_at=datetime.datetime.now(datetime.timezone.utc),
+        signal_date=datetime.date.today(),
+        snapshot=json.dumps(snapshot),
+    ))
+    db.flush()
+
+
+def test_signals_facet_reads_strength_snapshot(db):
+    """Post Forza/Probabilità split, snapshots carry "strength" (not
+    "confidence"). Regression: the facet read only "confidence" → 0/938
+    technical_scores rows had a `signals` value despite 1457 recent alerts."""
+    s = Stock(ticker="TSTR", exchange="NASDAQ", name="S", country="US")
+    db.add(s)
+    db.flush()
+    _alert(db, s.id, {"tone": "bull", "strength": 88, "probability": 52})
+    p = svc.partial_for(_df([100 + i for i in range(120)]))
+    svc.finalize(db, {s.id: p})
+    db.commit()
+    ts = db.get(TechnicalScore, s.id)
+    assert ts is not None and ts.signals == 88.0
+
+
+def test_signals_facet_picks_best_across_both_snapshot_shapes(db):
+    """Mixed history: a legacy confidence-only alert and a post-split
+    strength alert on the same stock — the facet coalesces per-row and keeps
+    the max, so neither shape is invisible."""
+    s = Stock(ticker="TMIX", exchange="NASDAQ", name="M", country="US")
+    db.add(s)
+    db.flush()
+    _alert(db, s.id, {"tone": "bull", "confidence": 70})            # legacy
+    _alert(db, s.id, {"tone": "bull", "strength": 91})              # post-split
+    p = svc.partial_for(_df([100 + i for i in range(120)]))
+    svc.finalize(db, {s.id: p})
+    db.commit()
+    ts = db.get(TechnicalScore, s.id)
+    assert ts is not None and ts.signals == 91.0
