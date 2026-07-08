@@ -1,8 +1,9 @@
 """Institutional / superinvestor portfolio endpoints.
 
-Four routes:
+Five routes:
 - GET /api/institutionals                          (list + summaries)
 - GET /api/institutionals/aggregate                (cross-portfolio rollups)
+- GET /api/institutionals/holder-counts            (batch smart-money badge)
 - GET /api/institutionals/{slug}                   (one portfolio detail)
 - GET /api/stocks/{ticker}/institutional-holders   (sidebar card on stock page)
 
@@ -73,6 +74,36 @@ def aggregate(
         recent_actions_limit=recent_actions_limit,
     )
     return AggregateStatsOut.model_validate(stats)
+
+
+@router.get(
+    "/institutionals/holder-counts",
+    response_model=dict[str, int],
+)
+def holder_counts(
+    tickers: Annotated[
+        str,
+        Query(description="Comma-separated tickers (max 100), e.g. AAPL,MSFT"),
+    ],
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+) -> dict[str, int]:
+    """Smart-money badge: {ticker: n_funds} counting how many tracked
+    funds hold each ticker in their latest (non-stale) filing. One
+    batch call per screener page instead of a request per row.
+
+    Tickers with zero holders are OMITTED from the response — the FE
+    treats missing keys as 0 and hides the badge.
+
+    Note: declared BEFORE `/{slug}` (like `/aggregate`) so FastAPI's
+    path routing doesn't capture "holder-counts" as a slug.
+    """
+    wanted = [t.strip() for t in tickers.split(",") if t.strip()]
+    if len(wanted) > 100:
+        raise HTTPException(
+            status_code=422, detail="Too many tickers (max 100 per call)"
+        )
+    return institutional_service.holder_counts_for_tickers(db, wanted)
 
 
 @router.get(

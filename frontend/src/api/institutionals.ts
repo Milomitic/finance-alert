@@ -36,6 +36,16 @@ export const institutionals = {
     return api<InstitutionalDetail>(`/api/institutionals/${slug}${suffix}`);
   },
 
+  /** Smart-money badge: batch {ticker: n_funds} over each fund's
+   *  latest filing. Tickers with zero holders are omitted by the
+   *  backend — treat missing keys as 0. */
+  holderCounts: (tickers: string[]) =>
+    api<Record<string, number>>(
+      `/api/institutionals/holder-counts?tickers=${encodeURIComponent(
+        tickers.join(","),
+      )}`,
+    ),
+
   forTicker: (
     ticker: string,
     limit: number = 25,

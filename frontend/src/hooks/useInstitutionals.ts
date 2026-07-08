@@ -41,6 +41,22 @@ export function useInstitutionalDetail(slug: string, periodEnd?: string) {
   });
 }
 
+/** Batch smart-money counts for the current page/dialog's tickers.
+ *  One call per set of tickers; staleTime long because 13F data moves
+ *  quarterly — refetching within a session is pure waste. The queryKey
+ *  sorts the tickers so the same page revisited in a different row
+ *  order hits the cache. */
+export function useHolderCounts(tickers: string[]) {
+  const key = [...tickers].sort().join(",");
+  return useQuery({
+    queryKey: ["institutionals", "holder-counts", key],
+    queryFn: () => institutionals.holderCounts(tickers),
+    enabled: tickers.length > 0,
+    staleTime: STALE_LONG,
+    retry: 1,
+  });
+}
+
 export function useTickerInstitutionalHolders(
   ticker: string,
   limit: number = 25,
