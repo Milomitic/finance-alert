@@ -1143,6 +1143,58 @@ def holders_for_ticker(
     return out
 
 
+def holder_counts_for_tickers(
+    db: Session,
+    tickers: Sequence[str],
+    *,
+    max_age_months: int = 18,
+) -> dict[str, int]:
+    """Batch "smart money" counter for the screener / alert badge: for
+    each requested ticker, how many tracked funds hold it in their
+    LATEST filing. Same holder semantics as `holders_for_ticker`, but
+    ONE grouped query for the whole page of tickers instead of N.
+
+    - Only each fund's latest filing counts (no cross-quarter double
+      counting — same rule as `get_aggregate_stats`).
+    - Stale funds (latest period older than `max_age_months`) are
+      excluded, mirroring `holders_for_ticker`'s freshness cutoff.
+    - `sold_out` phantom rows (shares == 0) don't count — an exited
+      position isn't a holder. NULL shares still count (some Dataroma
+      rows carry value without a share count).
+
+    Returns {ticker: n_funds}. Tickers with zero holders are simply
+    ABSENT from the dict — callers treat missing as 0.
+    """
+    wanted = list(dict.fromkeys(t for t in tickers if t))
+    if not wanted:
+        return {}
+    _rank, latest = _latest_filings_subq(db)
+    cutoff = date.today() - timedelta(days=int(30.4 * max_age_months))
+    rows = db.execute(
+        select(
+            InstitutionalHolding.ticker,
+            func.count(func.distinct(InstitutionalFiling.institutional_id)),
+        )
+        .join(
+            InstitutionalFiling,
+            InstitutionalFiling.id == InstitutionalHolding.filing_id,
+        )
+        .join(
+            latest,
+            (latest.c.institutional_id == InstitutionalFiling.institutional_id)
+            & (latest.c.max_period == InstitutionalFiling.period_end_date),
+        )
+        .where(
+            InstitutionalHolding.ticker.in_(wanted),
+            InstitutionalFiling.period_end_date >= cutoff,
+            # shares==0 = sold_out phantom row; NULL shares still count.
+            func.coalesce(InstitutionalHolding.shares, 1) > 0,
+        )
+        .group_by(InstitutionalHolding.ticker)
+    ).all()
+    return {ticker: int(n) for ticker, n in rows}
+
+
 def historical_holders_for_ticker(
     db: Session,
     ticker: str,

@@ -1,4 +1,5 @@
 import { ArrowLeft, Building2, ExternalLink } from "lucide-react";
+import { useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 
 import type { HoldingDetail } from "@/api/types";
@@ -43,6 +44,18 @@ function fmtPct(v: number | null | undefined, digits = 2): string {
   if (v == null) return "—";
   return `${v.toFixed(digits)}%`;
 }
+
+function fmtShortDate(s: string | null | undefined): string | null {
+  if (!s) return null;
+  const [y, m, d] = s.split("-");
+  if (!y || !m || !d) return s;
+  return `${d}/${m}/${y}`;
+}
+
+/** Azioni che rappresentano una VARIAZIONE del portafoglio rispetto al
+ *  trimestre precedente — il filtro "Solo variazioni" mostra solo
+ *  queste (hold e action=null/sconosciuta vengono nascoste). */
+const CHANGE_ACTIONS = new Set(["new", "add", "reduce", "sold_out"]);
 
 function fmtShares(v: number | null | undefined): string {
   if (v == null) return "—";
@@ -179,6 +192,11 @@ export default function InstitutionalDetailPage() {
   const { slug = "" } = useParams<{ slug: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
   const periodParam = searchParams.get("period") ?? undefined;
+  // "Solo variazioni": filtra la tabella holdings alle sole righe con
+  // azione new/add/reduce/sold_out (le hold e le action sconosciute
+  // dei primi filing spariscono). Stato locale, si resetta al cambio
+  // pagina — comportamento voluto.
+  const [onlyChanges, setOnlyChanges] = useState(false);
 
   const q = useInstitutionalDetail(slug, periodParam);
 
@@ -212,11 +230,18 @@ export default function InstitutionalDetailPage() {
     );
   }
 
-  const { institutional, holdings, available_periods } = q.data;
+  const { institutional, holdings, available_periods, filed_date } = q.data;
   const totalValue = institutional.total_value_usd ?? 0;
   const top10Pct = holdings
     .slice(0, 10)
     .reduce((sum, h) => sum + (h.portfolio_pct ?? 0), 0);
+  // Il filtro tocca SOLO la tabella holdings; l'infografica di
+  // composizione resta sul portafoglio intero (i pesi hanno senso
+  // solo sul totale).
+  const visibleHoldings = onlyChanges
+    ? holdings.filter((h) => h.action != null && CHANGE_ACTIONS.has(h.action))
+    : holdings;
+  const filedLabel = fmtShortDate(filed_date);
 
   return (
     <div className="flex flex-col gap-4">
@@ -323,6 +348,15 @@ export default function InstitutionalDetailPage() {
                 ))}
               </select>
             </div>
+            {/* Data di deposito effettiva del 13F (può arrivare ~45gg
+                dopo il fine trimestre). Campo nullable — i filing
+                storici / Dataroma possono non averla: in quel caso
+                niente riga, nessun "depositato il null". */}
+            {filedLabel && (
+              <div className="mt-1 text-xs text-muted-foreground">
+                depositato il {filedLabel}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -360,8 +394,25 @@ export default function InstitutionalDetailPage() {
             label="Holdings"
             className="mb-2"
             right={
-              <span className="text-sm text-muted-foreground tabular-nums">
-                {holdings.length}
+              <span className="flex items-center gap-2">
+                {/* Toggle "Solo variazioni": nasconde hold + azioni
+                    sconosciute, lasciando solo new/add/reduce/sold_out. */}
+                <button
+                  type="button"
+                  onClick={() => setOnlyChanges((v) => !v)}
+                  className={cn(
+                    "rounded border px-2 py-0.5 text-xs",
+                    onlyChanges
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "bg-background hover:bg-muted",
+                  )}
+                >
+                  Solo variazioni
+                </button>
+                <span className="text-sm text-muted-foreground tabular-nums">
+                  {visibleHoldings.length}
+                  {onlyChanges ? ` / ${holdings.length}` : ""}
+                </span>
               </span>
             }
           />
@@ -383,16 +434,18 @@ export default function InstitutionalDetailPage() {
                 </tr>
               </thead>
               <tbody>
-                {holdings.map((row) => (
+                {visibleHoldings.map((row) => (
                   <HoldingRow key={`${row.ticker}-${row.shares}`} row={row} />
                 ))}
-                {holdings.length === 0 && (
+                {visibleHoldings.length === 0 && (
                   <tr>
                     <td
                       colSpan={7}
                       className="px-2 py-4 text-center text-muted-foreground text-sm"
                     >
-                      Nessuna posizione registrata per questo periodo.
+                      {onlyChanges && holdings.length > 0
+                        ? "Nessuna variazione registrata per questo periodo."
+                        : "Nessuna posizione registrata per questo periodo."}
                     </td>
                   </tr>
                 )}

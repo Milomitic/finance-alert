@@ -1,5 +1,13 @@
-import { Building2, TrendingDown, TrendingUp, Users } from "lucide-react";
-import { useState } from "react";
+import {
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
+  Building2,
+  TrendingDown,
+  TrendingUp,
+  Users,
+} from "lucide-react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
 import type {
@@ -114,6 +122,17 @@ function shortDate(s: string | null): string {
   const [y, m, d] = s.split("-");
   if (!y || !m || !d) return s;
   return `${d}/${m}/${y.slice(2)}`;
+}
+
+/** Un fondo è "stale" quando il suo ultimo period_end è più vecchio di
+ *  2 trimestri (~183 giorni): con la finestra di deposito 13F di 45gg
+ *  un fondo attivo dovrebbe sempre avere un filing entro quel raggio.
+ *  Oltre → probabilmente non pubblica più / lo scraper l'ha perso. */
+function isStaleFund(periodEnd: string | null): boolean {
+  if (!periodEnd) return false;
+  const ts = Date.parse(periodEnd);
+  if (Number.isNaN(ts)) return false;
+  return Date.now() - ts > 183 * 86_400_000;
 }
 
 function MostPickedRow({ row }: { row: TickerAggregate }) {
@@ -261,20 +280,100 @@ function InstitutionalRow({ row }: { row: InstitutionalSummary }) {
         {fmtBig(row.total_value_usd)}
       </td>
       <td className="px-2 py-2 text-sm text-muted-foreground tabular-nums">
-        {shortDate(row.latest_period_end)}
+        <span className="inline-flex items-center gap-1.5">
+          {shortDate(row.latest_period_end)}
+          {isStaleFund(row.latest_period_end) && (
+            <span
+              className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300"
+              title="Ultimo 13F più vecchio di 2 trimestri: il fondo potrebbe non pubblicare più o lo snapshot è incompleto."
+            >
+              stale
+            </span>
+          )}
+        </span>
       </td>
     </tr>
   );
 }
 
+/** Colonne ordinabili client-side della tabella fondi. La lista è
+ *  piccola (≤200 righe già in memoria) — nessun round-trip server. */
+type FundSortKey = "total_positions" | "total_value_usd" | "latest_period_end";
+
+function FundSortHeader({
+  label,
+  col,
+  sort,
+  onClick,
+  align = "right",
+}: {
+  label: string;
+  col: FundSortKey;
+  sort: { key: FundSortKey; dir: "asc" | "desc" } | null;
+  onClick: (col: FundSortKey) => void;
+  align?: "left" | "right";
+}) {
+  const active = sort?.key === col;
+  return (
+    <button
+      type="button"
+      onClick={() => onClick(col)}
+      className={cn(
+        "inline-flex items-center gap-1 uppercase tracking-wide hover:text-foreground transition-colors",
+        active && "text-foreground",
+        align === "right" && "ml-auto",
+      )}
+    >
+      <span>{label}</span>
+      {active && sort?.dir === "desc" && <ArrowDown className="h-3 w-3" />}
+      {active && sort?.dir === "asc" && <ArrowUp className="h-3 w-3" />}
+      {!active && <ArrowUpDown className="h-3 w-3 opacity-30" />}
+    </button>
+  );
+}
+
 export default function InstitutionalsPage() {
   const [typeFilter, setTypeFilter] = useState<string | undefined>(undefined);
+  // null = ordine API (alfabetico per nome). Il primo click su una
+  // colonna parte DESC (i valori grandi/recenti sono i più interessanti),
+  // il secondo inverte.
+  const [fundSort, setFundSort] = useState<{
+    key: FundSortKey;
+    dir: "asc" | "desc";
+  } | null>(null);
   const list = useInstitutionalsList({ type: typeFilter, limit: 200 });
   const agg = useInstitutionalsAggregate({
     type: typeFilter,
     most_picked_limit: 25,
     recent_actions_limit: 15,
   });
+
+  function toggleFundSort(key: FundSortKey) {
+    setFundSort((prev) =>
+      prev?.key === key
+        ? { key, dir: prev.dir === "desc" ? "asc" : "desc" }
+        : { key, dir: "desc" },
+    );
+  }
+
+  const sortedFunds = useMemo(() => {
+    const rows = list.data ?? [];
+    if (!fundSort) return rows;
+    const mult = fundSort.dir === "asc" ? 1 : -1;
+    return [...rows].sort((a, b) => {
+      const av = a[fundSort.key];
+      const bv = b[fundSort.key];
+      // Nulls sempre in fondo, in entrambe le direzioni.
+      if (av == null && bv == null) return 0;
+      if (av == null) return 1;
+      if (bv == null) return -1;
+      if (typeof av === "string" && typeof bv === "string") {
+        // latest_period_end è ISO (YYYY-MM-DD) → confronto lessicografico ok
+        return av.localeCompare(bv) * mult;
+      }
+      return ((av as number) - (bv as number)) * mult;
+    });
+  }, [list.data, fundSort]);
 
   const counts = list.data?.length ?? 0;
 
@@ -287,6 +386,12 @@ export default function InstitutionalsPage() {
             <h1 className="text-2xl font-semibold">Superinvestor &amp; istituzionali</h1>
             <p className="text-sm text-muted-foreground">
               Portafogli 13F-equivalenti tracciati. {counts} fondi disponibili.
+            </p>
+            {/* Caption di onestà: il 13F non è un feed real-time — chi
+                legge deve sapere che le posizioni possono avere fino a
+                ~135 giorni (trimestre + finestra di deposito). */}
+            <p className="text-xs text-muted-foreground/80">
+              13F: dati trimestrali, depositati fino a 45gg dopo il fine trimestre.
             </p>
           </div>
         </div>
@@ -327,6 +432,18 @@ export default function InstitutionalsPage() {
           >
             Istituzionali
           </button>
+          <button
+            type="button"
+            className={cn(
+              "rounded border px-3 py-1.5",
+              typeFilter === "hedge_fund"
+                ? "bg-primary text-primary-foreground border-primary"
+                : "bg-background hover:bg-muted",
+            )}
+            onClick={() => setTypeFilter("hedge_fund")}
+          >
+            Hedge fund
+          </button>
         </div>
       </header>
 
@@ -346,7 +463,11 @@ export default function InstitutionalsPage() {
                 ) : undefined
               }
             />
-            <div className="overflow-x-auto">
+            {/* max-h + overflow-y: TUTTE le righe del payload vengono
+                renderizzate (prima uno slice(0,12) le troncava in
+                silenzio) — il corpo scrolla invece di gonfiare la card
+                oltre le sorelle buys/sells. */}
+            <div className="overflow-x-auto overflow-y-auto max-h-[420px]">
               {/* Body bumped from text-sm → text-base per user request,
                   but the ticker cell explicitly resets to text-sm
                   inside TickerNameCell so the ticker font keeps its
@@ -362,7 +483,7 @@ export default function InstitutionalsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {agg.data?.most_picked.slice(0, 12).map((row) => (
+                  {agg.data?.most_picked.map((row) => (
                     <MostPickedRow key={row.ticker} row={row} />
                   ))}
                   {!agg.isLoading && agg.data && agg.data.most_picked.length === 0 && (
@@ -484,13 +605,35 @@ export default function InstitutionalsPage() {
                   <th className="px-2 py-1.5 text-left">Portfolio</th>
                   <th className="px-2 py-1.5 text-left">Manager</th>
                   <th className="px-2 py-1.5 text-left">Tipo</th>
-                  <th className="px-2 py-1.5 text-right">N° pos.</th>
-                  <th className="px-2 py-1.5 text-right">Tot $</th>
-                  <th className="px-2 py-1.5 text-left">Q-end</th>
+                  <th className="px-2 py-1.5 text-right">
+                    <FundSortHeader
+                      label="N° pos."
+                      col="total_positions"
+                      sort={fundSort}
+                      onClick={toggleFundSort}
+                    />
+                  </th>
+                  <th className="px-2 py-1.5 text-right">
+                    <FundSortHeader
+                      label="Tot $"
+                      col="total_value_usd"
+                      sort={fundSort}
+                      onClick={toggleFundSort}
+                    />
+                  </th>
+                  <th className="px-2 py-1.5 text-left">
+                    <FundSortHeader
+                      label="Q-end"
+                      col="latest_period_end"
+                      sort={fundSort}
+                      onClick={toggleFundSort}
+                      align="left"
+                    />
+                  </th>
                 </tr>
               </thead>
               <tbody>
-                {list.data?.map((row) => (
+                {sortedFunds.map((row) => (
                   <InstitutionalRow key={row.id} row={row} />
                 ))}
                 {!list.isLoading && list.data && list.data.length === 0 && (

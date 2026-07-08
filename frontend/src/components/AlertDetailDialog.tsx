@@ -15,6 +15,7 @@ import { Link } from "react-router-dom";
 
 import type { Alert, SignalChainStep, SignalSnapshot } from "@/api/types";
 import { AlertKindChip, AlertToneChip } from "@/components/AlertChips";
+import { HolderCountBadge } from "@/components/stocks/HolderCountBadge";
 import { SignalChartSvg } from "@/components/SignalChartSvg";
 import { SignalSnapshotView } from "@/components/SignalSnapshotView";
 import { PlaybookView } from "@/components/PlaybookView";
@@ -26,6 +27,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { useHolderCounts } from "@/hooks/useInstitutionals";
 import { useSignalOhlcv } from "@/hooks/useSignalOhlcv";
 import { daysBetween, isDelayedDetection } from "@/lib/alertDates";
 import {
@@ -141,6 +143,9 @@ export function AlertDetailDialog({ alert, onClose }: Props) {
   const [showRaw, setShowRaw] = useState(false);
   const isSig = !!alert && isSignalKind(alert.rule_kind);
   const ohlcvQ = useSignalOhlcv(alert?.ticker, isSig);
+  // Smart-money badge: batch endpoint with a single-ticker "batch".
+  // Empty array = disabled query (hooks must run unconditionally).
+  const holderCounts = useHolderCounts(alert?.ticker ? [alert.ticker] : []);
 
   if (!alert) {
     return <Dialog open={false} onOpenChange={(open) => !open && onClose()} />;
@@ -255,6 +260,9 @@ export function AlertDetailDialog({ alert, onClose }: Props) {
               <span className="text-base font-medium text-muted-foreground truncate min-w-0">
                 {alert.name}
               </span>
+            )}
+            {alert.ticker && (
+              <HolderCountBadge count={holderCounts.data?.[alert.ticker]} />
             )}
           </DialogTitle>
           <DialogDescription className="sr-only">

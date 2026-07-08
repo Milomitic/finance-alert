@@ -5,6 +5,7 @@ import { Link } from "react-router-dom";
 import type { StockSortBy, SortDir } from "@/api/stocks";
 import type { StockSearchItem } from "@/api/types";
 import { StockLogo } from "@/components/dashboard/StockLogo";
+import { HolderCountBadge } from "@/components/stocks/HolderCountBadge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ColumnVisibilityMenu } from "@/components/ui/column-visibility-menu";
@@ -13,6 +14,7 @@ import {
 } from "@/components/ui/select";
 import { TableSearchInput } from "@/components/ui/table-search-input";
 import { useColumnVisibility } from "@/hooks/useColumnVisibility";
+import { useHolderCounts } from "@/hooks/useInstitutionals";
 import { useMarketSummary } from "@/hooks/useMarketSummary";
 import { RISK_LABEL, RISK_TONE, scoreColor } from "@/lib/scoreMeta";
 import { getStockFlagCode } from "@/lib/stockMeta";
@@ -160,6 +162,14 @@ function SortableHeader({
 export function StockBrowserTable({ items, sortBy, sortDir, onSortChange, q, onQueryChange }: Props) {
   const market = useMarketSummary();
 
+  // Smart-money badge: ONE batch call for the current page's tickers
+  // (quarterly data → long staleTime in the hook, no per-row fetches).
+  const pageTickers = useMemo(
+    () => items.map((it) => it.stock.ticker),
+    [items],
+  );
+  const holderCounts = useHolderCounts(pageTickers);
+
   // Column visibility for the desktop table variant.
   const { isVisible, toggle } = useColumnVisibility(
     "screener",
@@ -288,6 +298,7 @@ export function StockBrowserTable({ items, sortBy, sortDir, onSortChange, q, onQ
                         <StockLogo ticker={s.ticker} size="sm" />
                         <span className="font-semibold shrink-0">{s.ticker}</span>
                         <EtfBadge show={s.instrument_type === "etf"} />
+                        <HolderCountBadge count={holderCounts.data?.[s.ticker]} />
                         <span className="text-sm text-muted-foreground truncate min-w-0 flex-1">
                           {s.name}
                         </span>
@@ -511,6 +522,7 @@ export function StockBrowserTable({ items, sortBy, sortDir, onSortChange, q, onQ
                               {s.ticker}
                             </Link>
                             <EtfBadge show={s.instrument_type === "etf"} />
+                            <HolderCountBadge count={holderCounts.data?.[s.ticker]} />
                           </span>
                           <span className="text-xs text-muted-foreground truncate max-w-[220px] leading-tight">
                             {s.name}
