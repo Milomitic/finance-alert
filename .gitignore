@@ -43,7 +43,9 @@ backend/data/ff_calendar.xml
 Thumbs.db
 
 .claude/
-finance-alert/
+# Anchored to repo root: ignore only a stray top-level finance-alert/ checkout,
+# NOT charts/finance-alert/ (the Helm chart, which must be tracked).
+/finance-alert/
 .superpowers/
 
 # Runtime logs (emitted by uvicorn started from repo root)

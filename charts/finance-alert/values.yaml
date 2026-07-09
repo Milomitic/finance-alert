@@ -1,0 +1,56 @@
+# Default values for the finance-alert chart.
+# Override per-environment with `-f values-<env>.yaml` or `--set`.
+
+image:
+  repository: finance-alert
+  tag: local
+  # IfNotPresent: the image is side-loaded into kind (`kind load docker-image`),
+  # never pulled from a registry. On OCI (M3+) this flips to a real repo + pull.
+  pullPolicy: IfNotPresent
+
+# SQLite is a single-writer embedded file → EXACTLY one pod may hold the PVC.
+# This is a hard invariant, not a tuning knob (RWO volume + StatefulSet).
+replicaCount: 1
+
+persistence:
+  # The PVC that holds backend/data (app.db, logs, breakers, backups).
+  size: 2Gi
+  # "" = the cluster's default StorageClass. On kind that's local-path
+  # (a hostPath-backed provisioner); on OCI it becomes the block-volume class.
+  storageClass: ""
+  accessMode: ReadWriteOnce
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: "1"
+    memory: 512Mi
+
+service:
+  type: ClusterIP
+  port: 8000
+
+# Probe tuning. The app runs `alembic upgrade head` before uvicorn binds, so
+# readiness must tolerate a slow first boot (fresh DB migration).
+probes:
+  startupSeconds: 60   # max time allowed for first boot+migrate before failing
+  periodSeconds: 10
+
+# App configuration → injected as env (12-factor). Sensitive values go into a
+# Secret (templates/secret.yaml); the rest here are plain.
+#
+# ⚠️ DEV-ONLY placeholder secret for the LOCAL kind cluster. Real clusters
+# (M7+) source these from a Sealed/External Secret — NEVER a committed value.
+config:
+  adminUsername: "admin"
+  # DATABASE_URL is intentionally omitted → the app default
+  # `sqlite:///./data/app.db` resolves onto the mounted PVC.
+
+secret:
+  # Only used when create=true (local dev). In prod, set create=false and
+  # reference an externally-managed Secret via existingSecret.
+  create: true
+  existingSecret: ""
+  secretKey: "kind-local-dev-secret-not-for-production-32chars!"

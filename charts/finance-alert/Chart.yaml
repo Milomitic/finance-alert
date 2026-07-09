@@ -1,0 +1,12 @@
+apiVersion: v2
+name: finance-alert
+description: >-
+  finance-alert — local-first stock analysis platform. M2 topology: the app
+  runs as a single-replica StatefulSet that owns an embedded SQLite file on a
+  PersistentVolumeClaim. (SQLite is not a server — the app process opens the
+  file directly — so app and DB are fused into one workload. They split apart
+  only at M7 when Postgres, a real server, becomes its own StatefulSet.)
+type: application
+# Chart version — bump on chart changes. appVersion tracks the app image.
+version: 0.1.0
+appVersion: "0.1.0"

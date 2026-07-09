@@ -1,0 +1,88 @@
+{{- /*
+The app as a StatefulSet — the heart of M2.
+
+Why StatefulSet, not Deployment? The app embeds SQLite: it opens a file on
+disk directly, so it IS the database. A single-writer file demands (a) exactly
+one pod, and (b) a STABLE volume that survives pod restarts. `volumeClaimTemplates`
+gives each StatefulSet pod its own PersistentVolumeClaim that is re-bound to
+the same pod identity across restarts/reschedules — precisely the stateful
+guarantee a Deployment does not make. (At M7 Postgres takes over this role and
+the app reverts to a stateless Deployment.)
+*/ -}}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "finance-alert.fullname" . }}
+  labels:
+    {{- include "finance-alert.labels" . | nindent 4 }}
+spec:
+  serviceName: {{ include "finance-alert.fullname" . }}-headless
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "finance-alert.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "finance-alert.selectorLabels" . | nindent 8 }}
+    spec:
+      # Pod-level security: run as the non-root app user baked into the image
+      # (UID 10001). fsGroup makes the mounted PVC group-owned by 10001 so the
+      # app can write app.db/logs — the volume is created as root by the
+      # provisioner, and without fsGroup the writes would be permission-denied.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+      containers:
+        - name: app
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          ports:
+            - name: http
+              containerPort: 8000
+          env:
+            - name: ADMIN_USERNAME
+              value: {{ .Values.config.adminUsername | quote }}
+            # Pulled from the Secret, never from the pod spec in the clear.
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "finance-alert.secretName" . }}
+                  key: SECRET_KEY
+          # Startup probe gates liveness/readiness until the first success, so
+          # the slow first boot (alembic migrate before uvicorn binds) can't be
+          # mistaken for a crash-loop. failureThreshold × periodSeconds ≥ the
+          # allowed startup budget.
+          startupProbe:
+            httpGet: { path: /api/health, port: http }
+            periodSeconds: {{ .Values.probes.periodSeconds }}
+            failureThreshold: {{ div .Values.probes.startupSeconds .Values.probes.periodSeconds }}
+          readinessProbe:
+            httpGet: { path: /api/health, port: http }
+            periodSeconds: {{ .Values.probes.periodSeconds }}
+          livenessProbe:
+            httpGet: { path: /api/health, port: http }
+            periodSeconds: {{ .Values.probes.periodSeconds }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /app/backend/data
+  # Per-pod PVC. The name `data` here matches the volumeMount above.
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [{{ .Values.persistence.accessMode }}]
+        {{- if .Values.persistence.storageClass }}
+        storageClassName: {{ .Values.persistence.storageClass }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.persistence.size }}
