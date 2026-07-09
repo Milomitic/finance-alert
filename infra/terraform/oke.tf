@@ -17,10 +17,14 @@ data "oci_containerengine_node_pool_option" "this" {
 
 locals {
   k8s_ver_bare = replace(var.kubernetes_version, "v", "")
+  # Match the version as a delimited token so e.g. "1.33.1" doesn't also match a
+  # "1.33.10" image. Dots are escaped to literals; require a non-digit boundary
+  # after the version (image names read "…OKE-1.34.1-…").
+  k8s_ver_re = "${replace(local.k8s_ver_bare, ".", "[.]")}[^0-9]"
   arm_images = [
     for s in data.oci_containerengine_node_pool_option.this.sources :
     s.image_id
-    if can(regex("aarch64", s.source_name)) && can(regex(local.k8s_ver_bare, s.source_name))
+    if can(regex("aarch64", s.source_name)) && can(regex(local.k8s_ver_re, s.source_name))
   ]
   # First matching ARM image; empty (→ apply fails clearly) if none matched,
   # which flags a bad kubernetes_version for the region.

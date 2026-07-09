@@ -31,4 +31,4 @@ ssh_public_key = "ssh-ed25519 AAAA... you@host"
 # node_count      = 1
 # node_ocpus      = 4
 # node_memory_gbs = 24
-# kubernetes_version = "v1.32.1"
+# kubernetes_version = "v1.34.1"   # must be OKE-offered + have an aarch64 image
