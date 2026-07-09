@@ -66,11 +66,17 @@ tf() {
     "hashicorp/terraform:$TF_VERSION" "$@"
 }
 # OCI CLI in a container; auth entirely via env (overrides any config file).
-# --entrypoint oci is required: the image's default entrypoint isn't `oci`, but
-# the binary is on PATH at /usr/local/bin/oci (verified against v3.89.1).
+# --entrypoint oci: the image's default entrypoint isn't `oci`, but the binary
+#   is on PATH at /usr/local/bin/oci (verified against v3.89.1).
+# --user 0:0: the image runs as uid 1000(oracle) by default, which can't even
+#   traverse the mounted /root/.oci (dir mode 700 → root-only). Running as root
+#   reads the key regardless of its mode. (Terraform's image is already root.)
+# SUPPRESS_FILE_PERMISSIONS_WARNING: the mounted key is group/world readable on
+#   the Docker Desktop bind mount; silence the cosmetic "key too open" warning.
 ocicli() {
   MSYS_NO_PATHCONV=1 docker run --rm \
     --entrypoint oci \
+    --user 0:0 \
     -v "$HOST_OCI_DIR:/root/.oci:ro" \
     -e OCI_CLI_AUTH=api_key \
     -e "OCI_CLI_TENANCY=$TENANCY" \
@@ -78,6 +84,7 @@ ocicli() {
     -e "OCI_CLI_FINGERPRINT=$FINGERPRINT" \
     -e OCI_CLI_KEY_FILE=/root/.oci/oci_api_key.pem \
     -e "OCI_CLI_REGION=$REGION" \
+    -e OCI_CLI_SUPPRESS_FILE_PERMISSIONS_WARNING=True \
     "$OCI_CLI_IMAGE" "$@"
 }
 

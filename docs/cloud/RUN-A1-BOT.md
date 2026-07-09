@@ -71,11 +71,13 @@ The bot mounts `~/.oci/` into the containers and expects the key named
 ```bash
 mkdir -p ~/.oci
 mv /c/Users/giuli/Downloads/<the-downloaded-key>.pem ~/.oci/oci_api_key.pem
-chmod 600 ~/.oci/oci_api_key.pem          # silence the SDK's perms warning
 ls -l ~/.oci/oci_api_key.pem              # confirm it's there
 ```
 ⚠️ `~/.oci` should contain **only this key** — no `config` file. The bot passes
 auth via env, so a stray `config` with host paths would only cause confusion.
+No `chmod` needed: the bot reads the key as **root inside the container**
+(the oci-cli image otherwise runs as a non-root user that can't traverse the
+mounted `/root/.oci`, so it forces `--user 0:0`).
 
 ## Step 5 — SSH key for the worker nodes
 
@@ -174,7 +176,7 @@ That's the M3 finish line — a real OKE cluster with Always-Free A1 nodes. M4
 | `manifest unknown` / oci-cli image won't pull | Set an alternative image: `OCI_CLI_IMAGE=<image> bash …`. |
 | Apply error mentioning **NSG / security rule** | OKE net rules are picky; paste the log line and we'll adjust `vcn.tf`. |
 | Loops forever, only `0/2 ACTIVE` | Genuine capacity scarcity. Options: try `node_count=1, node_ocpus=4, node_memory_gbs=24` in tfvars (one bigger node schedules more easily), run overnight, or upgrade to PAYG (the reliable fix — see OCI-SETUP.md). |
-| Key perms warning | `chmod 600 ~/.oci/oci_api_key.pem`. |
+| `PermissionError … /root/.oci/oci_api_key.pem` | Handled: the bot runs oci-cli as root (`--user 0:0`). If you hand-run an oci container, add `--user 0:0` too — the image's default uid 1000 can't read the mounted `/root/.oci`. |
 
 > Honest note: this bot is authored against our Terraform but hasn't been run
 > against a live account yet. The OKE async-launch + destroy/recreate flow may
