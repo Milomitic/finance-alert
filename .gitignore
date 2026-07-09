@@ -61,6 +61,9 @@ data/logs/
 **/terraform.tfvars
 crash.log
 
+# A1 capacity-retry bot runtime log
+infra/oci/*.log
+
 # Worktrees (created by superpowers using-git-worktrees skill)
 .worktrees/
 

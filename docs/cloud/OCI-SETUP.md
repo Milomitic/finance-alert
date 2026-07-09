@@ -159,19 +159,22 @@ windows. The bot automates catching one:
 3. On success it (optionally) pings your Telegram bot (reusing
    `backend/.env`) and exits.
 
-Prereqs: Docker running, OCI CLI configured (`~/.oci/config`),
-`terraform.tfvars` filled. Then, from the repo root:
+**Fully containerised — you install nothing but Docker.** Terraform and the
+OCI CLI both run in throwaway containers; auth comes from `terraform.tfvars` +
+your API private key at `~/.oci/oci_api_key.pem` (no host CLI, no
+`~/.oci/config`).
+
+👉 **Full step-by-step: [`RUN-A1-BOT.md`](RUN-A1-BOT.md).** In short:
 
 ```bash
 bash infra/oci/a1-retry.sh
 # tune: INTERVAL=240 GRACE=210 MAX_HOURS=48 bash infra/oci/a1-retry.sh
-# leave it running in a terminal / tmux / a background window; check
-# infra/oci/a1-retry.log for progress.
+# leave it running; watch infra/oci/a1-retry.log
 ```
 
-> Honest caveat: this is authored against our Terraform but not yet exercised
-> against a live account — the OKE async-node-launch + destroy/recreate flow may
-> need a tweak on first run. We'll iterate once you point it at the account.
+> Honest caveat: authored against our Terraform but not yet exercised against a
+> live account — the OKE async-node-launch + destroy/recreate flow may need a
+> tweak on first run. We'll iterate once you point it at the account.
 
 ---
 

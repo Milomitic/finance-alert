@@ -1,21 +1,34 @@
 # Copy to terraform.tfvars and fill in (terraform.tfvars is gitignored — it
-# carries your OCIDs, not secrets, but it's environment-specific).
+# carries your OCIDs + key fingerprint, which are identifiers, not secrets;
+# the private key itself never goes here).
 #
 #   cp terraform.tfvars.example terraform.tfvars
 
+# ── Identity / region ────────────────────────────────────────────────────────
 tenancy_ocid     = "ocid1.tenancy.oc1..xxxxxxxx"
 compartment_ocid = "ocid1.compartment.oc1..xxxxxxxx"
-region           = "eu-frankfurt-1"
+region           = "eu-milan-1"
 
+# ── API-key auth ─────────────────────────────────────────────────────────────
+# From the Console when you add an API key (Profile → API Keys → Add API Key →
+# it shows a "Configuration File Preview" with exactly these three values).
+user_ocid   = "ocid1.user.oc1..xxxxxxxx"
+fingerprint = "aa:bb:cc:dd:ee:ff:00:11:22:33:44:55:66:77:88:99"
+# Leave private_key_path unset — it defaults to /root/.oci/oci_api_key.pem,
+# the path the a1-retry bot mounts your host key to inside the container.
+# Just save the downloaded private key to ~/.oci/oci_api_key.pem on your host.
+
+# ── Access control ───────────────────────────────────────────────────────────
 # Your client's public IP as a /32. Find it: `curl ifconfig.me`.
 # Add more entries for other trusted networks. NEVER put 0.0.0.0/0 here.
 allowlist_cidrs = ["203.0.113.10/32"]
 
-# Contents of your ~/.ssh/id_ed25519.pub (or id_rsa.pub).
+# Contents of your ~/.ssh/id_ed25519.pub (or the oci_finance_alert.pub below).
 ssh_public_key = "ssh-ed25519 AAAA... you@host"
 
-# Optional overrides (defaults are Always-Free-safe: 2 nodes × 2 OCPU × 12 GB):
+# ── Optional overrides (defaults are Always-Free-safe: 2 nodes × 2 OCPU × 12 GB)
+# If A1 capacity won't give you 2 nodes, try one bigger node:
+# node_count      = 1
+# node_ocpus      = 4
+# node_memory_gbs = 24
 # kubernetes_version = "v1.32.1"
-# node_count         = 2
-# node_ocpus         = 2
-# node_memory_gbs    = 12

@@ -1,12 +1,17 @@
-# OCI provider auth.
+# OCI provider auth — explicit API-key values.
 #
-# Locally this reads ~/.oci/config (the API-key config `oci setup config`
-# writes). In CI (M5) you'd instead export TF_VAR_* and the OCI_CLI_* env vars,
-# or use OKE workload identity. Only `region` + `tenancy_ocid` are declared
-# here; the user/fingerprint/key come from the config file so no secret ever
-# lands in a .tf file.
+# We pass every auth field as a variable instead of reading ~/.oci/config,
+# because Terraform runs INSIDE a container (see infra/oci/a1-retry.sh): a
+# host config file would carry host-specific key paths the container can't
+# resolve. The private key itself is never in a .tf file — only its path
+# (var.private_key_path, the container mount point) and its fingerprint are.
+# tenancy/user OCIDs + fingerprint are identifiers, not secrets; they live in
+# the gitignored terraform.tfvars.
 provider "oci" {
-  tenancy_ocid = var.tenancy_ocid
-  region       = var.region
-  # config_file_profile = "DEFAULT"   # uncomment to pin a non-default profile
+  auth             = "ApiKey"
+  tenancy_ocid     = var.tenancy_ocid
+  user_ocid        = var.user_ocid
+  fingerprint      = var.fingerprint
+  private_key_path = var.private_key_path
+  region           = var.region
 }

@@ -10,9 +10,28 @@ variable "compartment_ocid" {
 }
 
 variable "region" {
-  description = "OCI region identifier, e.g. eu-frankfurt-1. Pick one where Ampere A1 Always-Free capacity is actually available."
+  description = "OCI region identifier, e.g. eu-milan-1. Your home region — where Always-Free A1 lives."
   type        = string
-  default     = "eu-frankfurt-1"
+  default     = "eu-milan-1"
+}
+
+# ── API-key auth (from the key pair you generate in the Console) ──────────────
+# Passed explicitly so Terraform (running in a container) never needs to read a
+# host ~/.oci/config with host-specific key paths — the classic container gotcha.
+variable "user_ocid" {
+  description = "OCID of the user the API key belongs to."
+  type        = string
+}
+
+variable "fingerprint" {
+  description = "Fingerprint of the uploaded API public key (shown in the Console when you add the key)."
+  type        = string
+}
+
+variable "private_key_path" {
+  description = "Path to the API private key AS SEEN INSIDE the Terraform container. Leave the default — the a1-retry bot mounts your host key there."
+  type        = string
+  default     = "/root/.oci/oci_api_key.pem"
 }
 
 # ── Access control ───────────────────────────────────────────────────────────
