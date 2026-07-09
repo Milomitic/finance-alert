@@ -1,0 +1,21 @@
+# Copy to terraform.tfvars and fill in (terraform.tfvars is gitignored — it
+# carries your OCIDs, not secrets, but it's environment-specific).
+#
+#   cp terraform.tfvars.example terraform.tfvars
+
+tenancy_ocid     = "ocid1.tenancy.oc1..xxxxxxxx"
+compartment_ocid = "ocid1.compartment.oc1..xxxxxxxx"
+region           = "eu-frankfurt-1"
+
+# Your client's public IP as a /32. Find it: `curl ifconfig.me`.
+# Add more entries for other trusted networks. NEVER put 0.0.0.0/0 here.
+allowlist_cidrs = ["203.0.113.10/32"]
+
+# Contents of your ~/.ssh/id_ed25519.pub (or id_rsa.pub).
+ssh_public_key = "ssh-ed25519 AAAA... you@host"
+
+# Optional overrides (defaults are Always-Free-safe: 2 nodes × 2 OCPU × 12 GB):
+# kubernetes_version = "v1.32.1"
+# node_count         = 2
+# node_ocpus         = 2
+# node_memory_gbs    = 12

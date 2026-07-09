@@ -187,7 +187,7 @@ Let's Encrypt HTTP-01 is blocked by the IP allowlist → use DNS-01.
 | M0 Foundation | ✅ done |
 | M1 Containerisation | ✅ done — image builds, container serves `/api/health` + SPA, non-root, isolated DB (host `app.db` untouched). Fixed a Windows-only lockfile → cross-platform superset for `npm ci`. |
 | M2 K8s + SQLite StatefulSet | ✅ done — kind cluster + Helm chart (StatefulSet 1-replica owning an embedded-SQLite PVC, non-root securityContext + fsGroup, startup/readiness/liveness on `/api/health`). Verified: pod Ready via Service, and **data survives a pod delete** on the re-bound PVC. Corrected the roadmap's own wording — with embedded SQLite the app IS the StatefulSet (no separate DB pod); that split happens at M7 with Postgres. |
-| M3 Terraform / OKE | ⏳ next (needs the OCI account) |
+| M3 Terraform / OKE | 🟡 code done — modules (VCN+NSG allowlist, reserved IP, OKE Basic + A1 node pool, Object Storage, OCIR) written, `terraform fmt`+`validate` green via container. **`apply` pending the OCI account** (auth, A1 capacity, node-image lookup + OKE net rules verified only at apply). |
 | M4 Ingress + TLS + hardening | ⬜ |
 | M5 GitOps + CI/CD | ⬜ |
 | M6 Observability | ⬜ |

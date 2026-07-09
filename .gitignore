@@ -51,6 +51,16 @@ Thumbs.db
 # Runtime logs (emitted by uvicorn started from repo root)
 data/logs/
 
+# Terraform: never commit state (holds resource data incl. sensitive attrs),
+# the provider plugin cache, or the env-specific tfvars (OCIDs). The
+# *.example and *.tf files ARE tracked.
+**/.terraform/
+**/.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+**/terraform.tfvars
+crash.log
+
 # Worktrees (created by superpowers using-git-worktrees skill)
 .worktrees/
 
