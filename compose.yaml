@@ -1,0 +1,47 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Local container parity (M1). Runs the SAME image that will ship to K8s.
+#
+#   docker compose up --build      → http://localhost:8000
+#   docker compose down            → stops; DATA SURVIVES (named volume)
+#   docker compose down -v         → deletes the container's data too
+#
+# Deliberately isolated from the localhost dev flow:
+#  - the container gets its OWN database inside the `finance_data` named
+#    volume — your backend/data/app.db is never mounted, never touched;
+#  - `just up` / uvicorn --reload keep working exactly as before.
+# ─────────────────────────────────────────────────────────────────────────────
+name: finance-alert
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: finance-alert:local
+    ports:
+      # host:container — bind only on loopback so nothing on your LAN can
+      # reach the containerised app by accident (same posture as local dev).
+      - "127.0.0.1:8000:8000"
+    env_file:
+      # Reuses your existing backend/.env (SECRET_KEY, admin hash, API keys,
+      # Telegram…). env vars beat the image defaults per pydantic-settings.
+      # The file is NOT baked into the image (.dockerignore) — it is injected
+      # at runtime, which is the 12-factor way.
+      - backend/.env
+    environment:
+      # Explicit even though it matches the default: the DB lives on the
+      # named volume mounted below, NOT in an image layer.
+      DATABASE_URL: sqlite:///./data/app.db
+    volumes:
+      # Named volume ≠ bind mount: Docker owns the storage; first use copies
+      # ownership/permissions from the image dir (already chown'd to the app
+      # user in the Dockerfile). This is the compose ancestor of the K8s
+      # PersistentVolumeClaim the StatefulSet will use in M2.
+      - finance_data:/app/backend/data
+    restart: unless-stopped
+    # Container healthcheck (also declared in the image; compose lets us see
+    # it in `docker compose ps` and gate dependent services on it later,
+    # e.g. Postgres in M7).
+
+volumes:
+  finance_data:

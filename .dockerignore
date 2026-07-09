@@ -1,0 +1,44 @@
+# ── Build-context hygiene ────────────────────────────────────────────────
+# Everything listed here is NEVER sent to the Docker daemon. Two reasons:
+# 1. Speed: the context is tar'd and uploaded before the build starts —
+#    node_modules + the SQLite DB would add ~1GB per build.
+# 2. Security: files in the context can end up baked into image layers,
+#    where anyone with the image can extract them (docker save + untar).
+#    Runtime state and secrets must NEVER be part of an image.
+
+# VCS + editor
+.git
+.gitignore
+.claude
+*.md
+!README.md
+
+# Runtime state (DB, logs, breakers, backups) — lives in a VOLUME, not the image
+backend/data
+
+# Local virtualenvs / caches — rebuilt inside the image from uv.lock
+backend/.venv
+**/__pycache__
+**/.pytest_cache
+**/.ruff_cache
+
+# Frontend: node_modules is restored by `npm ci` in the build stage;
+# dist is BUILT in the build stage (never trust a possibly-stale local dist)
+frontend/node_modules
+frontend/dist
+
+# Tests are not shipped in the runtime image (smaller attack surface).
+# CI runs them from the repo checkout, not from the image.
+backend/tests
+
+# Secrets — belt & suspenders (they're gitignored too, but the docker
+# context is built from the working tree, not from git)
+**/.env
+**/.env.*
+!**/.env.example
+
+# Infra/docs not needed inside the app image
+docs
+scripts
+infra
+justfile
