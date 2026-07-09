@@ -185,8 +185,8 @@ Let's Encrypt HTTP-01 is blocked by the IP allowlist → use DNS-01.
 | Milestone | State |
 |---|---|
 | M0 Foundation | ✅ done |
-| M1 Containerisation | ⏳ next |
-| M2 K8s + SQLite StatefulSet | ⬜ |
+| M1 Containerisation | ✅ done — image builds, container serves `/api/health` + SPA, non-root, isolated DB (host `app.db` untouched). Fixed a Windows-only lockfile → cross-platform superset for `npm ci`. |
+| M2 K8s + SQLite StatefulSet | ⏳ next |
 | M3 Terraform / OKE | ⬜ |
 | M4 Ingress + TLS + hardening | ⬜ |
 | M5 GitOps + CI/CD | ⬜ |
