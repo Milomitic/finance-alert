@@ -139,10 +139,39 @@ Not your fault — it's Oracle capacity. In order of effort:
 1. **Retry** `apply` — capacity frees up; try off-peak hours.
 2. **Fewer/bigger node**: `node_count=1` (one 4-OCPU node) is often placeable
    when two aren't.
-3. **Upgrade to PAYG** (Decision 2) — the reliable fix.
-4. Different region only as a last resort (home region is fixed; you'd only be
+3. **Run the capacity-retry bot** (below) — automates the retry until it lands.
+4. **Upgrade to PAYG** (Decision 2) — the most reliable fix.
+5. Different region only as a last resort (home region is fixed; you'd only be
    changing where *non-home* resources go, which A1 Always-Free doesn't allow —
    so realistically this means a new account, avoid).
+
+### The capacity-retry bot — `infra/oci/a1-retry.sh`
+
+There is **no OCI API for "is A1 capacity free right now"** — the only signal
+is *attempting to launch*, and capacity appears in short, unpredictable
+windows. The bot automates catching one:
+
+1. Applies the cluster/network/storage once (no capacity constraint), then
+2. loops: wait a grace period → check the node pool's **ACTIVE node count** via
+   OCI CLI (Terraform can't see per-node lifecycle state) → if short, **destroy
+   + recreate the node pool** so each cycle is a fresh launch attempt →
+   back off with jitter and repeat.
+3. On success it (optionally) pings your Telegram bot (reusing
+   `backend/.env`) and exits.
+
+Prereqs: Docker running, OCI CLI configured (`~/.oci/config`),
+`terraform.tfvars` filled. Then, from the repo root:
+
+```bash
+bash infra/oci/a1-retry.sh
+# tune: INTERVAL=240 GRACE=210 MAX_HOURS=48 bash infra/oci/a1-retry.sh
+# leave it running in a terminal / tmux / a background window; check
+# infra/oci/a1-retry.log for progress.
+```
+
+> Honest caveat: this is authored against our Terraform but not yet exercised
+> against a live account — the OKE async-node-launch + destroy/recreate flow may
+> need a tweak on first run. We'll iterate once you point it at the account.
 
 ---
 

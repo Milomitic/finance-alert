@@ -5,6 +5,16 @@ output "cluster_id" {
   value       = oci_containerengine_cluster.this.id
 }
 
+output "node_pool_id" {
+  description = "OCID of the A1 node pool — the capacity-retry bot polls its node states."
+  value       = oci_containerengine_node_pool.this.id
+}
+
+output "compartment_ocid" {
+  description = "Echo of the compartment OCID (the bot needs it for OCI CLI calls)."
+  value       = var.compartment_ocid
+}
+
 output "kubeconfig_command" {
   description = "Run this to point kubectl at the new cluster."
   value       = "oci ce cluster create-kubeconfig --cluster-id ${oci_containerengine_cluster.this.id} --file $HOME/.kube/config --region ${var.region} --token-version 2.0.0 --kube-endpoint PUBLIC_ENDPOINT"
