@@ -1,0 +1,15 @@
+# kind cluster definition (M2). "Kubernetes IN Docker": each node below is a
+# container running on your Docker Desktop engine. Versioned so the cluster is
+# reproducible — `kind create cluster --config infra/kind/cluster.yaml`.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: finance-alert
+nodes:
+  - role: control-plane
+    # A NodePort we can surface to the host later (ingress lands here in M4).
+    # For M2 we reach the app with `kubectl port-forward`, so this is optional
+    # scaffolding — but a versioned cluster shape is good practice.
+    extraPortMappings:
+      - containerPort: 30080
+        hostPort: 30080
+        protocol: TCP
