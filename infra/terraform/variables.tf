@@ -47,38 +47,32 @@ variable "ssh_public_key" {
   type        = string
 }
 
-# ── OKE cluster + nodes ──────────────────────────────────────────────────────
+# ── k3s VM (compute.tf) ──────────────────────────────────────────────────────
 variable "cluster_name" {
-  description = "Name of the OKE cluster."
+  description = "Name prefix for the cluster's resources (VM, VCN, NSG…)."
   type        = string
   default     = "finance-alert"
 }
 
-variable "kubernetes_version" {
-  description = "K8s version for the control plane + nodes. Must be one OKE currently offers in your region AND has an aarch64 node image for (older pins get dropped over time — v1.32.1 was rejected at apply 2026-07). Check: `oci ce node-pool-options get --node-pool-option-id all --query 'data.sources[].\"source-name\"'`."
-  type        = string
-  default     = "v1.34.1"
-}
-
-# Ampere A1 Always-Free envelope is 4 OCPU + 24 GB total. Defaults below use it
-# fully across 2 nodes (a real multi-node cluster) — enough headroom for the
-# app + Postgres + Prometheus/Grafana/Loki that land in later milestones.
-variable "node_count" {
-  description = "Number of worker nodes."
-  type        = number
-  default     = 2
-}
-
+# A1.Flex shape for the single k3s node. Keep within your account's Always-Free
+# A1 allowance (this tenancy: 2 OCPU / 12 GB — check `oci limits value list
+# --service-name compute --query 'data[?contains(name,\`standard-a1\`)]'`).
 variable "node_ocpus" {
-  description = "OCPUs per node (A1.Flex). node_count * node_ocpus must be <= 4 for Always Free."
+  description = "OCPUs for the k3s VM (A1.Flex)."
   type        = number
   default     = 2
 }
 
 variable "node_memory_gbs" {
-  description = "Memory (GB) per node. node_count * node_memory_gbs must be <= 24 for Always Free."
+  description = "Memory (GB) for the k3s VM (A1.Flex)."
   type        = number
   default     = 12
+}
+
+variable "boot_volume_gbs" {
+  description = "Boot volume size (GB). Always-Free block storage is 200 GB total."
+  type        = number
+  default     = 50
 }
 
 # ── Storage ──────────────────────────────────────────────────────────────────

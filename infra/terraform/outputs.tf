@@ -1,13 +1,28 @@
-# Values you need after `apply`. `terraform output` prints them; CI reads them.
+# Values you need after `apply`. `terraform output` prints them.
 
-output "cluster_id" {
-  description = "OCID of the OKE cluster."
-  value       = oci_containerengine_cluster.this.id
+output "instance_id" {
+  description = "OCID of the k3s VM."
+  value       = oci_core_instance.k3s.id
 }
 
-output "node_pool_id" {
-  description = "OCID of the A1 node pool — the capacity-retry bot polls its node states."
-  value       = oci_containerengine_node_pool.this.id
+output "ingress_public_ip" {
+  description = "Ephemeral public IP of the k3s VM — SSH here, and (M4) the domain A-record points here."
+  value       = oci_core_instance.k3s.public_ip
+}
+
+output "ssh_command" {
+  description = "SSH into the VM (Oracle Linux default user is 'opc')."
+  value       = "ssh -i ~/.ssh/oci_finance_alert opc@${oci_core_instance.k3s.public_ip}"
+}
+
+output "fetch_kubeconfig" {
+  description = "Copy a working local kubeconfig off the box (server rewritten to the public IP)."
+  value       = "ssh -i ~/.ssh/oci_finance_alert opc@${oci_core_instance.k3s.public_ip} 'sudo cat /etc/rancher/k3s/k3s.yaml' | sed 's#127.0.0.1#${oci_core_instance.k3s.public_ip}#' > kubeconfig-oci && export KUBECONFIG=$PWD/kubeconfig-oci"
+}
+
+output "backup_bucket" {
+  description = "Object Storage bucket for DB backups / WAL."
+  value       = oci_objectstorage_bucket.backups.name
 }
 
 output "compartment_ocid" {
@@ -15,22 +30,7 @@ output "compartment_ocid" {
   value       = var.compartment_ocid
 }
 
-output "kubeconfig_command" {
-  description = "Run this to point kubectl at the new cluster."
-  value       = "oci ce cluster create-kubeconfig --cluster-id ${oci_containerengine_cluster.this.id} --file $HOME/.kube/config --region ${var.region} --token-version 2.0.0 --kube-endpoint PUBLIC_ENDPOINT"
-}
-
-output "ingress_public_ip" {
-  description = "Reserved public IP for the ingress LB — point the domain A-record here (M4)."
-  value       = oci_core_public_ip.ingress.ip_address
-}
-
-output "backup_bucket" {
-  description = "Object Storage bucket for backups / WAL."
-  value       = oci_objectstorage_bucket.backups.name
-}
-
 output "ocir_repo_path" {
-  description = "OCIR image path prefix (push the app image here in M5)."
+  description = "OCIR image path prefix (usable once create_ocir=true on PAYG, or via docker push)."
   value       = "${var.region}.ocir.io/${data.oci_objectstorage_namespace.this.namespace}/${var.ocir_repo_name}"
 }

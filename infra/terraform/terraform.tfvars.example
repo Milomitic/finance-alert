@@ -26,9 +26,8 @@ allowlist_cidrs = ["203.0.113.10/32"]
 # Contents of your ~/.ssh/id_ed25519.pub (or the oci_finance_alert.pub below).
 ssh_public_key = "ssh-ed25519 AAAA... you@host"
 
-# ── Optional overrides (defaults are Always-Free-safe: 2 nodes × 2 OCPU × 12 GB)
-# If A1 capacity won't give you 2 nodes, try one bigger node:
-# node_count      = 1
-# node_ocpus      = 4
-# node_memory_gbs = 24
-# kubernetes_version = "v1.34.1"   # must be OKE-offered + have an aarch64 image
+# ── Optional overrides — the single k3s VM's A1.Flex shape ───────────────────
+# Defaults (2 OCPU / 12 GB) use this account's whole Always-Free A1 allowance.
+# node_ocpus      = 2
+# node_memory_gbs = 12
+# boot_volume_gbs = 50

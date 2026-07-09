@@ -1,12 +1,12 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# Network. One VCN with a public subnet that hosts the OKE API endpoint, the
-# worker nodes, and (M4) the ingress load balancer. Access is fenced by a
-# Network Security Group (NSG) whose ingress rules honour the IP allowlist.
+# Network. One VCN with a public subnet that hosts the k3s VM (compute.tf).
+# Access is fenced by a Network Security Group (NSG) whose ingress rules honour
+# the IP allowlist: SSH, the k3s API, and the app's HTTP/HTTPS.
 #
-# Hardening note for later: production-grade OKE puts WORKER NODES in a PRIVATE
-# subnet behind a NAT gateway, exposing only the LB publicly. That's an extra
-# subnet + NAT gateway; on Always Free with a tight NSG, public nodes are an
-# acceptable, documented simplification for M3. Flagged as an M9 follow-up.
+# Hardening note for later: a production setup would put the node in a PRIVATE
+# subnet behind a NAT gateway, exposing only a load balancer publicly. On
+# Always Free with a tight NSG, a public node is an acceptable, documented
+# simplification. Flagged as an M9 follow-up.
 # ─────────────────────────────────────────────────────────────────────────────
 
 resource "oci_core_vcn" "this" {
@@ -51,7 +51,41 @@ resource "oci_core_network_security_group" "nodes" {
   display_name   = "${var.cluster_name}-nsg"
 }
 
-# K8s API server (6443) — only from the allowlist.
+# SSH (22) — only from the allowlist (VM management / break-glass).
+resource "oci_core_network_security_group_security_rule" "ssh_ingress" {
+  for_each                  = toset(var.allowlist_cidrs)
+  network_security_group_id = oci_core_network_security_group.nodes.id
+  direction                 = "INGRESS"
+  protocol                  = "6" # TCP
+  source                    = each.value
+  source_type               = "CIDR_BLOCK"
+  description               = "SSH from allowlisted client"
+  tcp_options {
+    destination_port_range {
+      min = 22
+      max = 22
+    }
+  }
+}
+
+# HTTP (80) — only from the allowlist (redirect to HTTPS + ACME HTTP-01 later).
+resource "oci_core_network_security_group_security_rule" "http_ingress" {
+  for_each                  = toset(var.allowlist_cidrs)
+  network_security_group_id = oci_core_network_security_group.nodes.id
+  direction                 = "INGRESS"
+  protocol                  = "6"
+  source                    = each.value
+  source_type               = "CIDR_BLOCK"
+  description               = "HTTP from allowlisted client"
+  tcp_options {
+    destination_port_range {
+      min = 80
+      max = 80
+    }
+  }
+}
+
+# k3s API server (6443) — only from the allowlist.
 resource "oci_core_network_security_group_security_rule" "api_ingress" {
   for_each                  = toset(var.allowlist_cidrs)
   network_security_group_id = oci_core_network_security_group.nodes.id
@@ -95,7 +129,7 @@ resource "oci_core_network_security_group_security_rule" "intra_vcn_ingress" {
   description               = "Intra-VCN (control plane + node-to-node)"
 }
 
-# Egress: nodes pull images, reach yfinance/SEC/etc., and the OKE control plane.
+# Egress: pull container images, reach yfinance/SEC/etc.
 resource "oci_core_network_security_group_security_rule" "all_egress" {
   network_security_group_id = oci_core_network_security_group.nodes.id
   direction                 = "EGRESS"
@@ -105,12 +139,5 @@ resource "oci_core_network_security_group_security_rule" "all_egress" {
   description               = "Egress anywhere (image pulls + upstream data)"
 }
 
-# ── Reserved public IP ───────────────────────────────────────────────────────
-# Created unattached now; the ingress LB (M4) binds it, and the domain A-record
-# points here. Reserved (not ephemeral) so it survives stop/start — the roadmap
-# gotcha: reserve BEFORE pointing DNS.
-resource "oci_core_public_ip" "ingress" {
-  compartment_id = var.compartment_ocid
-  lifetime       = "RESERVED"
-  display_name   = "${var.cluster_name}-ingress-ip"
-}
+# NOTE: a RESERVED public IP (for stable DNS) comes back in M4 alongside a
+# proper ingress. For now the k3s VM uses an ephemeral public IP (compute.tf).

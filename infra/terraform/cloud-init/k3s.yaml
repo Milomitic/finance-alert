@@ -1,0 +1,26 @@
+#cloud-config
+# Provisions k3s on the Oracle Linux aarch64 A1 VM.
+#
+# - firewalld is disabled: the OCI NSG (vcn.tf) is the real network firewall,
+#   and k3s + firewalld on Oracle Linux is a well-known source of broken pod
+#   networking. Defence-in-depth stays at the NSG layer.
+# - k3s discovers its OWN public IP and adds it as a TLS SAN, so a kubeconfig
+#   copied off the box works for remote `kubectl` over the public endpoint.
+# - default k3s add-ons are kept: Traefik (ingress), ServiceLB, and
+#   local-path-provisioner (the StorageClass the app's PVC binds to).
+write_files:
+  - path: /opt/k3s/install.sh
+    permissions: "0755"
+    content: |
+      #!/usr/bin/env bash
+      set -euxo pipefail
+      systemctl disable --now firewalld || true
+      PUBIP="$(curl -s --max-time 10 ifconfig.me || true)"
+      EXEC="--write-kubeconfig-mode 644"
+      [ -n "$PUBIP" ] && EXEC="$EXEC --tls-san $PUBIP"
+      curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="$EXEC" sh -
+      # readiness marker other tooling can poll for
+      until /usr/local/bin/k3s kubectl get nodes 2>/dev/null | grep -q ' Ready '; do sleep 5; done
+      touch /opt/k3s/ready
+runcmd:
+  - [/opt/k3s/install.sh]
