@@ -19,7 +19,12 @@ resource "oci_objectstorage_bucket" "backups" {
 }
 
 # OCI Container Registry repo for the app image (pushed by CI in M5).
+# Disabled by default: CreateContainerRepository returns 403
+# FREE_TIER_NOT_SUPPORTED on a pure Always-Free account. Flip create_ocir=true
+# after upgrading to PAYG (still $0 if only Always-Free resources run). Until
+# then, OCIR repos are auto-created on first `docker push` anyway.
 resource "oci_artifacts_container_repository" "app" {
+  count          = var.create_ocir ? 1 : 0
   compartment_id = var.compartment_ocid
   display_name   = var.ocir_repo_name
   is_public      = false

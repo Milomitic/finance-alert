@@ -93,3 +93,9 @@ variable "ocir_repo_name" {
   type        = string
   default     = "finance-alert/app"
 }
+
+variable "create_ocir" {
+  description = "Create the OCIR container repository. OFF by default: CreateContainerRepository returns 403 FREE_TIER_NOT_SUPPORTED on pure Always-Free accounts (repos auto-create on first docker push anyway). Enable after upgrading to PAYG."
+  type        = bool
+  default     = false
+}
