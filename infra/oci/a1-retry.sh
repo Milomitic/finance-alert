@@ -66,8 +66,11 @@ tf() {
     "hashicorp/terraform:$TF_VERSION" "$@"
 }
 # OCI CLI in a container; auth entirely via env (overrides any config file).
+# --entrypoint oci is required: the image's default entrypoint isn't `oci`, but
+# the binary is on PATH at /usr/local/bin/oci (verified against v3.89.1).
 ocicli() {
   MSYS_NO_PATHCONV=1 docker run --rm \
+    --entrypoint oci \
     -v "$HOST_OCI_DIR:/root/.oci:ro" \
     -e OCI_CLI_AUTH=api_key \
     -e "OCI_CLI_TENANCY=$TENANCY" \
