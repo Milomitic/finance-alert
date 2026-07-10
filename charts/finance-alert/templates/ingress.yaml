@@ -1,0 +1,39 @@
+{{- /*
+Ingress — only rendered when ingress.enabled. On the k3s VM this is Traefik
+(bundled with k3s, listening on the node's :80/:443), so the app is reachable
+at http://<vm-public-ip>/. A real hostname + TLS (cert-manager) arrive in M4.
+On the local kind cluster ingress stays disabled (default), unchanged from M2.
+*/ -}}
+{{- if .Values.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "finance-alert.fullname" . }}
+  labels:
+    {{- include "finance-alert.labels" . | nindent 4 }}
+  {{- with .Values.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if .Values.ingress.className }}
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- end }}
+  rules:
+    - http:
+        paths:
+          - path: {{ .Values.ingress.path | default "/" | quote }}
+            pathType: {{ .Values.ingress.pathType | default "Prefix" }}
+            backend:
+              service:
+                name: {{ include "finance-alert.fullname" . }}
+                port:
+                  number: {{ .Values.service.port }}
+      {{- if .Values.ingress.host }}
+      host: {{ .Values.ingress.host | quote }}
+      {{- end }}
+  {{- with .Values.ingress.tls }}
+  tls:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+{{- end }}

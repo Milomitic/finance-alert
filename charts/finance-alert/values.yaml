@@ -32,6 +32,17 @@ service:
   type: ClusterIP
   port: 8000
 
+# Ingress is OFF by default (local kind reaches the app via port-forward, as in
+# M2). The OCI/k3s overlay (values-oci.yaml) turns it on with Traefik.
+ingress:
+  enabled: false
+  className: ""
+  host: ""
+  path: /
+  pathType: Prefix
+  annotations: {}
+  tls: []
+
 # Probe tuning. The app runs `alembic upgrade head` before uvicorn binds, so
 # readiness must tolerate a slow first boot (fresh DB migration).
 probes:

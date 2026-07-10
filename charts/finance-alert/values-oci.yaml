@@ -1,0 +1,44 @@
+# Overrides for the single-node k3s VM on OCI Always Free (2 OCPU / 12 GB).
+# Applied by infra/oci/deploy-k3s.sh:
+#   helm upgrade --install finance-alert charts/finance-alert \
+#     -f charts/finance-alert/values-oci.yaml --set secret.secretKey=<random>
+
+image:
+  # Registry-free: the arm64 image is imported into k3s' containerd via
+  # `k3s ctr images import` (OCIR returns 403 on a free-tier account). Never
+  # tries to pull from a registry.
+  repository: finance-alert
+  tag: oci
+  pullPolicy: Never
+
+persistence:
+  storageClass: local-path # k3s' built-in Rancher local-path provisioner
+  size: 4Gi
+
+# App on a 2 OCPU / 12 GB node, leaving headroom for k3s + the OS.
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    cpu: "1500m"
+    memory: 2Gi
+
+# Fresh cloud DB → alembic migrates on first boot; give startup room.
+probes:
+  startupSeconds: 120
+  periodSeconds: 10
+
+# Traefik (bundled with k3s) fronts the app on the VM's public IP:80.
+ingress:
+  enabled: true
+  className: traefik
+  host: "" # any Host → reachable via the raw public IP until a domain (M4)
+  path: /
+  pathType: Prefix
+
+# The kind dev placeholder is NOT used in the cloud. deploy-k3s.sh generates a
+# random SECRET_KEY and passes it via --set secret.secretKey=… at install time.
+secret:
+  create: true
+  secretKey: "" # overridden at deploy; empty here on purpose

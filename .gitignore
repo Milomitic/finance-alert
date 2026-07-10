@@ -64,6 +64,10 @@ crash.log
 # A1 capacity-retry bot runtime log + last-apply scratch
 infra/oci/*.log
 infra/oci/.last-apply.out
+infra/oci/.bot.pid
+# Built image tarball + fetched cluster kubeconfig (never commit)
+infra/oci/*.tar
+kubeconfig-oci
 
 # Worktrees (created by superpowers using-git-worktrees skill)
 .worktrees/
