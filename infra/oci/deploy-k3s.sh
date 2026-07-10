@@ -44,9 +44,19 @@ until $SSH 'test -f /opt/k3s/ready' 2>/dev/null; do echo "  …not ready yet, re
 echo "k3s is ready."
 
 # ── 2. import the image into k3s containerd ──────────────────────────────────
-echo "copying + importing the app image…"
-scp -i "$KEY" -o StrictHostKeyChecking=accept-new "$TAR" "opc@$IP:/tmp/app.tar"
-$SSH 'sudo k3s ctr images import /tmp/app.tar && rm -f /tmp/app.tar'
+# Skip the (large) upload if the tar is already on the VM intact — makes retries
+# cheap. sudo needs the FULL path: Oracle Linux's secure_path excludes
+# /usr/local/bin where k3s lives.
+LOCAL_SZ=$(stat -c %s "$TAR" 2>/dev/null || echo 0)
+REMOTE_SZ=$($SSH 'stat -c %s /tmp/app.tar 2>/dev/null' 2>/dev/null | tr -d "\r" || echo 0)
+if [ "$LOCAL_SZ" = "$REMOTE_SZ" ] && [ "$LOCAL_SZ" != 0 ]; then
+  echo "image already on the VM (${LOCAL_SZ} bytes) — skipping upload"
+else
+  echo "uploading the app image (~595M, a few minutes)…"
+  scp -i "$KEY" -o StrictHostKeyChecking=accept-new "$TAR" "opc@$IP:/tmp/app.tar"
+fi
+echo "importing image into k3s containerd…"
+$SSH 'sudo /usr/local/bin/k3s ctr images import /tmp/app.tar'
 
 # ── 3. fetch a remote-usable kubeconfig ──────────────────────────────────────
 echo "fetching kubeconfig → $KUBECONFIG_FILE"
