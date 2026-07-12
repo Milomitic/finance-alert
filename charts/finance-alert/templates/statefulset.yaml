@@ -55,6 +55,15 @@ spec:
                 secretKeyRef:
                   name: {{ include "finance-alert.secretName" . }}
                   key: SECRET_KEY
+            # bcrypt hash the boot path provisions the admin login from.
+            # optional: the pod still starts when the Secret lacks the key
+            # (e.g. local kind, where login provisioning is manual).
+            - name: ADMIN_PASSWORD_HASH
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "finance-alert.secretName" . }}
+                  key: ADMIN_PASSWORD_HASH
+                  optional: true
           # Startup probe gates liveness/readiness until the first success, so
           # the slow first boot (alembic migrate before uvicorn binds) can't be
           # mistaken for a crash-loop. failureThreshold × periodSeconds ≥ the

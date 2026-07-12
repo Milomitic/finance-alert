@@ -3,11 +3,8 @@ import secrets
 from pathlib import Path
 
 from loguru import logger
-from sqlalchemy import select
 
 from app.core.config import ensure_data_dir, settings
-from app.core.db import SessionLocal
-from app.models import User
 from app.scripts import seed as seed_module
 
 
@@ -52,26 +49,13 @@ def ensure_admin_user() -> None:
             "ADMIN_PASSWORD_HASH not set. Run: uv run python -m app.scripts.set_admin_password"
         )
         return
-    db = SessionLocal()
-    try:
-        existing = db.execute(
-            select(User).where(User.username == settings.admin_username)
-        ).scalar_one_or_none()
-        if existing is None:
-            db.add(
-                User(
-                    username=settings.admin_username,
-                    password_hash=settings.admin_password_hash,
-                )
-            )
-            db.commit()
-            logger.info(f"Created admin user: {settings.admin_username}")
-        elif existing.password_hash != settings.admin_password_hash:
-            existing.password_hash = settings.admin_password_hash
-            db.commit()
-            logger.info(f"Updated admin password hash for: {settings.admin_username}")
-    finally:
-        db.close()
+    # The DB upsert lives in auth_service so the app's boot path (lifespan)
+    # shares the exact same logic instead of mirroring it here.
+    from app.services.auth_service import ensure_admin_user as _ensure
+
+    action = _ensure()
+    if action:
+        logger.info(f"Admin user {settings.admin_username!r} {action}.")
 
 
 def main() -> None:

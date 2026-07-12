@@ -64,11 +64,29 @@ $SSH 'sudo cat /etc/rancher/k3s/k3s.yaml' | sed "s#127.0.0.1#$IP#" > "$KUBECONFI
 export KUBECONFIG="$KUBECONFIG_FILE"
 
 # ── 4. deploy with a fresh random SECRET_KEY ─────────────────────────────────
+# Reuse the local admin's bcrypt HASH (never the password) so the cloud login
+# matches localhost: the app's boot path (lifespan) upserts the admin row from
+# ADMIN_PASSWORD_HASH. Skipped gracefully when there's no local DB/user.
+ADMIN_HASH=""
+LOCAL_DB="$REPO_ROOT/backend/data/app.db"
+PYEXE="$REPO_ROOT/backend/.venv/Scripts/python.exe"
+if [ -f "$LOCAL_DB" ] && [ -x "$PYEXE" ]; then
+  ADMIN_HASH="$("$PYEXE" -c "import sqlite3; r=sqlite3.connect('$LOCAL_DB').execute(\"SELECT password_hash FROM users WHERE username='admin'\").fetchone(); print(r[0] if r else '')" 2>/dev/null | tr -d '\r')"
+fi
+EXTRA_SETS=()
+if [ -n "$ADMIN_HASH" ]; then
+  EXTRA_SETS+=(--set-string "secret.adminPasswordHash=$ADMIN_HASH")
+  echo "admin login: seeding from the local DB's bcrypt hash"
+else
+  echo "admin login: no local hash found — provision manually after deploy"
+fi
+
 SECRET="$(openssl rand -hex 32)"
 echo "helm upgrade --install…"
 helm upgrade --install finance-alert "$CHART" \
   -f "$CHART/values-oci.yaml" \
   --set secret.secretKey="$SECRET" \
+  "${EXTRA_SETS[@]}" \
   --namespace finance-alert --create-namespace \
   --wait --timeout 6m
 

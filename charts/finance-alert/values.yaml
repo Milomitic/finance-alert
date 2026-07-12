@@ -65,3 +65,7 @@ secret:
   create: true
   existingSecret: ""
   secretKey: "kind-local-dev-secret-not-for-production-32chars!"
+  # bcrypt hash for the admin login (NEVER the plain password, never committed).
+  # Empty = key omitted from the Secret and the boot provisioning is skipped.
+  # deploy-k3s.sh auto-fills it from the local DB at deploy time.
+  adminPasswordHash: ""

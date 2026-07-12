@@ -267,9 +267,27 @@ def _catch_up_institutionals_on_boot() -> None:
         logger.warning(f"[startup] institutionals catch-up skipped: {exc}")
 
 
+def _ensure_admin_on_boot() -> None:
+    """Provision the admin login from ADMIN_PASSWORD_HASH (no-op when unset or
+    already in sync). Makes a fresh deployment with an empty DB log-in-able
+    without a manual step — the K8s chart feeds the env var via its Secret."""
+    import os
+
+    # Never touch the real dev DB from a test's TestClient lifespan.
+    if os.environ.get("PYTEST_CURRENT_TEST"):
+        return
+    try:
+        from app.services.auth_service import ensure_admin_user
+
+        ensure_admin_user()
+    except Exception as exc:  # noqa: BLE001 — boot-time best effort
+        logger.warning(f"[startup] ensure admin user failed (non-fatal): {exc}")
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     _cleanup_orphan_scans()
+    _ensure_admin_on_boot()
     _hydrate_fetch_caches()
     # Pre-fill the live-log ring buffer from the on-disk log tail so the
     # Salute log view (and its per-source filter) survives restarts.
