@@ -1,5 +1,5 @@
 """Tests for stock search service."""
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy.orm import Session
 
@@ -126,7 +126,7 @@ def _seed_scored(db: Session, ticker: str, **pillars) -> None:
         momentum=pillars.get("momentum"),
         sentiment=pillars.get("sentiment"),
         risk_tier="moderate",
-        computed_at=datetime.now(timezone.utc),
+        computed_at=datetime.now(UTC),
         breakdown="{}",
     ))
     db.commit()

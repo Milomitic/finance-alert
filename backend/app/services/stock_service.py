@@ -318,9 +318,9 @@ def _apply_filter(stmt, f: StockFilter):
     # % dal massimo 52w: il guard high_252 > 0 evita che una divisione per
     # zero (SQLite → NULL) o un massimo assurdo produca confronti spuri.
     if f.pct_off_high_min is not None:
-        stmt = stmt.where(StockMetrics.high_252 > 0, PCT_OFF_HIGH_EXPR >= f.pct_off_high_min)
+        stmt = stmt.where(StockMetrics.high_252 > 0, f.pct_off_high_min <= PCT_OFF_HIGH_EXPR)
     if f.pct_off_high_max is not None:
-        stmt = stmt.where(StockMetrics.high_252 > 0, PCT_OFF_HIGH_EXPR <= f.pct_off_high_max)
+        stmt = stmt.where(StockMetrics.high_252 > 0, f.pct_off_high_max >= PCT_OFF_HIGH_EXPR)
     if f.market_cap_min is not None:
         stmt = stmt.where(Stock.market_cap >= f.market_cap_min)
     if f.market_cap_max is not None:

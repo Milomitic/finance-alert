@@ -18,10 +18,11 @@ This is in-process (single uvicorn worker assumption — fine for local-first).
 """
 import os
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from threading import Lock
-from typing import Callable, TypeVar
+from typing import TypeVar
 
 from loguru import logger
 

@@ -17,11 +17,13 @@ from datetime import datetime
 
 from sqlalchemy import (
     DateTime,
-    Index as SAIndex,
     PrimaryKeyConstraint,
     String,
     Text,
     func,
+)
+from sqlalchemy import (
+    Index as SAIndex,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 

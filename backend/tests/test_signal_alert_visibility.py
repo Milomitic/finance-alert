@@ -1,5 +1,6 @@
 from datetime import date
-from app.models import Alert, OhlcvDaily, Stock
+
+from app.models import OhlcvDaily, Stock
 from app.services import scan_service
 from app.services.alert_service import derive_rule_kind, list_alerts
 

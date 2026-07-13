@@ -15,7 +15,6 @@ from threading import Lock
 from typing import Any
 
 import pandas as pd
-
 from loguru import logger
 
 from app.services.currency_units import is_minor_unit
@@ -586,7 +585,8 @@ def _merge_finnhub_revenue(ticker: str, f: "Fundamentals") -> None:
     if not finnhub_earnings_service.is_enabled():
         return
 
-    from datetime import date as _date, timedelta as _td
+    from datetime import date as _date
+    from datetime import timedelta as _td
 
     needs_history = any(
         ep.revenue_estimate is None or ep.revenue_reported is None

@@ -11,11 +11,11 @@ re-running on the same period replaces holdings via cascade-delete
 and recomputes Q/Q deltas via `compute_qoq_deltas`.
 """
 from loguru import logger
+from sqlalchemy import select
 
 from app.core.db import SessionLocal
 from app.models import Stock
 from app.services import institutional_service, sec_13f_scraper
-from sqlalchemy import select
 
 
 def run_refresh_sec_13f() -> None:

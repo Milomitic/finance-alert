@@ -18,12 +18,14 @@ from sqlalchemy import (
     Date,
     DateTime,
     Float,
-    Index as SAIndex,
     Integer,
     String,
     Text,
     UniqueConstraint,
     func,
+)
+from sqlalchemy import (
+    Index as SAIndex,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 

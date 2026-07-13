@@ -1,7 +1,8 @@
 import pandas as pd
+
 from app.signals.context import build_context
-from app.signals.events import extract_events
 from app.signals.detectors.trend_pullback import TrendPullback
+from app.signals.events import extract_events
 
 
 def _golden_then_pullback():

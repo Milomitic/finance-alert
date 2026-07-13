@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db, require_json
-from app.models import PriceAlert, Stock, User
+from app.models import Stock, User
 from app.schemas.price_alert import PriceAlertCreate, PriceAlertOut, PriceAlertUpdate
 from app.services import price_alert_service
 

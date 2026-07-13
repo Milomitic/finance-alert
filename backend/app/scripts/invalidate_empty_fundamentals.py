@@ -91,7 +91,7 @@ def main() -> None:
         # serving the empty version until restart.
         for t in to_invalidate:
             stock_fundamentals_service._CACHE.pop(t, None)
-        logger.info(f"invalidated. Next access to each ticker triggers fresh fetch.")
+        logger.info("invalidated. Next access to each ticker triggers fresh fetch.")
     finally:
         db.close()
 

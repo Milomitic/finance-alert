@@ -1,38 +1,67 @@
 """Stock router."""
-from datetime import timezone
+from datetime import UTC
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from loguru import logger
 from sqlalchemy import desc, select
-
-from app.core.visibility import visible_country_clause
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
+from app.core.errors import UpstreamError
+from app.core.visibility import visible_country_clause
 from app.models import OhlcvDaily, Stock, User
 from app.schemas.alert import AlertOut
 from app.schemas.stock import (
-    FilterOptionsOut, IndexOptionOut, StockMetricsRefOut, StockOut,
-    StockScoreRefOut, StockSearchItemOut, StockSearchOut, TechnicalScoreRefOut,
+    FilterOptionsOut,
+    IndexOptionOut,
+    StockMetricsRefOut,
+    StockOut,
+    StockScoreRefOut,
+    StockSearchItemOut,
+    StockSearchOut,
+    TechnicalScoreRefOut,
 )
 from app.schemas.stock_detail import (
-    AnalystActionOut, AnalystPriceTargetOut, AnalystRatingOut,
-    CompanyProfileOut, EffectiveRuleOut, EtfHoldingOut, EtfHoldingsOut,
-    FundamentalsAnnualOut, FundamentalsEarningsOut, FundamentalsOut,
-    FundamentalsQuarterlyOut, IndicatorPeriodsOut, IndicatorPointOut, IndicatorSeriesOut,
-    InsiderTransactionOut, LiveQuoteOut, LiveQuotesBatchOut, MicroDataOut,
-    OhlcvBarOut, StockDetailOut, StockKpisOut, StockNewsItemOut, StockNewsOut,
+    AnalystActionOut,
+    AnalystPriceTargetOut,
+    AnalystRatingOut,
+    CompanyProfileOut,
+    EffectiveRuleOut,
+    EtfHoldingOut,
+    EtfHoldingsOut,
+    FundamentalsAnnualOut,
+    FundamentalsEarningsOut,
+    FundamentalsOut,
+    FundamentalsQuarterlyOut,
+    IndicatorPeriodsOut,
+    IndicatorPointOut,
+    IndicatorSeriesOut,
+    InsiderTransactionOut,
+    LiveQuoteOut,
+    LiveQuotesBatchOut,
+    MicroDataOut,
+    OhlcvBarOut,
+    StockDetailOut,
+    StockKpisOut,
+    StockNewsItemOut,
+    StockNewsOut,
 )
 from app.services import (
-    etf_holdings_service, fetch_cache_store, live_quote_service,
-    news_analyst_extractor, stock_detail_service, stock_fundamentals_service,
+    etf_holdings_service,
+    fetch_cache_store,
+    live_quote_service,
+    news_analyst_extractor,
+    stock_detail_service,
+    stock_fundamentals_service,
     stock_news_service,
 )
-from app.core.errors import UpstreamError
 from app.services.earnings_session_timing import classify_session_timing
 from app.services.stock_service import (
-    SORTABLE_COLUMNS, StockFilter, get_filter_options, search_stocks,
+    SORTABLE_COLUMNS,
+    StockFilter,
+    get_filter_options,
+    search_stocks,
 )
 
 router = APIRouter(prefix="/api/stocks", tags=["stocks"])
@@ -239,7 +268,7 @@ def search(
         # (market_stats persists datetime.now(UTC)) so re-tag before
         # serializing — the FE staleness math needs the explicit offset.
         metrics_computed_at=(
-            page.metrics_computed_at.replace(tzinfo=timezone.utc)
+            page.metrics_computed_at.replace(tzinfo=UTC)
             if page.metrics_computed_at is not None
             and page.metrics_computed_at.tzinfo is None
             else page.metrics_computed_at
@@ -604,7 +633,8 @@ def _merge_news_analyst_actions(
         # `_normalize_firm` from the extractor so "Goldman Sachs" and
         # "Goldman" map together.
         from app.services.news_analyst_extractor import (
-            _normalize_firm, _date_within,
+            _date_within,
+            _normalize_firm,
         )
         existing_keys = {
             (_normalize_firm(getattr(ex, "firm", "") or ""), getattr(ex, "date", "") or "")

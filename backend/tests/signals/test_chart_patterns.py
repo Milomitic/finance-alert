@@ -1,4 +1,5 @@
 import pandas as pd
+
 from app.signals.chart_patterns import extract_chart_patterns
 
 

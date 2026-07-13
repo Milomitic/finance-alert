@@ -3,7 +3,6 @@ fire edge-deduped signal alerts.
 """
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import UTC, datetime
 
 import pandas as pd
 from loguru import logger
@@ -11,12 +10,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.visibility import visible_country_clause
-from app.models import Alert, OhlcvDaily, Stock
+from app.models import OhlcvDaily, Stock
+from app.services import technical_score_service
 from app.signals.signal_scan_service import (
     effective_max_age_days,
     evaluate_signals,
 )
-from app.services import technical_score_service
 
 
 @dataclass

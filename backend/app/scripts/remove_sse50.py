@@ -47,7 +47,6 @@ from sqlalchemy.orm import Session
 from app.core.db import SessionLocal
 from app.models import Index, Stock
 
-
 _INDEX_CODE = "SSE50"
 
 

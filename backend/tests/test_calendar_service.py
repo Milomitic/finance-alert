@@ -17,7 +17,6 @@ from app.services import calendar_macros, calendar_service, stock_fundamentals_s
 from app.services.calendar_service import EarningsEvent, MacroEventDC
 from app.services.stock_fundamentals_service import EarningsPoint, Fundamentals
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------

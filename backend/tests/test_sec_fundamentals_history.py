@@ -6,7 +6,6 @@ look-ahead protection."""
 from datetime import date
 
 from app.services import sec_fundamentals_history as sf
-from app.services.sec_fundamentals_history import FactPoint
 
 
 def _companyfacts_fixture() -> dict:

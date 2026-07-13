@@ -2,11 +2,11 @@
 import json
 from datetime import UTC, datetime
 
-from sqlalchemy import DateTime, Index as SAIndex, Integer, String, Text, event, func
+from sqlalchemy import DateTime, Integer, String, Text, event, func
+from sqlalchemy import Index as SAIndex
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
-
 
 # `kind` discriminator values. The schema is shared between alert-scan and
 # score-recompute jobs since both fit the same progress-tracking shape

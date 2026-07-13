@@ -41,7 +41,6 @@ from loguru import logger
 from app.core import breaker_state
 from app.core.config import settings
 
-
 _BASE_URL = "https://api.twelvedata.com/earnings"
 _USER_AGENT = "FinanceAlert/0.1 (personal use)"
 _REQUEST_TIMEOUT = 10  # seconds
@@ -95,7 +94,7 @@ def _is_blocked() -> tuple[bool, str | None]:
     with _BLOCK_LOCK:
         if _BLOCKED_UNTIL is None:
             return False, None
-        if _BLOCKED_UNTIL <= now:
+        if now >= _BLOCKED_UNTIL:
             _BLOCKED_UNTIL = None
             breaker_state.clear(_BREAKER_KEY)
             return False, None
@@ -106,7 +105,7 @@ def _trip_breaker(reason: str) -> None:
     global _BLOCKED_UNTIL
     now = _dt.datetime.now(_dt.UTC)
     with _BLOCK_LOCK:
-        if _BLOCKED_UNTIL is None or _BLOCKED_UNTIL <= now:
+        if _BLOCKED_UNTIL is None or now >= _BLOCKED_UNTIL:
             _BLOCKED_UNTIL = now + _BLOCK_DURATION
             breaker_state.save(_BREAKER_KEY, _BLOCKED_UNTIL, reason=reason)
             logger.warning(

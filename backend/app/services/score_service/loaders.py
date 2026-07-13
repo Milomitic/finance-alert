@@ -12,7 +12,6 @@ from sqlalchemy.orm import Session
 
 from app.models import OhlcvDaily
 from app.services import stock_news_service
-
 from app.services.score_service.common import _is_finite
 
 
@@ -122,7 +121,8 @@ def _bulk_load_recent_bars(
     Returns: {stock_id: [(high, low, close), ...]}. Empty dict when no
     bars match the date filter.
     """
-    from datetime import date as _date, timedelta as _td
+    from datetime import date as _date
+    from datetime import timedelta as _td
 
     cutoff = _date.today() - _td(days=days_back)
     rows = db.execute(

@@ -1,4 +1,5 @@
 import pandas as pd
+
 from app.signals.runner import detect_signals
 
 

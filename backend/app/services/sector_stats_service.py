@@ -155,7 +155,7 @@ class SectorStatsBundle:
         return getattr(self.universe, field_name, None)
 
 
-def compute(fundamentals_by_sector: dict[str, list["Fundamentals"]]) -> SectorStatsBundle:
+def compute(fundamentals_by_sector: dict[str, list[Fundamentals]]) -> SectorStatsBundle:
     """Aggregate medians over all sectors + the full universe.
 
     Stocks with sector = None / empty are silently fed into the
@@ -163,7 +163,7 @@ def compute(fundamentals_by_sector: dict[str, list["Fundamentals"]]) -> SectorSt
     a meaningless "(empty)" sector entry in UIs.
     """
     bundle = SectorStatsBundle()
-    all_funds: list["Fundamentals"] = []
+    all_funds: list[Fundamentals] = []
 
     for sector_name, funds in fundamentals_by_sector.items():
         all_funds.extend(funds)
@@ -175,7 +175,7 @@ def compute(fundamentals_by_sector: dict[str, list["Fundamentals"]]) -> SectorSt
     return bundle
 
 
-def _compute_one(sector: str, funds: list["Fundamentals"]) -> SectorStats:
+def _compute_one(sector: str, funds: list[Fundamentals]) -> SectorStats:
     """Build a SectorStats from a list of fundamentals."""
     micros = [f.micro for f in funds if f and f.micro is not None]
 

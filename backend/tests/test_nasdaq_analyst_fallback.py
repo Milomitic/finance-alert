@@ -17,7 +17,6 @@ import pytest
 
 from app.services import nasdaq_analyst_service as na
 
-
 # Real-shape fixture (trimmed from a live api.nasdaq.com response).
 _BODY = {
     "data": {

@@ -8,9 +8,9 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.models import Alert, Stock
 from app.services.notifier_service import (
+    SIGNAL_LABELS,
     DigestResult,
     PushResult,
-    SIGNAL_LABELS,
     build_digest_message,
     notify_price_alerts,
     notify_signal_alerts,

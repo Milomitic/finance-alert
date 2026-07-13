@@ -1,6 +1,5 @@
 """with_backoff: retry esponenziale con jitter, abort dopo N tentativi, rispetta
 solo le eccezioni listate in `on=`."""
-from unittest.mock import patch
 
 import pytest
 

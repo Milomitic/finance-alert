@@ -16,7 +16,6 @@ import pytest
 
 from app.services import yfinance_health
 
-
 # ── anti-network guard ───────────────────────────────────────────────────────
 
 def test_yfinance_ticker_is_blocked() -> None:

@@ -11,13 +11,13 @@ For "requires_auth" tests we construct an unauthenticated TestClient inline
 """
 import pytest
 from fastapi.testclient import TestClient
+from loguru import logger
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
 from app.core.logging import configure_logging
 from app.main import app
 from app.models import User
-from loguru import logger
 
 
 @pytest.fixture(autouse=True)

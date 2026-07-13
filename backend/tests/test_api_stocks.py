@@ -198,8 +198,9 @@ def test_search_score_filter_excludes_unscored(big_client: TestClient, db: Sessi
     """When min_score is set, stocks without a computed score must be excluded.
     Verifies the LEFT JOIN + WHERE composite >= N semantics: unscored rows
     have score=NULL, the WHERE filters them out."""
+    from datetime import UTC, datetime
+
     from app.models import StockScore
-    from datetime import datetime, UTC
     # Seed only one of the 12 stocks with a score
     db.add(
         StockScore(

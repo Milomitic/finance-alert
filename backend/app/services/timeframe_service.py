@@ -42,8 +42,8 @@ care about source.
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass, field
-from datetime import date, datetime, timedelta, timezone
+from dataclasses import dataclass
+from datetime import UTC, date, datetime
 from threading import Lock
 
 import pandas as pd
@@ -52,9 +52,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.indicators.bb import bollinger
+from app.indicators.ema import ema as ema_indicator
 from app.indicators.macd import macd
 from app.indicators.rsi import rsi as rsi_indicator
-from app.indicators.ema import ema as ema_indicator
 from app.models import OhlcvDaily, Stock
 from app.services.currency_units import is_minor_unit
 
@@ -114,7 +114,7 @@ _INTRADAY_TTL = 5 * 60
 _DAILY_TTL = 15 * 60
 
 # Cache key: (ticker, timeframe) → (timestamp, bars)
-_CACHE: dict[tuple[str, str], tuple[float, list["Bar"]]] = {}
+_CACHE: dict[tuple[str, str], tuple[float, list[Bar]]] = {}
 _CACHE_LOCK = Lock()
 
 
@@ -221,9 +221,9 @@ def _fetch_yfinance(ticker: str, tf: str) -> list[Bar]:
                 # pandas Timestamp -> aware datetime, then to UTC
                 d = ts.to_pydatetime()
                 if d.tzinfo is None:
-                    d = d.replace(tzinfo=timezone.utc)
+                    d = d.replace(tzinfo=UTC)
                 else:
-                    d = d.astimezone(timezone.utc)
+                    d = d.astimezone(UTC)
             elif isinstance(ts, datetime):
                 d = ts if is_intraday else ts.date()
             else:

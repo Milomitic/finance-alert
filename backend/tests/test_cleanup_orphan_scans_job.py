@@ -2,7 +2,6 @@
 Le ScanRun running con heartbeat recente NON devono essere toccate."""
 from datetime import UTC, datetime, timedelta
 
-import pytest
 from sqlalchemy import select
 
 from app.models import ScanRun

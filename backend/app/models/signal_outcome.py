@@ -23,11 +23,13 @@ from sqlalchemy import (
     DateTime,
     Float,
     ForeignKey,
-    Index as SAIndex,
     Integer,
     String,
     func,
     text,
+)
+from sqlalchemy import (
+    Index as SAIndex,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 

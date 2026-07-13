@@ -51,7 +51,7 @@ def _make_fake_yf_ticker(currency: str, last: float, prev: float,
         "dayHigh":       day_high,
         "dayLow":        day_low,
         "lastVolume":    last_volume,
-    }.get(k, None))
+    }.get(k))
     fake_ticker = MagicMock()
     fake_ticker.fast_info = fake_fast_info
     return fake_ticker

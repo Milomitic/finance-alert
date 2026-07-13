@@ -4,14 +4,13 @@ applied to the composite. Pure functions — no DB, no network.
 from __future__ import annotations
 
 from app.models import Stock
-from app.services.stock_fundamentals_service import MicroData
-
 from app.services.score_service.common import (
     _CYCLICAL_SECTORS,
     _DEFENSIVE_SECTORS,
     _MEGA_CAP_THRESHOLD,
     _is_finite,
 )
+from app.services.stock_fundamentals_service import MicroData
 
 
 def _classify_risk(

@@ -9,13 +9,12 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.models import Stock, StockScore
-from app.services.sectors_overview_cache import clear_overview_cache
-
 from app.services.score_service.build import compute_score
 from app.services.score_service.common import RecomputeCancelled
 from app.services.score_service.loaders import _bulk_load_recent_bars
 from app.services.score_service.sector_stats import _build_sector_stats
 from app.services.score_service.xs_engine import _apply_cross_sectional_engine
+from app.services.sectors_overview_cache import clear_overview_cache
 
 
 def recompute_all(

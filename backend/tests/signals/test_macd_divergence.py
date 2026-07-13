@@ -1,5 +1,6 @@
 # backend/tests/signals/test_macd_divergence.py
 import pandas as pd
+
 from app.signals.context import build_context
 from app.signals.detectors.base import SignalMatch
 from app.signals.detectors.macd_divergence import MacdDivergence

@@ -2,8 +2,7 @@
 Pure read; no side effects on the cache or DB."""
 import time
 
-from app.services import cache_metrics
-from app.services import stock_fundamentals_service, stock_news_service
+from app.services import cache_metrics, stock_fundamentals_service, stock_news_service
 
 
 def test_snapshot_shape_on_empty_caches(db):

@@ -61,9 +61,9 @@ from __future__ import annotations
 
 from app.services.score_service.build import (
     _EWMA_ALPHA,
-    _ComputedScore,
     _apply_turnover_control,
     _build_score,
+    _ComputedScore,
     _renormalize_weights,
     compute_score,
 )

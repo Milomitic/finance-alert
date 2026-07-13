@@ -1,4 +1,5 @@
 from datetime import date
+
 from app.models import Alert, OhlcvDaily, Stock
 from app.services import scan_service
 

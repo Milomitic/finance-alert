@@ -60,7 +60,6 @@ from loguru import logger
 
 from app.indicators.ema import ema
 from app.scripts.signal_detector_outcomes import _detector_horizon
-from app.signals.calibration_map import _DEFAULT_PATH
 from app.scripts.signal_factor_outcomes import (
     H_LONG,
     H_MED,
@@ -68,6 +67,7 @@ from app.scripts.signal_factor_outcomes import (
     _load_universe,
     _universe_mean_fwd,
 )
+from app.signals.calibration_map import _DEFAULT_PATH
 from app.signals.horizon import _PRIOR, classify_horizon
 from app.signals.runner import detect_signals
 

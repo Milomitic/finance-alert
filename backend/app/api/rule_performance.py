@@ -8,12 +8,16 @@ string — the field name is kept stable to avoid frontend churn.
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
 from app.models import User
-from app.services.rule_performance_service import compute_calibration, compute_performance, load_calibration_seed
-from pydantic import BaseModel
+from app.services.rule_performance_service import (
+    compute_calibration,
+    compute_performance,
+    load_calibration_seed,
+)
 
 router = APIRouter(prefix="/api/rule-performance", tags=["rule-performance"])
 

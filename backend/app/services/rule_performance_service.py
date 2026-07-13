@@ -307,9 +307,9 @@ class CalibrationBucket:
 class Calibration:
     days: int
     window: int
-    by_confidence: list["CalibrationBucket"]
-    by_nature: list["CalibrationBucket"]
-    by_horizon: list["CalibrationBucket"]
+    by_confidence: list[CalibrationBucket]
+    by_nature: list[CalibrationBucket]
+    by_horizon: list[CalibrationBucket]
 
 
 def compute_calibration(db: Session, *, days: int = 365, window: int = 20) -> Calibration:

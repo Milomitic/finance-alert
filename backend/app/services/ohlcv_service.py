@@ -193,7 +193,9 @@ def _upsert_one_stock(db: Session, stock: Stock, frame: pd.DataFrame) -> tuple[i
     # Computed once (market-open state doesn't change mid-loop).
     _skip_today = False
     try:
-        from datetime import UTC as _UTC, datetime as _dt
+        from datetime import UTC as _UTC
+        from datetime import datetime as _dt
+
         from app.services.live_quote_service import _is_market_open
         if _is_market_open(stock.ticker):
             _skip_today = True

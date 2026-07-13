@@ -67,7 +67,6 @@ from app.core.db import SessionLocal
 from app.indicators.ema import ema as ema_indicator
 from app.indicators.rsi import rsi as rsi_indicator
 
-
 # Forward-return horizons in trading days: ~1 week, ~1 month, ~1
 # quarter, ~1 year. The 252d horizon is the fair test for SLOW factors
 # (value / quality / growth) which express over quarters-to-years, not
@@ -637,8 +636,9 @@ def _fund_signals_as_of(hist: dict, as_of: date) -> dict[str, float | None]:
     """Compute the split-immune fundamental signals as of `as_of`,
     using only facts FILED by then (PIT). Division guards return None
     on zero/None denominators rather than inf/NaN."""
-    from app.services import sec_fundamentals_history as sf
     import datetime as _dt
+
+    from app.services import sec_fundamentals_history as sf
 
     def _ttm(c):
         return sf.ttm_flow(hist, c, as_of)
@@ -895,7 +895,7 @@ def run(*, us_only: bool, min_bars: int, obs_step: int,
 
         print()
         print("=" * 92)
-        print(f"  CONTINUOUS SIGNALS — rank-IC (mean) / IR / decile-spread / monotonic / hit")
+        print("  CONTINUOUS SIGNALS — rank-IC (mean) / IR / decile-spread / monotonic / hit")
         print(f"  universe={len(universe)} stocks  obs={len(obs):,}  dates~{n_dates}  "
               f"{'US-only' if us_only else 'ALL'}")
         print("=" * 92)

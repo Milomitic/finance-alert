@@ -2,8 +2,6 @@
 import json
 from datetime import date
 
-import pytest
-
 from app.models import Alert, SignalOutcome, Stock
 from app.services.alert_service import list_alerts
 

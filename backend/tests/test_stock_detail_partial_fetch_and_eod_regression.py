@@ -39,7 +39,6 @@ from app.services.stock_fundamentals_service import (
     MicroData,
 )
 
-
 # ─── Fix #1: partial-fetch detection ────────────────────────────────────────
 
 def test_payload_with_empty_info_is_marked_partial() -> None:

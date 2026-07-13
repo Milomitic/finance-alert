@@ -1,5 +1,4 @@
 """Tests for app.services.market_stats_service."""
-import pandas as pd
 
 from app.services.market_stats_service import (
     StockMetrics,

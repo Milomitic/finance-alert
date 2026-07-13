@@ -25,7 +25,8 @@ quote with `error` set instead of hitting Yahoo.
 import math
 import time
 from dataclasses import dataclass
-from datetime import date, datetime, time as dtime, timezone
+from datetime import UTC, date, datetime
+from datetime import time as dtime
 from threading import Lock
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -126,7 +127,7 @@ def _is_market_open(ticker: str, now_utc: datetime | None = None) -> bool:
     we convert `now` into the exchange's local timezone and compare against
     its local open/close, so the LIVE flag flips exactly at the local bell
     year-round (no summer/winter 1-hour drift)."""
-    now = now_utc or datetime.now(timezone.utc)
+    now = now_utc or datetime.now(UTC)
     region = _exchange_region(ticker)
     tzname, (oh, om), (ch, cm) = _MARKET_HOURS_LOCAL[region]
     local = now.astimezone(_tz(tzname))
@@ -148,7 +149,7 @@ def _is_premarket(ticker: str, now_utc: datetime | None = None) -> bool:
     the exchange-local conversion (same as `_is_market_open`)."""
     if _exchange_region(ticker) != "US":
         return False
-    now = now_utc or datetime.now(timezone.utc)
+    now = now_utc or datetime.now(UTC)
     tzname, (oh, om), _close = _MARKET_HOURS_LOCAL["US"]
     local = now.astimezone(_tz(tzname))
     if local.weekday() >= 5:
@@ -221,9 +222,10 @@ def _latest_two_bars(ticker: str) -> tuple[date, float, float] | None:
     has already written today's bar (most_recent_date == market-today) or
     we're still in the post-close gap (most_recent_date == yesterday)."""
     try:
+        from sqlalchemy import desc, select
+
         from app.core.db import SessionLocal
         from app.models import OhlcvDaily, Stock
-        from sqlalchemy import desc, select
 
         with SessionLocal() as db:
             stock = db.execute(
@@ -250,7 +252,7 @@ def _market_today(ticker: str) -> date:
     we compare OHLCV bar dates against to know if 'today' is filled yet."""
     region = _exchange_region(ticker)
     tzname = _MARKET_HOURS_LOCAL[region][0]
-    return datetime.now(timezone.utc).astimezone(_tz(tzname)).date()
+    return datetime.now(UTC).astimezone(_tz(tzname)).date()
 
 
 # ─── "Today" close in the post-close gap (close → EOD scan) ──────────
@@ -439,10 +441,14 @@ def _override_prev_close_from_ohlcv(ticker: str, live_price: float | None) -> fl
     if live_price is None:
         return None
     try:
-        from datetime import UTC as _UTC, date as _date, datetime as _dt
+        from datetime import UTC as _UTC
+        from datetime import date as _date
+        from datetime import datetime as _dt
+
+        from sqlalchemy import desc, select
+
         from app.core.db import SessionLocal
         from app.models import OhlcvDaily, Stock
-        from sqlalchemy import desc, select
 
         with SessionLocal() as db:
             stock = db.execute(
@@ -499,7 +505,8 @@ def _eod_fallback_quote(ticker: str) -> LiveQuote:
     Returns LiveQuote with error="not_found" if the ticker isn't in the DB,
     error="no_ohlcv" if there are no OHLCV bars, otherwise a fully-populated
     LiveQuote with market_state="CLOSED" and fetched_at=now."""
-    from sqlalchemy import select, desc
+    from sqlalchemy import desc, select
+
     from app.core.db import SessionLocal
     from app.models import OhlcvDaily, Stock
 
@@ -552,8 +559,9 @@ def _fetch_fresh(ticker: str, *, allow_remote_today_fetch: bool = True) -> LiveQ
     today's official daily bar from yfinance in the post-close gap. The
     batch path passes False to avoid firing ~100 history() calls at once
     right after the close — it relies on the in-memory intraday tick."""
-    from app.services import yfinance_health
     import yfinance as yf
+
+    from app.services import yfinance_health
 
     if yfinance_health.is_open():
         return _eod_fallback_quote(ticker)

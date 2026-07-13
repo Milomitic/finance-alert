@@ -225,7 +225,7 @@ def _run_scan_in_background_locked(stock_ids: list[int] | None) -> None:
                 # several minutes for a fresh DB and the user shouldn't have to
                 # wait for evaluate to start before being able to stop the scan.
                 if scan_cancel.is_cancel_requested(run.id):
-                    from datetime import datetime, UTC
+                    from datetime import UTC, datetime
                     run.status = "failed"
                     run.phase = None
                     run.current_target = None
@@ -432,7 +432,8 @@ def get_confluence(
 # Re-exported for backwards compatibility with anything that still imports
 # them from this module (test_api_alerts.py, etc.). Source of truth lives
 # in app.services.scan_status now.
-from app.services.scan_status import SCAN_STALE_THRESHOLD_SEC, build_scan_status_out as _build_scan_status  # noqa: E402, F401
+from app.services.scan_status import SCAN_STALE_THRESHOLD_SEC  # noqa: E402, F401
+from app.services.scan_status import build_scan_status_out as _build_scan_status
 
 
 @router.get("/scan-status", response_model=ScanStatusOut)
@@ -497,7 +498,7 @@ def stop_scan(
     Idempotent: calling /stop when no scan is running returns
     `was_running=False` with an explanatory message.
     """
-    from datetime import datetime, UTC
+    from datetime import UTC, datetime
 
     from app.services import scan_cancel
 

@@ -46,7 +46,6 @@ from app.core import breaker_state
 from app.core.config import settings
 from app.core.errors import UpstreamUnavailable
 
-
 # ─── Quota protection state ──────────────────────────────────────────
 # Circuit-breaker: when set to a future timestamp, ALL outgoing calls
 # (and the health probe) short-circuit until that time. Reset at next
@@ -82,7 +81,7 @@ def _trip_breaker(reason: str) -> None:
     `breaker_state.save()` so a restart inherits the closed state."""
     global _BLOCKED_UNTIL
     with _BLOCK_LOCK:
-        if _BLOCKED_UNTIL is None or _BLOCKED_UNTIL <= _dt.datetime.now(_dt.UTC):
+        if _BLOCKED_UNTIL is None or _dt.datetime.now(_dt.UTC) >= _BLOCKED_UNTIL:
             _BLOCKED_UNTIL = _next_utc_midnight()
             breaker_state.save(_BREAKER_KEY, _BLOCKED_UNTIL, reason=reason)
             logger.warning(
@@ -99,7 +98,7 @@ def _is_blocked() -> tuple[bool, str | None]:
     now = _dt.datetime.now(_dt.UTC)
     with _BLOCK_LOCK:
         if _BLOCKED_UNTIL is not None:
-            if _BLOCKED_UNTIL > now:
+            if now < _BLOCKED_UNTIL:
                 return True, f"breaker aperto fino a {_BLOCKED_UNTIL.isoformat()}"
             # Window passed → reset in-memory AND clear persisted entry
             # so the next boot doesn't reload a stale timestamp.

@@ -16,8 +16,6 @@ def find_pivots(series: pd.Series, width: int, *, kind: str) -> list[int]:
     for i in range(width, n - width):
         window = series.iloc[i - width:i + width + 1]
         v = series.iloc[i]
-        if kind == "low" and v == window.min():
-            idx.append(i)
-        elif kind == "high" and v == window.max():
+        if kind == "low" and v == window.min() or kind == "high" and v == window.max():
             idx.append(i)
     return idx

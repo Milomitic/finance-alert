@@ -57,7 +57,8 @@ def test_next_earnings_skips_past_orphan_rows(monkeypatch):
     """yfinance's earnings_dates keeps orphan rows (scheduled events whose
     Reported EPS was never reconciled). A PAST NaN-reported row must not win
     as 'prossima' — the bug showed 15/05/24 as the upcoming earnings in 2026."""
-    from datetime import date as _date, timedelta as _td
+    from datetime import date as _date
+    from datetime import timedelta as _td
 
     from app.services.stock_fundamentals_service import _extract_earnings
 
@@ -81,7 +82,8 @@ def test_next_estimate_falls_back_to_0q_consensus(monkeypatch):
     """When the earnings_dates next row carries no estimates, the PROSSIMA row
     fills from the estimate tables' 0q consensus (same source as the annual
     FY row) instead of rendering a strip of dashes."""
-    from datetime import date as _date, timedelta as _td
+    from datetime import date as _date
+    from datetime import timedelta as _td
 
     from app.services import stock_fundamentals_service as sfs
 

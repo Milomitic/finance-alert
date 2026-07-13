@@ -26,8 +26,8 @@ from loguru import logger
 from app.scripts.signal_detector_outcomes import (
     H_SHORT,
     _detector_horizon,
-    _trade_playbook_hit,
     _load_universe,
+    _trade_playbook_hit,
     _universe_mean_fwd,
 )
 from app.signals.runner import detect_signals

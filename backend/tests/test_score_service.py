@@ -11,7 +11,7 @@ adding a None component must NOT lower the pillar score.
 from __future__ import annotations
 
 import json
-from datetime import date, timedelta
+from datetime import UTC, date, timedelta
 
 import pandas as pd
 import pytest
@@ -21,13 +21,13 @@ from app.models import OhlcvDaily, Stock, StockScore
 from app.services import score_service, stock_fundamentals_service, stock_news_service
 from app.services.score_service import (
     PILLAR_WEIGHTS,
-    _ComputedScore,
     _apply_cross_sectional_engine,
     _apply_turnover_control,
     _build_score,
     _classify_risk,
-    _quality,
+    _ComputedScore,
     _growth,
+    _quality,
     _renormalize_weights,
     _sentiment,
     _value,
@@ -557,7 +557,7 @@ def test_build_score_exposes_global_coverage():
 
 
 def _mk_cs(stock_id: int, composite: float, tier: str, vote: int) -> _ComputedScore:
-    from datetime import datetime, timezone
+    from datetime import datetime
     # sub_scores content is irrelevant to _apply_turnover_control (it only
     # reads composite/risk_tier/breakdown); use a live pillar key now that
     # "momentum" is gone from the composite.
@@ -567,7 +567,7 @@ def _mk_cs(stock_id: int, composite: float, tier: str, vote: int) -> _ComputedSc
         sub_scores={"growth": composite},
         risk_tier=tier,
         breakdown={"risk_inputs": {"risk_vote": vote}, "_meta_global": {}},
-        computed_at=datetime.now(timezone.utc),
+        computed_at=datetime.now(UTC),
     )
 
 
@@ -633,7 +633,7 @@ def _seed_scored(db: Session, sector: str, comps: list[float]) -> list[Stock]:
             stock_id=s.id, composite=c, growth=c, value=c,
             profitability=c, sustainability=c, sentiment=c,
             risk_tier="moderate",
-            computed_at=_dt.datetime.now(_dt.timezone.utc),
+            computed_at=_dt.datetime.now(_dt.UTC),
             breakdown=json.dumps(bd),
         ))
         stocks.append(s)

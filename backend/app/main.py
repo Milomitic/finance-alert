@@ -19,16 +19,16 @@ from app.api import dashboard as dashboard_router
 from app.api import institutionals as institutionals_router
 from app.api import kpi as kpi_router
 from app.api import market as market_router
-from app.api import platform_health as platform_health_router
 from app.api import market_detail as market_detail_router
 from app.api import multi_tf as multi_tf_router
+from app.api import platform_health as platform_health_router
 from app.api import positions as positions_router
 from app.api import price_alerts as price_alerts_router
-from app.api import spotlight as spotlight_router
 from app.api import rule_performance as rule_performance_router
 from app.api import scan_log as scan_log_router
 from app.api import scores as scores_router
 from app.api import sectors as sectors_router
+from app.api import spotlight as spotlight_router
 from app.api import stocks as stocks_router
 from app.api.deps import get_current_user, require_json
 from app.core.errors import UpstreamError
@@ -53,10 +53,11 @@ def _cleanup_orphan_scans() -> None:
     """
     from datetime import UTC, datetime
 
+    from sqlalchemy import select
+
     from app.core.db import SessionLocal
     from app.models import ScanRun
     from app.scheduler.jobs.cleanup_orphan_scans_job import _STALE_AFTER_MINUTES
-    from sqlalchemy import select
 
     with SessionLocal() as db:
         orphans = db.execute(
@@ -369,13 +370,17 @@ def warmup_fundamentals(
     this is ~7-8min on a warm Yahoo, instant when the breaker is open.
     """
     import time
+
+    from sqlalchemy import select
+
     from app.core.db import SessionLocal
     from app.models import Stock
     from app.services import yfinance_health
     from app.services.stock_fundamentals_service import (
-        _CACHE, _TTL_SECONDS, get_fundamentals,
+        _CACHE,
+        _TTL_SECONDS,
+        get_fundamentals,
     )
-    from sqlalchemy import select
 
     db = SessionLocal()
     try:
@@ -465,11 +470,12 @@ def redownload_ohlcv(
     Runs synchronously (blocks the request) — for ~1100 stocks at a
     chunk-of-100 cadence with yfinance batch fetch, expect ~3-5 minutes.
     """
+    from sqlalchemy import delete, select
+
     from app.core.db import SessionLocal
     from app.models import OhlcvDaily, Stock
     from app.services import scan_lock, yfinance_health
     from app.services.ohlcv_service import fetch_and_upsert
-    from sqlalchemy import delete, select
 
     if period not in ("1y", "2y", "5y", "10y", "max"):
         raise HTTPException(

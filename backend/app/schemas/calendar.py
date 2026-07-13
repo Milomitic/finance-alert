@@ -7,7 +7,7 @@ the union is declared `Annotated[..., Field(discriminator="kind")]`.
 from __future__ import annotations
 
 from datetime import date
-from typing import Annotated, Literal, Union
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field
 
@@ -99,7 +99,7 @@ class MacroEventOut(BaseModel):
 
 
 CalendarEvent = Annotated[
-    Union[EarningsEventOut, MacroEventOut],
+    EarningsEventOut | MacroEventOut,
     Field(discriminator="kind"),
 ]
 

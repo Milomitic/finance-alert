@@ -14,6 +14,8 @@ from app.scheduler.jobs.health_probes_job import (
     run_health_probes_fast,
     run_health_probes_slow,
 )
+from app.scheduler.jobs.kpi_rollup import run_kpi_rollup
+from app.scheduler.jobs.live_movers_sweep import run_live_universe_sweep
 from app.scheduler.jobs.refresh_catalog import run_refresh_all
 from app.scheduler.jobs.refresh_fred import run_refresh_fred
 from app.scheduler.jobs.refresh_imminent_earnings import run_refresh_imminent_earnings
@@ -22,8 +24,6 @@ from app.scheduler.jobs.refresh_premarket import run_refresh_premarket
 from app.scheduler.jobs.refresh_sec_13f import run_refresh_sec_13f
 from app.scheduler.jobs.retention import run_retention
 from app.scheduler.jobs.scan_alerts import run_scan_alerts
-from app.scheduler.jobs.live_movers_sweep import run_live_universe_sweep
-from app.scheduler.jobs.kpi_rollup import run_kpi_rollup
 from app.scheduler.jobs.send_digest import run_send_digest
 from app.services.scheduler_metrics import install_listener as _install_scheduler_listener
 

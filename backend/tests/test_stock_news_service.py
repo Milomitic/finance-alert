@@ -1,5 +1,4 @@
 """Tests for stock_news_service."""
-from datetime import UTC, datetime, timedelta
 
 from app.services import stock_news_service
 

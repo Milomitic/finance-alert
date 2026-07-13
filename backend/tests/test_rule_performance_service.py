@@ -6,8 +6,6 @@ is preserved.
 """
 from datetime import UTC, date, datetime, timedelta
 
-import pytest
-
 from app.models import Alert, OhlcvDaily, Stock
 from app.services.rule_performance_service import compute_performance
 

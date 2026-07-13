@@ -1,6 +1,9 @@
 import pandas as pd
+
 from app.signals.events import (
-    extract_ema_cross, extract_rsi_divergence, extract_bollinger,
+    extract_bollinger,
+    extract_ema_cross,
+    extract_rsi_divergence,
 )
 from app.signals.pivots import find_pivots
 

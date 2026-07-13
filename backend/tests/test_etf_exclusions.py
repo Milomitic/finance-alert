@@ -30,9 +30,11 @@ from app.main import app
 from app.models import Alert, OhlcvDaily, SignalOutcome, Stock, StockMetrics, StockScore, User
 from app.services import (
     score_service,
-    signal_outcome_service as sos,
     stock_fundamentals_service,
     stock_news_service,
+)
+from app.services import (
+    signal_outcome_service as sos,
 )
 from app.services.stock_fundamentals_service import Fundamentals, MicroData
 from app.services.stock_service import StockFilter, search_stocks

@@ -1,5 +1,7 @@
-import json, pandas as pd
-from datetime import date
+import json
+
+import pandas as pd
+
 from app.models import Alert, Stock
 from app.signals.signal_scan_service import evaluate_signals
 

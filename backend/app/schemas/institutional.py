@@ -10,7 +10,6 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
 
-
 # Discriminated kind labels — kept open as plain strings so a Phase 2
 # source can add new types ("hedge_fund", "endowment", "sovereign")
 # without breaking the schema.

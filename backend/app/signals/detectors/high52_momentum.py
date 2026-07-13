@@ -5,10 +5,16 @@ from __future__ import annotations
 
 import pandas as pd
 
+from app.core.config import settings
 from app.signals.calibration_map import get_calibration
 from app.signals.context import SignalContext
-from app.core.config import settings
-from app.signals.detectors.base import SignalMatch, clamp01, concave, score_v2, trend_maturity_factor
+from app.signals.detectors.base import (
+    SignalMatch,
+    clamp01,
+    concave,
+    score_v2,
+    trend_maturity_factor,
+)
 from app.signals.events import Event
 
 _WINDOW = 252

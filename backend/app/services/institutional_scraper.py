@@ -30,14 +30,13 @@ from __future__ import annotations
 
 import re
 import time
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import date, datetime
-from typing import Iterable
 
 import requests
 from bs4 import BeautifulSoup
 from loguru import logger
-
 
 _BASE_URL = "https://www.dataroma.com"
 _INDEX_URL = f"{_BASE_URL}/m/managers.php"

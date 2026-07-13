@@ -7,7 +7,7 @@ fundamentals cache the same way `test_calendar_service.py` does.
 from __future__ import annotations
 
 import json
-from datetime import UTC, date, datetime
+from datetime import UTC, datetime
 
 import pytest
 from fastapi.testclient import TestClient
@@ -225,6 +225,7 @@ def test_macro_detail_full_payload(authed_client: TestClient, db: Session):
     release with previous_value pointing at the second-most-recent
     observation, full history (newest first), and the upcoming date."""
     from datetime import date as _d
+
     from app.models import MacroObservation, MacroReleaseDate, MacroSeries
 
     series = MacroSeries(
@@ -293,6 +294,7 @@ def test_scan_log_phase_history_recorded_on_phase_set(authed_client: TestClient,
     verify phase_history closes prior entries + appends new ones."""
     import json as _json
     from datetime import UTC, datetime
+
     from app.models import ScanRun
 
     run = ScanRun(
@@ -323,6 +325,7 @@ def test_scan_log_phase_history_recorded_on_phase_set(authed_client: TestClient,
 
 def test_scan_log_endpoint_returns_runs_with_durations(authed_client: TestClient, db: Session):
     from datetime import UTC, datetime, timedelta
+
     from app.models import ScanRun
 
     t0 = datetime.now(UTC)
@@ -363,6 +366,7 @@ def test_scan_log_endpoint_returns_runs_with_durations(authed_client: TestClient
 
 def test_scan_log_filter_by_kind(authed_client: TestClient, db: Session):
     from datetime import UTC, datetime
+
     from app.models import ScanRun
 
     db.add_all([

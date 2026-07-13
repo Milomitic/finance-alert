@@ -1,6 +1,6 @@
 """Tests for live_quote_service."""
 import time
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 
 import pytest
 
@@ -191,31 +191,31 @@ def test_batch_returns_one_quote_per_ticker(monkeypatch: pytest.MonkeyPatch) -> 
 
 def test_is_market_open_us_during_session() -> None:
     """Tuesday 18:00 UTC = 1pm ET = US market open."""
-    t = datetime(2026, 5, 5, 18, 0, tzinfo=timezone.utc)
+    t = datetime(2026, 5, 5, 18, 0, tzinfo=UTC)
     assert live_quote_service._is_market_open("AAPL", t) is True
 
 
 def test_is_market_open_us_after_close() -> None:
     """Tuesday 22:00 UTC = 5pm ET = US market closed."""
-    t = datetime(2026, 5, 5, 22, 0, tzinfo=timezone.utc)
+    t = datetime(2026, 5, 5, 22, 0, tzinfo=UTC)
     assert live_quote_service._is_market_open("AAPL", t) is False
 
 
 def test_is_market_open_weekend_always_closed() -> None:
     """Saturday 18:00 UTC — even within US hours, weekend = closed."""
-    t = datetime(2026, 5, 9, 18, 0, tzinfo=timezone.utc)
+    t = datetime(2026, 5, 9, 18, 0, tzinfo=UTC)
     assert live_quote_service._is_market_open("AAPL", t) is False
 
 
 def test_is_market_open_lse_during_session() -> None:
     """Tuesday 10:00 UTC = morning UK session."""
-    t = datetime(2026, 5, 5, 10, 0, tzinfo=timezone.utc)
+    t = datetime(2026, 5, 5, 10, 0, tzinfo=UTC)
     assert live_quote_service._is_market_open("HSBA.L", t) is True
 
 
 def test_is_market_open_hk_during_session() -> None:
     """Tuesday 03:00 UTC = 11am HKT (Hang Seng open)."""
-    t = datetime(2026, 5, 5, 3, 0, tzinfo=timezone.utc)
+    t = datetime(2026, 5, 5, 3, 0, tzinfo=UTC)
     assert live_quote_service._is_market_open("0005.HK", t) is True
 
 
@@ -233,6 +233,7 @@ def test_breaker_open_uses_eod_fallback(db, monkeypatch: pytest.MonkeyPatch) -> 
     """Quando yfinance_health.is_open() == True, get_quotes_batch deve
     popolare i campi base dall'ultima OhlcvDaily invece di tornare error."""
     from datetime import date
+
     from app.models import OhlcvDaily, Stock
 
     s = Stock(ticker="TESTBREAKER", name="Test Co", exchange="NYSE")

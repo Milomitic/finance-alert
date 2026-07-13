@@ -29,7 +29,6 @@ from app.services.exchange_codes import (
 )
 from app.services.seed_service import seed_index_from_csv
 
-
 # --- helpers --------------------------------------------------------------
 
 LEGACY_CSV = """ticker,name,exchange,sector,industry,country,currency

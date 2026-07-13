@@ -7,10 +7,9 @@ previously-correct pounds rows. Now: non-.L tickers skip the lookup entirely,
 successful .L lookups are memoized, and a failed .L lookup skips the stock's
 upsert for this cycle (fail CLOSED).
 """
-from datetime import date
 
 import pandas as pd
-from sqlalchemy import select, text
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.models import Stock

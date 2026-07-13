@@ -38,8 +38,9 @@ from app.models import (
     User,
 )
 from app.services import sectors_overview_cache, stock_fundamentals_service
-from app.services.sectors_overview_cache import clear_overview_cache  # noqa: F401 — re-export for tests/back-compat
-
+from app.services.sectors_overview_cache import (
+    clear_overview_cache,  # noqa: F401 — re-export for tests/back-compat
+)
 
 router = APIRouter(prefix="/api/sectors", tags=["sectors"])
 

@@ -5,10 +5,8 @@ is mapped onto a curve whose anchor points are placed at data-grounded raw
 values (from the forward-outcome study), so a factor value only reaches the top
 of its range when the underlying parameter is genuinely a "monster".
 """
-import math
 
 from app.signals.detectors.base import concave, log_saturate
-
 
 # A representative anchor set: (raw@0.45, raw@0.75, raw@0.88, ceil).
 ANCH = (0.05, 0.14, 0.30, 0.60)

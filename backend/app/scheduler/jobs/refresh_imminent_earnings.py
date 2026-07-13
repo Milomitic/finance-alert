@@ -45,7 +45,6 @@ from app.services import (
 )
 from app.services.finnhub_earnings_service import FinnhubEarning
 
-
 # How wide the "imminent earnings" window is, in days.
 _WINDOW_DAYS = 1
 

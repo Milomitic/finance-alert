@@ -34,7 +34,6 @@ from pathlib import Path
 
 from loguru import logger
 
-
 # State file lives next to the SQLite DB so it travels with the app's
 # durable state (and gets picked up by the same backup mechanism the
 # user already has for `app.db`).

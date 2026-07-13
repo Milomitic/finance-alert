@@ -53,7 +53,6 @@ from urllib.parse import urlparse
 import requests
 from loguru import logger
 
-
 _TIMEOUT = 5.0
 _MAX_BYTES = 200 * 1024  # 200 KB hard cap on body length
 _USER_AGENT = (

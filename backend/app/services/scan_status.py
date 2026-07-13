@@ -17,7 +17,6 @@ from datetime import UTC, datetime
 from app.models import ScanRun
 from app.schemas.alert import ScanStatusOut
 
-
 # Heartbeat threshold (seconds) past which a 'running' row is considered
 # stuck and the UI surfaces a "Stop (forzato)" affordance. Same value for
 # both kinds — score-recompute heartbeats fire ~10× per second on a

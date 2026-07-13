@@ -30,9 +30,8 @@ def test_yf_fetch_gives_up_after_retries():
 
     with patch(
         "app.services.stock_fundamentals_service._do_yf_call", side_effect=fake_do
-    ):
-        with pytest.raises(UpstreamTimeout):
-            _yf_fetch_with_retry("AAPL")
+    ), pytest.raises(UpstreamTimeout):
+        _yf_fetch_with_retry("AAPL")
 
 
 def test_per_endpoint_timeout_inside_do_yf_call_is_re_raised_for_retry():
@@ -60,9 +59,8 @@ def test_per_endpoint_timeout_inside_do_yf_call_is_re_raised_for_retry():
     fake_ticker.analyst_price_targets = None
     fake_ticker.upgrades_downgrades = None
 
-    with patch("yfinance.Ticker", return_value=fake_ticker):
-        with pytest.raises(UpstreamTimeout):
-            stock_fundamentals_service._do_yf_call("AAPL")
+    with patch("yfinance.Ticker", return_value=fake_ticker), pytest.raises(UpstreamTimeout):
+        stock_fundamentals_service._do_yf_call("AAPL")
 
 
 def test_per_endpoint_value_error_is_swallowed_not_re_raised():

@@ -17,9 +17,6 @@ from sqlalchemy.orm import Session
 
 from app.models import Stock, StockScore
 from app.services import stock_fundamentals_service
-from app.services.sector_stats_service import SectorStatsBundle
-from app.services.stock_fundamentals_service import Fundamentals
-
 from app.services.score_service.common import (
     PILLAR_WEIGHTS,
     _is_finite,
@@ -40,7 +37,8 @@ from app.services.score_service.pillars import (
     _value,
 )
 from app.services.score_service.risk import _classify_risk, _risk_overlay_factor
-
+from app.services.sector_stats_service import SectorStatsBundle
+from app.services.stock_fundamentals_service import Fundamentals
 
 # ---------------------------------------------------------------------------
 # Composite + weight renormalisation.
@@ -200,7 +198,7 @@ def _build_score(
 _EWMA_ALPHA = 0.6
 
 
-def _apply_turnover_control(db: Session, cs: "_ComputedScore") -> None:
+def _apply_turnover_control(db: Session, cs: _ComputedScore) -> None:
     """Mutate `cs` in place: EWMA-smooth the composite against the last
     persisted score and apply tier hysteresis. Cold start (no prior row,
     or prior composite null) is a no-op so a fresh universe isn't

@@ -5,8 +5,8 @@ Phase 1c Task 3: surfaces that previously used an INNER join on Rule
 (dropping NULL-rule rows) must include signal alerts and label their kind
 as "signal:<name>", not NULL / "unknown".
 """
-from datetime import date, datetime, timedelta, timezone
 import json
+from datetime import UTC, date, datetime, timedelta
 
 from app.models import Alert, Stock
 from app.services import stats_service
@@ -26,7 +26,7 @@ def _signal_alert(db, ticker="SIGSURF", d=date(2026, 5, 1)):
     )
     # triggered_at defaults to now() via server_default; set it explicitly so
     # it lands inside the 30-day window used by get_alerts_by_day.
-    a.triggered_at = datetime.now(timezone.utc) - timedelta(hours=1)
+    a.triggered_at = datetime.now(UTC) - timedelta(hours=1)
     db.add(a)
     db.commit()
     return s, a

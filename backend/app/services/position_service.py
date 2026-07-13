@@ -14,8 +14,9 @@ Both funnel into `check_stop_target_hits`. Idempotency is structural: a hit
 stamps `closed_at`, and only `closed_at IS NULL` rows are ever evaluated —
 a closed position can never re-close, whichever path fires first wins.
 """
+from collections.abc import Callable
 from datetime import UTC, datetime
-from typing import Any, Callable
+from typing import Any
 
 from loguru import logger
 from sqlalchemy import select

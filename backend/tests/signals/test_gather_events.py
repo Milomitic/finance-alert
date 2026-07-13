@@ -1,6 +1,5 @@
 """Tests for gather_events in events_fundamental.py."""
 import pandas as pd
-import pytest
 
 from app.models import Stock
 from app.signals.events import extract_events

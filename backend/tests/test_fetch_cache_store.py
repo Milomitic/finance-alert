@@ -1,6 +1,5 @@
 """Tests for the L2 persistence layer of fundamentals + news caches."""
 from datetime import UTC, datetime, timedelta
-from unittest.mock import patch
 
 from sqlalchemy.orm import Session
 
@@ -131,7 +130,6 @@ def test_get_fundamentals_uses_l2_after_l1_clear(db: Session, monkeypatch):
     """End-to-end of the stack: a write goes through both layers; clearing
     L1 (simulating restart) and reading again should serve from L2 without
     hitting the network."""
-    from app.core.db import SessionLocal
     from app.services import stock_fundamentals_service as svc
 
     # Stub the upstream fetch so we can detect any call to it.

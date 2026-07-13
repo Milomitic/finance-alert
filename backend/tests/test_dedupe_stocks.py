@@ -8,7 +8,7 @@ Verifies that:
 - the canonical row's exchange label is normalized to the catalog code,
 - a second invocation is a no-op.
 """
-from datetime import date, datetime, timezone
+from datetime import date
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -20,7 +20,6 @@ from app.models import (
     PriceAlert,
     Stock,
     StockIndex,
-    User,
 )
 from app.scripts.dedupe_stocks import (
     canonical_exchange_for,

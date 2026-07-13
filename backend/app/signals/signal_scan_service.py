@@ -12,8 +12,8 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.models import Alert, ScanRun, SignalOutcome, Stock
 from app.signals.context import build_context
-from app.signals.horizon import classify_horizon
 from app.signals.detectors.registry import DETECTORS
+from app.signals.horizon import classify_horizon
 from app.signals.runner import detect_signals
 
 # --- Quality gates (reduce false positives) --------------------------------

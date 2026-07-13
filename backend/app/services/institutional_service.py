@@ -32,9 +32,9 @@ Design notes
 from __future__ import annotations
 
 from collections import defaultdict
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
-from typing import Iterable, Sequence
 
 from loguru import logger
 from sqlalchemy import case, delete, func, select
@@ -254,7 +254,7 @@ def persist_scrape_results(
     type_: str = "superinvestor",
     source: str = "dataroma",
     compute_qoq: bool = False,
-    type_resolver: "callable | None" = None,
+    type_resolver: callable | None = None,
 ) -> UpsertResult:
     """End-to-end persistence of a full scrape pass.
 

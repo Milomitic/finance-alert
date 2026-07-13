@@ -22,7 +22,6 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import Stock, StockScore
-
 from app.services.score_service.common import PILLAR_WEIGHTS, _safe_round
 
 _XS_MIN_SECTOR_N = 8

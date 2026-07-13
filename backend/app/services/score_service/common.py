@@ -13,7 +13,6 @@ from typing import Any
 
 from app.services.sector_stats_service import SectorStatsBundle
 
-
 # ---------------------------------------------------------------------------
 # Pillar weights (composite-level) and risk tier set.
 # ---------------------------------------------------------------------------

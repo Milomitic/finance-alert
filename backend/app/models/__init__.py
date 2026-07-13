@@ -3,13 +3,13 @@ from app.models.alert import Alert
 from app.models.catalog_log import CatalogRefreshLog
 from app.models.fetch_cache import FetchCache
 from app.models.index import Index, StockIndex
-from app.models.kpi_snapshot import KpiSnapshot
 from app.models.institutional import (
     CusipTickerMap,
     Institutional,
     InstitutionalFiling,
     InstitutionalHolding,
 )
+from app.models.kpi_snapshot import KpiSnapshot
 from app.models.macro import MacroObservation, MacroReleaseDate, MacroSeries
 from app.models.market_snapshot import MarketSnapshot
 from app.models.ohlcv import OhlcvDaily

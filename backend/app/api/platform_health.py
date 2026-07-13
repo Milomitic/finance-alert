@@ -339,7 +339,7 @@ async def stream(
                     event_type, data = await asyncio.wait_for(
                         queue.get(), timeout=30.0
                     )
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     yield ": keepalive\n\n"
                     continue
                 yield f"event: {event_type}\ndata: {data}\n\n"

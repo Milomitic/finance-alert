@@ -11,9 +11,7 @@ import json
 from collections.abc import AsyncIterator
 from typing import Any
 
-import anyio
 import httpx
-import pytest
 from loguru import logger
 from starlette.types import ASGIApp
 
@@ -21,7 +19,6 @@ from app.api import deps as deps_module
 from app.core.logging import configure_logging
 from app.main import app
 from app.models import User
-
 
 # ---------------------------------------------------------------------------
 # Minimal streaming ASGI transport (asyncio-based)

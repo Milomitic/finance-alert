@@ -1,8 +1,6 @@
 """Rotating universe live-movers sweep: stage change% open-only, rank fresh."""
 from types import SimpleNamespace
 
-import pytest
-
 from app.models import Stock
 from app.services import live_universe_sweep_service as sweep
 

@@ -12,8 +12,9 @@ Two evaluation paths share the same crossing semantics + firing machinery:
                         marker — so the later EOD pass can never double-fire.
 """
 import json
+from collections.abc import Callable
 from datetime import UTC, date, datetime
-from typing import Any, Callable
+from typing import Any
 
 from loguru import logger
 from sqlalchemy import select

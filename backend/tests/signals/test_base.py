@@ -1,5 +1,5 @@
+from app.signals.detectors.base import SignalMatch, find_after
 from app.signals.events import Event
-from app.signals.detectors.base import find_after, SignalMatch
 
 
 def test_find_after_respects_order_and_window():

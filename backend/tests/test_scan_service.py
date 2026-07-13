@@ -8,7 +8,7 @@ from datetime import date, timedelta
 
 from sqlalchemy.orm import Session
 
-from app.models import Alert, OhlcvDaily, Stock
+from app.models import OhlcvDaily, Stock
 from app.services.scan_service import ScanResult, scan_universe
 
 

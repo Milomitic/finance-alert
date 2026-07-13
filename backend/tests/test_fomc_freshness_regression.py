@@ -40,7 +40,6 @@ from app.services import calendar_service, forexfactory_consensus, stock_fundame
 from app.services.calendar_service import MacroEventDC
 from app.services.forexfactory_consensus import FFEvent
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------

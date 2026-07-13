@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 import math
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pandas as pd
 from sqlalchemy import select
@@ -141,7 +141,7 @@ def _recent_signal_facets(db: Session, stock_ids: list[int]) -> dict[int, dict]:
     # tone, parsed from the snapshot. Feeds the informational `signals` field.
     if not stock_ids:
         return {}
-    cutoff = datetime.now(timezone.utc) - timedelta(days=14)
+    cutoff = datetime.now(UTC) - timedelta(days=14)
     rows = db.execute(
         select(Alert.stock_id, Alert.snapshot).where(
             Alert.signal_name.isnot(None),
@@ -187,7 +187,7 @@ def finalize(db: Session, partials: dict[int, dict]) -> int:
     for i, (sid, _) in enumerate(rets):
         rank[sid] = (i / (m - 1) * 100.0) if m > 1 else 50.0
     facets = _recent_signal_facets(db, list(partials.keys()))
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     count = 0
     for sid, p in partials.items():
         rel = rank.get(sid, 50.0)
@@ -285,7 +285,7 @@ def recompute_one(db: Session, stock_id: int) -> TechnicalScore | None:
     fac = _recent_signal_facets(db, [stock_id]).get(stock_id)
     signals_val = round(fac["confidence"], 1) if fac is not None else None
     posture = "Forte" if composite >= 66 else "Neutro" if composite >= 40 else "Debole"
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     db.merge(TechnicalScore(
         stock_id=stock_id,
         composite=round(composite, 1),

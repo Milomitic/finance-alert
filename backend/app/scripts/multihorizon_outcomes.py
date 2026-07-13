@@ -26,9 +26,9 @@ import numpy as np
 from loguru import logger
 
 from app.scripts.signal_detector_outcomes import (
+    _PLAYBOOK_HZ,
     H_SHORT,
     STOP_CAP_ATR,
-    _PLAYBOOK_HZ,
     _detector_horizon,
     _load_universe,
     _universe_mean_fwd,
@@ -145,7 +145,7 @@ def run(*, sample: int, step: int, window: int, min_bars: int) -> None:
 
         logger.info(f"[mh-outcomes] {n_signals:,} signals")
         print(f"\n{'#'*72}\n#  MULTI-HORIZON OUTCOME STUDY  (universe={len(universe)}, signals={n_signals:,})")
-        print(f"#  driftExcess% = market-neutral forward drift (the '+0.8%/30d' claim)")
+        print("#  driftExcess% = market-neutral forward drift (the '+0.8%/30d' claim)")
         print(f"#  tp1%/tp2% = reach TP1 / TP2 before the structural stop within horizon\n{'#'*72}")
         print(f"\n{'tone':>5}{'multiHz':>9}{'n':>8}{'driftEx%':>10}{'tp1%':>8}{'tp2%':>8}{'reachN':>8}")
         for tone in ("bull", "bear"):

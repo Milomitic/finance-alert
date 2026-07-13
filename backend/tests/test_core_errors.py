@@ -1,7 +1,10 @@
 """Le eccezioni tipate devono comportarsi come Exception ma essere distinguibili
 via except specifico — così possiamo refactor-are i broad-except nei router."""
 from app.core.errors import (
-    RateLimitError, UpstreamError, UpstreamTimeout, UpstreamUnavailable,
+    RateLimitError,
+    UpstreamError,
+    UpstreamTimeout,
+    UpstreamUnavailable,
 )
 
 

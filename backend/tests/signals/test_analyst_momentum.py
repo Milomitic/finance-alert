@@ -1,7 +1,8 @@
 import pandas as pd
+
 from app.signals.context import build_context
-from app.signals.detectors.base import SignalMatch
 from app.signals.detectors.analyst_momentum import AnalystMomentum
+from app.signals.detectors.base import SignalMatch
 from app.signals.events import Event
 
 

@@ -31,11 +31,9 @@ import time
 from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
-from typing import Iterable
 
 import requests
 from loguru import logger
-
 
 _FF_URL = "https://nfs.faireconomy.media/ff_calendar_thisweek.xml"
 _USER_AGENT = "FinanceAlert milomitic@gmail.com"

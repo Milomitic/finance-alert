@@ -105,11 +105,13 @@ def produce_insider_events(db, stock) -> list[Event]:
     total shares bought >= 10,000. Emit one event per cluster dated at
     the latest purchase in the window.
     """
+    from datetime import date as _date
+    from datetime import timedelta
+
     from app.services.stock_fundamentals_service import (
         _transaction_type,
         get_fundamentals_cached,
     )
-    from datetime import date as _date, timedelta
 
     f = get_fundamentals_cached(db, stock.ticker)
     if f is None:

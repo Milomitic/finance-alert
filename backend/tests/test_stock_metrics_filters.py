@@ -2,7 +2,7 @@
 + sort + the persist step that feeds them. The metrics are persisted at scan
 end by market_stats_service; here we seed stock_metrics rows directly and assert
 the search predicates + sort + response wiring behave."""
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from types import SimpleNamespace
 
 from sqlalchemy import select
@@ -12,7 +12,7 @@ from app.models import Alert, Stock, StockMetrics
 from app.services.market_stats_service import _persist_stock_metrics
 from app.services.stock_service import StockFilter, search_stocks
 
-NOW = datetime(2026, 6, 18, tzinfo=timezone.utc)
+NOW = datetime(2026, 6, 18, tzinfo=UTC)
 
 
 def _stock(db: Session, ticker: str, *, market_cap=None) -> Stock:
@@ -143,10 +143,10 @@ def test_has_signals_legacy_null_signal_date_falls_back_to_triggered_at(db: Sess
     ids = _seed(db)
     # Legacy alert: signal_date NULL, triggered long ago → excluded.
     db.add(Alert(stock_id=ids["a"], trigger_price=1.0,
-                 triggered_at=datetime.now(timezone.utc) - timedelta(days=60)))
+                 triggered_at=datetime.now(UTC) - timedelta(days=60)))
     # Legacy alert triggered now → the triggered_at fallback keeps it.
     db.add(Alert(stock_id=ids["b"], trigger_price=1.0,
-                 triggered_at=datetime.now(timezone.utc)))
+                 triggered_at=datetime.now(UTC)))
     db.commit()
     assert _tickers(search_stocks(db, StockFilter(has_signals=True))) == ["BBB"]
 

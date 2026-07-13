@@ -1,5 +1,6 @@
 import pandas as pd
-from app.signals.events import Event, extract_breakout, extract_volume_spike
+
+from app.signals.events import extract_breakout, extract_volume_spike
 
 
 def _df(rows):

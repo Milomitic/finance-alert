@@ -366,7 +366,7 @@ def test_recompute_tolerates_fundamentals_refresh_failure(
 # (bulk recompute flow — mirror of /api/alerts/scan UX)
 # ---------------------------------------------------------------------------
 
-from datetime import UTC, datetime as _dt
+from datetime import datetime as _dt
 
 from app.models.scan_run import KIND_ALERTS_SCAN, KIND_SCORE_RECOMPUTE
 

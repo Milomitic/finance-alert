@@ -11,7 +11,6 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, field_serializer
 
-
 RiskTier = Literal["conservative", "moderate", "aggressive"]
 ScoreLens = Literal["qualita", "tecnico"]
 # V3.2 splits Quality into Profitability + Sustainability. The legacy

@@ -51,9 +51,9 @@ from __future__ import annotations
 
 import re
 import time
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import date, datetime
-from typing import Iterable
 from xml.etree import ElementTree as ET
 
 import requests
@@ -644,7 +644,7 @@ class ResolutionStats:
     from_sec: int = 0       # pass 2: company_tickers.json match
     unresolved: int = 0     # stays "CUSIP:xxx"
 
-    def add(self, other: "ResolutionStats") -> None:
+    def add(self, other: ResolutionStats) -> None:
         self.from_map += other.from_map
         self.from_catalog += other.from_catalog
         self.from_sec += other.from_sec

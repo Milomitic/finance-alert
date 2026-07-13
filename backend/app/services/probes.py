@@ -182,8 +182,9 @@ def probe_finnhub_earnings() -> None:
         # No key configured → no probe (source stays idle in the UI).
         return
     try:
-        import requests
         from datetime import date
+
+        import requests
         d = date.today().isoformat()
         r = requests.get(
             "https://finnhub.io/api/v1/calendar/earnings",
@@ -216,8 +217,9 @@ def probe_finnhub_news() -> None:
     if recent is not None and recent < 4 * 3600:
         return
     try:
-        import requests
         from datetime import date, timedelta
+
+        import requests
         to_d = date.today()
         from_d = to_d - timedelta(days=2)
         r = requests.get(

@@ -40,7 +40,6 @@ from loguru import logger
 
 from app.core import breaker_state
 
-
 _URL = "https://api.nasdaq.com/api/analyst/{sym}/targetprice"
 # Nasdaq blocks default UAs — a browser-like header set is required
 # (same as premarket_service._NASDAQ_HEADERS).
@@ -71,7 +70,7 @@ _RATE_LOCK = threading.Lock()
 
 # ─── 24h per-ticker cache ────────────────────────────────────────────
 _TTL = _dt.timedelta(hours=24)
-_CACHE: dict[str, tuple[_dt.datetime, "NasdaqAnalyst | None"]] = {}
+_CACHE: dict[str, tuple[_dt.datetime, NasdaqAnalyst | None]] = {}
 _CACHE_LOCK = threading.Lock()
 
 
@@ -108,7 +107,7 @@ def _is_blocked() -> tuple[bool, str | None]:
     with _BLOCK_LOCK:
         if _BLOCKED_UNTIL is None:
             return False, None
-        if _BLOCKED_UNTIL <= now:
+        if now >= _BLOCKED_UNTIL:
             _BLOCKED_UNTIL = None
             breaker_state.clear(_BREAKER_KEY)
             return False, None
@@ -119,7 +118,7 @@ def _trip_breaker(reason: str) -> None:
     global _BLOCKED_UNTIL
     now = _dt.datetime.now(_dt.UTC)
     with _BLOCK_LOCK:
-        if _BLOCKED_UNTIL is None or _BLOCKED_UNTIL <= now:
+        if _BLOCKED_UNTIL is None or now >= _BLOCKED_UNTIL:
             _BLOCKED_UNTIL = now + _BLOCK_DURATION
             breaker_state.save(_BREAKER_KEY, _BLOCKED_UNTIL, reason=reason)
             logger.warning(

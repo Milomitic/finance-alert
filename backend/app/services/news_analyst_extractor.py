@@ -38,7 +38,6 @@ from dataclasses import dataclass
 
 from loguru import logger
 
-
 # ---------------------------------------------------------------------------
 # Firm matchers — order matters: more specific patterns FIRST so the longer
 # variant ("Bank of America Securities") wins over the shorter one ("Bank

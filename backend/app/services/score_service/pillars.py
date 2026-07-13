@@ -16,24 +16,22 @@ from typing import Any
 from app.models import Stock
 from app.services import stock_news_service
 from app.services.news_sentiment import classify_title
-from app.services.sector_stats_service import SectorStatsBundle
-from app.services.stock_fundamentals_service import (
-    Fundamentals,
-    MicroData,
-)
-
 from app.services.score_service.common import (
-    _Component,
     _aggregate,
     _blended_hib,
     _blended_lib,
     _blended_lib_multiple,
+    _Component,
     _is_finite,
     _ramp,
     _ramp3,
     _resolve_med,
 )
-
+from app.services.sector_stats_service import SectorStatsBundle
+from app.services.stock_fundamentals_service import (
+    Fundamentals,
+    MicroData,
+)
 
 # ---------------------------------------------------------------------------
 # Profitability pillar (V3.2 - was the magnitude side of Quality).
@@ -427,7 +425,8 @@ def _quality(
     in a minimal stand-in with an empty annual list so the lane simply
     drops out of the aggregate.
     """
-    from dataclasses import dataclass, field as _field
+    from dataclasses import dataclass
+    from dataclasses import field as _field
 
     @dataclass
     class _FundShim:

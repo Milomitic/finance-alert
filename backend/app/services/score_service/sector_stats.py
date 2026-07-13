@@ -9,10 +9,9 @@ from sqlalchemy import select
 
 from app.models import Stock
 from app.services import sector_stats_service, stock_fundamentals_service
+from app.services.score_service.common import RecomputeCancelled
 from app.services.sector_stats_service import SectorStatsBundle
 from app.services.stock_fundamentals_service import Fundamentals
-
-from app.services.score_service.common import RecomputeCancelled
 
 # Module-level cache for the sector_stats bundle. The bundle is expensive
 # to build (iterates ~1100 stocks, calls get_fundamentals on each — on a

@@ -1,7 +1,7 @@
 """score_history: daily snapshot of both composites, idempotent per day."""
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 
 from sqlalchemy import func, select
 
@@ -13,7 +13,7 @@ def _seed(db):
     s = Stock(ticker="HIST", exchange="NASDAQ", name="Hist Co", country="US")
     db.add(s)
     db.flush()
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     db.add(StockScore(stock_id=s.id, composite=72.0, quality=70.0, profitability=65.0,
                       sustainability=60.0, growth=80.0, value=55.0, sentiment=62.0,
                       risk_tier="moderate", computed_at=now, breakdown="{}"))

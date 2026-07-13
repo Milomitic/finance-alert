@@ -168,7 +168,7 @@ def test_search_is_constant_query_count_with_history(db: Session) -> None:
     assert len(page.items) == 8
     assert all(it.score.composite_delta_7d == pytest.approx(it.score.composite - 45.0)
                for it in page.items)
-    assert len(statements) == 3, f"expected 3 statements, got:\n" + "\n".join(statements)
+    assert len(statements) == 3, "expected 3 statements, got:\n" + "\n".join(statements)
 
 
 def test_composite_delta_7d_serialized_in_api(client: TestClient, db: Session) -> None:

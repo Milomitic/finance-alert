@@ -19,8 +19,9 @@ State is in-process (module dicts), refreshed by the scheduler job
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 from threading import Lock
-from typing import Any, Callable
+from typing import Any
 
 from loguru import logger
 from sqlalchemy import select

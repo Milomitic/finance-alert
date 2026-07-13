@@ -7,22 +7,20 @@ dataclass is preserved (with a constant `source="tier1"`) so the API
 shape and FE consumers don't break.
 """
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date
 from typing import Any
 
 import pandas as pd
 from sqlalchemy import select
-
-from app.core.visibility import visible_country_clause
 from sqlalchemy.orm import Session
 
+from app.core.visibility import visible_country_clause
 from app.indicators.bb import bollinger
+from app.indicators.ema import ema as ema_indicator
 from app.indicators.macd import macd
 from app.indicators.rsi import rsi as rsi_indicator
-from app.indicators.ema import ema as ema_indicator
 from app.models import Alert, OhlcvDaily, Stock
 from app.services.alert_service import derive_rule_kind
-
 
 RANGE_DAYS: dict[str, int | None] = {
     "1m": 30, "3m": 90, "6m": 180, "1y": 365, "5y": 5 * 365, "all": None,
@@ -257,7 +255,11 @@ def get_detail(db: Session, ticker: str, range_key: str = "1d") -> StockDetail |
         FIXED_MACD_SIGNAL,
         FIXED_MACD_SLOW,
         FIXED_RSI_PERIOD,
+    )
+    from app.services.timeframe_service import (
         compute_bundle as tf_compute_bundle,
+    )
+    from app.services.timeframe_service import (
         fetch_bars as tf_fetch_bars,
     )
 

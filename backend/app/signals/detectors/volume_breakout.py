@@ -5,11 +5,16 @@ from __future__ import annotations
 
 import pandas as pd
 
-from app.signals.context import SignalContext
 from app.core.config import settings
 from app.signals.calibration_map import get_calibration
+from app.signals.context import SignalContext
 from app.signals.detectors.base import (
-    SignalMatch, concave, find_after, log_saturate, score_v2, trend_maturity_factor,
+    SignalMatch,
+    concave,
+    find_after,
+    log_saturate,
+    score_v2,
+    trend_maturity_factor,
 )
 from app.signals.events import Event
 

@@ -1,6 +1,8 @@
 import json
 from datetime import UTC, date, datetime
+
 import pandas as pd
+
 from app.models import Alert, SignalOutcome, Stock
 from app.signals.signal_scan_service import evaluate_signals
 

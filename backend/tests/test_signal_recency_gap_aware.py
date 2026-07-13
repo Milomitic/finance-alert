@@ -1,8 +1,6 @@
 """Scan-gap-aware recency window: signals that completed during a scan
 outage aren't hard-dropped by the 7-day guard, but normal cadence is 7."""
-from datetime import UTC, date, datetime, timedelta
-
-from sqlalchemy import select
+from datetime import UTC, datetime, timedelta
 
 from app.models import ScanRun
 from app.signals.signal_scan_service import (

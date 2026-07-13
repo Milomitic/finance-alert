@@ -11,7 +11,6 @@ from sqlalchemy.orm import Session
 from app.models import OhlcvDaily, Stock
 from app.services import market_stats_service, stats_service
 
-
 SPARKLINE_LEN = 30
 
 

@@ -15,7 +15,6 @@ from app.models import Stock
 from app.services import seed_service
 from app.services.country_normalizer import canonical_country
 
-
 # ── Pure-function behavior ────────────────────────────────────────────
 
 @pytest.mark.parametrize(

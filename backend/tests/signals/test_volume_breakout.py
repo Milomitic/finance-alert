@@ -1,7 +1,8 @@
 import pandas as pd
+
 from app.signals.context import build_context
-from app.signals.events import extract_events
 from app.signals.detectors.volume_breakout import VolumeBreakout
+from app.signals.events import extract_events
 
 
 def _series(breakout=True, with_volume=True):

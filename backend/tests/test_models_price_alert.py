@@ -1,5 +1,4 @@
 """Test PriceAlert model — basic CRUD and FK behavior."""
-from datetime import UTC, datetime
 
 from app.models import PriceAlert, Stock
 

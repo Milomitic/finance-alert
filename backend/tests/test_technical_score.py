@@ -76,7 +76,7 @@ def test_composite_not_nudged_by_recent_signal(db):
     # A strong recent BULL signal that previously would have nudged +~4.4pp.
     db.add(Alert(
         stock_id=s.id, signal_name="volume_breakout", trigger_price=100.0,
-        triggered_at=datetime.datetime.now(datetime.timezone.utc),
+        triggered_at=datetime.datetime.now(datetime.UTC),
         signal_date=datetime.date.today(),
         snapshot=json.dumps({"tone": "bull", "confidence": 95}),
     ))
@@ -97,7 +97,7 @@ def _alert(db, stock_id: int, snapshot: dict):
 
     db.add(Alert(
         stock_id=stock_id, signal_name="volume_breakout", trigger_price=100.0,
-        triggered_at=datetime.datetime.now(datetime.timezone.utc),
+        triggered_at=datetime.datetime.now(datetime.UTC),
         signal_date=datetime.date.today(),
         snapshot=json.dumps(snapshot),
     ))

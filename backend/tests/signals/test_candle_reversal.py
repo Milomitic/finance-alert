@@ -1,5 +1,6 @@
 # backend/tests/signals/test_candle_reversal.py
 import pandas as pd
+
 from app.signals.context import build_context
 from app.signals.detectors.base import SignalMatch
 from app.signals.detectors.candle_reversal import CandleReversal

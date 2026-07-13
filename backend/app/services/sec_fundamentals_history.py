@@ -41,7 +41,7 @@ from __future__ import annotations
 import json
 import threading
 from dataclasses import dataclass
-from datetime import UTC, date, datetime
+from datetime import date
 
 import requests
 from loguru import logger
@@ -49,7 +49,6 @@ from sqlalchemy.orm import Session
 
 # Reuse the SEC-compliant User-Agent + timeout already vetted for 13F.
 from app.services.sec_13f_scraper import _REQUEST_TIMEOUT, _USER_AGENT
-
 
 _COMPANYFACTS_URL = "https://data.sec.gov/api/xbrl/companyfacts/CIK{cik:010d}.json"
 _TICKERS_URL = "https://www.sec.gov/files/company_tickers.json"

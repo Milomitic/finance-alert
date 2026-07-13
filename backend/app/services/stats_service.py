@@ -4,7 +4,7 @@ All functions are pure: take a Session, return a dataclass. No mutation,
 no side effects. Designed to be composed by `app/api/dashboard.py`.
 """
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -43,7 +43,7 @@ def get_alerts_by_index(
     Archived alerts excluded; sorted DESC by count so the heaviest-fire
     indices float to the top of the dashboard panel.
     """
-    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    cutoff = datetime.now(UTC) - timedelta(days=days)
     rows = db.execute(
         select(
             Index.code,
@@ -67,7 +67,7 @@ def get_alerts_by_index(
 
 
 def get_kpi_summary(db: Session) -> KpiSummary:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     cutoff_24h = now - timedelta(hours=24)
     cutoff_48h = now - timedelta(hours=48)
 
@@ -116,9 +116,9 @@ def get_alerts_by_day(db: Session, days: int = 30) -> list[AlertsByDayPoint]:
     `date.today()` boundary causes the chart to drop alerts during the
     1-2h window after local midnight (when UTC is still "yesterday").
     """
-    today = datetime.now(timezone.utc).date()
+    today = datetime.now(UTC).date()
     start_day = today - timedelta(days=days - 1)
-    cutoff_dt = datetime.combine(start_day, datetime.min.time(), tzinfo=timezone.utc)
+    cutoff_dt = datetime.combine(start_day, datetime.min.time(), tzinfo=UTC)
 
     rows = db.execute(
         select(
@@ -168,7 +168,7 @@ def get_top_stocks(db: Session, *, days: int = 30, limit: int = 10) -> list[TopS
     Order: alert_count DESC, ticker ASC (deterministic tie-break).
     `top_kind` = most frequent rule.kind for that stock in the same window.
     """
-    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    cutoff = datetime.now(UTC) - timedelta(days=days)
 
     # Step 1: top stock_ids by count
     counts = db.execute(
@@ -270,8 +270,11 @@ def get_top_alerted_stock_7d(db: Session) -> tuple[Stock, int] | None:
     """Top 1 stock by alert count in last 7 days. Returns (stock, count) or None.
     Excludes archived alerts."""
     from datetime import UTC, datetime, timedelta
+
     from sqlalchemy import func, select
-    from app.models import Alert, Stock as StockModel
+
+    from app.models import Alert
+    from app.models import Stock as StockModel
 
     cutoff = datetime.now(UTC) - timedelta(days=7)
     row = db.execute(

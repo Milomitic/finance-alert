@@ -1,4 +1,5 @@
 from datetime import date
+
 from app.models import Alert, Stock
 
 

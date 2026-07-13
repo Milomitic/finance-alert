@@ -1,5 +1,5 @@
 """Tests for stats_service aggregation queries."""
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 
 from sqlalchemy.orm import Session
 
@@ -7,7 +7,6 @@ from app.models import Alert, Stock
 from app.services.stats_service import (
     AlertsByDayPoint,
     KpiSummary,
-    TopStock,
     get_alerts_by_day,
     get_kpi_summary,
     get_top_stocks,
@@ -36,9 +35,9 @@ def _make_alert(
         snapshot="{}",
         signal_name=signal_name,
     )
-    a.triggered_at = datetime.now(timezone.utc) - timedelta(hours=age_hours)
+    a.triggered_at = datetime.now(UTC) - timedelta(hours=age_hours)
     if archived:
-        a.archived_at = datetime.now(timezone.utc)
+        a.archived_at = datetime.now(UTC)
     db.add(a)
     db.commit()
     return a
@@ -94,7 +93,7 @@ def test_alerts_by_day_groups_by_date_and_kind(db: Session) -> None:
     # Capture the reference UTC moment first; _make_alert uses
     # datetime.now(UTC) internally so the dates derived here will
     # match (within the few-millisecond gap between calls).
-    ref = datetime.now(timezone.utc)
+    ref = datetime.now(UTC)
 
     def _date_at(hours: float) -> "date":
         return (ref - timedelta(hours=hours)).date()
@@ -138,7 +137,7 @@ def test_alerts_by_day_excludes_archived(db: Session) -> None:
     whichever UTC day the 2h-ago alert actually lands on. Robust
     even when running at UTC 00:00-02:00."""
     stock = _seed_baseline(db)
-    ref = datetime.now(timezone.utc)
+    ref = datetime.now(UTC)
     target_date = (ref - timedelta(hours=2)).date()
 
     _make_alert(db, stock, age_hours=2)
@@ -192,6 +191,7 @@ def test_top_stocks_excludes_archived(db: Session) -> None:
 
 
 import pytest
+
 from app.services.stats_service import SystemStatus, get_system_status
 
 

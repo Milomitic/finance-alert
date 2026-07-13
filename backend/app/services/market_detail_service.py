@@ -27,7 +27,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from threading import Lock
 
 from loguru import logger
@@ -62,7 +62,7 @@ _TTL_SECONDS = 15 * 60
 # In-process cache: (symbol, range) → (timestamp, MarketDetailDC | None)
 # Bounded by the number of distinct (symbol, range) pairs, which is
 # tiny (~13 symbols × 6 ranges = 78). No eviction needed.
-_CACHE: dict[tuple[str, str], tuple[float, "MarketDetailDC | None"]] = {}
+_CACHE: dict[tuple[str, str], tuple[float, MarketDetailDC | None]] = {}
 _CACHE_LOCK = Lock()
 
 
@@ -153,9 +153,9 @@ def _fetch_fresh(symbol: str, range_key: str) -> MarketDetailDC | None:
             if is_intraday and hasattr(ts, "to_pydatetime"):
                 d = ts.to_pydatetime()
                 if d.tzinfo is None:
-                    d = d.replace(tzinfo=timezone.utc)
+                    d = d.replace(tzinfo=UTC)
                 else:
-                    d = d.astimezone(timezone.utc)
+                    d = d.astimezone(UTC)
             elif isinstance(ts, datetime):
                 d = ts if is_intraday else ts.date()
             else:

@@ -49,7 +49,6 @@ from app.core import breaker_state
 from app.core.config import settings
 from app.core.errors import UpstreamUnavailable
 
-
 _BASE = "https://finnhub.io/api/v1"
 _TIMEOUT = 10.0
 _USER_AGENT = "FinanceAlert/0.1 (personal use)"
@@ -117,8 +116,8 @@ _RATE_LOCK = threading.Lock()
 # tool (catalog ~1.1k tickers × small payloads ≈ trivial memory).
 _NEWS_TTL = _dt.timedelta(hours=1)
 _UPGRADE_TTL = _dt.timedelta(hours=24)
-_NEWS_CACHE: dict[str, tuple[_dt.datetime, list["FinnhubNewsItem"]]] = {}
-_UPGRADE_CACHE: dict[str, tuple[_dt.datetime, list["FinnhubAnalystEvent"]]] = {}
+_NEWS_CACHE: dict[str, tuple[_dt.datetime, list[FinnhubNewsItem]]] = {}
+_UPGRADE_CACHE: dict[str, tuple[_dt.datetime, list[FinnhubAnalystEvent]]] = {}
 _CACHE_LOCK = threading.Lock()
 
 

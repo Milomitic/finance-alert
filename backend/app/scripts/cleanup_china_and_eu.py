@@ -31,7 +31,6 @@ from sqlalchemy.orm import Session
 from app.core.db import SessionLocal
 from app.models import Stock
 
-
 # Yahoo ticker suffix → ISO country code. Same map as the frontend's
 # `lib/stockMeta.ts` SUFFIX_TO_FLAG (in upper case here since
 # `Stock.country` is ISO-2 uppercase by convention).

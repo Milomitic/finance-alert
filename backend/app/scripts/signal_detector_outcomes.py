@@ -212,8 +212,8 @@ def run(*, sample: int, step: int, window: int, min_bars: int,
 
         print(f"\n{'#'*78}\n#  DETECTOR-LEVEL OUTCOME STUDY (the conjunction)")
         print(f"#  universe={len(universe)}  detect_calls={n_calls:,}  signals={n_signals:,}")
-        print(f"#  absHit% = close-to-close directional hit (flat ~50%); tbs% =")
-        print(f"#  trade-playbook TP1-before-stop within horizon (the path-based,")
+        print("#  absHit% = close-to-close directional hit (flat ~50%); tbs% =")
+        print("#  trade-playbook TP1-before-stop within horizon (the path-based,")
         print(f"#  tradeable win-rate — the proposed Probabilita base rate)\n{'#'*78}")
         print(f"\n{'detector':<24}{'n':>7}{'absHit%':>9}{'tbs%':>8}{'tbsN':>7}"
               f"{'mnHit%':>8}{'mnEdge%':>9}{'horiz':>7}")

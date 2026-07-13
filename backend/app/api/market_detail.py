@@ -12,10 +12,12 @@ Why a separate router from `/api/stocks/...`
   straight to yfinance with a 15-min cache, no DB roundtrip for
   the OHLCV.
 """
-from datetime import date as date_t, datetime
+from datetime import date as date_t
+from datetime import datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from loguru import logger
 from pydantic import BaseModel
 
 from app.api.deps import get_current_user
@@ -23,7 +25,6 @@ from app.api.market import LIVE_ASSET_DEFINITIONS
 from app.core.errors import UpstreamError
 from app.models import User
 from app.services import live_quote_service, market_detail_service
-from loguru import logger
 
 router = APIRouter(prefix="/api/markets", tags=["markets"])
 

@@ -1,5 +1,6 @@
 import pandas as pd
-from app.signals.events import extract_macd_cross, extract_gap, extract_adx_trend
+
+from app.signals.events import extract_adx_trend, extract_gap, extract_macd_cross
 
 
 def _df(rows):
