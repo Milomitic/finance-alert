@@ -20,7 +20,11 @@
 # ─────────────────────────────────────────────────────────────────────────────
 
 # ── Stage 1: frontend build ─────────────────────────────────────────────────
-FROM node:20-alpine AS frontend-build
+# --platform=$BUILDPLATFORM: this stage outputs STATIC FILES (dist/), which are
+# architecture-independent — so it always runs native on the build host. In CI
+# that means the slow npm ci + vite build never pay the QEMU-emulation tax when
+# cross-building the arm64 runtime stage below.
+FROM --platform=$BUILDPLATFORM node:20-alpine AS frontend-build
 WORKDIR /fe
 
 # Lockfile first → the (slow) npm ci layer is cached until deps change.

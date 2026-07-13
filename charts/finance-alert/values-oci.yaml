@@ -1,21 +1,20 @@
 # Overrides for the single-node k3s VM on OCI Always Free (2 OCPU / 12 GB).
-# Applied by infra/oci/deploy-k3s.sh:
-#   helm upgrade --install finance-alert charts/finance-alert \
-#     -f charts/finance-alert/values-oci.yaml --set secret.secretKey=<random>
+# This file is the GITOPS SOURCE OF TRUTH: ArgoCD renders the chart with it on
+# every sync. CI's bump job rewrites `image.tag` after each green build on the
+# `cloud` branch — do not hand-edit the tag.
 
 image:
-  # Registry-free: the arm64 image is imported into k3s' containerd via
-  # `k3s ctr images import` (OCIR returns 403 on a free-tier account). Never
-  # tries to pull from a registry.
-  repository: finance-alert
-  tag: oci
-  pullPolicy: Never
+  # GHCR, public package → the node pulls anonymously (OCIR is 403 on a pure
+  # Always-Free tenancy). The tag below is stamped by CI (full commit sha).
+  repository: ghcr.io/milomitic/finance-alert
+  tag: "bootstrap"
+  pullPolicy: IfNotPresent
 
 persistence:
   storageClass: local-path # k3s' built-in Rancher local-path provisioner
   size: 4Gi
 
-# App on a 2 OCPU / 12 GB node, leaving headroom for k3s + the OS.
+# App on a 2 OCPU / 12 GB node, leaving headroom for k3s + ArgoCD + the OS.
 resources:
   requests:
     cpu: 250m
@@ -24,7 +23,7 @@ resources:
     cpu: "1500m"
     memory: 2Gi
 
-# Fresh cloud DB → alembic migrates on first boot; give startup room.
+# Cloud DB migrates on image upgrades; give startup room.
 probes:
   startupSeconds: 120
   periodSeconds: 10
@@ -37,8 +36,10 @@ ingress:
   path: /
   pathType: Prefix
 
-# The kind dev placeholder is NOT used in the cloud. deploy-k3s.sh generates a
-# random SECRET_KEY and passes it via --set secret.secretKey=… at install time.
+# The Secret is NOT managed by the chart in the cloud: ArgoCD renders from git
+# only, and committing key material is out of the question. A durable Secret
+# (`finance-alert-prod`: SECRET_KEY + ADMIN_PASSWORD_HASH) is created once on
+# the cluster (see docs/cloud/ROADMAP.md M5); the chart just references it.
 secret:
-  create: true
-  secretKey: "" # overridden at deploy; empty here on purpose
+  create: false
+  existingSecret: "finance-alert-prod"

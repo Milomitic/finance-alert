@@ -1,0 +1,39 @@
+# ArgoCD Application — the GitOps contract for finance-alert (M5).
+#
+# Bootstrap (one-time, chicken-and-egg by nature): ArgoCD itself + this file
+# are applied by hand; from then on every deploy is a git commit.
+#
+#   kubectl create namespace argocd
+#   kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+#   kubectl apply -f infra/gitops/finance-alert-app.yaml
+#
+# Flow: push to `cloud` → CI builds/pushes ghcr image → CI bumps
+# charts/finance-alert/values-oci.yaml → ArgoCD (polling this public repo from
+# INSIDE the cluster — the NSG allowlist blocks any push-based deploy) renders
+# the chart and applies the diff.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: finance-alert
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Milomitic/finance-alert.git
+    targetRevision: cloud
+    path: charts/finance-alert
+    helm:
+      valueFiles:
+        - values-oci.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: finance-alert
+  syncPolicy:
+    automated:
+      # selfHeal: drift on the cluster is reverted to what git says.
+      selfHeal: true
+      # prune intentionally OFF while the app carries state on a PVC — deleting
+      # resources stays a deliberate human action (kubectl/argocd cli).
+      prune: false
+    syncOptions:
+      - CreateNamespace=false
