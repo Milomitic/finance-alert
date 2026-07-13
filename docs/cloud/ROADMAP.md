@@ -190,7 +190,7 @@ Let's Encrypt HTTP-01 is blocked by the IP allowlist → use DNS-01.
 | M3 Terraform / infra | ✅ **done — live on OCI.** Pivoted OKE → self-managed **k3s on an A1 VM** (pure Always-Free pins OKE `cluster-count`/`node-count` to **0**; standalone A1 compute — 2 OCPU/12 GB — is allowed). Terraform-applied against the real account: VCN + NSG (SSH/6443/443/80 allowlisted) + Object Storage + the A1 VM (`compute.tf`, Oracle-Linux-aarch64, cloud-init installs k3s v1.36.2, Traefik, local-path). A1 capacity caught by `infra/oci/a1-retry.sh` on attempt #6. Cleared two leftover wizard VCNs (quota 2/2), bumped a stale K8s pin, gated OCIR off (`403 FREE_TIER`). See `RUN-A1-BOT.md`. |
 | M2b App deployed on cloud k3s | ✅ **done — app is LIVE.** arm64 image cross-built (buildx) → imported registry-free (`k3s ctr images import`) → Helm chart deployed with the OCI overlay (`values-oci.yaml`: local-path PVC, Traefik ingress, random SECRET_KEY). `GET http://<vm-ip>/api/health` → `200 {"status":"ok"}` and the SPA serves. Scripts: `infra/oci/build-image.sh`, `deploy-k3s.sh`, `status.sh`. **HTTP only — TLS + a domain are M4.** |
 | M4 Ingress + TLS + hardening | ⬜ |
-| M5 GitOps + CI/CD | ⬜ |
+| M5 GitOps + CI/CD | 🟡 in progress — CI (ruff+pytest, FE build, audit report-only, arm64 image → GHCR, trivy, tag-bump) authored; ArgoCD installed on k3s + finance-alert-prod Secret created; Application apply pending the first GHCR image. Deploys are pull-based BY DESIGN: the NSG allowlist means CI can't reach 6443 — ArgoCD pulls from inside. |
 | M6 Observability | ⬜ |
 | M7 Postgres migration | ⬜ |
 | M8 Polyglot (Valkey/pgvector/Timescale) | ⬜ |
