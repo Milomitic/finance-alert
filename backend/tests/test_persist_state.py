@@ -13,6 +13,43 @@ def test_persist_json_roundtrip(tmp_path):
     assert persist_json.read_json(p) == {"a": {"n": 1}}
 
 
+def test_persist_json_concurrent_writers_no_enoent(tmp_path):
+    """Many threads writing the SAME path at once must not warn nor corrupt.
+
+    Regression: a fixed '<name>.tmp' raced — one thread renamed the shared tmp
+    into place, another hit ENOENT on replace and logged '[persist_json] failed
+    to write … No such file or directory' (the recurring Salute-page warning
+    under APScheduler's thread pool). write_json SWALLOWS the OSError, so the
+    symptom is the LOG, not an exception — capture it. Unique per-call tmp
+    (mkstemp) fixes it: last write wins, file stays valid, no orphan tmp.
+    """
+    import threading
+
+    from loguru import logger
+
+    captured: list[str] = []
+    sink = logger.add(lambda m: captured.append(str(m)), level="WARNING")
+    try:
+        p = tmp_path / "scheduler_metrics.json"
+
+        def writer(n: int) -> None:
+            for i in range(60):
+                persist_json.write_json(p, {"w": n, "i": i})
+
+        threads = [threading.Thread(target=writer, args=(k,)) for k in range(8)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+    finally:
+        logger.remove(sink)
+
+    failed = [c for c in captured if "failed to write" in c]
+    assert failed == [], f"persist_json warned under concurrency: {failed[:2]}"
+    assert isinstance(persist_json.read_json(p), dict)          # never corrupt
+    assert list(tmp_path.glob("*.tmp")) == []                   # no orphan tmp
+
+
 def test_data_source_metrics_roundtrip():
     from app.services import data_source_metrics as m
     m.reset()
