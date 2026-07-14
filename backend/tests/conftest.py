@@ -92,6 +92,27 @@ def _reset_yfinance_breaker() -> Iterator[None]:
     yfinance_health.reset()
 
 
+@pytest.fixture(autouse=True)
+def _reset_scheduler_metrics() -> Iterator[None]:
+    """Stato pulito del singleton scheduler_metrics per ogni test.
+
+    `_INSTANCE._stats` è process-global. `health_rollup.scheduler_jobs_payload`
+    lo legge come "stats-only leftovers" (job con storico ma non più
+    registrati), SEPARATAMENTE dallo scheduler mockabile via `get_scheduler`.
+    Quindi un job `missed`/`error` lasciato da un test precedente fa risultare
+    il rollup `degraded` anche in un test che mocka lo scheduler a vuoto —
+    esattamente il flaky ordine-dipendente che passava in locale (NTFS) e
+    falliva su CI (ext4, ordine di collection diverso). Stessa classe del
+    breaker: un global va azzerato per ogni test."""
+    from app.services.scheduler_metrics import _INSTANCE
+
+    _INSTANCE._stats.clear()
+    _INSTANCE._started.clear()
+    yield
+    _INSTANCE._stats.clear()
+    _INSTANCE._started.clear()
+
+
 def _blocked_network_call(*_args, **_kwargs):  # noqa: ANN002, ANN003
     raise AssertionError(
         "test attempted real network I/O — mock it "
