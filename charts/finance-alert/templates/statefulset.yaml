@@ -64,6 +64,14 @@ spec:
                   name: {{ include "finance-alert.secretName" . }}
                   key: ADMIN_PASSWORD_HASH
                   optional: true
+            # Optional third-party news key (MarketAux). optional: the pod runs
+            # fine without it — the source simply reports "not configured".
+            - name: MARKETAUX_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "finance-alert.secretName" . }}
+                  key: MARKETAUX_API_KEY
+                  optional: true
           # Startup probe gates liveness/readiness until the first success, so
           # the slow first boot (alembic migrate before uvicorn binds) can't be
           # mistaken for a crash-loop. failureThreshold × periodSeconds ≥ the
