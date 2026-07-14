@@ -136,6 +136,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: cloud
+          fetch-depth: 0
       - name: point values-oci.yaml at the new image
         run: |
           sed -i 's/^  tag: .*/  tag: "${{ github.sha }}"/' charts/finance-alert/values-oci.yaml
@@ -147,4 +148,13 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add charts/finance-alert/values-oci.yaml
           git commit -m "chore(cd): image ${{ github.sha }} [skip ci]"
-          git push origin cloud
+          # Robust push: HEAD:cloud (checkout leaves a detached HEAD), and retry
+          # — a transient GitHub "remote: fatal error in commit_refs" rejected
+          # this step twice, and a concurrent push would need a rebase.
+          for i in 1 2 3 4 5; do
+            if git push origin HEAD:cloud; then exit 0; fi
+            echo "push attempt $i failed — refetch/rebase and retry"
+            git fetch origin cloud && git rebase origin/cloud || true
+            sleep $((i * 5))
+          done
+          echo "::error::bump push failed after 5 attempts"; exit 1
