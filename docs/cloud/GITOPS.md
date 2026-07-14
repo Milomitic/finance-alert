@@ -41,32 +41,17 @@ kubectl apply -n argocd --server-side -f https://raw.githubusercontent.com/argop
 kubectl apply -f infra/gitops/finance-alert-app.yaml   # the Application CR
 ```
 
-## ⚠️ The one open item: make the GHCR package PUBLIC
+## Registry: GHCR is public → fully hands-off ✅
 
-CI pushes the image to `ghcr.io/milomitic/finance-alert`, but the package is
-**private** by default and the local `gh` token lacks the `packages` scope, so
-it couldn't be flipped automatically. Consequences:
+The `ghcr.io/milomitic/finance-alert` package is **public**, so the k3s node
+pulls each new `<sha>` anonymously (`pullPolicy: IfNotPresent` → pull once per
+immutable sha, cached after). Nothing manual: a `cloud` push builds the image,
+the bump job points `values-oci.yaml` at the new sha, ArgoCD syncs, the kubelet
+pulls it from public GHCR. Verified end-to-end on 2026-07-15.
 
-- The node currently runs the image because it was **retagged into containerd**
-  by hand (`k3s ctr images tag docker.io/library/finance-alert:oci
-  ghcr.io/milomitic/finance-alert:<sha>`), and `pullPolicy: IfNotPresent` means
-  the kubelet uses that local copy instead of pulling.
-- **A push to `cloud` before the package is public will bump the tag to a new
-  `<sha>` the node has never seen → `IfNotPresent` tries to pull → private GHCR
-  → `ImagePullBackOff` → the pod can't start.**
-
-**Fix (30 seconds, one-time):** GitHub → your profile → Packages →
-`finance-alert` → Package settings → Change visibility → **Public**. After that
-the whole loop is hands-off: a `cloud` push builds a new `<sha>`, the node
-pulls it anonymously from public GHCR, no manual retag ever again.
-
-Until then, either don't push to `cloud`, or retag the node image to the new
-`<sha>` before ArgoCD syncs:
-```bash
-NEWSHA=$(git show origin/cloud:charts/finance-alert/values-oci.yaml | sed -n 's/^  tag: "\(.*\)"/\1/p')
-ssh -i ~/.ssh/oci_finance_alert opc@<VM_IP> \
-  "sudo /usr/local/bin/k3s ctr images tag docker.io/library/finance-alert:oci ghcr.io/milomitic/finance-alert:$NEWSHA"
-```
+> Historical fallback (only if the package is ever made private again): seed the
+> node image directly and rely on `IfNotPresent` —
+> `k3s ctr images tag docker.io/library/finance-alert:oci ghcr.io/milomitic/finance-alert:<sha>`.
 
 ## Operational notes
 
