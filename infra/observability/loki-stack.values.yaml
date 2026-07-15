@@ -1,0 +1,38 @@
+# Loki (single binary, filesystem) + promtail (log shipper), sized for the
+# shared A1 VM. Grafana/Prometheus come from kube-prometheus-stack, so both are
+# disabled here — Loki is wired into the existing Grafana as a datasource (M6-4).
+#
+# Install:
+#   helm repo add grafana https://grafana.github.io/helm-charts
+#   helm upgrade --install loki grafana/loki-stack -n monitoring -f this-file
+loki:
+  enabled: true
+  persistence:
+    enabled: true
+    storageClassName: local-path
+    size: 2Gi
+  resources:
+    requests: { cpu: 20m, memory: 80Mi }
+    limits: { memory: 300Mi }
+  config:
+    # Compactor-driven retention so the 2Gi PVC can't fill up: keep 72h of logs.
+    compactor:
+      retention_enabled: true
+      compaction_interval: 10m
+      retention_delete_delay: 1h
+    limits_config:
+      retention_period: 72h
+      reject_old_samples: true
+      reject_old_samples_max_age: 168h
+
+promtail:
+  enabled: true
+  resources:
+    requests: { cpu: 10m, memory: 32Mi }
+    limits: { memory: 128Mi }
+
+# We already have these from kube-prometheus-stack.
+grafana:
+  enabled: false
+prometheus:
+  enabled: false

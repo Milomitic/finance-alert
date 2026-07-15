@@ -1,0 +1,100 @@
+# kube-prometheus-stack (Prometheus + Grafana + Alertmanager + node-exporter +
+# kube-state-metrics), sized for a SHARED Always-Free A1 VM (2 OCPU / 12 GB)
+# that already runs the app + ArgoCD. Everything is deliberately small: short
+# retention, modest limits, 60s scrape.
+#
+# Install:
+#   helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+#   helm upgrade --install kps prometheus-community/kube-prometheus-stack \
+#     -n monitoring --create-namespace -f this-file \
+#     --set grafana.adminPassword=<random>
+fullnameOverride: kps
+
+# k3s bundles the control plane into one process and does NOT expose these as
+# scrape targets → disable their ServiceMonitors so we don't get permanently
+# "down" targets cluttering the alerts.
+kubeControllerManager: { enabled: false }
+kubeScheduler: { enabled: false }
+kubeProxy: { enabled: false }
+kubeEtcd: { enabled: false }
+
+prometheusOperator:
+  resources:
+    requests: { cpu: 20m, memory: 96Mi }
+    limits: { memory: 256Mi }
+
+prometheus:
+  prometheusSpec:
+    retention: 3d
+    retentionSize: "2GB"
+    scrapeInterval: 60s
+    evaluationInterval: 60s
+    resources:
+      requests: { cpu: 100m, memory: 320Mi }
+      limits: { memory: 900Mi }
+    # Discover ServiceMonitors/PodMonitors from ALL namespaces (incl. the app's
+    # in finance-alert), not just ones carrying this release's label.
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+    probeSelectorNilUsesHelmValues: false
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: local-path
+          accessModes: [ReadWriteOnce]
+          resources: { requests: { storage: 3Gi } }
+
+alertmanager:
+  alertmanagerSpec:
+    retention: 48h
+    resources:
+      requests: { cpu: 10m, memory: 32Mi }
+      limits: { memory: 96Mi }
+    storage:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: local-path
+          accessModes: [ReadWriteOnce]
+          resources: { requests: { storage: 1Gi } }
+
+grafana:
+  # adminPassword injected at install via --set (kept out of git).
+  defaultDashboardsTimezone: browser
+  # Loki datasource is NOT added here: loki-stack ships its own labelled
+  # ConfigMap that Grafana's sidecar auto-loads. Adding it here too created a
+  # duplicate "Loki" that made provisioning skip both.
+  resources:
+    requests: { cpu: 20m, memory: 64Mi }
+    limits: { memory: 192Mi }
+  persistence:
+    enabled: true
+    storageClassName: local-path
+    size: 1Gi
+  # No domain yet, and the ISP DNS (Wind3 RPZ) blocks nip.io/sslip.io wildcard
+  # hosts → reach Grafana PATH-BASED on the raw IP: http://<ip>/grafana (port 80
+  # is NSG-allowlisted). serve_from_sub_path makes Grafana live under /grafana;
+  # Traefik routes /grafana (longer path) to it and keeps / for the app. Swap
+  # for a real host in M4.
+  "grafana.ini":
+    server:
+      domain: 80.225.80.141
+      root_url: "%(protocol)s://%(domain)s/grafana"
+      serve_from_sub_path: true
+  ingress:
+    enabled: true
+    ingressClassName: traefik
+    path: /grafana
+    pathType: Prefix
+    hosts: []
+  # Loki datasource is provisioned via a labeled ConfigMap (loki-datasource.*).
+
+prometheus-node-exporter:
+  resources:
+    requests: { cpu: 10m, memory: 24Mi }
+    limits: { memory: 64Mi }
+
+kube-state-metrics:
+  resources:
+    requests: { cpu: 10m, memory: 32Mi }
+    limits: { memory: 128Mi }

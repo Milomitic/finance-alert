@@ -1,0 +1,23 @@
+# Tells Prometheus (operator) to scrape the app's /metrics. A PodMonitor (not a
+# ServiceMonitor) so we hit the pod ONCE — the chart ships two Services
+# (ClusterIP + headless) with identical labels, which a ServiceMonitor would
+# scrape twice. Discovered because the stack runs with
+# podMonitorSelectorNilUsesHelmValues=false (all namespaces).
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: finance-alert-app
+  namespace: monitoring
+  labels:
+    release: kps
+spec:
+  namespaceSelector:
+    matchNames: [finance-alert]
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: finance-alert
+      app.kubernetes.io/instance: finance-alert
+  podMetricsEndpoints:
+    - port: http # the container port NAME (containerPort 8000)
+      path: /metrics
+      interval: 60s
