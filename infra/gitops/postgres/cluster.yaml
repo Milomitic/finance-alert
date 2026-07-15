@@ -1,0 +1,52 @@
+# CloudNativePG Cluster — the finance-alert Postgres (M7-P2).
+#
+# Single instance: HA needs >=2 nodes; the free-tier has one A1 VM, so a
+# replica would just co-locate and buy nothing. Durability comes from the PVC
+# (block volume) + WAL archiving to Object Storage (added in the P2 WAL step).
+#
+# Sizing is deliberately small for the shared 12 GB node (app + kube-prometheus
+# + Loki already at ~46% live). shared_buffers stays at 128 MB instead of the
+# textbook 25%-of-RAM precisely because the RAM is shared. The 768 Mi limit
+# leaves headroom for the P3 bulk COPY (1M+ ohlcv rows) without OOM.
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: pg
+  namespace: finance-alert
+  labels:
+    app.kubernetes.io/part-of: finance-alert
+spec:
+  instances: 1
+  # PG16 (matches the CI test lane). arm64 variant verified on GHCR.
+  imageName: ghcr.io/cloudnative-pg/postgresql:16
+  primaryUpdateStrategy: unsupervised
+
+  storage:
+    size: 5Gi
+    storageClass: local-path
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      # no cpu limit — let it burst on the 2-vCPU node; cap memory to protect
+      # the co-tenant app + observability from a runaway query.
+      memory: 768Mi
+
+  postgresql:
+    parameters:
+      shared_buffers: "128MB"
+      max_connections: "50"      # app pool + migration + a spare; plenty
+      work_mem: "8MB"
+      maintenance_work_mem: "64MB"
+
+  # Least-privilege bootstrap: create the app database owned by a NON-superuser
+  # role (fa_app). CNPG keeps the postgres superuser password-less/no external
+  # login by default (enableSuperuserAccess unset), so fa_app is the only
+  # externally-reachable identity. CNPG auto-generates the Secret `pg-app`
+  # (username/password/dbname/host/port/uri) that the app consumes at cutover.
+  bootstrap:
+    initdb:
+      database: finance_alert
+      owner: fa_app

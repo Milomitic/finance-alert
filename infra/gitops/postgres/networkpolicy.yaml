@@ -1,0 +1,63 @@
+# NetworkPolicy — restrict Postgres ingress (M7-P2).
+#
+# GOAL: keep the finance-alert Postgres reachable only by the workloads that
+# need it. Postgres is ClusterIP-only (never exposed via Traefik/NodePort), so
+# it is already unreachable from outside the cluster; this policy is the
+# in-cluster defense-in-depth layer.
+#
+# ⚠️ k3s / kube-router limitation (measured, not assumed): NetworkPolicy
+# `from.podSelector` and `from.namespaceSelector` only match traffic that
+# arrives at the DESTINATION POD IP DIRECTLY. Traffic DNAT-ed through a
+# ClusterIP service is NOT matched by either selector on k3s's built-in netpol
+# controller — verified here: a pod carrying `app.kubernetes.io/name:
+# finance-alert` connects fine to the pod IP but is refused through the pg-rw
+# ClusterIP. The source pod IP IS preserved (no SNAT — inet_client_addr()
+# returned the pod's own IP), so the reliable match for service traffic is
+# `ipBlock` on the pod CIDR.
+#
+# Consequence, stated honestly: over the service path this allows ANY in-cluster
+# pod to reach 5432 — it does NOT isolate the app pod from other pods. It DOES
+# block every source outside the pod network. True per-pod / per-namespace
+# isolation over the service path needs Calico (swap k3s's netpol controller) —
+# deferred to P5/M9 as the risk of swapping the CNI on the live single node
+# outweighs the benefit for this project. The operator + Prometheus reach the
+# instance by POD IP, so their namespaceSelector rules below DO enforce.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: pg-allow-app-only
+  namespace: finance-alert
+  labels:
+    app.kubernetes.io/part-of: finance-alert
+spec:
+  podSelector:
+    matchLabels:
+      cnpg.io/cluster: pg
+  policyTypes:
+    - Ingress
+  ingress:
+    # In-cluster pods -> Postgres SQL (service-routed; see the k3s note above).
+    - from:
+        - ipBlock:
+            cidr: 10.42.0.0/24
+      ports:
+        - protocol: TCP
+          port: 5432
+    # CNPG operator -> SQL + instance-manager API (direct pod IP -> selector enforces).
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: cnpg-system
+      ports:
+        - protocol: TCP
+          port: 5432
+        - protocol: TCP
+          port: 8000
+    # Prometheus -> CNPG metrics exporter (direct pod IP -> selector enforces).
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - protocol: TCP
+          port: 9187

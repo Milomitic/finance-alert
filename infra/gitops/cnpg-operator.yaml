@@ -1,0 +1,51 @@
+# ArgoCD Application — CloudNativePG operator (M7-P2).
+#
+# Bootstrap (one-time, same chicken-and-egg pattern as finance-alert-app.yaml):
+#   export KUBECONFIG=./kubeconfig-oci
+#   kubectl apply -f infra/gitops/cnpg-operator.yaml
+# From then on the operator version is a git-tracked field (targetRevision).
+#
+# The operator installs the postgresql.cnpg.io CRDs and reconciles Cluster CRs.
+# It is deliberately its OWN Application (separate from postgres-cluster.yaml)
+# so the CRDs exist before the Cluster CR is applied — no sync-wave ordering
+# needed, just apply this one first and wait for it Ready.
+#
+# arm64: the operator image (ghcr.io/cloudnative-pg/cloudnative-pg:1.30.0) ships
+# a linux/arm64 variant — verified against GHCR before pinning.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cnpg-operator
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://cloudnative-pg.github.io/charts
+    chart: cloudnative-pg
+    targetRevision: 0.29.0   # operator appVersion 1.30.0
+    helm:
+      values: |
+        # One operator replica — HA is pointless on a single-node free-tier VM.
+        replicaCount: 1
+        # Sized down for the shared 12 GB node (app + observability + Postgres).
+        resources:
+          requests:
+            cpu: 50m
+            memory: 100Mi
+          limits:
+            memory: 200Mi
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: cnpg-system
+  syncPolicy:
+    automated:
+      selfHeal: true
+      # prune OFF — deleting the operator (and thus orphaning the DB) stays a
+      # deliberate human action, mirroring the app Application's stance.
+      prune: false
+    syncOptions:
+      - CreateNamespace=true
+      # CNPG CRDs are large; server-side apply avoids the client-side
+      # last-applied-configuration annotation size limit (the classic
+      # "metadata.annotations: Too long" CRD failure).
+      - ServerSideApply=true

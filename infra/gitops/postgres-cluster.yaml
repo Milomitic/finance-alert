@@ -1,0 +1,32 @@
+# ArgoCD Application — the finance-alert Postgres cluster + NetworkPolicy (M7-P2).
+#
+# Bootstrap once (chicken-and-egg, same as the other Applications):
+#   kubectl apply -f infra/gitops/postgres-cluster.yaml
+# Apply AFTER cnpg-operator.yaml (the postgresql.cnpg.io CRDs must exist first).
+#
+# selfHeal is OFF on purpose: CloudNativePG actively reconciles the Cluster
+# (failover, rolling restarts, hibernation, status) — ArgoCD must not fight the
+# operator by reverting those operational mutations. Automated sync still picks
+# up git changes to the desired spec; ServerSideApply keeps field ownership
+# clean (ArgoCD owns the fields in git, CNPG owns the ones it defaults).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: postgres-cluster
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Milomitic/finance-alert.git
+    targetRevision: cloud
+    path: infra/gitops/postgres
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: finance-alert
+  syncPolicy:
+    automated:
+      selfHeal: false
+      prune: false
+    syncOptions:
+      - CreateNamespace=false
+      - ServerSideApply=true
