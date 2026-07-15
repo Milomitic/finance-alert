@@ -24,6 +24,7 @@ backend/data/logs/
 backend/data/breakers.json
 backend/data/source_metrics.json
 backend/data/scheduler_metrics.json
+backend/data/health_notify_state.json
 backend/data/ff_calendar.xml
 # Stray repo-root /data — sometimes created by scripts run from the wrong
 # cwd (worktree edge case). Belongs nowhere in git, ever.

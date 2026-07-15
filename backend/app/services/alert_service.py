@@ -8,12 +8,13 @@ from sqlalchemy import Float, asc, desc, exists, func, or_, select, update
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.db_json import json_text
 from app.models import Alert, SignalOutcome, Stock
 
 # Columns that the caller may request sorting on.
-# confidence/tone live inside Alert.snapshot (SQLite JSON text column) and
-# are extracted at query time via json_extract so they sort correctly across
-# all rows regardless of pagination.
+# confidence/tone live inside Alert.snapshot (JSON text column); extracted at
+# query time via the dialect-portable json_text() (json_extract on SQLite,
+# ->>'key' on Postgres) so they sort correctly across all rows and backends.
 _SORTABLE: dict[str, Any] = {
     "triggered_at": Alert.triggered_at,
     "signal_date": Alert.signal_date,
@@ -21,18 +22,18 @@ _SORTABLE: dict[str, Any] = {
     "trigger_price": Alert.trigger_price,
     "kind": Alert.signal_name,
     "confidence": sqlalchemy.cast(
-        func.json_extract(Alert.snapshot, "$.confidence"), Float
+        json_text(Alert.snapshot, "confidence"), Float
     ),
     # Two-score model. "strength" (Forza) = COALESCE($.strength, $.confidence) so
     # legacy alerts (confidence-only) still sort. "probability" (Probabilita).
     "strength": func.coalesce(
-        sqlalchemy.cast(func.json_extract(Alert.snapshot, "$.strength"), Float),
-        sqlalchemy.cast(func.json_extract(Alert.snapshot, "$.confidence"), Float),
+        sqlalchemy.cast(json_text(Alert.snapshot, "strength"), Float),
+        sqlalchemy.cast(json_text(Alert.snapshot, "confidence"), Float),
     ),
     "probability": sqlalchemy.cast(
-        func.json_extract(Alert.snapshot, "$.probability"), Float
+        json_text(Alert.snapshot, "probability"), Float
     ),
-    "tone": func.json_extract(Alert.snapshot, "$.tone"),
+    "tone": json_text(Alert.snapshot, "tone"),
 }
 _SORTABLE_KEYS = frozenset(_SORTABLE)
 
@@ -105,22 +106,22 @@ def _apply_filters(
     elif archived is False:
         stmt = stmt.where(Alert.archived_at.is_(None))
     if tone is not None:
-        stmt = stmt.where(func.json_extract(Alert.snapshot, "$.tone") == tone)
+        stmt = stmt.where(json_text(Alert.snapshot, "tone") == tone)
     if confidence_min is not None:
         stmt = stmt.where(
-            sqlalchemy.cast(func.json_extract(Alert.snapshot, "$.confidence"), Float)
+            sqlalchemy.cast(json_text(Alert.snapshot, "confidence"), Float)
             >= confidence_min
         )
     if strength_min is not None:
         stmt = stmt.where(
             func.coalesce(
-                sqlalchemy.cast(func.json_extract(Alert.snapshot, "$.strength"), Float),
-                sqlalchemy.cast(func.json_extract(Alert.snapshot, "$.confidence"), Float),
+                sqlalchemy.cast(json_text(Alert.snapshot, "strength"), Float),
+                sqlalchemy.cast(json_text(Alert.snapshot, "confidence"), Float),
             ) >= strength_min
         )
     if probability_min is not None:
         stmt = stmt.where(
-            sqlalchemy.cast(func.json_extract(Alert.snapshot, "$.probability"), Float)
+            sqlalchemy.cast(json_text(Alert.snapshot, "probability"), Float)
             >= probability_min
         )
     if nature == "continuazione":
@@ -146,7 +147,7 @@ def _apply_filters(
     # Horizon filter: short | medium | long, from snapshot.horizon — same
     # json_extract shape as the tone filter above.
     if horizon is not None:
-        stmt = stmt.where(func.json_extract(Alert.snapshot, "$.horizon") == horizon)
+        stmt = stmt.where(json_text(Alert.snapshot, "horizon") == horizon)
     return stmt
 
 

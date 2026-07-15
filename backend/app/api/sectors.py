@@ -27,6 +27,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
+from app.core.db_json import json_text
 from app.core.visibility import visible_country_clause
 from app.models import (
     Alert,
@@ -532,7 +533,7 @@ def _signals_7d(db: Session, *, today: date | None = None) -> dict[str, dict[str
     as alert_service); tones other than bull/bear count in the total only.
     """
     cutoff = (today or date.today()) - timedelta(days=7)
-    tone_col = func.json_extract(Alert.snapshot, "$.tone")
+    tone_col = json_text(Alert.snapshot, "tone")
     rows = db.execute(
         select(Stock.sector, tone_col, func.count(Alert.id))
         .join(Stock, Stock.id == Alert.stock_id)

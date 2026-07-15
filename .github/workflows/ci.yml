@@ -45,6 +45,47 @@ jobs:
       - name: pytest (network-guarded suite)
         run: uv run pytest tests/ -q
 
+  backend-postgres:
+    name: backend — real-Postgres portability (M7)
+    # Proves the migrated json_text() queries and the whole schema work on a REAL
+    # Postgres, not merely that the SQL compiles. Its own gate (a regression here
+    # goes red and visible) but deliberately OFF the image/bump needs-chain: the
+    # cloud DB stays SQLite until the M7-P4 cutover, so this must not block the
+    # SQLite-safe deploy — same rationale as the report-only `audit` job.
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: fa
+          POSTGRES_PASSWORD: fa
+          POSTGRES_DB: fa_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U fa"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # psycopg3 driver (added to runtime deps for the P4 cutover); the module is
+      # skipped whenever this var is unset (every other job and all local runs).
+      TEST_DATABASE_URL: postgresql+psycopg://fa:fa@localhost:5432/fa_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.11"
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+      - name: install (locked, incl. dev)
+        run: uv sync --frozen
+      - name: pytest (real-Postgres lane)
+        run: uv run pytest tests/test_postgres_integration.py -v
+
   frontend:
     name: frontend — tsc + vite build
     runs-on: ubuntu-latest

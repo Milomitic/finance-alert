@@ -92,6 +92,17 @@ def run_db_backup() -> Path | None:
     from app.core.db import engine  # noqa: PLC0415
     from app.services import scan_lock  # noqa: PLC0415
 
+    # SQLite-only primitive: `VACUUM INTO` is how we snapshot the embedded DB.
+    # On Postgres (M7), point-in-time recovery is the cluster's job — WAL
+    # archiving to Object Storage (CloudNativePG/barman) — so this app-level
+    # backup no-ops instead of erroring on unknown SQL.
+    if engine.dialect.name != "sqlite":
+        logger.info(
+            "[db_backup] non-SQLite backend — skipping VACUUM INTO; backups are "
+            "handled by the database cluster's WAL archiving"
+        )
+        return None
+
     # Advisory peek only — never acquire the scan slot from here.
     if scan_lock.is_running():
         logger.warning(

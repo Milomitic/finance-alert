@@ -7,6 +7,10 @@ dependencies = [
     "fastapi>=0.110",
     "uvicorn[standard]>=0.27",
     "sqlalchemy>=2.0",
+    # psycopg3 (binary wheels — no libpq build toolchain, incl. linux/aarch64
+    # for the OCI image). Added for the M7 Postgres migration; the app connects
+    # via postgresql+psycopg://… at the P4 cutover. Harmless on the SQLite DB.
+    "psycopg[binary]>=3.2",
     "alembic>=1.13",
     "pydantic>=2.6",
     "pydantic-settings>=2.2",

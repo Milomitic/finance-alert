@@ -29,6 +29,7 @@ from sqlalchemy import Float, cast, func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.db_json import json_text
 from app.models import Alert, Stock
 
 # Confluence strength = base + diminishing-returns bonus toward a reserved
@@ -129,11 +130,11 @@ def compute_confluence(db: Session, *, days: int | None = None) -> list[Confluen
     # $.confidence for legacy snapshots written before the two-score model (and
     # so it survives the eventual removal of the transitional confidence alias).
     conf_col = func.coalesce(
-        cast(func.json_extract(Alert.snapshot, "$.strength"), Float),
-        cast(func.json_extract(Alert.snapshot, "$.confidence"), Float),
+        cast(json_text(Alert.snapshot, "strength"), Float),
+        cast(json_text(Alert.snapshot, "confidence"), Float),
     )
-    tone_col = func.json_extract(Alert.snapshot, "$.tone")
-    hz_col = func.json_extract(Alert.snapshot, "$.horizon")
+    tone_col = json_text(Alert.snapshot, "tone")
+    hz_col = json_text(Alert.snapshot, "horizon")
     rows = db.execute(
         select(Alert.id, Stock.ticker, Stock.name, Alert.signal_name,
                Alert.signal_date, conf_col, tone_col, hz_col)

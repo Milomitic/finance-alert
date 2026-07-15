@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import sqlite3
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from sqlalchemy import create_engine, text
@@ -92,6 +93,10 @@ def test_failure_cleans_tmp_and_reraises(source_engine, tmp_path: Path, monkeypa
             pass
 
     class _BoomEngine:
+        # run_db_backup reads engine.dialect.name to gate the SQLite-only
+        # VACUUM INTO path — a real SQLite engine reports "sqlite".
+        dialect = SimpleNamespace(name="sqlite")
+
         def raw_connection(self):
             return _BoomConn()
 
@@ -100,3 +105,17 @@ def test_failure_cleans_tmp_and_reraises(source_engine, tmp_path: Path, monkeypa
         db_backup.run_db_backup()
     backups = tmp_path / "backups"
     assert list(backups.glob("*")) == []  # no partial files left
+
+
+def test_non_sqlite_backend_skips(monkeypatch: pytest.MonkeyPatch) -> None:
+    """On a non-SQLite backend (Postgres, M7) the VACUUM-INTO job no-ops:
+    point-in-time recovery is the DB cluster's job (WAL archiving), and firing
+    SQLite-only SQL at Postgres would just error."""
+    class _PgEngine:
+        dialect = SimpleNamespace(name="postgresql")
+
+        def raw_connection(self):  # must never be reached
+            raise AssertionError("VACUUM INTO must not run on Postgres")
+
+    monkeypatch.setattr(db_module, "engine", _PgEngine())
+    assert db_backup.run_db_backup() is None
