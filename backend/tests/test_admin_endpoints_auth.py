@@ -37,3 +37,14 @@ def test_data_sources_health_endpoint_was_deleted(db):
 def test_health_stays_public(db):
     r = _unauthenticated_client(db).get("/api/health")
     assert r.status_code == 200
+
+
+def test_metrics_endpoint_prometheus(db):
+    """GET /metrics (M6) is public — Prometheus scrapes it in-cluster — and
+    returns the Prometheus exposition format with our HTTP request metrics. It
+    must be registered BEFORE the SPA catch-all or the index.html fallback would
+    shadow it (returning HTML instead of metrics)."""
+    r = _unauthenticated_client(db).get("/metrics")
+    assert r.status_code == 200
+    assert "text/plain" in r.headers.get("content-type", "")
+    assert "http_requests_total" in r.text  # not the SPA HTML shell

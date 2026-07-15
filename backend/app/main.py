@@ -10,6 +10,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from loguru import logger
+from prometheus_fastapi_instrumentator import Instrumentator
 
 from app.api import alerts as alerts_router
 from app.api import auth as auth_router
@@ -311,6 +312,13 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(title="Finance Alert", version="0.1.0", lifespan=lifespan)
+
+# Prometheus metrics (M6 observability). instrument() adds a middleware that
+# times/counts every HTTP request; expose() registers GET /metrics. It MUST be
+# registered here — BEFORE the SPA catch-all `/{full_path:path}` further down —
+# or the index.html fallback would shadow it. Prometheus scrapes it in-cluster
+# via the ClusterIP Service; the public ingress is IP-allowlisted at the NSG.
+Instrumentator().instrument(app).expose(app, endpoint="/metrics", include_in_schema=False)
 
 # Compress every response over 1KB: :8000 serves both the SPA bundle (~1MB of
 # JS) and fat JSON payloads (market-summary ~264KB, stock detail ~1.4MB) that
