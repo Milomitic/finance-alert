@@ -1,7 +1,17 @@
 """Stock model."""
 from datetime import date, datetime
 
-from sqlalchemy import BigInteger, Boolean, Date, DateTime, Integer, String, UniqueConstraint, func
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    Date,
+    DateTime,
+    Integer,
+    String,
+    UniqueConstraint,
+    false,
+    func,
+)
 from sqlalchemy import Index as SAIndex
 from sqlalchemy import text as sa_text
 from sqlalchemy.orm import Mapped, mapped_column
@@ -34,7 +44,10 @@ class Stock(Base):
     # already scaled at write time using yfinance fast_info.currency.
     # See docs/superpowers/specs/2026-05-08-price-units-data-integrity-design.md.
     ohlcv_in_pounds: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, server_default=sa_text("0"), default=False,
+        # server_default=false() is dialect-aware: renders `false` on
+        # Postgres (a bare `DEFAULT 0` is a boolean/integer type mismatch
+        # there) and `0` on SQLite. sa_text("0") only works on SQLite.
+        Boolean, nullable=False, server_default=false(), default=False,
     )
     # Dead-ticker quarantine: consecutive OHLCV fetches that returned NO data
     # at all (delisted/renamed symbols). At >= 3 the stock is skipped by the
