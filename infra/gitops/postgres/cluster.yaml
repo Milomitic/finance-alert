@@ -55,7 +55,18 @@ spec:
     pg_hba:
       - hostssl all all all scram-sha-256
       - hostnossl all all all reject
+    # pgaudit (M7-P5): a security audit trail that lands in the Postgres log ->
+    # pod stdout -> Loki (M6) -> queryable in Grafana.
+    shared_preload_libraries:
+      - pgaudit
     parameters:
+      # DELIBERATELY not 'write': the scan writes millions of ohlcv rows, so
+      # auditing DML would flood the log and the (already 85%-full) node disk.
+      # 'ddl' (schema changes) + 'role' (GRANT/REVOKE/CREATE ROLE) are rare and
+      # high-signal — exactly what a security audit needs to catch.
+      pgaudit.log: "ddl,role"
+      pgaudit.log_catalog: "off"
+      pgaudit.log_parameter: "on"
       shared_buffers: "128MB"
       max_connections: "50"      # app pool + migration + a spare; plenty
       work_mem: "8MB"
