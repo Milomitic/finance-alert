@@ -72,6 +72,20 @@ spec:
                   name: {{ include "finance-alert.secretName" . }}
                   key: MARKETAUX_API_KEY
                   optional: true
+            # M7-P4 cutover switch. OFF (default) = the app keeps its embedded
+            # SQLite on the PVC — the pre-M7 behaviour AND the instant rollback
+            # (flip the flag back to false and the untouched .db is authoritative
+            # again). ON = read/write the CloudNativePG cluster, consuming the
+            # operator-managed `pg-app` Secret's URI verbatim; the app's
+            # config.normalize_db_url() rewrites postgresql:// -> +psycopg so
+            # SQLAlchemy picks psycopg3 (psycopg2 is not installed).
+            {{- if .Values.postgres.enabled }}
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.postgres.secretName }}
+                  key: uri
+            {{- end }}
           # Startup probe gates liveness/readiness until the first success, so
           # the slow first boot (alembic migrate before uvicorn binds) can't be
           # mistaken for a crash-loop. failureThreshold × periodSeconds ≥ the

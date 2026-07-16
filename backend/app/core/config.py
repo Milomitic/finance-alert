@@ -1,8 +1,23 @@
 """Application configuration loaded from environment / .env."""
 from pathlib import Path
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+def normalize_db_url(url: str) -> str:
+    """Point a bare ``postgresql://`` URL at psycopg3 (M7).
+
+    CloudNativePG's generated ``pg-app`` Secret hands out a plain
+    ``postgresql://…`` URI. SQLAlchemy maps that scheme to **psycopg2**, which
+    this project does not install — ``psycopg[binary]`` (psycopg3) is the pinned
+    driver. Rewriting the scheme here lets the CNPG Secret be consumed verbatim
+    (via secretKeyRef) instead of duplicating credentials into a hand-built URL.
+    Non-Postgres URLs (the SQLite default) pass through untouched.
+    """
+    if url.startswith("postgresql://"):
+        return url.replace("postgresql://", "postgresql+psycopg://", 1)
+    return url
 
 
 class Settings(BaseSettings):
@@ -142,6 +157,14 @@ class Settings(BaseSettings):
     # free /earnings endpoint is EPS-only (no revenue). Empty string
     # disables this tier; yfinance + Finnhub remain the sources.
     twelvedata_api_key: str = ""
+
+    @field_validator("database_url")
+    @classmethod
+    def _normalize_database_url(cls, v: str) -> str:
+        """Accept CloudNativePG's `postgresql://` URI verbatim — see
+        normalize_db_url. Runs on the env/.env value, so the chart can wire
+        DATABASE_URL straight from the CNPG-managed `pg-app` Secret."""
+        return normalize_db_url(v)
 
     @property
     def is_dev(self) -> bool:

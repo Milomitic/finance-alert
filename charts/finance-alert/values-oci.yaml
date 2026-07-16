@@ -43,3 +43,11 @@ ingress:
 secret:
   create: false
   existingSecret: "finance-alert-prod"
+
+# M7 Postgres cutover switch (P4). false = the app uses its embedded SQLite on
+# the PVC; true = it reads/writes the CloudNativePG cluster via the URI in the
+# operator-generated Secret below. Flipping this is the whole cutover — and the
+# rollback, since the migration only ever READ the SQLite file.
+postgres:
+  enabled: false
+  secretName: pg-app

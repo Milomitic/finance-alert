@@ -32,6 +32,7 @@ from sqlalchemy import create_engine, func, insert, select, text
 from sqlalchemy.engine import Engine
 
 import app.models  # noqa: F401 — registers every mapper on Base.metadata
+from app.core.config import normalize_db_url
 from app.core.db import Base
 
 BATCH = 5000
@@ -104,7 +105,8 @@ def main() -> int:
     ap.add_argument("--sqlite", required=True, help="path to the SQLite snapshot")
     args = ap.parse_args()
 
-    pg_url = os.environ.get("DATABASE_URL", "")
+    # normalize so a CNPG-issued postgresql:// URI works verbatim (psycopg3)
+    pg_url = normalize_db_url(os.environ.get("DATABASE_URL", ""))
     if not pg_url.startswith("postgresql"):
         print("ERROR: DATABASE_URL must be a postgresql+psycopg:// URL", file=sys.stderr)
         return 2
