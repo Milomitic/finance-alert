@@ -1,8 +1,12 @@
 # Runbook — migrate/restore `app.db` onto the k3s cloud pod
 
 Executed successfully on 2026-07-13 (local → cloud, 375 MB / 96 MB gzipped).
-The same steps are the **disaster-recovery restore** (M9): replace "local
-snapshot" with "backup from Object Storage".
+
+> ⚠️ **Historical / localhost only.** Since M7 (2026-07-16) the **cloud app runs
+> on PostgreSQL**, not SQLite. Cloud disaster recovery is a CloudNativePG
+> restore from Object Storage — documented *and verified* in
+> **[`RUNBOOK-postgres-dr.md`](RUNBOOK-postgres-dr.md)**. The steps below still
+> apply to the localhost/`master` SQLite app.
 
 ## Preconditions
 - The pod's image knows the DB's alembic head (a DB *newer* than the image
