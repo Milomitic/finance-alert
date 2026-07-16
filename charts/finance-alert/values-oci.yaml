@@ -51,3 +51,7 @@ secret:
 postgres:
   enabled: false
   secretName: pg-app
+
+# M7-P4 cutover: temporarily 0 to stop writes while the final SQLite->Postgres
+# migration runs; restored to 1 in the same cutover.
+replicaCount: 0
