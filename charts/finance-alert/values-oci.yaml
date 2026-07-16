@@ -43,10 +43,10 @@ ingress:
   path: /
   pathType: Prefix
   annotations:
-    # STAGING first — a misconfigured setup burns Let's Encrypt's staging quota
-    # instead of production's real rate limits. Flip to letsencrypt-prod once an
-    # issued (untrusted) staging cert proves the ACME + HTTP-01 + Traefik chain.
-    cert-manager.io/cluster-issuer: letsencrypt-staging
+    # Production. Staging went first and issued cleanly (2026-07-16), proving the
+    # ACME + HTTP-01 + Traefik + sslip.io chain end-to-end, so production's real
+    # rate limits are only spent on a setup already known to work.
+    cert-manager.io/cluster-issuer: letsencrypt-prod
     # Serve the app ONLY on :443. Port 80 is open to the internet purely so
     # Let's Encrypt can fetch the ACME challenge (cert-manager puts a temporary
     # ingress there); the app must not answer on it.
