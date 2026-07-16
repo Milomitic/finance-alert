@@ -32,9 +32,30 @@ probes:
 ingress:
   enabled: true
   className: traefik
-  host: "" # any Host → reachable via the raw public IP until a domain (M4)
+  # M4: a real hostname, for free. sslip.io is a public wildcard DNS service that
+  # answers <dashed-ip>.sslip.io with that IP — so this resolves to the VM with
+  # nothing to buy or configure. (An earlier session wrongly believed the ISP's
+  # RPZ blocked sslip.io; that was an nslookup suffix-search artifact.)
+  # NOTE: setting a host means the raw-IP URL no longer matches this router —
+  # use https://80-225-80-141.sslip.io/ from now on. TLS certs are per-NAME, so
+  # a hostname is the price of HTTPS.
+  host: "80-225-80-141.sslip.io"
   path: /
   pathType: Prefix
+  annotations:
+    # STAGING first — a misconfigured setup burns Let's Encrypt's staging quota
+    # instead of production's real rate limits. Flip to letsencrypt-prod once an
+    # issued (untrusted) staging cert proves the ACME + HTTP-01 + Traefik chain.
+    cert-manager.io/cluster-issuer: letsencrypt-staging
+    # Serve the app ONLY on :443. Port 80 is open to the internet purely so
+    # Let's Encrypt can fetch the ACME challenge (cert-manager puts a temporary
+    # ingress there); the app must not answer on it.
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+  tls:
+    - hosts:
+        - 80-225-80-141.sslip.io
+      secretName: finance-alert-tls
 
 # The Secret is NOT managed by the chart in the cloud: ArgoCD renders from git
 # only, and committing key material is out of the question. A durable Secret
