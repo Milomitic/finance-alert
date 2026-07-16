@@ -71,22 +71,37 @@ grafana:
     enabled: true
     storageClassName: local-path
     size: 1Gi
-  # No domain yet, and the ISP DNS (Wind3 RPZ) blocks nip.io/sslip.io wildcard
-  # hosts → reach Grafana PATH-BASED on the raw IP: http://<ip>/grafana (port 80
-  # is NSG-allowlisted). serve_from_sub_path makes Grafana live under /grafana;
-  # Traefik routes /grafana (longer path) to it and keeps / for the app. Swap
-  # for a real host in M4.
+  # M4: HTTPS on a real hostname. Two earlier notes here were WRONG and had to go:
+  #  1. "the ISP's RPZ blocks nip.io/sslip.io" — an nslookup suffix-search
+  #     artifact, not a block. 80-225-80-141.sslip.io resolves to the VM fine.
+  #  2. "port 80 is NSG-allowlisted" — NO LONGER TRUE. :80 is now open to the
+  #     whole internet so Let's Encrypt can fetch the ACME challenge, which
+  #     briefly left this path-based Grafana PUBLICLY reachable. Hence the
+  #     websecure-only annotations below: Grafana must be served exclusively on
+  #     :443, which IS still allowlisted. Never serve anything but ACME on :80.
+  # serve_from_sub_path keeps Grafana under /grafana; Traefik prefers the longer
+  # path prefix, so /grafana reaches Grafana and / still reaches the app.
   "grafana.ini":
     server:
-      domain: 80.225.80.141
+      domain: 80-225-80-141.sslip.io
       root_url: "%(protocol)s://%(domain)s/grafana"
       serve_from_sub_path: true
   ingress:
     enabled: true
     ingressClassName: traefik
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt-prod
+      # :443 only — :443 stays NSG-allowlisted to the owner's IP, :80 does not.
+      traefik.ingress.kubernetes.io/router.entrypoints: websecure
+      traefik.ingress.kubernetes.io/router.tls: "true"
     path: /grafana
     pathType: Prefix
-    hosts: []
+    hosts:
+      - 80-225-80-141.sslip.io
+    tls:
+      - hosts:
+          - 80-225-80-141.sslip.io
+        secretName: grafana-tls
   # Loki datasource is provisioned via a labeled ConfigMap (loki-datasource.*).
 
 prometheus-node-exporter:
