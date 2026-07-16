@@ -45,6 +45,16 @@ spec:
       memory: 768Mi
 
   postgresql:
+    # Require TLS for every TCP client (M7-P5). CNPG's generated pg_hba ends with
+    # a permissive `host all all all scram-sha-256`, which would also accept a
+    # CLEARTEXT connection. User rules are inserted BEFORE that default, so
+    # `hostnossl … reject` closes the plaintext path while `hostssl` keeps the
+    # app working — verified beforehand that every app connection was already
+    # TLSv1.3. Unix-socket (`local … peer`) rules are CNPG-fixed and unaffected,
+    # so the in-pod instance manager + metrics exporter keep working.
+    pg_hba:
+      - hostssl all all all scram-sha-256
+      - hostnossl all all all reject
     parameters:
       shared_buffers: "128MB"
       max_connections: "50"      # app pool + migration + a spare; plenty
