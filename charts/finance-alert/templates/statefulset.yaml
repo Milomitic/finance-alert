@@ -49,6 +49,10 @@ spec:
           env:
             - name: ADMIN_USERNAME
               value: {{ .Values.config.adminUsername | quote }}
+            # "production" makes the session cookie Secure (auth.py:
+            # secure=not settings.is_dev). Requires TLS in front — see values.yaml.
+            - name: APP_ENV
+              value: {{ .Values.config.appEnv | default "development" | quote }}
             # Pulled from the Secret, never from the pod spec in the clear.
             - name: SECRET_KEY
               valueFrom:

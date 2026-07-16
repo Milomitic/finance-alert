@@ -56,8 +56,15 @@ probes:
 # (M7+) source these from a Sealed/External Secret — NEVER a committed value.
 config:
   adminUsername: "admin"
-  # DATABASE_URL is intentionally omitted → the app default
-  # `sqlite:///./data/app.db` resolves onto the mounted PVC.
+  # APP_ENV drives exactly one thing (app/api/auth.py): the session cookie's
+  # `Secure` attribute (`secure=not settings.is_dev`). Keep "development" here —
+  # a Secure cookie is never sent over plain HTTP, so flipping this without TLS
+  # in front would silently break login. The OCI overlay sets "production"
+  # because it terminates real HTTPS.
+  appEnv: "development"
+  # DATABASE_URL is not set here: the app default `sqlite:///./data/app.db`
+  # resolves onto the mounted PVC. The OCI overlay injects a Postgres URL from
+  # the CNPG Secret when `postgres.enabled` (see values-oci.yaml).
 
 secret:
   # Only used when create=true (local dev). In prod, set create=false and

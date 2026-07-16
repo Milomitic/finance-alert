@@ -47,3 +47,25 @@ def test_logout_clears_cookie(client: TestClient) -> None:
     assert resp.status_code == 204
     me = client.get("/api/auth/me")
     assert me.status_code == 401
+
+def test_session_cookie_is_not_secure_in_dev(client: TestClient, monkeypatch) -> None:
+    """Localhost has no TLS, so a Secure cookie would never be sent back and
+    login would silently break. app_env=development must leave the flag off."""
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "app_env", "development")
+    resp = client.post("/api/auth/login", json={"username": "admin", "password": "secret123"})
+    assert resp.status_code == 200
+    assert "secure" not in resp.headers["set-cookie"].lower()
+
+
+def test_session_cookie_is_secure_in_production(client: TestClient, monkeypatch) -> None:
+    """M4: with real HTTPS terminating in front (Let's Encrypt on the cloud
+    ingress), the session cookie MUST carry Secure so the browser can never
+    leak it over a plaintext request."""
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "app_env", "production")
+    resp = client.post("/api/auth/login", json={"username": "admin", "password": "secret123"})
+    assert resp.status_code == 200
+    assert "secure" in resp.headers["set-cookie"].lower()

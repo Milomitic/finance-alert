@@ -61,6 +61,12 @@ ingress:
 # only, and committing key material is out of the question. A durable Secret
 # (`finance-alert-prod`: SECRET_KEY + ADMIN_PASSWORD_HASH) is created once on
 # the cluster (see docs/cloud/ROADMAP.md M5); the chart just references it.
+# Real HTTPS terminates at Traefik (M4, Let's Encrypt), so the session cookie
+# can finally carry `Secure` — until now app_env stayed "development" purely
+# because a Secure cookie over plain HTTP would never be sent back.
+config:
+  appEnv: "production"
+
 secret:
   create: false
   existingSecret: "finance-alert-prod"
