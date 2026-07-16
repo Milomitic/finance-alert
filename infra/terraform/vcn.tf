@@ -68,15 +68,23 @@ resource "oci_core_network_security_group_security_rule" "ssh_ingress" {
   }
 }
 
-# HTTP (80) — only from the allowlist (redirect to HTTPS + ACME HTTP-01 later).
+# HTTP (80) — DELIBERATELY OPEN TO THE INTERNET (M4).
+#
+# Let's Encrypt validates HTTP-01 from its own servers, whose source IPs are not
+# published or stable, so an ACME challenge cannot be served from behind the IP
+# allowlist. What this actually exposes is narrow: Traefik answers :80 with the
+# ACME challenge and a 301 to HTTPS. The APP is served on :443, which REMAINS
+# allowlisted to the owner's IP (see https_ingress below) — so opening :80 does
+# NOT make the application reachable by the public.
+#
+# Single rule (no for_each over the allowlist): the source is the whole internet.
 resource "oci_core_network_security_group_security_rule" "http_ingress" {
-  for_each                  = toset(var.allowlist_cidrs)
   network_security_group_id = oci_core_network_security_group.nodes.id
   direction                 = "INGRESS"
   protocol                  = "6"
-  source                    = each.value
+  source                    = "0.0.0.0/0"
   source_type               = "CIDR_BLOCK"
-  description               = "HTTP from allowlisted client"
+  description               = "HTTP open for ACME HTTP-01 + HTTPS redirect (app is on 443, allowlisted)"
   tcp_options {
     destination_port_range {
       min = 80

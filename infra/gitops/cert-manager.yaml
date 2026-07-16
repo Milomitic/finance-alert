@@ -1,0 +1,61 @@
+# ArgoCD Application — cert-manager (M4: TLS via Let's Encrypt).
+#
+# Bootstrap once (same chicken-and-egg pattern as the other Applications):
+#   kubectl --kubeconfig=./kubeconfig-oci apply -f infra/gitops/cert-manager.yaml
+#
+# Issues + auto-renews the certificate for the Traefik ingress. Validation is
+# HTTP-01: Let's Encrypt hits :80 from its own (unpublished, rotating) IPs, so
+# the NSG opens :80 to 0.0.0.0/0 — see infra/terraform/vcn.tf. Only the ACME
+# challenge and a 301-to-HTTPS live there; the app stays on :443, allowlisted.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cert-manager
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://charts.jetstack.io
+    chart: cert-manager
+    targetRevision: v1.21.0
+    helm:
+      values: |
+        crds:
+          enabled: true
+        # Sized down hard: this node also carries the app, Postgres, Prometheus,
+        # Loki and ArgoCD. cert-manager is idle except at issuance/renewal.
+        replicaCount: 1
+        resources:
+          requests:
+            cpu: 20m
+            memory: 64Mi
+          limits:
+            memory: 128Mi
+        webhook:
+          replicaCount: 1
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 64Mi
+        cainjector:
+          replicaCount: 1
+          resources:
+            requests:
+              cpu: 10m
+              memory: 64Mi
+            limits:
+              memory: 128Mi
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: cert-manager
+  syncPolicy:
+    automated:
+      selfHeal: true
+      prune: false
+    syncOptions:
+      - CreateNamespace=true
+      # cert-manager's CRDs are large — server-side apply avoids the
+      # client-side last-applied annotation size limit.
+      - ServerSideApply=true

@@ -1,0 +1,47 @@
+# Let's Encrypt ClusterIssuers (M4).
+#
+# Apply AFTER the cert-manager Application is Healthy (these need its CRDs):
+#   kubectl --kubeconfig=./kubeconfig-oci apply -f infra/gitops/cert-manager-issuers.yaml
+#
+# TWO issuers on purpose. Staging first: Let's Encrypt production has strict
+# rate limits (and failed orders burn them), so every new setup is validated
+# against staging — whose certs are untrusted by browsers but prove the whole
+# ACME + HTTP-01 + ingress path works. Only then does the Ingress switch its
+# cluster-issuer annotation to production.
+#
+# HTTP-01 (not DNS-01): the hostname is <ip>.sslip.io — a public wildcard DNS
+# service we do not control, so there is no DNS zone to write a TXT record into.
+# HTTP-01 needs :80 reachable from Let's Encrypt's validators; the NSG allows
+# that (see infra/terraform/vcn.tf) while :443 stays IP-allowlisted.
+#
+# The email is the owner's, used only for Let's Encrypt expiry notices.
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-staging
+spec:
+  acme:
+    server: https://acme-staging-v02.api.letsencrypt.org/directory
+    email: milomitic@gmail.com
+    privateKeySecretRef:
+      name: letsencrypt-staging-account-key
+    solvers:
+      - http01:
+          ingress:
+            class: traefik
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-prod
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: milomitic@gmail.com
+    privateKeySecretRef:
+      name: letsencrypt-prod-account-key
+    solvers:
+      - http01:
+          ingress:
+            class: traefik
