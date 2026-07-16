@@ -1,0 +1,17 @@
+# Daily base backup of the finance-alert Postgres to OCI Object Storage (M7-P2).
+# WAL is archived continuously (spec.backup on the Cluster); a periodic base
+# backup bounds recovery time and lets old WAL be pruned (retentionPolicy 7d).
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  name: pg-daily
+  namespace: finance-alert
+  labels:
+    app.kubernetes.io/part-of: finance-alert
+spec:
+  # CNPG cron is 6-field (sec min hour dom mon dow) — 02:00:00 every day.
+  schedule: "0 0 2 * * *"
+  backupOwnerReference: self
+  cluster:
+    name: pg
+  method: barmanObjectStore

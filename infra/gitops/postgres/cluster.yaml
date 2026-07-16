@@ -21,6 +21,16 @@ spec:
   imageName: ghcr.io/cloudnative-pg/postgresql:16
   primaryUpdateStrategy: unsupervised
 
+  # OCI Object Storage's S3-compatible API rejects the AWS SDK's default
+  # streaming/chunked payload signing + trailing checksums (boto3 >= 1.36):
+  # "NotImplemented: AWS chunked encoding not supported". Force the SDK to
+  # compute checksums only WHEN_REQUIRED so barman-cloud sends plain PUTs.
+  env:
+    - name: AWS_REQUEST_CHECKSUM_CALCULATION
+      value: WHEN_REQUIRED
+    - name: AWS_RESPONSE_CHECKSUM_VALIDATION
+      value: WHEN_REQUIRED
+
   storage:
     size: 5Gi
     storageClass: local-path
@@ -50,3 +60,24 @@ spec:
     initdb:
       database: finance_alert
       owner: fa_app
+
+  # Point-in-time recovery: continuous WAL archiving + base backups to OCI
+  # Object Storage via its S3-compatible API (barman-cloud). Credentials live in
+  # the pg-wal-s3 Secret — an OCI Customer Secret Key created out-of-band, NEVER
+  # in git. OCI's S3 endpoint is per-tenancy-namespace (axaqdeicu0wx) + region.
+  backup:
+    retentionPolicy: "7d"
+    barmanObjectStore:
+      destinationPath: s3://finance-alert-backups/
+      endpointURL: https://axaqdeicu0wx.compat.objectstorage.eu-milan-1.oraclecloud.com
+      s3Credentials:
+        accessKeyId:
+          name: pg-wal-s3
+          key: ACCESS_KEY_ID
+        secretAccessKey:
+          name: pg-wal-s3
+          key: SECRET_ACCESS_KEY
+      wal:
+        compression: gzip
+      data:
+        compression: gzip
