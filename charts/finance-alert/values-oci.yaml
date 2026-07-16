@@ -49,9 +49,9 @@ secret:
 # operator-generated Secret below. Flipping this is the whole cutover — and the
 # rollback, since the migration only ever READ the SQLite file.
 postgres:
-  enabled: false
+  enabled: true    # M7-P4: CUT OVER — the app now reads/writes CloudNativePG
   secretName: pg-app
 
 # M7-P4 cutover: temporarily 0 to stop writes while the final SQLite->Postgres
 # migration runs; restored to 1 in the same cutover.
-replicaCount: 0
+replicaCount: 1
