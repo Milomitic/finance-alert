@@ -243,6 +243,38 @@ Both? Do both.
 
 ---
 
+## ⚠️ `npm audit fix` / `npm install` on Windows breaks `npm ci` on Linux
+
+**This has now bitten twice.** `frontend/package-lock.json` must be a
+**cross-platform SUPERSET**: it needs the optional platform binaries for BOTH
+Windows (dev) and Linux (Docker/CI). Any `npm install` / `npm audit fix` run on
+Windows rewrites the lock with **only** the Windows set, and CI dies with:
+
+```
+npm ci can only install packages when your package.json and package-lock.json
+are in sync … Missing: @emnapi/core@… from lock file
+```
+
+It is invisible locally — `npm run build` and even `npm ci` pass on Windows. Only
+a clean `npm ci` on Linux shows it. And because the `frontend` job gates `image`,
+a broken lock silently stops the deploy (image + bump get skipped).
+
+**The recipe (from a594b29, re-applied 2026-07-17):**
+
+```bash
+cd frontend
+npm install            # or npm audit fix — the Windows half
+# add the linux half (needs Docker running):
+MSYS_NO_PATHCONV=1 docker run --rm -v "$PWD:/app" -w /app node:20-alpine   npm install --package-lock-only --no-audit --no-fund
+# verify BOTH — this is the whole point of a superset:
+MSYS_NO_PATHCONV=1 docker run --rm -v "$PWD:/app" -w /app node:20-alpine npm ci
+npm ci                 # windows side
+```
+
+Commit the lock only when both pass.
+
+---
+
 ## Database migrations (alembic)
 
 - Migration files live in `backend/alembic/versions/`
