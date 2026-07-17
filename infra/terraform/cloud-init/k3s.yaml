@@ -8,6 +8,12 @@
 #   copied off the box works for remote `kubectl` over the public endpoint.
 # - default k3s add-ons are kept: Traefik (ingress), ServiceLB, and
 #   local-path-provisioner (the StorageClass the app's PVC binds to).
+# - dnf-automatic applies SECURITY updates nightly (M9). The stock OL image
+#   ships with a large backlog — this box was found with 185 pending security
+#   advisories (6 Critical) after a week of uptime, because nothing was ever
+#   patching it. `reboot = never` on purpose: a single-node cluster rebooting
+#   unannounced is an outage; kernel updates therefore need a DELIBERATE reboot
+#   (see docs/cloud/ROADMAP.md M9).
 write_files:
   - path: /opt/k3s/install.sh
     permissions: "0755"
@@ -22,5 +28,23 @@ write_files:
       # readiness marker other tooling can poll for
       until /usr/local/bin/k3s kubectl get nodes 2>/dev/null | grep -q ' Ready '; do sleep 5; done
       touch /opt/k3s/ready
+  - path: /opt/k3s/harden.sh
+    permissions: "0755"
+    content: |
+      #!/usr/bin/env bash
+      set -euxo pipefail
+      # Automatic SECURITY patching. Without this the box simply never updates:
+      # the stock image arrived with 185 pending advisories, 6 of them Critical.
+      dnf -y install dnf-automatic
+      sed -i 's/^upgrade_type =.*/upgrade_type = security/'    /etc/dnf/automatic.conf
+      sed -i 's/^download_updates =.*/download_updates = yes/'  /etc/dnf/automatic.conf
+      sed -i 's/^apply_updates =.*/apply_updates = yes/'        /etc/dnf/automatic.conf
+      # NEVER auto-reboot: one node, no HA — an unannounced reboot is an outage.
+      # Kernel advisories stay "pending" until someone reboots on purpose.
+      sed -i 's/^reboot =.*/reboot = never/'                    /etc/dnf/automatic.conf
+      systemctl enable --now dnf-automatic.timer
+      # Catch up on the image's backlog immediately, don't wait for the timer.
+      dnf -y update --security || true
 runcmd:
   - [/opt/k3s/install.sh]
+  - [/opt/k3s/harden.sh]
