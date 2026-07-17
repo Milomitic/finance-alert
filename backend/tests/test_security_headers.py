@@ -64,19 +64,23 @@ def test_operational_paths_skip_host_check(client: TestClient, monkeypatch) -> N
 
 
 def test_unknown_host_rejected_on_real_paths(client: TestClient, monkeypatch) -> None:
+    # /api/auth/me is a non-exempt route that always exists (unlike /, which
+    # serves the SPA only when frontend/dist is built — it isn't in the
+    # backend-only CI job). Unauth it returns 401, so "not 400" == host accepted.
     import app.main as m
 
     monkeypatch.setattr(m, "_allowed_hosts", frozenset(["app.example"]))
     monkeypatch.setattr(m, "_host_check_on", True)
-    # a non-exempt path with a foreign Host is refused before it does any work
-    assert client.get("/", headers={"host": "evil.example"}).status_code == 400
-    # the correct host passes
-    assert client.get("/", headers={"host": "app.example"}).status_code == 200
+    # a foreign Host is refused BEFORE routing (400), never reaching the 401 path
+    assert client.get("/api/auth/me", headers={"host": "evil.example"}).status_code == 400
+    # the correct host passes the check and routing proceeds (401, not 400)
+    assert client.get("/api/auth/me", headers={"host": "app.example"}).status_code == 401
 
 
 def test_host_check_off_by_default(client: TestClient, monkeypatch) -> None:
-    """allowed_hosts='*' (dev/LAN default) disables the check entirely."""
+    """allowed_hosts='*' (dev/LAN default) disables the check entirely — any Host
+    reaches routing (here: 401 from /api/auth/me, i.e. NOT a 400 host rejection)."""
     import app.main as m
 
     monkeypatch.setattr(m, "_host_check_on", False)
-    assert client.get("/", headers={"host": "anything.at.all"}).status_code == 200
+    assert client.get("/api/auth/me", headers={"host": "anything.at.all"}).status_code == 401
