@@ -144,6 +144,25 @@ data rollback.
 
 ---
 
+## The app Secret dies with the node too — recreate it
+
+Restoring Postgres is not enough. The app also needs the **`finance-alert-prod`**
+Secret (SECRET_KEY + ADMIN_PASSWORD_HASH + MARKETAUX_API_KEY), which lives ONLY
+in the cluster — not in git, not in Terraform. Rebuild it with:
+
+```bash
+bash infra/oci/recreate-app-secret.sh          # prompts for the admin password
+# or non-interactive:
+ADMIN_PASSWORD='…' MARKETAUX_API_KEY='…' bash infra/oci/recreate-app-secret.sh
+```
+
+None of the three values is truly lost: SECRET_KEY is random (regenerating it
+just re-logs everyone in), ADMIN_PASSWORD_HASH is a bcrypt of a password you
+know (the script re-hashes via the app's own code so the cost never drifts), and
+MARKETAUX is in your account. The script restarts the app so it re-reads the
+Secret. **Verified end-to-end 2026-07-17**: after recreation, login returned 200
+with the same password and 401 with a wrong one.
+
 ## Gotchas (each one cost real debugging time)
 
 1. **OCI rejects the AWS SDK's default chunked encoding.** boto3 ≥ 1.36 signs
