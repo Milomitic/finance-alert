@@ -66,13 +66,12 @@ ingress:
 # because a Secure cookie over plain HTTP would never be sent back.
 config:
   appEnv: "production"
-  # ⚠️ MUST stay "*" until the probes/scrapers are handled. Pinning this to the
-  # public hostname took the app DOWN: kubelet's readiness/liveness probes hit
-  # the pod by IP (Host: 10.42.0.x:8000) and Prometheus scrapes /metrics the same
-  # way, so TrustedHostMiddleware 400s them and the pod never goes Ready.
-  # Fix properly by setting an explicit Host header on the probes + PodMonitor,
-  # THEN pin this. See docs/cloud/ROADMAP.md M4.
-  allowedHosts: "*"
+  # Pinned to the real hostname. Safe now: the app's validate_host middleware
+  # EXEMPTS /api/health + /metrics, the only endpoints in-cluster clients
+  # (kubelet probes, Prometheus) reach by pod IP. An earlier attempt to pin this
+  # with a bare TrustedHostMiddleware — which validates every path — 400'd those
+  # probes and took the app down; see app/main.py.
+  allowedHosts: "80-225-80-141.sslip.io"
 
 secret:
   create: false

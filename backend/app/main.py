@@ -11,7 +11,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from loguru import logger
 from prometheus_fastapi_instrumentator import Instrumentator
-from starlette.middleware.trustedhost import TrustedHostMiddleware
+from starlette.responses import JSONResponse
 
 from app.api import alerts as alerts_router
 from app.api import auth as auth_router
@@ -290,6 +290,17 @@ def _ensure_admin_on_boot() -> None:
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    # Fail FAST, not at first login. Without this, an empty SECRET_KEY lets the
+    # app boot happily and only blows up (RuntimeError in _serializer) the first
+    # time someone tries to log in — i.e. in front of a user, not at deploy. In
+    # production a missing key is a hard stop; dev/.env may legitimately leave it
+    # blank (the test fixture and localhost bootstrap fill it in).
+    if not settings.is_dev and not settings.secret_key:
+        raise RuntimeError(
+            "SECRET_KEY is empty but APP_ENV is not 'development' — refusing to "
+            "start. Set it in the finance-alert-prod Secret (see "
+            "infra/oci/recreate-app-secret.sh)."
+        )
     _cleanup_orphan_scans()
     _ensure_admin_on_boot()
     _hydrate_fetch_caches()
@@ -328,23 +339,45 @@ Instrumentator().instrument(app).expose(app, endpoint="/metrics", include_in_sch
 app.add_middleware(GZipMiddleware, minimum_size=1024)
 
 # Reject requests whose Host header we don't recognise (M4). Starlette rebuilds
-# request.url from the Host header, so an unvalidated Host is an injection point
-# for anything derived from it. "*" (the dev default) disables the check.
-_allowed_hosts = [h.strip() for h in settings.allowed_hosts.split(",") if h.strip()]
-if _allowed_hosts and _allowed_hosts != ["*"]:
-    app.add_middleware(TrustedHostMiddleware, allowed_hosts=_allowed_hosts)
+# request.url from the Host header, so an unvalidated Host is an injection point.
+# "*" (the dev default) disables the check.
+#
+# NOT Starlette's TrustedHostMiddleware: it validates EVERY path, and pinning the
+# allowlist to the public hostname took the app DOWN — kubelet's readiness/
+# liveness probes hit the pod by IP (Host: 10.42.0.x:8000) and Prometheus scrapes
+# /metrics the same way, so a bare TrustedHost 400s them and the pod never goes
+# Ready. These operational endpoints are exempt: /api/health returns static JSON
+# and /metrics returns counters — neither derives anything from the Host header,
+# so skipping the check there is safe. The exemption keys off the RAW ASGI scope
+# path, never request.url.path (which is Host-derived, the very thing we distrust).
+_allowed_hosts = frozenset(
+    h.strip() for h in settings.allowed_hosts.split(",") if h.strip()
+)
+_host_check_on = bool(_allowed_hosts) and _allowed_hosts != {"*"}
+_HOST_EXEMPT_PATHS = frozenset({"/api/health", "/metrics"})
+
+
+@app.middleware("http")
+async def validate_host(request: Request, call_next):
+    if _host_check_on and request.scope.get("path") not in _HOST_EXEMPT_PATHS:
+        host = (request.headers.get("host") or "").rsplit(":", 1)[0].strip("[]")
+        if host not in _allowed_hosts:
+            return JSONResponse({"detail": "Invalid host header"}, status_code=400)
+    return await call_next(request)
 
 # Content-Security-Policy. Honest about its one weak spot: `script-src` carries
-# 'unsafe-inline' because index.html runs a small inline script that applies the
-# saved theme before first paint (without it, every load flashes light→dark), and
-# chart libs inject inline styles. That blunts CSP's anti-XSS edge — but the rest
-# still pays: frame-ancestors kills clickjacking, connect-src bounds where a
-# script could exfiltrate to, img-src pins the two logo CDNs, object-src/base-uri
-# close classic injection vectors. Hashing the inline script would be stricter,
-# but the hash silently breaks the page the day someone edits that script.
+# script-src is 'self' only (the theme script was externalised to /theme-init.js).
+# style-src keeps 'unsafe-inline' because the chart libs inject inline styles at
+# runtime. frame-ancestors kills clickjacking, connect-src bounds exfiltration,
+# img-src pins the two logo CDNs, object-src/base-uri close classic vectors.
 _CSP = "; ".join([
     "default-src 'self'",
-    "script-src 'self' 'unsafe-inline'",
+    # No 'unsafe-inline' here: the one inline script (theme init) moved to an
+    # external /theme-init.js, so 'self' covers it. This is the directive that
+    # actually blunts XSS, so keeping it strict matters most.
+    "script-src 'self'",
+    # 'unsafe-inline' stays only on styles: lightweight-charts / recharts inject
+    # inline styles at runtime, which cannot be nonce'd without patching them.
     "style-src 'self' 'unsafe-inline'",
     # the two logo providers the SPA actually loads from
     "img-src 'self' data: https://assets.parqet.com https://financialmodelingprep.com",

@@ -1,0 +1,29 @@
+# Default resource limits for the argocd namespace (audit #2).
+#
+# ArgoCD is bootstrapped from upstream manifests (kubectl apply, not an ArgoCD
+# Application), and none of its 7 containers set a memory limit — on a shared
+# 12 GB node a leak or a runaway sync could OOM the app and Postgres alongside
+# it. A LimitRange is the right tool: it stamps a DEFAULT limit onto every
+# container in the namespace that lacks one, survives re-applies of the ArgoCD
+# manifests, and covers future pods — without patching each Deployment.
+#
+# 640Mi: the heaviest is argocd-application-controller at ~326Mi at rest, so this
+# gives it 2x headroom for a big sync while still capping a runaway. Limits are
+# ceilings, not reservations, so over-provisioning the small containers is free.
+# A modest defaultRequest keeps scheduling honest (they requested 0 before).
+#
+# NOT applied to kube-system: it is k3s-managed, and capping traefik (the
+# ingress) or coredns (cluster DNS) risks OOM-killing critical infra under load.
+# Their usage is tens of MiB and stable, so the runaway risk there is low.
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: default-mem-limits
+  namespace: argocd
+spec:
+  limits:
+    - type: Container
+      default:
+        memory: 640Mi
+      defaultRequest:
+        memory: 64Mi

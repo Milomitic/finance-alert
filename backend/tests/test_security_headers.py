@@ -35,6 +35,10 @@ def test_csp_locks_the_dangerous_directives(client: TestClient) -> None:
     assert "connect-src 'self'" in csp
     # the two logo CDNs the SPA really uses must be allowed, or images 404
     assert "https://assets.parqet.com" in csp
+    # script-src is 'self' only — the theme init script was externalised so we
+    # no longer need 'unsafe-inline' on scripts (the directive that matters most)
+    assert "script-src 'self'" in csp
+    assert "script-src 'self' 'unsafe-inline'" not in csp
 
 
 def test_hsts_only_when_tls_terminates(client: TestClient, monkeypatch) -> None:
@@ -46,3 +50,33 @@ def test_hsts_only_when_tls_terminates(client: TestClient, monkeypatch) -> None:
     monkeypatch.setattr(settings, "app_env", "production")
     hsts = client.get("/api/health").headers["strict-transport-security"]
     assert "max-age=31536000" in hsts
+
+def test_operational_paths_skip_host_check(client: TestClient, monkeypatch) -> None:
+    """The regression that took prod down: kubelet probes + Prometheus hit the pod
+    by IP (Host: 10.42.x:8000). /api/health and /metrics MUST answer them even
+    when host validation is on, or the pod never goes Ready."""
+    import app.main as m
+
+    monkeypatch.setattr(m, "_allowed_hosts", frozenset(["app.example"]))
+    monkeypatch.setattr(m, "_host_check_on", True)
+    assert client.get("/api/health", headers={"host": "10.42.0.9:8000"}).status_code == 200
+    assert client.get("/metrics", headers={"host": "10.42.0.9:8000"}).status_code == 200
+
+
+def test_unknown_host_rejected_on_real_paths(client: TestClient, monkeypatch) -> None:
+    import app.main as m
+
+    monkeypatch.setattr(m, "_allowed_hosts", frozenset(["app.example"]))
+    monkeypatch.setattr(m, "_host_check_on", True)
+    # a non-exempt path with a foreign Host is refused before it does any work
+    assert client.get("/", headers={"host": "evil.example"}).status_code == 400
+    # the correct host passes
+    assert client.get("/", headers={"host": "app.example"}).status_code == 200
+
+
+def test_host_check_off_by_default(client: TestClient, monkeypatch) -> None:
+    """allowed_hosts='*' (dev/LAN default) disables the check entirely."""
+    import app.main as m
+
+    monkeypatch.setattr(m, "_host_check_on", False)
+    assert client.get("/", headers={"host": "anything.at.all"}).status_code == 200
