@@ -26,11 +26,36 @@ from app.models import User
 MUTATING_METHODS = {"POST", "PATCH", "PUT", "DELETE"}
 
 
+def _all_api_routes(routes) -> list[APIRoute]:
+    """Every APIRoute reachable from `routes`, however FastAPI nests them.
+
+    FastAPI <=0.136 flattened `include_router()`'d routes straight into
+    `app.routes`, so a one-level list comprehension saw them all. 0.139 keeps
+    each inclusion as a private `_IncludedRouter` wrapper instead, and a flat
+    scan silently drops to the handful of routes registered directly on `app` —
+    which would make the coverage assert below vacuous rather than failing.
+    (That is exactly what test_enumeration_sees_the_real_app caught on the
+    upgrade.) So: recurse, and support both shapes without pinning either.
+    """
+    found: list[APIRoute] = []
+    for r in routes:
+        if isinstance(r, APIRoute):
+            found.append(r)
+        # 0.139+: the inclusion wrapper keeps the original APIRouter…
+        inner = getattr(r, "original_router", None)
+        # …older/other shapes (Mount, APIRouter) expose .routes directly.
+        if inner is None:
+            inner = r if hasattr(r, "routes") and not isinstance(r, APIRoute) else None
+        if inner is not None:
+            found.extend(_all_api_routes(getattr(inner, "routes", [])))
+    return found
+
+
 def _mutating_routes() -> list[APIRoute]:
     return [
         r
-        for r in app.routes
-        if isinstance(r, APIRoute) and (r.methods & MUTATING_METHODS)
+        for r in _all_api_routes(app.routes)
+        if r.methods & MUTATING_METHODS
     ]
 
 

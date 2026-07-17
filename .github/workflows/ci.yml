@@ -103,16 +103,21 @@ jobs:
       - run: npm run build
 
   audit:
-    name: dependency audit (report-only)
+    name: dependency audit (fails on a known CVE)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
         with:
           python-version: "3.11"
+      # NOT continue-on-error any more. It used to be, and that is exactly why
+      # 18 known CVEs (6 in starlette, the ASGI layer under FastAPI) sat in the
+      # lockfile unnoticed: the job printed them and went green. An audit that
+      # can never fail is decorative. This job does NOT gate deploys — `image`
+      # needs [backend, frontend], not [audit] — so a new advisory turns CI red
+      # and visible without blocking a release.
       - name: pip-audit (backend runtime deps)
         working-directory: backend
-        continue-on-error: true
         run: |
           uv export --frozen --no-dev --format requirements-txt -o requirements-audit.txt
           uvx pip-audit -r requirements-audit.txt
@@ -121,7 +126,6 @@ jobs:
           node-version: 20
       - name: npm audit (frontend)
         working-directory: frontend
-        continue-on-error: true
         run: npm audit --audit-level=high
 
   image:
