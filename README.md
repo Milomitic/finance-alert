@@ -1,9 +1,19 @@
 # Finance Alert
 
-**Local-first, single-user equity research & screening platform.** A FastAPI
-backend serves a React SPA over a SQLite database; everything runs on your own
-machine — no cloud, no network exposure (beyond the optional outbound calls to
-free market-data providers).
+**Single-user equity research & screening platform.** A FastAPI backend serves a
+React SPA; one codebase, **two deployments**:
+
+| | `master` — local-first | `cloud` — *this branch*, live |
+|---|---|---|
+| Runs on | your own machine (Windows 11) | an Ampere A1 VM on **OCI Always-Free** (€0) |
+| Database | **SQLite** (WAL) | **PostgreSQL** via the CloudNativePG operator on k3s |
+| Exposure | none — LAN-only, optional | **HTTPS** on a real Let's Encrypt cert; `:443` locked to one IP by the cloud firewall |
+| Ops | `just up` | Terraform · k3s · Helm · **ArgoCD GitOps** · Prometheus/Grafana/Loki |
+
+The local mode is genuinely local: no cloud, no network exposure beyond the
+optional outbound calls to free market-data providers. The cloud mode is the
+same app, migrated to Postgres and deployed properly — see
+[Cloud deployment](#cloud-deployment).
 
 What started as a catalog + watchlist tool is now a full personal
 **market-intelligence platform**: it ingests ~1,000 global stocks nightly and
@@ -255,6 +265,50 @@ just migrate-apply  # apply new Alembic revisions
 
 ---
 
+## Cloud deployment
+
+*Branch `cloud` only. The `master` branch stays local-first and SQLite.*
+
+**Live:** <https://80-225-80-141.sslip.io/> · Grafana at `/grafana` · **€0/month**
+(OCI Always-Free).
+
+### How it hangs together
+
+Push to `cloud` → GitHub Actions runs the tests, builds an **arm64** image and
+pushes it to GHCR, then commits the new tag into `values-oci.yaml` → **ArgoCD**,
+running *inside* the cluster, notices and applies it. Deploys are **pull-based by
+necessity**: the firewall allows `:6443` only from the owner's IP, so CI *cannot*
+reach the cluster even if it wanted to.
+
+```
+git push cloud → CI (pytest · vite · arm64 image → GHCR · bump tag) → ArgoCD pulls → rollout
+```
+
+### Notable bits
+
+- **k3s, not managed Kubernetes.** A pure Always-Free tenancy pins OKE's cluster
+  and node limits to **0** — managed K8s is simply not available at €0. So: k3s
+  on a single A1 VM (2 OCPU / 12 GB, arm64).
+- **PostgreSQL via CloudNativePG**, migrated from SQLite with full row-count
+  parity (2.8M rows). The app role is a non-superuser, TLS is enforced, and WAL +
+  daily base backups land in Object Storage — with a **restore drill that was
+  actually executed**, not just configured (`docs/cloud/RUNBOOK-postgres-dr.md`).
+- **One codebase, two databases.** `app/core/db_json.py` emits `json_extract()`
+  on SQLite and `jsonb ->>` on Postgres from the same ORM code; a dedicated CI
+  lane (`backend-postgres`) runs against a real Postgres to keep it honest.
+- **HTTPS for free, no domain.** `sslip.io` resolves `<dashed-ip>.sslip.io` to
+  that IP, so Let's Encrypt can issue a real certificate with nothing to buy.
+- **Single replica on purpose.** APScheduler runs in-process, so a second replica
+  would duplicate every scan. Multi-replica needs scheduler leader-election first.
+
+### Files
+
+`infra/terraform/` (VCN · NSG · A1 VM · Object Storage · k3s cloud-init) ·
+`infra/gitops/` (ArgoCD Applications) · `charts/finance-alert/values-oci.yaml`
+(the cloud overlay) · `docs/cloud/` (roadmap, GitOps, observability, DR runbook).
+
+---
+
 ## Project layout
 
 ```
@@ -298,6 +352,18 @@ finance-alert/
 │       ├── api/                     # typed fetch client + response types
 │       └── lib/                     # formatters, meta maps, helpers
 ├── docs/                            # ARCHITECTURE.md, scoring-algorithm.md, calendar-page.md
+│   └── cloud/                       # ROADMAP, GITOPS, OBSERVABILITY, OCI-SETUP,
+│                                    #   RUNBOOK-postgres-dr (verified restore)
+├── infra/                           # branch `cloud` — the deployment
+│   ├── terraform/                   # VCN/NSG/A1 VM/Object Storage + k3s cloud-init
+│   ├── gitops/                      # ArgoCD Applications: app, cnpg-operator,
+│   │                                #   postgres-cluster (+ Cluster/NetworkPolicy/
+│   │                                #   ScheduledBackup), cert-manager + issuers
+│   ├── observability/               # kube-prometheus-stack + loki values
+│   └── oci/                         # A1 capacity retry bot, image build, deploy
+├── charts/finance-alert/            # Helm chart (values.yaml = local/kind,
+│                                    #   values-oci.yaml = the cloud overlay)
+├── .github/workflows/ci.yml         # tests + arm64 image → GHCR + GitOps tag bump
 ├── scripts/windows/                 # PowerShell auto-start
 ├── justfile                         # task runner
 ├── CLAUDE.md                        # operational playbook + accumulated gotchas
@@ -309,12 +375,19 @@ finance-alert/
 ## Tech stack
 
 **Backend** — Python 3.11+ · FastAPI · uvicorn · SQLAlchemy 2.0 + Alembic ·
-SQLite (WAL) · APScheduler · pydantic-settings · loguru · pandas/numpy ·
-yfinance · requests/httpx · bcrypt + itsdangerous · pytest · ruff · pyright
+SQLite (WAL) **and PostgreSQL** (psycopg3; one dialect-portable codebase) ·
+APScheduler · pydantic-settings · loguru · pandas/numpy · yfinance ·
+requests/httpx · bcrypt + itsdangerous · pytest · ruff · pyright
 
 **Frontend** — React 19 + TypeScript · Vite 8 · TailwindCSS + shadcn/ui ·
 TanStack Query 5 · React Router · React Hook Form + Zod · lightweight-charts ·
 Recharts · vitest · eslint · prettier
+
+**Cloud (branch `cloud`)** — OCI Always-Free (Ampere A1, arm64) · **Terraform**
+(VCN/NSG/VM/Object Storage) · **k3s** · Helm · **ArgoCD** (GitOps) ·
+**CloudNativePG** (Postgres operator, WAL→Object Storage) · cert-manager +
+Let's Encrypt · Traefik · **Prometheus / Grafana / Loki / Alertmanager** ·
+GitHub Actions (arm64 image → GHCR)
 
 **Tooling** — `uv`, `just`.
 
@@ -337,12 +410,23 @@ and offline by construction.
 ## Documentation
 
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — living technical reference (data
-  model, flows, caching, scheduler, scoring engine internals)
+  model, flows, caching, scheduler, scoring engine internals, cloud topology,
+  security posture)
 - [docs/scoring-algorithm.md](docs/scoring-algorithm.md) — the Qualità composite (5 pillars),
-  per-pillar formulas, and the IC-validation methodology
+  per-pillar formulas, and the **IC study** — which found **no** statistically
+  significant IC on forward returns, i.e. the composite is a company-quality
+  *descriptor*, not a return predictor. The weights are **not** "IC-validated"
 - [docs/calendar-page.md](docs/calendar-page.md) — earnings + macro calendar design
 - [CLAUDE.md](CLAUDE.md) — operational playbook (backend restart discipline, dist
   rebuild rules, known data quirks)
+
+**Cloud** (branch `cloud`):
+
+- [docs/cloud/ROADMAP.md](docs/cloud/ROADMAP.md) — milestones, the as-deployed
+  architecture, and the decisions log (including what was *dropped* and why)
+- [docs/cloud/RUNBOOK-postgres-dr.md](docs/cloud/RUNBOOK-postgres-dr.md) —
+  disaster recovery, **executed and verified**, not theoretical
+- [docs/cloud/GITOPS.md](docs/cloud/GITOPS.md) · [OBSERVABILITY.md](docs/cloud/OBSERVABILITY.md) · [OCI-SETUP.md](docs/cloud/OCI-SETUP.md)
 
 ---
 

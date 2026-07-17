@@ -37,53 +37,63 @@ SQLite/`just up` world.
 
 ---
 
-## Target architecture (end state)
+## Architecture (as deployed — this is reality, not a plan)
 
 ```
-                    Internet (IP allowlist @ OCI NSG)
-                              │  :443
-                    ┌─────────▼──────────┐
-                    │  Ingress + TLS     │  ingress-nginx / Traefik
-                    │  cert-manager (LE) │  DNS-01 challenge
-                    └─────────┬──────────┘
-                              │
-                    ┌─────────▼──────────┐
-                    │  FastAPI (app pod) │  Deployment, N replicas
-                    │  serves built SPA  │
-                    └──┬───────┬─────┬───┘
-             reads/writes │  cache │   │ scrape/analytics
-                    ┌─────▼──┐ ┌──▼───┐ │
-                    │Postgres│ │Valkey│ │
-                    │  (CNPG │ │(K/V, │ │
-                    │operator│ │throt-│ │
-                    │ + jsonb│ │ tle) │ │
-                    │+pgvec  │ └──────┘ │
-                    │+Timesc)│          │
-                    └───┬────┘          │
-              WAL/backup │              │
-                    ┌────▼─────────┐    │
-                    │ OCI Object   │    │
-                    │ Storage      │    │
-                    └──────────────┘    │
-                              observability │
-                    ┌─────────────────────▼────────────┐
-                    │ Prometheus  Grafana  Loki         │
-                    │ (metrics)   (dash)   (logs)       │
+                         Internet
+                            │
+   :80  0.0.0.0/0 ──────────┤        :443  IP-allowlist @ OCI NSG
+   ACME challenge ONLY      │        (everything real lives here)
+   (404 for everything else)│
+                    ┌───────▼────────────┐
+                    │ Traefik (bundled   │  cert-manager + Let's Encrypt
+                    │ with k3s)          │  HTTP-01 → 80-225-80-141.sslip.io
+                    └───────┬────────────┘
+                            │
+                    ┌───────▼────────────┐
+                    │ FastAPI (app pod)  │  StatefulSet, 1 replica
+                    │ + built React SPA  │  APScheduler runs IN-PROCESS
+                    └───┬────────────┬───┘
+         reads/writes   │            │ /metrics
+                  ┌─────▼──┐         │
+                  │Postgres│ CloudNativePG operator · TLS enforced
+                  │  `pg`  │ non-superuser app role · pgaudit (ddl,role)
+                  │ +jsonb │ NetworkPolicy
+                  └───┬────┘
+      WAL (continuous)│
+      + daily base    │
+                  ┌───▼──────────┐
+                  │ OCI Object   │  barman-cloud over the S3-compat API
+                  │ Storage      │  restore DRILL PASSED (data == live)
+                  └──────────────┘
+                            observability
+                    ┌───────────────────────────────────┐
+                    │ Prometheus · Grafana · Loki       │
+                    │ Alertmanager → Telegram           │
                     └───────────────────────────────────┘
 
-Provisioned by Terraform (VCN/NSG/OKE/IP/bucket) · GitOps by ArgoCD · CI by GitHub Actions
+Terraform (VCN/NSG/A1 VM/bucket) · self-managed k3s · ArgoCD GitOps · GitHub Actions CI
 ```
 
-**Datastore responsibilities (polyglot persistence):**
+> Deviations from the original plan, and why: **k3s not OKE** (a pure Always-Free
+> tenancy pins OKE cluster/node limits to 0); **HTTP-01 not DNS-01** (the host is
+> `sslip.io`, a public wildcard service whose zone we do not control — so :80 is
+> open to the world for the challenge, and *only* the challenge); **1 replica not
+> N** (APScheduler runs in-process, so a second replica would duplicate every
+> scan — multi-replica needs leader election first).
+
+**Datastore responsibilities:**
 
 | Store | Owns | Why not the others |
 |---|---|---|
 | **PostgreSQL** | Relational core (stocks, ohlcv, alerts, outcomes, 13F, positions, scores) + JSON blobs via `jsonb` (snapshots, fetch_cache) | The app is join- and aggregation-heavy; `jsonb` gives document flexibility without losing joins |
-| **Postgres + `pgvector`** | News-embedding semantic search | Zero new infra (extension); covers the emerging "AI data" line |
-| **Postgres + TimescaleDB** *(optional)* | `ohlcv_daily` as a hypertable | 2.4M time-ordered rows are a natural fit; still just Postgres |
-| **Valkey** | Shared cache (L1 fundamentals/news/quote) + login-throttle state | On multi-replica K8s the in-process dict resets per pod and isn't shared — needs an external K/V |
 | **Prometheus** | Metrics (app + cluster) | Time-series metrics ≠ relational |
 | **Loki** | Centralised logs | Log aggregation / retention ≠ the app DB |
+| **OCI Object Storage** | Postgres base backups + WAL | Durability outside the node's disk |
+
+> **Polyglot persistence (Valkey / pgvector / TimescaleDB) was considered and
+> dropped — see the note after the milestones.** Keeping the store list honest
+> matters more than making it look impressive.
 
 ---
 
@@ -146,11 +156,31 @@ Each is a self-contained PR into `cloud`. Order matters: earlier ones unblock la
   **pgaudit**, SCRAM auth, TLS app↔DB, **least-privilege roles** (app ≠ migration ≠ read-only-for-Grafana), NetworkPolicy so only the app pod reaches Postgres.
 - **Portfolio signal:** *"migrated stateful data from SQLite to an operator-managed Postgres on K8s, with WAL archiving, verified restore, and least-privilege + audit"* — the strongest single line on the CV.
 
-### M8 — Polyglot persistence & extensions
-- **Valkey** (Deployment/StatefulSet): move the L1 cache + login-throttle state off in-process → shared. NetworkPolicy + auth; never a public port.
-- **pgvector** extension: embed news per ticker → semantic "similar news" search.
-- **TimescaleDB** *(optional)*: `ohlcv_daily` → hypertable.
-- **Portfolio signal:** motivated polyglot persistence + AI-data (pgvector) + time-series, each defensible.
+### ~~M8 — Polyglot persistence & extensions~~ — **DROPPED (2026-07-17)**
+
+Cut deliberately, not forgotten. Each of the three was re-examined against the
+system as actually built, and none survived:
+
+- **Valkey** (shared cache + login-throttle state) — **YAGNI**. Its whole premise
+  was "on multi-replica K8s the in-process dict isn't shared". The app runs **one
+  replica** and cannot trivially run more (APScheduler is in-process; a second
+  replica would duplicate every scan). Solving a problem the deployment does not
+  have would add a component, a NetworkPolicy, an auth secret and a failure mode,
+  in exchange for nothing.
+- **pgvector** (news-embedding semantic search) — needs an **embedding source**:
+  a paid API, or a local model on a node whose RAM is already shared by app +
+  Postgres + Prometheus + Loki. The extension is the easy part; the cost is not.
+- **TimescaleDB** (`ohlcv_daily` as a hypertable) — **not in the CloudNativePG
+  image**, so it needs a custom Postgres image to build and maintain. 2.4M rows
+  are also simply not enough to hurt: the queries that matter are already indexed
+  and fast.
+
+This mirrors the rule the engine side of this project already follows (see
+CLAUDE.md: no confirmation-count bonus, no pillar reweighting, no factor
+adjustments — all rejected because the studies showed no edge). **Infrastructure
+deserves the same bar as scoring: build it when there is evidence it is needed.**
+A CV line about "polyglot persistence" that exists only to be a CV line is worth
+less than being able to explain why you *didn't* build it.
 
 ### M9 — Production hardening & docs
 - **systemd/node hardening** (if any host-level bits), `fail2ban` on SSH, unattended-upgrades.
@@ -169,7 +199,7 @@ Each is a self-contained PR into `cloud`. Order matters: earlier ones unblock la
 | Object Storage (10GB — backups/WAL) | ✅ |
 | VCN/NSG/IGW/reserved IP (attached) | ✅ |
 | OCIR (within Object Storage allowance) | ✅ |
-| Terraform / Kubernetes / Helm / ArgoCD / cert-manager / Prometheus / Grafana / Loki / Valkey / Postgres+CNPG / pgvector / Timescale | ✅ open-source, self-hosted |
+| Terraform / k3s / Helm / ArgoCD / cert-manager / Prometheus / Grafana / Loki / Postgres+CNPG | ✅ open-source, self-hosted |
 | GitHub Actions | ✅ (unlimited on public repos) |
 | **Domain registration** | ❌ ~€10/yr (or free subdomain: DuckDNS / Cloudflare-managed) |
 | Managed Postgres on OCI (NOT used — self-hosted instead) | 💰 paid |
@@ -193,5 +223,4 @@ Let's Encrypt HTTP-01 is blocked by the IP allowlist → use DNS-01.
 | M5 GitOps + CI/CD | ✅ **done — full loop live.** CI (GitHub Actions): ruff fatal-gate + pytest 1371, tsc+vite, pip-audit/npm audit (advisory), **arm64 image → GHCR** (GHA cache), trivy (advisory), **tag-bump** commit to `values-oci.yaml`. **ArgoCD** on k3s watches the repo and **auto-synced/adopted** the release (Synced/Healthy) → pod runs the git-pinned `ghcr…:<sha>` reading the durable `finance-alert-prod` Secret; `selfHeal` reverts drift (verified). Deploys are pull-based (NSG blocks CI→6443). Verified E2E: health 200, DB persisted, login OK. **GHCR package is public** → the node pulls each new sha anonymously; the loop is fully hands-off (verified 2026-07-15). See `docs/cloud/GITOPS.md`. Backlog: ruff full-config adoption. |
 | M6 Observability | ✅ **done — live.** kube-prometheus-stack (Prometheus 3d + Grafana + Alertmanager + node-exporter/kube-state-metrics) + Loki/promtail (72h logs), sized for the shared 12 GB VM (node ~46%). App `/metrics` via prometheus-fastapi-instrumentator, scraped by a PodMonitor (14 targets all up). Grafana at `http://<ip>/grafana` (path-based; ISP DNS blocks nip.io). Alertmanager→Telegram (reuses the app bot; test alert delivered). Datasources: Prometheus/Loki/Alertmanager. See `docs/cloud/OBSERVABILITY.md`. |
 | M7 Postgres migration | ✅ **DONE — the live app runs on operator-managed Postgres.** P1 (app portability) done. `json_text()` @compiles helper (SQLite `json_extract` ↔ Postgres `jsonb ->>`) replaces the raw `json_extract` in alert/confluence/sectors; the nightly `VACUUM INTO` backup no-ops on a non-SQLite engine (Postgres PITR is the cluster's job); `psycopg[binary]` added to runtime deps (aarch64 wheels). Proven portable without a cutover: all **25 tables compile to Postgres DDL**, `json_text` SQL asserted for **both** dialects (`test_db_json_dialect`), and a real **`postgres:16` CI lane** (`backend-postgres`, guarded by `TEST_DATABASE_URL`, off the deploy needs-chain) `create_all`'s the whole schema + runs `json_text` on live Postgres. **P2 (CloudNativePG) core done:** operator 1.30 (chart 0.29.0, arm64) via a GitOps ArgoCD Application in `cnpg-system`; a single-instance PG16 `Cluster` (`bootstrap.initdb` → DB `finance_alert` owned by the non-superuser role `fa_app`; CNPG auto-generates the `pg-app` Secret + TLS certs). Verified live: cluster **healthy 1/1**, and an app-labeled pod authenticates as `fa_app` over TCP **with SSL** (`pg_stat_ssl.ssl=t`) through the `pg-rw` service. NetworkPolicy applied — with a MEASURED k3s/kube-router caveat: pod/namespaceSelectors don't match ClusterIP-service traffic (only direct-pod-IP), source IP is preserved, so the app path is allowed via `ipBlock` on the pod CIDR; per-pod isolation over the service path would need Calico (P5). ArgoCD Synced/Healthy on `cnpg-operator` + `postgres-cluster`. **P2 fully done** — WAL archiving + a daily base backup run to the private `finance-alert-backups` OCI bucket (S3-compat, barman-cloud); base backup `completed`, `firstRecoverabilityPoint` set. Needed the OCI fix `AWS_*_CHECKSUM_CALCULATION=WHEN_REQUIRED` (boto3≥1.36 chunked encoding → OCI `NotImplemented`). Credential = an OCI Customer Secret Key in Secret `pg-wal-s3` (out-of-band, not in git). **P3 data migration DONE** — `app/scripts/migrate_sqlite_to_pg.py` (idempotent, re-runnable at cutover) copied **2,804,018 rows / 25 tables with full parity** from a VACUUM INTO snapshot into Postgres (run via port-forward so the compute stayed off the live app pod); sequences reset, alembic stamped `5f67045e4500`. Integrity spot-checked on migrated data (json_text tone counts, numeric cast, boolean 900F/99T). **P4 CUTOVER DONE — the live app now runs on Postgres.** Mechanism is a single gated values flag (`postgres.enabled`): the chart wires `DATABASE_URL` from the operator-managed `pg-app` Secret via secretKeyRef, and `config.normalize_db_url()` rewrites CNPG's bare `postgresql://` to `+psycopg` (psycopg2 isn't installed). Zero-data-loss sequence: scale app to 0 (writes halted) → final migration IN-CLUSTER from the freed PVC (throwaway pod on the app image) → 2,804,018 rows re-loaded at full parity → flip flag + scale to 1. Verified live: health ok, alembic logs `Context impl PostgresqlImpl`, `pg_stat_activity` shows the app pod connected, and `ohlcv_daily` grew past the migrated count — proving the app READS AND WRITES Postgres. SPA 200, auth 401. **Rollback** = flip the flag back; the SQLite file on the PVC is untouched (the migration only READ it). Node at 57% mem with app + PG + observability. **P5 hardening DONE — every claim verified, not asserted.** (1) **Restore drill**: bootstrapped a throwaway cluster purely from the Object Storage backup + WAL replay — it came up healthy with data IDENTICAL to live (999/4304/2,434,321/306,358), schema, alembic and the non-superuser `fa_app` role intact; then deleted. This is the *verified* in "verified restore". (2) **require-TLS**: CNPG's default pg_hba ends with a permissive `host … scram-sha-256` that also accepts cleartext; added `hostssl … scram-sha-256` + `hostnossl … reject` (user rules precede the default). Probed: `sslmode=disable` → `FATAL: pg_hba.conf rejects connection … no encryption`, `sslmode=require` → ok. App unaffected (already TLSv1.3). (3) **pgaudit** `ddl,role` → Postgres log → Loki → Grafana; a DDL probe was captured in full. Deliberately NOT `write` — a scan writes millions of ohlcv rows and would flood the 85%-full disk. (4) Grafana read-only role **deliberately skipped (YAGNI)**: no Grafana Postgres datasource exists, so it would be an unused credential; add it together with the datasource if DB dashboards are ever wanted. |
-| M8 Polyglot (Valkey/pgvector/Timescale) | ⬜ |
 | M9 Prod hardening + docs | 🔨 **node patching + DR runbook done.** **The VM had NEVER been patched**: a week after provisioning it carried **185 pending security advisories (6 Critical, 119 Important)** — the stock Oracle Linux image ships a backlog and OCI patches nothing for you. No alert, no log, no symptom: you only find it if you look. Applied supervised (`dnf update --security`, app/pods/node unaffected, zero restarts) and installed **dnf-automatic** (security-only, `apply_updates=yes`, **`reboot = never`** — a single-node cluster rebooting unannounced IS an outage), declared in cloud-init so a rebuilt node is born patched. Then a **deliberate, supervised reboot** to activate the new kernel (6.12.0-204.92.4.3), which doubled as a **resilience test — PASSED**: VM back in ~60s, **all 28 pods self-healed in ~75s**, Postgres PVC + data byte-identical (999/4394/2,435,192), TLS cert intact, app resumed scanning on its own. **Security advisories: 185 → 0.** Also reclaimed ~2 GB (80%→74%) of SQLite snapshots made obsolete by the M7 cutover. DR runbook: `RUNBOOK-postgres-dr.md`. **Remaining:** ARCHITECTURE.md is stale (still describes the SQLite/pre-cloud app) — the portfolio front page still needs rewriting. |

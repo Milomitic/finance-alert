@@ -25,10 +25,19 @@ Ingerisce ~1.000 titoli globali ogni notte, ne calcola uno **score composito**,
 e li espone attraverso una dashboard di mercato, uno screener, pagine di
 dettaglio ricche e un motore di alert. Funzioni principali:
 
-- **Scoring** — score composito 0-100 per titolo da 6 pilastri (Profitability ·
-  Sustainability · Growth · Value · Momentum · Sentiment), classificazione in
-  risk-tier, smoothing EWMA con isteresi. Pesi **validati sull'Information
-  Coefficient** vs dati point-in-time (vedi §3.5 e `docs/scoring-algorithm.md`).
+- **Scoring** — score composito 0-100 per titolo da **5 pilastri** (Profitability ·
+  Sustainability · Growth · Value · Sentiment — `PILLAR_WEIGHTS` in
+  `score_service/common.py`), classificazione in risk-tier, smoothing EWMA con
+  isteresi. Il pilastro **Momentum è stato RIMOSSO**: la price-action appartiene
+  alla lente Tecnico, tenerla anche qui era leakage fra lenti.
+  ⚠️ **I pesi NON sono "validati sull'Information Coefficient".** Il backtest IC
+  point-in-time (2026-07-07, 552 titoli US, 39 cross-section trimestrali, 20.217
+  osservazioni — `app/data/score_ic_report.json`) ha trovato l'**opposto**:
+  nessun pilastro raggiunge la significatività (profitability IC −0.006 t=−0.39 ·
+  sustainability +0.000 t=0.04 · growth +0.041 t=1.68), il composito è IC +0.015
+  (t=0.81) con **decile spread NEGATIVO** e non monotono. Conclusione operativa:
+  **il composito Qualità è un DESCRITTORE di qualità aziendale, non un predittore
+  di rendimento** — non va ripesato su basi di alpha. Vedi `docs/scoring-algorithm.md`.
 - **Dashboard** (`/`) — hero mood + KPI globali, matrice breadth per-indice,
   top-movers con polling live 15s su pool ampio, top-volume, RSI histogram,
   sector heatmap, 52w/vol, card pre-market USA, top-pick per score, consensus
@@ -47,9 +56,20 @@ dettaglio ricche e un motore di alert. Funzioni principali:
   **Alert** (`/alerts`, regole tecniche edge-triggered + digest Telegram),
   **Salute piattaforma** (`/health`, stato di ogni fonte dati).
 
-**Modello di deployment**: locale sul PC dell'utente (Windows 11). Nessun cloud,
-nessuna esposizione di rete (oltre alle chiamate outbound opzionali ai provider
-free di dati di mercato). Accesso LAN opzionale bindando su `0.0.0.0`.
+**Modello di deployment — DUE, non uno** (branch diversi, stessa codebase):
+
+| | `master` — locale | `cloud` — questo branch |
+|---|---|---|
+| Dove gira | PC dell'utente (Windows 11) | VM Ampere A1 su OCI Always-Free |
+| DB | SQLite (`./backend/data/app.db`) | **PostgreSQL** (CloudNativePG su k3s) |
+| Esposizione | nessuna (LAN opzionale su `0.0.0.0`) | **HTTPS pubblico** su `80-225-80-141.sslip.io`, :443 IP-allowlistato via NSG |
+| Orchestrazione | processo singolo / `just up` | k3s + Helm + ArgoCD (GitOps) |
+
+Lo stesso codice serve entrambi: il DB è astratto via SQLAlchemy con un helper
+dialect-aware (`app/core/db_json.py`), e `postgres.enabled` nel chart decide se
+l'app parla SQLite o Postgres. **Il resto di questo documento descrive
+l'applicazione** (valida per entrambi); la topologia cloud è in §3.3 e in
+`docs/cloud/`.
 
 ## 2. Stack tecnologico
 
@@ -139,6 +159,58 @@ Un solo processo. FastAPI serve sia API che assets React buildati.
 Avvio:
 - Manuale: `just prod-local`
 - Automatico al logon Windows: Task Scheduler → `Run-FinanceAlert.ps1` (vedi §8)
+
+### 3.3 Modalità cloud (branch `cloud`) — LIVE
+
+Stessa immagine, stesso codice; cambiano DB, esposizione e chi lo tiene in piedi.
+
+```
+                         Internet
+                            │
+   :80  0.0.0.0/0 ──────────┤   :443  solo IP allowlistato (NSG)
+   SOLO challenge ACME      │   ← qui vive tutto il resto
+   (404 su tutto il resto)  │
+                    ┌───────▼────────────┐
+                    │ Traefik (in k3s)   │ cert-manager + Let's Encrypt
+                    │                    │ HTTP-01 → 80-225-80-141.sslip.io
+                    └───────┬────────────┘
+                            │
+                    ┌───────▼────────────┐
+                    │ FastAPI + SPA      │ StatefulSet 1 replica
+                    │ APScheduler        │ APP_ENV=production → cookie Secure
+                    └───┬────────────┬───┘
+         legge/scrive   │            │ /metrics
+                  ┌─────▼──┐         │
+                  │Postgres│ CloudNativePG · TLS obbligatorio
+                  │  `pg`  │ ruolo app NON-superuser · pgaudit
+                  └───┬────┘ NetworkPolicy
+      WAL continuo +  │
+      base giornaliero│
+                  ┌───▼──────────┐
+                  │ OCI Object   │ barman-cloud (API S3-compat)
+                  │ Storage      │ restore VERIFICATO
+                  └──────────────┘
+                            osservabilità
+                    ┌───────────────────────────────┐
+                    │ Prometheus · Grafana · Loki   │
+                    │ Alertmanager → Telegram       │
+                    └───────────────────────────────┘
+```
+
+**Perché single-replica** (non è pigrizia): APScheduler gira **in-process**, quindi
+una seconda replica duplicherebbe ogni scan. Il multi-replica richiede prima una
+leader-election per lo scheduler — finché non c'è, `replicaCount: 1` è corretto.
+
+**Il DB è astratto, non riscritto**: `app/core/db_json.py` espone `json_text()`,
+un costrutto `@compiles` che emette `json_extract()` su SQLite e `jsonb ->>` su
+Postgres. Lo stesso codice ORM serve entrambi i branch; una lane CI dedicata
+(`backend-postgres`) gira contro un Postgres reale per impedire regressioni.
+
+Deploy: push su `cloud` → GitHub Actions (test + immagine arm64 → GHCR + bump del
+tag) → **ArgoCD** in-cluster fa pull e applica. È pull-based per necessità: la NSG
+blocca la :6443 a chiunque non sia l'IP del proprietario, quindi la CI **non può**
+raggiungere il cluster. Dettagli in `docs/cloud/` (ROADMAP, GITOPS, OBSERVABILITY,
+RUNBOOK-postgres-dr).
 
 ## 3.5 Sottosistemi attuali
 
@@ -483,9 +555,19 @@ notifiers/  → (Fase 2) Telegram, email, webhook
 
 ### 7.1 Autenticazione
 
-Single-user. Password admin generata via bcrypt cost 12, hash salvato in `.env` come `ADMIN_PASSWORD_HASH`.
+Single-user. Password admin generata via bcrypt cost 12, hash in `ADMIN_PASSWORD_HASH`
+(locale: `.env` · **cloud: il Secret k8s `finance-alert-prod`**, che il chart
+referenzia ma NON gestisce — ArgoCD renderizza da git, e materiale crittografico
+in git è fuori discussione).
 
 Cookie sessione: signed con `itsdangerous` usando `SECRET_KEY`. Payload: `{username, exp}`.
+Attributi: `HttpOnly`, `SameSite=Strict`, e **`Secure` sse `APP_ENV != development`**
+(`secure=not settings.is_dev`, unico consumatore di `is_dev` in tutto il backend).
+In locale resta OFF di proposito: senza TLS un cookie Secure non tornerebbe mai
+indietro e il login fallirebbe in silenzio. Sul cloud è **ON** da M4.
+
+Throttling login: dopo N fallimenti consecutivi per username → 429 + Retry-After
+(stato in-memory, si azzera al riavvio — accettabile per single-user/single-process).
 
 ### 7.2 CSRF
 
@@ -502,7 +584,29 @@ Tutti i body sono Pydantic schemas. Query parameters sono typed via FastAPI. Nes
 
 ### 7.4 Secrets
 
-Tutti via `.env`. `.env` è in `.gitignore`; `.env.example` ha solo nomi delle chiavi senza valori. Nessun secret hardcoded mai.
+Locale: tutti via `.env`, che è in `.gitignore`; `.env.example` ha solo i nomi
+delle chiavi senza valori. Nessun secret hardcoded, mai.
+
+Cloud: **Secret k8s, mai in git**. `finance-alert-prod` (SECRET_KEY +
+ADMIN_PASSWORD_HASH + MARKETAUX_API_KEY) creato una volta sul cluster; `pg-app`
+generato dall'operatore CloudNativePG (l'app lo consuma verbatim via
+`secretKeyRef`, senza duplicare credenziali); `pg-wal-s3` (Customer Secret Key
+OCI per il WAL). ⚠️ Un Secret k8s è **base64, non cifrato**: chi può leggere i
+Secret del namespace legge le password. La difesa reale è che l'accesso al
+cluster (:6443) è NSG-allowlistato al solo IP del proprietario.
+
+### 7.5 Postura di sicurezza cloud (M4 + M7-P5)
+
+| Layer | Cosa |
+|---|---|
+| **Rete** | NSG allowlista l'IP del proprietario su :22/:443/:6443. **:80 è aperta a 0.0.0.0/0** — necessaria per il challenge ACME (i validator Let's Encrypt hanno IP rotanti) e serve **solo quello**: app e Grafana sono `websecure`-only, quindi `http://<ip>/qualunque-cosa` → 404. ⚠️ **Ogni nuovo Ingress deve essere websecure-only, o è pubblico all'istante** (è già successo a Grafana). |
+| **Trasporto** | TLS Let's Encrypt su `80-225-80-141.sslip.io`, rinnovo automatico via cert-manager. |
+| **App↔DB** | TLS **imposto**: `pg_hba` = `hostssl … scram-sha-256` + `hostnossl … reject`. Provato: `sslmode=disable` → `FATAL … no encryption`. |
+| **Privilegi DB** | L'app usa `fa_app`, **non-superuser** (no CREATEDB/CREATEROLE), owner del solo DB `finance_alert`. Il superuser Postgres non ha login esterno. |
+| **Audit** | pgaudit `ddl,role` → log Postgres → Loki → Grafana. NON `write`: uno scan scrive milioni di righe ohlcv e allagherebbe il disco. |
+| **Isolamento** | NetworkPolicy sui pod Postgres. ⚠️ Limite **misurato** di k3s/kube-router: i selettori pod/namespace non matchano il traffico via ClusterIP → l'app passa via `ipBlock` sul pod-CIDR. L'isolamento per-pod sul path del service richiederebbe Calico. |
+| **Durabilità** | WAL continuo + base backup giornaliero → OCI Object Storage. **Restore verificato** (drill: cluster ricostruito dal solo bucket, dati identici al live). |
+| **Patching** | `dnf-automatic` security-only, `reboot = never`. L'immagine OL arriva con un backlog: al primo audit c'erano **185 advisory pendenti, 6 Critical**. |
 
 ## 8. Esecuzione background su Windows
 
