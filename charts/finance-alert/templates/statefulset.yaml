@@ -53,6 +53,10 @@ spec:
             # secure=not settings.is_dev). Requires TLS in front — see values.yaml.
             - name: APP_ENV
               value: {{ .Values.config.appEnv | default "development" | quote }}
+            # TrustedHostMiddleware allowlist. "*" (default) disables the check —
+            # right for kind/localhost, wrong for a public deployment.
+            - name: ALLOWED_HOSTS
+              value: {{ .Values.config.allowedHosts | default "*" | quote }}
             # Pulled from the Secret, never from the pod spec in the clear.
             - name: SECRET_KEY
               valueFrom:

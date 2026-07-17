@@ -62,6 +62,9 @@ config:
   # in front would silently break login. The OCI overlay sets "production"
   # because it terminates real HTTPS.
   appEnv: "development"
+  # Host header allowlist (TrustedHostMiddleware). "*" = accept any Host, which
+  # is fine on localhost/LAN and wrong in public — the OCI overlay pins it.
+  allowedHosts: "*"
   # DATABASE_URL is not set here: the app default `sqlite:///./data/app.db`
   # resolves onto the mounted PVC. The OCI overlay injects a Postgres URL from
   # the CNPG Secret when `postgres.enabled` (see values-oci.yaml).

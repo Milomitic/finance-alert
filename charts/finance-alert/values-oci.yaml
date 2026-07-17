@@ -66,6 +66,8 @@ ingress:
 # because a Secure cookie over plain HTTP would never be sent back.
 config:
   appEnv: "production"
+  # Only the real hostname. Anything else gets a 400 before it reaches the app.
+  allowedHosts: "80-225-80-141.sslip.io"
 
 secret:
   create: false

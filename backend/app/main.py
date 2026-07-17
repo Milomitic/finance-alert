@@ -11,6 +11,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from loguru import logger
 from prometheus_fastapi_instrumentator import Instrumentator
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.api import alerts as alerts_router
 from app.api import auth as auth_router
@@ -32,6 +33,7 @@ from app.api import sectors as sectors_router
 from app.api import spotlight as spotlight_router
 from app.api import stocks as stocks_router
 from app.api.deps import get_current_user, require_json
+from app.core.config import settings
 from app.core.errors import UpstreamError
 from app.core.logging import configure_logging, hydrate_log_buffer_from_disk
 from app.models import User
@@ -324,6 +326,59 @@ Instrumentator().instrument(app).expose(app, endpoint="/metrics", include_in_sch
 # JS) and fat JSON payloads (market-summary ~264KB, stock detail ~1.4MB) that
 # previously travelled uncompressed. gzip cuts these 3-10x for ~ms of CPU.
 app.add_middleware(GZipMiddleware, minimum_size=1024)
+
+# Reject requests whose Host header we don't recognise (M4). Starlette rebuilds
+# request.url from the Host header, so an unvalidated Host is an injection point
+# for anything derived from it. "*" (the dev default) disables the check.
+_allowed_hosts = [h.strip() for h in settings.allowed_hosts.split(",") if h.strip()]
+if _allowed_hosts and _allowed_hosts != ["*"]:
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=_allowed_hosts)
+
+# Content-Security-Policy. Honest about its one weak spot: `script-src` carries
+# 'unsafe-inline' because index.html runs a small inline script that applies the
+# saved theme before first paint (without it, every load flashes light→dark), and
+# chart libs inject inline styles. That blunts CSP's anti-XSS edge — but the rest
+# still pays: frame-ancestors kills clickjacking, connect-src bounds where a
+# script could exfiltrate to, img-src pins the two logo CDNs, object-src/base-uri
+# close classic injection vectors. Hashing the inline script would be stricter,
+# but the hash silently breaks the page the day someone edits that script.
+_CSP = "; ".join([
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline'",
+    "style-src 'self' 'unsafe-inline'",
+    # the two logo providers the SPA actually loads from
+    "img-src 'self' data: https://assets.parqet.com https://financialmodelingprep.com",
+    "font-src 'self' data:",
+    "connect-src 'self'",
+    "frame-ancestors 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "object-src 'none'",
+])
+
+
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    """Baseline security headers (M4). None of these existed before: the app was
+    served over plain HTTP where most of them are meaningless, and they were
+    simply never added once TLS landed."""
+    response = await call_next(request)
+    response.headers.setdefault("Content-Security-Policy", _CSP)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    response.headers.setdefault(
+        "Permissions-Policy", "geolocation=(), microphone=(), camera=(), payment=()"
+    )
+    # HSTS only where TLS actually terminates. Sent from the local HTTP
+    # deployment it would be ignored by browsers anyway, but promising
+    # "https-only for a year" from a box that has no TLS is a footgun: gate it on
+    # the same flag that gates the Secure cookie.
+    if not settings.is_dev:
+        response.headers.setdefault(
+            "Strict-Transport-Security", "max-age=31536000; includeSubDomains"
+        )
+    return response
 
 
 @app.middleware("http")

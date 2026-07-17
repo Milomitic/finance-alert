@@ -29,6 +29,12 @@ class Settings(BaseSettings):
     session_cookie_name: str = "finance_alert_session"
     session_max_age_days: int = 7
     log_level: str = "INFO"
+    # Comma-separated Host values TrustedHostMiddleware accepts (M4). "*" =
+    # accept anything, which is right for localhost/LAN dev but NOT for the
+    # public deployment: without this, an attacker-chosen Host header reaches
+    # the app and poisons anything derived from it. The OCI overlay pins it to
+    # the real hostname.
+    allowed_hosts: str = "*"
     admin_username: str = "admin"
     admin_password_hash: str = ""
     # Throttling login (B4-11, light): dopo N fallimenti consecutivi per uno
