@@ -86,6 +86,7 @@ import {
   useInstitutionalsAggregate,
   useInstitutionalsList,
 } from "@/hooks/useInstitutionals";
+import { QueryError } from "@/components/ui/query-error";
 import { cn } from "@/lib/utils";
 
 /* InstitutionalsPage — overview of all tracked institutional/superinvestor
@@ -446,6 +447,20 @@ export default function InstitutionalsPage() {
           </button>
         </div>
       </header>
+
+      {/* One banner for the whole page's 13F data — both the aggregate strip and
+          the funds table read from these two queries; on failure they'd
+          otherwise render silently-empty tables (U1). */}
+      {(agg.isError || list.isError) && (
+        <QueryError
+          message="dei portafogli 13F"
+          onRetry={() => {
+            agg.refetch();
+            list.refetch();
+          }}
+          isRetrying={agg.isFetching || list.isFetching}
+        />
+      )}
 
       {/* Aggregate strip: most-picked + recent buys + recent sells */}
       <div className="grid gap-3 lg:grid-cols-3">

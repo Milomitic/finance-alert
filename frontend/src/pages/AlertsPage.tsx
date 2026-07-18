@@ -10,6 +10,7 @@ import { AlertsInsightCard } from "@/components/AlertsInsightCard";
 import { AlertsTable } from "@/components/AlertsTable";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { QueryError } from "@/components/ui/query-error";
 import { useAlertsList, useConfluence } from "@/hooks/useAlerts";
 import { useBulkAlerts, usePatchAlert } from "@/hooks/useAlertMutations";
 
@@ -239,6 +240,13 @@ export default function AlertsPage() {
               empty. The empty-state message renders inside the tbody. */}
           {list.isLoading ? (
             <div className="p-6 text-sm text-muted-foreground">Caricamento…</div>
+          ) : list.isError ? (
+            <QueryError
+              message="dei segnali"
+              onRetry={() => list.refetch()}
+              isRetrying={list.isFetching}
+              className="p-6"
+            />
           ) : (
             <AlertsTable
               alerts={items}
