@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 
 import type { Position } from "@/api/types";
 import { StockLogo } from "@/components/dashboard/StockLogo";
+import { PortfolioSummary } from "@/components/PortfolioSummary";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { SectionTitle } from "@/components/ui/section-title";
@@ -173,6 +174,7 @@ export default function PositionsPage() {
 
       {!q.isLoading && !q.isError && (
         <>
+          <PortfolioSummary open={open} closed={closed} />
           {/* Posizioni aperte — P&L live (poll 15s, quote condivise 10s) */}
           <Card>
             <CardContent className="p-4">
