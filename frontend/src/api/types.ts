@@ -1306,3 +1306,31 @@ export interface TechnicalScoreDetail {
   posture: string;
   computed_at: string;
 }
+
+/** Point-in-time Information-Coefficient study of the Qualità pillars
+ *  (backend app.scripts.score_ic_backtest → app/data/score_ic_report.json).
+ *  `available: false` when the artifact was never generated on this deploy. */
+export interface ScoreIcPillar {
+  n_dates: number;
+  ic_mean: number;
+  ic_std: number;
+  t_stat: number;
+  decile_spread?: number;
+  decile_monotonic?: boolean;
+}
+export interface ScoreIcReport {
+  available: boolean;
+  generated_at?: string;
+  params?: { start: string; horizons: number[] };
+  coverage?: {
+    universe_stocks: number;
+    with_pit_facts: number;
+    n_observations: number;
+    n_dates_observed: number;
+    pillars_reconstructed: string[];
+    pillars_excluded: Record<string, string>;
+    caveats: string[];
+  };
+  results?: Record<string, Record<string, ScoreIcPillar>>;
+}
+

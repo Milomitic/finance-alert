@@ -744,3 +744,36 @@ def test_score_history_unauthenticated_401(db: Session):
         assert resp.status_code == 401
     finally:
         app.dependency_overrides.clear()
+
+
+def test_ic_report_endpoint_returns_the_study(db: Session) -> None:
+    """GET /api/scores/ic-report serves the bundled backtest artifact so the UI
+    can show WHY the composite is a descriptor, not a return predictor (F2).
+    Needs no DB rows — it reads a static file — just an authenticated user."""
+    user = User(username="tester", password_hash="x")
+    db.add(user)
+    db.commit()
+    app.dependency_overrides[get_db] = lambda: db
+    app.dependency_overrides[get_current_user] = lambda: user
+    try:
+        with TestClient(app) as c:
+            r = c.get("/api/scores/ic-report")
+    finally:
+        app.dependency_overrides.clear()
+    assert r.status_code == 200
+    body = r.json()
+    assert body["available"] is True
+    # the study covers three forward horizons and a composite row per horizon
+    assert set(body["results"]) == {"21", "63", "126"}
+    assert "composite" in body["results"]["63"]
+    assert "t_stat" in body["results"]["63"]["composite"]
+
+
+def test_ic_report_requires_auth(db: Session) -> None:
+    """No get_current_user override → the real auth check returns 401."""
+    app.dependency_overrides[get_db] = lambda: db
+    try:
+        with TestClient(app) as c:
+            assert c.get("/api/scores/ic-report").status_code == 401
+    finally:
+        app.dependency_overrides.clear()

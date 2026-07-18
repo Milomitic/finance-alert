@@ -6,6 +6,7 @@ dict to render component bars without re-fetching upstream data.
 """
 import json
 from datetime import date, timedelta
+from pathlib import Path
 from typing import Annotated, get_args
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
@@ -48,6 +49,8 @@ from app.services import (
 from app.services.scan_status import build_scan_status_out
 
 router = APIRouter(prefix="/api", tags=["scores"])
+
+_IC_REPORT_PATH = Path(__file__).resolve().parent.parent / "data" / "score_ic_report.json"
 
 
 def _sector_avg_composite(db: Session, sector: str | None) -> float | None:
@@ -514,6 +517,21 @@ def recompute_status(
     if latest is None:
         return ScanStatusOut(is_running=False)
     return build_scan_status_out(latest)
+
+
+@router.get("/scores/ic-report")
+def score_ic_report(_user: User = Depends(get_current_user)) -> dict:
+    """The point-in-time Information-Coefficient study of the Qualità pillars
+    (produced by app.scripts.score_ic_backtest). Read-only transparency: this is
+    what backs the honest claim that the composite is a company-quality
+    DESCRIPTOR, not a return predictor — a fact that until now lived only in a
+    JSON artifact + docs + a code comment. Static file; returns
+    {available: False} if it was never generated on this deployment."""
+    try:
+        data = json.loads(_IC_REPORT_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {"available": False}
+    return {"available": True, **data}
 
 
 @router.post(

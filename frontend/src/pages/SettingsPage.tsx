@@ -13,6 +13,7 @@ import { useMemo, useState } from "react";
 
 import { EngineHealthPanel } from "@/components/EngineHealthPanel";
 import { DetectorPerformancePanel } from "@/components/settings/DetectorPerformancePanel";
+import { ScoreIcPanel } from "@/components/settings/ScoreIcPanel";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { SectionTitle } from "@/components/ui/section-title";
@@ -58,6 +59,7 @@ export default function SettingsPage() {
       <RulePerformancePanel />
       <CalibrationPanel />
       <DetectorPerformancePanel />
+      <ScoreIcPanel />
       <ScanLogPanel />
       <CatalogRefreshPanel />
     </div>

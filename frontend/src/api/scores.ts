@@ -5,6 +5,7 @@ import type {
   ScanStopResultInfo,
   ScoreCategory,
   ScoreHistoryOut,
+  ScoreIcReport,
   ScoreLens,
   StockScore,
   TechnicalScoreDetail,
@@ -86,4 +87,7 @@ export const scores = {
     api<ScanStopResultInfo>(`/api/scores/recompute-stop`, { method: "POST" }),
   top: (opts: TopPicksParams = {}) =>
     api<TopPicks>(`/api/scores/top${toQuery(opts)}`),
+  /** The pillar-IC transparency study (why the composite is a descriptor,
+   *  not a return predictor). Static artifact — cache hard. */
+  icReport: () => api<ScoreIcReport>(`/api/scores/ic-report`),
 };
