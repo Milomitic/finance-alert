@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { type MutableRefObject, useEffect, useRef, useState } from "react";
 import {
   ColorType, CrosshairMode, PriceScaleMode, createChart,
   type IChartApi, type ISeriesApi, type SeriesMarker, type Time, type UTCTimestamp,
@@ -9,6 +9,7 @@ import { SignalHoverPanel } from "@/components/chart/SignalHoverPanel";
 import type { IndicatorPoint, IndicatorSeries, OhlcvBar, PriceAlert } from "@/api/types";
 import type { IndicatorStyle } from "@/components/stock/IndicatorToggles";
 import type { RegisterChart } from "@/hooks/useChartSync";
+import type { LinePoint } from "@/lib/benchmarkOverlay";
 import type { SignalHoverItem } from "@/lib/signalMarkers";
 import { EDGE_MARGIN_BARS } from "@/lib/chartClamp";
 import { defaultVisibleBars } from "@/lib/timeframeZoom";
@@ -51,6 +52,14 @@ interface Props {
   chartType?: ChartType;
   /** Logarithmic right price scale when true (linear otherwise). */
   logScale?: boolean;
+  /** Benchmark overlay line, rebased to the stock's starting price (empty =
+   *  none). See `rebaseBenchmark`. */
+  benchmarkLine?: LinePoint[];
+  /** Benchmark line colour + label (badge). */
+  benchmarkColor?: string;
+  benchmarkLabel?: string;
+  /** Exposes the chart instance to the parent for PNG export. */
+  chartApiRef?: MutableRefObject<IChartApi | null>;
 }
 
 /** Price-series render style. "candle" is the OHLC default; "line" / "area"
@@ -74,6 +83,7 @@ export function PriceChart({
   onChartClick, onReady, timeframe,
   signalMarkers = [], signalsByTime, earningsMarkers = [],
   chartType = "candle", logScale = false,
+  benchmarkLine = [], benchmarkColor = "#7c3aed", benchmarkLabel, chartApiRef,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -125,6 +135,9 @@ export function PriceChart({
   // toggled against the candle series by the chart-type effect.
   const lineRef = useRef<ISeriesApi<"Line"> | null>(null);
   const areaRef = useRef<ISeriesApi<"Area"> | null>(null);
+  // Benchmark overlay (rebased index line) — independent of the price-style
+  // series, always visible when it has data.
+  const benchmarkRef = useRef<ISeriesApi<"Line"> | null>(null);
   const chartTypeRef = useRef<ChartType>(chartType);
   const onChartClickRef = useRef(onChartClick);
 
@@ -209,6 +222,15 @@ export function PriceChart({
       priceLineVisible: false, lastValueVisible: true,
       visible: chartType === "area",
     });
+    // Benchmark overlay: a thin dashed line rebased to the stock's start;
+    // data set later by its effect (empty when no benchmark is selected).
+    benchmarkRef.current = chart.addLineSeries({
+      color: benchmarkColor, lineWidth: 1, lineStyle: 2,
+      priceLineVisible: false, lastValueVisible: true,
+      crosshairMarkerVisible: false,
+      title: benchmarkLabel ?? "",
+    });
+    if (chartApiRef) chartApiRef.current = chart;
     // Initial scale mode (linear / logarithmic); toggled later by its effect.
     chart.priceScale("right").applyOptions({
       mode: logScale ? PriceScaleMode.Logarithmic : PriceScaleMode.Normal,
@@ -306,10 +328,12 @@ export function PriceChart({
       chart.unsubscribeClick(clickHandler);
       chart.unsubscribeCrosshairMove(crosshairHandler);
       chart.remove();
+      if (chartApiRef) chartApiRef.current = null;
       chartRef.current = null;
       candleRef.current = null;
       lineRef.current = null;
       areaRef.current = null;
+      benchmarkRef.current = null;
       ema20Ref.current = null;
       ema50Ref.current = null;
       ema200Ref.current = null;
@@ -394,6 +418,16 @@ export function PriceChart({
       mode: logScale ? PriceScaleMode.Logarithmic : PriceScaleMode.Normal,
     });
   }, [logScale]);
+
+  // Benchmark overlay data.
+  useEffect(() => {
+    benchmarkRef.current?.setData(benchmarkLine);
+  }, [benchmarkLine]);
+
+  // Benchmark line colour + badge label.
+  useEffect(() => {
+    benchmarkRef.current?.applyOptions({ color: benchmarkColor, title: benchmarkLabel ?? "" });
+  }, [benchmarkColor, benchmarkLabel]);
 
 
   // EMA20

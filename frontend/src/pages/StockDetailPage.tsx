@@ -1,5 +1,6 @@
+import type { IChartApi } from "lightweight-charts";
 import { AlertCircle, Loader2 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 
 import type { LiveQuote, OhlcvBar, PriceAlert } from "@/api/types";
@@ -8,7 +9,10 @@ import { CardSkeleton } from "@/components/ui/card-skeleton";
 import { useChartSync } from "@/hooks/useChartSync";
 import { liveExtendIndicators } from "@/lib/liveIndicators";
 import { buildEarningsMarkers, buildSignalOverlay } from "@/lib/signalMarkers";
+import { rebaseBenchmark } from "@/lib/benchmarkOverlay";
+import { downloadChartPng } from "@/lib/chartExport";
 import { useStockFundamentals } from "@/hooks/useStockFundamentals";
+import { useMarketDetail } from "@/hooks/useMarketDetail";
 import { useCreatePriceAlert, useStockPriceAlerts } from "@/hooks/useStockPriceAlerts";
 import { useLiveQuote } from "@/hooks/useLiveQuote";
 import { useStockDetail } from "@/hooks/useStockDetail";
@@ -33,7 +37,7 @@ import { PriceAlertDialog } from "@/components/stock/PriceAlertDialog";
 // CRUD via dialog/chart-click still works (the import is no longer
 // needed here because nothing on this page lists existing alerts).
 import { PriceChart, type ChartType } from "@/components/stock/PriceChart";
-import { ChartOptionsToolbar } from "@/components/stock/ChartOptionsToolbar";
+import { BENCHMARKS, ChartOptionsToolbar } from "@/components/stock/ChartOptionsToolbar";
 import { RangeSelector } from "@/components/stock/RangeSelector";
 import { ResizableSection } from "@/components/stock/ResizableSection";
 import { RsiPanel } from "@/components/stock/RsiPanel";
@@ -173,6 +177,17 @@ export default function StockDetailPage() {
     () => buildEarningsMarkers(mergedOhlcv, fundamentals.data?.earnings ?? []),
     [mergedOhlcv, fundamentals.data?.earnings],
   );
+  // Benchmark overlay: fetch the selected index (same timeframe) via the
+  // curated markets endpoint, then rebase its closes onto the stock's start
+  // price so the divergence reads as relative performance.
+  const [benchmark, setBenchmark] = useState(""); // "" = no overlay
+  const chartApiRef = useRef<IChartApi | null>(null);
+  const benchmarkDetail = useMarketDetail(benchmark, range);
+  const benchmarkLine = useMemo(
+    () => (benchmark ? rebaseBenchmark(mergedOhlcv, benchmarkDetail.data?.bars ?? []) : []),
+    [benchmark, mergedOhlcv, benchmarkDetail.data?.bars],
+  );
+  const benchmarkLabel = BENCHMARKS.find((b) => b.symbol === benchmark)?.label;
 
   const [indicators, setIndicators] = useState<IndicatorState>(DEFAULT_INDICATOR_STATE);
   const [chartType, setChartType] = useState<ChartType>("candle");
@@ -376,6 +391,11 @@ export default function StockDetailPage() {
                 onChartType={setChartType}
                 logScale={logScale}
                 onLogScale={setLogScale}
+                benchmark={benchmark}
+                onBenchmark={setBenchmark}
+                onExport={() =>
+                  downloadChartPng(chartApiRef.current, `${ticker}-${range}.png`)
+                }
               />
               {/* CENTER — indicators */}
               <div className="mx-auto flex items-center gap-2 flex-wrap justify-center">
@@ -467,6 +487,9 @@ export default function StockDetailPage() {
                   earningsMarkers={earningsMarkers}
                   chartType={chartType}
                   logScale={logScale}
+                  benchmarkLine={benchmarkLine}
+                  benchmarkLabel={benchmarkLabel}
+                  chartApiRef={chartApiRef}
                 />
               </ResizableSection>
             )}
