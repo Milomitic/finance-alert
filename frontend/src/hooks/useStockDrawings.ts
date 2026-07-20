@@ -1,84 +1,149 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
-export interface HorizontalDrawing {
-  id: string;
-  price: number;
-}
+import {
+  drawings as drawingsApi,
+  type HorizontalDrawing,
+  type StockDrawings,
+  type TrendDrawing,
+} from "@/api/drawings";
 
-export interface TrendDrawing {
-  id: string;
-  x1: number;   // unix seconds
-  y1: number;
-  x2: number;
-  y2: number;
-}
-
-export interface StockDrawings {
-  horizontal: HorizontalDrawing[];
-  trend: TrendDrawing[];
-}
+export type { HorizontalDrawing, StockDrawings, TrendDrawing };
 
 const EMPTY: StockDrawings = { horizontal: [], trend: [] };
 
-function storageKey(ticker: string): string {
+/** Legacy localStorage key (pre-backend). Read once to migrate, then dropped. */
+function legacyKey(ticker: string): string {
   return `stock-drawings:${ticker}`;
 }
 
-function loadFromStorage(ticker: string): StockDrawings {
+function parseLegacy(raw: string): { horizontal: { price: number }[]; trend: TrendDrawing[] } {
   try {
-    const raw = localStorage.getItem(storageKey(ticker));
-    if (!raw) return { horizontal: [], trend: [] };
-    const parsed = JSON.parse(raw);
+    const p = JSON.parse(raw);
     return {
-      horizontal: Array.isArray(parsed.horizontal) ? parsed.horizontal : [],
-      trend: Array.isArray(parsed.trend) ? parsed.trend : [],
+      horizontal: Array.isArray(p.horizontal) ? p.horizontal : [],
+      trend: Array.isArray(p.trend) ? p.trend : [],
     };
   } catch {
     return { horizontal: [], trend: [] };
   }
 }
 
+// Optimistic ids are negative so they never collide with a real backend PK;
+// they're replaced by the real row on the next refetch (invalidateQueries).
+let _tempId = -1;
+const tempId = () => _tempId--;
+
+/**
+ * Per-stock chart drawings, now backend-persisted (was localStorage-only) so
+ * they survive a browser wipe and sync across devices. Same public surface as
+ * before — add* / remove* / clearAll / `drawings` — so callers are unchanged.
+ *
+ * Writes are optimistic: the line appears/disappears instantly, then the
+ * mutation runs and the query is invalidated to reconcile with the server
+ * (and pick up the real row id). A one-time migration lifts any pre-existing
+ * localStorage drawings into the backend on first load.
+ */
 export function useStockDrawings(ticker: string) {
-  const [drawings, setDrawings] = useState<StockDrawings>(EMPTY);
+  const qc = useQueryClient();
+  const key = ["stocks", ticker, "drawings"] as const;
 
+  const query = useQuery({
+    queryKey: key,
+    queryFn: () => drawingsApi.list(ticker),
+    enabled: !!ticker,
+    staleTime: 60_000,
+  });
+
+  // One-time localStorage → backend migration, per ticker per browser.
+  // Removing the legacy key is the "already migrated" marker; the ref guards
+  // against a double-fire in the same session before the refetch lands.
+  const migratedRef = useRef<Set<string>>(new Set());
   useEffect(() => {
-    setDrawings(loadFromStorage(ticker));
-  }, [ticker]);
+    if (!ticker || !query.isSuccess || migratedRef.current.has(ticker)) return;
+    migratedRef.current.add(ticker);
+    const raw = localStorage.getItem(legacyKey(ticker));
+    if (!raw) return;
+    localStorage.removeItem(legacyKey(ticker)); // consume so it can't re-run
+    const legacy = parseLegacy(raw);
+    Promise.all([
+      ...legacy.horizontal.map((h) =>
+        drawingsApi.create(ticker, { kind: "horizontal", price: h.price }),
+      ),
+      ...legacy.trend.map((t) =>
+        drawingsApi.create(ticker, { kind: "trend", x1: t.x1, y1: t.y1, x2: t.x2, y2: t.y2 }),
+      ),
+    ])
+      .then(() => qc.invalidateQueries({ queryKey: key }))
+      .catch(() => {
+        /* migration is best-effort; the user can redraw if it failed */
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ticker, query.isSuccess]);
 
-  const persist = useCallback((next: StockDrawings) => {
-    setDrawings(next);
-    try {
-      localStorage.setItem(storageKey(ticker), JSON.stringify(next));
-    } catch {
-      // localStorage full or unavailable; in-memory state still works
-    }
-  }, [ticker]);
+  const patch = useCallback(
+    (fn: (prev: StockDrawings) => StockDrawings) => {
+      qc.setQueryData<StockDrawings>(key, (prev) => fn(prev ?? EMPTY));
+    },
+    // key is derived from ticker; qc is stable.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [qc, ticker],
+  );
 
-  const addHorizontal = useCallback((price: number) => {
-    persist({
-      ...drawings,
-      horizontal: [...drawings.horizontal, { id: crypto.randomUUID(), price }],
-    });
-  }, [drawings, persist]);
+  const reconcile = useCallback(() => {
+    qc.invalidateQueries({ queryKey: key });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [qc, ticker]);
 
-  const removeHorizontal = useCallback((id: string) => {
-    persist({ ...drawings, horizontal: drawings.horizontal.filter((h) => h.id !== id) });
-  }, [drawings, persist]);
+  const addHorizontal = useCallback(
+    (price: number) => {
+      patch((prev) => ({
+        ...prev,
+        horizontal: [...prev.horizontal, { id: tempId(), price }],
+      }));
+      drawingsApi.create(ticker, { kind: "horizontal", price }).then(reconcile, reconcile);
+    },
+    [ticker, patch, reconcile],
+  );
 
-  const addTrend = useCallback((x1: number, y1: number, x2: number, y2: number) => {
-    persist({
-      ...drawings,
-      trend: [...drawings.trend, { id: crypto.randomUUID(), x1, y1, x2, y2 }],
-    });
-  }, [drawings, persist]);
+  const removeHorizontal = useCallback(
+    (id: number) => {
+      patch((prev) => ({ ...prev, horizontal: prev.horizontal.filter((h) => h.id !== id) }));
+      if (id > 0) drawingsApi.remove(ticker, id).then(reconcile, reconcile);
+    },
+    [ticker, patch, reconcile],
+  );
 
-  const removeTrend = useCallback((id: string) => {
-    persist({ ...drawings, trend: drawings.trend.filter((t) => t.id !== id) });
-  }, [drawings, persist]);
+  const addTrend = useCallback(
+    (x1: number, y1: number, x2: number, y2: number) => {
+      patch((prev) => ({
+        ...prev,
+        trend: [...prev.trend, { id: tempId(), x1, y1, x2, y2 }],
+      }));
+      drawingsApi.create(ticker, { kind: "trend", x1, y1, x2, y2 }).then(reconcile, reconcile);
+    },
+    [ticker, patch, reconcile],
+  );
+
+  const removeTrend = useCallback(
+    (id: number) => {
+      patch((prev) => ({ ...prev, trend: prev.trend.filter((t) => t.id !== id) }));
+      if (id > 0) drawingsApi.remove(ticker, id).then(reconcile, reconcile);
+    },
+    [ticker, patch, reconcile],
+  );
 
   const clearAll = useCallback(() => {
-    persist({ horizontal: [], trend: [] });
-  }, [persist]);
+    patch(() => ({ horizontal: [], trend: [] }));
+    drawingsApi.clear(ticker).then(reconcile, reconcile);
+  }, [ticker, patch, reconcile]);
 
-  return { drawings, addHorizontal, removeHorizontal, addTrend, removeTrend, clearAll };
+  return {
+    drawings: query.data ?? EMPTY,
+    addHorizontal,
+    removeHorizontal,
+    addTrend,
+    removeTrend,
+    clearAll,
+  };
 }

@@ -23,10 +23,10 @@ interface Props {
     bb: IndicatorStyle;
   };
   priceAlerts: PriceAlert[];
-  horizontalDrawings?: { id: string; price: number }[];
+  horizontalDrawings?: { id: number; price: number }[];
   /** Trend lines drawn by the "Linea" tool — each connects two
    *  (time, price) points. Rendered as a 2-point line series. */
-  trendDrawings?: { id: string; x1: number; y1: number; x2: number; y2: number }[];
+  trendDrawings?: { id: number; x1: number; y1: number; x2: number; y2: number }[];
   /** Chart click → (price, time). `time` is the UTC-seconds timestamp of
    *  the bar under the cursor (undefined off-axis); the Line tool needs
    *  it to anchor a trend line's X coordinate. */

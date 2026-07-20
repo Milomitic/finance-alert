@@ -31,6 +31,7 @@ from app.api import scan_log as scan_log_router
 from app.api import scores as scores_router
 from app.api import sectors as sectors_router
 from app.api import spotlight as spotlight_router
+from app.api import stock_drawings as stock_drawings_router
 from app.api import stocks as stocks_router
 from app.api.deps import get_current_user, require_json
 from app.core.config import settings
@@ -434,6 +435,7 @@ app.include_router(market_router.router)
 app.include_router(market_detail_router.router)
 app.include_router(multi_tf_router.router)
 app.include_router(price_alerts_router.router)
+app.include_router(stock_drawings_router.router)
 app.include_router(positions_router.router)
 app.include_router(spotlight_router.router)
 app.include_router(scores_router.router)
