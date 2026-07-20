@@ -1,4 +1,4 @@
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, Loader2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 
@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { CardSkeleton } from "@/components/ui/card-skeleton";
 import { useChartSync } from "@/hooks/useChartSync";
 import { liveExtendIndicators } from "@/lib/liveIndicators";
+import { buildSignalOverlay } from "@/lib/signalMarkers";
 import { useCreatePriceAlert, useStockPriceAlerts } from "@/hooks/useStockPriceAlerts";
 import { useLiveQuote } from "@/hooks/useLiveQuote";
 import { useStockDetail } from "@/hooks/useStockDetail";
@@ -154,6 +155,13 @@ export default function StockDetailPage() {
     () =>
       detail.data ? liveExtendIndicators(detail.data.indicators, mergedOhlcv) : null,
     [detail.data, mergedOhlcv],
+  );
+  // Signal markers overlay: map the stock's alert history onto the chart bars
+  // so the user sees WHERE each detector fired (arrow per bar, tone by
+  // majority) with a hover panel of detector · Forza · realized outcome.
+  const signalOverlay = useMemo(
+    () => buildSignalOverlay(mergedOhlcv, detail.data?.alerts_history ?? []),
+    [mergedOhlcv, detail.data?.alerts_history],
   );
 
   const [indicators, setIndicators] = useState<IndicatorState>(DEFAULT_INDICATOR_STATE);
@@ -402,6 +410,17 @@ export default function StockDetailPage() {
               </div>
             ) : (
               <ResizableSection defaultHeight={460} minHeight={240} label="Price">
+                {/* Timeframe-switch feedback: `placeholderData` keeps the
+                    previous range's bars on screen while the new ones load
+                    (intraday hits yfinance live → can take seconds). Without
+                    a cue the click looks ignored. Show a small badge while a
+                    refetch runs over stale/placeholder data. */}
+                {detail.isFetching && detail.isPlaceholderData && (
+                  <div className="absolute top-2 right-2 z-20 flex items-center gap-1.5 rounded-md border bg-card/90 backdrop-blur-sm px-2 py-1 text-xs text-muted-foreground shadow-sm pointer-events-none">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                    Aggiornamento…
+                  </div>
+                )}
                 {/* `key={range}` forces a clean remount on range switch
                     (1m / 3m / 6m / 1y / 5y / all). Without it, the data
                     effects of all three charts fire fitContent() in
@@ -425,6 +444,8 @@ export default function StockDetailPage() {
                   onChartClick={handleChartClick}
                   onReady={registerChart}
                   timeframe={range}
+                  signalMarkers={signalOverlay.markers}
+                  signalsByTime={signalOverlay.byTime}
                 />
               </ResizableSection>
             )}

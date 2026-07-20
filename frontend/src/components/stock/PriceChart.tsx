@@ -1,13 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import {
   ColorType, CrosshairMode, createChart,
-  type IChartApi, type ISeriesApi, type Time, type UTCTimestamp,
+  type IChartApi, type ISeriesApi, type SeriesMarker, type Time, type UTCTimestamp,
 } from "lightweight-charts";
 
 import { OhlcLegend, barToLegend, type LegendDatum } from "@/components/chart/ohlcLegend";
+import { SignalHoverPanel } from "@/components/chart/SignalHoverPanel";
 import type { IndicatorPoint, IndicatorSeries, OhlcvBar, PriceAlert } from "@/api/types";
 import type { IndicatorStyle } from "@/components/stock/IndicatorToggles";
 import type { RegisterChart } from "@/hooks/useChartSync";
+import type { SignalHoverItem } from "@/lib/signalMarkers";
 import { EDGE_MARGIN_BARS } from "@/lib/chartClamp";
 import { defaultVisibleBars } from "@/lib/timeframeZoom";
 
@@ -36,6 +38,12 @@ interface Props {
   /** Active timeframe key (30m/1h/1d/...) — drives the initial visible
    *  range so e.g. 30m doesn't render 60 days of 30-min bars at once. */
   timeframe?: string;
+  /** Signal markers (arrows) drawn on the candles — one per bar, tone by
+   *  bull/bear majority. Built by `buildSignalOverlay` in the parent. */
+  signalMarkers?: SeriesMarker<Time>[];
+  /** Bar-time (UTCTimestamp seconds) → signals fired on that bar, surfaced
+   *  in a hover panel when the crosshair is over a marked candle. */
+  signalsByTime?: Map<number, SignalHoverItem[]>;
 }
 
 function dateToTime(d: string): UTCTimestamp {
@@ -53,6 +61,7 @@ export function PriceChart({
   ohlcv, indicators, styles,
   priceAlerts, horizontalDrawings = [], trendDrawings = [],
   onChartClick, onReady, timeframe,
+  signalMarkers = [], signalsByTime,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -71,6 +80,11 @@ export function PriceChart({
   // The fixed top-left legend. `null` only before the first data load;
   // afterwards it shows the latest bar (idle) or the hovered bar.
   const [legend, setLegend] = useState<LegendDatum | null>(null);
+  // Signals fired on the hovered candle (null when the cursor is off a
+  // marked bar). Drives the hover detail panel under the legend. Held in a
+  // ref too so the mount-once crosshair handler reads the fresh map.
+  const [hoverSignals, setHoverSignals] = useState<SignalHoverItem[] | null>(null);
+  const signalsByTimeRef = useRef<Map<number, SignalHoverItem[]> | undefined>(signalsByTime);
   // Latest bar's legend, kept in a ref so the crosshair handler can
   // restore it when the cursor leaves the plot (handler is registered
   // once at mount and must not close over a stale snapshot).
@@ -86,7 +100,8 @@ export function PriceChart({
   useEffect(() => {
     timeframeRef.current = timeframe;
     ohlcvRef.current = ohlcv;
-  }, [timeframe, ohlcv]);
+    signalsByTimeRef.current = signalsByTime;
+  }, [timeframe, ohlcv, signalsByTime]);
   const ema20Ref = useRef<ISeriesApi<"Line"> | null>(null);
   const ema50Ref = useRef<ISeriesApi<"Line"> | null>(null);
   const ema200Ref = useRef<ISeriesApi<"Line"> | null>(null);
@@ -204,9 +219,11 @@ export function PriceChart({
     // container. Edge-flipping is done at render time, not here.
     const crosshairHandler = (param: { time?: Time }) => {
       // Off the plot (or on a gap) → revert the legend to the latest bar
-      // instead of hiding it, so the corner always shows something.
+      // instead of hiding it, so the corner always shows something. Signal
+      // detail is hover-only, so it clears here.
       if (!param.time) {
         setLegend(latestLegendRef.current);
+        setHoverSignals(null);
         return;
       }
       // We use UTCTimestamp (number) throughout via dateToTime, so the
@@ -215,12 +232,14 @@ export function PriceChart({
       const bar = barsByTimeRef.current.get(param.time as number);
       if (!bar) {
         setLegend(latestLegendRef.current);
+        setHoverSignals(null);
         return;
       }
       // Δ% bar-over-bar (this close vs PREVIOUS close) — the canonical
       // D/D return on daily bars, period-over-period on intraday.
       const prevBar = bar.idx > 0 ? ohlcvRef.current[bar.idx - 1] : null;
       setLegend(barToLegend(bar, prevBar, timeframeRef.current));
+      setHoverSignals(signalsByTimeRef.current?.get(param.time as number) ?? null);
     };
     chart.subscribeCrosshairMove(crosshairHandler);
 
@@ -435,12 +454,28 @@ export function PriceChart({
     };
   }, [trendDrawings]);
 
+  // Signal markers (arrows) on the candles. Re-applied on data change too:
+  // `setData` doesn't clear markers, but depending on `ohlcv` guarantees the
+  // markers land after the series has the bars they anchor to.
+  useEffect(() => {
+    if (!candleRef.current) return;
+    candleRef.current.setMarkers(signalMarkers);
+    return () => {
+      // Clear on unmount / before re-apply so a timeframe switch (which
+      // remounts) never leaves orphaned markers behind.
+      candleRef.current?.setMarkers([]);
+    };
+  }, [signalMarkers, ohlcv]);
+
   return (
     <div ref={containerRef} className="w-full h-full relative">
       {/* Fixed top-left OHLCV legend — shared with MarketChart (see
           components/chart/ohlcLegend): latest bar idle, hovered bar on
           crosshair-move; never occludes the candles. */}
       <OhlcLegend legend={legend} />
+      {/* Signal detail for the hovered candle — sits just under the legend,
+          only while the cursor is over a marked bar. */}
+      <SignalHoverPanel signals={hoverSignals} />
     </div>
   );
 }
