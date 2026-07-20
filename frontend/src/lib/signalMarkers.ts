@@ -109,7 +109,10 @@ export function buildSignalOverlay(ohlcv: OhlcvBar[], alerts: Alert[]): SignalOv
       position: isBull ? "belowBar" : isBear ? "aboveBar" : "inBar",
       shape: isBull ? "arrowUp" : isBear ? "arrowDown" : "circle",
       color: isBull ? "#17b551" : isBear ? "#dc2626" : "#d97706",
-      text: items.length > 1 ? `${items.length} segnali` : items[0].label,
+      // No on-chart text — the arrow conveys position + tone, and the detail
+      // (detector · Forza · outcome, and the count when several fired on one
+      // bar) lives in the hover panel. Verbose labels cluttered the candles.
+      text: "",
     });
   }
   markers.sort((a, b) => (a.time as number) - (b.time as number));

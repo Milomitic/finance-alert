@@ -68,14 +68,14 @@ describe("buildSignalOverlay", () => {
     expect(markers).toEqual([]);
   });
 
-  it("collapses several same-day signals into one marker with a count + majority tone", () => {
+  it("collapses several same-day signals into one arrow (majority tone), detail in byTime", () => {
     const { markers, byTime } = buildSignalOverlay(OHLCV, [
       signal("2026-07-09", "bull"),
       signal("2026-07-09", "bull"),
       signal("2026-07-09", "bear"),
     ]);
     expect(markers).toHaveLength(1);
-    expect(markers[0].text).toBe("3 segnali");
+    expect(markers[0].text).toBe(""); // no on-chart clutter; count is in the hover panel
     expect(markers[0].shape).toBe("arrowUp"); // 2 bull vs 1 bear → bull majority
     const t = Math.floor(Date.parse("2026-07-09") / 1000);
     expect(byTime.get(t)).toHaveLength(3);

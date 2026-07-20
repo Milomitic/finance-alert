@@ -1,6 +1,6 @@
 import { type MutableRefObject, useEffect, useRef, useState } from "react";
 import {
-  ColorType, CrosshairMode, PriceScaleMode, createChart,
+  ColorType, CrosshairMode, createChart,
   type IChartApi, type ISeriesApi, type SeriesMarker, type Time, type UTCTimestamp,
 } from "lightweight-charts";
 
@@ -50,8 +50,6 @@ interface Props {
   earningsMarkers?: SeriesMarker<Time>[];
   /** Price-series render style (candle / line / area). Default candle. */
   chartType?: ChartType;
-  /** Logarithmic right price scale when true (linear otherwise). */
-  logScale?: boolean;
   /** Benchmark overlay line, rebased to the stock's starting price (empty =
    *  none). See `rebaseBenchmark`. */
   benchmarkLine?: LinePoint[];
@@ -86,7 +84,7 @@ export function PriceChart({
   priceAlerts, horizontalDrawings = [], trendDrawings = [],
   onChartClick, onReady, timeframe,
   signalMarkers = [], signalsByTime, earningsMarkers = [],
-  chartType = "candle", logScale = false,
+  chartType = "candle",
   benchmarkLine = [], benchmarkColor = "#7c3aed", benchmarkLabel, chartApiRef,
   exchangeTz = "UTC",
 }: Props) {
@@ -264,10 +262,6 @@ export function PriceChart({
       title: benchmarkLabel ?? "",
     });
     if (chartApiRef) chartApiRef.current = chart;
-    // Initial scale mode (linear / logarithmic); toggled later by its effect.
-    chart.priceScale("right").applyOptions({
-      mode: logScale ? PriceScaleMode.Logarithmic : PriceScaleMode.Normal,
-    });
     // Indicator series: `lastValueVisible: true` shows a colored badge
     // on the right price-scale with the latest value — replaces the
     // previous on-chart `title` legend that overlapped the candles.
@@ -444,13 +438,6 @@ export function PriceChart({
     lineRef.current?.applyOptions({ visible: chartType === "line" });
     areaRef.current?.applyOptions({ visible: chartType === "area" });
   }, [chartType]);
-
-  // Log vs linear price scale.
-  useEffect(() => {
-    chartRef.current?.priceScale("right").applyOptions({
-      mode: logScale ? PriceScaleMode.Logarithmic : PriceScaleMode.Normal,
-    });
-  }, [logScale]);
 
   // Benchmark overlay data.
   useEffect(() => {

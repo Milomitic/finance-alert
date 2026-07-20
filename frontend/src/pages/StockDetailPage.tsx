@@ -122,7 +122,6 @@ export default function StockDetailPage() {
 
   const [indicators, setIndicators] = useState<IndicatorState>(DEFAULT_INDICATOR_STATE);
   const [chartType, setChartType] = useState<ChartType>("candle");
-  const [logScale, setLogScale] = useState(false);
   const [mode, setMode] = useState<DrawingMode>("none");
   const [pendingPrice, setPendingPrice] = useState<number | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -320,8 +319,6 @@ export default function StockDetailPage() {
               <ChartOptionsToolbar
                 chartType={chartType}
                 onChartType={setChartType}
-                logScale={logScale}
-                onLogScale={setLogScale}
                 benchmark={benchmark}
                 onBenchmark={setBenchmark}
                 onExport={() =>
@@ -417,7 +414,6 @@ export default function StockDetailPage() {
                   signalsByTime={signalOverlay.byTime}
                   earningsMarkers={earningsMarkers}
                   chartType={chartType}
-                  logScale={logScale}
                   benchmarkLine={benchmarkLine}
                   benchmarkLabel={benchmarkLabel}
                   chartApiRef={chartApiRef}
