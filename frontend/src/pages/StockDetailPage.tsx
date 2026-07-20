@@ -32,7 +32,8 @@ import { PriceAlertDialog } from "@/components/stock/PriceAlertDialog";
 // slot in the right sidebar now hosts InsidersAnalystCard. Price-alert
 // CRUD via dialog/chart-click still works (the import is no longer
 // needed here because nothing on this page lists existing alerts).
-import { PriceChart } from "@/components/stock/PriceChart";
+import { PriceChart, type ChartType } from "@/components/stock/PriceChart";
+import { ChartOptionsToolbar } from "@/components/stock/ChartOptionsToolbar";
 import { RangeSelector } from "@/components/stock/RangeSelector";
 import { ResizableSection } from "@/components/stock/ResizableSection";
 import { RsiPanel } from "@/components/stock/RsiPanel";
@@ -174,6 +175,8 @@ export default function StockDetailPage() {
   );
 
   const [indicators, setIndicators] = useState<IndicatorState>(DEFAULT_INDICATOR_STATE);
+  const [chartType, setChartType] = useState<ChartType>("candle");
+  const [logScale, setLogScale] = useState(false);
   const [mode, setMode] = useState<DrawingMode>("none");
   const [pendingPrice, setPendingPrice] = useState<number | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -363,10 +366,16 @@ export default function StockDetailPage() {
                 left/right clusters (and wrap gracefully when space runs
                 out). All controls share the 32px (h-8) height. */}
             <div className="flex items-center flex-wrap gap-x-3 gap-y-2 mb-3">
-              {/* LEFT — timeframe */}
+              {/* LEFT — timeframe + chart-render options */}
               <RangeSelector
                 value={range}
                 onChange={(r) => setSearchParams({ range: r })}
+              />
+              <ChartOptionsToolbar
+                chartType={chartType}
+                onChartType={setChartType}
+                logScale={logScale}
+                onLogScale={setLogScale}
               />
               {/* CENTER — indicators */}
               <div className="mx-auto flex items-center gap-2 flex-wrap justify-center">
@@ -456,6 +465,8 @@ export default function StockDetailPage() {
                   signalMarkers={signalOverlay.markers}
                   signalsByTime={signalOverlay.byTime}
                   earningsMarkers={earningsMarkers}
+                  chartType={chartType}
+                  logScale={logScale}
                 />
               </ResizableSection>
             )}

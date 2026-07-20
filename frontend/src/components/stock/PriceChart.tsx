@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  ColorType, CrosshairMode, createChart,
+  ColorType, CrosshairMode, PriceScaleMode, createChart,
   type IChartApi, type ISeriesApi, type SeriesMarker, type Time, type UTCTimestamp,
 } from "lightweight-charts";
 
@@ -47,7 +47,15 @@ interface Props {
   /** Earnings "E" flags below the candles, tone by EPS surprise. Built by
    *  `buildEarningsMarkers` in the parent. Merged with signalMarkers. */
   earningsMarkers?: SeriesMarker<Time>[];
+  /** Price-series render style (candle / line / area). Default candle. */
+  chartType?: ChartType;
+  /** Logarithmic right price scale when true (linear otherwise). */
+  logScale?: boolean;
 }
+
+/** Price-series render style. "candle" is the OHLC default; "line" / "area"
+ *  plot the close, for a cleaner read over long ranges. */
+export type ChartType = "candle" | "line" | "area";
 
 function dateToTime(d: string): UTCTimestamp {
   return (Date.parse(d) / 1000) as UTCTimestamp;
@@ -65,6 +73,7 @@ export function PriceChart({
   priceAlerts, horizontalDrawings = [], trendDrawings = [],
   onChartClick, onReady, timeframe,
   signalMarkers = [], signalsByTime, earningsMarkers = [],
+  chartType = "candle", logScale = false,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -112,11 +121,26 @@ export function PriceChart({
   const bbMiddleRef = useRef<ISeriesApi<"Line"> | null>(null);
   const bbLowerRef = useRef<ISeriesApi<"Line"> | null>(null);
   const volumeRef = useRef<ISeriesApi<"Histogram"> | null>(null);
+  // Close-price series for the line / area render styles. Created hidden and
+  // toggled against the candle series by the chart-type effect.
+  const lineRef = useRef<ISeriesApi<"Line"> | null>(null);
+  const areaRef = useRef<ISeriesApi<"Area"> | null>(null);
+  const chartTypeRef = useRef<ChartType>(chartType);
   const onChartClickRef = useRef(onChartClick);
 
   useEffect(() => {
     onChartClickRef.current = onChartClick;
   }, [onChartClick]);
+  useEffect(() => {
+    chartTypeRef.current = chartType;
+  }, [chartType]);
+
+  // The currently visible price series — host for markers, price lines, and
+  // the click→price lookup, so they follow whichever style is active. Common
+  // methods (setMarkers / createPriceLine / coordinateToPrice) exist on every
+  // series type, so the union needs no cast.
+  const activePriceSeries = (type: ChartType = chartTypeRef.current) =>
+    type === "line" ? lineRef.current : type === "area" ? areaRef.current : candleRef.current;
 
   // Create chart once
   useEffect(() => {
@@ -169,6 +193,25 @@ export function PriceChart({
       // collide). It still reads as primary via the candle up/down
       // colour; the shared axis font bump gives it a touch more size.
       lastValueVisible: true,
+      visible: chartType === "candle",
+    });
+    // Line / area close-price series for the alternate render styles. Created
+    // right after the candle (same z-level, under the EMA/BB overlays) and
+    // hidden unless their style is active. The area adds a soft gradient fill.
+    lineRef.current = chart.addLineSeries({
+      color: "#2563eb", lineWidth: 2,
+      priceLineVisible: false, lastValueVisible: true,
+      visible: chartType === "line",
+    });
+    areaRef.current = chart.addAreaSeries({
+      lineColor: "#2563eb", lineWidth: 2,
+      topColor: "rgba(37,99,235,0.28)", bottomColor: "rgba(37,99,235,0.02)",
+      priceLineVisible: false, lastValueVisible: true,
+      visible: chartType === "area",
+    });
+    // Initial scale mode (linear / logarithmic); toggled later by its effect.
+    chart.priceScale("right").applyOptions({
+      mode: logScale ? PriceScaleMode.Logarithmic : PriceScaleMode.Normal,
     });
     // Indicator series: `lastValueVisible: true` shows a colored badge
     // on the right price-scale with the latest value — replaces the
@@ -203,8 +246,9 @@ export function PriceChart({
 
     const clickHandler = (param: { point?: { x: number; y: number }; time?: Time }) => {
       const handler = onChartClickRef.current;
-      if (!handler || !param.point || !candleRef.current) return;
-      const price = candleRef.current.coordinateToPrice(param.point.y);
+      const series = activePriceSeries();
+      if (!handler || !param.point || !series) return;
+      const price = series.coordinateToPrice(param.point.y);
       if (price !== null && typeof price === "number") {
         // Emit the bar time too — the Line tool anchors a trend line's
         // X coordinate to it. `param.time` is undefined when the click
@@ -264,6 +308,8 @@ export function PriceChart({
       chart.remove();
       chartRef.current = null;
       candleRef.current = null;
+      lineRef.current = null;
+      areaRef.current = null;
       ema20Ref.current = null;
       ema50Ref.current = null;
       ema200Ref.current = null;
@@ -305,6 +351,11 @@ export function PriceChart({
         open: b.open, high: b.high, low: b.low, close: b.close,
       })),
     );
+    // Line / area render the close; kept fed even while hidden so a style
+    // switch is instant (no re-fetch, no empty flash).
+    const closeData = ohlcv.map((b) => ({ time: dateToTime(b.date), value: b.close }));
+    lineRef.current?.setData(closeData);
+    areaRef.current?.setData(closeData);
     volumeRef.current.setData(
       ohlcv.map((b) => ({
         time: dateToTime(b.date),
@@ -329,6 +380,20 @@ export function PriceChart({
       ts.fitContent();
     }
   }, [ohlcv, timeframe]);
+
+  // Chart-type switch: show exactly one price series (candle / line / area).
+  useEffect(() => {
+    candleRef.current?.applyOptions({ visible: chartType === "candle" });
+    lineRef.current?.applyOptions({ visible: chartType === "line" });
+    areaRef.current?.applyOptions({ visible: chartType === "area" });
+  }, [chartType]);
+
+  // Log vs linear price scale.
+  useEffect(() => {
+    chartRef.current?.priceScale("right").applyOptions({
+      mode: logScale ? PriceScaleMode.Logarithmic : PriceScaleMode.Normal,
+    });
+  }, [logScale]);
 
 
   // EMA20
@@ -376,10 +441,11 @@ export function PriceChart({
     bbLowerRef.current.setData(pointsToChartData(indicators.bb_lower));
   }, [indicators.bb_upper, indicators.bb_middle, indicators.bb_lower, styles.bb]);
 
-  // Price alert lines (dashed)
+  // Price alert lines (dashed). Hosted on the ACTIVE price series so they
+  // stay visible in line / area mode too (a price line hides with its series).
   useEffect(() => {
-    if (!candleRef.current) return;
-    const series = candleRef.current;
+    const series = activePriceSeries(chartType);
+    if (!series) return;
     const created = priceAlerts
       .filter((pa) => pa.enabled && pa.triggered_at === null)
       .map((pa) =>
@@ -395,12 +461,12 @@ export function PriceChart({
     return () => {
       created.forEach((line) => series.removePriceLine(line));
     };
-  }, [priceAlerts]);
+  }, [priceAlerts, chartType]);
 
-  // Horizontal drawings
+  // Horizontal drawings — also hosted on the active series (see above).
   useEffect(() => {
-    if (!candleRef.current) return;
-    const series = candleRef.current;
+    const series = activePriceSeries(chartType);
+    if (!series) return;
     const created = horizontalDrawings.map((h) =>
       series.createPriceLine({
         price: h.price,
@@ -414,7 +480,7 @@ export function PriceChart({
     return () => {
       created.forEach((line) => series.removePriceLine(line));
     };
-  }, [horizontalDrawings]);
+  }, [horizontalDrawings, chartType]);
 
   // Trend lines (drawn with the "Linea" tool) — each is a 2-point line
   // series connecting the two clicked (time, price) points. Excluded
@@ -463,17 +529,18 @@ export function PriceChart({
   // charts requires ONE array sorted ascending by time, so the two marker
   // sets are merged and re-sorted here.
   useEffect(() => {
-    if (!candleRef.current) return;
+    const series = activePriceSeries(chartType);
+    if (!series) return;
     const merged = [...signalMarkers, ...earningsMarkers].sort(
       (a, b) => (a.time as number) - (b.time as number),
     );
-    candleRef.current.setMarkers(merged);
+    series.setMarkers(merged);
     return () => {
       // Clear on unmount / before re-apply so a timeframe switch (which
-      // remounts) never leaves orphaned markers behind.
-      candleRef.current?.setMarkers([]);
+      // remounts) or a style switch never leaves orphaned markers behind.
+      series.setMarkers([]);
     };
-  }, [signalMarkers, earningsMarkers, ohlcv]);
+  }, [signalMarkers, earningsMarkers, ohlcv, chartType]);
 
   return (
     <div ref={containerRef} className="w-full h-full relative">
