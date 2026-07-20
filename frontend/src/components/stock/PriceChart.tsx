@@ -44,6 +44,9 @@ interface Props {
   /** Bar-time (UTCTimestamp seconds) → signals fired on that bar, surfaced
    *  in a hover panel when the crosshair is over a marked candle. */
   signalsByTime?: Map<number, SignalHoverItem[]>;
+  /** Earnings "E" flags below the candles, tone by EPS surprise. Built by
+   *  `buildEarningsMarkers` in the parent. Merged with signalMarkers. */
+  earningsMarkers?: SeriesMarker<Time>[];
 }
 
 function dateToTime(d: string): UTCTimestamp {
@@ -61,7 +64,7 @@ export function PriceChart({
   ohlcv, indicators, styles,
   priceAlerts, horizontalDrawings = [], trendDrawings = [],
   onChartClick, onReady, timeframe,
-  signalMarkers = [], signalsByTime,
+  signalMarkers = [], signalsByTime, earningsMarkers = [],
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -454,18 +457,23 @@ export function PriceChart({
     };
   }, [trendDrawings]);
 
-  // Signal markers (arrows) on the candles. Re-applied on data change too:
+  // Signal + earnings markers on the candles. Re-applied on data change too:
   // `setData` doesn't clear markers, but depending on `ohlcv` guarantees the
-  // markers land after the series has the bars they anchor to.
+  // markers land after the series has the bars they anchor to. lightweight-
+  // charts requires ONE array sorted ascending by time, so the two marker
+  // sets are merged and re-sorted here.
   useEffect(() => {
     if (!candleRef.current) return;
-    candleRef.current.setMarkers(signalMarkers);
+    const merged = [...signalMarkers, ...earningsMarkers].sort(
+      (a, b) => (a.time as number) - (b.time as number),
+    );
+    candleRef.current.setMarkers(merged);
     return () => {
       // Clear on unmount / before re-apply so a timeframe switch (which
       // remounts) never leaves orphaned markers behind.
       candleRef.current?.setMarkers([]);
     };
-  }, [signalMarkers, ohlcv]);
+  }, [signalMarkers, earningsMarkers, ohlcv]);
 
   return (
     <div ref={containerRef} className="w-full h-full relative">

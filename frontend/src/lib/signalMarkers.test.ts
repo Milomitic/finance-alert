@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { Alert, OhlcvBar } from "@/api/types";
-import { buildSignalOverlay } from "@/lib/signalMarkers";
+import { buildEarningsMarkers, buildSignalOverlay } from "@/lib/signalMarkers";
 
 function bar(date: string, close = 100): OhlcvBar {
   return { date, open: 100, high: 101, low: 99, close, volume: 1000 };
@@ -97,5 +97,42 @@ describe("buildSignalOverlay", () => {
     ]);
     const times = markers.map((m) => m.time as number);
     expect(times).toEqual([...times].sort((a, b) => a - b));
+  });
+});
+
+describe("buildEarningsMarkers", () => {
+  it("returns empty for empty inputs", () => {
+    expect(buildEarningsMarkers([], [])).toEqual([]);
+    expect(buildEarningsMarkers(OHLCV, [])).toEqual([]);
+  });
+
+  it("flags an in-window earnings date, tone by surprise", () => {
+    const beat = buildEarningsMarkers(OHLCV, [{ date: "2026-07-08", surprise_pct: 4.2 }]);
+    expect(beat).toHaveLength(1);
+    expect(beat[0].shape).toBe("square");
+    expect(beat[0].text).toBe("E");
+    expect(beat[0].color).toBe("#0d9488"); // beat → teal
+
+    const miss = buildEarningsMarkers(OHLCV, [{ date: "2026-07-08", surprise_pct: -1.5 }]);
+    expect(miss[0].color).toBe("#b91c1c"); // miss → red
+
+    const unknown = buildEarningsMarkers(OHLCV, [{ date: "2026-07-08", surprise_pct: null }]);
+    expect(unknown[0].color).toBe("#64748b"); // unknown → slate
+  });
+
+  it("skips a future earnings date past the last bar", () => {
+    expect(buildEarningsMarkers(OHLCV, [{ date: "2027-01-01", surprise_pct: 0 }])).toEqual([]);
+  });
+
+  it("skips an earnings date before the first bar", () => {
+    expect(buildEarningsMarkers(OHLCV, [{ date: "2020-01-01", surprise_pct: 0 }])).toEqual([]);
+  });
+
+  it("emits at most one flag per bar", () => {
+    const m = buildEarningsMarkers(OHLCV, [
+      { date: "2026-07-08", surprise_pct: 1 },
+      { date: "2026-07-08", surprise_pct: 2 },
+    ]);
+    expect(m).toHaveLength(1);
   });
 });

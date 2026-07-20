@@ -7,7 +7,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { CardSkeleton } from "@/components/ui/card-skeleton";
 import { useChartSync } from "@/hooks/useChartSync";
 import { liveExtendIndicators } from "@/lib/liveIndicators";
-import { buildSignalOverlay } from "@/lib/signalMarkers";
+import { buildEarningsMarkers, buildSignalOverlay } from "@/lib/signalMarkers";
+import { useStockFundamentals } from "@/hooks/useStockFundamentals";
 import { useCreatePriceAlert, useStockPriceAlerts } from "@/hooks/useStockPriceAlerts";
 import { useLiveQuote } from "@/hooks/useLiveQuote";
 import { useStockDetail } from "@/hooks/useStockDetail";
@@ -162,6 +163,14 @@ export default function StockDetailPage() {
   const signalOverlay = useMemo(
     () => buildSignalOverlay(mergedOhlcv, detail.data?.alerts_history ?? []),
     [mergedOhlcv, detail.data?.alerts_history],
+  );
+  // Earnings "E" flags. Reuses the fundamentals query the FundamentalsCard
+  // already loads (shared queryKey → no extra request); the earnings list is
+  // the report dates + EPS surprise.
+  const fundamentals = useStockFundamentals(ticker);
+  const earningsMarkers = useMemo(
+    () => buildEarningsMarkers(mergedOhlcv, fundamentals.data?.earnings ?? []),
+    [mergedOhlcv, fundamentals.data?.earnings],
   );
 
   const [indicators, setIndicators] = useState<IndicatorState>(DEFAULT_INDICATOR_STATE);
@@ -446,6 +455,7 @@ export default function StockDetailPage() {
                   timeframe={range}
                   signalMarkers={signalOverlay.markers}
                   signalsByTime={signalOverlay.byTime}
+                  earningsMarkers={earningsMarkers}
                 />
               </ResizableSection>
             )}

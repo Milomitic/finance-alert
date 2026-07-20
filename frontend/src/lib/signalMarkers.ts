@@ -11,6 +11,29 @@ function alertDayISO(a: Alert): string | null {
   return iso ? iso.slice(0, 10) : null;
 }
 
+/** Ascending bar times (unix seconds) for the OHLCV series. */
+function barTimesOf(ohlcv: OhlcvBar[]): number[] {
+  return ohlcv.map((b) => Math.floor(Date.parse(b.date) / 1000));
+}
+
+/** The last bar time ≤ t (the candle that CONTAINS day `t`), or null when t
+ *  precedes the first bar. `barTimes` must be ascending. */
+function enclosingBarTime(barTimes: number[], t: number): number | null {
+  let lo = 0;
+  let hi = barTimes.length - 1;
+  let idx = -1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (barTimes[mid] <= t) {
+      idx = mid;
+      lo = mid + 1;
+    } else {
+      hi = mid - 1;
+    }
+  }
+  return idx < 0 ? null : barTimes[idx];
+}
+
 /** One signal line rendered in the chart's hover panel. */
 export interface SignalHoverItem {
   label: string;
@@ -44,7 +67,7 @@ export function buildSignalOverlay(ohlcv: OhlcvBar[], alerts: Alert[]): SignalOv
   if (ohlcv.length === 0 || alerts.length === 0) return EMPTY;
 
   // Bar times ascending (seconds). ohlcv is already sorted ascending.
-  const barTimes = ohlcv.map((b) => Math.floor(Date.parse(b.date) / 1000));
+  const barTimes = barTimesOf(ohlcv);
   const firstT = barTimes[0];
 
   const byTime = new Map<number, SignalHoverItem[]>();
@@ -54,22 +77,9 @@ export function buildSignalOverlay(ohlcv: OhlcvBar[], alerts: Alert[]): SignalOv
     const t = Math.floor(Date.parse(day) / 1000);
     if (!Number.isFinite(t) || t < firstT) continue; // older than the window
 
-    // Binary search: index of the last bar with barTimes[i] <= t.
-    let lo = 0;
-    let hi = barTimes.length - 1;
-    let idx = -1;
-    while (lo <= hi) {
-      const mid = (lo + hi) >> 1;
-      if (barTimes[mid] <= t) {
-        idx = mid;
-        lo = mid + 1;
-      } else {
-        hi = mid - 1;
-      }
-    }
-    if (idx < 0) continue;
+    const barT = enclosingBarTime(barTimes, t);
+    if (barT == null) continue;
 
-    const barT = barTimes[idx];
     const meta = getAlertMeta(a);
     const item: SignalHoverItem = {
       label: meta.label,
@@ -104,4 +114,50 @@ export function buildSignalOverlay(ohlcv: OhlcvBar[], alerts: Alert[]): SignalOv
   }
   markers.sort((a, b) => (a.time as number) - (b.time as number));
   return { markers, byTime };
+}
+
+/** Minimal earnings shape needed to place a marker (subset of
+ *  `FundamentalsEarnings`). */
+export interface EarningsPoint {
+  date: string;
+  surprise_pct?: number | null;
+}
+
+/** Build "E" flags for past earnings reports that fall within the chart's
+ *  bar range, one per bar, tone by EPS surprise (beat = teal, miss = red,
+ *  unknown = slate). Future/upcoming earnings (no bar yet) and dates before
+ *  the first bar are skipped. */
+export function buildEarningsMarkers(
+  ohlcv: OhlcvBar[],
+  earnings: EarningsPoint[],
+): SeriesMarker<Time>[] {
+  if (ohlcv.length === 0 || earnings.length === 0) return [];
+  const barTimes = barTimesOf(ohlcv);
+  const firstT = barTimes[0];
+  const lastT = barTimes[barTimes.length - 1];
+
+  const markers: SeriesMarker<Time>[] = [];
+  const seen = new Set<number>();
+  for (const e of earnings) {
+    const day = e.date?.slice(0, 10);
+    if (!day) continue;
+    const t = Math.floor(Date.parse(day) / 1000);
+    // Only past earnings that fall inside the visible window get a flag —
+    // a future `next_earnings_date` has no candle to anchor to.
+    if (!Number.isFinite(t) || t < firstT || t > lastT) continue;
+    const barT = enclosingBarTime(barTimes, t);
+    if (barT == null || seen.has(barT)) continue; // one flag per bar
+    seen.add(barT);
+    const s = e.surprise_pct;
+    const color = typeof s === "number" ? (s >= 0 ? "#0d9488" : "#b91c1c") : "#64748b";
+    markers.push({
+      time: barT as UTCTimestamp,
+      position: "belowBar",
+      shape: "square",
+      color,
+      text: "E",
+    });
+  }
+  markers.sort((a, b) => (a.time as number) - (b.time as number));
+  return markers;
 }
