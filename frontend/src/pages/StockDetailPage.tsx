@@ -12,6 +12,7 @@ import { mergeLiveQuoteIntoOhlcv } from "@/lib/liveOhlcvMerge";
 import { buildEarningsMarkers, buildSignalOverlay } from "@/lib/signalMarkers";
 import { rebaseBenchmark } from "@/lib/benchmarkOverlay";
 import { downloadChartPng } from "@/lib/chartExport";
+import { exchangeTimezone } from "@/lib/exchangeHours";
 import { useStockFundamentals } from "@/hooks/useStockFundamentals";
 import { useMarketDetail } from "@/hooks/useMarketDetail";
 import { useCreatePriceAlert, useStockPriceAlerts } from "@/hooks/useStockPriceAlerts";
@@ -420,6 +421,7 @@ export default function StockDetailPage() {
                   benchmarkLine={benchmarkLine}
                   benchmarkLabel={benchmarkLabel}
                   chartApiRef={chartApiRef}
+                  exchangeTz={exchangeTimezone(ticker)}
                 />
               </ResizableSection>
             )}

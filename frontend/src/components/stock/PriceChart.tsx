@@ -60,6 +60,10 @@ interface Props {
   benchmarkLabel?: string;
   /** Exposes the chart instance to the parent for PNG export. */
   chartApiRef?: MutableRefObject<IChartApi | null>;
+  /** IANA timezone of the stock's exchange. Intraday axis + legend render in
+   *  this zone so a US 09:35 bar reads "09:35", not the UTC "13:35". Daily+
+   *  stays date-only in UTC regardless. Defaults to UTC. */
+  exchangeTz?: string;
 }
 
 /** Price-series render style. "candle" is the OHLC default; "line" / "area"
@@ -84,6 +88,7 @@ export function PriceChart({
   signalMarkers = [], signalsByTime, earningsMarkers = [],
   chartType = "candle", logScale = false,
   benchmarkLine = [], benchmarkColor = "#7c3aed", benchmarkLabel, chartApiRef,
+  exchangeTz = "UTC",
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -99,6 +104,7 @@ export function PriceChart({
   // would otherwise close over the initial `ohlcv` snapshot.
   const ohlcvRef = useRef<OhlcvBar[]>([]);
   const timeframeRef = useRef<string | undefined>(timeframe);
+  const exchangeTzRef = useRef<string>(exchangeTz);
   // The fixed top-left legend. `null` only before the first data load;
   // afterwards it shows the latest bar (idle) or the hovered bar.
   const [legend, setLegend] = useState<LegendDatum | null>(null);
@@ -123,7 +129,8 @@ export function PriceChart({
     timeframeRef.current = timeframe;
     ohlcvRef.current = ohlcv;
     signalsByTimeRef.current = signalsByTime;
-  }, [timeframe, ohlcv, signalsByTime]);
+    exchangeTzRef.current = exchangeTz;
+  }, [timeframe, ohlcv, signalsByTime, exchangeTz]);
   const ema20Ref = useRef<ISeriesApi<"Line"> | null>(null);
   const ema50Ref = useRef<ISeriesApi<"Line"> | null>(null);
   const ema200Ref = useRef<ISeriesApi<"Line"> | null>(null);
@@ -158,6 +165,28 @@ export function PriceChart({
   // Create chart once
   useEffect(() => {
     if (!containerRef.current) return;
+    const isIntraday = timeframe === "5m" || timeframe === "30m" || timeframe === "1h";
+    // Intraday axis + crosshair render times in the EXCHANGE's local zone
+    // (read live from the ref so a cross-ticker nav without remount stays
+    // correct). lightweight-charts renders UTCTimestamps as UTC by default, so
+    // without this a US 09:35 bar showed the UTC "13:35". Daily+ keeps the
+    // library's default date formatter.
+    const intradayTick = (time: Time, tickType: number): string => {
+      const d = new Date((time as unknown as number) * 1000);
+      const tz = exchangeTzRef.current;
+      if (tickType <= 2) {
+        // Year | Month | DayOfMonth boundary → show the date.
+        return d.toLocaleDateString("it-IT", { day: "2-digit", month: "short", timeZone: tz });
+      }
+      return d.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit", timeZone: tz });
+    };
+    const intradayCrosshair = (time: Time): string => {
+      const d = new Date((time as unknown as number) * 1000);
+      return d.toLocaleString("it-IT", {
+        day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit",
+        timeZone: exchangeTzRef.current,
+      });
+    };
     const chart = createChart(containerRef.current, {
       layout: {
         background: { type: ColorType.Solid, color: "transparent" },
@@ -180,14 +209,18 @@ export function PriceChart({
         // never glued to the border. The pan/zoom clamp (below) keeps the
         // symmetric bound on both edges.
         rightOffset: EDGE_MARGIN_BARS,
-        // Intraday (30m / 1h) — show wall-clock time on the axis so
-        // the user reads "14:30" instead of just the date. Daily+
-        // timeframes keep the date-only axis. Toggled via the
-        // `timeframe` prop and re-applied at chart creation (the
-        // outer key={range} forces a fresh mount when this flips).
-        timeVisible: timeframe === "5m" || timeframe === "30m" || timeframe === "1h",
+        // Intraday (5m / 30m / 1h) — show wall-clock time on the axis so the
+        // user reads "09:35" instead of just the date. Daily+ timeframes keep
+        // the date-only axis. The custom tickMarkFormatter renders that time
+        // in the exchange's local zone (see intradayTick). Toggled via the
+        // `timeframe` prop, re-applied at chart creation (key={range} forces a
+        // fresh mount when this flips).
+        timeVisible: isIntraday,
         secondsVisible: false,
+        tickMarkFormatter: isIntraday ? intradayTick : undefined,
       },
+      // Crosshair time label (bottom axis) also in exchange-local time.
+      localization: isIntraday ? { timeFormatter: intradayCrosshair } : undefined,
       // Free crosshair (was Magnet=1) so the Y-value badge tracks the
       // cursor's actual position rather than snapping to the candle close.
       // Per user request: "lascialo libero a prescindere dalla curva".
@@ -307,7 +340,7 @@ export function PriceChart({
       // Δ% bar-over-bar (this close vs PREVIOUS close) — the canonical
       // D/D return on daily bars, period-over-period on intraday.
       const prevBar = bar.idx > 0 ? ohlcvRef.current[bar.idx - 1] : null;
-      setLegend(barToLegend(bar, prevBar, timeframeRef.current));
+      setLegend(barToLegend(bar, prevBar, timeframeRef.current, exchangeTzRef.current));
       setHoverSignals(signalsByTimeRef.current?.get(param.time as number) ?? null);
     };
     chart.subscribeCrosshairMove(crosshairHandler);
@@ -366,7 +399,7 @@ export function PriceChart({
     // Seed/refresh the top-left legend with the latest bar (idle state).
     const lastBar = ohlcv[ohlcv.length - 1];
     const prevOfLast = ohlcv.length > 1 ? ohlcv[ohlcv.length - 2] : null;
-    const latest = lastBar ? barToLegend(lastBar, prevOfLast, timeframe) : null;
+    const latest = lastBar ? barToLegend(lastBar, prevOfLast, timeframe, exchangeTzRef.current) : null;
     latestLegendRef.current = latest;
     setLegend(latest);
     candleRef.current.setData(

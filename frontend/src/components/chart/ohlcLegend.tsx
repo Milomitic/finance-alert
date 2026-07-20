@@ -32,22 +32,30 @@ export interface LegendDatum {
   isUp: boolean;
 }
 
-/** Format a bar's ISO date for the legend. Intraday timeframes show
- *  date+time so the user can tell which candle they're on; daily+ show
- *  just the date. Forced UTC so it matches lightweight-charts' axis
- *  (which renders UTC and would otherwise disagree with Europe/Rome). */
-export function formatBarDate(iso: string, timeframe: string | undefined): string {
+/** Format a bar's ISO date for the legend. Intraday timeframes show date+time
+ *  in the EXCHANGE's local time (`tz`) so a US 09:35 bar reads "09:35", not the
+ *  UTC "13:35" — matching the axis, which uses the same tz formatter. Daily+
+ *  show just the date, always in UTC: those ISO values are date-only (midnight
+ *  UTC) and a negative-offset tz would shift them a day. `tz` defaults to UTC
+ *  for callers with no single exchange (market assets: indices / FX / crypto). */
+export function formatBarDate(
+  iso: string,
+  timeframe: string | undefined,
+  tz: string = "UTC",
+): string {
   const isIntraday = timeframe === "5m" || timeframe === "30m" || timeframe === "1h";
   const d = new Date(iso);
   if (isNaN(d.getTime())) return iso;
+  if (!isIntraday) {
+    return d.toLocaleDateString("it-IT", {
+      day: "2-digit", month: "2-digit", year: "2-digit", timeZone: "UTC",
+    });
+  }
   const dateStr = d.toLocaleDateString("it-IT", {
-    day: "2-digit", month: "2-digit", year: "2-digit",
-    timeZone: "UTC",
+    day: "2-digit", month: "2-digit", year: "2-digit", timeZone: tz,
   });
-  if (!isIntraday) return dateStr;
   const timeStr = d.toLocaleTimeString("it-IT", {
-    hour: "2-digit", minute: "2-digit",
-    timeZone: "UTC",
+    hour: "2-digit", minute: "2-digit", timeZone: tz,
   });
   return `${dateStr} ${timeStr}`;
 }
@@ -71,13 +79,14 @@ export function barToLegend(
   bar: LegendBar,
   prevBar: LegendBar | null,
   timeframe: string | undefined,
+  tz: string = "UTC",
 ): LegendDatum {
   const changePct =
     prevBar && prevBar.close !== 0
       ? ((bar.close - prevBar.close) / prevBar.close) * 100
       : null;
   return {
-    date: formatBarDate(bar.date, timeframe),
+    date: formatBarDate(bar.date, timeframe, tz),
     open: bar.open,
     high: bar.high,
     low: bar.low,
