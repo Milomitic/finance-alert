@@ -3,11 +3,12 @@ import { AlertCircle, Loader2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 
-import type { LiveQuote, OhlcvBar, PriceAlert } from "@/api/types";
+import type { PriceAlert } from "@/api/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { CardSkeleton } from "@/components/ui/card-skeleton";
 import { useChartSync } from "@/hooks/useChartSync";
 import { liveExtendIndicators } from "@/lib/liveIndicators";
+import { mergeLiveQuoteIntoOhlcv } from "@/lib/liveOhlcvMerge";
 import { buildEarningsMarkers, buildSignalOverlay } from "@/lib/signalMarkers";
 import { rebaseBenchmark } from "@/lib/benchmarkOverlay";
 import { downloadChartPng } from "@/lib/chartExport";
@@ -47,77 +48,6 @@ import { EtfHoldingsCard } from "@/components/stock/EtfHoldingsCard";
 import { StockScoreCard } from "@/components/stock/StockScoreCard";
 import { StockTechnicalCard } from "@/components/stock/StockTechnicalCard";
 import { TechnicalKpiCard } from "@/components/stock/TechnicalKpiCard";
-
-/**
- * Merge the live quote into the OHLCV series so the rightmost candle
- * reflects the in-session price instead of yesterday's close.
- *
- * Why this is needed: for 1d/1w/1m/all the backend reads daily bars
- * from the DB, and those are only refreshed by the EOD scan at 23:30.
- * During the trading day the latest stored bar is yesterday's close —
- * the chart's last candle would otherwise lag the live header price.
- *
- *  - 1d: if last.date is older than today, APPEND a new bar dated
- *    today with open/high/low/close synthesized from the live quote.
- *  - 1w / 1m / all: the last bar covers a multi-day range that
- *    includes today, so UPDATE its close (= live price) and extend
- *    high/low with today's session extremes.
- *
- * Intraday timeframes (30m / 1h) are excluded: those come straight
- * from yfinance and already include today's partial bar with live
- * values. Volume is intentionally left untouched for 1w/1m/all to
- * avoid double-counting today if the catalog refresh already folded
- * it into the partial bar.
- */
-function mergeLiveQuoteIntoOhlcv(
-  ohlcv: OhlcvBar[],
-  live: LiveQuote | undefined,
-  range: string,
-): OhlcvBar[] {
-  if (range === "5m" || range === "30m" || range === "1h") return ohlcv;
-  if (!live || live.price == null || ohlcv.length === 0) return ohlcv;
-  const todayISO = new Date().toISOString().slice(0, 10);
-  // Overlay the live quote whenever the backend says `price` is TODAY's
-  // value — either a genuine open session (market_state OPEN/PRE) OR the
-  // post-close gap where the backend now serves today's official/
-  // provisional close (as_of_date === today). When `price` is yesterday's
-  // close (as_of_date < today, e.g. no today data available) we DON'T
-  // overlay: appending an echo of the last DB bar would just duplicate
-  // the rightmost candle (the original phantom-candle bug).
-  const showsToday =
-    live.market_state === "OPEN" ||
-    live.market_state === "PRE" ||
-    live.as_of_date === todayISO;
-  if (!showsToday) return ohlcv;
-
-  const last = ohlcv[ohlcv.length - 1];
-  const liveOpen = live.day_open ?? live.price;
-  const liveHigh = Math.max(live.day_high ?? live.price, live.price);
-  const liveLow = Math.min(live.day_low ?? live.price, live.price);
-
-  if (range === "1d" && last.date < todayISO) {
-    return [
-      ...ohlcv,
-      {
-        date: todayISO,
-        open: liveOpen,
-        high: liveHigh,
-        low: liveLow,
-        close: live.price,
-        volume: live.volume ?? 0,
-      },
-    ];
-  }
-  return [
-    ...ohlcv.slice(0, -1),
-    {
-      ...last,
-      close: live.price,
-      high: Math.max(last.high, liveHigh),
-      low: Math.min(last.low, liveLow),
-    },
-  ];
-}
 
 export default function StockDetailPage() {
   const { ticker = "" } = useParams<{ ticker: string }>();
