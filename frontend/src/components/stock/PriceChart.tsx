@@ -653,13 +653,13 @@ export function PriceChart({
 
   return (
     <div ref={containerRef} className="w-full h-full relative">
-      {/* Fixed top-left OHLCV legend — shared with MarketChart (see
-          components/chart/ohlcLegend): latest bar idle, hovered bar on
-          crosshair-move; never occludes the candles. */}
-      <OhlcLegend legend={legend} />
-      {/* Signal detail for the hovered candle — sits just under the legend,
-          only while the cursor is over a marked bar. */}
-      <SignalHoverPanel signals={hoverSignals} />
+      {/* Top-left overlay stack: OHLCV legend, then (only over a marked bar)
+          the signal detail — a flex column so the panel always sits directly
+          below the legend regardless of how many lines the legend wraps to. */}
+      <div className="absolute top-2 left-2 z-10 flex flex-col items-start gap-1 pointer-events-none">
+        <OhlcLegend legend={legend} inline />
+        <SignalHoverPanel signals={hoverSignals} />
+      </div>
     </div>
   );
 }

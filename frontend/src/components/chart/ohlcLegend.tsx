@@ -104,10 +104,24 @@ const downTone = "text-red-700 dark:text-red-300";
  *  Two lines: O/H/L/C on top, Vol + Δ% below (no date — it's on the time
  *  axis under the cursor). `pointer-events-none` so it never steals the
  *  crosshair. */
-export function OhlcLegend({ legend }: { legend: LegendDatum | null }) {
+export function OhlcLegend({
+  legend,
+  inline = false,
+}: {
+  legend: LegendDatum | null;
+  /** When true, drop the self-positioning so a parent can stack the legend
+   *  with sibling overlays (e.g. the signal hover panel). Default keeps the
+   *  standalone absolute top-left placement used by MarketChart. */
+  inline?: boolean;
+}) {
   if (!legend) return null;
   return (
-    <div className="absolute top-2 left-2 z-10 pointer-events-none rounded-md border bg-card/85 backdrop-blur-sm px-3 py-1.5 font-mono tabular-nums shadow-sm text-sm leading-snug">
+    <div
+      className={cn(
+        "rounded-md border bg-card/85 backdrop-blur-sm px-3 py-1.5 font-mono tabular-nums shadow-sm text-sm leading-snug",
+        !inline && "absolute top-2 left-2 z-10 pointer-events-none",
+      )}
+    >
       <div className="flex flex-wrap items-center gap-x-4 gap-y-0.5">
         <span>
           <span className="text-muted-foreground">O</span> {fmtPrice(legend.open)}

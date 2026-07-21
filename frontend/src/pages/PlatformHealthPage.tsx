@@ -7,6 +7,7 @@ import {
   fetchProbeProgress,
   runProbesNow,
 } from "@/api/platformHealth";
+import { QueryError } from "@/components/ui/query-error";
 import DataSourcesCard from "@/components/health/DataSourcesCard";
 import SchedulerCard from "@/components/health/SchedulerCard";
 import ScansCard from "@/components/health/ScansCard";
@@ -58,7 +59,13 @@ export default function PlatformHealthPage() {
     queryKey: ["platform-logs-initial"],
     queryFn: () => fetchLogs({ limit: 500 }),
   });
-  const { data: initialHealth, isLoading: healthLoading } = useQuery({
+  const {
+    data: initialHealth,
+    isLoading: healthLoading,
+    isError: healthError,
+    isFetching: healthFetching,
+    refetch: refetchHealth,
+  } = useQuery({
     queryKey: ["platform-health"],
     queryFn: fetchHealth,
   });
@@ -257,7 +264,10 @@ export default function PlatformHealthPage() {
           </div>
         </div>
 
-        {/* Overall status banner */}
+        {/* Overall status banner — only when we actually have a snapshot.
+            Without this guard a failed initial fetch (health null) showed a
+            falsely-green "operational" banner over an empty body. */}
+        {health && (
         <div
           className={`flex items-start gap-3 rounded-lg border p-5 ${status.bg} ${status.border}`}
         >
@@ -282,12 +292,30 @@ export default function PlatformHealthPage() {
             )}
           </div>
         </div>
+        )}
       </header>
 
       {/* Loading state */}
       {healthLoading && !health && (
         <div className="rounded-lg border bg-card p-8 text-center text-muted-foreground">
           Caricamento snapshot iniziale…
+        </div>
+      )}
+
+      {/* Hard-failure state: initial fetch errored and SSE hasn't delivered a
+          snapshot — surface a retry instead of the empty (falsely-green) body. */}
+      {!health && !healthLoading && (
+        <div className="rounded-lg border bg-card p-8">
+          <QueryError
+            message="dello stato piattaforma"
+            onRetry={refetchHealth}
+            isRetrying={healthFetching}
+          />
+          {!healthError && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              In attesa del primo evento SSE…
+            </p>
+          )}
         </div>
       )}
 

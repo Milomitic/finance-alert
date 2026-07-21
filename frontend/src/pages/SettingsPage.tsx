@@ -16,6 +16,7 @@ import { DetectorPerformancePanel } from "@/components/settings/DetectorPerforma
 import { ScoreIcPanel } from "@/components/settings/ScoreIcPanel";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { QueryError } from "@/components/ui/query-error";
 import { SectionTitle } from "@/components/ui/section-title";
 import {
   useCatalogStatus,
@@ -101,6 +102,10 @@ function RulePerformancePanel() {
           <div className="py-8 text-center text-sm text-muted-foreground inline-flex items-center gap-2 justify-center w-full">
             <Loader2 className="h-4 w-4 animate-spin" />
             Calcolo statistiche…
+          </div>
+        ) : q.isError ? (
+          <div className="py-8">
+            <QueryError message="delle statistiche" onRetry={q.refetch} isRetrying={q.isFetching} />
           </div>
         ) : items.length === 0 ? (
           <div className="py-8 text-center text-sm text-muted-foreground">
@@ -285,6 +290,10 @@ function ScanLogPanel() {
         {q.isLoading ? (
           <div className="py-6 text-center text-sm text-muted-foreground">
             Caricamento…
+          </div>
+        ) : q.isError ? (
+          <div className="py-6">
+            <QueryError message="del log scan" onRetry={q.refetch} isRetrying={q.isFetching} />
           </div>
         ) : runs.length === 0 ? (
           <div className="py-6 text-center text-sm text-muted-foreground">
@@ -569,6 +578,10 @@ function CatalogRefreshPanel() {
         {status.isLoading ? (
           <div className="py-6 text-center text-sm text-muted-foreground">
             Caricamento…
+          </div>
+        ) : status.isError ? (
+          <div className="py-6">
+            <QueryError message="dello stato catalogo" onRetry={status.refetch} isRetrying={status.isFetching} />
           </div>
         ) : (
           <div className="overflow-x-auto">

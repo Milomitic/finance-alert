@@ -21,7 +21,7 @@ function outcomeGlyph(outcome: boolean | null | undefined): { text: string; cls:
 export function SignalHoverPanel({ signals }: { signals: SignalHoverItem[] | null }) {
   if (!signals || signals.length === 0) return null;
   return (
-    <div className="absolute top-[52px] left-2 z-10 pointer-events-none max-w-[280px] rounded-md border bg-card/90 backdrop-blur-sm px-3 py-1.5 shadow-sm text-xs leading-snug space-y-0.5">
+    <div className="max-w-[280px] rounded-md border bg-card/90 backdrop-blur-sm px-3 py-1.5 shadow-sm text-xs leading-snug space-y-0.5">
       {signals.map((s, i) => {
         const oc = outcomeGlyph(s.outcome);
         return (

@@ -19,6 +19,7 @@ import { Link, useParams } from "react-router-dom";
 import { StockIdentity } from "@/components/dashboard/StockIdentity";
 import { Card, CardContent } from "@/components/ui/card";
 import { CardSkeleton } from "@/components/ui/card-skeleton";
+import { QueryError } from "@/components/ui/query-error";
 import { SectionTitle } from "@/components/ui/section-title";
 import { useSectorDetail, type SectorStockRow } from "@/hooks/useSectorDetail";
 import { getSectorIcon, getSectorIconColor } from "@/lib/sectorMeta";
@@ -144,14 +145,19 @@ export default function SectorDetailPage() {
       </div>
     );
   }
-  if (q.error || !q.data) {
+  if (q.isError || !q.data) {
     return (
       <div className="p-8">
         <Link to="/sectors" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:underline">
           <ArrowLeft className="h-4 w-4" /> Settori
         </Link>
-        <div className="mt-4 text-red-600">
-          Settore non trovato: {decoded}
+        <div className="mt-4">
+          {q.isError ? (
+            // A genuine fetch failure is retryable — don't mislabel it "not found".
+            <QueryError message={`del settore ${decoded}`} onRetry={q.refetch} isRetrying={q.isFetching} />
+          ) : (
+            <div className="text-red-600">Settore non trovato: {decoded}</div>
+          )}
         </div>
       </div>
     );
