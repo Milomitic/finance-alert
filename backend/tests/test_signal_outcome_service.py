@@ -17,7 +17,7 @@ def _seed(db, *, closes: list[float], sig_idx: int, tone: str = "bull"):
     db.flush()
     d0 = date(2026, 1, 1)
     days = [d0 + timedelta(days=i) for i in range(len(closes))]
-    for d, c in zip(days, closes):
+    for d, c in zip(days, closes, strict=False):
         db.add(OhlcvDaily(stock_id=s.id, date=d, open=c, high=c + 1,
                           low=c - 1, close=c, volume=1_000_000))
     a = Alert(

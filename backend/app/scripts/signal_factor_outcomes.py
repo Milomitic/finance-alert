@@ -214,7 +214,7 @@ def _collect_observations(universe: list[_Stock]) -> list[_Obs]:
         df = s.df
         pos = {d: i for i, d in enumerate(s.dates)}
 
-        def add(factor, events, *, mode_dir, lag=0):  # noqa: ANN001
+        def add(factor, events, *, mode_dir, lag=0, pos=pos, sidx=sidx):  # noqa: ANN001
             for e in events:
                 i = pos.get(e.date)
                 if i is None or e.magnitude is None:
@@ -326,7 +326,6 @@ def _report_factor(name: str, df: pd.DataFrame, n_buckets: int) -> None:
         print(f"\n{name}: only {n} obs — too few to bucket, skipping.")
         return
     directional = name in _DIR_FACTORS
-    metric = "dir_excess" if directional else "abs_excess"
     try:
         sub = sub.copy()
         sub["bucket"] = pd.qcut(sub["raw"].rank(method="first"), n_buckets, labels=False)

@@ -9,7 +9,7 @@ from app.signals.events import extract_events
 def _near_52w_high_uptrend():
     rows = []
     price = 50.0
-    for i in range(260):
+    for _i in range(260):
         price += 0.25
         rows.append(price)
     records = [
@@ -57,11 +57,11 @@ def test_high52_momentum_annotations_has_resistance_level():
 def test_silent_far_below_high():
     rows = []
     price = 50.0
-    for i in range(220):
+    for _i in range(220):
         price += 0.25
         rows.append(price)
     peak = price
-    for i in range(40):
+    for _i in range(40):
         price -= peak * 0.006
         rows.append(price)
     df = pd.DataFrame([

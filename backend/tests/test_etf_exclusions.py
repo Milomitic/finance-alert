@@ -61,7 +61,7 @@ def _stock(db: Session, ticker: str, *, instrument_type: str = "equity",
 def _seed_ohlcv(db: Session, stock_id: int, closes: list[float],
                 start: date = date(2026, 1, 1)) -> list[date]:
     days = [start + timedelta(days=i) for i in range(len(closes))]
-    for d, c in zip(days, closes):
+    for d, c in zip(days, closes, strict=False):
         db.add(OhlcvDaily(stock_id=stock_id, date=d, open=c, high=c + 1,
                           low=max(c - 1, 0.01), close=c, volume=1_000_000))
     return days

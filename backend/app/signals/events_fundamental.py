@@ -143,7 +143,7 @@ def produce_insider_events(db, stock) -> list[Event]:
     out: list[Event] = []
     emitted_windows: list[tuple[_date, _date]] = []  # (start, end) of already-emitted clusters
 
-    for i, (d_start, _, _) in enumerate(purchases):
+    for _i, (d_start, _, _) in enumerate(purchases):
         d_end = d_start + timedelta(days=_WINDOW_DAYS)
         # Gather all purchases inside [d_start, d_end]
         in_window = [(d, ins, sh) for (d, ins, sh) in purchases if d_start <= d <= d_end]

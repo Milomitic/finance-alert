@@ -84,7 +84,7 @@ def _universe_fwd_medians(universe, horizons) -> dict[int, dict]:
             c0, cH = c[:-h], c[h:]
             ok = c0 > 0
             rets = cH[ok] / c0[ok] - 1.0
-            for d, r in zip(np.asarray(s.dates, dtype=object)[:-h][ok], rets):
+            for d, r in zip(np.asarray(s.dates, dtype=object)[:-h][ok], rets, strict=False):
                 by_date[d].append(float(r))
         out[h] = {d: float(np.median(v)) for d, v in by_date.items() if len(v) >= 10}
     return out
@@ -158,7 +158,7 @@ def run(*, sample: int, step: int, window: int, min_bars: int, holdout_frac: flo
               f"{'nB':>7}{'nb':>7}{'OOSΔ':>7}{'OOSsign':>8}")
         print("-" * 92)
         for det in detectors:
-            def cell(reg, period=None):
+            def cell(reg, period=None, det=det):
                 if period:
                     arr = per.get((det, reg, period), [])
                 else:

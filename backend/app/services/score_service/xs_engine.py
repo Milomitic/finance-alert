@@ -125,7 +125,7 @@ def _apply_cross_sectional_engine(db: Session, stocks: list[Stock]) -> int:
                 bysec_pairs[r["sector"]].append((sv, idx))
                 univ_pairs.append((sv, idx))
         univ_pct = _avg_rank_pct(univ_pairs) if univ_pairs else {}
-        for sector, pairs in bysec_pairs.items():
+        for _sector, pairs in bysec_pairs.items():
             pct = (
                 _avg_rank_pct(pairs)
                 if len(pairs) >= _XS_MIN_SECTOR_N

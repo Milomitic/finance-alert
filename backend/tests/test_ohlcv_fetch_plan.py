@@ -40,7 +40,7 @@ def test_build_fetch_plan_split_sort_and_quarantine(db):
     fresh_new = _stock(db, "FR2")     # latest 2d ago  -> incremental
     fresh_old = _stock(db, "FR9")     # latest 9d ago  -> incremental (staler)
     stale = _stock(db, "STALE")       # latest 60d ago -> backfill
-    empty = _stock(db, "EMPTY")       # no bars        -> backfill
+    _stock(db, "EMPTY")       # no bars        -> backfill
     # Zero-bar dead ticker in quarantine window -> excluded from backfill.
     _stock(db, "DEADQ", ohlcv_nodata_streak=5, ohlcv_last_nodata_at=TODAY)
     # Stale stock WITH data and a high nodata streak: quarantine must NOT

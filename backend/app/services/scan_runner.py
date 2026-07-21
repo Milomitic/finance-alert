@@ -379,7 +379,7 @@ def run_tracked_scan(
                 # Propagate as the scan-level cancel so the outer handler can
                 # finalize the row cleanly. The user clicked Stop — same
                 # outcome whether it landed inside or outside the score loop.
-                raise ScanCancelled("Cancellato dall'utente")
+                raise ScanCancelled("Cancellato dall'utente") from None
         except ScanCancelled:
             raise
         except Exception as score_exc:  # noqa: BLE001

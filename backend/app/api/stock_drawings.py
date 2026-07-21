@@ -90,7 +90,7 @@ def delete_drawing(
     try:
         stock_drawing_service.delete_one(db, stock_id, drawing_id)
     except LookupError:
-        raise HTTPException(status_code=404, detail="Drawing not found")
+        raise HTTPException(status_code=404, detail="Drawing not found") from None
 
 
 @router.delete(

@@ -826,7 +826,7 @@ def _validate_fundamentals(obs: pd.DataFrame) -> None:
         obs2 = obs.copy()
         obs2[sig + "_sr"] = (
             obs2.groupby("obs_date", group_keys=False)
-            .apply(lambda g: g.groupby("sector")[sig].rank(pct=True) * 100.0)
+            .apply(lambda g, sig=sig: g.groupby("sector")[sig].rank(pct=True) * 100.0)
         )
         sr_cells = []
         for h in _HORIZONS:

@@ -866,7 +866,7 @@ def get_quotes_batch(tickers: list[str]) -> dict[str, LiveQuote]:
         results = ex.map(
             lambda t: get_quote(t, allow_remote_today_fetch=False), tickers
         )
-        for t, q in zip(tickers, results):
+        for t, q in zip(tickers, results, strict=False):
             out[t] = q
     return out
 

@@ -82,7 +82,6 @@ class _StreamingASGITransport(httpx.AsyncBaseTransport):
         status_code, raw_headers = await response_started
 
         # Build a streaming response body
-        transport_ref = self
 
         class _StreamBody(httpx.AsyncByteStream):
             async def __aiter__(self) -> AsyncIterator[bytes]:

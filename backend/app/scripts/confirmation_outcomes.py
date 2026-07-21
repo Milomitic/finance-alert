@@ -71,7 +71,7 @@ def run(*, sample: int, step: int, window: int, min_bars: int) -> None:
                     continue
                 if not matches:
                     continue
-                di = date_to_idx.get(s.dates[i])
+                date_to_idx.get(s.dates[i])
                 for m in matches:
                     if "confirmation_count" not in m.factors:
                         continue  # non-enrichable (fundamental) detector

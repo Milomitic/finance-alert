@@ -88,7 +88,7 @@ def update_price_alert(
             direction=body.direction, note=body.note,
         )
     except LookupError:
-        raise HTTPException(status_code=404, detail="Price alert not found")
+        raise HTTPException(status_code=404, detail="Price alert not found") from None
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
     return PriceAlertOut.model_validate(pa, from_attributes=True)
@@ -107,4 +107,4 @@ def delete_price_alert(
     try:
         price_alert_service.delete(db, alert_id)
     except LookupError:
-        raise HTTPException(status_code=404, detail="Price alert not found")
+        raise HTTPException(status_code=404, detail="Price alert not found") from None

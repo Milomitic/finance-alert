@@ -327,7 +327,7 @@ def _compute_indicators(bars: list[OhlcvBar]) -> IndicatorBundle:
 
     def _series_to_points(series):
         out = []
-        for d, v in zip(dates, series.tolist()):
+        for d, v in zip(dates, series.tolist(), strict=False):
             try:
                 fv = float(v) if v == v and v is not None else None  # NaN check
                 if fv is not None and (fv == float("inf") or fv == float("-inf")):

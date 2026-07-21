@@ -44,9 +44,9 @@ def test_top_alerted_7d_returns_winner(db):
 
 
 def test_build_spotlight_with_snapshot_and_alerts(db):
-    s1 = _seed_stock(db, "NVDA")
+    _seed_stock(db, "NVDA")
     s2 = _seed_stock(db, "AAPL")
-    s3 = _seed_stock(db, "PLTR")
+    _seed_stock(db, "PLTR")
     payload = {
         "movers": {
             "gainers": [{"ticker": "NVDA", "change_pct": 4.2, "last_close": 880.0}],

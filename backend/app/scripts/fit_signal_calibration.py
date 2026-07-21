@@ -528,7 +528,7 @@ def decide(res_stock: dict, res_time: dict) -> tuple[str | None, str]:
     lines = []
     winner = None
     for key in ("isotonic", "logistic"):
-        gains, ll_ok, all_ok = [], True, True
+        gains, ll_ok, _all_ok = [], True, True
         for res in (res_stock, res_time):
             b = res["baseline"]
             m = res[key]

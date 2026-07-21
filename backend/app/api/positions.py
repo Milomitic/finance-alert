@@ -98,7 +98,7 @@ def patch_position(
                 db, position_id, exit_price=exit_price, exit_reason="manual"
             )
         except LookupError:
-            raise HTTPException(status_code=404, detail="Position not found")
+            raise HTTPException(status_code=404, detail="Position not found") from None
         except ValueError as e:
             # "already closed" is a state conflict, not a validation error.
             detail = str(e)
@@ -114,7 +114,7 @@ def patch_position(
             notes=body.notes,
         )
     except LookupError:
-        raise HTTPException(status_code=404, detail="Position not found")
+        raise HTTPException(status_code=404, detail="Position not found") from None
     except ValueError as e:
         detail = str(e)
         status_code = 409 if "already closed" in detail else 422
@@ -135,4 +135,4 @@ def delete_position(
     try:
         position_service.delete_position(db, position_id)
     except LookupError:
-        raise HTTPException(status_code=404, detail="Position not found")
+        raise HTTPException(status_code=404, detail="Position not found") from None

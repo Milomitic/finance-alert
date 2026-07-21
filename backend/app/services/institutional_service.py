@@ -752,7 +752,7 @@ def get_aggregate_stats(
         latest_ids_q = latest_ids_q.where(Institutional.type == type_)
     latest_rows = db.execute(latest_ids_q).all()
     latest_filing_ids = [r[0] for r in latest_rows]
-    inst_name_by_id: dict[int, str] = {r[1]: r[2] for r in latest_rows}
+    {r[1]: r[2] for r in latest_rows}
 
     if not latest_filing_ids:
         return AggregateStats(

@@ -62,7 +62,7 @@ def test_evaluate_below_fires_when_crossed(db):
 
 def test_evaluate_does_not_refire_already_triggered(db):
     s = _seed_stock_with_two_bars(db, "T", prev_close=99.0, last_close=101.0)
-    pa = price_alert_service.create(db, s.id, 100.0, "above")
+    price_alert_service.create(db, s.id, 100.0, "above")
     price_alert_service.evaluate_all(db)
     fired_again = price_alert_service.evaluate_all(db)
     assert fired_again == 0
@@ -110,7 +110,7 @@ def test_scan_runner_fires_price_alerts(db, monkeypatch):
 
 
 def test_scan_runner_price_alert_failure_is_non_fatal(db, monkeypatch):
-    s = _seed_stock_with_two_bars(db, "X", prev_close=100.0, last_close=100.0)
+    _seed_stock_with_two_bars(db, "X", prev_close=100.0, last_close=100.0)
     from app.services import scan_service
     monkeypatch.setattr(
         scan_service, "scan_universe",

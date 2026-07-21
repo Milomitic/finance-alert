@@ -36,12 +36,15 @@ jobs:
           cache-dependency-glob: backend/uv.lock
       - name: install (locked, incl. dev)
         run: uv sync --frozen
-      # Staged ruff adoption: the project's full config was never enforced and
-      # has ~400 pre-existing style findings (E501/I001/N8xx…). CI gates on the
-      # fatal set (syntax errors + undefined names) so real breakage fails fast;
-      # full-config adoption is a tracked backlog item, not a silent skip.
-      - name: ruff (fatal gate)
-        run: uv run ruff check app tests --select E9,F63,F7,F82
+      # Staged ruff adoption: the BUG-CATCHING rules are enforced — full
+      # pyflakes (F: undefined names, unused imports/vars) + bugbear (B: likely
+      # bugs like B023 loop-var closures, B904 exception chaining, B905 zip
+      # strictness). B008 stays ignored (Depends() in FastAPI defaults is
+      # idiomatic). The remaining ~340 pure-STYLE findings (E501 long comments,
+      # N8xx naming, SIM, UP, E402 lazy imports) are a separate cosmetic cleanup,
+      # deliberately not gated so they don't block on aesthetics.
+      - name: ruff (bug-catching gate — pyflakes + bugbear)
+        run: uv run ruff check app tests --select F,B --ignore B008
       - name: pytest (network-guarded suite)
         run: uv run pytest tests/ -q
 

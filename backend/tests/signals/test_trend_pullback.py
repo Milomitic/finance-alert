@@ -8,13 +8,13 @@ from app.signals.events import extract_events
 def _golden_then_pullback():
     rows = []
     price = 100.0
-    for i in range(210):
+    for _i in range(210):
         price += 0.6
         rows.append((price, 1000))
-    for i in range(8):
+    for _i in range(8):
         price -= 1.4
         rows.append((price, 1000))
-    for i in range(4):
+    for _i in range(4):
         price += 2.2
         rows.append((price, 1000))
     return pd.DataFrame([

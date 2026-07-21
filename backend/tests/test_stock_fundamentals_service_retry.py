@@ -3,7 +3,7 @@ from unittest.mock import patch
 
 import pytest
 
-from app.core.errors import UpstreamTimeout
+from app.core.errors import RateLimitError, UpstreamTimeout
 from app.services.stock_fundamentals_service import _yf_fetch_with_retry
 
 
@@ -191,7 +191,7 @@ def test_breaker_records_failure_on_each_retry_attempt(monkeypatch):
         stock_fundamentals_service, "_do_yf_call", always_429
     )
 
-    with pytest.raises(Exception):
+    with pytest.raises(RateLimitError):
         stock_fundamentals_service._yf_fetch_with_retry("AAPL")
 
     status = yfinance_health.status()
