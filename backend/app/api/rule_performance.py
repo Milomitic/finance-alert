@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
 from app.models import User
+from app.services.detector_performance_service import compute_equity_curve
 from app.services.rule_performance_service import (
     compute_calibration,
     compute_performance,
@@ -20,6 +21,52 @@ from app.services.rule_performance_service import (
 )
 
 router = APIRouter(prefix="/api/rule-performance", tags=["rule-performance"])
+
+
+class EquityPointOut(BaseModel):
+    date: str
+    equity: float
+    equity_mkt_neutral: float
+
+
+class EquityCurveOut(BaseModel):
+    points: list[EquityPointOut]
+    n_signals: int
+    total_return_pct: float
+    mkt_neutral_return_pct: float
+    win_rate_pct: float
+    avg_return_pct: float
+    max_drawdown_pct: float
+    horizon_days: int
+    detectors: list[str]
+
+
+@router.get("/equity-curve", response_model=EquityCurveOut)
+def get_equity_curve(
+    horizon_days: Annotated[int, Query()] = 21,
+    detector: str | None = None,
+    tone: Annotated[str | None, Query(pattern=r"^(bull|bear)$")] = None,
+    regime: Annotated[str | None, Query(pattern=r"^(bull|bear|flat)$")] = None,
+    strength_min: Annotated[int | None, Query(ge=0, le=100)] = None,
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+) -> EquityCurveOut:
+    """Hypothetical cumulative equity of following every matured signal matching
+    the filters. Absolute + market-neutral curves. Growth-of-1 illustration, not
+    a tradeable P&L (no overlap/sizing/costs). Reads the signal_outcomes
+    warehouse; horizon_days is clamped to a value the warehouse actually holds."""
+    if horizon_days not in (5, 21):
+        horizon_days = 21
+    return EquityCurveOut(
+        **compute_equity_curve(
+            db,
+            horizon_days=horizon_days,
+            detector=detector,
+            tone=tone,
+            regime=regime,
+            strength_min=strength_min,
+        )
+    )
 
 
 class WindowStatsOut(BaseModel):

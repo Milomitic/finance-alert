@@ -227,3 +227,89 @@ def compute_detector_performance(db: Session, *, min_n: int = _DEFAULT_MIN_N) ->
         "detectors": detectors,
         "replay": _replay_block(replay_summary, min_n) if replay_summary else None,
     }
+
+
+def compute_equity_curve(
+    db: Session,
+    *,
+    horizon_days: int = 21,
+    detector: str | None = None,
+    tone: str | None = None,
+    regime: str | None = None,
+    strength_min: int | None = None,
+) -> dict:
+    """Hypothetical cumulative equity from following every matured signal that
+    matches the filters, ordered by signal date.
+
+    Two curves: absolute (compound the realised forward returns) and
+    market-neutral (compound the tone-signed excess vs the universe mean). This
+    is a growth-of-1 ILLUSTRATION — one unit per signal, sequential, with NO
+    overlap handling, position sizing, or costs — not a tradeable backtest P&L.
+    The market-neutral curve is the honest, beta-stripped read. Read-only over
+    the signal_outcomes warehouse.
+    """
+    stmt = (
+        select(
+            SignalOutcome.signal_date,
+            SignalOutcome.fwd_return,
+            SignalOutcome.mkt_neutral_excess,
+            SignalOutcome.abs_hit,
+        )
+        .join(Alert, Alert.id == SignalOutcome.alert_id)
+        .where(Alert.archived_at.is_(None))
+        .where(SignalOutcome.horizon_days == horizon_days)
+        .order_by(SignalOutcome.signal_date.asc(), SignalOutcome.id.asc())
+    )
+    if detector:
+        stmt = stmt.where(SignalOutcome.detector == detector)
+    if tone in ("bull", "bear"):
+        stmt = stmt.where(SignalOutcome.tone == tone)
+    if regime in ("bull", "bear", "flat"):
+        stmt = stmt.where(SignalOutcome.regime_at_signal == regime)
+    if strength_min is not None:
+        stmt = stmt.where(SignalOutcome.strength >= strength_min)
+
+    rows = db.execute(stmt).all()
+
+    eq = 1.0
+    eqmn = 1.0
+    peak = 1.0
+    max_dd = 0.0
+    wins = 0
+    ret_sum = 0.0
+    by_date: dict[str, dict] = {}
+    for r in rows:
+        eq *= 1.0 + r.fwd_return
+        excess = r.mkt_neutral_excess if r.mkt_neutral_excess is not None else 0.0
+        eqmn *= 1.0 + excess
+        peak = max(peak, eq)
+        if peak > 0:
+            max_dd = max(max_dd, (peak - eq) / peak)
+        wins += int(r.abs_hit or 0)
+        ret_sum += r.fwd_return
+        # One point per date — the equity after that date's last signal — for a
+        # clean, monotone time axis (several signals can share a date).
+        by_date[r.signal_date.isoformat()] = {
+            "equity": round(eq, 4),
+            "equity_mkt_neutral": round(eqmn, 4),
+        }
+
+    n = len(rows)
+    # Full detector list (unfiltered) so the UI dropdown always offers every one.
+    det_names = [
+        d
+        for (d,) in db.execute(
+            select(SignalOutcome.detector).distinct().order_by(SignalOutcome.detector)
+        ).all()
+    ]
+    return {
+        "points": [{"date": d, **v} for d, v in by_date.items()],
+        "n_signals": n,
+        "total_return_pct": round((eq - 1.0) * 100.0, 2),
+        "mkt_neutral_return_pct": round((eqmn - 1.0) * 100.0, 2),
+        "win_rate_pct": round(wins / n * 100.0, 1) if n else 0.0,
+        "avg_return_pct": round(ret_sum / n * 100.0, 2) if n else 0.0,
+        "max_drawdown_pct": round(max_dd * 100.0, 2),
+        "horizon_days": horizon_days,
+        "detectors": det_names,
+    }
