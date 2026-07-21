@@ -31,6 +31,12 @@ class PositionOut(BaseModel):
     unrealized_abs: float | None
     realized_pct: float | None
     realized_abs: float | None
+    # Native currency of the position (= the stock's currency) + the abs P&L
+    # converted to USD, so the portfolio rollup can sum across currencies.
+    currency: str | None = None
+    unrealized_usd: float | None = None
+    realized_usd: float | None = None
+    cost_usd: float | None = None
 
 
 class PositionCreate(BaseModel):

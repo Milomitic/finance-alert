@@ -6,12 +6,11 @@ import { cn } from "@/lib/utils";
  * Portfolio-level rollup over tracked positions (F1). Everything is derived
  * client-side from the same list the tables already render — no new endpoint.
  *
- * Honesty caveat: Position carries no currency, and `_abs` figures come back in
- * each name's native currency. Summing them mixes currencies without FX
- * conversion, so the absolute totals are "native units" and labelled as such.
- * The % figures are cost-weighted (Σ pnl / Σ cost), which is dimensionless and
- * the least-wrong blended-return view. Notional-only positions (no size, so no
- * `_abs`) are excluded from the money totals and counted in the caveat.
+ * The backend converts each position's abs P&L + cost basis to USD (native
+ * currency × the live FX rate), so the money totals here sum ACROSS currencies
+ * in USD — no longer "native units, no FX". The % figures are cost-weighted
+ * (Σ pnl / Σ cost) in USD, dimensionless. Notional-only positions (no size, so
+ * no `_usd`) are excluded from the money totals and counted in the note.
  */
 const nfMoney = new Intl.NumberFormat("it-IT", {
   maximumFractionDigits: 0,
@@ -60,16 +59,15 @@ export function PortfolioSummary({
 }) {
   if (open.length === 0 && closed.length === 0) return null;
 
-  const openSized = open.filter((p) => p.size != null && p.unrealized_abs != null);
-  const openPnl = sum(openSized.map((p) => p.unrealized_abs));
-  const openCost = sum(openSized.map((p) => p.entry_price * (p.size as number)));
+  // All money in USD (backend-converted). Open exposure = cost + unrealized P&L.
+  const openSized = open.filter((p) => p.size != null && p.unrealized_usd != null);
+  const openPnl = sum(openSized.map((p) => p.unrealized_usd));
+  const openCost = sum(openSized.map((p) => p.cost_usd));
   const openPct = openCost > 0 ? (openPnl / openCost) * 100 : null;
-  const exposure = sum(
-    openSized.map((p) => (p.last_price ?? p.entry_price) * (p.size as number)),
-  );
+  const exposure = openCost + openPnl;
 
-  const closedSized = closed.filter((p) => p.realized_abs != null);
-  const realizedPnl = sum(closedSized.map((p) => p.realized_abs));
+  const closedSized = closed.filter((p) => p.realized_usd != null);
+  const realizedPnl = sum(closedSized.map((p) => p.realized_usd));
   const wins = closed.filter((p) => (p.realized_pct ?? 0) > 0).length;
   const winRate = closed.length > 0 ? (wins / closed.length) * 100 : null;
 
@@ -83,7 +81,7 @@ export function PortfolioSummary({
       <CardContent className="space-y-3 p-4">
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           <StatTile
-            label="P&L totale"
+            label="P&L totale · USD"
             value={nfMoney.format(totalPnl)}
             valueClass={pnlClass(totalPnl)}
             sub="non realizzato + realizzato"
@@ -101,13 +99,13 @@ export function PortfolioSummary({
             sub={winRate != null ? `win rate ${Math.round(winRate)}%` : "—"}
           />
           <StatTile
-            label="Esposizione aperta"
+            label="Esposizione aperta · USD"
             value={nfMoneyPlain.format(exposure)}
             sub="valore di mercato"
           />
         </div>
         <p className="text-[11px] text-muted-foreground">
-          Somme in valuta nativa, senza conversione FX.
+          Somme convertite in USD ai cambi correnti.
           {notionalOnly > 0 &&
             ` ${notionalOnly} posizion${notionalOnly === 1 ? "e" : "i"} notional (senza size) escluse dai totali.`}
         </p>

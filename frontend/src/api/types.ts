@@ -613,6 +613,12 @@ export interface Position {
   unrealized_abs: number | null;
   realized_pct: number | null;
   realized_abs: number | null;
+  /** Native currency (= the stock's), and the abs P&L + cost basis converted
+   *  to USD so the portfolio rollup can sum across currencies. */
+  currency: string | null;
+  unrealized_usd: number | null;
+  realized_usd: number | null;
+  cost_usd: number | null;
 }
 
 export interface PositionCreate {

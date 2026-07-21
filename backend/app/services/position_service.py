@@ -23,6 +23,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import OhlcvDaily, Position, Stock
+from app.services import fx_service
+from app.services.currency_units import is_minor_unit
 
 VALID_SIDES = ("long", "short")
 VALID_EXIT_REASONS = ("stop", "target", "manual")
@@ -231,13 +233,27 @@ def _enrich(
         "unrealized_abs": None,
         "realized_pct": None,
         "realized_abs": None,
+        "currency": None,
+        "unrealized_usd": None,
+        "realized_usd": None,
+        "cost_usd": None,
     }
+    # Currency for FX: prices are stored in MAJOR units (live_quote already
+    # scaled GBp→GBP), and Stock.currency is mostly-but-not-always normalized,
+    # so map any residual minor-unit code to its major before converting.
+    cur = stock.currency or "USD"
+    fx_cur = "GBP" if is_minor_unit(cur) else cur
+    out["currency"] = cur
+    if size is not None:
+        # Cost basis in USD — lets the rollup derive USD exposure + weighted %.
+        out["cost_usd"] = fx_service.to_usd(entry * size, fx_cur)
     if pos.closed_at is not None:
         if pos.exit_price is not None and entry > 0:
             exit_p = float(pos.exit_price)
             out["realized_pct"] = sign * (exit_p - entry) / entry * 100.0
             if size is not None:
                 out["realized_abs"] = sign * (exit_p - entry) * size
+        out["realized_usd"] = fx_service.to_usd(out["realized_abs"], fx_cur)
         return out
     price = price_fn(stock.ticker) if price_fn is not None else _live_price(stock.ticker)
     source = "live" if price is not None else None
@@ -250,6 +266,7 @@ def _enrich(
         out["unrealized_pct"] = sign * (price - entry) / entry * 100.0
         if size is not None:
             out["unrealized_abs"] = sign * (price - entry) * size
+    out["unrealized_usd"] = fx_service.to_usd(out["unrealized_abs"], fx_cur)
     return out
 
 
