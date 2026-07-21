@@ -62,6 +62,11 @@ interface Props {
    *  this zone so a US 09:35 bar reads "09:35", not the UTC "13:35". Daily+
    *  stays date-only in UTC regardless. Defaults to UTC. */
   exchangeTz?: string;
+  /** Erase mode: a click near a drawing deletes just that one (hit-tested in
+   *  pixel space here, where the chart's priceToCoordinate is available). */
+  eraseMode?: boolean;
+  onDeleteHorizontal?: (id: number) => void;
+  onDeleteTrend?: (id: number) => void;
 }
 
 /** Price-series render style. "candle" is the OHLC default; "line" / "area"
@@ -87,6 +92,7 @@ export function PriceChart({
   chartType = "candle",
   benchmarkLine = [], benchmarkColor = "#7c3aed", benchmarkLabel, chartApiRef,
   exchangeTz = "UTC",
+  eraseMode = false, onDeleteHorizontal, onDeleteTrend,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -145,6 +151,13 @@ export function PriceChart({
   const benchmarkRef = useRef<ISeriesApi<"Line"> | null>(null);
   const chartTypeRef = useRef<ChartType>(chartType);
   const onChartClickRef = useRef(onChartClick);
+  // Erase-mode state kept in refs so the mount-once click handler hit-tests
+  // against the LIVE drawings + callbacks.
+  const eraseRef = useRef(eraseMode);
+  const horizontalRef = useRef(horizontalDrawings);
+  const trendRef = useRef(trendDrawings);
+  const onDeleteHorizontalRef = useRef(onDeleteHorizontal);
+  const onDeleteTrendRef = useRef(onDeleteTrend);
 
   useEffect(() => {
     onChartClickRef.current = onChartClick;
@@ -152,6 +165,13 @@ export function PriceChart({
   useEffect(() => {
     chartTypeRef.current = chartType;
   }, [chartType]);
+  useEffect(() => {
+    eraseRef.current = eraseMode;
+    horizontalRef.current = horizontalDrawings;
+    trendRef.current = trendDrawings;
+    onDeleteHorizontalRef.current = onDeleteHorizontal;
+    onDeleteTrendRef.current = onDeleteTrend;
+  }, [eraseMode, horizontalDrawings, trendDrawings, onDeleteHorizontal, onDeleteTrend]);
 
   // The currently visible price series — host for markers, price lines, and
   // the click→price lookup, so they follow whichever style is active. Common
@@ -294,9 +314,44 @@ export function PriceChart({
     });
 
     const clickHandler = (param: { point?: { x: number; y: number }; time?: Time }) => {
-      const handler = onChartClickRef.current;
       const series = activePriceSeries();
-      if (!handler || !param.point || !series) return;
+      if (!param.point || !series) return;
+
+      // Erase mode: delete the drawing closest to the click (within a pixel
+      // tolerance). Horizontal lines hit-test on |priceToCoordinate - y|;
+      // trend lines interpolate their price at the clicked time first.
+      if (eraseRef.current) {
+        const y = param.point.y;
+        const TOL = 8; // px
+        let best: { kind: "h" | "t"; id: number; d: number } | null = null;
+        for (const h of horizontalRef.current ?? []) {
+          const hy = series.priceToCoordinate(h.price);
+          if (hy == null) continue;
+          const d = Math.abs(hy - y);
+          if (d <= TOL && (!best || d < best.d)) best = { kind: "h", id: h.id, d };
+        }
+        const t = param.time as number | undefined;
+        if (t != null) {
+          for (const tr of trendRef.current ?? []) {
+            const lo = Math.min(tr.x1, tr.x2);
+            const hi = Math.max(tr.x1, tr.x2);
+            if (t < lo || t > hi || tr.x1 === tr.x2) continue;
+            const price = tr.y1 + ((tr.y2 - tr.y1) * (t - tr.x1)) / (tr.x2 - tr.x1);
+            const py = series.priceToCoordinate(price);
+            if (py == null) continue;
+            const d = Math.abs(py - y);
+            if (d <= TOL && (!best || d < best.d)) best = { kind: "t", id: tr.id, d };
+          }
+        }
+        if (best) {
+          if (best.kind === "h") onDeleteHorizontalRef.current?.(best.id);
+          else onDeleteTrendRef.current?.(best.id);
+        }
+        return;
+      }
+
+      const handler = onChartClickRef.current;
+      if (!handler) return;
       const price = series.coordinateToPrice(param.point.y);
       if (price !== null && typeof price === "number") {
         // Emit the bar time too — the Line tool anchors a trend line's

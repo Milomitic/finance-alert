@@ -343,6 +343,11 @@ export default function StockDetailPage() {
                     {pendingTrend ? "Clicca il 2° punto" : "Clicca il 1° punto"}
                   </span>
                 )}
+                {mode === "erase" && (
+                  <span className="text-[11px] font-medium text-red-600 animate-pulse whitespace-nowrap">
+                    Clicca una linea da cancellare
+                  </span>
+                )}
                 <DrawingToolbar
                   mode={mode}
                   onSetMode={setMode}
@@ -418,6 +423,9 @@ export default function StockDetailPage() {
                   benchmarkLabel={benchmarkLabel}
                   chartApiRef={chartApiRef}
                   exchangeTz={exchangeTimezone(ticker)}
+                  eraseMode={mode === "erase"}
+                  onDeleteHorizontal={drawings.removeHorizontal}
+                  onDeleteTrend={drawings.removeTrend}
                 />
               </ResizableSection>
             )}

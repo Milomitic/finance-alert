@@ -1,9 +1,9 @@
-import { Bell, Eraser, Minus, Slash } from "lucide-react";
+import { Bell, Eraser, Minus, Slash, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-export type DrawingMode = "none" | "hline" | "trend" | "alert";
+export type DrawingMode = "none" | "hline" | "trend" | "alert" | "erase";
 
 interface Props {
   mode: DrawingMode;
@@ -33,12 +33,13 @@ export function DrawingToolbar({ mode, onSetMode, onClearAll }: Props) {
       <Tool target="hline" label="H-line" icon={Minus} title="Disegna una linea orizzontale al prezzo cliccato" />
       <Tool target="trend" label="Linea" icon={Slash} title="Disegna una retta cliccando su due punti del grafico" />
       <Tool target="alert" label="Set alert" icon={Bell} title="Crea un price alert al prezzo cliccato" />
+      <Tool target="erase" label="Cancella" icon={Eraser} title="Clicca su una linea/retta per cancellarla" />
       <Button
         type="button" size="sm" variant="ghost" onClick={onClearAll}
         title="Rimuovi tutti i drawing per questo stock"
         className="text-sm h-8"
       >
-        <Eraser className="h-3.5 w-3.5 mr-1" /> Clear
+        <Trash2 className="h-3.5 w-3.5 mr-1" /> Pulisci
       </Button>
     </div>
   );
