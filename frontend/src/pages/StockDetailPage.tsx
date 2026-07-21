@@ -119,6 +119,15 @@ export default function StockDetailPage() {
     [benchmark, mergedOhlcv, benchmarkDetail.data?.bars],
   );
   const benchmarkLabel = BENCHMARKS.find((b) => b.symbol === benchmark)?.label;
+  // Multi-ticker compare: overlay another stock, rebased the same way. Its
+  // range-matched OHLCV comes from the same detail endpoint (enabled only when
+  // a ticker is entered).
+  const [compareTicker, setCompareTicker] = useState("");
+  const compareDetail = useStockDetail(compareTicker, range, !!compareTicker);
+  const compareLine = useMemo(
+    () => (compareTicker ? rebaseBenchmark(mergedOhlcv, compareDetail.data?.ohlcv ?? []) : []),
+    [compareTicker, mergedOhlcv, compareDetail.data?.ohlcv],
+  );
 
   const [indicators, setIndicators] = useState<IndicatorState>(DEFAULT_INDICATOR_STATE);
   const [chartType, setChartType] = useState<ChartType>("candle");
@@ -321,6 +330,8 @@ export default function StockDetailPage() {
                 onChartType={setChartType}
                 benchmark={benchmark}
                 onBenchmark={setBenchmark}
+                compareTicker={compareTicker}
+                onCompareTicker={setCompareTicker}
                 onExport={() =>
                   downloadChartPng(chartApiRef.current, `${ticker}-${range}.png`)
                 }
@@ -421,6 +432,8 @@ export default function StockDetailPage() {
                   chartType={chartType}
                   benchmarkLine={benchmarkLine}
                   benchmarkLabel={benchmarkLabel}
+                  compareLine={compareLine}
+                  compareLabel={compareTicker || undefined}
                   chartApiRef={chartApiRef}
                   exchangeTz={exchangeTimezone(ticker)}
                   eraseMode={mode === "erase"}

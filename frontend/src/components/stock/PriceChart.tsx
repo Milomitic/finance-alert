@@ -56,6 +56,11 @@ interface Props {
   /** Benchmark line colour + label (badge). */
   benchmarkColor?: string;
   benchmarkLabel?: string;
+  /** Second overlay: another STOCK rebased to this stock's start (multi-ticker
+   *  compare). Same rebasing as the benchmark; distinct colour. */
+  compareLine?: LinePoint[];
+  compareColor?: string;
+  compareLabel?: string;
   /** Exposes the chart instance to the parent for PNG export. */
   chartApiRef?: MutableRefObject<IChartApi | null>;
   /** IANA timezone of the stock's exchange. Intraday axis + legend render in
@@ -91,6 +96,7 @@ export function PriceChart({
   signalMarkers = [], signalsByTime, earningsMarkers = [],
   chartType = "candle",
   benchmarkLine = [], benchmarkColor = "#7c3aed", benchmarkLabel, chartApiRef,
+  compareLine = [], compareColor = "#ea580c", compareLabel,
   exchangeTz = "UTC",
   eraseMode = false, onDeleteHorizontal, onDeleteTrend,
 }: Props) {
@@ -149,6 +155,7 @@ export function PriceChart({
   // Benchmark overlay (rebased index line) — independent of the price-style
   // series, always visible when it has data.
   const benchmarkRef = useRef<ISeriesApi<"Line"> | null>(null);
+  const compareRef = useRef<ISeriesApi<"Line"> | null>(null);
   const chartTypeRef = useRef<ChartType>(chartType);
   const onChartClickRef = useRef(onChartClick);
   // Erase-mode state kept in refs so the mount-once click handler hit-tests
@@ -280,6 +287,12 @@ export function PriceChart({
       priceLineVisible: false, lastValueVisible: true,
       crosshairMarkerVisible: false,
       title: benchmarkLabel ?? "",
+    });
+    compareRef.current = chart.addLineSeries({
+      color: compareColor, lineWidth: 1, lineStyle: 2,
+      priceLineVisible: false, lastValueVisible: true,
+      crosshairMarkerVisible: false,
+      title: compareLabel ?? "",
     });
     if (chartApiRef) chartApiRef.current = chart;
     // Indicator series: `lastValueVisible: true` shows a colored badge
@@ -416,6 +429,7 @@ export function PriceChart({
       lineRef.current = null;
       areaRef.current = null;
       benchmarkRef.current = null;
+      compareRef.current = null;
       ema20Ref.current = null;
       ema50Ref.current = null;
       ema200Ref.current = null;
@@ -503,6 +517,14 @@ export function PriceChart({
   useEffect(() => {
     benchmarkRef.current?.applyOptions({ color: benchmarkColor, title: benchmarkLabel ?? "" });
   }, [benchmarkColor, benchmarkLabel]);
+
+  // Compare-stock overlay data + style.
+  useEffect(() => {
+    compareRef.current?.setData(compareLine);
+  }, [compareLine]);
+  useEffect(() => {
+    compareRef.current?.applyOptions({ color: compareColor, title: compareLabel ?? "" });
+  }, [compareColor, compareLabel]);
 
 
   // EMA20

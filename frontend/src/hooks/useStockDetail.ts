@@ -19,8 +19,9 @@ import { stocks } from "@/api/stocks";
  *    user can switch tabs and come back within half a minute
  *    without paying a refetch.
  */
-export function useStockDetail(ticker: string, range: string = "1y") {
+export function useStockDetail(ticker: string, range: string = "1y", enabled = true) {
   return useQuery({
+    enabled: enabled && !!ticker,
     queryKey: ["stock-detail", ticker, range],
     queryFn: () => stocks.detail(ticker, range),
     placeholderData: (prev, prevQuery) => {

@@ -1,4 +1,5 @@
-import { AreaChart, CandlestickChart, Download, LineChart } from "lucide-react";
+import { AreaChart, CandlestickChart, Download, LineChart, X } from "lucide-react";
+import { useEffect, useState } from "react";
 
 import type { ChartType } from "@/components/stock/PriceChart";
 import { cn } from "@/lib/utils";
@@ -18,6 +19,8 @@ interface Props {
   onChartType: (t: ChartType) => void;
   benchmark: string;
   onBenchmark: (symbol: string) => void;
+  compareTicker: string;
+  onCompareTicker: (ticker: string) => void;
   onExport: () => void;
 }
 
@@ -31,8 +34,14 @@ const TYPES: { key: ChartType; label: string; Icon: typeof LineChart }[] = [
  *  picker, and PNG export. Segmented buttons match the RangeSelector's visual
  *  language. */
 export function ChartOptionsToolbar({
-  chartType, onChartType, benchmark, onBenchmark, onExport,
+  chartType, onChartType, benchmark, onBenchmark, compareTicker, onCompareTicker, onExport,
 }: Props) {
+  // Local input state; commit the compare ticker on Enter / blur so we don't
+  // fire a fetch on every keystroke.
+  const [cmp, setCmp] = useState(compareTicker);
+  useEffect(() => setCmp(compareTicker), [compareTicker]);
+  const commit = () => onCompareTicker(cmp.trim().toUpperCase());
+
   return (
     <div className="inline-flex items-center gap-1.5">
       <div className="inline-flex h-8 items-center rounded-md border bg-muted/30 p-0.5">
@@ -72,6 +81,38 @@ export function ChartOptionsToolbar({
           </option>
         ))}
       </select>
+      {/* Multi-ticker compare — type a ticker, commit on Enter/blur. */}
+      <div className="relative inline-flex items-center">
+        <input
+          value={cmp}
+          onChange={(e) => setCmp(e.target.value.toUpperCase())}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") commit();
+          }}
+          onBlur={commit}
+          placeholder="vs ticker…"
+          aria-label="Confronta con un titolo"
+          title="Sovrapponi un altro titolo (ribasato)"
+          className={cn(
+            "h-8 w-24 px-2 text-sm rounded-md border bg-muted/30",
+            compareTicker ? "pr-6 text-foreground" : "text-muted-foreground",
+          )}
+        />
+        {compareTicker && (
+          <button
+            type="button"
+            onClick={() => {
+              setCmp("");
+              onCompareTicker("");
+            }}
+            title="Rimuovi confronto"
+            aria-label="Rimuovi confronto"
+            className="absolute right-1 text-muted-foreground hover:text-foreground"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        )}
+      </div>
       <button
         type="button"
         onClick={onExport}
