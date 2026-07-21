@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
@@ -6,6 +7,13 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: { "@": path.resolve(__dirname, "./src") },
+  },
+  test: {
+    // jsdom for component tests; the pure-lib tests are env-agnostic and still
+    // pass. Explicit vitest imports are kept (no `globals`), so no tsconfig
+    // types change is needed.
+    environment: "jsdom",
+    setupFiles: ["./src/test/setup.ts"],
   },
   build: {
     rollupOptions: {
