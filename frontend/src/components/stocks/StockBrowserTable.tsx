@@ -18,6 +18,7 @@ import {
 } from "@/hooks/useBookAwareness";
 import { useHolderCounts } from "@/hooks/useInstitutionals";
 import { useMarketSummary } from "@/hooks/useMarketSummary";
+import { usePrefetchStockDetail } from "@/hooks/usePrefetchStockDetail";
 import { RISK_LABEL, RISK_TONE, scoreColor } from "@/lib/scoreMeta";
 import { getStockFlagCode } from "@/lib/stockMeta";
 import { cn } from "@/lib/utils";
@@ -278,6 +279,8 @@ export function StockBrowserTable({
   isColumnVisible: isVisible, onToggleColumn: toggle,
 }: Props) {
   const market = useMarketSummary();
+  // Warm the detail page on hover-intent so a row click feels instant.
+  const prefetch = usePrefetchStockDetail();
 
   // Smart-money badge: ONE batch call for the current page's tickers
   // (quarterly data → long staleTime in the hook, no per-row fetches).
@@ -410,6 +413,8 @@ export function StockBrowserTable({
                     <Link
                       to={`/stocks/${encodeURIComponent(s.ticker)}`}
                       className="block px-3 py-2.5 hover:bg-muted/40 transition-colors"
+                      onMouseEnter={() => prefetch.enter(s.ticker)}
+                      onMouseLeave={prefetch.leave}
                     >
                       <div className="flex items-center gap-2 min-w-0">
                         <StockLogo ticker={s.ticker} size="sm" />
@@ -652,6 +657,8 @@ export function StockBrowserTable({
                             <Link
                               to={`/stocks/${encodeURIComponent(s.ticker)}`}
                               className="font-semibold hover:underline leading-tight"
+                              onMouseEnter={() => prefetch.enter(s.ticker)}
+                              onMouseLeave={prefetch.leave}
                             >
                               {s.ticker}
                             </Link>
