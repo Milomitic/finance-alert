@@ -26,3 +26,14 @@ createRoot(document.getElementById("root")!).render(
     </QueryClientProvider>
   </StrictMode>
 );
+
+// PWA: register the network-first service worker in production so the app is
+// installable + works offline. Dev is skipped (Vite + a SW fight over caching).
+// Failure is non-fatal — the app runs fine without it.
+if (import.meta.env.PROD && "serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch(() => {
+      /* SW unavailable (e.g. served over http) — ignore */
+    });
+  });
+}

@@ -1,0 +1,14 @@
+{
+  "name": "Finance-Alert",
+  "short_name": "Finance-Alert",
+  "description": "Segnali tecnici, screener, alert e portafoglio su ~1000 titoli.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0b0f17",
+  "theme_color": "#0b0f17",
+  "icons": [
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}
