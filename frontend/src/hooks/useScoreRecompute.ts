@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
@@ -19,23 +19,43 @@ import type { ScanStatusInfo } from "@/api/types";
  * fresh values without manually refreshing.
  */
 
+const RECOMPUTE_KEY = ["scores", "recompute-status"] as const;
+
 export function useScoreRecomputeStatus() {
   const qc = useQueryClient();
   const previousStatus = useRef<string | null | undefined>(undefined);
+  const [connected, setConnected] = useState(false);
 
   const q = useQuery({
-    queryKey: ["scores", "recompute-status"],
+    queryKey: RECOMPUTE_KEY,
     queryFn: () => scores.recomputeStatus(),
-    refetchInterval: (query) => {
-      const data = query.state.data;
-      if (data?.is_running) return 1_000;   // live progress, even in background
-      // Idle + hidden tab → stop polling. Foreground idle still polls to catch
-      // scheduler-triggered recomputes.
+    // SSE drives updates; poll only as a FALLBACK when the stream is down and
+    // the tab is visible.
+    refetchInterval: () => {
+      if (connected) return false;
       if (typeof document !== "undefined" && document.hidden) return false;
       return 30_000;
     },
     refetchIntervalInBackground: true,
   });
+
+  // SSE → push each recompute-status snapshot into the query cache.
+  useEffect(() => {
+    const es = new EventSource("/api/scores/recompute-status/stream", {
+      withCredentials: true,
+    });
+    es.addEventListener("status", (ev) => {
+      try {
+        qc.setQueryData<ScanStatusInfo>(RECOMPUTE_KEY, JSON.parse((ev as MessageEvent).data));
+      } catch {
+        /* ignore a malformed frame */
+      }
+    });
+    es.onopen = () => setConnected(true);
+    es.onerror = () => setConnected(false);
+    return () => es.close();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     const data = q.data;

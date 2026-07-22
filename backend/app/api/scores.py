@@ -4,12 +4,14 @@ Both endpoints require auth (consistent with the rest of /api). The single-
 stock endpoint returns the persisted breakdown verbatim — the UI walks the
 dict to render component bars without re-fetching upstream data.
 """
+import asyncio
 import json
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Annotated, get_args
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
+from fastapi.responses import StreamingResponse
 from loguru import logger
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -517,6 +519,60 @@ def recompute_status(
     if latest is None:
         return ScanStatusOut(is_running=False)
     return build_scan_status_out(latest)
+
+
+@router.get("/scores/recompute-status/stream")
+async def recompute_status_stream(
+    request: Request, _user: User = Depends(get_current_user)
+) -> StreamingResponse:
+    """SSE stream of the score-recompute status — the mirror of
+    /api/alerts/scan-status/stream for the recompute job. Pushes `status` on
+    connect + on change (~1s while running, 5s idle + 30s keepalive). Replaces
+    the client's 1s/30s poll; the transition side-effects stay client-side.
+    Fresh session per tick (via the module attribute) so it sees the worker's
+    committed updates and stays test-monkeypatchable."""
+
+    def _snapshot() -> tuple[str, bool]:
+        from app.core import db as core_db
+
+        with core_db.SessionLocal() as s:
+            latest = (
+                s.execute(
+                    select(ScanRun)
+                    .where(ScanRun.kind == KIND_SCORE_RECOMPUTE)
+                    .order_by(ScanRun.started_at.desc())
+                    .limit(1)
+                ).scalar_one_or_none()
+            )
+            out = build_scan_status_out(latest) if latest is not None else ScanStatusOut(is_running=False)
+            return out.model_dump_json(), out.is_running
+
+    async def event_gen():
+        last, running = await asyncio.to_thread(_snapshot)
+        yield f"event: status\ndata: {last}\n\n"
+        idle_ticks = 0
+        while True:
+            if await request.is_disconnected():
+                return
+            await asyncio.sleep(1.0 if running else 5.0)
+            payload, running = await asyncio.to_thread(_snapshot)
+            if payload != last:
+                last = payload
+                idle_ticks = 0
+                yield f"event: status\ndata: {payload}\n\n"
+            elif running:
+                yield f"event: status\ndata: {payload}\n\n"
+            else:
+                idle_ticks += 1
+                if idle_ticks >= 6:
+                    idle_ticks = 0
+                    yield ": keepalive\n\n"
+
+    return StreamingResponse(
+        event_gen(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.get("/scores/ic-report")
