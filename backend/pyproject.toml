@@ -43,14 +43,28 @@ extend-exclude = ["alembic/versions"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "N", "SIM"]
-# B008: FastAPI uses `param: T = Depends(...)` pattern extensively; not a bug in this codebase.
-ignore = ["B008"]
+# The bug-catching rules (F pyflakes + B bugbear) are fully enforced. The
+# entries below are deliberate house-style / intentional-pattern exemptions —
+# NOT bugs — so the gate flags real problems without churning aesthetics.
+ignore = [
+    "B008",   # FastAPI `param: T = Depends(...)` in defaults — idiomatic, not a bug.
+    "E501",   # long-form explanatory comments are a deliberate house style.
+    "E402",   # deliberate lazy/late imports (circular-dep breaks, test path setup).
+    "N806",   # non-lowercase locals: SQLAlchemy Session / numeric matrices are idiomatic.
+    "N811",   # module singletons imported under a lowercase alias by design (log_buffer…).
+    "N818",   # control-flow signal exceptions (…Cancelled) are not "…Error"s.
+    "SIM102", # nested `if`s are often clearer with the intervening comments left in place.
+    "SIM103", # collapsing a guard sequence's last branch into `return not (...)` hurts it.
+    "SIM105", # `try/except: pass` with an intentional broad-except reads clearer than suppress.
+    "SIM108", # forced ternaries hurt readability on non-trivial branches.
+]
 
 [tool.ruff.lint.per-file-ignores]
 # Alembic env.py is a stock template — leave its long lines alone.
 "alembic/env.py" = ["E501"]
-# Tests use SQLAlchemy session classes (PascalCase locals) and that's idiomatic.
-"tests/conftest.py" = ["N806"]
+# Test setup style: `db.add(x); db.commit()` (E701/E702), market-state consts in
+# names (PRE → N802), `LiveQuote as _LQ` (N814), and short loop vars (E741).
+"tests/*" = ["E701", "E702", "N802", "N814", "E741"]
 
 [tool.pyright]
 include = ["app", "tests"]

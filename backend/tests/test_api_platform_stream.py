@@ -7,6 +7,7 @@ stream. We use a custom streaming ASGI transport based on asyncio queues that
 allows the consumer to break out early and cancel the ASGI app task.
 """
 import asyncio
+import contextlib
 import json
 from collections.abc import AsyncIterator
 from typing import Any
@@ -95,10 +96,8 @@ class _StreamingASGITransport(httpx.AsyncBaseTransport):
                 # Signal the ASGI app that the client disconnected
                 disconnect_event.set()
                 app_task.cancel()
-                try:
+                with contextlib.suppress(asyncio.CancelledError, Exception):
                     await app_task
-                except (asyncio.CancelledError, Exception):
-                    pass
 
         response = httpx.Response(
             status_code=status_code,
@@ -218,10 +217,8 @@ def test_stream_pushes_log_record_after_warning(db):
                                 break
                 finally:
                     warning_task.cancel()
-                    try:
+                    with contextlib.suppress(asyncio.CancelledError):
                         await warning_task
-                    except asyncio.CancelledError:
-                        pass
 
                 return buf
 

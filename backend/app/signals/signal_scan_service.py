@@ -151,7 +151,7 @@ def evaluate_signals(
                "points": list(m.annotations.get("points", []))}
         inv = m.invalidation or {}
         inv_level = inv.get("level") if isinstance(inv, dict) else None
-        if isinstance(inv_level, (int, float)) and not any(l.get("kind") == "stop" for l in ann["levels"]):
+        if isinstance(inv_level, (int, float)) and not any(lvl.get("kind") == "stop" for lvl in ann["levels"]):
             ann["levels"].append({"label": "Stop / invalidazione", "price": float(inv_level), "kind": "stop"})
         snapshot = {
             "tone": m.tone,

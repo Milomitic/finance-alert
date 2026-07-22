@@ -182,7 +182,7 @@ def dedupe_on_connection(conn: Connection) -> int:
         ).scalar_one()
         target_exchange = canonical_exchange_for(ticker, current_exchange)
 
-        relabel = " (relabel exchange %r -> %r)" % (current_exchange, target_exchange) \
+        relabel = f" (relabel exchange {current_exchange!r} -> {target_exchange!r})" \
             if current_exchange != target_exchange else ""
         logger.info(f"  {ticker}: canonical={canonical}, drop={duplicates}{relabel}")
 

@@ -6,6 +6,7 @@ subscribe to receive each new record as it arrives.
 Thread-safe: deque append is atomic, but we wrap subscriber notification
 in a try/except per subscriber so one buggy listener can't break the rest
 or break logging itself."""
+import contextlib
 import re
 from collections import deque
 from collections.abc import Callable
@@ -117,11 +118,8 @@ class LogBuffer:
             self._subs.append(callback)
 
         def _unsub() -> None:
-            with self._lock:
-                try:
-                    self._subs.remove(callback)
-                except ValueError:
-                    pass
+            with self._lock, contextlib.suppress(ValueError):
+                self._subs.remove(callback)
 
         return _unsub
 

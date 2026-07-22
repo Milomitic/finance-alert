@@ -1591,13 +1591,15 @@ def _fetch_fresh(ticker: str) -> Fundamentals:
         # fail; _do_yf_call returns None for each failed endpoint.
         try:
             f.annual = _extract_annual(raw.get("income_stmt"))
-            if f.annual: saw_success = True
+            if f.annual:
+                saw_success = True
         except Exception as e:
             logger.debug(f"[fund] annual {ticker}: {e}")
             _maybe_record(e)
         try:
             f.quarterly = _extract_quarterly(raw.get("quarterly_income_stmt"))
-            if f.quarterly: saw_success = True
+            if f.quarterly:
+                saw_success = True
         except Exception as e:
             logger.debug(f"[fund] quarterly {ticker}: {e}")
             _maybe_record(e)
@@ -1608,7 +1610,8 @@ def _fetch_fresh(ticker: str) -> Fundamentals:
             f.next_earnings_time_utc = nxt_time
             f.next_eps_estimate = nxt_est
             f.next_revenue_estimate = nxt_rev_est
-            if hist or nxt_date: saw_success = True
+            if hist or nxt_date:
+                saw_success = True
         except Exception as e:
             logger.debug(f"[fund] earnings {ticker}: {e}")
             _maybe_record(e)
@@ -1651,7 +1654,8 @@ def _fetch_fresh(ticker: str) -> Fundamentals:
             f.profile = _extract_profile(info)
             if isinstance(info, dict) and is_minor_unit(info.get("currency")):
                 pence_scale = 0.01
-            if any(getattr(f.micro, k) is not None for k in vars(f.micro)): saw_success = True
+            if any(getattr(f.micro, k) is not None for k in vars(f.micro)):
+                saw_success = True
             if f.profile.long_business_summary or f.profile.website:
                 saw_success = True
         except Exception as e:
@@ -1721,13 +1725,15 @@ def _fetch_fresh(ticker: str) -> Fundamentals:
             # micro-transfers). 25 in → after filter the UI's slice(0,10)
             # still has 10 real events for most tickers.
             f.insiders = _extract_insiders(raw.get("insider_transactions"), limit=25)
-            if f.insiders: saw_success = True
+            if f.insiders:
+                saw_success = True
         except Exception as e:
             logger.debug(f"[fund] insiders {ticker}: {e}")
             _maybe_record(e)
         try:
             f.analyst_ratings = _extract_ratings(raw.get("recommendations"))
-            if f.analyst_ratings: saw_success = True
+            if f.analyst_ratings:
+                saw_success = True
         except Exception as e:
             logger.debug(f"[fund] recommendations {ticker}: {e}")
             _maybe_record(e)
@@ -1790,7 +1796,8 @@ def _fetch_fresh(ticker: str) -> Fundamentals:
                 logger.debug(f"[fund] nasdaq ratings fallback {ticker}: {e}")
         try:
             f.price_target = _extract_price_target(raw.get("analyst_price_targets"), scale=pence_scale)
-            if f.price_target.mean is not None: saw_success = True
+            if f.price_target.mean is not None:
+                saw_success = True
         except Exception as e:
             logger.debug(f"[fund] price_target {ticker}: {e}")
             _maybe_record(e)
@@ -1819,7 +1826,8 @@ def _fetch_fresh(ticker: str) -> Fundamentals:
                 logger.debug(f"[fund] nasdaq price-target fallback {ticker}: {e}")
         try:
             f.analyst_actions = _extract_actions(raw.get("upgrades_downgrades"), scale=pence_scale)
-            if f.analyst_actions: saw_success = True
+            if f.analyst_actions:
+                saw_success = True
         except Exception as e:
             logger.debug(f"[fund] upgrades_downgrades {ticker}: {e}")
             _maybe_record(e)

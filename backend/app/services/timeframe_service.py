@@ -220,10 +220,7 @@ def _fetch_yfinance(ticker: str, tf: str) -> list[Bar]:
             if is_intraday and hasattr(ts, "to_pydatetime"):
                 # pandas Timestamp -> aware datetime, then to UTC
                 d = ts.to_pydatetime()
-                if d.tzinfo is None:
-                    d = d.replace(tzinfo=UTC)
-                else:
-                    d = d.astimezone(UTC)
+                d = d.replace(tzinfo=UTC) if d.tzinfo is None else d.astimezone(UTC)
             elif isinstance(ts, datetime):
                 d = ts if is_intraday else ts.date()
             else:

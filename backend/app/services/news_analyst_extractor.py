@@ -268,9 +268,8 @@ def extract_from_news_item(
     # and drop it. Callers without ticker context (legacy code, tests)
     # bypass the gate.
     haystack_known = " ".join(filter(None, [title, summary])).strip()
-    if ticker:
-        if not _is_news_about_ticker(haystack_known, ticker, company_name):
-            return None
+    if ticker and not _is_news_about_ticker(haystack_known, ticker, company_name):
+        return None
 
     # ── Body-fetch last-resort enrichment ──
     # If the merged extraction is missing the price target AND we

@@ -4,6 +4,7 @@
 - GET /stream    -> SSE stream (snapshot + log push + keepalive)
 """
 import asyncio
+import contextlib
 import json
 from datetime import UTC, datetime
 from typing import Annotated
@@ -278,10 +279,8 @@ async def stream(
             payload = json.dumps(record, default=str)
 
             def _enqueue() -> None:
-                try:
+                with contextlib.suppress(asyncio.QueueFull):
                     queue.put_nowait(("log", payload))
-                except asyncio.QueueFull:
-                    pass
 
             loop.call_soon_threadsafe(_enqueue)
         except Exception:  # noqa: BLE001 — never break logging

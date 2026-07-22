@@ -36,15 +36,14 @@ jobs:
           cache-dependency-glob: backend/uv.lock
       - name: install (locked, incl. dev)
         run: uv sync --frozen
-      # Staged ruff adoption: the BUG-CATCHING rules are enforced — full
-      # pyflakes (F: undefined names, unused imports/vars) + bugbear (B: likely
-      # bugs like B023 loop-var closures, B904 exception chaining, B905 zip
-      # strictness). B008 stays ignored (Depends() in FastAPI defaults is
-      # idiomatic). The remaining ~340 pure-STYLE findings (E501 long comments,
-      # N8xx naming, SIM, UP, E402 lazy imports) are a separate cosmetic cleanup,
-      # deliberately not gated so they don't block on aesthetics.
-      - name: ruff (bug-catching gate — pyflakes + bugbear)
-        run: uv run ruff check app tests --select F,B --ignore B008
+      # Full ruff config now enforced (pyproject select E,F,I,B,UP,N,SIM). The
+      # bug-catching rules (F pyflakes + B bugbear) plus import order (I),
+      # pyupgrade (UP) and the sensible E/N/SIM checks all gate on every push;
+      # the deliberate house-style exemptions (E501 long comments, N806 SQL/
+      # matrix locals, E402 lazy imports, a few SIM readability rules, test-only
+      # E701/E702…) live in pyproject `ignore` / per-file-ignores, documented there.
+      - name: ruff (full config)
+        run: uv run ruff check app tests
       - name: pytest (network-guarded suite)
         run: uv run pytest tests/ -q
 

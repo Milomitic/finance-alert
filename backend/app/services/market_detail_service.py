@@ -152,10 +152,7 @@ def _fetch_fresh(symbol: str, range_key: str) -> MarketDetailDC | None:
         try:
             if is_intraday and hasattr(ts, "to_pydatetime"):
                 d = ts.to_pydatetime()
-                if d.tzinfo is None:
-                    d = d.replace(tzinfo=UTC)
-                else:
-                    d = d.astimezone(UTC)
+                d = d.replace(tzinfo=UTC) if d.tzinfo is None else d.astimezone(UTC)
             elif isinstance(ts, datetime):
                 d = ts if is_intraday else ts.date()
             else:
