@@ -1,9 +1,10 @@
 """Alerts API: list/patch/bulk/export/scan/send-digest."""
+import asyncio
 import csv
 import io
 from datetime import date
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 from loguru import logger
 from sqlalchemy import func, select
@@ -462,6 +463,68 @@ def scan_status(
     if latest is None:
         return ScanStatusOut(is_running=False)
     return _build_scan_status(latest)
+
+
+@router.get("/scan-status/stream")
+async def scan_status_stream(
+    request: Request, _user: User = Depends(get_current_user)
+) -> StreamingResponse:
+    """SSE stream of the alert-scan status — replaces the client's adaptive
+    1s/30s polling with one push connection.
+
+    Emits `event: status` on connect and whenever the status changes (~1s
+    cadence while a scan runs so live progress feels continuous; a 5s idle poll
+    + 30s keepalive otherwise). The client keeps the transition side-effects
+    (invalidate alerts/dashboard + toast) and a slow fallback poll for when the
+    stream is down. Each tick uses a FRESH short-lived session so it always sees
+    the scan_runner's committed updates (the worker commits from another
+    session/thread)."""
+
+    def _snapshot() -> tuple[str, bool]:
+        # Reference the module attribute (not the import-time-bound name) so a
+        # fresh session is used AND tests that monkeypatch app.core.db.SessionLocal
+        # take effect. Fresh per tick → always sees the worker's committed state.
+        from app.core import db as core_db
+
+        with core_db.SessionLocal() as s:
+            latest = (
+                s.execute(
+                    select(ScanRun)
+                    .where(ScanRun.kind == KIND_ALERTS_SCAN)
+                    .order_by(ScanRun.started_at.desc())
+                    .limit(1)
+                ).scalar_one_or_none()
+            )
+            out = _build_scan_status(latest) if latest is not None else ScanStatusOut(is_running=False)
+            return out.model_dump_json(), out.is_running
+
+    async def event_gen():
+        last, running = await asyncio.to_thread(_snapshot)
+        yield f"event: status\ndata: {last}\n\n"
+        idle_ticks = 0
+        while True:
+            if await request.is_disconnected():
+                return
+            await asyncio.sleep(1.0 if running else 5.0)
+            payload, running = await asyncio.to_thread(_snapshot)
+            if payload != last:
+                last = payload
+                idle_ticks = 0
+                yield f"event: status\ndata: {payload}\n\n"
+            elif running:
+                # Unchanged but still running — heartbeat the status anyway.
+                yield f"event: status\ndata: {payload}\n\n"
+            else:
+                idle_ticks += 1
+                if idle_ticks >= 6:  # ~30s at the 5s idle cadence
+                    idle_ticks = 0
+                    yield ": keepalive\n\n"
+
+    return StreamingResponse(
+        event_gen(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.get("/signal-calibration")

@@ -1,46 +1,65 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { alerts } from "@/api/alerts";
+import type { ScanStatusInfo } from "@/api/types";
+
+const KEY = ["alerts", "scan-status"] as const;
 
 /**
- * Polls /api/alerts/scan-status with adaptive cadence:
- * - 1s when a scan is running (live progress — chosen alongside the backend's
- *   progress_every=5 heartbeats so sub-phase + current_target updates feel
- *   continuous rather than choppy)
- * - 30s when idle in the FOREGROUND (catch externally-triggered scans, e.g.
- *   cron); no idle polling in a hidden tab — a running scan still polls in the
- *   background so the progress toast keeps advancing.
+ * Live alert-scan status. An SSE stream (`/api/alerts/scan-status/stream`)
+ * pushes the status into the query cache, so there's no aggressive polling —
+ * the server pushes ~1s updates while a scan runs and idles otherwise. A slow
+ * 30s poll runs ONLY as a fallback while the stream is disconnected (and the
+ * tab is visible). Consumers still call `useScanStatus().data` unchanged.
  *
  * Side effect: when the latest run transitions running -> success/failed,
  * invalidate the alerts list + the scan-derived dashboard/market summaries +
- * show a toast so the user sees the new data without manually refreshing.
+ * toast, so the user sees new data without a manual refresh.
  */
 export function useScanStatus() {
   const qc = useQueryClient();
   const previousStatus = useRef<string | null | undefined>(undefined);
+  const [connected, setConnected] = useState(false);
 
   const q = useQuery({
-    queryKey: ["alerts", "scan-status"],
+    queryKey: KEY,
     queryFn: () => alerts.scanStatus(),
-    refetchInterval: (query) => {
-      const data = query.state.data;
-      if (data?.is_running) return 1_000;
-      // Idle: only poll when the tab is visible. A hidden idle tab doesn't need
-      // to catch a cron scan in real time — it will on focus / next visible tick.
+    // SSE drives updates; poll only as a FALLBACK when the stream is down and
+    // the tab is visible (a hidden idle tab catches up on focus).
+    refetchInterval: () => {
+      if (connected) return false;
       if (typeof document !== "undefined" && document.hidden) return false;
       return 30_000;
     },
     refetchIntervalInBackground: true,
   });
 
+  // SSE → push each status snapshot into the query cache.
+  useEffect(() => {
+    const es = new EventSource("/api/alerts/scan-status/stream", {
+      withCredentials: true,
+    });
+    es.addEventListener("status", (ev) => {
+      try {
+        qc.setQueryData<ScanStatusInfo>(KEY, JSON.parse((ev as MessageEvent).data));
+      } catch {
+        /* ignore a malformed frame */
+      }
+    });
+    es.onopen = () => setConnected(true);
+    es.onerror = () => setConnected(false); // EventSource auto-reconnects
+    return () => es.close();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Transition detection: running -> success/failed.
   useEffect(() => {
     const data = q.data;
     if (!data) return;
     const prev = previousStatus.current;
     const next = data.status;
-    // Detect transition: was running, now success/failed
     if (prev === "running" && next !== "running" && next !== null) {
       qc.invalidateQueries({ queryKey: ["alerts"] });
       // Breadth, RSI distribution, top movers, etc. are recomputed by the scan
