@@ -121,6 +121,14 @@ def _exchange_region(ticker: str) -> str:
     return "US"
 
 
+def exchange_timezone(ticker: str) -> str:
+    """IANA timezone name of the ticker's exchange (public wrapper over the
+    region→tz map). Single source of truth: the frontend reads this off the
+    stock-detail response to render intraday chart axes in the exchange's local
+    time, instead of hand-mirroring this map."""
+    return _MARKET_HOURS_LOCAL[_exchange_region(ticker)][0]
+
+
 def _is_market_open(ticker: str, now_utc: datetime | None = None) -> bool:
     """True iff the exchange of `ticker` is currently in regular trading hours.
     No holiday calendar — only weekday + time-of-day check, but DST-aware:

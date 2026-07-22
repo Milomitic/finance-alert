@@ -398,6 +398,7 @@ def get_stock_detail(
         raise HTTPException(status_code=404, detail="Ticker not found")
     return StockDetailOut(
         stock=StockOut.model_validate(detail.stock),
+        exchange_tz=live_quote_service.exchange_timezone(ticker),
         ohlcv=[
             OhlcvBarOut(
                 date=b.date, open=float(b.open), high=float(b.high),

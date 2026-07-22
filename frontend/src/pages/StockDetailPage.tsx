@@ -12,7 +12,6 @@ import { mergeLiveQuoteIntoOhlcv } from "@/lib/liveOhlcvMerge";
 import { buildEarningsMarkers, buildSignalOverlay } from "@/lib/signalMarkers";
 import { rebaseBenchmark } from "@/lib/benchmarkOverlay";
 import { downloadChartPng } from "@/lib/chartExport";
-import { exchangeTimezone } from "@/lib/exchangeHours";
 import { useStockFundamentals } from "@/hooks/useStockFundamentals";
 import { useMarketDetail } from "@/hooks/useMarketDetail";
 import { useCreatePriceAlert, useStockPriceAlerts } from "@/hooks/useStockPriceAlerts";
@@ -435,10 +434,10 @@ export default function StockDetailPage() {
                   compareLine={compareLine}
                   compareLabel={compareTicker || undefined}
                   chartApiRef={chartApiRef}
-                  exchangeTz={exchangeTimezone(ticker)}
                   eraseMode={mode === "erase"}
                   onDeleteHorizontal={drawings.removeHorizontal}
                   onDeleteTrend={drawings.removeTrend}
+                  exchangeTz={d.exchange_tz ?? "UTC"}
                 />
               </ResizableSection>
             )}

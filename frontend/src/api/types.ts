@@ -538,6 +538,9 @@ export interface StockDetail {
   kpis: StockKpis;
   effective_rules: EffectiveRule[];
   alerts_history: Alert[];
+  /** IANA timezone of the listing exchange — the chart renders intraday axes
+   *  in this zone. Optional for back-compat with cached payloads (→ "UTC"). */
+  exchange_tz?: string;
 }
 
 export interface StockNewsItem {
