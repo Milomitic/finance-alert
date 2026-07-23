@@ -143,8 +143,8 @@ def test_open_breaker_skips_yfinance_and_uses_eod_fallback(
 ) -> None:
     """When the breaker is open we don't hit Yahoo at all — EOD fallback is used."""
     for _ in range(yfinance_health.N_FAILURES):
-        yfinance_health.record_failure("simulated 429")
-    assert yfinance_health.is_open()
+        yfinance_health.record_failure("simulated 429", lane=yfinance_health.LANE_QUOTES)
+    assert yfinance_health.is_open(yfinance_health.LANE_QUOTES)
 
     # If yfinance got called we'd raise; the test relies on the breaker short-circuit.
     def boom(_t: str) -> None:
@@ -178,7 +178,7 @@ def test_yfinance_exception_sets_error_and_records_failure(
     assert q.error is not None
     assert "429" in q.error
     # Single failure shouldn't trip the breaker yet (need N)
-    assert not yfinance_health.is_open()
+    assert not yfinance_health.is_open(yfinance_health.LANE_QUOTES)
 
 
 def test_batch_returns_one_quote_per_ticker(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -253,7 +253,7 @@ def test_breaker_open_uses_eod_fallback(db, monkeypatch: pytest.MonkeyPatch) -> 
     db.add_all([bar2, bar1])
     db.commit()
 
-    monkeypatch.setattr(yfinance_health, "is_open", lambda: True)
+    monkeypatch.setattr(yfinance_health, "is_open", lambda *a, **k: True)
     live_quote_service._CACHE.clear()
 
     quotes = live_quote_service.get_quotes_batch(["TESTBREAKER"])

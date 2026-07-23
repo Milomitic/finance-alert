@@ -571,7 +571,7 @@ def _fetch_fresh(ticker: str, *, allow_remote_today_fetch: bool = True) -> LiveQ
 
     from app.services import yfinance_health
 
-    if yfinance_health.is_open():
+    if yfinance_health.is_open(yfinance_health.LANE_QUOTES):
         return _eod_fallback_quote(ticker)
 
     quote = LiveQuote(ticker=ticker, fetched_at=time.time())
@@ -749,15 +749,15 @@ def _fetch_fresh(ticker: str, *, allow_remote_today_fetch: bool = True) -> LiveQ
         quote.currency = "GBP" if is_minor_unit(currency) else currency
 
         if last is not None:
-            yfinance_health.record_success()
+            yfinance_health.record_success(yfinance_health.LANE_QUOTES)
         elif yfinance_health.is_rate_limit_error(Exception("empty fast_info")):
             # Defensive: shouldn't reach here normally
-            yfinance_health.record_failure("live_quote: empty payload")
+            yfinance_health.record_failure("live_quote: empty payload", lane=yfinance_health.LANE_QUOTES)
     except Exception as e:  # noqa: BLE001
         logger.warning(f"[live_quote] {ticker}: {e}")
         quote.error = str(e)
         if yfinance_health.is_rate_limit_error(e):
-            yfinance_health.record_failure(f"live_quote {ticker}: {e}")
+            yfinance_health.record_failure(f"live_quote {ticker}: {e}", lane=yfinance_health.LANE_QUOTES)
 
     # Per-source metrics
     from app.services import data_source_metrics

@@ -40,7 +40,7 @@ def test_successful_yfinance_probe_recovers_breaker():
     for _ in range(yfinance_health.N_FAILURES):
         yfinance_health.record_failure("x")
     # Cooldown elapsed → the probe is the granted half-open probe.
-    yfinance_health._state.opened_at = time.time() - yfinance_health.COOLDOWN_SECONDS - 1
+    yfinance_health._states[yfinance_health.LANE_DEFAULT].opened_at = time.time() - yfinance_health.COOLDOWN_SECONDS - 1
     assert yfinance_health.is_open() is False
     probes._record("yfinance", "live_quote", ok=True)
     assert yfinance_health.status()["state"] == "closed"

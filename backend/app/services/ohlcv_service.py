@@ -299,7 +299,7 @@ def fetch_and_upsert(
         return FetchResult()
     tickers = [s.ticker for s in stocks]
 
-    if yfinance_health.is_open():
+    if yfinance_health.is_open(yfinance_health.LANE_OHLCV):
         logger.info(
             f"[ohlcv] yfinance breaker OPEN — skipping batch of {len(tickers)} tickers; "
             "will retry next cycle"
@@ -328,7 +328,7 @@ def fetch_and_upsert(
             count=len(stocks),
         )
         if yfinance_health.is_rate_limit_error(e):
-            yfinance_health.record_failure(f"yf.download: {e}")
+            yfinance_health.record_failure(f"yf.download: {e}", lane=yfinance_health.LANE_OHLCV)
             logger.warning(
                 "[ohlcv] yfinance.download rate-limited — breaker tripped; "
                 "skipping batch (no fallback available)"
@@ -373,7 +373,7 @@ def fetch_and_upsert(
             result.failed_tickers.append(stock.ticker)
 
     if result.stocks_succeeded > 0:
-        yfinance_health.record_success()
+        yfinance_health.record_success(yfinance_health.LANE_OHLCV)
 
     # Record per-source metrics for the health dashboard. ONE batch verdict
     # (ok / partial / failed) instead of success-then-failure calls, so the

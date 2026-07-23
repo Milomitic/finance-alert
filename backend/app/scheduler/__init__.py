@@ -22,6 +22,7 @@ from app.scheduler.jobs.refresh_imminent_earnings import run_refresh_imminent_ea
 from app.scheduler.jobs.refresh_institutionals import run_refresh_institutionals
 from app.scheduler.jobs.refresh_premarket import run_refresh_premarket
 from app.scheduler.jobs.refresh_sec_13f import run_refresh_sec_13f
+from app.scheduler.jobs.repair_ohlcv_gaps import run_repair_ohlcv_gaps
 from app.scheduler.jobs.retention import run_retention
 from app.scheduler.jobs.scan_alerts import run_scan_alerts
 from app.scheduler.jobs.send_digest import run_send_digest
@@ -113,6 +114,21 @@ def get_scheduler() -> BackgroundScheduler:
                 max_instances=1,
                 coalesce=True,
             )
+        # OHLCV gap self-repair — every 6h at :20 (00:20 lands ~50min after the
+        # nightly scan, so a batch the scan dropped is topped up the same
+        # night). Cheap no-op when nothing is behind. Exists because the scan
+        # makes exactly ONE fetch attempt per stock per tick and never
+        # revisits it: before this job, one transient upstream failure left a
+        # PERMANENT hole in the charts — ~100 symbols including AMZN/MSFT lost
+        # a week of bars in July 2026 without a single failed scan.
+        _scheduler.add_job(
+            run_repair_ohlcv_gaps,
+            trigger=CronTrigger(hour="*/6", minute=20),
+            id="repair_ohlcv_gaps",
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+        )
         _scheduler.add_job(
             run_send_digest,
             trigger=CronTrigger(
