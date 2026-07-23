@@ -5,9 +5,11 @@ cookie check entirely — including POST /api/admin/redownload-ohlcv, which WIPE
 and refetches OHLCV history. /api/health stays public by design (liveness
 probe, exposes nothing sensitive).
 """
+import inspect
+
 from fastapi.testclient import TestClient
 
-from app.main import app
+from app.main import app, health
 
 
 def _unauthenticated_client(db) -> TestClient:
@@ -37,6 +39,19 @@ def test_data_sources_health_endpoint_was_deleted(db):
 def test_health_stays_public(db):
     r = _unauthenticated_client(db).get("/api/health")
     assert r.status_code == 200
+
+
+def test_health_handler_is_async(db):
+    """The liveness-probe target MUST run on the event loop, not the anyio
+    threadpool. A sync `def` handler needs a free worker slot to answer, so
+    when slow sync endpoints saturate the pool — rate-limited yfinance quote
+    fetches held six requests for 43-50s on 2026-07-23 — /api/health misses
+    the kubelet's probe timeout and the LIVENESS probe kills a container that
+    is merely busy, turning a survivable slowdown into a real outage.
+
+    Reverting this to `def` reintroduces that outage silently, so guard it.
+    """
+    assert inspect.iscoroutinefunction(health)
 
 
 def test_metrics_endpoint_prometheus(db):

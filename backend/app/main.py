@@ -446,8 +446,23 @@ app.include_router(platform_health_router.router)
 app.include_router(kpi_router.router)
 
 
+# `async` ON PURPOSE — do not turn this back into a plain `def`.
+#
+# A sync handler is dispatched to the anyio threadpool, so it needs a free
+# worker slot to answer. When slow SYNC endpoints saturate that pool this
+# trivially-fast probe target starves: on 2026-07-23 six /api/stocks/quotes +
+# /api/dashboard/live-assets calls held workers for 43-50s each (yfinance
+# 429'd nearly every ticker until the circuit breaker opened), /api/health
+# stopped answering inside the kubelet's probe timeout, and the LIVENESS probe
+# killed a container that was merely BUSY — every one of those requests still
+# returned 200. Traefik then served "no available server" for the whole
+# restart: a real outage manufactured out of a non-fatal slowdown.
+#
+# Declaring it async runs it directly on the event loop, so it stays
+# answerable no matter how full the threadpool is. Safe because the body does
+# no I/O — both values are in-memory attribute reads.
 @app.get("/api/health")
-def health() -> dict[str, object]:
+async def health() -> dict[str, object]:
     return {"status": "ok", "scheduler_running": get_scheduler().running, "version": app.version}
 
 

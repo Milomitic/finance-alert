@@ -45,9 +45,24 @@ ingress:
 
 # Probe tuning. The app runs `alembic upgrade head` before uvicorn binds, so
 # readiness must tolerate a slow first boot (fresh DB migration).
+#
+# The timeout/threshold values below are NOT decoration — leaving them unset
+# takes the Kubernetes defaults (timeoutSeconds=1, failureThreshold=3), which
+# on a single-replica app means ~30s of a busy process reads as "dead" and the
+# container is killed. That is a REAL outage (Traefik answers "no available
+# server" for the whole restart) manufactured out of a survivable slowdown —
+# it happened on 2026-07-23 when rate-limited yfinance calls held requests for
+# 50s. Liveness must only fire on a genuinely WEDGED process, never on a slow
+# one; see the matching note on app/main.py:health.
 probes:
   startupSeconds: 60   # max time allowed for first boot+migrate before failing
   periodSeconds: 10
+  timeoutSeconds: 5    # 1s (the k8s default) is hostile under any load
+  # 6 × 10s = the process must be unresponsive for a full minute to be killed.
+  livenessFailureThreshold: 6
+  # Readiness is cheaper to trip (it only sheds traffic) but with ONE replica
+  # shedding traffic is also downtime — so keep it off a hair-trigger too.
+  readinessFailureThreshold: 3
 
 # App configuration → injected as env (12-factor). Sensitive values go into a
 # Secret (templates/secret.yaml); the rest here are plain.

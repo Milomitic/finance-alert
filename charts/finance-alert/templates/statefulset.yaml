@@ -101,13 +101,21 @@ spec:
           startupProbe:
             httpGet: { path: /api/health, port: http }
             periodSeconds: {{ .Values.probes.periodSeconds }}
+            timeoutSeconds: {{ .Values.probes.timeoutSeconds }}
             failureThreshold: {{ div .Values.probes.startupSeconds .Values.probes.periodSeconds }}
+          # timeoutSeconds/failureThreshold are set EXPLICITLY: the k8s defaults
+          # (1s / 3) let a merely-slow app be killed as if it were dead. See the
+          # rationale in values.yaml and on app/main.py:health.
           readinessProbe:
             httpGet: { path: /api/health, port: http }
             periodSeconds: {{ .Values.probes.periodSeconds }}
+            timeoutSeconds: {{ .Values.probes.timeoutSeconds }}
+            failureThreshold: {{ .Values.probes.readinessFailureThreshold }}
           livenessProbe:
             httpGet: { path: /api/health, port: http }
             periodSeconds: {{ .Values.probes.periodSeconds }}
+            timeoutSeconds: {{ .Values.probes.timeoutSeconds }}
+            failureThreshold: {{ .Values.probes.livenessFailureThreshold }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
