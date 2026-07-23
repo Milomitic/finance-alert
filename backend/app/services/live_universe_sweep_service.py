@@ -100,7 +100,14 @@ def refresh_chunk(
     from app.services import live_quote_service
 
     chunk_size = chunk_size or settings.live_movers_chunk
-    batch_fn = batch_fn or live_quote_service.get_quotes_batch
+    # deadline_seconds=None: this is the BACKGROUND pool — nobody is waiting on
+    # it, and its whole job is to actually land the quotes that keep the
+    # user-facing path warm. The 6s deadline exists to protect interactive
+    # requests; applying it here would make the sweep give up on the very
+    # tickers it exists to fetch.
+    batch_fn = batch_fn or (
+        lambda tickers: live_quote_service.get_quotes_batch(tickers, deadline_seconds=None)
+    )
     is_open = is_open or live_quote_service._is_market_open
 
     tickers = [

@@ -496,9 +496,24 @@ simulate a process restart in a test), poke `_CACHE.clear()` directly.
 when the upstream fetch returned an error — a transient yfinance failure
 shouldn't poison the cache for 24h across restarts.
 
-The third in-memory cache (`live_quote_service`) is **NOT** backed by L2
-because its TTL is 10 seconds — a 30s-old quote is worse than re-fetching,
-and the persistence overhead would dominate.
+`live_quote_service` **IS** now backed by L2 (`live_quote_l2`, `kind="live_quote"`)
+— this REVERSES the earlier rule that said it must not be. The old rationale
+("TTL is 10s, a 30s-old quote is worse than re-fetching") assumed re-fetching
+is fast. On 2026-07-23 we measured quote requests taking **43-50 seconds**
+under Yahoo rate-limiting; they saturated the sync threadpool and got the pod
+liveness-killed. A 30s-old price beats a 50s wait, and beats a blank page
+after a restart. Rules of the layer:
+
+- It is a **floor, never a source of truth** — read only when the live path
+  can't answer NOW (breaker open, deadline blown, cold cache after restart).
+- Restored quotes are flagged `market_state="STALE"`. **Never** let a restored
+  price present itself as live.
+- Writes are **batched**: the sweep marks tickers dirty and `flush_l2()` writes
+  them in ONE transaction at the end of its pass. Don't add per-quote commits.
+- Errors are never persisted (same rule as fundamentals/news).
+
+`get_quotes_batch` also takes `deadline_seconds` (default 6s): user-facing
+callers must stay bounded, background callers (the sweep) pass `None`.
 
 ---
 

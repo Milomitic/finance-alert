@@ -33,6 +33,7 @@ from zoneinfo import ZoneInfo
 
 from loguru import logger
 
+from app.services import live_quote_l2
 from app.services.currency_units import is_minor_unit, scale_minor_to_major
 
 
@@ -779,6 +780,11 @@ def _fetch_fresh(ticker: str, *, allow_remote_today_fetch: bool = True) -> LiveQ
 # price for EOD numbers (the top-movers "missing dot" report, 2026-06-10).
 _LAST_LIVE: dict[str, LiveQuote] = {}
 
+# Persisted snapshots hydrated from L2 at boot (ticker → payload dict). This is
+# what makes the FIRST page load after a restart instant instead of a cold
+# fan-out to Yahoo. Only ever read as a last resort, below _CACHE/_LAST_LIVE.
+_L2_SNAPSHOT: dict[str, dict[str, Any]] = {}
+
 
 def _today_session_open_epoch(ticker: str) -> float | None:
     """Epoch of TODAY's session open in the ticker's exchange-local tz.
@@ -825,6 +831,8 @@ def get_quote(
         with _CACHE_LOCK:
             _CACHE[ticker] = fresh
             _LAST_LIVE[ticker] = fresh
+        # Queue for the next L2 flush (in-memory, no DB write on this path).
+        live_quote_l2.mark_dirty(ticker, _quote_to_l2_payload(fresh))
         return fresh
     # Degraded (or legitimately-closed) quote. Courtesy only while the
     # exchange is open: after the close the EOD fallback IS the truth.
@@ -840,7 +848,116 @@ def get_quote(
     return fresh
 
 
-def get_quotes_batch(tickers: list[str]) -> dict[str, LiveQuote]:
+# ─── L2 snapshot bridge ─────────────────────────────────────────────────────
+def _quote_to_l2_payload(q: LiveQuote) -> dict[str, Any]:
+    return {f: getattr(q, f) for f in live_quote_l2.FIELDS}
+
+
+def _quote_from_l2_payload(ticker: str, d: dict[str, Any]) -> LiveQuote:
+    """Rebuild a quote from its persisted snapshot, FLAGGED STALE.
+
+    market_state is forced to "STALE" — never "OPEN" — because this price was
+    not just fetched. Presenting a restored snapshot as live would be the one
+    way this cache could actually mislead someone.
+    """
+    price = d.get("price")
+    prev = d.get("prev_close")
+    change_abs = change_pct = None
+    if price is not None and prev:
+        change_abs = price - prev
+        change_pct = (change_abs / prev) * 100.0
+    return LiveQuote(
+        ticker=ticker,
+        price=price,
+        prev_close=prev,
+        change_abs=change_abs,
+        change_pct=change_pct,
+        day_open=d.get("day_open"),
+        day_high=d.get("day_high"),
+        day_low=d.get("day_low"),
+        volume=d.get("volume"),
+        market_state="STALE",
+        currency=d.get("currency"),
+        fetched_at=d.get("fetched_at") or 0.0,
+        as_of_date=d.get("as_of_date"),
+    )
+
+
+def _warm_or_eod(ticker: str) -> LiveQuote:
+    """Best answer obtainable WITHOUT touching yfinance, in descending
+    freshness: TTL-expired cache → last good live quote → persisted L2
+    snapshot → EOD close from stored bars. Used whenever the live path can't
+    answer in time; the point is that a request NEVER blocks on Yahoo."""
+    with _CACHE_LOCK:
+        cached = _CACHE.get(ticker)
+        last_live = _LAST_LIVE.get(ticker)
+        snap = _L2_SNAPSHOT.get(ticker)
+    if cached is not None:
+        return cached
+    if last_live is not None:
+        return last_live
+    if snap is not None:
+        return _quote_from_l2_payload(ticker, snap)
+    return _eod_fallback_quote(ticker)
+
+
+def hydrate_l2_snapshots() -> int:
+    """Load persisted snapshots into memory at boot so the first page load
+    after a restart is served instantly instead of cold-fanning out to Yahoo."""
+    from app.core import db as core_db
+    try:
+        with core_db.SessionLocal() as db:
+            snaps = live_quote_l2.load_all(db)
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"[live_quote] L2 hydration skipped: {e}")
+        return 0
+    if snaps:
+        with _CACHE_LOCK:
+            _L2_SNAPSHOT.update(snaps)
+        logger.info(f"[live_quote] hydrated {len(snaps)} L2 quote snapshots")
+    return len(snaps)
+
+
+def flush_l2() -> int:
+    """Persist everything the sweep queued. Called at the end of a sweep pass."""
+    from app.core import db as core_db
+    try:
+        with core_db.SessionLocal() as db:
+            return live_quote_l2.flush(db)
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"[live_quote] L2 flush failed: {e}")
+        return 0
+
+
+# How long a USER-facing batch may wait on Yahoo before it stops waiting and
+# serves what it already has. On 2026-07-23 quote requests ran 43-50s under
+# rate-limiting, saturated the sync threadpool and got the pod liveness-killed:
+# an unbounded wait is not a slow response, it is an outage. Background callers
+# that genuinely want every quote (the sweep) pass deadline_seconds=None.
+_BATCH_DEADLINE_SECONDS = 6.0
+
+# One shared, bounded pool instead of a fresh executor per call. A timed-out
+# future is NOT cancelled: it keeps running here and populates _CACHE, so the
+# work still lands and the NEXT poll gets it for free.
+_POOL_WORKERS = 8
+_POOL: Any = None
+_POOL_LOCK = Lock()
+
+
+def _pool() -> Any:
+    global _POOL
+    with _POOL_LOCK:
+        if _POOL is None:
+            from concurrent.futures import ThreadPoolExecutor
+            _POOL = ThreadPoolExecutor(
+                max_workers=_POOL_WORKERS, thread_name_prefix="livequote"
+            )
+        return _POOL
+
+
+def get_quotes_batch(
+    tickers: list[str], *, deadline_seconds: float | None = _BATCH_DEADLINE_SECONDS
+) -> dict[str, LiveQuote]:
     """Fetch multiple quotes CONCURRENTLY. Cache hits return instantly;
     only cache-miss tickers hit yfinance. Returns {ticker: LiveQuote}.
 
@@ -854,28 +971,67 @@ def get_quotes_batch(tickers: list[str]) -> dict[str, LiveQuote]:
     within tolerance; the yfinance circuit breaker is the backstop.
 
     No batched yfinance call exists (fast_info is per-Ticker); Stooq
-    only exposes EOD, not live, so there's no live fallback when the
-    breaker opens — entries with `error` set tell the frontend to
-    render a stale state.
+    only exposes EOD, not live.
+
+    Three guarantees added 2026-07-24 after quote requests were measured at
+    43-50s under Yahoo rate-limiting (they saturated the sync threadpool and
+    got the pod liveness-killed):
+
+    1. The breaker is consulted ONCE up front, not per ticker — when it's
+       open we don't spin up N workers just to have each bail immediately.
+    2. A DEADLINE bounds the wait. Stragglers past it are served warm
+       (`_warm_or_eod`) and left running in the background, so the work still
+       lands for the next poll. `deadline_seconds=None` waits for everything
+       — for background callers like the sweep, where nobody is watching.
+    3. Nothing ever returns bare `error` when a usable price exists: the
+       fallback ladder is cache → last-good → L2 snapshot → EOD close.
     """
     out: dict[str, LiveQuote] = {}
     if not tickers:
         return out
-    from concurrent.futures import ThreadPoolExecutor
-    # 8 workers: enough to collapse a 50-name batch to ~1s without
-    # hammering Yahoo with 50 simultaneous connections.
-    workers = min(8, len(tickers))
+
+    # Serve TTL-fresh entries without touching a thread at all.
+    now = time.time()
+    misses: list[str] = []
+    with _CACHE_LOCK:
+        for t in tickers:
+            cached = _CACHE.get(t)
+            if cached is not None and (now - cached.fetched_at) < _TTL_SECONDS:
+                out[t] = cached
+            else:
+                misses.append(t)
+    if not misses:
+        return out
+
+    from app.services import yfinance_health
+    if yfinance_health.is_open(yfinance_health.LANE_QUOTES):
+        for t in misses:
+            out[t] = _warm_or_eod(t)
+        return out
+
     # allow_remote_today_fetch=False: the batch must NOT fire an on-demand
     # history() per ticker (≈100 names would hammer yfinance right after
     # the close). The in-memory intraday tick covers the displayed names
     # (they were polled while OPEN); single-quote views still fetch the
     # official bar.
-    with ThreadPoolExecutor(max_workers=workers) as ex:
-        results = ex.map(
-            lambda t: get_quote(t, allow_remote_today_fetch=False), tickers
+    futures = {
+        _pool().submit(get_quote, t, allow_remote_today_fetch=False): t
+        for t in misses
+    }
+    deadline = None if deadline_seconds is None else time.time() + deadline_seconds
+    timed_out = 0
+    for fut, t in futures.items():
+        try:
+            timeout = None if deadline is None else max(0.0, deadline - time.time())
+            out[t] = fut.result(timeout=timeout)
+        except Exception:  # noqa: BLE001 — timeout OR a per-ticker fetch error
+            # Deliberately NOT cancelled: let it finish and warm the cache.
+            out[t] = _warm_or_eod(t)
+            timed_out += 1
+    if timed_out:
+        logger.info(
+            f"[live_quote] batch deadline: {timed_out}/{len(misses)} served warm"
         )
-        for t, q in zip(tickers, results, strict=False):
-            out[t] = q
     return out
 
 
@@ -884,6 +1040,7 @@ def clear_cache() -> None:
     with _CACHE_LOCK:
         _CACHE.clear()
         _LAST_LIVE.clear()
+        _L2_SNAPSHOT.clear()
     with _LAST_INTRADAY_LOCK:
         _LAST_INTRADAY.clear()
     with _TODAY_BAR_LOCK:

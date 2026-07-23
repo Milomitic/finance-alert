@@ -13,7 +13,12 @@ best-effort — neither step may break the scheduler loop or the other.
 from loguru import logger
 
 from app.core.db import SessionLocal
-from app.services import live_universe_sweep_service, position_service, price_alert_service
+from app.services import (
+    live_quote_service,
+    live_universe_sweep_service,
+    position_service,
+    price_alert_service,
+)
 
 
 def run_live_universe_sweep() -> None:
@@ -37,5 +42,12 @@ def run_live_universe_sweep() -> None:
             position_service.evaluate_intraday_hits(db)
         except Exception as exc:  # noqa: BLE001 — never break the scheduler loop
             logger.warning(f"[live-sweep] intraday position hit-check failed: {exc}")
+        # Persist what this pass warmed, in ONE transaction. This is what makes
+        # the app fast on the FIRST load after a restart: without it the L1
+        # quote cache boots empty and the landing page cold-fans-out to Yahoo.
+        try:
+            live_quote_service.flush_l2()
+        except Exception as exc:  # noqa: BLE001 — never break the scheduler loop
+            logger.warning(f"[live-sweep] L2 quote flush failed: {exc}")
     finally:
         db.close()

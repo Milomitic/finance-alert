@@ -113,12 +113,19 @@ def _hydrate_fetch_caches() -> None:
     skippate, così una L2 sempre più sporca emerge nelle metriche."""
     import time as _time
 
-    from app.services import stock_fundamentals_service, stock_news_service
+    from app.services import (
+        live_quote_service,
+        stock_fundamentals_service,
+        stock_news_service,
+    )
 
     t0 = _time.perf_counter()
     try:
         n_fund_ok, n_fund_skip = stock_fundamentals_service.hydrate_l1_from_db()
         n_news_ok, n_news_skip = stock_news_service.hydrate_l1_from_db()
+        # Live-quote snapshots: makes the first page load after a restart
+        # instant instead of a cold fan-out to a rate-limited Yahoo.
+        live_quote_service.hydrate_l2_snapshots()
     except Exception as exc:  # noqa: BLE001 — boot-time best effort
         logger.warning(f"[startup] L1 hydration failed (non-fatal): {exc}")
         return
