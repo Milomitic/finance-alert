@@ -119,7 +119,7 @@ export function MarketTickerTape() {
   // text-sm font (was text-[12px]).
   if (q.isLoading || assets.length === 0) {
     return (
-      <div className="relative w-full overflow-hidden rounded-md border bg-card/40 h-9">
+      <div className="relative w-full overflow-hidden border bg-card/40 h-9 -mx-3 rounded-none border-x-0 sm:mx-0 sm:rounded-md sm:border-x">
         <div className="absolute inset-0 animate-pulse bg-muted/30" />
       </div>
     );
@@ -147,7 +147,11 @@ export function MarketTickerTape() {
   return (
     <div
       className={cn(
-        "relative w-full max-w-full overflow-hidden rounded-md border bg-card",
+        "relative w-full max-w-full overflow-hidden border bg-card",
+        // Full-bleed on phones: cancel the main's p-3 with -mx-3 so the tape
+        // runs edge to edge, and drop the rounding/side borders that only
+        // make sense for an inset card. Back to an inset rounded card at sm+.
+        "-mx-3 rounded-none border-x-0 sm:mx-0 sm:rounded-md sm:border-x",
         // Hover-pause: applied via CSS (group hover) so the user can
         // read a flying ticker without aborting the animation.
         "group",

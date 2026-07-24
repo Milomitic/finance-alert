@@ -157,6 +157,15 @@
 .group:hover .ticker-rail {
   animation-play-state: paused;
 }
+/* Phones: same 60s cycle moves the SAME px/s, but the window showing it is
+   ~5x narrower — you see two tickers and wait ~8s for the next, which reads
+   as stalled rather than live. Halving the cycle restores the sense of
+   motion on the small screen without touching the tuned desktop speed. */
+@media (max-width: 639px) {
+  .ticker-rail {
+    animation-duration: 28s;
+  }
+}
 @media (prefers-reduced-motion: reduce) {
   .ticker-rail {
     animation: none;

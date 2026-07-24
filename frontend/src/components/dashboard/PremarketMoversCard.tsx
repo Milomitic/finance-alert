@@ -191,7 +191,9 @@ export function PremarketMoversCard() {
             placeholder branch (cache-cold skeleton) was removed when
             the visibility gate moved from `market_open` to
             `available` — see the docstring for rationale. */}
-        <div className="grid grid-cols-2 divide-x divide-border/40 flex-1 min-h-0">
+        {/* Same stacking as TopMoversCard: two lists side by side on a phone
+            leave each one too narrow for its own row content. */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-border/40 flex-1 min-h-0">
           <Column title="Gainers" rows={d.gainers} side="g" />
           <Column title="Losers" rows={d.losers} side="l" />
         </div>

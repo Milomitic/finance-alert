@@ -157,7 +157,7 @@ function MoverRow({ m, field, window, live, computedAt, livePrice, livePulse, fl
           (minmax(0,1fr)) and truncates first when the column narrows. */}
       <Link
         to={`/stocks/${encodeURIComponent(m.ticker)}`}
-        className="grid grid-cols-[minmax(0,1fr)_46px_52px_48px_30px_auto] items-center gap-1 px-1.5 py-1.5 hover:bg-accent/30 transition-colors"
+        className="grid grid-cols-[minmax(0,1fr)_46px_52px_auto] sm:grid-cols-[minmax(0,1fr)_46px_52px_48px_30px_auto] items-center gap-1 px-1.5 py-1.5 hover:bg-accent/30 transition-colors"
       >
         {/* Col 1: identity + per-row live-poll dot. A classic pulsing green
             dot sits right of the ticker for every row whose 15s polling is
@@ -194,7 +194,7 @@ function MoverRow({ m, field, window, live, computedAt, livePrice, livePulse, fl
         {/* Col 4: volume (number only — multiplier moved to its own column so
             the columns stay aligned). Window-aware per volValue above. */}
         <span
-          className="text-[12.5px] tabular-nums text-right font-semibold text-foreground/80"
+          className="hidden sm:block text-[12.5px] tabular-nums text-right font-semibold text-foreground/80"
           title={volTitle}
         >
           {volEstimated ? "~" : ""}
@@ -202,7 +202,7 @@ function MoverRow({ m, field, window, live, computedAt, livePrice, livePulse, fl
         </span>
         {/* Col 5: × vs 20d-avg multiplier (1d only; empty cell otherwise so
             the score column never shifts between windows). */}
-        <span className="text-[11px] font-mono tabular-nums text-center" title={volTitle}>
+        <span className="hidden sm:block text-[11px] font-mono tabular-nums text-center" title={volTitle}>
           {window === "1d" && multiplier != null ? (
             <span
               className={cn(
@@ -499,7 +499,11 @@ export function TopMoversCard({ movers, computedAt }: Props) {
             lists are capped at ROWS_PER_COL so they flow to content and the
             card grows to fit — the dashboard grid then equalizes all three
             spotlight cards to the tallest, with no internal scroll. */}
-        <div className="grid grid-cols-2 divide-x divide-border/40">
+        {/* Stacked on a phone: side-by-side gave each list ~175px, which is
+            LESS than this row's fixed columns alone (176px) — the identity
+            cell's minmax(0,1fr) collapsed to zero, so the ticker painted on
+            top of the price and the right-hand columns were clipped away. */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-border/40">
           {(["gainers", "losers"] as const).map((side) => {
             const list = side === "gainers" ? data.gainers : data.losers;
             return (

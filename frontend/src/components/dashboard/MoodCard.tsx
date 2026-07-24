@@ -153,7 +153,12 @@ function RegionRow({ region, byIndex, parentFg }: { region: RegionDef; byIndex: 
     "text-muted-foreground";
 
   return (
-    <div className="flex items-center gap-2.5 rounded-md bg-white/60 dark:bg-black/20 border border-white/40 dark:border-white/5 px-3 py-2 hover:bg-white/80 dark:hover:bg-black/30 transition-colors">
+    // flex-wrap: every child here is shrink-0 (deliberately — these are
+    // numbers, squeezing them is worse than wrapping). In a non-wrapping row
+    // that guarantees overflow on a phone, and the Card's overflow-hidden
+    // then CLIPPED the trailing chips clean off. Wrapping keeps every value
+    // on screen; from sm up the row still fits on one line, unchanged.
+    <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 rounded-md bg-white/60 dark:bg-black/20 border border-white/40 dark:border-white/5 px-3 py-2 hover:bg-white/80 dark:hover:bg-black/30 transition-colors">
       {region.flagSrc ? (
         <img
           src={region.flagSrc} alt={region.label}
@@ -177,7 +182,7 @@ function RegionRow({ region, byIndex, parentFg }: { region: RegionDef; byIndex: 
       <span className={cn("text-sm tabular-nums shrink-0 font-bold", changeColor)} title={ACRONYM_HELP.AVG_CHANGE}>
         {m.avg_change >= 0 ? "+" : ""}{m.avg_change.toFixed(2)}%
       </span>
-      <div className="ml-auto flex flex-wrap items-center gap-1 justify-end">
+      <div className="ml-auto flex flex-wrap items-center gap-1 justify-end min-w-0">
         {indices.map((idx) => <IndexPill key={idx.code} idx={idx} />)}
       </div>
     </div>

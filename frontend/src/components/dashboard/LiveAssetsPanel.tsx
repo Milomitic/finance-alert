@@ -141,7 +141,14 @@ function AssetRow({ asset }: { asset: LiveAsset }) {
   }
 
   return (
-    <li className="flex-1 flex min-h-0">
+    // min-h floor: the whole chain above is flexBasis:0 + flex-1 + min-h-0,
+    // which only produces sane rows when an ANCESTOR supplies a definite
+    // height. HeroStrip does — but only at `lg` (h-[340px]). Below that the
+    // flex had nothing to distribute and min-h-0 removed the min-content
+    // floor, so rows collapsed toward zero and painted on top of each other
+    // (the unreadable "Mercati live" on a phone). The floor costs nothing on
+    // desktop, where 340px/7 rows is ~44px anyway.
+    <li className="flex-1 flex min-h-[38px]">
       <Link
         to={`/markets/${encodeURIComponent(asset.quote_symbol || asset.symbol)}`}
         className={cn(
@@ -175,7 +182,11 @@ function AssetRow({ asset }: { asset: LiveAsset }) {
           after-hours index/commodity rows, 24/7 for crypto. (The old
           amber "FUT" badge was dropped: the futures price IS the live
           price after the cash close, so it gets the same live dot.) */}
-      <div className="shrink-0 min-w-0 flex items-center gap-1.5">
+      {/* flex-1 below sm so a long name truncates instead of pushing the
+          price out of the row — `shrink-0` made the `truncate` below dead
+          code. From sm up the sparkline is the flex spacer, so the name goes
+          back to its natural width. */}
+      <div className="flex-1 sm:flex-none min-w-0 flex items-center gap-1.5">
         <span className="text-[15px] font-semibold truncate leading-tight">
           {asset.name}
         </span>
@@ -207,7 +218,7 @@ function AssetRow({ asset }: { asset: LiveAsset }) {
       </div>
 
       {/* Price + change inline */}
-      <div className="text-right shrink-0 flex items-baseline gap-1.5 leading-tight">
+      <div className="text-right shrink-0 ml-auto sm:ml-0 flex items-baseline gap-1.5 leading-tight">
         {hasError ? (
           <span className="text-[15px] font-bold tabular-nums">
             <Tooltip>

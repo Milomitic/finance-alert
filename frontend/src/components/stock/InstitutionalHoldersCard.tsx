@@ -70,7 +70,7 @@ function actionMeta(action: string | null): {
  * implicit min-width:0 that lets the long fund name truncate instead
  * of overflowing its track. */
 const HOLDER_GRID =
-  "grid grid-cols-[minmax(0,1fr)_4rem_3rem_4.75rem_3.5rem] items-baseline gap-2";
+  "grid grid-cols-[minmax(0,1fr)_4rem_3rem_4.75rem_3.5rem] items-baseline gap-2 min-w-[340px] md:min-w-0";
 
 function HolderHeader() {
   return (
@@ -198,12 +198,16 @@ export function InstitutionalHoldersCard({ ticker }: Props) {
           </div>
         ) : (
           <>
+            {/* The fixed columns are wider than a phone; scroll the list
+                rather than let the identity cell collapse to zero. */}
+            <div className="overflow-x-auto md:overflow-visible">
             <ul>
               <HolderHeader />
               {visible.map((h) => (
                 <HolderRow key={`${h.institutional_id}-${h.period_end_date}`} h={h} />
               ))}
             </ul>
+            </div>
             {/* Besides the latest transactions above, the same data as
                 an infographic: WHO holds this stock and in what
                 measure — bar length = the holder's portfolio WEIGHT

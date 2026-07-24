@@ -207,7 +207,7 @@ function abbreviatePosition(raw: string | null | undefined): string {
  * `minmax(0,1fr)` injects the implicit min-width:0 the name needs to
  * truncate instead of overflowing its track. */
 const INSIDER_GRID =
-  "grid grid-cols-[minmax(0,1fr)_4.25rem_5.5rem_5.25rem_3.5rem] items-baseline gap-2";
+  "grid grid-cols-[minmax(0,1fr)_4.25rem_5.5rem_5.25rem_3.5rem] items-baseline gap-2 min-w-[380px] md:min-w-0";
 
 function InsiderHeader() {
   return (
@@ -353,12 +353,16 @@ export function InsidersAnalystCard({ ticker }: Props) {
             </span>
           </div>
         ) : (
+          // The fixed columns are wider than a phone; scroll the list rather
+          // than let the identity cell collapse to zero.
+          <div className="overflow-x-auto md:overflow-visible">
           <ul>
             <InsiderHeader />
             {latest.map((t, i) => (
               <InsiderRow key={`${t.insider}-${t.date}-${i}`} t={t} />
             ))}
           </ul>
+          </div>
         )}
       </CardContent>
     </Card>
