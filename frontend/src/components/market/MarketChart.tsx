@@ -74,6 +74,11 @@ export function MarketChart({
     const el = containerRef.current;
     if (!el) return;
     const chart = createChart(el, {
+      // autoSize: width/height below are read ONCE at creation, so without
+      // this the canvas kept its mount-time size forever — a rotation or any
+      // container change left it the wrong width. The explicit sizes stay as
+      // the documented fallback for when ResizeObserver is unavailable.
+      autoSize: true,
       width: el.clientWidth,
       height: el.clientHeight,
       layout: {

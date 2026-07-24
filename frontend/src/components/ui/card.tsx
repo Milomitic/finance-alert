@@ -8,6 +8,10 @@ const Card = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <div
     ref={ref}
+    // Styling hook for the phone rule in index.css that unwinds internal
+    // scrollers. Cards only — dialogs, dropdowns and the page shell keep
+    // their own scrolling.
+    data-card=""
     className={cn(
       "rounded-xl border bg-card text-card-foreground shadow",
       className

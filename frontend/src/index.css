@@ -191,3 +191,30 @@
     animation: none;
   }
 }
+
+/* ─── One scroll context below lg ────────────────────────────────────────
+ * The app had 44 nested vertical scrollers inside cards. On a desktop they
+ * are correct: the page rows set a definite height (`lg:h-[340px]`,
+ * `lg:h-[520px]`…) and each card scrolls its own overflow inside it.
+ *
+ * On a phone none of those heights apply, so the scrollers had nothing to
+ * size against — and worse, a touch gesture that lands on one of them is
+ * captured by THAT element for its whole duration. You put your thumb down
+ * to scroll the page, and instead you scroll a table. With 44 of them the
+ * page is a minefield, which is exactly the reported symptom.
+ *
+ * Below lg, cards therefore grow to their content and the PAGE is the only
+ * thing that scrolls. Every constrained scroller in the codebase uses
+ * `max-h-*` rather than a hard height, so releasing the cap simply lets the
+ * content flow — nothing gets clipped.
+ *
+ * Deliberately scoped to [data-card]: dialogs, the command palette and the
+ * app shell must keep their own scrolling. And overflow-X is untouched, so
+ * the wide tables still scroll sideways as designed.
+ */
+@media (max-width: 1023px) {
+  [data-card] .overflow-y-auto {
+    overflow-y: visible;
+    max-height: none;
+  }
+}
