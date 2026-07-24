@@ -1,4 +1,4 @@
-import { Radio, Sunrise } from "lucide-react";
+import { History, Radio, Sunrise } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
@@ -13,18 +13,29 @@ import { cn } from "@/lib/utils";
  *   • PRE  (amber pulse)   — US pre-market: the % shown is the
  *                             pre-market move vs yesterday's close
  *   • Closed (muted)       — markets closed, showing last EOD close
+ *   • STALE (orange)       — the quote could NOT be refreshed and we are
+ *                             showing a restored snapshot. Added 2026-07-24
+ *                             with the L2 quote cache: a persisted price is
+ *                             genuinely useful (it beats a blank page after a
+ *                             restart, and beats a 50s wait under Yahoo
+ *                             rate-limiting) but it must never masquerade as
+ *                             live — so it gets its own visibly non-live chip.
  *
  * The PRE badge is the whole point of this component: without it a
  * pre-market % under a "Closed" (or worse, "LIVE") chip is confusing —
  * the user can't tell the change is a pre-open move.
  */
-export type MarketPhase = "open" | "pre" | "closed";
+export type MarketPhase = "open" | "pre" | "closed" | "stale";
 
 export function deriveMarketPhase(
   states: (string | null | undefined)[],
 ): MarketPhase {
   if (states.some((s) => s === "OPEN")) return "open";
   if (states.some((s) => s === "PRE")) return "pre";
+  // `every`, not `some`: one un-refreshed ticker in a 50-name card must not
+  // label the whole card stale — that overstates the problem. A single-quote
+  // badge (StockHeader) has one state, so every === some there anyway.
+  if (states.length > 0 && states.every((s) => s === "STALE")) return "stale";
   return "closed";
 }
 
@@ -88,6 +99,24 @@ export function MarketStateBadge({
         </span>
         <Sunrise className={sz.icon} />
         PRE
+      </span>
+    );
+  }
+  if (phase === "stale") {
+    return (
+      <span
+        className={cn(
+          "inline-flex items-center gap-1 uppercase tracking-wider text-orange-700 dark:text-orange-300",
+          sz.text,
+          className,
+        )}
+        title={
+          title ??
+          "Quotazione non aggiornabile in questo momento — mostro l'ultimo prezzo salvato, non è un valore live"
+        }
+      >
+        <History className={sz.icon} />
+        STALE
       </span>
     );
   }

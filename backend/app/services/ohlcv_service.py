@@ -349,8 +349,22 @@ def fetch_and_upsert(
             result.stocks_failed += 1
             result.failed_tickers.append(stock.ticker)
             continue
+        # SAVEPOINT per stock. On POSTGRES a failed statement poisons the whole
+        # transaction: every later command returns InFailedSqlTransaction until
+        # a rollback. So a single bad ticker used to take down the ENTIRE rest
+        # of the chunk while this loop happily logged one error per stock and
+        # carried on — which is exactly how ~21 NYSE Arca ETFs (SPY, QQQ, XLF,
+        # XLE, XBI, SOXX…) silently stopped updating on 17 July 2026: one
+        # price-basis mismatch aborted the transaction and the ~10 tickers
+        # behind it in the same batch were never written.
+        #
+        # SQLite has no such aborted state, so this was invisible until the
+        # M7-P4 Postgres cutover. begin_nested() scopes each stock's writes to
+        # a savepoint: a failure rolls back only that stock and leaves the
+        # transaction usable for the rest of the batch.
         try:
-            inserted, updated = _upsert_one_stock(db, stock, frame)
+            with db.begin_nested():
+                inserted, updated = _upsert_one_stock(db, stock, frame)
             if stock.ohlcv_nodata_streak:
                 stock.ohlcv_nodata_streak = 0  # any data → alive again
             result.rows_inserted += inserted
@@ -359,7 +373,8 @@ def fetch_and_upsert(
         except PriceBasisMismatch as e:
             logger.warning(f"[ohlcv] price-basis mismatch (split?): {e} — rebasing full history")
             try:
-                ins = _rebase_full_history(db, stock)
+                with db.begin_nested():
+                    ins = _rebase_full_history(db, stock)
                 result.rows_inserted += ins
                 result.stocks_succeeded += 1
                 result.stocks_rebased += 1

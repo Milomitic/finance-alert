@@ -90,6 +90,12 @@ export function StockHeader({ stock, kpis, ohlcv }: Props) {
   // would read "Ultima chiusura" over a live pre-market figure — exactly the
   // ambiguity the PRE badge resolves on the dashboard cards.
   const isPremarket = liveOk && live.data!.market_state === "PRE";
+  // "STALE" = the backend served a RESTORED snapshot because it could not
+  // refresh the quote (breaker open, batch deadline, or a cold cache right
+  // after a restart). The price is real and useful, it is just not live —
+  // so it must not sit under a LIVE chip, and it must not silently look like
+  // a normal market close either.
+  const isStale = liveOk && live.data!.market_state === "STALE";
   const displayPrice = liveOk ? live.data!.price! : kpis.last_close;
   const change = liveOk ? (live.data!.change_pct ?? null) : kpis.change_pct;
   const changeAbs = liveOk ? live.data!.change_abs : null;
@@ -199,6 +205,16 @@ export function StockHeader({ stock, kpis, ohlcv }: Props) {
                         liveAge != null
                           ? `Pre-market USA · la variazione è il movimento pre-apertura vs chiusura di ieri · aggiornato ${Math.round(liveAge)}s fa`
                           : "Pre-market USA — la variazione mostrata è il movimento pre-apertura rispetto alla chiusura di ieri"
+                      }
+                    />
+                  ) : isStale ? (
+                    <MarketStateBadge
+                      phase="stale"
+                      size="md"
+                      title={
+                        liveAge != null && liveAge > 90
+                          ? `Quotazione non aggiornabile ora — ultimo prezzo salvato ${Math.round(liveAge / 60)} min fa`
+                          : "Quotazione non aggiornabile ora — mostro l'ultimo prezzo salvato, non è un valore live"
                       }
                     />
                   ) : (

@@ -98,3 +98,56 @@ def test_json_text_extracts_scalar_on_postgres(pg):
         select(Alert).where(cast(json_text(Alert.snapshot, "strength"), Float) >= 75)
     ).scalars().all()
     assert len(strong) == 2  # strengths 80 and 90 clear the bar; 40 does not
+
+
+def test_one_failed_stock_does_not_poison_the_rest_of_the_batch(pg, monkeypatch):
+    """THE regression test for the 17 July 2026 ETF outage.
+
+    Postgres puts a transaction into the aborted state as soon as ONE
+    statement errors; every later command then returns InFailedSqlTransaction.
+    ohlcv_service's per-stock loop catches its exceptions and carries on —
+    correct on SQLite, catastrophic here: one price-basis mismatch aborted the
+    transaction and the ~10 tickers behind it in the same batch (SPY, QQQ,
+    XLF, XLE, XBI, SOXX…) were silently never written, so their charts stopped
+    dead while every scan still reported success.
+
+    This drives the REAL fetch_and_upsert loop (only the yfinance I/O and the
+    row-building are stubbed) so it fails if the `begin_nested()` savepoint is
+    ever removed. On SQLite it would pass either way — hence the Postgres lane.
+    """
+    from sqlalchemy import insert
+
+    from app.models import OhlcvDaily
+    from app.services import ohlcv_service
+
+    bad = Stock(ticker="PGBAD", exchange="NASDAQ", name="Poisoner", country="US")
+    good = Stock(ticker="PGGOOD", exchange="NASDAQ", name="Victim", country="US")
+    pg.add_all([bad, good])
+    pg.flush()
+
+    # Pre-existing bar the poisoner will collide with (PK = stock_id + date).
+    day = date(2026, 7, 20)
+    base = {"open": 1, "high": 1, "low": 1, "close": 1, "volume": 1}
+    pg.execute(insert(OhlcvDaily).values(stock_id=bad.id, date=day, **base))
+
+    monkeypatch.setattr(ohlcv_service, "_yf_download", lambda *a, **k: object())
+    monkeypatch.setattr(ohlcv_service, "_extract_ticker_frame", lambda df, t: [t])
+
+    def fake_upsert(db, stock, frame):
+        if stock.ticker == "PGBAD":
+            # Duplicate PK → IntegrityError → transaction aborted on Postgres.
+            db.execute(insert(OhlcvDaily).values(stock_id=stock.id, date=day, **base))
+        db.execute(insert(OhlcvDaily).values(stock_id=stock.id, date=date(2026, 7, 21), **base))
+        return 1, 0
+
+    monkeypatch.setattr(ohlcv_service, "_upsert_one_stock", fake_upsert)
+
+    result = ohlcv_service.fetch_and_upsert(pg, [bad, good], period="1mo")
+
+    # The poisoner fails — expected. The one BEHIND it must still be written.
+    assert result.stocks_failed == 1
+    assert result.stocks_succeeded == 1, "the failed stock poisoned the rest of the batch"
+    landed = pg.execute(
+        select(OhlcvDaily.date).where(OhlcvDaily.stock_id == good.id)
+    ).scalars().all()
+    assert date(2026, 7, 21) in landed
