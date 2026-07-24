@@ -463,7 +463,7 @@ export default function InstitutionalsPage() {
       )}
 
       {/* Aggregate strip: most-picked + recent buys + recent sells */}
-      <div className="grid gap-3 lg:grid-cols-3">
+      <div className="grid gap-3 lg:grid-cols-3 [&>*]:min-w-0">
         <Card>
           <CardContent className="p-3">
             <SectionTitle

@@ -35,7 +35,10 @@ const OPTIONS = [
 
 export function RangeSelector({ value, onChange }: Props) {
   return (
-    <div className="inline-flex h-8 items-center rounded-md border bg-muted/30 p-0.5">
+    // max-w-full + overflow-x-auto: six timeframe buttons in an unbreakable
+    // inline-flex are the widest atom in the chart toolbar. Now that the card
+    // can shrink, this must scroll inside it rather than push it wide again.
+    <div className="inline-flex h-8 max-w-full overflow-x-auto items-center rounded-md border bg-muted/30 p-0.5">
       {OPTIONS.map((opt) => (
         <button
           key={opt.key}

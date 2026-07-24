@@ -43,7 +43,7 @@ import { usePremarketMovers } from "@/hooks/usePremarketMovers";
 function HeroRowSkeleton() {
   return (
     // HeroStrip row: [340px_1fr_200px] split at lg+.
-    <div className="grid gap-3 lg:grid-cols-[340px_1fr_200px]">
+    <div className="grid gap-3 lg:grid-cols-[340px_1fr_200px] [&>*]:min-w-0">
       <CardSkeleton className="h-[120px]" rows={3} />
       <CardSkeleton label="MERCATI LIVE" rows={4} strongHeader className="h-[120px]" />
       <CardSkeleton className="h-[120px]" rows={3} />
@@ -55,8 +55,8 @@ function SpotlightRowSkeleton() {
   return (
     // Row 2: Volumi + 52w (top-left pair) + TopMovers, with pre-market
     // on the right — mirrors the real row template.
-    <div className="grid gap-3 lg:grid-cols-[3fr_2fr] lg:h-[440px]">
-      <div className="grid gap-3 lg:grid-cols-3">
+    <div className="grid gap-3 lg:grid-cols-[3fr_2fr] lg:h-[440px] [&>*]:min-w-0">
+      <div className="grid gap-3 lg:grid-cols-3 [&>*]:min-w-0">
         <CardSkeleton label="VOLUMI" rows={8} strongHeader className="h-[400px]" />
         <CardSkeleton label="52 SETTIMANE" rows={8} strongHeader className="h-[400px]" />
         <CardSkeleton label="TOP MOVERS" rows={8} strongHeader className="h-[400px]" />
@@ -69,7 +69,7 @@ function SpotlightRowSkeleton() {
 function BreadthRowSkeleton() {
   return (
     // Lower row: breadth (wide, bottom-left) + RSI + Sectors (lg:h-[520px]).
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-[2fr_1fr_1fr] gap-3 lg:h-[520px]">
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-[2fr_1fr_1fr] gap-3 lg:h-[520px] [&>*]:min-w-0">
       <CardSkeleton label="BREADTH PER INDICE" rows={8} strongHeader />
       <CardSkeleton label="RSI DISTRIBUTION" rows={6} strongHeader />
       <CardSkeleton label="SETTORI" rows={6} strongHeader />
@@ -95,7 +95,7 @@ function DashboardSkeleton() {
       <SpotlightRowSkeleton />
       <BreadthRowSkeleton />
       {/* Discovery row: [2fr_1fr_1fr] at lg+. */}
-      <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr_1fr] gap-3 lg:h-[420px]">
+      <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr_1fr] gap-3 lg:h-[420px] [&>*]:min-w-0">
         <CardSkeleton label="TOP PICKS" rows={10} strongHeader />
         <CardSkeleton label="SUPERINVESTOR" rows={8} strongHeader />
         <CardSkeleton label="VALUTAZIONI ANALISTI" rows={8} strongHeader />
@@ -302,8 +302,8 @@ export default function HomePage() {
           (no flex-1/overflow) precisely so this auto-equalization works. */}
       {m?.movers ? (
         hidePremarket ? (
-          <div className="grid gap-3 lg:grid-cols-[5fr_4fr] items-stretch">
-            <div className="grid gap-3 lg:grid-cols-[1fr_1fr]">
+          <div className="grid gap-3 lg:grid-cols-[5fr_4fr] items-stretch [&>*]:min-w-0">
+            <div className="grid gap-3 lg:grid-cols-[1fr_1fr] [&>*]:min-w-0">
               <div className="min-w-0"><FiftyTwoWeekVolCard movers={m.movers} /></div>
               <div className="min-w-0"><LiveVolumeMoversCard movers={m.movers} computedAt={m.computed_at} /></div>
             </div>
@@ -317,7 +317,7 @@ export default function HomePage() {
           // into each other. The two dense two-column cards (TopMovers,
           // pre-market) now get the most room; the single-column Volumi the
           // least.
-          <div className="grid gap-3 lg:grid-cols-[minmax(0,2.2fr)_minmax(0,2fr)_minmax(0,2.9fr)_minmax(0,2.9fr)] items-stretch">
+          <div className="grid gap-3 lg:grid-cols-[minmax(0,2.2fr)_minmax(0,2fr)_minmax(0,2.9fr)_minmax(0,2.9fr)] items-stretch [&>*]:min-w-0">
             <div className="min-w-0"><FiftyTwoWeekVolCard movers={m.movers} /></div>
             <div className="min-w-0"><LiveVolumeMoversCard movers={m.movers} computedAt={m.computed_at} /></div>
             <div className="min-w-0"><TopMoversCard movers={m.movers} computedAt={m.computed_at} /></div>
@@ -329,7 +329,7 @@ export default function HomePage() {
       )}
       {/* Lower row: breadth matrix (bottom-left, wide 2fr) + RSI + Sectors. */}
       {m?.by_index && m.rsi_distribution && m.sectors ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-[2fr_1fr_1fr] gap-3 lg:h-[520px]">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-[2fr_1fr_1fr] gap-3 lg:h-[520px] [&>*]:min-w-0">
           <div className="h-[440px] lg:h-full min-h-0"><BreadthMatrixTable data={m.by_index} /></div>
           <div className="h-[440px] lg:h-full min-h-0">
             <Suspense fallback={<CardSkeleton label="RSI DISTRIBUTION" rows={6} className="h-full" />}>
@@ -371,7 +371,7 @@ export default function HomePage() {
           of the single-column Superinvestor + Analyst lists to stay
           readable. `[2fr_1fr_1fr]` keeps the sub-columns legible while
           still fitting the new third card on the same row. */}
-      <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr_1fr] gap-3 lg:h-[420px]">
+      <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr_1fr] gap-3 lg:h-[420px] [&>*]:min-w-0">
         {/* No fixed mobile height: TopPicksCard flows its 3 tiers
             (24 rows) at natural height and the page scrolls. A capped
             height here would crush the rows (text overlap). lg+: fills

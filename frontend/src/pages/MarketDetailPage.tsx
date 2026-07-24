@@ -272,7 +272,7 @@ export default function MarketDetailPage() {
 
       {/* Chart (left) + sidebar (right). Same 1fr+480px split as
           /stocks/:ticker so the visual rhythm aligns. */}
-      <div className="grid lg:grid-cols-[1fr_480px] gap-3">
+      <div className="grid lg:grid-cols-[1fr_480px] gap-3 [&>*]:min-w-0">
       <Card>
         <CardContent className="p-4">
           <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
@@ -356,7 +356,7 @@ export default function MarketDetailPage() {
             <div className="text-[11px] uppercase tracking-wider font-semibold text-muted-foreground/70 mb-2">
               KPI di prezzo
             </div>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 gap-2 [&>*]:min-w-0">
               <KpiCell
                 label="52W high"
                 value={d.high_52w != null ? formatMarketPrice(d.high_52w, d.category) : "—"}

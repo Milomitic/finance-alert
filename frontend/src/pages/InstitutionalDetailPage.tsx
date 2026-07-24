@@ -208,7 +208,7 @@ export default function InstitutionalDetailPage() {
     return (
       <div className="space-y-3">
         <CardSkeleton rows={3} className="h-[120px]" />
-        <div className="grid lg:grid-cols-[1fr_1fr] gap-3">
+        <div className="grid lg:grid-cols-[1fr_1fr] gap-3 [&>*]:min-w-0">
           <CardSkeleton label="COMPOSIZIONE PORTAFOGLIO" rows={10} strongHeader className="h-[480px]" />
           <CardSkeleton label="HOLDINGS" rows={10} strongHeader className="h-[480px]" />
         </div>
@@ -288,7 +288,7 @@ export default function InstitutionalDetailPage() {
       </header>
 
       {/* KPI strip */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 [&>*]:min-w-0">
         <Card>
           <CardContent className="p-3">
             <div className="text-[13px] uppercase tracking-wide text-muted-foreground">

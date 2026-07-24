@@ -81,12 +81,12 @@ export default function SectorsOverviewPage() {
     return (
       <div className="space-y-6">
         <h2 className="text-2xl sm:text-3xl font-semibold tracking-tight">Settori</h2>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 [&>*]:min-w-0">
           {Array.from({ length: 4 }).map((_, i) => (
             <CardSkeleton key={i} rows={2} className="h-[84px]" />
           ))}
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 [&>*]:min-w-0">
           {Array.from({ length: 8 }).map((_, i) => (
             <CardSkeleton key={i} rows={5} className="h-[220px]" />
           ))}
@@ -135,7 +135,7 @@ export default function SectorsOverviewPage() {
       </div>
 
       {/* ─── Top summary tiles ─────────────────────────────────────── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 [&>*]:min-w-0">
         <SummaryTile
           icon={Globe2}
           label="Stock totali"
@@ -179,7 +179,7 @@ export default function SectorsOverviewPage() {
             ) : undefined
           }
         />
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 [&>*]:min-w-0">
           {data.sectors.map((s) => (
             <SectorTile key={s.name} sector={s} />
           ))}

@@ -165,7 +165,7 @@ export default function MacroDetailPage() {
             )}
           </div>
 
-          <div className="grid grid-cols-3 gap-6 sm:gap-8">
+          <div className="grid grid-cols-3 gap-6 sm:gap-8 [&>*]:min-w-0">
             <KpiCell
               label="Attuale"
               value={latest?.actual_value}
@@ -190,7 +190,7 @@ export default function MacroDetailPage() {
       </Card>
 
       {/* Two-column body: description (left, wide) + metadata (right) */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 [&>*]:min-w-0">
         <Card className="md:col-span-2">
           <CardHeader>
             <CardTitle className="text-base">Cos'è questo indicatore</CardTitle>

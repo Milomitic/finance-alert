@@ -192,12 +192,12 @@ export default function StockDetailPage() {
       <div className="space-y-3">
         {/* Header strip: ticker / live price / score chips */}
         <CardSkeleton label={ticker?.toUpperCase()} rows={2} className="h-[100px]" />
-        <div className="grid lg:grid-cols-[1fr_320px] gap-3">
+        <div className="grid lg:grid-cols-[1fr_320px] gap-3 [&>*]:min-w-0">
           <div className="space-y-3">
             {/* Main chart placeholder — matches the PriceChart's tall slot. */}
             <CardSkeleton label="GRAFICO PREZZO" rows={10} strongHeader className="h-[600px]" />
             {/* Below-chart row: 3 ~equal-height context cards. */}
-            <div className="grid lg:grid-cols-3 gap-3">
+            <div className="grid lg:grid-cols-3 gap-3 [&>*]:min-w-0">
               <CardSkeleton label="FONDAMENTALI" rows={6} strongHeader className="h-[260px]" />
               <CardSkeleton label="VALUTAZIONE" rows={6} strongHeader className="h-[260px]" />
               <CardSkeleton label="NEWS" rows={6} strongHeader className="h-[260px]" />
@@ -242,7 +242,7 @@ export default function StockDetailPage() {
           below, so the right rail (score+tech above, Segnali below) lines up
           by column — the two score cards together span exactly the Segnali
           card's width. */}
-      <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-3 items-stretch">
+      <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-3 items-stretch [&>*]:min-w-0">
         <StockHeader
           stock={d.stock}
           kpis={d.kpis}
@@ -252,7 +252,7 @@ export default function StockDetailPage() {
             is below what either card's internals need: the Qualità gauge
             collided with its risk badge, "Top N% del settore" was cut mid-
             sentence, and the technical card's timestamp fell off the edge. */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-stretch">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-stretch [&>*]:min-w-0">
           <StockScoreCard ticker={ticker} />
           <StockTechnicalCard ticker={ticker} />
         </div>
@@ -269,7 +269,7 @@ export default function StockDetailPage() {
           and scrolls internally when there are more rows than fit.
           The profile is the page's lead content and dictates the row
           height; the alerts card adapts. Stacks vertically below `lg`. */}
-      <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-3 lg:h-[300px]">
+      <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-3 lg:h-[300px] [&>*]:min-w-0">
         {/* Both cards fill the fixed row height (h-full inside each): the
             profile's prose scrolls internally if its condensed summary still
             overflows, the alerts card scrolls its rows. AlertsHistory needs a
@@ -293,7 +293,7 @@ export default function StockDetailPage() {
           Valuation scrolls its now-much-longer metrics list (~50 rows
           across 2 columns after the yfinance expansion), News scrolls
           its items, Analyst scrolls its recent actions. */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1.5fr_1fr_1fr_1fr] gap-3 lg:h-[520px]">
+      <div className="grid grid-cols-1 lg:grid-cols-[1.5fr_1fr_1fr_1fr] gap-3 lg:h-[520px] [&>*]:min-w-0">
         {/* Fundamentals: no internal scroll — its earnings table sets
             the natural height (CLAUDE.md). Leave it auto on mobile.
             The other three scroll internally so they need an explicit
@@ -320,8 +320,14 @@ export default function StockDetailPage() {
           chart can dominate the vertical real estate that the row
           used to consume. */}
 
-      <div className="grid lg:grid-cols-[1fr_480px] gap-3">
-        <Card>
+      {/* min-w-0 on the Card: a grid ITEM defaults to `min-width: auto`, i.e.
+          it refuses to shrink below its own min-content. The chart card's
+          min-content is the toolbar row, which is wider than a phone — so the
+          card dilated past the viewport and dragged the chart (and its right
+          price scale) off-screen with it. This is invisible in the class list
+          because it is a CSS default, not a utility. */}
+      <div className="grid lg:grid-cols-[1fr_480px] gap-3 [&>*]:min-w-0">
+        <Card className="min-w-0">
           <CardContent className="p-4">
             {/* Single-row toolbar with three balanced clusters: timeframe
                 pinned LEFT, indicators CENTERED, drawing tools pinned

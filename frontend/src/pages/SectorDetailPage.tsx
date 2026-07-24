@@ -63,7 +63,7 @@ export default function SectorDetailPage() {
     return (
       <div className="space-y-3">
         <CardSkeleton rows={3} className="h-[120px]" />
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 [&>*]:min-w-0">
           {Array.from({ length: 4 }).map((_, i) => (
             <CardSkeleton key={i} rows={2} className="h-[100px]" />
           ))}
@@ -123,7 +123,7 @@ export default function SectorDetailPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3 [&>*]:min-w-0">
         <KpiTile label="Score medio" value={fmtNum(d.kpis.avg_composite, 1)} />
         <KpiTile label="Score mediano" value={fmtNum(d.kpis.median_composite, 1)} />
         <KpiTile
@@ -151,12 +151,12 @@ export default function SectorDetailPage() {
           - Risk tier + Market cap distributions stacked vertically
           Densità informativa alta in poco spazio: ogni card è
           autocontenuta e legge un sottoinsieme di kpis. */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 [&>*]:min-w-0">
         <PillarAveragesCard pa={d.kpis.pillar_averages} />
         <IndustryBreakdownCard buckets={d.kpis.industry_breakdown} total={d.kpis.stock_count} />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 [&>*]:min-w-0">
         <DistributionCard
           title="Distribuzione paesi"
           buckets={d.kpis.country_distribution}
@@ -181,7 +181,7 @@ export default function SectorDetailPage() {
         />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 [&>*]:min-w-0">
         <PicksCard title="Top 5 per score composito" rows={d.top_picks} accent="green" />
         <PicksCard
           title="Bottom 5 per score composito"

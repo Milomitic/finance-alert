@@ -331,7 +331,7 @@ export default function PlatformHealthPage() {
 
       {/* Secondary operational cards. */}
       {health && (
-        <div className="grid gap-4 lg:grid-cols-3">
+        <div className="grid gap-4 lg:grid-cols-3 [&>*]:min-w-0">
           <SchedulerCard jobs={health.scheduler} />
           <ScansCard scans={health.scans} />
           <CacheCard cache={health.cache} />
