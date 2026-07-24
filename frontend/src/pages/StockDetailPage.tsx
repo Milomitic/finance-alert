@@ -1,5 +1,5 @@
 import type { IChartApi } from "lightweight-charts";
-import { AlertCircle, Loader2 } from "lucide-react";
+import { AlertCircle, ChevronDown, Loader2, SlidersHorizontal } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 
@@ -38,6 +38,7 @@ import { PriceAlertDialog } from "@/components/stock/PriceAlertDialog";
 // CRUD via dialog/chart-click still works (the import is no longer
 // needed here because nothing on this page lists existing alerts).
 import { PriceChart, type ChartType } from "@/components/stock/PriceChart";
+import { cn } from "@/lib/utils";
 import { BENCHMARKS, ChartOptionsToolbar } from "@/components/stock/ChartOptionsToolbar";
 import { RangeSelector } from "@/components/stock/RangeSelector";
 import { ResizableSection } from "@/components/stock/ResizableSection";
@@ -130,6 +131,13 @@ export default function StockDetailPage() {
 
   const [indicators, setIndicators] = useState<IndicatorState>(DEFAULT_INDICATOR_STATE);
   const [chartType, setChartType] = useState<ChartType>("candle");
+  // Phone-only: the chart toolbar is five wrapped rows of chrome (timeframe,
+  // render options, benchmark, 5 indicator chips, 4 drawing tools) which
+  // pushed the CHART — the reason the page exists — off the first screen.
+  // Collapsed by default on phones; `sm:contents` below makes this wrapper
+  // vanish from layout at sm+, so the desktop toolbar is byte-for-byte what
+  // it was.
+  const [toolsOpen, setToolsOpen] = useState(false);
   const [mode, setMode] = useState<DrawingMode>("none");
   const [pendingPrice, setPendingPrice] = useState<number | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -318,12 +326,40 @@ export default function StockDetailPage() {
                 space equally, so the indicators sit centred between the
                 left/right clusters (and wrap gracefully when space runs
                 out). All controls share the 32px (h-8) height. */}
-            <div className="flex items-center flex-wrap gap-x-3 gap-y-2 mb-3">
+            <div className="flex items-center flex-wrap gap-x-3 gap-y-2 mb-3 min-w-0">
               {/* LEFT — timeframe + chart-render options */}
               <RangeSelector
                 value={range}
                 onChange={(r) => setSearchParams({ range: r })}
               />
+              {/* Phone-only disclosure. The timeframe stays out (it is the one
+                  control that gets used on every visit); everything else hides
+                  behind this until asked for. */}
+              <button
+                type="button"
+                onClick={() => setToolsOpen((o) => !o)}
+                aria-expanded={toolsOpen}
+                className="sm:hidden inline-flex items-center gap-1.5 h-8 px-2.5 rounded-md border bg-muted/30 text-xs font-semibold hover:bg-accent transition-colors"
+              >
+                <SlidersHorizontal className="h-3.5 w-3.5" aria-hidden />
+                Strumenti
+                <ChevronDown
+                  className={cn("h-3.5 w-3.5 transition-transform", toolsOpen && "rotate-180")}
+                  aria-hidden
+                />
+              </button>
+              {/* `sm:contents` is the crux: at sm+ this wrapper is removed from
+                  layout entirely and its children become direct flex items of
+                  the row above — i.e. the desktop toolbar is unchanged. On a
+                  phone it is a full-width wrapping row, shown on demand. */}
+              <div
+                className={cn(
+                  toolsOpen
+                    ? "flex w-full min-w-0 flex-wrap items-center gap-x-3 gap-y-2"
+                    : "hidden",
+                  "sm:contents",
+                )}
+              >
               <ChartOptionsToolbar
                 chartType={chartType}
                 onChartType={setChartType}
@@ -346,8 +382,11 @@ export default function StockDetailPage() {
                   periods={d.indicators.periods}
                 />
               </div>
-              {/* RIGHT — drawing tools (+ live hint for the Line tool) */}
-              <div className="flex items-center gap-2.5 shrink-0">
+              {/* RIGHT — drawing tools (+ live hint for the Line tool).
+                  `shrink-0` only from sm: the four tools are ~360px wide, more
+                  than a phone's ~327px of usable row, so on a phone the group
+                  must be allowed to wrap instead of overflowing the page. */}
+              <div className="flex items-center gap-2.5 flex-wrap sm:flex-nowrap sm:shrink-0 min-w-0">
                 {mode === "trend" && (
                   <span className="text-[11px] font-medium text-blue-600 animate-pulse whitespace-nowrap">
                     {pendingTrend ? "Clicca il 2° punto" : "Clicca il 1° punto"}
@@ -363,6 +402,7 @@ export default function StockDetailPage() {
                   onSetMode={setMode}
                   onClearAll={drawings.clearAll}
                 />
+              </div>
               </div>
             </div>
 

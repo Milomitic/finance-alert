@@ -213,6 +213,16 @@ export function PriceChart({
       });
     };
     const chart = createChart(containerRef.current, {
+      // Touch handling. `vertTouchDrag` defaults to TRUE in
+      // lightweight-charts, which means a vertical finger drag STARTED on the
+      // chart pans the price scale instead of scrolling the page — on a phone
+      // the chart is a wall you cannot scroll past, since it occupies most of
+      // the viewport. Turning it off lets vertical drags fall through to the
+      // page while horizontal drags still pan the time axis, which is the
+      // gesture split every mobile charting app uses. Pinch-zoom
+      // (`handleScale`) is untouched, and nothing changes on desktop where
+      // scrolling is the wheel and panning is a pressed mouse move.
+      handleScroll: { vertTouchDrag: false },
       layout: {
         background: { type: ColorType.Solid, color: "transparent" },
         textColor: "#374151",

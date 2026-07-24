@@ -39,6 +39,9 @@ export function MacdPanel({ line, signal, hist, color = "#ef4444", width = 2, on
   useEffect(() => {
     if (!containerRef.current) return;
     const chart = createChart(containerRef.current, {
+      // Same as PriceChart: vertical finger drags must scroll the PAGE,
+      // not this panel. See the note there.
+      handleScroll: { vertTouchDrag: false },
       layout: { background: { type: ColorType.Solid, color: "transparent" }, textColor: "#374151" },
       grid: { vertLines: { color: "rgba(0,0,0,0.05)" }, horzLines: { color: "rgba(0,0,0,0.05)" } },
       rightPriceScale: { borderColor: "rgba(0,0,0,0.1)" },

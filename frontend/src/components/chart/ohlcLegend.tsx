@@ -118,11 +118,15 @@ export function OhlcLegend({
   return (
     <div
       className={cn(
-        "rounded-md border bg-card/85 backdrop-blur-sm px-3 py-1.5 font-mono tabular-nums shadow-sm text-sm leading-snug",
+        // Compact below sm: this box floats OVER the chart, and at the phone
+        // chart height (300px) the desktop sizing covered roughly a quarter
+        // of the plot area. Desktop sizing is unchanged from sm up.
+        "rounded-md border bg-card/85 backdrop-blur-sm font-mono tabular-nums shadow-sm leading-snug",
+        "px-2 py-1 text-[11px] sm:px-3 sm:py-1.5 sm:text-sm",
         !inline && "absolute top-2 left-2 z-10 pointer-events-none",
       )}
     >
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-0.5">
+      <div className="flex flex-wrap items-center gap-x-2.5 sm:gap-x-4 gap-y-0.5">
         <span>
           <span className="text-muted-foreground">O</span> {fmtPrice(legend.open)}
         </span>
@@ -141,7 +145,7 @@ export function OhlcLegend({
           </span>
         </span>
       </div>
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-0.5 mt-1">
+      <div className="flex flex-wrap items-center gap-x-2.5 sm:gap-x-4 gap-y-0.5 mt-0.5 sm:mt-1">
         {legend.volume != null && (
           <span>
             <span className="text-muted-foreground">Vol</span> {fmtVolume(legend.volume)}
