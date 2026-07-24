@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 
 import { StockIdentity } from "@/components/dashboard/StockIdentity";
 import { Card, CardContent } from "@/components/ui/card";
+import { MetricCardList, type MetricColumn } from "@/components/ui/metric-card-list";
 import { SectionTitle } from "@/components/ui/section-title";
 import type { SectorStockRow } from "@/hooks/useSectorDetail";
 import { fmtMarketCap, fmtNum } from "@/lib/sectorFormat";
@@ -217,6 +218,23 @@ function compareRows(a: SectorStockRow, b: SectorStockRow, key: SortKey, dir: So
   return dir === "asc" ? cmp : -cmp;
 }
 
+/* Phone card fields. Ticker/score are not here — they are the card's identity
+ * and headline. `country` becomes a labelled field because on a card there is
+ * no column position to infer it from. */
+const MOBILE_COLUMNS: MetricColumn<SectorStockRow>[] = [
+  {
+    key: "country",
+    label: "Paese",
+    cell: (r) => <CountryFlag country={r.country} ticker={r.ticker} />,
+  },
+  { key: "pe", label: "P/E", cell: (r) => fmtNum(r.pe, 1) },
+  { key: "pb", label: "P/B", cell: (r) => fmtNum(r.pb, 2) },
+  { key: "roe", label: "ROE", cell: (r) => fmtNum(r.roe, 1, "%") },
+  { key: "revenue_growth", label: "Cresc. ric.", cell: (r) => fmtNum(r.revenue_growth, 1, "%") },
+  { key: "dividend_yield", label: "Div. Y", cell: (r) => fmtNum(r.dividend_yield, 2, "%") },
+  { key: "market_cap", label: "Mkt cap", cell: (r) => fmtMarketCap(r.market_cap) },
+];
+
 export function SortableStocksTable({ rows }: { rows: SectorStockRow[] }) {
   const [sortKey, setSortKey] = useState<SortKey>("composite");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
@@ -244,7 +262,69 @@ export function SortableStocksTable({ rows }: { rows: SectorStockRow[] }) {
           label={`Tutte le aziende (${rows.length})`}
           className="mb-3"
         />
-        <div className="overflow-x-auto">
+        {/* ── Phone: cards, not a 9-column table ────────────────────────
+            Sorting moves to a native <select> because a card list has no
+            header row to click — and a native select is a full-height,
+            OS-rendered touch target, which beats any custom dropdown on a
+            phone. The direction toggle keeps a 44px hit area. */}
+        <div className="sm:hidden">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="shrink-0 text-xs text-muted-foreground">Ordina</span>
+            <select
+              aria-label="Ordina le aziende per"
+              value={sortKey}
+              onChange={(e) => {
+                const col = COLUMNS.find((c) => c.key === e.target.value);
+                if (col) {
+                  setSortKey(col.key);
+                  setSortDir(col.defaultDir);
+                }
+              }}
+              className="min-h-[44px] flex-1 min-w-0 rounded-md border bg-background px-2 text-sm"
+            >
+              {COLUMNS.map((c) => (
+                <option key={c.key} value={c.key}>
+                  {c.label}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={() => setSortDir((d) => (d === "asc" ? "desc" : "asc"))}
+              className="min-h-[44px] min-w-[44px] shrink-0 inline-flex items-center justify-center rounded-md border hover:bg-accent transition-colors"
+              aria-label={
+                sortDir === "asc" ? "Ordine crescente — inverti" : "Ordine decrescente — inverti"
+              }
+            >
+              {sortDir === "asc" ? (
+                <ArrowUp className="h-4 w-4" aria-hidden />
+              ) : (
+                <ArrowDown className="h-4 w-4" aria-hidden />
+              )}
+            </button>
+          </div>
+          <MetricCardList
+            rows={sorted}
+            columns={MOBILE_COLUMNS}
+            rowKey={(r) => r.ticker}
+            identity={(r) => (
+              <Link
+                to={`/stocks/${encodeURIComponent(r.ticker)}`}
+                className="flex items-center gap-2 min-w-0"
+              >
+                <StockIdentity ticker={r.ticker} name={r.name} />
+              </Link>
+            )}
+            headline={(r) => (
+              <span className={cn("text-lg font-semibold", scoreColor(r.composite))}>
+                {fmtNum(r.composite, 0)}
+              </span>
+            )}
+          />
+        </div>
+
+        {/* ── sm and up: the existing table, untouched ─────────────────── */}
+        <div className="hidden sm:block overflow-x-auto">
           <table className="w-full text-sm tabular-nums">
             <thead>
               <tr className="text-[10px] uppercase tracking-wider text-muted-foreground/80 border-b border-border/60">
