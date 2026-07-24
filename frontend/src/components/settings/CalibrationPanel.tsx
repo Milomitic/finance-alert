@@ -117,7 +117,12 @@ function CalTable({
       <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold mb-1">
         {title}
       </div>
-      <table className="w-full text-sm tabular-nums">
+      {/* The only raw table in the app with no overflow container: 5 numeric
+          columns pushed the whole PAGE wide on a phone. Scrolling the table
+          instead of the body keeps the section title and the rest of the page
+          in place. */}
+      <div className="overflow-x-auto">
+      <table className="w-full text-sm tabular-nums min-w-[420px]">
         <thead className="text-muted-foreground border-b">
           <tr>
             <th className="text-left px-2 py-1 font-semibold">Gruppo</th>
@@ -137,6 +142,7 @@ function CalTable({
           ))}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }

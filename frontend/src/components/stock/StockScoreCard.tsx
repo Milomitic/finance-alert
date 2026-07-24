@@ -150,7 +150,7 @@ export function MultiTfStrip({ ticker, kind }: { ticker: string; kind: "stock" |
   const data = q.data;
   if (q.isLoading || !data || data.items.length === 0) {
     return (
-      <div className="grid grid-cols-6 gap-1 text-center">
+      <div className="grid grid-cols-3 sm:grid-cols-6 gap-1 text-center">
         {["30m", "1h", "1d", "1w", "1m", "All"].map((tf) => (
           <div
             key={tf}
@@ -161,7 +161,7 @@ export function MultiTfStrip({ ticker, kind }: { ticker: string; kind: "stock" |
     );
   }
   return (
-    <div className="grid grid-cols-6 gap-1">
+    <div className="grid grid-cols-3 sm:grid-cols-6 gap-1">
       {data.items.map((it) => {
         const prio = TF_PRIORITY[it.timeframe] ?? "secondary";
         const tone = compositeTone(it.composite_score);
