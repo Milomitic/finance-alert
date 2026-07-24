@@ -248,7 +248,11 @@ export default function StockDetailPage() {
           kpis={d.kpis}
           ohlcv={mergedOhlcv}
         />
-        <div className="grid grid-cols-2 gap-3 items-stretch">
+        {/* Stacked on a phone. Side by side these two got ~170px each, which
+            is below what either card's internals need: the Qualità gauge
+            collided with its risk badge, "Top N% del settore" was cut mid-
+            sentence, and the technical card's timestamp fell off the edge. */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-stretch">
           <StockScoreCard ticker={ticker} />
           <StockTechnicalCard ticker={ticker} />
         </div>

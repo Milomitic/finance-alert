@@ -891,7 +891,11 @@ export function StockScoreCard({ ticker }: Props) {
             </span>
           </div>
         </div>
-        <div className="flex flex-col items-start gap-1">
+        {/* min-w-0: without it this column cannot shrink at all, so next to
+            the 96px gauge its content (the risk badge, "media settore",
+            "Top N% del settore") overflowed instead of truncating whenever
+            the card was narrow. */}
+        <div className="flex flex-col items-start gap-1 min-w-0">
           <span className="text-[12px] uppercase tracking-wider text-muted-foreground">
             {scoreLabel(composite)}
           </span>

@@ -41,7 +41,7 @@ export function HeaderSparkline({ closes, up }: { closes: number[]; up: boolean 
   const stroke = up ? "#17b551" : "#dc2626";
   return (
     <svg
-      className="absolute inset-0 w-full h-full pointer-events-none"
+      className="absolute inset-0 w-full h-full pointer-events-none opacity-50 sm:opacity-100"
       viewBox={`0 0 ${W} ${H}`}
       preserveAspectRatio="none"
       aria-hidden="true"
@@ -230,11 +230,11 @@ export function StockHeader({ stock, kpis, ohlcv }: Props) {
                     </span>
                   )}
                 </div>
-                <FlashValue value={displayPrice} format={(v) => `$${v.toFixed(2)}`} className="text-5xl font-bold leading-none" />
+                <FlashValue value={displayPrice} format={(v) => `$${v.toFixed(2)}`} className="text-4xl sm:text-5xl font-bold leading-none" />
               </>
             )}
             {change != null && (
-              <div className={cn("inline-flex items-baseline gap-1.5 text-2xl font-bold mt-1", tone.text)}>
+              <div className={cn("inline-flex items-baseline gap-1.5 text-xl sm:text-2xl font-bold mt-1", tone.text)}>
                 <span className="text-lg">{tone.arrow}</span>
                 {changeAbs != null && (
                   <span className="text-base font-semibold opacity-80">
