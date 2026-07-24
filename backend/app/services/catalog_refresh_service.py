@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 
 import pandas as pd
 from loguru import logger
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.models import CatalogRefreshLog, Index, Stock, StockIndex
@@ -30,16 +30,20 @@ INDEX_SOURCES: dict[str, dict[str, object]] = {
         "currency": "USD",
     },
     "NDX": {
-        # As of 2026, Wikipedia constituents table moved to index 5 and uses
-        # ICB classification columns instead of GICS.
-        "url": "https://en.wikipedia.org/wiki/Nasdaq-100",
+        # 2026-07: Wikipedia SPLIT the constituent list out of the main
+        # Nasdaq-100 article into its own page. The old article's table 5 is
+        # now a navbox, so the scrape silently returned nothing and the
+        # refresh wiped all 101 memberships (see the wipe guards below —
+        # they exist because of this). The list page carries the same columns
+        # as before, at table 0. Reference footnotes moved [14] → [1].
+        "url": "https://en.wikipedia.org/wiki/List_of_NASDAQ-100_companies",
         "name": "Nasdaq-100",
         "country": "US",
-        "table_index": 5,
+        "table_index": 0,
         "ticker_col": "Ticker",
         "name_col": "Company",
-        "sector_col": "ICB Industry[14]",
-        "industry_col": "ICB Subsector[14]",
+        "sector_col": "ICB Industry[1]",
+        "industry_col": "ICB Subsector[1]",
         "default_exchange": "NASDAQ",
         "currency": "USD",
     },
@@ -128,6 +132,13 @@ class RefreshResult:
     error_message: str | None = None
 
 
+class CatalogSourceError(RuntimeError):
+    """The upstream constituent table was missing/unparseable. Distinct from a
+    generic failure so the caller can tell "the source broke" from "our code
+    broke" — and so the wipe guards read as a deliberate refusal, not a
+    crash."""
+
+
 def _fetch_table(url: str, table_index: int) -> pd.DataFrame:
     """Wrap pandas.read_html with retry. Patchable for tests."""
     last: Exception | None = None
@@ -204,6 +215,13 @@ def _ensure_index(db: Session, code: str, name: str, country: str) -> Index:
         db.add(idx)
         db.flush()
     return idx
+
+
+# A refresh may prune constituents, but an index that suddenly reports fewer
+# than this share of its known members is a parse regression, not a real
+# reshuffle. Deliberately loose: FTSE100's top-50 slice and periodic index
+# reviews do move real numbers, just never by half in one run.
+_MIN_RETAINED_RATIO = 0.5
 
 
 def refresh_index(db: Session, index_code: str) -> RefreshResult:
@@ -293,6 +311,37 @@ def refresh_index(db: Session, index_code: str) -> RefreshResult:
             ).scalar_one_or_none()
             if existing_link is None:
                 db.add(StockIndex(stock_id=stock.id, index_id=idx.id))
+
+        # ── Wipe guards ──────────────────────────────────────────────────
+        # On 2026-07-18 this routine deleted all 101 Nasdaq-100 memberships
+        # and logged status="success". Wikipedia had changed the page (or
+        # served something unparseable), `_fetch_table` returned a frame with
+        # no usable tickers, `seen_stock_ids` stayed empty, and the DELETE
+        # below happily removed everything not in an empty set. The index then
+        # silently vanished from Market Mood and from every breadth number
+        # that averages over it.
+        #
+        # An empty parse is ALWAYS a source failure, never a real index with
+        # no members. And a real index does not shed half its constituents
+        # overnight — that shape means the page layout moved and we are now
+        # reading the wrong table. Both cases must fail loudly and leave the
+        # existing membership untouched; the next run repairs it.
+        existing_count = db.execute(
+            select(func.count())
+            .select_from(StockIndex)
+            .where(StockIndex.index_id == idx.id)
+        ).scalar_one()
+        if not seen_stock_ids:
+            raise CatalogSourceError(
+                f"{index_code}: source returned no usable constituents "
+                f"({existing_count} kept) — refusing to wipe the index"
+            )
+        if existing_count and len(seen_stock_ids) < existing_count * _MIN_RETAINED_RATIO:
+            raise CatalogSourceError(
+                f"{index_code}: source returned only {len(seen_stock_ids)} of "
+                f"{existing_count} known constituents — looks like a parse "
+                f"regression, refusing to prune"
+            )
 
         # remove stale memberships for this index
         stale = db.execute(
