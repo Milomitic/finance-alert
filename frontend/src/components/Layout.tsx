@@ -1,5 +1,6 @@
 import {
   Bell,
+  Hourglass,
   Briefcase,
   Building2,
   CalendarDays,
@@ -52,6 +53,7 @@ const NAV: NavEntry[] = [
   // sidebar so the user composes rules + reviews their alerts in one
   // surface. The /rules route was removed.
   { to: "/alerts", label: "Segnali", icon: Bell, enabled: true },
+  { to: "/setups", label: "In formazione", icon: Hourglass, enabled: true },
   // Tracked trades: playbook entries persisted as positions with live P&L
   // and auto stop/target hit detection. Briefcase = "portfolio" flavor.
   { to: "/positions", label: "Posizioni", icon: Briefcase, enabled: true },

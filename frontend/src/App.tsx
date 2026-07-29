@@ -11,6 +11,7 @@ import ProtectedRoute from "@/components/ProtectedRoute";
 // unchanged — each page still mounts exactly as before, just fetched on
 // demand the first time its route is visited.
 const AlertsPage = lazy(() => import("@/pages/AlertsPage"));
+const SetupsPage = lazy(() => import("@/pages/SetupsPage"));
 const CalendarPage = lazy(() => import("@/pages/CalendarPage"));
 const HomePage = lazy(() => import("@/pages/HomePage"));
 const InstitutionalDetailPage = lazy(() => import("@/pages/InstitutionalDetailPage"));
@@ -57,6 +58,10 @@ export default function App() {
               the existing /sectors/:name detail page. */}
           <Route path="/sectors" element={<SectorsOverviewPage />} />
           <Route path="/alerts" element={<AlertsPage />} />
+          {/* Setups: the pre-trigger state of the same detectors. Its own
+              route, never folded into /alerts — a setup is a wait, not a
+              call, and the two must not be browsed as one list. */}
+          <Route path="/setups" element={<SetupsPage />} />
           {/* Tracked trades (B3-6): playbook entries persisted as positions
               with live P&L + auto stop/target closing. */}
           <Route path="/positions" element={<PositionsPage />} />
