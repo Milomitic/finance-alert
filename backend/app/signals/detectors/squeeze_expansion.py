@@ -10,6 +10,7 @@ from app.signals.calibration_map import get_calibration
 from app.signals.context import SignalContext
 from app.signals.detectors.base import SignalMatch, concave, find_after, score_v2
 from app.signals.events import Event
+from app.signals.setups.base import SetupMatch
 
 _EXPAND_WINDOW_DAYS = 15
 # Forza anchors in raw event-magnitude units.
@@ -59,3 +60,61 @@ class SqueezeExpansion:
                            strength=strength, probability=probability,
                            signal_date=exp.date, chain=chain, invalidation=None,
                            factors=factors)
+
+    # ── Setup (pre-trigger) ─────────────────────────────────────────────
+    # The purest anticipation case in the engine. A squeeze IS a waiting
+    # state — Bollinger compressed inside Keltner means energy building with
+    # no direction yet — and it can hold for days. The expansion is the
+    # trigger, and by the time bands re-open the move is under way.
+    #
+    # Note this setup carries NO tone: an unresolved squeeze genuinely does
+    # not know which way it breaks. Saying "bull" here would be inventing a
+    # forecast, which is exactly what setups must not do. The tone follows
+    # the prevailing trend only as the more likely resolution, and the
+    # `missing` text states plainly that direction is still open.
+    def proximity(
+        self, events: list[Event], ohlcv: pd.DataFrame, ctx: SignalContext
+    ) -> SetupMatch | None:
+        if len(ohlcv) < self.min_bars:
+            return None
+        squeezes = [e for e in events if e.type == "bb_squeeze"]
+        if not squeezes:
+            return None
+        sq = squeezes[-1]
+        # Already expanded → detect() fired (or the window lapsed); not a setup.
+        if find_after(events, "bb_expansion", after=sq.date,
+                      within_days=_EXPAND_WINDOW_DAYS) is not None:
+            return None
+
+        # A squeeze older than the expansion window never resolved into this
+        # signal — stop presenting a stale coil as if it were still loaded.
+        last_date = str(ohlcv["date"].iloc[-1])[:10]
+        age = _days_between(sq.date, last_date)
+        if age is not None and age > _EXPAND_WINDOW_DAYS:
+            return None
+
+        tightness = concave(sq.magnitude or 1.0, _TIGHTNESS_ANCHORS)
+        # Only one gate of two is outstanding, but that gate is the whole
+        # event, so proximity stays mid-band: tighter coils sit higher because
+        # they are closer to having to resolve.
+        prox = round(0.45 + 0.30 * tightness, 3)
+        return SetupMatch(
+            detector=self.name,
+            tone="bull" if ctx.trend_sign >= 0 else "bear",
+            proximity=prox,
+            missing=(
+                "le bande devono riaprirsi (espansione): la compressione e' carica "
+                "ma la direzione non e' ancora decisa"
+            ),
+            factors={"tightness": tightness, "gate_squeeze": 1.0},
+            annotations={"levels": [], "points": []},
+        )
+
+
+def _days_between(a: str, b: str) -> int | None:
+    """Calendar days between two ISO dates; None if either is unparsable."""
+    from datetime import date as _date
+    try:
+        return (_date.fromisoformat(str(b)[:10]) - _date.fromisoformat(str(a)[:10])).days
+    except ValueError:
+        return None

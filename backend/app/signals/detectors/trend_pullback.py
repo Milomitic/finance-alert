@@ -12,6 +12,7 @@ from app.signals.calibration_map import get_calibration
 from app.signals.context import SignalContext
 from app.signals.detectors.base import SignalMatch, concave, score_v2, trend_maturity_factor
 from app.signals.events import Event
+from app.signals.setups.base import SetupMatch
 
 _FAST = 50
 _SLOW = 200
@@ -95,6 +96,72 @@ class TrendPullback:
                            strength=strength, probability=probability,
                            signal_date=_last_date(ohlcv), chain=chain,
                            invalidation=invalidation, factors=factors)
+
+
+    # ── Setup (pre-trigger) ─────────────────────────────────────────────
+    # Gates: an EMA cross established the trend → price TAGGED the fast EMA
+    # (the pullback) → price RESUMED past it. The pullback can sit on the EMA
+    # for several bars before resuming; `resumed` is the trigger and it prints
+    # only once the bounce has happened.
+    #
+    # The setup is "tagged, not yet resumed": the pullback is in progress and
+    # the EMA itself is the level to plan against.
+    def proximity(
+        self, events: list[Event], ohlcv: pd.DataFrame, ctx: SignalContext
+    ) -> SetupMatch | None:
+        if len(ohlcv) < self.min_bars:
+            return None
+        crosses = [e for e in events if e.type == "ema_cross"]
+        if not crosses:
+            return None
+        cross = crosses[-1]
+        tone = cross.direction or "bull"
+        close = ohlcv["close"].astype(float).reset_index(drop=True)
+        ef = ema(close, _FAST).reset_index(drop=True)
+        es = ema(close, _SLOW).reset_index(drop=True)
+        last = len(close) - 1
+        fast_now = ef.iloc[last]
+        if pd.isna(fast_now) or fast_now == 0:
+            return None
+
+        tol = _PULLBACK_TOL
+        if ctx.atr and fast_now:
+            tol = max(_PULLBACK_TOL, (ctx.atr * _PULLBACK_ATR_K) / fast_now)
+        recent = range(max(0, last - 20), last + 1)
+        if tone == "bull":
+            tagged = any(close.iloc[i] <= ef.iloc[i] * (1 + tol) for i in recent)
+            resumed = close.iloc[last] > fast_now
+        else:
+            tagged = any(close.iloc[i] >= ef.iloc[i] * (1 - tol) for i in recent)
+            resumed = close.iloc[last] < fast_now
+        # Not pulled back yet, or already resumed (detect() fired) → no setup.
+        if not tagged or resumed:
+            return None
+
+        spread = abs(ef.iloc[last] - es.iloc[last]) / close.iloc[last]
+        trend_aligned = (ctx.trend_sign > 0 and tone == "bull") or (ctx.trend_sign < 0 and tone == "bear")
+        # Two of three gates hold and the outstanding one is a single close on
+        # the right side of an EMA that price is already sitting on — a genuinely
+        # near-term trigger, so this ranks alongside the reversal-at-level case.
+        return SetupMatch(
+            detector=self.name,
+            tone=tone,
+            proximity=0.80,
+            missing=(
+                f"il prezzo deve tornare {'sopra' if tone == 'bull' else 'sotto'} "
+                f"la EMA{_FAST} ({float(fast_now):.2f}): il pullback e' in corso, "
+                "manca la ripartenza"
+            ),
+            factors={
+                "trend_strength": concave(spread, _TREND_STRENGTH_ANCHORS),
+                "trend_alignment": 1.0 if trend_aligned else 0.4,
+                "gate_tagged": 1.0,
+            },
+            annotations={"levels": [{"label": f"EMA{_FAST}", "price": float(fast_now),
+                                     "kind": "support" if tone == "bull" else "resistance"}],
+                         "points": []},
+        )
+
 
 
 def _last_date(ohlcv: pd.DataFrame) -> str:
