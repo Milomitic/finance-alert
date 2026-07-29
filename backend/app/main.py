@@ -30,6 +30,7 @@ from app.api import rule_performance as rule_performance_router
 from app.api import scan_log as scan_log_router
 from app.api import scores as scores_router
 from app.api import sectors as sectors_router
+from app.api import setups as setups_router
 from app.api import spotlight as spotlight_router
 from app.api import stock_drawings as stock_drawings_router
 from app.api import stocks as stocks_router
@@ -446,6 +447,7 @@ app.include_router(stock_drawings_router.router)
 app.include_router(positions_router.router)
 app.include_router(spotlight_router.router)
 app.include_router(scores_router.router)
+app.include_router(setups_router.router)
 app.include_router(sectors_router.router)
 app.include_router(calendar_router.router)
 app.include_router(institutionals_router.router)

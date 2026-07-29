@@ -14,7 +14,7 @@ from app.models import Alert, ScanRun, SignalOutcome, Stock
 from app.signals.context import build_context
 from app.signals.detectors.registry import DETECTORS
 from app.signals.horizon import classify_horizon
-from app.signals.runner import detect_signals
+from app.signals.runner import detect_signals_and_setups
 
 # --- Quality gates (reduce false positives) --------------------------------
 # Trend-following signals: their direction should agree with the prevailing
@@ -101,6 +101,31 @@ def effective_max_age_days(db: Session) -> int:
     return min(max(base, gap_days + 2), _MAX_AGE_RELAX_CAP)
 
 
+def _persist_setups(db, stock, setups) -> None:
+    """Persist the pre-trigger setups for one stock.
+
+    The two lens scores are looked up so `convenience` can express the
+    cross-lens part of the idea (a panic sell on a strong company ranks above
+    the same pattern on a weak one). Both are OPTIONAL — a stock without them
+    must not be pushed down for data it never had.
+    """
+    from app.models import StockScore, TechnicalScore
+    from app.services import setup_service
+
+    tech = db.execute(
+        select(TechnicalScore.composite).where(TechnicalScore.stock_id == stock.id)
+    ).scalars().first()
+    qual = db.execute(
+        select(StockScore.composite).where(StockScore.stock_id == stock.id)
+    ).scalars().first()
+    for sm in setups:
+        setup_service.upsert_setup(
+            db, stock_id=stock.id, match=sm,
+            technical_composite=float(tech) if tech is not None else None,
+            quality_composite=float(qual) if qual is not None else None,
+        )
+
+
 def evaluate_signals(
     db: Session, stock: Stock, ohlcv: pd.DataFrame, *, max_age_days: int | None = None,
 ) -> int:
@@ -122,7 +147,16 @@ def evaluate_signals(
     _atr = float(_ctx.atr) if (_ctx.atr is not None and _ctx.atr == _ctx.atr) else None
     idx_by_date = {str(d)[:10]: i for i, d in enumerate(ohlcv["date"])}
     added = 0
-    for m in detect_signals(ohlcv, db=db, stock=stock):
+    matches, setups = detect_signals_and_setups(ohlcv, db=db, stock=stock)
+    # Setups are the PRE-trigger state of these same detectors: persisted here
+    # so the wait starts being counted from the first bar the conditions held.
+    # Best-effort — a setup problem must never cost a signal.
+    if setups and stock is not None and getattr(stock, "id", None):
+        try:
+            _persist_setups(db, stock, setups)
+        except Exception as e:  # noqa: BLE001
+            logger.warning(f"[setups] persist failed for {stock.ticker}: {e}")
+    for m in matches:
         # Emission gate now on Forza (strength). `signal_min_confidence` is the
         # min-Forza bar; note calibrated Forza runs lower than the old confidence,
         # so the same 60 admits fewer, individually-stronger signals (revisit).
@@ -231,11 +265,21 @@ def evaluate_signals(
         # New alert: pin the original emission timestamp (never overwritten by
         # later refreshes), no amendment yet.
         snapshot["first_emitted_at"] = now_iso
-        db.add(Alert(
+        alert = Alert(
             stock_id=stock.id, trigger_price=last_close,
             signal_date=sig_date, signal_name=m.name,
             snapshot=json.dumps(snapshot),
-        ))
+        )
+        db.add(alert)
+        # Close the loop on any setup that was waiting for exactly this
+        # detector: records the lead time it actually bought. Needs the id, so
+        # flush first. Best-effort — bookkeeping must never cost the alert.
+        try:
+            db.flush()
+            from app.services import setup_service
+            setup_service.convert_setups_for_alert(db, alert)
+        except Exception as e:  # noqa: BLE001
+            logger.warning(f"[setups] conversion bookkeeping failed: {e}")
         added += 1
     return added
 

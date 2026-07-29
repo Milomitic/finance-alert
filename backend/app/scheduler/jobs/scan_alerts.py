@@ -137,6 +137,17 @@ def _run_scan_alerts_locked(trigger: str) -> None:
 
         # Step 2: evaluate rules + fire alerts (reuses the same ScanRun row)
         run_tracked_scan(db, trigger=trigger, existing_run=run)
+
+        # Step 3: retire setups whose conditions decayed without firing. They
+        # are the "expired" half of the conversion rate, so this is what keeps
+        # that number honest — without it only conversions would ever resolve
+        # and the rate would read 100%.
+        try:
+            from app.services import setup_service
+            setup_service.expire_stale_setups(db)
+            db.commit()
+        except Exception as e:  # noqa: BLE001 — bookkeeping never fails a scan
+            logger.warning(f"[setups] expiry pass failed: {e}")
     finally:
         db.close()
     logger.info("[scan_alerts] job: done")

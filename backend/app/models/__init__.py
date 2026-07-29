@@ -22,6 +22,7 @@ from app.models.stock import Stock
 from app.models.stock_drawing import StockDrawing
 from app.models.stock_metrics import StockMetrics
 from app.models.stock_score import StockScore
+from app.models.stock_setup import StockSetup
 from app.models.technical_score import TechnicalScore
 from app.models.user import User
 
@@ -41,6 +42,7 @@ __all__ = [
     "Position",
     "PriceAlert",
     "ScanRun",
+    "StockSetup",
     "SignalOutcome",
     "ScoreHistory",
     "KpiSnapshot",

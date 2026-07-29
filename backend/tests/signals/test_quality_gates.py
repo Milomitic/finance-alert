@@ -36,7 +36,7 @@ def test_regime_gate_drops_countertrend(db, monkeypatch):
     monkeypatch.setattr(svc.settings, "signal_require_trend_alignment", True)
     df = _df([200 - i for i in range(60)])  # steady downtrend -> trend_sign < 0
     m = _match(df["date"].iloc[-1], tone="bull")  # bull signal against the trend
-    monkeypatch.setattr(svc, "detect_signals", lambda *a, **k: [m])
+    monkeypatch.setattr(svc, "detect_signals_and_setups", lambda *a, **k: ([m], []))
     s = _stock(db, "RGT")
     assert svc.evaluate_signals(db, s, df) == 0
     db.commit()
@@ -50,7 +50,7 @@ def test_regime_gate_exempts_reversal(db, monkeypatch):
     monkeypatch.setattr(svc.settings, "signal_require_trend_alignment", True)
     df = _df([200 - i for i in range(60)])  # downtrend
     m = _match(df["date"].iloc[-1], tone="bull", name="oversold_reversal")
-    monkeypatch.setattr(svc, "detect_signals", lambda *a, **k: [m])
+    monkeypatch.setattr(svc, "detect_signals_and_setups", lambda *a, **k: ([m], []))
     s = _stock(db, "REV")
     assert svc.evaluate_signals(db, s, df) == 1  # reversal detector is exempt
 
@@ -61,7 +61,7 @@ def test_follow_through_passes_last_bar(db, monkeypatch):
     monkeypatch.setattr(svc.settings, "signal_require_follow_through", True)
     df = _df([100] * 30 + [110])  # trigger on the last bar (no next bar yet)
     m = _match(df["date"].iloc[-1], tone="bull", invalidation={"level": 105.0, "reason": "x"})
-    monkeypatch.setattr(svc, "detect_signals", lambda *a, **k: [m])
+    monkeypatch.setattr(svc, "detect_signals_and_setups", lambda *a, **k: ([m], []))
     # Last-bar trigger is NOT suppressed (cannot be a confirmed fakeout yet).
     assert svc.evaluate_signals(db, _stock(db, "FTL"), df) == 1
 
@@ -72,7 +72,7 @@ def test_follow_through_confirms_when_next_bar_holds(db, monkeypatch):
     monkeypatch.setattr(svc.settings, "signal_require_follow_through", True)
     df = _df([100] * 30 + [110, 112])  # past-dated trigger, next bar holds
     m = _match(df["date"].iloc[30], tone="bull", invalidation={"level": 105.0, "reason": "x"})
-    monkeypatch.setattr(svc, "detect_signals", lambda *a, **k: [m])
+    monkeypatch.setattr(svc, "detect_signals_and_setups", lambda *a, **k: ([m], []))
     assert svc.evaluate_signals(db, _stock(db, "FTH"), df) == 1
 
 
@@ -82,6 +82,6 @@ def test_follow_through_drops_fakeout(db, monkeypatch):
     monkeypatch.setattr(svc.settings, "signal_require_follow_through", True)
     df = _df([100] * 30 + [110, 101])  # next bar closes back below the level
     m = _match(df["date"].iloc[30], tone="bull", invalidation={"level": 105.0, "reason": "x"})
-    monkeypatch.setattr(svc, "detect_signals", lambda *a, **k: [m])
+    monkeypatch.setattr(svc, "detect_signals_and_setups", lambda *a, **k: ([m], []))
     s = _stock(db, "FAK")
     assert svc.evaluate_signals(db, s, df) == 0  # fakeout dropped
