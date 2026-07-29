@@ -8,6 +8,7 @@ would be reported twice, once as a forecast and once as a fact.
 import pandas as pd
 
 from app.signals.context import SignalContext
+from app.signals.detectors.candle_reversal import CandleReversal
 from app.signals.detectors.oversold_reversal import OversoldReversal
 from app.signals.detectors.squeeze_expansion import SqueezeExpansion
 from app.signals.detectors.trend_pullback import TrendPullback
@@ -148,3 +149,75 @@ def test_pullback_setup_steps_aside_once_price_resumes():
     df = _frame(closes)
     events = [Event(date="2026-01-10", type="ema_cross", direction="bull")]
     assert det.proximity(events, df, _ctx(closes[-1])) is None
+
+
+# ─── candle_reversal: at a proven level, awaiting the reversal candle ───────
+
+def _level_events(level: float, kind: str = "support") -> list[Event]:
+    return [Event(date="2026-01-20", type="sr_level", payload={"kind": kind, "level": level})]
+
+
+def _bars_touching(level: float, touches: int, last_close: float) -> pd.DataFrame:
+    """A series whose lows come back to `level` exactly `touches` times."""
+    closes, lows = [], []
+    for i in range(30):
+        if i < touches:
+            closes.append(level * 1.05)
+            lows.append(level)              # a test of the level
+        else:
+            closes.append(level * 1.30)
+            lows.append(level * 1.25)       # well away from it
+    closes[-1] = last_close
+    lows[-1] = last_close * 0.999
+    df = _frame(closes)
+    df["low"] = lows
+    return df
+
+
+def test_candle_setup_when_price_tests_a_proven_level_without_a_candle():
+    det = CandleReversal()
+    df = _bars_touching(100.0, touches=4, last_close=100.5)   # 0.5% above
+    events = _level_events(100.0)
+
+    assert det.detect(events, df, _ctx(100.5)) is None, "no reversal candle yet"
+    sm = det.proximity(events, df, _ctx(100.5))
+    assert sm is not None
+    assert "candela di inversione" in sm.missing
+    assert "testato" in sm.missing, "the level's history is the point"
+
+
+def test_candle_setup_steps_aside_once_the_candle_prints():
+    det = CandleReversal()
+    df = _bars_touching(100.0, touches=4, last_close=100.5)
+    events = _level_events(100.0) + [
+        Event(date="2026-01-28", type="candle_reversal", direction="bull",
+              magnitude=0.9, payload={"pattern": "hammer"}),
+    ]
+    assert det.proximity(events, df, _ctx(100.5)) is None
+
+
+def test_candle_setup_ignores_a_level_touched_only_once():
+    """A single pivot is the swing that defined the level, not a level being
+    respected. Emitting on it is how a setup list becomes the whole market."""
+    det = CandleReversal()
+    df = _bars_touching(100.0, touches=1, last_close=100.5)
+    assert det.proximity(_level_events(100.0), df, _ctx(100.5)) is None
+
+
+def test_candle_setup_is_stricter_than_the_trigger_it_anticipates():
+    """detect() fires within 3% of a level — a band a large slice of the
+    universe sits in at any time. The setup must be tighter, or it recreates
+    the flood that made the first production run unusable (1214 setups)."""
+    det = CandleReversal()
+    at = _bars_touching(100.0, touches=4, last_close=100.5)    # 0.5% away
+    loose = _bars_touching(100.0, touches=4, last_close=102.5)  # 2.5% — inside
+                                                               # the trigger band
+    assert det.proximity(_level_events(100.0), at, _ctx(100.5)) is not None
+    assert det.proximity(_level_events(100.0), loose, _ctx(102.5)) is None
+
+
+def test_a_more_tested_level_ranks_higher():
+    det = CandleReversal()
+    many = det.proximity(_level_events(100.0), _bars_touching(100.0, 8, 100.5), _ctx(100.5))
+    few = det.proximity(_level_events(100.0), _bars_touching(100.0, 2, 100.5), _ctx(100.5))
+    assert many.factors["level_strength"] > few.factors["level_strength"]
