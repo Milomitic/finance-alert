@@ -13,7 +13,7 @@ import { OhlcLegend, barToLegend, type LegendDatum } from "@/components/chart/oh
 import type { IndicatorStyle } from "@/components/stock/IndicatorToggles";
 import type { RegisterChart } from "@/hooks/useChartSync";
 import type { MarketDetailBar, MarketIndicatorPoint, MarketIndicators } from "@/hooks/useMarketDetail";
-import { defaultVisibleBars } from "@/lib/timeframeZoom";
+import { defaultVisibleBars, isIntraday } from "@/lib/timeframeZoom";
 
 interface Props {
   bars: MarketDetailBar[];
@@ -94,7 +94,19 @@ export function MarketChart({
       rightPriceScale: { borderColor: "rgba(115, 115, 115, 0.2)" },
       timeScale: {
         borderColor: "rgba(115, 115, 115, 0.2)",
-        timeVisible: timeframe === "30m" || timeframe === "1h",
+        // ALL three intraday timeframes need the clock on the axis — "5m" was
+        // missing here, so a 5m chart fell back to the date-only formatter and
+        // every tick of the same session rendered the identical "28" / "29".
+        // With timeVisible the library labels intra-session ticks "09:35" and
+        // keeps the date only on day boundaries.
+        //
+        // No custom tickMarkFormatter on purpose (PriceChart has one): market
+        // assets are indices / FX / crypto with no single exchange timezone,
+        // so the axis stays in UTC — which is exactly what the shared OHLC
+        // legend does for these bars (`formatBarDate` defaults tz="UTC").
+        // Axis and legend must agree; adding a local-tz formatter here would
+        // desync them.
+        timeVisible: isIntraday(timeframe),
         secondsVisible: false,
       },
     });

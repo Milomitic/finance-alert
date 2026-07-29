@@ -38,7 +38,20 @@ export function RangeSelector({ value, onChange }: Props) {
     // max-w-full + overflow-x-auto: six timeframe buttons in an unbreakable
     // inline-flex are the widest atom in the chart toolbar. Now that the card
     // can shrink, this must scroll inside it rather than push it wide again.
-    <div className="inline-flex h-8 max-w-full overflow-x-auto items-center rounded-md border bg-muted/30 p-0.5">
+    //
+    // `px-0.5` and NOT `p-0.5` — the missing vertical padding is deliberate.
+    // CSS forces `overflow-y: visible` to compute as `auto` when the other
+    // axis is `auto`, so ANY vertical overflow here paints a real scrollbar.
+    // With `p-0.5` the sums didn't fit: 32px (h-8) − 2px border − 4px padding
+    // = a 26px content box holding 28px (h-7) buttons. Those 2px of overflow
+    // are what rendered the little scroll widget glued to the selector's
+    // right edge. Dropping the vertical padding gives a 30px content box for
+    // the same 28px buttons: no overflow, no scrollbar, and — since the
+    // buttons were already centred and bleeding past the old content box —
+    // the pills land on exactly the same pixels as before. Height stays h-8
+    // so the selector still matches ChartOptionsToolbar beside it, which is
+    // built from the identical h-8 shell + h-7 pills.
+    <div className="inline-flex h-8 max-w-full overflow-x-auto items-center rounded-md border bg-muted/30 px-0.5">
       {OPTIONS.map((opt) => (
         <button
           key={opt.key}

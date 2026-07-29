@@ -1,4 +1,21 @@
 /**
+ * The intraday timeframes — the ones whose bars carry a meaningful
+ * wall-clock time, so charts must show HH:MM on the axis and in the legend
+ * instead of a date that repeats for every bar of the same session.
+ *
+ * SINGLE SOURCE OF TRUTH: this list used to be inlined (`tf === "5m" || tf
+ * === "30m" || tf === "1h"`) in PriceChart, MarketChart and the OHLC legend.
+ * MarketChart's copy was missing "5m", which is why the 5m market chart
+ * rendered a row of identical day-number ticks. Add any new intraday
+ * timeframe HERE, never in a call site.
+ */
+const INTRADAY_TIMEFRAMES = new Set(["5m", "30m", "1h"]);
+
+export function isIntraday(timeframe: string | undefined): boolean {
+  return timeframe !== undefined && INTRADAY_TIMEFRAMES.has(timeframe);
+}
+
+/**
  * Default visible-bar count per timeframe for chart initial zoom.
  *
  * Rationale: yfinance returns the maximum history per timeframe (60d

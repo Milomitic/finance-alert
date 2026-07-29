@@ -12,7 +12,7 @@ import type { RegisterChart } from "@/hooks/useChartSync";
 import type { LinePoint } from "@/lib/benchmarkOverlay";
 import type { SignalHoverItem } from "@/lib/signalMarkers";
 import { EDGE_MARGIN_BARS } from "@/lib/chartClamp";
-import { defaultVisibleBars } from "@/lib/timeframeZoom";
+import { defaultVisibleBars, isIntraday } from "@/lib/timeframeZoom";
 
 interface Props {
   ohlcv: OhlcvBar[];
@@ -190,7 +190,7 @@ export function PriceChart({
   // Create chart once
   useEffect(() => {
     if (!containerRef.current) return;
-    const isIntraday = timeframe === "5m" || timeframe === "30m" || timeframe === "1h";
+    const intraday = isIntraday(timeframe);
     // Intraday axis + crosshair render times in the EXCHANGE's local zone
     // (read live from the ref so a cross-ticker nav without remount stays
     // correct). lightweight-charts renders UTCTimestamps as UTC by default, so
@@ -250,12 +250,12 @@ export function PriceChart({
         // in the exchange's local zone (see intradayTick). Toggled via the
         // `timeframe` prop, re-applied at chart creation (key={range} forces a
         // fresh mount when this flips).
-        timeVisible: isIntraday,
+        timeVisible: intraday,
         secondsVisible: false,
-        tickMarkFormatter: isIntraday ? intradayTick : undefined,
+        tickMarkFormatter: intraday ?intradayTick : undefined,
       },
       // Crosshair time label (bottom axis) also in exchange-local time.
-      localization: isIntraday ? { timeFormatter: intradayCrosshair } : undefined,
+      localization: intraday ?{ timeFormatter: intradayCrosshair } : undefined,
       // Free crosshair (was Magnet=1) so the Y-value badge tracks the
       // cursor's actual position rather than snapping to the candle close.
       // Per user request: "lascialo libero a prescindere dalla curva".

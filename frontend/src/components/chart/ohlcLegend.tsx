@@ -3,6 +3,7 @@
  *  MarketChart renders the IDENTICAL fixed top-left legend: latest bar by
  *  default, hovered bar while the crosshair is over a candle — the classic
  *  TradingView corner legend that never occludes the candles. */
+import { isIntraday } from "@/lib/timeframeZoom";
 import { cn } from "@/lib/utils";
 
 /** Minimal bar shape the legend needs. `volume` is null for assets whose
@@ -43,10 +44,9 @@ export function formatBarDate(
   timeframe: string | undefined,
   tz: string = "UTC",
 ): string {
-  const isIntraday = timeframe === "5m" || timeframe === "30m" || timeframe === "1h";
   const d = new Date(iso);
   if (isNaN(d.getTime())) return iso;
-  if (!isIntraday) {
+  if (!isIntraday(timeframe)) {
     return d.toLocaleDateString("it-IT", {
       day: "2-digit", month: "2-digit", year: "2-digit", timeZone: "UTC",
     });
