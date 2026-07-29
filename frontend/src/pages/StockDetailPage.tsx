@@ -44,6 +44,7 @@ import { RangeSelector } from "@/components/stock/RangeSelector";
 import { ResizableSection } from "@/components/stock/ResizableSection";
 import { RsiPanel } from "@/components/stock/RsiPanel";
 import { StockAlertsHistoryCard } from "@/components/stock/StockAlertsHistoryCard";
+import { StockSetupsCard } from "@/components/stock/StockSetupsCard";
 import { StockHeader } from "@/components/stock/StockHeader";
 import { EtfHoldingsCard } from "@/components/stock/EtfHoldingsCard";
 import { StockScoreCard } from "@/components/stock/StockScoreCard";
@@ -279,6 +280,10 @@ export default function StockDetailPage() {
           <CompanyOverviewCard ticker={ticker} stock={d.stock} />
         </div>
         <div className="h-[300px] lg:h-full lg:min-h-0">
+          {/* What is FORMING on this stock, above the history of what already
+              fired. Renders nothing when there is no setup, which is most of
+              the time for most stocks. */}
+          <StockSetupsCard ticker={ticker} />
           <StockAlertsHistoryCard alerts={d.alerts_history} ticker={ticker} />
         </div>
       </div>

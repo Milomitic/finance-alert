@@ -53,17 +53,26 @@ def list_setups(
     _user: User = Depends(get_current_user),
     limit: int = Query(50, ge=1, le=200),
     tone: str | None = None,
+    ticker: str | None = None,
 ) -> SetupListOut:
     q = (
         select(StockSetup, Stock)
         .join(Stock, Stock.id == StockSetup.stock_id)
-        # Shortlisted only: rows outside their detector's top N still exist
-        # (they keep their history so `lead_days` stays honest) but are not
-        # what the user is asked to look at.
-        .where(StockSetup.status == STATUS_ACTIVE, StockSetup.shortlisted.is_(True))
+        .where(StockSetup.status == STATUS_ACTIVE)
     )
     if tone in ("bull", "bear"):
         q = q.where(StockSetup.tone == tone)
+    if ticker:
+        # Per-stock view (the detail page). Deliberately NOT limited to the
+        # shortlist: on a page about ONE stock, "this setup exists but ranks
+        # 14th market-wide" is still worth seeing. The global list is the one
+        # that has to stay short to be usable.
+        q = q.where(Stock.ticker == ticker.upper())
+    else:
+        # Rows outside their detector's top N still exist — they keep their
+        # history so `lead_days` stays honest — but are not what the user is
+        # asked to scan.
+        q = q.where(StockSetup.shortlisted.is_(True))
     q = q.order_by(StockSetup.convenience.desc()).limit(limit)
 
     out: list[SetupOut] = []

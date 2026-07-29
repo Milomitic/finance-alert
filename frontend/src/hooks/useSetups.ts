@@ -48,10 +48,18 @@ export interface SetupsResponse {
   stats: SetupStats;
 }
 
-export function useSetups(tone?: "bull" | "bear") {
+export function useSetups(tone?: "bull" | "bear", ticker?: string) {
   return useQuery({
-    queryKey: ["setups", tone ?? "all"],
-    queryFn: () => api<SetupsResponse>(`/api/setups${tone ? `?tone=${tone}` : ""}`),
+    queryKey: ["setups", tone ?? "all", ticker ?? "*"],
+    queryFn: () => {
+      const p = new URLSearchParams();
+      if (tone) p.set("tone", tone);
+      // Per-ticker asks the backend for THIS stock's setups, shortlisted or
+      // not — see the API note. The global list stays capped.
+      if (ticker) p.set("ticker", ticker);
+      const qs = p.toString();
+      return api<SetupsResponse>(`/api/setups${qs ? `?${qs}` : ""}`);
+    },
     staleTime: 5 * 60 * 1000,
   });
 }
