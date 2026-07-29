@@ -21,6 +21,15 @@ def _match(detector="oversold_reversal", tone="bull", proximity=0.85, **factors)
     )
 
 
+def _successful_scans(db, n: int):
+    """Expiry is guarded on scans having actually run — see the guard below."""
+    from app.models import ScanRun
+    for _ in range(n):
+        db.add(ScanRun(kind="alerts_scan", trigger="cron", status="success",
+                       completed_at=datetime.now(UTC)))
+    db.flush()
+
+
 def _stock(db, ticker="TSET"):
     s = Stock(ticker=ticker, exchange="NASDAQ", name=ticker, country="US")
     db.add(s)
@@ -95,6 +104,8 @@ def test_stale_setups_expire_but_are_kept_on_record(db):
     db.flush()
     row.last_seen_at = datetime.now(UTC) - timedelta(days=30)
     db.flush()
+
+    _successful_scans(db, 3)
 
     assert setup_service.expire_stale_setups(db) == 1
     db.flush()
@@ -207,13 +218,69 @@ def test_the_cap_keeps_the_strongest_and_preserves_detector_diversity(db):
     setup_service.prune_to_top_per_detector(db)
     db.flush()
 
-    kept = db.query(StockSetup).filter_by(detector="squeeze_expansion").all()
+    kept = db.query(StockSetup).filter_by(
+        detector="squeeze_expansion", shortlisted=True
+    ).all()
     assert len(kept) == settings.setup_max_per_detector
+    # Dropped rows SURVIVE with their history — deleting them would restart
+    # the wait of anything that re-enters the shortlist later.
+    assert db.query(StockSetup).filter_by(
+        detector="squeeze_expansion", shortlisted=False
+    ).count() == 6
     # The survivors must be the STRONGEST, not an arbitrary slice: every kept
     # score has to beat every dropped one.
     assert sorted((r.convenience for r in kept), reverse=True) == sorted(
         all_scores, reverse=True
     )[: settings.setup_max_per_detector]
-    assert db.query(StockSetup).filter_by(detector="oversold_reversal").count() == 1, (
-        "the rare detector must survive the common one's cap"
-    )
+    assert db.query(StockSetup).filter_by(
+        detector="oversold_reversal", shortlisted=True
+    ).count() == 1, "the rare detector must survive the common one's cap"
+
+
+def test_nothing_expires_while_the_pipeline_is_quiet(db):
+    """`last_seen_at` only advances when a scan re-observes a setup, so an
+    outage looks exactly like decay. Ageing setups out during a pipeline
+    problem would inflate the expired count — the mirror image of the bug the
+    keep-expired-rows rule prevents."""
+    s = _stock(db)
+    row = setup_service.upsert_setup(db, stock_id=s.id, match=_match())
+    db.flush()
+    row.last_seen_at = datetime.now(UTC) - timedelta(days=30)
+    db.flush()
+
+    # No successful scans recorded: the silence is ours, not the market's.
+    assert setup_service.expire_stale_setups(db) == 0
+    assert db.query(StockSetup).one().status == STATUS_ACTIVE
+
+
+def test_a_setup_that_re_enters_the_shortlist_keeps_its_original_wait(db):
+    """THE reason the cap flags instead of deleting: scores cluster, so rows
+    oscillate around the boundary. If dropping meant deleting, every re-entry
+    would restart the clock and avg_lead_days would trend to zero for reasons
+    that have nothing to do with the market."""
+    s = _stock(db)
+    row = setup_service.upsert_setup(db, stock_id=s.id, match=_match())
+    db.flush()
+    row.first_seen_at = datetime.now(UTC) - timedelta(days=5)
+    row.shortlisted = False           # fell out of the top N
+    db.flush()
+
+    again = setup_service.upsert_setup(db, stock_id=s.id, match=_match())
+    db.flush()
+    assert again.id == row.id
+    assert (datetime.now(UTC) - again.first_seen_at.replace(tzinfo=UTC)).days == 5
+
+
+def test_stats_count_only_what_was_actually_surfaced(db):
+    """A setup the user never saw made no claim to them, so its outcome must
+    not move the conversion rate the page advertises."""
+    shown = _stock(db, "SHOWN")
+    hidden = _stock(db, "HIDDEN")
+    a = setup_service.upsert_setup(db, stock_id=shown.id, match=_match())
+    b = setup_service.upsert_setup(db, stock_id=hidden.id, match=_match())
+    db.flush()
+    a.status, b.status = STATUS_CONVERTED, STATUS_CONVERTED
+    b.shortlisted = False
+    db.flush()
+
+    assert setup_service.conversion_stats(db)["converted"] == 1

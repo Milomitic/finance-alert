@@ -57,7 +57,10 @@ def list_setups(
     q = (
         select(StockSetup, Stock)
         .join(Stock, Stock.id == StockSetup.stock_id)
-        .where(StockSetup.status == STATUS_ACTIVE)
+        # Shortlisted only: rows outside their detector's top N still exist
+        # (they keep their history so `lead_days` stays honest) but are not
+        # what the user is asked to look at.
+        .where(StockSetup.status == STATUS_ACTIVE, StockSetup.shortlisted.is_(True))
     )
     if tone in ("bull", "bear"):
         q = q.where(StockSetup.tone == tone)

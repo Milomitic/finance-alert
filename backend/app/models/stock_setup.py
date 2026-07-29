@@ -23,6 +23,7 @@ duplicated, so `first_seen_at` stays the honest start of the wait.
 from datetime import datetime
 
 from sqlalchemy import (
+    Boolean,
     DateTime,
     Float,
     ForeignKey,
@@ -70,6 +71,12 @@ class StockSetup(Base):
     annotations_json: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     status: Mapped[str] = mapped_column(String(16), nullable=False, default=STATUS_ACTIVE)
+    # Whether this setup is currently in the surfaced shortlist (top N of its
+    # detector). NOT a delete, deliberately: dropping the row would destroy
+    # `first_seen_at`, and a setup oscillating around the cap boundary would
+    # restart its clock every time it re-entered — quietly zeroing the one
+    # number this feature is judged by.
+    shortlisted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     first_seen_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

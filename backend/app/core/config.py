@@ -101,10 +101,20 @@ class Settings(BaseSettings):
     # showed why that was wrong: 1214 setups over a ~1000-name universe — more
     # than one per stock, i.e. the whole market rather than a watchlist.
     #
-    # The gate is on `convenience` because that is precisely what convenience
-    # is for: deciding what deserves attention. Tuned against the observed
-    # distribution (>=70 -> 406, >=75 -> 141, >=78 -> 51, >=80 -> 13).
-    setup_min_convenience: float = 75.0
+    # GARBAGE FILTER ONLY — the per-detector cap below does the selecting.
+    #
+    # This was briefly 75, and that was wrong in a way the data caught within
+    # the hour: `oversold_reversal bull` peaked at 74.9, so the user's primary
+    # use case (panic sell bouncing off support) was silently wiped out — 136
+    # matches, zero survivors.
+    #
+    # The cause is that convenience is NOT comparable across detectors. Each
+    # feeds differently-scaled factors into it: squeeze_expansion runs
+    # concave() over raw magnitudes, while oversold_reversal pre-compresses
+    # through clamp01((30-rsi)/25) first. A single absolute bar therefore
+    # ranks CALIBRATION SCALE, not merit. Ranking is only meaningful WITHIN a
+    # detector, which is exactly what the cap does.
+    setup_min_convenience: float = 55.0
     # Per (detector, tone) cap applied after each scan. A floor alone is not
     # enough: `squeeze_expansion` matched 291 names because ~30% of any
     # universe has compressed bands at any time, so one detector could still

@@ -18,11 +18,11 @@ import json
 from datetime import UTC, date, datetime, timedelta
 
 from loguru import logger
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.models import Alert, StockSetup
+from app.models import Alert, ScanRun, StockSetup
 from app.models.stock_setup import STATUS_ACTIVE, STATUS_CONVERTED, STATUS_EXPIRED
 from app.signals.setups.base import SetupMatch, convenience
 
@@ -30,6 +30,9 @@ from app.signals.setups.base import SetupMatch, convenience
 # without firing. Short on purpose — a setup is a "watch this now" object, and
 # one kept alive for weeks is just clutter that inflates the active list.
 _EXPIRE_AFTER_DAYS = 10
+# Scans run twice a day, so a healthy 10-day window contains ~20. Requiring a
+# handful means a brief outage cannot silently retire the whole list.
+_MIN_SCANS_BEFORE_EXPIRY = 3
 
 
 def upsert_setup(
@@ -145,12 +148,34 @@ def expire_stale_setups(db: Session, *, today: date | None = None) -> int:
     These are NOT deleted: an expired setup is half of the conversion rate.
     Deleting them would leave only the successes on record and make the
     feature look better than it is.
+
+    GUARDED on scans actually having run. `last_seen_at` only advances when a
+    scan re-observes the setup, so a stretch with no successful scan — the app
+    down, a crashing job, the OHLCV outage of July 2026 — looks identical to
+    "the conditions decayed". Ageing setups out during a pipeline problem
+    would inflate the expired count and make the feature look worse than it
+    is, which is the mirror image of the failure the no-delete rule prevents.
     """
     cutoff = datetime.combine(
         (today or date.today()) - timedelta(days=_EXPIRE_AFTER_DAYS),
         datetime.min.time(),
         tzinfo=UTC,
     )
+    # A setup can only be judged stale if scans have had the chance to
+    # re-observe it. Require at least this many successful scans since the
+    # cutoff, so a quiet pipeline never ages anything out.
+    scans_since = db.execute(
+        select(func.count())
+        .select_from(ScanRun)
+        .where(ScanRun.status == "success", ScanRun.completed_at >= cutoff)
+    ).scalar_one()
+    if scans_since < _MIN_SCANS_BEFORE_EXPIRY:
+        logger.info(
+            f"[setups] only {scans_since} successful scans since the cutoff — "
+            "skipping expiry so a quiet pipeline is not read as decay"
+        )
+        return 0
+
     rows = db.execute(
         select(StockSetup).where(StockSetup.status == STATUS_ACTIVE)
     ).scalars().all()
@@ -170,7 +195,12 @@ def expire_stale_setups(db: Session, *, today: date | None = None) -> int:
 
 def conversion_stats(db: Session) -> dict:
     """The feature's own report card. Read-only, no market claim."""
-    rows = db.execute(select(StockSetup)).scalars().all()
+    # Only setups that were actually SURFACED. A setup the user never saw made
+    # no claim to them, so counting its outcome would measure something the
+    # feature never offered.
+    rows = db.execute(
+        select(StockSetup).where(StockSetup.shortlisted.is_(True))
+    ).scalars().all()
     converted = [r for r in rows if r.status == STATUS_CONVERTED]
     expired = [r for r in rows if r.status == STATUS_EXPIRED]
     resolved = len(converted) + len(expired)
@@ -196,9 +226,13 @@ def prune_to_top_per_detector(db: Session) -> int:
     more specific ones — and the rare ones are the reason to look.
 
     Runs AFTER the scan because the ranking is only knowable once every stock
-    has been evaluated. Dropped rows are DELETED, not expired: they never
-    reached the user, so counting them as failures would understate the
-    conversion rate of the setups actually surfaced.
+    has been evaluated.
+
+    Dropped rows are FLAGGED, never deleted. Deleting them looked tidy and was
+    a bug: `first_seen_at` would go with them, so a setup hovering at the cap
+    boundary would restart its wait each time it re-entered, quietly zeroing
+    `lead_days` — the one number this feature is judged by. The row survives,
+    keeps its history, and simply stops being surfaced.
     """
     rows = db.execute(
         select(StockSetup).where(StockSetup.status == STATUS_ACTIVE)
@@ -210,9 +244,12 @@ def prune_to_top_per_detector(db: Session) -> int:
     dropped = 0
     for group in by_group.values():
         group.sort(key=lambda r: r.convenience, reverse=True)
-        for r in group[settings.setup_max_per_detector:]:
-            db.delete(r)
-            dropped += 1
+        for rank, r in enumerate(group):
+            keep = rank < settings.setup_max_per_detector
+            if r.shortlisted != keep:
+                r.shortlisted = keep
+                if not keep:
+                    dropped += 1
     if dropped:
-        logger.info(f"[setups] pruned {dropped} beyond the per-detector cap")
+        logger.info(f"[setups] {dropped} dropped out of the per-detector shortlist")
     return dropped
