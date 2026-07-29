@@ -21,6 +21,7 @@ from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.models import Alert, StockSetup
 from app.models.stock_setup import STATUS_ACTIVE, STATUS_CONVERTED, STATUS_EXPIRED
 from app.signals.setups.base import SetupMatch, convenience
@@ -38,7 +39,7 @@ def upsert_setup(
     match: SetupMatch,
     technical_composite: float | None = None,
     quality_composite: float | None = None,
-) -> StockSetup:
+) -> StockSetup | None:
     """Create or refresh the live setup for (stock, detector).
 
     UPDATES rather than inserts when one already exists: `first_seen_at` must
@@ -57,6 +58,16 @@ def upsert_setup(
             StockSetup.stock_id == stock_id, StockSetup.detector == match.detector
         )
     ).scalar_one_or_none()
+
+    # Emission gate. Without it the first production scan produced 1214 setups
+    # over ~1000 stocks — the whole market, not a watchlist. A setup below the
+    # bar is not merely hidden: an EXISTING row that decays below it is
+    # dropped, so a list that stops deserving attention actually shrinks
+    # instead of accumulating forever.
+    if score < settings.setup_min_convenience:
+        if row is not None and row.status == STATUS_ACTIVE:
+            db.delete(row)
+        return None
 
     if row is None:
         row = StockSetup(
@@ -174,3 +185,34 @@ def conversion_stats(db: Session) -> dict:
         "conversion_rate": round(len(converted) / resolved, 3) if resolved else None,
         "avg_lead_days": round(sum(leads) / len(leads), 1) if leads else None,
     }
+
+
+def prune_to_top_per_detector(db: Session) -> int:
+    """Keep only the strongest N active setups per (detector, tone).
+
+    The floor alone leaves the list lopsided: `squeeze_expansion` matched 291
+    names on the first real scan, because ~30% of any universe has compressed
+    bands at any moment. Without a cap one common pattern buries the rarer,
+    more specific ones — and the rare ones are the reason to look.
+
+    Runs AFTER the scan because the ranking is only knowable once every stock
+    has been evaluated. Dropped rows are DELETED, not expired: they never
+    reached the user, so counting them as failures would understate the
+    conversion rate of the setups actually surfaced.
+    """
+    rows = db.execute(
+        select(StockSetup).where(StockSetup.status == STATUS_ACTIVE)
+    ).scalars().all()
+    by_group: dict[tuple[str, str], list[StockSetup]] = {}
+    for r in rows:
+        by_group.setdefault((r.detector, r.tone), []).append(r)
+
+    dropped = 0
+    for group in by_group.values():
+        group.sort(key=lambda r: r.convenience, reverse=True)
+        for r in group[settings.setup_max_per_detector:]:
+            db.delete(r)
+            dropped += 1
+    if dropped:
+        logger.info(f"[setups] pruned {dropped} beyond the per-detector cap")
+    return dropped

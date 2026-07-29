@@ -145,6 +145,9 @@ def _run_scan_alerts_locked(trigger: str) -> None:
         try:
             from app.services import setup_service
             setup_service.expire_stale_setups(db)
+            # Cap per detector AFTER the whole universe has been evaluated —
+            # the ranking is only knowable once every stock has been seen.
+            setup_service.prune_to_top_per_detector(db)
             db.commit()
         except Exception as e:  # noqa: BLE001 — bookkeeping never fails a scan
             logger.warning(f"[setups] expiry pass failed: {e}")

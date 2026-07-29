@@ -36,7 +36,9 @@ def test_reobserving_a_setup_updates_it_and_keeps_the_original_start(db):
     exists to produce would be silently zeroed.
     """
     s = _stock(db)
-    row = setup_service.upsert_setup(db, stock_id=s.id, match=_match(proximity=0.5))
+    # Both observations must clear the emission floor, otherwise the first one
+    # is never stored and this would be testing nothing.
+    row = setup_service.upsert_setup(db, stock_id=s.id, match=_match(proximity=0.80))
     db.flush()
     started = row.first_seen_at
 
@@ -155,3 +157,63 @@ def test_convenience_ignores_gate_factors():
     plain = convenience(_match(proximity=0.5, rsi_extremity=0.4))
     gated = convenience(_match(proximity=0.5, rsi_extremity=0.4, gate_rsi_extreme=1.0))
     assert plain == gated
+
+
+# ─── Emission gate (first production scan: 1214 setups over ~1000 stocks) ────
+
+def test_a_weak_setup_is_not_stored_at_all(db):
+    """Setups shipped with no bar and the first real scan produced more than
+    one per stock — the whole market rather than a watchlist."""
+    s = _stock(db)
+    weak = _match(proximity=0.30, rsi_extremity=0.2)
+    assert setup_service.upsert_setup(db, stock_id=s.id, match=weak) is None
+    db.flush()
+    assert db.query(StockSetup).count() == 0
+
+
+def test_a_setup_that_decays_below_the_bar_is_dropped_not_kept(db):
+    """Otherwise the list only ever grows: things that stop deserving
+    attention would sit there forever."""
+    s = _stock(db)
+    setup_service.upsert_setup(db, stock_id=s.id, match=_match(proximity=0.85))
+    db.flush()
+    assert db.query(StockSetup).count() == 1
+
+    setup_service.upsert_setup(db, stock_id=s.id, match=_match(proximity=0.30, rsi_extremity=0.1))
+    db.flush()
+    assert db.query(StockSetup).count() == 0, "a decayed setup must leave the list"
+
+
+def test_the_cap_keeps_the_strongest_and_preserves_detector_diversity(db):
+    """squeeze_expansion matched 291 names on the first scan — ~30% of any
+    universe has compressed bands. Without a per-detector cap one common
+    pattern buries the rarer ones, which are the reason to look at all."""
+    from app.core.config import settings
+
+    all_scores = []
+    for i in range(settings.setup_max_per_detector + 6):
+        st = _stock(db, ticker=f"SQZ{i}")
+        # convenience rises with i, so the last ones are the strongest
+        row = setup_service.upsert_setup(
+            db, stock_id=st.id,
+            match=_match("squeeze_expansion", proximity=0.85, rsi_extremity=0.70 + i * 0.015),
+        )
+        all_scores.append(row.convenience)
+    other = _stock(db, ticker="RARE")
+    setup_service.upsert_setup(db, stock_id=other.id,
+                               match=_match("oversold_reversal", proximity=0.85))
+    db.flush()
+
+    setup_service.prune_to_top_per_detector(db)
+    db.flush()
+
+    kept = db.query(StockSetup).filter_by(detector="squeeze_expansion").all()
+    assert len(kept) == settings.setup_max_per_detector
+    # The survivors must be the STRONGEST, not an arbitrary slice: every kept
+    # score has to beat every dropped one.
+    assert sorted((r.convenience for r in kept), reverse=True) == sorted(
+        all_scores, reverse=True
+    )[: settings.setup_max_per_detector]
+    assert db.query(StockSetup).filter_by(detector="oversold_reversal").count() == 1, (
+        "the rare detector must survive the common one's cap"
+    )

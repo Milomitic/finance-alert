@@ -96,6 +96,21 @@ class Settings(BaseSettings):
     # Signal engine: minimum confidence (0-100) for a detected signal to
     # become an alert. Below this the signal is computed but not surfaced.
     signal_min_confidence: int = 60
+    # Setup emission gate. Signals have had `signal_min_confidence` since the
+    # start; setups shipped with NO bar at all, and the first production scan
+    # showed why that was wrong: 1214 setups over a ~1000-name universe — more
+    # than one per stock, i.e. the whole market rather than a watchlist.
+    #
+    # The gate is on `convenience` because that is precisely what convenience
+    # is for: deciding what deserves attention. Tuned against the observed
+    # distribution (>=70 -> 406, >=75 -> 141, >=78 -> 51, >=80 -> 13).
+    setup_min_convenience: float = 75.0
+    # Per (detector, tone) cap applied after each scan. A floor alone is not
+    # enough: `squeeze_expansion` matched 291 names because ~30% of any
+    # universe has compressed bands at any time, so one detector could still
+    # drown out the rest. The cap keeps the list DIVERSE, which matters more
+    # than keeping the single highest-scoring family.
+    setup_max_per_detector: int = 10
     # Signal engine recency guard: a detected signal is only surfaced if its
     # signal_date is within this many calendar days of the latest OHLCV bar.
     # Stops the first scan after a deploy/backfill from flooding the feed with
