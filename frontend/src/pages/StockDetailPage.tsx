@@ -270,7 +270,11 @@ export default function StockDetailPage() {
           and scrolls internally when there are more rows than fit.
           The profile is the page's lead content and dictates the row
           height; the alerts card adapts. Stacks vertically below `lg`. */}
-      <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-3 lg:h-[300px] [&>*]:min-w-0">
+      {/* min-h, not h: this row now holds TWO stacked cards on the right when a
+          setup exists, and a hard 300px box sized for one made the second
+          overflow and paint over the row below. A floor keeps the empty-state
+          proportions; the row grows only when there is something to grow for. */}
+      <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-3 lg:min-h-[300px] [&>*]:min-w-0">
         {/* Both cards fill the fixed row height (h-full inside each): the
             profile's prose scrolls internally if its condensed summary still
             overflows, the alerts card scrolls its rows. AlertsHistory needs a
@@ -279,12 +283,16 @@ export default function StockDetailPage() {
         <div className="lg:h-full lg:min-h-0">
           <CompanyOverviewCard ticker={ticker} stock={d.stock} />
         </div>
-        <div className="h-[300px] lg:h-full lg:min-h-0">
-          {/* What is FORMING on this stock, above the history of what already
-              fired. Renders nothing when there is no setup, which is most of
-              the time for most stocks. */}
+        {/* Same axis, present then past: what is FORMING above what already
+            fired. A flex column so the two share the height explicitly —
+            setups take what they need, the history takes the rest and scrolls.
+            The history keeps a floor so its internal `flex-1 min-h-0` pane
+            can never collapse to zero. */}
+        <div className="flex flex-col gap-3 lg:h-full lg:min-h-0">
           <StockSetupsCard ticker={ticker} />
-          <StockAlertsHistoryCard alerts={d.alerts_history} ticker={ticker} />
+          <div className="h-[300px] lg:h-auto lg:flex-1 lg:min-h-[220px]">
+            <StockAlertsHistoryCard alerts={d.alerts_history} ticker={ticker} />
+          </div>
         </div>
       </div>
 

@@ -17,10 +17,17 @@ import { cn } from "@/lib/utils";
  * about one company, "this is forming but ranks 14th market-wide" is still
  * worth knowing. The global list is the one that has to stay short.
  */
+const _MAX_SHOWN = 3;
+
 export function StockSetupsCard({ ticker }: { ticker: string }) {
   const q = useSetups(undefined, ticker);
-  const setups = q.data?.setups ?? [];
-  if (q.isLoading || setups.length === 0) return null;
+  const all = q.data?.setups ?? [];
+  if (q.isLoading || all.length === 0) return null;
+  // Capped: this card shares a row with the signal history, and an unbounded
+  // list would push that off the page — which is how it overlapped the row
+  // below in the first place. Three is enough to see what is forming; the
+  // rest are one click away.
+  const setups = all.slice(0, _MAX_SHOWN);
 
   return (
     <Card>
@@ -69,7 +76,9 @@ export function StockSetupsCard({ ticker }: { ticker: string }) {
           to="/setups"
           className="mt-2 inline-block text-xs text-muted-foreground hover:text-foreground hover:underline"
         >
-          Vedi tutti i setup →
+          {all.length > setups.length
+            ? `Altri ${all.length - setups.length} setup →`
+            : "Vedi tutti i setup →"}
         </Link>
       </CardContent>
     </Card>
