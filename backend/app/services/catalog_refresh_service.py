@@ -1,4 +1,5 @@
 """Refresh stock catalog from Wikipedia constituent tables."""
+import re
 import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -13,6 +14,10 @@ from app.services.country_normalizer import canonical_country
 from app.services.exchange_codes import canonical_exchange, has_known_suffix
 from app.services.industry_normalizer import canonical_industry
 from app.services.sector_normalizer import canonical_sector
+
+# "BRK.B" / "BF.B" / "BT.A" — ticker, dot, ONE letter. Deliberately not a
+# broad dot-replace: ".L", ".MI", ".HK" are exchange suffixes, not classes.
+_SHARE_CLASS_DOT = re.compile(r"^[A-Z]{1,5}\.[A-Z]$")
 
 USER_AGENT = "FinanceAlert/0.1 (personal use)"
 
@@ -168,6 +173,20 @@ def _normalize_ticker(raw: str, default_exchange: str) -> tuple[str, str]:
     # Strip non-breaking space (U+00A0) which Wikipedia sometimes injects
     # between the prefix and the number ("SEHK:\xa05" → "SEHK: 5").
     t = t.replace("\xa0", " ")
+    # Share-class dot -> dash. Wikipedia writes "BRK.B", "BF.B", "BT.A";
+    # yfinance only resolves "BRK-B", "BF-B". Those three were renamed by hand
+    # in June 2026 and the refresh QUIETLY RECREATED them a month later: the
+    # unique constraint is on (ticker, exchange) and the re-imported rows landed
+    # on a DIFFERENT exchange, so nothing caught the collision. The result was
+    # three permanent zombies with zero bars, burning a fetch attempt every scan
+    # and producing the bulk of the app's error log.
+    #
+    # Normalising HERE — the only door these come through — is what stops them
+    # coming back. Restricted to a single trailing class letter so genuine
+    # exchange suffixes (".L", ".MI", ".HK") are untouched; those are handled
+    # further down.
+    if _SHARE_CLASS_DOT.match(t):
+        t = t.replace(".", "-")
     # CSI 300: "SSE: 600519" / "SZSE: 002475"
     if t.startswith("SSE:") or t.startswith("SZSE:"):
         prefix, _, num = t.partition(":")

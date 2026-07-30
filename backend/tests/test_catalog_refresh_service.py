@@ -143,3 +143,28 @@ def test_a_normal_prune_still_goes_through(db: Session) -> None:
     assert result.status == "success"
     assert result.stocks_removed == 2
     assert db.query(StockIndex).filter_by(index_id=idx.id).count() == 8
+
+
+# ─── Share-class normalisation (zombie rows, found 2026-07-30) ──────────────
+
+def test_share_class_dots_become_dashes_so_zombies_cannot_return():
+    """BRK.B / BF.B / BT.A were renamed by hand in June 2026 and the refresh
+    quietly recreated them a month later. The unique constraint is on
+    (ticker, exchange) and the re-imported rows landed on a DIFFERENT exchange,
+    so nothing caught the collision — leaving three permanent zero-bar rows
+    that burned a fetch every scan."""
+    from app.services.catalog_refresh_service import _normalize_ticker
+
+    assert _normalize_ticker("BRK.B", "NYSE")[0] == "BRK-B"
+    assert _normalize_ticker("BF.B", "NASDAQ")[0] == "BF-B"
+    # LSE also appends its exchange suffix, after the class fix.
+    assert _normalize_ticker("BT.A", "LSE")[0] == "BT-A.L"
+
+
+def test_exchange_suffixes_are_not_mistaken_for_share_classes():
+    """A broad dot-replace would corrupt every non-US symbol in the catalog."""
+    from app.services.catalog_refresh_service import _normalize_ticker
+
+    assert _normalize_ticker("ENEL.MI", "BIT")[0] == "ENEL.MI"
+    assert _normalize_ticker("0005.HK", "HKEX")[0] == "0005.HK"
+    assert _normalize_ticker("AAPL", "NASDAQ")[0] == "AAPL"

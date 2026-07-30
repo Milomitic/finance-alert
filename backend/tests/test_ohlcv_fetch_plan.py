@@ -116,3 +116,44 @@ def test_iter_fetch_chunks_smart_skip_and_chunking(db):
     assert chunks[0][2] == TODAY - timedelta(days=1)
     # The skip chunk carries no fetch parameters.
     assert chunks[1][2] is None and chunks[1][3] is None
+
+
+# ─── Long-dead quarantine (found 2026-07-30) ───────────────────────────────
+
+def test_a_symbol_with_bars_but_a_long_dead_streak_is_finally_quarantined(db):
+    """The original rule never quarantined a stock that had bars, so a few
+    transient misses could not knock a live symbol out. Right, but unbounded:
+    APLS, CTRA, BK and TERN were found with streaks of 81-107, retried every
+    scan for over three months."""
+    from app.models import OhlcvDaily, Stock
+    from app.services.ohlcv_fetch_plan import LONG_DEAD_STREAK, build_fetch_plan
+
+    s = Stock(ticker="DEAD", exchange="NASDAQ", name="Dead Co", country="US",
+              ohlcv_nodata_streak=LONG_DEAD_STREAK + 5,
+              ohlcv_last_nodata_at=date.today())
+    db.add(s)
+    db.flush()
+    db.add(OhlcvDaily(stock_id=s.id, date=date(2026, 1, 2), open=1, high=1,
+                      low=1, close=1, volume=1))       # stale but present
+    db.flush()
+
+    plan = build_fetch_plan(db, [s])
+    assert [q.ticker for q in plan.quarantined] == ["DEAD"]
+
+
+def test_a_live_symbol_with_a_short_streak_is_still_fetched(db):
+    """A bad week upstream must not set a live symbol aside — that is the
+    protection the original rule was written for and it has to survive."""
+    from app.models import OhlcvDaily, Stock
+    from app.services.ohlcv_fetch_plan import build_fetch_plan
+
+    s = Stock(ticker="ALIVE", exchange="NASDAQ", name="Alive Co", country="US",
+              ohlcv_nodata_streak=5, ohlcv_last_nodata_at=date.today())
+    db.add(s)
+    db.flush()
+    db.add(OhlcvDaily(stock_id=s.id, date=date.today(), open=1, high=1,
+                      low=1, close=1, volume=1))
+    db.flush()
+
+    plan = build_fetch_plan(db, [s])
+    assert plan.quarantined == []

@@ -49,6 +49,13 @@ KIND_INCREMENTAL = "incremental"
 KIND_BACKFILL = "backfill"
 KIND_SKIP = "skip"
 
+# Streak at which a symbol that HAS stored bars is finally treated as dead.
+# Deliberately far above the zero-bar threshold (QUARANTINE_STREAK = 3): a
+# live symbol must survive a bad week of upstream misses, but not a bad
+# quarter. Scans run twice daily, so 30 is roughly a fortnight of consecutive
+# failures before anything with history is set aside.
+LONG_DEAD_STREAK = 30
+
 
 @dataclass
 class FetchPlan:
@@ -84,11 +91,29 @@ def build_fetch_plan(
         s for s in stocks
         if latest_dates.get(s.id) is None or latest_dates[s.id] < cutoff
     ]
-    # Dead-ticker quarantine — ONLY stocks with zero stored bars (nothing to
-    # evaluate anyway); see module docstring.
-    _, quarantined = split_quarantined(
-        [s for s in backfill if latest_dates.get(s.id) is None]
-    )
+    # Dead-ticker quarantine, at TWO thresholds.
+    #
+    # Zero-bar symbols quarantine at the normal streak: they were never
+    # resolvable and there is nothing to evaluate anyway.
+    #
+    # Symbols that DO have history need a much higher bar, because the original
+    # rule — never quarantine a stock with bars — was written so a few
+    # transient yfinance misses could not knock a live symbol out of the scan.
+    # That is right, but it has no upper end: APLS, CTRA, BK and TERN were
+    # found with streaks of 81 to 107, failing every scan for over three
+    # months, retried forever because they had (stale) bars. A hundred
+    # consecutive no-data days is not a transient miss.
+    #
+    # LONG_DEAD_STREAK keeps the protection the original intent wanted while
+    # ending the "retry a dead symbol forever" case. The weekly re-probe still
+    # applies, so a symbol that comes back is picked up.
+    zero_bar = [s for s in backfill if latest_dates.get(s.id) is None]
+    long_dead = [
+        s for s in backfill
+        if latest_dates.get(s.id) is not None
+        and (s.ohlcv_nodata_streak or 0) >= LONG_DEAD_STREAK
+    ]
+    _, quarantined = split_quarantined(zero_bar + long_dead)
     if quarantined:
         qids = {s.id for s in quarantined}
         backfill = [s for s in backfill if s.id not in qids]
