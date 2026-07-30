@@ -81,6 +81,40 @@
   html {
     font-size: 17px;
   }
+
+  /* Last line of defence against horizontal page overflow.
+   *
+   * Every previous fix for "the container runs past the edge of the phone"
+   * was per-element: min-w-0 on a grid, a scroller around a wide table, a
+   * clip on the chart. Those are correct, but they only cover the culprits
+   * we already found — one new component with a long unbreakable string or
+   * a forgotten min-width puts the whole page back into horizontal scroll.
+   * This makes the failure mode structurally impossible instead.
+   *
+   * `clip`, NOT `hidden`, and the difference is the whole point. Per spec a
+   * non-`visible` value on one axis forces the other axis to compute to
+   * `auto`, so `overflow-x: hidden` here would turn the viewport into a
+   * second scroll container — which breaks every `position: sticky` header
+   * in the app (they would stick to the wrong scrollport). EarningsTable
+   * documents that dependency explicitly. `clip` clips without creating a
+   * scroll container, so `overflow-y` stays `visible` and sticky survives.
+   *
+   * No `hidden` fallback on purpose. A browser without `clip` support
+   * (pre-Safari 16) simply ignores these lines and behaves exactly as it
+   * does today; adding `hidden` as a fallback would trade a rare cosmetic
+   * overflow for broken sticky headers on those same browsers, which is
+   * the worse of the two.
+   *
+   * The tradeoff this accepts: content that escapes horizontally is now
+   * cropped rather than reachable by scrolling. That is the right call
+   * because content that is *meant* to be wide already scrolls inside its
+   * own `overflow-x-auto` box (tables, the earnings grid) and is untouched
+   * by a clip at the root — anything that reaches the root was a bug. */
+  html,
+  body {
+    overflow-x: clip;
+  }
+
   * {
     @apply border-border;
   }
