@@ -27,7 +27,7 @@ import time
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from datetime import time as dtime
-from threading import Lock
+from threading import Event, Lock
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -780,6 +780,23 @@ def _fetch_fresh(ticker: str, *, allow_remote_today_fetch: bool = True) -> LiveQ
 # price for EOD numbers (the top-movers "missing dot" report, 2026-06-10).
 _LAST_LIVE: dict[str, LiveQuote] = {}
 
+# ─── Single-flight ──────────────────────────────────────────────────────────
+# One upstream fetch per ticker at a time. Without this, N concurrent callers
+# that all miss the 10s TTL for the same symbol each start their own request —
+# the dashboard polls several cards, the batch path fans out 8 workers, and a
+# cold cache after a restart makes every one of them miss at once. The
+# duplicates are pure waste AND they are what pushes Yahoo into the 429s that
+# opened the quotes breaker in the first place.
+#
+# Followers wait on the leader's event and then read the cache the leader
+# filled, so they pay the latency once between them instead of once each.
+_INFLIGHT: dict[str, Event] = {}
+_INFLIGHT_LOCK = Lock()
+# A follower must not wait forever if the leader dies. Slightly above the
+# user-facing batch deadline so the deadline stays the thing that bounds a
+# request, not this.
+_INFLIGHT_WAIT_SECONDS = 8.0
+
 # Persisted snapshots hydrated from L2 at boot (ticker → payload dict). This is
 # what makes the FIRST page load after a restart instant instead of a cold
 # fan-out to Yahoo. Only ever read as a last resort, below _CACHE/_LAST_LIVE.
@@ -826,7 +843,37 @@ def get_quote(
             cached = _CACHE.get(ticker)
             if cached is not None and (now - cached.fetched_at) < _TTL_SECONDS:
                 return cached
-    fresh = _fetch_fresh(ticker, allow_remote_today_fetch=allow_remote_today_fetch)
+
+    # Single-flight: become the leader for this ticker, or follow an existing
+    # one. `force_refresh` still coalesces — a caller asking for fresh data is
+    # served by the in-flight fetch, which IS fresh; starting a second request
+    # for the same symbol would only add load.
+    with _INFLIGHT_LOCK:
+        waiter = _INFLIGHT.get(ticker)
+        leader = waiter is None
+        if leader:
+            waiter = _INFLIGHT[ticker] = Event()
+
+    if not leader:
+        # Wait for the leader, then read what it stored. On timeout fall
+        # through to the warm ladder rather than starting a duplicate fetch:
+        # if the leader is that slow, a second request will not be faster.
+        assert waiter is not None
+        waiter.wait(_INFLIGHT_WAIT_SECONDS)
+        with _CACHE_LOCK:
+            cached = _CACHE.get(ticker)
+        if cached is not None and (time.time() - cached.fetched_at) < _TTL_SECONDS:
+            return cached
+        return _warm_or_eod(ticker)
+
+    try:
+        fresh = _fetch_fresh(ticker, allow_remote_today_fetch=allow_remote_today_fetch)
+    finally:
+        # Release followers even if the fetch raised — otherwise one exception
+        # wedges every later caller for this ticker until the wait times out.
+        with _INFLIGHT_LOCK:
+            _INFLIGHT.pop(ticker, None)
+        waiter.set()
     if _is_live_quote(fresh):
         with _CACHE_LOCK:
             _CACHE[ticker] = fresh

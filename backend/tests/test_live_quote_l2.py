@@ -6,6 +6,7 @@ the pod liveness-killed. An unbounded wait is not a slow response — it is an
 outage. These tests pin the two properties that prevent a repeat: a request
 never blocks indefinitely, and there is always something to serve.
 """
+import importlib
 import time
 
 import pytest
@@ -102,3 +103,89 @@ def test_warm_ladder_falls_through_to_l2_snapshot() -> None:
     q = live_quote_service._warm_or_eod("NVDA")
     assert q.price == 777.0
     assert q.market_state == "STALE"
+
+
+# ─── Single-flight ──────────────────────────────────────────────────────────
+# N concurrent callers missing the 10s TTL for the SAME symbol used to start N
+# upstream requests each. The dashboard polls several cards, the batch path
+# fans out 8 workers, and a cold cache after a restart makes them all miss at
+# once — duplicate load that is also what pushes Yahoo into the 429s that open
+# the quotes breaker.
+
+def test_concurrent_callers_share_one_upstream_fetch() -> None:
+    """THE point of single-flight: ten callers, one fetch."""
+    import threading
+
+    calls = []
+    barrier = threading.Barrier(10)
+
+    def slow_fetch(t, **_k):
+        calls.append(t)
+        time.sleep(0.25)          # long enough for the others to pile up
+        return LiveQuote(ticker=t, price=42.0, market_state="OPEN",
+                         fetched_at=time.time())
+
+    live_quote_service._fetch_fresh = slow_fetch  # type: ignore[assignment]
+    try:
+        results = []
+
+        def worker():
+            barrier.wait()        # all ten arrive together
+            results.append(live_quote_service.get_quote("AAPL"))
+
+        threads = [threading.Thread(target=worker) for _ in range(10)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(timeout=10)
+
+        assert len(calls) == 1, f"{len(calls)} upstream fetches for one ticker"
+        assert len(results) == 10
+        assert all(r.price == 42.0 for r in results), "followers got the leader's quote"
+    finally:
+        importlib.reload(live_quote_service)
+
+
+def test_a_failing_leader_does_not_wedge_the_followers() -> None:
+    """If the leader raises, its in-flight slot must still be released —
+    otherwise one exception blocks every later caller for that ticker until
+    the wait times out."""
+    def boom(_t, **_k):
+        raise RuntimeError("upstream exploded")
+
+    live_quote_service._fetch_fresh = boom  # type: ignore[assignment]
+    try:
+        try:
+            live_quote_service.get_quote("AAPL")
+        except RuntimeError:
+            pass
+        assert "AAPL" not in live_quote_service._INFLIGHT, "slot leaked"
+    finally:
+        importlib.reload(live_quote_service)
+
+
+def test_different_tickers_are_not_serialised() -> None:
+    """Single-flight is PER TICKER. Coalescing across symbols would turn the
+    batch path back into a serial loop, which is the thing the thread pool
+    exists to avoid."""
+    import threading
+
+    started = threading.Semaphore(0)
+    release = threading.Event()
+
+    def blocking_fetch(t, **_k):
+        started.release()
+        release.wait(timeout=5)
+        return LiveQuote(ticker=t, price=1.0, market_state="OPEN", fetched_at=time.time())
+
+    live_quote_service._fetch_fresh = blocking_fetch  # type: ignore[assignment]
+    try:
+        for tk in ("AAPL", "MSFT"):
+            threading.Thread(target=live_quote_service.get_quote, args=(tk,)).start()
+        # Both must get INTO the fetch; if they were serialised only one would.
+        assert started.acquire(timeout=3)
+        assert started.acquire(timeout=3), "the second ticker was blocked by the first"
+    finally:
+        release.set()
+        time.sleep(0.1)
+        importlib.reload(live_quote_service)
