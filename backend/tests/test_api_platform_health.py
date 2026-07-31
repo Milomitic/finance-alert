@@ -146,6 +146,33 @@ def test_health_overall_degraded_when_last_scan_failed(client: TestClient, db: S
     assert any("Ultimo scan fallito" in reason for reason in body["reasons"])
 
 
+def test_health_overall_degraded_when_scan_succeeded_over_nothing(
+    client: TestClient, db: Session
+):
+    """End-to-end over the REAL endpoint, not a SimpleNamespace.
+
+    The unit tests for this rule feed hand-built objects, so they stay green
+    even if the API payload model stops carrying the work counters — and then
+    the rule reads None ("unknown") and silently never fires on the two paths
+    that actually reach the user. This exercises ScanRun → _recent_scans →
+    RecentScanOut → compute_rollup, which is where that break would happen."""
+    from datetime import UTC, datetime
+
+    from app.models import ScanRun
+
+    now = datetime.now(UTC)
+    db.add(ScanRun(
+        trigger="cron", status="success",
+        started_at=now, completed_at=now,
+        stocks_scanned=0, stocks_skipped=999,
+    ))
+    db.commit()
+
+    body = client.get("/api/platform/health").json()
+    assert body["overall"] == "degraded"
+    assert any("nessun titolo analizzato" in r for r in body["reasons"]), body["reasons"]
+
+
 # ---------------------------------------------------------------------------
 # /api/platform/logs
 # ---------------------------------------------------------------------------

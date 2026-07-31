@@ -11,6 +11,7 @@ import math
 from datetime import UTC, datetime, timedelta
 
 import pandas as pd
+from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -56,8 +57,22 @@ def _trend(close: pd.Series, ohlcv: pd.DataFrame) -> float:
     try:
         a, _, _ = adx(ohlcv, 14)
         adx_w = _clamp(float(a.dropna().iloc[-1]) / 40.0)
-    except Exception:
-        pass
+    except (IndexError, ValueError, TypeError) as e:
+        # Narrowed from a bare `except Exception: pass`. These three ARE the
+        # legitimate shortage: too few bars leaves the ADX series all-NaN, so
+        # .iloc[-1] raises IndexError, and a non-finite value trips
+        # ValueError/TypeError. Falling back to the neutral 0.5 weight is the
+        # right answer for those.
+        #
+        # What must NOT be swallowed is a KeyError from `ohlcv["high"]` — that
+        # means the frame arrived with the wrong shape, which is a defect, and
+        # under the old blanket catch it silently rewrote every stock's Tecnico
+        # score to the neutral weight instead of failing. A wrong score that
+        # looks right is worse than a crash.
+        #
+        # debug, not warning: this runs once per stock across the ~1000-name
+        # universe, and a per-stock warning would bury the log it lives in.
+        logger.debug(f"[technical] ADX unavailable ({len(close)} bars): {e!r} — neutral weight")
     return _clamp(0.5 + (t01 - 0.5) * (0.6 + 0.4 * adx_w)) * 100.0
 
 
@@ -132,7 +147,14 @@ def partial_for(ohlcv: pd.DataFrame) -> dict | None:
             "volume": _volume(ohlcv, close),
             "blended_return": _blended_return(close),
         }
-    except Exception:
+    except Exception as e:  # noqa: BLE001 — per-stock isolation boundary
+        # Deliberately broad: this is the boundary that stops ONE malformed
+        # stock from killing a ~1000-name recompute. What it was missing is a
+        # voice. Returning None silently means the stock simply has no
+        # Tecnico score, which looks identical to "not computed yet" — so a
+        # systematic frame-shape defect could drain the lens for a whole
+        # slice of the universe with nothing anywhere to show for it.
+        logger.debug(f"[technical] partial_for skipped ({len(ohlcv)} bars): {e!r}")
         return None
 
 
@@ -153,7 +175,12 @@ def _recent_signal_facets(db: Session, stock_ids: list[int]) -> dict[int, dict]:
     for sid, snap in rows:
         try:
             d = json.loads(snap) if snap else {}
-        except Exception:
+        except (json.JSONDecodeError, TypeError) as e:
+            # Narrowed + logged. Skipping one corrupt snapshot is right, but
+            # under a blanket silent catch a SYSTEMATIC corruption (a writer
+            # bug, a truncated column) would drain this facet to empty with
+            # no trace anywhere. debug because it is per-alert.
+            logger.debug(f"[technical] snapshot alert stock_id={sid} illeggibile: {e!r}")
             continue
         # Snapshots carry "strength" since the Forza/Probabilità split;
         # "confidence" is the transitional legacy alias only present on

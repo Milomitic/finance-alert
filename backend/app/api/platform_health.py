@@ -84,6 +84,8 @@ def _recent_scans(db: Session, limit: int = 10) -> list[RecentScanOut]:
             progress_total=r.progress_total,
             alerts_count=alerts_count,
             error_message=r.error_message,
+            stocks_scanned=r.stocks_scanned,
+            stocks_skipped=r.stocks_skipped,
         ))
     return out
 

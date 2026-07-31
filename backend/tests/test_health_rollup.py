@@ -27,14 +27,23 @@ def _scan(
     status: str = "success",
     started_minutes_ago: float | None = 5,
     error_message: str | None = None,
+    stocks_scanned: int | None = None,
+    stocks_skipped: int | None = None,
 ) -> SimpleNamespace:
+    """Counters default to None — the legacy shape. Every pre-existing test
+    keeps its meaning: unknown work is not judged."""
     started_at = (
         (datetime.now(UTC) - timedelta(minutes=started_minutes_ago)).isoformat()
         if started_minutes_ago is not None
         else None
     )
     return SimpleNamespace(
-        id=id, status=status, started_at=started_at, error_message=error_message
+        id=id,
+        status=status,
+        started_at=started_at,
+        error_message=error_message,
+        stocks_scanned=stocks_scanned,
+        stocks_skipped=stocks_skipped,
     )
 
 
@@ -350,3 +359,143 @@ def test_compute_rollup_from_db_smoke(db, monkeypatch: pytest.MonkeyPatch) -> No
     overall, reasons = health_rollup.compute_rollup_from_db(db)
     assert overall == "operational"
     assert reasons == []
+
+
+# ─── work accounting: a run that produced nothing is not a success ───────
+#
+# The failure mode this closes is the one the July-17 audit named: a job that
+# runs to completion, writes status="success", and does no work. The counters
+# to catch it were already on ScanRun and already judged by
+# `kpi_service.compute_flags` — but those flags are served only by /api/kpi
+# (the Settings panel). The rollup drives the banner, the SSE stream and the
+# Telegram push, and it never saw them. These tests hold the wiring.
+
+
+def test_a_scan_that_analysed_nothing_is_not_reported_healthy() -> None:
+    overall, reasons = _rollup(
+        scans=[_scan(status="success", stocks_scanned=0, stocks_skipped=999)]
+    )
+    assert overall == "degraded"
+    assert any("nessun titolo" in r.lower() for r in reasons), reasons
+
+
+def test_a_scan_that_skipped_most_of_the_universe_is_degraded() -> None:
+    # 800/1000 skipped: the scan "succeeded" over a fifth of the universe.
+    overall, reasons = _rollup(
+        scans=[_scan(status="success", stocks_scanned=200, stocks_skipped=800)]
+    )
+    assert overall == "degraded"
+    assert any("saltat" in r.lower() for r in reasons), reasons
+
+
+def test_a_normal_scan_is_not_flagged() -> None:
+    # A handful of skips is the steady state (quarantined tickers, recent
+    # listings with <2 bars). It must never colour the banner.
+    overall, reasons = _rollup(
+        scans=[_scan(status="success", stocks_scanned=990, stocks_skipped=9)]
+    )
+    assert overall == "operational"
+    assert reasons == []
+
+
+def test_legacy_scans_without_counters_are_not_judged() -> None:
+    """None is 'unknown', not 'zero'. Judging it would paint every legacy row
+    red and train the user to ignore the banner."""
+    overall, reasons = _rollup(
+        scans=[_scan(status="success", stocks_scanned=None, stocks_skipped=None)]
+    )
+    assert overall == "operational"
+    assert reasons == []
+
+
+def test_the_partial_counters_of_a_running_scan_are_not_judged() -> None:
+    """scan_runner snapshots in-flight counters so the UI can show progress.
+    Judging those would flag EVERY scan during its first seconds, when
+    scanned is still 0."""
+    overall, reasons = _rollup(
+        scans=[
+            _scan(id=2, status="running", stocks_scanned=0, stocks_skipped=0),
+            _scan(id=1, status="success", stocks_scanned=990, stocks_skipped=9),
+        ]
+    )
+    assert overall == "operational"
+    assert reasons == []
+
+
+def test_a_failed_scan_is_not_double_reported_as_empty() -> None:
+    """A crashed scan already has its own reason. Its counters are partial by
+    definition, so judging them too would just duplicate the message."""
+    overall, reasons = _rollup(
+        scans=[_scan(status="failed", error_message="boom",
+                     stocks_scanned=0, stocks_skipped=0)]
+    )
+    assert overall == "degraded"
+    assert len([r for r in reasons if "nessun titolo" in r.lower()]) == 0, reasons
+
+
+# ─── job liveness: overdue by its own next_run_time ──────────────────────
+#
+# scheduler_metrics is a pure event listener, so a job that stops being
+# submitted keeps its last successful `last_result` forever. APScheduler's
+# own next_run_time is the authoritative liveness signal: if the scheduler is
+# processing, it is always in the future.
+
+
+def test_a_job_overdue_past_its_next_run_is_degraded() -> None:
+    overdue = time.time() - (health_rollup.JOB_OVERDUE_MINUTES + 5) * 60
+    overall, reasons = _rollup(
+        scheduler=[{"job_id": "scan_alerts", "last_result": "ok",
+                    "next_run_time": overdue}]
+    )
+    assert overall == "degraded"
+    assert any("scan_alerts" in r for r in reasons), reasons
+
+
+def test_a_job_barely_past_due_is_tolerated() -> None:
+    """Submission jitter and misfire grace are normal; only a real backlog
+    counts, or the banner flickers amber on every tick."""
+    overall, reasons = _rollup(
+        scheduler=[{"job_id": "live_movers_sweep", "last_result": "ok",
+                    "next_run_time": time.time() - 30}]
+    )
+    assert overall == "operational"
+    assert reasons == []
+
+
+def test_a_job_due_in_the_future_is_not_flagged() -> None:
+    overall, reasons = _rollup(
+        scheduler=[{"job_id": "db_backup", "last_result": "ok",
+                    "next_run_time": time.time() + 3600}]
+    )
+    assert overall == "operational"
+    assert reasons == []
+
+
+def test_a_job_without_a_next_run_is_not_flagged() -> None:
+    """next_run_time is None for a PAUSED job and equally for one whose
+    scheduler was built but never started (the test/boot path). The two are
+    indistinguishable here, so flagging would fire on every cold start."""
+    overall, reasons = _rollup(
+        scheduler=[{"job_id": "refresh_sec_13f", "last_result": "ok",
+                    "next_run_time": None}]
+    )
+    assert overall == "operational"
+    assert reasons == []
+
+
+def test_the_api_scan_payload_carries_what_the_rollup_judges() -> None:
+    """Contract test between two files that are easy to drift apart.
+
+    compute_rollup reads the work counters with getattr, so a payload model
+    missing them degrades to None — "unknown" — and the empty-scan rule goes
+    silently inert on exactly the two paths that matter (the REST snapshot
+    and the SSE stream), while still passing every unit test because those
+    feed SimpleNamespace. A guard that quietly stops guarding is the failure
+    mode this whole rule exists to catch, so it gets its own test."""
+    from app.schemas.platform import RecentScanOut
+
+    for field in ("stocks_scanned", "stocks_skipped"):
+        assert field in RecentScanOut.model_fields, (
+            f"RecentScanOut lost {field} — compute_rollup can no longer tell "
+            "an empty scan from a legacy row on the API paths"
+        )

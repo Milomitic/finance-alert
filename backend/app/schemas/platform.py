@@ -65,6 +65,12 @@ class RecentScanOut(BaseModel):
     progress_total: int | None
     alerts_count: int | None
     error_message: str | None
+    # Work counters. Not decoration: health_rollup judges the last successful
+    # run on these to catch a scan that "succeeded" over nothing. Drop them
+    # and that rule reads None — "unknown" — and stops firing on the REST and
+    # SSE paths without any test noticing. test_health_rollup pins this.
+    stocks_scanned: int | None = None
+    stocks_skipped: int | None = None
 
 
 class CacheKindStatOut(BaseModel):

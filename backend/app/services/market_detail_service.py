@@ -206,8 +206,16 @@ def _fetch_fresh(symbol: str, range_key: str) -> MarketDetailDC | None:
                 if closes_52w:
                     high_52w = max(closes_52w)
                     low_52w = min(closes_52w)
-        except Exception:
-            pass
+        except Exception as e:  # noqa: BLE001 — the KPI strip degrades, the page must not
+            # Was a bare `pass`. The user just saw two empty cells in the KPI
+            # strip with no way to tell a real absence from a failed fetch,
+            # and nothing in the logs said which. Same warning level and shape
+            # as the primary fetch above (line 142): an upstream miss is
+            # reportable, never fatal.
+            logger.warning(
+                f"[market_detail] 52w fetch failed for {symbol}: {e!r} "
+                "— high/low 52w left empty"
+            )
     else:
         # 1y / 5y / all — the in-range high/low IS already ≥ 52w.
         high_52w = high_window

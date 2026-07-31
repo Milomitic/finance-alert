@@ -26,6 +26,11 @@ _CONF_BUCKETS = [(60, 70), (70, 80), (80, 90), (90, 101)]
 _CALIB_MIN_N = 50
 # Hours after which the latest scan is considered stale (daily cadence expected).
 _SCAN_STALE_HOURS = 36
+# Fraction of the universe that may be skipped before a "successful" scan is
+# considered to have run on too little of it. Public because health_rollup
+# applies the SAME judgement to reach the banner and the Telegram push — the
+# two must not drift apart.
+HIGH_SKIP_RATIO = 0.5
 
 
 def _cbucket(c: float) -> str | None:
@@ -175,7 +180,7 @@ def compute_flags(scans: list[dict], rollups: list[dict]) -> list[dict]:
                 "detail": "0 titoli analizzati nell'ultimo scan.",
             })
         tot = scanned + skipped
-        if tot and skipped / tot > 0.5:
+        if tot and skipped / tot > HIGH_SKIP_RATIO:
             flags.append({
                 "level": "warn", "code": "high_skip",
                 "title": "Molti titoli saltati",

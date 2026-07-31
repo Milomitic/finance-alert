@@ -43,6 +43,13 @@ from app.core.config import settings
 # A running scan with no completion after this is considered stuck (same
 # threshold the frontend derivation used).
 STUCK_SCAN_MINUTES = 30
+# How far a job's own next_run_time may slip into the past before the
+# scheduler is considered to have stopped processing it. APScheduler advances
+# next_run_time at SUBMISSION, so a live scheduler keeps it in the future even
+# while a long job runs — a past value means nothing is picking the job up.
+# Generous on purpose: misfire grace and submission jitter are normal, and a
+# banner that flickers amber is a banner the user learns to ignore.
+JOB_OVERDUE_MINUTES = 15
 # Max one Telegram notification per state (degraded / outage) per window.
 NOTIFY_COOLDOWN_SECONDS = 6 * 3600
 
@@ -143,6 +150,41 @@ def _scan_elapsed_minutes(started_at: Any) -> float | None:
     return (datetime.now(UTC) - dt).total_seconds() / 60.0
 
 
+def _scan_work_reasons(scans: list[Any]) -> list[str]:
+    """Reasons the most recent COMPLETED scan should not count as healthy.
+
+    Returns [] when there is nothing to judge — no completed run yet, or a
+    legacy row whose counters were never populated. `None` means "unknown",
+    not "zero": treating the two alike would paint every pre-migration row
+    red and teach the user to ignore the banner."""
+    from app.services.kpi_service import HIGH_SKIP_RATIO
+
+    last_ok = next(
+        (s for s in scans if getattr(s, "status", None) == "success"), None
+    )
+    if last_ok is None:
+        return []
+
+    scanned = getattr(last_ok, "stocks_scanned", None)
+    skipped = getattr(last_ok, "stocks_skipped", None)
+    if scanned is None and skipped is None:
+        return []
+
+    scanned = scanned or 0
+    skipped = skipped or 0
+    if scanned == 0:
+        return ["Ultimo scan riuscito ma nessun titolo analizzato (0 su "
+                f"{scanned + skipped}) — dati fermi nonostante lo stato 'ok'"]
+
+    total = scanned + skipped
+    if total and skipped / total > HIGH_SKIP_RATIO:
+        return [
+            f"Ultimo scan su una frazione dell'universo: {skipped}/{total} "
+            f"titoli saltati ({skipped / total * 100:.0f}%)"
+        ]
+    return []
+
+
 def compute_rollup(
     *,
     sources: list[Any],
@@ -203,6 +245,23 @@ def compute_rollup(
             degraded.append(f"Job scheduler in errore: {j.get('job_id')}")
         elif j.get("last_result") == "missed":
             degraded.append(f"Job scheduler mancato (missed): {j.get('job_id')}")
+        # Overdue — the silent-death mode the two rules above CANNOT see.
+        # scheduler_metrics is a pure event listener, so a job that simply
+        # stops being submitted keeps its last successful `last_result`
+        # forever and reads healthy. next_run_time is APScheduler's own
+        # answer to "when will this run", and it is authoritative: it is
+        # advanced at submission, so on a live scheduler it is always in the
+        # future. `None` is deliberately NOT flagged — it means paused, but
+        # equally it means the scheduler was built and never started (the
+        # boot and test paths), and those are indistinguishable from here.
+        nrt = j.get("next_run_time")
+        if isinstance(nrt, int | float):
+            late_min = (time.time() - nrt) / 60.0
+            if late_min > JOB_OVERDUE_MINUTES:
+                degraded.append(
+                    f"Job scheduler in ritardo: {j.get('job_id')} "
+                    f"atteso da {late_min:.0f} min — scheduler fermo?"
+                )
 
     # Degraded — the LAST scan failed (crash). A user-cancelled scan also
     # persists status='failed' but with the sentinel message — that's an
@@ -212,6 +271,21 @@ def compute_rollup(
         msg = getattr(last, "error_message", None) or ""
         if getattr(last, "status", None) == "failed" and not msg.startswith("Cancellato"):
             degraded.append(f"Ultimo scan fallito: {msg or 'errore sconosciuto'}")
+
+    # Degraded — the last SUCCESSFUL scan did no real work. This is the
+    # failure shape the July-17 audit named and that none of the rules above
+    # can see: the job ran, finished, and wrote status='success' while
+    # producing nothing. The counters to catch it were already on ScanRun and
+    # already judged by kpi_service.compute_flags — but those flags are
+    # served only by /api/kpi (the Settings panel), so the banner, the SSE
+    # stream and the Telegram push never learned about them. Same thresholds,
+    # imported rather than re-declared, so the two verdicts cannot drift.
+    #
+    # Only a COMPLETED run is judged: scan_runner snapshots in-flight counters
+    # for the progress UI, and those read 0/0 during the first seconds of
+    # every scan. A failed run is skipped too — its counters are partial by
+    # definition and it already has its own reason above.
+    degraded.extend(_scan_work_reasons(scans))
 
     if outage:
         return "outage", outage + degraded

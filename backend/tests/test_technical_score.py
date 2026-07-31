@@ -133,3 +133,41 @@ def test_signals_facet_picks_best_across_both_snapshot_shapes(db):
     db.commit()
     ts = db.get(TechnicalScore, s.id)
     assert ts is not None and ts.signals == 91.0
+
+
+def test_trend_refuses_to_score_a_malformed_frame():
+    """Targets `_trend` directly, and deliberately so.
+
+    The ADX fallback used to sit behind a bare `except Exception: pass`, so a
+    frame missing high/low silently rewrote the trend score to the neutral
+    ADX weight — a wrong number indistinguishable from a right one. The catch
+    is now narrowed to the genuine shortage errors (all-NaN series, non-finite
+    values) so a defect escapes instead.
+
+    Asserting this through `partial_for` would be VACUOUS: its outer boundary
+    collapses every failure to None, and _structure/_volume touch the same
+    missing column, so that assertion passes with or without the narrowing.
+    Checked in both directions before writing it this way."""
+    import pytest
+
+    df = _df([100 + i for i in range(120)]).drop(columns=["high"])
+    close = df["close"].astype(float).reset_index(drop=True)
+    with pytest.raises(KeyError):
+        svc._trend(close, df)
+
+
+def test_partial_for_isolates_one_bad_stock_instead_of_failing_the_run():
+    """The other half: that escaping error must NOT reach the caller. The
+    broad catch in partial_for stays broad on purpose — one malformed stock
+    cannot be allowed to kill a ~1000-name recompute. An absent score is
+    honest; a plausible wrong one is not."""
+    df = _df([100 + i for i in range(120)]).drop(columns=["high"])
+    assert svc.partial_for(df) is None
+
+
+def test_too_few_bars_for_adx_still_degrades_gracefully():
+    """The other half of the narrowing: a short-but-well-formed history is a
+    legitimate shortage, not a defect, and must still score."""
+    out = svc.partial_for(_df([100 + i for i in range(60)]))
+    assert out is not None
+    assert 0.0 <= out["trend"] <= 100.0
