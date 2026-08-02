@@ -640,6 +640,48 @@ different answer without NEW point-in-time data (e.g. matured score_history
 after 6-12 months of accrual).** Mirrors the confirmation-count rule: no
 score-affecting change without a study showing edge; this study showed none.
 
+### Conditional screen (2026-08-03): the wide-search tooling — BUILT, NOT YET RUN AT SCALE
+Five narrow studies (confirmation-count, factor-adjustments, score-IC, regime,
+multi-horizon) all came back null, so this one widens the search instead:
+MANY candidate conditions tested together, with the statistics that make
+"many" honest. **Don't rebuild this — it exists.**
+
+- `app.scripts.backfill_macro_history` — full-history FRED **state** series,
+  deliberately separate from `refresh_fred`'s `CURATED_SERIES` (those are
+  calendar events on a 3y rolling window; these are state on 10y+ and must
+  stay OFF the calendar). VIXCLS (1990), T10Y2Y (1976), **BAA10Y (1986)**.
+  ⚠️ Do NOT reach for the ICE BofA OAS series (`BAMLH0A0HYM2`, `BAMLC0A0CM`):
+  ICE restricted the licence and FRED serves only a ~3y rolling window —
+  measured, 795 obs even with an explicit 1996 start. Moody's Baa-over-10y is
+  the deep-history substitute. Idempotent.
+- `app.scripts.conditional_screen_replay` — ONE replay, MANY stamps: one row
+  per signal with 8 conditions (vix level/Δ5d, curve, credit, breadth,
+  sector RS, ATR regime, + `regime` as a **negative control**) → csv.gz. It
+  deliberately does NOT aggregate, so new hypotheses/bucketings are re-analysed
+  offline without paying for the replay again (the regime study had to re-run 4x).
+- `app.scripts.conditional_screen_grid` — Benjamini-Hochberg FDR over the whole
+  grid, effective-n by collapsing overlapping windows into episodes, per-cell
+  MDE so "no effect" stays distinct from "no power".
+
+**Three invariants, all TDD'd in `tests/test_conditional_screen.py` and verified
+to fail when removed — a bug in any of them is INVISIBLE in the output:**
+1. Tercile boundaries are EXPANDING-WINDOW. A whole-sample cut encodes the
+   future in the label; the test asserts an old date's label cannot change
+   when later observations are appended.
+2. Macro reads are STRICTLY BEFORE the fire date (FRED revises and posts late).
+3. The hit uses the universe **MEDIAN**, never the mean — the tone-asymmetry
+   that fabricated the trend_pullback regime artifact.
+
+The `regime` condition is a negative control with a KNOWN null (2026-06-10). If
+the grid ever reports it as a survivor, **the pipeline is broken and every
+other survivor in that run is void** — the script prints this check first.
+
+A survivor is a CANDIDATE, not a result: adoption still needs the full cascade
+(OOS sign+magnitude, adversarial verification starting with the tone↔condition
+correlation, wider-universe confirmation) before any `signal_calibration.json`
+block. The regime-conditioned Probabilità mechanism is already shipped and
+dormant, waiting for exactly that.
+
 ### One-off scan / recompute outside the API (e.g. after a scoring change)
 Stop uvicorn FIRST (sole SQLite writer → avoids "database is locked"), run with
 `cd backend && PYTHONPATH=. ./.venv/Scripts/python.exe <script>`, then restart +
