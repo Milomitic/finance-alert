@@ -192,3 +192,66 @@ def test_a_missing_input_file_is_reported_not_raised(tmp_path, capsys):
 
     grid.run(src=str(tmp_path / "nope.csv.gz"), out=str(tmp_path / "o.json"))
     assert "Run app.scripts.conditional_screen_replay first" in capsys.readouterr().out
+
+
+# ─── the unit of analysis (the nine-false-survivors bug) ──────────────────
+
+
+def test_the_t_distribution_is_stricter_than_the_normal_at_small_n():
+    """The block test runs on a handful of observations. Using a normal there
+    is exactly how a false finding gets born, so the t-tail must be fatter."""
+    from app.scripts.conditional_screen_grid import _phi, _t_two_sided_p
+
+    normal_p = 2 * (1 - _phi(2.5))
+    assert _t_two_sided_p(2.5, df=4) > normal_p * 2
+
+
+def test_t_p_values_match_known_values():
+    from app.scripts.conditional_screen_grid import _t_two_sided_p
+
+    # t(2.776, df=4) is the classic 95% two-sided critical value.
+    assert abs(_t_two_sided_p(2.776, 4) - 0.05) < 0.001
+    # t(2.228, df=10) likewise.
+    assert abs(_t_two_sided_p(2.228, 10) - 0.05) < 0.001
+
+
+def test_contiguous_months_group_into_one_block():
+    from app.scripts.conditional_screen_grid import _blocks
+
+    months = {"2020-01", "2020-02", "2020-03", "2021-06", "2021-07"}
+    assert [len(b) for b in _blocks(months)] == [3, 2]
+
+
+def test_a_market_wide_condition_is_not_credited_with_thousands_of_samples(tmp_path):
+    """THE regression test for the nine false survivors.
+
+    300 stocks all see the same VIX on the same day. A cell with tens of
+    thousands of rows spread over three months is THREE-ish looks at that
+    state, not tens of thousands — and a difference that large-n statistics
+    would call overwhelming must not survive here."""
+    from app.scripts import conditional_screen_grid as grid
+
+    src = tmp_path / "rows.csv.gz"
+    out = tmp_path / "rep.json"
+    rows = []
+    # One short 'high' episode where the detector happens to do very well,
+    # and a long 'low' stretch where it does averagely. Row counts are huge.
+    for stock in range(300):
+        for k in range(8):
+            rows.append(("d1", "bull", f"2020-0{1 + k % 3}-15", stock, k * 100, 5,
+                         1, "0.05", "train", "high", "bull"))
+        for k in range(8):
+            rows.append(("d1", "bull", f"2021-0{1 + k % 6}-15", stock, k * 100, 5,
+                         0, "-0.01", "train", "low", "bull"))
+    _write_rows(src, rows)
+
+    grid.run(src=str(src), out=str(out), q=0.10)
+    report = json.loads(out.read_text(encoding="utf-8"))
+    assert report["rows"] == 4800
+    vix = [c for c in report["all_cells"] if c["condition"] == "vix_level"]
+    for c in vix:
+        assert c["unit"] == "time_block", "a market-wide condition must not use stock episodes"
+    assert not [c for c in vix if c["survives"]], (
+        "a 100pp difference across ~3 time blocks is not evidence — "
+        "the market-wide clustering correction is not being applied"
+    )
