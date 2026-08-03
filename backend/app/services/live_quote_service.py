@@ -960,6 +960,22 @@ def _warm_or_eod(ticker: str) -> LiveQuote:
     return _eod_fallback_quote(ticker)
 
 
+def has_any_value(ticker: str) -> bool:
+    """True when SOMETHING could be shown for `ticker` without going upstream.
+
+    Mirrors the rungs `_warm_or_eod` walks, minus the EOD one — stored bars
+    exist only for catalog stocks, and the callers that ask this question are
+    precisely the ones handling symbols that have none. False therefore means
+    "every rung is empty": the UI can render nothing at all for this symbol.
+    """
+    with _CACHE_LOCK:
+        return (
+            ticker in _CACHE
+            or ticker in _LAST_LIVE
+            or ticker in _L2_SNAPSHOT
+        )
+
+
 def hydrate_l2_snapshots() -> int:
     """Load persisted snapshots into memory at boot so the first page load
     after a restart is served instantly instead of cold-fanning out to Yahoo."""

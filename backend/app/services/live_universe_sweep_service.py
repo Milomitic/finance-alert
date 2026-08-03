@@ -109,6 +109,7 @@ def _always_warm_symbols() -> tuple[str, ...]:
 def _warm_live_assets(
     batch_fn: Callable[[list[str]], dict[str, Any]],
     is_open: Callable[[str], bool],
+    has_value: Callable[[str], bool],
 ) -> None:
     """Keep a floor under the dashboard's first panel.
 
@@ -128,13 +129,27 @@ def _warm_live_assets(
     thing on the page. They are NOT passed to `record_quotes` — an index is
     not a "mover" and would pollute that list.
 
-    Still gated on `is_open`, which is the sweep's standing rule and one the
-    warm has no reason to break: once a session's quotes are cached and
-    flushed to L2 they remain the correct floor while the market is shut, so
-    fetching into a closed market would buy nothing and spend the Yahoo budget
-    that the rate-limiting incident taught us to respect.
+    Open markets are refreshed; a CLOSED one is fetched only when we hold
+    nothing for it at all.
+
+    The first version gated purely on `is_open`, reasoning that once a
+    session's quotes are flushed to L2 they stay the correct floor while the
+    market is shut. True — as long as they were ever warmed WHILE open. From
+    cold the rule excludes itself: a pod that starts after Milan and Shanghai
+    have closed never warms them, L2 has nothing, and those two rows stay
+    blank until the next session opens. That is exactly what shipped, and the
+    dashboard showed it precisely — every open market populated, and only
+    FTSE MIB and CSI 300 (the two closed ones without a futures pair) empty.
+
+    So the condition is open OR cold. A closed market's last price is the
+    right thing to display, it costs one request per symbol per process, and
+    once held the `has_any_value` check stops asking again.
     """
-    warm = [s for s in _always_warm_symbols() if is_open(s)]
+    warm = [
+        s
+        for s in _always_warm_symbols()
+        if is_open(s) or not has_value(s)
+    ]
     if not warm:
         return
     try:
@@ -149,6 +164,7 @@ def refresh_chunk(
     chunk_size: int | None = None,
     batch_fn: Callable[[list[str]], dict[str, Any]] | None = None,
     is_open: Callable[[str], bool] | None = None,
+    has_value: Callable[[str], bool] | None = None,
 ) -> int:
     """Sweep the next rotating chunk of the universe. Only open-market tickers
     are fetched. Returns the number of quotes staged. Seams (batch_fn/is_open)
@@ -165,8 +181,9 @@ def refresh_chunk(
         lambda tickers: live_quote_service.get_quotes_batch(tickers, deadline_seconds=None)
     )
     is_open = is_open or live_quote_service._is_market_open
+    has_value = has_value or live_quote_service.has_any_value
 
-    _warm_live_assets(batch_fn, is_open)
+    _warm_live_assets(batch_fn, is_open, has_value)
 
     tickers = [
         t for (t,) in db.execute(

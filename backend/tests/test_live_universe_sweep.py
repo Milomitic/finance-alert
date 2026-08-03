@@ -54,8 +54,15 @@ def test_refresh_chunk_no_open_tickers_no_fetch(db):
     def fake_batch(tickers):
         called["n"] += 1
         return {}
-    n = sweep.refresh_chunk(db, batch_fn=fake_batch, is_open=lambda t: False)
-    assert n == 0 and called["n"] == 0  # never hit yfinance when all closed
+    # Invariant refined 2026-08-03: "all closed" alone is no longer the whole
+    # condition. A closed market we hold NOTHING for is still fetched once, or
+    # its dashboard row can never fill (that shipped, and showed as FTSE MIB
+    # and CSI 300 sitting blank). Nothing open AND nothing missing is what
+    # genuinely warrants no upstream call.
+    n = sweep.refresh_chunk(
+        db, batch_fn=fake_batch, is_open=lambda t: False, has_value=lambda t: True,
+    )
+    assert n == 0 and called["n"] == 0  # never hit yfinance with nothing to gain
 
 
 def test_sweep_job_runs_intraday_price_eval_even_if_sweep_fails(monkeypatch):
@@ -119,3 +126,40 @@ def test_warmed_indices_are_not_staged_as_movers(db):
     movers = sweep.get_live_movers()
     rows = [r for side in ("gainers", "losers") for r in movers.get(side, [])]
     assert not [r for r in rows if str(r.get("ticker", "")).startswith("^")]
+
+
+def test_a_closed_market_is_warmed_when_we_hold_nothing_for_it(db):
+    """The gap the first version of the warm shipped with.
+
+    Gating purely on is_open assumed the symbol had been warmed earlier in the
+    session. From cold that assumption excludes itself: a pod starting after
+    Milan and Shanghai close never warms them, L2 holds nothing, and those two
+    rows stay blank until the next open. The dashboard showed exactly that —
+    every open market populated, only FTSE MIB and CSI 300 empty."""
+    db.add(Stock(ticker="US1", exchange="X", name="x", country="US"))
+    db.commit()
+    seen: list[str] = []
+    sweep.refresh_chunk(
+        db,
+        batch_fn=lambda tickers: (seen.extend(tickers), {})[1],
+        is_open=lambda t: False,           # everything shut
+        has_value=lambda t: False,         # and nothing held
+    )
+    assert "FTSEMIB.MI" in seen, "a closed market with no data must still be fetched once"
+    assert "000300.SS" in seen
+
+
+def test_a_closed_market_we_already_hold_is_left_alone(db):
+    """The other half: once a price is held, re-fetching a shut market buys
+    nothing and spends the Yahoo budget the rate-limiting incident taught us
+    to respect."""
+    db.add(Stock(ticker="US1", exchange="X", name="x", country="US"))
+    db.commit()
+    seen: list[str] = []
+    sweep.refresh_chunk(
+        db,
+        batch_fn=lambda tickers: (seen.extend(tickers), {})[1],
+        is_open=lambda t: False,
+        has_value=lambda t: True,          # already held
+    )
+    assert seen == [], "nothing is open and nothing is missing — no reason to fetch"
