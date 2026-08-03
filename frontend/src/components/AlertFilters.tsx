@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/select";
 import { SectionTitle } from "@/components/ui/section-title";
 import { PROBABILITA_TOOLTIP } from "@/lib/alertMeta";
+import { useIsPhone } from "@/hooks/useMediaQuery";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -148,6 +149,10 @@ function FilterChip({
 }
 
 export function AlertFilters({ value, onChange }: Props) {
+  const isPhone = useIsPhone();
+  // null = "the user has not decided", so the default can depend on whether
+  // anything is actually filtered.
+  const [manualOpen, setManualOpen] = useState<boolean | null>(null);
   // The standalone Ticker text-input lived here previously; it has been
   // folded into the AlertsTable's Stock column header so the filter
   // sits where the user is already looking. The Ticker filter chip
@@ -230,6 +235,15 @@ export function AlertFilters({ value, onChange }: Props) {
     (value.horizon ? 1 : 0) +
     (value.date_from || value.date_to ? 1 : 0);
 
+  // Nine controls in a grid cost an entire phone screen before the first
+  // signal is visible — and they are almost always all on "Tutti", so the
+  // reader scrolls past a wall of defaults to reach the content they came
+  // for. Collapsed by default on a phone, but only while nothing is filtered:
+  // hiding ACTIVE filters would leave a list mysteriously short with no
+  // visible reason. The count badge stays in the header either way, so the
+  // collapsed state still reports the truth.
+  const open = !isPhone || (manualOpen ?? activeCount > 0);
+
   return (
     <Card>
       <CardContent className="p-4 space-y-3">
@@ -238,6 +252,17 @@ export function AlertFilters({ value, onChange }: Props) {
           label="Filtri"
           right={
             <div className="flex items-center gap-2">
+              {isPhone && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setManualOpen(!open)}
+                  className="h-7 text-xs"
+                  aria-expanded={open}
+                >
+                  {open ? "Nascondi" : "Mostra"}
+                </Button>
+              )}
               {activeCount > 0 && (
                 <span className="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-primary text-primary-foreground text-[11px] font-bold tabular-nums">
                   {activeCount}
@@ -257,7 +282,7 @@ export function AlertFilters({ value, onChange }: Props) {
             short — was a tall vertical stack. Wraps to 2-5 cols on narrow
             viewports, single row on xl+ (9 controls since Esito + Orizzonte
             landed). */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-9 gap-3">
+        <div className={cn("grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-9 gap-3", !open && "hidden")}>
         <div>
           <Label className="text-xs uppercase tracking-wider text-muted-foreground">
             Archivio
