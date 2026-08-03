@@ -189,3 +189,68 @@ def test_different_tickers_are_not_serialised() -> None:
         release.set()
         time.sleep(0.1)
         importlib.reload(live_quote_service)
+
+
+def test_a_follower_never_waits_past_the_callers_deadline():
+    """The inversion that made the dashboard's index panel permanently empty.
+
+    Single-flight shipped with a fixed 8s follower wait while the batch path
+    gives up at 6s, so a follower could not possibly contribute: the batch
+    abandoned it two seconds before it would have stopped waiting. Whenever an
+    upstream fetch outlasts the poll interval — 43-50s measured under Yahoo
+    rate-limiting against a 15s dashboard poll — every later poll became a
+    follower and the panel never filled."""
+    import threading
+    import time as _time
+
+    live_quote_service.clear_cache()
+    started = threading.Event()
+    release = threading.Event()
+
+    def slow_fetch(ticker, **kw):
+        started.set()
+        release.wait(10.0)        # held open until the assertion is made
+        return LiveQuote(ticker=ticker, price=1.0, prev_close=1.0,
+                         currency="USD", market_state="OPEN",
+                         fetched_at=_time.time(), as_of_date="2026-08-03")
+
+    original = live_quote_service._fetch_fresh
+    live_quote_service._fetch_fresh = slow_fetch
+    leader = threading.Thread(
+        target=lambda: live_quote_service.get_quote("AAPL"), daemon=True
+    )
+    try:
+        leader.start()
+        assert started.wait(2.0), "leader did not start"
+
+        t0 = _time.time()
+        live_quote_service.get_quote("AAPL", wait_budget=0.3)
+        waited = _time.time() - t0
+    finally:
+        # Let the leader finish and JOIN it before restoring the seam. Leaving
+        # it in flight lets it write its price into the cache midway through
+        # the next test — the pollution is timing-dependent, so it shows up as
+        # a failure that vanishes when the test is run alone.
+        release.set()
+        leader.join(timeout=5.0)
+        live_quote_service._fetch_fresh = original
+        live_quote_service.clear_cache()
+
+    assert waited < 2.0, (
+        f"follower waited {waited:.1f}s despite a 0.3s budget — it would be "
+        "abandoned by its caller before ever returning"
+    )
+
+
+def test_without_a_budget_the_follower_keeps_the_generous_default():
+    """Single-quote callers have no deadline, so coalescing should still buy
+    them the leader's result rather than a stale one."""
+    live_quote_service.clear_cache()
+    original = live_quote_service._fetch_fresh
+    live_quote_service._fetch_fresh = lambda ticker, **kw: LiveQuote(
+        ticker=ticker, price=42.0, prev_close=40.0, currency="USD",
+        market_state="OPEN", fetched_at=time.time(), as_of_date="2026-08-03")
+    try:
+        assert live_quote_service.get_quote("AAPL").price == 42.0
+    finally:
+        live_quote_service._fetch_fresh = original

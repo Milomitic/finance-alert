@@ -87,6 +87,62 @@ def get_live_movers(top_n: int | None = None) -> dict[str, Any]:
     return {"gainers": _fmt(gainers), "losers": _fmt(losers), "swept": len(fresh)}
 
 
+_ALWAYS_WARM: tuple[str, ...] | None = None
+
+
+def _always_warm_symbols() -> tuple[str, ...]:
+    """The dashboard's indices / commodities / crypto, plus their futures pairs.
+
+    Lazy import on purpose: the list lives in the API layer because it carries
+    display metadata (name, flag, category), and importing it at module level
+    here would invert the service → api dependency at load time."""
+    global _ALWAYS_WARM
+    if _ALWAYS_WARM is None:
+        from app.api.market import LIVE_ASSET_DEFINITIONS
+
+        syms = [d[0] for d in LIVE_ASSET_DEFINITIONS]
+        syms += [d[4] for d in LIVE_ASSET_DEFINITIONS if d[4]]
+        _ALWAYS_WARM = tuple(dict.fromkeys(syms))
+    return _ALWAYS_WARM
+
+
+def _warm_live_assets(
+    batch_fn: Callable[[list[str]], dict[str, Any]],
+    is_open: Callable[[str], bool],
+) -> None:
+    """Keep a floor under the dashboard's first panel.
+
+    These symbols are deliberately absent from the `Stock` catalog — they are
+    not equities the user follows — so the rotation below never reaches them.
+    They also have no rows in `ohlcv_daily`. The consequence is that EVERY rung
+    of the live-quote fallback ladder is empty for them: no warm cache, no
+    last-good, no L2 snapshot, no EOD close. When a live fetch misses the
+    interactive deadline there is simply nothing to show, and the panel renders
+    "—" for all of them at once — which is exactly what it did.
+
+    Warming them here fixes that at the source: the sweep runs on the
+    background pool with no deadline, so it lands the quotes that the
+    user-facing path can then serve instantly or fall back to.
+
+    Every tick, not on the rotation: it is ~18 symbols, and they are the first
+    thing on the page. They are NOT passed to `record_quotes` — an index is
+    not a "mover" and would pollute that list.
+
+    Still gated on `is_open`, which is the sweep's standing rule and one the
+    warm has no reason to break: once a session's quotes are cached and
+    flushed to L2 they remain the correct floor while the market is shut, so
+    fetching into a closed market would buy nothing and spend the Yahoo budget
+    that the rate-limiting incident taught us to respect.
+    """
+    warm = [s for s in _always_warm_symbols() if is_open(s)]
+    if not warm:
+        return
+    try:
+        batch_fn(warm)
+    except Exception as exc:  # noqa: BLE001 — never break the sweep or scheduler
+        logger.warning(f"[live-sweep] live-asset warm failed: {exc}")
+
+
 def refresh_chunk(
     db: Session,
     *,
@@ -109,6 +165,8 @@ def refresh_chunk(
         lambda tickers: live_quote_service.get_quotes_batch(tickers, deadline_seconds=None)
     )
     is_open = is_open or live_quote_service._is_market_open
+
+    _warm_live_assets(batch_fn, is_open)
 
     tickers = [
         t for (t,) in db.execute(

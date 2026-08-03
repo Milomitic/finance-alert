@@ -75,3 +75,47 @@ def test_sweep_job_runs_intraday_price_eval_even_if_sweep_fails(monkeypatch):
     )
     job.run_live_universe_sweep()  # must not raise
     assert called["n"] == 1
+
+
+def test_the_dashboard_indices_are_warmed_even_though_they_are_not_in_the_catalog(db):
+    """The gap that made the dashboard's first panel render "—" for all 18
+    rows at once.
+
+    Indices, commodities and crypto are deliberately absent from the `Stock`
+    catalog, so the rotation never reaches them, and they have no rows in
+    `ohlcv_daily` either. Every rung of the live-quote fallback ladder is
+    therefore empty for them — no warm cache, no last-good, no L2 snapshot, no
+    EOD close — and a live fetch that misses the interactive deadline leaves
+    literally nothing to show. The sweep is the only place that can put a
+    floor under them."""
+    db.add(Stock(ticker="US1", exchange="X", name="x", country="US"))
+    db.commit()
+    seen: list[list[str]] = []
+
+    def fake_batch(tickers):
+        seen.append(list(tickers))
+        return {}
+
+    sweep.refresh_chunk(db, batch_fn=fake_batch, is_open=lambda t: True)
+
+    warmed = {s for call in seen for s in call}
+    assert "^GSPC" in warmed, "the S&P index must be warmed by the sweep"
+    assert "BTC-USD" in warmed
+    assert "ES=F" in warmed, "the futures pair is what the panel swaps to after hours"
+
+
+def test_warmed_indices_are_not_staged_as_movers(db):
+    """An index is not a mover. Warming must not leak into that list."""
+    db.add(Stock(ticker="US1", exchange="X", name="x", country="US"))
+    db.commit()
+    sweep.refresh_chunk(
+        db,
+        batch_fn=lambda tickers: {
+            t: type("Q", (), {"price": 1.0, "change_pct": 1.0, "error": None})()
+            for t in tickers
+        },
+        is_open=lambda t: True,
+    )
+    movers = sweep.get_live_movers()
+    rows = [r for side in ("gainers", "losers") for r in movers.get(side, [])]
+    assert not [r for r in rows if str(r.get("ticker", "")).startswith("^")]

@@ -827,6 +827,7 @@ def _is_live_quote(q: LiveQuote) -> bool:
 
 def get_quote(
     ticker: str, *, force_refresh: bool = False, allow_remote_today_fetch: bool = True,
+    wait_budget: float | None = None,
 ) -> LiveQuote:
     """Cached single-ticker quote (TTL 10s). Force-refresh bypasses cache.
     `allow_remote_today_fetch=False` (used by the batch path) skips the
@@ -858,8 +859,19 @@ def get_quote(
         # Wait for the leader, then read what it stored. On timeout fall
         # through to the warm ladder rather than starting a duplicate fetch:
         # if the leader is that slow, a second request will not be faster.
+        #
+        # The wait is capped by the CALLER's budget, never only by the module
+        # constant. Shipping this with a fixed 8s while the batch path gives up
+        # at 6 meant a follower could never contribute: the batch abandoned it
+        # two seconds before it would have stopped waiting, so every overlapping
+        # poll produced nothing. Whenever the fetch is slower than the poll
+        # interval — measured at 43-50s under Yahoo rate-limiting against a 15s
+        # dashboard poll — that state is self-sustaining.
         assert waiter is not None
-        waiter.wait(_INFLIGHT_WAIT_SECONDS)
+        budget = _INFLIGHT_WAIT_SECONDS
+        if wait_budget is not None:
+            budget = max(0.0, min(budget, wait_budget))
+        waiter.wait(budget)
         with _CACHE_LOCK:
             cached = _CACHE.get(ticker)
         if cached is not None and (time.time() - cached.fetched_at) < _TTL_SECONDS:
@@ -1061,8 +1073,14 @@ def get_quotes_batch(
     # the close). The in-memory intraday tick covers the displayed names
     # (they were polled while OPEN); single-quote views still fetch the
     # official bar.
+    # wait_budget: a follower inside this batch must never outlive the batch's
+    # own deadline — see the note in get_quote. Passing it here is what keeps
+    # the two bounds from inverting when either constant is retuned.
     futures = {
-        _pool().submit(get_quote, t, allow_remote_today_fetch=False): t
+        _pool().submit(
+            get_quote, t, allow_remote_today_fetch=False,
+            wait_budget=deadline_seconds,
+        ): t
         for t in misses
     }
     deadline = None if deadline_seconds is None else time.time() + deadline_seconds
