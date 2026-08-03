@@ -83,4 +83,4 @@ scripts/.env
 # Conditional-screen intermediate: one row per replayed signal (tens of MB,
 # fully regenerable by app.scripts.conditional_screen_replay). The REPORT it
 # produces is small and IS committed — the rows are not.
-backend/app/data/conditional_screen_rows*.csv.gz
+backend/app/data/conditional_screen_*.csv.gz
