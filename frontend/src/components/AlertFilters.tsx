@@ -25,7 +25,10 @@ interface Props {
 
 // Archive axis only — read/unread was removed from the UI in a prior pass.
 const STATUS_OPTIONS: { value: string; label: string }[] = [
-  { value: "active", label: "Tutti (esclusi archiviati)" },
+  // The select is half the grid width on a phone, where the parenthetical
+  // was sliced to "Tutti (esclusi arch". "Attivi" says the same thing in
+  // a word — the archived option sits right below it for contrast.
+  { value: "active", label: "Attivi" },
   { value: "archived", label: "Solo archiviati" },
 ];
 

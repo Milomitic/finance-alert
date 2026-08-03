@@ -6,6 +6,7 @@ import { StockLogo } from "@/components/dashboard/StockLogo";
 import { Card, CardContent } from "@/components/ui/card";
 import { SectionTitle } from "@/components/ui/section-title";
 import { getAlertKindMeta } from "@/lib/alertMeta";
+import { useIsPhone } from "@/hooks/useMediaQuery";
 import { cn } from "@/lib/utils";
 
 /* ─── AlertsInsightCard ──────────────────────────────────────────────────
@@ -314,9 +315,13 @@ function DetectorMix({ clusters }: { clusters: Confluence[] }) {
         const meta = getAlertKindMeta(kind);
         const Icon = meta.icon;
         return (
-          <div key={kind} className="flex items-center gap-2 text-[13px]">
+          <div key={kind} className="flex flex-wrap sm:flex-nowrap items-center gap-x-2 gap-y-0.5 text-[13px]">
             <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-            <span className="w-28 shrink-0 truncate" title={meta.label}>{meta.label}</span>
+            {/* w-28 (7rem) cannot hold "Massimo 52 settimane" or
+                "Squeeze + Espansione". Below sm the name takes the full
+                width and the bar moves under it, so the label is readable
+                instead of guessable. */}
+            <span className="w-full sm:w-28 shrink-0 truncate" title={meta.label}>{meta.label}</span>
             <div className="flex-1 h-2 rounded-full bg-muted/70 overflow-hidden">
               <div className="h-full rounded-full bg-sky-400 dark:bg-sky-500" style={{ width: `${(n / max) * 100}%` }} />
             </div>
@@ -339,6 +344,7 @@ export function AlertsInsightCard({
    *  the alerts table below (SEG-1 audit: rows were dead ends). */
   onTickerSelect?: (ticker: string) => void;
 }) {
+  const isPhone = useIsPhone();
   const top10 = clusters.slice(0, 10);
   const bull = clusters.filter((c) => c.direction === "bull");
   const bear = clusters.filter((c) => c.direction === "bear");
@@ -413,9 +419,9 @@ export function AlertsInsightCard({
                 </div>
 
                 <div className="grid grid-cols-3 gap-2">
-                  <StatCell icon={Layers} label="Multi-orizz." value={String(multiH)} tone={multiH > 0 ? "text-indigo-600 dark:text-indigo-400" : undefined} />
+                  <StatCell icon={Layers} label={isPhone ? "Multi-orizz." : "Multi-orizzonte"} value={String(multiH)} tone={multiH > 0 ? "text-indigo-600 dark:text-indigo-400" : undefined} />
                   <StatCell icon={Swords} label="Contese" value={String(contested)} tone={contested > 0 ? "text-amber-600 dark:text-amber-400" : undefined} />
-                  <StatCell icon={Gauge} label="Forza media" value={String(avgStrength)} />
+                  <StatCell icon={Gauge} label={isPhone ? "Forza med." : "Forza media"} value={String(avgStrength)} />
                 </div>
 
                 {/* Horizon mix + detector mix — two columns on the same row. */}
