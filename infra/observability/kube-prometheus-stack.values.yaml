@@ -64,19 +64,27 @@ grafana:
   # Loki datasource is NOT added here: loki-stack ships its own labelled
   # ConfigMap that Grafana's sidecar auto-loads. Adding it here too created a
   # duplicate "Loki" that made provisioning skip both.
-  # 192Mi → 384Mi (2026-08-03). The old ceiling held at idle and gave way the
-  # moment the UI was used: Grafana went 503 ("no available server" from
-  # Traefik — no healthy backend) right after someone opened Administration →
-  # Service accounts. Grafana 11 plus the datasource sidecar sits around
-  # 150-250Mi once a browser session and a datasource query are in flight, so
-  # 192 was a limit that only ever worked while nobody looked at it.
+  # 192Mi → 512Mi (2026-08-03), in two steps and the second one matters more
+  # than the first.
   #
-  # Affordable: the node is 2 OCPU / 12 GB at ~46% — this is under 2% of RAM.
-  # Sized to the observed working set rather than doubled blindly; if it OOMs
-  # again the answer is a measurement, not another doubling.
+  # 192 held at idle and collapsed the moment the UI was touched: Grafana went
+  # 503 ("no available server" from Traefik — a real route with no healthy
+  # backend) right after the admin UI was opened. Raised to 384 on the strength
+  # of typical Grafana-11 figures. It then died AGAIN, on the login page alone.
+  #
+  # That second failure is the informative one. Dying under a dashboard load
+  # would mean the ceiling was somewhat low; dying on login means it was below
+  # the cost of merely existing, and that my 384 was an estimate dressed as a
+  # measurement. 512 is still an estimate — `kubectl top pod` against a real
+  # session is what turns it into a number, and this should be set from that.
+  #
+  # The asymmetry justifies erring high: the node is 2 OCPU / 12 GB at ~46%, so
+  # 512Mi is ~4% of RAM and costs nothing, while being wrong the other way
+  # takes the whole observability stack down — which is precisely when it is
+  # needed.
   resources:
-    requests: { cpu: 20m, memory: 96Mi }
-    limits: { memory: 384Mi }
+    requests: { cpu: 20m, memory: 128Mi }
+    limits: { memory: 512Mi }
   persistence:
     enabled: true
     storageClassName: local-path
