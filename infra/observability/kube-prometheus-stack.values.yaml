@@ -83,8 +83,23 @@ grafana:
   # takes the whole observability stack down — which is precisely when it is
   # needed.
   resources:
-    requests: { cpu: 20m, memory: 128Mi }
+    requests: { cpu: 50m, memory: 128Mi }
     limits: { memory: 512Mi }
+
+  # The chart ships readiness with timeoutSeconds: 1. Grafana's /api/health
+  # touches its SQLite store, so one second is a bar it clears only on a good
+  # day — the pod logged 78 readiness failures over 17 days. Each failure pulls
+  # it out of the Service endpoints, and Traefik then answers 503 "no available
+  # server" for a container that is running perfectly well.
+  #
+  # Exactly the failure the app hit earlier the same day: a health endpoint
+  # that occasionally takes longer than a default probe allows. Same remedy,
+  # 5s and a little more tolerance before declaring death.
+  readinessProbe:
+    httpGet: { path: /api/health, port: 3000 }
+    timeoutSeconds: 5
+    failureThreshold: 5
+    periodSeconds: 10
   persistence:
     enabled: true
     storageClassName: local-path
