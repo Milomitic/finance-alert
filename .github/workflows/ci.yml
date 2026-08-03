@@ -126,9 +126,18 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: npm audit (frontend)
+      # `npm audit --audit-level=high` cannot say "read it, does not apply
+      # here", so one unfixable advisory pins this red forever — and a
+      # permanently red pipeline is an ignored one. It already cost us: a
+      # genuinely broken backend gate went unnoticed among the usual red.
+      # The gate below audits the PRODUCTION tree only (the build toolchain
+      # never ships) and fails on anything not carrying a written reason and
+      # a review date in security/audit-allowlist.json.
+      - name: npm audit gate (production tree, reviewed exceptions)
         working-directory: frontend
-        run: npm audit --audit-level=high
+        run: |
+          npm audit --json --omit=dev > /tmp/npm-audit.json || true
+          node security/audit-gate.mjs /tmp/npm-audit.json
 
   image:
     name: arm64 image → GHCR

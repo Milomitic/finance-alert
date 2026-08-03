@@ -1,0 +1,21 @@
+{
+  "$comment": [
+    "Advisories that have been READ and judged not to apply to this app.",
+    "Not a mute button: audit-gate.mjs fails on anything not listed here, and",
+    "ALSO fails once an entry is past `review_by`. An exception that never",
+    "expires is how a security gate turns into decoration.",
+    "",
+    "Adding an entry means: you opened the advisory, you can say why this",
+    "codebase is not exposed, and you named a date to look again. If you",
+    "cannot write the `reason` without hedging, upgrade instead."
+  ],
+  "allow": [
+    {
+      "id": "GHSA-qwww-vcr4-c8h2",
+      "package": "react-router",
+      "title": "RSC Mode CSRF Bypass Allows Action Execution Before 400 Response",
+      "reason": "The advisory is specific to React Server Components mode: the bypass lets a server action run before the framework returns 400. This app is a Vite SPA — react-router-dom is used purely for client-side routing, there is no RSC runtime, no server actions and no loader/action server, so the vulnerable code path does not exist in the shipped bundle. There is also no forward fix: the affected range is 7.12.0-8.2.0 and the current release (7.18.2) sits inside it, so npm's suggested remedy is a DOWNGRADE to 7.11.0 — trading a real routing regression for an advisory that cannot fire here.",
+      "review_by": "2026-11-01"
+    }
+  ]
+}

@@ -65,6 +65,40 @@ COPY backend/pyproject.toml backend/uv.lock ./
 #   not an installed package.
 RUN uv sync --frozen --no-dev --no-install-project
 
+# Drop the SYSTEM interpreter's packaging tools. Not a cosmetic cleanup: they
+# were the only findings in the image scan, and this removes them rather than
+# excusing them.
+#
+# python:3.11-slim ships pip + setuptools in /usr/local, and setuptools carries
+# its own vendored copies of jaraco.context and wheel. Those two vendored
+# copies — not the app's dependencies, which trivy reports clean — are what
+# turned the scan red (CVE-2026-23949, CVE-2026-24049). Note the standalone
+# `wheel` in the same image is already patched; only the copy buried inside
+# setuptools/_vendor lags, and no base-image update can fix it faster than
+# simply not shipping it.
+#
+# Safe by construction: the app runs from /app/backend/.venv, and a uv-created
+# venv does not include the system site-packages, so nothing on the runtime
+# path can import any of this today. `uv` itself needs none of it either — it
+# is a static binary. What remains is a container with no package installer in
+# it, which is where a runtime container should have been all along.
+RUN python -m pip uninstall -y pip setuptools wheel 2>/dev/null || true; \
+    rm -rf /usr/local/lib/python3.11/site-packages/pip \
+           /usr/local/lib/python3.11/site-packages/pip-*.dist-info \
+           /usr/local/lib/python3.11/site-packages/setuptools \
+           /usr/local/lib/python3.11/site-packages/setuptools-*.dist-info \
+           /usr/local/lib/python3.11/site-packages/pkg_resources \
+           /usr/local/lib/python3.11/site-packages/wheel \
+           /usr/local/lib/python3.11/site-packages/wheel-*.dist-info \
+           /usr/local/bin/pip /usr/local/bin/pip3 /usr/local/bin/pip3.11
+
+# The app must still start with the packaging tools gone. Importing the
+# entrypoint is the cheapest honest proof: it pulls the whole dependency graph,
+# so a package that secretly needed pkg_resources fails the BUILD instead of
+# the first request after a deploy.
+RUN python -c "import uvicorn, alembic, fastapi, sqlalchemy, pandas, yfinance" \
+ && echo "runtime imports OK without pip/setuptools"
+
 # Application code + migrations. tests/ and data/ are excluded by
 # .dockerignore — runtime state NEVER ships inside an image.
 COPY backend/alembic.ini ./
