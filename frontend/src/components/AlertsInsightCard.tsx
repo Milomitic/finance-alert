@@ -79,7 +79,11 @@ function StrengthBar({ value, bull, width = "w-16" }: { value: number; bull: boo
  *  the columns line up (the Titolo cell is flex-1 in both). */
 function TopHeader() {
   return (
-    <div className="flex items-center gap-2 px-2 pb-1.5 mb-1 border-b border-border/40 text-[10px] uppercase tracking-wider text-muted-foreground/70 font-semibold">
+    // Hidden below sm: the phone layout stacks each row over two lines, so
+    // there are no columns left for a header to label. Kept visible would
+    // have printed "TITONO" — the labels themselves overlapping, which is
+    // how this bug announced itself in the first place.
+    <div className="hidden sm:flex items-center gap-2 px-2 pb-1.5 mb-1 border-b border-border/40 text-[10px] uppercase tracking-wider text-muted-foreground/70 font-semibold">
       <span className="w-4 shrink-0" />
       <span className="flex-1 min-w-0">Titolo</span>
       <span className="w-[4.25rem] shrink-0">Tono</span>
@@ -123,13 +127,25 @@ function TopRow({
             onSelect?.(c.ticker);
           }
         }}
-        className="flex items-center gap-2 px-2 py-1 rounded-md hover:bg-accent/50 transition-colors min-w-0 cursor-pointer"
+        // Seven fixed columns — 1 + 4.25 + 3 + 2.25 + 2 + 5.25rem plus six
+        // gaps and the padding — come to roughly 370px at this root size.
+        // A 375px phone has about 330 once page and card padding are taken,
+        // so the fixed cells alone overflowed BEFORE the flex-1 title got
+        // anything: it collapsed to zero width and its ticker painted over
+        // the neighbouring columns. The header gave it away by rendering
+        // "TITONO".
+        //
+        // Below sm the row wraps into two lines instead. `sm:contents` on the
+        // meta group is what keeps the desktop layout byte-identical: at sm
+        // and up the wrapper stops generating a box and its children rejoin
+        // the parent flex exactly as before.
+        className="flex flex-wrap sm:flex-nowrap items-center gap-x-2 gap-y-1 px-2 py-1 rounded-md hover:bg-accent/50 transition-colors min-w-0 cursor-pointer"
         title={`${c.name ?? c.ticker} · forza confluenza ${pct} · forza max ${maxForza ?? "—"} · ${c.n_signals} segnali${c.effective_n != null ? ` (${c.effective_n} indip.)` : ""}${c.multi_horizon ? " · multi-orizzonte" : ""}${c.contested ? " · conteso" : ""} — clic per filtrare la tabella`}
       >
         <span className="w-4 shrink-0 text-right text-xs font-mono tabular-nums text-muted-foreground/60">{rank}</span>
         {/* Titolo — logo + ticker + name in ONE flex-1 cell so the meta columns
             align with the header. */}
-        <div className="flex-1 min-w-0 flex items-center gap-2">
+        <div className="min-w-0 flex-1 basis-[calc(100%-1.5rem)] sm:basis-auto flex items-center gap-2">
           <StockLogo ticker={c.ticker} size="xs" />
           <div className="min-w-0">
             <Link
@@ -145,6 +161,10 @@ function TopRow({
             )}
           </div>
         </div>
+        {/* Meta columns: a full second line on a phone, and at sm+
+            `contents` dissolves this wrapper so the original
+            seven-column row is preserved exactly. */}
+        <div className="flex w-full items-center gap-2 pl-6 sm:pl-0 sm:w-auto sm:contents">
         {/* Tono (+ contested flag + bull multi-horizon conviction) */}
         <div className="w-[4.25rem] shrink-0 flex items-center gap-1">
           <DirPill direction={c.direction} />
@@ -171,6 +191,7 @@ function TopRow({
         <div className="w-[5.25rem] shrink-0 flex items-center justify-end gap-1.5">
           <StrengthBar value={pct} bull={bull} width="w-12" />
           <span className="text-sm font-semibold tabular-nums w-7 text-right">{pct}</span>
+        </div>
         </div>
       </div>
     </li>
