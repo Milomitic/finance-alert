@@ -25,6 +25,23 @@ class Settings(BaseSettings):
 
     app_env: str = "development"
     database_url: str = "sqlite:///./data/app.db"
+    # Connection pool (Postgres only — SQLite keeps SQLAlchemy's defaults).
+    #
+    # SQLAlchemy's own defaults are 5 + 10 overflow = 15, and production ran on
+    # them until a QueuePool timeout surfaced in the logs as a 500. Fifteen is
+    # not enough here for a reason that is not about database load: every
+    # endpoint is a sync `def`, so it runs in AnyIO's threadpool and holds its
+    # connection for the WHOLE request — including the seconds spent waiting on
+    # yfinance, measured at 43-50s while rate-limited. The connection is idle
+    # for that entire wait and still reserved.
+    #
+    # Sized against the real ceiling rather than guessed: Postgres allows 50,
+    # so 35 for the app leaves ~15 for CloudNativePG's own management
+    # connections, backups, monitoring and a psql session. Tunable by env so a
+    # future change needs no redeploy of code.
+    db_pool_size: int = 20
+    db_max_overflow: int = 15
+    db_pool_timeout_seconds: int = 30
     secret_key: str = Field(default="")
     session_cookie_name: str = "finance_alert_session"
     session_max_age_days: int = 7

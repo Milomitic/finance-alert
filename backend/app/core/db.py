@@ -9,10 +9,33 @@ class Base(DeclarativeBase):
     pass
 
 
+_IS_SQLITE = settings.database_url.startswith("sqlite")
+
+# Pool tuning applies to Postgres only. SQLite is single-writer and local, so
+# a bigger pool buys nothing there and would change every test's behaviour for
+# no reason.
+_pool_kwargs: dict = {}
+if not _IS_SQLITE:
+    _pool_kwargs = {
+        "pool_size": settings.db_pool_size,
+        "max_overflow": settings.db_max_overflow,
+        "pool_timeout": settings.db_pool_timeout_seconds,
+        # CloudNativePG can fail the instance over, and a pooled connection to
+        # the old primary then looks fine until it is used. pre_ping spends one
+        # trivial round-trip to find out first — far cheaper than surfacing a
+        # dead connection as a 500 to the user.
+        "pool_pre_ping": True,
+        # Recycle before anything upstream (Postgres idle timeouts, a k8s
+        # NetworkPolicy conntrack entry) decides to drop a long-idle socket
+        # without telling us.
+        "pool_recycle": 1800,
+    }
+
 engine = create_engine(
     settings.database_url,
     echo=False,
-    connect_args={"check_same_thread": False} if settings.database_url.startswith("sqlite") else {},
+    connect_args={"check_same_thread": False} if _IS_SQLITE else {},
+    **_pool_kwargs,
 )
 
 
