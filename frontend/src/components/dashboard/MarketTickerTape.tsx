@@ -1,6 +1,7 @@
 import { ArrowDown, ArrowUp } from "lucide-react";
 import { Link } from "react-router-dom";
 
+import { NoValue, hasValue } from "@/components/ui/no-value";
 import { useLiveAssets, type LiveAsset } from "@/hooks/useLiveAssets";
 import { cn } from "@/lib/utils";
 
@@ -31,8 +32,15 @@ function fmtPrice(v: number | null | undefined): string {
   return v.toFixed(4);
 }
 
-function fmtPct(v: number | null | undefined): string {
-  if (v == null || !Number.isFinite(v)) return "0.00%";
+/* Returns null when there is no number — the caller renders <NoValue/>.
+ *
+ * This used to return "0.00%", and that was the bug behind "the whole ticker
+ * is empty": it was not empty, it was FABRICATED. Every index read
+ * "Nasdaq 0.00%", which does not say "no data" — it says "the index did not
+ * move", a specific and false claim, delivered with the same confidence as a
+ * real quote. A missing value must look missing. */
+function fmtPct(v: number | null | undefined): string | null {
+  if (!hasValue(v)) return null;
   const sign = v >= 0 ? "+" : "";
   return `${sign}${v.toFixed(2)}%`;
 }
@@ -57,6 +65,14 @@ function TickerItem({ asset }: { asset: LiveAsset }) {
     : changePct < 0
     ? ArrowDown
     : null;
+
+  const pct = fmtPct(changePct);
+  // Say WHY it is missing. The upstream error is the most useful answer when
+  // there is one; otherwise the honest statement is that the quote has not
+  // arrived, not a guess at the cause.
+  const unavailableHint = q?.error
+    ? `${asset.name}: quotazione non disponibile (${q.error})`
+    : `${asset.name}: quotazione non ancora ricevuta`;
 
   // Each tile is a Link to the MarketDetailPage for that symbol —
   // same routing convention as LiveAssetsPanel uses. The hover-pause
@@ -93,7 +109,7 @@ function TickerItem({ asset }: { asset: LiveAsset }) {
         {asset.name}
       </span>
       <span className="font-mono text-sm tabular-nums text-foreground/85">
-        {fmtPrice(price)}
+        {hasValue(price) ? fmtPrice(price) : <NoValue hint={unavailableHint} />}
       </span>
       <span
         className={cn(
@@ -102,7 +118,7 @@ function TickerItem({ asset }: { asset: LiveAsset }) {
         )}
       >
         {ArrowIcon && <ArrowIcon className="h-3.5 w-3.5" />}
-        {fmtPct(changePct)}
+        {pct ?? <NoValue hint={unavailableHint} />}
       </span>
     </Link>
   );

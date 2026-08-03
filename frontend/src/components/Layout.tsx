@@ -24,6 +24,7 @@ import { ScoreRecomputeToast } from "@/components/ScoreRecomputeToast";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
+import { InitialLoadBar } from "@/components/ui/initial-load-bar";
 import { Separator } from "@/components/ui/separator";
 import { useLogout, useMe } from "@/hooks/useAuth";
 import { useTheme, type Theme } from "@/hooks/useTheme";
@@ -374,6 +375,10 @@ export default function Layout() {
             <span className="hidden sm:inline">Esci</span>
           </Button>
         </header>
+        {/* Mounted once, above the route content: any page that is still
+            filling in for the first time gets the same signal, and nothing
+            has to remember to add one. */}
+        <InitialLoadBar />
         <main className="flex-1 min-w-0 overflow-y-auto p-3 sm:p-6">
           <Outlet />
         </main>

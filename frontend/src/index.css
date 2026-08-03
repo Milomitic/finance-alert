@@ -252,3 +252,31 @@
     max-height: none;
   }
 }
+
+/* Indeterminate sweep for InitialLoadBar. Travels the full width and comes
+ * back, so the motion reads as "work in progress" without implying a
+ * percentage — we do not know how long an upstream fetch will take, and a
+ * fabricated progress figure is the same kind of lie as a fabricated price.
+ *
+ * A named class rather than a Tailwind arbitrary value: the reduced-motion
+ * override below has to select it, and escaping `animate-[loadbar_1.1s_...]`
+ * in a media query is brittle enough that it would break silently. */
+@keyframes loadbar {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(400%); }
+}
+.loadbar-sweep {
+  animation: loadbar 1.1s ease-in-out infinite;
+  will-change: transform;
+}
+
+/* A user who asked the OS for less motion still needs to know data is on its
+ * way, so the bar stays — it just stops moving, rather than disappearing and
+ * taking the only signal with it. */
+@media (prefers-reduced-motion: reduce) {
+  .loadbar-sweep {
+    animation: none;
+    width: 100%;
+    opacity: 0.55;
+  }
+}

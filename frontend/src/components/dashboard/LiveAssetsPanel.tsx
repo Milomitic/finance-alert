@@ -14,6 +14,7 @@ import { Link } from "react-router-dom";
 import { Sparkline } from "@/components/dashboard/Sparkline";
 import { Card, CardContent } from "@/components/ui/card";
 import { FlashValue } from "@/components/ui/FlashValue";
+import { NoValue, hasValue } from "@/components/ui/no-value";
 import { SectionTitle } from "@/components/ui/section-title";
 import {
   Tooltip,
@@ -245,7 +246,13 @@ function AssetRow({ asset }: { asset: LiveAsset }) {
             changeColor(changePct),
           )}
         >
-          {fmtPct(changePct)}
+          {hasValue(changePct) ? (
+            fmtPct(changePct)
+          ) : (
+            // The price beside this already explains itself through its own
+            // tooltip; the variation was the one cell still saying nothing.
+            <NoValue hint={q?.error ?? "Variazione non disponibile"} />
+          )}
         </span>
       </div>
       </Link>
