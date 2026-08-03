@@ -171,18 +171,27 @@ function RegionRow({ region, byIndex, parentFg }: { region: RegionDef; byIndex: 
       )}
       <span className={cn("text-sm font-bold shrink-0", parentFg)}>{region.label}</span>
       <MoodDot mood={m.mood} />
-      <span className={cn("text-xs tabular-nums shrink-0", parentFg, "opacity-80")} title={ACRONYM_HELP.EMA200}>
-        <strong>{m.pct_above_ema200.toFixed(0)}%</strong>
-        <span className="opacity-60 ml-0.5">EMA200</span>
+      {/* The three readings travel together. Loose in the parent they were
+          three independent wrap candidates, and on a phone the change% lost:
+          it broke to a line of its own, detached from the region it belongs
+          to, reading as a rendering fault rather than as a number. */}
+      <span className="flex items-center gap-x-2.5 shrink-0">
+        <span className={cn("text-xs tabular-nums", parentFg, "opacity-80")} title={ACRONYM_HELP.EMA200}>
+          <strong>{m.pct_above_ema200.toFixed(0)}%</strong>
+          <span className="opacity-60 ml-0.5">EMA200</span>
+        </span>
+        <span className={cn("text-xs tabular-nums", parentFg, "opacity-80")} title={ACRONYM_HELP.AD_RATIO}>
+          <strong>{m.advancers}/{m.decliners}</strong>
+          <span className="opacity-60 ml-0.5">A/D</span>
+        </span>
+        <span className={cn("text-sm tabular-nums font-bold", changeColor)} title={ACRONYM_HELP.AVG_CHANGE}>
+          {m.avg_change >= 0 ? "+" : ""}{m.avg_change.toFixed(2)}%
+        </span>
       </span>
-      <span className={cn("text-xs tabular-nums shrink-0", parentFg, "opacity-80")} title={ACRONYM_HELP.AD_RATIO}>
-        <strong>{m.advancers}/{m.decliners}</strong>
-        <span className="opacity-60 ml-0.5">A/D</span>
-      </span>
-      <span className={cn("text-sm tabular-nums shrink-0 font-bold", changeColor)} title={ACRONYM_HELP.AVG_CHANGE}>
-        {m.avg_change >= 0 ? "+" : ""}{m.avg_change.toFixed(2)}%
-      </span>
-      <div className="ml-auto flex flex-wrap items-center gap-1 justify-end min-w-0">
+      {/* Below sm the pills take a row of their own deliberately, instead of
+          competing for the tail of the first one. `ml-auto` only applies once
+          there is room for it to mean anything. */}
+      <div className="flex w-full flex-wrap items-center gap-1 justify-start min-w-0 sm:ml-auto sm:w-auto sm:justify-end">
         {indices.map((idx) => <IndexPill key={idx.code} idx={idx} />)}
       </div>
     </div>

@@ -10,6 +10,7 @@ import { useEffect, useRef, useState } from "react";
 
 import type { ScanStatusInfo } from "@/api/types";
 import { Button } from "@/components/ui/button";
+import { useIsPhone } from "@/hooks/useMediaQuery";
 import { useNowTick } from "@/hooks/useNowTick";
 import { cn } from "@/lib/utils";
 
@@ -270,6 +271,7 @@ export function RunProgressToast({ status, labels, onStop, isStopping }: Props) 
 
   // Show the counter strip when any counter has a non-null value (i.e. the
   // backend has populated at least one of them, even mid-run).
+  const isPhone = useIsPhone();
   const counterValues = labels.counters.map((c) => ({
     ...c,
     value: c.value(status),
@@ -444,20 +446,49 @@ export function RunProgressToast({ status, labels, onStop, isStopping }: Props) 
             // consumer would leave the 3rd grid slot empty after
             // ScoreRecomputeToast dropped its "Saltati" cell in
             // May 2026.
-            style={{
-              gridTemplateColumns: `repeat(${counterValues.length}, minmax(0, 1fr))`,
-            }}
-            className="grid gap-1.5 px-3.5 pb-3"
+            style={
+              isPhone
+                ? undefined
+                : {
+                    gridTemplateColumns: `repeat(${counterValues.length}, minmax(0, 1fr))`,
+                  }
+            }
+            className={
+              isPhone
+                ? "flex flex-wrap items-baseline gap-x-3 gap-y-1 px-3.5 pb-3 text-xs"
+                : "grid gap-1.5 px-3.5 pb-3"
+            }
             onClick={(e) => e.stopPropagation()}
           >
-            {counterValues.map((c, idx) => (
-              <CounterCell
-                key={idx}
-                label={c.label}
-                value={c.value ?? 0}
-                highlight={!!c.highlightWhenPositive && (c.value ?? 0) > 0}
-              />
-            ))}
+            {/* On a phone the three boxed cells cost roughly a third of the
+                viewport, on top of the progress bar and the stop button — the
+                toast ended up covering half the page it is reporting on. The
+                numbers are the same; only their footprint changes. */}
+            {isPhone
+              ? counterValues.map((c, idx) => (
+                  <span key={idx} className="tabular-nums">
+                    <strong
+                      className={
+                        c.highlightWhenPositive && (c.value ?? 0) > 0
+                          ? "text-emerald-600 dark:text-emerald-400"
+                          : undefined
+                      }
+                    >
+                      {c.value ?? 0}
+                    </strong>{" "}
+                    <span className="text-muted-foreground">
+                      {c.label.toLowerCase()}
+                    </span>
+                  </span>
+                ))
+              : counterValues.map((c, idx) => (
+                  <CounterCell
+                    key={idx}
+                    label={c.label}
+                    value={c.value ?? 0}
+                    highlight={!!c.highlightWhenPositive && (c.value ?? 0) > 0}
+                  />
+                ))}
           </div>
         )}
 

@@ -14,6 +14,7 @@ import { SectionTitle } from "@/components/ui/section-title";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useLiveQuotes } from "@/hooks/useLiveQuote";
 import { projectVolRatio } from "@/lib/intradayVolume";
+import { useIsPhone } from "@/hooks/useMediaQuery";
 import { cn } from "@/lib/utils";
 
 type VolMode = "dollar" | "shares";
@@ -62,6 +63,7 @@ interface Props {
  *     the eye scans naturally between price and score.
  */
 export function LiveVolumeMoversCard({ movers, computedAt }: Props) {
+  const isPhone = useIsPhone();
   const ROWS_VISIBLE = 10;
   // Default to DOLLAR (notional) turnover — "where the money flowed".
   // Raw share-count over-represents cheap instruments (inverse leveraged
@@ -114,7 +116,9 @@ export function LiveVolumeMoversCard({ movers, computedAt }: Props) {
         <div className="px-3 py-2 border-b bg-muted/30 shrink-0">
           <SectionTitle
             icon={Activity}
-            label="Volumi maggiori oggi"
+            // Uppercase + letter-spacing is expensive in width; the full
+            // label ellipsised to "VOLUMI MAGGIORI O…" on a phone.
+            label={isPhone ? "Volumi oggi" : "Volumi maggiori oggi"}
             right={
               <div className="flex items-center gap-2">
                 <MarketStateBadge phase={phase} />

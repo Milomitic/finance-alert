@@ -9,6 +9,7 @@ import { useMarketSummary } from "@/hooks/useMarketSummary";
 import { useStockSearch } from "@/hooks/useStockSearch";
 import { getIndexMeta } from "@/lib/indexMeta";
 import { getFlagFromTicker, getStockFlagCode } from "@/lib/stockMeta";
+import { useIsPhone } from "@/hooks/useMediaQuery";
 import { cn } from "@/lib/utils";
 
 // ── localStorage recent searches ──────────────────────────
@@ -55,6 +56,7 @@ interface FlatRow {
 
 // ── component ─────────────────────────────────────────────
 export function NavbarSearch() {
+  const isPhone = useIsPhone();
   const navigate = useNavigate();
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
@@ -344,7 +346,12 @@ export function NavbarSearch() {
           onChange={(e) => { setQ(e.target.value); setOpen(true); }}
           onFocus={() => setOpen(true)}
           onKeyDown={onKeyDown}
-          placeholder="Cerca stock, indici, settori… (premi / per focus)"
+          // The long form is cut mid-word at 375px, and the keyboard hint
+          // is nonsense on a device with no keyboard. CSS cannot shorten a
+          // placeholder — only the string itself can.
+          placeholder={
+            isPhone ? "Cerca…" : "Cerca stock, indici, settori… (premi / per focus)"
+          }
           className="pl-11 pr-10 h-12 text-base"
         />
         {q && (
