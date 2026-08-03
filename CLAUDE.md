@@ -579,6 +579,11 @@ every detector's `strength_keys`, `factor_adjustments` has no
 **Do NOT re-add a confirmation/confluence → score bonus without a NEW study
 showing edge** (mirrors the "read/unread removed, don't re-add" rule). Findings:
 `docs/superpowers/specs/2026-06-09-confirmation-outcome-study-findings.md`.
+**Re-confirmed independently 2026-08-03**: the conditional screen tested
+`concurrence` (count of DISTINCT detectors firing on one name on one day) as a
+condition and found it null at h=1/2/3/5 — a different metric, horizon set and
+statistical treatment than the 2026-06 study, same answer. Two independent
+nulls; treat this as settled.
 
 Confluence aggregation (`confluence_service`) IS de-correlated by detector
 FAMILY (`_FAMILY` / `_effective_n`): N correlated same-family signals count
@@ -640,11 +645,56 @@ different answer without NEW point-in-time data (e.g. matured score_history
 after 6-12 months of accrual).** Mirrors the confirmation-count rule: no
 score-affecting change without a study showing edge; this study showed none.
 
-### Conditional screen (2026-08-03): the wide-search tooling — BUILT, NOT YET RUN AT SCALE
-Five narrow studies (confirmation-count, factor-adjustments, score-IC, regime,
-multi-horizon) all came back null, so this one widens the search instead:
-MANY candidate conditions tested together, with the statistics that make
-"many" honest. **Don't rebuild this — it exists.**
+### Conditional screen RUN (2026-08-03) — verdict: NO condition changes detector skill
+The 6th study, and the one that widened the search instead of deepening it:
+729,830 signals, 300 stocks, 8 candidate market states + concurrence, tested
+at 5 horizons. **Zero survivors.** Unlike the earlier nulls this one had
+power: 0/243 cells were below a 10pp MDE, so "flat" here means "no effect",
+not "no sample". **Do NOT re-run expecting a different answer without
+materially new data** (the accruing live `signal_outcomes`, which are OOS by
+construction). Reports: `app/data/conditional_screen_report{,_h1,_h2,_h3,_h5}.json`.
+
+**Two hard-won methodology rules came out of this run. Both produced a
+convincing false result first, and both are now TDD'd.**
+
+**A. Market-wide conditions are counted in TIME BLOCKS, not stock-episodes.**
+The first grid reported **9 survivors** — the first non-null in six studies,
+and all false. Collapsing rows into per-stock episodes fixes clustering WITHIN
+a name, but on 2015-03-12 there is ONE VIX shared by all 300 stocks: a cell
+credited with 12,054 "independent episodes" was 4–13 contiguous occurrences of
+that state in 10 years. Re-tested per block, all 9 collapsed;
+`trend_pullback/credit=mid` **reversed sign** (row −3.2pp → block +1.8pp, a
+textbook Simpson's paradox). `_MARKET_WIDE` in the grid holds the classification;
+the block test uses a **Student-t** (5–14 obs — a normal tail is far too
+generous there), implemented via the regularized incomplete beta since scipy
+is not a dependency. ⚠️ **The negative control PASSED in that broken run** — the
+flaw inflated confidence uniformly rather than manufacturing a specific effect.
+A control only proves the pipeline isn't lying in the way you thought to check.
+
+**B. FDR is applied WITHIN a grid, so testing N horizons multiplies the budget
+by N.** h=3 and h=5 each produced one cell at q≈0.09; with 4 horizon families
+both go back above threshold. Neither was claimed.
+
+**Beta vs skill, quantified** (`conditional_screen_shorthz`, absolute and
+market-neutral side by side): `high52_momentum` (100% bull) reads **54.0 abs /
+50.5 mkt-neutral @5d** — of ~4pp above a coin flip, **3.5 is simply being long**.
+Pooled across detectors the gap is −0.1pp only because bear-tone signals are
+sign-flipped and cancel it; **read the per-detector table, never the pooled row**.
+
+**Concurrence (several detectors, same name, same day) is NULL at 1/2/3/5
+days** — the literal "coincidence of events" hypothesis, tested on tens of
+thousands of stock-episodes (it varies cross-sectionally, so it has real n).
+Largest raw effects sit at q≥0.36.
+
+**The h=1 grid is VOID** and stays that way: the negative control fired,
+returning `trend_pullback` bull **+1.4** / bear **−1.4** — a perfect symmetry,
+which is the signature of ONE effect seen from two sides, i.e. tone, not
+regime. It had an attractive survivor (`macd_divergence/vix=low`, q=0.077);
+it was discarded. **Honour the control rule even when it costs you a finding.**
+
+---
+
+The tooling below is BUILT and RUN. **Don't rebuild it — it exists.**
 
 - `app.scripts.backfill_macro_history` — full-history FRED **state** series,
   deliberately separate from `refresh_fred`'s `CURATED_SERIES` (those are
@@ -660,10 +710,17 @@ MANY candidate conditions tested together, with the statistics that make
   deliberately does NOT aggregate, so new hypotheses/bucketings are re-analysed
   offline without paying for the replay again (the regime study had to re-run 4x).
 - `app.scripts.conditional_screen_grid` — Benjamini-Hochberg FDR over the whole
-  grid, effective-n by collapsing overlapping windows into episodes, per-cell
-  MDE so "no effect" stays distinct from "no power".
+  grid, effective-n by collapsing overlapping windows into episodes (or time
+  blocks for `_MARKET_WIDE` conditions — see rule A), per-cell MDE so "no
+  effect" stays distinct from "no power".
+- `app.scripts.conditional_screen_shorthz` — re-scores the SAME rows at
+  h=1/2/3/5 with absolute vs market-neutral side by side, and adds
+  `concurrence`. **No replay needed**: the rows kept `stock_id` + `bar_i`, so
+  outcomes are recomputed by rejoining stored OHLCV — ~4 min vs ~3.2 h. This is
+  the payoff of the "write raw rows, never aggregate" design; reach for it
+  before ever re-running the replay.
 
-**Three invariants, all TDD'd in `tests/test_conditional_screen.py` and verified
+**Four invariants, all TDD'd in `tests/test_conditional_screen.py` and verified
 to fail when removed — a bug in any of them is INVISIBLE in the output:**
 1. Tercile boundaries are EXPANDING-WINDOW. A whole-sample cut encodes the
    future in the label; the test asserts an old date's label cannot change
@@ -671,16 +728,31 @@ to fail when removed — a bug in any of them is INVISIBLE in the output:**
 2. Macro reads are STRICTLY BEFORE the fire date (FRED revises and posts late).
 3. The hit uses the universe **MEDIAN**, never the mean — the tone-asymmetry
    that fabricated the trend_pullback regime artifact.
+4. Market-wide conditions are sized on time blocks, not stock-episodes (rule A).
+   The regression test builds the exact trap: 4,800 rows / 300 stocks showing a
+   100pp difference across 3 months, which must NOT survive.
 
 The `regime` condition is a negative control with a KNOWN null (2026-06-10). If
 the grid ever reports it as a survivor, **the pipeline is broken and every
 other survivor in that run is void** — the script prints this check first.
+(2026-08-03: it fired at h=1 and that grid was discarded. It also PASSED a run
+that was broken in a different way — see the ⚠️ in rule A.)
 
 A survivor is a CANDIDATE, not a result: adoption still needs the full cascade
 (OOS sign+magnitude, adversarial verification starting with the tone↔condition
 correlation, wider-universe confirmation) before any `signal_calibration.json`
 block. The regime-conditioned Probabilità mechanism is already shipped and
 dormant, waiting for exactly that.
+
+**Where the engine stands after six studies.** Confirmation-count, factor-
+adjustments, score-IC, regime, multi-horizon and now the conditional screen are
+all null. `factor_adjustments` stays `{}`, pillar weights stay put, no
+conditional Probabilità block exists. Read the engine as what the evidence
+supports: a **descriptor and an attention filter** with a structured entry/exit
+geometry — not a return predictor. Probabilità is a per-detector base rate.
+The only thing that can still overturn this is time: matured live outcomes in
+`signal_outcomes`, out-of-sample by construction because they did not exist
+when the detectors were written.
 
 ### One-off scan / recompute outside the API (e.g. after a scoring change)
 Stop uvicorn FIRST (sole SQLite writer → avoids "database is locked"), run with
