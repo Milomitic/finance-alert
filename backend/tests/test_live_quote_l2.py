@@ -204,6 +204,16 @@ def test_a_follower_never_waits_past_the_callers_deadline():
     import time as _time
 
     live_quote_service.clear_cache()
+    # Seed the warm rung the follower will land on. Without it the ladder walks
+    # all the way down to the EOD fallback, which queries `stocks` — and this
+    # test asks for no `db` fixture, so it only passed locally because a stray
+    # database happened to be lying around. In CI it raised "no such table",
+    # failed the backend gate, and blocked the image build: the assertion is
+    # about the WAIT, so reaching the database at all was never intended.
+    live_quote_service._LAST_LIVE["AAPL"] = LiveQuote(
+        ticker="AAPL", price=99.0, prev_close=98.0, currency="USD",
+        market_state="OPEN", fetched_at=0.0, as_of_date="2026-08-03",
+    )
     started = threading.Event()
     release = threading.Event()
 
@@ -224,7 +234,7 @@ def test_a_follower_never_waits_past_the_callers_deadline():
         assert started.wait(2.0), "leader did not start"
 
         t0 = _time.time()
-        live_quote_service.get_quote("AAPL", wait_budget=0.3)
+        served = live_quote_service.get_quote("AAPL", wait_budget=0.3)
         waited = _time.time() - t0
     finally:
         # Let the leader finish and JOIN it before restoring the seam. Leaving
@@ -240,6 +250,9 @@ def test_a_follower_never_waits_past_the_callers_deadline():
         f"follower waited {waited:.1f}s despite a 0.3s budget — it would be "
         "abandoned by its caller before ever returning"
     )
+    # And it came back with the warm price rather than nothing: giving up on
+    # the leader is only useful if the caller still gets an answer.
+    assert served.price == 99.0
 
 
 def test_without_a_budget_the_follower_keeps_the_generous_default():
