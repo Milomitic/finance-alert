@@ -64,9 +64,19 @@ grafana:
   # Loki datasource is NOT added here: loki-stack ships its own labelled
   # ConfigMap that Grafana's sidecar auto-loads. Adding it here too created a
   # duplicate "Loki" that made provisioning skip both.
+  # 192Mi → 384Mi (2026-08-03). The old ceiling held at idle and gave way the
+  # moment the UI was used: Grafana went 503 ("no available server" from
+  # Traefik — no healthy backend) right after someone opened Administration →
+  # Service accounts. Grafana 11 plus the datasource sidecar sits around
+  # 150-250Mi once a browser session and a datasource query are in flight, so
+  # 192 was a limit that only ever worked while nobody looked at it.
+  #
+  # Affordable: the node is 2 OCPU / 12 GB at ~46% — this is under 2% of RAM.
+  # Sized to the observed working set rather than doubled blindly; if it OOMs
+  # again the answer is a measurement, not another doubling.
   resources:
-    requests: { cpu: 20m, memory: 64Mi }
-    limits: { memory: 192Mi }
+    requests: { cpu: 20m, memory: 96Mi }
+    limits: { memory: 384Mi }
   persistence:
     enabled: true
     storageClassName: local-path
