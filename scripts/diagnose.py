@@ -49,6 +49,15 @@ from pathlib import Path
 DEFAULT_BASE = "https://80-225-80-141.sslip.io/grafana"
 ENV_FILE = Path(__file__).with_name(".env")
 
+# Force UTF-8 on stdout. A Windows console defaults to cp1252 and raises
+# UnicodeEncodeError on the first non-latin1 byte — and log lines are exactly
+# where such bytes turn up, unpredictably. Fixing it at the stream rather than
+# sanitising each string means a stray character in someone's stack trace can
+# never again abort the whole report; errors="replace" keeps it printing.
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 # Log noise is mostly ONE message repeated with a different subject. Collapsing
 # on these turns "PAYX, SJM, LLY, J, SPOT have no data" into a single finding
 # that says how many and which — which is the actual shape of the problem.
@@ -132,12 +141,21 @@ def _loki_range(base: str, token: str, uid: str, query: str, hours: int, limit: 
     )
 
 
+# Known-benign lines that would otherwise dominate the ranking. The first run
+# of this script spent a third of its 3,000-line budget on two CoreDNS warnings
+# about optional config files that were never meant to exist — noise loud
+# enough to push real findings off the page. Excluded at the QUERY, not after,
+# so the budget goes to lines worth reading.
+_MUTE = [
+    "No files matching import glob pattern",   # coredns optional custom config
+]
+
+
 def report_log_signatures(base: str, token: str, uid: str, hours: int, limit: int) -> None:
-    data = _loki_range(
-        base, token, uid,
-        '{namespace=~".+"} |~ "(?i)(warning|error|exception|traceback|failed)"',
-        hours, limit,
-    )
+    q = '{namespace=~".+"} |~ "(?i)(warning|error|exception|traceback|failed)"'
+    for pat in _MUTE:
+        q += f' != "{pat}"'
+    data = _loki_range(base, token, uid, q, hours, limit)
     groups: dict[str, dict] = defaultdict(
         lambda: {"n": 0, "first": None, "last": None, "example": "", "subjects": set()}
     )
