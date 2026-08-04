@@ -1,7 +1,9 @@
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { act, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { ScanStatusInfo } from "@/api/types";
+
+import { setFirstPaintActive } from "@/lib/firstPaint";
 
 import { RunProgressToast, type RunToastLabels } from "./RunProgressToast";
 
@@ -109,5 +111,30 @@ describe("RunProgressToast — hook order across visibility changes", () => {
       .filter((m) => /order of Hooks|Rendered (more|fewer) hooks/.test(m));
     expect(hookErrors).toEqual([]);
     spy.mockRestore();
+  });
+});
+
+describe("RunProgressToast — one loading bar at a time", () => {
+  afterEach(() => setFirstPaintActive(false));
+
+  it("renders nothing while a first-paint gate covers the page", () => {
+    /* A scan running when the dashboard loads used to paint its own bar in the
+     * corner at the same moment the gate painted one in the middle: two
+     * indicators for one wait. The toast defers — the gate is the one that
+     * knows when the page is ready. */
+    setFirstPaintActive(true);
+    render(<RunProgressToast status={status()} labels={labels} />);
+    expect(screen.queryByText(/Scansione in corso/)).toBeNull();
+  });
+
+  it("comes back once the gate opens", () => {
+    setFirstPaintActive(true);
+    render(<RunProgressToast status={status()} labels={labels} />);
+    expect(screen.queryByText(/Scansione in corso/)).toBeNull();
+
+    // No manual rerender: the store must push the change itself, or the toast
+    // would stay hidden until something else happened to re-render it.
+    act(() => setFirstPaintActive(false));
+    expect(screen.getByText(/Scansione in corso/)).toBeTruthy();
   });
 });

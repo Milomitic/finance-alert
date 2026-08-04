@@ -1,6 +1,9 @@
 import { useIsFetching } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 
+import { setFirstPaintActive } from "@/lib/firstPaint";
+import { cn } from "@/lib/utils";
+
 /* Holds a page back until its data has arrived, then reveals it in one go.
  *
  * The problem it solves is the staggered reveal: on a cold cache each panel
@@ -17,6 +20,17 @@ import { useEffect, useRef, useState } from "react";
  *    lightweight-charts sizes itself from its container — it would measure
  *    zero and come back wrong.
  *
+ * THE OVERLAY IS `fixed`, NOT `absolute` — that one word is why the bar used
+ * to sit in the wrong place. The children are the whole dashboard (3644px,
+ * measured), and an `absolute inset-0` overlay stretches to its parent, so
+ * `justify-center` centred the bar 1822px down: two and a half screens below
+ * the fold. Fixed centres it on the VIEWPORT, which is the box the reader is
+ * actually looking at.
+ *
+ * It also covers everything, sidebar included, over an opaque background.
+ * While the page loads the bar is the only thing on screen — anything else is
+ * a second thing to look at during a wait that is meant to end quickly.
+ *
  * THE DEADLINE IS THE REST OF THE DESIGN. A gate that waits for everything
  * hangs forever the first time a source is genuinely unavailable, which is not
  * hypothetical here: the dashboard's index panel had no data at all for
@@ -27,6 +41,10 @@ import { useEffect, useRef, useState } from "react";
  *  query has resolved. Time is a guess; resolved queries are a fact, so the
  *  guess is capped well short of the end and the facts carry the rest. */
 const TIME_ONLY_CEILING = 0.35;
+
+/** Cross-fade length. Short on purpose: the gate exists to hide the assembly,
+ *  and a slow fade only trades a staggered reveal for a sluggish one. */
+const FADE_MS = 160;
 
 export function FirstPaintGate({
   children,
@@ -42,6 +60,9 @@ export function FirstPaintGate({
   });
 
   const [open, setOpen] = useState(false);
+  // Stays mounted for one fade after `open` flips, so the overlay can fade OUT
+  // rather than vanish between two frames.
+  const [overlayMounted, setOverlayMounted] = useState(true);
   const startedAt = useRef(Date.now());
   // Highest number of in-flight first-loads seen so far. This is the
   // denominator: it can only grow, so the ratio never walks backwards when a
@@ -52,6 +73,14 @@ export function FirstPaintGate({
   useEffect(() => {
     setTotal((t) => Math.max(t, pending));
   }, [pending]);
+
+  // Tell the rest of the app it is covered, so the global progress toasts do
+  // not paint a second bar over this one. Cleared on unmount as well —
+  // navigating away mid-load must not leave them muted forever.
+  useEffect(() => {
+    setFirstPaintActive(!open);
+    return () => setFirstPaintActive(false);
+  }, [open]);
 
   // Drives the time component of the estimate. Stops the moment the gate
   // opens, so nothing keeps ticking behind a page the reader is using.
@@ -74,6 +103,13 @@ export function FirstPaintGate({
     return () => clearTimeout(t);
   }, [open, pending, minShowMs]);
 
+  // Unmount the overlay only once its fade-out has finished.
+  useEffect(() => {
+    if (!open) return;
+    const t = setTimeout(() => setOverlayMounted(false), FADE_MS);
+    return () => clearTimeout(t);
+  }, [open]);
+
   const resolved = Math.max(0, total - pending);
   // What actually happened: the share of first-loads that have landed. This is
   // a measurement, not an animation.
@@ -89,15 +125,20 @@ export function FirstPaintGate({
 
   return (
     <div className="relative">
-      {!open && (
+      {overlayMounted && (
         <div
           role="progressbar"
           aria-valuemin={0}
           aria-valuemax={100}
           aria-valuenow={Math.round(progress * 100)}
-          aria-busy="true"
+          aria-busy={!open}
           aria-label="Caricamento della dashboard"
-          className="absolute inset-0 z-20 flex min-h-[55vh] flex-col items-center justify-center gap-5 px-6"
+          className={cn(
+            "fixed inset-0 z-50 flex flex-col items-center justify-center gap-5 px-6",
+            "bg-background transition-opacity ease-out",
+            open ? "pointer-events-none opacity-0" : "opacity-100",
+          )}
+          style={{ transitionDuration: `${FADE_MS}ms` }}
         >
           <div className="w-full max-w-lg space-y-3">
             <div className="flex items-baseline justify-between text-sm">
@@ -120,14 +161,26 @@ export function FirstPaintGate({
           </div>
         </div>
       )}
+      {/* NO transition on the children — deliberately, and this cost a second
+          blank screen before it was measured.
+       *
+       * Putting `transition-opacity` on both states makes the VISIBLE state
+       * the end of an animation, so the content is only readable once that
+       * animation completes. A paused compositor (background tab, throttling,
+       * a devtools pane that isn't painting) leaves the transition stuck at
+       * its start value and the page stays blank permanently — observed:
+       * computed opacity 0 with a never-finishing opacity transition, three
+       * seconds after the gate had opened.
+       *
+       * The reveal doesn't need it. The overlay above is opaque and fades out
+       * over FADE_MS; the children are already at full opacity underneath by
+       * then, so the dissolve IS the reveal. Here the resting state is plain
+       * `opacity-100` with nothing to wait for: if no animation ever runs, the
+       * page is visible, which is the correct failure direction. */}
       <div
         aria-hidden={!open}
         inert={!open}
-        className={
-          open
-            ? "transition-opacity duration-300 opacity-100"
-            : "pointer-events-none select-none opacity-0"
-        }
+        className={open ? "opacity-100" : "pointer-events-none select-none opacity-0"}
       >
         {children}
       </div>

@@ -10,6 +10,7 @@ import { useEffect, useRef, useState } from "react";
 
 import type { ScanStatusInfo } from "@/api/types";
 import { Button } from "@/components/ui/button";
+import { useFirstPaintActive } from "@/lib/firstPaint";
 import { useIsPhone } from "@/hooks/useMediaQuery";
 import { useNowTick } from "@/hooks/useNowTick";
 import { cn } from "@/lib/utils";
@@ -168,6 +169,11 @@ export function RunProgressToast({ status, labels, onStop, isStopping }: Props) 
   // Nothing catches this earlier: it typechecks, it builds, and the tests
   // render the toast in a single state so the order never flips.
   const isPhone = useIsPhone();
+  // Same rule, same reason: called here with the other hooks, never below the
+  // early returns. Suppresses this toast while a first-paint gate covers the
+  // page, so a scan running at load time doesn't paint a second progress bar
+  // in the corner while the gate paints one in the middle.
+  const firstPaintActive = useFirstPaintActive();
 
   const [dismissedRunId, setDismissedRunId] = useState<number | null>(null);
   const seenRunIdRef = useRef<number | null>(null);
@@ -201,6 +207,7 @@ export function RunProgressToast({ status, labels, onStop, isStopping }: Props) 
     }
   }, [status?.phase, status?.last_run_id]);
 
+  if (firstPaintActive) return null;
   if (!status || !status.last_run_id) return null;
   if (dismissedRunId === status.last_run_id) return null;
 

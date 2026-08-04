@@ -101,3 +101,94 @@ describe("FirstPaintGate — progress", () => {
     expect(Number(bar.getAttribute("aria-valuenow"))).toBeLessThan(100);
   });
 });
+
+/* ─── Covering, centring, fading ─────────────────────────────────────────── *
+ *
+ * These three are one requirement seen from three sides: while the page loads
+ * the bar is the ONLY thing on screen, it sits in the middle of the SCREEN,
+ * and it leaves quickly rather than blinking out.
+ */
+describe("FirstPaintGate — the overlay covers, centres and fades", () => {
+  function pendingClient() {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    qc.prefetchQuery({ queryKey: ["slow"], queryFn: () => new Promise(() => {}) });
+    return qc;
+  }
+
+  it("centres on the VIEWPORT, not on the children", async () => {
+    /* The regression this locks down. The children are the whole dashboard —
+     * 3644px measured — so an `absolute inset-0` overlay stretched to that and
+     * `justify-center` put the bar 1822px down, two and a half screens below
+     * the fold. Only `fixed` centres on the box the reader is looking at. */
+    withClient(
+      <FirstPaintGate><p style={{ height: 4000 }}>contenuto</p></FirstPaintGate>,
+      pendingClient(),
+    );
+    const overlay = await screen.findByRole("progressbar");
+    expect(overlay).toHaveClass("fixed");
+    expect(overlay).toHaveClass("inset-0");
+    expect(overlay).not.toHaveClass("absolute");
+    // items-center + justify-center are what actually centre it; without the
+    // flex context the classes above would position but not centre.
+    expect(overlay).toHaveClass("items-center");
+    expect(overlay).toHaveClass("justify-center");
+  });
+
+  it("paints an opaque background so nothing else shows through", async () => {
+    withClient(<FirstPaintGate><p>contenuto</p></FirstPaintGate>, pendingClient());
+    const overlay = await screen.findByRole("progressbar");
+    expect(overlay).toHaveClass("bg-background");
+  });
+
+  it("fades out instead of vanishing, then unmounts", async () => {
+    /* Opening must not swap the overlay for the page between two frames. The
+     * overlay stays mounted for one fade at opacity-0, THEN goes. */
+    const { qc } = withClient(
+      <FirstPaintGate minShowMs={0}><p>contenuto</p></FirstPaintGate>,
+      pendingClient(),
+    );
+    const overlay = await screen.findByRole("progressbar");
+    expect(overlay).toHaveClass("opacity-100");
+
+    // Resolve everything: the gate opens.
+    qc.setQueryData(["slow"], "fatto");
+
+    // First it is still present but transparent…
+    await waitFor(() => expect(overlay).toHaveClass("opacity-0"));
+    // …and the content is on its way in at the same time (a cross-fade, not a
+    // gap where neither is visible).
+    expect(screen.getByText("contenuto").parentElement).toHaveClass("opacity-100");
+    // …then it leaves.
+    await waitFor(
+      () => expect(screen.queryByRole("progressbar")).not.toBeInTheDocument(),
+      { timeout: 2000 },
+    );
+  });
+});
+
+describe("FirstPaintGate — the reveal must not depend on an animation", () => {
+  it("leaves the children with a plain visible class, no transition to wait on", async () => {
+    /* The second blank screen this file caused, caught by measuring rather
+     * than by looking. With `transition-opacity` on BOTH states the visible
+     * state is the END of an animation, so a paused compositor (background
+     * tab, throttling) leaves the content stuck at opacity 0 — permanently.
+     * Observed in a real browser: computed opacity 0, transition still
+     * running, three seconds after the gate opened.
+     *
+     * The resting visible state must therefore be static. If no animation
+     * ever runs, the page shows. */
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    qc.prefetchQuery({ queryKey: ["slow"], queryFn: () => new Promise(() => {}) });
+    withClient(<FirstPaintGate minShowMs={0}><p>contenuto</p></FirstPaintGate>, qc);
+
+    qc.setQueryData(["slow"], "fatto");
+    const wrapper = await waitFor(() => {
+      const w = screen.getByText("contenuto").parentElement!;
+      expect(w).toHaveClass("opacity-100");
+      return w;
+    });
+    // The whole point: nothing on this element defers its visibility.
+    expect(wrapper.className).not.toMatch(/transition/);
+    expect(wrapper.className).not.toMatch(/animate-/);
+  });
+});
