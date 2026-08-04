@@ -25,7 +25,6 @@ const RsiHistogramCard = lazy(() =>
     default: m.RsiHistogramCard,
   })),
 );
-import { FirstPaintGate } from "@/components/ui/first-paint-gate";
 import { useDashboardSummary } from "@/hooks/useDashboardSummary";
 import { useMarketSummary } from "@/hooks/useMarketSummary";
 import { usePremarketMovers } from "@/hooks/usePremarketMovers";
@@ -136,7 +135,7 @@ function MarketError({ onRetry }: { onRetry: () => void }) {
   );
 }
 
-function HomePageContent() {
+export default function HomePage() {
   const market = useMarketSummary();
   const summary = useDashboardSummary();
   // The pre-market card is visible ONLY when the backend tells us
@@ -408,14 +407,3 @@ function HomePageContent() {
   );
 }
 
-
-/* The gate wraps the whole page rather than each panel: the point is to stop
- * the panels appearing one at a time, which per-panel skeletons cannot do —
- * they ARE the stagger, just prettier. */
-export default function HomePage() {
-  return (
-    <FirstPaintGate>
-      <HomePageContent />
-    </FirstPaintGate>
-  );
-}
