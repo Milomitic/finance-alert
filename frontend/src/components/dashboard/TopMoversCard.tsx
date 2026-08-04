@@ -28,6 +28,18 @@ interface Props {
    *  projecting partial-day vol_ratio to end-of-day. Falls back to
    *  "now" inside the projector when null. */
   computedAt?: string | null;
+  /**
+   * "split"   — gainers | losers side by side. Fits a card ≥ ~710px.
+   * "stacked" — gainers above losers, each row spanning the full card.
+   *
+   * The choice is about arithmetic, not taste. A row's fixed numeric columns
+   * occupy 241px including gaps, so a sub-column narrower than ~351px leaves
+   * the company name nothing and it renders blank. In a three-card row on a
+   * 1280px viewport this card is ~366px wide — enough for one full row, not
+   * for two. Stacked trades list length (10 rows instead of 18) for rows that
+   * are actually complete.
+   */
+  layout?: "split" | "stacked";
 }
 
 type Window = "1d" | "1w" | "1m";
@@ -50,6 +62,10 @@ interface WindowedMovers {
 // live-quoting the whole ~1100-name catalog.
 const MAX_LIVE_TICKERS = 120;
 const ROWS_PER_COL = 9;
+/** Stacked layout puts both lists in one column, so the card's height is the
+ *  SUM of the two rather than the max. Halving the cap keeps it roughly as
+ *  tall as the split version instead of doubling the row. */
+const ROWS_PER_COL_STACKED = 5;
 
 // Exchanges that follow the US intraday-volume curve used by `projectVolRatio`.
 // Only these get the partial-day → end-of-day volume PROJECTION. A Hong Kong
@@ -76,8 +92,14 @@ function getWindowed(movers: MoversBlock, w: Window): WindowedMovers {
   return { gainers: movers.gainers, losers: movers.losers, field: "change_pct" };
 }
 
-function MoverRow({ m, field, window, live, computedAt, livePrice, livePulse, flipRef }: {
+function MoverRow({ m, field, window, live, computedAt, livePrice, livePulse, flipRef, wide }: {
   m: Mover;
+  /** True when the row spans the whole card (stacked layout) rather than one
+   *  of two side-by-side sub-columns. The six-column template needs ~351px to
+   *  leave the company name a readable ~110px; a full-card row clears that at
+   *  any viewport, so `wide` shows every column unconditionally instead of
+   *  waiting for the `row-full` breakpoint. */
+  wide?: boolean;
   field: WindowedMovers["field"];
   /** Active window — drives WHICH volume to show: today's (1d, projected
    *  to EOD for US names) vs the period total (1w → vol_5d, 1m → vol_20d). */
@@ -157,7 +179,12 @@ function MoverRow({ m, field, window, live, computedAt, livePrice, livePulse, fl
           (minmax(0,1fr)) and truncates first when the column narrows. */}
       <Link
         to={`/stocks/${encodeURIComponent(m.ticker)}`}
-        className="grid grid-cols-[minmax(0,1fr)_46px_52px_auto] row-full:grid-cols-[minmax(0,1fr)_46px_52px_48px_30px_auto] items-center gap-1 px-1.5 py-1.5 hover:bg-accent/30 transition-colors"
+        className={cn(
+          "grid items-center gap-1 px-1.5 py-1.5 hover:bg-accent/30 transition-colors",
+          wide
+            ? "grid-cols-[minmax(0,1fr)_46px_52px_48px_30px_auto]"
+            : "grid-cols-[minmax(0,1fr)_46px_52px_auto] row-full:grid-cols-[minmax(0,1fr)_46px_52px_48px_30px_auto]",
+        )}
       >
         {/* Col 1: identity + per-row live-poll dot. A classic pulsing green
             dot sits right of the ticker for every row whose 15s polling is
@@ -194,7 +221,10 @@ function MoverRow({ m, field, window, live, computedAt, livePrice, livePulse, fl
         {/* Col 4: volume (number only — multiplier moved to its own column so
             the columns stay aligned). Window-aware per volValue above. */}
         <span
-          className="hidden row-full:block text-[12.5px] tabular-nums text-right font-semibold text-foreground/80"
+          className={cn(
+            "text-[12.5px] tabular-nums text-right font-semibold text-foreground/80",
+            wide ? "block" : "hidden row-full:block",
+          )}
           title={volTitle}
         >
           {volEstimated ? "~" : ""}
@@ -202,7 +232,13 @@ function MoverRow({ m, field, window, live, computedAt, livePrice, livePulse, fl
         </span>
         {/* Col 5: × vs 20d-avg multiplier (1d only; empty cell otherwise so
             the score column never shifts between windows). */}
-        <span className="hidden row-full:block text-[11px] font-mono tabular-nums text-center" title={volTitle}>
+        <span
+          className={cn(
+            "text-[11px] font-mono tabular-nums text-center",
+            wide ? "block" : "hidden row-full:block",
+          )}
+          title={volTitle}
+        >
           {window === "1d" && multiplier != null ? (
             <span
               className={cn(
@@ -289,7 +325,8 @@ function readBoardSnapshot(): WindowedMovers | null {
   }
 }
 
-export function TopMoversCard({ movers, computedAt }: Props) {
+export function TopMoversCard({ movers, computedAt, layout = "split" }: Props) {
+  const stacked = layout === "stacked";
   const [window, setWindow] = useState<Window>("1d");
   const [boardSeed] = useState(readBoardSnapshot);
   const registerFlip = useFlipList();
@@ -503,7 +540,12 @@ export function TopMoversCard({ movers, computedAt }: Props) {
             LESS than this row's fixed columns alone (176px) — the identity
             cell's minmax(0,1fr) collapsed to zero, so the ticker painted on
             top of the price and the right-hand columns were clipped away. */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-border/40">
+        <div
+          className={cn(
+            "grid divide-y divide-border/40",
+            stacked ? "grid-cols-1" : "grid-cols-1 sm:grid-cols-2 sm:divide-y-0 sm:divide-x",
+          )}
+        >
           {(["gainers", "losers"] as const).map((side) => {
             const list = side === "gainers" ? data.gainers : data.losers;
             return (
@@ -515,7 +557,7 @@ export function TopMoversCard({ movers, computedAt }: Props) {
                   </div>
                 ) : (
                   <ul>
-                    {list.slice(0, ROWS_PER_COL).map((m) => {
+                    {list.slice(0, stacked ? ROWS_PER_COL_STACKED : ROWS_PER_COL).map((m) => {
                       const lq = liveActive ? liveMap.get(m.ticker) : undefined;
                       return (
                         <MoverRow
@@ -528,6 +570,7 @@ export function TopMoversCard({ movers, computedAt }: Props) {
                           computedAt={computedAt}
                           livePrice={lq?.price ?? null}
                           livePulse={!!lq?.is_open && lq?.price != null}
+                          wide={stacked}
                         />
                       );
                     })}

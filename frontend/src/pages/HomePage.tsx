@@ -3,11 +3,10 @@ import { Suspense, lazy } from "react";
 
 import { AlertsCompactPanel } from "@/components/dashboard/AlertsCompactPanel";
 import { BreadthMatrixTable } from "@/components/dashboard/BreadthMatrixTable";
-import { FiftyTwoWeekVolCard } from "@/components/dashboard/FiftyTwoWeekVolCard";
 import { HeroStrip } from "@/components/dashboard/HeroStrip";
 import { LiveVolumeMoversCard } from "@/components/dashboard/LiveVolumeMoversCard";
+import { MarketEventsRail } from "@/components/dashboard/MarketEventsRail";
 import { MarketTickerTape } from "@/components/dashboard/MarketTickerTape";
-import { PremarketMoversCard } from "@/components/dashboard/PremarketMoversCard";
 import { AnalystActionsCard } from "@/components/dashboard/AnalystActionsCard";
 import { ScanHeaderButton } from "@/components/dashboard/ScanHeaderButton";
 import { TopMoversCard } from "@/components/dashboard/TopMoversCard";
@@ -28,7 +27,6 @@ const RsiHistogramCard = lazy(() =>
 import { FirstPaintGate } from "@/components/ui/first-paint-gate";
 import { useDashboardSummary } from "@/hooks/useDashboardSummary";
 import { useMarketSummary } from "@/hooks/useMarketSummary";
-import { usePremarketMovers } from "@/hooks/usePremarketMovers";
 
 /* ─── Per-row skeletons ─────────────────────────────────────────────────── */
 /* Each market-driven row has its own skeleton that mirrors the loaded
@@ -58,11 +56,10 @@ function SpotlightRowSkeleton() {
     // skeleton has to use the SAME breakpoints as the loaded layout, or the
     // page visibly reflows the moment data lands — which is exactly what the
     // first-paint gate exists to prevent.
-    <div className="grid gap-3 md:grid-cols-2 dense-4:grid-cols-4 [&>*]:min-w-0">
-      <CardSkeleton label="52 SETTIMANE" rows={8} strongHeader className="h-[400px]" />
-      <CardSkeleton label="VOLUMI" rows={8} strongHeader className="h-[400px]" />
-      <CardSkeleton label="TOP MOVERS" rows={8} strongHeader className="h-[400px]" />
-      <CardSkeleton label="PRE-MARKET USA" rows={8} strongHeader className="h-[400px]" />
+    <div className="grid gap-3 dense-3:grid-cols-[19fr_19fr_12fr] [&>*]:min-w-0">
+      <CardSkeleton label="TOP MOVERS" rows={10} strongHeader className="h-[400px]" />
+      <CardSkeleton label="VOLUMI MAGGIORI" rows={10} strongHeader className="h-[400px]" />
+      <CardSkeleton label="SINTESI EVENTI" rows={10} strongHeader className="h-[400px]" />
     </div>
   );
 }
@@ -139,26 +136,11 @@ function MarketError({ onRetry }: { onRetry: () => void }) {
 function HomePageContent() {
   const market = useMarketSummary();
   const summary = useDashboardSummary();
-  // The pre-market card is visible ONLY when the backend tells us
-  // `available=true` — i.e. the US regular market is CLOSED AND the
-  // pre-market cache is fresh AND non-empty. Any other state (RTH
-  // open / cache cold / fetch in flight / no data) hides the card
-  // entirely AND collapses the surrounding grid so the breadth +
-  // top-movers row takes the full row width (no dead column).
-  //
-  // Evolution: earlier we kept the slot visible during cache-cold
-  // off-hours with a "in attesa" placeholder, but the user
-  // requested that the card appear only when there's actually
-  // something to show. Hiding the slot is the strictest possible
-  // surface — no flash of empty boxes, no "perché non si carica?"
-  // moment, just "card appears when data exists".
-  //
-  // While the hook is in flight `premarketQ.data` is undefined →
-  // `available` is undefined → `!!undefined` is false → we default
-  // to HIDE. The hook has staleTime=5s + a shared cache so on
-  // subsequent navigations data is usually already populated.
-  const premarketQ = usePremarketMovers();
-  const hidePremarket = !premarketQ.data?.available;
+  // The pre-market query no longer lives here: MarketEventsRail owns it,
+  // along with the strict `available` gate (US market closed AND cache fresh
+  // AND non-empty) that decides whether the section renders at all. The page
+  // no longer has to reshape its grid around a card that may or may not
+  // appear — the rail is always present and its pre-market section is not.
 
   // Full-page skeleton ONLY while BOTH summaries are still on their
   // first load with nothing cached (react-query: `isLoading` =
@@ -301,35 +283,48 @@ function HomePageContent() {
           and no card is taller than its content needs (snug uniform
           height). See the cards' internals: their lists are natural-height
           (no flex-1/overflow) precisely so this auto-equalization works. */}
+      {/* Activity row — two protagonists and a rail.
+       *
+       * This used to be four equal cards (52w events, Volumi, Top movers,
+       * Pre-market), which is four lists answering one question: what moved
+       * today. It read as density, but it was partly duplication — the lists
+       * rank by dollar volume or market cap, so the same mega-caps surfaced in
+       * several of them at once (META appeared in four cards simultaneously,
+       * AAPL/AMZN/MSFT/NVDA/GOOGL in three each; 23 tickers of 129 were
+       * repeated).
+       *
+       * The split above cost more than it bought. With four cards on one row a
+       * 1280px viewport gave each ~230px, and a movers row spends 241px on
+       * fixed numeric columns before the name gets a pixel — so the name
+       * resolved to 0px. The page was, in effect, choosing what to drop, and
+       * choosing badly and invisibly.
+       *
+       * So the hierarchy is stated instead of inferred. Top movers and Volumi
+       * are the two lists actually read every day: they get real width and
+       * complete rows at every viewport (TopMovers switches to `stacked`, so
+       * each row spans the whole card and keeps all six columns even at
+       * 1280px). 52w events, volume spikes and pre-market fold into
+       * MarketEventsRail — always visible, never behind a tab, reduced on
+       * purpose to ticker + one number.
+       *
+       * Three geometries, one per amount of room. At dense-3 the rail is a
+       * narrow third column. Between md and dense-3 only two cards fit, so the
+       * rail drops below them at full width and lays its sections out
+       * horizontally — shorter than three stacked cards, which is what a naive
+       * `grid-cols-1` fallback produced (measured: the page got TALLER at
+       * 1280px than before the change). Below md everything stacks. */}
       {m?.movers ? (
-        hidePremarket ? (
-          <div className="grid gap-3 dense-3:grid-cols-[5fr_4fr] items-stretch [&>*]:min-w-0">
-            <div className="grid gap-3 md:grid-cols-2 [&>*]:min-w-0">
-              <div className="min-w-0"><FiftyTwoWeekVolCard movers={m.movers} /></div>
-              <div className="min-w-0"><LiveVolumeMoversCard movers={m.movers} computedAt={m.computed_at} /></div>
-            </div>
-            <div className="min-w-0"><TopMoversCard movers={m.movers} computedAt={m.computed_at} /></div>
+        <div className="grid gap-3 md:grid-cols-2 dense-3:grid-cols-[19fr_19fr_12fr] items-stretch [&>*]:min-w-0">
+          <div className="min-w-0">
+            <TopMoversCard movers={m.movers} computedAt={m.computed_at} layout="stacked" />
           </div>
-        ) : (
-          // Flat 4-column grid with CONTENT-PROPORTIONAL widths. The two dense
-          // two-column cards (TopMovers, pre-market) get the most room; the
-          // single-column Volumi the least.
-          //
-          // Four across only at `dense-4` (1700px), NOT at `lg`. lg is 1024px
-          // of VIEWPORT, and this grid does not get the viewport — the sidebar
-          // takes 255px of it. At lg each card was ~180px wide, and TopMovers
-          // splits internally into gainers|losers, so each half was ~134px
-          // against 98px of fixed numeric columns: the name column resolved to
-          // 0px and company names rendered as nothing. Measured, not guessed.
-          // Between md and dense-4 the row is 2×2, which gives every card the
-          // ~330px it actually needs.
-          <div className="grid gap-3 md:grid-cols-2 dense-4:grid-cols-[minmax(0,2.2fr)_minmax(0,2fr)_minmax(0,2.9fr)_minmax(0,2.9fr)] items-stretch [&>*]:min-w-0">
-            <div className="min-w-0"><FiftyTwoWeekVolCard movers={m.movers} /></div>
-            <div className="min-w-0"><LiveVolumeMoversCard movers={m.movers} computedAt={m.computed_at} /></div>
-            <div className="min-w-0"><TopMoversCard movers={m.movers} computedAt={m.computed_at} /></div>
-            <div className="min-w-0"><PremarketMoversCard /></div>
+          <div className="min-w-0">
+            <LiveVolumeMoversCard movers={m.movers} computedAt={m.computed_at} />
           </div>
-        )
+          <div className="min-w-0 md:col-span-2 dense-3:col-span-1">
+            <MarketEventsRail movers={m.movers} />
+          </div>
+        </div>
       ) : (
         <SpotlightRowSkeleton />
       )}
