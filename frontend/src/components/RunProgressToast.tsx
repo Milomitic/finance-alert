@@ -154,6 +154,21 @@ export function RunProgressToast({ status, labels, onStop, isStopping }: Props) 
   // timestamps, so nothing drifts.
   const now = useNowTick(TICK_MS);
 
+  // MUST stay above the early returns below, with every other hook.
+  //
+  // This sat next to the JSX that reads it, which put it AFTER three
+  // `return null`s — so it ran on renders where the toast is visible and not
+  // on renders where it is hidden. React identifies hooks by call order, so
+  // the first time a scan started or finished the count went 7↔8 and React
+  // threw mid-render. There is no error boundary above this component, so the
+  // whole tree unmounted: the entire dashboard went blank, and the visible
+  // sequence ("the bar shows, then everything disappears") pointed at the
+  // loading bar rather than at the hook.
+  //
+  // Nothing catches this earlier: it typechecks, it builds, and the tests
+  // render the toast in a single state so the order never flips.
+  const isPhone = useIsPhone();
+
   const [dismissedRunId, setDismissedRunId] = useState<number | null>(null);
   const seenRunIdRef = useRef<number | null>(null);
   useEffect(() => {
@@ -271,7 +286,6 @@ export function RunProgressToast({ status, labels, onStop, isStopping }: Props) 
 
   // Show the counter strip when any counter has a non-null value (i.e. the
   // backend has populated at least one of them, even mid-run).
-  const isPhone = useIsPhone();
   const counterValues = labels.counters.map((c) => ({
     ...c,
     value: c.value(status),

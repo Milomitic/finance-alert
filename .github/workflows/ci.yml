@@ -89,7 +89,7 @@ jobs:
         run: uv run pytest tests/test_postgres_integration.py -v
 
   frontend:
-    name: frontend — tsc + vite build
+    name: frontend — hooks lint + vitest + tsc + vite build
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -102,6 +102,22 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
+      # ONE eslint rule, and the reason it is worth its own step: a hook called
+      # after an early return throws during render, and a render throw with no
+      # boundary above it unmounts the whole app. `useIsPhone()` did exactly
+      # that in RunProgressToast and blanked the dashboard whenever a scan
+      # started. tsc and vite both accepted it happily.
+      #
+      # The full `npm run lint` is deliberately NOT used here: it reports ~57
+      # pre-existing stylistic errors, so it would fail on day one and get
+      # switched off. See frontend/eslint.hooks.config.js.
+      - name: hook rules (blank-screen class)
+        run: npm run lint:hooks
+      # The suite existed and passed, but nothing ran it on a push — so a test
+      # could go red and merge anyway. ~3s for 87 tests; there is no reason for
+      # it not to gate.
+      - name: vitest
+        run: npm run test:run
       - run: npm run build
 
   audit:

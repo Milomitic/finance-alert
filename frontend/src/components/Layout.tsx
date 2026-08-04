@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { NavbarSearch } from "@/components/NavbarSearch";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ScanProgressToast } from "@/components/ScanProgressToast";
 import { ScoreRecomputeToast } from "@/components/ScoreRecomputeToast";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
@@ -375,7 +376,14 @@ export default function Layout() {
           </Button>
         </header>
         <main className="flex-1 min-w-0 overflow-y-auto p-3 sm:p-6">
-          <Outlet />
+          {/* Keyed by pathname so the boundary is a fresh instance per route:
+              boundaries never clear their own error state, so without this a
+              single crash would leave every subsequent page blank until a full
+              reload. Navigating away is the recovery. The header and nav sit
+              OUTSIDE it and stay usable. */}
+          <ErrorBoundary key={location.pathname} label={location.pathname}>
+            <Outlet />
+          </ErrorBoundary>
         </main>
       </div>
       {/* Persistent progress notifications — mounted globally so they
@@ -386,8 +394,17 @@ export default function Layout() {
           guard, and the post-completion windows rarely overlap). Each
           auto-dismisses 30s after completion; click anywhere on the
           toast body to dismiss earlier. */}
-      <ScanProgressToast />
-      <ScoreRecomputeToast />
+      {/* `fallback={null}`: these are chrome. If one throws, the right outcome
+          is that it disappears and the dashboard behind it keeps working —
+          exactly what did NOT happen when the scan toast called a hook after an
+          early return and took the whole page down with it. The console still
+          gets the error. */}
+      <ErrorBoundary fallback={null} label="ScanProgressToast">
+        <ScanProgressToast />
+      </ErrorBoundary>
+      <ErrorBoundary fallback={null} label="ScoreRecomputeToast">
+        <ScoreRecomputeToast />
+      </ErrorBoundary>
     </div>
   );
 }

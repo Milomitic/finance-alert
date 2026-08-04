@@ -7,9 +7,11 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "lint:hooks": "eslint --config eslint.hooks.config.js .",
     "format": "prettier --write src",
     "preview": "vite preview",
-    "test": "vitest"
+    "test": "vitest",
+    "test:run": "vitest run"
   },
   "dependencies": {
     "@radix-ui/react-checkbox": "^1.3.3",
