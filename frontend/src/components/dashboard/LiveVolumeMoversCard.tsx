@@ -182,7 +182,7 @@ export function LiveVolumeMoversCard({ movers, computedAt }: Props) {
                 <li key={r.ticker}>
                   <Link
                     to={`/stocks/${encodeURIComponent(r.ticker)}`}
-                    className="grid grid-cols-[minmax(0,1fr)_auto_auto_auto] sm:grid-cols-[minmax(0,1fr)_auto_auto_auto_auto_auto] items-center gap-2 px-3 py-1.5 hover:bg-accent/30 transition-colors"
+                    className="grid grid-cols-[minmax(0,1fr)_auto_auto_auto] row-full:grid-cols-[minmax(0,1fr)_auto_auto_auto_auto_auto] items-center gap-2 px-3 py-1.5 hover:bg-accent/30 transition-colors"
                   >
                     {/* Col 1: identity + per-row live-poll dot.
                         Previously the "is this row being polled
@@ -257,7 +257,7 @@ export function LiveVolumeMoversCard({ movers, computedAt }: Props) {
                         ("250M"). The tooltip always shows BOTH so the
                         cross-reference is one hover away. */}
                     <div
-                      className="hidden sm:block shrink-0 text-sm font-semibold tabular-nums text-foreground/80 min-w-[68px] text-right"
+                      className="hidden row-full:block shrink-0 text-sm font-semibold tabular-nums text-foreground/80 min-w-[68px] text-right"
                       title={
                         [
                           dollarVol != null
@@ -285,7 +285,7 @@ export function LiveVolumeMoversCard({ movers, computedAt }: Props) {
                         in the session we're looking. */}
                     <div
                       className={cn(
-                        "hidden sm:block shrink-0 text-xs font-mono font-semibold tabular-nums rounded px-2 py-0.5 min-w-[56px] text-center",
+                        "hidden row-full:block shrink-0 text-xs font-mono font-semibold tabular-nums rounded px-2 py-0.5 min-w-[56px] text-center",
                         volRatio != null && volRatio >= 3
                           ? "bg-orange-100 dark:bg-orange-950/40 text-orange-800 dark:text-orange-200"
                           : volRatio != null && volRatio >= 2

@@ -71,7 +71,12 @@ export function AlertsCompactPanel({
             intermediate keeps each readable until there's room for all
             four. The fixed-height + divide-x behavior aligns to lg (where
             the 4-col row lives) so the card grows naturally below that. */}
-        <div className="flex-1 min-h-0 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x lg:divide-y-0 lg:divide-x divide-border/40">
+        {/* Four sub-columns only at dense-4. At lg this panel is 964px wide,
+            so a 4-way split gave each column 231px — and the confluence rows
+            put their identity cell in `min-w-0 flex-1` next to shrink-0
+            numbers, so the ticker and company name resolved to 0px. Two
+            columns in between keeps every row readable. */}
+        <div className="flex-1 min-h-0 grid grid-cols-1 sm:grid-cols-2 dense-4:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x dense-4:divide-y-0 dense-4:divide-x divide-border/40">
           {COLUMNS.map((col) => (
             <div key={col.key} className="flex flex-col min-h-0 min-w-0">
               <div className="shrink-0 px-3 py-1.5 text-xs uppercase tracking-[0.16em] font-bold text-muted-foreground border-b bg-muted/40">

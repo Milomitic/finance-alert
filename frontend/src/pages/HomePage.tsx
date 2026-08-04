@@ -54,14 +54,14 @@ function HeroRowSkeleton() {
 
 function SpotlightRowSkeleton() {
   return (
-    // Row 2: Volumi + 52w (top-left pair) + TopMovers, with pre-market
-    // on the right — mirrors the real row template.
-    <div className="grid gap-3 lg:grid-cols-[3fr_2fr] lg:h-[440px] [&>*]:min-w-0">
-      <div className="grid gap-3 lg:grid-cols-3 [&>*]:min-w-0">
-        <CardSkeleton label="VOLUMI" rows={8} strongHeader className="h-[400px]" />
-        <CardSkeleton label="52 SETTIMANE" rows={8} strongHeader className="h-[400px]" />
-        <CardSkeleton label="TOP MOVERS" rows={8} strongHeader className="h-[400px]" />
-      </div>
+    // Mirrors the real row: 2×2 below dense-4, four across above it. The
+    // skeleton has to use the SAME breakpoints as the loaded layout, or the
+    // page visibly reflows the moment data lands — which is exactly what the
+    // first-paint gate exists to prevent.
+    <div className="grid gap-3 md:grid-cols-2 dense-4:grid-cols-4 [&>*]:min-w-0">
+      <CardSkeleton label="52 SETTIMANE" rows={8} strongHeader className="h-[400px]" />
+      <CardSkeleton label="VOLUMI" rows={8} strongHeader className="h-[400px]" />
+      <CardSkeleton label="TOP MOVERS" rows={8} strongHeader className="h-[400px]" />
       <CardSkeleton label="PRE-MARKET USA" rows={8} strongHeader className="h-[400px]" />
     </div>
   );
@@ -70,7 +70,7 @@ function SpotlightRowSkeleton() {
 function BreadthRowSkeleton() {
   return (
     // Lower row: breadth (wide, bottom-left) + RSI + Sectors (lg:h-[520px]).
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-[2fr_1fr_1fr] gap-3 lg:h-[520px] [&>*]:min-w-0">
+    <div className="grid grid-cols-1 md:grid-cols-2 dense-3:grid-cols-[2fr_1fr_1fr] gap-3 dense-3:h-[520px] [&>*]:min-w-0">
       <CardSkeleton label="BREADTH PER INDICE" rows={8} strongHeader />
       <CardSkeleton label="RSI DISTRIBUTION" rows={6} strongHeader />
       <CardSkeleton label="SETTORI" rows={6} strongHeader />
@@ -96,7 +96,7 @@ function DashboardSkeleton() {
       <SpotlightRowSkeleton />
       <BreadthRowSkeleton />
       {/* Discovery row: [2fr_1fr_1fr] at lg+. */}
-      <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr_1fr] gap-3 lg:h-[420px] [&>*]:min-w-0">
+      <div className="grid grid-cols-1 dense-3:grid-cols-[2fr_1fr_1fr] gap-3 dense-3:h-[420px] [&>*]:min-w-0">
         <CardSkeleton label="TOP PICKS" rows={10} strongHeader />
         <CardSkeleton label="SUPERINVESTOR" rows={8} strongHeader />
         <CardSkeleton label="VALUTAZIONI ANALISTI" rows={8} strongHeader />
@@ -303,22 +303,27 @@ function HomePageContent() {
           (no flex-1/overflow) precisely so this auto-equalization works. */}
       {m?.movers ? (
         hidePremarket ? (
-          <div className="grid gap-3 lg:grid-cols-[5fr_4fr] items-stretch [&>*]:min-w-0">
-            <div className="grid gap-3 lg:grid-cols-[1fr_1fr] [&>*]:min-w-0">
+          <div className="grid gap-3 dense-3:grid-cols-[5fr_4fr] items-stretch [&>*]:min-w-0">
+            <div className="grid gap-3 md:grid-cols-2 [&>*]:min-w-0">
               <div className="min-w-0"><FiftyTwoWeekVolCard movers={m.movers} /></div>
               <div className="min-w-0"><LiveVolumeMoversCard movers={m.movers} computedAt={m.computed_at} /></div>
             </div>
             <div className="min-w-0"><TopMoversCard movers={m.movers} computedAt={m.computed_at} /></div>
           </div>
         ) : (
-          // Flat 4-column grid with CONTENT-PROPORTIONAL widths. The old
-          // [5fr_4fr] crammed the three left cards into equal thirds while
-          // pre-market alone took 4/9 — so the two-up TopMovers (gainers +
-          // losers sub-columns) was squeezed to ~18% and its rows overflowed
-          // into each other. The two dense two-column cards (TopMovers,
-          // pre-market) now get the most room; the single-column Volumi the
-          // least.
-          <div className="grid gap-3 lg:grid-cols-[minmax(0,2.2fr)_minmax(0,2fr)_minmax(0,2.9fr)_minmax(0,2.9fr)] items-stretch [&>*]:min-w-0">
+          // Flat 4-column grid with CONTENT-PROPORTIONAL widths. The two dense
+          // two-column cards (TopMovers, pre-market) get the most room; the
+          // single-column Volumi the least.
+          //
+          // Four across only at `dense-4` (1700px), NOT at `lg`. lg is 1024px
+          // of VIEWPORT, and this grid does not get the viewport — the sidebar
+          // takes 255px of it. At lg each card was ~180px wide, and TopMovers
+          // splits internally into gainers|losers, so each half was ~134px
+          // against 98px of fixed numeric columns: the name column resolved to
+          // 0px and company names rendered as nothing. Measured, not guessed.
+          // Between md and dense-4 the row is 2×2, which gives every card the
+          // ~330px it actually needs.
+          <div className="grid gap-3 md:grid-cols-2 dense-4:grid-cols-[minmax(0,2.2fr)_minmax(0,2fr)_minmax(0,2.9fr)_minmax(0,2.9fr)] items-stretch [&>*]:min-w-0">
             <div className="min-w-0"><FiftyTwoWeekVolCard movers={m.movers} /></div>
             <div className="min-w-0"><LiveVolumeMoversCard movers={m.movers} computedAt={m.computed_at} /></div>
             <div className="min-w-0"><TopMoversCard movers={m.movers} computedAt={m.computed_at} /></div>
@@ -328,16 +333,22 @@ function HomePageContent() {
       ) : (
         <SpotlightRowSkeleton />
       )}
-      {/* Lower row: breadth matrix (bottom-left, wide 2fr) + RSI + Sectors. */}
+      {/* Lower row: breadth matrix (bottom-left, wide 2fr) + RSI + Sectors.
+          Three across only at dense-3 (1400px). At lg the two 1fr cards were
+          235px, narrower than "Information Technology" needs to render (156px
+          of text plus its value), so sector labels and the RSI legend clipped.
+          The fixed row height moves with the column count for the same reason:
+          at 2 columns the row is twice as tall, and a height pinned at lg
+          would crop it. */}
       {m?.by_index && m.rsi_distribution && m.sectors ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-[2fr_1fr_1fr] gap-3 lg:h-[520px] [&>*]:min-w-0">
-          <div className="h-[440px] lg:h-full min-h-0"><BreadthMatrixTable data={m.by_index} /></div>
-          <div className="h-[440px] lg:h-full min-h-0">
+        <div className="grid grid-cols-1 md:grid-cols-2 dense-3:grid-cols-[2fr_1fr_1fr] gap-3 dense-3:h-[520px] [&>*]:min-w-0">
+          <div className="h-[440px] dense-3:h-full min-h-0"><BreadthMatrixTable data={m.by_index} /></div>
+          <div className="h-[440px] dense-3:h-full min-h-0">
             <Suspense fallback={<CardSkeleton label="RSI DISTRIBUTION" rows={6} className="h-full" />}>
               <RsiHistogramCard rsi={m.rsi_distribution} indices={m.by_index} />
             </Suspense>
           </div>
-          <div className="h-[440px] lg:h-full min-h-0"><SectorsHeatmapCard sectors={m.sectors} /></div>
+          <div className="h-[440px] dense-3:h-full min-h-0"><SectorsHeatmapCard sectors={m.sectors} /></div>
         </div>
       ) : (
         <BreadthRowSkeleton />
@@ -372,18 +383,24 @@ function HomePageContent() {
           of the single-column Superinvestor + Analyst lists to stay
           readable. `[2fr_1fr_1fr]` keeps the sub-columns legible while
           still fitting the new third card on the same row. */}
-      <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr_1fr] gap-3 lg:h-[420px] [&>*]:min-w-0">
+      {/* dense-3, not lg — and this row had the worst of it. TopPicks takes
+          2fr and then splits INTERNALLY into three tiers
+          (Conservative/Moderate/Aggressive), so at lg its 469px became three
+          sub-columns of ~155px and the ticker column resolved to 0px: the
+          tier lists rendered their rows with no ticker at all. Two columns
+          between md and dense-3 gives TopPicks a full row of its own. */}
+      <div className="grid grid-cols-1 dense-3:grid-cols-[2fr_1fr_1fr] gap-3 dense-3:h-[420px] [&>*]:min-w-0">
         {/* No fixed mobile height: TopPicksCard flows its 3 tiers
             (24 rows) at natural height and the page scrolls. A capped
-            height here would crush the rows (text overlap). lg+: fills
+            height here would crush the rows (text overlap). dense-3+: fills
             the row height as before. */}
-        <div className="lg:h-full lg:min-h-0">
+        <div className="dense-3:h-full dense-3:min-h-0">
           <TopPicksCard />
         </div>
-        <div className="h-[420px] lg:h-full lg:min-h-0">
+        <div className="h-[420px] dense-3:h-full dense-3:min-h-0">
           <SuperinvestorPicksCard />
         </div>
-        <div className="h-[420px] lg:h-full lg:min-h-0">
+        <div className="h-[420px] dense-3:h-full dense-3:min-h-0">
           <AnalystActionsCard />
         </div>
       </div>

@@ -34,9 +34,17 @@ function MoverRow({ m, side }: { m: PremarketMover; side: "g" | "l" }) {
         className="flex items-center gap-2 px-3 py-1.5 hover:bg-accent/30 transition-colors min-w-0"
       >
         <StockIdentity ticker={m.ticker} name={m.name} />
+        {/* Volume is the first thing to go when the row is tight. Every item
+            here is shrink-0, so together they set a floor the row cannot go
+            below — and StockIdentity, the only flexible cell, absorbs the
+            whole deficit and collapses to nothing. Measured at a 1280px
+            viewport: the fixed cells wanted 241px inside a 237px row, so the
+            company name rendered at 0px wide. Dropping volume below row-full
+            buys the name back ~40px, and volume is the least urgent number in
+            a pre-market glance list. */}
         {m.volume != null && (
           <span
-            className="text-xs text-muted-foreground/80 tabular-nums shrink-0"
+            className="hidden row-full:inline text-xs text-muted-foreground/80 tabular-nums shrink-0"
             title={`Volume pre-market: ${m.volume.toLocaleString("it-IT")}`}
           >
             {fmtVol(m.volume)}
