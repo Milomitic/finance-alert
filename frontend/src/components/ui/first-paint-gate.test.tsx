@@ -28,7 +28,9 @@ describe("FirstPaintGate", () => {
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     qc.prefetchQuery({ queryKey: ["slow"], queryFn: () => new Promise(() => {}) });
     withClient(<FirstPaintGate><p>contenuto</p></FirstPaintGate>, qc);
-    expect(await screen.findByRole("status")).toBeInTheDocument();
+    // role changed from "status" to "progressbar" once the bar carried a
+    // real percentage — a progressbar is what announces a value.
+    expect(await screen.findByRole("progressbar")).toBeInTheDocument();
     expect(screen.getByText("contenuto").parentElement).toHaveClass("opacity-0");
   });
 
@@ -64,5 +66,38 @@ describe("FirstPaintGate", () => {
     qc.prefetchQuery({ queryKey: ["later"], queryFn: () => new Promise(() => {}) });
     await new Promise((r) => setTimeout(r, 50));
     expect(screen.getByText("contenuto").parentElement).toHaveClass("opacity-100");
+  });
+});
+
+describe("FirstPaintGate — progress", () => {
+  it("reports a percentage that reflects resolved queries, not a fake animation", async () => {
+    /* Two first-loads outstanding; one resolves. The bar must move because
+     * something actually happened, and the label must say what. */
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    qc.prefetchQuery({ queryKey: ["a"], queryFn: () => new Promise(() => {}) });
+    qc.prefetchQuery({ queryKey: ["b"], queryFn: () => new Promise(() => {}) });
+    withClient(<FirstPaintGate><p>contenuto</p></FirstPaintGate>, qc);
+
+    const bar = await screen.findByRole("progressbar");
+    expect(bar).toHaveAttribute("aria-valuenow", "0");
+
+    qc.setQueryData(["a"], { ok: true });
+    await waitFor(() =>
+      expect(Number(screen.getByRole("progressbar").getAttribute("aria-valuenow"))).toBeGreaterThan(40),
+    );
+    expect(screen.getByText(/1 di 2 sezioni pronte/)).toBeInTheDocument();
+  });
+
+  it("never shows 100% while the page is still hidden", async () => {
+    /* A bar sitting at "done" over a blank page is worse than one at 40%: it
+     * says the wait is over when it is not. */
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    qc.prefetchQuery({ queryKey: ["slow"], queryFn: () => new Promise(() => {}) });
+    withClient(
+      <FirstPaintGate timeoutMs={200}><p>contenuto</p></FirstPaintGate>, qc,
+    );
+    const bar = await screen.findByRole("progressbar");
+    await new Promise((r) => setTimeout(r, 150));
+    expect(Number(bar.getAttribute("aria-valuenow"))).toBeLessThan(100);
   });
 });
