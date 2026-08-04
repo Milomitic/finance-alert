@@ -172,9 +172,18 @@ function ActionRow({ a }: { a: AnalystAction }) {
             stock-detail Analyst card's style. */}
         <GradeChip from={a.from_grade} to={a.to_grade} />
         <PriceTargetChip a={a} />
-        <TargetUpsideChip a={a} />
+        {/* Upside and date step aside until dense-4. Measured on this row at a
+            1920px viewport: 287px of shrink-0 children plus 64px of gaps in a
+            383px row, so the firm — the only flexible cell — was left 7px and
+            rendered as nothing. These two are the ones to drop: the upside is
+            derivable from the price target beside it, and the date is the
+            least urgent field in a "who said what" list. Dropping both returns
+            ~148px to the firm. */}
+        <span className="hidden dense-4:contents">
+          <TargetUpsideChip a={a} />
+        </span>
 
-        <span className="shrink-0 w-10 text-right text-[10px] text-muted-foreground tabular-nums whitespace-nowrap">
+        <span className="hidden dense-4:block shrink-0 w-10 text-right text-[10px] text-muted-foreground tabular-nums whitespace-nowrap">
           {fmtDate(a.date)}
         </span>
       </Link>

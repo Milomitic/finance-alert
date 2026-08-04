@@ -3,7 +3,7 @@ import { Suspense, lazy } from "react";
 
 import { AlertsCompactPanel } from "@/components/dashboard/AlertsCompactPanel";
 import { BreadthMatrixTable } from "@/components/dashboard/BreadthMatrixTable";
-import { HeroStrip } from "@/components/dashboard/HeroStrip";
+import { MarketMoodStrip } from "@/components/dashboard/MarketMoodStrip";
 import { LiveVolumeMoversCard } from "@/components/dashboard/LiveVolumeMoversCard";
 import { MarketEventsRail } from "@/components/dashboard/MarketEventsRail";
 import { MarketTickerTape } from "@/components/dashboard/MarketTickerTape";
@@ -40,14 +40,8 @@ import { useMarketSummary } from "@/hooks/useMarketSummary";
  */
 
 function HeroRowSkeleton() {
-  return (
-    // HeroStrip row: [340px_1fr_200px] split at lg+.
-    <div className="grid gap-3 lg:grid-cols-[340px_1fr_200px] [&>*]:min-w-0">
-      <CardSkeleton className="h-[120px]" rows={3} />
-      <CardSkeleton label="MERCATI LIVE" rows={4} strongHeader className="h-[120px]" />
-      <CardSkeleton className="h-[120px]" rows={3} />
-    </div>
-  );
+  // One thin bar: the mood hero is a strip now, not a 340px row.
+  return <CardSkeleton className="h-[52px]" rows={1} />;
 }
 
 function SpotlightRowSkeleton() {
@@ -90,6 +84,7 @@ function DashboardSkeleton() {
   return (
     <div className="space-y-4">
       <HeroRowSkeleton />
+      <AlertsPanelSkeleton />
       <SpotlightRowSkeleton />
       <BreadthRowSkeleton />
       {/* Discovery row: [2fr_1fr_1fr] at lg+. */}
@@ -98,7 +93,6 @@ function DashboardSkeleton() {
         <CardSkeleton label="SUPERINVESTOR" rows={8} strongHeader />
         <CardSkeleton label="VALUTAZIONI ANALISTI" rows={8} strongHeader />
       </div>
-      <AlertsPanelSkeleton />
       {/* Footer (DataSources). */}
       <CardSkeleton label="DATA SOURCES" rows={3} className="h-[120px]" />
     </div>
@@ -245,10 +239,40 @@ function HomePageContent() {
           double as the TS narrowing — past the validation above a
           settled payload always has all of them). */}
       {m?.global && m.by_index ? (
-        <HeroStrip global={m.global} byIndex={m.by_index} />
+        <MarketMoodStrip global={m.global} byIndex={m.by_index} />
       ) : (
         <HeroRowSkeleton />
       )}
+      {/* Segnali, above the fold.
+       *
+       * The app is called finance-ALERT and this is the panel that says what
+       * fired: new signals, the confluence clusters, the names carrying them.
+       * It used to sit at the very bottom, five screens down, under four rows
+       * of market description — so the thing the product exists to surface was
+       * the last thing the page showed. Ordering is an editorial claim about
+       * what matters, and the old order made the wrong one.
+       *
+       * Market context did not disappear, it moved behind: the strip above
+       * carries the verdict, and breadth / RSI / sectors are one scroll down
+       * for when the answer to "what fired" prompts "in what weather". */}
+      {/* Height follows the panel's own column count, which is 2 up to dense-4
+          and 4 above it — a 2-column panel needs roughly twice the rows, so a
+          single cap wrong-foots one of the two. Leaving it uncapped was worse
+          still: measured, the page grew from 5.4 to 6.0 screens at 1280px, and
+          the whole point of moving Segnali up was to make the page shorter. */}
+      {summaryData ? (
+        <div className="md:h-[520px] dense-4:h-[420px]">
+          <AlertsCompactPanel
+            topStocks={summaryData.top_stocks_30d}
+            recentAlerts={summaryData.recent_alerts}
+            alertsByIndex={summaryData.alerts_by_index_30d}
+            alertsLast24h={summaryData.kpis.alerts_last_24h}
+            alertsPrev24h={summaryData.kpis.alerts_prev_24h}
+          />
+        </div>
+      ) : summary.isLoading ? (
+        <AlertsPanelSkeleton />
+      ) : null}
       {/* Row 2: same [3fr_2fr] split as HeroStrip — breadth matrix on
           the left (the wider, table-shaped artifact) + live-volume
           movers on the right (vertical list, narrower, polls live
@@ -336,7 +360,10 @@ function HomePageContent() {
           at 2 columns the row is twice as tall, and a height pinned at lg
           would crop it. */}
       {m?.by_index && m.rsi_distribution && m.sectors ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 dense-3:grid-cols-[2fr_1fr_1fr] gap-3 dense-3:h-[520px] [&>*]:min-w-0">
+        <div
+          id="breadth"
+          className="grid grid-cols-1 md:grid-cols-2 dense-3:grid-cols-[2fr_1fr_1fr] gap-3 dense-3:h-[520px] [&>*]:min-w-0 scroll-mt-4"
+        >
           <div className="h-[440px] dense-3:h-full min-h-0"><BreadthMatrixTable data={m.by_index} /></div>
           <div className="h-[440px] dense-3:h-full min-h-0">
             <Suspense fallback={<CardSkeleton label="RSI DISTRIBUTION" rows={6} className="h-full" />}>
@@ -399,23 +426,6 @@ function HomePageContent() {
           <AnalystActionsCard />
         </div>
       </div>
-      {/* Alerts panel: driven by the dashboard summary alone — shows its
-          own skeleton while that query is still in flight instead of
-          holding the whole page hostage. Absent (as before) if the
-          summary settled without data. */}
-      {summaryData ? (
-        <div className="lg:h-[420px]">
-          <AlertsCompactPanel
-            topStocks={summaryData.top_stocks_30d}
-            recentAlerts={summaryData.recent_alerts}
-            alertsByIndex={summaryData.alerts_by_index_30d}
-            alertsLast24h={summaryData.kpis.alerts_last_24h}
-            alertsPrev24h={summaryData.kpis.alerts_prev_24h}
-          />
-        </div>
-      ) : summary.isLoading ? (
-        <AlertsPanelSkeleton />
-      ) : null}
     </div>
   );
 }
