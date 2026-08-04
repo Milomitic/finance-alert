@@ -185,6 +185,39 @@ def get_news(
             logger.warning(f"[news] finnhub fallback failed for {ticker}: {exc}")
 
     if not normalized:
+        # Yahoo per-ticker RSS. Placed BEFORE Marketaux despite carrying less
+        # metadata, because it has no key and no published quota while
+        # Marketaux allows 100 calls a DAY and is routinely spent by
+        # mid-morning. Trying the unlimited source first keeps that small
+        # budget for what this one misses.
+        #
+        # It exists for the listings the stages above cannot reach: Finnhub's
+        # free tier answers HTTP 403 for anything off a US exchange, which left
+        # 225 foreign names — London, Hong Kong, Tokyo, Seoul, Milan — with no
+        # source at all. This feed returns headlines for every one of them.
+        try:
+            from app.services import yahoo_rss_news_service
+            rss_items = yahoo_rss_news_service.fetch_company_news(ticker, limit=15)
+            if rss_items:
+                logger.info(
+                    f"[news] yfinance+finnhub empty for {ticker}, using "
+                    f"Yahoo RSS fallback ({len(rss_items)} items)"
+                )
+                normalized = [
+                    {
+                        "title": item.title,
+                        "link": item.url,
+                        "publisher": item.source or "Yahoo Finance",
+                        "published_at": item.published_at,
+                        "sentiment": classify_title(item.title),
+                        "summary": None,
+                    }
+                    for item in rss_items
+                ]
+        except Exception as exc:  # noqa: BLE001 — fallback can fail, that's OK
+            logger.warning(f"[news] yahoo-rss fallback failed for {ticker}: {exc}")
+
+    if not normalized:
         try:
             from app.services import marketaux_news_service
             fallback = marketaux_news_service.fetch_news(ticker, limit=10)
