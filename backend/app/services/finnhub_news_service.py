@@ -174,6 +174,31 @@ def is_enabled() -> bool:
     return bool(settings.finnhub_api_key)
 
 
+# One warning per scope per process. A missing key is a PERMANENT condition,
+# so logging it per call would emit thousands of identical lines and teach
+# everyone to filter them out; logging it never — which is what the bare
+# `return []` did — leaves an entire fallback tier silently absent.
+#
+# It matters more here than it looks. This is the FIRST fallback for news, and
+# with no key it returns empty in a way indistinguishable from "this ticker has
+# no news". The chain then falls through to Marketaux, which allows 100 calls a
+# DAY, so it saturates immediately while carrying traffic Finnhub was meant to
+# absorb. Production ran that way with 429 of 999 tickers newsless, and nothing
+# anywhere said the middle tier was not configured.
+_WARNED_DISABLED: set[str] = set()
+
+
+def _warn_disabled_once(scope: str) -> None:
+    if scope in _WARNED_DISABLED:
+        return
+    _WARNED_DISABLED.add(scope)
+    logger.warning(
+        f"[finnhub] {scope}: FINNHUB_API_KEY not configured — this fallback "
+        "tier is inert. Every call returns empty, which upstream cannot tell "
+        "apart from 'no results'."
+    )
+
+
 def _is_blocked(scope: str = _NEWS_SCOPE) -> tuple[bool, str | None]:
     """True if the `scope`'s breaker is open. Cheap check — used by
     probes and callers to short-circuit before the network round-trip.
@@ -276,6 +301,7 @@ def fetch_company_news(
     decision horizon, narrow enough to keep the payload bounded.
     """
     if not is_enabled():
+        _warn_disabled_once(_NEWS_SCOPE)
         return []
     blocked, why = _is_blocked(_NEWS_SCOPE)
     if blocked:
@@ -414,6 +440,7 @@ def fetch_upgrade_downgrade(
     cadence at most, so checking every minute would be wasteful.
     """
     if not is_enabled():
+        _warn_disabled_once(_NEWS_SCOPE)
         return []
     blocked, why = _is_blocked(_ANALYST_SCOPE)
     if blocked:
@@ -533,6 +560,7 @@ def fetch_recommendation_trend(ticker: str) -> list[FinnhubRatingBucket]:
     other Finnhub fetchers.
     """
     if not is_enabled():
+        _warn_disabled_once(_NEWS_SCOPE)
         return []
     blocked, why = _is_blocked(_ANALYST_SCOPE)
     if blocked:
