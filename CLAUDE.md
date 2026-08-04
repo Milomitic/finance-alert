@@ -368,9 +368,93 @@ The bug is invisible in dev.
 
 - **Backend**: `cd backend && ./.venv/Scripts/python.exe -m pytest tests/ -x -q`
   (281+ tests, runs in ~5s)
+- **Frontend tests**: `cd frontend && npm run test:run` (91 tests, ~3s)
+- **Frontend hook gate**: `cd frontend && npm run lint:hooks` (see below — clean
+  output and exit 0 is the only acceptable result)
 - **Frontend build/typecheck**: `cd frontend && npm run build`
   (also: `npx tsc -b` for type-only check)
 - **Single test file**: append the file path to the pytest command
+
+⚠️ `npm run lint` (the FULL config) reports ~57 pre-existing stylistic errors
+from eslint-plugin-react-hooks v7 — exhaustive-deps, set-state-in-effect,
+static-components, purity. They are NOT gated and a red result there is
+expected. Cleaning them is a separate job. `lint:hooks` is the gated subset.
+
+---
+
+## ⚠️ White screen = a component threw during render. READ THE CONSOLE FIRST.
+
+**Cost so far: two wrong fixes and two reverts of innocent code (2026-08-04).**
+
+React unmounts the ENTIRE tree when a render throws with no error boundary
+above it. So a bug in a decorative corner widget presents as "the whole app is
+blank" — and whatever was on screen just before the blank looks like the
+culprit while being unrelated. The actual cause is always named, precisely, in
+the browser console.
+
+**The rule: on a blank page, read the console before forming any hypothesis.**
+The error gives the component, the hook index, and the exact transition. Both
+wrong fixes were plausible readings of the SYMPTOM; one console read gave the
+answer in seconds.
+
+The instance that cost the time: `useIsPhone()` in `RunProgressToast` sat next
+to the JSX that used it, which put it after three `return null`s. Hidden render
+= 7 hooks, visible render = 8, so React threw the moment a scan started. The
+toast IS the progress bar, so "the bar appears then everything disappears"
+read as a bug in the bar. Fixed in `76bd68a`.
+
+### Now guarded — three layers
+
+1. **`npm run lint:hooks`** (`frontend/eslint.hooks.config.js`) — ONE rule,
+   `react-hooks/rules-of-hooks`, gated in CI. The plugin was installed and the
+   rule enabled the whole time; it simply never ran where it could stop a
+   merge. Verified empirically by re-introducing the bug on a copy.
+2. **`ErrorBoundary` is wired** in `Layout.tsx` — around the route outlet
+   (keyed by `location.pathname`, because boundaries never reset themselves)
+   and around both global toasts with `fallback={null}`. A crash now costs one
+   subtree. It existed as dead code before, imported nowhere.
+3. **Frontend tests run in CI.** They did not before — the job was `npm ci` +
+   `npm run build` only, so 85 tests could go red and merge anyway.
+
+### Writing tests that can actually see this class of bug
+
+A test that renders a component in ONE state cannot detect a hook-order fault.
+Render it across the TRANSITION, both directions — see
+`RunProgressToast.test.tsx`. React reports the violation via `console.error`
+rather than a throw the test can catch, so assert on a spy.
+
+**Always confirm a regression test fails with the fix reverted.** It is cheap:
+patch the fix out on a copy, run, restore.
+
+### Local repro of a logged-in browser session (no password anywhere)
+
+Guessing from the outside is what cost the time. This gets a real browser onto
+the real app in about a minute:
+
+```bash
+# 1. backend (background)
+cd backend && ./.venv/Scripts/python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+
+# 2. mint a session cookie with the app's OWN signer and write it to a
+#    throwaway page — the token never passes through the chat or a shell echo
+cd backend && ./.venv/Scripts/python.exe -c "
+import io
+from app.core.security import create_session_token
+from app.core.config import settings
+tok = create_session_token(settings.admin_username)
+io.open('../frontend/public/__dev-session.html','w',encoding='utf-8').write(
+  \"<script>document.cookie='%s=%s; path=/; SameSite=Lax'</script>\" % (settings.session_cookie_name, tok))"
+
+# 3. vite (proxies /api -> :8000), then visit /__dev-session.html, then /
+cd frontend && npm run dev
+
+# 4. ALWAYS delete it afterwards — it contains a valid session token
+rm frontend/public/__dev-session.html
+```
+
+`frontend/public/` is served at the site root and IS a committed directory —
+the file must never be committed. Verify with
+`git log --all -- frontend/public/__dev-session.html` (must be empty).
 
 ---
 
