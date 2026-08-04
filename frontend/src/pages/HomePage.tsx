@@ -25,6 +25,7 @@ const RsiHistogramCard = lazy(() =>
     default: m.RsiHistogramCard,
   })),
 );
+import { FirstPaintGate } from "@/components/ui/first-paint-gate";
 import { useDashboardSummary } from "@/hooks/useDashboardSummary";
 import { useMarketSummary } from "@/hooks/useMarketSummary";
 import { usePremarketMovers } from "@/hooks/usePremarketMovers";
@@ -135,7 +136,7 @@ function MarketError({ onRetry }: { onRetry: () => void }) {
   );
 }
 
-export default function HomePage() {
+function HomePageContent() {
   const market = useMarketSummary();
   const summary = useDashboardSummary();
   // The pre-market card is visible ONLY when the backend tells us
@@ -404,6 +405,26 @@ export default function HomePage() {
         <AlertsPanelSkeleton />
       ) : null}
     </div>
+  );
+}
+
+/* The gate wraps the whole page rather than each panel: the point is to stop
+ * the panels appearing one at a time, which per-panel skeletons cannot do —
+ * they ARE the stagger, just prettier.
+ *
+ * This was removed twice on the belief that it was blanking the dashboard. It
+ * was not: the blank screen came from a hook called after an early return in
+ * RunProgressToast, which unmounted the whole tree (fixed in 76bd68a, and the
+ * console named it precisely both times nobody read it). The gate is restored
+ * unchanged. It is also no longer the last line of defence — Layout wraps the
+ * route outlet in an ErrorBoundary, so a crash under here costs this subtree
+ * rather than the page.
+ */
+export default function HomePage() {
+  return (
+    <FirstPaintGate>
+      <HomePageContent />
+    </FirstPaintGate>
   );
 }
 
