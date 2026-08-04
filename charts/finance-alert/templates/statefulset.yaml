@@ -80,6 +80,23 @@ spec:
                   name: {{ include "finance-alert.secretName" . }}
                   key: MARKETAUX_API_KEY
                   optional: true
+            # Finnhub — the FIRST news fallback (60/min) and the one that
+            # matters most. It was missing from this list, so the key could sit
+            # in the Secret and the pod would still never see it: the tier
+            # returned empty forever, indistinguishable from "no news found",
+            # while MarketAux (100 a DAY) absorbed the whole overflow and
+            # tripped its breaker. 429 of 999 tickers were newsless as a
+            # result.
+            #
+            # `optional: true` matches MarketAux — a missing key must not stop
+            # the pod booting — but the service now logs the absence once per
+            # process, so an unconfigured tier is stated rather than silent.
+            - name: FINNHUB_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "finance-alert.secretName" . }}
+                  key: FINNHUB_API_KEY
+                  optional: true
             # M7-P4 cutover switch. OFF (default) = the app keeps its embedded
             # SQLite on the PVC — the pre-M7 behaviour AND the instant rollback
             # (flip the flag back to false and the untouched .db is authoritative
