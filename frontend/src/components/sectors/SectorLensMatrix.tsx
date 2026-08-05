@@ -5,7 +5,7 @@ import { useNavigate } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { SectionTitle } from "@/components/ui/section-title";
 import type { SectorSummary } from "@/hooks/useSectorDetail";
-import { bullShare, meanOf } from "@/lib/sectorLens";
+import { bullShare, meanOf, shortSectorName } from "@/lib/sectorLens";
 import { cn } from "@/lib/utils";
 
 /* ─── SectorLensMatrix — the two lenses as two axes ─────────────────────── *
@@ -24,6 +24,18 @@ import { cn } from "@/lib/utils";
  *
  * Hand-drawn SVG rather than recharts. Eleven points do not justify a 331KB
  * chunk that the dashboard already lazy-loads to keep off its critical path.
+ *
+ * SIZE. The chart is capped at MAX_PX wide (see the wrapper below) rather than
+ * filling its column. `w-full h-auto` on an SVG means the height follows the
+ * page width, so on a 4K screen the old 680×400 box rendered well over 700px
+ * tall and pushed everything else off the fold. A scatter of eleven points
+ * gains nothing from that area — past a certain size the reader is just
+ * moving their eyes further between the same eleven marks.
+ *
+ * Kept near-square on purpose. Both axes are 0-100 composites, so a point of
+ * Qualità and a point of Tecnico should occupy the same number of pixels; a
+ * wide, short band would quietly flatten the vertical spread and make the
+ * lenses look more aligned than they are.
  */
 
 interface Props {
@@ -33,12 +45,14 @@ interface Props {
   onHover?: (name: string | null) => void;
 }
 
-const W = 680;
-const H = 400;
-const PAD_L = 52;
-const PAD_R = 24;
-const PAD_T = 26;
-const PAD_B = 44;
+const W = 440;
+const H = 350;
+const PAD_L = 32;
+const PAD_R = 14;
+const PAD_T = 14;
+const PAD_B = 28;
+/** Hard ceiling on the rendered width — the whole point of the resize. */
+const MAX_PX = "max-w-[460px]";
 
 /** Axis domain from the data, padded, then snapped outward to whole numbers.
  *  A fixed 0-100 domain would squeeze every sector into the middle third —
@@ -79,8 +93,10 @@ export function SectorLensMatrix({ sectors, activeSector, onHover }: Props) {
   const Y = (v: number) =>
     H - PAD_B - ((v - yDom[0]) / (yDom[1] - yDom[0])) * (H - PAD_T - PAD_B);
   // Area-proportional, not radius-proportional: doubling the radius quadruples
-  // the ink, which would read as four times the stocks.
-  const R = (n: number) => 8 + Math.sqrt(n / maxCount) * 16;
+  // the ink, which would read as four times the stocks. Range narrowed with
+  // the box (was 8-24): at the smaller scale the old bubbles overlapped into
+  // one another and the labels had nowhere to sit.
+  const R = (n: number) => 4 + Math.sqrt(n / maxCount) * 9;
 
   const ticks = (d: [number, number]) => {
     const step = d[1] - d[0] > 24 ? 10 : 5;
@@ -99,7 +115,7 @@ export function SectorLensMatrix({ sectors, activeSector, onHover }: Props) {
           </span>
         </div>
 
-        <div className="flex-1 min-h-0 p-2">
+        <div className={cn("flex-1 min-h-0 p-2 w-full mx-auto", MAX_PX)}>
           <svg
             viewBox={`0 0 ${W} ${H}`}
             className="w-full h-auto"
@@ -151,33 +167,18 @@ export function SectorLensMatrix({ sectors, activeSector, onHover }: Props) {
                 className="stroke-foreground/40" strokeWidth={1} strokeDasharray="4 4"
               />
             )}
-            {mx !== null && my !== null && (
-              <>
-                <text x={W - PAD_R - 4} y={PAD_T + 11} textAnchor="end"
-                      className="fill-muted-foreground/70 text-[10px]">
-                  forte su entrambe
-                </text>
-                <text x={PAD_L + 4} y={PAD_T + 11}
-                      className="fill-muted-foreground/70 text-[10px]">
-                  qualità non ancora prezzata
-                </text>
-                <text x={W - PAD_R - 4} y={H - PAD_B - 6} textAnchor="end"
-                      className="fill-muted-foreground/70 text-[10px]">
-                  momentum senza qualità
-                </text>
-                <text x={PAD_L + 4} y={H - PAD_B - 6}
-                      className="fill-muted-foreground/70 text-[10px]">
-                  debole su entrambe
-                </text>
-              </>
-            )}
+            {/* The four quadrant captions used to be drawn in the corners.
+                They were the longest text in the picture, and at this size
+                they landed on top of the points they were describing. The
+                same key now sits under the chart as one line, where it can be
+                read in full without competing with the data. */}
 
-            <text x={W - PAD_R} y={H - 6} textAnchor="end"
-                  className="fill-muted-foreground text-[11px] font-medium">
+            <text x={W - PAD_R} y={H - 4} textAnchor="end"
+                  className="fill-muted-foreground text-[10px] font-medium">
               Tecnico →
             </text>
-            <text x={0} y={0} transform={`rotate(-90) translate(${-(H - PAD_B)} 13)`}
-                  className="fill-muted-foreground text-[11px] font-medium">
+            <text x={0} y={0} transform={`rotate(-90) translate(${-(H - PAD_B)} 10)`}
+                  className="fill-muted-foreground text-[10px] font-medium">
               Qualità →
             </text>
 
@@ -216,19 +217,29 @@ export function SectorLensMatrix({ sectors, activeSector, onHover }: Props) {
                     strokeWidth={active ? 2.5 : 1.5}
                   />
                   <text
-                    x={cx} y={cy - r - 5} textAnchor="middle"
+                    x={cx} y={cy - r - 4} textAnchor="middle"
                     className={cn(
-                      "text-[10.5px] pointer-events-none",
-                      active ? "fill-foreground font-semibold" : "fill-foreground/75",
+                      "text-[9px] pointer-events-none",
+                      active ? "fill-foreground font-semibold" : "fill-foreground/70",
                     )}
                   >
-                    {s.name}
+                    {shortSectorName(s.name)}
                   </text>
                 </g>
               );
             })}
           </svg>
         </div>
+
+        {/* Reading key, displaced from the plot corners. The two off-diagonal
+            quadrants are the interesting ones — they are where the lenses
+            disagree, which is the reading no column of the table carries. */}
+        <p className="px-3 pb-1.5 text-[11px] text-muted-foreground shrink-0 leading-snug">
+          Le linee tratteggiate sono le medie. In alto a sinistra la{" "}
+          <span className="text-foreground/80">qualità non ancora prezzata</span>, in
+          basso a destra il <span className="text-foreground/80">momentum senza
+          qualità</span>: è lì che le due lenti si contraddicono.
+        </p>
 
         {missing.length > 0 && (
           <p className="px-3 pb-2 text-[11px] text-muted-foreground shrink-0">

@@ -1,7 +1,6 @@
 import { ArrowRight, BellRing } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 
-import { Card, CardContent } from "@/components/ui/card";
 import type {
   IndustryRow,
   SectorSummary,
@@ -97,39 +96,10 @@ function ScoreSparkline({ points }: { points: SectorTrendPoint[] }) {
   );
 }
 
-/* ─── Top summary tile ─────────────────────────────────────────────────── */
-export function SummaryTile({
-  icon: Icon,
-  label,
-  value,
-  hint,
-}: {
-  icon: React.ComponentType<{ className?: string }>;
-  label: string;
-  value: string | number;
-  hint?: string;
-}) {
-  return (
-    <Card className="overflow-hidden">
-      <CardContent className="p-4 flex items-center gap-3">
-        <div className="rounded-lg bg-muted/60 p-2.5">
-          <Icon className="h-5 w-5 text-muted-foreground" />
-        </div>
-        <div className="min-w-0">
-          <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-mono">
-            {label}
-          </div>
-          <div className="text-2xl font-bold tabular-nums leading-tight">
-            {value}
-          </div>
-          {hint && (
-            <div className="text-xs text-muted-foreground mt-0.5">{hint}</div>
-          )}
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
+/* `SummaryTile` lived here until August 2026. It rendered the four universe
+ * totals as four 84px cards across the top of the Esplora page — the first
+ * thing the reader saw, above anything actionable. The same four numbers now
+ * sit on one line in the page header; nothing else used the component. */
 
 /* ─── Sector tile card ────────────────────────────────────────────────── */
 export function SectorTile({ sector }: { sector: SectorSummary }) {

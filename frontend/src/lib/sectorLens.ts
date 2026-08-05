@@ -39,6 +39,25 @@ export function bullShare(s: SectorSummary): number | null {
  */
 export const GAP_NOTABLE = 8;
 
+/** GICS names abbreviated for the scatter's point labels ONLY.
+ *
+ *  Three of the eleven sectors are long enough to overlap their neighbours at
+ *  chart scale — "Information Technology" is 22 characters against bubbles
+ *  roughly 20px across. Everywhere the name is read rather than glanced at
+ *  (table, tiles, routes) it stays full: the sector name is also the URL
+ *  segment, so abbreviating it globally would break `/sectors/{name}`.
+ */
+const SHORT_SECTOR: Record<string, string> = {
+  "Information Technology": "Info Tech",
+  "Consumer Discretionary": "Cons. Discr.",
+  "Consumer Staples": "Cons. Staples",
+  "Communication Services": "Comm. Svcs",
+};
+
+export function shortSectorName(name: string): string {
+  return SHORT_SECTOR[name] ?? name;
+}
+
 export type SortKey =
   | "name"
   | "stock_count"

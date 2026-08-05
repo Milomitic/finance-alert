@@ -1,21 +1,13 @@
-import {
-  BarChart3,
-  Factory,
-  Globe2,
-  Grid3x3,
-  Layers,
-  RefreshCw,
-  Sparkles,
-} from "lucide-react";
+import { BarChart3, Grid3x3, RefreshCw } from "lucide-react";
 import { useMemo, useState } from "react";
 
+import { LeaderboardStrip } from "@/components/sectors/LeaderboardStrip";
 import { SectorIndustriesBreakdown } from "@/components/sectors/SectorIndustriesBreakdown";
 import { SectorLensMatrix } from "@/components/sectors/SectorLensMatrix";
 import { SectorLensTable } from "@/components/sectors/SectorLensTable";
-import { SummaryTile } from "@/components/sectors/SectorOverviewTiles";
 import { Card, CardContent } from "@/components/ui/card";
 import { CardSkeleton } from "@/components/ui/card-skeleton";
-import { useSectorsOverview } from "@/hooks/useSectorDetail";
+import { useLeaderboards, useSectorsOverview } from "@/hooks/useSectorDetail";
 import { fmtNum } from "@/lib/sectorFormat";
 import { cn } from "@/lib/utils";
 
@@ -44,9 +36,23 @@ import { cn } from "@/lib/utils";
  * (existing SectorDetailPage). The tile / row building blocks live in
  * components/sectors/SectorOverviewTiles — this file orchestrates the
  * layout and the industries view-mode toggle.
+ *
+ * ─── Reordered, August 2026 ───────────────────────────────────────────────
+ * The page used to open with four tiles carrying the universe totals, then
+ * the sector lenses. Nothing above the fold answered "so what do I look at",
+ * which is the question someone opens this page with.
+ *
+ * Now: header → top picks → lenses → industries. The totals moved into the
+ * header line, where they still orient without spending a full row: they are
+ * reference numbers that change once a day, and they were outranking the
+ * three rankings underneath them purely by being higher up.
  */
 export default function SectorsOverviewPage() {
   const { data, isLoading, isError, refetch, isFetching } = useSectorsOverview();
+  // Separate query from the overview on purpose: the sector lenses render
+  // straight from SQL while the analyst board waits on the fundamentals
+  // cache, so the page paints without being held to the slower half.
+  const { data: boards, isLoading: boardsLoading } = useLeaderboards();
   // Shared highlight between the matrix and the table — hovering a bubble
   // lights its row and vice versa, so the two are one surface.
   const [hoveredSector, setHoveredSector] = useState<string | null>(null);
@@ -84,14 +90,17 @@ export default function SectorsOverviewPage() {
     // era un semplice "Caricamento…" testuale.
     return (
       <div className="space-y-6">
-        <h2 className="text-2xl sm:text-3xl font-semibold tracking-tight">Settori</h2>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 [&>*]:min-w-0">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <CardSkeleton key={i} rows={2} className="h-[84px]" />
+        <h2 className="text-2xl sm:text-3xl font-semibold tracking-tight">Esplora</h2>
+        {/* Mirrors the real layout: three ranking cards, then the two lenses. */}
+        <div className="grid gap-3 lg:grid-cols-3 [&>*]:min-w-0">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <CardSkeleton key={i} rows={6} />
           ))}
         </div>
-        <CardSkeleton rows={6} className="h-[420px]" />
-        <CardSkeleton label="SETTORI" rows={11} strongHeader />
+        <div className="grid gap-3 items-start dense-3:grid-cols-[minmax(0,480px)_minmax(0,1fr)]">
+          <CardSkeleton rows={6} className="h-[380px]" />
+          <CardSkeleton label="SETTORI" rows={11} strongHeader />
+        </div>
       </div>
     );
   }
@@ -122,46 +131,51 @@ export default function SectorsOverviewPage() {
 
   return (
     <div className="space-y-6">
-      {/* ─── Header ────────────────────────────────────────────────── */}
+      {/* ─── Header + universe totals on one line ──────────────────── */}
       <div>
         <h2 className="text-2xl sm:text-3xl font-semibold tracking-tight flex items-center gap-3">
           <Grid3x3 className="h-7 w-7 text-muted-foreground" aria-hidden />
-          Settori
+          Esplora
         </h2>
         <p className="text-sm text-muted-foreground mt-1">
-          Panoramica completa di tutti i settori e sotto-settori del catalogo.
-          Clicca su un settore per esplorare i suoi stock, le mediane, e i top
-          mover.
+          Dove guardare oggi, e come si posizionano i settori del catalogo.
         </p>
+        <dl className="mt-2 flex flex-wrap items-baseline gap-x-4 gap-y-1 text-xs text-muted-foreground">
+          <span>
+            <dt className="inline">Stock</dt>{" "}
+            <dd className="inline font-medium tabular-nums text-foreground">
+              {data.total_stocks.toLocaleString("it-IT")}
+            </dd>
+          </span>
+          <span>
+            <dt className="inline">Settori</dt>{" "}
+            <dd className="inline font-medium tabular-nums text-foreground">
+              {data.total_sectors}
+            </dd>
+          </span>
+          <span>
+            <dt className="inline">Industries</dt>{" "}
+            <dd className="inline font-medium tabular-nums text-foreground">
+              {data.total_industries}
+            </dd>
+          </span>
+          <span>
+            <dt className="inline">Score medio universo</dt>{" "}
+            <dd className="inline font-medium tabular-nums text-foreground">
+              {fmtNum(universeAvgScore, 1)}
+            </dd>
+          </span>
+        </dl>
       </div>
 
-      {/* ─── Top summary tiles ─────────────────────────────────────── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 [&>*]:min-w-0">
-        <SummaryTile
-          icon={Globe2}
-          label="Stock totali"
-          value={data.total_stocks.toLocaleString("it-IT")}
-          hint="Universo dei country visibili"
-        />
-        <SummaryTile
-          icon={Layers}
-          label="Settori"
-          value={data.total_sectors}
-          hint="Classificazione GICS"
-        />
-        <SummaryTile
-          icon={Factory}
-          label="Industries"
-          value={data.total_industries}
-          hint="Sotto-settori GICS"
-        />
-        <SummaryTile
-          icon={Sparkles}
-          label="Score medio universo"
-          value={fmtNum(universeAvgScore, 1)}
-          hint="Composito 0–100, pesato per stock count"
-        />
-      </div>
+      {/* ─── Top picks ─────────────────────────────────────────────── */}
+      <LeaderboardStrip
+        analysts={boards?.analysts ?? []}
+        combined={boards?.combined ?? []}
+        signals={boards?.signals ?? []}
+        signalWindowDays={boards?.signal_window_days ?? 30}
+        isLoading={boardsLoading}
+      />
 
       {/* ─── Sectors: matrix over table ────────────────────────────── *
        *
@@ -185,16 +199,21 @@ export default function SectorsOverviewPage() {
             compaiono qui.
           </p>
         )}
-        <SectorLensMatrix
-          sectors={data.sectors}
-          activeSector={hoveredSector}
-          onHover={setHoveredSector}
-        />
-        <SectorLensTable
-          sectors={data.sectors}
-          activeSector={hoveredSector}
-          onHover={setHoveredSector}
-        />
+        {/* Side by side from 1400px, where the table's 760px minimum still
+            leaves the scatter its full width. Below that they stack, and the
+            scatter's own max-width keeps it from stretching. */}
+        <div className="grid gap-3 items-start dense-3:grid-cols-[minmax(0,480px)_minmax(0,1fr)]">
+          <SectorLensMatrix
+            sectors={data.sectors}
+            activeSector={hoveredSector}
+            onHover={setHoveredSector}
+          />
+          <SectorLensTable
+            sectors={data.sectors}
+            activeSector={hoveredSector}
+            onHover={setHoveredSector}
+          />
+        </div>
       </div>
 
       {/* ─── Industries breakdown ──────────────────────────────────── */}
@@ -209,7 +228,8 @@ export default function SectorsOverviewPage() {
             (0–100) di tutti gli stock del settore. Mediane P/E, ROE e dividend
             yield calcolate sui fundamentals più recenti (yfinance, cache 24h).
             Per il dettaglio di ogni settore — distribuzione score, top/bottom
-            pick, tabella completa con filtri — clicca su una tile.
+            pick, tabella completa con filtri — clicca sul nome del settore
+            nella tabella o sulla sua bolla nel grafico.
           </p>
         </CardContent>
       </Card>

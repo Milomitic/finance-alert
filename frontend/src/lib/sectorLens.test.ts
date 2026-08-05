@@ -2,7 +2,14 @@ import { describe, expect, it } from "vitest";
 
 import type { SectorSummary } from "@/hooks/useSectorDetail";
 
-import { bullShare, lensGap, meanOf, signalBalance, sortSectors } from "./sectorLens";
+import {
+  bullShare,
+  lensGap,
+  meanOf,
+  shortSectorName,
+  signalBalance,
+  sortSectors,
+} from "./sectorLens";
 
 function sec(over: Partial<SectorSummary> = {}): SectorSummary {
   return {
@@ -109,5 +116,27 @@ describe("meanOf", () => {
 
   it("is null when nothing is measurable", () => {
     expect(meanOf([sec({ avg_score: null })], (s) => s.avg_score)).toBeNull();
+  });
+});
+
+describe("shortSectorName", () => {
+  it("abbreviates only the names long enough to collide on the chart", () => {
+    // Three of the eleven GICS sectors are 20+ characters against bubbles
+    // roughly 20px wide; the rest already fit.
+    expect(shortSectorName("Information Technology")).toBe("Info Tech");
+    expect(shortSectorName("Consumer Discretionary")).toBe("Cons. Discr.");
+    expect(shortSectorName("Communication Services")).toBe("Comm. Svcs");
+  });
+
+  it("leaves short names untouched", () => {
+    expect(shortSectorName("Energy")).toBe("Energy");
+    expect(shortSectorName("Utilities")).toBe("Utilities");
+  });
+
+  it("passes through anything it does not know", () => {
+    // The sector name is also the /sectors/{name} URL segment. A lookup miss
+    // must return the name unchanged, never an empty string — that would put
+    // an unlabelled bubble on the chart and break the link out of it.
+    expect(shortSectorName("Qualcosa Di Nuovo")).toBe("Qualcosa Di Nuovo");
   });
 });

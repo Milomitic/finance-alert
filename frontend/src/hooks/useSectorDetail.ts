@@ -153,3 +153,41 @@ export function useSectorsOverview() {
     staleTime: 5 * 60 * 1000,
   });
 }
+
+/** Una riga di classifica. `value` è il numero di testa del board che la
+ *  contiene — ogni board spiega il proprio, per questo il nome è generico. */
+export interface LeaderRow {
+  ticker: string;
+  name: string | null;
+  sector: string | null;
+  quality: number | null;
+  technical: number | null;
+  value: number;
+  detail: string | null;
+  signals_bull: number;
+  signals_bear: number;
+  detectors_bull: number;
+  /** Solo board analisti. */
+  analysts: number | null;
+  recommendation: number | null;
+  upside_pct: number | null;
+  target: number | null;
+  last_close: number | null;
+}
+
+export interface Leaderboards {
+  analysts: LeaderRow[];
+  combined: LeaderRow[];
+  signals: LeaderRow[];
+  /** Ampiezza della finestra del board segnali, dichiarata dal server così
+   *  la UI non fissa un numero che poi va in deriva. */
+  signal_window_days: number;
+}
+
+export function useLeaderboards(limit = 6) {
+  return useQuery({
+    queryKey: ["sectors-leaderboards", limit],
+    queryFn: () => api<Leaderboards>(`/api/sectors/leaderboards?limit=${limit}`),
+    staleTime: 5 * 60 * 1000,
+  });
+}
