@@ -1,14 +1,13 @@
-import { Clock, Hourglass, Target, TrendingDown, TrendingUp } from "lucide-react";
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Hourglass, Target } from "lucide-react";
+import { useMemo, useState } from "react";
 
-import { StockIdentity } from "@/components/dashboard/StockIdentity";
+import { SetupConditionGroup } from "@/components/setups/SetupConditionGroup";
 import { Card, CardContent } from "@/components/ui/card";
 import { CardSkeleton } from "@/components/ui/card-skeleton";
 import { QueryError } from "@/components/ui/query-error";
 import { SectionTitle } from "@/components/ui/section-title";
-import { useSetups, waitingDays, type Setup } from "@/hooks/useSetups";
-import { getAlertKindMeta } from "@/lib/alertMeta";
+import { useSetups } from "@/hooks/useSetups";
+import { detectorCounts, detectorLabel, groupByCondition, type SetupSortKey } from "@/lib/setupGrouping";
 import { cn } from "@/lib/utils";
 
 /* ─── Setups — cosa si sta formando, PRIMA del segnale ─────────────────────
@@ -25,91 +24,6 @@ import { cn } from "@/lib/utils";
  * If this page ever starts looking like a list of predictions, the honesty
  * the backend was built around has leaked away at the last step.
  */
-
-function ProximityBar({ value }: { value: number }) {
-  const pct = Math.round(value * 100);
-  return (
-    <div className="flex items-center gap-2 min-w-0">
-      <div className="h-1.5 w-16 shrink-0 rounded-full bg-muted overflow-hidden">
-        <div
-          className={cn(
-            "h-full rounded-full",
-            // Literal class strings (Tailwind purger, per CLAUDE.md).
-            value >= 0.8 ? "bg-emerald-500" : value >= 0.6 ? "bg-sky-500" : "bg-amber-500",
-          )}
-          style={{ width: `${pct}%` }}
-        />
-      </div>
-      <span className="text-xs tabular-nums text-muted-foreground shrink-0">{pct}%</span>
-    </div>
-  );
-}
-
-function SetupRow({ setup }: { setup: Setup }) {
-  const meta = getAlertKindMeta(setup.detector);
-  const days = waitingDays(setup);
-  const bull = setup.tone === "bull";
-  const level = setup.annotations?.levels?.[0];
-
-  return (
-    <div className="rounded-lg border bg-card p-3 hover:bg-muted/30 transition-colors">
-      <div className="flex items-start justify-between gap-3">
-        <Link
-          to={`/stocks/${encodeURIComponent(setup.ticker)}`}
-          className="flex items-center gap-2 min-w-0 hover:underline"
-        >
-          <StockIdentity ticker={setup.ticker} name={setup.name} />
-        </Link>
-        <div className="shrink-0 text-right">
-          <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-mono">
-            Priorità
-          </div>
-          <div className="text-lg font-semibold tabular-nums leading-none">
-            {Math.round(setup.convenience)}
-          </div>
-        </div>
-      </div>
-
-      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5">
-        <span
-          className={cn(
-            "inline-flex items-center gap-1 text-xs font-semibold",
-            bull ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400",
-          )}
-        >
-          {bull ? <TrendingUp className="h-3.5 w-3.5" /> : <TrendingDown className="h-3.5 w-3.5" />}
-          {meta.label}
-        </span>
-        <ProximityBar value={setup.proximity} />
-        {days !== null && (
-          <span
-            className="inline-flex items-center gap-1 text-xs text-muted-foreground"
-            title="Da quanto queste condizioni si mantengono"
-          >
-            <Clock className="h-3 w-3" aria-hidden />
-            in attesa da {days === 0 ? "oggi" : `${days}g`}
-          </span>
-        )}
-      </div>
-
-      {/* The actionable part, deliberately the most legible thing on the row. */}
-      <div className="mt-2 flex items-start gap-2 rounded-md bg-muted/50 px-2.5 py-2">
-        <Target className="h-3.5 w-3.5 mt-0.5 shrink-0 text-muted-foreground" aria-hidden />
-        <div className="min-w-0">
-          <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-mono">
-            Cosa manca
-          </div>
-          <div className="text-sm leading-snug">{setup.missing}</div>
-          {level && (
-            <div className="mt-1 text-xs text-muted-foreground tabular-nums">
-              {level.label}: {level.price.toFixed(2)}
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
 
 /** The feature's own report card. Shown up front on purpose: setups make no
  *  market claim, so the only honest thing to advertise is whether they do
@@ -149,7 +63,16 @@ function StatsStrip({ stats }: { stats: ReturnType<typeof useSetups>["data"] ext
 
 export default function SetupsPage() {
   const [tone, setTone] = useState<"bull" | "bear" | undefined>(undefined);
+  const [detector, setDetector] = useState<string | null>(null);
+  const [sort, setSort] = useState<SetupSortKey>("convenience");
   const q = useSetups(tone);
+
+  const all = q.data?.setups ?? [];
+  const detectors = useMemo(() => detectorCounts(all), [all]);
+  const groups = useMemo(
+    () => groupByCondition(detector ? all.filter((s) => s.detector === detector) : all, sort),
+    [all, detector, sort],
+  );
 
   return (
     <div className="space-y-4 max-w-5xl">
@@ -167,7 +90,10 @@ export default function SetupsPage() {
 
       {q.data && <StatsStrip stats={q.data.stats} />}
 
-      <div className="flex items-center gap-2">
+      {/* Three controls became eight. The page had exactly one axis — tone —
+          which meant no way to ask "show me only the squeezes" or "who has
+          been waiting longest", on the longest page in the app. */}
+      <div className="flex flex-wrap items-center gap-2">
         {([undefined, "bull", "bear"] as const).map((t) => (
           <button
             key={t ?? "all"}
@@ -181,10 +107,62 @@ export default function SetupsPage() {
             {t === undefined ? "Tutti" : t === "bull" ? "Rialzisti" : "Ribassisti"}
           </button>
         ))}
+
+        {detectors.length > 1 && (
+          <>
+            <span className="h-5 w-px bg-border mx-1" aria-hidden />
+            <button
+              type="button"
+              onClick={() => setDetector(null)}
+              className={cn(
+                "min-h-[36px] px-3 rounded-md border text-xs font-semibold transition-colors",
+                detector === null ? "bg-primary text-primary-foreground" : "hover:bg-accent",
+              )}
+            >
+              Ogni condizione
+            </button>
+            {detectors.map(({ detector: d, count }) => (
+              <button
+                key={d}
+                type="button"
+                onClick={() => setDetector(d)}
+                className={cn(
+                  "min-h-[36px] px-3 rounded-md border text-xs font-semibold transition-colors",
+                  detector === d ? "bg-primary text-primary-foreground" : "hover:bg-accent",
+                )}
+              >
+                {detectorLabel(d)}{" "}
+                <span className="tabular-nums opacity-70">{count}</span>
+              </button>
+            ))}
+          </>
+        )}
+
+        <span className="h-5 w-px bg-border mx-1" aria-hidden />
+        <label className="flex items-center gap-2 text-xs text-muted-foreground">
+          Ordina
+          <select
+            value={sort}
+            onChange={(e) => setSort(e.target.value as SetupSortKey)}
+            className="min-h-[36px] rounded-md border bg-background px-2 text-xs font-semibold"
+          >
+            <option value="convenience">Priorità</option>
+            <option value="waiting">Attesa più lunga</option>
+            <option value="ticker">Titolo (A-Z)</option>
+          </select>
+        </label>
       </div>
 
       <div>
-        <SectionTitle icon={Target} label="Setup attivi" className="mb-3" />
+        <SectionTitle
+          icon={Target}
+          label={
+            groups.length > 0
+              ? `Setup attivi — ${groups.reduce((n, g) => n + g.setups.length, 0)} in ${groups.length} condizioni`
+              : "Setup attivi"
+          }
+          className="mb-3"
+        />
         {q.isLoading ? (
           <div className="space-y-2">
             {Array.from({ length: 5 }).map((_, i) => (
@@ -202,9 +180,9 @@ export default function SetupsPage() {
             </CardContent>
           </Card>
         ) : (
-          <div className="space-y-2">
-            {q.data.setups.map((s) => (
-              <SetupRow key={s.id} setup={s} />
+          <div className="space-y-3">
+            {groups.map((g) => (
+              <SetupConditionGroup key={g.key} group={g} />
             ))}
           </div>
         )}

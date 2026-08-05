@@ -124,13 +124,24 @@ export const DayCell = forwardRef<HTMLDivElement, DayCellProps>(
           )}
         </div>
 
-        {/* Event chip grid — 2 columns. Renders on EVERY cell that has
-            events, including out-of-month days (was previously gated on
-            `inMonth` which silently hid chips on the leading/trailing
-            edges of the grid). The opacity on the cell wrapper already
-            visually de-emphasizes adjacent-month days. */}
+        {/* Event chips. Renders on EVERY cell that has events, including
+            out-of-month days (was previously gated on `inMonth` which silently
+            hid chips on the leading/trailing edges of the grid). The opacity on
+            the cell wrapper already visually de-emphasizes adjacent-month days.
+         *
+         * ONE COLUMN until the month grid is genuinely wide. Two columns is
+         * what made the tickers vanish: a day cell is a seventh of the grid —
+         * 138px at a 1280px viewport, measured — so each chip got 60px, and a
+         * chip is an icon plus a gap plus the ticker. The icon and gap fit; the
+         * ticker resolved to 0px and rendered as nothing. Thirty-one labels
+         * were invisible that way, tickers and macro events alike ("AIR.PA",
+         * "QCOM", "FOMC rate decision"), on a page that otherwise looked fine.
+         *
+         * dense-3 (1400px) puts the cell near 175px, which fits two 85px chips.
+         * Below that the cell shows fewer chips and an honest "+N" overflow
+         * rather than a row of blanks. */}
         {hasEvents && (
-          <div className="relative grid grid-cols-2 gap-x-1 gap-y-1 min-h-0">
+          <div className="relative grid grid-cols-1 dense-3:grid-cols-2 gap-x-1 gap-y-1 min-h-0">
             {visible.map((ev, i) => (
               <EventChip
                 key={
@@ -148,7 +159,9 @@ export const DayCell = forwardRef<HTMLDivElement, DayCellProps>(
               <Tooltip>
                 <TooltipTrigger asChild>
                   <span
-                    className="col-span-2 self-start text-[13px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors px-1 cursor-help"
+                    /* Spans whatever the grid currently is — hard-coding
+                       col-span-2 would overflow the single-column layout. */
+                    className="col-span-full self-start text-[13px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors px-1 cursor-help"
                     aria-label={`${overflowCount} altri eventi`}
                   >
                     +{overflowCount} altri
