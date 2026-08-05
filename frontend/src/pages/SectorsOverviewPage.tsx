@@ -7,13 +7,14 @@ import {
   RefreshCw,
   Sparkles,
 } from "lucide-react";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
 import { SectorIndustriesBreakdown } from "@/components/sectors/SectorIndustriesBreakdown";
-import { SectorTile, SummaryTile } from "@/components/sectors/SectorOverviewTiles";
+import { SectorLensMatrix } from "@/components/sectors/SectorLensMatrix";
+import { SectorLensTable } from "@/components/sectors/SectorLensTable";
+import { SummaryTile } from "@/components/sectors/SectorOverviewTiles";
 import { Card, CardContent } from "@/components/ui/card";
 import { CardSkeleton } from "@/components/ui/card-skeleton";
-import { SectionTitle } from "@/components/ui/section-title";
 import { useSectorsOverview } from "@/hooks/useSectorDetail";
 import { fmtNum } from "@/lib/sectorFormat";
 import { cn } from "@/lib/utils";
@@ -46,6 +47,9 @@ import { cn } from "@/lib/utils";
  */
 export default function SectorsOverviewPage() {
   const { data, isLoading, isError, refetch, isFetching } = useSectorsOverview();
+  // Shared highlight between the matrix and the table — hovering a bubble
+  // lights its row and vice versa, so the two are one surface.
+  const [hoveredSector, setHoveredSector] = useState<string | null>(null);
 
   // Stocks with sector = NULL don't appear in any card, so the sum of
   // the card counts can undershoot the "Stock totali" tile (es. 938 vs
@@ -86,11 +90,8 @@ export default function SectorsOverviewPage() {
             <CardSkeleton key={i} rows={2} className="h-[84px]" />
           ))}
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 [&>*]:min-w-0">
-          {Array.from({ length: 8 }).map((_, i) => (
-            <CardSkeleton key={i} rows={5} className="h-[220px]" />
-          ))}
-        </div>
+        <CardSkeleton rows={6} className="h-[420px]" />
+        <CardSkeleton label="SETTORI" rows={11} strongHeader />
       </div>
     );
   }
@@ -162,28 +163,38 @@ export default function SectorsOverviewPage() {
         />
       </div>
 
-      {/* ─── Sector grid ───────────────────────────────────────────── */}
-      <div>
-        <SectionTitle
-          icon={Layers}
-          label={`Settori (${data.sectors.length})`}
-          className="mb-3"
-          right={
-            unclassifiedCount > 0 ? (
-              <span
-                className="text-xs text-muted-foreground"
-                title="Stock senza settore assegnato: non compaiono in nessuna card ma contano nel totale"
-              >
-                ({unclassifiedCount} non classificati)
-              </span>
-            ) : undefined
-          }
+      {/* ─── Sectors: matrix over table ────────────────────────────── *
+       *
+       * This replaced a grid of eleven identical cards. The cards showed every
+       * sector the same way, alphabetically, with seven metrics each as plain
+       * text — so "which sector has the strongest technical posture" meant
+       * reading and comparing seventy-seven numbers by eye, and the page ran
+       * 3.6 screens doing it.
+       *
+       * Two views, deliberately in this order. The matrix answers "where does
+       * everything sit" — including the one reading no column can carry, which
+       * is where the two lenses DISAGREE. The table answers every pointed
+       * question underneath it, sortable, in half a screen.
+       *
+       * Hovering either one highlights the same sector in the other, so they
+       * read as one surface rather than two charts of the same data. */}
+      <div className="space-y-3">
+        {unclassifiedCount > 0 && (
+          <p className="text-xs text-muted-foreground">
+            {unclassifiedCount} stock senza settore assegnato: contano nel totale ma non
+            compaiono qui.
+          </p>
+        )}
+        <SectorLensMatrix
+          sectors={data.sectors}
+          activeSector={hoveredSector}
+          onHover={setHoveredSector}
         />
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 [&>*]:min-w-0">
-          {data.sectors.map((s) => (
-            <SectorTile key={s.name} sector={s} />
-          ))}
-        </div>
+        <SectorLensTable
+          sectors={data.sectors}
+          activeSector={hoveredSector}
+          onHover={setHoveredSector}
+        />
       </div>
 
       {/* ─── Industries breakdown ──────────────────────────────────── */}

@@ -16,14 +16,21 @@ import { cn } from "@/lib/utils";
  * by-sector / flat-ranking view toggle. Owns the view-mode state (the page
  * never reads it back) and the parent-sector grouping memo — extracted so
  * SectorsOverviewPage stays a thin layout orchestrator. */
+/** How many industries the ranking shows before asking. 46 rows carrying four
+ *  fields each made this the TALLEST block on the page — 1237px measured,
+ *  more than the matrix and the whole sector table combined (1169px) — for a
+ *  quarter of their information. Ten is enough to answer "what leads", and
+ *  the rest is one click away. */
+const RANK_PREVIEW = 10;
+
 export function SectorIndustriesBreakdown({ industries }: { industries: IndustryRow[] }) {
-  // "by-sector" groups under each sector header, "flat" lists all in one
-  // ranked list. Default by-sector because that's the most useful entry
-  // point on first land — the user typically wants "what's IN technology?"
-  // rather than a global industry leaderboard.
-  const [industryView, setIndustryView] = useState<"by-sector" | "flat">(
-    "by-sector",
-  );
+  // Default flipped to "flat" alongside the sector table redesign. The
+  // grouped view repeats a hierarchy the table above now states clearly, and
+  // it is the expensive one to render: eleven cards, one per sector, each
+  // with its own header. The ranking answers the question the section is
+  // actually for — which sub-sectors lead — in ten rows.
+  const [industryView, setIndustryView] = useState<"by-sector" | "flat">("flat");
+  const [showAll, setShowAll] = useState(false);
 
   // Group industries by parent sector for the "by-sector" view.
   const industriesBySector = useMemo(() => {
@@ -36,6 +43,19 @@ export function SectorIndustriesBreakdown({ industries }: { industries: Industry
     }
     return m;
   }, [industries]);
+
+  // Sorted once here rather than inside the JSX: the ranking is also what the
+  // "show all" count reports, and computing it twice invites the two to drift.
+  const ranked = useMemo(
+    () =>
+      [...industries].sort((a, b) => {
+        const sa = a.avg_score ?? -Infinity;
+        const sb = b.avg_score ?? -Infinity;
+        if (sa !== sb) return sb - sa;
+        return b.stock_count - a.stock_count;
+      }),
+    [industries],
+  );
 
   return (
     <div>
@@ -107,21 +127,26 @@ export function SectorIndustriesBreakdown({ industries }: { industries: Industry
           })}
         </div>
       ) : (
-        /* Flat ranking — sorted by avg score desc, then stock count desc */
+        /* Flat ranking — sorted by avg score desc, then stock count desc.
+           Truncated to RANK_PREVIEW until asked: see the constant. */
         <Card>
           <CardContent className="p-3">
             <div className="space-y-0.5">
-              {[...industries]
-                .sort((a, b) => {
-                  const sa = a.avg_score ?? -Infinity;
-                  const sb = b.avg_score ?? -Infinity;
-                  if (sa !== sb) return sb - sa;
-                  return b.stock_count - a.stock_count;
-                })
-                .map((ind) => (
-                  <IndustryRankRow key={`${ind.sector}-${ind.name}`} industry={ind} />
-                ))}
+              {ranked.slice(0, showAll ? ranked.length : RANK_PREVIEW).map((ind) => (
+                <IndustryRankRow key={`${ind.sector}-${ind.name}`} industry={ind} />
+              ))}
             </div>
+            {ranked.length > RANK_PREVIEW && (
+              <button
+                type="button"
+                onClick={() => setShowAll((v) => !v)}
+                className="mt-2 w-full rounded-md border py-1.5 text-xs text-muted-foreground hover:bg-accent transition-colors"
+              >
+                {showAll
+                  ? "Mostra solo i primi 10"
+                  : `Mostra tutti i ${ranked.length} sotto-settori`}
+              </button>
+            )}
           </CardContent>
         </Card>
       )}
