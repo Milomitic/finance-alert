@@ -12,6 +12,7 @@ function st(over: Partial<Setup> = {}): Setup {
     detector: "trend_pullback",
     tone: "bull",
     proximity: 0.8,
+    distance_atr: null,
     convenience: 75,
     missing: "il prezzo deve tornare sopra la EMA50 (100.00): il pullback e' in corso",
     first_seen_at: new Date(Date.now() - 2 * 86400000).toISOString(),

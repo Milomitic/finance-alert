@@ -12,7 +12,7 @@ from app.signals.calibration_map import get_calibration
 from app.signals.context import SignalContext
 from app.signals.detectors.base import SignalMatch, clamp01, concave, score_v2
 from app.signals.events import Event
-from app.signals.setups.base import SetupMatch
+from app.signals.setups.base import SetupMatch, distance_to_trigger_atr
 
 _NEAR_PCT = 0.03
 # ── Setup-only thresholds ────────────────────────────────────────────────
@@ -146,6 +146,9 @@ class CandleReversal:
             # candle — near-term, but genuinely unresolved: price at a level
             # can break it instead of bouncing.
             proximity=0.70,
+            distance_atr=distance_to_trigger_atr(
+                ctx.last_close, float(nearest), ctx.atr
+            ),
             missing=(
                 f"manca la candela di inversione al {level_label.lower()} "
                 f"{nearest:.2f} (testato {touches} volte)"

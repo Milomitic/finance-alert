@@ -2,11 +2,12 @@ import { Hourglass, Target } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { SetupConditionGroup } from "@/components/setups/SetupConditionGroup";
+import { SetupDetailDialog } from "@/components/setups/SetupDetailDialog";
 import { Card, CardContent } from "@/components/ui/card";
 import { CardSkeleton } from "@/components/ui/card-skeleton";
 import { QueryError } from "@/components/ui/query-error";
 import { SectionTitle } from "@/components/ui/section-title";
-import { useSetups } from "@/hooks/useSetups";
+import { useSetups, type Setup } from "@/hooks/useSetups";
 import { detectorCounts, detectorLabel, groupByCondition, type SetupSortKey } from "@/lib/setupGrouping";
 import { cn } from "@/lib/utils";
 
@@ -65,6 +66,10 @@ export default function SetupsPage() {
   const [tone, setTone] = useState<"bull" | "bear" | undefined>(undefined);
   const [detector, setDetector] = useState<string | null>(null);
   const [sort, setSort] = useState<SetupSortKey>("convenience");
+  // The setup whose detail panel is open. Named `openSetup`, not `open`:
+  // a bare `open` resolves to `window.open` when the declaration is missing,
+  // and TypeScript then reports a type error somewhere else entirely.
+  const [openSetup, setOpenSetup] = useState<Setup | null>(null);
   const q = useSetups(tone);
 
   const all = q.data?.setups ?? [];
@@ -147,6 +152,7 @@ export default function SetupsPage() {
             className="min-h-[36px] rounded-md border bg-background px-2 text-xs font-semibold"
           >
             <option value="convenience">Priorità</option>
+            <option value="distance">Più vicini all'innesco</option>
             <option value="waiting">Attesa più lunga</option>
             <option value="ticker">Titolo (A-Z)</option>
           </select>
@@ -182,11 +188,12 @@ export default function SetupsPage() {
         ) : (
           <div className="space-y-3">
             {groups.map((g) => (
-              <SetupConditionGroup key={g.key} group={g} />
+              <SetupConditionGroup key={g.key} group={g} onOpen={setOpenSetup} />
             ))}
           </div>
         )}
       </div>
+      <SetupDetailDialog setup={openSetup} onClose={() => setOpenSetup(null)} />
     </div>
   );
 }

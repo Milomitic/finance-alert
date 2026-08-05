@@ -33,6 +33,7 @@ const setup = {
   detector: "oversold_reversal",
   tone: "bull",
   proximity: 0.85,
+  distance_atr: 0.42,
   convenience: 72.4,
   missing: "la barra deve girare al livello 180.00",
   first_seen_at: new Date(Date.now() - 3 * 86_400_000).toISOString(),

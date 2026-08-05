@@ -27,8 +27,15 @@ class SetupOut(BaseModel):
     name: str | None = None
     detector: str
     tone: str
-    #: 0..1 — share of the detector's gate chain already satisfied.
+    #: 0..1 — share of the detector's gate chain already satisfied. A property
+    #: of the DETECTOR: every setup of the same detector at the same stage
+    #: carries the same value, so it cannot rank two of them against each other.
     proximity: float
+    #: Distance from price to the trigger level, in ATR units — the per-SETUP
+    #: counterpart to `proximity`. Near 0 means a normal day's move would fire
+    #: it. Null when the trigger is not a price crossing (squeeze_expansion
+    #: waits on volatility) or when the row predates the field.
+    distance_atr: float | None = None
     #: 0..100 ATTENTION score for ordering. NOT a probability: setups make no
     #: forecast, and nothing in the engine's calibration applies to them.
     convenience: float
@@ -37,6 +44,10 @@ class SetupOut(BaseModel):
     first_seen_at: str | None = None
     last_seen_at: str | None = None
     annotations: dict | None = None
+    #: The measured 0..1 factors behind the setup. Stored since day one and
+    #: never surfaced — the detail panel shows them so the wait can be read as
+    #: evidence rather than as an assertion.
+    factors: dict[str, float] | None = None
 
 
 class SetupListOut(BaseModel):
@@ -81,15 +92,20 @@ def list_setups(
             ann = json.loads(row.annotations_json) if row.annotations_json else None
         except (ValueError, TypeError):
             ann = None
+        try:
+            fac = json.loads(row.factors_json) if row.factors_json else None
+        except (ValueError, TypeError):
+            fac = None
         out.append(
             SetupOut(
                 id=row.id, ticker=stock.ticker, name=stock.name,
                 detector=row.detector, tone=row.tone,
-                proximity=row.proximity, convenience=row.convenience,
+                proximity=row.proximity, distance_atr=row.distance_atr,
+                convenience=row.convenience,
                 missing=row.missing,
                 first_seen_at=row.first_seen_at.isoformat() if row.first_seen_at else None,
                 last_seen_at=row.last_seen_at.isoformat() if row.last_seen_at else None,
-                annotations=ann,
+                annotations=ann, factors=fac,
             )
         )
     return SetupListOut(setups=out, stats=setup_service.conversion_stats(db))

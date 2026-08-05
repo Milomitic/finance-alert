@@ -19,8 +19,15 @@ export interface Setup {
   name: string | null;
   detector: string;
   tone: string;
-  /** 0..1 — share of the detector's gate chain already satisfied. */
+  /** 0..1 — share of the detector's gate chain already satisfied. A property
+   *  of the DETECTOR: identical for every setup of the same detector at the
+   *  same stage, so it cannot rank two of them against each other. */
   proximity: number;
+  /** Distance from price to the trigger level, in ATR units — the per-SETUP
+   *  counterpart to `proximity`. Near 0 means one normal session's move would
+   *  fire it. Null when the trigger is not a price crossing (squeeze waits on
+   *  volatility) or when the row predates the field. */
+  distance_atr: number | null;
   /**
    * 0..100 ATTENTION score used for ordering. NOT a probability: setups make
    * no forecast and none of the engine's calibration applies to them. Never
@@ -32,6 +39,8 @@ export interface Setup {
   first_seen_at: string | null;
   last_seen_at: string | null;
   annotations: { levels?: { label: string; price: number; kind: string }[] } | null;
+  /** Measured 0..1 factors behind the setup — evidence for the wait. */
+  factors?: Record<string, number> | null;
 }
 
 export interface SetupStats {

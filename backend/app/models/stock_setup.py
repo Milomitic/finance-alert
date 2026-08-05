@@ -67,6 +67,13 @@ class StockSetup(Base):
     convenience: Mapped[float] = mapped_column(Float, nullable=False)
     # Plain-language "what still has to happen" — the actionable part.
     missing: Mapped[str] = mapped_column(Text, nullable=False)
+    # Distance from price to the trigger level, in ATR units. The per-SETUP
+    # counterpart to `proximity` above, which is per-DETECTOR by construction:
+    # two stocks at the same gate stage are not equally close to firing.
+    # Nullable because some triggers are not price crossings at all
+    # (squeeze_expansion waits on volatility), and because rows written before
+    # this column existed have no value to backfill from.
+    distance_atr: Mapped[float | None] = mapped_column(Float, nullable=True)
     factors_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     annotations_json: Mapped[str | None] = mapped_column(Text, nullable=True)
 

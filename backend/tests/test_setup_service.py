@@ -7,16 +7,20 @@ pin that bookkeeping — especially the ways it could silently flatter itself.
 """
 from datetime import UTC, date, datetime, timedelta
 
+import pytest
+
 from app.models import Alert, Stock, StockSetup
 from app.models.stock_setup import STATUS_ACTIVE, STATUS_CONVERTED, STATUS_EXPIRED
 from app.services import setup_service
 from app.signals.setups.base import SetupMatch, convenience
 
 
-def _match(detector="oversold_reversal", tone="bull", proximity=0.85, **factors):
+def _match(detector="oversold_reversal", tone="bull", proximity=0.85,
+           distance_atr=None, **factors):
     return SetupMatch(
         detector=detector, tone=tone, proximity=proximity,
         missing="la barra deve girare",
+        distance_atr=distance_atr,
         factors=factors or {"rsi_extremity": 0.8},
     )
 
@@ -284,3 +288,40 @@ def test_stats_count_only_what_was_actually_surfaced(db):
     db.flush()
 
     assert setup_service.conversion_stats(db)["converted"] == 1
+
+
+def test_distance_atr_survives_the_round_trip(db):
+    """The wiring, end to end: detector → SetupMatch → row.
+
+    `proximity` cannot separate two setups of the same detector — it is the
+    same number for all of them by construction. `distance_atr` is the value
+    that can, so it has to actually reach the database; a field computed in
+    the detector and dropped on the way to the row would look identical in
+    every unit test of the calculation itself.
+    """
+    s = Stock(ticker="AAA", name="A", exchange="X")
+    db.add(s)
+    db.flush()
+
+    row = setup_service.upsert_setup(db, stock_id=s.id, match=_match(distance_atr=0.42))
+    assert row.distance_atr == pytest.approx(0.42)
+
+    # And it must be REFRESHED on re-detection, not written once: price moves,
+    # so a stale distance is worse than none — it would rank a setup that has
+    # drifted away as if it were still on the doorstep.
+    again = setup_service.upsert_setup(db, stock_id=s.id, match=_match(distance_atr=1.9))
+    assert again.id == row.id
+    assert again.distance_atr == pytest.approx(1.9)
+
+
+def test_distance_atr_is_none_for_triggers_without_a_level(db):
+    """squeeze_expansion waits on volatility re-expanding — there is no price
+    level to be near. None must survive as None rather than becoming a 0 that
+    would sort it to the top of "closest to firing"."""
+    s = Stock(ticker="BBB", name="B", exchange="X")
+    db.add(s)
+    db.flush()
+    row = setup_service.upsert_setup(
+        db, stock_id=s.id, match=_match(detector="squeeze_expansion", distance_atr=None)
+    )
+    assert row.distance_atr is None

@@ -12,7 +12,7 @@ from app.signals.calibration_map import get_calibration
 from app.signals.context import SignalContext
 from app.signals.detectors.base import SignalMatch, concave, score_v2, trend_maturity_factor
 from app.signals.events import Event
-from app.signals.setups.base import SetupMatch
+from app.signals.setups.base import SetupMatch, distance_to_trigger_atr
 
 _FAST = 50
 _SLOW = 200
@@ -147,6 +147,11 @@ class TrendPullback:
             detector=self.name,
             tone=tone,
             proximity=0.80,
+            # The per-setup half: how far this stock's close sits from the
+            # EMA it must cross back over, in its own ATR.
+            distance_atr=distance_to_trigger_atr(
+                float(close.iloc[last]), float(fast_now), ctx.atr
+            ),
             missing=(
                 f"il prezzo deve tornare {'sopra' if tone == 'bull' else 'sotto'} "
                 f"la EMA{_FAST} ({float(fast_now):.2f}): il pullback e' in corso, "

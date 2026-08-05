@@ -53,13 +53,57 @@ class SetupMatch:
     # 0..1 — how much of the detector's gate chain is already satisfied. 1.0 is
     # NOT reachable: at 1.0 the detector would have fired and this would be a
     # signal instead.
+    #
+    # This is a property of the DETECTOR, not of the individual setup: each
+    # detector states the share its own chain has reached, so every setup of
+    # that detector at the same stage carries the same number. Measured on a
+    # live payload it had ONE distinct value across 20 trend_pullback setups
+    # and one across 15 oversold_reversal ones. That is correct behaviour for
+    # what it measures — and the reason `distance_atr` below exists, because it
+    # is NOT a per-setup measure and must not be read as one.
     proximity: float
     # Plain-language statement of what still has to happen. This is the whole
     # user-facing value: it says what to watch for, so the wait is actionable.
     missing: str
+    # How far price sits from the level that would trigger, in ATR units — the
+    # genuinely per-setup number. Two stocks at the same gate stage are not
+    # equally close: one 0.2 ATR from its trigger could fire tomorrow, one 2.5
+    # ATR away needs a move it does not usually make in a day. Expressed in ATR
+    # rather than percent so a quiet utility and a volatile biotech are
+    # comparable at all.
+    #
+    # None when the trigger is not a price crossing — `squeeze_expansion` waits
+    # on volatility re-expanding, which has no level to be near. Reporting some
+    # other quantity here to avoid a blank would repeat the mistake this field
+    # was added to fix.
+    distance_atr: float | None = None
     factors: dict[str, float] = field(default_factory=dict)
     # Chart levels worth drawing while waiting (same shape signals use).
     annotations: dict = field(default_factory=dict)
+
+
+def distance_to_trigger_atr(
+    last_close: float | None, level: float | None, atr_value: float | None
+) -> float | None:
+    """Absolute gap between price and its trigger level, in ATR units.
+
+    ATR rather than percent because the question is "can this plausibly happen
+    next session", and 1% means something different on a utility than on a
+    biotech. A value near 0 means the trigger is a normal day's move away; 2+
+    means it is not, whatever the gate chain says.
+
+    Returns None rather than a number whenever the inputs cannot support one —
+    no level, no ATR, or a degenerate ATR of zero on a flat instrument.
+    """
+    if last_close is None or level is None or atr_value is None:
+        return None
+    try:
+        a = float(atr_value)
+        if a <= 0:
+            return None
+        return abs(float(last_close) - float(level)) / a
+    except (TypeError, ValueError):
+        return None
 
 
 class SupportsProximity(Protocol):

@@ -11,7 +11,7 @@ from app.signals.calibration_map import get_calibration
 from app.signals.context import SignalContext
 from app.signals.detectors.base import SignalMatch, clamp01, concave, score_v2
 from app.signals.events import Event
-from app.signals.setups.base import SetupMatch
+from app.signals.setups.base import SetupMatch, distance_to_trigger_atr
 
 _NEAR_PCT = 0.03   # within 3% of the level counts as "at" the level
 # Setup-only: how far out we still consider the level "in play". Wider than
@@ -167,6 +167,9 @@ class OversoldReversal:
             detector=self.name,
             tone=tone,
             proximity=round(prox, 3),
+            distance_atr=distance_to_trigger_atr(
+                ctx.last_close, float(nearest), ctx.atr
+            ),
             missing=missing,
             factors={
                 "rsi_extremity": concave(extremity, _RSI_EXTREMITY_ANCHORS),

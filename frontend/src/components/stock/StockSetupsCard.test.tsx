@@ -21,6 +21,7 @@ function setup(i: number): Setup {
     detector: "trend_pullback",
     tone: "bull",
     proximity: 0.8,
+    distance_atr: null,
     convenience: 70 - i,
     missing: `condizione numero ${i}`,
     first_seen_at: new Date().toISOString(),

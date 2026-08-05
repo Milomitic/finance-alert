@@ -71,7 +71,7 @@ function heading(setup: Setup): { title: string; hint: string } {
   return { title: raw.charAt(0).toUpperCase() + raw.slice(1), hint: setup.detector };
 }
 
-export type SetupSortKey = "convenience" | "ticker" | "waiting";
+export type SetupSortKey = "convenience" | "ticker" | "waiting" | "distance";
 
 export interface ConditionGroup {
   key: string;
@@ -106,6 +106,10 @@ const PROXIMITY_SPREAD_VISIBLE = 0.05;
 function sortValue(s: Setup, key: SetupSortKey): number {
   switch (key) {
     case "waiting": return waitingDays(s) ?? -1;
+    // Negated so the shared descending comparator puts the NEAREST first —
+    // for every other key "more is better", for a distance it is the reverse.
+    // Setups with no measurable distance sink via the null branch in compare().
+    case "distance": return s.distance_atr == null ? Number.NaN : -s.distance_atr;
     case "convenience": return s.convenience;
     default: return 0;
   }
@@ -113,7 +117,13 @@ function sortValue(s: Setup, key: SetupSortKey): number {
 
 function compare(a: Setup, b: Setup, key: SetupSortKey): number {
   if (key === "ticker") return a.ticker.localeCompare(b.ticker, "it");
-  const d = sortValue(b, key) - sortValue(a, key);
+  const va = sortValue(a, key);
+  const vb = sortValue(b, key);
+  // NaN marks "unmeasurable for this key" — it must sink, not sort randomly.
+  if (Number.isNaN(va) && Number.isNaN(vb)) return a.ticker.localeCompare(b.ticker, "it");
+  if (Number.isNaN(va)) return 1;
+  if (Number.isNaN(vb)) return -1;
+  const d = vb - va;
   // Ties broken by ticker so the order is stable between renders rather than
   // depending on however the payload happened to arrive.
   return d !== 0 ? d : a.ticker.localeCompare(b.ticker, "it");

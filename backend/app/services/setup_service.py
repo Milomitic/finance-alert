@@ -78,6 +78,7 @@ def upsert_setup(
             detector=match.detector,
             tone=match.tone,
             proximity=match.proximity,
+            distance_atr=match.distance_atr,
             convenience=score,
             missing=match.missing,
             factors_json=json.dumps(match.factors),
@@ -100,6 +101,7 @@ def upsert_setup(
 
     row.tone = match.tone
     row.proximity = match.proximity
+    row.distance_atr = match.distance_atr
     row.convenience = score
     row.missing = match.missing
     row.factors_json = json.dumps(match.factors)
