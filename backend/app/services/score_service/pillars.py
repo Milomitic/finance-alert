@@ -16,6 +16,7 @@ from typing import Any
 from app.models import Stock
 from app.services import stock_news_service
 from app.services.news_sentiment import classify_title
+from app.services.percent_units import dividend_yield_pct
 from app.services.score_service.common import (
     _aggregate,
     _blended_hib,
@@ -685,11 +686,11 @@ def _value(
     ))
 
     # --- Dividend yield (sector-aware HIB blend) -------------------------
-    # yfinance is inconsistent: <1 -> fraction, >=1 -> percent.
-    dy_raw = micro.dividend_yield
-    dy_pct = None
-    if _is_finite(dy_raw) and dy_raw is not None and dy_raw >= 0:
-        dy_pct = dy_raw if dy_raw > 1 else dy_raw * 100.0
+    # The stored field is ALREADY a percentage. It used to be re-scaled here by
+    # a `<1 means fraction` guess, which multiplied every sub-1% yield by a
+    # hundred — and with abs_full=3.0 below, a 0.06% payer scored as if it
+    # yielded 6% and took full marks. See services/percent_units.py.
+    dy_pct = dividend_yield_pct(micro.dividend_yield)
     components.append(_Component(
         "dividend_yield", dy_pct,
         _blended_hib(dy_pct, _med("dividend_yield_median"),

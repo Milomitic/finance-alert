@@ -36,6 +36,8 @@ import statistics
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
+from app.services.percent_units import dividend_yield_pct
+
 if TYPE_CHECKING:
     from app.services.stock_fundamentals_service import Fundamentals
 
@@ -57,12 +59,6 @@ def _is_finite(x: object) -> bool:
     return not (math.isnan(f) or math.isinf(f))
 
 
-def _normalise_div_yield(v: float | None) -> float | None:
-    """yfinance dividend_yield is inconsistent: <1 -> fraction (0.0231),
-    >=1 -> percent (2.31). Normalise to PERCENT at intake."""
-    if v is None or not _is_finite(v) or v < 0:
-        return None
-    return v if v > 1 else v * 100.0
 
 
 def _safe_median(values: list[float]) -> float | None:
@@ -251,7 +247,7 @@ def _compute_one(sector: str, funds: list[Fundamentals]) -> SectorStats:
             [
                 normalised
                 for m in micros
-                for normalised in [_normalise_div_yield(m.dividend_yield)]
+                for normalised in [dividend_yield_pct(m.dividend_yield)]
                 if normalised is not None
             ]
         ),

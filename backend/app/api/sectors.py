@@ -39,6 +39,7 @@ from app.models import (
     User,
 )
 from app.services import sectors_overview_cache, stock_fundamentals_service
+from app.services.percent_units import dividend_yield_pct
 from app.services.sectors_overview_cache import (
     clear_overview_cache,  # noqa: F401 — re-export for tests/back-compat
 )
@@ -226,10 +227,6 @@ def _safe_mean(values):
     return sum(finite) / len(finite)
 
 
-def _normalise_div_yield(v):
-    if v is None or not _is_finite(v) or v < 0:
-        return None
-    return v if v > 1 else v * 100.0
 
 
 def _to_pct(v):
@@ -256,7 +253,7 @@ def _build_stock_row(stock, score):
         roe = _to_pct(m.return_on_equity)
         rev_g = _to_pct(m.revenue_growth)
         pm = _to_pct(m.profit_margins)
-        dy = _normalise_div_yield(m.dividend_yield)
+        dy = dividend_yield_pct(m.dividend_yield)
     return SectorStockRow(
         ticker=stock.ticker,
         name=stock.name,
@@ -412,7 +409,7 @@ def _sector_rollup(db: Session) -> list[SectorSummary]:
                 pbs.append(float(m.price_to_book))
             if _is_finite(m.return_on_equity):
                 roes.append(float(m.return_on_equity) * 100.0)
-            normd = _normalise_div_yield(m.dividend_yield)
+            normd = dividend_yield_pct(m.dividend_yield)
             if normd is not None:
                 dys.append(normd)
         out.append(SectorSummary(

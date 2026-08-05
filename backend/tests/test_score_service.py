@@ -179,7 +179,12 @@ def test_value_full_when_well_below_sector_median():
         trailing_pe=15.0, forward_pe=15.0, peg_ratio=0.5,
         price_to_book=2.0, price_to_sales=1.0,
         enterprise_to_ebitda=5.0, enterprise_to_revenue=1.0,
-        dividend_yield=0.04, payout_ratio=0.45,
+        # 4 PERCENT, against a 0.5% sector median — the fixture's intent is a
+        # payer well clear of its peers, and the assertion below is unchanged.
+        # It used to read 0.04 and pass only because the pillar multiplied
+        # anything under 1 by a hundred; the field has always been percent
+        # (see services/percent_units.py), so 0.04 meant 0.04%.
+        dividend_yield=4.0, payout_ratio=0.45,
     )
     score, _, br = _value(_stock(sector="Technology"), micro, last_close=200.0,
                           sector_stats=bundle)
@@ -310,7 +315,9 @@ def test_quality_missing_components_do_not_drag_score_down():
 
 def test_value_missing_components_do_not_drag_score_down():
     """Only P/E and dividend present, both at full → pillar ≈ 100."""
-    micro = MicroData(trailing_pe=20.0, dividend_yield=0.04)
+    # 4 percent clears the pillar's abs_full=3.0. The old 0.04 reached "full"
+    # only through the ×100 rescale the field never needed.
+    micro = MicroData(trailing_pe=20.0, dividend_yield=4.0)
     score, _, _ = _value(_stock(sector="Technology"), micro, last_close=100.0)
     assert score == pytest.approx(100.0, abs=0.5)
 
@@ -475,7 +482,8 @@ def test_build_score_all_pillars_present():
         trailing_pe=20.0, forward_pe=18.0, peg_ratio=1.0,
         price_to_book=4.0, price_to_sales=2.0,
         enterprise_to_ebitda=8.0, enterprise_to_revenue=2.0,
-        dividend_yield=0.03, payout_ratio=0.45,
+        # 3 percent — see the note on the value-pillar fixture above.
+        dividend_yield=3.0, payout_ratio=0.45,
         beta=1.0, fifty_two_week_change=0.50, sp500_fifty_two_week_change=0.10,
         recommendation_mean=1.8, short_percent_of_float=0.02,
     )
