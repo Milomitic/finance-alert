@@ -32,9 +32,9 @@ _CACHE: dict[str, tuple[float, Any]] = {}
 _TTL_SECONDS = 60.0
 
 
-def get_cached() -> Any | None:
-    """Return the memoized payload if within TTL, else None."""
-    cached = _CACHE.get("default")
+def get_cached(key: str = "default") -> Any | None:
+    """Return the memoized payload for `key` if within TTL, else None."""
+    cached = _CACHE.get(key)
     if cached is None:
         return None
     ts, payload = cached
@@ -43,13 +43,25 @@ def get_cached() -> Any | None:
     return payload
 
 
-def store(payload: Any) -> None:
-    """Memoize `payload` under the singleton key with a fresh timestamp."""
-    _CACHE["default"] = (time.time(), payload)
+def store(payload: Any, key: str = "default") -> None:
+    """Memoize `payload` under `key` with a fresh timestamp.
+
+    `key` exists so every payload of the /sectors hub shares ONE invalidation
+    hook. The leaderboards are ranked on `StockScore.composite` and
+    `TechnicalScore.composite`, exactly like the sector tiles — a second cache
+    with its own TTL and no recompute hook would reintroduce the
+    stale-after-recompute phantom this module's docstring exists to describe.
+    """
+    _CACHE[key] = (time.time(), payload)
 
 
 def clear_overview_cache() -> None:
-    """Drop the memoized payload so the next hit recomputes from scratch.
+    """Drop EVERY memoized payload so the next hit recomputes from scratch.
+
+    Clears all keys, not just "default": both the overview and the
+    leaderboards are ranked on composites that a recompute has just moved, so
+    invalidating one and not the other would leave the hub page internally
+    inconsistent — sector averages updated, top picks still stale.
 
     Called by tests and by `score_service.recompute_all` at the end of
     every recompute (the post-recompute hook).

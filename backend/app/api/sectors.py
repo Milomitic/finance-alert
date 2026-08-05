@@ -21,7 +21,7 @@ import statistics
 from datetime import date, timedelta
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Path
+from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -38,7 +38,11 @@ from app.models import (
     TechnicalScore,
     User,
 )
-from app.services import sectors_overview_cache, stock_fundamentals_service
+from app.services import (
+    leaderboard_service,
+    sectors_overview_cache,
+    stock_fundamentals_service,
+)
 from app.services.percent_units import dividend_yield_pct
 from app.services.sectors_overview_cache import (
     clear_overview_cache,  # noqa: F401 — re-export for tests/back-compat
@@ -846,3 +850,69 @@ def get_sector_detail(
         bottom_picks=bottom_picks,
         stocks=rows,
     )
+
+
+# ─────────────────────────────────────────────────────────────────────
+# Leaderboards — the "Top pick" strip at the top of the Esplora page.
+# ─────────────────────────────────────────────────────────────────────
+class LeaderRowOut(BaseModel):
+    ticker: str
+    name: str | None = None
+    sector: str | None = None
+    quality: float | None = None
+    technical: float | None = None
+    # The board's headline number, already in display units. Each board
+    # explains its own in the UI, which is why this is named generically.
+    value: float
+    detail: str | None = None
+    signals_bull: int = 0
+    signals_bear: int = 0
+    detectors_bull: int = 0
+    # Analyst board only.
+    analysts: int | None = None
+    recommendation: float | None = None
+    upside_pct: float | None = None
+    target: float | None = None
+    last_close: float | None = None
+
+
+class LeaderboardsOut(BaseModel):
+    analysts: list[LeaderRowOut] = Field(default_factory=list)
+    combined: list[LeaderRowOut] = Field(default_factory=list)
+    signals: list[LeaderRowOut] = Field(default_factory=list)
+    # How many days of signal history the `signals` board covers, so the UI
+    # states the window instead of hard-coding a number that can drift.
+    signal_window_days: int = leaderboard_service.SIGNAL_WINDOW_DAYS
+
+
+@router.get("/leaderboards", response_model=LeaderboardsOut)
+def sectors_leaderboards(
+    limit: int = Query(6, ge=1, le=20),
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+):
+    """Three attention rankings over the same universe.
+
+    Separate from /overview rather than folded into it: the sector rollups
+    render immediately from SQL, while the analyst board depends on the
+    fundamentals L1 cache. Keeping them apart lets the page paint the sector
+    view without waiting, and means a cold cache degrades one strip instead of
+    the whole payload.
+
+    Memoized under its own key in `sectors_overview_cache`, so it shares the
+    post-recompute invalidation hook with the overview — both are ranked on
+    composites that a recompute has just moved.
+    """
+    cache_key = f"leaderboards:{limit}"
+    cached = sectors_overview_cache.get_cached(cache_key)
+    if cached is not None:
+        return cached
+
+    boards = leaderboard_service.build_leaderboards(db, limit=limit)
+    payload = LeaderboardsOut(
+        analysts=[LeaderRowOut(**vars(r)) for r in boards["analysts"]],
+        combined=[LeaderRowOut(**vars(r)) for r in boards["combined"]],
+        signals=[LeaderRowOut(**vars(r)) for r in boards["signals"]],
+    )
+    sectors_overview_cache.store(payload, cache_key)
+    return payload
