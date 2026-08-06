@@ -41,6 +41,7 @@ import httpx
 from loguru import logger
 
 from app.core.config import settings
+from app.core.redaction import scrub_secrets
 
 _FRED_BASE = "https://api.stlouisfed.org/fred"
 
@@ -106,10 +107,12 @@ def fetch_observations(
             data = resp.json()
         data_source_metrics.record_success("fred", "macro")
     except Exception as e:  # noqa: BLE001
-        logger.warning(f"[fred] observations fetch failed for {series_id}: {e}")
-        data_source_metrics.record_failure(
-            "fred", "macro", reason=str(e)[:200]
-        )
+        # Same shape as the Finnhub leak: `api_key` is a query parameter, so
+        # an HTTPError's message carries it. Not observed leaking yet only
+        # because FRED has not been failing — scrubbed for when it does.
+        safe = scrub_secrets(str(e))
+        logger.warning(f"[fred] observations fetch failed for {series_id}: {safe}")
+        data_source_metrics.record_failure("fred", "macro", reason=safe[:200])
         return []
     out: list[FredObservation] = []
     for row in data.get("observations", []):
@@ -163,7 +166,9 @@ def fetch_release_dates(
             resp.raise_for_status()
             data = resp.json()
     except Exception as e:  # noqa: BLE001
-        logger.warning(f"[fred] release/dates fetch failed for {release_id}: {e}")
+        logger.warning(
+            f"[fred] release/dates fetch failed for {release_id}: {scrub_secrets(str(e))}"
+        )
         return []
     out: list[FredReleaseDate] = []
     for row in data.get("release_dates", []):

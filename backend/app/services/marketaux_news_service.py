@@ -35,7 +35,6 @@ The probe in `probes.py` ALSO consults `_is_blocked()` so a tripped
 breaker disables both fetch and probe in one place.
 """
 import datetime as _dt
-import re
 import threading
 from dataclasses import dataclass
 
@@ -45,6 +44,7 @@ from loguru import logger
 from app.core import breaker_state
 from app.core.config import settings
 from app.core.errors import UpstreamUnavailable
+from app.core.redaction import scrub_secrets
 
 # ─── Quota protection state ──────────────────────────────────────────
 # Circuit-breaker: when set to a future timestamp, ALL outgoing calls
@@ -144,17 +144,18 @@ def _clear_caches_for_tests() -> None:
     with _CACHE_LOCK:
         _RESPONSE_CACHE.clear()
 
-# Used to scrub the api_token from any error response body we log.
-# Marketaux sometimes echoes the token in JSON error messages.
-_API_TOKEN_PATTERN = re.compile(
-    r'(api[-_]?token["\']?\s*[:=]\s*["\']?)[^"\'&\s,}]+', re.IGNORECASE
-)
-
-
 def _scrub_token(text: str) -> str:
-    """Return `text` with any api_token=... or "api_token":"..." substring
-    redacted. Used before logging Marketaux error bodies."""
-    return _API_TOKEN_PATTERN.sub(r'\1[REDACTED]', text)
+    """Return `text` with any credential substring redacted, before logging a
+    Marketaux error body (Marketaux echoes the token back in JSON errors).
+
+    Delegates to the shared `scrub_secrets`. This used to be a private regex
+    matching `api_token` only. Keeping it private is what let the identical
+    bug survive in `finnhub_earnings_service`, where it wrote a live key to
+    Loki 1,061 times in 24 hours: a per-service scrubber protects the one
+    service somebody audited, and every later integration starts again from
+    zero. The name is kept so the two call sites below read unchanged.
+    """
+    return scrub_secrets(text)
 
 
 @dataclass

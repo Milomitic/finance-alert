@@ -32,6 +32,7 @@ import requests
 from loguru import logger
 
 from app.core.config import settings
+from app.core.redaction import scrub_secrets
 
 _BASE_URL = "https://finnhub.io/api/v1/calendar/earnings"
 _USER_AGENT = "FinanceAlert/0.1 (personal use)"
@@ -102,10 +103,14 @@ def fetch_calendar(
         # 1 unit consumed from the 60/min free-tier quota.
         data_source_metrics.record_success("finnhub", "earnings")
     except Exception as exc:  # noqa: BLE001
-        logger.warning(f"[finnhub] earnings calendar fetch failed: {exc}")
-        data_source_metrics.record_failure(
-            "finnhub", "earnings", reason=str(exc)[:200]
-        )
+        # The API key travels as a QUERY PARAMETER, and requests builds its
+        # HTTPError message as "... for url: <full URL>" — so the raw `exc`
+        # carries the live credential. It reached Loki 1,061 times in 24h
+        # before this was added. Scrub before it touches a log OR the metrics
+        # store; `reason` is surfaced in the Salute page.
+        safe = scrub_secrets(str(exc))
+        logger.warning(f"[finnhub] earnings calendar fetch failed: {safe}")
+        data_source_metrics.record_failure("finnhub", "earnings", reason=safe[:200])
         return []
 
     raw = payload.get("earningsCalendar") or []
