@@ -15,13 +15,34 @@ persistence:
   size: 4Gi
 
 # App on a 2 OCPU / 12 GB node, leaving headroom for k3s + ArgoCD + the OS.
+#
+# memory 2Gi -> 3Gi (2026-08-19), after an OOMKill.
+#
+# The container was killed around 10 August and nothing said so: there was no
+# alert rule on memory or restarts at the time, and the app came back on its
+# own, so a fortnight passed before anyone noticed. Measured afterwards, the
+# usage is a SAWTOOTH, not a leak:
+#
+#   baseline  ~950-1040 MB   (idle between cycles)
+#   peak      ~1760 MB       (scan + recompute_all over ~950 stocks)
+#   limit      2048 MB       -> 14% headroom at peak
+#
+# A slightly heavier cycle crosses it. 3Gi puts the peak at ~57% instead of
+# ~86%. It is affordable: the node has 10.9 GB with 4.6 GB available, and
+# REQUESTS — the number that actually reserves RAM — total only 2.4 GB across
+# the cluster and are untouched here, so nothing else loses room.
+#
+# This raises the ceiling; it does not lower the peak. The real fix is to stop
+# holding ~950 stocks' worth of frames at once in the scan/recompute cycle.
+# Until that is done, the alert rule in infra/observability/app-alert-rules.yaml
+# is what turns a silent death into a message.
 resources:
   requests:
     cpu: 250m
     memory: 512Mi
   limits:
     cpu: "1500m"
-    memory: 2Gi
+    memory: 3Gi
 
 # Cloud DB migrates on image upgrades; give startup room.
 probes:

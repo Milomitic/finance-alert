@@ -1,0 +1,126 @@
+# Alert rules for the finance-alert app.
+#
+# WHY THIS FILE EXISTS
+# --------------------
+# On ~10 August 2026 the app container was OOMKilled. It restarted itself and
+# kept working, and nobody was told — the owner found out nine days later by
+# asking. Auditing the cluster afterwards, the alert rules with live series
+# were exactly two: `Watchdog` (the heartbeat that always fires by design) and
+# `TargetDown`. Nothing watched memory, restarts, or the app being down.
+#
+# Alertmanager already routes every non-Watchdog alert to the Telegram
+# receiver, so these need no routing of their own — they only had to exist.
+#
+# Prometheus discovers PrometheusRule objects from every namespace
+# (`ruleSelectorNilUsesHelmValues: false` in kube-prometheus-stack.values.yaml),
+# so this applies with a plain `kubectl apply -f` like the PodMonitor beside it.
+#
+# WHAT THESE DO NOT COVER
+# -----------------------
+# They watch whether the app is ALIVE, not whether it is DOING ITS JOB. A pod
+# that stays up while every scan fails would keep all of these silent. Closing
+# that gap needs an app-exported metric — a `last_successful_scan_timestamp`
+# gauge — since Prometheus rules cannot query Loki, where the scan lines live.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: finance-alert-app
+  namespace: monitoring
+  labels:
+    release: kps
+spec:
+  groups:
+    - name: finance-alert.rules
+      rules:
+        # --- The one that would have prevented the incident ------------------
+        # Memory here is a SAWTOOTH, not a plateau: ~950-1040 MB at rest,
+        # ~1760 MB during the scan + recompute cycle. A rule of the usual shape
+        # (`ratio > 0.85` sustained `for: 10m`) would therefore never fire —
+        # the peak lasts minutes, and between cycles the ratio is back to a
+        # comfortable-looking 0.3.
+        #
+        # So the ratio is taken against the HIGH-WATER MARK of the last half
+        # hour rather than the instantaneous value. `for: 0m` is deliberate:
+        # max_over_time already provides the smoothing, and requiring the peak
+        # to also persist would re-introduce the very blindness being fixed.
+        - alert: FinanceAlertMemoryNearLimit
+          expr: |
+            max by (pod) (
+              max_over_time(
+                container_memory_working_set_bytes{namespace="finance-alert",container="app"}[30m]
+              )
+            )
+            /
+            max by (pod) (
+              kube_pod_container_resource_limits{namespace="finance-alert",container="app",resource="memory"}
+            )
+            > 0.85
+          for: 0m
+          labels:
+            severity: warning
+          annotations:
+            summary: "finance-alert vicina al limite di memoria"
+            description: >-
+              Nell'ultima mezz'ora il picco di memoria ha superato l'85% del
+              limite ({{ $value | humanizePercentage }} su {{ $labels.pod }}).
+              È lo stato che precede un OOMKill. Il picco arriva dal ciclo
+              scan + recompute; controlla se il limite va alzato o il ciclo
+              alleggerito.
+
+        # --- After the fact, but it names the cause --------------------------
+        # `last_terminated_reason` stays set for the life of the pod, so on its
+        # own it would alert forever after a single kill. Gating it on a restart
+        # in the last hour makes it fire once per event and resolve by itself.
+        - alert: FinanceAlertOOMKilled
+          expr: |
+            (
+              increase(kube_pod_container_status_restarts_total{namespace="finance-alert",container="app"}[1h]) > 0
+            )
+            and on (pod, container)
+            (
+              kube_pod_container_status_last_terminated_reason{namespace="finance-alert",container="app",reason="OOMKilled"} == 1
+            )
+          for: 0m
+          labels:
+            severity: critical
+          annotations:
+            summary: "finance-alert uccisa per memoria (OOMKilled)"
+            description: >-
+              Il container {{ $labels.pod }} è stato terminato dal kernel per
+              superamento del limite di memoria ed è ripartito. I dati in
+              corso di elaborazione in quel momento sono persi.
+
+        # --- Any restart, whatever the reason --------------------------------
+        # Broader than the OOM rule on purpose: a crash loop from a bad deploy
+        # or a failed migration looks nothing like an OOM and is just as silent.
+        - alert: FinanceAlertRestarted
+          expr: |
+            increase(kube_pod_container_status_restarts_total{namespace="finance-alert",container="app"}[1h]) > 0
+          for: 0m
+          labels:
+            severity: warning
+          annotations:
+            summary: "finance-alert è ripartita"
+            description: >-
+              {{ $value | printf "%.0f" }} riavvii dell'app nell'ultima ora
+              ({{ $labels.pod }}). Se è accompagnato da FinanceAlertOOMKilled
+              la causa è la memoria; altrimenti guarda i log del container
+              precedente.
+
+        # --- The app stopped answering the scrape ----------------------------
+        # `absent()` is the other half: `up == 0` needs the target to exist to
+        # be zero, so a target that disappears entirely produces no series and
+        # no alert. Both halves are needed to distinguish "down" from "gone".
+        - alert: FinanceAlertDown
+          expr: |
+            up{job="monitoring/finance-alert-app"} == 0
+            or
+            absent(up{job="monitoring/finance-alert-app"})
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "finance-alert non risponde allo scrape"
+            description: >-
+              Da 5 minuti /metrics non risponde: l'app è giù, oppure il
+              PodMonitor non la trova più.

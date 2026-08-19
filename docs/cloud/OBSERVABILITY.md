@@ -71,7 +71,36 @@ helm upgrade --install loki grafana/loki-stack -n monitoring \
   -f infra/observability/loki-stack.values.yaml
 
 kubectl apply -f infra/observability/app-podmonitor.yaml
+kubectl apply -f infra/observability/app-alert-rules.yaml
 # then add the Loki datasource via the Grafana API (POST /api/datasources).
+```
+
+## Alert rules
+
+`infra/observability/app-alert-rules.yaml` — OOM, restart, memory-near-limit
+and app-down. Added 2026-08-19 after the app was OOMKilled around 10 August
+and **nothing said so**: auditing the cluster afterwards, the only rules with
+live series were `Watchdog` (fires by design) and `TargetDown`. Nothing
+watched the app itself, so it died, restarted and went unnoticed for nine days.
+
+Two things about these worth keeping in mind:
+
+- The memory rule measures `max_over_time(...[30m])`, not the instantaneous
+  value. Usage here is a sawtooth — ~950-1040 MB idle, ~1760 MB during the
+  scan + recompute cycle — so the conventional "ratio > 0.85 sustained for
+  10m" shape would never have fired: the peak is minutes long and the ratio
+  looks comfortable between cycles.
+- They watch whether the app is ALIVE, not whether it is WORKING. A pod that
+  stays up while every scan fails keeps all four silent. Closing that needs an
+  app-exported `last_successful_scan_timestamp` gauge — Prometheus rules
+  cannot query Loki, where the scan lines live.
+
+Verify they are actually loaded (creating the CR is not the same as Prometheus
+evaluating it) — every rule should read `health=ok`:
+
+```bash
+kubectl -n monitoring port-forward svc/kps-prometheus 9090:9090
+curl -s localhost:9090/api/v1/rules | jq '.data.groups[]|select(.name=="finance-alert.rules").rules[]|{name,health,lastError}'
 ```
 
 ## Known follow-ups
