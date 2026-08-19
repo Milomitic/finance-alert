@@ -59,6 +59,42 @@ class FinnhubEarning:
     hour: str | None  # 'amc' (after market close), 'bmo' (before market open), 'dmh' (during market hours)
 
 
+# Finnhub's plan covers US-LISTED symbols. Everything else answers 403 —
+# measured on production logs: 469 Forbidden in the retained window, split
+# MI 14 / L 10 / T 10 / KS 6 / DE 4 / HK 4 / HE 1, and NOT ONE on a bare
+# ticker. The date range was a red herring; a 14-day window 403s just the
+# same when the symbol is foreign-listed.
+#
+# The predicate is about the LISTING, not the company. Checked against the
+# whole catalogue (999 rows):
+#
+#              | US  | non-US
+#   bare (AAPL)| 664 |  25
+#   suffixed   |   0 | 310
+#
+# The 25 are ADRs — TSM, BIDU, SPOT, RACE, NVO — foreign companies trading on
+# NYSE/NASDAQ, which Finnhub serves fine and which never appear among the
+# 403s. So filtering on `Stock.country` would wrongly drop 25 working symbols,
+# while the yfinance exchange suffix separates the two sets exactly: 310 of
+# 310 suffixed tickers are foreign-listed, with zero false positives.
+def is_us_listed(symbol: str) -> bool:
+    """True when `symbol` is a bare US-exchange ticker Finnhub will answer for.
+
+    yfinance encodes the exchange as a dot suffix (TEN.MI, 0700.HK, BT-A.L);
+    a US listing carries none. Dashes are NOT a suffix — BRK-B and BF-B are
+    US tickers that were renamed FROM dot form precisely so yfinance would
+    accept them (see the universe note in CLAUDE.md).
+
+    An empty or missing symbol is NOT us-listed: `"." not in ""` is True, so
+    the naive form let a blank through as a valid US ticker. Unknown has to
+    fail closed here — the whole point is to stop making calls that cannot
+    succeed.
+    """
+    if not symbol:
+        return False
+    return "." not in symbol
+
+
 def is_enabled() -> bool:
     """Cheap predicate so callers can short-circuit when no API key is
     set. Avoids logging "request without token" warnings on every
@@ -81,6 +117,13 @@ def fetch_calendar(
     whatever yfinance gave us" — never raises.
     """
     if not is_enabled():
+        return []
+    # A foreign-listed symbol is a guaranteed 403 (see `is_us_listed`), so the
+    # call is skipped rather than made and logged. Only when a symbol is
+    # NAMED: the un-narrowed window call fetches the whole US calendar and is
+    # exactly the one that works.
+    if symbol is not None and not is_us_listed(symbol):
+        logger.debug(f"[finnhub] skip {symbol}: not US-listed, plan would 403")
         return []
     params: dict[str, Any] = {
         "from": from_date.isoformat(),
