@@ -12,8 +12,10 @@ from loguru import logger
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.core import app_metrics
 from app.core.config import settings
 from app.models import Alert, ScanRun
+from app.models.scan_run import KIND_ALERTS_SCAN
 from app.services import scan_cancel
 from app.services.scan_service import ScanCancelled, ScanResult, scan_universe
 
@@ -444,6 +446,10 @@ def run_tracked_scan(
         run.phase = None
         run.completed_at = datetime.now(UTC)
         db.commit()
+        # Tell Prometheus the pipeline actually produced something. The
+        # liveness rules cannot see this: a pod that stays up while every scan
+        # fails looks perfectly healthy from the outside.
+        app_metrics.record_successful_run(KIND_ALERTS_SCAN, run.completed_at)
         # Optional per-signal instant Telegram push (best-effort: a Telegram
         # problem must NEVER fail a successful scan). Only the NEW signal
         # alerts of THIS run (id > baseline) are considered; the strength

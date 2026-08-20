@@ -20,6 +20,7 @@ from datetime import UTC, datetime
 from loguru import logger
 from sqlalchemy.orm import Session
 
+from app.core import app_metrics
 from app.models import ScanRun
 from app.models.scan_run import KIND_SCORE_RECOMPUTE
 from app.services import scan_cancel
@@ -140,6 +141,7 @@ def run_tracked_recompute(
         run.alerts_fired = None
         run.completed_at = datetime.now(UTC)
         db.commit()
+        app_metrics.record_successful_run(KIND_SCORE_RECOMPUTE, run.completed_at)
         logger.info(
             f"[score_runner] ScanRun {run.id} success: "
             f"scored={ok} failed={failed}"

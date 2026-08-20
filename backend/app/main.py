@@ -297,6 +297,26 @@ def _ensure_admin_on_boot() -> None:
         logger.warning(f"[startup] ensure admin user failed (non-fatal): {exc}")
 
 
+def _hydrate_run_metrics() -> None:
+    """Restore `finance_alert_last_successful_run_timestamp_seconds` from the DB.
+
+    A Prometheus gauge lives in process memory and starts empty, so without
+    this a restart would report "no successful scan" — including the OOM
+    restart the alert on this metric exists to detect. The metric would then
+    fire a second, false alarm about scanning at exactly the moment a real
+    incident was already being handled. `scan_runs` already knows the answer;
+    the gauge is a projection of it.
+    """
+    from app.core import app_metrics
+    from app.core.db import SessionLocal
+
+    try:
+        with SessionLocal() as db:
+            app_metrics.hydrate_from_db(db)
+    except Exception as exc:  # noqa: BLE001 — boot-time best effort
+        logger.warning(f"[startup] run-metrics hydration failed (non-fatal): {exc}")
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     # Fail FAST, not at first login. Without this, an empty SECRET_KEY lets the
@@ -313,6 +333,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     _cleanup_orphan_scans()
     _ensure_admin_on_boot()
     _hydrate_fetch_caches()
+    _hydrate_run_metrics()
     # Pre-fill the live-log ring buffer from the on-disk log tail so the
     # Salute log view (and its per-source filter) survives restarts.
     hydrate_log_buffer_from_disk()
