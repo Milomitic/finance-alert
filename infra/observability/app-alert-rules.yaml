@@ -120,10 +120,25 @@ spec:
         # restart would zero it and this rule would fire falsely — including
         # right after the OOM restart the rules above exist to catch, turning
         # one real incident into two alerts, one of them wrong.
+        #
+        # SCOPED TO kind="alerts_scan", and it has to be. The gauge also
+        # carries kind="score_recompute", which looked 1,345 hours stale the
+        # first time this was checked against production — and that is CORRECT
+        # behaviour, not an outage: `run_tracked_recompute` is only ever
+        # called by the "Ricalcola score" button (trigger="manual"), it has no
+        # cron, and the automatic recompute runs INSIDE run_tracked_scan under
+        # the scan's own row. So its staleness measures how long since someone
+        # last clicked a button, which is not a fault condition.
+        #
+        # Left unscoped, `max by (kind)` would have made this alert fire
+        # permanently from the moment it was applied. Do not broaden it back
+        # without giving score_recompute a schedule of its own.
         - alert: FinanceAlertNotScanning
           expr: |
             (
-              time() - max by (kind) (finance_alert_last_successful_run_timestamp_seconds)
+              time() - max by (kind) (
+                finance_alert_last_successful_run_timestamp_seconds{kind="alerts_scan"}
+              )
             ) > 26 * 3600
           for: 30m
           labels:
@@ -141,7 +156,7 @@ spec:
         # means the app failed to hydrate at boot, not that scanning stopped.
         - alert: FinanceAlertScanMetricMissing
           expr: |
-            absent(finance_alert_last_successful_run_timestamp_seconds)
+            absent(finance_alert_last_successful_run_timestamp_seconds{kind="alerts_scan"})
           for: 30m
           labels:
             severity: warning
