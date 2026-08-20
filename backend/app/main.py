@@ -310,6 +310,10 @@ def _hydrate_run_metrics() -> None:
     from app.core import app_metrics
     from app.core.db import SessionLocal
 
+    # Cache occupancy is read at scrape time, so registering the collector is
+    # all that is needed — see its note in app_metrics for why the numbers are
+    # not maintained by the caches themselves.
+    app_metrics.register_cache_collector()
     try:
         with SessionLocal() as db:
             app_metrics.hydrate_from_db(db)

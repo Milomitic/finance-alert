@@ -120,3 +120,59 @@ class TestExposed:
         body = generate_latest().decode()
         assert "finance_alert_last_successful_run_timestamp_seconds" in body
         assert f'kind="{KIND_ALERTS_SCAN}"' in body
+
+
+class TestCacheOccupancy:
+    """Memory composition, which nothing in the app reported before.
+
+    Over one pod's life the working set climbs 543MB -> 806MB in eleven hours,
+    in steps with long plateaus, never returning to where it started. Caches
+    warming toward a legitimate ceiling and something that never gets released
+    look identical from `process_resident_memory_bytes`; these counts are what
+    tells them apart.
+    """
+
+    def test_reports_every_cache_it_knows_about(self):
+        from prometheus_client import generate_latest
+
+        app_metrics.register_cache_collector()
+        body = generate_latest().decode()
+        for label, _mod, _attr in app_metrics._CACHE_SOURCES:
+            assert f'cache="{label}"' in body
+
+    def test_the_count_follows_the_cache(self):
+        from prometheus_client import generate_latest
+
+        from app.services import stock_fundamentals_service as fund
+
+        app_metrics.register_cache_collector()
+        fund._CACHE.clear()
+        fund._CACHE["AAA"] = object()
+        fund._CACHE["BBB"] = object()
+        line = next(
+            l for l in generate_latest().decode().splitlines()
+            if 'finance_alert_cache_entries{cache="fundamentals"}' in l
+        )
+        assert line.endswith("2.0")
+        fund._CACHE.clear()
+
+    def test_registering_twice_is_harmless(self):
+        # The default registry raises on a duplicate collector, and both the
+        # app lifespan and the tests call this.
+        app_metrics.register_cache_collector()
+        app_metrics.register_cache_collector()
+
+    def test_a_missing_cache_does_not_break_the_scrape(self, monkeypatch):
+        """A scrape that raises takes the whole /metrics endpoint down — and
+        with it the alerting that depends on it. Worth more than one bad
+        number."""
+        from prometheus_client import generate_latest
+
+        monkeypatch.setattr(
+            app_metrics, "_CACHE_SOURCES",
+            [("ghost", "app.services.does_not_exist", "_CACHE"),
+             ("fundamentals", "app.services.stock_fundamentals_service", "_CACHE")],
+        )
+        body = generate_latest().decode()
+        assert 'cache="fundamentals"' in body
+        assert 'cache="ghost"' not in body

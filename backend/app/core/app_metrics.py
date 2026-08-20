@@ -94,3 +94,78 @@ def hydrate_from_db(db: Session) -> None:
 
     if rows:
         logger.info(f"[metrics] hydrated last-successful-run gauge for {len(rows)} kind(s)")
+
+# ─── Cache occupancy ────────────────────────────────────────────────────────
+# WHY. Profiling the app's memory from outside hits a wall: over one pod's
+# life the working set climbs 543MB -> 806MB in eleven hours, in steps with
+# long plateaus, and never returns to where it started. That shape has two
+# very different explanations — caches warming up toward a legitimate ceiling,
+# or something that never gets released — and `process_resident_memory_bytes`
+# cannot tell them apart. The app holds ten in-process dict caches and
+# exported nothing about any of them.
+#
+# These counts settle it: if entries plateau while RSS keeps climbing, it is a
+# leak; if the two rise and level off together, the ~1GB baseline is simply
+# the warm working set of a 999-stock universe and the OOM came from the scan
+# spike landing on top of it.
+#
+# Counted at SCRAPE time via a collector rather than kept up to date by the
+# caches themselves: no writer has to remember to maintain a counter, so the
+# number cannot silently drift from the thing it describes. `len()` on a dict
+# is O(1), and the collector is only asked once a minute.
+_CACHE_SOURCES: list[tuple[str, str, str]] = [
+    # (label, module, attribute)
+    ("fundamentals", "app.services.stock_fundamentals_service", "_CACHE"),
+    ("news", "app.services.stock_news_service", "_CACHE"),
+    ("live_quote", "app.services.live_quote_service", "_CACHE"),
+    ("live_sparkline", "app.services.live_sparkline_service", "_CACHE"),
+    ("market_detail", "app.services.market_detail_service", "_CACHE"),
+    ("timeframe", "app.services.timeframe_service", "_CACHE"),
+    ("fx", "app.services.fx_service", "_CACHE"),
+    ("nasdaq_analyst", "app.services.nasdaq_analyst_service", "_CACHE"),
+]
+
+
+class _CacheSizeCollector:
+    """Reports how many entries each in-process cache holds, at scrape time."""
+
+    def collect(self):  # noqa: D102 - prometheus_client protocol
+        from importlib import import_module
+
+        from prometheus_client.metrics_core import GaugeMetricFamily
+
+        g = GaugeMetricFamily(
+            "finance_alert_cache_entries",
+            "Entries held in each in-process cache.",
+            labels=["cache"],
+        )
+        for label, module_name, attr in _CACHE_SOURCES:
+            try:
+                cache = getattr(import_module(module_name), attr, None)
+                if cache is None:
+                    continue
+                g.add_metric([label], float(len(cache)))
+            except Exception:  # noqa: BLE001 - a scrape must never raise
+                continue
+        yield g
+
+
+_cache_collector_registered = False
+
+
+def register_cache_collector() -> None:
+    """Register the cache-size collector once. Safe to call repeatedly.
+
+    Idempotent because the default registry raises on a duplicate, and tests
+    import this module more than once per session.
+    """
+    global _cache_collector_registered
+    if _cache_collector_registered:
+        return
+    try:
+        from prometheus_client import REGISTRY
+
+        REGISTRY.register(_CacheSizeCollector())
+        _cache_collector_registered = True
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(f"[metrics] cache collector not registered: {exc}")
