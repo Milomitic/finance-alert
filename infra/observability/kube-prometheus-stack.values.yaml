@@ -18,6 +18,47 @@ kubeScheduler: { enabled: false }
 kubeProxy: { enabled: false }
 kubeEtcd: { enabled: false }
 
+# Control-plane histogram BUCKETS are dropped at scrape (2026-08-20). Measured
+# on the live TSDB, ten bucket families were 52,832 of 96,950 active series —
+# 54% of everything stored — led by apiserver_request_duration_seconds_bucket
+# (12,954) and etcd_request_duration_seconds_bucket (10,064). They exist to
+# compute apiserver latency quantiles, which nobody is ever going to tune on a
+# single-node personal cluster; meanwhile they were halving how far back the
+# metrics that ARE read could go.
+#
+# `_count` and `_sum` survive, so average latency is still available — only the
+# quantiles are gone. Some of the chart's default control-plane SLO rules
+# reference these buckets and will simply evaluate to no data, staying inactive
+# rather than erroring, which is what they already were on this cluster.
+#
+# BOTH scrape jobs need the rule, and finding that out cost a wrong first
+# attempt. k3s runs the apiserver, etcd and controller-manager inside ONE
+# process, so its kubelet endpoint serves their metrics alongside its own —
+# `count by (job) (apiserver_request_duration_seconds_bucket)` showed
+# job=kubelet, not job=apiserver. Dropping them only on kubeApiServer changed
+# nothing; dropping them only on the kubelet left 3,860 series still arriving
+# from the real apiserver target. Measured after applying both: the three
+# families go to zero and ingestion falls from 1,753 to 905 samples/s, −48%.
+#
+# The kubelet rule is on the MAIN /metrics endpoint only. The chart gives
+# cadvisor its own endpoint (and its own `cAdvisorMetricRelabelings`), which is
+# left alone deliberately: container_memory_working_set_bytes lives there and
+# is the input to the memory alert in app-alert-rules.yaml. Cardinality is not
+# the only thing worth counting.
+kubeApiServer:
+  serviceMonitor:
+    metricRelabelings:
+      - action: drop
+        sourceLabels: [__name__]
+        regex: "(apiserver|etcd|workqueue)_.*_bucket"
+
+kubelet:
+  serviceMonitor:
+    metricRelabelings:
+      - action: drop
+        sourceLabels: [__name__]
+        regex: "(apiserver|etcd|workqueue)_.*_bucket"
+
 prometheusOperator:
   resources:
     requests: { cpu: 20m, memory: 96Mi }
@@ -25,8 +66,19 @@ prometheusOperator:
 
 prometheus:
   prometheusSpec:
-    retention: 3d
-    retentionSize: "2GB"
+    # 3d -> 30d (2026-08-20). The owner came back from two weeks away and the
+    # stack could not say what had happened: the app had been OOMKilled around
+    # 10 August and the only evidence left was Kubernetes' cumulative restart
+    # counter. Metrics went back 3 days, logs 3.
+    #
+    # `retentionSize` is the real cap here, not the time — measured, 3 days of
+    # this cluster cost 0.67GB, so 2500MB buys roughly two and a half weeks and
+    # the 30d is just a generous ceiling above it. Sized against the PVC below
+    # (3Gi) with room for the WAL, NOT against free disk: local-path does not
+    # enforce the PVC request, so an over-large cap would quietly eat the
+    # node's remaining 7.8GB and take everything down with it.
+    retention: 30d
+    retentionSize: "2500MB"
     scrapeInterval: 60s
     evaluationInterval: 60s
     resources:

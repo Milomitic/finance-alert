@@ -21,7 +21,12 @@ loki:
       compaction_interval: 10m
       retention_delete_delay: 1h
     limits_config:
-      retention_period: 72h
+      # 72h -> 720h (2026-08-20), same reason as the Prometheus retention:
+      # a two-week absence outlived the logs. Costs almost nothing — measured,
+      # 72h of ALL namespaces was 30.5MB, so 30 days is ~305MB inside the 2Gi
+      # PVC below. The old 72h was not a disk constraint, just a default nobody
+      # had had a reason to revisit.
+      retention_period: 720h
       reject_old_samples: true
       reject_old_samples_max_age: 168h
 
