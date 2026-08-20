@@ -273,6 +273,32 @@ npm ci                 # windows side
 
 Commit the lock only when both pass.
 
+### Better, when it is ONE transitive package: edit the three fields
+
+The recipe above regenerates the whole lock and needs Docker running. For a
+single advisory on a transitive dependency there is a smaller move that cannot
+break the superset, because it never touches it:
+
+1. Let npm compute the new entry somewhere disposable —
+   `npm update <pkg> --package-lock-only` — and copy the `version` /
+   `resolved` / `integrity` it produced.
+2. `git checkout -- frontend/package-lock.json` to get the known-good lock
+   back.
+3. Write those three fields into that package's entry and nothing else.
+4. `npm ci` + `npm run build` + `npm run test:run` on Windows, and run the
+   gate the way CI does:
+   `npm audit --json --omit=dev > /tmp/a.json; node security/audit-gate.mjs /tmp/a.json`
+
+The diff is three lines and every other byte is the lock CI already passes
+with, so `npm ci` on Linux cannot regress. Applied for nanoid 3.3.16 -> 3.3.18
+on 2026-08-20; the ordinary `npm update` on Windows had dropped
+`@emnapi/core` and `@emnapi/runtime` (the exact packages in the failure
+message above), and `--os=linux --cpu=x64` restored only the first.
+
+Only valid when the bump stays INSIDE the existing semver range — nanoid was
+`^3.3.12` under postcss, so nothing else in the tree had to move. If the fix
+needs a range change in package.json, use the full Docker recipe.
+
 ---
 
 ## Database migrations (alembic)
