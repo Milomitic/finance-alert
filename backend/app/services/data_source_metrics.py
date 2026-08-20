@@ -288,6 +288,43 @@ class SourceMetric:
     health: str
 
 
+def _is_plan_gated(c: _Counter) -> bool:
+    """Every failure this source ever had was an HTTP 403.
+
+    Means the upstream is up and understood us fine, and our tier simply does
+    not include the endpoint — a configuration fact, not an incident. A single
+    non-403 failure (timeout, 5xx, 429) breaks the pattern and this goes back
+    to False on its own.
+
+    Shared by `_classify` (which paints the source slate instead of amber) and
+    by the health probes (which stop re-asking). Those two had drifted apart:
+    the UI already understood the source was plan-gated while the probe kept
+    calling it every tick forever.
+    """
+    return c.failure > 0 and c.failure_403 == c.failure
+
+
+def is_plan_gated(source: str, op: str) -> bool:
+    """Public form of `_is_plan_gated` for callers outside this module."""
+    with _lock:
+        c = _counters.get(_key(source, op))
+        return _is_plan_gated(c) if c is not None else False
+
+
+def seconds_since_last_failure(source: str, op: str) -> float | None:
+    """Age of the most recent failure, or None if there has never been one.
+
+    Mirrors `seconds_since_last_success`. Needed because a permanently-failing
+    call has no last SUCCESS to measure against, so success-based elision can
+    never throttle it — it retries at full rate forever.
+    """
+    with _lock:
+        c = _counters.get(_key(source, op))
+        if c is None or c.last_failure_at is None:
+            return None
+        return max(0.0, time.time() - c.last_failure_at)
+
+
 def _classify(c: _Counter) -> tuple[float, str]:
     """Outcome-of-last-batch health. The lifetime success_rate is kept as an
     INFORMATIONAL figure only (rendered in the UI), never as the classifier
@@ -322,7 +359,7 @@ def _classify(c: _Counter) -> tuple[float, str]:
     # amber forever — it's a configuration fact, not an incident. A single
     # non-403 failure (timeout, 5xx, 429) breaks the pattern and the normal
     # classification returns.
-    if health in ("failing", "degraded") and c.failure > 0 and c.failure_403 == c.failure:
+    if health in ("failing", "degraded") and _is_plan_gated(c):
         health = "unavailable"
     return rate, health
 

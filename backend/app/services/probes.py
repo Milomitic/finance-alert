@@ -42,6 +42,34 @@ def progress() -> dict:
     return {"refreshing": s["refreshing"], "progress_pct": pct}
 
 
+# How long to leave a plan-gated endpoint alone before re-checking. Long
+# because the only thing that can change the answer is someone upgrading the
+# plan, which is not an event that happens between two scheduler ticks.
+_PLAN_GATED_RECHECK_SECONDS = 24 * 3600
+
+
+def _skip_plan_gated(source: str, op: str) -> bool:
+    """True when this endpoint has only ever answered 403 and was asked
+    recently.
+
+    The existing elision in every probe below keys on the last SUCCESS, which
+    silently does nothing for a call that has never succeeded: with no success
+    to measure against, the probe re-fires at full scheduler rate forever.
+    Measured on `finnhub.upgrades` — /stock/upgrade-downgrade is not in the
+    free tier — that was 147 identical 403s in the retained log window and not
+    one success, for an answer that cannot change.
+
+    The source stays marked unavailable in the Salute page either way: 403s are
+    already classified plan-gated there (slate, out of the degraded rollup), so
+    nothing is hidden by asking less often. One re-check a day is enough to
+    notice a plan upgrade.
+    """
+    if not data_source_metrics.is_plan_gated(source, op):
+        return False
+    since = data_source_metrics.seconds_since_last_failure(source, op)
+    return since is not None and since < _PLAN_GATED_RECHECK_SECONDS
+
+
 def _record(source: str, op: str, ok: bool, reason: str = "") -> None:
     if ok:
         data_source_metrics.record_success(source, op)
@@ -255,6 +283,11 @@ def probe_finnhub_upgrades() -> None:
         return
     recent = data_source_metrics.seconds_since_last_success("finnhub", "upgrades")
     if recent is not None and recent < 4 * 3600:
+        return
+    # /stock/upgrade-downgrade is not in the free tier: it has answered 403
+    # every time it was ever asked. Without this the success-based elision
+    # above never engages and the probe re-fires on every tick.
+    if _skip_plan_gated("finnhub", "upgrades"):
         return
     try:
         import requests
