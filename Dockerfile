@@ -42,6 +42,31 @@ RUN npm run build
 # ── Stage 2: runtime ────────────────────────────────────────────────────────
 FROM python:3.11-slim AS runtime
 
+# ── Debian security patches ──────────────────────────────────────────────────
+# The base image ships whatever package versions existed when Docker Hub last
+# rebuilt the tag, which lags Debian's security archive. On 2026-08-19 that gap
+# was the entire trivy failure: 9 HIGH findings, all of them ONE advisory —
+# CVE-2026-53615, an integer overflow in libblkid/src/partitions/dos.c —
+# counted once per binary package built from util-linux (bsdutils, libblkid1,
+# liblastlog2-2, libmount1, libsmartcols1, libuuid1, login, mount,
+# util-linux). Debian had already published the fix as 2.41.5-0+deb13u1; the
+# image simply had no step that would pick it up.
+#
+# A general `upgrade` rather than pinning the nine names: the next advisory
+# will land in different packages, and a list of names would have to be edited
+# every time — which means it would go stale exactly when it mattered. The
+# reproducibility cost is real but narrow, and it lands where it belongs: the
+# app's own dependencies stay pinned by uv.lock and package-lock.json, while
+# the OS layer is expected to track security fixes. Leaving it unpinned is
+# also what keeps the CI gate meaningful instead of permanently red.
+#
+# Runs before USER app (this stage is still root here) and cleans the apt
+# lists so the layer does not carry a package index into production.
+RUN apt-get update \
+ && apt-get upgrade -y --no-install-recommends \
+ && apt-get clean \
+ && rm -rf /var/lib/apt/lists/*
+
 # uv: copied as a static binary from its official image — no curl|sh, no pip
 # bootstrap, version-pinned. It manages the venv below and then is only
 # needed again if you exec into the container.
