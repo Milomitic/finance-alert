@@ -14,7 +14,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { SectionTitle } from "@/components/ui/section-title";
-import { PROBABILITA_TOOLTIP } from "@/lib/alertMeta";
 import { useIsPhone } from "@/hooks/useMediaQuery";
 import { cn } from "@/lib/utils";
 
@@ -232,7 +231,6 @@ export function AlertFilters({ value, onChange }: Props) {
     (value.rule_kind ? 1 : 0) +
     (value.tone ? 1 : 0) +
     (value.strength_min != null ? 1 : 0) +
-    (value.probability_min != null ? 1 : 0) +
     (value.nature ? 1 : 0) +
     (value.outcome ? 1 : 0) +
     (value.horizon ? 1 : 0) +
@@ -479,38 +477,15 @@ export function AlertFilters({ value, onChange }: Props) {
           </div>
         </div>
 
-        {/* Probabilità minima — number input 0-100. Drives `probability_min`. */}
-        <div>
-          <Label
-            className="text-xs uppercase tracking-wider text-muted-foreground"
-            title={PROBABILITA_TOOLTIP}
-          >
-            Probabilità minima
-          </Label>
-          <div className="mt-1 inline-flex items-center gap-1.5 h-9 px-2 rounded border border-input w-full">
-            <input
-              type="number"
-              min={0}
-              max={100}
-              step={5}
-              placeholder="—"
-              value={value.probability_min ?? ""}
-              onChange={(e) => {
-                const raw = e.target.value;
-                if (raw === "") {
-                  onChange({ ...value, probability_min: undefined });
-                  return;
-                }
-                const n = Number(raw);
-                if (Number.isFinite(n) && n >= 0 && n <= 100) {
-                  onChange({ ...value, probability_min: n });
-                }
-              }}
-              className="flex-1 bg-transparent text-sm tabular-nums focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-            />
-            <span className="text-xs text-muted-foreground">/ 100</span>
-          </div>
-        </div>
+        {/* The "Probabilità minima" control lived here until 2026-08-20.
+            It read as a quality threshold and was not one. Measured over 2,246
+            live signals, Probabilità takes ONE OR TWO distinct values per
+            detector and never exceeds 52 anywhere in the engine, so every
+            threshold above 52 returned an empty list forever, every threshold
+            below 47 filtered nothing, and in between it selected a set of
+            DETECTORS — which the "Tipo segnale" filter above already does, by
+            name and without the disguise. Do not re-add it unless there is a
+            genuinely per-signal probability to put behind it. */}
         </div>
 
         {/* Range personalizzato — due date input nativi (dal / al). Visibile
@@ -650,18 +625,6 @@ export function AlertFilters({ value, onChange }: Props) {
                   </>
                 }
                 onClear={() => onChange({ ...value, strength_min: undefined })}
-                className="bg-muted text-foreground border-border"
-              />
-            )}
-            {value.probability_min != null && (
-              <FilterChip
-                label={
-                  <>
-                    <span className="text-muted-foreground/80">Probabilità ≥</span>{" "}
-                    {value.probability_min}%
-                  </>
-                }
-                onClear={() => onChange({ ...value, probability_min: undefined })}
                 className="bg-muted text-foreground border-border"
               />
             )}

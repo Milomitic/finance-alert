@@ -736,7 +736,22 @@ splits + no log-loss regression + monotone reliability): isotonic ΔBrier
 Probabilità adjustments demonstrably do not improve out-of-sample prediction
 on this data. The UI tooltip (lib/alertMeta.ts PROBABILITA_TOOLTIP) now states
 honestly that Probabilità is the detector's base rate, identical for every
-signal of the same detector. Do NOT re-run this gate expecting a different
+signal of the same detector.
+
+**Measured on 2,246 live signals (2026-08-20), and the UI was changed because
+of it.** Probabilità takes ONE OR TWO distinct values per detector and spans
+47-52 across the whole engine; Forza, beside it, takes 34-39 values per
+detector over 60-98. So the two mechanics built on it were not what they
+looked like: sorting by Prob. ordered rows BY DETECTOR, and the "Probabilità
+minima" filter selected a set of detectors — returning an empty list forever
+for any threshold above 52, and filtering nothing below 47. Both were removed
+from the UI (the sortable header in AlertsTable, the control + chip in
+AlertFilters); `filtersFromSearch` also drops `probability_min` and a
+`sort_by=probability` coming from an old bookmark, because a filter with no
+control left to clear it is worse than none. The COLUMN stays — the number is
+honest context, with its calibration dot — and the backend still accepts both
+parameters. Same rule as read/unread: **do not re-add the filter or the sort
+without a genuinely per-signal probability behind them.** Do NOT re-run this gate expecting a different
 answer without materially new data (e.g. 6-12 months of live outcomes).**
 
 ### Score-IC backtest RUN (2026-07-07) — verdict: NO reweighting is justified

@@ -349,22 +349,17 @@ export function AlertsTable({
               </TableHead>
             )
           )}
+          {/* Prob. is NOT sortable, unlike every other numeric column here.
+              Measured over 2,246 live signals, Probabilità takes ONE OR TWO
+              distinct values per detector and spans 47-52 across the whole
+              engine — Forza, beside it, takes 34-39 values per detector over
+              60-98. So ordering by it ordered rows by detector, in a sequence
+              that read as "best signals first" and was nothing of the kind.
+              The "Tipo segnale" filter selects detectors properly. */}
           {showProbabilita && (
-            onSort ? (
-              <SortableHeader
-                column="probability"
-                label="Prob."
-                align="right"
-                title={PROBABILITA_TOOLTIP}
-                sortBy={sortBy}
-                sortDir={sortDir}
-                onSort={onSort}
-              />
-            ) : (
-              <TableHead className="text-base text-right" title={PROBABILITA_TOOLTIP}>
-                Prob.
-              </TableHead>
-            )
+            <TableHead className="text-base text-right" title={PROBABILITA_TOOLTIP}>
+              Prob.
+            </TableHead>
           )}
           {showEsito && (
             <TableHead

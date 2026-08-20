@@ -32,7 +32,10 @@ function numParam(sp: URLSearchParams, key: string): number | undefined {
   return Number.isFinite(n) && n >= 0 && n <= 100 ? n : undefined;
 }
 
-function filtersFromSearch(sp: URLSearchParams): AlertListParams {
+/** Exported for tests: the stale-parameter handling below is invisible on
+ *  screen — a dropped filter looks exactly like no filter — so it needs a
+ *  test that reads the behaviour directly. */
+export function filtersFromSearch(sp: URLSearchParams): AlertListParams {
   const s = (k: string) => sp.get(k) || undefined;
   return {
     archived: sp.get("archived") === "true",
@@ -46,7 +49,14 @@ function filtersFromSearch(sp: URLSearchParams): AlertListParams {
     date_from: s("date_from"),
     date_to: s("date_to"),
     strength_min: numParam(sp, "strength_min"),
-    probability_min: numParam(sp, "probability_min"),
+    // `probability_min` is deliberately NOT read back from the URL. The filter
+    // was removed (see AlertFilters), but a bookmark or a pasted link from
+    // before the removal still carries the parameter — and honouring it would
+    // apply a filter with no control to see or clear it. Worse, Probabilità
+    // tops out at 52 across the whole engine, so any saved threshold above
+    // that returns an empty list forever with nothing on screen explaining
+    // why. Dropping it degrades an old link to "no filter", which is the only
+    // safe reading.
   };
 }
 
@@ -67,7 +77,6 @@ function searchFromState(
   if (filters.date_from) sp.set("date_from", filters.date_from);
   if (filters.date_to) sp.set("date_to", filters.date_to);
   if (filters.strength_min != null) sp.set("strength_min", String(filters.strength_min));
-  if (filters.probability_min != null) sp.set("probability_min", String(filters.probability_min));
   if (filters.archived) sp.set("archived", "true");
   if (page > 0) sp.set("page", String(page + 1)); // 1-based in the URL
   if (sortBy !== "triggered_at") sp.set("sort_by", sortBy);
@@ -97,7 +106,14 @@ export default function AlertsPage() {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [openDetail, setOpenDetail] = useState<Alert | null>(null);
   const [sortBy, setSortBy] = useState(
-    () => searchParams.get("sort_by") ?? "triggered_at",
+    // Same reasoning as probability_min above: sorting by Probabilità ordered
+    // rows by DETECTOR (the value is a per-detector constant), so the sort was
+    // removed. An old link asking for it falls back to the default instead of
+    // producing an order nothing on screen can explain.
+    () => {
+      const sb = searchParams.get("sort_by");
+      return sb && sb !== "probability" ? sb : "triggered_at";
+    },
   );
   const [sortDir, setSortDir] = useState<"asc" | "desc">(() =>
     searchParams.get("sort_dir") === "asc" ? "asc" : "desc",
