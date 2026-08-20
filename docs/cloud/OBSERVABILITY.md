@@ -90,10 +90,21 @@ Two things about these worth keeping in mind:
   scan + recompute cycle — so the conventional "ratio > 0.85 sustained for
   10m" shape would never have fired: the peak is minutes long and the ratio
   looks comfortable between cycles.
-- They watch whether the app is ALIVE, not whether it is WORKING. A pod that
-  stays up while every scan fails keeps all four silent. Closing that needs an
-  app-exported `last_successful_scan_timestamp` gauge — Prometheus rules
-  cannot query Loki, where the scan lines live.
+- `FinanceAlertNotScanning` is the ALIVE-vs-WORKING one: the other rules all
+  stay silent for a pod that stays up while every scan fails. It reads
+  `finance_alert_last_successful_run_timestamp_seconds`, a gauge the app
+  exports itself (`app/core/app_metrics.py`) — Prometheus rules cannot query
+  Loki, where the scan lines live. Threshold 26h, against a guaranteed daily
+  cron (`day_of_week="*"`) plus a weekday EU-close tick.
+- That gauge is REHYDRATED from `scan_runs` at boot. A Prometheus gauge starts
+  empty, so without hydration every restart would report "never scanned" —
+  including the OOM restart the memory rules exist to catch, turning one real
+  incident into two alerts, one of them wrong.
+
+**Order of operations when adding a rule that reads an app metric:** deploy the
+app first, confirm the series exists in Prometheus, then apply the rule. Doing
+it the other way round means `absent()` fires on a metric that has simply not
+shipped yet.
 
 Verify they are actually loaded (creating the CR is not the same as Prometheus
 evaluating it) — every rule should read `health=ok`:

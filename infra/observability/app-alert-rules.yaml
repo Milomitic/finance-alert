@@ -15,12 +15,14 @@
 # (`ruleSelectorNilUsesHelmValues: false` in kube-prometheus-stack.values.yaml),
 # so this applies with a plain `kubectl apply -f` like the PodMonitor beside it.
 #
-# WHAT THESE DO NOT COVER
-# -----------------------
-# They watch whether the app is ALIVE, not whether it is DOING ITS JOB. A pod
-# that stays up while every scan fails would keep all of these silent. Closing
-# that gap needs an app-exported metric — a `last_successful_scan_timestamp`
-# gauge — since Prometheus rules cannot query Loki, where the scan lines live.
+# ALIVE vs WORKING
+# ----------------
+# The first four rules watch whether the app is ALIVE. A pod that stays up
+# while every scan fails would keep all of them silent — the more insidious
+# outage, because nothing crashes and the dashboards look fine while the data
+# quietly stops moving. `FinanceAlertNotScanning` closes that, using a gauge
+# the app exports itself (`app/core/app_metrics.py`); Prometheus rules cannot
+# query Loki, where the scan log lines live, so the app has to say so.
 apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
 metadata:
@@ -106,6 +108,49 @@ spec:
               ({{ $labels.pod }}). Se è accompagnato da FinanceAlertOOMKilled
               la causa è la memoria; altrimenti guarda i log del container
               precedente.
+
+        # --- Alive but not working -------------------------------------------
+        # `scan_alerts` runs DAILY (day_of_week="*"), with an extra weekday
+        # tick after the EU close, so the largest normal gap is 24h — on a
+        # weekend, when only the daily job fires. 26h gives two hours of slack
+        # over the guaranteed cadence: long enough never to cry about a late
+        # start, short enough to notice a missed day the same morning.
+        #
+        # The gauge is REHYDRATED from `scan_runs` at boot. Without that a
+        # restart would zero it and this rule would fire falsely — including
+        # right after the OOM restart the rules above exist to catch, turning
+        # one real incident into two alerts, one of them wrong.
+        - alert: FinanceAlertNotScanning
+          expr: |
+            (
+              time() - max by (kind) (finance_alert_last_successful_run_timestamp_seconds)
+            ) > 26 * 3600
+          for: 30m
+          labels:
+            severity: critical
+          annotations:
+            summary: "finance-alert è viva ma non completa più i job ({{ $labels.kind }})"
+            description: >-
+              L'ultimo run '{{ $labels.kind }}' andato a buon fine risale a più
+              di 26 ore fa. Il pod risponde — questo non è un crash: o il job
+              non parte, o fallisce ogni volta. Guarda i log dello scheduler.
+
+        # The gauge missing ENTIRELY is a different failure from a stale one:
+        # a series that never appears cannot be compared against time(), so the
+        # rule above would stay silent forever. Split out because it usually
+        # means the app failed to hydrate at boot, not that scanning stopped.
+        - alert: FinanceAlertScanMetricMissing
+          expr: |
+            absent(finance_alert_last_successful_run_timestamp_seconds)
+          for: 30m
+          labels:
+            severity: warning
+          annotations:
+            summary: "la metrica di ultimo scan non esiste"
+            description: >-
+              L'app non espone finance_alert_last_successful_run_timestamp_seconds.
+              O il boot non ha reidratato la gauge da scan_runs, o nessun run è
+              mai riuscito. Finché manca, FinanceAlertNotScanning è cieca.
 
         # --- The app stopped answering the scrape ----------------------------
         # `absent()` is the other half: `up == 0` needs the target to exist to
