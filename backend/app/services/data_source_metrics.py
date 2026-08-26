@@ -288,20 +288,35 @@ class SourceMetric:
     health: str
 
 
+# Share of failures that must be 403 for a source to count as plan-gated. Not
+# 100%: these counters are LIFETIME cumulative and never reset, so exact
+# equality means one transient timeout years ago disqualifies an endpoint
+# permanently. Measured in production on 2026-08-26, that is exactly what had
+# happened — finnhub.upgrades sat at failure=1122 / failure_403=1120, off by
+# TWO, so the probe throttle built on this predicate never engaged once and the
+# endpoint was re-asked 48 times a day for a week.
+_PLAN_GATED_MIN_403_SHARE = 0.9
+
+
 def _is_plan_gated(c: _Counter) -> bool:
-    """Every failure this source ever had was an HTTP 403.
+    """The endpoint has NEVER once worked, and essentially all of it was 403.
 
     Means the upstream is up and understood us fine, and our tier simply does
-    not include the endpoint — a configuration fact, not an incident. A single
-    non-403 failure (timeout, 5xx, 429) breaks the pattern and this goes back
-    to False on its own.
+    not include the endpoint — a configuration fact, not an incident.
+
+    The `success == 0` half is the load-bearing one, and it was missing. An
+    endpoint that has ever returned data is by definition included in the plan,
+    whatever its 403 count says: production had finnhub.news reading plan-gated
+    on 181/181 403s while also holding 271 successes. Requiring a clean zero
+    makes the predicate say what it means, and lets the 403 share be tolerant
+    of noise without becoming loose.
 
     Shared by `_classify` (which paints the source slate instead of amber) and
-    by the health probes (which stop re-asking). Those two had drifted apart:
-    the UI already understood the source was plan-gated while the probe kept
-    calling it every tick forever.
+    by the health probes (which stop re-asking).
     """
-    return c.failure > 0 and c.failure_403 == c.failure
+    if c.failure <= 0 or c.success > 0:
+        return False
+    return c.failure_403 >= c.failure * _PLAN_GATED_MIN_403_SHARE
 
 
 def is_plan_gated(source: str, op: str) -> bool:

@@ -28,13 +28,40 @@ class TestIsPlanGated:
             dsm.record_failure("finnhub", "upgrades", reason="HTTP 403")
         assert dsm.is_plan_gated("finnhub", "upgrades") is True
 
-    def test_one_non_403_breaks_the_pattern(self):
-        """A timeout among the 403s means something else is also wrong, and
-        the source goes back to being a normal incident rather than a
-        configuration fact."""
-        dsm.record_failure("finnhub", "upgrades", reason="HTTP 403")
+    def test_a_couple_of_stray_timeouts_do_not_disqualify_it(self):
+        """THE BUG THIS PREDICATE SHIPPED WITH.
+
+        The first version required failure_403 == failure exactly. These
+        counters are LIFETIME cumulative and never reset, so one transient
+        timeout at any point in history disqualified an endpoint forever.
+        Production on 2026-08-26: finnhub.upgrades at failure=1122 /
+        failure_403=1120 — off by two, never once successful — and the
+        throttle built on this never engaged, re-asking 48 times a day.
+        """
+        for _ in range(98):
+            dsm.record_failure("finnhub", "upgrades", reason="HTTP 403")
         dsm.record_failure("finnhub", "upgrades", reason="ReadTimeout")
+        dsm.record_failure("finnhub", "upgrades", reason="ReadTimeout")
+        assert dsm.is_plan_gated("finnhub", "upgrades") is True
+
+    def test_a_mostly_broken_endpoint_is_not_plan_gated(self):
+        """Tolerance is not blindness: half timeouts is an incident, and the
+        probe has to keep watching it."""
+        for _ in range(25):
+            dsm.record_failure("finnhub", "upgrades", reason="HTTP 403")
+        for _ in range(25):
+            dsm.record_failure("finnhub", "upgrades", reason="ReadTimeout")
         assert dsm.is_plan_gated("finnhub", "upgrades") is False
+
+    def test_an_endpoint_that_has_ever_worked_is_never_plan_gated(self):
+        """The half that was missing, and the load-bearing one. An endpoint
+        that has returned data is by definition included in the plan, whatever
+        its 403 count says. Production had finnhub.news reading plan-gated on
+        181/181 403s while also holding 271 successes."""
+        for _ in range(181):
+            dsm.record_failure("finnhub", "news", reason="HTTP 403")
+        dsm.record_success("finnhub", "news")
+        assert dsm.is_plan_gated("finnhub", "news") is False
 
     def test_an_untouched_source_is_not_plan_gated(self):
         assert dsm.is_plan_gated("finnhub", "upgrades") is False
