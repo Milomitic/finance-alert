@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { CardSkeleton } from "@/components/ui/card-skeleton";
 import { QueryError } from "@/components/ui/query-error";
 import { SectionTitle } from "@/components/ui/section-title";
+import { SetupOutcomeList } from "@/components/setups/SetupOutcomeList";
 import { useSetups, type Setup } from "@/hooks/useSetups";
 import { detectorCounts, detectorLabel, groupByCondition, type SetupSortKey } from "@/lib/setupGrouping";
 import { cn } from "@/lib/utils";
@@ -70,7 +71,11 @@ export default function SetupsPage() {
   // a bare `open` resolves to `window.open` when the declaration is missing,
   // and TypeScript then reports a type error somewhere else entirely.
   const [openSetup, setOpenSetup] = useState<Setup | null>(null);
-  const q = useSetups(tone);
+  // "In formazione" vs "Esiti". The closed rows are the only record of
+  // whether the feature works — conversion rate and lead time both come from
+  // them — and until now the page could not show a single one.
+  const [view, setView] = useState<"active" | "closed">("active");
+  const q = useSetups(tone, undefined, view);
 
   const all = q.data?.setups ?? [];
   const detectors = useMemo(() => detectorCounts(all), [all]);
@@ -160,15 +165,34 @@ export default function SetupsPage() {
       </div>
 
       <div>
-        <SectionTitle
-          icon={Target}
-          label={
-            groups.length > 0
-              ? `Setup attivi — ${groups.reduce((n, g) => n + g.setups.length, 0)} in ${groups.length} condizioni`
-              : "Setup attivi"
-          }
-          className="mb-3"
-        />
+        <div className="mb-3 flex items-center justify-between gap-3 flex-wrap">
+          <SectionTitle
+            icon={Target}
+            label={
+              view === "closed"
+                ? `Esiti — ${all.length} setup chiusi`
+                : groups.length > 0
+                  ? `Setup attivi — ${groups.reduce((n, g) => n + g.setups.length, 0)} in ${groups.length} condizioni`
+                  : "Setup attivi"
+            }
+          />
+          <div className="inline-flex rounded-md border overflow-hidden text-xs font-semibold">
+            {(["active", "closed"] as const).map((v) => (
+              <button
+                key={v}
+                type="button"
+                onClick={() => setView(v)}
+                aria-pressed={view === v}
+                className={cn(
+                  "px-3 py-1.5 transition-colors",
+                  view === v ? "bg-accent text-foreground" : "text-muted-foreground hover:bg-accent/40",
+                )}
+              >
+                {v === "active" ? "In formazione" : "Esiti"}
+              </button>
+            ))}
+          </div>
+        </div>
         {q.isLoading ? (
           <div className="space-y-2">
             {Array.from({ length: 5 }).map((_, i) => (
@@ -177,7 +201,7 @@ export default function SetupsPage() {
           </div>
         ) : q.isError ? (
           <QueryError message="dei setup" onRetry={q.refetch} isRetrying={q.isFetching} />
-        ) : !q.data || q.data.setups.length === 0 ? (
+        ) : view === "active" && (!q.data || q.data.setups.length === 0) ? (
           <Card>
             <CardContent className="p-6 text-sm text-muted-foreground">
               Nessun setup in formazione al momento. Vengono ricalcolati a ogni scan —
@@ -185,6 +209,8 @@ export default function SetupsPage() {
               scansione notturna.
             </CardContent>
           </Card>
+        ) : view === "closed" ? (
+          <SetupOutcomeList setups={all} />
         ) : (
           <div className="space-y-3">
             {groups.map((g) => (

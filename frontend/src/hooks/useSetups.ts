@@ -41,7 +41,21 @@ export interface Setup {
   annotations: { levels?: { label: string; price: number; kind: string }[] } | null;
   /** Measured 0..1 factors behind the setup — evidence for the wait. */
   factors?: Record<string, number> | null;
+  /** "active" | "converted" | "expired". Closed setups are kept, never
+   *  deleted: an expired one is half of the conversion rate, and dropping
+   *  them would leave only the successes on record. */
+  status?: SetupStatus;
+  resolved_at?: string | null;
+  /** Days between first sighting and the signal firing — the warning this
+   *  setup actually gave. Only set on converted rows. */
+  lead_days?: number | null;
+  converted_alert_id?: number | null;
 }
+
+export type SetupStatus = "active" | "converted" | "expired";
+/** What the list is asking for. "closed" is both outcomes together, because
+ *  the honest reading of the feature is the ratio between them. */
+export type SetupStatusFilter = SetupStatus | "closed";
 
 export interface SetupStats {
   active: number;
@@ -57,12 +71,17 @@ export interface SetupsResponse {
   stats: SetupStats;
 }
 
-export function useSetups(tone?: "bull" | "bear", ticker?: string) {
+export function useSetups(
+  tone?: "bull" | "bear",
+  ticker?: string,
+  status: SetupStatusFilter = "active",
+) {
   return useQuery({
-    queryKey: ["setups", tone ?? "all", ticker ?? "*"],
+    queryKey: ["setups", tone ?? "all", ticker ?? "*", status],
     queryFn: () => {
       const p = new URLSearchParams();
       if (tone) p.set("tone", tone);
+      if (status !== "active") p.set("status", status);
       // Per-ticker asks the backend for THIS stock's setups, shortlisted or
       // not — see the API note. The global list stays capped.
       if (ticker) p.set("ticker", ticker);
@@ -71,6 +90,16 @@ export function useSetups(tone?: "bull" | "bear", ticker?: string) {
     },
     staleTime: 5 * 60 * 1000,
   });
+}
+
+/** Days a CLOSED setup spent waiting, first sighting to resolution. The live
+ *  counterpart is `waitingDays`, which measures against now instead. */
+export function resolvedAfterDays(setup: Setup): number | null {
+  if (!setup.first_seen_at || !setup.resolved_at) return null;
+  const a = new Date(setup.first_seen_at).getTime();
+  const b = new Date(setup.resolved_at).getTime();
+  if (Number.isNaN(a) || Number.isNaN(b)) return null;
+  return Math.max(0, Math.floor((b - a) / 86_400_000));
 }
 
 /** Days a setup has been waiting — the lead time it is currently offering. */
