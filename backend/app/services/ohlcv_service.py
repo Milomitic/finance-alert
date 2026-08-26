@@ -1,12 +1,12 @@
 """Fetch OHLCV from yfinance and upsert into ohlcv_daily."""
 import math
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 from typing import Any
 
 import pandas as pd
 from loguru import logger
-from sqlalchemy import text
+from sqlalchemy import or_, text
 from sqlalchemy.orm import Session
 
 from app.models import OhlcvDaily, Stock
@@ -468,6 +468,33 @@ def split_quarantined(
         else:
             fetchable.append(s)
     return fetchable, quarantined
+
+
+def not_quarantined_clause(today: date | None = None):
+    """SQL form of `split_quarantined`, for callers that select tickers in the
+    database instead of filtering Stock objects in Python.
+
+    The quarantine used to be OHLCV-only knowledge, which meant it stopped the
+    10y downloads and nothing else. Measured on 2026-08-26, five genuinely dead
+    symbols (BK, CTRA, APLS, TERN, VSCO — streaks of 129 to 262) were still
+    being asked for by the live-quote universe sweep every half hour, because
+    that sweep selects on `visible_country_clause()` alone. Roughly 2,200
+    "possibly delisted" log lines in 48 hours came from there, not from the
+    fetch plan the quarantine was guarding.
+
+    Kept next to `split_quarantined` and covered by a test that asserts the two
+    agree on the same rows: two copies of a rule in two languages is exactly
+    the shape that drifts.
+    """
+    today = today or date.today()
+    # quarantined iff streak >= N AND last is not null AND (today-last) < REPROBE
+    # so NOT quarantined is the negation, term by term.
+    cutoff = today - timedelta(days=REPROBE_DAYS)
+    return or_(
+        Stock.ohlcv_nodata_streak < QUARANTINE_STREAK,
+        Stock.ohlcv_last_nodata_at.is_(None),
+        Stock.ohlcv_last_nodata_at <= cutoff,
+    )
 
 
 def latest_ohlcv_date(db: Session, stock_id: int) -> Any | None:

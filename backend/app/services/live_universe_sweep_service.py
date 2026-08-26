@@ -169,7 +169,7 @@ def refresh_chunk(
     """Sweep the next rotating chunk of the universe. Only open-market tickers
     are fetched. Returns the number of quotes staged. Seams (batch_fn/is_open)
     are injectable for tests."""
-    from app.services import live_quote_service
+    from app.services import live_quote_service, ohlcv_service
 
     chunk_size = chunk_size or settings.live_movers_chunk
     # deadline_seconds=None: this is the BACKGROUND pool — nobody is waiting on
@@ -185,9 +185,18 @@ def refresh_chunk(
 
     _warm_live_assets(batch_fn, is_open, has_value)
 
+    # Dead symbols are excluded here too, not just from the OHLCV fetch plan.
+    # The quarantine used to be OHLCV-only knowledge: five delisted names with
+    # no-data streaks of 129-262 were still asked for by this sweep every half
+    # hour, which is where ~2,200 of the 48-hour "possibly delisted" log lines
+    # were coming from. The weekly re-probe still applies, so a symbol that
+    # comes back is picked up by the fetch plan and rejoins the sweep.
     tickers = [
         t for (t,) in db.execute(
-            select(Stock.ticker).where(visible_country_clause()).order_by(Stock.id)
+            select(Stock.ticker)
+            .where(visible_country_clause())
+            .where(ohlcv_service.not_quarantined_clause())
+            .order_by(Stock.id)
         ).all()
     ]
     if not tickers:
