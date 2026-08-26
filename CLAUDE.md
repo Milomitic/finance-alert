@@ -301,6 +301,32 @@ needs a range change in package.json, use the full Docker recipe.
 
 ---
 
+## ⚠️ Checking CI: `gh run list` serves stale results
+
+Cost time twice in one session (2026-08-26). `gh run list --branch cloud` kept
+returning runs from six days earlier while a fresh run was already finished,
+and once returned a run id from a completely different day. Do not trust it.
+
+Ask the API instead — it has been correct every time:
+
+```bash
+gh api "repos/Milomitic/finance-alert/actions/runs?per_page=5"   --jq '.workflow_runs[] | "\(.created_at)  \(.head_sha[0:8])  \(.event)  \(.status)/\(.conclusion)"'
+# or for one commit:
+gh api "repos/Milomitic/finance-alert/actions/runs?head_sha=$(git rev-parse HEAD)" --jq .total_count
+```
+
+### `workflow_dispatch` verifies but does NOT deploy
+
+`image`, `trivy` and `gitops` all carry
+`if: github.event_name == 'push' && github.ref == 'refs/heads/cloud'`. A run
+started with `gh workflow run ci` therefore goes green with those three
+**skipped** — tests and audits pass, no image is built and no tag is bumped,
+so nothing reaches the cluster. Green is not deployed; check the job list.
+
+If a push somehow fails to trigger CI (observed once, cause not established —
+the ref had moved and no run was ever created), dispatching will not fix it.
+Only another push event will build and deploy.
+
 ## Database migrations (alembic)
 
 - Migration files live in `backend/alembic/versions/`
