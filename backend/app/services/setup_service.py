@@ -30,6 +30,25 @@ from app.signals.setups.base import SetupMatch, convenience
 # without firing. Short on purpose — a setup is a "watch this now" object, and
 # one kept alive for weeks is just clutter that inflates the active list.
 _EXPIRE_AFTER_DAYS = 10
+
+# Absolute ceiling on how long a setup may stay pending, measured from
+# `first_seen_at` and independent of re-observation.
+#
+# WHY THIS IS NEEDED. `_EXPIRE_AFTER_DAYS` above measures staleness from
+# `last_seen_at`, which every scan refreshes while the conditions still hold —
+# so a setup whose conditions persist never expires at all. Measured on
+# 2026-08-26: 1,420 active setups, 715 of them `oversold_reversal`, none of
+# which had ever resolved. "Oversold and within 8% of a support" is a state a
+# stock can sit in for months, and the row sat there with it.
+#
+# WHY 28. The lead time of every conversion so far: 26% within 3 days, 32% by
+# a week, 82% by 13 days, then 12% and 5.5% in the last two bands. Nothing has
+# converted past 27 days — but that figure is CENSORED, because the feature
+# itself is only 28 days old and no setup has yet had the chance. So the cap is
+# justified by the shape of the decline, not by the empty tail: a setup still
+# waiting after four weeks is not providing lead time any more, it is
+# describing a condition. Revisit once there is a longer history to read.
+_MAX_AGE_DAYS = 28
 # Scans run twice a day, so a healthy 10-day window contains ~20. Requiring a
 # handful means a brief outage cannot silently retire the whole list.
 _MIN_SCANS_BEFORE_EXPIRY = 3
@@ -178,21 +197,44 @@ def expire_stale_setups(db: Session, *, today: date | None = None) -> int:
         )
         return 0
 
+    age_cutoff = datetime.combine(
+        (today or date.today()) - timedelta(days=_MAX_AGE_DAYS),
+        datetime.min.time(),
+        tzinfo=UTC,
+    )
     rows = db.execute(
         select(StockSetup).where(StockSetup.status == STATUS_ACTIVE)
     ).scalars().all()
-    n = 0
+    n_stale = 0
+    n_aged = 0
     for row in rows:
         seen = row.last_seen_at
         if seen is not None and seen.tzinfo is None:
             seen = seen.replace(tzinfo=UTC)
-        if seen is not None and seen < cutoff:
+        first = row.first_seen_at
+        if first is not None and first.tzinfo is None:
+            first = first.replace(tzinfo=UTC)
+
+        stale = seen is not None and seen < cutoff
+        # Aged out while still perfectly valid: the conditions never decayed,
+        # they simply never resolved either. Counted separately because the
+        # two say different things about the detector — decay is the market
+        # moving on, age is a gate that describes a state rather than a lead.
+        aged = first is not None and first < age_cutoff
+
+        if stale or aged:
             row.status = STATUS_EXPIRED
             row.resolved_at = datetime.now(UTC)
-            n += 1
-    if n:
-        logger.info(f"[setups] expired {n} stale setups")
-    return n
+            if stale:
+                n_stale += 1
+            else:
+                n_aged += 1
+    if n_stale or n_aged:
+        logger.info(
+            f"[setups] expired {n_stale + n_aged} setups "
+            f"({n_stale} stale, {n_aged} past the {_MAX_AGE_DAYS}-day ceiling)"
+        )
+    return n_stale + n_aged
 
 
 def conversion_stats(db: Session) -> dict:
