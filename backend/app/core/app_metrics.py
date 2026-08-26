@@ -127,12 +127,38 @@ _CACHE_SOURCES: list[tuple[str, str, str]] = [
 
 
 class _CacheSizeCollector:
-    """Reports how many entries each in-process cache holds, at scrape time."""
+    """Cache occupancy and Python heap shape, both read at scrape time.
+
+    HEAP: the cache counts above answered their question and eliminated
+    themselves. Over six days the working set went 832MB -> 1459MB, about
+    105MB/day with no sign of levelling, while every cache stayed at its
+    ceiling — +131 entries in total against +627MB. So the growth is not the
+    caches, and `process_resident_memory_bytes` alone cannot say what it is.
+
+    `sys.getallocatedblocks()` splits the two remaining explanations, which
+    need opposite fixes:
+
+      blocks rise with RSS  -> Python objects are accumulating; something holds
+                               references it should not, and the fix is to find
+                               and drop them.
+      blocks flat, RSS rises -> the objects are being freed but the memory is
+                               not going back to the OS, or it was never
+                               CPython's to begin with: numpy and pandas
+                               allocate array buffers through malloc directly,
+                               outside this counter. The fix there is arena or
+                               workload shaped, not a missing `del`.
+
+    Everything here is O(1). `gc.get_objects()` would give per-type attribution
+    but builds a list of every tracked object to do it — the last thing to run
+    on a process that is already short of memory.
+    """
 
     def collect(self):  # noqa: D102 - prometheus_client protocol
+        import gc
+        import sys
         from importlib import import_module
 
-        from prometheus_client.metrics_core import GaugeMetricFamily
+        from prometheus_client.metrics_core import CounterMetricFamily, GaugeMetricFamily
 
         g = GaugeMetricFamily(
             "finance_alert_cache_entries",
@@ -148,6 +174,34 @@ class _CacheSizeCollector:
             except Exception:  # noqa: BLE001 - a scrape must never raise
                 continue
         yield g
+
+        try:
+            blocks = GaugeMetricFamily(
+                "finance_alert_python_allocated_blocks",
+                "Live CPython allocator blocks (sys.getallocatedblocks).",
+            )
+            blocks.add_metric([], float(sys.getallocatedblocks()))
+            yield blocks
+
+            # Non-zero means reference cycles the collector cannot free —
+            # rare, and a direct pointer at the cause when it happens.
+            garbage = GaugeMetricFamily(
+                "finance_alert_python_gc_uncollectable",
+                "Objects the garbage collector could not free (len(gc.garbage)).",
+            )
+            garbage.add_metric([], float(len(gc.garbage)))
+            yield garbage
+
+            collected = CounterMetricFamily(
+                "finance_alert_python_gc_collected",
+                "Objects freed by the garbage collector, per generation.",
+                labels=["generation"],
+            )
+            for gen, stats in enumerate(gc.get_stats()):
+                collected.add_metric([str(gen)], float(stats.get("collected", 0)))
+            yield collected
+        except Exception:  # noqa: BLE001 - a scrape must never raise
+            return
 
 
 _cache_collector_registered = False
