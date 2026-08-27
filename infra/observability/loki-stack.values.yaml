@@ -35,6 +35,25 @@ promtail:
   resources:
     requests: { cpu: 10m, memory: 32Mi }
     limits: { memory: 128Mi }
+  config:
+    snippets:
+      # Dropped at the SHIPPER, so the line never reaches Loki and never costs
+      # retention. Measured over 7 days: kube-system produced 40,724 error/warn
+      # lines and every single one was this pair of CoreDNS warnings about
+      # optional custom-config files that are not meant to exist — ~5,800 a
+      # day, 40% of everything the cluster logs, carrying no information.
+      #
+      # `scripts/diagnose.py` already muted this string when READING, which is
+      # what hid how much of it was being written.
+      #
+      # `cri` MUST stay first and must not be dropped: it parses the container
+      # runtime envelope, and replacing the stage list without it would stop
+      # every log in the cluster from being parsed at all.
+      pipelineStages:
+        - cri: {}
+        - drop:
+            expression: ".*No files matching import glob pattern.*"
+            drop_counter_reason: coredns_optional_config
 
 # We already have these from kube-prometheus-stack.
 grafana:
