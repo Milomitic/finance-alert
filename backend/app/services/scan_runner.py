@@ -450,6 +450,10 @@ def run_tracked_scan(
         # liveness rules cannot see this: a pod that stays up while every scan
         # fails looks perfectly healthy from the outside.
         app_metrics.record_successful_run(KIND_ALERTS_SCAN, run.completed_at)
+        # Recount stale price data here, where it just changed. A scan that
+        # completes says nothing about whether the data advanced — four
+        # symbols were frozen for weeks while every scan reported success.
+        app_metrics.refresh_stale_ohlcv_gauge(db)
         # Optional per-signal instant Telegram push (best-effort: a Telegram
         # problem must NEVER fail a successful scan). Only the NEW signal
         # alerts of THIS run (id > baseline) are considered; the strength

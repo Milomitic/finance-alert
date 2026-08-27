@@ -317,6 +317,7 @@ def _hydrate_run_metrics() -> None:
     try:
         with SessionLocal() as db:
             app_metrics.hydrate_from_db(db)
+            app_metrics.refresh_stale_ohlcv_gauge(db)
     except Exception as exc:  # noqa: BLE001 — boot-time best effort
         logger.warning(f"[startup] run-metrics hydration failed (non-fatal): {exc}")
 

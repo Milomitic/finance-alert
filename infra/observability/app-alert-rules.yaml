@@ -167,6 +167,54 @@ spec:
               O il boot non ha reidratato la gauge da scan_runs, o nessun run è
               mai riuscito. Finché manca, FinanceAlertNotScanning è cieca.
 
+        # --- The data stopped moving while everything reported success -------
+        # The rules above, including FinanceAlertNotScanning, all watch whether
+        # WORK HAPPENS. None of them can see whether the work achieved
+        # anything. Measured on 2026-08-26: SATS, NUVL, CPRX and EA carried no
+        # new price bar for 16 to 40 days while every scan completed, every
+        # dashboard was green and no alert existed that could have said so.
+        #
+        # Alerting on "any stale stock" would fire forever: genuinely delisted
+        # symbols sit in this count until someone removes them from the
+        # catalogue, and there were nine of them the day this was written. So
+        # the rule watches the count GROWING past its own recent floor, which
+        # is the shape a real incident takes — roughly twenty NYSE Arca ETFs
+        # froze together on 17 July 2026 when one bad ticker aborted a
+        # Postgres transaction and took the rest of its batch with it.
+        - alert: FinanceAlertStaleDataSpike
+          expr: |
+            (
+              finance_alert_stale_ohlcv_stocks
+              - min_over_time(finance_alert_stale_ohlcv_stocks[7d])
+            ) > 5
+          for: 1h
+          labels:
+            severity: warning
+          annotations:
+            summary: "più titoli del solito hanno prezzi fermi"
+            description: >-
+              I titoli senza barre recenti sono cresciuti di
+              {{ $value | printf "%.0f" }} rispetto al minimo dell'ultima
+              settimana. Gli scan possono completare con successo mentre i
+              dati non avanzano: controlla i log del fetch OHLCV per un ticker
+              che aborta la transazione e trascina con sé il resto del blocco.
+
+        # The catastrophic shape, which the spike rule can miss if the floor
+        # rises with it: a large absolute count means the pipeline is broken
+        # rather than a few symbols having died.
+        - alert: FinanceAlertStaleDataHigh
+          expr: |
+            finance_alert_stale_ohlcv_stocks > 50
+          for: 30m
+          labels:
+            severity: critical
+          annotations:
+            summary: "molti titoli senza prezzi recenti"
+            description: >-
+              {{ $value | printf "%.0f" }} titoli non hanno una barra degli
+              ultimi giorni. Su un universo di circa mille nomi questo non è
+              un delisting, è la pipeline dei prezzi che non sta scrivendo.
+
         # --- The app stopped answering the scrape ----------------------------
         # `absent()` is the other half: `up == 0` needs the target to exist to
         # be zero, so a target that disappears entirely produces no series and

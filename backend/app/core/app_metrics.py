@@ -51,6 +51,50 @@ LAST_SUCCESSFUL_RUN = Gauge(
 )
 
 
+# How many stocks carry OHLCV older than this. The alert on it is the answer
+# to a gap the run metric above cannot see: `FinanceAlertNotScanning` reports
+# that scans FINISH, not that the data they touch actually moves. Measured on
+# 2026-08-26, four symbols had been frozen for 16 to 40 days while every scan
+# completed successfully and every dashboard stayed green.
+#
+# 7 days rather than the fetch layer's 10: this metric only has to be noticed,
+# not acted on automatically, so it is allowed to be the more sensitive of the
+# two. A handful of names is normal — genuinely delisted symbols sit here
+# until someone removes them — so the alert is on the TREND crossing a floor,
+# not on the count being non-zero.
+STALE_OHLCV_STOCKS = Gauge(
+    "finance_alert_stale_ohlcv_stocks",
+    "Visible stocks whose most recent OHLCV bar is older than the staleness window.",
+)
+STALE_OHLCV_WINDOW_DAYS = 7
+
+
+def refresh_stale_ohlcv_gauge(db: Session) -> int | None:
+    """Recount stocks with stale price data. Returns the count, or None if the
+    query failed — never raises, and never leaves a stale value silently: on
+    failure the previous reading stands, which the alert's `for:` window
+    tolerates.
+    """
+    from sqlalchemy import text
+
+    try:
+        n = db.execute(
+            text(
+                """
+                SELECT COUNT(*) FROM stocks s
+                WHERE (SELECT MAX(date) FROM ohlcv_daily o WHERE o.stock_id = s.id)
+                      < CURRENT_DATE - :w
+                """
+            ),
+            {"w": STALE_OHLCV_WINDOW_DAYS},
+        ).scalar_one()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(f"[metrics] stale-OHLCV recount failed: {exc}")
+        return None
+    STALE_OHLCV_STOCKS.set(float(n))
+    return int(n)
+
+
 def record_successful_run(kind: str, when: datetime | None = None) -> None:
     """Stamp the gauge for `kind`. Never raises.
 
