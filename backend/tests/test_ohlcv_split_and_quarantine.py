@@ -160,14 +160,38 @@ def test_empty_fetch_increments_streak_and_data_resets_it(db, monkeypatch):
         assert s.ohlcv_nodata_streak == expected
     assert s.ohlcv_last_nodata_at == date.today()
 
-    # A later fetch WITH data resets the streak.
-    frame = _frame(date(2026, 6, 1), [10.0, 10.5])
+    # A later fetch with RECENT data resets the streak. The date is relative
+    # on purpose: it used to be the literal 2026-06-01, which passed only
+    # because any frame at all counted as proof of life.
+    frame = _frame(date.today() - timedelta(days=1), [10.0, 10.5])
     monkeypatch.setattr(
         ohlcv_service, "_yf_download", lambda tickers, **kw: _yf_single("DEAD", frame)
     )
     ohlcv_service.fetch_and_upsert(db, [s], period="10y")
     db.commit()
     assert s.ohlcv_nodata_streak == 0
+
+
+def test_a_frame_of_stale_bars_does_not_count_as_alive(db, monkeypatch):
+    """The bug this rule was tightened for.
+
+    yfinance can answer a request for a halted or delisted symbol with the
+    history it still holds. Treating "got a frame" as "still trading" reset
+    the very counter meant to notice the symbol had died — measured in
+    production on 2026-08-26, SATS, NUVL, CPRX and EA had no new bar for 16 to
+    40 days while sitting at streak 0, so they never quarantined and were
+    re-fetched forever.
+    """
+    s = _seed_stock(db, "ZOMBIE")
+    stale = _frame(date.today() - timedelta(days=40), [10.0, 10.5])
+    monkeypatch.setattr(
+        ohlcv_service, "_yf_download", lambda tickers, **kw: _yf_single("ZOMBIE", stale)
+    )
+    for expected in (1, 2, 3):
+        ohlcv_service.fetch_and_upsert(db, [s], period="10y")
+        db.commit()
+        assert s.ohlcv_nodata_streak == expected, "old bars must not read as proof of life"
+    assert s.ohlcv_last_nodata_at == date.today()
 
 
 def test_split_quarantined_rule(db):

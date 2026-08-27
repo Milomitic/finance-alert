@@ -110,6 +110,29 @@ def _yf_download(tickers: list[str], **kwargs: Any) -> pd.DataFrame:
     )
 
 
+# How recent the newest bar must be for a fetch to count as proof of life.
+# Generous on purpose: two days of weekend plus the longest exchange closures
+# (a four- or five-day national holiday) have to pass through without a single
+# healthy stock starting a streak. At 10 days a real gap still needs three
+# consecutive scans to reach QUARANTINE_STREAK, and the weekly re-probe undoes
+# a mistake on its own. The gaps this exists to catch were 16 to 40 days.
+_FRESH_WITHIN_DAYS = 10
+
+
+def _frame_is_fresh(frame: pd.DataFrame, today: date | None = None) -> bool:
+    """True when the frame's newest bar is recent enough to prove the symbol
+    is still trading. Never raises: this sits in the per-stock fetch loop, and
+    an exception here would cost the rest of the chunk."""
+    try:
+        newest = pd.to_datetime(frame.index.max()).date()
+        return ((today or date.today()) - newest).days <= _FRESH_WITHIN_DAYS
+    except Exception:  # noqa: BLE001 - unusable index is "not fresh", not a crash
+        # The subtraction has to be INSIDE the guard: an empty index yields
+        # NaT, whose .date() returns NaT rather than raising, and it is the
+        # arithmetic that blows up one line later.
+        return False
+
+
 def _extract_ticker_frame(df: pd.DataFrame, ticker: str) -> pd.DataFrame | None:
     """Pull the per-ticker subframe out of yfinance's multi-index column response.
 
@@ -365,8 +388,25 @@ def fetch_and_upsert(
         try:
             with db.begin_nested():
                 inserted, updated = _upsert_one_stock(db, stock, frame)
-            if stock.ohlcv_nodata_streak:
-                stock.ohlcv_nodata_streak = 0  # any data → alive again
+            # "Got a frame" is NOT the same as "still trading", and treating
+            # the two as equal is how four symbols rotted unnoticed. Measured
+            # on 2026-08-26: SATS, NUVL, CPRX and EA had no new bar for 16 to
+            # 40 days while sitting at streak 0, so they never reached the
+            # quarantine threshold and were re-fetched forever — and nothing
+            # anywhere reported that their data had stopped moving. yfinance
+            # can answer a request for a halted or delisted symbol with the
+            # history it still holds, and that stale frame reset the very
+            # counter meant to notice the symbol had died.
+            #
+            # Aliveness is judged on the frame's NEWEST BAR, not on its
+            # existence and not on rows written: a stock that is fully up to
+            # date legitimately writes nothing, and using `inserted or updated`
+            # would have quarantined the healthy majority.
+            if _frame_is_fresh(frame):
+                stock.ohlcv_nodata_streak = 0  # recent data → alive
+            else:
+                stock.ohlcv_nodata_streak = (stock.ohlcv_nodata_streak or 0) + 1
+                stock.ohlcv_last_nodata_at = date.today()
             result.rows_inserted += inserted
             result.rows_updated += updated
             result.stocks_succeeded += 1
