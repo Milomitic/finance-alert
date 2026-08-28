@@ -310,7 +310,15 @@ def recompute_one(db: Session, stock_id: int) -> TechnicalScore | None:
     }
     composite = sum(_WEIGHTS[k] * dims[k] for k in _WEIGHTS)
     fac = _recent_signal_facets(db, [stock_id]).get(stock_id)
-    signals_val = round(fac["confidence"], 1) if fac is not None else None
+    # "strength", not "confidence". `_recent_signal_facets` has returned
+    # {"strength", "tone"} since the Forza/Probabilità split; "confidence" is
+    # the legacy alias and is never a key of this dict. The twin in `finalize`
+    # was updated at the time and this one was missed, so every call here with
+    # a recent signal raised KeyError — a 500 from the per-stock recompute
+    # button, and only ever on the stocks that HAVE a signal, which is to say
+    # the interesting ones. The 1,700-test suite passed because no test
+    # exercised the `fac is not None` branch.
+    signals_val = round(fac["strength"], 1) if fac is not None else None
     posture = "Forte" if composite >= 66 else "Neutro" if composite >= 40 else "Debole"
     now = datetime.now(UTC)
     db.merge(TechnicalScore(
