@@ -17,6 +17,15 @@ metadata:
     app.kubernetes.io/part-of: finance-alert
 spec:
   instances: 1
+  # Without this CNPG exports nothing to Prometheus, and it exported nothing
+  # for the whole life of this cluster: `count(cnpg_*)` returned ZERO on
+  # 2026-08-27. The backups run and were restored end-to-end once (see
+  # RUNBOOK-postgres-dr.md), but NOTHING was checking they were still
+  # happening — the same shape as the OOMKill that went unnoticed for nine
+  # days. The alert rules that consume this live in
+  # infra/observability/app-alert-rules.yaml.
+  monitoring:
+    enablePodMonitor: true
   # PG16 (matches the CI test lane). arm64 variant verified on GHCR.
   imageName: ghcr.io/cloudnative-pg/postgresql:16
   primaryUpdateStrategy: unsupervised

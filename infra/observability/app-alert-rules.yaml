@@ -215,6 +215,66 @@ spec:
               ultimi giorni. Su un universo di circa mille nomi questo non è
               un delisting, è la pipeline dei prezzi che non sta scrivendo.
 
+        # --- The backup you only find out about when you need it -------------
+        # The backups run, and were restored end-to-end once (RUNBOOK-postgres-
+        # dr.md, 2026-07-16 — more than most projects can say). What was
+        # missing is the CONTINUOUS check: `count(cnpg_*)` returned zero on
+        # 2026-08-27, because the Cluster never enabled its PodMonitor. So a
+        # rotated OCI key or a bucket refusing PUTs would stop the nightly
+        # backup and nothing anywhere would say so, until a restore was needed.
+        # Same shape as the OOMKill that went unnoticed for nine days.
+        #
+        # 36h, not 24: the schedule is nightly, and a single missed run during
+        # a maintenance window is not yet a story worth waking up for.
+        - alert: FinanceAlertPostgresBackupStale
+          expr: |
+            time() - max(cnpg_collector_last_available_backup_timestamp) > 36 * 3600
+          for: 1h
+          labels:
+            severity: critical
+          annotations:
+            summary: "nessun backup Postgres riuscito da oltre 36 ore"
+            description: >-
+              L'ultimo backup disponibile risale a più di 36 ore fa. I backup
+              sono l'unica difesa contro la perdita dati su un nodo singolo:
+              controlla le credenziali OCI e i log di barman-cloud.
+
+        # A failure NEWER than the last success. Distinct from staleness: this
+        # fires on the first failed night, before the 36h window has elapsed.
+        - alert: FinanceAlertPostgresBackupFailing
+          expr: |
+            max(cnpg_collector_last_failed_backup_timestamp)
+              > max(cnpg_collector_last_available_backup_timestamp)
+          for: 30m
+          labels:
+            severity: critical
+          annotations:
+            summary: "l'ultimo tentativo di backup Postgres è fallito"
+            description: >-
+              Il timestamp dell'ultimo backup FALLITO è più recente di quello
+              dell'ultimo riuscito.
+
+        # --- The certificate nobody is watching ------------------------------
+        # `count(certmanager_*)` also returned zero on 2026-08-27. The ingress
+        # is websecure-only, so an expired certificate is a TOTAL outage, and
+        # HTTP-01 renewal depends on two things outside this cluster: port 80
+        # reachable, and sslip.io still resolving the IP-derived hostname.
+        # Let's Encrypt renews at 30 days remaining, so 14 leaves two full
+        # weeks of failed attempts before anything breaks.
+        - alert: FinanceAlertCertificateExpiringSoon
+          expr: |
+            (min(certmanager_certificate_expiration_timestamp_seconds) - time()) < 14 * 86400
+          for: 1h
+          labels:
+            severity: critical
+          annotations:
+            summary: "certificato TLS in scadenza fra meno di 14 giorni"
+            description: >-
+              Il rinnovo automatico non è andato a buon fine. L'ingress serve
+              solo su :443, quindi alla scadenza l'app diventa irraggiungibile.
+              Verifica che la :80 sia aperta per la challenge ACME e che
+              l'hostname sslip.io risolva ancora.
+
         # --- The app stopped answering the scrape ----------------------------
         # `absent()` is the other half: `up == 0` needs the target to exist to
         # be zero, so a target that disappears entirely produces no series and

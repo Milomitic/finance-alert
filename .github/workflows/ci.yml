@@ -50,10 +50,18 @@ jobs:
   backend-postgres:
     name: backend — real-Postgres portability (M7)
     # Proves the migrated json_text() queries and the whole schema work on a REAL
-    # Postgres, not merely that the SQL compiles. Its own gate (a regression here
-    # goes red and visible) but deliberately OFF the image/bump needs-chain: the
-    # cloud DB stays SQLite until the M7-P4 cutover, so this must not block the
-    # SQLite-safe deploy — same rationale as the report-only `audit` job.
+    # Postgres, not merely that the SQL compiles.
+    #
+    # GATES THE DEPLOY since 2026-08-27. It used to sit off the image/bump
+    # chain, on the grounds that "the cloud DB stays SQLite until the M7-P4
+    # cutover, so this must not block the SQLite-safe deploy". That cutover has
+    # happened — values-oci.yaml carries `postgres.enabled: true  # M7-P4: CUT
+    # OVER` — so the rationale had inverted: production IS Postgres, and the
+    # one lane that can catch a Postgres-only regression was the one allowed
+    # not to matter. A query that works on SQLite and fails on Postgres (the
+    # json_text() family is exactly this class) passed `backend`, shipped an
+    # image, moved the tag and 500'd in production, while this job went red in
+    # parallel — too late to stop it.
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -158,7 +166,7 @@ jobs:
   image:
     name: arm64 image → GHCR
     if: github.event_name == 'push' && github.ref == 'refs/heads/cloud'
-    needs: [backend, frontend]
+    needs: [backend, backend-postgres, frontend]
     runs-on: ubuntu-latest
     timeout-minutes: 90
     permissions:

@@ -22,6 +22,16 @@ spec:
       values: |
         crds:
           enabled: true
+        # certmanager_certificate_expiration_timestamp_seconds is the only way
+        # to learn a renewal failed BEFORE the browser does. `count(certmanager_*)`
+        # returned ZERO on 2026-08-27. The stakes are total: the ingress serves
+        # websecure-only, so an expired cert is a full outage, and HTTP-01
+        # renewal depends on two things outside our control (port 80 reachable,
+        # sslip.io still resolving).
+        prometheus:
+          enabled: true
+          servicemonitor:
+            enabled: true
         # Sized down hard: this node also carries the app, Postgres, Prometheus,
         # Loki and ArgoCD. cert-manager is idle except at issuance/renewal.
         replicaCount: 1
