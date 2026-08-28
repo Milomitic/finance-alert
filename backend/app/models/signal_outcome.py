@@ -62,6 +62,16 @@ class SignalOutcome(Base):
     fwd_return: Mapped[float] = mapped_column(Float, nullable=False)
     # Universe mean forward return over the SAME horizon ending the same day —
     # the market benchmark. Nullable when the universe map lacked the date.
+    # NAME IS LEGACY: this column holds the universe forward MEDIAN, not the
+    # mean, since 2026-08-27. The mean made the zero point of
+    # `mkt_neutral_hit` move with tone and horizon — under zero skill a bull
+    # signal started from ~45 and a bear from ~55, a bias larger than the
+    # effect being measured. See `_universe_fwd_medians` for the full
+    # reasoning and CLAUDE.md invariant #3.
+    #
+    # Not renamed because the column is referenced in ~24 places including six
+    # offline study scripts, and a migration to rename it would buy nothing
+    # the comment does not. Rows written BEFORE that date carry a mean.
     universe_mean_fwd: Mapped[float | None] = mapped_column(Float, nullable=True)
     # Tone-signed market-neutral excess (fwd_return - universe_mean, flipped for
     # bear). Positive = the signal beat the market in its direction.

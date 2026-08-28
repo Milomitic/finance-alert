@@ -174,11 +174,16 @@ def _bull_alert(db: Session, stock_id: int, sig_day: date, price: float) -> Aler
 
 
 def test_universe_benchmark_excludes_etf_parity(db: Session, monkeypatch):
-    """Benchmark with vs without the ETF must DIFFER (the leveraged series
-    distorts the mean), and mature_outcomes must store the companies-only
-    value — while the ETF's own alert still gets an outcome row with its
-    entry/forward math intact."""
+    """Benchmark with vs without the ETF must DIFFER, and mature_outcomes must
+    store the companies-only value — while the ETF's own alert still gets an
+    outcome row with its entry/forward math intact.
+
+    The benchmark is the universe MEDIAN since 2026-08-27, which is already
+    robust to one extreme series — so exclusion buys less here than it did
+    against a mean. It is kept because a leveraged ETF is not a company, not
+    because of the arithmetic."""
     monkeypatch.setattr(sos, "_horizon_days", lambda _d: 3)
+    monkeypatch.setattr(sos, "_MIN_UNIVERSE_PER_DATE", 1)
 
     eq1 = _stock(db, "EQ1")
     eq2 = _stock(db, "EQ2")
@@ -193,20 +198,33 @@ def test_universe_benchmark_excludes_etf_parity(db: Session, monkeypatch):
     a_etf = _bull_alert(db, etf.id, sig_day, 10.0 * (1.2 ** 10))
     db.commit()
 
-    # Parity check on the loader itself.
-    means_all = sos._universe_fwd_means(sos._load_universe_closes(db), 3)
-    means_ex = sos._universe_fwd_means(
+    # The ETF must be absent from the benchmark POPULATION — a structural
+    # fact about what counts as "the market", checked on the loader.
+    all_ids = set(sos._load_universe_closes(db))
+    eq_only_ids = set(sos._load_universe_closes(db, exclude_etf=True))
+    assert etf.id in all_ids
+    assert etf.id not in eq_only_ids
+    assert eq_only_ids == {eq1.id, eq2.id}
+
+    bench_all = sos._universe_fwd_medians(sos._load_universe_closes(db), 3)
+    bench_ex = sos._universe_fwd_medians(
         sos._load_universe_closes(db, exclude_etf=True), 3
     )
-    assert means_all[sig_day] != pytest.approx(means_ex[sig_day])
+    # And here the benchmark is UNCHANGED by the exclusion — which is the
+    # point of the median, not a bug. A +20%/day leveraged series moves a mean
+    # violently and a median not at all. The exclusion is kept because a
+    # leveraged ETF is not a company, not because of the arithmetic; before
+    # 2026-08-27 this line asserted the two must differ, which was true only
+    # while the benchmark was a mean.
+    assert bench_all[sig_day] == pytest.approx(bench_ex[sig_day])
 
     added = sos.mature_outcomes(db)
     assert added == 2
     rows = {r.alert_id: r for r in db.execute(select(SignalOutcome)).scalars().all()}
 
     # Both rows carry the companies-only benchmark.
-    assert rows[a_eq.id].universe_mean_fwd == pytest.approx(means_ex[sig_day])
-    assert rows[a_etf.id].universe_mean_fwd == pytest.approx(means_ex[sig_day])
+    assert rows[a_eq.id].universe_mean_fwd == pytest.approx(bench_ex[sig_day])
+    assert rows[a_etf.id].universe_mean_fwd == pytest.approx(bench_ex[sig_day])
 
     # The ETF alert's OWN entry/forward math is untouched by the exclusion.
     etf_row = rows[a_etf.id]

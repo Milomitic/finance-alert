@@ -125,30 +125,51 @@ def _load_stock_closes(
     return _rows_to_arrays(rows, keep=stock_ids if load_all else None)
 
 
-def _universe_fwd_means(
+# A date needs at least this many stocks before its benchmark means anything.
+# Same floor as the conditional-screen replay: a median over three names is
+# not a market.
+_MIN_UNIVERSE_PER_DATE = 10
+
+
+def _universe_fwd_medians(
     closes_by_stock: dict[int, tuple[np.ndarray, np.ndarray]], horizon: int
 ) -> dict[date, float]:
-    """{trigger_date: mean H-day-forward return across the universe}. Vectorized
-    per stock + numpy fancy-add into a global date index."""
-    all_dates = sorted({d for ds, _ in closes_by_stock.values() for d in ds})
-    if not all_dates:
-        return {}
-    gidx = {d: i for i, d in enumerate(all_dates)}
-    s = np.zeros(len(all_dates))
-    n = np.zeros(len(all_dates))
+    """{trigger_date: MEDIAN H-day-forward return across the universe}.
+
+    THE MEDIAN, NOT THE MEAN, and the distinction is the whole point of this
+    function. Cross-sectional forward returns are right-skewed, so under zero
+    skill P(beat the mean) is BELOW 50% — measured on this universe: 47.4% at
+    H=5, 45.3% at H=21, 42.2% at H=63. A bull signal therefore starts from ~45
+    and a bear signal from ~55 before any skill exists, so the zero point of
+    `mkt_neutral_hit` moves with tone and horizon and the bias is larger than
+    the effect being measured (the whole engine spans 45.7-52.0).
+
+    This is invariant #3 in CLAUDE.md — the lesson of the trend_pullback
+    artifact, which a whole conditional-screen grid had to be discarded over.
+    `conditional_screen_replay._universe_fwd_medians` honoured it; this path,
+    which is what actually reaches the user through `calibration_map.skill`
+    and the honesty tags, used the mean. The invariant's regression test lived
+    only in `test_conditional_screen.py`, i.e. only on the path that already
+    obeyed it.
+
+    Collected per date rather than accumulated: a median needs the whole
+    distribution, so the fancy-add trick the mean used does not apply.
+    """
+    by_date: dict[date, list[float]] = defaultdict(list)
     for ds, cs in closes_by_stock.values():
-        m = len(cs)
-        if m <= horizon:
+        if len(cs) <= horizon:
             continue
         c0 = cs[:-horizon]
         cH = cs[horizon:]
-        valid = c0 > 0
-        rets = np.where(valid, cH / np.where(valid, c0, 1.0) - 1.0, np.nan)
-        idxs = np.fromiter((gidx[d] for d in ds[:-horizon]), dtype="int64", count=m - horizon)
-        ok = ~np.isnan(rets)
-        np.add.at(s, idxs[ok], rets[ok])
-        np.add.at(n, idxs[ok], 1.0)
-    return {all_dates[i]: s[i] / n[i] for i in range(len(all_dates)) if n[i] > 0}
+        ok = c0 > 0
+        rets = cH[ok] / c0[ok] - 1.0
+        for d, r in zip(np.asarray(ds, dtype=object)[:-horizon][ok], rets, strict=False):
+            by_date[d].append(float(r))
+    return {
+        d: float(np.median(v))
+        for d, v in by_date.items()
+        if len(v) >= _MIN_UNIVERSE_PER_DATE
+    }
 
 
 def _ema(values: np.ndarray, span: int) -> np.ndarray:
@@ -204,8 +225,8 @@ def mature_outcomes(db: Session, *, commit: bool = True) -> int:
         db, since=min_td - timedelta(days=10), exclude_etf=True
     )
     horizons = {_horizon_days(a.signal_name) for a in pending}
-    means_by_h: dict[int, dict[date, float]] = {
-        h: _universe_fwd_means(uni_closes, h) for h in horizons
+    medians_by_h: dict[int, dict[date, float]] = {
+        h: _universe_fwd_medians(uni_closes, h) for h in horizons
     }
     ema_cache: dict[int, np.ndarray] = {}
 
@@ -233,10 +254,10 @@ def mature_outcomes(db: Session, *, commit: bool = True) -> int:
             continue
         abs_hit = 1 if ((tone == "bull" and fwd_ret > 0) or (tone == "bear" and fwd_ret < 0)) else 0
 
-        uni_mean = means_by_h.get(H, {}).get(dates[ti])
+        uni_median = medians_by_h.get(H, {}).get(dates[ti])
         mkt_excess = mkt_hit = None
-        if uni_mean is not None:
-            excess = fwd_ret - uni_mean
+        if uni_median is not None:
+            excess = fwd_ret - uni_median
             mkt_excess = excess if tone == "bull" else -excess
             mkt_hit = 1 if mkt_excess > 0 else 0
 
@@ -252,7 +273,7 @@ def mature_outcomes(db: Session, *, commit: bool = True) -> int:
             alert_id=a.id, stock_id=a.stock_id, detector=a.signal_name,
             signal_date=sd, tone=tone, horizon_days=H,
             entry_close=entry, forward_close=fwd_close, fwd_return=fwd_ret,
-            universe_mean_fwd=uni_mean, mkt_neutral_excess=mkt_excess,
+            universe_mean_fwd=uni_median, mkt_neutral_excess=mkt_excess,
             abs_hit=abs_hit, mkt_neutral_hit=mkt_hit, regime_at_signal=regime,
             strength=strength, probability=probability,
         ))

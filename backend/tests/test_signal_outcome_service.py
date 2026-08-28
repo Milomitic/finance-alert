@@ -58,6 +58,9 @@ def test_windowed_universe_mean_matches_full_load(db, monkeypatch):
     SAME market-neutral benchmark at the trigger date as a full-history load —
     this is the core exactness claim of the mature_outcomes windowing."""
     monkeypatch.setattr(sos, "_horizon_days", lambda _d: 3)
+    # The production floor is 10 stocks per date before a benchmark counts;
+    # this fixture has two, so lower it rather than inflating the fixture.
+    monkeypatch.setattr(sos, "_MIN_UNIVERSE_PER_DATE", 1)
     # Two stocks, 60 bars each; signal near the end (idx 50) so the windowed
     # load trims ~40 pre-trigger bars while keeping the forward window.
     s1 = Stock(ticker="UNIVA", exchange="NASDAQ", name="A", country="US")
@@ -78,13 +81,13 @@ def test_windowed_universe_mean_matches_full_load(db, monkeypatch):
     # Windowed value (what mature_outcomes actually stores).
     sos.mature_outcomes(db)
     row = db.execute(select(SignalOutcome)).scalars().one()
-    windowed_mean = row.universe_mean_fwd
+    windowed_benchmark = row.universe_mean_fwd  # column name is legacy; holds the MEDIAN
 
     # Full-history value: same computation without the `since` window.
     full = sos._load_universe_closes(db)
-    full_means = sos._universe_fwd_means(full, 3)
-    assert windowed_mean is not None
-    assert full_means[sig_day] == windowed_mean          # exact, not approximate
+    full_medians = sos._universe_fwd_medians(full, 3)
+    assert windowed_benchmark is not None
+    assert full_medians[sig_day] == windowed_benchmark   # exact, not approximate
     assert row.regime_at_signal in ("bull", "bear")      # EMA used full history
     assert row.mkt_neutral_excess is not None
 
