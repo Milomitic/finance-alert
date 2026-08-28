@@ -114,6 +114,26 @@ kubectl -n monitoring port-forward svc/kps-prometheus 9090:9090
 curl -s localhost:9090/api/v1/rules | jq '.data.groups[]|select(.name=="finance-alert.rules").rules[]|{name,health,lastError}'
 ```
 
+## Trappola GitOps: non tutti i manifest in `infra/gitops/` sono applicati da ArgoCD
+
+Solo due Application puntano a un path di questo repo — `finance-alert`
+(`charts/finance-alert`) e `postgres-cluster` (`infra/gitops/postgres`).
+`cert-manager` e `cnpg-operator` puntano a chart REMOTI (jetstack, cloudnative-pg)
+e il loro `spec.source.path` è vuoto: i file `infra/gitops/cert-manager.yaml` e
+`infra/gitops/cnpg-operator.yaml` SONO le Application stesse, e nessuno le
+osserva. Modificarne i values e fare push non produce alcun effetto, in
+silenzio.
+
+Dopo aver toccato uno di quei due file serve:
+
+```bash
+kubectl apply -f infra/gitops/cert-manager.yaml
+```
+
+Verificato il 2026-08-28 abilitando il ServiceMonitor di cert-manager: il push
+era andato, ArgoCD diceva `Synced`, e il ServiceMonitor non esisteva — perché
+"Synced" si riferiva al chart remoto v1.21.0, non al file in git.
+
 ## Known follow-ups
 - Health-probe cosmetics for Loki/Alertmanager datasources (functional, ignore).
 - The Loki datasource is API-added, not provisioned — re-add if the Grafana PVC
