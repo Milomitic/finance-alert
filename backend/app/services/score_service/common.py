@@ -92,7 +92,11 @@ _CYCLICAL_SECTORS = {
     "Energy", "Basic Materials", "Materials",
 }
 
+# Both in USD. Callers MUST convert `stock.market_cap` (which is in the
+# listing currency) via `fx_service.to_usd` before comparing — see the note in
+# risk.py for what happened when one of them did not.
 _MEGA_CAP_THRESHOLD = 200_000_000_000.0
+_SMALL_CAP_THRESHOLD = 2_000_000_000.0
 
 
 class RecomputeCancelled(Exception):

@@ -4,10 +4,12 @@ applied to the composite. Pure functions — no DB, no network.
 from __future__ import annotations
 
 from app.models import Stock
+from app.services.fx_service import to_usd
 from app.services.score_service.common import (
     _CYCLICAL_SECTORS,
     _DEFENSIVE_SECTORS,
     _MEGA_CAP_THRESHOLD,
+    _SMALL_CAP_THRESHOLD,
     _is_finite,
 )
 from app.services.stock_fundamentals_service import MicroData
@@ -60,11 +62,27 @@ def _classify_risk(
         elif sec in _CYCLICAL_SECTORS:
             score += 1
 
-    mc = stock.market_cap
+    # CONVERTED TO USD FIRST. `stock.market_cap` is in the LISTING currency,
+    # and the thresholds are dollar figures — the docstrings say "> $200B" and
+    # "< $2B". Comparing them directly meant a JPY, KRW or HKD cap was judged
+    # against a dollar bar: measured on the live catalogue, 158 names cleared
+    # 200e9 in native currency but only 81 in USD, so 79 stocks — 0175.HK at
+    # $27bn, 7270.T at $12bn, 033780.KS at $15bn — were being scored as
+    # stable mega-caps, while SHEL.L at a real $226bn LOST the vote because
+    # its cap is denominated in pence. The small-cap half was effectively
+    # dead for those markets in the other direction: 2 billion yen is $13M.
+    #
+    # `market_stats_service.aggregate_by_index` already does this; the risk
+    # classifier had simply never been given the same treatment.
+    mc = to_usd(stock.market_cap, stock.currency) if stock.market_cap is not None else None
     if mc is not None:
+        # Counted as an input like every other vote. It was not, so a stock
+        # whose ONLY available signal was its market cap fell through to
+        # `inputs == 0` and was scored "moderate" regardless of size.
+        inputs += 1
         if mc > _MEGA_CAP_THRESHOLD:
             score -= 1
-        elif mc < 2_000_000_000:
+        elif mc < _SMALL_CAP_THRESHOLD:
             score += 1
 
     de = micro.debt_to_equity if micro is not None else None
