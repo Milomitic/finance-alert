@@ -97,6 +97,113 @@ def _check_price_basis(db: Session, stock: Stock, rows: list[dict]) -> None:
         raise PriceBasisMismatch(stock.ticker, first["date"], stored_f, incoming)
 
 
+# Ratios a real corporate action actually uses, forward and reverse. Anything
+# not near one of these is a price move, however violent.
+# CALIBRATED AGAINST THE LIVE CATALOGUE, not chosen by taste. The first
+# version of this list started at 1.5 and returned 239 "splits" — dozens of
+# them dated 9-18 March 2020, i.e. the COVID crash. A 1.5 ratio means any
+# single-day fall of ~30%, which is a market event, not a corporate action.
+#
+# Sweeping min-ratio x tolerance over the whole stored history:
+#
+#   min  tol   hits  COVID  real found (of 5 known)
+#     2  0.08    47      5   5
+#     3  0.08    14      0   5      <- chosen
+#     4  0.08    10      0   4      (loses CRWD)
+#     3  0.05     9      0   3      (loses CRWD, SOXS)
+#
+# KNOWN BLIND SPOT, stated rather than hidden: a 2:1 split is NOT detected.
+# Real splits land 3-6% off their exact ratio because the price also moves
+# that day, so the tolerance cannot be tightened below ~0.08 without losing
+# true positives — and at 0.08 a minimum of 2.0 readmits the crash crowd.
+# Constraining the 2-3 band by conserved dollar volume was tried and rejected:
+# it let 3 COVID rows back in and found nothing the >=3 rule had not.
+_SPLIT_MIN_RATIO = 3.0
+_SPLIT_RATIOS = (3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 10.0, 15.0, 20.0, 25.0, 30.0)
+_SPLIT_TOLERANCE = 0.08
+
+
+@dataclass(frozen=True)
+class BasisBreak:
+    """A suspected unrepaired split inside a stock's STORED history."""
+
+    date: date
+    prev_close: float
+    close: float
+    price_ratio: float
+    volume_ratio: float | None
+    matched_ratio: float
+
+
+def _near_split_ratio(ratio: float) -> float | None:
+    """The corporate-action ratio `ratio` looks like, or None."""
+    if ratio <= 0:
+        return None
+    candidate = ratio if ratio >= 1.0 else 1.0 / ratio
+    if candidate < _SPLIT_MIN_RATIO:
+        return None
+    for r in _SPLIT_RATIOS:
+        if abs(candidate - r) / r <= _SPLIT_TOLERANCE:
+            return r
+    return None
+
+
+def find_basis_breaks(
+    dates: list[date], closes: list[float], volumes: list[float | None]
+) -> list[BasisBreak]:
+    """Suspected splits ALREADY INSIDE the stored series.
+
+    WHY THIS EXISTS, separately from `_check_price_basis` above. That guard
+    compares the incoming overlap bar against the stored one, so it only ever
+    sees a discontinuity at the EDGE of a fetch window. A break already inside
+    the stored history is invisible to it by construction: from the next day
+    on, stored and incoming are both on the new basis, the ratio is 1.0, and
+    the guard reports "basis OK" forever. It was added on 2026-07-04, so every
+    split spliced before that date was never repaired and never would be.
+
+    Measured on the live catalogue on 2026-09-01, five names carried one:
+    KLAC x0.097, CRWD x0.265, SOXS x0.054, 8053.T x0.246, TIT.MI x10.00. The
+    damage is not cosmetic — TIT.MI held `rel_strength = 100.0`, the highest
+    in the entire universe, purely as an artifact of an unrepaired reverse
+    split, while three real companies sat at the bottom for the same reason.
+
+    THE DISCRIMINATOR IS VOLUME, and it is what separates a split from a
+    crash. A split does not change the money traded, only how many shares it
+    is divided into: a 10:1 forward split puts price at x0.1 and share volume
+    at ~x10. A crash also moves volume, but UPWARD alongside a falling price,
+    never inversely. Requiring the two to move in opposite directions is what
+    stops this from firing on every violent session.
+
+    Deliberately does NOT repair anything. The remedy is `_rebase_full_history`
+    (wipe + refetch on the authoritative basis), which is a destructive
+    operation that belongs behind an explicit decision, not inside a scan.
+    """
+    out: list[BasisBreak] = []
+    n = min(len(dates), len(closes), len(volumes))
+    for i in range(1, n):
+        p0, p1 = closes[i - 1], closes[i]
+        if p0 is None or p1 is None or p0 <= 0 or p1 <= 0:
+            continue
+        ratio = p1 / p0
+        if _BASIS_RATIO_LOW <= ratio <= _BASIS_RATIO_HIGH:
+            continue  # an ordinary session, however large
+        matched = _near_split_ratio(ratio)
+        if matched is None:
+            continue  # a violent move that is not a corporate-action ratio
+
+        v0, v1 = volumes[i - 1], volumes[i]
+        vol_ratio = (v1 / v0) if (v0 and v1 and v0 > 0) else None
+        if vol_ratio is not None:
+            # Opposite directions, or it is a price move and not a split.
+            if (ratio < 1.0) != (vol_ratio > 1.0):
+                continue
+        out.append(BasisBreak(
+            date=dates[i], prev_close=float(p0), close=float(p1),
+            price_ratio=ratio, volume_ratio=vol_ratio, matched_ratio=matched,
+        ))
+    return out
+
+
 def _yf_download(tickers: list[str], **kwargs: Any) -> pd.DataFrame:
     """Wrap yfinance.download for monkeypatching in tests."""
     import yfinance as yf
