@@ -67,6 +67,24 @@ class PriceBasisMismatch(Exception):
         )
 
 
+class CurrencyGateSkipped(RuntimeError):
+    """The GBp/GBP decision could not be made, so nothing was written.
+
+    Distinct from a plain no-op, and that distinction is the whole point. The
+    gate fails CLOSED — correctly — by writing nothing, but it used to signal
+    that with `return 0, 0`, which the caller could not tell apart from "this
+    stock is already up to date". The consequence: the fetch loop reset
+    `ohlcv_nodata_streak` to zero and incremented `stocks_succeeded`, so a
+    persistent lookup failure on the ~100 LSE names would have frozen their
+    prices indefinitely while the Salute dashboard reported a clean batch and
+    the quarantine never engaged.
+
+    Same failure family as the stale-frame bug fixed on 2026-08-27, reached by
+    a different door: there a stale frame proved liveness it should not have,
+    here a skipped write claimed success it had not earned.
+    """
+
+
 # A same-date close may legitimately differ a little (self-heal of a bar that
 # slipped past the market-open guard: an in-flight close is rarely >25% off the
 # settled one). Beyond these bounds the difference is a basis change: the
@@ -291,11 +309,13 @@ def _upsert_one_stock(db: Session, stock: Stock, frame: pd.DataFrame) -> tuple[i
     # stock's upsert (fail CLOSED — see currency_units.native_currency_for_scaling).
     native_currency, currency_ok = currency_units.native_currency_for_scaling(stock.ticker)
     if not currency_ok:
-        logger.warning(
-            f"[ohlcv] currency lookup failed for {stock.ticker} — skipping upsert "
-            "this cycle (pence/pounds ambiguity; will retry next fetch)"
+        # Raised, not returned: see CurrencyGateSkipped. The caller must be
+        # able to tell "wrote nothing because it could not" apart from "wrote
+        # nothing because there was nothing to write".
+        raise CurrencyGateSkipped(
+            f"{stock.ticker}: currency lookup failed (pence/pounds ambiguity) — "
+            "nothing written this cycle, will retry next fetch"
         )
-        return 0, 0
     # The latest date in the frame. yfinance routinely returns the most
     # recent bar with O/H/L populated but Close=NaN — the session hasn't
     # "settled" yet at the data provider (very common for Asian markets
@@ -517,6 +537,15 @@ def fetch_and_upsert(
             result.rows_inserted += inserted
             result.rows_updated += updated
             result.stocks_succeeded += 1
+        except CurrencyGateSkipped as e:
+            # Counted as a FAILURE and the streak is deliberately left alone:
+            # the raise skips the reset above, so a run of these accumulates
+            # toward quarantine instead of masquerading as a healthy no-op.
+            # warning, not exception: this is an expected transient, and a
+            # traceback per LSE ticker would bury the real errors.
+            logger.warning(f"[ohlcv] {e}")
+            result.stocks_failed += 1
+            result.failed_tickers.append(stock.ticker)
         except PriceBasisMismatch as e:
             logger.warning(f"[ohlcv] price-basis mismatch (split?): {e} — rebasing full history")
             try:

@@ -167,10 +167,13 @@ def test_upsert_fails_closed_when_yfinance_currency_unavailable(db: Session) -> 
 
     frame = _make_pence_frame()
 
+    # Signalled by RAISING since 2026-09-01: returning (0, 0) was
+    # indistinguishable from a legitimate no-op, so the caller reset the
+    # no-data streak and counted a success it had not earned.
     with patch.object(currency_units, "get_native_currency", return_value=None):
-        ins, _ = ohlcv_service._upsert_one_stock(db, stock, frame)
-        db.commit()
+        with pytest.raises(ohlcv_service.CurrencyGateSkipped):
+            ohlcv_service._upsert_one_stock(db, stock, frame)
+        db.rollback()
 
-    assert ins == 0
     bar = db.query(OhlcvDaily).filter(OhlcvDaily.stock_id == stock.id).first()
     assert bar is None  # nothing written — no pence/pounds gamble
