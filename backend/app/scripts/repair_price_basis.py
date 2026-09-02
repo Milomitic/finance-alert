@@ -53,7 +53,7 @@ from loguru import logger
 from sqlalchemy import text
 
 from app.core.db import SessionLocal
-from app.models import Stock
+from app.models import OhlcvDaily, Stock
 from app.services.ohlcv_service import _rebase_full_history, find_basis_breaks
 
 
@@ -82,9 +82,64 @@ def scan(db, only: set[str] | None = None) -> list[tuple[Stock, list]]:
     return out
 
 
+def _truncate(db, found) -> None:
+    """Delete every bar strictly before the break, keeping the newer basis.
+
+    WHEN TO USE THIS INSTEAD OF --apply. `--apply` wipes and re-downloads, so it
+    only helps when the SOURCE is right and our stored copy drifted. If a fresh
+    download reproduces the same break, refetching destroys the series and
+    rebuilds it identically broken - strictly worse than doing nothing.
+
+    Why not rescale the old bars by the ratio? Because the ratio would be OURS,
+    not the source's. SOXS (established 2026-09-02) is the case this exists for:
+
+      - exactly one discontinuity, 2026-05-26: price x0.054, volume x21.4;
+      - yfinance DECLARES splits on 2026-03-05 (1:20) and 2026-07-15 (1:10),
+        and both are correctly adjusted - no discontinuity on either date;
+      - so the May break matches NO declared corporate action, and the "20:1"
+        the detector prints is a pattern match, not a fact;
+      - a fresh 10y download reproduces it to the cent, so --apply cannot help.
+
+    Dividing ten years of prices by an inferred 20 would look perfectly healthy
+    and be silently wrong if the true ratio were 18 or 25. Truncating invents
+    nothing: what remains sits on ONE consistent basis, and a ticker left under
+    200 bars simply fails `has_full_data`, which already keeps it out of
+    EMA200-dependent signals and out of breadth (CLAUDE.md). It self-heals as
+    real bars accrue.
+
+    The cost is explicit and one-way: the pre-break history for that ticker is
+    gone. Prefer --apply whenever a fresh download IS clean.
+    """
+    print()
+    print(f"troncamento di {len(found)} titoli (elimina le barre PRIMA della rottura)...")
+    for stock, breaks in found:
+        cut = min(b.date for b in breaks)
+        try:
+            n = db.query(OhlcvDaily).filter(
+                OhlcvDaily.stock_id == stock.id, OhlcvDaily.date < cut,
+            ).delete(synchronize_session=False)
+            left = db.query(OhlcvDaily).filter(
+                OhlcvDaily.stock_id == stock.id,
+            ).count()
+            db.commit()
+            flag = "  <- sotto 200: fuori dai segnali EMA200" if left < 200 else ""
+            print(f"  ok  {stock.ticker:<10} -{n} barre prima del {cut}, restano {left}{flag}")
+        except Exception as exc:  # noqa: BLE001 - one bad ticker must not stop the rest
+            db.rollback()
+            logger.warning(f"[repair] {stock.ticker} non troncato: {exc}")
+            print(f"  FALLITO {stock.ticker:<10} {str(exc)[:70]}")
+    print()
+    print("Ricalcola i punteggi tecnici: i vecchi restano sulla base sbagliata.")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--apply", action="store_true", help="repair (destructive refetch)")
+    ap.add_argument(
+        "--truncate", action="store_true",
+        help="drop every bar BEFORE the break instead of refetching - for a "
+             "break the source itself reproduces (see SOXS in _truncate)",
+    )
     ap.add_argument("--ticker", action="append", help="limit to these tickers")
     args = ap.parse_args()
 
@@ -107,8 +162,15 @@ def main() -> None:
                     f"{format(b.matched_ratio, '.0f') + ':1':>9}"
                 )
 
+        if args.truncate:
+            _truncate(db, found)
+            return
+
         if not args.apply:
-            print("\nsola lettura. Ripassa con --apply per riparare.")
+            print()
+            print("sola lettura.")
+            print("  --apply    riscarica da capo - SOLO se un download fresco e' pulito")
+            print("  --truncate elimina le barre prima della rottura - quando non lo e'")
             return
 
         print(f"\nriparazione di {len(found)} titoli (wipe + refetch 10y)...")
