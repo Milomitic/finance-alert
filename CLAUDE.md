@@ -418,8 +418,16 @@ The bug is invisible in dev.
 
 ## Test commands
 
+- **Backend lint (GATED, and the one that's easy to forget)**:
+  `cd backend && ./.venv/Scripts/ruff.exe check app tests`
+  CI runs ruff BEFORE pytest and a lint error fails the job without a single
+  test running — so a green local pytest tells you nothing about the gate.
+  Cost a red CI on 2026-09-02 (`fc3ee7c`): an `import pytest` inserted at line
+  1, ahead of `import pandas`. Note the scope is **`app tests`**, not `.` —
+  `backend/scripts/` is deliberately outside the gate and has a pre-existing
+  I001 that is NOT yours to fix; `ruff check .` will report it and mislead you.
 - **Backend**: `cd backend && ./.venv/Scripts/python.exe -m pytest tests/ -x -q`
-  (281+ tests, runs in ~5s)
+  (1743+ tests, runs in ~37s)
 - **Frontend tests**: `cd frontend && npm run test:run` (91 tests, ~3s)
 - **Frontend hook gate**: `cd frontend && npm run lint:hooks` (see below — clean
   output and exit 0 is the only acceptable result)
@@ -681,6 +689,38 @@ cross-lens leakage; don't re-introduce it):
   (unbounded ratios, e.g. volume). ⚠️ anchors are per-detector and must be in the
   **UNITS OF THE VALUE PASSED TO THE CURVE** — read the factor formula (e.g. a
   `clamp01((ADX-25)/75)` factor takes 0..1, NOT raw ADX).
+
+  ⚠️⚠️ **This rule was already written here and `chart_pattern` still violated
+  it for the whole life of the detector** (found and fixed 2026-09-02,
+  `fc3ee7c`). Read it as a checklist item, not a maxim, because the failure is
+  SILENT and self-congratulatory:
+
+  - Its anchors were `(0.40, 0.65, 0.80, 0.92)` while the factor — a chart
+    figure's height as a fraction of price — actually runs p50=0.094 /
+    p95=0.234 / max=0.564 over 1,041 measured patterns. The median pattern
+    scored Forza 10.6, and exactly ONE pattern in 1,041 could clear the 60
+    emission gate.
+  - Three of the seven pattern families hard-coded their magnitude (0.6 / 0.6 /
+    0.55) instead of measuring it. Since `pattern_amplitude` is that detector's
+    ONLY strength factor, a constant magnitude is a constant Forza.
+  - Net effect: **every alert the detector ever produced was a triangle**, at
+    two Forza values (63.0 and 69.0 — the two constants), while the four
+    families that measured themselves honestly were silent. It looked healthy:
+    95 alerts in the warehouse.
+
+  **Two checks that would have caught it, and are cheap:**
+  1. For any detector, ask how many DISTINCT Forza values it has produced.
+     Two, on 95 alerts, is not a score — it is a constant wearing a number.
+     (`SELECT COUNT(DISTINCT ROUND((snapshot->>'strength')::numeric,1))
+     FROM alerts GROUP BY signal_name`.)
+  2. Before trusting anchors, measure the factor's real distribution over
+     stored OHLCV and check the anchors bracket it. If a45 sits above the
+     p95 of the real data, the factor is dead and the detector is running on
+     whatever else is in the weighted mean — or, if it is the only factor, on
+     nothing at all.
+
+  A test that only asserts "the pattern is EMITTED" cannot see any of this;
+  that is exactly what the existing tests did. Assert on the NUMBER.
 - **Probabilità** = `calibration_map.get_calibration().probability(name, factors)`
   → per-detector base rate (+ bounded factor adjustments) from
   `app/data/signal_calibration.json`. Empirical hit-rate "di accadimento" (~45-55:

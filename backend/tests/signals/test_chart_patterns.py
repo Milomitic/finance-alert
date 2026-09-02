@@ -1,5 +1,5 @@
-import pytest
 import pandas as pd
+import pytest
 
 from app.signals.chart_patterns import extract_chart_patterns
 
