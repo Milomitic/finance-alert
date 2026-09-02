@@ -523,73 +523,91 @@ def warmup_fundamentals(
 
     from app.core.db import SessionLocal
     from app.models import Stock
-    from app.services import yfinance_health
+    from app.services import scan_lock, yfinance_health
     from app.services.stock_fundamentals_service import (
         _CACHE,
         _TTL_SECONDS,
         get_fundamentals,
     )
 
-    db = SessionLocal()
-    try:
-        stocks = db.execute(
-            select(Stock).order_by(Stock.market_cap.desc().nullslast())
-        ).scalars().all()
-        if limit:
-            stocks = stocks[:limit]
-        ok = err = empty = cached_skip = 0
-        breaker_aborted_at: int | None = None
-        now = time.time()
-        for i, s in enumerate(stocks):
-            if yfinance_health.is_open():
-                breaker_aborted_at = i
-                break
-            if skip_cached:
-                c = _CACHE.get(s.ticker)
-                if c is not None and (now - c.fetched_at) < _TTL_SECONDS:
-                    cached_skip += 1
-                    continue
-            try:
-                f = get_fundamentals(s.ticker)
-                if f.error:
-                    err += 1
-                elif f.annual or (f.micro and f.micro.trailing_pe is not None):
-                    ok += 1
-                else:
-                    empty += 1
-            except UpstreamError as e:
-                logger.warning(
-                    f"[warmup] upstream {e.source}.{e.op} failed for {s.ticker}: {e}"
-                )
-                err += 1
-            except Exception:  # noqa: BLE001 — defensive last-resort
-                err += 1
-            time.sleep(0.3)
-        # Now that the fundamentals cache is warm, recompute scores so the
-        # values reflect the freshly-fetched data. Non-fatal — warmup itself
-        # has already reported its own success/failure counts.
-        scores_recomputed = 0
-        try:
-            from app.services import score_service
-            scores_recomputed, scores_failed = score_service.recompute_all(db)
-            logger.info(
-                f"[warmup] recomputed {scores_recomputed} stock scores "
-                f"({scores_failed} failed)"
+    # Same single-scan slot as the scan entry points and as
+    # `redownload-ohlcv` directly below. This is an equally heavy
+    # single-writer: several minutes of upstream fetching followed by
+    # `score_service.recompute_all`, which is the same recompute a scan
+    # does. It was the only multi-minute writer in the app NOT holding the
+    # slot — an omission, not a choice: scan_lock's own docstring names
+    # "chunked fetch_and_upsert + recompute" as exactly what it guards.
+    #
+    # Running it beside a live scan means two writers recomputing the same
+    # score rows and competing for the same rate-limited upstream. On
+    # SQLite that is the 'database is locked' contention the mutex exists
+    # to prevent.
+    with scan_lock.scan_slot() as acquired:
+        if not acquired:
+            raise HTTPException(
+                status_code=409,
+                detail="uno scan è in corso — riprova al termine",
             )
-        except Exception as exc:  # noqa: BLE001
-            logger.warning(f"[warmup] score recompute failed (non-fatal): {exc}")
-        return {
-            "total_stocks": len(stocks),
-            "succeeded": ok,
-            "errors": err,
-            "empty_payload": empty,
-            "skipped_cached": cached_skip,
-            "breaker_aborted_at": breaker_aborted_at,
-            "yfinance_breaker": yfinance_health.status(),
-            "scores_recomputed": scores_recomputed,
-        }
-    finally:
-        db.close()
+        db = SessionLocal()
+        try:
+            stocks = db.execute(
+                select(Stock).order_by(Stock.market_cap.desc().nullslast())
+            ).scalars().all()
+            if limit:
+                stocks = stocks[:limit]
+            ok = err = empty = cached_skip = 0
+            breaker_aborted_at: int | None = None
+            now = time.time()
+            for i, s in enumerate(stocks):
+                if yfinance_health.is_open():
+                    breaker_aborted_at = i
+                    break
+                if skip_cached:
+                    c = _CACHE.get(s.ticker)
+                    if c is not None and (now - c.fetched_at) < _TTL_SECONDS:
+                        cached_skip += 1
+                        continue
+                try:
+                    f = get_fundamentals(s.ticker)
+                    if f.error:
+                        err += 1
+                    elif f.annual or (f.micro and f.micro.trailing_pe is not None):
+                        ok += 1
+                    else:
+                        empty += 1
+                except UpstreamError as e:
+                    logger.warning(
+                        f"[warmup] upstream {e.source}.{e.op} failed for {s.ticker}: {e}"
+                    )
+                    err += 1
+                except Exception:  # noqa: BLE001 — defensive last-resort
+                    err += 1
+                time.sleep(0.3)
+            # Now that the fundamentals cache is warm, recompute scores so the
+            # values reflect the freshly-fetched data. Non-fatal — warmup itself
+            # has already reported its own success/failure counts.
+            scores_recomputed = 0
+            try:
+                from app.services import score_service
+                scores_recomputed, scores_failed = score_service.recompute_all(db)
+                logger.info(
+                    f"[warmup] recomputed {scores_recomputed} stock scores "
+                    f"({scores_failed} failed)"
+                )
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(f"[warmup] score recompute failed (non-fatal): {exc}")
+            return {
+                "total_stocks": len(stocks),
+                "succeeded": ok,
+                "errors": err,
+                "empty_payload": empty,
+                "skipped_cached": cached_skip,
+                "breaker_aborted_at": breaker_aborted_at,
+                "yfinance_breaker": yfinance_health.status(),
+                "scores_recomputed": scores_recomputed,
+            }
+        finally:
+            db.close()
 
 
 @app.post("/api/admin/redownload-ohlcv", dependencies=[Depends(require_json)])
