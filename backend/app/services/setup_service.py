@@ -237,6 +237,38 @@ def expire_stale_setups(db: Session, *, today: date | None = None) -> int:
     return n_stale + n_aged
 
 
+def run_post_scan_bookkeeping(db: Session) -> None:
+    """Retire decayed setups, then cap each detector. Call once at the end of
+    EVERY scan, whatever started it.
+
+    This exists because it used to be an inline block in the cron job only, and
+    the manual-scan entry point in api/alerts.py ended at `run_tracked_scan`
+    without it. The two paths then did different bookkeeping, which is the kind
+    of divergence that survives precisely because neither path is wrong on its
+    own.
+
+    The consequence was bounded rather than permanent — `expire_stale_setups`
+    sweeps the whole table, not just the setups the current scan touched, so a
+    manual scan's leftovers were retired by the NEXT cron run. Bounded is still
+    not correct: between the two, a setup that has decayed still reads as
+    live, and `prune_to_top_per_detector`'s cap is over-subscribed.
+
+    Order matters: expire first, then cap. The per-detector ranking is only
+    knowable once the whole universe has been evaluated, and capping before
+    expiring would rank decayed setups against live ones.
+
+    Never raises. Bookkeeping must not fail a scan that has already done its
+    real work — the caller has committed alerts by this point.
+    """
+    try:
+        expire_stale_setups(db)
+        prune_to_top_per_detector(db)
+        db.commit()
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"[setups] post-scan bookkeeping failed: {e}")
+        db.rollback()
+
+
 def conversion_stats(db: Session) -> dict:
     """The feature's own report card. Read-only, no market claim."""
     # Only setups that were actually SURFACED. A setup the user never saw made

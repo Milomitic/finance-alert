@@ -123,6 +123,13 @@ def recent_actions(
                 ),
             ))
 
-    # Newest first; tiebreak by ticker for a stable order.
-    out.sort(key=lambda t: (t[0], t[1].ticker), reverse=True)
+    # Newest first; tiebreak by ticker A->Z for a stable order.
+    #
+    # `reverse=True` on the whole tuple reversed the tiebreak too, so same-day
+    # actions came out Z->A — the opposite of what this comment claimed, and
+    # same-day is the common case (several firms act on one name at once).
+    # Two stable passes give (date desc, ticker asc); Python's sort is
+    # guaranteed stable, so the first pass survives the second.
+    out.sort(key=lambda t: t[1].ticker)
+    out.sort(key=lambda t: t[0], reverse=True)
     return [item for _, item in out[:limit]]

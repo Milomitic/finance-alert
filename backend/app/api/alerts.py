@@ -289,6 +289,13 @@ def _run_scan_in_background_locked(stock_ids: list[int] | None) -> None:
         run.current_target = None
         bump_heartbeat(db, run)
         run_tracked_scan(db, trigger="manual", existing_run=run)
+
+        # Phase 3: the same setup bookkeeping the scheduled scan does. This
+        # path ended at `run_tracked_scan` until 2026-09-02, so a manual scan
+        # left decayed setups reading as live and over-subscribed the
+        # per-detector cap until the next cron run swept them.
+        from app.services import setup_service
+        setup_service.run_post_scan_bookkeeping(db)
     finally:
         db.close()
 

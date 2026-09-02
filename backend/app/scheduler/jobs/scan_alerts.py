@@ -142,15 +142,11 @@ def _run_scan_alerts_locked(trigger: str) -> None:
         # are the "expired" half of the conversion rate, so this is what keeps
         # that number honest — without it only conversions would ever resolve
         # and the rate would read 100%.
-        try:
-            from app.services import setup_service
-            setup_service.expire_stale_setups(db)
-            # Cap per detector AFTER the whole universe has been evaluated —
-            # the ranking is only knowable once every stock has been seen.
-            setup_service.prune_to_top_per_detector(db)
-            db.commit()
-        except Exception as e:  # noqa: BLE001 — bookkeeping never fails a scan
-            logger.warning(f"[setups] expiry pass failed: {e}")
+        #
+        # Shared with the manual-scan entry point, which used to end at
+        # `run_tracked_scan` without any of this. See the helper's docstring.
+        from app.services import setup_service
+        setup_service.run_post_scan_bookkeeping(db)
     finally:
         db.close()
     logger.info("[scan_alerts] job: done")

@@ -325,3 +325,48 @@ def test_distance_atr_is_none_for_triggers_without_a_level(db):
         db, stock_id=s.id, match=_match(detector="squeeze_expansion", distance_atr=None)
     )
     assert row.distance_atr is None
+
+
+class TestPostScanBookkeeping:
+    """The expire + prune pass used to be an inline block in the cron job, and
+    the manual-scan entry point in api/alerts.py ended at `run_tracked_scan`
+    without it. Both now call one helper, so the two paths cannot drift again.
+
+    The consequence of the drift was bounded, not permanent — `expire_stale_
+    setups` sweeps the whole table rather than just the current scan's rows, so
+    the next cron run cleaned up after a manual scan. Bounded is still wrong:
+    in between, a decayed setup reads as live and the per-detector cap is
+    over-subscribed."""
+
+    def test_it_expires_then_prunes_in_that_order(self, monkeypatch):
+        from app.services import setup_service
+        calls = []
+        monkeypatch.setattr(setup_service, "expire_stale_setups",
+                            lambda db: calls.append("expire"))
+        monkeypatch.setattr(setup_service, "prune_to_top_per_detector",
+                            lambda db: calls.append("prune"))
+
+        class _Db:
+            def commit(self): calls.append("commit")
+            def rollback(self): calls.append("rollback")
+
+        setup_service.run_post_scan_bookkeeping(_Db())
+        # Order is load-bearing: the per-detector ranking is only knowable once
+        # the universe has been evaluated, and capping before expiring would
+        # rank decayed setups against live ones.
+        assert calls == ["expire", "prune", "commit"]
+
+    def test_a_failure_does_not_propagate_into_the_scan(self, monkeypatch):
+        """The caller has already committed real alerts by this point. A
+        bookkeeping error must not turn a successful scan into a failed one."""
+        from app.services import setup_service
+        rolled = []
+        monkeypatch.setattr(setup_service, "expire_stale_setups",
+                            lambda db: (_ for _ in ()).throw(RuntimeError("boom")))
+
+        class _Db:
+            def commit(self): raise AssertionError("must not commit after a failure")
+            def rollback(self): rolled.append(True)
+
+        setup_service.run_post_scan_bookkeeping(_Db())   # must not raise
+        assert rolled == [True]
