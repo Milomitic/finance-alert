@@ -45,9 +45,11 @@ export function PlaybookView({ playbook }: { playbook: Playbook }) {
         <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold", chipCls)}>
           {p.action}
         </span>
-        <span className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
-          {p.conviction}
-        </span>
+        {/* The "ingresso" / "osserva" label lived here until 2026-09-02. It
+            read as an instruction and rested on Forza, which the app's own
+            outcome warehouse shows has no measured relation to results — the
+            90-99 band hits 42.3% market-neutral against 52-53% for 60-89.
+            The plan describes a geometry; it does not tell you to enter. */}
       </div>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
         <Cell label="Entry" value={`$${price(p.entry)}`} />
@@ -64,7 +66,12 @@ export function PlaybookView({ playbook }: { playbook: Playbook }) {
         </div>
         <div className="rounded-md border border-border/60 px-2.5 py-1.5">
           <span className="text-muted-foreground">Rischio: </span>
-          <span className="font-medium">{p.riskBudgetPct.toFixed(1)}% del capitale</span>
+          <span
+            className="font-medium"
+            title="Budget di rischio fisso. La dimensione varia con la distanza dello stop, non con la Forza del segnale."
+          >
+            {p.riskBudgetPct.toFixed(1)}% del capitale
+          </span>
           <span className="text-muted-foreground"> - </span>
           <span className={cn("font-medium", accent)}>{p.leverageNote}</span>
         </div>

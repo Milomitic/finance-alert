@@ -9,7 +9,6 @@ export interface PlaybookTarget {
 export interface Playbook {
   side: "long" | "short";
   action: string;
-  conviction: string;
   horizon: string; // "Breve" | "Medio" | "Lungo"
   entry: number;
   stop: number;
@@ -23,8 +22,37 @@ export interface Playbook {
   leverageNote: string;
 }
 
-const RISK_FLOOR = 0.5;
-const RISK_CEIL = 1.5;
+// FIXED, not scaled by Forza. It used to run 0.5% -> 1.5% linearly in
+// `strength`, and leverage followed it, so the plan committed the most capital
+// and the most leverage to the highest-Forza signals.
+//
+// The app's own outcome warehouse says that is backwards. Market-neutral hit
+// rate by Forza band, measured on 2,246 matured live signals:
+//
+//     60-69   n=889   52.0%
+//     70-79   n=778   53.0%
+//     80-89   n=359   52.1%
+//     90-99   n=220   42.3%   <- the band that got 1.5% and 3x leverage
+//
+// and the decline holds INSIDE a single detector (sr_flip: 54.3 / 54.6 / 49.6
+// / 45.5). This is NOT evidence that high Forza is worse — one sample,
+// overlapping windows, no multiple-testing correction, and the engine's own
+// methodology bar (episodes/blocks, FDR, negative control) has not been
+// applied. It is evidence that there is NO BASIS for the old ramp, so the
+// ramp goes and nothing takes its place. Inverting it would repeat the same
+// mistake with the opposite sign.
+//
+// Position size still varies per signal, through `riskBudget / stopPct` —
+// stop distance is a MEASURED per-signal quantity and the stop/target
+// geometry is the one part of this file with an out-of-sample backtest behind
+// it (+0.01/+0.04/+0.09R). Risk-parity on a measured input, instead of a
+// multiplier on an unvalidated score.
+//
+// THE LEVEL IS A RISK-APPETITE CHOICE AND IT IS YOURS: 0.5% is what the app
+// already applied to its most cautious signals, kept because nothing in the
+// data justifies committing more. Change this one constant to move it; what
+// must not come back is making it depend on Forza.
+const RISK_BUDGET_PCT = 0.5;
 const MAX_LEVERAGE = 3;
 // Bound the catastrophic wide tail (e.g. trend vs a far EMA200, ~40% stops)
 // to STOP_CAP_ATR*ATR. Validated 2026-05-25 as expectancy-neutral while
@@ -128,11 +156,9 @@ export function buildPlaybook(
     { label: "Target 2", price: entry + sign * d2, rr: d2 / R },
   ];
 
-  // Position sizing scales with Forza (pattern strength). `strength` is always
-  // present now; default to 60 only for a malformed/absent snapshot.
-  const conf = typeof s.strength === "number" ? s.strength : 60;
-  const t = Math.max(0, Math.min(1, (conf - 60) / 40));
-  const riskBudgetPct = RISK_FLOOR + t * (RISK_CEIL - RISK_FLOOR);
+  // Fixed risk budget — see RISK_BUDGET_PCT. Deliberately does not read
+  // `s.strength`: the size must not depend on Forza.
+  const riskBudgetPct = RISK_BUDGET_PCT;
   // Risk-based size: position fraction = risk budget / stop distance (both pct).
   const rawLev = riskBudgetPct / stopPct;
   const leverage = Math.min(rawLev, MAX_LEVERAGE);
@@ -143,10 +169,14 @@ export function buildPlaybook(
       : `Leva ~${leverage.toFixed(1)}x (size ${positionPct.toFixed(0)}% del capitale), cap a ${MAX_LEVERAGE}x.`;
 
   const action = side === "long" ? "Long (acquisto)" : "Short (vendita allo scoperto)";
-  const conviction = conf >= 75 ? "ingresso" : conf >= 60 ? "ingresso prudente" : "osserva";
+  // `conviction` used to be here: "ingresso" at Forza >= 75, "ingresso
+  // prudente" at >= 60, "osserva" below. Imperative verbs on a scale with no
+  // measured relation to outcome — the strongest claim in the file, resting on
+  // the weakest evidence. Removed rather than reworded: the plan describes a
+  // geometry, it does not issue an instruction.
 
   return {
-    side, action, conviction, horizon: P.label, entry, stop, stopPct, stopCapped, targets,
+    side, action, horizon: P.label, entry, stop, stopPct, stopCapped, targets,
     duration: P.duration, riskBudgetPct, positionPct, leverage, leverageNote,
   };
 }
