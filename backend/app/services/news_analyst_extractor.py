@@ -351,20 +351,6 @@ def _try_extract(
 # that haven't been migrated to the news-item shape still work, just
 # without the body-text fallback. New code should use
 # `extract_from_news_item` directly.
-def extract_from_title(
-    title: str,
-    *,
-    published_at_iso: str | None = None,
-    link: str | None = None,
-) -> ExtractedAnalystMention | None:
-    return extract_from_news_item(
-        title,
-        summary=None,
-        published_at_iso=published_at_iso,
-        link=link,
-    )
-
-
 # ---------------------------------------------------------------------------
 # Internals
 # ---------------------------------------------------------------------------

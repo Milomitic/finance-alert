@@ -44,7 +44,3 @@ def clear(run_id: int) -> None:
         _REQUESTS.discard(run_id)
 
 
-def pending_count() -> int:
-    """Diagnostics."""
-    with _LOCK:
-        return len(_REQUESTS)

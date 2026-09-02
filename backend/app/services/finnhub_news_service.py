@@ -532,11 +532,6 @@ def fetch_upgrade_downgrade(
     return events
 
 
-def _safe_dict(x: Any) -> dict:
-    """Defensive: Finnhub sometimes returns 'No data' as a string."""
-    return x if isinstance(x, dict) else {}
-
-
 # ─── /stock/recommendation ───────────────────────────────────────────
 
 

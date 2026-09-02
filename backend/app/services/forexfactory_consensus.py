@@ -352,16 +352,6 @@ def consensus_value_for_label(label: str, on_date: date) -> float | None:
     return parse_numeric(ev.forecast)
 
 
-def consensus_actual_for_label(label: str, on_date: date) -> float | None:
-    """Companion to `consensus_value_for_label`: returns the ACTUAL
-    value Forexfactory reports for the event after release. Useful
-    when we want a same-day "what happened" before FRED catches up."""
-    ev = consensus_for_label(label, on_date)
-    if ev is None or not ev.actual:
-        return None
-    return parse_numeric(ev.actual)
-
-
 def clear_cache() -> None:
     """Test hook — invalidates the in-memory cache."""
     global _CACHE

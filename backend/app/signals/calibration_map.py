@@ -157,7 +157,3 @@ def get_calibration() -> CalibrationMap:
     return _cache
 
 
-def reset_cache() -> None:
-    """For tests / after regenerating the artifact."""
-    global _cache
-    _cache = None
