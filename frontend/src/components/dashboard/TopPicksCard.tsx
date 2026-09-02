@@ -1,4 +1,4 @@
-import { Trophy } from "lucide-react";
+import { ListOrdered } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import type { RiskTier, TopPickItem } from "@/api/types";
@@ -159,12 +159,31 @@ export function TopPicksCard() {
     <Card className="md:h-full overflow-hidden flex flex-col">
       <CardContent className="p-0 flex-1 min-h-0 flex flex-col">
         <div className="shrink-0 px-3 py-2 border-b bg-muted/30">
+          {/* Was `Trophy` + "Top picks" + "classifica per score composito".
+              The words and the icon made a claim the app's own evidence
+              contradicts: the score-IC backtest (2026-07-07, point-in-time SEC
+              facts, 552 stocks, 39 quarterly cross-sections, 20,217 obs) found
+              NO pillar with a significant IC on forward returns and a NEGATIVE
+              market-neutral decile spread at longer horizons. CLAUDE.md states
+              the operational rule that follows from it: the Qualità composite
+              is a company-quality DESCRIPTOR, not a return predictor.
+
+              A trophy names a winner. That study is the reason this card
+              cannot. The ordering itself is real and worth keeping — it ranks
+              the universe by a genuine fundamental measurement — so the fix is
+              to say what the ranking IS, exactly as the Esplora leaderboards
+              already do ("per decidere dove guardare"), and to surface the
+              disclosure that until now lived only in Impostazioni. */}
           <SectionTitle
-            icon={Trophy}
-            label="Top picks"
+            icon={ListOrdered}
+            label="Classifica qualità"
             right={
-              <span className="text-xs text-muted-foreground">
-                classifica per score composito
+              <span
+                className="text-xs text-muted-foreground"
+                title="Ordinamento per score composito di qualità fondamentale, dentro ogni profilo di rischio. Non è una previsione: lo studio IC dei pilastri (Impostazioni → Score IC) non trova capacità predittiva sui rendimenti futuri."
+              >
+                <span className="hidden sm:inline">score composito · </span>
+                non prevede i rendimenti
               </span>
             }
           />
