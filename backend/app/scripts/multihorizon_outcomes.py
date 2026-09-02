@@ -31,7 +31,7 @@ from app.scripts.signal_detector_outcomes import (
     STOP_CAP_ATR,
     _detector_horizon,
     _load_universe,
-    _universe_mean_fwd,
+    _universe_median_fwd,
 )
 from app.signals.context import build_context
 from app.signals.horizon import classify_horizon
@@ -98,8 +98,13 @@ def run(*, sample: int, step: int, window: int, min_bars: int) -> None:
         if not universe:
             print("No eligible stocks.")
             return
-        umean = _universe_mean_fwd(universe)
-        date_to_idx = umean["_date_to_idx"]
+        # Median, not mean: cross-sectional forward returns are right-skewed,
+        # so the mean is not a tone-symmetric baseline (measured: a zero-skill
+        # bull signal beats it only 48.4% of the time at h=21, 47.1% at h=63).
+        # CLAUDE.md conditional-screen invariant #3, and the same choice the
+        # live warehouse makes in signal_outcome_service.
+        ubench = _universe_median_fwd(universe)
+        date_to_idx = ubench["_date_to_idx"]
 
         # (tone, mh) -> list of (dir_excess, tp1|None, tp2|None)
         rows: dict[tuple[str, bool], list[tuple[float, float | None, float | None]]] = defaultdict(list)
@@ -129,7 +134,7 @@ def run(*, sample: int, step: int, window: int, min_bars: int) -> None:
                         continue
                     mh = (m.tone == "bull" and len(bull_hz) >= 2) or \
                          (m.tone == "bear" and len(bear_hz) >= 2)
-                    mhf = umean[h]
+                    mhf = ubench[h]
                     mean = mhf[di] if di is not None else np.nan
                     if not np.isfinite(mean):
                         continue

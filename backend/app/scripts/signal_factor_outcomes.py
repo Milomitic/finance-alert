@@ -177,7 +177,26 @@ def _load_universe(db, *, min_bars: int, sample: int | None) -> list[_Stock]:
 def _universe_mean_fwd(universe: list[_Stock]) -> dict[int, np.ndarray]:
     """Per-calendar-date mean forward return across the whole universe, for
     each horizon. Returns {h: mean_array_indexed_by_global_calendar}, plus a
-    shared date→idx map stored on the function via attribute for reuse."""
+    shared date→idx map stored on the function via attribute for reuse.
+
+    ⚠️ DO NOT USE THESE VALUES AS A MARKET-NEUTRAL BENCHMARK — use
+    `_universe_median_fwd` below, which has the identical return shape.
+    Cross-sectional forward returns are right-skewed, so the mean is NOT a
+    tone-symmetric baseline. Measured on 400 stocks, ~1M stock-days, the
+    fraction of stock-days beating each benchmark under zero skill:
+
+              h=5      h=21     h=63
+        mean  49.29%   48.37%   47.12%
+        med   49.94%   49.94%   49.94%
+
+    So a bull-tone signal with no skill scores 1.6pp low at h=21 and 2.9pp low
+    at h=63, and a bear-tone one the mirror image. That asymmetry is what
+    fabricated the trend_pullback regime artifact, and it is why CLAUDE.md's
+    conditional-screen invariant #3 requires the median.
+
+    This function is KEPT because three scripts (backfill_replay_outcomes,
+    confirmation_outcomes, fit_signal_calibration) import it only for
+    `_date_to_idx` and never read its values."""
     all_dates: set[str] = set()
     for s in universe:
         all_dates.update(s.dates)
@@ -203,6 +222,58 @@ def _universe_mean_fwd(universe: list[_Stock]) -> dict[int, np.ndarray]:
         mean = {h: np.where(counts[h] > 0, sums[h] / counts[h], np.nan) for h in _ALL_H}
     mean["_date_to_idx"] = date_to_idx  # type: ignore[assignment]
     return mean
+
+
+def _universe_median_fwd(universe: list[_Stock]) -> dict[int, np.ndarray]:
+    """Per-calendar-date MEDIAN forward return, same return shape as
+    `_universe_mean_fwd` so call sites swap one identifier.
+
+    The median is tone-symmetric: under zero skill, P(bull beats it) =
+    P(bear lags it) = 50%. See the warning on `_universe_mean_fwd` for the
+    measured size of the mean's bias, and CLAUDE.md invariant #3.
+    """
+    all_dates: set[str] = set()
+    for s in universe:
+        all_dates.update(s.dates)
+    cal = sorted(all_dates)
+    date_to_idx = {d: i for i, d in enumerate(cal)}
+
+    out: dict[int, np.ndarray] = {}
+    for h in _ALL_H:
+        # Gather (calendar_idx, fwd_return) for every stock-day, then take one
+        # median per calendar position. A running accumulator can't do this —
+        # a median needs the whole cross-section for the date.
+        dis: list[np.ndarray] = []
+        fws: list[np.ndarray] = []
+        for s in universe:
+            c = s.closes
+            n = len(c)
+            if n <= h:
+                continue
+            idxs = np.fromiter(
+                (date_to_idx[d] for d in s.dates), dtype=np.int64, count=n,
+            )
+            base = c[:-h]
+            with np.errstate(divide="ignore", invalid="ignore"):
+                fwd = np.where(base > 0, c[h:] / base - 1.0, np.nan)
+            ok = np.isfinite(fwd)
+            dis.append(idxs[:-h][ok])
+            fws.append(fwd[ok])
+        arr = np.full(len(cal), np.nan)
+        if dis:
+            di = np.concatenate(dis)
+            fw = np.concatenate(fws)
+            order = np.argsort(di, kind="stable")
+            di, fw = di[order], fw[order]
+            # group boundaries of the sorted date index
+            starts = np.searchsorted(di, np.arange(len(cal)), side="left")
+            ends = np.searchsorted(di, np.arange(len(cal)), side="right")
+            for i in range(len(cal)):
+                if ends[i] > starts[i]:
+                    arr[i] = np.median(fw[starts[i]:ends[i]])
+        out[h] = arr
+    out["_date_to_idx"] = date_to_idx  # type: ignore[assignment]
+    return out
 
 
 def _collect_observations(universe: list[_Stock]) -> list[_Obs]:
@@ -265,13 +336,13 @@ def _collect_observations(universe: list[_Stock]) -> list[_Obs]:
 
 
 def _attach_outcomes(
-    obs: list[_Obs], universe: list[_Stock], umean: dict, horizon: int,
+    obs: list[_Obs], universe: list[_Stock], ubench: dict, horizon: int,
 ) -> pd.DataFrame:
     """For each obs compute the market-neutral DIRECTIONAL excess forward
     return at `horizon`. Returns a DataFrame: factor, raw, dir_excess, abs_excess,
     direction."""
-    date_to_idx = umean["_date_to_idx"]
-    mh = umean[horizon]
+    date_to_idx = ubench["_date_to_idx"]
+    mh = ubench[horizon]
     recs = []
     for o in obs:
         s = universe[o.stock_idx]
@@ -389,7 +460,12 @@ def run(*, min_bars: int, sample: int | None, n_buckets: int) -> None:
             print("No eligible stocks.")
             return
         logger.info("[factor-outcomes] computing universe mean forward returns ...")
-        umean = _universe_mean_fwd(universe)
+        # Median, not mean: cross-sectional forward returns are right-skewed,
+        # so the mean is not a tone-symmetric baseline (measured: a zero-skill
+        # bull signal beats it only 48.4% of the time at h=21, 47.1% at h=63).
+        # CLAUDE.md conditional-screen invariant #3, and the same choice the
+        # live warehouse makes in signal_outcome_service.
+        ubench = _universe_median_fwd(universe)
         logger.info("[factor-outcomes] re-deriving historical signals ...")
         obs = _collect_observations(universe)
         logger.info(f"[factor-outcomes] {len(obs):,} signal occurrences re-derived")
@@ -401,7 +477,7 @@ def run(*, min_bars: int, sample: int | None, n_buckets: int) -> None:
 
         frames = []
         for h, lst in by_h.items():
-            frames.append(_attach_outcomes(lst, universe, umean, h))
+            frames.append(_attach_outcomes(lst, universe, ubench, h))
         df = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
         if df.empty:
             print("No outcomes attached.")

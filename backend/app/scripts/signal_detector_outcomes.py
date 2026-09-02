@@ -55,7 +55,7 @@ from app.scripts.signal_factor_outcomes import (
     H_MED,
     H_SHORT,
     _load_universe,
-    _universe_mean_fwd,
+    _universe_median_fwd,
 )
 from app.signals.context import build_context
 from app.signals.horizon import _PRIOR, classify_horizon
@@ -154,8 +154,13 @@ def run(*, sample: int, step: int, window: int, min_bars: int,
         if not universe:
             print("No eligible stocks.")
             return
-        umean = _universe_mean_fwd(universe)
-        date_to_idx = umean["_date_to_idx"]
+        # Median, not mean: cross-sectional forward returns are right-skewed,
+        # so the mean is not a tone-symmetric baseline (measured: a zero-skill
+        # bull signal beats it only 48.4% of the time at h=21, 47.1% at h=63).
+        # CLAUDE.md conditional-screen invariant #3, and the same choice the
+        # live warehouse makes in signal_outcome_service.
+        ubench = _universe_median_fwd(universe)
+        date_to_idx = ubench["_date_to_idx"]
 
         # Accumulators. Per detector, one tuple per fired signal:
         #   (dir_excess, confidence, abs_hit, tbs)
@@ -185,7 +190,7 @@ def run(*, sample: int, step: int, window: int, min_bars: int,
                     h = _detector_horizon(m.name)
                     if i + h >= n or c[i] <= 0:
                         continue
-                    mh = umean[h]
+                    mh = ubench[h]
                     mean = mh[di] if di is not None else np.nan
                     if not np.isfinite(mean):
                         continue

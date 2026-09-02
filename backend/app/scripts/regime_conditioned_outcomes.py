@@ -207,7 +207,10 @@ if __name__ == "__main__":
     ap.add_argument("--min-bars", type=int, default=400)
     ap.add_argument("--holdout-frac", type=float, default=0.30)
     ap.add_argument("--out", type=str, default="app/data/regime_conditioned_study.json")
-    ap.add_argument("--benchmark", type=str, choices=("mean", "median"), default="mean")
+    ap.add_argument("--benchmark", type=str, choices=("mean", "median"),
+                    # Was default="mean" — this script implements the median and
+                    # documents why it is required, then defaulted to the biased one.
+                    default="median")
     a = ap.parse_args()
     run(sample=a.sample, step=a.step, window=a.window, min_bars=a.min_bars,
         holdout_frac=a.holdout_frac, out=a.out, benchmark=a.benchmark)
