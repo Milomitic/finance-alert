@@ -387,6 +387,66 @@ small gap is normal, not a bug.
 
 ---
 
+## Unrepaired splits inside the stored history (tooling EXISTS — 2026-09)
+
+`ohlcv_service._check_price_basis` compares the incoming overlap bar against the
+stored one, so it only ever sees a discontinuity at the EDGE of a fetch window.
+A break already INSIDE the stored history is invisible to it by construction:
+from the next day on, stored and incoming are both on the new basis, the ratio
+is 1.0, and it reports "basis OK" forever. It was added 2026-07-04, so every
+split spliced before that date went unrepaired.
+
+The damage was not cosmetic — measured on the live catalogue 2026-09-01:
+
+    TIT.MI  reverse 1:10, 15 May  ->  rel_strength 100.0, the HIGHEST in the
+                                      whole universe, posture "Forte"
+    KLAC    10:1, 18 May          ->  rel_strength 0.1
+    CRWD    4:1, 29 Jun           ->  rel_strength 0.3
+    SOXS    20:1, 26 May          ->  rel_strength 0.0
+
+Three real companies at the bottom of the technical ranking and one artifact at
+the very top. It contaminates breadth, ATR, the 52-week range, the Tecnico lens
+and every detector whose lookback crosses the date.
+
+**Built, do not rebuild:** `ohlcv_service.find_basis_breaks` (detector) and
+`app.scripts.repair_price_basis` (report + repair, read-only by default,
+`--ticker` to scope).
+
+### The detector is deliberately blind to 2:1 splits
+
+Calibrated by sweeping min-ratio x tolerance against real data: `min=3.0`,
+`tol=0.08` gives 14 hits, zero of them the COVID crash, and 5/5 known real
+splits. A first attempt started the ratio list at 1.5 and returned **239 false
+positives**, dozens dated 9-18 March 2020 — any ~30% single-day fall matches a
+1.5 ratio. The volume discriminator (`(ratio < 1) != (vol_ratio > 1)`) is what
+separates a split from a crash: a split conserves dollar volume, a crash does
+not. **A 2:1 split is therefore NOT detected. That is the accepted cost.**
+
+### Two repair modes, and picking the wrong one destroys data
+
+- `--apply` wipes the series and re-downloads it. Correct ONLY when a fresh
+  download is clean, i.e. our stored copy drifted from a healthy source.
+- `--truncate` drops every bar BEFORE the break. For when the source itself
+  reproduces the break.
+
+**Check which case you are in before running either.** Download the ticker
+fresh and re-run the detector on it. SOXS (2026-09-02) is the worked example:
+one break at 2026-05-26 that a fresh 10y download reproduces to the cent, so
+`--apply` would have destroyed 2,514 bars and rebuilt them identically broken.
+
+And do not "just rescale by the ratio". yfinance DECLARES SOXS splits on
+2026-03-05 (1:20) and 2026-07-15 (1:10) — both correctly adjusted, no
+discontinuity on either date — so the May break matches no declared corporate
+action and the `20:1` the detector prints is a pattern match, not a fact. A
+ratio you inferred, applied to ten years of prices, looks perfectly healthy and
+is silently wrong if the truth is 18 or 25. (The residual is real, too:
+1159.50/20 = 57.98 against an actual 62.90 is a genuine +8.5% day for a 3x
+leveraged ETF, so the arithmetic cannot be checked against itself.)
+
+Truncating invents nothing, and a ticker left under 200 bars simply fails
+`has_full_data` — which already keeps it out of EMA200 signals and breadth —
+then self-heals as real bars accrue.
+
 ## Catalog ticker rows — duplicates RESOLVED (2026-05)
 
 **Historical note:** 59 tickers (AAPL, AMZN, UCG.MI, etc.) used to have **two
