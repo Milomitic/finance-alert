@@ -12,7 +12,6 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db, require_json
 from app.core.db import SessionLocal
-from app.core.errors import UpstreamError
 from app.models import Alert, ScanRun, Stock, User
 from app.models.scan_run import KIND_ALERTS_SCAN
 from app.schemas.alert import (
@@ -267,12 +266,17 @@ def _run_scan_in_background_locked(stock_ids: list[int] | None) -> None:
                         else:
                             fetch_and_upsert(db, chunk, period=sub_period)
                     db.commit()
-                except UpstreamError as e:
-                    logger.warning(
-                        f"[scan] upstream {e.source}.{e.op} failed: {e}"
-                    )
-                    db.rollback()
-                    # continue — next chunk
+                # There was an `except UpstreamError` here. It could never
+                # run, twice over: ohlcv_service raises no typed upstream
+                # errors (only the four news services and
+                # stock_fundamentals_service do), and `fetch_and_upsert`
+                # catches Exception per stock anyway, so nothing escapes it.
+                #
+                # Upstream failures during a fetch are NOT silent — they are
+                # just reported somewhere else: per-stock `logger.exception`
+                # inside ohlcv_service, and `result.failed_tickers` /
+                # `stocks_failed` on the returned result. Do not search the
+                # logs for "[scan] upstream ..."; it was never emitted.
                 except Exception as e:  # noqa: BLE001 — defensive last-resort
                     logger.exception(f"[scan] unexpected error in fetch chunk: {e}")
                     db.rollback()

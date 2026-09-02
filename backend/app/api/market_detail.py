@@ -22,7 +22,6 @@ from pydantic import BaseModel
 
 from app.api.deps import get_current_user
 from app.api.market import LIVE_ASSET_DEFINITIONS
-from app.core.errors import UpstreamError
 from app.models import User
 from app.services import live_quote_service, market_detail_service
 
@@ -162,12 +161,11 @@ def get_market_detail(
                 currency=q.currency,
                 error=q.error,
             )
-    except UpstreamError as e:
-        logger.warning(
-            f"[market_detail] upstream {e.source}.{e.op} failed for {symbol}: {e}"
-        )
-        # Quote is best-effort; the chart still renders without it.
-        quote_out = None
+    # There was an `except UpstreamError` here, unreachable:
+    # live_quote_service does not raise the typed errors — it reports an
+    # upstream problem on the RETURNED object, as `q.error`, which is read
+    # into the response two lines above. The handler below stays as the
+    # genuine last resort.
     except Exception as e:  # noqa: BLE001 — defensive last-resort
         logger.exception(f"[market_detail] unexpected error fetching quote for {symbol}: {e}")
         # Quote is best-effort; the chart still renders without it.

@@ -615,6 +615,35 @@ Routers catch the base `UpstreamError` for warning-level structured logging
 (`logger.warning(f"upstream {e.source}.{e.op} failed: {e}")`), then fall back to
 `except Exception` only as a defensive last-resort.
 
+### ⚠️ Only FIVE services actually raise these — check before writing a handler
+
+`stock_fundamentals_service` (via `_normalize_yf_error`) and the four news
+services (`stock_news_service`, `finnhub_news_service`, `marketaux_news_service`,
+`yahoo_rss_news_service`). Nothing else does.
+
+**The two biggest upstream fetches in the app are NOT among them**, and they
+report failures through a different channel on purpose:
+
+| Service | How an upstream failure surfaces |
+|---|---|
+| `ohlcv_service.fetch_and_upsert` | caught per stock inside the loop; `logger.exception` + `result.failed_tickers` / `stocks_failed` on the returned result |
+| `live_quote_service.get_quote` | `q.error` on the RETURNED quote object, plus `market_state="STALE"` for an L2 restore |
+
+A per-item result is richer than an exception here — one bad ticker must not
+abort a 999-stock batch — so this is a design choice, not a gap to close.
+
+Two `except UpstreamError` handlers had been written around exactly these two
+calls and could never run (removed 2026-09-02). The `ohlcv_service` one was
+dead twice over: the service raises no typed error AND catches `Exception` per
+stock, so nothing escapes to the router at all. Both sat directly above an
+identical `except Exception`, so deleting them changed no behaviour.
+
+The cost of an unreachable handler is not runtime, it is belief: it reads as
+"upstream failures on this path are logged with source/op", so anyone grepping
+the logs for `[scan] upstream ...` during a yfinance outage finds nothing and
+goes looking for the bug somewhere else. **Before adding a handler, confirm the
+callee is on the list above.**
+
 When adding a new external fetch:
 1. Wrap raw network calls so they raise the appropriate typed exception (see
    `_normalize_yf_error` in `stock_fundamentals_service.py` for the pattern).
