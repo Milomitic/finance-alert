@@ -106,6 +106,28 @@ def extract_chart_patterns(ohlcv: pd.DataFrame, *, pivot_w: int = _PIVOT_W) -> l
                                  magnitude=float(min(1.0, (hh - neckline) / hh)) if hh else None,
                                  payload={"pattern": "head_shoulders", "neckline": neckline,
                                           "head": float(hh), "points": points}))
+    # ── Triangles ──────────────────────────────────────────────────────
+    # Until 2026-09-02 all three triangle branches hard-coded their magnitude
+    # (0.6 / 0.6 / 0.55) instead of measuring it, while the four families above
+    # computed a real geometric amplitude. `pattern_amplitude` is the ONLY
+    # strength factor the ChartPattern detector weighs, so a constant magnitude
+    # is a constant Forza — and the consequence was not cosmetic:
+    #
+    #   * measured on 1,041 patterns across the whole universe, real amplitudes
+    #     run p50=0.094 / p95=0.234 / max=0.564, i.e. ~6x BELOW the constants;
+    #   * so triangles scored Forza 69/69/63 and cleared the 60 emission gate,
+    #     while every honestly-measured pattern scored ~10-45 and never did.
+    #
+    # All 95 chart_pattern alerts in the warehouse were triangles, at exactly
+    # two Forza values (63.0 and 69.0 — the two constants). Double bottom,
+    # double top and both head-and-shoulders — the patterns this module's own
+    # docstring names as its purpose — had never emitted once.
+    #
+    # Fixing this alone would have DELETED the detector (1 pattern in 1,041
+    # clears the gate on real amplitudes under the old anchors), so the Forza
+    # anchors were re-expressed in the real units at the same time. See
+    # `_PATTERN_AMPLITUDE_ANCHORS` in detectors/chart_pattern.py.
+
     # Ascending triangle (bull): flat highs + rising lows.
     if len(highs) >= 3 and len(lows) >= 3:
         hi_idx = highs[-3:]
@@ -120,8 +142,14 @@ def extract_chart_patterns(ohlcv: pd.DataFrame, *, pivot_w: int = _PIVOT_W) -> l
                 [{"date": _iso(dates.iloc[i]), "price": float(high.iloc[i])} for i in hi_idx]
                 + [{"date": _iso(dates.iloc[i]), "price": float(low.iloc[i])} for i in lo_idx]
             )
+            # Amplitude = the triangle's height at its BASE, over the flat
+            # side — the same "pattern height as a fraction of price" the four
+            # families above measure, and what the classic measured-move target
+            # uses. It was hard-coded 0.6 until 2026-09-02; see the note at the
+            # top of the triangle section.
             out.append(Event(_iso(dates.iloc[lows[-1]]), "chart_pattern", "bull",
-                             magnitude=0.6,
+                             magnitude=(float(min(1.0, (neckline - lo3[0]) / neckline))
+                                        if neckline > 0 else None),
                              payload={"pattern": "ascending_triangle", "neckline": neckline,
                                       "points": tri_points}))
         # Descending triangle (bear): flat lows + falling highs.
@@ -133,8 +161,12 @@ def extract_chart_patterns(ohlcv: pd.DataFrame, *, pivot_w: int = _PIVOT_W) -> l
                 [{"date": _iso(dates.iloc[i]), "price": float(high.iloc[i])} for i in hi_idx]
                 + [{"date": _iso(dates.iloc[i]), "price": float(low.iloc[i])} for i in lo_idx]
             )
+            # Bear patterns divide by the HIGH level (see double_top and
+            # head_shoulders above), so the base here is the first, highest of
+            # the falling highs.
             out.append(Event(_iso(dates.iloc[highs[-1]]), "chart_pattern", "bear",
-                             magnitude=0.6,
+                             magnitude=(float(min(1.0, (h[0] - neckline) / h[0]))
+                                        if h[0] > 0 else None),
                              payload={"pattern": "descending_triangle", "neckline": neckline,
                                       "points": tri_points}))
     # Symmetrical triangle: converging (falling highs + rising lows); direction
@@ -153,14 +185,18 @@ def extract_chart_patterns(ohlcv: pd.DataFrame, *, pivot_w: int = _PIVOT_W) -> l
                 [{"date": _iso(dates.iloc[i]), "price": float(high.iloc[i])} for i in sym_hi_idx]
                 + [{"date": _iso(dates.iloc[i]), "price": float(low.iloc[i])} for i in sym_lo_idx]
             )
+            # The base of a converging triangle is its first pair, and the
+            # amplitude does not depend on which way it resolves — so both
+            # break directions carry the same measurement.
+            sym_amp = (float(min(1.0, (h3[0] - l3[0]) / h3[0])) if h3[0] > 0 else None)
             if last_close > recent_high:
                 out.append(Event(_iso(dates.iloc[-1]), "chart_pattern", "bull",
-                                 magnitude=0.55,
+                                 magnitude=sym_amp,
                                  payload={"pattern": "symmetrical_triangle", "neckline": recent_high,
                                           "points": sym_points}))
             elif last_close < recent_low:
                 out.append(Event(_iso(dates.iloc[-1]), "chart_pattern", "bear",
-                                 magnitude=0.55,
+                                 magnitude=sym_amp,
                                  payload={"pattern": "symmetrical_triangle", "neckline": recent_low,
                                           "points": sym_points}))
     return out

@@ -10,10 +10,40 @@ from app.signals.context import SignalContext
 from app.signals.detectors.base import SignalMatch, clamp01, concave, score_v2
 from app.signals.events import Event
 
-# Forza anchor for pattern_amplitude = the chart_pattern event magnitude
-# (already 0..1; the extractor hard-codes ~0.6 for many patterns). Anchors live
-# in those 0..1 units: a 0.80-amplitude pattern reads strong (→ ~0.88).
-_PATTERN_AMPLITUDE_ANCHORS = (0.40, 0.65, 0.80, 0.92)
+# Forza anchors for pattern_amplitude = the chart_pattern event magnitude, i.e.
+# the pattern's height as a fraction of price. This is the ONLY strength factor
+# this detector weighs (weight 1.0), so these anchors ARE the Forza curve.
+#
+# They used to be (0.40, 0.65, 0.80, 0.92) — values that ask for a figure whose
+# height is 40-92% of the share price. No such pattern exists. Measured over
+# the whole universe (1,041 patterns, all seven families):
+#
+#     p10   p25   p50   p75   p85   p95   p99   max
+#    .054  .070  .094  .136  .165  .234  .321  .564
+#
+# so the old anchors mapped the MEDIAN pattern to Forza 10.6, and exactly ONE
+# pattern in 1,041 could clear the 60 emission gate. The four families that
+# measure their amplitude honestly were therefore silent — every alert this
+# detector ever produced was a triangle riding a hard-coded 0.6/0.55 (see the
+# triangle note in signals/chart_patterns.py).
+#
+# WHAT GROUNDS THESE NUMBERS, AND WHAT DOES NOT. The convention elsewhere in
+# this package is that anchors sit at the raw level where the realised forward
+# hit-rate crosses 52/56/60% (app.scripts.signal_factor_outcomes). NO SUCH
+# STUDY EXISTS for pattern_amplitude, and this repo's rule is that you do not
+# invent one. These are placed on the OBSERVED DISTRIBUTION instead — a45 at
+# the median, a75 at p85, a88 at p97 — which is the most direct reading of
+# "0.45 = a middling example of this factor" that requires no invention.
+#
+# Say plainly what that buys: Forza here ranks a pattern by HOW BIG IT IS
+# relative to other patterns. It is not a probability and carries no claim
+# about outcome. That is the honest job of an attention filter, and it is a
+# strictly weaker claim than the one the old constants implied.
+#
+# Consequence to expect: ~27% of detected patterns now clear Forza 60 (before
+# the neckline-break confirmation, which filters further), against ~3.6% —
+# triangles only — before. Volume goes UP and the mix changes completely.
+_PATTERN_AMPLITUDE_ANCHORS = (0.094, 0.165, 0.265, 0.45)
 
 _PATTERN_IT = {
     "double_bottom": "Doppio minimo",
