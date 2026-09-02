@@ -10,8 +10,19 @@ anything else in this repo.**
 
 **The user has explicitly opted in to auto-commit + auto-push.** After
 completing a coherent unit of work (a feature, fix, refactor, or doc update),
-**commit it and push to `origin/master` without being asked** — this overrides
+**commit it and push to `origin/cloud` without being asked** — this overrides
 the generic "only commit when explicitly asked" default.
+
+⚠️ It said `origin/master` until 2026-09-02. **`cloud` is the deployed branch**:
+CI only builds an image and bumps the GitOps tag on a push to `refs/heads/cloud`
+(see the `workflow_dispatch` note below), so a push to `master` verifies nothing
+and reaches no cluster.
+
+Expect `origin/cloud` to have moved every time you go to push: CI writes the new
+image tag back into `charts/finance-alert/values-oci.yaml` on the same branch
+(`chore(cd): image <sha> [skip ci]`), so the GitOps loop advances the branch on
+its own after every deploy. `git fetch && git rebase origin/cloud` then push —
+never force.
 
 Guidelines:
 - Commit at natural completion points (work builds + tests pass), not mid-edit.
@@ -427,8 +438,8 @@ The bug is invisible in dev.
   `backend/scripts/` is deliberately outside the gate and has a pre-existing
   I001 that is NOT yours to fix; `ruff check .` will report it and mislead you.
 - **Backend**: `cd backend && ./.venv/Scripts/python.exe -m pytest tests/ -x -q`
-  (1743+ tests, runs in ~37s)
-- **Frontend tests**: `cd frontend && npm run test:run` (91 tests, ~3s)
+  (1756+ tests, runs in ~35s)
+- **Frontend tests**: `cd frontend && npm run test:run` (152 tests, ~5s)
 - **Frontend hook gate**: `cd frontend && npm run lint:hooks` (see below — clean
   output and exit 0 is the only acceptable result)
 - **Frontend build/typecheck**: `cd frontend && npm run build`
@@ -787,6 +798,51 @@ cross-lens leakage; don't re-introduce it):
   `confidence` shown ~flat vs realised outcome — the reason for the split).
 - Design spec: `docs/superpowers/specs/2026-05-28-signal-strength-probability-split-design.md`.
 
+### ⚠️ The market-neutral benchmark is the universe MEDIAN, everywhere (2026-09-02)
+
+Invariant #3 in the conditional-screen list below is not local to that study.
+Every "market-neutral hit" in this repo is *signal beat the universe benchmark
+that day*, sign-flipped for bear tone — which only means something if a
+zero-skill signal scores 50%. Measured here, 400 stocks / ~1M stock-days:
+
+          h=5      h=21     h=63
+    mean  49.29%   48.37%   47.12%
+    med   49.94%   49.94%   49.94%
+
+Cross-sectional forward returns are right-skewed, so the mean sits above the
+typical stock and charges every bull-tone detector 1.6pp at h=21 / 2.9pp at
+h=63, crediting every bear-tone one the same. The live warehouse
+(`signal_outcome_service._universe_fwd_medians`) was already on the median;
+**four offline studies were still on the mean until 2026-09-02** —
+`signal_detector_outcomes`, `multihorizon_outcomes`, `signal_factor_outcomes`,
+`backfill_replay_outcomes`. All four now call `_universe_median_fwd`
+(`signal_factor_outcomes`), which has the identical return shape.
+`regime_conditioned_outcomes` had implemented the median and documented why,
+then defaulted to `--benchmark mean`; the default is flipped.
+
+`_universe_mean_fwd` still exists ONLY because `confirmation_outcomes` and
+`fit_signal_calibration` import it for its `_date_to_idx` calendar map and
+compute no market-neutral label at all. In those two the variable is named
+`_cal`, not `umean`, so nobody reaches for its values. **Never use its values
+as a benchmark.**
+
+Guarded by `tests/test_universe_benchmark_symmetry.py`, on a deliberately
+right-skewed fixture, including a test asserting the MEAN is *not* symmetric on
+it — so if the fixture ever stops being skewed, the symmetry test stops
+silently passing for the wrong reason.
+
+Two things this does NOT change. `base_rate` (→ Probabilità) is
+`close_to_close_abs_hit` — ABSOLUTE, never touches the benchmark. And the six
+null results stand: a biased benchmark manufactures apparent effects rather
+than hiding them, so nulls measured against a harsher baseline stay null. What
+moves are the POINT ESTIMATES on display — `mkt_neutral_hit`,
+`mkt_neutral_edge_pct`, and the `coinflip`/`negative`/`edge` quality_tag.
+
+**A search that misses this class of bug:** grepping `umean[` finds `umean[h]`
+and silently misses `umean.get(h)`. That is exactly how `backfill_replay_outcomes`
+was first cleared as "calendar-map only" and had to be corrected a commit later.
+Grep the bare identifier and read every hit.
+
 ### Chain enrichment + `confirmation_count` is DISPLAY-ONLY by design (2026-06)
 `app/signals/chain_enrichment.py` appends co-temporal, same-tone confirmation
 events (EMA reject, MACD cross, candle rejection, RSI rollover, volume,
@@ -817,7 +873,8 @@ FAMILY (`_FAMILY` / `_effective_n`): N correlated same-family signals count
 `n_signals`). This only ever *lowers* inflated confluence; it makes no
 predictive claim. The one cross-signal feature with a prior backtest edge is
 `multi_horizon` (~+0.8%/30d, bull only) — the only thing that may justify a
-future target/conviction tweak.
+future target tweak. (It used to read "target/conviction tweak"; there is no
+conviction any more — see the trade-playbook note below.)
 
 ### Engine Quality v1 (2026-06): outcome warehouse + honest surfacing
 Spec: `docs/superpowers/specs/2026-06-09-engine-quality-v1-design.md`. All
@@ -841,6 +898,41 @@ SURFACING + SUBSTRATE — none of it changes the composite/Probabilità/targets.
   governance/analyst signals are INFORMATIONAL (read-time, cache-only). Do NOT
   weight any of these into the composite without the score-IC backtest
   (roadmap #9) over persisted score_history + point-in-time fundamentals.
+
+### The honesty rules are enforced in the UI too, not just in this file (2026-09-02)
+
+The engine's conclusions kept being stated here and contradicted on screen. Four
+places were fixed; the pattern is worth recognising because each one *looked*
+fine:
+
+- **Trade playbook no longer sizes on Forza.** `frontend/src/lib/tradePlaybook.ts`
+  ran the risk budget 0.5% → 1.5% linearly in `strength`, with leverage
+  following — the most capital and the most leverage on the highest-Forza
+  signals. The warehouse says the opposite: market-neutral hit by Forza band
+  over 2,246 matured live signals is 52.0 / 53.0 / 52.1 and then **42.3% for
+  90-99**, and the decline holds inside a single detector. That is NOT evidence
+  high Forza is worse (one sample, overlapping windows, no multiple-testing
+  correction) — it is evidence there was no basis for the ramp, so the ramp went
+  and **nothing replaced it**. Inverting it would repeat the mistake with the
+  opposite sign. Budget is now one constant; the LEVEL is the user's
+  risk-appetite choice, and what must not come back is making it depend on
+  Forza. Size still varies through `riskBudget / stopPct` — stop distance is
+  MEASURED and the stop/target geometry is the one part with an OOS backtest
+  (+0.01/+0.04/+0.09R). `conviction` ("ingresso" / "osserva") is gone: the plan
+  describes a geometry, it does not issue an instruction.
+- **The home card cannot wear a trophy.** It was `Trophy` + "Top picks"; the
+  score-IC study says the Qualità composite is a descriptor, not a predictor.
+  Now "Classifica qualità · non prevede i rendimenti". `SuperinvestorPicksCard`
+  KEEPS "Top picks" deliberately — those are positions someone filed with the
+  SEC, not a claim the app makes.
+- **A rate needs a sample.** The Setups tile showed "100%" on six resolved
+  setups. Below 20 it now shows the raw fraction; the unresolved case still
+  renders "—", never 0%.
+- **`chart_pattern`** — see the anchors warning in the Forza section above.
+
+The rule these share: **a number, an icon or a verb that claims more than the
+measurement supports is the same defect as a wrong number.** When a study here
+concludes "no edge", check what the screen says before considering it shipped.
 
 ### Factor-adjustment fitting RUN (2026-07-08) — verdict: Probabilità stays a per-detector base rate
 The B4-4 gate was executed (`app.scripts.fit_signal_calibration --sample 999`,
@@ -994,6 +1086,19 @@ geometry — not a return predictor. Probabilità is a per-detector base rate.
 The only thing that can still overturn this is time: matured live outcomes in
 `signal_outcomes`, out-of-sample by construction because they did not exist
 when the detectors were written.
+
+### ⚠️ Run scripts from `backend/`, or you silently query an EMPTY database
+
+There is a gitignored `data/app.db` at the REPO ROOT: 4 KB, **zero tables**.
+The real one is `backend/data/app.db` — 28 tables, ~616 MB. The SQLite URL is
+relative, so a script started from the repo root connects to the empty decoy
+instead of failing, and you get zeros, empty lists, or `no such table: stocks`
+— none of which read as "wrong working directory". Hit on 2026-09-02 while
+spot-checking a catalogue count.
+
+Always `cd backend` first (the `PYTHONPATH=. ./.venv/Scripts/python.exe ...`
+form below already does). If a query returns suspiciously empty results, check
+`pwd` before you check your SQL.
 
 ### One-off scan / recompute outside the API (e.g. after a scoring change)
 Stop uvicorn FIRST (sole SQLite writer → avoids "database is locked"), run with

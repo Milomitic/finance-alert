@@ -113,7 +113,21 @@ def _prune_old(st: _State, now: float) -> None:
 
 
 def is_open(lane: str = LANE_DEFAULT) -> bool:
-    """Return True if `lane`'s breaker is OPEN (callers should skip yfinance)."""
+    """Return True if `lane`'s breaker is OPEN (callers should skip yfinance).
+
+    ⚠️ NOT A PURE QUERY. When the cooldown has elapsed this GRANTS the
+    half-open probe slot and returns False — so the caller that gets False is
+    the probe, and is expected to make the yfinance call and report back via
+    `record_success` / `record_failure`.
+
+    Do not call this just to look (a status endpoint, a log line, a
+    diagnostic): you would consume a grant nobody uses. The damage is bounded —
+    `HALF_OPEN_PROBE_TIMEOUT` reclaims an abandoned slot after 30s, see the
+    note at that constant — but a real probe is delayed meanwhile. Every
+    current caller honours this: each one proceeds to hit yfinance when it
+    gets False. If you need a look-only check, add a pure `peek_open()`
+    rather than reusing this.
+    """
     with _lock:
         st = _st(lane)
         if st.opened_at is None:
