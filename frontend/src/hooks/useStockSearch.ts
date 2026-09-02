@@ -20,48 +20,25 @@ export function useStockSearch(params: SearchParams) {
   const effective: SearchParams = { ...params, q: debouncedQ || undefined };
 
   return useQuery({
-    queryKey: [
-      "stocks-search",
-      effective.q ?? "",
-      (effective.exchange ?? []).join(","),
-      (effective.sector ?? []).join(","),
-      (effective.industry ?? []).join(","),
-      (effective.country ?? []).join(","),
-      (effective.index ?? []).join(","),
-      (effective.risk ?? []).join(","),
-      effective.min_score ?? "",
-      effective.score_max ?? "",
-      effective.profitability_min ?? "",
-      effective.sustainability_min ?? "",
-      effective.growth_min ?? "",
-      effective.value_min ?? "",
-      effective.sentiment_min ?? "",
-      effective.tech_min ?? "",
-      effective.tech_max ?? "",
-      (effective.posture ?? []).join(","),
-      effective.market_cap_min ?? "",
-      effective.market_cap_max ?? "",
-      effective.rsi_min ?? "",
-      effective.rsi_max ?? "",
-      effective.above_ema50 ? "1" : "",
-      effective.above_ema200 ? "1" : "",
-      effective.near_52w_high ? "1" : "",
-      effective.near_52w_low ? "1" : "",
-      effective.has_signals ? "1" : "",
-      effective.signals_within_days ?? "",
-      effective.price_min ?? "",
-      effective.price_max ?? "",
-      effective.change_min ?? "",
-      effective.change_max ?? "",
-      effective.vol_spike ? "1" : "",
-      effective.vol_ratio_min ?? "",
-      effective.volume_min ?? "",
-      effective.exclude_etf ? "1" : "",
-      effective.sort_by ?? "ticker",
-      effective.sort_dir ?? "asc",
-      effective.limit ?? 50,
-      effective.offset ?? 0,
-    ],
+    // The whole params object, not a hand-listed projection of it.
+    //
+    // This used to spell out all 39 fields — every one correct, as it happens,
+    // but correct only for as long as someone remembers to edit two files when
+    // adding a filter. Forgetting is SILENT and it is the bad kind: the key
+    // stays equal across a filter change, so React Query serves the cached
+    // result for the PREVIOUS filter and the screener quietly shows the wrong
+    // stocks. Nothing errors.
+    //
+    // Safe because query-core's `hashKey` (v5) is JSON.stringify with a
+    // replacer that sorts plain-object keys, so the hash is stable and
+    // independent of property order. Arrays keep their order, which is what
+    // the old `.join(",")` did too.
+    //
+    // One deliberate difference: the old key folded `undefined` and `false`
+    // to the same "", so `above_ema50: false` and an absent flag shared a
+    // cache entry. They now get one each — an extra fetch in a rare case, in
+    // exchange for an invariant that cannot rot.
+    queryKey: ["stocks-search", effective],
     queryFn: ({ signal }) => stocks.search(effective, signal),
     placeholderData: keepPreviousData,
     staleTime: 30_000,
