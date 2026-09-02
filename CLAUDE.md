@@ -532,26 +532,47 @@ The 3-card row (Fundamentals · Valuation · News) uses:
 
 ---
 
-## Indicator periods adapt to range
+## Indicator periods are FIXED, not adaptive (reversed — read this)
+
+**This section used to say the opposite, and the code that made it look true
+was dead.** Corrected 2026-09-02.
+
+Periods do NOT adapt to the range. They are fixed across every timeframe:
+
+| EMA fast/mid/slow | RSI | BB | MACD |
+|---|---|---|---|
+| 20/50/200 | 14 | 20 (k=2.0) | 12/26/9 |
+
+Single source of truth: `FIXED_*` in `app/services/timeframe_service.py`. That
+module states the rationale at its own constants — *"Don't adapt these per
+timeframe"* — because **the user asked for it explicitly**: one indicator
+definition everywhere, so the values change with BAR DURATION rather than with
+a lookup table. RSI(14) on 30m bars covers 7 hours; on daily bars, 14 trading
+days. (May 2026 switched the trend lines SMA→EMA keeping 20/50/200.)
 
 The bundle keys in the API response (`sma20`/`sma50`/`sma200`, `rsi14`) are
-**slot names**, not literal periods. The actual periods are in
-`indicators.periods` (`sma_fast`, `sma_mid`, `sma_slow`, `rsi`, etc.) and
-adapt to the range_key:
+still SLOT NAMES rather than literal periods, and `indicators.periods` is still
+the field to read in the UI — that part of the old advice survives. What is
+gone is the reason: the periods it reports are now constant.
 
-| Range | sma_fast/mid/slow | rsi | bb |
-|-------|-------------------|-----|-----|
-| 1m    | 5/10/20           | 7   | 10  |
-| 3m    | 10/20/50          | 14  | 20  |
-| 6m    | 20/50/100         | 14  | 20  |
-| 1y    | 20/50/200         | 14  | 20  |
-| all   | 50/100/200        | 21  | 50  |
+### Why this note exists at all
 
-UI labels (IndicatorToggles, ResizableSection labels) read the live periods,
-not the static defaults. Don't hard-code "SMA 200" / "RSI(14)" in new code —
-read from `indicators.periods`.
+The stale version carried a full table of per-range periods (1m → 5/10/20,
+3m → 10/20/50, …) and the instruction *"don't hard-code SMA 200 / RSI(14) in
+new code"*. Anyone checking would have found `_RANGE_PERIODS` in
+`stock_detail_service.py` holding exactly that table, and believed it.
 
----
+It was dead. `_compute_indicator_series`, its only consumer, had **zero
+callers** in `app/` or `tests/` — and it was the sole reason that file imported
+pandas, `bollinger`, `ema`, `macd` and `rsi` at all. Both are now deleted (64
+lines plus 5 imports), with a note in their place pointing at
+`timeframe_service`.
+
+**The general lesson, since this file is read before anything else:** dead code
+does not just sit there. It corroborates stale documentation, which is how a
+wrong instruction survives a spot-check. When a note here disagrees with the
+code, suspect BOTH — and delete the loser rather than leaving it to mislead the
+next reader.
 
 ## Alert dual-timestamp model
 

@@ -10,15 +10,10 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Any
 
-import pandas as pd
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.visibility import visible_country_clause
-from app.indicators.bb import bollinger
-from app.indicators.ema import ema as ema_indicator
-from app.indicators.macd import macd
-from app.indicators.rsi import rsi as rsi_indicator
 from app.models import Alert, OhlcvDaily, Stock
 from app.services.alert_service import derive_rule_kind
 
@@ -122,68 +117,21 @@ class _IndicatorBundle:
     periods: IndicatorPeriods
 
 
-# Adaptive periods per range. Tuned so each indicator window covers roughly
-# 5-15% of the visible range — short enough to react to the visible price
-# action, long enough not to be pure noise.
+# The per-range ADAPTIVE indicator periods used to live here — a `_RANGE_PERIODS`
+# dict (1m -> 5/10/20, 3m -> 10/20/50, ... all -> 50/100/200) plus the
+# `_compute_indicator_series` function that read it. Both were dead: the
+# function had no callers anywhere in app/ or tests/, and the dict had no
+# consumer but that function.
 #
-# 1m (~22 trading days): aggressive short windows so the 30-day chart shows
-#   meaningful indicator movement (an EMA200 on 22 bars converges quickly
-#   but visually still flattens — short windows are the right call).
-# 3m (~66): step up to standard fast/mid windows.
-# 6m, 1y: the standard "long" defaults; EMA200 makes sense beyond 6m.
-# 5y (~1260 trading days): same shape as `all` — both are "long-horizon"
-#   views, the only difference is whether the user wants to bound the
-#   visible window to a recent 5y or see everything stored.
-# all: full history, longest windows.
-_RANGE_PERIODS: dict[str, IndicatorPeriods] = {
-    "1m":  IndicatorPeriods(ema_fast=5,  ema_mid=10, ema_slow=20,  rsi=7,  bb_period=10, bb_k=2.0, macd_fast=6,  macd_slow=13, macd_signal=5),
-    "3m":  IndicatorPeriods(ema_fast=10, ema_mid=20, ema_slow=50,  rsi=14, bb_period=20, bb_k=2.0, macd_fast=12, macd_slow=26, macd_signal=9),
-    "6m":  IndicatorPeriods(ema_fast=20, ema_mid=50, ema_slow=100, rsi=14, bb_period=20, bb_k=2.0, macd_fast=12, macd_slow=26, macd_signal=9),
-    "1y":  IndicatorPeriods(ema_fast=20, ema_mid=50, ema_slow=200, rsi=14, bb_period=20, bb_k=2.0, macd_fast=12, macd_slow=26, macd_signal=9),
-    "5y":  IndicatorPeriods(ema_fast=50, ema_mid=100, ema_slow=200, rsi=21, bb_period=50, bb_k=2.0, macd_fast=26, macd_slow=52, macd_signal=18),
-    "all": IndicatorPeriods(ema_fast=50, ema_mid=100, ema_slow=200, rsi=21, bb_period=50, bb_k=2.0, macd_fast=26, macd_slow=52, macd_signal=18),
-}
-
-
-def _compute_indicator_series(
-    bars: list[OhlcvDaily], range_key: str = "1y"
-) -> _IndicatorBundle:
-    p = _RANGE_PERIODS.get(range_key, _RANGE_PERIODS["1y"])
-    empty = _IndicatorBundle(*[[] for _ in range(10)], periods=p)
-    if len(bars) < 2:
-        return empty
-    close = pd.Series([float(b.close) for b in bars])
-    ema_fast_s = ema_indicator(close, p.ema_fast)
-    ema_mid_s = ema_indicator(close, p.ema_mid)
-    ema_slow_s = ema_indicator(close, p.ema_slow)
-    rsi_s = rsi_indicator(close, p.rsi)
-    bb_u, bb_m, bb_l = bollinger(close, period=p.bb_period, k=p.bb_k)
-    macd_line_s, macd_sig_s, macd_hist_s = macd(close, fast=p.macd_fast, slow=p.macd_slow, signal=p.macd_signal)
-
-    def to_points(series: pd.Series) -> list[IndicatorPoint]:
-        return [
-            IndicatorPoint(
-                date=bars[i].date,
-                value=float(v) if not pd.isna(v) else None,
-            )
-            for i, v in enumerate(series)
-        ]
-
-    # Bundle keys are ema20/ema50/ema200/rsi14 — the UI reads `periods`
-    # to label them with the actual values used at the requested range.
-    return _IndicatorBundle(
-        ema20=to_points(ema_fast_s),
-        ema50=to_points(ema_mid_s),
-        ema200=to_points(ema_slow_s),
-        rsi14=to_points(rsi_s),
-        bb_upper=to_points(bb_u),
-        bb_middle=to_points(bb_m),
-        bb_lower=to_points(bb_l),
-        macd_line=to_points(macd_line_s),
-        macd_signal=to_points(macd_sig_s),
-        macd_hist=to_points(macd_hist_s),
-        periods=p,
-    )
+# They are gone because the design was deliberately REVERSED, not forgotten.
+# Periods are fixed now (`FIXED_*` in services/timeframe_service.py: EMA
+# 20/50/200, RSI 14, BB 20/2.0, MACD 12/26/9) at the user's explicit request —
+# the same indicator definition across every timeframe, so the values change
+# naturally with bar duration instead of with a lookup table. That module says
+# so at its own constants: "Don't adapt these per timeframe".
+#
+# `IndicatorPeriods` and `_IndicatorBundle` above are NOT dead — the live path
+# builds both from the FIXED_* constants further down this file.
 
 
 def _compute_kpis(bars: list[OhlcvDaily]) -> StockKpis:
