@@ -28,7 +28,8 @@ METHOD
     only use a recent window anyway).
   • Forward return = close-to-close from the OBS bar (the detection date — when
     you'd act) over the detector's horizon, market-neutral (minus the universe
-    mean that date). Directional: bull→+excess, bear→−excess.
+    MEDIAN that date — the mean is right-skew-biased and not tone-symmetric).
+    Directional: bull→+excess, bear→−excess.
   • No look-ahead: the window ends at the obs bar; the forward return is the
     only thing that looks past it.
 

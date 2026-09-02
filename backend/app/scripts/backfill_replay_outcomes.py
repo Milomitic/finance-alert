@@ -18,7 +18,7 @@ this script walks can be persisted directly and the artifact retired.
 
 METHOD (mirrors app.scripts.signal_detector_outcomes — same replay machinery)
 ══════════════════════════════════════════════════════════════════════════════
-  • Reuses `_load_universe` / `_universe_mean_fwd` (signal_factor_outcomes)
+  • Reuses `_load_universe` / `_universe_median_fwd` (signal_factor_outcomes)
     and `_detector_horizon` (signal_detector_outcomes) — no re-implementation
     of the detector iteration beyond the windowed observation loop itself.
   • For each stock and each observation bar (every `--step` bars), the real
@@ -26,7 +26,7 @@ METHOD (mirrors app.scripts.signal_detector_outcomes — same replay machinery)
     obs bar; matches outside `--detectors` are discarded.
   • Outcome labels replicate `signal_outcome_service.mature_outcomes`:
     close-to-close forward return at the detector's natural horizon,
-    absolute directional hit, market-neutral hit vs the universe mean forward
+    absolute directional hit, market-neutral hit vs the universe median forward
     return on the same date, and the causal regime (close vs EMA200) at the
     trigger bar.
   • No look-ahead is structural: the detect window ends at the obs bar and an
@@ -60,7 +60,7 @@ import numpy as np
 from loguru import logger
 
 from app.scripts.signal_detector_outcomes import _detector_horizon
-from app.scripts.signal_factor_outcomes import _load_universe, _universe_mean_fwd
+from app.scripts.signal_factor_outcomes import _load_universe, _universe_median_fwd
 from app.services.detector_performance_service import (
     _REGIME_ORDER,
     _STRENGTH_ORDER,
@@ -91,7 +91,7 @@ class _ReplayObs:
     strength: int | None
     regime: str | None        # "bull" | "bear" | None (EMA not computable)
     abs_hit: int              # 1/0 — close moved the signalled way
-    mkt_hit: int | None       # 1/0 vs universe mean; None when no benchmark
+    mkt_hit: int | None       # 1/0 vs universe median; None when no benchmark
     fwd_return: float         # close-to-close ratio over the horizon
     obs_date: str             # ISO date of the observation bar
 
@@ -147,8 +147,12 @@ def compute_replay_summary(
     obs: list[_ReplayObs] = []
     n_calls = 0
     if universe:
-        umean = _universe_mean_fwd(universe)
-        date_to_idx = umean["_date_to_idx"]
+        # Median, not mean: cross-sectional forward returns are right-skewed,
+        # so the mean is not a tone-symmetric baseline (a zero-skill bull signal
+        # beats it only 48.4% of the time at h=21, 47.1% at h=63). CLAUDE.md
+        # conditional-screen invariant #3.
+        ubench = _universe_median_fwd(universe)
+        date_to_idx = ubench["_date_to_idx"]
         for sidx, s in enumerate(universe):
             c = s.closes
             n = len(c)
@@ -176,15 +180,16 @@ def compute_replay_summary(
                     fwd = float(c[i + h] / c[i] - 1.0)
                     abs_hit = 1 if ((m.tone == "bull" and fwd > 0)
                                     or (m.tone == "bear" and fwd < 0)) else 0
-                    # Market-neutral label vs the universe mean fwd return on
+                    # Market-neutral label vs the universe MEDIAN fwd return on
                     # the same date; None when the benchmark is missing (same
-                    # nullable convention as the warehouse).
+                    # nullable convention as the warehouse, which also uses the
+                    # median — see signal_outcome_service._universe_fwd_medians).
                     mkt_hit = None
                     di = date_to_idx.get(s.dates[i])
-                    mh = umean.get(h)
-                    mean = mh[di] if (mh is not None and di is not None) else np.nan
-                    if np.isfinite(mean):
-                        excess = fwd - float(mean)
+                    mh = ubench.get(h)
+                    bench = mh[di] if (mh is not None and di is not None) else np.nan
+                    if np.isfinite(bench):
+                        excess = fwd - float(bench)
                         dir_excess = excess if m.tone == "bull" else -excess
                         mkt_hit = 1 if dir_excess > 0 else 0
                     regime = None

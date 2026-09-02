@@ -459,7 +459,7 @@ def run(*, min_bars: int, sample: int | None, n_buckets: int) -> None:
         if not universe:
             print("No eligible stocks.")
             return
-        logger.info("[factor-outcomes] computing universe mean forward returns ...")
+        logger.info("[factor-outcomes] computing universe median forward returns ...")
         # Median, not mean: cross-sectional forward returns are right-skewed,
         # so the mean is not a tone-symmetric baseline (measured: a zero-skill
         # bull signal beats it only 48.4% of the time at h=21, 47.1% at h=63).

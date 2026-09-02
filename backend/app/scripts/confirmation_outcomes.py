@@ -49,8 +49,12 @@ def run(*, sample: int, step: int, window: int, min_bars: int) -> None:
         if not universe:
             print("No eligible stocks.")
             return
-        umean = _universe_mean_fwd(universe)
-        date_to_idx = umean["_date_to_idx"]
+        # ONLY for the shared date->index calendar. This script computes no
+        # market-neutral label, so it needs no benchmark — and must not grow
+        # one from `_universe_mean_fwd`'s VALUES, which are right-skew-biased
+        # (use `_universe_median_fwd` if a benchmark is ever added here).
+        _cal = _universe_mean_fwd(universe)
+        date_to_idx = _cal["_date_to_idx"]
 
         # rows: (bucket, abs_hit, tbs_or_None); also per-detector.
         overall: list[tuple[int, float, float | None]] = []
