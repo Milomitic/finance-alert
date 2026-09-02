@@ -122,14 +122,39 @@ describe("SetupsPage", () => {
     expect(screen.queryByText("0%")).not.toBeInTheDocument();
   });
 
-  it("renders a real conversion rate once setups have resolved", async () => {
+  it("shows a small resolved sample as a fraction, not as a percentage", async () => {
+    /* This test used to assert "75%" on 3-of-4, which enshrined the defect:
+     * a percentage in 2xl bold claims a rate, and four observations cannot
+     * carry one. The live page was showing "100%" on six. The fraction says
+     * exactly as much and claims nothing. */
     renderWith({
       setups: [setup],
       stats: { active: 1, converted: 3, expired: 1, conversion_rate: 0.75, avg_lead_days: 2.5 },
     });
-    expect(await screen.findByText("75%")).toBeInTheDocument();
+    expect(await screen.findByText("3/4")).toBeInTheDocument();
+    expect(screen.queryByText("75%")).not.toBeInTheDocument();
+    expect(screen.getByText(/troppo pochi per un tasso/i)).toBeInTheDocument();
     expect(screen.getByText("2.5g")).toBeInTheDocument();
-    expect(screen.getByText(/3 su 4/)).toBeInTheDocument();
+  });
+
+  it("a perfect small record does not get to say 100%", async () => {
+    // The observed live case: six converted, none expired.
+    renderWith({
+      setups: [setup],
+      stats: { active: 4, converted: 6, expired: 0, conversion_rate: 1, avg_lead_days: 3 },
+    });
+    expect(await screen.findByText("6/6")).toBeInTheDocument();
+    expect(screen.queryByText("100%")).not.toBeInTheDocument();
+  });
+
+  it("renders a real conversion rate once the sample can carry one", async () => {
+    renderWith({
+      setups: [setup],
+      stats: { active: 1, converted: 18, expired: 6, conversion_rate: 0.75, avg_lead_days: 2.5 },
+    });
+    expect(await screen.findByText("75%")).toBeInTheDocument();
+    expect(screen.getByText(/18 su 24/)).toBeInTheDocument();
+    expect(screen.queryByText(/troppo pochi/i)).not.toBeInTheDocument();
   });
 
   it("explains the empty state instead of looking broken", async () => {

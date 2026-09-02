@@ -30,15 +30,41 @@ import { cn } from "@/lib/utils";
 /** The feature's own report card. Shown up front on purpose: setups make no
  *  market claim, so the only honest thing to advertise is whether they do
  *  what they say — convert, and with how much warning. */
+/** Below this many RESOLVED setups the conversion rate is shown as a raw
+ *  fraction rather than a percentage — see the tile comment. */
+const MIN_RATE_N = 20;
+
 function StatsStrip({ stats }: { stats: ReturnType<typeof useSetups>["data"] extends undefined ? never : NonNullable<ReturnType<typeof useSetups>["data"]>["stats"] }) {
+  const resolved = stats.converted + stats.expired;
   const tiles = [
     { label: "In formazione", value: String(stats.active) },
     {
       label: "Tasso conversione",
-      // null means "nothing has resolved yet" — rendering it as 0% would
-      // read as "setups never work", which is a different claim entirely.
-      value: stats.conversion_rate === null ? "—" : `${Math.round(stats.conversion_rate * 100)}%`,
-      hint: stats.conversion_rate === null ? "nessuno ancora risolto" : `${stats.converted} su ${stats.converted + stats.expired}`,
+      // Three states, not two.
+      //
+      // null means "nothing has resolved yet" — rendering it as 0% would read
+      // as "setups never work", which is a different claim entirely.
+      //
+      // A resolved count below MIN_RATE_N gets the raw FRACTION as the
+      // headline instead of a percentage. Same information, minus a claim the
+      // sample cannot carry: at 6-out-of-6 the Wilson 95% lower bound is ~61%,
+      // so "100%" in 2xl bold is compatible with a true rate near a coin flip.
+      // The threshold is where a perfect record's lower bound first clears
+      // ~84%, i.e. where the point estimate starts informing more than it
+      // misleads. This is the same rule the page's docstring states and the
+      // same one that stops `expire_stale_setups` from deleting expiries.
+      value:
+        stats.conversion_rate === null
+          ? "—"
+          : resolved < MIN_RATE_N
+            ? `${stats.converted}/${resolved}`
+            : `${Math.round(stats.conversion_rate * 100)}%`,
+      hint:
+        stats.conversion_rate === null
+          ? "nessuno ancora risolto"
+          : resolved < MIN_RATE_N
+            ? `troppo pochi per un tasso (servono ${MIN_RATE_N})`
+            : `${stats.converted} su ${resolved}`,
     },
     {
       label: "Anticipo medio",
