@@ -880,6 +880,29 @@ h=63, crediting every bear-tone one the same. The live warehouse
 `regime_conditioned_outcomes` had implemented the median and documented why,
 then defaulted to `--benchmark mean`; the default is flipped.
 
+**REGENERATED 2026-09-02** — `signal_calibration.json` is now median-based
+(`2026-09-02-977u-median`, 977 stocks, 249,345 signals). `base_rate` is
+byte-identical for all 14 detectors, confirming Probabilità never depended on
+the benchmark. Three of fourteen honesty tags changed, in both directions:
+
+    high52_momentum   bull   45.7 -> 50.9   negative -> coinflip
+    trend_pullback    bull   49.5 -> 50.2   negative -> coinflip
+    structure_break   bear   50.2 -> 47.7   coinflip -> negative
+
+The two big movers are the two most one-sided detectors by tone, each moving
+the way a right-skewed benchmark predicts. The external check: an independent
+study already on the median (`conditional_screen_shorthz`) had high52_momentum
+at 50.5; the new value is 50.9, the old was 45.7.
+
+Artifacts now carry `"benchmark": "universe_median"`. **One with no
+`benchmark` key predates this and was built on the mean.** `--map-version`
+used to default to `"1"` and silently overwrote the informative July string;
+it now stamps `<date>-<N>u-median` on its own.
+
+⚠️ **Budget 7-8 HOURS for a full re-run** (`--sample 999 --emit-map` took
+7h27m wall-clock, single-core-bound). Scaling linearly from a small `--sample`
+underestimates by ~4x — measured, after a 12-stock run predicted 1h50.
+
 `_universe_mean_fwd` still exists ONLY because `confirmation_outcomes` and
 `fit_signal_calibration` import it for its `_date_to_idx` calendar map and
 compute no market-neutral label at all. In those two the variable is named
