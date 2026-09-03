@@ -447,6 +447,50 @@ Truncating invents nothing, and a ticker left under 200 bars simply fails
 `has_full_data` — which already keeps it out of EMA200 signals and breadth —
 then self-heals as real bars accrue.
 
+### Run the scan against PROD, not the dev DB (2026-09-03)
+
+The local `backend/data/app.db` showed exactly ONE break (SOXS). Production had
+**seven, across six tickers**. The dev copy is not a sample of production — it
+is a different, staler dataset. Always run the read-only pass in the pod:
+
+    kubectl exec -n finance-alert finance-alert-finance-alert-0 --         python -m app.scripts.repair_price_basis
+
+Triage that worked, and it is mechanical: download each ticker fresh and re-run
+the detector on the DOWNLOAD. Fresh clean -> `--apply`. Fresh reproduces the
+break -> `--truncate`, or leave it. Result on 2026-09-03:
+
+    DD      fresh clean (declares a 1:3 on 2026-06-24)  -> --apply,    2512 bars
+    FCIT.L  fresh clean (declares a 4:1 on 2026-05-11)  -> --apply,    2525 bars
+    ARWR    fresh reproduces, no declared split          -> --truncate,  -129
+    KDP     fresh reproduces, no declared split          -> --truncate,  -548
+    SOXS    fresh reproduces, no declared split          -> --truncate, -2444
+
+Six down to two. Always back the rows up first — `\copy (...) TO STDOUT` piped
+to a local file; the pg pod's filesystem is read-only, so a server-side path
+fails.
+
+### Two breaks that REVERSE within days are bad data, not a split (INDV)
+
+INDV shows x0.159 on 2022-11-23 and x6.719 on 2022-11-28 — down ~6x, back up
+~6x, three sessions apart, and `volume_ratio` is null on both. No corporate
+action does that. It is a handful of corrupt bars, and **neither repair mode
+fits**: `--truncate` at the first break would delete 1,635 rows (6 years) for a
+three-day glitch, and `--apply` reproduces it. Left alone deliberately.
+
+**The discriminator to remember:** a real split is a ONE-WAY basis change. A
+pair of opposite breaks close together is a data defect in the window between
+them, and wants a bar-level repair that does not exist yet.
+
+### EYPT: deferred on purpose, re-check it
+
+EYPT breaks at 2026-08-17 (x0.330, volume x20.8) — the shape of a 3:1 forward
+split, but yfinance declares none, and truncating would leave **13 bars** of
+2,514. The break is recent, and Yahoo does sometimes apply a split adjustment
+to history days or weeks late. Destroying ten years for something the source
+may fix on its own is the wrong trade, so it waits. Re-run the read-only pass
+periodically: if the fresh download goes clean, `--apply` restores it properly;
+if the break is still there in a month or two, truncate then.
+
 ## Catalog ticker rows — duplicates RESOLVED (2026-05)
 
 **Historical note:** 59 tickers (AAPL, AMZN, UCG.MI, etc.) used to have **two
