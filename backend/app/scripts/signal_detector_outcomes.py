@@ -46,6 +46,7 @@ USAGE
 from __future__ import annotations
 
 import argparse
+import datetime as _dt
 from collections import defaultdict
 
 import numpy as np
@@ -144,7 +145,7 @@ def _trade_playbook_hit(
 
 
 def run(*, sample: int, step: int, window: int, min_bars: int,
-        emit_map: bool = False, map_version: str = "1") -> None:
+        emit_map: bool = False, map_version: str | None = None) -> None:
     from app.core.db import SessionLocal
 
     db = SessionLocal()
@@ -283,7 +284,14 @@ def run(*, sample: int, step: int, window: int, min_bars: int,
             from pathlib import Path
 
             payload = {
-                "version": map_version,
+                "version": map_version or (
+                    f"{_dt.date.today().isoformat()}-{len(universe)}u-median"
+                ),
+                # Which market-neutral baseline the mnHit/mnEdge figures below
+                # were computed against. Artifacts written before 2026-09-02
+                # carry no such key and were built on the universe MEAN, which
+                # is right-skew-biased and not tone-symmetric (CLAUDE.md).
+                "benchmark": "universe_median",
                 "generated_by": "app.scripts.signal_detector_outcomes",
                 # base_rate per detector = round(absHit), the close-to-close
                 # directional hit-rate. The C2 candidate (trade-playbook
@@ -318,7 +326,12 @@ if __name__ == "__main__":
     ap.add_argument("--min-bars", type=int, default=1000)
     ap.add_argument("--emit-map", action="store_true",
                     help="write app/data/signal_calibration.json from the base rates")
-    ap.add_argument("--map-version", type=str, default="1")
+    # Default None -> stamped at emit time as "<date>-<N>u-median".
+    # It used to default to "1": the July run passed an explicit
+    # "2026-07-04-999u" and the next run silently wrote "1", losing when
+    # and on what the artifact was built. That matters more now that two
+    # generations exist with DIFFERENT benchmark semantics.
+    ap.add_argument("--map-version", type=str, default=None)
     args = ap.parse_args()
     run(sample=args.sample, step=args.step, window=args.window, min_bars=args.min_bars,
         emit_map=args.emit_map, map_version=args.map_version)
