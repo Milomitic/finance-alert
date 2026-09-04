@@ -77,7 +77,7 @@ function HolderHeader() {
     <li
       className={cn(
         HOLDER_GRID,
-        "pb-1 text-[10px] uppercase tracking-wider text-muted-foreground/70 font-semibold",
+        "pb-1 text-[0.5882rem] uppercase tracking-wider text-muted-foreground/70 font-semibold",
       )}
     >
       <span className="truncate">Fondo</span>
@@ -110,16 +110,16 @@ function HolderRow({ h }: { h: TickerHolder }) {
       >
         {displayName}
       </Link>
-      <span className={cn("text-[12px] truncate", a.tone)} title={a.label}>
+      <span className={cn("text-[0.7059rem] truncate", a.tone)} title={a.label}>
         {a.label}
       </span>
-      <span className="text-[12px] text-muted-foreground tabular-nums text-right">
+      <span className="text-[0.7059rem] text-muted-foreground tabular-nums text-right">
         {fmtPct(h.portfolio_pct)}
       </span>
-      <span className="text-[12px] text-muted-foreground tabular-nums text-right">
+      <span className="text-[0.7059rem] text-muted-foreground tabular-nums text-right">
         {fmtBig(h.value_usd)}
       </span>
-      <span className="text-[12px] text-muted-foreground tabular-nums text-right">
+      <span className="text-[0.7059rem] text-muted-foreground tabular-nums text-right">
         {shortDate(h.period_end_date)}
       </span>
     </li>
@@ -153,11 +153,29 @@ export function InstitutionalHoldersCard({ ticker }: Props) {
   const historical = q.data?.historical ?? [];
   const visible = holders.slice(0, 10);
 
-  // Infographic data: current holders first (real action chip), then
-  // funds that used to hold it. Historical rows are forced to the
-  // "sold_out" chip → red "Uscito" — relative to *now* they are not
-  // current holders, which is exactly the signal the user wants the
-  // dual-encoded bars to carry alongside live positions.
+  /* The positions panel, and why it is NOT the table above repeated.
+   *
+   * The table lists the latest TRANSACTIONS: one row per fund, labelled with
+   * the 13F verb (Add / Reduce / Nuovo). This panel answers a different
+   * question — who HOLDS this stock and how much of their book it is — so it
+   * must not carry the same verbs. `value_usd` and `portfolio_pct` are the
+   * fund's TOTAL position in its latest filing, not the size of the change:
+   * an "Add" adds to whatever the fund already held, or equals the position
+   * when it is the first. Labelling a total-position bar "ADD" answered a
+   * question nobody asked of it. The movement now shows as a signed delta.
+   *
+   * One row per institution. A fund can appear in both lists (a stale current
+   * row plus a newer historical one); the CURRENT row wins, because the panel
+   * describes what is held now.
+   *
+   * Historical funds are `exited` → struck through with a dashed, hollow bar,
+   * and AllocationBars keeps them in their own block so the `max` cut can
+   * never drop them silently. Before this they were sorted in with live
+   * positions by weight, so on any stock whose top ten holders were all
+   * current the panel rendered exactly the ten rows above it — which is the
+   * bug that made "incl. storiche" a promise the panel did not keep.
+   */
+  const seen = new Set<number>();
   const allocItems = [
     ...holders.map((h) => ({
       key: `cur-${h.institutional_id}-${h.period_end_date}`,
@@ -165,7 +183,9 @@ export function InstitutionalHoldersCard({ ticker }: Props) {
       href: `/institutionals/${h.institutional_slug}`,
       valueUsd: h.value_usd,
       pct: h.portfolio_pct,
-      action: h.action,
+      deltaPct: h.qoq_change_pct ?? null,
+      exited: false,
+      id: h.institutional_id,
     })),
     ...historical.map((h) => ({
       key: `hist-${h.institutional_id}-${h.period_end_date}`,
@@ -173,9 +193,11 @@ export function InstitutionalHoldersCard({ ticker }: Props) {
       href: `/institutionals/${h.institutional_slug}`,
       valueUsd: h.value_usd,
       pct: h.portfolio_pct,
-      action: "sold_out" as const,
+      deltaPct: null,
+      exited: true,
+      id: h.institutional_id,
     })),
-  ];
+  ].filter((i) => (seen.has(i.id) ? false : (seen.add(i.id), true)));
 
   return (
     <Card>
@@ -216,8 +238,8 @@ export function InstitutionalHoldersCard({ ticker }: Props) {
                 position is the largest. */}
             <div className="mt-3 border-t border-border/40 pt-3">
               <AllocationBars
-                title="Quote per istituzione (incl. storiche)"
-                max={10}
+                title="Posizioni per istituzione (incl. uscite)"
+                max={14}
                 metric="weight"
                 items={allocItems}
               />

@@ -41,6 +41,13 @@ export interface AllocItem {
   pct: number | null;
   /** Optional 13F action chip (new/add/reduce/sold_out/hold). */
   action?: string | null;
+  /** The fund no longer holds the position. Rendered struck-through with a
+   *  dashed bar: a closed position must not read like a live one. */
+  exited?: boolean;
+  /** Quarter-on-quarter change in the fund's portfolio weight, in percentage
+   *  POINTS. Shown instead of the action verb — see the note on the action
+   *  column in the render body. */
+  deltaPct?: number | null;
 }
 
 function fmtBig(v: number | null | undefined): string {
@@ -58,6 +65,14 @@ function fmtPct(v: number | null | undefined): string {
   return v == null ? "—" : `${v.toFixed(1)}%`;
 }
 
+/** Quarter-on-quarter move in the fund's weight, in percentage points.
+ *  Signed, because the sign IS the information. */
+function fmtDelta(v: number | null | undefined): string {
+  if (v == null || !Number.isFinite(v)) return "";
+  if (Math.abs(v) < 0.05) return "=";
+  return `${v > 0 ? "+" : "−"}${Math.abs(v).toFixed(1)}pp`;
+}
+
 /** Conviction buckets by portfolio weight. Literal classes only. */
 function weightTone(pct: number | null): { bar: string; dot: string } {
   if (pct == null) return { bar: "bg-slate-300 dark:bg-slate-700", dot: "bg-slate-400" };
@@ -67,17 +82,11 @@ function weightTone(pct: number | null): { bar: string; dot: string } {
   return { bar: "bg-slate-400 dark:bg-slate-600", dot: "bg-slate-400" };
 }
 
-const _ACTION_TONE: Record<string, string> = {
-  new: "text-emerald-700 dark:text-emerald-300",
-  add: "text-emerald-700 dark:text-emerald-300",
-  reduce: "text-amber-700 dark:text-amber-300",
-  sold_out: "text-red-700 dark:text-red-300",
-  hold: "text-muted-foreground",
-};
-const _ACTION_LABEL: Record<string, string> = {
-  new: "Nuovo", add: "Add", reduce: "Reduce",
-  sold_out: "Uscito", hold: "Hold",
-};
+// `_ACTION_TONE` lived here with a colour per 13F verb. The verbs are gone
+// from this component: the rows show a POSITION, and the movement column is
+// coloured by the sign of the weight delta instead. Only the closed-position
+// word survives.
+const _ACTION_LABEL = { sold_out: "Uscito" } as const;
 
 type Metric = "weight" | "value";
 
@@ -107,10 +116,27 @@ export function AllocationBars({
   const barOf = (i: AllocItem): number =>
     metric === "weight" ? i.pct ?? 0 : i.valueUsd ?? 0;
 
-  const sorted = [...items]
-    .filter((i) => (i.valueUsd ?? 0) > 0 || i.pct != null)
-    .sort((a, b) => barOf(b) - barOf(a))
-    .slice(0, max);
+  // Live positions first, then closed ones, each block sorted by bar metric.
+  //
+  // Closed positions get RESERVED SLOTS rather than merely being placed last.
+  // Ordering alone is not enough: with ten live holders and max=10 the cut
+  // still lands exactly on the exited rows, which is how a panel titled
+  // "incl. storiche" came to render precisely the ten rows of the
+  // transactions table above it. A panel that promises to include something
+  // has to spend capacity on it.
+  const usable = [...items].filter(
+    (i) => (i.valueUsd ?? 0) > 0 || i.pct != null,
+  );
+  const byBar = (a: AllocItem, b: AllocItem) => barOf(b) - barOf(a);
+  const live = usable.filter((i) => !i.exited).sort(byBar);
+  const closed = usable.filter((i) => i.exited).sort(byBar);
+  // Never starve the live list: at most a third of the panel goes to closed
+  // positions, and only as many slots as there are closed rows to fill them.
+  const closedSlots = Math.min(closed.length, Math.max(1, Math.floor(max / 3)));
+  const sorted = [
+    ...live.slice(0, Math.max(1, max - closedSlots)),
+    ...closed.slice(0, closedSlots),
+  ].slice(0, max);
   const maxBar = Math.max(
     metric === "weight" ? 0.0001 : 1,
     ...sorted.map((i) => barOf(i)),
@@ -134,10 +160,10 @@ export function AllocationBars({
   return (
     <div className="min-w-0">
       <div className="mb-2.5 flex items-baseline justify-between gap-2">
-        <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+        <span className="text-[0.6471rem] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
           {title}
         </span>
-        <span className="text-[10px] text-muted-foreground/80">{caption}</span>
+        <span className="text-[0.5882rem] text-muted-foreground/80">{caption}</span>
       </div>
       {sorted.length === 0 ? (
         <div className="py-3 text-center text-xs text-muted-foreground">
@@ -149,21 +175,26 @@ export function AllocationBars({
             const tone = weightTone(it.pct);
             // min 4% so a tiny-but-present position stays visible.
             const w = Math.max(4, Math.round((barOf(it) / maxBar) * 100));
+            // Literal class strings, never composed — the Tailwind purger
+            // only sees literals (CLAUDE.md).
+            const nameCls = it.exited
+              ? "truncate text-sm font-semibold line-through decoration-1 text-muted-foreground"
+              : "truncate text-sm font-semibold";
             const nameEl = it.href ? (
               <Link
                 to={it.href}
-                className="truncate text-sm font-semibold hover:underline"
-                title={it.label}
+                className={cn(nameCls, "hover:underline")}
+                title={it.exited ? `${it.label} — posizione chiusa` : it.label}
               >
                 {it.label}
               </Link>
             ) : (
-              <span className="truncate text-sm font-semibold" title={it.label}>
+              <span className={nameCls} title={it.label}>
                 {it.label}
               </span>
             );
             return (
-              <li key={it.key} className={cn(ROW, "text-[12px] leading-tight")}>
+              <li key={it.key} className={cn(ROW, "text-[0.7059rem] leading-tight")}>
                 {/* Col 1: dot + name */}
                 <span className="flex min-w-0 items-center gap-1.5">
                   <span
@@ -171,27 +202,69 @@ export function AllocationBars({
                   />
                   {nameEl}
                 </span>
-                {/* Col 2: action chip — own column, so labels align */}
+                {/* Col 2: how the POSITION moved, not what the transaction was.
+                    This used to print the raw 13F verb (ADD / REDUCE / NUOVO),
+                    which mislabels the row: the bar and the numbers beside it
+                    are the fund's TOTAL position in its latest filing, while
+                    "add" describes only the change that produced it. An ADD
+                    adds to whatever the fund already held — or equals the
+                    position when it is the first — so the verb answered a
+                    different question from the one the bar asks.
+
+                    A closed position keeps a word ("Uscito"), because zero is
+                    not a movement. Everything else shows the quarter-on-quarter
+                    move in portfolio weight, signed, in percentage points. */}
                 <span
                   className={cn(
-                    "truncate text-[10px] uppercase tracking-wider",
-                    it.action && _ACTION_TONE[it.action]
-                      ? _ACTION_TONE[it.action]
-                      : "text-muted-foreground",
+                    "truncate text-[0.5882rem] uppercase tracking-wider tabular-nums",
+                    it.exited
+                      ? "text-red-700 dark:text-red-300"
+                      : (it.deltaPct ?? 0) > 0
+                        ? "text-emerald-700 dark:text-emerald-300"
+                        : (it.deltaPct ?? 0) < 0
+                          ? "text-amber-700 dark:text-amber-300"
+                          : "text-muted-foreground",
+                  )}
+                  title={
+                    it.exited
+                      ? "Il fondo non detiene piu la posizione"
+                      : "Variazione del peso in portafoglio rispetto al trimestre precedente"
+                  }
+                >
+                  {it.exited ? _ACTION_LABEL.sold_out : fmtDelta(it.deltaPct)}
+                </span>
+                {/* Col 3: bar (fixed-width track → narrower + aligned).
+                    A closed position gets a hollow, dashed track: it reads as
+                    an outline of a position that is no longer there, which no
+                    amount of colour on a solid bar can convey. */}
+                {it.exited ? (
+                  <span className="h-2 w-full rounded-full border border-dashed border-muted-foreground/50">
+                    <span
+                      className="block h-full rounded-full bg-muted-foreground/20"
+                      style={{ width: `${w}%` }}
+                    />
+                  </span>
+                ) : (
+                  <span className="h-2 w-full overflow-hidden rounded-full bg-muted/60">
+                    <span
+                      className={cn("block h-full rounded-full", tone.bar)}
+                      style={{ width: `${w}%` }}
+                    />
+                  </span>
+                )}
+                {/* Col 4: weight% · $value, right-aligned */}
+                <span
+                  className={cn(
+                    "shrink-0 whitespace-nowrap tabular-nums text-muted-foreground",
+                    it.exited && "line-through decoration-1",
                   )}
                 >
-                  {it.action ? _ACTION_LABEL[it.action] ?? "" : ""}
-                </span>
-                {/* Col 3: bar (fixed-width track → narrower + aligned) */}
-                <span className="h-2 w-full overflow-hidden rounded-full bg-muted/60">
                   <span
-                    className={cn("block h-full rounded-full", tone.bar)}
-                    style={{ width: `${w}%` }}
-                  />
-                </span>
-                {/* Col 4: weight% · $value, right-aligned */}
-                <span className="shrink-0 whitespace-nowrap tabular-nums text-muted-foreground">
-                  <span className="font-medium text-foreground">
+                    className={cn(
+                      "font-medium",
+                      it.exited ? "text-muted-foreground" : "text-foreground",
+                    )}
+                  >
                     {fmtPct(it.pct)}
                   </span>{" "}
                   · {fmtBig(it.valueUsd)}
