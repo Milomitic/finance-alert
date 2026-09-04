@@ -71,6 +71,7 @@ class EarningsEvent:
     #   eps_reported = the actual EPS reported
     #   surprise_pct = (reported - estimate) / |estimate| * 100
     eps_reported: float | None = None
+    revenue_reported: float | None = None
     surprise_pct: float | None = None
 
 
@@ -218,6 +219,7 @@ def _earnings_for_stock(
         time_utc: str | None,
         eps_reported: float | None = None,
         surprise_pct: float | None = None,
+        revenue_reported: float | None = None,
     ) -> EarningsEvent:
         return EarningsEvent(
             date=d,
@@ -226,6 +228,7 @@ def _earnings_for_stock(
             name=stock.name,
             eps_estimate=eps_est,
             revenue_estimate=rev_est,
+            revenue_reported=revenue_reported,
             sector=stock.sector,
             market_cap=stock.market_cap,
             forward_pe=forward_pe,
@@ -267,6 +270,9 @@ def _earnings_for_stock(
             getattr(ep, "time_utc", None),
             eps_reported=getattr(ep, "eps_reported", None),
             surprise_pct=getattr(ep, "surprise_pct", None),
+            # Il ricavo REALE viveva gia' sugli stessi record da cui questa
+            # riga legge la stima; semplicemente non arrivava al calendario.
+            revenue_reported=getattr(ep, "revenue_reported", None),
         ))
         seen.add(d)
 

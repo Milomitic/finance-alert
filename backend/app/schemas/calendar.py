@@ -19,6 +19,7 @@ class EarningsEventOut(BaseModel):
     name: str
     eps_estimate: float | None = None
     revenue_estimate: float | None = None
+    revenue_reported: float | None = None
     sector: str | None = None
     market_cap: int | None = None
     # Extras used by the right-pane stock list. Optional so older clients /

@@ -7,6 +7,7 @@ import {
   buildWeekDays,
   earningsBeatTone,
   formatEps,
+  formatRevenueEstimate,
   isSameISODay,
   regionFlag,
   regionFlagAsset,
@@ -170,41 +171,84 @@ function WeekEarningsRow({ event }: { event: EarningsEvent }) {
           : "border-border/70",
       )}
     >
-      <div className="flex items-center gap-1.5 min-w-0">
-        <StockLogo ticker={event.ticker} size="xs" />
+      {/* Griglia: logo | ticker+orario | EPS e Ricavi impilati | sorpresa.
+          Prima EPS stava SOTTO in una riga a parte e i ricavi non c'erano
+          affatto: la vista settimana ha larghezza da vendere e la sprecava in
+          altezza. Le due metriche stanno ora a destra del ticker, una sotto
+          l'altra, reale contro stima. */}
+      <div className="flex items-center gap-2 min-w-0">
+        {/* Il cerchio del logo si colora come nella vista mese: verde se ha
+            battuto le stime, rosso se le ha deluse, neutro se non ha ancora
+            pubblicato. Prima il colore stava solo sul bordo della riga e sul
+            testo — il tondo restava identico in tutti e tre i casi. */}
         <span
           className={cn(
-            "text-[0.7647rem] font-bold tabular-nums leading-none truncate",
-            resultColor,
+            "shrink-0 rounded-full p-[2px] ring-2",
+            reported
+              ? beat
+                ? "ring-emerald-500/70 bg-emerald-500/10"
+                : "ring-rose-500/70 bg-rose-500/10"
+              : "ring-border/60",
           )}
         >
-          {event.ticker}
+          <StockLogo ticker={event.ticker} size="xs" />
         </span>
-        {event.earnings_when === "pre" && (
-          <span className="text-[0.6765rem] leading-none shrink-0" title="Pre-market">☀</span>
-        )}
-        {event.earnings_when === "after" && (
-          <span className="text-[0.6765rem] leading-none shrink-0 opacity-80" title="After-market">☾</span>
-        )}
+
+        <span className="flex min-w-0 shrink-0 items-center gap-1">
+          <span className={cn("text-[0.8235rem] font-bold tabular-nums leading-none truncate", resultColor)}>
+            {event.ticker}
+          </span>
+          {event.earnings_when === "pre" && (
+            <span className="text-[0.7059rem] leading-none shrink-0" title="Pre-market">☀</span>
+          )}
+          {event.earnings_when === "after" && (
+            <span className="text-[0.7059rem] leading-none shrink-0 opacity-80" title="After-market">☾</span>
+          )}
+        </span>
+
+        {/* EPS sopra, ricavi sotto. Ogni riga: valore reale (colorato) contro
+            stima. Prima della pubblicazione si mostra la sola stima. */}
+        <span className="ml-1 flex min-w-0 flex-col gap-0.5 text-[0.7059rem] tabular-nums leading-tight">
+          <span className="truncate">
+            <span className="text-muted-foreground/70">EPS </span>
+            {reported ? (
+              <>
+                <span className={cn("font-semibold", resultColor)}>{formatEps(event.eps_reported)}</span>
+                <span className="text-muted-foreground/60"> vs {formatEps(event.eps_estimate)}</span>
+              </>
+            ) : (
+              <span className="font-semibold text-foreground/80">stim. {formatEps(event.eps_estimate)}</span>
+            )}
+          </span>
+          <span className="truncate">
+            <span className="text-muted-foreground/70">Ric. </span>
+            {event.revenue_reported != null ? (
+              <>
+                <span className={cn("font-semibold", resultColor)}>
+                  {formatRevenueEstimate(event.revenue_reported)}
+                </span>
+                <span className="text-muted-foreground/60">
+                  {" vs "}{formatRevenueEstimate(event.revenue_estimate)}
+                </span>
+              </>
+            ) : event.revenue_estimate != null ? (
+              <span className="font-semibold text-foreground/80">
+                stim. {formatRevenueEstimate(event.revenue_estimate)}
+              </span>
+            ) : (
+              <span className="text-muted-foreground/50">n/d</span>
+            )}
+          </span>
+        </span>
+
         {reported && (
           <span
-            className={cn("ml-auto shrink-0 text-[0.7059rem] font-bold tabular-nums", resultColor)}
+            className={cn("ml-auto shrink-0 text-[0.7647rem] font-bold tabular-nums", resultColor)}
             title={beat ? "Ha battuto le stime" : "Sotto le stime"}
           >
             {beat ? "▲" : "▼"} {(event.surprise_pct ?? 0) >= 0 ? "+" : ""}
             {(event.surprise_pct ?? 0).toFixed(1)}%
           </span>
-        )}
-      </div>
-      {/* Preview: reported vs estimate (the whole point of the wide view) */}
-      <div className="mt-1 text-[0.7059rem] tabular-nums text-muted-foreground leading-tight">
-        {reported ? (
-          <>
-            EPS <span className={cn("font-semibold", resultColor)}>{formatEps(event.eps_reported)}</span>
-            <span className="opacity-60"> vs stim. {formatEps(event.eps_estimate)}</span>
-          </>
-        ) : (
-          <>Stim. EPS <span className="font-semibold text-foreground/80">{formatEps(event.eps_estimate)}</span></>
         )}
       </div>
     </Link>

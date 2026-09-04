@@ -9,6 +9,7 @@ import { useLiveQuotes } from "@/hooks/useLiveQuote";
 import { HolderCountBadge } from "@/components/stocks/HolderCountBadge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { FlashValue } from "@/components/ui/FlashValue";
 import { ColumnVisibilityMenu } from "@/components/ui/column-visibility-menu";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -471,10 +472,18 @@ export function StockBrowserTable({
                       </div>
                       <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs tabular-nums">
                         <span className={changeColor}>
-                          Δ {change == null ? "—" : `${change >= 0 ? "+" : ""}${change.toFixed(2)}%`}
+                          Δ <FlashValue
+                            value={change}
+                            format={(v) => `${v >= 0 ? "+" : ""}${v.toFixed(2)}%`}
+                            noTween
+                          />
                         </span>
                         <span className="text-muted-foreground">
-                          {fmtClose(rowClose(item), currencyByTicker.get(s.ticker) ?? s.currency ?? undefined)}
+                          <FlashValue
+                            value={rowClose(item)}
+                            format={(v) => fmtClose(v, currencyByTicker.get(s.ticker) ?? s.currency ?? undefined)}
+                            noTween
+                          />
                         </span>
                         {item.metrics?.rsi14 != null && (
                           <span className="text-muted-foreground">
@@ -749,7 +758,11 @@ export function StockBrowserTable({
                               title="Prezzo in tempo quasi reale"
                             />
                           )}
-                            {fmtClose(rowClose(item), currencyByTicker.get(s.ticker) ?? s.currency ?? undefined)}
+                            <FlashValue
+                              value={rowClose(item)}
+                              format={(v) => fmtClose(v, currencyByTicker.get(s.ticker) ?? s.currency ?? undefined)}
+                              noTween
+                            />
                         </span>
                       </td>
                     )}
@@ -758,7 +771,12 @@ export function StockBrowserTable({
                     )}
                     {isVisible("delta_pct") && (
                       <td className={cn("px-3 py-1.5 text-right", changeColor)}>
-                        {change == null ? "—" : `${change >= 0 ? "+" : ""}${change.toFixed(2)}%`}
+                        <FlashValue
+                          value={change}
+                          format={(v) => `${v >= 0 ? "+" : ""}${v.toFixed(2)}%`}
+                          noTween
+                          showArrow
+                        />
                       </td>
                     )}
                     {isVisible("rsi") && (

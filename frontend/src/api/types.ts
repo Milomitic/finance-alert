@@ -1064,6 +1064,8 @@ export interface EarningsEvent {
   name: string;
   eps_estimate: number | null;
   revenue_estimate: number | null;
+  /** Ricavo REALE, presente solo dopo la pubblicazione. */
+  revenue_reported?: number | null;
   sector: string | null;
   market_cap: number | null;
   // Extras used by the right-pane stock list (split-view detail panel).
