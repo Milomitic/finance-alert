@@ -26,6 +26,7 @@ from datetime import date, timedelta
 from loguru import logger
 from sqlalchemy import select
 
+from app.core import app_metrics  # noqa: I001
 from app.core import db as core_db
 from app.models import ScanRun, Stock
 from app.services import yfinance_health
@@ -48,6 +49,20 @@ MAX_PER_RUN = 250
 
 def run_repair_ohlcv_gaps() -> None:
     """Refetch stocks whose newest stored bar trails the universe's newest."""
+    # Basis-break recount rides this daily job because it is the other keeper
+    # of OHLCV integrity, and it runs BEFORE the two early returns below: it
+    # reads the stored series and touches no network, so neither an open
+    # breaker nor a running scan is a reason to skip it. Costs a minute or two
+    # over the whole catalogue — see refresh_basis_breaks_gauge for why it is
+    # not approximated in SQL.
+    try:
+        with core_db.SessionLocal() as _db:
+            n = app_metrics.refresh_basis_breaks_gauge(_db)
+        if n:
+            logger.warning(f"[ohlcv-repair] {n} stocks carry a price-basis break")
+    except Exception as exc:  # noqa: BLE001 — a gauge must never fail the job
+        logger.warning(f"[ohlcv-repair] basis-break recount skipped: {exc}")
+
     if yfinance_health.is_open(yfinance_health.LANE_OHLCV):
         logger.info("[ohlcv-repair] OHLCV breaker OPEN — skipping this pass")
         return

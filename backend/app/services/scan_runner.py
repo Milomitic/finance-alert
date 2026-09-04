@@ -454,6 +454,7 @@ def run_tracked_scan(
         # completes says nothing about whether the data advanced — four
         # symbols were frozen for weeks while every scan reported success.
         app_metrics.refresh_stale_ohlcv_gauge(db)
+        app_metrics.refresh_data_health_gauges(db)
         # Optional per-signal instant Telegram push (best-effort: a Telegram
         # problem must NEVER fail a successful scan). Only the NEW signal
         # alerts of THIS run (id > baseline) are considered; the strength

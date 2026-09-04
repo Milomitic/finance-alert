@@ -69,6 +69,148 @@ STALE_OHLCV_STOCKS = Gauge(
 STALE_OHLCV_WINDOW_DAYS = 7
 
 
+# ── Data-health gauges: what a manual "is everything OK?" pass looks at ──────
+#
+# These exist because checking this app used to mean a dozen ad-hoc queries
+# against unrelated sources — kubectl, psql, the Prometheus API, the log
+# stream — and the answers were only as good as whoever remembered to ask.
+# Every gauge below replaced one of those questions. They feed the
+# "Finance-Alert - Salute" Grafana dashboard.
+#
+# All of them are CHEAP (indexed max()/count() over one table) and refresh on
+# the same hooks as STALE_OHLCV_STOCKS: app start and scan end.
+
+# Days since the newest row of each dataset. `dataset` is the table in
+# question, not a display name. Freshness is the one property that fails
+# silently in this app: the page still renders, the pod stays 1/1 Running, and
+# the number on screen is simply old. The macro calendar sat 60 days stale
+# with FRED_API_KEY unset, and nothing anywhere said so.
+DATA_AGE_DAYS = Gauge(
+    "finance_alert_data_age_days",
+    "Days between today and the most recent row of a dataset.",
+    ["dataset"],
+)
+
+# Setups by status. The interesting one is `expired`: without it only
+# conversions ever resolve and the conversion rate reads 100%, which is what
+# the scheduled scan's expiry pass exists to prevent.
+SETUPS = Gauge(
+    "finance_alert_setups", "Setups by status.", ["status"],
+)
+
+# 1 when a third-party key is configured, 0 when it is not. A missing key
+# degrades a whole feature to a WARNING logged on every scheduler tick and
+# nothing else — see the FRED incident above.
+API_KEY_CONFIGURED = Gauge(
+    "finance_alert_api_key_configured",
+    "1 if the provider API key is set, 0 otherwise.",
+    ["provider"],
+)
+
+CATALOG_STOCKS = Gauge(
+    "finance_alert_catalog_stocks", "Stocks in the catalogue.",
+)
+
+# Tickers whose stored history contains a price-basis discontinuity — an
+# unrepaired split. Set by the DAILY job, not per scan: it runs the real
+# `find_basis_breaks` over every stock's series, which takes a minute or two.
+#
+# It is deliberately NOT approximated in SQL. A pure ratio>=3 query finds 11
+# where the detector finds 2 (it catches the March-2020 COVID crash and real
+# corporate actions); adding the volume discriminator gives 3, still with two
+# false positives, and it LOSES INDV because that ticker's volume is null. A
+# gauge reading 3 when the truth is 2 is the kind of number this codebase
+# keeps removing, so the expensive-but-correct path won.
+BASIS_BREAKS = Gauge(
+    "finance_alert_basis_breaks",
+    "Tickers with a price-basis discontinuity in stored OHLCV.",
+)
+
+
+def refresh_data_health_gauges(db: Session) -> None:
+    """Refresh the cheap data-health gauges. Never raises: a metrics refresh
+    must not be able to fail a scan that already did its real work. Each query
+    is isolated so one broken table does not blank the others."""
+    from sqlalchemy import text
+
+    from app.core.config import settings
+
+    def _try(label: str, fn) -> None:
+        try:
+            fn()
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(f"[metrics] {label} refresh failed: {exc}")
+
+    def _age(dataset: str, sql: str) -> None:
+        d = db.execute(text(sql)).scalar()
+        if d is not None:
+            DATA_AGE_DAYS.labels(dataset=dataset).set(float(d))
+
+    _try("ohlcv age", lambda: _age(
+        "ohlcv_daily", "SELECT CURRENT_DATE - MAX(date) FROM ohlcv_daily"))
+    _try("macro age", lambda: _age(
+        "macro_observations", "SELECT CURRENT_DATE - MAX(date) FROM macro_observations"))
+    _try("alert age", lambda: _age(
+        "alerts", "SELECT CURRENT_DATE - MAX(triggered_at)::date FROM alerts"))
+
+    def _setups() -> None:
+        rows = db.execute(text(
+            "SELECT status, COUNT(*) FROM stock_setups GROUP BY status")).all()
+        for status, n in rows:
+            SETUPS.labels(status=str(status)).set(float(n))
+    _try("setups", _setups)
+
+    _try("catalog", lambda: CATALOG_STOCKS.set(
+        float(db.execute(text("SELECT COUNT(*) FROM stocks")).scalar_one())))
+
+    def _keys() -> None:
+        for provider, value in (
+            ("fred", settings.fred_api_key),
+            ("finnhub", settings.finnhub_api_key),
+            ("marketaux", settings.marketaux_api_key),
+        ):
+            API_KEY_CONFIGURED.labels(provider=provider).set(
+                1.0 if (value or "").strip() else 0.0)
+    _try("api keys", _keys)
+
+
+def refresh_basis_breaks_gauge(db: Session) -> int | None:
+    """Count tickers whose stored OHLCV contains a basis discontinuity.
+
+    Runs the REAL detector over every stock, so it belongs on the daily job,
+    not the per-scan hook. Returns the count, or None on failure — in which
+    case the previous reading stands rather than dropping to a false zero.
+    """
+    from sqlalchemy import text
+
+    from app.services.ohlcv_service import find_basis_breaks
+
+    try:
+        stock_ids = [r[0] for r in db.execute(text("SELECT id FROM stocks")).all()]
+        hits = 0
+        for sid in stock_ids:
+            rows = db.execute(
+                text(
+                    "SELECT date, close, volume FROM ohlcv_daily "
+                    "WHERE stock_id = :s ORDER BY date"
+                ),
+                {"s": sid},
+            ).all()
+            if len(rows) < 2:
+                continue
+            if find_basis_breaks(
+                [r[0] for r in rows],
+                [float(r[1]) for r in rows],
+                [int(r[2] or 0) for r in rows],
+            ):
+                hits += 1
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(f"[metrics] basis-break recount failed: {exc}")
+        return None
+    BASIS_BREAKS.set(float(hits))
+    return hits
+
+
 def refresh_stale_ohlcv_gauge(db: Session) -> int | None:
     """Recount stocks with stale price data. Returns the count, or None if the
     query failed — never raises, and never leaves a stale value silently: on
