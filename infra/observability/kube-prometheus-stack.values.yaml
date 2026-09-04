@@ -166,6 +166,18 @@ grafana:
   #     :443, which IS still allowlisted. Never serve anything but ACME on :80.
   # serve_from_sub_path keeps Grafana under /grafana; Traefik prefers the longer
   # path prefix, so /grafana reaches Grafana and / still reaches the app.
+  # ⚠️ MUST track `serve_from_sub_path` below. Grafana serves EVERYTHING under
+  # root_url, /metrics included, so with the sub-path on it lives at
+  # /grafana/metrics and the chart default (/metrics) returns 404. Prometheus
+  # scraped the default and the kps-grafana target was DOWN — silently, since
+  # the pod is 1/1 Running and Grafana itself works fine; only its own metrics
+  # (dashboard latency, datasource errors, alerting, sessions) were missing.
+  # Found 2026-09-04 via a firing TargetDown; verified /metrics 404 vs
+  # /grafana/metrics 200 from inside the container.
+  serviceMonitor:
+    enabled: true
+    path: /grafana/metrics
+
   "grafana.ini":
     server:
       domain: 80-225-80-141.sslip.io
