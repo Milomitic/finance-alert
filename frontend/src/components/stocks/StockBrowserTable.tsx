@@ -5,6 +5,7 @@ import { Link } from "react-router-dom";
 import type { StockSortBy, SortDir } from "@/api/stocks";
 import type { StockSearchItem } from "@/api/types";
 import { StockLogo } from "@/components/dashboard/StockLogo";
+import { useLiveQuotes } from "@/hooks/useLiveQuote";
 import { HolderCountBadge } from "@/components/stocks/HolderCountBadge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -323,16 +324,52 @@ export function StockBrowserTable({
     return { changeByTicker: ch, closeByTicker: cl, currencyByTicker: cc };
   }, [market.data]);
 
-  // Per-row accessors that prefer the server `metrics` block (EOD, exact),
-  // falling back to the market-summary treemap when absent.
-  const rowChange = (item: StockSearchItem): number | undefined =>
-    item.metrics?.change_pct ?? changeByTicker.get(item.stock.ticker);
-  const rowClose = (item: StockSearchItem): number | undefined =>
-    item.metrics?.last_close ?? closeByTicker.get(item.stock.ticker);
-
   // Sorting is fully server-side now (incl. change_pct via stock_metrics) —
   // render items in the order the API returned them.
   const displayItems = items;
+
+  /* Near-live prices for the rows ON SCREEN, same source the dashboard uses.
+   *
+   * Only the visible page is polled — the screener filters over ~950 names but
+   * renders a page at a time, and quoting the whole universe would be both
+   * pointless and a fast way to get rate-limited. `useLiveQuotes` chunks into
+   * 50s, parallelises, and backs off to 60s once every market in the batch
+   * reports closed. */
+  const visibleTickers = useMemo(
+    () => displayItems.map((i) => i.stock.ticker),
+    [displayItems],
+  );
+  const liveQ = useLiveQuotes(visibleTickers, visibleTickers.length > 0);
+
+  /* A RESTORED quote must never present itself as live.
+   *
+   * live_quote_service falls back to its L2 cache when the live path cannot
+   * answer now — breaker open, deadline blown, cold cache after a restart —
+   * and flags those `market_state="STALE"`. CLAUDE.md is explicit that a
+   * restored price must not read as current, so STALE rows are dropped here
+   * and the row keeps its exact EOD close instead. An hours-old price shown
+   * as today's is worse than yesterday's close shown as yesterday's close. */
+  const liveByTicker = useMemo(() => {
+    const m = new Map<string, { price: number; changePct: number | null }>();
+    for (const q of liveQ.data?.quotes ?? []) {
+      if (q.error || q.market_state === "STALE" || q.price == null) continue;
+      m.set(q.ticker, { price: q.price, changePct: q.change_pct });
+    }
+    return m;
+  }, [liveQ.data]);
+
+  // Per-row accessors: live quote first, then the server `metrics` block (EOD,
+  // exact), then the market-summary treemap.
+  const rowChange = (item: StockSearchItem): number | undefined =>
+    liveByTicker.get(item.stock.ticker)?.changePct ??
+    item.metrics?.change_pct ??
+    changeByTicker.get(item.stock.ticker);
+  const rowClose = (item: StockSearchItem): number | undefined =>
+    liveByTicker.get(item.stock.ticker)?.price ??
+    item.metrics?.last_close ??
+    closeByTicker.get(item.stock.ticker);
+  const isLiveRow = (item: StockSearchItem): boolean =>
+    liveByTicker.has(item.stock.ticker);
 
   // The empty-state used to early-return a different layout, but that
   // hid the Ticker-header search input — making it impossible to
@@ -701,7 +738,19 @@ export function StockBrowserTable({
                     )}
                     {isVisible("prezzo") && (
                       <td className="px-3 py-1.5 text-right font-semibold">
-                        {fmtClose(rowClose(item), currencyByTicker.get(s.ticker) ?? s.currency ?? undefined)}
+                        {/* Punto verde quando il prezzo arriva dal feed live invece che
+                            dalla chiusura: senza, le due cose sono indistinguibili a
+                            schermo, e un prezzo di ieri che sembra di adesso e' peggio
+                            di nessun prezzo live. */}
+                        <span className="inline-flex items-center justify-end gap-1.5">
+                          {isLiveRow(item) && (
+                            <span
+                              className="h-1.5 w-1.5 shrink-0 rounded-full bg-green-500"
+                              title="Prezzo in tempo quasi reale"
+                            />
+                          )}
+                            {fmtClose(rowClose(item), currencyByTicker.get(s.ticker) ?? s.currency ?? undefined)}
+                        </span>
                       </td>
                     )}
                     {isVisible("market_cap") && (
