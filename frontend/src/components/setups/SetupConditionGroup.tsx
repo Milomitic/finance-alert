@@ -97,20 +97,20 @@ function DistanceCell({ value }: { value: number | null }) {
 function GroupHeaderRow() {
   return (
     <li className={cn(COLS, "px-3 py-1 border-b bg-muted/20")}>
-      <span className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">Titolo</span>
-      <span className="hidden sm:block text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+      <span className="text-[0.5882rem] uppercase tracking-[0.14em] text-muted-foreground">Titolo</span>
+      <span className="hidden sm:block text-[0.5882rem] uppercase tracking-[0.14em] text-muted-foreground">
         Livello d'innesco
       </span>
-      <span className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground justify-self-end sm:justify-self-start">
+      <span className="text-[0.5882rem] uppercase tracking-[0.14em] text-muted-foreground justify-self-end sm:justify-self-start">
         Priorità
       </span>
       <span
-        className="hidden sm:block text-[10px] uppercase tracking-[0.14em] text-muted-foreground"
+        className="hidden sm:block text-[0.5882rem] uppercase tracking-[0.14em] text-muted-foreground"
         title="Distanza dal livello d'innesco, in multipli dell'ATR del titolo"
       >
         Distanza
       </span>
-      <span className="hidden sm:block text-[10px] uppercase tracking-[0.14em] text-muted-foreground justify-self-end">
+      <span className="hidden sm:block text-[0.5882rem] uppercase tracking-[0.14em] text-muted-foreground justify-self-end">
         Attesa
       </span>
     </li>

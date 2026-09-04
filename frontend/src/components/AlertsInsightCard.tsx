@@ -36,7 +36,7 @@ function HorizonChips({ horizons }: { horizons: string[] }) {
   return (
     <div className="flex gap-0.5">
       {ordered.map((h) => (
-        <span key={h} className={cn("px-1 rounded text-[10px] font-bold leading-tight", HZ_CHIP[h].cls)} title={HZ_CHIP[h].label}>
+        <span key={h} className={cn("px-1 rounded text-[0.5882rem] font-bold leading-tight", HZ_CHIP[h].cls)} title={HZ_CHIP[h].label}>
           {HZ_CHIP[h].letter}
         </span>
       ))}
@@ -50,7 +50,7 @@ function DirPill({ direction, className }: { direction: string; className?: stri
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide shrink-0",
+        "inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[0.5882rem] font-bold uppercase tracking-wide shrink-0",
         bull
           ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300"
           : "bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300",
@@ -84,7 +84,7 @@ function TopHeader() {
     // there are no columns left for a header to label. Kept visible would
     // have printed "TITONO" — the labels themselves overlapping, which is
     // how this bug announced itself in the first place.
-    <div className="hidden sm:flex items-center gap-2 px-2 pb-1.5 mb-1 border-b border-border/40 text-[10px] uppercase tracking-wider text-muted-foreground/70 font-semibold">
+    <div className="hidden sm:flex items-center gap-2 px-2 pb-1.5 mb-1 border-b border-border/40 text-[0.5882rem] uppercase tracking-wider text-muted-foreground/70 font-semibold">
       <span className="w-4 shrink-0" />
       <span className="flex-1 min-w-0">Titolo</span>
       <span className="w-[4.25rem] shrink-0">Tono</span>
@@ -158,7 +158,7 @@ function TopRow({
               {c.ticker}
             </Link>
             {c.name && (
-              <div className="text-[11px] text-muted-foreground truncate leading-tight" title={c.name}>{c.name}</div>
+              <div className="text-[0.6471rem] text-muted-foreground truncate leading-tight" title={c.name}>{c.name}</div>
             )}
           </div>
         </div>
@@ -187,7 +187,7 @@ function TopRow({
           {maxForza ?? "—"}
         </span>
         {/* Segnali */}
-        <span className="w-8 shrink-0 text-right text-[11px] text-muted-foreground/80 tabular-nums">{c.n_signals}</span>
+        <span className="w-8 shrink-0 text-right text-[0.6471rem] text-muted-foreground/80 tabular-nums">{c.n_signals}</span>
         {/* Forza (bar + value) */}
         <div className="w-[5.25rem] shrink-0 flex items-center justify-end gap-1.5">
           <StrengthBar value={pct} bull={bull} width="w-12" />
@@ -214,7 +214,7 @@ function ExtremeCell({
   if (!c) {
     return (
       <div className="flex items-center gap-2 rounded-lg border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-        <span className="uppercase tracking-wider text-[11px]">{label}</span>
+        <span className="uppercase tracking-wider text-[0.6471rem]">{label}</span>
         <span className="ml-auto">—</span>
       </div>
     );
@@ -234,7 +234,7 @@ function ExtremeCell({
       className="flex items-center gap-2 rounded-lg border bg-muted/30 px-3 py-2 hover:bg-accent/40 transition-colors min-w-0 cursor-pointer"
       title={`${c.ticker} · forza ${Math.round(c.strength)} · ${c.n_signals} segnali — clic per filtrare la tabella`}
     >
-      <span className="uppercase tracking-wider text-[11px] text-muted-foreground shrink-0">{label}</span>
+      <span className="uppercase tracking-wider text-[0.6471rem] text-muted-foreground shrink-0">{label}</span>
       <StockLogo ticker={c.ticker} size="xs" />
       <Link
         to={`/stocks/${encodeURIComponent(c.ticker)}`}
@@ -244,7 +244,7 @@ function ExtremeCell({
       >
         {c.ticker}
       </Link>
-      {c.name && <span className="text-[11px] text-muted-foreground truncate min-w-0">{c.name}</span>}
+      {c.name && <span className="text-[0.6471rem] text-muted-foreground truncate min-w-0">{c.name}</span>}
       <DirPill direction={c.direction} className="ml-auto" />
       <span className={cn("font-bold tabular-nums shrink-0", bull ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400")}>
         {Math.round(c.strength)}
@@ -261,7 +261,7 @@ function StatCell({ icon: Icon, label, value, tone }: {
 }) {
   return (
     <div className="rounded-lg border bg-muted/30 px-2.5 py-2">
-      <div className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-muted-foreground/80">
+      <div className="flex items-center gap-1 text-[0.5882rem] uppercase tracking-wider text-muted-foreground/80">
         <Icon className="h-3.5 w-3.5" />
         <span className="truncate">{label}</span>
       </div>
@@ -288,7 +288,7 @@ function HorizonMix({ clusters }: { clusters: Confluence[] }) {
   return (
     <div className="space-y-1.5">
       {HZ_ORDER.map((h) => (
-        <div key={h} className="flex items-center gap-2 text-[13px]">
+        <div key={h} className="flex items-center gap-2 text-[0.7647rem]">
           <span className="w-14 shrink-0 text-muted-foreground">{HZ_LABEL[h]}</span>
           <div className="flex-1 h-2 rounded-full bg-muted/70 overflow-hidden">
             <div className="h-full rounded-full bg-indigo-400 dark:bg-indigo-500" style={{ width: `${(counts[h] / max) * 100}%` }} />
@@ -315,7 +315,7 @@ function DetectorMix({ clusters }: { clusters: Confluence[] }) {
         const meta = getAlertKindMeta(kind);
         const Icon = meta.icon;
         return (
-          <div key={kind} className="flex flex-wrap sm:flex-nowrap items-center gap-x-2 gap-y-0.5 text-[13px]">
+          <div key={kind} className="flex flex-wrap sm:flex-nowrap items-center gap-x-2 gap-y-0.5 text-[0.7647rem]">
             <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
             {/* w-28 (7rem) cannot hold "Massimo 52 settimane" or
                 "Squeeze + Espansione". Below sm the name takes the full
@@ -398,7 +398,7 @@ export function AlertsInsightCard({
                 <div>
                   <SubHeader>Posizionamento</SubHeader>
                   {/* Each label spans (and centers over) its own bar segment. */}
-                  <div className="flex text-[13px] mb-1">
+                  <div className="flex text-[0.7647rem] mb-1">
                     <span
                       className="text-center font-semibold text-emerald-600 dark:text-emerald-400 whitespace-nowrap"
                       style={{ width: `${bullPct}%` }}

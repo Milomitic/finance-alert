@@ -254,7 +254,7 @@ export function StockHeader({ stock, kpis, ohlcv }: Props) {
                 quel caso il prezzo mostrato È già la chiusura). */}
             {(isMarketOpen || isPremarket) && live.data?.prev_close != null && (
               <div
-                className="text-[11px] uppercase tracking-wider text-muted-foreground/80 mt-0.5"
+                className="text-[0.6471rem] uppercase tracking-wider text-muted-foreground/80 mt-0.5"
                 title={
                   isPremarket
                     ? "Chiusura di ieri — riferimento da cui si calcola il movimento pre-apertura"

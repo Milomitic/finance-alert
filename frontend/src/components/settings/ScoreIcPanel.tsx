@@ -102,7 +102,7 @@ export function ScoreIcPanel() {
                 {/* Pillar × horizon IC (t-stat below each). */}
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
-                    <thead className="text-[13px] uppercase tracking-wide text-muted-foreground">
+                    <thead className="text-[0.7647rem] uppercase tracking-wide text-muted-foreground">
                       <tr>
                         <th className="px-2 py-1.5 text-left">Pilastro</th>
                         {horizons.map((h) => (
@@ -132,7 +132,7 @@ export function ScoreIcPanel() {
                                 {cell ? (
                                   <>
                                     {nfIc.format(cell.ic_mean)}
-                                    <span className="block text-[11px] text-muted-foreground/70">
+                                    <span className="block text-[0.6471rem] text-muted-foreground/70">
                                       t={cell.t_stat.toFixed(2)}
                                     </span>
                                   </>

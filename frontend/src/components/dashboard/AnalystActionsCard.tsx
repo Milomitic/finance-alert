@@ -56,7 +56,7 @@ function GradeChip({
   return (
     <span
       className={cn(
-        "px-1.5 py-0.5 rounded text-[12px] font-semibold shrink-0",
+        "px-1.5 py-0.5 rounded text-[0.7059rem] font-semibold shrink-0",
         TONE_CLASSES[gradeTone(grade)],
       )}
       title={from && to && from !== to ? `${from} → ${to}` : grade}
@@ -97,7 +97,7 @@ function PriceTargetChip({ a }: { a: AnalystAction }) {
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-0.5 tabular-nums font-bold shrink-0 text-[13px]",
+        "inline-flex items-center gap-0.5 tabular-nums font-bold shrink-0 text-[0.7647rem]",
         tone.cls,
       )}
       title={title}
@@ -121,7 +121,7 @@ function TargetUpsideChip({ a }: { a: AnalystAction }) {
   return (
     <span
       className={cn(
-        "shrink-0 w-[52px] text-right tabular-nums text-[11px] font-semibold",
+        "shrink-0 w-[52px] text-right tabular-nums text-[0.6471rem] font-semibold",
         up ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400",
       )}
       title={`Target ${up ? "sopra" : "sotto"} il prezzo attuale ($${cur.toFixed(2)}) del ${Math.abs(pct).toFixed(1)}%`}
@@ -148,13 +148,13 @@ function ActionRow({ a }: { a: AnalystAction }) {
       >
         {/* Compact identity: logo + ticker (company name → row tooltip). */}
         <StockLogo ticker={a.ticker} size="xs" />
-        <span className="shrink-0 w-[40px] text-[13px] font-bold tabular-nums leading-none truncate">
+        <span className="shrink-0 w-[40px] text-[0.7647rem] font-bold tabular-nums leading-none truncate">
           {a.ticker}
         </span>
 
         {/* Firm — flexes + truncates first when the row gets tight. */}
         <span
-          className="flex-1 min-w-0 text-[12px] text-muted-foreground truncate"
+          className="flex-1 min-w-0 text-[0.7059rem] text-muted-foreground truncate"
           title={a.firm}
         >
           {a.firm || "—"}
@@ -183,7 +183,7 @@ function ActionRow({ a }: { a: AnalystAction }) {
           <TargetUpsideChip a={a} />
         </span>
 
-        <span className="hidden dense-4:block shrink-0 w-10 text-right text-[10px] text-muted-foreground tabular-nums whitespace-nowrap">
+        <span className="hidden dense-4:block shrink-0 w-10 text-right text-[0.5882rem] text-muted-foreground tabular-nums whitespace-nowrap">
           {fmtDate(a.date)}
         </span>
       </Link>

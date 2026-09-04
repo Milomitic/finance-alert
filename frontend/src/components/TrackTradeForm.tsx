@@ -33,7 +33,7 @@ function Field({
 }) {
   return (
     <label className="flex flex-col gap-1 min-w-0">
-      <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+      <span className="text-[0.5882rem] uppercase tracking-wider text-muted-foreground font-semibold">
         {label}
       </span>
       <Input
@@ -118,7 +118,7 @@ export function TrackTradeForm({ ticker, alertId, playbook }: Props) {
 
   return (
     <div className="mt-2 rounded-md border border-border/60 p-3 space-y-2">
-      <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
+      <div className="text-[0.6471rem] uppercase tracking-wider text-muted-foreground font-semibold">
         Traccia trade — {playbook.side === "long" ? "Long" : "Short"} su {ticker}
       </div>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -157,7 +157,7 @@ export function TrackTradeForm({ ticker, alertId, playbook }: Props) {
         >
           Annulla
         </Button>
-        <span className="text-[10px] text-muted-foreground/70 italic ml-auto hidden sm:inline">
+        <span className="text-[0.5882rem] text-muted-foreground/70 italic ml-auto hidden sm:inline">
           Senza size il P&amp;L è solo in %.
         </span>
       </div>

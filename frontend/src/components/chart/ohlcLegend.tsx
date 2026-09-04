@@ -122,7 +122,7 @@ export function OhlcLegend({
         // chart height (300px) the desktop sizing covered roughly a quarter
         // of the plot area. Desktop sizing is unchanged from sm up.
         "rounded-md border bg-card/85 backdrop-blur-sm font-mono tabular-nums shadow-sm leading-snug",
-        "px-2 py-1 text-[11px] sm:px-3 sm:py-1.5 sm:text-sm",
+        "px-2 py-1 text-[0.6471rem] sm:px-3 sm:py-1.5 sm:text-sm",
         !inline && "absolute top-2 left-2 z-10 pointer-events-none",
       )}
     >

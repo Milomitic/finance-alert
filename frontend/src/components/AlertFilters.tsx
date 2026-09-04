@@ -265,7 +265,7 @@ export function AlertFilters({ value, onChange }: Props) {
                 </Button>
               )}
               {activeCount > 0 && (
-                <span className="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-primary text-primary-foreground text-[11px] font-bold tabular-nums">
+                <span className="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-primary text-primary-foreground text-[0.6471rem] font-bold tabular-nums">
                   {activeCount}
                 </span>
               )}

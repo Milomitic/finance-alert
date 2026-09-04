@@ -55,7 +55,7 @@ function PriceTargetBar({ pt }: { pt: AnalystPriceTarget }) {
           upside != null ? (
             <span
               className={cn(
-                "font-bold tabular-nums text-[13px]",
+                "font-bold tabular-nums text-[0.7647rem]",
                 upside > 0
                   ? "text-emerald-700 dark:text-emerald-300"
                   : "text-rose-700 dark:text-rose-300",
@@ -72,13 +72,13 @@ function PriceTargetBar({ pt }: { pt: AnalystPriceTarget }) {
       {/* Mean target as the headline number */}
       <div className="flex items-baseline gap-2 mb-3 tabular-nums">
         <span className="text-2xl font-bold">${mean.toFixed(2)}</span>
-        <span className="text-[13px] text-muted-foreground">target medio</span>
+        <span className="text-[0.7647rem] text-muted-foreground">target medio</span>
       </div>
 
       {/* The bar itself: low → high gradient with markers stacked above. */}
       <div className="relative">
         {/* Marker labels above the bar */}
-        <div className="relative h-5 mb-1 text-[12px]">
+        <div className="relative h-5 mb-1 text-[0.7059rem]">
           {currentPos != null && (
             <div
               className="absolute -translate-x-1/2 flex flex-col items-center"
@@ -123,7 +123,7 @@ function PriceTargetBar({ pt }: { pt: AnalystPriceTarget }) {
         </div>
 
         {/* Low / high labels under the bar */}
-        <div className="flex items-center justify-between mt-1.5 text-[13px] tabular-nums text-muted-foreground">
+        <div className="flex items-center justify-between mt-1.5 text-[0.7647rem] tabular-nums text-muted-foreground">
           <span title="Target più basso fra gli analisti">
             low <span className="font-semibold text-foreground/70">${low.toFixed(2)}</span>
           </span>
@@ -153,7 +153,7 @@ function RatingBar({ r }: { r: AnalystRating }) {
 
         className="mb-1"
         right={
-          <span className="tabular-nums text-[12px] text-muted-foreground">
+          <span className="tabular-nums text-[0.7059rem] text-muted-foreground">
             {total} analisti
           </span>
         }
@@ -186,7 +186,7 @@ function RatingBar({ r }: { r: AnalystRating }) {
           skipped entirely (no "0 sell" placeholder). The non-zero
           segments naturally widen to fill the row, keeping their labels
           aligned under the corresponding bar slice. */}
-      <div className="flex mt-1 text-[13px] tabular-nums">
+      <div className="flex mt-1 text-[0.7647rem] tabular-nums">
         {buy > 0 && (
           <span
             className="text-center text-emerald-700 dark:text-emerald-300 font-semibold"
@@ -338,7 +338,7 @@ function PriceTargetChip({ a }: { a: AnalystAction }) {
             : "Target non fornito da questa fonte"
         }
       >
-        <span className="text-[13px]">·</span>
+        <span className="text-[0.7647rem]">·</span>
         <span>—</span>
       </span>
     );
@@ -356,7 +356,7 @@ function PriceTargetChip({ a }: { a: AnalystAction }) {
         ptTone.cls,
       )}
     >
-      <span className="text-[13px]">{ptTone.arrow}</span>
+      <span className="text-[0.7647rem]">{ptTone.arrow}</span>
       <span>{fmt}</span>
     </span>
   );
@@ -365,7 +365,7 @@ function PriceTargetChip({ a }: { a: AnalystAction }) {
 function ActionsList({ actions }: { actions: AnalystAction[] }) {
   if (actions.length === 0) {
     return (
-      <div className="text-[13px] text-muted-foreground italic px-1 py-2">
+      <div className="text-[0.7647rem] text-muted-foreground italic px-1 py-2">
         Nessuna azione recente di analisti disponibile.
       </div>
     );
@@ -403,7 +403,7 @@ function ActionsList({ actions }: { actions: AnalystAction[] }) {
         return (
           <li
             key={`${a.date}-${a.firm}-${i}`}
-            className="flex items-center gap-1.5 text-[13px] py-1 border-b border-border/40 last:border-b-0"
+            className="flex items-center gap-1.5 text-[0.7647rem] py-1 border-b border-border/40 last:border-b-0"
             title={newsTitle}
           >
             {actionIcon(a.action)}
@@ -418,14 +418,14 @@ function ActionsList({ actions }: { actions: AnalystAction[] }) {
                   href={a.source_link}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="shrink-0 px-1 py-0.5 rounded text-[11px] font-bold uppercase tracking-wider bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-200 hover:bg-amber-200 dark:hover:bg-amber-800/70"
+                  className="shrink-0 px-1 py-0.5 rounded text-[0.6471rem] font-bold uppercase tracking-wider bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-200 hover:bg-amber-200 dark:hover:bg-amber-800/70"
                   title="Apri articolo originale"
                 >
                   news
                 </a>
               ) : (
                 <span
-                  className="shrink-0 px-1 py-0.5 rounded text-[11px] font-bold uppercase tracking-wider bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-200"
+                  className="shrink-0 px-1 py-0.5 rounded text-[0.6471rem] font-bold uppercase tracking-wider bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-200"
                   title="Estratto da news"
                 >
                   news
@@ -539,7 +539,7 @@ export function AnalystTargetCard({ ticker }: Props) {
       <Card className="h-full">
         <CardContent className="p-4 h-full flex flex-col">
           <SectionTitle icon={Target} label="Analyst" className="mb-2" right={refreshBtn} />
-          <div className="flex-1 flex items-center justify-center text-[13px] text-muted-foreground text-center px-2">
+          <div className="flex-1 flex items-center justify-center text-[0.7647rem] text-muted-foreground text-center px-2">
             Nessuna stima analista disponibile.
           </div>
         </CardContent>
@@ -584,7 +584,7 @@ export function AnalystTargetCard({ ticker }: Props) {
             className="mb-1 shrink-0"
             right={
               actions.length > 0 ? (
-                <span className="tabular-nums text-[12px] text-muted-foreground/70">
+                <span className="tabular-nums text-[0.7059rem] text-muted-foreground/70">
                   {actions.length} totali
                 </span>
               ) : undefined

@@ -44,25 +44,25 @@ export function MacroRow({ event }: { event: MacroEvent }) {
           </span>
         )}
         <Landmark className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-        <span className="text-[14px] font-semibold leading-tight truncate flex-1 min-w-0">
+        <span className="text-[0.8235rem] font-semibold leading-tight truncate flex-1 min-w-0">
           {event.label}
         </span>
         {event.release_time && (
           <span
-            className="inline-flex items-center gap-0.5 text-[11px] tabular-nums text-muted-foreground shrink-0"
+            className="inline-flex items-center gap-0.5 text-[0.6471rem] tabular-nums text-muted-foreground shrink-0"
             title={`Orario di rilascio: ${event.release_time} UTC. Convertilo nel tuo fuso aggiungendo / sottraendo l'offset locale.`}
           >
             ⏱ {event.release_time} UTC
           </span>
         )}
-        <span className="text-[11px] uppercase tracking-wider text-muted-foreground shrink-0">
+        <span className="text-[0.6471rem] uppercase tracking-wider text-muted-foreground shrink-0">
           {regionLabel(event.region)}
         </span>
         {/* Importance label — the ONLY surface that carries the rose/amber
             tint. Compact chip on the right, not a full card flood. */}
         <span
           className={cn(
-            "inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] uppercase tracking-wider font-semibold shrink-0",
+            "inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[0.5882rem] uppercase tracking-wider font-semibold shrink-0",
             importanceChipTone,
           )}
         >
@@ -162,7 +162,7 @@ function MacroInsightStrip({ event }: { event: MacroEvent }) {
       {surprise != null && (
         <div
           className={cn(
-            "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-semibold tabular-nums",
+            "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[0.6471rem] font-semibold tabular-nums",
             surprise > 0
               ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300"
               : surprise < 0
@@ -190,7 +190,7 @@ function MacroInsightStrip({ event }: { event: MacroEvent }) {
           <button
             type="button"
             onClick={() => setExpanded((v) => !v)}
-            className="text-[10px] uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-0.5"
+            className="text-[0.5882rem] uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-0.5"
             aria-expanded={expanded}
           >
             {expanded ? "Riduci ▴" : "Storico ▾"}
@@ -198,7 +198,7 @@ function MacroInsightStrip({ event }: { event: MacroEvent }) {
           {event.series_id != null && (
             <Link
               to={`/macro/${event.series_id}`}
-              className="ml-auto inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline"
+              className="ml-auto inline-flex items-center gap-1 text-[0.6471rem] font-medium text-primary hover:underline"
               title="Apri la pagina di dettaglio dell'indicatore"
             >
               Apri dettaglio
@@ -275,7 +275,7 @@ function KpiSlot({
 
   return (
     <div className="flex flex-col gap-0.5 min-w-0" title={hint}>
-      <span className="text-[10px] uppercase tracking-wider text-muted-foreground/80">
+      <span className="text-[0.5882rem] uppercase tracking-wider text-muted-foreground/80">
         {label}
       </span>
       <span
@@ -300,7 +300,7 @@ function KpiSlot({
         </span>
       )}
       {dateBadge && (
-        <span className="text-[9px] text-muted-foreground/70 tabular-nums">
+        <span className="text-[0.5294rem] text-muted-foreground/70 tabular-nums">
           {dateBadge}
         </span>
       )}
@@ -391,7 +391,7 @@ function ExtendedHistoryChart({
   const last = points[points.length - 1];
   return (
     <div className="rounded border border-current/15 bg-current/5 p-2">
-      <div className="flex items-baseline justify-between text-[10px] opacity-70 tabular-nums mb-1">
+      <div className="flex items-baseline justify-between text-[0.5882rem] opacity-70 tabular-nums mb-1">
         <span>{formatMacroDate(pts[0].date)}</span>
         <span className="opacity-90 italic">
           {pts.length} osservazioni · max {formatMacroValue(max, unit)} · min{" "}
@@ -425,7 +425,7 @@ function ExtendedHistoryChart({
           strokeWidth="1"
         />
       </svg>
-      <div className="text-[10px] opacity-70 mt-1 text-right tabular-nums">
+      <div className="text-[0.5882rem] opacity-70 mt-1 text-right tabular-nums">
         Ultimo:{" "}
         <span className="font-semibold">
           {formatMacroValue(last.value, unit)}
@@ -443,9 +443,9 @@ function ExtendedHistoryChart({
           the release; historical consensus values aren't free to
           backfill (would need TradingEconomics). */}
       <div className="mt-2 pt-2 border-t border-current/15 overflow-x-auto">
-        <table className="w-full text-[11px] tabular-nums">
+        <table className="w-full text-[0.6471rem] tabular-nums">
           <thead>
-            <tr className="text-[10px] uppercase tracking-wider opacity-60">
+            <tr className="text-[0.5882rem] uppercase tracking-wider opacity-60">
               <th className="text-left font-semibold pb-1">Periodo</th>
               <th className="text-right font-semibold pb-1">Valore</th>
             </tr>

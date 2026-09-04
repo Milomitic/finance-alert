@@ -46,7 +46,7 @@ function OutcomeRow({ setup }: { setup: Setup }) {
       >
         <span
           className={cn(
-            "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold shrink-0",
+            "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[0.6471rem] font-semibold shrink-0",
             badge,
           )}
         >
@@ -57,9 +57,9 @@ function OutcomeRow({ setup }: { setup: Setup }) {
         <span className="min-w-0 flex-1">
           <span className="flex items-baseline gap-1.5">
             <span className="text-sm font-medium truncate">{setup.ticker}</span>
-            <span className="text-[11px] text-muted-foreground truncate">{setup.name}</span>
+            <span className="text-[0.6471rem] text-muted-foreground truncate">{setup.name}</span>
           </span>
-          <span className="block text-[11px] text-muted-foreground truncate">
+          <span className="block text-[0.6471rem] text-muted-foreground truncate">
             {detectorLabel(setup.detector)}
             {converted && setup.lead_days !== null && setup.lead_days !== undefined
               ? ` · ${setup.lead_days}g di preavviso`
@@ -69,7 +69,7 @@ function OutcomeRow({ setup }: { setup: Setup }) {
           </span>
         </span>
 
-        <span className="shrink-0 text-[11px] text-muted-foreground tabular-nums">
+        <span className="shrink-0 text-[0.6471rem] text-muted-foreground tabular-nums">
           {fmtDate(setup.resolved_at)}
         </span>
       </Link>

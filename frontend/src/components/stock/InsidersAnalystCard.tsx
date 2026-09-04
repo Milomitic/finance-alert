@@ -214,7 +214,7 @@ function InsiderHeader() {
     <li
       className={cn(
         INSIDER_GRID,
-        "pb-1 text-[10px] uppercase tracking-wider text-muted-foreground/70 font-semibold",
+        "pb-1 text-[0.5882rem] uppercase tracking-wider text-muted-foreground/70 font-semibold",
       )}
     >
       <span className="truncate">Insider</span>
@@ -252,21 +252,21 @@ function InsiderRow({ t }: { t: InsiderTransaction }) {
         // Hover-title preserves the full verbose role; the visible
         // label uses the canonical abbreviation (CEO / CFO / EVP / …)
         // so it doesn't truncate to "..." in the cramped slot.
-        className="text-[12px] italic text-muted-foreground/80 truncate"
+        className="text-[0.7059rem] italic text-muted-foreground/80 truncate"
         title={t.position || ""}
       >
         {t.position ? abbreviatePosition(t.position) : "—"}
       </span>
       <span
-        className={cn("text-[12px] truncate", txnTone(t.transaction))}
+        className={cn("text-[0.7059rem] truncate", txnTone(t.transaction))}
         title={t.transaction}
       >
         {t.transaction || "—"}
       </span>
-      <span className="text-[12px] text-muted-foreground tabular-nums text-right">
+      <span className="text-[0.7059rem] text-muted-foreground tabular-nums text-right">
         {sub}
       </span>
-      <span className="text-[12px] text-muted-foreground tabular-nums text-right">
+      <span className="text-[0.7059rem] text-muted-foreground tabular-nums text-right">
         {shortDate(t.date)}
       </span>
     </li>

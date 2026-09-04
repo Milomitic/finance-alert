@@ -82,6 +82,35 @@
     font-size: 17px;
   }
 
+  /* Scala tipografica sui monitor larghi.
+   *
+   * Il blocco sopra promette che "ogni token Tailwind e' in rem, quindi tutto
+   * scala insieme". Era vero per le CLASSI TOKEN (text-xs, p-3, gap-2), ma il
+   * codice aveva poi introdotto 368 dimensioni assolute `text-[11px]` sparse
+   * su 85 file, che si erano chiamate fuori da quel meccanismo: su uno schermo
+   * da 2000px il calendario restava a 10-11px mentre tutto il resto respirava.
+   * Quelle 368 sono state convertite in rem (stessa resa esatta a 17px, quindi
+   * nessun cambiamento visivo alle dimensioni attuali), e adesso partecipano
+   * a queste due tacche.
+   *
+   * Perche' solo due tacche e modeste: il commento sopra registra che a 18px
+   * su TUTTE le larghezze le tabelle iniziavano ad andare a capo. Qui il
+   * confronto e' diverso, perche' sopra i 1536px lo spazio orizzontale c'e' —
+   * ma restano 152 dimensioni di layout ancora in px fissi (altezze di icone,
+   * min-width), che non crescono col testo. Un +6% su un carattere da 11px
+   * sono 0,7px: sotto la soglia in cui una scatola ad altezza fissa trabocca.
+   * Prima di spingere oltre andrebbero convertite anche quelle. */
+  @media (min-width: 1536px) {
+    html {
+      font-size: 18px;
+    }
+  }
+  @media (min-width: 1920px) {
+    html {
+      font-size: 19px;
+    }
+  }
+
   /* Last line of defence against horizontal page overflow.
    *
    * Every previous fix for "the container runs past the edge of the phone"

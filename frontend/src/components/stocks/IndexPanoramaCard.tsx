@@ -244,7 +244,7 @@ export function IndexPanoramaCard({ data, filters, onTileFilter }: Props) {
             const inner = (
               <>
                 <Icon className="h-3.5 w-3.5 text-muted-foreground/60 mx-auto mb-1" />
-                <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{t.label}</div>
+                <div className="text-[0.5882rem] uppercase tracking-wide text-muted-foreground">{t.label}</div>
                 <div className={cn("text-lg font-bold tabular-nums mt-0.5", fg)}>{t.value}</div>
               </>
             );
@@ -285,7 +285,7 @@ export function IndexPanoramaCard({ data, filters, onTileFilter }: Props) {
         </div>
 
         {/* Footer hint */}
-        <div className="text-[11px] text-muted-foreground mt-3 italic">
+        <div className="text-[0.6471rem] text-muted-foreground mt-3 italic">
           {onTileFilter
             ? "Clicca un tile per filtrare la tabella · hover per la spiegazione"
             : "Hover sui tile per la spiegazione"} · stock di {data.code} listati sotto

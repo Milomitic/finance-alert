@@ -163,7 +163,7 @@ export function CatalogRefreshPanel() {
                 })}
               </tbody>
             </table>
-            <p className="mt-2 text-[11px] text-muted-foreground italic">
+            <p className="mt-2 text-[0.6471rem] text-muted-foreground italic">
               I refresh leggono Wikipedia per aggiornare i constituent
               di ciascun indice. "+/~/-": aggiunti / aggiornati /
               rimossi vs il run precedente.

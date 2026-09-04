@@ -77,7 +77,7 @@ function StatsStrip({ stats }: { stats: ReturnType<typeof useSetups>["data"] ext
       {tiles.map((t) => (
         <Card key={t.label}>
           <CardContent className="p-3">
-            <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-mono">
+            <div className="text-[0.5882rem] uppercase tracking-wider text-muted-foreground font-mono">
               {t.label}
             </div>
             <div className="text-2xl font-bold tabular-nums leading-tight mt-0.5">{t.value}</div>

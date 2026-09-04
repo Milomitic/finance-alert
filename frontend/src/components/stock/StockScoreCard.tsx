@@ -175,7 +175,7 @@ export function MultiTfStrip({ ticker, kind }: { ticker: string; kind: "stock" |
                   prio === "secondary" && "opacity-70",
                 )}
               >
-                <div className="text-[11px] uppercase tracking-wider font-bold leading-none">
+                <div className="text-[0.6471rem] uppercase tracking-wider font-bold leading-none">
                   {it.timeframe === "all" ? "All" : it.timeframe}
                 </div>
                 <div className="text-sm font-bold tabular-nums leading-none mt-0.5">
@@ -184,7 +184,7 @@ export function MultiTfStrip({ ticker, kind }: { ticker: string; kind: "stock" |
                 </div>
               </div>
             </TooltipTrigger>
-            <TooltipContent side="bottom" className="text-[12px] space-y-0.5">
+            <TooltipContent side="bottom" className="text-[0.7059rem] space-y-0.5">
               <div className="font-bold uppercase tracking-wider">
                 Timeframe {it.timeframe}
               </div>
@@ -355,7 +355,7 @@ function ScoreSparkline({ ticker }: { ticker: string }) {
   if (points.length < MIN_SPARK_DAYS) {
     return (
       <span
-        className="mt-0.5 text-[10px] italic text-muted-foreground/70"
+        className="mt-0.5 text-[0.5882rem] italic text-muted-foreground/70"
         title={`Andamento giornaliero dello score — il grafico appare dopo ${MIN_SPARK_DAYS} giorni di storico`}
       >
         storico score: {points.length}/{MIN_SPARK_DAYS} giorni
@@ -408,7 +408,7 @@ function ScoreSparkline({ ticker }: { ticker: string }) {
         />
       </svg>
       {/* Identity label + first-to-last Δ — what the floating line lacked. */}
-      <span className="flex flex-col leading-tight text-[9px]">
+      <span className="flex flex-col leading-tight text-[0.5294rem]">
         <span>score {points.length}g</span>
         <span
           className={
@@ -591,7 +591,7 @@ function SubScoreRow({ pillar, score, components }: SubScoreRowProps) {
                   score. Sorted by effective contribution (score × weight)
                   desc so the user sees the strongest drivers first. */}
               {presentList.length > 0 && (
-                <ul className="space-y-1 text-[12px]">
+                <ul className="space-y-1 text-[0.7059rem]">
                   {presentList.map(([name, comp]) => {
                     const m = metaFor(name);
                     const compScore = comp.score ?? 0;
@@ -613,7 +613,7 @@ Vs settore: mediana ${fmtRaw(comp.sector_median, m.format)}`
                         <span className="tabular-nums text-muted-foreground/80 shrink-0">
                           {fmtRaw(comp.raw, m.format)}
                           {comp.sector_median != null && (
-                            <span className="text-[11px] text-muted-foreground/50 ml-1">
+                            <span className="text-[0.6471rem] text-muted-foreground/50 ml-1">
                               ({fmtRaw(comp.sector_median, m.format)})
                             </span>
                           )}
@@ -628,7 +628,7 @@ Vs settore: mediana ${fmtRaw(comp.sector_median, m.format)}`
                           {Math.round(compScore)}
                         </span>
                         <span
-                          className="tabular-nums text-muted-foreground/60 shrink-0 text-[11px]"
+                          className="tabular-nums text-muted-foreground/60 shrink-0 text-[0.6471rem]"
                           title={`Peso ${(comp.weight * 100).toFixed(0)}% nel pilastro`}
                         >
                           ×{(comp.weight * 100).toFixed(0)}
@@ -646,7 +646,7 @@ Vs settore: mediana ${fmtRaw(comp.sector_median, m.format)}`
                   higher if I had this data, but the absence isn't
                   hurting me right now". */}
               {missingList.length > 0 && (
-                <details className="text-[12px]">
+                <details className="text-[0.7059rem]">
                   <summary className="cursor-pointer text-muted-foreground/70 hover:text-muted-foreground italic select-none">
                     {missingList.length} componente{missingList.length === 1 ? "" : "i"} senza dato
                     <span className="ml-1 text-muted-foreground/50">
@@ -663,7 +663,7 @@ Vs settore: mediana ${fmtRaw(comp.sector_median, m.format)}`
                           title={m.hint}
                         >
                           <span className="truncate">{m.label}</span>
-                          <span className="tabular-nums text-[11px] shrink-0">
+                          <span className="tabular-nums text-[0.6471rem] shrink-0">
                             ×{(comp.weight * 100).toFixed(0)} · n/d
                           </span>
                         </li>
@@ -678,7 +678,7 @@ Vs settore: mediana ${fmtRaw(comp.sector_median, m.format)}`
                   weight that was active. Communicates the
                   missing-data-neutralization invariant explicitly. */}
               {meta && (
-                <div className="pt-1.5 border-t border-border/40 text-[11px] text-muted-foreground/80 italic">
+                <div className="pt-1.5 border-t border-border/40 text-[0.6471rem] text-muted-foreground/80 italic">
                   {meta.components_present} di {meta.components_total}{" "}
                   componenti attivi
                   {meta.components_present < meta.components_total &&
@@ -763,11 +763,11 @@ function QualityExtrasRow({ extras }: { extras?: StockScore["quality_extras"] })
   if (!govItems.length && !an) return null;
   const govTone = (v: number) => (v <= 3 ? "text-emerald-600 dark:text-emerald-400" : v >= 7 ? "text-rose-600 dark:text-rose-400" : "text-amber-600 dark:text-amber-400");
   return (
-    <div className="mt-2 border-t border-border/40 pt-2 space-y-1 text-[11px]"
+    <div className="mt-2 border-t border-border/40 pt-2 space-y-1 text-[0.6471rem]"
       title="Dati informativi (governance + analisti): mostrati come contesto, NON entrano nel punteggio Qualità qui sopra.">
       {an && (
         <div className="flex items-center gap-2 flex-wrap text-muted-foreground">
-          <span className="uppercase tracking-wider text-[10px] font-semibold">Analisti</span>
+          <span className="uppercase tracking-wider text-[0.5882rem] font-semibold">Analisti</span>
           {an.recommendation_mean != null && (
             <span title="Consenso 1 (strong buy) – 5 (sell)">rec <span className="font-semibold tabular-nums text-foreground/80">{an.recommendation_mean.toFixed(2)}</span></span>
           )}
@@ -782,7 +782,7 @@ function QualityExtrasRow({ extras }: { extras?: StockScore["quality_extras"] })
       )}
       {govItems.length > 0 && (
         <div className="flex items-center gap-2 flex-wrap text-muted-foreground">
-          <span className="uppercase tracking-wider text-[10px] font-semibold" title="Rischio governance: 1 (migliore) – 10 (peggiore)">Governance</span>
+          <span className="uppercase tracking-wider text-[0.5882rem] font-semibold" title="Rischio governance: 1 (migliore) – 10 (peggiore)">Governance</span>
           {govItems.map(([label, v]) => (
             <span key={label}>{label} <span className={cn("font-semibold tabular-nums", govTone(v as number))}>{v}</span></span>
           ))}
@@ -859,7 +859,7 @@ export function StockScoreCard({ ticker }: Props) {
   const confidenceChip =
     mg && typeof mg.coverage === "number" ? (
       <span
-        className="text-[10px] tabular-nums text-muted-foreground"
+        className="text-[0.5882rem] tabular-nums text-muted-foreground"
         title={`Confidence: lo score poggia sul ${Math.round(mg.coverage * 100)}% del peso fattoriale nominale (${mg.pillars_present ?? "?"}/${mg.pillars_total ?? 6} pilastri con dati). Più basso = score basato su pochi input, da interpretare con cautela.`}
       >
         Confidence {Math.round(mg.coverage * 100)}%
@@ -896,12 +896,12 @@ export function StockScoreCard({ ticker }: Props) {
             "Top N% del settore") overflowed instead of truncating whenever
             the card was narrow. */}
         <div className="flex flex-col items-start gap-1 min-w-0">
-          <span className="text-[12px] uppercase tracking-wider text-muted-foreground">
+          <span className="text-[0.7059rem] uppercase tracking-wider text-muted-foreground">
             {scoreLabel(composite)}
           </span>
           <span
             className={cn(
-              "px-2 py-0.5 rounded border text-[12px] uppercase tracking-wider font-semibold",
+              "px-2 py-0.5 rounded border text-[0.7059rem] uppercase tracking-wider font-semibold",
               RISK_TONE[data.risk_tier],
             )}
           >
@@ -909,7 +909,7 @@ export function StockScoreCard({ ticker }: Props) {
           </span>
           {data.sector_avg != null && (
             <span
-              className="mt-0.5 inline-flex items-center gap-1 text-[10px] text-muted-foreground"
+              className="mt-0.5 inline-flex items-center gap-1 text-[0.5882rem] text-muted-foreground"
               title={`Media composito del settore (${data.sector_avg.toFixed(1)}) — la tacca sul gauge`}
             >
               <span className="h-2 w-0.5 rounded-sm bg-foreground/70" />
@@ -921,7 +921,7 @@ export function StockScoreCard({ ticker }: Props) {
           )}
           {data.sector_percentile != null && (
             <span
-              className="mt-0.5 text-[10px] text-muted-foreground"
+              className="mt-0.5 text-[0.5882rem] text-muted-foreground"
               title={
                 `Percentile nel settore: ${data.sector_percentile}° (più alto = migliore)` +
                 (data.universe_percentile != null ? ` · ${data.universe_percentile}° nell'universo` : "") +

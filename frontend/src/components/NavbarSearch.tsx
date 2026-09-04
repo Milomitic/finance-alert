@@ -214,7 +214,7 @@ export function NavbarSearch() {
             <span className="text-sm font-bold tabular-nums">{i.code}</span>
             <span className="text-xs text-muted-foreground truncate">{meta.fullName}</span>
           </div>
-          <div className="text-[11px] text-muted-foreground">
+          <div className="text-[0.6471rem] text-muted-foreground">
             {i.n} stock · {i.pct_above_ema200 != null ? `${i.pct_above_ema200.toFixed(0)}% > EMA200` : "—"}
           </div>
         </div>
@@ -259,18 +259,18 @@ export function NavbarSearch() {
                 className="rounded-[1px] shadow-sm shrink-0"
               />
             )}
-            <span className="text-[10px] text-muted-foreground bg-muted/60 dark:bg-muted/40 px-1.5 py-0.5 rounded">
+            <span className="text-[0.5882rem] text-muted-foreground bg-muted/60 dark:bg-muted/40 px-1.5 py-0.5 rounded">
               {s.exchange}
             </span>
             {s.sector && (
-              <span className="text-[10px] text-muted-foreground bg-muted/60 dark:bg-muted/40 px-1.5 py-0.5 rounded truncate max-w-[140px]">
+              <span className="text-[0.5882rem] text-muted-foreground bg-muted/60 dark:bg-muted/40 px-1.5 py-0.5 rounded truncate max-w-[140px]">
                 {s.sector}
               </span>
             )}
           </div>
           <div className="text-xs text-muted-foreground truncate mt-0.5">{s.name}</div>
           {mc != null && (
-            <div className="text-[10px] text-muted-foreground/80 mt-0.5">
+            <div className="text-[0.5882rem] text-muted-foreground/80 mt-0.5">
               Mkt cap <strong className="text-muted-foreground tabular-nums">{fmtMc(mc)}</strong>
             </div>
           )}
@@ -280,7 +280,7 @@ export function NavbarSearch() {
             <div className={cn("text-base font-bold tabular-nums", changeColor)}>
               {change >= 0 ? "+" : ""}{change.toFixed(2)}%
             </div>
-            <div className="text-[10px] text-muted-foreground">oggi</div>
+            <div className="text-[0.5882rem] text-muted-foreground">oggi</div>
           </div>
         )}
       </button>
@@ -385,7 +385,7 @@ export function NavbarSearch() {
                   {/* Indices section */}
                   {indexMatches.length > 0 && (
                     <div>
-                      <div className="px-4 py-1.5 bg-muted/40 text-[10px] uppercase tracking-wider font-bold text-muted-foreground border-b">
+                      <div className="px-4 py-1.5 bg-muted/40 text-[0.5882rem] uppercase tracking-wider font-bold text-muted-foreground border-b">
                         🏛️ Indici ({indexMatches.length})
                       </div>
                       {indexMatches.map((i) => {
@@ -398,7 +398,7 @@ export function NavbarSearch() {
                   {/* Stocks section */}
                   {stockItems.length > 0 && (
                     <div>
-                      <div className="px-4 py-1.5 bg-muted/40 text-[10px] uppercase tracking-wider font-bold text-muted-foreground border-b">
+                      <div className="px-4 py-1.5 bg-muted/40 text-[0.5882rem] uppercase tracking-wider font-bold text-muted-foreground border-b">
                         🔍 Stocks ({stockItems.length})
                       </div>
                       {stockItems.map((s) => {
@@ -423,7 +423,7 @@ export function NavbarSearch() {
                 <>
                   {recent.length > 0 && (
                     <div>
-                      <div className="px-4 py-1.5 bg-muted/40 text-[10px] uppercase tracking-wider font-bold text-muted-foreground border-b">
+                      <div className="px-4 py-1.5 bg-muted/40 text-[0.5882rem] uppercase tracking-wider font-bold text-muted-foreground border-b">
                         🕓 Visti di recente ({recent.length})
                       </div>
                       {recent.map((t) => {
@@ -434,7 +434,7 @@ export function NavbarSearch() {
                   )}
                   {topMovers.length > 0 && (
                     <div>
-                      <div className="px-4 py-1.5 bg-muted/40 text-[10px] uppercase tracking-wider font-bold text-muted-foreground border-b">
+                      <div className="px-4 py-1.5 bg-muted/40 text-[0.5882rem] uppercase tracking-wider font-bold text-muted-foreground border-b">
                         🚀 Top movers oggi ({topMovers.length})
                       </div>
                       {topMovers.map((m) => {
@@ -449,16 +449,16 @@ export function NavbarSearch() {
           )}
 
           {/* Footer */}
-          <div className="border-t px-4 py-1.5 text-[10px] text-muted-foreground bg-muted/30 flex items-center justify-between">
+          <div className="border-t px-4 py-1.5 text-[0.5882rem] text-muted-foreground bg-muted/30 flex items-center justify-between">
             <span>
               {q.trim().length > 0
                 ? `${stockItems.length} stock${stockItems.length === 1 ? "" : "s"} + ${indexMatches.length} indic${indexMatches.length === 1 ? "e" : "i"}`
                 : "Suggerimenti"}
             </span>
             <span>
-              <kbd className="px-1 py-0.5 bg-background rounded border text-[9px]">↑↓</kbd>
-              <kbd className="ml-1 px-1 py-0.5 bg-background rounded border text-[9px]">↵</kbd>
-              <kbd className="ml-1 px-1 py-0.5 bg-background rounded border text-[9px]">esc</kbd>
+              <kbd className="px-1 py-0.5 bg-background rounded border text-[0.5294rem]">↑↓</kbd>
+              <kbd className="ml-1 px-1 py-0.5 bg-background rounded border text-[0.5294rem]">↵</kbd>
+              <kbd className="ml-1 px-1 py-0.5 bg-background rounded border text-[0.5294rem]">esc</kbd>
             </span>
           </div>
         </div>

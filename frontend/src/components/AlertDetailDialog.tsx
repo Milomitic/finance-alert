@@ -222,24 +222,24 @@ export function AlertDetailDialog({ alert, onClose }: Props) {
             <div className="text-right shrink-0 pr-6">
               <div
                 className={cn(
-                  "flex items-center justify-end gap-1 text-[11px] font-semibold",
+                  "flex items-center justify-end gap-1 text-[0.6471rem] font-semibold",
                   delayed ? "text-amber-700 dark:text-amber-300" : "text-muted-foreground",
                 )}
               >
                 {delayed ? <Clock className="h-3 w-3" /> : <CalendarClock className="h-3 w-3" />}
                 {delayed ? "Rilevato in ritardo" : "Rilevato"}
               </div>
-              <div className="text-[11px] text-muted-foreground tabular-nums mt-0.5">
+              <div className="text-[0.6471rem] text-muted-foreground tabular-nums mt-0.5">
                 {formatRelative(alert.triggered_at)} - {formatAbsolute(alert.triggered_at)}
               </div>
               {delayed && delta != null && (
-                <div className="text-[10px] text-amber-700 dark:text-amber-300 italic mt-0.5">
+                <div className="text-[0.5882rem] text-amber-700 dark:text-amber-300 italic mt-0.5">
                   +{delta}g vs segnale
                 </div>
               )}
               {amendedAt && (
                 <div
-                  className="mt-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60"
+                  className="mt-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[0.5882rem] font-semibold bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60"
                   title={`Snapshot rivisto da uno scan successivo il ${formatAbsolute(amendedAt)}${
                     firstEmittedAt ? ` · emesso originariamente il ${formatAbsolute(firstEmittedAt)}` : ""
                   }. La catena riflette l'ultima revisione: eventi aggiunti dopo non risalgono alla data di emissione originale.`}
@@ -308,7 +308,7 @@ export function AlertDetailDialog({ alert, onClose }: Props) {
 
         <div className="px-5 grid grid-cols-3 gap-3">
           <div className="rounded-lg border border-border/60 bg-muted/30 dark:bg-muted/15 p-3">
-            <div className="flex items-center gap-1 text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
+            <div className="flex items-center gap-1 text-[0.6471rem] uppercase tracking-wider text-muted-foreground font-semibold">
               <DollarSign className="h-3 w-3" />
               Prezzo trigger
             </div>
@@ -327,7 +327,7 @@ export function AlertDetailDialog({ alert, onClose }: Props) {
           >
             <div
               className={cn(
-                "flex items-center gap-1 text-[11px] uppercase tracking-wider font-semibold",
+                "flex items-center gap-1 text-[0.6471rem] uppercase tracking-wider font-semibold",
                 invLevel != null ? "text-amber-700 dark:text-amber-300" : "text-muted-foreground",
               )}
             >
@@ -340,7 +340,7 @@ export function AlertDetailDialog({ alert, onClose }: Props) {
                   ${invLevel.toFixed(2)}
                 </div>
                 {inv?.reason && (
-                  <div className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
+                  <div className="text-[0.6471rem] text-muted-foreground mt-0.5 leading-snug">
                     {inv.reason}
                   </div>
                 )}
@@ -353,7 +353,7 @@ export function AlertDetailDialog({ alert, onClose }: Props) {
           </div>
 
           <div className="rounded-lg border border-border/60 bg-muted/30 dark:bg-muted/15 p-3">
-            <div className="flex items-center gap-1 text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
+            <div className="flex items-center gap-1 text-[0.6471rem] uppercase tracking-wider text-muted-foreground font-semibold">
               <CalendarRange className="h-3 w-3" />
               Data segnale
             </div>
@@ -392,7 +392,7 @@ export function AlertDetailDialog({ alert, onClose }: Props) {
             nessuna sezione. */}
         {isSignalKind(alert.rule_kind) && alert.signal_date && (
           <div className="px-5 pt-4">
-            <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">
+            <div className="text-[0.6471rem] uppercase tracking-wider text-muted-foreground font-semibold mb-2">
               Esito realizzato
             </div>
             {alert.outcome_hit != null ? (
@@ -423,7 +423,7 @@ export function AlertDetailDialog({ alert, onClose }: Props) {
                       {hit ? "Direzione azzeccata" : "Direzione mancata"}
                     </span>
                     <div>
-                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+                      <div className="text-[0.5882rem] uppercase tracking-wider text-muted-foreground font-semibold">
                         Ritorno a {hz ?? "?"} gg
                       </div>
                       <div
@@ -439,7 +439,7 @@ export function AlertDetailDialog({ alert, onClose }: Props) {
                     </div>
                     {mkt != null && (
                       <div title="Excess market-neutral: quanto il segnale ha battuto la media dell'universo nella sua direzione, sullo stesso orizzonte.">
-                        <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+                        <div className="text-[0.5882rem] uppercase tracking-wider text-muted-foreground font-semibold">
                           Excess vs mercato
                         </div>
                         <div
@@ -468,7 +468,7 @@ export function AlertDetailDialog({ alert, onClose }: Props) {
 
         {isSignalKind(alert.rule_kind) && (
           <div className="px-5 pt-4">
-            <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">
+            <div className="text-[0.6471rem] uppercase tracking-wider text-muted-foreground font-semibold mb-2">
               Grafico del segnale
             </div>
             <SignalChartSvg
@@ -481,7 +481,7 @@ export function AlertDetailDialog({ alert, onClose }: Props) {
 
         <div className="px-5 pt-4 pb-1">
           {!isSignalKind(alert.rule_kind) && (
-            <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">
+            <div className="text-[0.6471rem] uppercase tracking-wider text-muted-foreground font-semibold mb-2">
               Snapshot del trigger
             </div>
           )}
@@ -531,7 +531,7 @@ export function AlertDetailDialog({ alert, onClose }: Props) {
           const pb = buildPlaybook(alert.snapshot ?? {}, alert.trigger_price, alert.rule_kind ?? null);
           return (
             <div className="px-5 pt-2 pb-4">
-              <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">
+              <div className="text-[0.6471rem] uppercase tracking-wider text-muted-foreground font-semibold mb-2">
                 Piano operativo
               </div>
               {pb ? (

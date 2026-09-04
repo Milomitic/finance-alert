@@ -86,7 +86,7 @@ export function RulePerformancePanel() {
                           <span className="font-semibold">{meta.label}</span>
                           <span
                             className={cn(
-                              "px-1.5 py-px rounded text-[10px] uppercase tracking-wider font-semibold",
+                              "px-1.5 py-px rounded text-[0.5882rem] uppercase tracking-wider font-semibold",
                               row.tone === "bullish"
                                 ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200"
                                 : row.tone === "bearish"
@@ -155,7 +155,7 @@ export function RulePerformancePanel() {
                 })}
               </tbody>
             </table>
-            <p className="mt-2 text-[11px] text-muted-foreground italic">
+            <p className="mt-2 text-[0.6471rem] text-muted-foreground italic">
               "Hit" = % di alert con direzione coerente con il tono del
               segnale entro la finestra (bullish → ritorno positivo,
               bearish → negativo). I segnali neutri non hanno hit-rate.

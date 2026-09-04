@@ -47,7 +47,7 @@ export function CalibrationPanel() {
           <div className="space-y-4">
             {matured > 0 ? (
               <div>
-                <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold mb-1">
+                <div className="text-[0.6471rem] uppercase tracking-wider text-muted-foreground font-semibold mb-1">
                   Live - esiti maturati: {matured} (orizzonte {horizon}g)
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -64,7 +64,7 @@ export function CalibrationPanel() {
             )}
             {c?.backtest_seed && (
               <div>
-                <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold mb-1">
+                <div className="text-[0.6471rem] uppercase tracking-wider text-muted-foreground font-semibold mb-1">
                   Riferimento backtest - forward {c.backtest_seed.window}g, direction-adjusted
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -114,7 +114,7 @@ function CalTable({
 }) {
   return (
     <div>
-      <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold mb-1">
+      <div className="text-[0.6471rem] uppercase tracking-wider text-muted-foreground font-semibold mb-1">
         {title}
       </div>
       {/* The only raw table in the app with no overflow container: 5 numeric

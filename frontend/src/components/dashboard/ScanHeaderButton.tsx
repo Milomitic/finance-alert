@@ -69,7 +69,7 @@ export function ScanHeaderButton(_: Props) {
             </span>
           </Button>
         </TooltipTrigger>
-        <TooltipContent side="bottom" className="text-[11px]">
+        <TooltipContent side="bottom" className="text-[0.6471rem]">
           {isRunning
             ? "Uno scan è già in corso — vedi il toast in basso a destra"
             : "Avvia uno scan in background. La notifica seguirà l'avanzamento."}
@@ -100,7 +100,7 @@ export function ScanHeaderButton(_: Props) {
             </span>
           </Button>
         </TooltipTrigger>
-        <TooltipContent side="bottom" className="text-[11px]">
+        <TooltipContent side="bottom" className="text-[0.6471rem]">
           {isRecomputeRunning
             ? "Ricalcolo già in corso — vedi il toast in basso a destra"
             : "Forza il ricalcolo del composite score per tutte le stock (~30-60s). La notifica seguirà l'avanzamento."}
@@ -125,7 +125,7 @@ export function ScanHeaderButton(_: Props) {
             <span className="ml-1.5 hidden md:inline">Digest</span>
           </Button>
         </TooltipTrigger>
-        <TooltipContent side="bottom" className="text-[11px]">
+        <TooltipContent side="bottom" className="text-[0.6471rem]">
           Invia il digest degli ultimi alert sui canali configurati
         </TooltipContent>
       </Tooltip>

@@ -100,11 +100,11 @@ export default function SchedulerCard({ jobs }: Props) {
           <CardTitle className="text-base font-semibold flex items-center gap-1.5">
             <Clock className="h-4 w-4" />
             Scheduler
-            <span className="text-[11px] font-normal text-muted-foreground ml-1">
+            <span className="text-[0.6471rem] font-normal text-muted-foreground ml-1">
               {jobs.length} job registrati
             </span>
           </CardTitle>
-          <span className="text-[11px] text-muted-foreground tabular-nums">
+          <span className="text-[0.6471rem] text-muted-foreground tabular-nums">
             {totalRuns} runs · {totalErrors} err
           </span>
         </div>
@@ -159,7 +159,7 @@ export default function SchedulerCard({ jobs }: Props) {
                     </span>
                   )}
                 </div>
-                <div className="text-[11px] text-muted-foreground font-mono truncate mt-0.5" title={j.trigger ?? undefined}>
+                <div className="text-[0.6471rem] text-muted-foreground font-mono truncate mt-0.5" title={j.trigger ?? undefined}>
                   {j.job_id} · {j.last_run_at != null ? ago(j.last_run_at) : "mai eseguito"}
                   {fmtDuration(j.last_duration_ms) != null && (
                     <span title="Durata dell'ultima esecuzione">
@@ -169,23 +169,23 @@ export default function SchedulerCard({ jobs }: Props) {
                   )}
                 </div>
                 {j.next_run_time != null && !late && (
-                  <div className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-1">
+                  <div className="text-[0.6471rem] text-muted-foreground mt-0.5 flex items-center gap-1">
                     <CalendarClock className="h-3 w-3 shrink-0" />
                     prossimo: {nextRunLabel(j.next_run_time)}
                   </div>
                 )}
                 {j.next_run_time == null && j.trigger == null && (
-                  <div className="text-[11px] text-muted-foreground italic mt-0.5">
+                  <div className="text-[0.6471rem] text-muted-foreground italic mt-0.5">
                     non più registrato (storico)
                   </div>
                 )}
                 {j.last_error && (
-                  <div className="text-[11px] text-red-700/80 dark:text-red-400/80 mt-0.5 truncate" title={j.last_error}>
+                  <div className="text-[0.6471rem] text-red-700/80 dark:text-red-400/80 mt-0.5 truncate" title={j.last_error}>
                     ✗ {j.last_error}
                   </div>
                 )}
               </div>
-              <div className="text-right text-[11px] text-muted-foreground tabular-nums shrink-0">
+              <div className="text-right text-[0.6471rem] text-muted-foreground tabular-nums shrink-0">
                 <div className="text-emerald-700 dark:text-emerald-400 font-medium">{j.runs}</div>
                 {j.errors > 0 && <div className="text-red-700 dark:text-red-400">{j.errors} err</div>}
               </div>

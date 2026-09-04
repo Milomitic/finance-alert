@@ -46,7 +46,7 @@ export function TableSearchInput({
           "w-full rounded border bg-background/60 pl-6 pr-6 py-0.5",
           // Override any uppercase + wide tracking inherited from
           // a column header so the placeholder reads naturally.
-          "text-[12px] font-normal normal-case tracking-normal",
+          "text-[0.7059rem] font-normal normal-case tracking-normal",
           "placeholder:text-muted-foreground/60",
           "focus:outline-none focus:ring-1 focus:ring-primary/40 focus:bg-background",
         )}

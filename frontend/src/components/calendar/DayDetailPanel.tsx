@@ -183,13 +183,13 @@ function DayDetailContent({
         >
           <X className="h-4 w-4" />
         </button>
-        <div className="text-[13px] font-mono font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+        <div className="text-[0.7647rem] font-mono font-semibold uppercase tracking-[0.18em] text-muted-foreground">
           {isToday ? "Oggi" : "Giornata"}
         </div>
         <h2 className="mt-1 text-lg font-semibold leading-tight tabular-nums pr-10">
           {formatLongDate(date)}
         </h2>
-        <div className="mt-2 flex items-center gap-2 text-[14px] text-muted-foreground">
+        <div className="mt-2 flex items-center gap-2 text-[0.8235rem] text-muted-foreground">
           <CountChip count={macros.length} label="Macro" tone="macro" />
           <CountChip count={earnings.length} label="Earnings" tone="sector" />
         </div>
@@ -248,7 +248,7 @@ function DayDetailContent({
                   onQueryChange={setQuery}
                 />
                 {filteredEarnings.length === 0 && query.trim() && (
-                  <div className="rounded-lg border border-dashed bg-muted/20 px-4 py-3 text-center text-[13px] text-muted-foreground">
+                  <div className="rounded-lg border border-dashed bg-muted/20 px-4 py-3 text-center text-[0.7647rem] text-muted-foreground">
                     Nessun risultato per "{query}".
                   </div>
                 )}

@@ -40,7 +40,7 @@ function pct(v: number): string {
 function Stat({ label, value, tone }: { label: string; value: string; tone?: "up" | "down" | "muted" }) {
   return (
     <div className="rounded-md border bg-muted/20 px-3 py-2">
-      <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className="text-[0.6471rem] uppercase tracking-wide text-muted-foreground">{label}</div>
       <div
         className={cn(
           "text-lg font-semibold tabular-nums",

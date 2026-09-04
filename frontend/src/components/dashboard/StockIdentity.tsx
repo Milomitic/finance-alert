@@ -16,7 +16,7 @@ interface Props {
  * Single source of truth so TopMovers, 52w&Volume, Alerts (Top stocks
  * + Feed) and Top Picks all share exactly the same visual treatment.
  * Was previously inline-copied in each card with subtle drift
- * (text-[13px] vs text-sm, text-[10px] vs text-[11px], etc.) — this
+ * (text-[0.7647rem] vs text-sm, text-[0.5882rem] vs text-[0.6471rem], etc.) — this
  * component locks the copies together.
  *
  * Note on flex semantics: the wrapper div is `flex-1 min-w-0` so it
@@ -36,7 +36,7 @@ export function StockIdentity({ ticker, name }: Props) {
         </div>
         {name && (
           <div
-            className="text-[11px] text-muted-foreground truncate leading-tight"
+            className="text-[0.6471rem] text-muted-foreground truncate leading-tight"
             title={name}
           >
             {name}

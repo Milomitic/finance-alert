@@ -65,7 +65,7 @@ export function MetricCardList<T>({
           <dl className="mt-2.5 grid grid-cols-2 gap-x-3 gap-y-1.5 border-t pt-2.5">
             {shown.map((col) => (
               <div key={col.key} className="flex items-baseline justify-between gap-2">
-                <dt className="text-[11px] uppercase tracking-wider text-muted-foreground truncate">
+                <dt className="text-[0.6471rem] uppercase tracking-wider text-muted-foreground truncate">
                   {col.label}
                 </dt>
                 <dd className="text-sm tabular-nums shrink-0">{col.cell(row)}</dd>

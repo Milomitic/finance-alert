@@ -96,13 +96,13 @@ function TickerItem({ asset }: { asset: LiveAsset }) {
         </span>
       ) : asset.using_futures ? (
         <span
-          className="shrink-0 px-1 py-0 rounded text-[9px] font-bold uppercase tracking-wider bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-200"
+          className="shrink-0 px-1 py-0 rounded text-[0.5294rem] font-bold uppercase tracking-wider bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-200"
           title="Cash market chiuso · prezzo dal contratto futures"
         >
           FUT
         </span>
       ) : null}
-      {/* Font bumped from text-[12px] → text-sm (~14px). The ticker
+      {/* Font bumped from text-[0.7059rem] → text-sm (~14px). The ticker
           tape used to feel cramped; the readability gain at this
           size is worth the slight extra horizontal footprint. */}
       <span className="font-mono font-semibold text-sm tracking-tight">
@@ -132,7 +132,7 @@ export function MarketTickerTape() {
   // Empty isn't really expected (the dashboard auth gate already
   // guarantees the user has the data) but defensive.
   // Height bumped 7→9 (28→36px) to match the live rail's new
-  // text-sm font (was text-[12px]).
+  // text-sm font (was text-[0.7059rem]).
   if (q.isLoading || assets.length === 0) {
     return (
       <div className="relative w-full overflow-hidden border bg-card/40 h-9 -mx-3 rounded-none border-x-0 sm:mx-0 sm:rounded-md sm:border-x">

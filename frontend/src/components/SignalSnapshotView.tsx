@@ -121,7 +121,7 @@ export function SignalSnapshotView({
     <div className="space-y-4">
       {isHybrid && (
         <div className="flex items-center gap-1.5">
-          <span className="inline-flex items-center gap-1 rounded-full border border-indigo-300/60 bg-indigo-50 px-2 py-0.5 text-[11px] font-semibold text-indigo-700 dark:border-indigo-700/50 dark:bg-indigo-950/40 dark:text-indigo-300">
+          <span className="inline-flex items-center gap-1 rounded-full border border-indigo-300/60 bg-indigo-50 px-2 py-0.5 text-[0.6471rem] font-semibold text-indigo-700 dark:border-indigo-700/50 dark:bg-indigo-950/40 dark:text-indigo-300">
             Ibrido
           </span>
         </div>
@@ -137,7 +137,7 @@ export function SignalSnapshotView({
           {/* Forza — pattern strength, tone-colored. */}
           {forza != null && (
             <div className="flex items-center gap-3">
-              <span className="w-[4.5rem] shrink-0 text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
+              <span className="w-[4.5rem] shrink-0 text-[0.6471rem] uppercase tracking-wider text-muted-foreground font-semibold">
                 Forza
               </span>
               <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
@@ -150,7 +150,7 @@ export function SignalSnapshotView({
           {/* Probabilità — historical hit-rate, neutral/info (slate/sky).
               Shows the backend value, or "n/d" when truly absent. */}
           <div className="flex items-center gap-3" title={PROBABILITA_TOOLTIP}>
-            <span className="w-[4.5rem] shrink-0 text-[11px] uppercase tracking-wider text-sky-700/80 dark:text-sky-300/80 font-semibold">
+            <span className="w-[4.5rem] shrink-0 text-[0.6471rem] uppercase tracking-wider text-sky-700/80 dark:text-sky-300/80 font-semibold">
               Probabilità
             </span>
             <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
@@ -169,25 +169,25 @@ export function SignalSnapshotView({
           {cal && (
             <div className="flex items-center gap-2 flex-wrap pl-[5.5rem] -mt-2">
               {cal.tag === "coinflip" && (
-                <span className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60"
+                <span className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[0.5882rem] font-semibold bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60"
                   title="Storicamente ~50/50 al netto del mercato: nessun edge direzionale dimostrato">
                   ≈50/50 storico
                 </span>
               )}
               {cal.tag === "negative" && (
-                <span className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800/60"
+                <span className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[0.5882rem] font-semibold bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800/60"
                   title={`Edge storico NEGATIVO al netto del mercato (${cal.edge_pct?.toFixed(2)}%): segnale anti-predittivo`}>
                   edge storico negativo
                 </span>
               )}
               {cal.tag === "edge" && (
-                <span className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60"
+                <span className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[0.5882rem] font-semibold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60"
                   title="Edge storico positivo al netto del mercato (beta-stripped)">
                   edge storico
                 </span>
               )}
               {cal.skill != null && (
-                <span className="text-[11px] text-muted-foreground tabular-nums"
+                <span className="text-[0.6471rem] text-muted-foreground tabular-nums"
                   title="Hit-rate storico al netto del movimento di mercato (skill, beta-stripped). La Probabilità sopra include invece il beta di mercato.">
                   skill {Math.round(cal.skill)}%{cal.n != null ? ` · n ${cal.n.toLocaleString("it-IT")}` : ""}
                 </span>
@@ -200,7 +200,7 @@ export function SignalSnapshotView({
           {driftFlagged && (
             <div
               className={cn(
-                "flex items-center gap-1.5 pl-[5.5rem] -mt-1 text-[11px] tabular-nums",
+                "flex items-center gap-1.5 pl-[5.5rem] -mt-1 text-[0.6471rem] tabular-nums",
                 driftFlagged.delta < 0
                   ? "text-rose-600 dark:text-rose-400"
                   : "text-emerald-600 dark:text-emerald-400",
@@ -216,7 +216,7 @@ export function SignalSnapshotView({
 
           {Object.keys(factors).length > 0 && (
             <div>
-              <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">
+              <div className="text-[0.6471rem] uppercase tracking-wider text-muted-foreground font-semibold mb-2">
                 Fattori di forza
               </div>
               <div className="space-y-1.5">
@@ -230,7 +230,7 @@ export function SignalSnapshotView({
                       <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
                         <div className="h-full bg-sky-500/70 rounded-full" style={{ width: `${pct}%` }} />
                       </div>
-                      <span className="w-9 text-right text-[11px] tabular-nums text-muted-foreground">{pct}%</span>
+                      <span className="w-9 text-right text-[0.6471rem] tabular-nums text-muted-foreground">{pct}%</span>
                     </div>
                   );
                 })}
@@ -242,7 +242,7 @@ export function SignalSnapshotView({
         {/* Left column (desktop): the event chain */}
         {chain.length > 0 && (
           <div className="md:order-1">
-            <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">
+            <div className="text-[0.6471rem] uppercase tracking-wider text-muted-foreground font-semibold mb-2">
               Catena di eventi
             </div>
             <ol className="relative border-l border-border/60 ml-2.5 space-y-3">
@@ -253,7 +253,7 @@ export function SignalSnapshotView({
                 return (
                   <li key={`${step.date}-${i}`} className="ml-4 relative">
                     {num != null ? (
-                      <span className="absolute -left-[1.72rem] top-0 h-5 w-5 rounded-full bg-slate-900 dark:bg-slate-700 text-white text-[10px] font-bold flex items-center justify-center border-2 border-background">
+                      <span className="absolute -left-[1.72rem] top-0 h-5 w-5 rounded-full bg-slate-900 dark:bg-slate-700 text-white text-[0.5882rem] font-bold flex items-center justify-center border-2 border-background">
                         {num}
                       </span>
                     ) : (
@@ -264,7 +264,7 @@ export function SignalSnapshotView({
                       {badge && (
                         <span
                           className={cn(
-                            "inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none",
+                            "inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[0.5882rem] font-semibold leading-none",
                             badge.cls,
                           )}
                         >
@@ -274,7 +274,7 @@ export function SignalSnapshotView({
                       )}
                       {step.kind === "confirmation" && (
                         <span
-                          className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60"
+                          className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[0.5882rem] font-semibold leading-none bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60"
                           title="Evento co-temporale che rinforza il segnale"
                         >
                           conferma
@@ -283,9 +283,9 @@ export function SignalSnapshotView({
                     </div>
                     {step.detail && <div className="text-xs text-muted-foreground">{step.detail}</div>}
                     {gloss && (
-                      <div className="text-[11px] text-sky-700/80 dark:text-sky-300/80 italic mt-0.5">{gloss}</div>
+                      <div className="text-[0.6471rem] text-sky-700/80 dark:text-sky-300/80 italic mt-0.5">{gloss}</div>
                     )}
-                    <div className="text-[11px] text-muted-foreground/70 tabular-nums mt-0.5">{step.date}</div>
+                    <div className="text-[0.6471rem] text-muted-foreground/70 tabular-nums mt-0.5">{step.date}</div>
                   </li>
                 );
               })}
@@ -312,7 +312,7 @@ export function SignalSnapshotView({
       )}
 
       {sources.length > 0 && (
-        <div className="flex items-start gap-2 text-[11px] text-muted-foreground">
+        <div className="flex items-start gap-2 text-[0.6471rem] text-muted-foreground">
           <BookOpen className="h-3.5 w-3.5 shrink-0 mt-0.5" />
           <div>{sources.join(" - ")}</div>
         </div>

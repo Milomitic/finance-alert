@@ -64,7 +64,7 @@ export function RsiHistogramCard({ rsi, indices }: Props) {
             icon={BarChart2}
             label="RSI distribution per indice"
             right={
-              <span className="text-[10px] text-muted-foreground">
+              <span className="text-[0.5882rem] text-muted-foreground">
                 click su legenda per nascondere/mostrare
               </span>
             }
@@ -129,7 +129,7 @@ export function RsiHistogramCard({ rsi, indices }: Props) {
             </LineChart>
           </ResponsiveContainer>
         </div>
-        <div className="text-[10px] text-muted-foreground mt-2 italic">
+        <div className="text-[0.5882rem] text-muted-foreground mt-2 italic">
           Y = numero di stock per ciascun bin RSI(14). Bins 0-30 = oversold, 70-100 = overbought.
         </div>
         </div>

@@ -52,7 +52,7 @@ export function AlertKindChip({ alert, size = "md", className }: Props) {
       className={cn(
         "inline-flex items-center gap-1 rounded font-semibold whitespace-nowrap",
         size === "sm"
-          ? "px-1.5 py-0.5 text-[11px]"
+          ? "px-1.5 py-0.5 text-[0.6471rem]"
           : "px-2 py-1 text-sm",
         TONE_BG[meta.tone],
         className,
@@ -79,7 +79,7 @@ export function AlertToneChip({ alert, size = "md", className }: Props) {
       className={cn(
         "inline-flex items-center gap-1 rounded-sm border font-semibold uppercase tracking-wider whitespace-nowrap",
         size === "sm"
-          ? "px-1 py-0.5 text-[10px]"
+          ? "px-1 py-0.5 text-[0.5882rem]"
           : "px-2 py-0.5 text-xs",
         meta.tone === "bullish"
           ? "border-emerald-300/70 dark:border-emerald-700/60 text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40"
@@ -105,7 +105,7 @@ export function AlertToneCell({ alert, size = "md" }: Props) {
       <span
         className={cn(
           "text-muted-foreground/60",
-          size === "sm" ? "text-[11px]" : "text-sm",
+          size === "sm" ? "text-[0.6471rem]" : "text-sm",
         )}
       >
         —
@@ -134,7 +134,7 @@ export function AlertNatureChip({ alert, size = "md", className }: Props) {
     <span
       className={cn(
         "inline-flex items-center rounded font-semibold whitespace-nowrap",
-        size === "sm" ? "px-1.5 py-0.5 text-[11px]" : "px-2 py-0.5 text-xs",
+        size === "sm" ? "px-1.5 py-0.5 text-[0.6471rem]" : "px-2 py-0.5 text-xs",
         NATURE_BG[nat],
         className,
       )}
@@ -157,7 +157,7 @@ export function AlertNatureCell({ alert, size = "md" }: Props) {
       <span
         className={cn(
           "text-muted-foreground/60",
-          size === "sm" ? "text-[11px]" : "text-sm",
+          size === "sm" ? "text-[0.6471rem]" : "text-sm",
         )}
       >
         —

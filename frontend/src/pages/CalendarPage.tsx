@@ -235,7 +235,7 @@ export default function CalendarPage() {
     <div className="space-y-5 w-full">
       {/* ── Page header — typographic, editorial. ───────────────────── */}
       <header className="space-y-1">
-        <div className="flex items-center gap-2 text-[10px] font-mono font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+        <div className="flex items-center gap-2 text-[0.5882rem] font-mono font-semibold uppercase tracking-[0.22em] text-muted-foreground">
           <CalendarRange className="h-3 w-3" />
           <span>Pianificazione · Eventi di mercato</span>
         </div>

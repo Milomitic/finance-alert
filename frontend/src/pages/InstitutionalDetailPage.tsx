@@ -118,7 +118,7 @@ function HoldingRow({ row }: { row: HoldingDetail }) {
   // separate "Nome" column — visually matches the dashboard's
   // TopPicksCard / TopMoversCard pattern. The ticker stays at
   // text-sm (the "ticker font" the user asked to keep unchanged
-  // when bumping the rest of the page); name is text-[11px] muted.
+  // when bumping the rest of the page); name is text-[0.6471rem] muted.
   const tickerInner = (
     <span className="inline-flex items-center gap-2 min-w-0">
       <StockLogo ticker={row.ticker} size="xs" />
@@ -128,7 +128,7 @@ function HoldingRow({ row }: { row: HoldingDetail }) {
         </span>
         {row.company_name && (
           <span
-            className="block text-[11px] text-muted-foreground truncate leading-tight max-w-[260px]"
+            className="block text-[0.6471rem] text-muted-foreground truncate leading-tight max-w-[260px]"
             title={row.company_name}
           >
             {row.company_name}
@@ -168,7 +168,7 @@ function HoldingRow({ row }: { row: HoldingDetail }) {
       <td className="px-2 py-2">
         <span
           className={cn(
-            "inline-block rounded px-2 py-0.5 text-[12px] font-medium",
+            "inline-block rounded px-2 py-0.5 text-[0.7059rem] font-medium",
             a.tone,
             a.bg,
           )}
@@ -291,7 +291,7 @@ export default function InstitutionalDetailPage() {
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 [&>*]:min-w-0">
         <Card>
           <CardContent className="p-3">
-            <div className="text-[13px] uppercase tracking-wide text-muted-foreground">
+            <div className="text-[0.7647rem] uppercase tracking-wide text-muted-foreground">
               Posizioni
             </div>
             <div className="text-2xl font-semibold tabular-nums">
@@ -301,7 +301,7 @@ export default function InstitutionalDetailPage() {
         </Card>
         <Card>
           <CardContent className="p-3">
-            <div className="text-[13px] uppercase tracking-wide text-muted-foreground">
+            <div className="text-[0.7647rem] uppercase tracking-wide text-muted-foreground">
               Valore totale
             </div>
             <div className="text-2xl font-semibold tabular-nums">
@@ -311,7 +311,7 @@ export default function InstitutionalDetailPage() {
         </Card>
         <Card>
           <CardContent className="p-3">
-            <div className="text-[13px] uppercase tracking-wide text-muted-foreground">
+            <div className="text-[0.7647rem] uppercase tracking-wide text-muted-foreground">
               Top-10 weight
             </div>
             <div className="text-2xl font-semibold tabular-nums">
@@ -321,7 +321,7 @@ export default function InstitutionalDetailPage() {
         </Card>
         <Card>
           <CardContent className="p-3">
-            <div className="text-[13px] uppercase tracking-wide text-muted-foreground">
+            <div className="text-[0.7647rem] uppercase tracking-wide text-muted-foreground">
               Periodo (Q-end)
             </div>
             <div className="flex items-center gap-2">
@@ -422,7 +422,7 @@ export default function InstitutionalDetailPage() {
                 ticker font keeps its current size. "Nome" header is
                 gone — name now lives stacked under the ticker. */}
             <table className="w-full text-base">
-              <thead className="text-[13px] uppercase tracking-wide text-muted-foreground border-b">
+              <thead className="text-[0.7647rem] uppercase tracking-wide text-muted-foreground border-b">
                 <tr>
                   <th className="px-2 py-1.5 text-left">Ticker</th>
                   <th className="px-2 py-1.5 text-right">% port.</th>

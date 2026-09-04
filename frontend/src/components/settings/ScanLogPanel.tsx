@@ -104,7 +104,7 @@ export function ScanLogPanel() {
                 ))}
               </tbody>
             </table>
-            <p className="mt-2 text-[11px] text-muted-foreground italic">
+            <p className="mt-2 text-[0.6471rem] text-muted-foreground italic">
               Il segmentato sotto "Fasi" mostra quanto tempo ha occupato
               ciascuna sotto-fase. Passa il mouse su un segmento per nome +
               durata. Auto-refresh ogni 30s.
@@ -133,7 +133,7 @@ function KpiCell({
         : "text-foreground";
   return (
     <div className="rounded border bg-muted/30 px-3 py-2">
-      <div className="text-[10px] uppercase tracking-wider text-muted-foreground/80">
+      <div className="text-[0.5882rem] uppercase tracking-wider text-muted-foreground/80">
         {label}
       </div>
       <div className={cn("text-base font-bold tabular-nums", toneCls)}>
@@ -269,7 +269,7 @@ function PhaseStrip({
         })}
       </div>
       {/* Top-3 phase chips — at-a-glance "where did the time go?" */}
-      <div className="flex flex-wrap gap-1 text-[10px]">
+      <div className="flex flex-wrap gap-1 text-[0.5882rem]">
         {phases
           .slice()
           .sort((a, b) => (b.duration_sec ?? 0) - (a.duration_sec ?? 0))

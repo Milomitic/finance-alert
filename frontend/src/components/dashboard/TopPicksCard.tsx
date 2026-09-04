@@ -68,7 +68,7 @@ function PickRow({ item }: { item: TopPickItem }) {
             from per-row text length. */}
         <span
           className={cn(
-            "shrink-0 w-[92px] text-center px-1 py-px rounded border text-[10px] uppercase tracking-wider font-semibold",
+            "shrink-0 w-[92px] text-center px-1 py-px rounded border text-[0.5882rem] uppercase tracking-wider font-semibold",
             RISK_TONE[item.risk_tier],
           )}
         >
@@ -76,7 +76,7 @@ function PickRow({ item }: { item: TopPickItem }) {
         </span>
         <span
           className={cn(
-            "text-[14px] font-bold tabular-nums shrink-0 w-[36px] text-right",
+            "text-[0.8235rem] font-bold tabular-nums shrink-0 w-[36px] text-right",
             compTone,
           )}
           title={scoreLabel(item.composite)}

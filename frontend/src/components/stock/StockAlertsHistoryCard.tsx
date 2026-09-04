@@ -108,7 +108,7 @@ export function StockAlertsHistoryCard({ alerts, ticker }: Props) {
             label={`Segnali storici per questo ticker (${stats.total})`}
             className="mb-3 shrink-0"
             right={
-              <div className="flex items-center gap-2 flex-wrap text-[13px]">
+              <div className="flex items-center gap-2 flex-wrap text-[0.7647rem]">
                 {stats.total > 0 && (
                   <>
                   {stats.last30d > 0 && (

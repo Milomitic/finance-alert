@@ -112,7 +112,7 @@ export function RecentAlertsFeed({ alerts }: Props) {
                     <span className="text-muted-foreground">—</span>
                   ) : (
                     <span
-                      className={cn("text-[13px] font-semibold tabular-nums", forzaTxt)}
+                      className={cn("text-[0.7647rem] font-semibold tabular-nums", forzaTxt)}
                       title={`Forza ${forza}%`}
                     >
                       {forza}%
@@ -126,7 +126,7 @@ export function RecentAlertsFeed({ alerts }: Props) {
                     <span className="text-muted-foreground">—</span>
                   ) : (
                     <span
-                      className="text-[13px] font-semibold tabular-nums text-slate-700 dark:text-slate-300"
+                      className="text-[0.7647rem] font-semibold tabular-nums text-slate-700 dark:text-slate-300"
                       title={`Probabilità ${prob}% — ${PROBABILITA_TOOLTIP}`}
                     >
                       {prob}%
@@ -141,7 +141,7 @@ export function RecentAlertsFeed({ alerts }: Props) {
                     detection (>=1 day after the market bar). */}
                 <TableCell className="py-2 text-right pr-4">
                   <span
-                    className="inline-flex items-center justify-end gap-1 text-[13px] text-muted-foreground tabular-nums whitespace-nowrap"
+                    className="inline-flex items-center justify-end gap-1 text-[0.7647rem] text-muted-foreground tabular-nums whitespace-nowrap"
                     title={
                       a.signal_date
                         ? `Segnale: ${a.signal_date} · Rilevato: ${new Date(a.triggered_at).toLocaleString("it-IT")}`

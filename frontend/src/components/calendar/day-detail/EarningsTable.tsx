@@ -259,7 +259,7 @@ function EarningsTableRow({ event }: { event: EarningsEvent }) {
                 Inferred server-side from yfinance UTC timestamps. */}
             {event.earnings_when === "pre" && (
               <span
-                className="text-[12px] leading-none shrink-0"
+                className="text-[0.7059rem] leading-none shrink-0"
                 title="Pre-market: earnings rilasciati prima dell'apertura della sessione"
                 aria-label="pre-market"
               >
@@ -268,7 +268,7 @@ function EarningsTableRow({ event }: { event: EarningsEvent }) {
             )}
             {event.earnings_when === "after" && (
               <span
-                className="text-[12px] leading-none shrink-0 opacity-80"
+                className="text-[0.7059rem] leading-none shrink-0 opacity-80"
                 title="After-market: earnings rilasciati dopo la chiusura della sessione"
                 aria-label="after-market"
               >
@@ -280,7 +280,7 @@ function EarningsTableRow({ event }: { event: EarningsEvent }) {
               aria-hidden
             />
           </div>
-          <div className="text-[13px] text-muted-foreground truncate leading-tight">
+          <div className="text-[0.7647rem] text-muted-foreground truncate leading-tight">
             {event.sector ? `${event.sector} · ` : ""}
             {event.name}
           </div>
@@ -323,7 +323,7 @@ function NumCell({
   return (
     <div
       className={cn(
-        "text-right text-[14px] font-semibold tabular-nums",
+        "text-right text-[0.8235rem] font-semibold tabular-nums",
         tone === "pos" && "text-emerald-700 dark:text-emerald-400",
         tone === "neg" && "text-rose-700 dark:text-rose-400",
       )}
@@ -336,7 +336,7 @@ function NumCell({
 function RiskCell({ tier }: { tier: RiskTier | null }) {
   if (!tier)
     return (
-      <div className="text-right text-[14px] text-muted-foreground/60">—</div>
+      <div className="text-right text-[0.8235rem] text-muted-foreground/60">—</div>
     );
   return (
     <div className="flex justify-end">

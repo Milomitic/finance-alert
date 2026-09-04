@@ -112,7 +112,7 @@ export function SectorIndustriesBreakdown({ industries }: { industries: Industry
                     <span className="font-semibold text-sm truncate">
                       {sector}
                     </span>
-                    <span className="ml-auto text-[11px] text-muted-foreground tabular-nums">
+                    <span className="ml-auto text-[0.6471rem] text-muted-foreground tabular-nums">
                       {rows.length} industries
                     </span>
                   </Link>

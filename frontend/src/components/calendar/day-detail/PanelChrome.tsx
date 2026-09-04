@@ -20,14 +20,14 @@ export function SectionTitle({
   return (
     <div className="flex items-baseline justify-between">
       <div className="flex items-baseline gap-2">
-        <span className="text-[14px] font-semibold uppercase tracking-[0.16em] text-foreground/80">
+        <span className="text-[0.8235rem] font-semibold uppercase tracking-[0.16em] text-foreground/80">
           {label}
         </span>
-        <span className="rounded-full border bg-muted/40 px-1.5 py-0 text-[13px] font-mono tabular-nums text-muted-foreground">
+        <span className="rounded-full border bg-muted/40 px-1.5 py-0 text-[0.7647rem] font-mono tabular-nums text-muted-foreground">
           {count}
         </span>
       </div>
-      <span className="text-[13px] uppercase tracking-wider text-muted-foreground/70">
+      <span className="text-[0.7647rem] uppercase tracking-wider text-muted-foreground/70">
         {hint}
       </span>
     </div>
@@ -49,7 +49,7 @@ export function CountChip({
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[13px] font-semibold uppercase tracking-wider",
+        "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[0.7647rem] font-semibold uppercase tracking-wider",
         dim
           ? "border-border/60 text-muted-foreground/60"
           : tone === "sector"

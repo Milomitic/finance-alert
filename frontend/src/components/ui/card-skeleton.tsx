@@ -50,7 +50,7 @@ export function CardSkeleton({
                 : "px-3 py-2",
             )}
           >
-            <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+            <span className="text-[0.6471rem] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
               {label}
             </span>
           </div>

@@ -37,11 +37,11 @@ interface Props {
 function RailHeader({ label, count }: { label: string; count?: number }) {
   return (
     <div className="px-3 py-1 border-y bg-muted/40 shrink-0 flex items-baseline justify-between gap-2">
-      <span className="text-[10px] uppercase tracking-[0.16em] font-bold text-muted-foreground truncate">
+      <span className="text-[0.5882rem] uppercase tracking-[0.16em] font-bold text-muted-foreground truncate">
         {label}
       </span>
       {count != null && (
-        <span className="text-[10px] tabular-nums text-muted-foreground/70 shrink-0">{count}</span>
+        <span className="text-[0.5882rem] tabular-nums text-muted-foreground/70 shrink-0">{count}</span>
       )}
     </div>
   );
@@ -71,7 +71,7 @@ function RailRow({
         <span className="text-[12.5px] font-semibold truncate min-w-0">{ticker}</span>
         <span
           className={cn(
-            "ml-auto shrink-0 text-[12px] font-semibold tabular-nums",
+            "ml-auto shrink-0 text-[0.7059rem] font-semibold tabular-nums",
             tone === "pos" && "text-emerald-600 dark:text-emerald-400",
             tone === "neg" && "text-red-600 dark:text-red-400",
             tone === "warn" && "text-amber-600 dark:text-amber-400",
@@ -86,7 +86,7 @@ function RailRow({
 }
 
 function Empty({ label }: { label: string }) {
-  return <div className="px-3 py-2 text-[11px] text-muted-foreground">{label}</div>;
+  return <div className="px-3 py-2 text-[0.6471rem] text-muted-foreground">{label}</div>;
 }
 
 export function MarketEventsRail({ movers }: Props) {

@@ -106,14 +106,14 @@ function EarningsChip({
           <span className="shrink-0 -ml-px">
             <StockLogo ticker={event.ticker} size="xs" />
           </span>
-          <span className="text-[14px] font-bold tracking-tight tabular-nums leading-none truncate">
+          <span className="text-[0.8235rem] font-bold tracking-tight tabular-nums leading-none truncate">
             {event.ticker}
           </span>
           {/* Beat/miss arrow once reported — color inherits the chip's
               green/red tone, so it reads without extra palette. */}
           {reported && (
             <span
-              className="text-[11px] font-bold leading-none shrink-0"
+              className="text-[0.6471rem] font-bold leading-none shrink-0"
               aria-label={beat ? "ha battuto le stime" : "sotto le stime"}
               title={beat ? "Ha battuto le stime" : "Sotto le stime"}
             >
@@ -126,7 +126,7 @@ function EarningsChip({
               timestamps vs the US session boundaries. */}
           {event.earnings_when === "pre" && (
             <span
-              className="text-[11px] leading-none shrink-0"
+              className="text-[0.6471rem] leading-none shrink-0"
               title="Pre-market: earnings rilasciati prima dell'apertura della sessione"
               aria-label="pre-market"
             >
@@ -135,7 +135,7 @@ function EarningsChip({
           )}
           {event.earnings_when === "after" && (
             <span
-              className="text-[11px] leading-none shrink-0 opacity-80"
+              className="text-[0.6471rem] leading-none shrink-0 opacity-80"
               title="After-market: earnings rilasciati dopo la chiusura della sessione"
               aria-label="after-market"
             >
@@ -151,13 +151,13 @@ function EarningsChip({
             <div className="text-base font-semibold leading-tight">
               {event.name}
             </div>
-            <div className="text-[14px] text-muted-foreground tabular-nums tracking-wide">
+            <div className="text-[0.8235rem] text-muted-foreground tabular-nums tracking-wide">
               {event.ticker}
               {event.sector ? ` · ${event.sector}` : ""}
             </div>
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 pt-1 text-[14px] tabular-nums">
+        <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 pt-1 text-[0.8235rem] tabular-nums">
           <span className="text-muted-foreground">EPS est.</span>
           <span className="text-right font-semibold">{epsLabel}</span>
           {reported && (
@@ -253,11 +253,11 @@ function MacroChip({
               aria-hidden
             />
           ) : (
-            <span className="text-[14px] leading-none shrink-0" aria-hidden>
+            <span className="text-[0.8235rem] leading-none shrink-0" aria-hidden>
               {regionFlag(event.region)}
             </span>
           )}
-          <span className="text-[14px] font-medium leading-none truncate">
+          <span className="text-[0.8235rem] font-medium leading-none truncate">
             {event.label}
           </span>
         </button>
@@ -281,7 +281,7 @@ function MacroChip({
             <div className="text-base font-semibold leading-tight">
               {event.label}
             </div>
-            <div className="mt-0.5 flex items-center gap-1.5 text-[14px] text-muted-foreground tracking-wide uppercase">
+            <div className="mt-0.5 flex items-center gap-1.5 text-[0.8235rem] text-muted-foreground tracking-wide uppercase">
               <span>{regionLabel(event.region)}</span>
               <span className="opacity-30">·</span>
               <ImportanceDots

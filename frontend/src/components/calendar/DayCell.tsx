@@ -161,14 +161,14 @@ export const DayCell = forwardRef<HTMLDivElement, DayCellProps>(
                   <span
                     /* Spans whatever the grid currently is — hard-coding
                        col-span-2 would overflow the single-column layout. */
-                    className="col-span-full self-start text-[13px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors px-1 cursor-help"
+                    className="col-span-full self-start text-[0.7647rem] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors px-1 cursor-help"
                     aria-label={`${overflowCount} altri eventi`}
                   >
                     +{overflowCount} altri
                   </span>
                 </TooltipTrigger>
                 <TooltipContent side="top" className="space-y-1 max-w-[300px]">
-                  <div className="text-[13px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  <div className="text-[0.7647rem] font-semibold uppercase tracking-wider text-muted-foreground">
                     Altri eventi
                   </div>
                   <ul className="space-y-0.5">

@@ -40,7 +40,7 @@ function KpiTile({ label, value, hint }: { label: string; value: string; hint?: 
         <div className="text-xs text-muted-foreground truncate" title={label}>{label}</div>
         <div className="text-lg font-semibold tabular-nums mt-1">{value}</div>
         {hint && (
-          <div className="text-[11px] text-muted-foreground truncate" title={hint}>
+          <div className="text-[0.6471rem] text-muted-foreground truncate" title={hint}>
             {hint}
           </div>
         )}

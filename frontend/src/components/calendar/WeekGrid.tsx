@@ -87,12 +87,12 @@ export function WeekGrid({
                 aria-label={`${ITALIAN_DAY_FULL[day.jsDayIndex]} ${day.day}, ${evs.length} eventi`}
               >
                 <span className="flex items-baseline gap-1.5 min-w-0">
-                  <span className="text-[11px] font-mono font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                  <span className="text-[0.6471rem] font-mono font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                     {ITALIAN_DAY_LONG[day.jsDayIndex]}
                   </span>
                   <span
                     className={cn(
-                      "tabular-nums font-mono text-[14px] leading-none",
+                      "tabular-nums font-mono text-[0.8235rem] leading-none",
                       isToday
                         ? "inline-flex h-6 w-6 items-center justify-center rounded-full bg-sky-500 text-white font-bold shadow-sm"
                         : "text-foreground/85 font-semibold",
@@ -120,7 +120,7 @@ export function WeekGrid({
                     ))}
                   </div>
                 ) : evs.length === 0 ? (
-                  <div className="flex h-full min-h-[6rem] items-center justify-center text-[11px] text-muted-foreground/50">
+                  <div className="flex h-full min-h-[6rem] items-center justify-center text-[0.6471rem] text-muted-foreground/50">
                     —
                   </div>
                 ) : (
@@ -174,21 +174,21 @@ function WeekEarningsRow({ event }: { event: EarningsEvent }) {
         <StockLogo ticker={event.ticker} size="xs" />
         <span
           className={cn(
-            "text-[13px] font-bold tabular-nums leading-none truncate",
+            "text-[0.7647rem] font-bold tabular-nums leading-none truncate",
             resultColor,
           )}
         >
           {event.ticker}
         </span>
         {event.earnings_when === "pre" && (
-          <span className="text-[10px] leading-none shrink-0" title="Pre-market">☀</span>
+          <span className="text-[0.5882rem] leading-none shrink-0" title="Pre-market">☀</span>
         )}
         {event.earnings_when === "after" && (
-          <span className="text-[10px] leading-none shrink-0 opacity-80" title="After-market">☾</span>
+          <span className="text-[0.5882rem] leading-none shrink-0 opacity-80" title="After-market">☾</span>
         )}
         {reported && (
           <span
-            className={cn("ml-auto shrink-0 text-[11px] font-bold tabular-nums", resultColor)}
+            className={cn("ml-auto shrink-0 text-[0.6471rem] font-bold tabular-nums", resultColor)}
             title={beat ? "Ha battuto le stime" : "Sotto le stime"}
           >
             {beat ? "▲" : "▼"} {(event.surprise_pct ?? 0) >= 0 ? "+" : ""}
@@ -197,7 +197,7 @@ function WeekEarningsRow({ event }: { event: EarningsEvent }) {
         )}
       </div>
       {/* Preview: reported vs estimate (the whole point of the wide view) */}
-      <div className="mt-1 text-[11px] tabular-nums text-muted-foreground leading-tight">
+      <div className="mt-1 text-[0.6471rem] tabular-nums text-muted-foreground leading-tight">
         {reported ? (
           <>
             EPS <span className={cn("font-semibold", resultColor)}>{formatEps(event.eps_reported)}</span>
@@ -243,7 +243,7 @@ function WeekMacroRow({
             aria-hidden
           />
         ) : (
-          <span className="text-[13px] leading-none shrink-0" aria-hidden>
+          <span className="text-[0.7647rem] leading-none shrink-0" aria-hidden>
             {regionFlag(event.region)}
           </span>
         )}
@@ -258,7 +258,7 @@ function WeekMacroRow({
         />
       </div>
       {(reported || event.expected_value != null) && (
-        <div className="mt-1 text-[11px] tabular-nums text-muted-foreground leading-tight">
+        <div className="mt-1 text-[0.6471rem] tabular-nums text-muted-foreground leading-tight">
           {reported ? (
             <>
               <span className="opacity-60">stim. {fmt(event.expected_value)} →</span>{" "}

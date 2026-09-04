@@ -50,7 +50,7 @@ export function EtfHoldingsCard({ ticker }: Props) {
             icon={Layers}
             label="Componenti ETF"
             right={
-              <span className="text-[11px] text-muted-foreground tabular-nums">
+              <span className="text-[0.6471rem] text-muted-foreground tabular-nums">
                 {underlying ? (
                   <>
                     via{" "}
@@ -66,7 +66,7 @@ export function EtfHoldingsCard({ ticker }: Props) {
           {wChange != null && (
             <span
               className={cn(
-                "shrink-0 inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[12px] font-semibold tabular-nums",
+                "shrink-0 inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[0.7059rem] font-semibold tabular-nums",
                 wChange >= 0
                   ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/60"
                   : "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800/60",
@@ -83,7 +83,7 @@ export function EtfHoldingsCard({ ticker }: Props) {
           )}
         </div>
         {underlying && (
-          <div className="px-4 py-1.5 text-[11px] text-muted-foreground border-b bg-muted/10 leading-snug">
+          <div className="px-4 py-1.5 text-[0.6471rem] text-muted-foreground border-b bg-muted/10 leading-snug">
             ETF a leva: esposizione tramite swap sull'indice. Mostriamo il
             paniere reale dell'indice sottostante (
             <span className="font-semibold text-foreground/70">{underlying}</span>
@@ -122,7 +122,7 @@ function HoldingRow({ h, maxWeight }: { h: EtfHolding; maxWeight: number }) {
           </div>
           {h.name && (
             <div
-              className="text-[11px] text-muted-foreground truncate leading-tight"
+              className="text-[0.6471rem] text-muted-foreground truncate leading-tight"
               title={h.name}
             >
               {h.name}
@@ -139,7 +139,7 @@ function HoldingRow({ h, maxWeight }: { h: EtfHolding; maxWeight: number }) {
             style={{ width: `${barPct}%` }}
           />
         </div>
-        <span className="w-11 text-right text-[11px] tabular-nums text-muted-foreground">
+        <span className="w-11 text-right text-[0.6471rem] tabular-nums text-muted-foreground">
           {(h.weight * 100).toFixed(1)}%
         </span>
       </div>
@@ -154,7 +154,7 @@ function HoldingRow({ h, maxWeight }: { h: EtfHolding; maxWeight: number }) {
         <div className="text-sm font-semibold leading-tight">
           {h.price != null ? `$${h.price.toFixed(2)}` : "—"}
         </div>
-        <div className={cn("text-[12px] font-semibold leading-tight", changeColor)}>
+        <div className={cn("text-[0.7059rem] font-semibold leading-tight", changeColor)}>
           {h.change_pct != null
             ? `${h.change_pct >= 0 ? "+" : ""}${h.change_pct.toFixed(2)}%`
             : "—"}

@@ -156,7 +156,7 @@ function PresetsMenu({
           <Bookmark className="h-3.5 w-3.5" />
           Preset
           {names.length > 0 && (
-            <Badge variant="secondary" className="h-4 px-1 text-[10px]">
+            <Badge variant="secondary" className="h-4 px-1 text-[0.5882rem]">
               {names.length}
             </Badge>
           )}
@@ -256,7 +256,7 @@ function MultiSelect({ label, options, selected, onChange }: MultiSelectProps) {
           <span className="flex items-center gap-1.5">
             <span>{label}</span>
             {active && (
-              <Badge variant="default" className="h-5 px-1.5 text-[10px] font-semibold">
+              <Badge variant="default" className="h-5 px-1.5 text-[0.5882rem] font-semibold">
                 {selected.length}
               </Badge>
             )}
@@ -504,7 +504,7 @@ function CollapsibleArea({
           {title}
         </span>
         {activeCount > 0 && (
-          <Badge variant="secondary" className="h-4 px-1 text-[10px]">
+          <Badge variant="secondary" className="h-4 px-1 text-[0.5882rem]">
             {activeCount}
           </Badge>
         )}
@@ -617,7 +617,7 @@ export function StockFiltersCard({ state, onChange, filters }: Props) {
             <Filter className="h-4 w-4" />
             <span>Filtri</span>
             {totalActive > 0 && (
-              <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">
+              <Badge variant="secondary" className="h-5 px-1.5 text-[0.5882rem]">
                 {totalActive} attivi
               </Badge>
             )}
@@ -750,7 +750,7 @@ export function StockFiltersCard({ state, onChange, filters }: Props) {
                 Punteggi pillar
               </span>
               {pillarActiveCount > 0 && (
-                <Badge variant="secondary" className="h-4 px-1 text-[10px]">
+                <Badge variant="secondary" className="h-4 px-1 text-[0.5882rem]">
                   {pillarActiveCount}
                 </Badge>
               )}

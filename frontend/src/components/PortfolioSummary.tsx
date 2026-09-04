@@ -104,7 +104,7 @@ export function PortfolioSummary({
             sub="valore di mercato"
           />
         </div>
-        <p className="text-[11px] text-muted-foreground">
+        <p className="text-[0.6471rem] text-muted-foreground">
           Somme convertite in USD ai cambi correnti.
           {notionalOnly > 0 &&
             ` ${notionalOnly} posizion${notionalOnly === 1 ? "e" : "i"} notional (senza size) escluse dai totali.`}

@@ -47,7 +47,7 @@ export function deriveMarketPhase(
 type BadgeSize = "sm" | "md";
 
 const SIZE_MAP: Record<BadgeSize, { text: string; dot: string; icon: string }> = {
-  sm: { text: "text-[10px] font-mono", dot: "h-1.5 w-1.5", icon: "h-2.5 w-2.5" },
+  sm: { text: "text-[0.5882rem] font-mono", dot: "h-1.5 w-1.5", icon: "h-2.5 w-2.5" },
   md: { text: "text-sm font-semibold", dot: "h-2 w-2", icon: "h-3 w-3" },
 };
 

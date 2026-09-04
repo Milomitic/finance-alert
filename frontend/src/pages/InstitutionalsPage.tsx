@@ -30,7 +30,7 @@ import { SectionTitle } from "@/components/ui/section-title";
  *
  * Sizes are explicit and intentional: `text-sm font-bold` on the ticker
  * (the user asked to keep ticker font size unchanged when bumping the
- * rest of the page), `text-[11px]` on the name (small enough not to
+ * rest of the page), `text-[0.6471rem]` on the name (small enough not to
  * compete with the ticker, big enough to read at scan-distance).
  *
  * Wrapped in a Link only when the ticker matches a catalog row
@@ -63,7 +63,7 @@ function TickerNameCell({
         </span>
         {name && (
           <span
-            className="block text-[11px] text-muted-foreground truncate leading-tight max-w-[180px]"
+            className="block text-[0.6471rem] text-muted-foreground truncate leading-tight max-w-[180px]"
             title={name}
           >
             {name}
@@ -285,7 +285,7 @@ function InstitutionalRow({ row }: { row: InstitutionalSummary }) {
           {shortDate(row.latest_period_end)}
           {isStaleFund(row.latest_period_end) && (
             <span
-              className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300"
+              className="inline-flex items-center rounded px-1.5 py-0.5 text-[0.5882rem] font-semibold uppercase tracking-wider bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300"
               title="Ultimo 13F più vecchio di 2 trimestri: il fondo potrebbe non pubblicare più o lo snapshot è incompleto."
             >
               stale
@@ -489,7 +489,7 @@ export default function InstitutionalsPage() {
                   current size. The "Nome" column is gone — name is
                   now stacked under the ticker à la TopPicksCard. */}
               <table className="w-full text-base">
-                <thead className="text-[13px] uppercase tracking-wide text-muted-foreground">
+                <thead className="text-[0.7647rem] uppercase tracking-wide text-muted-foreground">
                   <tr>
                     <th className="px-2 py-1.5 text-left">Ticker</th>
                     <th className="px-2 py-1.5 text-right">N° fondi</th>
@@ -533,7 +533,7 @@ export default function InstitutionalsPage() {
             </p>
             <div className="overflow-x-auto">
               <table className="w-full text-base">
-                <thead className="text-[13px] uppercase tracking-wide text-muted-foreground">
+                <thead className="text-[0.7647rem] uppercase tracking-wide text-muted-foreground">
                   <tr>
                     <th className="px-2 py-1.5 text-left">Ticker</th>
                     <th className="px-2 py-1.5 text-left">Action</th>
@@ -571,7 +571,7 @@ export default function InstitutionalsPage() {
             </p>
             <div className="overflow-x-auto">
               <table className="w-full text-base">
-                <thead className="text-[13px] uppercase tracking-wide text-muted-foreground">
+                <thead className="text-[0.7647rem] uppercase tracking-wide text-muted-foreground">
                   <tr>
                     <th className="px-2 py-1.5 text-left">Ticker</th>
                     <th className="px-2 py-1.5 text-left">Action</th>
@@ -615,7 +615,7 @@ export default function InstitutionalsPage() {
           />
           <div className="overflow-x-auto">
             <table className="w-full text-base">
-              <thead className="text-[13px] uppercase tracking-wide text-muted-foreground border-b">
+              <thead className="text-[0.7647rem] uppercase tracking-wide text-muted-foreground border-b">
                 <tr>
                   <th className="px-2 py-1.5 text-left">Portfolio</th>
                   <th className="px-2 py-1.5 text-left">Manager</th>

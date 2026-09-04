@@ -283,7 +283,7 @@ function AnnualTabBody({
         <MiniTrendChart data={chartData} hasEstimate={hasEstimate} />
       </div>
       <div className="mt-2 flex-1 min-h-0 overflow-y-auto pr-1 -mr-1">
-        <table className="w-full text-[13px] tabular-nums">
+        <table className="w-full text-[0.7647rem] tabular-nums">
           <thead className="text-sm text-muted-foreground uppercase sticky top-0 bg-card z-10">
             <tr>
               <th className="px-1.5 py-1 text-left">FY</th>
@@ -294,7 +294,7 @@ function AnnualTabBody({
                 className="px-1.5 py-1 text-right"
                 title="EPS GAAP (conto economico) — include poste straordinarie (es. costi di fusione, impairment). Può divergere fortemente dalla somma degli EPS adjusted trimestrali."
               >
-                EPS<span className="ml-0.5 text-[9px] align-top text-muted-foreground">GAAP</span>
+                EPS<span className="ml-0.5 text-[0.5294rem] align-top text-muted-foreground">GAAP</span>
               </th>
               <th
                 className="px-1.5 py-1 text-right"
@@ -325,7 +325,7 @@ function AnnualTabBody({
                     <td className="px-1.5 py-1 font-mono not-italic">
                       <span className="inline-flex items-center gap-1">
                         FY{String(currFy).slice(2, 4)}
-                        <span className="not-italic px-1 py-px rounded border border-blue-400/40 text-blue-500 dark:text-blue-400 text-[9px] uppercase tracking-wider font-semibold">
+                        <span className="not-italic px-1 py-px rounded border border-blue-400/40 text-blue-500 dark:text-blue-400 text-[0.5294rem] uppercase tracking-wider font-semibold">
                           stima
                         </span>
                       </span>
@@ -477,7 +477,7 @@ function QuarterlyTabBody({
         <MiniTrendChart data={chartData} hasEstimate={hasEstimate} />
       </div>
       <div className="mt-2 flex-1 min-h-0 overflow-y-auto pr-1 -mr-1">
-        <table className="w-full text-[13px] tabular-nums">
+        <table className="w-full text-[0.7647rem] tabular-nums">
           <thead className="text-sm text-muted-foreground uppercase sticky top-0 bg-card z-10">
             <tr>
               <th className="px-1.5 py-1 text-left">Data</th>
@@ -487,7 +487,7 @@ function QuarterlyTabBody({
                 className="px-1.5 py-1 text-right"
                 title="EPS GAAP del trimestre (conto economico) — include poste straordinarie (es. costi di fusione, impairment)."
               >
-                EPS<span className="ml-0.5 text-[9px] align-top text-muted-foreground">GAAP</span>
+                EPS<span className="ml-0.5 text-[0.5294rem] align-top text-muted-foreground">GAAP</span>
               </th>
               <th
                 className="px-1.5 py-1 text-right"
@@ -513,7 +513,7 @@ function QuarterlyTabBody({
                       EventChip. Sun = pre-open release, moon = after-close. */}
                   {nextEarningsWhen === "pre" && (
                     <span
-                      className="ml-1 text-[11px] leading-none shrink-0 text-amber-500"
+                      className="ml-1 text-[0.6471rem] leading-none shrink-0 text-amber-500"
                       title="Pre-market: earnings rilasciati prima dell'apertura della sessione"
                       aria-label="pre-market"
                     >
@@ -522,14 +522,14 @@ function QuarterlyTabBody({
                   )}
                   {nextEarningsWhen === "after" && (
                     <span
-                      className="ml-1 text-[11px] leading-none shrink-0 opacity-80"
+                      className="ml-1 text-[0.6471rem] leading-none shrink-0 opacity-80"
                       title="After-market: earnings rilasciati dopo la chiusura della sessione"
                       aria-label="after-market"
                     >
                       ☾
                     </span>
                   )}
-                  <span className="ml-1 text-[10px] uppercase tracking-wider text-blue-700/80 dark:text-blue-300/80 font-semibold">
+                  <span className="ml-1 text-[0.5882rem] uppercase tracking-wider text-blue-700/80 dark:text-blue-300/80 font-semibold">
                     prossima
                   </span>
                 </td>
