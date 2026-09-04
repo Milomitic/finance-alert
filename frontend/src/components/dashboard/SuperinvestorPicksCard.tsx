@@ -78,7 +78,7 @@ export function SuperinvestorPicksCard() {
                       idx === 0 && "border-t-0",
                     )}
                   >
-                    <span className="text-[0.5882rem] text-muted-foreground tabular-nums w-4 shrink-0">
+                    <span className="text-[0.6765rem] text-muted-foreground tabular-nums w-4 shrink-0">
                       {idx + 1}
                     </span>
                     {linkable ? (
@@ -104,7 +104,7 @@ export function SuperinvestorPicksCard() {
                       {row.holder_count}
                       <span className="ml-0.5 font-normal text-muted-foreground">fondi</span>
                     </span>
-                    <span className="text-[0.6471rem] text-muted-foreground tabular-nums shrink-0 w-16 text-right">
+                    <span className="text-[0.7059rem] text-muted-foreground tabular-nums shrink-0 w-16 text-right">
                       {fmtBig(row.total_value_usd)}
                     </span>
                   </li>

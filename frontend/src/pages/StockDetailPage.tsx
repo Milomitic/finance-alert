@@ -396,7 +396,7 @@ export default function StockDetailPage() {
               />
               {/* CENTER — indicators */}
               <div className="mx-auto flex items-center gap-2 flex-wrap justify-center">
-                <span className="text-[0.6471rem] uppercase tracking-wider font-semibold text-muted-foreground/70 shrink-0 hidden md:block">
+                <span className="text-[0.7059rem] uppercase tracking-wider font-semibold text-muted-foreground/70 shrink-0 hidden md:block">
                   Indicatori
                 </span>
                 <IndicatorToggles
@@ -411,12 +411,12 @@ export default function StockDetailPage() {
                   must be allowed to wrap instead of overflowing the page. */}
               <div className="flex items-center gap-2.5 flex-wrap sm:flex-nowrap sm:shrink-0 min-w-0">
                 {mode === "trend" && (
-                  <span className="text-[0.6471rem] font-medium text-blue-600 animate-pulse whitespace-nowrap">
+                  <span className="text-[0.7059rem] font-medium text-blue-600 animate-pulse whitespace-nowrap">
                     {pendingTrend ? "Clicca il 2° punto" : "Clicca il 1° punto"}
                   </span>
                 )}
                 {mode === "erase" && (
-                  <span className="text-[0.6471rem] font-medium text-red-600 animate-pulse whitespace-nowrap">
+                  <span className="text-[0.7059rem] font-medium text-red-600 animate-pulse whitespace-nowrap">
                     Clicca una linea da cancellare
                   </span>
                 )}

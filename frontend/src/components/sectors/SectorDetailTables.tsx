@@ -31,7 +31,7 @@ function CountryFlag({ country, ticker }: { country: string | null; ticker: stri
   const code = getStockFlagCode(country ?? null, ticker);
   if (!code) {
     return country ? (
-      <span className="text-[0.5882rem] text-muted-foreground uppercase tracking-wider tabular-nums">
+      <span className="text-[0.6765rem] text-muted-foreground uppercase tracking-wider tabular-nums">
         {country}
       </span>
     ) : (
@@ -327,7 +327,7 @@ export function SortableStocksTable({ rows }: { rows: SectorStockRow[] }) {
         <div className="hidden sm:block overflow-x-auto">
           <table className="w-full text-sm tabular-nums">
             <thead>
-              <tr className="text-[0.5882rem] uppercase tracking-wider text-muted-foreground/80 border-b border-border/60">
+              <tr className="text-[0.6765rem] uppercase tracking-wider text-muted-foreground/80 border-b border-border/60">
                 {COLUMNS.map((col) => {
                   const active = col.key === sortKey;
                   const Indicator = active

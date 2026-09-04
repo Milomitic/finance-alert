@@ -126,14 +126,14 @@ export function LiveVolumeMoversCard({ movers, computedAt }: Props) {
                   <TabsList className="h-6 p-0.5">
                     <TabsTrigger
                       value="dollar"
-                      className="h-5 text-[0.5882rem] px-1.5"
+                      className="h-5 text-[0.6765rem] px-1.5"
                       title="Ordina per controvalore scambiato (volume × prezzo, convertito in USD) — la vera dimensione del flusso di denaro"
                     >
                       $
                     </TabsTrigger>
                     <TabsTrigger
                       value="shares"
-                      className="h-5 text-[0.5882rem] px-1.5"
+                      className="h-5 text-[0.6765rem] px-1.5"
                       title="Ordina per numero di azioni scambiate (favorisce i titoli a basso prezzo)"
                     >
                       Vol
@@ -373,7 +373,7 @@ export function ScoreChip({ score }: { score: number | null | undefined }) {
   return (
     <span
       className={cn(
-        // Bumped from text-[0.6471rem] / px-1.5 / min-w-28 to text-sm /
+        // Bumped from text-[0.7059rem] / px-1.5 / min-w-28 to text-sm /
         // px-2 / min-w-44 so the score chip reads at the same weight
         // as the price column to its left. Same visual treatment as
         // the BreadthMatrixTable's score column.

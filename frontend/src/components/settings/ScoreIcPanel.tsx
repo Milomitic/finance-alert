@@ -132,7 +132,7 @@ export function ScoreIcPanel() {
                                 {cell ? (
                                   <>
                                     {nfIc.format(cell.ic_mean)}
-                                    <span className="block text-[0.6471rem] text-muted-foreground/70">
+                                    <span className="block text-[0.7059rem] text-muted-foreground/70">
                                       t={cell.t_stat.toFixed(2)}
                                     </span>
                                   </>

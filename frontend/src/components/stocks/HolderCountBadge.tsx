@@ -11,7 +11,7 @@ export function HolderCountBadge({ count }: { count: number | null | undefined }
   if (!count) return null;
   return (
     <span
-      className="inline-flex items-center gap-1 rounded bg-muted/60 px-1.5 py-0.5 text-[0.5882rem] font-medium text-muted-foreground shrink-0"
+      className="inline-flex items-center gap-1 rounded bg-muted/60 px-1.5 py-0.5 text-[0.6765rem] font-medium text-muted-foreground shrink-0"
       title={`${count} fondi istituzionali/superinvestor tracciati detengono il titolo nell'ultimo 13F disponibile`}
     >
       <Building2 className="h-3 w-3" />

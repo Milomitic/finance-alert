@@ -141,7 +141,7 @@ export function EngineHealthPanel() {
             {/* 4. Scan trend */}
             {data && data.scans.length > 0 && <ScanTrend scans={data.scans} />}
 
-            <p className="text-[0.6471rem] text-muted-foreground italic">
+            <p className="text-[0.7059rem] text-muted-foreground italic">
               KPI raccolti a fine scan (popolazione segnali + fonti dati) e dal
               rollup giornaliero (calibrazione + confluenza). I flag in cima
               segnalano scan a vuoto, fonti degradate o calibrazione immatura.
@@ -185,7 +185,7 @@ function StatCell({
 }) {
   return (
     <div className="rounded border bg-muted/30 px-3 py-2">
-      <div className="text-[0.5882rem] uppercase tracking-wider text-muted-foreground/80">
+      <div className="text-[0.6765rem] uppercase tracking-wider text-muted-foreground/80">
         {label}
       </div>
       <div
@@ -196,7 +196,7 @@ function StatCell({
       >
         {value}
       </div>
-      {hint && <div className="text-[0.5882rem] text-muted-foreground tabular-nums">{hint}</div>}
+      {hint && <div className="text-[0.6765rem] text-muted-foreground tabular-nums">{hint}</div>}
     </div>
   );
 }
@@ -218,7 +218,7 @@ function Distribution({
   const safe = total > 0 ? total : 1;
   return (
     <div>
-      <div className="text-[0.6471rem] uppercase tracking-wider text-muted-foreground font-semibold mb-1.5">
+      <div className="text-[0.7059rem] uppercase tracking-wider text-muted-foreground font-semibold mb-1.5">
         {title}
       </div>
       <div className="space-y-1.5">
@@ -253,7 +253,7 @@ function ScanTrend({ scans }: { scans: KpiSnapshot<KpiScanMetrics>[] }) {
   const maxFired = Math.max(1, ...series.map((s) => s.metrics.alerts_fired ?? 0));
   return (
     <div>
-      <div className="text-[0.6471rem] uppercase tracking-wider text-muted-foreground font-semibold mb-1.5">
+      <div className="text-[0.7059rem] uppercase tracking-wider text-muted-foreground font-semibold mb-1.5">
         Segnali per scan — ultimi {series.length}
       </div>
       <div className="flex items-end gap-0.5 h-16">

@@ -56,7 +56,7 @@ export function CardUpdatedAt({
   if (!ms) return null;
   return (
     <span
-      className={cn("text-[0.5882rem] leading-none text-muted-foreground", className)}
+      className={cn("text-[0.6765rem] leading-none text-muted-foreground", className)}
       title={`Ultimo aggiornamento: ${absolute(ms)}`}
     >
       aggiornato {relative(ms)}

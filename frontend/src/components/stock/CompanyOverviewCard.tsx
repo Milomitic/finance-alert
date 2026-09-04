@@ -162,7 +162,7 @@ export function CompanyOverviewCard({ ticker, stock }: Props) {
             />
             {website && (
               <div className="grid grid-cols-[6.5rem_minmax(0,1fr)] items-baseline gap-3 py-2">
-                <dt className="flex items-center gap-1.5 text-[0.6471rem] font-semibold uppercase tracking-wider text-muted-foreground">
+                <dt className="flex items-center gap-1.5 text-[0.7059rem] font-semibold uppercase tracking-wider text-muted-foreground">
                   <ExternalLink className="h-3 w-3 shrink-0" />
                   Sito web
                 </dt>
@@ -200,7 +200,7 @@ function Row({
   if (!value) return null;
   return (
     <div className="grid grid-cols-[6.5rem_minmax(0,1fr)] items-baseline gap-3 py-2">
-      <dt className="flex items-center gap-1.5 text-[0.6471rem] font-semibold uppercase tracking-wider text-muted-foreground">
+      <dt className="flex items-center gap-1.5 text-[0.7059rem] font-semibold uppercase tracking-wider text-muted-foreground">
         <Icon className="h-3 w-3 shrink-0" />
         {label}
       </dt>
@@ -226,7 +226,7 @@ function CeoRow({
   const flag = getStockFlagCode(country);
   return (
     <div className="grid grid-cols-[6.5rem_minmax(0,1fr)] items-baseline gap-3 py-2">
-      <dt className="flex items-center gap-1.5 text-[0.6471rem] font-semibold uppercase tracking-wider text-muted-foreground">
+      <dt className="flex items-center gap-1.5 text-[0.7059rem] font-semibold uppercase tracking-wider text-muted-foreground">
         <User className="h-3 w-3 shrink-0" />
         CEO
       </dt>

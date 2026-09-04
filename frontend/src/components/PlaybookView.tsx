@@ -21,11 +21,11 @@ function Cell({
         : "text-foreground";
   return (
     <div className="rounded-md border border-border/60 px-2.5 py-1.5">
-      <div className="text-[0.5882rem] uppercase tracking-wider text-muted-foreground font-semibold truncate" title={label}>
+      <div className="text-[0.6765rem] uppercase tracking-wider text-muted-foreground font-semibold truncate" title={label}>
         {label}
       </div>
       <div className={cn("font-bold tabular-nums", vcls)}>{value}</div>
-      {hint && <div className="text-[0.5882rem] text-muted-foreground tabular-nums">{hint}</div>}
+      {hint && <div className="text-[0.6765rem] text-muted-foreground tabular-nums">{hint}</div>}
     </div>
   );
 }
@@ -76,7 +76,7 @@ export function PlaybookView({ playbook }: { playbook: Playbook }) {
           <span className={cn("font-medium", accent)}>{p.leverageNote}</span>
         </div>
       </div>
-      <div className="text-[0.5882rem] text-muted-foreground/70 italic">
+      <div className="text-[0.6765rem] text-muted-foreground/70 italic">
         Stime educative su base tecnica, non un consiglio finanziario o di investimento.
       </div>
     </div>

@@ -418,14 +418,14 @@ function ActionsList({ actions }: { actions: AnalystAction[] }) {
                   href={a.source_link}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="shrink-0 px-1 py-0.5 rounded text-[0.6471rem] font-bold uppercase tracking-wider bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-200 hover:bg-amber-200 dark:hover:bg-amber-800/70"
+                  className="shrink-0 px-1 py-0.5 rounded text-[0.7059rem] font-bold uppercase tracking-wider bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-200 hover:bg-amber-200 dark:hover:bg-amber-800/70"
                   title="Apri articolo originale"
                 >
                   news
                 </a>
               ) : (
                 <span
-                  className="shrink-0 px-1 py-0.5 rounded text-[0.6471rem] font-bold uppercase tracking-wider bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-200"
+                  className="shrink-0 px-1 py-0.5 rounded text-[0.7059rem] font-bold uppercase tracking-wider bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-200"
                   title="Estratto da news"
                 >
                   news

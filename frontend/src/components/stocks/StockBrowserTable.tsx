@@ -150,7 +150,7 @@ function EtfBadge({ show }: { show: boolean }) {
   if (!show) return null;
   return (
     <span
-      className="inline-flex items-center px-1 py-0.5 rounded bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-300 text-[0.5294rem] font-semibold uppercase tracking-wider shrink-0"
+      className="inline-flex items-center px-1 py-0.5 rounded bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-300 text-[0.6471rem] font-semibold uppercase tracking-wider shrink-0"
       title="ETF/ETN — nessuno score fondamentale (Qualità) per design"
     >
       ETF
@@ -165,7 +165,7 @@ function EtfBadge({ show }: { show: boolean }) {
 function InPositionChip({ show, asLink = true }: { show: boolean; asLink?: boolean }) {
   if (!show) return null;
   const cls =
-    "inline-flex items-center px-1 py-0.5 rounded bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-300 text-[0.5294rem] font-semibold uppercase tracking-wider shrink-0";
+    "inline-flex items-center px-1 py-0.5 rounded bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-300 text-[0.6471rem] font-semibold uppercase tracking-wider shrink-0";
   const title = "Posizione aperta su questo titolo — vai a Posizioni";
   if (!asLink) {
     return <span className={cls} title={title}>IN POS</span>;
@@ -201,7 +201,7 @@ function ScoreTrendArrow({ delta }: { delta: number | null | undefined }) {
   return (
     <span
       className={cn(
-        "text-[0.5882rem] font-semibold align-middle ml-0.5",
+        "text-[0.6765rem] font-semibold align-middle ml-0.5",
         up ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400",
       )}
       title={`Δ score vs ~7 giorni fa: ${up ? "+" : ""}${delta.toFixed(1)}`}
@@ -467,7 +467,7 @@ export function StockBrowserTable({
                         {item.score.risk_tier && (
                           <span
                             className={cn(
-                              "inline-flex items-center px-1.5 py-0.5 rounded text-[0.5882rem] font-semibold uppercase tracking-wider",
+                              "inline-flex items-center px-1.5 py-0.5 rounded text-[0.6765rem] font-semibold uppercase tracking-wider",
                               RISK_TONE[item.score.risk_tier],
                             )}
                           >
@@ -770,7 +770,7 @@ export function StockBrowserTable({
                           {item.technical.composite != null ? item.technical.composite.toFixed(0) : "-"}
                         </span>
                         {item.technical.posture && (
-                          <span className="block text-[0.5882rem] text-muted-foreground leading-none">{item.technical.posture}</span>
+                          <span className="block text-[0.6765rem] text-muted-foreground leading-none">{item.technical.posture}</span>
                         )}
                       </td>
                     )}
@@ -789,7 +789,7 @@ export function StockBrowserTable({
                         {item.score.risk_tier ? (
                           <span
                             className={cn(
-                              "inline-flex items-center px-1.5 py-0.5 rounded text-[0.5882rem] font-semibold uppercase tracking-wider",
+                              "inline-flex items-center px-1.5 py-0.5 rounded text-[0.6765rem] font-semibold uppercase tracking-wider",
                               RISK_TONE[item.score.risk_tier],
                             )}
                           >

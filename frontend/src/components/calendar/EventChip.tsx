@@ -113,7 +113,7 @@ function EarningsChip({
               green/red tone, so it reads without extra palette. */}
           {reported && (
             <span
-              className="text-[0.6471rem] font-bold leading-none shrink-0"
+              className="text-[0.7059rem] font-bold leading-none shrink-0"
               aria-label={beat ? "ha battuto le stime" : "sotto le stime"}
               title={beat ? "Ha battuto le stime" : "Sotto le stime"}
             >
@@ -126,7 +126,7 @@ function EarningsChip({
               timestamps vs the US session boundaries. */}
           {event.earnings_when === "pre" && (
             <span
-              className="text-[0.6471rem] leading-none shrink-0"
+              className="text-[0.7059rem] leading-none shrink-0"
               title="Pre-market: earnings rilasciati prima dell'apertura della sessione"
               aria-label="pre-market"
             >
@@ -135,7 +135,7 @@ function EarningsChip({
           )}
           {event.earnings_when === "after" && (
             <span
-              className="text-[0.6471rem] leading-none shrink-0 opacity-80"
+              className="text-[0.7059rem] leading-none shrink-0 opacity-80"
               title="After-market: earnings rilasciati dopo la chiusura della sessione"
               aria-label="after-market"
             >

@@ -228,7 +228,7 @@ export default function PositionsPage() {
                             )}
                             {p.price_source === "eod" && (
                               <span
-                                className="ml-1 text-[0.5882rem] uppercase text-muted-foreground"
+                                className="ml-1 text-[0.6765rem] uppercase text-muted-foreground"
                                 title="Ultima chiusura giornaliera"
                               >
                                 eod

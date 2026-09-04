@@ -99,7 +99,25 @@
    * ma restano 152 dimensioni di layout ancora in px fissi (altezze di icone,
    * min-width), che non crescono col testo. Un +6% su un carattere da 11px
    * sono 0,7px: sotto la soglia in cui una scatola ad altezza fissa trabocca.
-   * Prima di spingere oltre andrebbero convertite anche quelle. */
+   * AGGIORNAMENTO: le 152 sono state ispezionate e NON sono un vincolo — sono
+   * quasi tutte contenitori di grafici e scroller (400-640px) con
+   * `overflow-auto`, non scatole aderenti al testo; le poche piccole (36/44/52px)
+   * sono altezze di controlli con margine abbondante. La cautela qui sopra era
+   * eccessiva.
+   *
+   * Il vero limite era un altro: una scala uniforme lascia il gradino piu basso
+   * dov'era. Un 9px al +6% resta 10px, cioe' ancora illeggibile su un monitor
+   * grande. Quindi il FONDO della scala e' stato alzato alla sorgente —
+   * 9->11, 10->11.5, 11->12 px di base, tenendoli DISTINTI perche' la gerarchia
+   * (badge < etichetta < corpo) doveva sopravvivere all'ingrandimento.
+   *
+   * Scala risultante, base 17px -> 19px sui monitor grandi:
+   *   11 -> 12.3   11.5 -> 12.9   12 -> 13.4   13 -> 14.5   14 -> 15.6
+   *
+   * Restavano le etichette degli assi dei grafici, testo SVG con `fontSize`
+   * inline in px assoluti che non partecipa a nulla di tutto questo: portate
+   * da 11 a 12. Non oltre, perche' sugli assi lo spazio e' finito e a 13
+   * iniziano a sovrapporsi. */
   @media (min-width: 1536px) {
     html {
       font-size: 18px;

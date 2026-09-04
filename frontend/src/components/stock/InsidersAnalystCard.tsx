@@ -214,7 +214,7 @@ function InsiderHeader() {
     <li
       className={cn(
         INSIDER_GRID,
-        "pb-1 text-[0.5882rem] uppercase tracking-wider text-muted-foreground/70 font-semibold",
+        "pb-1 text-[0.6765rem] uppercase tracking-wider text-muted-foreground/70 font-semibold",
       )}
     >
       <span className="truncate">Insider</span>

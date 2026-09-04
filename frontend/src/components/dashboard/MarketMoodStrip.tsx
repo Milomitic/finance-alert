@@ -107,7 +107,7 @@ export function MarketMoodStrip({ global, byIndex }: Props) {
               <span className="text-sm shrink-0" aria-hidden="true">{region.emoji}</span>
             )}
             <span className="text-xs font-semibold">{region.label}</span>
-            <span className="text-[0.6471rem] tabular-nums text-muted-foreground">
+            <span className="text-[0.7059rem] tabular-nums text-muted-foreground">
               {rm.pct_above_ema200.toFixed(0)}%
             </span>
             <span className={cn("text-xs font-bold tabular-nums", toneFor(rm.avg_change))}>
@@ -119,7 +119,7 @@ export function MarketMoodStrip({ global, byIndex }: Props) {
             a move rather than a loss. */}
         <a
           href="#breadth"
-          className="text-[0.6471rem] text-muted-foreground hover:text-foreground underline underline-offset-2 shrink-0"
+          className="text-[0.7059rem] text-muted-foreground hover:text-foreground underline underline-offset-2 shrink-0"
         >
           dettaglio per indice ↓
         </a>

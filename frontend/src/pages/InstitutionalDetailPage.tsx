@@ -118,7 +118,7 @@ function HoldingRow({ row }: { row: HoldingDetail }) {
   // separate "Nome" column — visually matches the dashboard's
   // TopPicksCard / TopMoversCard pattern. The ticker stays at
   // text-sm (the "ticker font" the user asked to keep unchanged
-  // when bumping the rest of the page); name is text-[0.6471rem] muted.
+  // when bumping the rest of the page); name is text-[0.7059rem] muted.
   const tickerInner = (
     <span className="inline-flex items-center gap-2 min-w-0">
       <StockLogo ticker={row.ticker} size="xs" />
@@ -128,7 +128,7 @@ function HoldingRow({ row }: { row: HoldingDetail }) {
         </span>
         {row.company_name && (
           <span
-            className="block text-[0.6471rem] text-muted-foreground truncate leading-tight max-w-[260px]"
+            className="block text-[0.7059rem] text-muted-foreground truncate leading-tight max-w-[260px]"
             title={row.company_name}
           >
             {row.company_name}

@@ -96,7 +96,7 @@ function TickerItem({ asset }: { asset: LiveAsset }) {
         </span>
       ) : asset.using_futures ? (
         <span
-          className="shrink-0 px-1 py-0 rounded text-[0.5294rem] font-bold uppercase tracking-wider bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-200"
+          className="shrink-0 px-1 py-0 rounded text-[0.6471rem] font-bold uppercase tracking-wider bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-200"
           title="Cash market chiuso · prezzo dal contratto futures"
         >
           FUT

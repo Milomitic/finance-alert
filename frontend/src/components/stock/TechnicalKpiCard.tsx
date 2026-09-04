@@ -220,7 +220,7 @@ function MatrixRowComponent({
           <TooltipTrigger asChild>
             <span className="cursor-help">{row.label}</span>
           </TooltipTrigger>
-          <TooltipContent side="left" className="max-w-[260px] text-[0.6471rem]">
+          <TooltipContent side="left" className="max-w-[260px] text-[0.7059rem]">
             {row.hint}
           </TooltipContent>
         </Tooltip>
@@ -292,7 +292,7 @@ export function TechnicalKpiCard({ ticker, kind = "stock" }: Props) {
         <div className="mt-3 overflow-x-auto">
           <table className="w-full text-sm border-separate border-spacing-y-0.5">
             <thead>
-              <tr className="text-[0.5882rem] uppercase tracking-wider text-muted-foreground/70">
+              <tr className="text-[0.6765rem] uppercase tracking-wider text-muted-foreground/70">
                 <th className="text-left font-semibold pb-1.5 pr-2">
                   Indicatore
                 </th>

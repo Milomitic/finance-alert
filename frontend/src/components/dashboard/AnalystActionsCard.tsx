@@ -121,7 +121,7 @@ function TargetUpsideChip({ a }: { a: AnalystAction }) {
   return (
     <span
       className={cn(
-        "shrink-0 w-[52px] text-right tabular-nums text-[0.6471rem] font-semibold",
+        "shrink-0 w-[52px] text-right tabular-nums text-[0.7059rem] font-semibold",
         up ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400",
       )}
       title={`Target ${up ? "sopra" : "sotto"} il prezzo attuale ($${cur.toFixed(2)}) del ${Math.abs(pct).toFixed(1)}%`}
@@ -183,7 +183,7 @@ function ActionRow({ a }: { a: AnalystAction }) {
           <TargetUpsideChip a={a} />
         </span>
 
-        <span className="hidden dense-4:block shrink-0 w-10 text-right text-[0.5882rem] text-muted-foreground tabular-nums whitespace-nowrap">
+        <span className="hidden dense-4:block shrink-0 w-10 text-right text-[0.6765rem] text-muted-foreground tabular-nums whitespace-nowrap">
           {fmtDate(a.date)}
         </span>
       </Link>

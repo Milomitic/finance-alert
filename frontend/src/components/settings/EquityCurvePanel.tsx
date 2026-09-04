@@ -40,7 +40,7 @@ function pct(v: number): string {
 function Stat({ label, value, tone }: { label: string; value: string; tone?: "up" | "down" | "muted" }) {
   return (
     <div className="rounded-md border bg-muted/20 px-3 py-2">
-      <div className="text-[0.6471rem] uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className="text-[0.7059rem] uppercase tracking-wide text-muted-foreground">{label}</div>
       <div
         className={cn(
           "text-lg font-semibold tabular-nums",
@@ -158,11 +158,11 @@ export function EquityCurvePanel() {
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(120,120,120,0.15)" />
                   <XAxis
                     dataKey="date"
-                    tick={{ fontSize: 11, fill: "var(--muted-foreground, #6b7280)" }}
+                    tick={{ fontSize: 12, fill: "var(--muted-foreground, #6b7280)" }}
                     minTickGap={40}
                   />
                   <YAxis
-                    tick={{ fontSize: 11, fill: "var(--muted-foreground, #6b7280)" }}
+                    tick={{ fontSize: 12, fill: "var(--muted-foreground, #6b7280)" }}
                     domain={["auto", "auto"]}
                     tickFormatter={(v: number) => v.toFixed(2)}
                     width={44}

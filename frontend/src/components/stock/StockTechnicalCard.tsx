@@ -34,12 +34,12 @@ export function StockTechnicalCard({ ticker }: { ticker: string | undefined }) {
     <Card>
       <CardContent className="p-3 space-y-2.5">
         <div className="flex items-center justify-between">
-          <span className="text-[0.6471rem] uppercase tracking-wider text-muted-foreground font-semibold">
+          <span className="text-[0.7059rem] uppercase tracking-wider text-muted-foreground font-semibold">
             Valutazione tecnica
           </span>
           <div className="flex items-center gap-2">
             {data && (
-              <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-[0.6471rem] font-semibold", POSTURE_CLS[data.posture] ?? "bg-muted text-muted-foreground")}>
+              <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-[0.7059rem] font-semibold", POSTURE_CLS[data.posture] ?? "bg-muted text-muted-foreground")}>
                 {data.posture}
               </span>
             )}
@@ -69,7 +69,7 @@ export function StockTechnicalCard({ ticker }: { ticker: string | undefined }) {
               </span>
               <span className="text-xs text-muted-foreground">/ 100 composito</span>
               {data.signals != null && (
-                <span className="ml-auto self-center text-[0.6471rem] text-muted-foreground">
+                <span className="ml-auto self-center text-[0.7059rem] text-muted-foreground">
                   Segnale recente: confidenza{" "}
                   <span className="font-semibold text-foreground/80">
                     {data.signals.toFixed(0)}%
@@ -87,7 +87,7 @@ export function StockTechnicalCard({ ticker }: { ticker: string | undefined }) {
                     <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
                       <div className="h-full rounded-full bg-sky-500/70" style={{ width: `${pct}%` }} />
                     </div>
-                    <span className={cn("w-8 text-right text-[0.6471rem] tabular-nums", v != null ? scoreColor(v) : "text-muted-foreground")}>
+                    <span className={cn("w-8 text-right text-[0.7059rem] tabular-nums", v != null ? scoreColor(v) : "text-muted-foreground")}>
                       {v != null ? v.toFixed(0) : "-"}
                     </span>
                   </div>

@@ -77,7 +77,7 @@ export function AlertsByIndexBars({ data }: Props) {
                 <div className="shrink-0 w-[46px] text-right leading-tight">
                   <div className="font-bold tabular-nums">{d.alert_count}</div>
                   <div
-                    className="text-[0.5882rem] text-muted-foreground tabular-nums"
+                    className="text-[0.6765rem] text-muted-foreground tabular-nums"
                     title={`${share}% dei segnali degli ultimi 30 giorni`}
                   >
                     {share}%

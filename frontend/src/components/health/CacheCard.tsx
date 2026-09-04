@@ -34,16 +34,16 @@ function TierRow({
 }) {
   return (
     <div className="flex items-baseline justify-between gap-2 tabular-nums">
-      <span className="text-[0.6471rem] text-muted-foreground inline-flex items-baseline gap-1.5">
+      <span className="text-[0.7059rem] text-muted-foreground inline-flex items-baseline gap-1.5">
         <span className="font-semibold text-foreground/80">{tier}</span>
-        <span className="text-[0.5882rem]">{subtitle}</span>
+        <span className="text-[0.6765rem]">{subtitle}</span>
       </span>
-      <span className="text-[0.6471rem] text-muted-foreground inline-flex items-baseline gap-1.5">
+      <span className="text-[0.7059rem] text-muted-foreground inline-flex items-baseline gap-1.5">
         <span>
           agg.{" "}
           <span className="font-mono text-foreground/90">{fmtAge(newestAgeS)}</span> fa
         </span>
-        <span className="text-[0.5882rem] opacity-70">
+        <span className="text-[0.6765rem] opacity-70">
           · meno fresco <span className="font-mono">{fmtAge(oldestAgeS)}</span>
         </span>
       </span>
@@ -99,7 +99,7 @@ export default function CacheCard({ cache }: Props) {
             <Layers className="h-4 w-4" />
             Cache &amp; Database
           </CardTitle>
-          <span className="text-[0.6471rem] text-muted-foreground tabular-nums">
+          <span className="text-[0.7059rem] text-muted-foreground tabular-nums">
             {totalL1}/{totalL2}
           </span>
         </div>
@@ -117,7 +117,7 @@ export default function CacheCard({ cache }: Props) {
                 <CandlestickChart className="h-4 w-4" />
                 Dati
               </span>
-              <span className="text-[0.6471rem] text-muted-foreground tabular-nums">
+              <span className="text-[0.7059rem] text-muted-foreground tabular-nums">
                 {cache.ohlcv.max_date != null ? (
                   <>
                     OHLCV aggiornati al{" "}
@@ -143,7 +143,7 @@ export default function CacheCard({ cache }: Props) {
               {fmtSize(cache.db.size_mb)}
             </span>
           </div>
-          <div className="text-[0.6471rem] text-muted-foreground mt-1">
+          <div className="text-[0.7059rem] text-muted-foreground mt-1">
             SQLite WAL · backup automatici settimanali
           </div>
         </div>

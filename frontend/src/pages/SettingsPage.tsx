@@ -24,7 +24,7 @@ export default function SettingsPage() {
   return (
     <div className="space-y-5 max-w-6xl">
       <header className="space-y-1">
-        <div className="flex items-center gap-2 text-[0.5882rem] font-mono font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+        <div className="flex items-center gap-2 text-[0.6765rem] font-mono font-semibold uppercase tracking-[0.22em] text-muted-foreground">
           <SettingsIcon className="h-3 w-3" />
           <span>Amministrazione · diagnostica</span>
         </div>

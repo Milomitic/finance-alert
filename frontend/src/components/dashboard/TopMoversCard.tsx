@@ -234,7 +234,7 @@ function MoverRow({ m, field, window, live, computedAt, livePrice, livePulse, fl
             the score column never shifts between windows). */}
         <span
           className={cn(
-            "text-[0.6471rem] font-mono tabular-nums text-center",
+            "text-[0.7059rem] font-mono tabular-nums text-center",
             wide ? "block" : "hidden row-full:block",
           )}
           title={volTitle}
@@ -521,9 +521,9 @@ export function TopMoversCard({ movers, computedAt, layout = "split" }: Props) {
                 {liveActive ? <MarketStateBadge phase={phase} /> : null}
                 <Tabs value={window} onValueChange={(v) => setWindow(v as Window)}>
                   <TabsList className="h-6 p-0.5">
-                    <TabsTrigger value="1d" className="h-5 text-[0.5882rem] px-1.5" title="Variazione giornaliera — ranking live ogni 15s">1G</TabsTrigger>
-                    <TabsTrigger value="1w" className="h-5 text-[0.5882rem] px-1.5" title="Variazione settimanale (~5 giorni)">1S</TabsTrigger>
-                    <TabsTrigger value="1m" className="h-5 text-[0.5882rem] px-1.5" title="Variazione mensile (~20 giorni)">1M</TabsTrigger>
+                    <TabsTrigger value="1d" className="h-5 text-[0.6765rem] px-1.5" title="Variazione giornaliera — ranking live ogni 15s">1G</TabsTrigger>
+                    <TabsTrigger value="1w" className="h-5 text-[0.6765rem] px-1.5" title="Variazione settimanale (~5 giorni)">1S</TabsTrigger>
+                    <TabsTrigger value="1m" className="h-5 text-[0.6765rem] px-1.5" title="Variazione mensile (~20 giorni)">1M</TabsTrigger>
                   </TabsList>
                 </Tabs>
               </div>

@@ -50,7 +50,7 @@ export function EtfHoldingsCard({ ticker }: Props) {
             icon={Layers}
             label="Componenti ETF"
             right={
-              <span className="text-[0.6471rem] text-muted-foreground tabular-nums">
+              <span className="text-[0.7059rem] text-muted-foreground tabular-nums">
                 {underlying ? (
                   <>
                     via{" "}
@@ -83,7 +83,7 @@ export function EtfHoldingsCard({ ticker }: Props) {
           )}
         </div>
         {underlying && (
-          <div className="px-4 py-1.5 text-[0.6471rem] text-muted-foreground border-b bg-muted/10 leading-snug">
+          <div className="px-4 py-1.5 text-[0.7059rem] text-muted-foreground border-b bg-muted/10 leading-snug">
             ETF a leva: esposizione tramite swap sull'indice. Mostriamo il
             paniere reale dell'indice sottostante (
             <span className="font-semibold text-foreground/70">{underlying}</span>
@@ -122,7 +122,7 @@ function HoldingRow({ h, maxWeight }: { h: EtfHolding; maxWeight: number }) {
           </div>
           {h.name && (
             <div
-              className="text-[0.6471rem] text-muted-foreground truncate leading-tight"
+              className="text-[0.7059rem] text-muted-foreground truncate leading-tight"
               title={h.name}
             >
               {h.name}
@@ -139,7 +139,7 @@ function HoldingRow({ h, maxWeight }: { h: EtfHolding; maxWeight: number }) {
             style={{ width: `${barPct}%` }}
           />
         </div>
-        <span className="w-11 text-right text-[0.6471rem] tabular-nums text-muted-foreground">
+        <span className="w-11 text-right text-[0.7059rem] tabular-nums text-muted-foreground">
           {(h.weight * 100).toFixed(1)}%
         </span>
       </div>

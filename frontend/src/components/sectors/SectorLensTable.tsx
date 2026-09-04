@@ -141,7 +141,7 @@ export function SectorLensTable({ sectors, activeSector, onHover }: Props) {
       <CardContent className="p-0">
         <div className="px-3 py-2 border-b bg-muted/30 flex items-center justify-between gap-3">
           <SectionTitle icon={Table2} label={`Settori (${sectors.length})`} />
-          <span className="text-[0.6471rem] text-muted-foreground truncate">
+          <span className="text-[0.7059rem] text-muted-foreground truncate">
             clicca un'intestazione per riordinare
           </span>
         </div>
@@ -157,7 +157,7 @@ export function SectorLensTable({ sectors, activeSector, onHover }: Props) {
                       key={c.key}
                       scope="col"
                       className={cn(
-                        "px-3 py-1.5 font-medium text-[0.5882rem] uppercase tracking-[0.14em]",
+                        "px-3 py-1.5 font-medium text-[0.6765rem] uppercase tracking-[0.14em]",
                         c.num ? "text-right" : "text-left",
                         active ? "text-foreground" : "text-muted-foreground",
                       )}
@@ -183,7 +183,7 @@ export function SectorLensTable({ sectors, activeSector, onHover }: Props) {
                     </th>
                   );
                 })}
-                <th scope="col" className="px-3 py-1.5 text-left font-medium text-[0.5882rem] uppercase tracking-[0.14em] text-muted-foreground">
+                <th scope="col" className="px-3 py-1.5 text-left font-medium text-[0.6765rem] uppercase tracking-[0.14em] text-muted-foreground">
                   Trend
                 </th>
               </tr>
@@ -210,7 +210,7 @@ export function SectorLensTable({ sectors, activeSector, onHover }: Props) {
                         {s.name}
                       </Link>
                       {s.etf_proxy && (
-                        <span className="ml-2 rounded border px-1 text-[0.5882rem] text-muted-foreground align-middle">
+                        <span className="ml-2 rounded border px-1 text-[0.6765rem] text-muted-foreground align-middle">
                           {s.etf_proxy}
                         </span>
                       )}
@@ -255,7 +255,7 @@ export function SectorLensTable({ sectors, activeSector, onHover }: Props) {
             stocks that had a score on each capture date. Saying so is cheaper
             than letting the reader wonder why a sector reading 47.7 draws a
             line around 59. */}
-        <p className="px-3 py-2 border-t text-[0.6471rem] text-muted-foreground">
+        <p className="px-3 py-2 border-t text-[0.7059rem] text-muted-foreground">
           Il trend proviene dalle catture storiche dello score e copre solo gli stock
           già valutati a ciascuna data: la sua scala può non coincidere con la colonna
           Qualità, che è calcolata su tutto il settore oggi.

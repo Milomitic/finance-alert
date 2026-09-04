@@ -160,10 +160,10 @@ export function AllocationBars({
   return (
     <div className="min-w-0">
       <div className="mb-2.5 flex items-baseline justify-between gap-2">
-        <span className="text-[0.6471rem] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+        <span className="text-[0.7059rem] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
           {title}
         </span>
-        <span className="text-[0.5882rem] text-muted-foreground/80">{caption}</span>
+        <span className="text-[0.6765rem] text-muted-foreground/80">{caption}</span>
       </div>
       {sorted.length === 0 ? (
         <div className="py-3 text-center text-xs text-muted-foreground">
@@ -216,7 +216,7 @@ export function AllocationBars({
                     move in portfolio weight, signed, in percentage points. */}
                 <span
                   className={cn(
-                    "truncate text-[0.5882rem] uppercase tracking-wider tabular-nums",
+                    "truncate text-[0.6765rem] uppercase tracking-wider tabular-nums",
                     it.exited
                       ? "text-red-700 dark:text-red-300"
                       : (it.deltaPct ?? 0) > 0

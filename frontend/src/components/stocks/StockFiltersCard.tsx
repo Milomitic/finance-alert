@@ -156,7 +156,7 @@ function PresetsMenu({
           <Bookmark className="h-3.5 w-3.5" />
           Preset
           {names.length > 0 && (
-            <Badge variant="secondary" className="h-4 px-1 text-[0.5882rem]">
+            <Badge variant="secondary" className="h-4 px-1 text-[0.6765rem]">
               {names.length}
             </Badge>
           )}
@@ -256,7 +256,7 @@ function MultiSelect({ label, options, selected, onChange }: MultiSelectProps) {
           <span className="flex items-center gap-1.5">
             <span>{label}</span>
             {active && (
-              <Badge variant="default" className="h-5 px-1.5 text-[0.5882rem] font-semibold">
+              <Badge variant="default" className="h-5 px-1.5 text-[0.6765rem] font-semibold">
                 {selected.length}
               </Badge>
             )}
@@ -504,7 +504,7 @@ function CollapsibleArea({
           {title}
         </span>
         {activeCount > 0 && (
-          <Badge variant="secondary" className="h-4 px-1 text-[0.5882rem]">
+          <Badge variant="secondary" className="h-4 px-1 text-[0.6765rem]">
             {activeCount}
           </Badge>
         )}
@@ -617,7 +617,7 @@ export function StockFiltersCard({ state, onChange, filters }: Props) {
             <Filter className="h-4 w-4" />
             <span>Filtri</span>
             {totalActive > 0 && (
-              <Badge variant="secondary" className="h-5 px-1.5 text-[0.5882rem]">
+              <Badge variant="secondary" className="h-5 px-1.5 text-[0.6765rem]">
                 {totalActive} attivi
               </Badge>
             )}
@@ -635,300 +635,318 @@ export function StockFiltersCard({ state, onChange, filters }: Props) {
           )}
         </div>
 
-        {/* ─── Area 1: Mercato (classification) ─── */}
-        <CollapsibleArea
-          title="Mercato"
-          activeCount={mercatoActive}
-          isOpen={areaOpen.mercato}
-          onToggle={() => toggleArea("mercato")}
-        >
-          <div className="flex items-center gap-2 flex-wrap">
-            <MultiSelect
-              label="Indice"
-              options={indexOptions}
-              selected={state.indexCodes}
-              onChange={(v) => set({ indexCodes: v })}
-            />
-            <MultiSelect
-              label="Settore"
-              options={sectorOptions}
-              selected={state.sectors}
-              onChange={(v) => set({ sectors: v })}
-            />
-            <MultiSelect
-              label="Industry"
-              options={industryOptions}
-              selected={state.industries}
-              onChange={(v) => set({ industries: v })}
-            />
-            <MultiSelect
-              label="Exchange"
-              options={exchangeOptions}
-              selected={state.exchanges}
-              onChange={(v) => set({ exchanges: v })}
-            />
-            <MultiSelect
-              label="Paese"
-              options={countryOptions}
-              selected={state.countries}
-              onChange={(v) => set({ countries: v })}
-            />
-            {/* Tipo strumento: gli ETF/ETN (24 prodotti NYSE Arca) non hanno
-                score Qualità per design — questo toggle li nasconde. */}
-            <ToggleChip
-              label="Escludi ETF"
-              active={state.excludeEtf}
-              onToggle={() => set({ excludeEtf: !state.excludeEtf })}
-            />
-          </div>
-        </CollapsibleArea>
+        {/* Le quattro aree su DUE COLONNE dai monitor larghi in su.
+         *
+         * Impilate, ognuna occupava una riga intera per una manciata di
+         * controlli che finivano entro i primi 700-1200px: su uno schermo da
+         * 2000px il pannello era alto il doppio del necessario con meta
+         * schermo vuoto a destra.
+         *
+         * `items-start` e load-bearing: senza, le aree si stirano all altezza
+         * della riga e quella piu corta diventa una scatola mezza vuota, che e
+         * peggio del problema di partenza.
+         *
+         * L ordine DOM decide l accoppiamento (row-major): Mercato con
+         * Fondamentali, Tecnici con Prezzo. Non e casuale — accoppia la piu
+         * alta (Fondamentali, che porta il blocco pillar) con la piu bassa
+         * (Mercato), cosi le due righe si bilanciano invece di sommare due
+         * massimi. */}
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 items-start">
+          {/* ─── Area 1: Mercato (classification) ─── */}
+          <CollapsibleArea
+            title="Mercato"
+            activeCount={mercatoActive}
+            isOpen={areaOpen.mercato}
+            onToggle={() => toggleArea("mercato")}
+          >
+            <div className="flex items-center gap-2 flex-wrap">
+              <MultiSelect
+                label="Indice"
+                options={indexOptions}
+                selected={state.indexCodes}
+                onChange={(v) => set({ indexCodes: v })}
+              />
+              <MultiSelect
+                label="Settore"
+                options={sectorOptions}
+                selected={state.sectors}
+                onChange={(v) => set({ sectors: v })}
+              />
+              <MultiSelect
+                label="Industry"
+                options={industryOptions}
+                selected={state.industries}
+                onChange={(v) => set({ industries: v })}
+              />
+              <MultiSelect
+                label="Exchange"
+                options={exchangeOptions}
+                selected={state.exchanges}
+                onChange={(v) => set({ exchanges: v })}
+              />
+              <MultiSelect
+                label="Paese"
+                options={countryOptions}
+                selected={state.countries}
+                onChange={(v) => set({ countries: v })}
+              />
+              {/* Tipo strumento: gli ETF/ETN (24 prodotti NYSE Arca) non hanno
+                  score Qualità per design — questo toggle li nasconde. */}
+              <ToggleChip
+                label="Escludi ETF"
+                active={state.excludeEtf}
+                onToggle={() => set({ excludeEtf: !state.excludeEtf })}
+              />
+            </div>
+          </CollapsibleArea>
 
-        {/* ─── Area 2: Fondamentali ─── */}
-        <CollapsibleArea
-          title="Fondamentali"
-          activeCount={fondamentaliActive}
-          isOpen={areaOpen.fondamentali}
-          onToggle={() => toggleArea("fondamentali")}
-        >
-          <div className="flex items-center gap-2 flex-wrap">
-            {/* Composite score range: min + max inline. */}
-            <div className="inline-flex items-center gap-1 h-9 px-2 rounded border border-input">
-              <span className="text-xs text-muted-foreground">Score</span>
-              <input
-                type="number"
-                min={0}
-                max={100}
-                step={5}
-                placeholder="min"
-                value={state.minScore ?? ""}
-                onChange={(e) => {
-                  const raw = e.target.value;
-                  if (raw === "") { set({ minScore: null }); return; }
-                  const n = Number(raw);
-                  if (Number.isFinite(n) && n >= 0 && n <= 100) set({ minScore: n });
-                }}
-                className="w-10 bg-transparent text-sm tabular-nums focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+          {/* ─── Area 2: Fondamentali ─── */}
+          <CollapsibleArea
+            title="Fondamentali"
+            activeCount={fondamentaliActive}
+            isOpen={areaOpen.fondamentali}
+            onToggle={() => toggleArea("fondamentali")}
+          >
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Composite score range: min + max inline. */}
+              <div className="inline-flex items-center gap-1 h-9 px-2 rounded border border-input">
+                <span className="text-xs text-muted-foreground">Score</span>
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  step={5}
+                  placeholder="min"
+                  value={state.minScore ?? ""}
+                  onChange={(e) => {
+                    const raw = e.target.value;
+                    if (raw === "") { set({ minScore: null }); return; }
+                    const n = Number(raw);
+                    if (Number.isFinite(n) && n >= 0 && n <= 100) set({ minScore: n });
+                  }}
+                  className="w-10 bg-transparent text-sm tabular-nums focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                />
+                <span className="text-xs text-muted-foreground">–</span>
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  step={5}
+                  placeholder="max"
+                  value={state.scoreMax ?? ""}
+                  onChange={(e) => {
+                    const raw = e.target.value;
+                    if (raw === "") { set({ scoreMax: null }); return; }
+                    const n = Number(raw);
+                    if (Number.isFinite(n) && n >= 0 && n <= 100) set({ scoreMax: n });
+                  }}
+                  className="w-10 bg-transparent text-sm tabular-nums focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                />
+              </div>
+              <MultiSelect
+                label="Rischio"
+                options={RISK_OPTIONS}
+                selected={state.riskTiers}
+                onChange={(v) => set({ riskTiers: v as FiltersState["riskTiers"] })}
               />
-              <span className="text-xs text-muted-foreground">–</span>
-              <input
-                type="number"
-                min={0}
-                max={100}
-                step={5}
-                placeholder="max"
-                value={state.scoreMax ?? ""}
-                onChange={(e) => {
-                  const raw = e.target.value;
-                  if (raw === "") { set({ scoreMax: null }); return; }
-                  const n = Number(raw);
-                  if (Number.isFinite(n) && n >= 0 && n <= 100) set({ scoreMax: n });
-                }}
-                className="w-10 bg-transparent text-sm tabular-nums focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-              />
-            </div>
-            <MultiSelect
-              label="Rischio"
-              options={RISK_OPTIONS}
-              selected={state.riskTiers}
-              onChange={(v) => set({ riskTiers: v as FiltersState["riskTiers"] })}
-            />
-            {/* Market cap range — entered in billions, stored in absolute $. */}
-            <NumberRange
-              label="Mkt cap"
-              suffix="B$"
-              step={1}
-              min={mcToBillions(state.marketCapMin)}
-              max={mcToBillions(state.marketCapMax)}
-              onMinChange={(v) => set({ marketCapMin: mcFromBillions(v) })}
-              onMaxChange={(v) => set({ marketCapMax: mcFromBillions(v) })}
-            />
-          </div>
-          {/* Per-pillar minimum scores grid. */}
-          <div className="mt-3 pt-3 border-t border-border/40">
-            <div className="flex items-center gap-1.5 mb-2">
-              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                Punteggi pillar
-              </span>
-              {pillarActiveCount > 0 && (
-                <Badge variant="secondary" className="h-4 px-1 text-[0.5882rem]">
-                  {pillarActiveCount}
-                </Badge>
-              )}
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-1.5">
-              <PillarInput
-                label={CATEGORY_LABEL.profitability}
-                value={state.profitabilityMin}
-                onChange={(v) => set({ profitabilityMin: v })}
-              />
-              <PillarInput
-                label={CATEGORY_LABEL.sustainability}
-                value={state.sustainabilityMin}
-                onChange={(v) => set({ sustainabilityMin: v })}
-              />
-              <PillarInput
-                label={CATEGORY_LABEL.growth}
-                value={state.growthMin}
-                onChange={(v) => set({ growthMin: v })}
-              />
-              <PillarInput
-                label={CATEGORY_LABEL.value}
-                value={state.valueMin}
-                onChange={(v) => set({ valueMin: v })}
-              />
-              <PillarInput
-                label={CATEGORY_LABEL.sentiment}
-                value={state.sentimentMin}
-                onChange={(v) => set({ sentimentMin: v })}
+              {/* Market cap range — entered in billions, stored in absolute $. */}
+              <NumberRange
+                label="Mkt cap"
+                suffix="B$"
+                step={1}
+                min={mcToBillions(state.marketCapMin)}
+                max={mcToBillions(state.marketCapMax)}
+                onMinChange={(v) => set({ marketCapMin: mcFromBillions(v) })}
+                onMaxChange={(v) => set({ marketCapMax: mcFromBillions(v) })}
               />
             </div>
-          </div>
-        </CollapsibleArea>
+            {/* Per-pillar minimum scores grid. */}
+            <div className="mt-3 pt-3 border-t border-border/40">
+              <div className="flex items-center gap-1.5 mb-2">
+                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  Punteggi pillar
+                </span>
+                {pillarActiveCount > 0 && (
+                  <Badge variant="secondary" className="h-4 px-1 text-[0.6765rem]">
+                    {pillarActiveCount}
+                  </Badge>
+                )}
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-1.5">
+                <PillarInput
+                  label={CATEGORY_LABEL.profitability}
+                  value={state.profitabilityMin}
+                  onChange={(v) => set({ profitabilityMin: v })}
+                />
+                <PillarInput
+                  label={CATEGORY_LABEL.sustainability}
+                  value={state.sustainabilityMin}
+                  onChange={(v) => set({ sustainabilityMin: v })}
+                />
+                <PillarInput
+                  label={CATEGORY_LABEL.growth}
+                  value={state.growthMin}
+                  onChange={(v) => set({ growthMin: v })}
+                />
+                <PillarInput
+                  label={CATEGORY_LABEL.value}
+                  value={state.valueMin}
+                  onChange={(v) => set({ valueMin: v })}
+                />
+                <PillarInput
+                  label={CATEGORY_LABEL.sentiment}
+                  value={state.sentimentMin}
+                  onChange={(v) => set({ sentimentMin: v })}
+                />
+              </div>
+            </div>
+          </CollapsibleArea>
 
-        {/* ─── Area 3: Tecnici ─── */}
-        <CollapsibleArea
-          title="Tecnici"
-          activeCount={tecniciActive}
-          isOpen={areaOpen.tecnici}
-          onToggle={() => toggleArea("tecnici")}
-        >
-          <div className="flex items-center gap-2 flex-wrap">
-            <div className="inline-flex items-center gap-1 h-9 px-2 rounded border border-input">
-              <span className="text-xs text-muted-foreground">Tecnico</span>
-              <input
-                type="number"
-                min={0}
-                max={100}
-                step={5}
-                placeholder="min"
-                value={state.techMin ?? ""}
-                onChange={(e) => {
-                  const raw = e.target.value;
-                  if (raw === "") { set({ techMin: null }); return; }
-                  const n = Number(raw);
-                  if (Number.isFinite(n) && n >= 0 && n <= 100) set({ techMin: n });
-                }}
-                className="w-10 bg-transparent text-sm tabular-nums focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+          {/* ─── Area 3: Tecnici ─── */}
+          <CollapsibleArea
+            title="Tecnici"
+            activeCount={tecniciActive}
+            isOpen={areaOpen.tecnici}
+            onToggle={() => toggleArea("tecnici")}
+          >
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="inline-flex items-center gap-1 h-9 px-2 rounded border border-input">
+                <span className="text-xs text-muted-foreground">Tecnico</span>
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  step={5}
+                  placeholder="min"
+                  value={state.techMin ?? ""}
+                  onChange={(e) => {
+                    const raw = e.target.value;
+                    if (raw === "") { set({ techMin: null }); return; }
+                    const n = Number(raw);
+                    if (Number.isFinite(n) && n >= 0 && n <= 100) set({ techMin: n });
+                  }}
+                  className="w-10 bg-transparent text-sm tabular-nums focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                />
+              </div>
+              <div className="inline-flex items-center gap-1 h-9 px-2 rounded border border-input">
+                <span className="text-xs text-muted-foreground">Postura</span>
+                {(["Forte", "Neutro", "Debole"] as const).map((pp) => {
+                  const on = state.postures.includes(pp);
+                  return (
+                    <button
+                      key={pp}
+                      type="button"
+                      onClick={() => set({ postures: on ? state.postures.filter((x) => x !== pp) : [...state.postures, pp] })}
+                      className={cn("px-1.5 py-0.5 rounded text-xs font-medium", on ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted")}
+                    >
+                      {pp}
+                    </button>
+                  );
+                })}
+              </div>
+              {/* RSI 0-100 range. */}
+              <NumberRange
+                label="RSI"
+                step={1}
+                min={state.rsiMin}
+                max={state.rsiMax}
+                onMinChange={(v) => set({ rsiMin: v == null ? null : Math.min(100, Math.max(0, v)) })}
+                onMaxChange={(v) => set({ rsiMax: v == null ? null : Math.min(100, Math.max(0, v)) })}
+                width="w-12"
               />
+              <ToggleChip label="sopra EMA200" active={state.aboveEma200} onToggle={() => set({ aboveEma200: !state.aboveEma200 })} />
+              <ToggleChip label="sopra EMA50" active={state.aboveEma50} onToggle={() => set({ aboveEma50: !state.aboveEma50 })} />
+              <ToggleChip label="vicino max 52s" active={state.near52wHigh} onToggle={() => set({ near52wHigh: !state.near52wHigh })} />
+              <ToggleChip label="vicino min 52s" active={state.near52wLow} onToggle={() => set({ near52wLow: !state.near52wLow })} />
+              {/* "Con segnali" con finestra di recenza — pill group come la
+                  Postura. Cliccare la finestra attiva la spegne (toggle). */}
+              <div className="inline-flex items-center gap-1 h-9 px-2 rounded border border-input">
+                <span className="text-xs text-muted-foreground">Segnali</span>
+                {SIGNAL_WINDOW_OPTIONS.map((opt) => {
+                  const on = state.signalsWithinDays === opt.days;
+                  return (
+                    <button
+                      key={opt.days}
+                      type="button"
+                      onClick={() => set({ signalsWithinDays: on ? null : opt.days })}
+                      title={`Solo titoli con segnali negli ultimi ${opt.days === 1 ? "1 giorno" : `${opt.days} giorni`}`}
+                      className={cn("px-1.5 py-0.5 rounded text-xs font-medium", on ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted")}
+                    >
+                      {opt.label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-            <div className="inline-flex items-center gap-1 h-9 px-2 rounded border border-input">
-              <span className="text-xs text-muted-foreground">Postura</span>
-              {(["Forte", "Neutro", "Debole"] as const).map((pp) => {
-                const on = state.postures.includes(pp);
-                return (
-                  <button
-                    key={pp}
-                    type="button"
-                    onClick={() => set({ postures: on ? state.postures.filter((x) => x !== pp) : [...state.postures, pp] })}
-                    className={cn("px-1.5 py-0.5 rounded text-xs font-medium", on ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted")}
-                  >
-                    {pp}
-                  </button>
-                );
-              })}
-            </div>
-            {/* RSI 0-100 range. */}
-            <NumberRange
-              label="RSI"
-              step={1}
-              min={state.rsiMin}
-              max={state.rsiMax}
-              onMinChange={(v) => set({ rsiMin: v == null ? null : Math.min(100, Math.max(0, v)) })}
-              onMaxChange={(v) => set({ rsiMax: v == null ? null : Math.min(100, Math.max(0, v)) })}
-              width="w-12"
-            />
-            <ToggleChip label="sopra EMA200" active={state.aboveEma200} onToggle={() => set({ aboveEma200: !state.aboveEma200 })} />
-            <ToggleChip label="sopra EMA50" active={state.aboveEma50} onToggle={() => set({ aboveEma50: !state.aboveEma50 })} />
-            <ToggleChip label="vicino max 52s" active={state.near52wHigh} onToggle={() => set({ near52wHigh: !state.near52wHigh })} />
-            <ToggleChip label="vicino min 52s" active={state.near52wLow} onToggle={() => set({ near52wLow: !state.near52wLow })} />
-            {/* "Con segnali" con finestra di recenza — pill group come la
-                Postura. Cliccare la finestra attiva la spegne (toggle). */}
-            <div className="inline-flex items-center gap-1 h-9 px-2 rounded border border-input">
-              <span className="text-xs text-muted-foreground">Segnali</span>
-              {SIGNAL_WINDOW_OPTIONS.map((opt) => {
-                const on = state.signalsWithinDays === opt.days;
-                return (
-                  <button
-                    key={opt.days}
-                    type="button"
-                    onClick={() => set({ signalsWithinDays: on ? null : opt.days })}
-                    title={`Solo titoli con segnali negli ultimi ${opt.days === 1 ? "1 giorno" : `${opt.days} giorni`}`}
-                    className={cn("px-1.5 py-0.5 rounded text-xs font-medium", on ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted")}
-                  >
-                    {opt.label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </CollapsibleArea>
+          </CollapsibleArea>
 
-        {/* ─── Area 4: Prezzo & Volume ─── */}
-        <CollapsibleArea
-          title="Prezzo & Volume"
-          activeCount={prezzoVolumeActive}
-          isOpen={areaOpen.prezzoVolume}
-          onToggle={() => toggleArea("prezzoVolume")}
-        >
-          <div className="flex items-center gap-2 flex-wrap">
-            <NumberRange
-              label="Prezzo"
-              step={1}
-              min={state.priceMin}
-              max={state.priceMax}
-              onMinChange={(v) => set({ priceMin: v })}
-              onMaxChange={(v) => set({ priceMax: v })}
-            />
-            <NumberRange
-              label="Δ%"
-              step={0.5}
-              allowNegative
-              min={state.changeMin}
-              max={state.changeMax}
-              onMinChange={(v) => set({ changeMin: v })}
-              onMaxChange={(v) => set({ changeMax: v })}
-              width="w-12"
-            />
-            <ToggleChip label="vol spike >2×" active={state.volSpike} onToggle={() => set({ volSpike: !state.volSpike })} />
-            {/* Soglia continua Vol× — la sorella regolabile del preset
-                vol spike (>2×): es. 1.5 = volume ≥ 1.5× la media 20g. */}
-            <div className="inline-flex items-center gap-1 h-9 px-2 rounded border border-input">
-              <span className="text-xs text-muted-foreground">Vol× ≥</span>
-              <input
-                type="number"
-                min={0}
+          {/* ─── Area 4: Prezzo & Volume ─── */}
+          <CollapsibleArea
+            title="Prezzo & Volume"
+            activeCount={prezzoVolumeActive}
+            isOpen={areaOpen.prezzoVolume}
+            onToggle={() => toggleArea("prezzoVolume")}
+          >
+            <div className="flex items-center gap-2 flex-wrap">
+              <NumberRange
+                label="Prezzo"
+                step={1}
+                min={state.priceMin}
+                max={state.priceMax}
+                onMinChange={(v) => set({ priceMin: v })}
+                onMaxChange={(v) => set({ priceMax: v })}
+              />
+              <NumberRange
+                label="Δ%"
                 step={0.5}
-                placeholder="—"
-                value={state.volRatioMin ?? ""}
-                onChange={(e) => {
-                  const raw = e.target.value;
-                  if (raw === "") { set({ volRatioMin: null }); return; }
-                  const n = Number(raw);
-                  if (Number.isFinite(n) && n >= 0) set({ volRatioMin: n });
-                }}
-                className="w-12 bg-transparent text-sm tabular-nums focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                allowNegative
+                min={state.changeMin}
+                max={state.changeMax}
+                onMinChange={(v) => set({ changeMin: v })}
+                onMaxChange={(v) => set({ changeMax: v })}
+                width="w-12"
               />
+              <ToggleChip label="vol spike >2×" active={state.volSpike} onToggle={() => set({ volSpike: !state.volSpike })} />
+              {/* Soglia continua Vol× — la sorella regolabile del preset
+                  vol spike (>2×): es. 1.5 = volume ≥ 1.5× la media 20g. */}
+              <div className="inline-flex items-center gap-1 h-9 px-2 rounded border border-input">
+                <span className="text-xs text-muted-foreground">Vol× ≥</span>
+                <input
+                  type="number"
+                  min={0}
+                  step={0.5}
+                  placeholder="—"
+                  value={state.volRatioMin ?? ""}
+                  onChange={(e) => {
+                    const raw = e.target.value;
+                    if (raw === "") { set({ volRatioMin: null }); return; }
+                    const n = Number(raw);
+                    if (Number.isFinite(n) && n >= 0) set({ volRatioMin: n });
+                  }}
+                  className="w-12 bg-transparent text-sm tabular-nums focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                />
+              </div>
+              {/* Volume min (share count). Wide-ish single input. */}
+              <div className="inline-flex items-center gap-1 h-9 px-2 rounded border border-input">
+                <span className="text-xs text-muted-foreground">Vol min</span>
+                <input
+                  type="number"
+                  min={0}
+                  step={100000}
+                  placeholder="azioni"
+                  value={state.volumeMin ?? ""}
+                  onChange={(e) => {
+                    const raw = e.target.value;
+                    if (raw === "") { set({ volumeMin: null }); return; }
+                    const n = Number(raw);
+                    if (Number.isFinite(n) && n >= 0) set({ volumeMin: n });
+                  }}
+                  className="w-20 bg-transparent text-sm tabular-nums focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                />
+              </div>
             </div>
-            {/* Volume min (share count). Wide-ish single input. */}
-            <div className="inline-flex items-center gap-1 h-9 px-2 rounded border border-input">
-              <span className="text-xs text-muted-foreground">Vol min</span>
-              <input
-                type="number"
-                min={0}
-                step={100000}
-                placeholder="azioni"
-                value={state.volumeMin ?? ""}
-                onChange={(e) => {
-                  const raw = e.target.value;
-                  if (raw === "") { set({ volumeMin: null }); return; }
-                  const n = Number(raw);
-                  if (Number.isFinite(n) && n >= 0) set({ volumeMin: n });
-                }}
-                className="w-20 bg-transparent text-sm tabular-nums focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-              />
-            </div>
-          </div>
-        </CollapsibleArea>
+          </CollapsibleArea>
+        </div>
 
         {totalActive > 0 && (
           <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-border/50">

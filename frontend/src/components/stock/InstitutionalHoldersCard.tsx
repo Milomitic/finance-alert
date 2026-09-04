@@ -77,7 +77,7 @@ function HolderHeader() {
     <li
       className={cn(
         HOLDER_GRID,
-        "pb-1 text-[0.5882rem] uppercase tracking-wider text-muted-foreground/70 font-semibold",
+        "pb-1 text-[0.6765rem] uppercase tracking-wider text-muted-foreground/70 font-semibold",
       )}
     >
       <span className="truncate">Fondo</span>

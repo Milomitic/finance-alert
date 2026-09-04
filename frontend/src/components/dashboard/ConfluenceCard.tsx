@@ -58,7 +58,7 @@ export function ConfluenceRows({ limit = 8 }: { limit?: number }) {
                 <span className="w-[72px] shrink-0">
                   <span
                     className={cn(
-                      "inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[0.6471rem] font-semibold",
+                      "inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[0.7059rem] font-semibold",
                       tone,
                     )}
                     title={`${c.n_signals} segnali concordi · direzione ${dirWord.toLowerCase()}`}

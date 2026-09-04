@@ -60,11 +60,11 @@ function Metric({
 }) {
   return (
     <div className={cn("rounded-lg border border-border/60 bg-muted/30 dark:bg-muted/15 p-3", className)}>
-      <div className="text-[0.5882rem] uppercase tracking-wider text-muted-foreground font-semibold">
+      <div className="text-[0.6765rem] uppercase tracking-wider text-muted-foreground font-semibold">
         {label}
       </div>
       <div className="text-xl font-bold tabular-nums leading-tight mt-0.5">{value}</div>
-      {hint && <div className="text-[0.6471rem] text-muted-foreground mt-1 leading-snug">{hint}</div>}
+      {hint && <div className="text-[0.7059rem] text-muted-foreground mt-1 leading-snug">{hint}</div>}
     </div>
   );
 }
@@ -139,7 +139,7 @@ export function SetupDetailDialog({ setup, onClose }: Props) {
               <div className="rounded-lg border bg-muted/40 p-4 flex items-start gap-3">
                 <Target className="h-4 w-4 mt-0.5 shrink-0 text-muted-foreground" aria-hidden />
                 <div className="min-w-0">
-                  <div className="text-[0.5882rem] uppercase tracking-wider text-muted-foreground font-semibold">
+                  <div className="text-[0.6765rem] uppercase tracking-wider text-muted-foreground font-semibold">
                     Cosa manca
                   </div>
                   <p className="text-base leading-snug mt-1">{setup.missing}</p>
@@ -175,13 +175,13 @@ export function SetupDetailDialog({ setup, onClose }: Props) {
 
             {factors.length > 0 && (
               <div className="px-5 pt-4">
-                <div className="text-[0.5882rem] uppercase tracking-wider text-muted-foreground font-semibold mb-2">
+                <div className="text-[0.6765rem] uppercase tracking-wider text-muted-foreground font-semibold mb-2">
                   Fattori misurati
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                   {factors.map(([k, v]) => (
                     <div key={k} className="rounded border bg-card px-2.5 py-1.5">
-                      <div className="text-[0.6471rem] text-muted-foreground truncate" title={k}>
+                      <div className="text-[0.7059rem] text-muted-foreground truncate" title={k}>
                         {k.replace(/_/g, " ")}
                       </div>
                       <div className="flex items-center gap-2 mt-0.5">
@@ -200,7 +200,7 @@ export function SetupDetailDialog({ setup, onClose }: Props) {
             )}
 
             <div className="p-5 flex items-center justify-between gap-3">
-              <p className="text-[0.6471rem] text-muted-foreground leading-snug max-w-md">
+              <p className="text-[0.7059rem] text-muted-foreground leading-snug max-w-md">
                 Un setup descrive lo stato di oggi, non una previsione. Diventa un segnale solo
                 quando la condizione qui sopra si verifica.
               </p>

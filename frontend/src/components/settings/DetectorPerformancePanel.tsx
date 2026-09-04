@@ -105,7 +105,7 @@ export function DetectorPerformancePanel() {
                     </tbody>
                   </table>
                 </div>
-                <p className="text-[0.6471rem] text-muted-foreground italic">
+                <p className="text-[0.7059rem] text-muted-foreground italic">
                   "Hit" = direzione del prezzo coerente col tono entro
                   l'orizzonte del detector; "Hit neutro" al netto della media
                   dell'universo (skill, non beta). Le celle attenuate con chip
@@ -245,7 +245,7 @@ function BreakdownTable({
 }) {
   return (
     <div>
-      <div className="text-[0.6471rem] uppercase tracking-wider text-muted-foreground font-semibold mb-1">
+      <div className="text-[0.7059rem] uppercase tracking-wider text-muted-foreground font-semibold mb-1">
         {title}
       </div>
       <table className="w-full text-xs tabular-nums">
@@ -310,7 +310,7 @@ function BreakdownTable({
 function LowNChip() {
   return (
     <span
-      className="px-1 py-px rounded text-[0.5294rem] uppercase tracking-wider font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
+      className="px-1 py-px rounded text-[0.6471rem] uppercase tracking-wider font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
       title="Campione sotto la soglia di 30 esiti maturati: valore indicativo, non conclusivo."
     >
       n&lt;30

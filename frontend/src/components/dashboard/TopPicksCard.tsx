@@ -68,7 +68,7 @@ function PickRow({ item }: { item: TopPickItem }) {
             from per-row text length. */}
         <span
           className={cn(
-            "shrink-0 w-[92px] text-center px-1 py-px rounded border text-[0.5882rem] uppercase tracking-wider font-semibold",
+            "shrink-0 w-[92px] text-center px-1 py-px rounded border text-[0.6765rem] uppercase tracking-wider font-semibold",
             RISK_TONE[item.risk_tier],
           )}
         >

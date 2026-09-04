@@ -84,7 +84,7 @@ export function MarketChart({
       layout: {
         background: { type: ColorType.Solid, color: "transparent" },
         textColor: "rgba(115, 115, 115, 1)",
-        fontSize: 11,
+        fontSize: 12,
       },
       grid: {
         vertLines: { color: "rgba(115, 115, 115, 0.08)" },

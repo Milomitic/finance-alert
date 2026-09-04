@@ -87,7 +87,7 @@ export function WeekGrid({
                 aria-label={`${ITALIAN_DAY_FULL[day.jsDayIndex]} ${day.day}, ${evs.length} eventi`}
               >
                 <span className="flex items-baseline gap-1.5 min-w-0">
-                  <span className="text-[0.6471rem] font-mono font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                  <span className="text-[0.7059rem] font-mono font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                     {ITALIAN_DAY_LONG[day.jsDayIndex]}
                   </span>
                   <span
@@ -120,7 +120,7 @@ export function WeekGrid({
                     ))}
                   </div>
                 ) : evs.length === 0 ? (
-                  <div className="flex h-full min-h-[6rem] items-center justify-center text-[0.6471rem] text-muted-foreground/50">
+                  <div className="flex h-full min-h-[6rem] items-center justify-center text-[0.7059rem] text-muted-foreground/50">
                     —
                   </div>
                 ) : (
@@ -181,14 +181,14 @@ function WeekEarningsRow({ event }: { event: EarningsEvent }) {
           {event.ticker}
         </span>
         {event.earnings_when === "pre" && (
-          <span className="text-[0.5882rem] leading-none shrink-0" title="Pre-market">☀</span>
+          <span className="text-[0.6765rem] leading-none shrink-0" title="Pre-market">☀</span>
         )}
         {event.earnings_when === "after" && (
-          <span className="text-[0.5882rem] leading-none shrink-0 opacity-80" title="After-market">☾</span>
+          <span className="text-[0.6765rem] leading-none shrink-0 opacity-80" title="After-market">☾</span>
         )}
         {reported && (
           <span
-            className={cn("ml-auto shrink-0 text-[0.6471rem] font-bold tabular-nums", resultColor)}
+            className={cn("ml-auto shrink-0 text-[0.7059rem] font-bold tabular-nums", resultColor)}
             title={beat ? "Ha battuto le stime" : "Sotto le stime"}
           >
             {beat ? "▲" : "▼"} {(event.surprise_pct ?? 0) >= 0 ? "+" : ""}
@@ -197,7 +197,7 @@ function WeekEarningsRow({ event }: { event: EarningsEvent }) {
         )}
       </div>
       {/* Preview: reported vs estimate (the whole point of the wide view) */}
-      <div className="mt-1 text-[0.6471rem] tabular-nums text-muted-foreground leading-tight">
+      <div className="mt-1 text-[0.7059rem] tabular-nums text-muted-foreground leading-tight">
         {reported ? (
           <>
             EPS <span className={cn("font-semibold", resultColor)}>{formatEps(event.eps_reported)}</span>
@@ -258,7 +258,7 @@ function WeekMacroRow({
         />
       </div>
       {(reported || event.expected_value != null) && (
-        <div className="mt-1 text-[0.6471rem] tabular-nums text-muted-foreground leading-tight">
+        <div className="mt-1 text-[0.7059rem] tabular-nums text-muted-foreground leading-tight">
           {reported ? (
             <>
               <span className="opacity-60">stim. {fmt(event.expected_value)} →</span>{" "}

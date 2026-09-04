@@ -54,12 +54,12 @@ export default function ScansCard({ scans }: Props) {
           <CardTitle className="text-base font-semibold flex items-center gap-1.5">
             <Radar className="h-4 w-4" />
             Scan recenti
-            <span className="text-[0.6471rem] font-normal text-muted-foreground ml-1">
+            <span className="text-[0.7059rem] font-normal text-muted-foreground ml-1">
               ultimi {scans.length}
             </span>
           </CardTitle>
           {successRate24h !== null && (
-            <span className="text-[0.6471rem] text-muted-foreground tabular-nums">
+            <span className="text-[0.7059rem] text-muted-foreground tabular-nums">
               {successRate24h.toFixed(0)}% / 24h
             </span>
           )}
@@ -81,11 +81,11 @@ export default function ScansCard({ scans }: Props) {
           return (
             <div className="p-4 border-b bg-muted/10">
               <div className="flex items-center justify-between gap-2 mb-1.5">
-                <span className="text-[0.6471rem] font-semibold uppercase tracking-wider text-muted-foreground">
+                <span className="text-[0.7059rem] font-semibold uppercase tracking-wider text-muted-foreground">
                   Ultimo scan
                 </span>
                 <span
-                  className={`inline-flex items-center gap-1 px-2.5 py-0.5 text-[0.6471rem] font-medium rounded-full border ${badge.classes}`}
+                  className={`inline-flex items-center gap-1 px-2.5 py-0.5 text-[0.7059rem] font-medium rounded-full border ${badge.classes}`}
                 >
                   <badge.Icon
                     className={`h-3 w-3 ${last.status === "running" ? "animate-spin" : ""}`}
@@ -113,7 +113,7 @@ export default function ScansCard({ scans }: Props) {
               </div>
               {progressPct !== null && last.status === "running" && (
                 <div className="mt-2">
-                  <div className="flex items-center justify-between text-[0.6471rem] text-muted-foreground">
+                  <div className="flex items-center justify-between text-[0.7059rem] text-muted-foreground">
                     <span>{last.phase}</span>
                     <span className="tabular-nums">
                       {last.progress_done}/{last.progress_total}
@@ -129,7 +129,7 @@ export default function ScansCard({ scans }: Props) {
               )}
               {last.error_message && (
                 <div
-                  className="text-[0.6471rem] text-red-700/90 dark:text-red-400/90 mt-1.5 truncate font-mono"
+                  className="text-[0.7059rem] text-red-700/90 dark:text-red-400/90 mt-1.5 truncate font-mono"
                   title={last.error_message}
                 >
                   ✗ {last.error_message}
@@ -154,7 +154,7 @@ export default function ScansCard({ scans }: Props) {
                   </span>
                 </div>
                 {s.alerts_count != null && s.alerts_count > 0 && (
-                  <div className="text-[0.6471rem] text-muted-foreground inline-flex items-center gap-1 mt-0.5">
+                  <div className="text-[0.7059rem] text-muted-foreground inline-flex items-center gap-1 mt-0.5">
                     <Bell className="h-3 w-3" />
                     {s.alerts_count} alert
                   </div>

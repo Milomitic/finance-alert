@@ -272,14 +272,14 @@ export default function MacroDetailPage() {
                   <XAxis
                     dataKey="date"
                     tickFormatter={(v: string) => formatMacroDate(v)}
-                    tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+                    tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }}
                     axisLine={{ stroke: "hsl(var(--border))" }}
                     tickLine={{ stroke: "hsl(var(--border))" }}
                     interval="preserveStartEnd"
                     minTickGap={40}
                   />
                   <YAxis
-                    tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+                    tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }}
                     axisLine={{ stroke: "hsl(var(--border))" }}
                     tickLine={{ stroke: "hsl(var(--border))" }}
                     tickFormatter={(v: number) => formatMacroValue(v, unit)}

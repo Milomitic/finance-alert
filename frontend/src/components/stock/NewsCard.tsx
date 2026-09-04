@@ -220,7 +220,7 @@ export function NewsCard({ ticker }: Props) {
                         </span>
                         <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground mt-0.5 opacity-60" />
                       </div>
-                      <div className="flex items-center gap-2 mt-0.5 text-[0.6471rem]">
+                      <div className="flex items-center gap-2 mt-0.5 text-[0.7059rem]">
                         <span
                           className="font-semibold text-foreground/70 truncate"
                           title={n.publisher}
@@ -238,7 +238,7 @@ export function NewsCard({ ticker }: Props) {
                             return (
                               <span
                                 className={cn(
-                                  "inline-flex items-center gap-0.5 px-1 py-0.5 rounded-sm border text-[0.5882rem] font-semibold uppercase tracking-wider whitespace-nowrap shrink-0",
+                                  "inline-flex items-center gap-0.5 px-1 py-0.5 rounded-sm border text-[0.6765rem] font-semibold uppercase tracking-wider whitespace-nowrap shrink-0",
                                   meta.cls,
                                 )}
                                 title={`Sentiment del titolo: ${meta.label} (classificato server-side dal motore parole-chiave finance)`}

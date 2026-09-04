@@ -201,7 +201,7 @@ function RateLimitBar({ used, limit, unit }: { used: number; limit: number; unit
   const tone = pct >= 90 ? "bg-rose-500" : pct >= 70 ? "bg-amber-500" : "bg-emerald-500";
   return (
     <div className="space-y-0.5">
-      <div className="flex items-center justify-between text-[0.5882rem] text-muted-foreground">
+      <div className="flex items-center justify-between text-[0.6765rem] text-muted-foreground">
         <span>Quota {unit}</span>
         <span className="tabular-nums">
           <span className="font-medium text-foreground">{used}</span> / {limit}
@@ -266,7 +266,7 @@ function SourceRow({
           {ROLE_LABEL[m.role] ?? m.role}
         </span>
       </div>
-      <div className="mt-0.5 pl-4 text-[0.6471rem] text-muted-foreground tabular-nums">
+      <div className="mt-0.5 pl-4 text-[0.7059rem] text-muted-foreground tabular-nums">
         {total > 0 ? (
           <>
             <span className="text-emerald-700 dark:text-emerald-400 font-medium">{m.success}</span> ok
@@ -354,7 +354,7 @@ function ClusterCard({
         </div>
         <span
           className={cn(
-            "shrink-0 inline-flex items-center gap-1 px-2 py-0.5 text-[0.5882rem] font-medium rounded-full border",
+            "shrink-0 inline-flex items-center gap-1 px-2 py-0.5 text-[0.6765rem] font-medium rounded-full border",
             meta.chip,
           )}
         >
@@ -511,7 +511,7 @@ function BreakerChip({ breaker }: { breaker: Record<string, unknown> }) {
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 px-2.5 py-0.5 text-[0.6471rem] font-medium rounded-full border",
+        "inline-flex items-center gap-1.5 px-2.5 py-0.5 text-[0.7059rem] font-medium rounded-full border",
         tone,
       )}
       title="Circuit breaker yfinance — quando aperto, gli scan saltano il provider primario"
@@ -583,7 +583,7 @@ export default function DataSourcesCard({
               <Database className="h-4 w-4" />
             </span>
             Fonti dati
-            <span className="text-[0.6471rem] font-normal text-muted-foreground tabular-nums">
+            <span className="text-[0.7059rem] font-normal text-muted-foreground tabular-nums">
               {operational}/{metrics.length} operative
             </span>
           </CardTitle>

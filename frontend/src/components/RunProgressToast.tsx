@@ -353,7 +353,7 @@ export function RunProgressToast({ status, labels, onStop, isStopping }: Props) 
               )}
               {dismissCountdown != null && (
                 <span
-                  className="ml-auto text-[0.6471rem] uppercase tracking-wider text-muted-foreground/70 tabular-nums"
+                  className="ml-auto text-[0.7059rem] uppercase tracking-wider text-muted-foreground/70 tabular-nums"
                   title="La notifica si chiuderà automaticamente"
                 >
                   chiusura in {dismissCountdown}s
@@ -391,7 +391,7 @@ export function RunProgressToast({ status, labels, onStop, isStopping }: Props) 
                 </div>
                 {stepInfo.step.durationHintSec && (
                   <span
-                    className="text-[0.6471rem] text-muted-foreground/70 tabular-nums"
+                    className="text-[0.7059rem] text-muted-foreground/70 tabular-nums"
                     title="Durata tipica di questo passo"
                   >
                     ~{stepInfo.step.durationHintSec[0]}-
@@ -566,7 +566,7 @@ function CounterCell({
           : "bg-muted/60",
       )}
     >
-      <div className="uppercase tracking-wider text-[0.6471rem] text-muted-foreground/80">
+      <div className="uppercase tracking-wider text-[0.7059rem] text-muted-foreground/80">
         {label}
       </div>
       <div className="text-base font-bold tabular-nums">{value}</div>

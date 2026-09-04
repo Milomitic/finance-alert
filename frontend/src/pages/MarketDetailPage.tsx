@@ -252,7 +252,7 @@ export default function MarketDetailPage() {
             {/* Prev close caption when live — same UX as stock detail. */}
             {isLive && d.quote?.prev_close != null && (
               <div
-                className="text-[0.6471rem] uppercase tracking-wider text-muted-foreground/80 mt-0.5"
+                className="text-[0.7059rem] uppercase tracking-wider text-muted-foreground/80 mt-0.5"
                 title="Chiusura della sessione precedente"
               >
                 Prev close:{" "}
@@ -262,7 +262,7 @@ export default function MarketDetailPage() {
               </div>
             )}
             {d.quote?.currency && (
-              <div className="text-[0.5882rem] uppercase tracking-wider text-muted-foreground/70 mt-0.5">
+              <div className="text-[0.6765rem] uppercase tracking-wider text-muted-foreground/70 mt-0.5">
                 {d.quote.currency}
               </div>
             )}
@@ -353,7 +353,7 @@ export default function MarketDetailPage() {
         <TechnicalKpiCard ticker={d.symbol} kind="market" />
         <Card>
           <CardContent className="p-4">
-            <div className="text-[0.6471rem] uppercase tracking-wider font-semibold text-muted-foreground/70 mb-2">
+            <div className="text-[0.7059rem] uppercase tracking-wider font-semibold text-muted-foreground/70 mb-2">
               KPI di prezzo
             </div>
             <div className="grid grid-cols-2 gap-2 [&>*]:min-w-0">
@@ -378,7 +378,7 @@ export default function MarketDetailPage() {
         </Card>
         <Card>
           <CardContent className="p-4">
-            <div className="text-[0.6471rem] uppercase tracking-wider font-semibold text-muted-foreground/70 mb-2">
+            <div className="text-[0.7059rem] uppercase tracking-wider font-semibold text-muted-foreground/70 mb-2">
               Meta
             </div>
             <dl className="space-y-1 text-sm">
@@ -430,7 +430,7 @@ function KpiCell({ label, value }: { label: string; value: string }) {
   return (
     <Card>
       <CardContent className="p-3">
-        <div className="text-[0.5882rem] uppercase tracking-wider text-muted-foreground">
+        <div className="text-[0.6765rem] uppercase tracking-wider text-muted-foreground">
           {label}
         </div>
         <div className="text-lg font-bold tabular-nums">{value}</div>

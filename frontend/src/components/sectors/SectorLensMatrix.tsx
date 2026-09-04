@@ -110,7 +110,7 @@ export function SectorLensMatrix({ sectors, activeSector, onHover }: Props) {
       <CardContent className="p-0 h-full flex flex-col min-h-0">
         <div className="px-3 py-2 border-b bg-muted/30 shrink-0 flex items-center justify-between gap-3">
           <SectionTitle icon={Crosshair} label="Qualità × Tecnico" />
-          <span className="text-[0.6471rem] text-muted-foreground truncate">
+          <span className="text-[0.7059rem] text-muted-foreground truncate">
             bolla = n° stock · colore = saldo segnali 7g
           </span>
         </div>
@@ -131,7 +131,7 @@ export function SectorLensMatrix({ sectors, activeSector, onHover }: Props) {
                 />
                 <text
                   x={X(v)} y={H - PAD_B + 15} textAnchor="middle"
-                  className="fill-muted-foreground text-[0.5882rem]"
+                  className="fill-muted-foreground text-[0.6765rem]"
                 >
                   {v}
                 </text>
@@ -145,7 +145,7 @@ export function SectorLensMatrix({ sectors, activeSector, onHover }: Props) {
                 />
                 <text
                   x={PAD_L - 8} y={Y(v) + 3} textAnchor="end"
-                  className="fill-muted-foreground text-[0.5882rem]"
+                  className="fill-muted-foreground text-[0.6765rem]"
                 >
                   {v}
                 </text>
@@ -174,11 +174,11 @@ export function SectorLensMatrix({ sectors, activeSector, onHover }: Props) {
                 read in full without competing with the data. */}
 
             <text x={W - PAD_R} y={H - 4} textAnchor="end"
-                  className="fill-muted-foreground text-[0.5882rem] font-medium">
+                  className="fill-muted-foreground text-[0.6765rem] font-medium">
               Tecnico →
             </text>
             <text x={0} y={0} transform={`rotate(-90) translate(${-(H - PAD_B)} 10)`}
-                  className="fill-muted-foreground text-[0.5882rem] font-medium">
+                  className="fill-muted-foreground text-[0.6765rem] font-medium">
               Qualità →
             </text>
 
@@ -219,7 +219,7 @@ export function SectorLensMatrix({ sectors, activeSector, onHover }: Props) {
                   <text
                     x={cx} y={cy - r - 4} textAnchor="middle"
                     className={cn(
-                      "text-[0.5294rem] pointer-events-none",
+                      "text-[0.6471rem] pointer-events-none",
                       active ? "fill-foreground font-semibold" : "fill-foreground/70",
                     )}
                   >
@@ -234,7 +234,7 @@ export function SectorLensMatrix({ sectors, activeSector, onHover }: Props) {
         {/* Reading key, displaced from the plot corners. The two off-diagonal
             quadrants are the interesting ones — they are where the lenses
             disagree, which is the reading no column of the table carries. */}
-        <p className="px-3 pb-1.5 text-[0.6471rem] text-muted-foreground shrink-0 leading-snug">
+        <p className="px-3 pb-1.5 text-[0.7059rem] text-muted-foreground shrink-0 leading-snug">
           Le linee tratteggiate sono le medie. In alto a sinistra la{" "}
           <span className="text-foreground/80">qualità non ancora prezzata</span>, in
           basso a destra il <span className="text-foreground/80">momentum senza
@@ -242,7 +242,7 @@ export function SectorLensMatrix({ sectors, activeSector, onHover }: Props) {
         </p>
 
         {missing.length > 0 && (
-          <p className="px-3 pb-2 text-[0.6471rem] text-muted-foreground shrink-0">
+          <p className="px-3 pb-2 text-[0.7059rem] text-muted-foreground shrink-0">
             Non rappresentati ({missing.length}): {missing.map((s) => s.name).join(", ")} —
             manca uno dei due punteggi.
           </p>

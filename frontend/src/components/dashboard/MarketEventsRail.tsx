@@ -37,11 +37,11 @@ interface Props {
 function RailHeader({ label, count }: { label: string; count?: number }) {
   return (
     <div className="px-3 py-1 border-y bg-muted/40 shrink-0 flex items-baseline justify-between gap-2">
-      <span className="text-[0.5882rem] uppercase tracking-[0.16em] font-bold text-muted-foreground truncate">
+      <span className="text-[0.6765rem] uppercase tracking-[0.16em] font-bold text-muted-foreground truncate">
         {label}
       </span>
       {count != null && (
-        <span className="text-[0.5882rem] tabular-nums text-muted-foreground/70 shrink-0">{count}</span>
+        <span className="text-[0.6765rem] tabular-nums text-muted-foreground/70 shrink-0">{count}</span>
       )}
     </div>
   );
@@ -86,7 +86,7 @@ function RailRow({
 }
 
 function Empty({ label }: { label: string }) {
-  return <div className="px-3 py-2 text-[0.6471rem] text-muted-foreground">{label}</div>;
+  return <div className="px-3 py-2 text-[0.7059rem] text-muted-foreground">{label}</div>;
 }
 
 export function MarketEventsRail({ movers }: Props) {
