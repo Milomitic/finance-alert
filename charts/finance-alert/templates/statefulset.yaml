@@ -97,6 +97,23 @@ spec:
                   name: {{ include "finance-alert.secretName" . }}
                   key: FINNHUB_API_KEY
                   optional: true
+            # FRED — the macro calendar (release schedule + observations).
+            # Same trap as Finnhub above, one step earlier: it was in NEITHER
+            # the Secret nor this list. The app logged
+            # "[fred] FRED_API_KEY not configured - skipping refresh" on every
+            # scheduler tick and nothing surfaced it, so macro observations
+            # sat frozen at 2026-07-06 for 60 days while the page still
+            # rendered. Added 2026-09-04.
+            #
+            # optional: true like the others - a missing key degrades the
+            # macro calendar to its hardcoded schedule, it must not stop the
+            # pod booting.
+            - name: FRED_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "finance-alert.secretName" . }}
+                  key: FRED_API_KEY
+                  optional: true
             # M7-P4 cutover switch. OFF (default) = the app keeps its embedded
             # SQLite on the PVC — the pre-M7 behaviour AND the instant rollback
             # (flip the flag back to false and the untouched .db is authoritative
