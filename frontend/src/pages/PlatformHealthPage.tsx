@@ -12,6 +12,7 @@ import DataSourcesCard from "@/components/health/DataSourcesCard";
 import SchedulerCard from "@/components/health/SchedulerCard";
 import ScansCard from "@/components/health/ScansCard";
 import CacheCard from "@/components/health/CacheCard";
+import DataHealthCard from "@/components/health/DataHealthCard";
 import LogStream from "@/components/health/LogStream";
 import { usePlatformHealthStream } from "@/hooks/usePlatformHealthStream";
 
@@ -335,6 +336,7 @@ export default function PlatformHealthPage() {
           <SchedulerCard jobs={health.scheduler} />
           <ScansCard scans={health.scans} />
           <CacheCard cache={health.cache} />
+          <DataHealthCard data={health.data_health} deploy={health.deploy} />
         </div>
       )}
 

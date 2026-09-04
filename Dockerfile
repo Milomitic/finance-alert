@@ -72,6 +72,14 @@ RUN apt-get update \
 # needed again if you exec into the container.
 COPY --from=ghcr.io/astral-sh/uv:0.7 /uv /uvx /usr/local/bin/
 
+# Commit da cui questa immagine e' stata costruita. Risponde, DA DENTRO
+# L'APP, all'unica domanda che conta dopo un deploy: "sto eseguendo la mia
+# modifica?". CI verde e ArgoCD Synced/Healthy non la rispondono, perche' il
+# bump del tag immagine e' un commit SUCCESSIVO: esiste sempre una finestra in
+# cui tutto e' verde e gira l'immagine precedente.
+ARG GIT_SHA=unknown
+ENV GIT_SHA=${GIT_SHA}
+
 ENV PYTHONUNBUFFERED=1 \
     # Never let uv download its own Python: use the image's interpreter, so
     # the runtime is exactly python:3.11-slim's (security patches come from

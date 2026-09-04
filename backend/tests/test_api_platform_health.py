@@ -62,6 +62,8 @@ def test_health_endpoint_returns_expected_keys(client: TestClient):
     assert set(body.keys()) == {
         "data_sources", "yfinance_breaker", "scheduler", "scans", "cache",
         "overall", "reasons", "suggestions",
+        "data_health",
+        "deploy",
     }
     assert isinstance(body["data_sources"], list)
     assert isinstance(body["scheduler"], list)
@@ -214,3 +216,43 @@ def test_logs_endpoint_filters_by_search_substring(client: TestClient):
     records = r.json()
     assert len(records) >= 1
     assert all("zzz123" in rec["message"] for rec in records)
+
+
+def test_data_health_ages_are_real_days_not_string_subtraction(client, db):
+    """Le eta' si calcolano in Python, non in SQL.
+
+    Postgres valuta `CURRENT_DATE - MAX(date)` come giorni interi; SQLite tratta
+    le date come stringhe e la stessa espressione NON fallisce — sottrae due
+    stringhe e restituisce un numero privo di senso. Il campo si popolerebbe
+    comunque, quindi nessuna asserzione sulla presenza l'avrebbe vista. Qui si
+    asserisce il VALORE contro una riga di eta' nota.
+    """
+    from datetime import UTC, datetime, timedelta
+
+    from sqlalchemy import text
+
+    from app.models import Stock
+
+    s = Stock(ticker="ZZAGE", name="T", exchange="TEST", currency="USD")
+    db.add(s)
+    db.flush()
+    d = (datetime.now(UTC).date() - timedelta(days=5)).isoformat()
+    db.execute(
+        text("INSERT INTO ohlcv_daily (stock_id, date, open, high, low, close, volume)"
+             " VALUES (:s, :d, 1, 1, 1, 1, 1)"),
+        {"s": s.id, "d": d},
+    )
+    db.commit()
+
+    body = client.get("/api/platform/health").json()
+    age = body["data_health"]["ohlcv_age_days"]
+    assert age is not None, "l'eta' non deve essere nulla con dati presenti"
+    assert 0 <= age <= 5, f"eta' implausibile: {age}"
+
+
+def test_deploy_block_reports_what_is_running(client):
+    """La sola risposta diretta a 'la mia modifica e' a schermo'."""
+    body = client.get("/api/platform/health").json()
+    dep = body["deploy"]
+    assert "git_sha" in dep
+    assert dep["uptime_seconds"] is not None and dep["uptime_seconds"] >= 0

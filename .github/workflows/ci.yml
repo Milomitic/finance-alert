@@ -186,6 +186,10 @@ jobs:
           context: .
           platforms: linux/arm64
           push: true
+          # Stamped into the image so /api/platform/health can report which
+          # commit is actually running - see the ARG in the Dockerfile.
+          build-args: |
+            GIT_SHA=${{ github.sha }}
           tags: |
             ghcr.io/milomitic/finance-alert:${{ github.sha }}
             ghcr.io/milomitic/finance-alert:latest

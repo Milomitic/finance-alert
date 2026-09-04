@@ -11,13 +11,17 @@ from typing import Annotated
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Query, Request
 from fastapi.responses import StreamingResponse
+from loguru import logger
 from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db, require_json
+from app.core.app_metrics import STALE_OHLCV_WINDOW_DAYS
 from app.core.log_buffer import _INSTANCE as log_buffer
 from app.models import Alert, ScanRun, User
 from app.schemas.platform import (
+    DataHealthOut,
+    DeployHealthOut,
     DetectorPerformanceOut,
     LogRecordOut,
     PlatformHealthOut,
@@ -153,7 +157,108 @@ def health_snapshot(
         overall=overall,
         reasons=reasons,
         suggestions=_gap_suggestions(),
+        data_health=_data_health(db),
+        deploy=_deploy_health(),
     )
+
+
+def _deploy_health() -> DeployHealthOut:
+    """Which commit this process is running, and for how long."""
+    import os
+    import time
+
+    started = getattr(_deploy_health, "_boot", None)
+    if started is None:
+        started = _deploy_health._boot = time.time()  # noqa: SLF001
+    return DeployHealthOut(
+        git_sha=os.environ.get("GIT_SHA") or None,
+        uptime_seconds=int(time.time() - started),
+        started_at=datetime.fromtimestamp(started, UTC).isoformat(),
+    )
+
+
+def _data_health(db: Session) -> DataHealthOut:
+    """Freshness + inventory, read straight from the DB.
+
+    Reads the SAME questions the Prometheus gauges answer, but from SQL rather
+    than from the gauges: a gauge only holds what the last refresh wrote, so
+    reading it here would serve a value up to a scan old and give no way to
+    tell. These are indexed max()/count() over one table each.
+
+    Never raises. This block sits inside the platform-health payload and a
+    failed sub-query must degrade to a null field, not blank the whole page —
+    each one is isolated so one broken table cannot take the others with it.
+    """
+    from sqlalchemy import text
+
+    from app.core.app_metrics import BASIS_BREAKS
+    from app.core.config import settings
+
+    out = DataHealthOut()
+
+    def _q(fn, label: str):
+        try:
+            return fn()
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(f"[platform-health] {label} non disponibile: {exc}")
+            return None
+
+    def _age(sql: str) -> int | None:
+        """Giorni dalla riga piu' recente, calcolati in PYTHON.
+
+        La differenza di date NON si fa in SQL qui. Postgres valuta
+        `CURRENT_DATE - MAX(date)` come giorni interi, ma SQLite tratta le date
+        come stringhe: la stessa espressione non fallisce, sottrae due stringhe
+        e restituisce un numero privo di senso. Un'eta' SBAGLIATA e' peggio di
+        un'eta' assente, e nessun test l'avrebbe vista perche' il campo si
+        popola comunque. (Il cast Postgres `::date` invece esplode su SQLite,
+        ed e' cosi' che il problema e' emerso.)
+        """
+        v = db.execute(text(sql)).scalar()
+        if v is None:
+            return None
+        if isinstance(v, str):
+            v = datetime.fromisoformat(v.replace("Z", "+00:00"))
+        d = v.date() if isinstance(v, datetime) else v
+        return (datetime.now(UTC).date() - d).days
+
+    out.ohlcv_age_days = _q(
+        lambda: _age("SELECT MAX(date) FROM ohlcv_daily"), "eta ohlcv")
+    out.macro_age_days = _q(
+        lambda: _age("SELECT MAX(date) FROM macro_observations"), "eta macro")
+    out.alert_age_days = _q(
+        lambda: _age("SELECT MAX(triggered_at) FROM alerts"), "eta alert")
+    out.catalog_stocks = _q(
+        lambda: int(db.execute(text("SELECT COUNT(*) FROM stocks")).scalar_one()), "catalogo")
+    out.stale_ohlcv_stocks = _q(
+        lambda: int(db.execute(text(
+            "SELECT COUNT(*) FROM stocks s WHERE (SELECT MAX(date) FROM ohlcv_daily o"
+            " WHERE o.stock_id = s.id) < CURRENT_DATE - :w"
+        ), {"w": STALE_OHLCV_WINDOW_DAYS}).scalar_one()), "ohlcv stantii")
+
+    def _setups() -> None:
+        rows = db.execute(text(
+            "SELECT status, COUNT(*) FROM stock_setups GROUP BY status")).all()
+        by = {str(k): int(v) for k, v in rows}
+        out.setups_active = by.get("active", 0)
+        out.setups_converted = by.get("converted", 0)
+        out.setups_expired = by.get("expired", 0)
+    _q(_setups, "setup")
+
+    out.api_keys = {
+        "fred": bool((settings.fred_api_key or "").strip()),
+        "finnhub": bool((settings.finnhub_api_key or "").strip()),
+        "marketaux": bool((settings.marketaux_api_key or "").strip()),
+    }
+    # The one value that IS read from its gauge: recomputing it here would run
+    # the real detector over every stock's series inside a page load. The daily
+    # job owns it; `None` until that job has run once since boot.
+    try:
+        v = BASIS_BREAKS._value.get()  # noqa: SLF001
+        out.basis_breaks = int(v) if v is not None else None
+    except Exception:  # noqa: BLE001
+        out.basis_breaks = None
+    return out
 
 
 @router.get("/signal-drift", response_model=SignalDriftOut)

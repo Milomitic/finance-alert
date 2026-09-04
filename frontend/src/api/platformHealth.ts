@@ -78,6 +78,30 @@ export type GapSuggestion = {
   suggestion: string;
 };
 
+/** Freschezza e inventario dei dati su cui gira l'app. */
+export type DataHealth = {
+  ohlcv_age_days: number | null;
+  macro_age_days: number | null;
+  alert_age_days: number | null;
+  stale_ohlcv_stocks: number | null;
+  catalog_stocks: number | null;
+  setups_active: number | null;
+  setups_converted: number | null;
+  setups_expired: number | null;
+  api_keys: Record<string, boolean>;
+  basis_breaks: number | null;
+};
+
+/** Cosa sta girando adesso: l'unica risposta diretta a "la mia modifica e' a
+ *  schermo". CI verde e ArgoCD Synced non la danno — il bump del tag immagine
+ *  e' un commit successivo, quindi esiste sempre una finestra in cui tutto e'
+ *  verde e il pod esegue l'immagine precedente. */
+export type DeployHealth = {
+  git_sha: string | null;
+  uptime_seconds: number | null;
+  started_at: string | null;
+};
+
 export type PlatformHealth = {
   data_sources: DataSourceMetric[];
   yfinance_breaker: Record<string, unknown>;
@@ -99,6 +123,8 @@ export type PlatformHealth = {
   reasons?: string[];
   /** Hint gap-analysis — vuoto quando ogni operazione ha ≥1 fonte sana. */
   suggestions?: GapSuggestion[];
+  data_health?: DataHealth | null;
+  deploy?: DeployHealth | null;
 };
 
 export type LogRecord = {

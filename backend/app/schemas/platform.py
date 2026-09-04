@@ -108,6 +108,58 @@ class GapSuggestionOut(BaseModel):
     suggestion: str
 
 
+class DataHealthOut(BaseModel):
+    """Freshness + inventory of the data the app runs on.
+
+    Lives here rather than only in Prometheus because these are the questions a
+    manual "is everything OK?" pass actually asks, and the answer belongs where
+    the user already is — behind the app's own auth, not behind a second login.
+    The same numbers still feed the Grafana panels; this is the second reader,
+    not a duplicate source.
+    """
+    # Days between today and the newest row of each dataset. Freshness is the
+    # failure mode that hides: the page renders, the pod stays 1/1 Running, and
+    # the number on screen is simply old. The macro calendar sat 60 days stale
+    # with FRED_API_KEY unset and nothing anywhere said so.
+    ohlcv_age_days: int | None = None
+    macro_age_days: int | None = None
+    alert_age_days: int | None = None
+    # Stocks whose newest bar is older than the staleness window. A handful is
+    # normal (delisted symbols); the TREND is the signal, not the count.
+    stale_ohlcv_stocks: int | None = None
+    catalog_stocks: int | None = None
+    # Setups by status. `expired` is the honest half of the conversion rate:
+    # without it only conversions ever resolve and the rate reads 100%.
+    setups_active: int | None = None
+    setups_converted: int | None = None
+    setups_expired: int | None = None
+    # 1/0 per provider. A missing key degrades a whole feature to a WARNING
+    # logged on every scheduler tick and nothing else.
+    api_keys: dict[str, bool] = {}
+    # Tickers whose stored history carries an unrepaired split. Refreshed by
+    # the daily job, so it can lag by up to a day — stated, not hidden.
+    basis_breaks: int | None = None
+
+
+class DeployHealthOut(BaseModel):
+    """Cosa sta girando, adesso.
+
+    Esiste per una ragione precisa: dopo un deploy, ne' una CI verde ne' un
+    ArgoCD "Synced/Healthy" rispondono alla domanda "la mia modifica e' a
+    schermo". Il bump del tag immagine e' un commit SUCCESSIVO a quello del
+    codice — la CI puo' scriverlo solo dopo aver costruito l'immagine — quindi
+    c'e' sempre una finestra in cui ogni semaforo e' verde e il pod esegue
+    ancora l'immagine precedente. Questo campo e' l'unica risposta diretta.
+    """
+    # Commit impresso nell'immagine al momento della build (ARG GIT_SHA).
+    # "unknown" su un'immagine costruita a mano senza build-arg.
+    git_sha: str | None = None
+    # Da quanto e' vivo questo processo. Un valore piccolo subito dopo un push
+    # e' la conferma che il rollout e' avvenuto.
+    uptime_seconds: int | None = None
+    started_at: str | None = None
+
+
 class PlatformHealthOut(BaseModel):
     data_sources: list[DataSourceMetricOut]
     yfinance_breaker: dict   # the existing yfinance_health.status() shape
@@ -121,6 +173,8 @@ class PlatformHealthOut(BaseModel):
     reasons: list[str] = []          # Italian, human-readable, outage first
     # Gap-analysis hints — empty when every op has at least one healthy source.
     suggestions: list[GapSuggestionOut] = []
+    data_health: DataHealthOut | None = None
+    deploy: DeployHealthOut | None = None
 
 
 class LogRecordOut(BaseModel):
