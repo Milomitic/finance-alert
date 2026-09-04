@@ -9,7 +9,6 @@ Two properties matter and neither is obvious from reading the code:
    a false zero. A gauge that drops to 0 on error looks exactly like "the
    problem went away", which is worse than no gauge.
 """
-import pytest
 from sqlalchemy import text
 
 from app.core import app_metrics
