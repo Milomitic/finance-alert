@@ -326,6 +326,36 @@ gh api "repos/Milomitic/finance-alert/actions/runs?per_page=5"   --jq '.workflow
 gh api "repos/Milomitic/finance-alert/actions/runs?head_sha=$(git rev-parse HEAD)" --jq .total_count
 ```
 
+### ⚠️ "Synced + Healthy" does NOT mean your change is on screen
+
+Cost a round-trip on 2026-09-04 ("non vedo le modifiche"). Everything looked
+right and nothing was wrong:
+
+    CI su d8ab4c6            green, all 7 jobs including image + gitops
+    ArgoCD                   sync=Synced  health=Healthy  rev=d8ab4c6
+    pod                      running image 025362e3   <-- the PREVIOUS one
+
+The image tag bump is a SEPARATE COMMIT that lands AFTER the code commit — CI
+can only write it once the image exists (`chore(cd): image <sha> [skip ci]`,
+here `58588e5` after `d8ab4c6`). So ArgoCD reporting `Synced` at your commit
+means it applied the manifests **as they were at that commit**, whose
+`values-oci.yaml` still carried the PREVIOUS tag. There is always a window
+where every dashboard is green and the pod runs the old image.
+
+It resolves itself on the next poll (~3 min). To confirm or force it:
+
+```bash
+# what is ACTUALLY running — this is the check that matters
+kubectl get pod -n finance-alert finance-alert-finance-alert-0   -o jsonpath='{.spec.containers[0].image}'
+
+# force the poll instead of waiting
+kubectl annotate application -n argocd finance-alert   argocd.argoproj.io/refresh=hard --overwrite
+```
+
+**Never tell the user "it is deployed" on the strength of a green CI run or an
+ArgoCD status.** Compare the running image tag against the commit. The rule is
+the same one as `workflow_dispatch` below: green is not deployed.
+
 ### `workflow_dispatch` verifies but does NOT deploy
 
 `image`, `trivy` and `gitops` all carry
