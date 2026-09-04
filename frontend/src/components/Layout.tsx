@@ -5,7 +5,7 @@ import {
   Building2,
   CalendarDays,
   Filter,
-  Grid3x3,
+  ScanSearch,
   HeartPulse,
   LayoutDashboard,
   LogOut,
@@ -41,10 +41,14 @@ const NAV: NavEntry[] = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, enabled: true },
   // /sectors is the post-watchlist hub: cross-sector overview with
   // breadth, score medians, top-movers, and tile drill-downs into
-  // the per-sector detail page. Grid icon to telegraph the
-  // "everything at a glance" function (vs ListChecks' to-do flavor
-  // that the old Watchlists entry carried).
-  { to: "/sectors", label: "Esplora", icon: Grid3x3, enabled: true },
+  // the per-sector detail page.
+  //
+  // `ScanSearch` (a magnifier inside scan brackets) rather than the old
+  // `Grid3x3`: the grid told you the LAYOUT of the page, not what it is for.
+  // Beside it in the nav sits Screener with a Filter icon, and the two read as
+  // a pair — filtrare contro esplorare. The brackets carry the analysed,
+  // machine-assisted flavour a plain `Search` would not.
+  { to: "/sectors", label: "Esplora", icon: ScanSearch, enabled: true },
   // /stocks route stays; the page is conceptually a screener (filters +
   // ranking) so that's the label. Filter icon to telegraph the function.
   { to: "/stocks", label: "Screener", icon: Filter, enabled: true },

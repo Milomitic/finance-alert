@@ -187,10 +187,17 @@ function ActionRow({ row, kind }: { row: ActionAggregate; kind: "buy" | "sell" }
       <td className="px-2 py-2 text-right tabular-nums text-sm text-muted-foreground">
         {fmtPct(row.portfolio_pct)}
       </td>
+      {/* Fund names run long — "Norges Bank Investment Management",
+          "Capital Research Global Investors" — and with no width bound the
+          cell wrapped onto three lines, so ONE long name made the whole row
+          three times taller than its neighbours. The column now holds a single
+          line and truncates; the full name lives in the tooltip and one click
+          away on the fund page. */}
       <td className="px-2 py-2 text-sm">
         <Link
           to={`/institutionals/${row.institutional_slug}`}
-          className="hover:underline"
+          className="block max-w-[11rem] truncate hover:underline"
+          title={row.institutional_name}
         >
           {row.institutional_name}
         </Link>
@@ -481,8 +488,14 @@ export default function InstitutionalsPage() {
             {/* max-h + overflow-y: TUTTE le righe del payload vengono
                 renderizzate (prima uno slice(0,12) le troncava in
                 silenzio) — il corpo scrolla invece di gonfiare la card
-                oltre le sorelle buys/sells. */}
-            <div className="overflow-x-auto overflow-y-auto max-h-[420px]">
+                oltre le sorelle buys/sells.
+
+                Il cap vale per TUTTE E TRE le card, non solo per questa.
+                Quando lo aveva solo most-picked, questa scrollava dentro una
+                scatola da 420px mentre acquisti e vendite si allungavano per
+                mezza pagina: la card corta accanto a due lunghissime leggeva
+                come uno scroll rotto, non come una scelta. */}
+            <div className="overflow-x-auto overflow-y-auto max-h-[30rem]">
               {/* Body bumped from text-sm → text-base per user request,
                   but the ticker cell explicitly resets to text-sm
                   inside TickerNameCell so the ticker font keeps its
@@ -531,7 +544,7 @@ export default function InstitutionalsPage() {
             <p className="text-xs text-muted-foreground mb-2">
               Azioni rialziste: <span className="font-semibold">nuove posizioni</span> (new) + <span className="font-semibold">aumenti</span> (add)
             </p>
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto overflow-y-auto max-h-[30rem]">
               <table className="w-full text-base">
                 <thead className="text-[0.7647rem] uppercase tracking-wide text-muted-foreground">
                   <tr>
@@ -569,7 +582,7 @@ export default function InstitutionalsPage() {
             <p className="text-xs text-muted-foreground mb-2">
               Azioni ribassiste: <span className="font-semibold">riduzioni</span> (reduce) + <span className="font-semibold">uscite complete</span> (sold out)
             </p>
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto overflow-y-auto max-h-[30rem]">
               <table className="w-full text-base">
                 <thead className="text-[0.7647rem] uppercase tracking-wide text-muted-foreground">
                   <tr>
