@@ -22,7 +22,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.models import Alert, ScanRun, StockSetup
+from app.models import Alert, ScanRun, SignalOutcome, StockSetup
 from app.models.stock_setup import STATUS_ACTIVE, STATUS_CONVERTED, STATUS_EXPIRED
 from app.signals.setups.base import SetupMatch, convenience
 
@@ -270,26 +270,83 @@ def run_post_scan_bookkeeping(db: Session) -> None:
 
 
 def conversion_stats(db: Session) -> dict:
-    """The feature's own report card. Read-only, no market claim."""
+    """The feature's own report card. Read-only.
+
+    Two layers, and the distinction matters. The FIRST needs no market claim
+    at all: how many setups are waiting, how many converted, how many expired,
+    how much warning the converted ones gave. Those are facts about the
+    feature, true from day one, and they are why this page could ship before
+    any study existed.
+
+    The SECOND asks whether a converted setup went on to be right, by
+    following `converted_alert_id` into the `signal_outcomes` warehouse. Two
+    rules keep it honest:
+
+      - the label is `mkt_neutral_hit`, NEVER `abs_hit`. Absolute hit books
+        the market's drift as the setup's merit — on the live warehouse
+        `sr_flip` bull reads 57.9% absolute against 51.5% market-neutral.
+      - a converted setup with no outcome yet, or with no universe benchmark
+        on its trigger date, is PENDING. Folding either into "negativo" would
+        invent losses that never happened.
+    """
     # Only setups that were actually SURFACED. A setup the user never saw made
     # no claim to them, so counting its outcome would measure something the
     # feature never offered.
     rows = db.execute(
         select(StockSetup).where(StockSetup.shortlisted.is_(True))
     ).scalars().all()
+    active = [r for r in rows if r.status == STATUS_ACTIVE]
     converted = [r for r in rows if r.status == STATUS_CONVERTED]
     expired = [r for r in rows if r.status == STATUS_EXPIRED]
     resolved = len(converted) + len(expired)
-    leads = [r.lead_days for r in converted if r.lead_days is not None]
+    leads = sorted(r.lead_days for r in converted if r.lead_days is not None)
+
+    # Market-neutral label per converted alert, for the ones that have matured.
+    alert_ids = [r.converted_alert_id for r in converted if r.converted_alert_id]
+    labels: dict[int, int | None] = {}
+    if alert_ids:
+        labels = {
+            aid: hit
+            for aid, hit in db.execute(
+                select(SignalOutcome.alert_id, SignalOutcome.mkt_neutral_hit)
+                .where(SignalOutcome.alert_id.in_(alert_ids))
+            ).all()
+        }
+    positive = sum(1 for aid in alert_ids if labels.get(aid) == 1)
+    negative = sum(1 for aid in alert_ids if labels.get(aid) == 0)
+
+    def _median(xs: list[int]) -> float | None:
+        if not xs:
+            return None
+        mid = len(xs) // 2
+        return float(xs[mid] if len(xs) % 2 else (xs[mid - 1] + xs[mid]) / 2)
+
     return {
-        "active": sum(1 for r in rows if r.status == STATUS_ACTIVE),
+        "active": len(active),
         "converted": len(converted),
         "expired": len(expired),
+        # The two tabs, each with its own total, and the sum of everything the
+        # feature has ever tracked.
+        "closed": resolved,
+        "total": len(rows),
+        "active_bull": sum(1 for r in active if r.tone == "bull"),
+        "active_bear": sum(1 for r in active if r.tone == "bear"),
         # None (not 0.0) while nothing has resolved yet: a rate computed over
         # an empty denominator is not "0%", it is "unknown", and showing 0%
         # would read as "setups never work".
         "conversion_rate": round(len(converted) / resolved, 3) if resolved else None,
+        # Everything converted that is neither a hit nor a miss: horizon not
+        # elapsed, or no universe benchmark on the day. Absent, not failed.
+        "converted_positive": positive,
+        "converted_negative": negative,
+        "converted_pending": len(converted) - positive - negative,
         "avg_lead_days": round(sum(leads) / len(leads), 1) if leads else None,
+        # The median and the range beside the mean: one number cannot say
+        # whether the warning was reliably a week or anywhere from a day to a
+        # month, and the wait is the whole product.
+        "median_lead_days": _median(leads),
+        "lead_days_min": leads[0] if leads else None,
+        "lead_days_max": leads[-1] if leads else None,
     }
 
 

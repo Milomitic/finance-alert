@@ -8,7 +8,7 @@ import { CardSkeleton } from "@/components/ui/card-skeleton";
 import { QueryError } from "@/components/ui/query-error";
 import { SectionTitle } from "@/components/ui/section-title";
 import { SetupOutcomeList } from "@/components/setups/SetupOutcomeList";
-import { useSetups, type Setup } from "@/hooks/useSetups";
+import { useSetups, type Setup, type SetupStats } from "@/hooks/useSetups";
 import { detectorCounts, detectorLabel, groupByCondition, type SetupSortKey } from "@/lib/setupGrouping";
 import { cn } from "@/lib/utils";
 
@@ -34,10 +34,28 @@ import { cn } from "@/lib/utils";
  *  fraction rather than a percentage — see the tile comment. */
 const MIN_RATE_N = 20;
 
-function StatsStrip({ stats }: { stats: ReturnType<typeof useSetups>["data"] extends undefined ? never : NonNullable<ReturnType<typeof useSetups>["data"]>["stats"] }) {
+function StatsStrip({ stats }: { stats: SetupStats }) {
+  // Derived, not read from `stats.closed`: the same number arriving twice
+  // can disagree, and the rate below is judged against it.
   const resolved = stats.converted + stats.expired;
-  const tiles = [
-    { label: "In formazione", value: String(stats.active) },
+  const judged = stats.converted_positive + stats.converted_negative;
+
+  const tiles: {
+    label: string;
+    value: string;
+    hint?: string;
+    tone?: "ok" | "bad" | null;
+  }[] = [
+    {
+      label: "In formazione",
+      value: String(stats.active),
+      hint: `${stats.active_bull} rialzisti · ${stats.active_bear} ribassisti`,
+    },
+    {
+      label: "Esiti",
+      value: String(resolved),
+      hint: `${stats.converted} convertiti · ${stats.expired} scaduti`,
+    },
     {
       label: "Tasso conversione",
       // Three states, not two.
@@ -49,10 +67,6 @@ function StatsStrip({ stats }: { stats: ReturnType<typeof useSetups>["data"] ext
       // headline instead of a percentage. Same information, minus a claim the
       // sample cannot carry: at 6-out-of-6 the Wilson 95% lower bound is ~61%,
       // so "100%" in 2xl bold is compatible with a true rate near a coin flip.
-      // The threshold is where a perfect record's lower bound first clears
-      // ~84%, i.e. where the point estimate starts informing more than it
-      // misleads. This is the same rule the page's docstring states and the
-      // same one that stops `expire_stale_setups` from deleting expiries.
       value:
         stats.conversion_rate === null
           ? "—"
@@ -67,20 +81,58 @@ function StatsStrip({ stats }: { stats: ReturnType<typeof useSetups>["data"] ext
             : `${stats.converted} su ${resolved}`,
     },
     {
-      label: "Anticipo medio",
-      value: stats.avg_lead_days === null ? "—" : `${stats.avg_lead_days}g`,
-      hint: "giorni di preavviso reali",
+      // The question the page could not answer: a setup converted — and then?
+      // Counts, never a percentage. The sample is small, the windows overlap,
+      // and a rate here would claim more than the measurement supports.
+      label: "Convertiti: esito",
+      value: judged === 0 ? "—" : `${stats.converted_positive} / ${stats.converted_negative}`,
+      hint:
+        judged === 0
+          ? "nessun esito ancora maturato"
+          : `positivi / negativi rispetto alla mediana dell'universo${
+              stats.converted_pending > 0 ? ` · ${stats.converted_pending} in attesa` : ""
+            }`,
+      tone:
+        judged === 0
+          ? null
+          : stats.converted_positive > stats.converted_negative
+            ? "ok"
+            : stats.converted_negative > stats.converted_positive
+              ? "bad"
+              : null,
+    },
+    {
+      label: "Anticipo mediano",
+      value: stats.median_lead_days === null ? "—" : `${stats.median_lead_days}g`,
+      hint:
+        stats.lead_days_min === null
+          ? "giorni di preavviso reali"
+          : `da ${stats.lead_days_min}g a ${stats.lead_days_max}g · media ${stats.avg_lead_days}g`,
+    },
+    {
+      label: "Totale tracciati",
+      value: String(stats.total),
+      hint: "tutto ciò che la funzione ha mai seguito",
     },
   ];
+
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 [&>*]:min-w-0">
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 [&>*]:min-w-0">
       {tiles.map((t) => (
         <Card key={t.label}>
           <CardContent className="p-3">
-            <div className="text-[0.6765rem] uppercase tracking-wider text-muted-foreground font-mono">
+            <div className="text-[0.6765rem] uppercase tracking-wider text-muted-foreground font-mono truncate">
               {t.label}
             </div>
-            <div className="text-2xl font-bold tabular-nums leading-tight mt-0.5">{t.value}</div>
+            <div
+              className={cn(
+                "text-2xl font-bold tabular-nums leading-tight mt-0.5",
+                t.tone === "ok" && "text-emerald-700 dark:text-emerald-400",
+                t.tone === "bad" && "text-rose-700 dark:text-rose-400",
+              )}
+            >
+              {t.value}
+            </div>
             {t.hint && <div className="text-xs text-muted-foreground mt-0.5">{t.hint}</div>}
           </CardContent>
         </Card>

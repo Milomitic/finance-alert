@@ -4,7 +4,7 @@ import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
 import SetupsPage from "./SetupsPage";
-import type { SetupsResponse } from "@/hooks/useSetups";
+import type { SetupStats, SetupsResponse } from "@/hooks/useSetups";
 
 /* The backend went to some length to keep setups from masquerading as
  * predictions — no probability, a conversion rate that is null rather than 0
@@ -41,10 +41,20 @@ const setup = {
   annotations: { levels: [{ label: "Supporto", price: 180, kind: "support" }] },
 };
 
-const stats = {
+const stats: SetupStats = {
   active: 1,
   converted: 0,
   expired: 0,
+  closed: 0,
+  total: 1,
+  active_bull: 1,
+  active_bear: 0,
+  converted_positive: 0,
+  converted_negative: 0,
+  converted_pending: 0,
+  median_lead_days: null,
+  lead_days_min: null,
+  lead_days_max: null,
   conversion_rate: null,
   avg_lead_days: null,
 };
@@ -129,19 +139,27 @@ describe("SetupsPage", () => {
      * exactly as much and claims nothing. */
     renderWith({
       setups: [setup],
-      stats: { active: 1, converted: 3, expired: 1, conversion_rate: 0.75, avg_lead_days: 2.5 },
+      stats: {
+        ...stats, active: 1, converted: 3, expired: 1, closed: 4,
+        conversion_rate: 0.75, avg_lead_days: 2.5,
+        median_lead_days: 2, lead_days_min: 1, lead_days_max: 6,
+      },
     });
     expect(await screen.findByText("3/4")).toBeInTheDocument();
     expect(screen.queryByText("75%")).not.toBeInTheDocument();
     expect(screen.getByText(/troppo pochi per un tasso/i)).toBeInTheDocument();
-    expect(screen.getByText("2.5g")).toBeInTheDocument();
+    // The lead-time tile leads with the MEDIAN and keeps the mean in the
+    // detail line. One mean cannot say whether the warning was reliably a
+    // week or anywhere from a day to a month, and the wait is the product.
+    expect(screen.getByText("2g")).toBeInTheDocument();
+    expect(screen.getByText(/da 1g a 6g · media 2\.5g/)).toBeInTheDocument();
   });
 
   it("a perfect small record does not get to say 100%", async () => {
     // The observed live case: six converted, none expired.
     renderWith({
       setups: [setup],
-      stats: { active: 4, converted: 6, expired: 0, conversion_rate: 1, avg_lead_days: 3 },
+      stats: { ...stats, active: 4, converted: 6, expired: 0, closed: 6, conversion_rate: 1, avg_lead_days: 3 },
     });
     expect(await screen.findByText("6/6")).toBeInTheDocument();
     expect(screen.queryByText("100%")).not.toBeInTheDocument();
@@ -150,7 +168,7 @@ describe("SetupsPage", () => {
   it("renders a real conversion rate once the sample can carry one", async () => {
     renderWith({
       setups: [setup],
-      stats: { active: 1, converted: 18, expired: 6, conversion_rate: 0.75, avg_lead_days: 2.5 },
+      stats: { ...stats, active: 1, converted: 18, expired: 6, closed: 24, conversion_rate: 0.75, avg_lead_days: 2.5 },
     });
     expect(await screen.findByText("75%")).toBeInTheDocument();
     expect(screen.getByText(/18 su 24/)).toBeInTheDocument();

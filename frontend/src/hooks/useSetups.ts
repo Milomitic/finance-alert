@@ -64,6 +64,31 @@ export interface SetupStats {
   /** null = nothing has resolved yet. NOT the same as 0 — do not render it as 0%. */
   conversion_rate: number | null;
   avg_lead_days: number | null;
+
+  /** The two tabs, each with its own total. `total` is everything the feature
+   *  has ever tracked: active + closed. */
+  closed: number;
+  total: number;
+  active_bull: number;
+  active_bear: number;
+
+  /** Did a converted setup go on to be RIGHT? Followed through the alert it
+   *  became into the outcome warehouse, and labeled MARKET-NEUTRAL — beating
+   *  the universe median in its own direction — never absolute, which would
+   *  book the market's drift as the setup's merit.
+   *
+   *  `pending` is converted-but-unjudged: the horizon has not elapsed, or the
+   *  trigger date had no universe benchmark. Neither is a loss, and folding
+   *  them into `negative` would invent one. */
+  converted_positive: number;
+  converted_negative: number;
+  converted_pending: number;
+
+  /** The median and the range beside the mean: one number cannot say whether
+   *  the warning was reliably a week or anywhere from a day to a month. */
+  median_lead_days: number | null;
+  lead_days_min: number | null;
+  lead_days_max: number | null;
 }
 
 export interface SetupsResponse {
