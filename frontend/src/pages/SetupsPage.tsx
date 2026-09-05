@@ -110,9 +110,13 @@ function StatsStrip({ stats }: { stats: SetupStats }) {
           : `da ${stats.lead_days_min}g a ${stats.lead_days_max}g · media ${stats.avg_lead_days}g`,
     },
     {
-      label: "Totale tracciati",
+      label: "Totale in lista",
       value: String(stats.total),
-      hint: "tutto ciò che la funzione ha mai seguito",
+      // Non è la tabella intera. `conversion_stats` conta solo i setup
+      // effettivamente SURFACED: uno che l'utente non ha mai visto non gli ha
+      // promesso niente, quindi contarne l'esito misurerebbe qualcosa che la
+      // funzione non ha mai offerto. In produzione sono 71 su ~1.800 righe.
+      hint: "setup effettivamente mostrati in lista, non l'intera tabella",
     },
   ];
 

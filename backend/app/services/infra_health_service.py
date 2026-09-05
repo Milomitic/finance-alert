@@ -20,6 +20,16 @@ metrics endpoint was a down target for months while every dashboard was calm.
 So every value is `int | float | None`, sub-queries are isolated (one missing
 metric costs its own row, not the card), and the envelope carries
 `available` + `error` so the UI can say WHY a row is empty.
+
+⚠️ THE FAILURE THIS DESIGN DOES NOT CATCH, and how it was found. A PromQL
+label value that matches nothing returns HTTP 200 with an EMPTY result — a
+successful query about a series that does not exist. The memory row shipped
+filtering `container="finance-alert"` when the container is called `app`, so
+it rendered "—" beside five healthy-looking values and no test, log or status
+said a word. No unit test can see it either: the fetcher is mocked, and the
+mock answers whatever the query asks. The only thing that found it was running
+this function against production and reading the numbers. **Do that after
+changing any expression here.**
 """
 from __future__ import annotations
 
@@ -56,10 +66,17 @@ _DOWN_LIST = "up == 0"
 _RESTARTS = (
     f"sum(increase(kube_pod_container_status_restarts_total{{{_NS}}}[24h]))"
 )
+# Selected by POD, not by container name. The first version filtered
+# `container="finance-alert"` and matched nothing — the container is called
+# `app` — so this row read "—" while everything around it was green. PromQL
+# returns SUCCESS with zero series for a label value that does not exist, so
+# nothing anywhere reported an error; only comparing against production did.
+# `container!=""` drops the pod-level sandbox series that would otherwise be
+# summed in, and the pod regex keeps postgres (same namespace) out.
+_POD = 'pod=~"finance-alert-.*"'
 _MEMORY_PCT = (
-    f'100 * max(container_memory_working_set_bytes{{{_NS},container="finance-alert"}})'
-    f' / max(kube_pod_container_resource_limits{{{_NS},container="finance-alert",'
-    'resource="memory"})'
+    f'100 * max(container_memory_working_set_bytes{{{_NS},{_POD},container!=""}})'
+    f' / max(kube_pod_container_resource_limits{{{_NS},{_POD},resource="memory"}})'
 )
 _CERT_DAYS = (
     "min((certmanager_certificate_expiration_timestamp_seconds - time()) / 86400)"
