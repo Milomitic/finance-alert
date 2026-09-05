@@ -1,39 +1,39 @@
-"""Signal hit-rate / forward-return statistics.
+"""Realised calibration of the signal engine, replayed from `ohlcv_daily`.
 
-For every signal alert that fired, look up the underlying stock's price K
-days after the signal date and compute the forward return. Aggregate
-per signal_name to surface "volume_breakout alerts have a +1.8% median
-return after 5 days; rsi_oversold averages -0.4%".
+Bucket matured alerts by stated confidence, by nature (continuation vs
+reversal) and by horizon, and report the hit rate each bucket actually
+achieved. Consumed by `kpi_service` and the Settings calibration panel.
 
-Why this matters
-----------------
-A signal that fires often but produces zero alpha is noise; one with a
-small but consistent edge is real signal. The hit-rate panel turns
-historical alert data into a feedback loop the user can use to
-evaluate the signal engine's output.
+WHAT USED TO BE HERE, AND WHY IT IS NOT (2026-09-05)
+----------------------------------------------------
+This module also carried `compute_performance` — per-signal forward-return
+stats over 1/5/20-day windows, feeding a "signal effectiveness" table in
+Settings. That table now reads the `signal_outcomes` warehouse instead (see
+`detector_performance_service`), which is the documented single source of
+truth for whether a signal worked.
 
-Forward windows: 1d, 5d, 20d (1 day / 1 week / 1 month). Each is a
-column in the output. We use trading-day-adjacent OHLCV bars (not
-calendar days) so weekends/holidays don't penalize the metric.
+Leaving the replay behind would have left TWO answers to one question, and
+they disagreed by construction: this one reported the ABSOLUTE hit rate, so a
+bull signal in a rising market scored the market's drift as its own skill. On
+the live warehouse `sr_flip` bull read 57.9% absolute against 51.5%
+market-neutral. It also treated each alert as an independent observation,
+which overlapping forward windows make false.
 
-Stat shape per (signal, window):
-  - count          alerts with enough forward data to compute return
-  - mean_pct       arithmetic mean forward return
-  - median_pct     more robust to outliers
-  - hit_rate       % of alerts where forward return matched the
-                   signal's directional expectation:
-                     bullish signals → positive forward return
-                     bearish signals → negative forward return
-                     neutral signals → not computed (None)
+`_SIGNAL_TONE` went with it — a hand-maintained mirror of the frontend's tone
+map, carrying a comment instructing future readers to update it when adding a
+signal. Nothing had read it for some time.
 
-Caveats
--------
-- We don't account for survivorship bias (delisted tickers don't
-  contribute) or transaction costs.
-- "Tone" comes from `lib/alertMeta.getAlertKindMeta` on the
-  frontend; here we mirror that mapping in `_SIGNAL_TONE` for
-  consistency. If the frontend tone changes, update the dict.
-- Excludes archived alerts (user-flagged as "no longer relevant").
+Caveats that still apply
+------------------------
+- No survivorship-bias correction (delisted tickers don't contribute) and no
+  transaction costs.
+- Forward windows use trading-day-adjacent bars, not calendar days, so
+  weekends and holidays don't penalise the metric.
+- Archived alerts are excluded. ⚠️ This is the same filter that was removed
+  from the outcome warehouse's three consumers on 2026-09-05 after it was
+  measured to hide 4,861 of 4,880 matured outcomes there — archival tracks
+  AGE, not signal quality, and so does maturation. This path was left alone
+  deliberately in that pass; it has not been re-measured here.
 """
 from __future__ import annotations
 
@@ -47,49 +47,6 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models import Alert, OhlcvDaily
-
-# Mirror of frontend `getAlertKindMeta` tone classification. Used
-# only for the directional hit_rate calculation. Keys are raw signal
-# names (without the "signal:" prefix). Update when adding signals
-# or shifting an existing signal's directional bias.
-_SIGNAL_TONE: dict[str, str] = {
-    "rsi_oversold": "bullish",
-    "rsi_overbought": "bearish",
-    "golden_cross": "bullish",
-    "death_cross": "bearish",
-    "macd_bullish_cross": "bullish",
-    "macd_bearish_cross": "bearish",
-    "bollinger_squeeze": "neutral",   # squeeze = expansion expected, no direction
-    "bollinger_breakout_up": "bullish",
-    "bollinger_breakout_down": "bearish",
-    "volume_spike": "neutral",        # direction depends on price action
-    "volume_breakout": "bullish",
-    "breakout_up": "bullish",
-    "breakout_down": "bearish",
-    "gap_up": "bullish",
-    "gap_down": "bearish",
-    "adx_trend_up": "bullish",
-    "adx_trend_down": "bearish",
-    "mean_reversion_long": "bullish",
-    "mean_reversion_short": "bearish",
-}
-
-
-@dataclass(frozen=True)
-class WindowStats:
-    """Stats for one (rule, window) pair."""
-    count: int
-    mean_pct: float | None
-    median_pct: float | None
-    hit_rate: float | None  # 0..1, None for neutral rules
-
-
-@dataclass(frozen=True)
-class RulePerformance:
-    rule_kind: str
-    tone: str               # "bullish" | "bearish" | "neutral"
-    total_alerts: int       # alerts of this kind in window (any forward data)
-    stats: dict[int, WindowStats]  # window_days → stats
 
 
 @dataclass(frozen=True)
@@ -205,89 +162,6 @@ def _directional_hit(tone: str | None, ret: float) -> bool | None:
     if tone == "bear":
         return ret < 0
     return None
-
-
-def compute_performance(
-    db: Session,
-    *,
-    days: int = 90,
-    windows: tuple[int, ...] = (1, 5, 20),
-) -> list[RulePerformance]:
-    """Forward-return stats per signal_name over `days`. Directional hit-rate
-    uses each alert's OWN snapshot tone (bull/bear), not a static name map.
-    Memoized on a mutation fingerprint (recomputes only after a scan/archival)."""
-    cutoff = datetime.now(UTC) - timedelta(days=days)
-    key = ("perf", days, windows)
-    token = _mutation_token(db, cutoff)
-    hit = _MEMO.get(key)
-    if hit is not None and hit[0] == token:
-        return hit[1]  # type: ignore[return-value]
-    out = _compute_performance(db, cutoff, windows)
-    _MEMO[key] = (token, out)
-    return out
-
-
-def _compute_performance(
-    db: Session, cutoff: datetime, windows: tuple[int, ...]
-) -> list[RulePerformance]:
-    rows = db.execute(
-        select(Alert).where(
-            Alert.triggered_at >= cutoff,
-            Alert.archived_at.is_(None),
-            Alert.signal_name.is_not(None),
-        )
-    ).scalars().all()
-    if not rows:
-        return []
-
-    by_kind: dict[str, list[tuple[int, date, str | None]]] = {}
-    min_signal_date: date | None = None
-    for alert in rows:
-        if not alert.signal_name:
-            continue
-        kind = f"signal:{alert.signal_name}"
-        sig_d = alert.signal_date or alert.triggered_at.date()
-        tone, _, _ = _snapshot_tone_conf(alert.snapshot)
-        by_kind.setdefault(kind, []).append((alert.stock_id, sig_d, tone))
-        if min_signal_date is None or sig_d < min_signal_date:
-            min_signal_date = sig_d
-    if not by_kind:
-        return []
-
-    bars_by_stock = _load_bars(db, since=min_signal_date)
-    out: list[RulePerformance] = []
-    for kind, signals in by_kind.items():
-        tones = [t for *_, t in signals if t]
-        row_tone = max(set(tones), key=tones.count) if tones else "neutral"
-        per_window: dict[int, WindowStats] = {}
-        for w in windows:
-            rets: list[float] = []
-            hits = 0
-            counted = 0
-            for stock_id, sig_d, tone in signals:
-                fwd = _forward_close(bars_by_stock, stock_id, sig_d, w)
-                if fwd is None:
-                    continue
-                sc, fc = fwd
-                if sc <= 0:
-                    continue
-                ret = (fc - sc) / sc * 100.0
-                rets.append(ret)
-                hit = _directional_hit(tone, ret)
-                if hit is not None:
-                    counted += 1
-                    if hit:
-                        hits += 1
-            per_window[w] = WindowStats(
-                count=len(rets),
-                mean_pct=statistics.fmean(rets) if rets else None,
-                median_pct=statistics.median(rets) if rets else None,
-                hit_rate=(hits / counted) if counted > 0 else None,
-            )
-        out.append(RulePerformance(rule_kind=kind, tone=row_tone,
-                                   total_alerts=len(signals), stats=per_window))
-    out.sort(key=lambda r: r.total_alerts, reverse=True)
-    return out
 
 
 # --- Calibration: confidence-bucket + nature hit-rate at one horizon --------
