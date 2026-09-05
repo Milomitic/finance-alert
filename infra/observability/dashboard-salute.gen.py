@@ -1,5 +1,12 @@
 """Generatore del cruscotto "Finance-Alert - Salute".
 
+⚠️ I pannelli memoria selezionavano `container="finance-alert"`. Il container
+si chiama `app`: PromQL risponde 200 con ZERO serie a un valore di etichetta
+che non esiste, quindi i due pannelli erano vuoti e nulla lo segnalava. Si
+seleziona per POD (`pod=~"finance-alert-.*"`, `container!=""` per escludere la
+serie di sandbox); il regex tiene fuori postgres, che vive nello stesso
+namespace. Trovato solo confrontando con la produzione.
+
 Il JSON e' generato invece che scritto a mano perche' la griglia di Grafana e'
 posizionale: ogni pannello porta x/y/w/h assoluti, e spostarne uno a mano
 significa ricalcolare quelli sotto. Qui le righe si accumulano da sole.
@@ -144,8 +151,8 @@ panels.append(stat(
     desc="Riavvii nelle ultime 24 ore. Un OOM-kill compare qui prima che altrove."))
 panels.append(stat(
     "Memoria usata",
-    '100 * max(container_memory_working_set_bytes{namespace="finance-alert",container="finance-alert"})'
-    ' / max(kube_pod_container_resource_limits{namespace="finance-alert",container="finance-alert",resource="memory"})',
+    '100 * max(container_memory_working_set_bytes{namespace="finance-alert",pod=~"finance-alert-.*",container!=""})'
+    ' / max(kube_pod_container_resource_limits{namespace="finance-alert",pod=~"finance-alert-.*",resource="memory"})',
     20, y, unit="percent",
     steps=[{"color": "green", "value": None}, {"color": "yellow", "value": 75},
            {"color": "red", "value": 90}],
@@ -217,8 +224,8 @@ panels.append(row("Infrastruttura - andamento nel tempo", y))
 y += 1
 panels.append(ts(
     "Memoria: uso contro limite", [
-        target('container_memory_working_set_bytes{namespace="finance-alert",container="finance-alert"}', "in uso"),
-        target('kube_pod_container_resource_limits{namespace="finance-alert",container="finance-alert",resource="memory"}', "limite"),
+        target('container_memory_working_set_bytes{namespace="finance-alert",pod=~"finance-alert-.*",container!=""}', "in uso"),
+        target('kube_pod_container_resource_limits{namespace="finance-alert",pod=~"finance-alert-.*",resource="memory"}', "limite"),
     ], 0, y, w=8, h=7, unit="bytes",
     desc="Una crescita monotona che non si appiattisce mai e' una perdita; un plateau non lo e'."))
 panels.append(ts(

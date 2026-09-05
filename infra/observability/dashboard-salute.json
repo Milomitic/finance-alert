@@ -376,7 +376,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "100 * max(container_memory_working_set_bytes{namespace=\"finance-alert\",container=\"finance-alert\"}) / max(kube_pod_container_resource_limits{namespace=\"finance-alert\",container=\"finance-alert\",resource=\"memory\"})",
+          "expr": "100 * max(container_memory_working_set_bytes{namespace=\"finance-alert\",pod=~\"finance-alert-.*\",container!=\"\"}) / max(kube_pod_container_resource_limits{namespace=\"finance-alert\",pod=~\"finance-alert-.*\",resource=\"memory\"})",
           "refId": "A",
           "instant": true
         }
@@ -1043,7 +1043,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "container_memory_working_set_bytes{namespace=\"finance-alert\",container=\"finance-alert\"}",
+          "expr": "container_memory_working_set_bytes{namespace=\"finance-alert\",pod=~\"finance-alert-.*\",container!=\"\"}",
           "refId": "A",
           "legendFormat": "in uso"
         },
@@ -1052,7 +1052,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "kube_pod_container_resource_limits{namespace=\"finance-alert\",container=\"finance-alert\",resource=\"memory\"}",
+          "expr": "kube_pod_container_resource_limits{namespace=\"finance-alert\",pod=~\"finance-alert-.*\",resource=\"memory\"}",
           "refId": "A",
           "legendFormat": "limite"
         }
