@@ -228,6 +228,20 @@ class DetectorPerfCellOut(BaseModel):
     avg_fwd_return: float                # mean forward return over the horizon (%)
     low_confidence: bool                 # n < min_n → thin evidence, render muted
 
+    # Independent-window count and the interval sized on it. `n` counts rows;
+    # overlapping forward windows mean those rows are not independent draws,
+    # and a rate quoted without this reads far stronger than the evidence is.
+    # None on replay cells: the artifact stores counts, not signal dates.
+    effective_n: int | None = None
+    # The forward horizon that set the block length — it explains the count.
+    horizon_days: int | None = None
+    skill_ci_low: float | None = None    # Wilson 95% bounds on the market-
+    skill_ci_high: float | None = None   # neutral rate, sized by effective_n
+    # "above" / "below" only when the interval clears 50 outright, else
+    # "inconclusive". Distinct from calibration_map's edge/coinflip/negative,
+    # which keys on a point estimate with no sample behind it.
+    skill_verdict: str | None = None
+
 
 class DetectorPerfRowOut(BaseModel):
     """One detector's totals + the three orthogonal breakdowns."""

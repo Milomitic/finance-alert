@@ -8,7 +8,7 @@ in test_signal_drift_service.py; this suite tests the aggregation itself):
   - Forza banding (<60 / 60-74 / >=75, null → "n/d") incl. the boundaries;
   - null regime_at_signal → the "n/d" bucket;
   - the low_confidence honesty flag (n < min_n per cell, totals included);
-  - archived alerts excluded;
+  - archived alerts still measured (archival tracks age, not quality);
   - meta coverage envelope (rows, detectors present vs 17, date range);
   - the read-only endpoint (auth + envelope shape + empty warehouse);
   - the replay segment (B4-5): artifact merge, read-time low_confidence,
@@ -17,7 +17,7 @@ in test_signal_drift_service.py; this suite tests the aggregation itself):
 from __future__ import annotations
 
 import json
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -210,16 +210,33 @@ def test_min_n_parameter_moves_the_flag(db: Session):
         "total"]["low_confidence"] is False
 
 
-def test_archived_alerts_excluded(db: Session):
+def test_archived_alerts_are_still_measured(db: Session):
+    """Archiving is an INBOX action, not a verdict on the signal.
+
+    This used to exclude archived alerts, on the reading that the user had
+    flagged them irrelevant. Measured on production 2026-09-05, the effect was
+    that the warehouse held 4,880 matured outcomes and this cube could see
+    NINETEEN of them.
+
+    The cause is that archival tracks AGE, not quality — 99% of May's alerts
+    were archived, 68% of June's, 36% of August's, 0% of September's, a clean
+    monotone gradient. Maturation tracks age too: an outcome is written only
+    once its forward window has elapsed. So the two filters select opposite
+    ends of the same axis, and intersecting them keeps almost nothing.
+
+    Whether the user has filed an alert away is a fact about the user's
+    reading, not about whether the engine was right. An efficacy measurement
+    that moves when someone clears their inbox is not a measurement.
+    """
     _mk_outcome(db, abs_hit=1)
     _mk_outcome(db, abs_hit=0, archived=True)
     db.commit()
 
     out = perf.compute_detector_performance(db)
     total = out["detectors"][0]["total"]
-    assert total["n"] == 1                       # the archived row is invisible
-    assert total["abs_hit_rate"] == pytest.approx(100.0)
-    assert out["meta"]["total_rows"] == 1
+    assert total["n"] == 2
+    assert total["abs_hit_rate"] == pytest.approx(50.0)
+    assert out["meta"]["total_rows"] == 2
 
 
 def test_detectors_sorted_by_total_n_desc(db: Session):
@@ -404,6 +421,8 @@ def test_detector_performance_endpoint_returns_replay_segment(
     assert set(row["total"].keys()) == {
         "key", "n", "abs_hit_rate", "mkt_neutral_hit_rate",
         "avg_fwd_return", "low_confidence",
+        "effective_n", "horizon_days",
+        "skill_ci_low", "skill_ci_high", "skill_verdict",
     }
 
 
@@ -424,6 +443,8 @@ def test_detector_performance_endpoint_returns_cube(client: TestClient, db: Sess
     assert set(row["total"].keys()) == {
         "key", "n", "abs_hit_rate", "mkt_neutral_hit_rate",
         "avg_fwd_return", "low_confidence",
+        "effective_n", "horizon_days",
+        "skill_ci_low", "skill_ci_high", "skill_verdict",
     }
     regimes = {c["key"]: c for c in row["by_regime"]}
     assert regimes["n/d"]["n"] == 1
@@ -436,3 +457,99 @@ def test_detector_performance_endpoint_returns_cube(client: TestClient, db: Sess
 
 def test_detector_performance_endpoint_validates_min_n(client: TestClient):
     assert client.get("/api/platform/detector-performance?min_n=0").status_code == 422
+
+
+# --------------------------------------------------------------------------- #
+# Effective sample size + interval-based verdict                              #
+#                                                                             #
+# The cube counted one warehouse row as one observation. Signals labeled on a  #
+# 21-day forward window overlap almost entirely when a detector fires across   #
+# a cluster of days, and completely when it fires across stocks on ONE day —   #
+# so `n` overstates the evidence, sometimes by an order of magnitude. Each     #
+# cell now also carries the independent-window count and a Wilson interval     #
+# sized on it. See tests/test_effective_sample.py for the helpers themselves.  #
+# --------------------------------------------------------------------------- #
+
+def test_same_day_fires_are_one_effective_observation(db: Session):
+    """20 stocks tripping the same detector on one day is one day of market."""
+    for _ in range(20):
+        _mk_outcome(db, signal_date=date(2026, 6, 1))
+    db.flush()
+
+    cell = perf.compute_detector_performance(db)["detectors"][0]["total"]
+
+    assert cell["n"] == 20
+    assert cell["effective_n"] == 1
+
+
+def test_fires_spread_across_months_keep_their_independence(db: Session):
+    """Four fires a full quarter apart overlap on nothing."""
+    for m in (1, 4, 7, 10):
+        _mk_outcome(db, signal_date=date(2026, m, 1))
+    db.flush()
+
+    cell = perf.compute_detector_performance(db)["detectors"][0]["total"]
+
+    assert cell["n"] == 4
+    assert cell["effective_n"] == 4
+
+
+def test_a_perfect_but_clustered_record_stays_inconclusive(db: Session):
+    """THE test. 40 rows, every one a market-neutral hit — but all on a single
+    day, so the honest sample is one. A 100% rate on one observation cannot
+    exclude a coin flip, and the cell must say so rather than read as proof.
+
+    Sizing the interval on `n` instead of `effective_n` flips this to
+    "above" (Wilson on 40/40 has a lower bound near 91%), which is precisely
+    the failure this guards.
+    """
+    for _ in range(40):
+        _mk_outcome(db, signal_date=date(2026, 6, 1), abs_hit=1, mkt_hit=1)
+    db.flush()
+
+    cell = perf.compute_detector_performance(db)["detectors"][0]["total"]
+
+    assert cell["mkt_neutral_hit_rate"] == 100.0
+    assert cell["effective_n"] == 1
+    assert cell["skill_ci_low"] < 50.0
+    assert cell["skill_verdict"] == "inconclusive"
+
+
+def test_a_spread_out_winning_record_earns_its_verdict(db: Session):
+    """The same 100% across 40 genuinely separate windows DOES clear the bar —
+    otherwise the guard above would just be a way of never concluding
+    anything."""
+    for i in range(40):
+        _mk_outcome(db, signal_date=date(2026, 1, 1) + timedelta(days=40 * i), mkt_hit=1)
+    db.flush()
+
+    cell = perf.compute_detector_performance(db)["detectors"][0]["total"]
+
+    assert cell["effective_n"] == 40
+    assert cell["skill_ci_low"] > 50.0
+    assert cell["skill_verdict"] == "above"
+
+
+def test_a_spread_out_losing_record_reads_below(db: Session):
+    for i in range(40):
+        _mk_outcome(db, signal_date=date(2026, 1, 1) + timedelta(days=40 * i), mkt_hit=0)
+    db.flush()
+
+    cell = perf.compute_detector_performance(db)["detectors"][0]["total"]
+
+    assert cell["skill_ci_high"] < 50.0
+    assert cell["skill_verdict"] == "below"
+
+
+def test_unlabeled_rows_get_no_verdict_rather_than_a_zero(db: Session):
+    """No market-neutral label means no benchmark, not a failed signal."""
+    for _ in range(5):
+        _mk_outcome(db, mkt_hit=None)
+    db.flush()
+
+    cell = perf.compute_detector_performance(db)["detectors"][0]["total"]
+
+    assert cell["mkt_neutral_hit_rate"] is None
+    assert cell["skill_verdict"] is None
+    assert cell["skill_ci_low"] is None
+    assert cell["skill_ci_high"] is None

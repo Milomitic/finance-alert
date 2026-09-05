@@ -327,9 +327,17 @@ def test_drift_reads_the_warehouse_not_raw_ohlcv(db: Session, monkeypatch):
     assert rows[0]["n_matured"] == 35
 
 
-def test_archived_and_out_of_window_alerts_excluded(db: Session, monkeypatch):
-    """Archived alerts and alerts whose signal_date predates the window are
-    excluded; an empty result is returned when nothing qualifies."""
+def test_out_of_window_excluded_but_archived_still_counts(db: Session, monkeypatch):
+    """The window is a real filter; archival is not.
+
+    Archiving is an inbox action that tracks AGE, not signal quality — and
+    maturation tracks age too, so excluding archived alerts removed almost
+    every outcome that had had time to be labeled. Measured on production
+    2026-09-05: 4,880 matured outcomes, of which 19 survived this filter. A
+    drift monitor whose job is to say WHEN to retune a detector cannot do it
+    on nineteen rows, and it reported no drift rather than reporting that it
+    could not see.
+    """
     hz = 5
     _patch_calibration(monkeypatch, {"sr_flip": 50.0}, horizon_days=hz)
 
@@ -353,7 +361,11 @@ def test_archived_and_out_of_window_alerts_excluded(db: Session, monkeypatch):
     sos.mature_outcomes(db)  # the real production pipeline: warehouse → drift
 
     rows = drift.compute_signal_drift(db, window_days=90, min_n=30)
-    assert rows == []
+    # The 200-day-old signal is genuinely out of the window; the archived one
+    # inside it is measured like any other.
+    assert [r["detector"] for r in rows] == ["sr_flip"]
+    assert rows[0]["n_matured"] == 1
+    assert rows[0]["drift_flag"] is False        # n=1 is far below min_n
 
 
 def test_rows_sorted_by_abs_delta(db: Session, monkeypatch):

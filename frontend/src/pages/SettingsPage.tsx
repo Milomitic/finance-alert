@@ -5,15 +5,15 @@ import { CalibrationPanel } from "@/components/settings/CalibrationPanel";
 import { CatalogRefreshPanel } from "@/components/settings/CatalogRefreshPanel";
 import { DetectorPerformancePanel } from "@/components/settings/DetectorPerformancePanel";
 import { EquityCurvePanel } from "@/components/settings/EquityCurvePanel";
-import { RulePerformancePanel } from "@/components/settings/RulePerformancePanel";
 import { ScanLogPanel } from "@/components/settings/ScanLogPanel";
 import { ScoreIcPanel } from "@/components/settings/ScoreIcPanel";
+import { SignalEffectivenessPanel } from "@/components/settings/SignalEffectiveness";
 
 /* ─── SettingsPage — /settings route ────────────────────────────────────── *
  *
  * Admin / diagnostic surface. Two main panels:
- *   - Rule effectiveness (forward-return stats per rule.kind over
- *     1d / 5d / 20d windows).
+ *   - Signal effectiveness, read from the matured `signal_outcomes`
+ *     warehouse (skill beside absolute hit, sized on independent windows).
  *   - Catalog refresh status (per-index last-run state + manual
  *     trigger).
  *
@@ -38,7 +38,7 @@ export default function SettingsPage() {
       </header>
 
       <EngineHealthPanel />
-      <RulePerformancePanel />
+      <SignalEffectivenessPanel />
       <CalibrationPanel />
       <DetectorPerformancePanel />
       <EquityCurvePanel />

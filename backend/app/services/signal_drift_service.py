@@ -71,7 +71,7 @@ from datetime import UTC, date, datetime, timedelta
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.models import Alert, SignalOutcome
+from app.models import SignalOutcome
 from app.signals.calibration_map import get_calibration
 from app.signals.horizon import _PRIOR
 
@@ -106,7 +106,7 @@ def _horizon_days(detector: str) -> int:
     return _H_BY_HORIZON.get(_PRIOR.get(detector, "medium"), _DEFAULT_HORIZON_DAYS)
 
 
-def wilson_interval(hits: int, n: int, z: float = _DEFAULT_Z) -> tuple[float, float]:
+def wilson_interval(hits: float, n: int, z: float = _DEFAULT_Z) -> tuple[float, float]:
     """95%-default Wilson score interval for a binomial proportion, as a
     (low, high) pair of PROPORTIONS in [0, 1].
 
@@ -144,8 +144,15 @@ def compute_signal_drift(
     # from the signal_outcomes warehouse (maturation already enforced the
     # horizon-elapsed + usable-tone/price rules at write time). Use signal_date
     # (the bar the rule matched) — the horizon clock starts there, not at
-    # wall-clock triggered_at. Join alerts only to exclude archived
-    # (user-flagged irrelevant) rows.
+    # wall-clock triggered_at.
+    #
+    # ARCHIVED ALERTS COUNT. This joined alerts to exclude them until
+    # 2026-09-05; on production that left the monitor reading 19 of 4,880
+    # matured outcomes, so it reported "no drift" when what it meant was that
+    # it could not see. Archival tracks age (99% of May's alerts, 0% of
+    # September's) and so does maturation, so the two filters cancel. Whether
+    # the user has filed an alert away says nothing about whether the detector
+    # was right.
     cutoff = date.today() - timedelta(days=window_days)
     grouped = db.execute(
         select(
@@ -153,11 +160,7 @@ def compute_signal_drift(
             func.count(SignalOutcome.id),
             func.sum(SignalOutcome.abs_hit),
         )
-        .join(Alert, Alert.id == SignalOutcome.alert_id)
-        .where(
-            SignalOutcome.signal_date >= cutoff,
-            Alert.archived_at.is_(None),
-        )
+        .where(SignalOutcome.signal_date >= cutoff)
         .group_by(SignalOutcome.detector)
     ).all()
 

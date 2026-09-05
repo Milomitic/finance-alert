@@ -1056,6 +1056,65 @@ SURFACING + SUBSTRATE — none of it changes the composite/Probabilità/targets.
   weight any of these into the composite without the score-IC backtest
   (roadmap #9) over persisted score_history + point-in-time fundamentals.
 
+### ⚠️ The warehouse was measuring 19 of its 4,880 rows (2026-09-05)
+
+`signal_outcomes` is the single source of truth for whether the engine works.
+Three consumers joined `alerts` to exclude archived ones — the cube
+(`detector_performance_service`), the equity curve, and the drift monitor
+(`signal_drift_service`) — on the reading that archival means "user flagged it
+irrelevant". Measured against production:
+
+    esiti maturati nel magazzino          4.880
+    visibili dopo il filtro archiviati        19
+
+**Archival tracks AGE, not quality.** By month of signal: 99% of May's alerts
+archived, 68% June, 61% July, 36% August, 0% September — a clean monotone
+gradient, because archiving is an inbox action and old alerts have had time to
+be filed. Maturation tracks age too (an outcome is written only once its
+forward window has elapsed). So the two conditions select opposite ends of one
+axis and their intersection is nearly empty.
+
+The drift monitor exists to say WHEN to retune a detector on evidence. It was
+answering "no drift" when the truth was "I can see nineteen rows". Nothing
+errored, every panel rendered.
+
+**The general rule: never filter an efficacy measurement on a field the USER
+writes.** A number that moves when someone clears their inbox is not measuring
+the engine. If a filter must exist, check what fraction of the sample it
+removes before trusting anything downstream of it.
+
+### `n` is not the sample size — overlapping windows are one observation
+
+Every consumer treated one warehouse row as one independent draw. They are not.
+A signal labeled 21 trading days forward shares 18/21 of its outcome window
+with one fired three days later, and shares ALL of it with the twenty other
+stocks that tripped the same detector the same morning.
+
+`detector_performance_service.independent_blocks(dates, horizon)` counts
+non-overlapping horizon-length time blocks — the same convention as rule A in
+the conditional-screen notes above, and for the same reason. `sized_interval`
+then puts a Wilson 95% band around the rate using THAT count. The point
+estimate still uses every row (it is the best guess available); only the WIDTH
+is charged the overlap.
+
+Measured on the live warehouse, this is not a rounding correction:
+
+    detector            righe   finestre   skill        intervallo 95%
+    candle_reversal      1884         16   44.4         23.6 - 67.4
+    macd_divergence       227          3   78.9         28.0 - 97.3
+    trend_pullback        325          1   46.2          4.7 - 93.7
+
+**All 16 detectors read "non concludente", and that is the correct answer, not
+a bug.** The warehouse spans ~3.5 months; a 21-day detector fits in it three
+times. Resolving a 5pp edge needs a few hundred independent windows, which at
+21-day horizons is measured in decades. More stocks do not help — only time
+does. This is the same conclusion the six offline studies reached, now visible
+on screen instead of buried in a report.
+
+The cell carries `horizon_days` beside `effective_n` because without it the
+count is unreadable: 16 windows for a 5-day detector and 1 for a 63-day one
+over the identical span looks arbitrary until you can see why.
+
 ### The honesty rules are enforced in the UI too, not just in this file (2026-09-02)
 
 The engine's conclusions kept being stated here and contradicted on screen. Four

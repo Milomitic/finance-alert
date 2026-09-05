@@ -172,6 +172,25 @@ export type DetectorPerfCell = {
   avg_fwd_return: number;
   /** n < min_n → thin evidence, render muted with an "n<30" chip. */
   low_confidence: boolean;
+
+  /** Non-overlapping forward windows the rows span. `n` counts rows, and rows
+   *  that share a forward window are not independent draws — a 21-day signal
+   *  firing on 20 stocks in one day is ONE observation, not twenty. This is
+   *  the number a rate should be trusted in proportion to. Null on replay
+   *  cells (the artifact stores counts, not signal dates). */
+  effective_n: number | null;
+  /** The forward horizon that set the block length. It EXPLAINS effective_n:
+   *  over one identical span a 5-day detector yields ~16 independent windows
+   *  and a 63-day one yields 1. */
+  horizon_days: number | null;
+  /** Wilson 95% bounds on `mkt_neutral_hit_rate`, sized by `effective_n`. */
+  skill_ci_low: number | null;
+  skill_ci_high: number | null;
+  /** "above" / "below" only where the interval clears 50 outright, else
+   *  "inconclusive". NOT the same vocabulary as the calibration artifact's
+   *  edge/coinflip/negative, which keys on a point estimate with no sample
+   *  behind it — same word, different bar would be worse than no word. */
+  skill_verdict: "above" | "below" | "inconclusive" | null;
 };
 
 /** One detector's totals + the three orthogonal breakdowns. */

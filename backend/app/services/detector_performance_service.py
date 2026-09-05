@@ -21,11 +21,19 @@ warehouse is young: long-horizon (63d) outcomes mature months after their
 signals, so entire detectors are still absent. Saying so beats implying
 completeness.
 
-Read-only, no caching: the warehouse is small (~1.3k rows today, one row per
+Read-only, no caching: the warehouse is small (~4.9k rows today, one row per
 matured signal alert ever) and grows by a handful per scan, so a single column
 SELECT + in-Python bucketing is microseconds — far below caching territory.
-Archived alerts (user-flagged irrelevant) are excluded, matching the drift
-monitor's convention.
+
+ARCHIVED ALERTS ARE INCLUDED, and that reverses the original design. This
+excluded them until 2026-09-05, reading archival as "user flagged it
+irrelevant". Measured against production, the filter left this cube able to
+see 19 of the warehouse's 4,880 matured outcomes. Archival tracks AGE rather
+than quality — 99% of May's alerts were archived, 68% of June's, 36% of
+August's, 0% of September's — and maturation tracks age as well, so the two
+conditions select opposite ends of one axis. Beyond the sample loss it is the
+wrong variable in principle: efficacy is a property of the engine, and a
+number that moves when someone clears their inbox is not measuring it.
 
 All rates are PERCENTAGES (0..100) to match the calibration artifact and the
 rest of the platform UI; `avg_fwd_return` is likewise a percentage (the stored
@@ -45,15 +53,17 @@ block is None and `meta.replay_available` is False.
 from __future__ import annotations
 
 import json
+import math
 from collections import defaultdict
 from collections.abc import Callable, Sequence
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import Alert, SignalOutcome
+from app.models import SignalOutcome
+from app.services.signal_drift_service import wilson_interval
 from app.signals.horizon import _PRIOR
 
 # Replay artifact written by `app.scripts.backfill_replay_outcomes`.
@@ -83,6 +93,53 @@ def _strength_band(strength: int | None) -> str:
     return ">=75"
 
 
+# Signals are stamped with CALENDAR dates; horizons are counted in TRADING
+# bars. 21 trading days is 30 calendar days at the 7/5 weekday factor.
+_TRADING_TO_CALENDAR = 7.0 / 5.0
+
+
+def independent_blocks(dates: Sequence[date], horizon_trading_days: int) -> int:
+    """How many NON-OVERLAPPING horizon-length windows these fires span.
+
+    Greedy interval cover: walk the sorted dates, open a block at the first
+    fire, and absorb every later fire whose forward window still overlaps it.
+
+    This is the honest denominator for a detector's hit rate. Two fires three
+    days apart, each labeled 21 trading days forward, share 18/21 of their
+    outcome window and most of their market — counting them as two independent
+    draws is what lets a single good quarter read as overwhelming evidence.
+    Fires on the same day across many stocks collapse hardest of all: they are
+    one day of market seen N times.
+
+    Deliberately conservative. It ignores that different stocks are not
+    perfectly correlated, so it UNDERSTATES the true independent count. An
+    honest error in this direction costs a claim we cannot yet support; the
+    other direction manufactures one.
+    """
+    if not dates:
+        return 0
+    span = max(1, math.ceil(horizon_trading_days * _TRADING_TO_CALENDAR))
+    blocks = 0
+    open_until: date | None = None
+    for d in sorted(dates):
+        if open_until is None or d >= open_until:
+            blocks += 1
+            open_until = d + timedelta(days=span)
+    return blocks
+
+
+def sized_interval(*, rate_pct: float, effective_n: int) -> tuple[float, float]:
+    """Wilson 95% interval around `rate_pct`, sized by the INDEPENDENT count.
+
+    The point estimate keeps every row — it is the best guess available. Only
+    the WIDTH is charged the overlap, which is exactly where the overlap does
+    its damage: 81.8% on 99 clustered rows is still the best estimate, it is
+    simply indistinguishable from a coin flip.
+    """
+    lo, hi = wilson_interval(rate_pct / 100.0 * effective_n, effective_n)
+    return round(lo * 100.0, 1), round(hi * 100.0, 1)
+
+
 def _cell(key: str, rows: Sequence, min_n: int) -> dict:
     """Aggregate one bucket of outcome rows into a display cell.
 
@@ -92,14 +149,52 @@ def _cell(key: str, rows: Sequence, min_n: int) -> dict:
     """
     n = len(rows)
     abs_rate = sum(r.abs_hit for r in rows) / n * 100.0
-    mkt_labels = [r.mkt_neutral_hit for r in rows if r.mkt_neutral_hit is not None]
-    mkt_rate = (sum(mkt_labels) / len(mkt_labels) * 100.0) if mkt_labels else None
+    labeled = [r for r in rows if r.mkt_neutral_hit is not None]
+    mkt_rate = (
+        sum(r.mkt_neutral_hit for r in labeled) / len(labeled) * 100.0
+        if labeled
+        else None
+    )
     avg_fwd = sum(r.fwd_return for r in rows) / n * 100.0  # ratio → percent
+
+    # Conservative: the widest horizon in the bucket sets the overlap window.
+    horizon = max((r.horizon_days for r in rows), default=21)
+    eff_n = independent_blocks([r.signal_date for r in rows], horizon)
+
+    # The interval is sized on the independence of the LABELED rows only —
+    # they are the sample the market-neutral rate is drawn from, and an
+    # unlabeled row lends it no evidence. Usually the two counts coincide;
+    # when they don't, using the larger one would overstate the precision of
+    # a rate it did not contribute to.
+    if mkt_rate is None:
+        ci_low = ci_high = verdict = None
+    else:
+        ci_low, ci_high = sized_interval(
+            rate_pct=mkt_rate,
+            effective_n=independent_blocks([r.signal_date for r in labeled], horizon),
+        )
+        # A verdict only where the interval clears the coin flip outright.
+        # Everything else is "inconclusive" — deliberately NOT the
+        # coinflip/negative/edge vocabulary of `calibration_map.quality_tag`,
+        # which keys on a point estimate above 52 with no sample behind it.
+        # Same word, different bar, same screen would be worse than no word.
+        verdict = (
+            "above" if ci_low > 50.0 else "below" if ci_high < 50.0 else "inconclusive"
+        )
+
     return {
         "key": key,
         "n": n,
+        "effective_n": eff_n,
+        # Travels with the count because it EXPLAINS it: over one identical
+        # span, a 5-day detector yields ~16 independent windows and a 63-day
+        # one yields 1. Without the horizon the column reads as arbitrary.
+        "horizon_days": horizon,
         "abs_hit_rate": round(abs_rate, 1),
         "mkt_neutral_hit_rate": round(mkt_rate, 1) if mkt_rate is not None else None,
+        "skill_ci_low": ci_low,
+        "skill_ci_high": ci_high,
+        "skill_verdict": verdict,
         "avg_fwd_return": round(avg_fwd, 2),
         "low_confidence": n < min_n,
     }
@@ -180,9 +275,8 @@ def compute_detector_performance(db: Session, *, min_n: int = _DEFAULT_MIN_N) ->
             SignalOutcome.mkt_neutral_hit,
             SignalOutcome.fwd_return,
             SignalOutcome.signal_date,
+            SignalOutcome.horizon_days,
         )
-        .join(Alert, Alert.id == SignalOutcome.alert_id)
-        .where(Alert.archived_at.is_(None))
     ).all()
 
     by_detector: dict[str, list] = defaultdict(list)
@@ -255,8 +349,6 @@ def compute_equity_curve(
             SignalOutcome.mkt_neutral_excess,
             SignalOutcome.abs_hit,
         )
-        .join(Alert, Alert.id == SignalOutcome.alert_id)
-        .where(Alert.archived_at.is_(None))
         .where(SignalOutcome.horizon_days == horizon_days)
         .order_by(SignalOutcome.signal_date.asc(), SignalOutcome.id.asc())
     )
