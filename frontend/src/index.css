@@ -212,45 +212,36 @@
   }
 }
 
-/* ─── MarketTickerTape animations ──────────────────────────────────────────
- * The ticker tape (top of dashboard) uses a CSS-only horizontal scroll
- * via translateX. The track is duplicated in the DOM, so animating
- * from 0 → -50% lands the second copy exactly where the first started
- * — invisibly seamless loop.
+/* ─── Market ticker tape ──────────────────────────────────────────────────
+ * The tape is a real horizontal scroller now; the advance is JS writing its
+ * scrollLeft (see MarketTickerTape.tsx for why transform could not stay).
+ * What is left here is what CSS still owns:
  *
- * Speed: 60s per full cycle is fast enough to feel "alive" without
- * being unreadable. 90s slowed to a crawl in user-tests (felt static),
- * 30s was too fast to read individual symbols.
+ *   - no scrollbar. A 36px strip has no room for one, and on desktop the
+ *     global slim scrollbar would sit across the tickers.
+ *   - no horizontal overscroll chaining, so a flick to the end of the tape
+ *     cannot trigger the browser's swipe-to-go-back.
  *
- * Hover pauses the animation so the user can lock onto a flying
- * ticker. `prefers-reduced-motion` respect: when the user's OS asks
- * for reduced motion (vestibular sensitivity, etc.) we stop the
- * animation entirely — the values are still visible, just static.
+ * Deliberately NO `touch-action` override: the tape sits at the very top of
+ * the dashboard, so a swipe meant to scroll the page often starts on it.
+ * overflow-y: hidden already sends vertical pans to the page, and pinning
+ * touch-action to pan-x would trap them here instead.
+ *
+ * prefers-reduced-motion is handled in JS by not advancing — the tape stays
+ * draggable by hand, which the old keyframe version was not.
+ *
+ * Pace (kept from the keyframe tuning, now expressed as one rail width per
+ * N seconds in MarketTickerTape.tsx): 60s on desktop — 90s tested as static,
+ * 30s too fast to read a symbol. Phones run 18s, because the window is ~5x
+ * narrower and the same pixel speed shows two tickers and then a long wait.
  */
-@keyframes ticker-marquee {
-  from { transform: translateX(0); }
-  to   { transform: translateX(-50%); }
+.ticker-scroller {
+  scrollbar-width: none;           /* Firefox */
+  -ms-overflow-style: none;        /* legacy Edge */
+  overscroll-behavior-x: contain;
 }
-.ticker-rail {
-  animation: ticker-marquee 60s linear infinite;
-  will-change: transform;
-}
-.group:hover .ticker-rail {
-  animation-play-state: paused;
-}
-/* Phones: same 60s cycle moves the SAME px/s, but the window showing it is
-   ~5x narrower — you see two tickers and wait ~8s for the next, which reads
-   as stalled rather than live. Halving the cycle restores the sense of
-   motion on the small screen without touching the tuned desktop speed. */
-@media (max-width: 639px) {
-  .ticker-rail {
-    animation-duration: 28s;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .ticker-rail {
-    animation: none;
-  }
+.ticker-scroller::-webkit-scrollbar {
+  display: none;                   /* WebKit/Blink */
 }
 
 /* ─── HomePage ambient pulse ──────────────────────────────────────────────
