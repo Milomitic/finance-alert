@@ -139,7 +139,7 @@ export default function InfraCard({ data }: { data?: InfraHealth | null }) {
             label="Memoria"
             value={mem == null ? "—" : `${mem.toFixed(0)}%`}
             tone={mem == null ? "muted" : mem >= 90 ? "bad" : mem >= 75 ? "warn" : "ok"}
-            hint="Percentuale del LIMITE del container, non della memoria del nodo."
+            hint="Percentuale del LIMITE del container, non della memoria del nodo. Subito dopo un riavvio resta vuota per un ciclo di scrape: la serie del container nuovo non esiste ancora."
           />
           <Metric
             label="Certificati TLS"
