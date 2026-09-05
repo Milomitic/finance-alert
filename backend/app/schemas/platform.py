@@ -297,3 +297,43 @@ class DetectorPerformanceOut(BaseModel):
     detectors: list[DetectorPerfRowOut]   # sorted by descending total n
     # Present only when the replay artifact exists (meta.replay_available).
     replay: DetectorReplayOut | None = None
+
+
+class InfraComponentOut(BaseModel):
+    """One scrape target, so the card can NAME what is down rather than only
+    counting it — "1 target giù" sends you to kubectl; the job name is the
+    answer."""
+    job: str
+    namespace: str
+    up: bool
+
+
+class InfraHealthOut(BaseModel):
+    """Cluster + observability rollup read from Prometheus.
+
+    Every count is nullable, and that is the contract, not laziness: a query
+    that could not run must read as UNAVAILABLE, never as zero. "0 target giù"
+    and "I could not ask" are opposite statements, and rendering the second as
+    the first is how a monitoring panel goes green by going blind. The app's
+    own metrics endpoint was a down target for months behind calm dashboards.
+    """
+    # False on any local run (no in-cluster Prometheus). The UI must then say
+    # so instead of drawing empty rows that look like good news.
+    available: bool
+    error: str | None = None
+    prometheus_url: str | None = None
+
+    targets_up: int | None = None
+    targets_down: int | None = None
+    down_targets: list[str] = []
+    # Watchdog is excluded: it fires forever by design, as the canary proving
+    # Alertmanager delivers. Counted, it leaves the card permanently red.
+    alerts_firing: int | None = None
+    firing_alerts: list[str] = []
+    restarts_24h: int | None = None
+    memory_pct: float | None = None
+    cert_days: float | None = None
+    # None when nobody scrapes argocd-metrics — "non monitorato" is honest,
+    # a fabricated sync status is not.
+    argocd: dict | None = None
+    components: list[InfraComponentOut] = []

@@ -264,3 +264,43 @@ export async function fetchLogs(params: {
   if (!r.ok) throw new Error(`logs ${r.status}`);
   return r.json();
 }
+
+/** One scrape target. Named, not just counted: "1 target giù" sends you to
+ *  kubectl — the job name is the answer. */
+export type InfraComponent = {
+  job: string;
+  namespace: string;
+  up: boolean;
+};
+
+/** Cluster + observability rollup, read from Prometheus.
+ *
+ *  Every count is nullable and that is the contract: a query that could not
+ *  run reads as UNAVAILABLE, never as zero. "0 target giù" and "non ho potuto
+ *  chiedere" are opposite statements, and drawing the second as the first is
+ *  how a monitoring panel goes green by going blind. */
+export type InfraHealth = {
+  available: boolean;
+  error: string | null;
+  prometheus_url: string | null;
+  targets_up: number | null;
+  targets_down: number | null;
+  down_targets: string[];
+  /** Watchdog excluded — it fires forever by design, as the canary proving
+   *  Alertmanager delivers. */
+  alerts_firing: number | null;
+  firing_alerts: string[];
+  restarts_24h: number | null;
+  memory_pct: number | null;
+  cert_days: number | null;
+  /** Null when nobody scrapes argocd-metrics: "non monitorato" is honest, a
+   *  fabricated sync status is not. */
+  argocd: { sync: string; health: string } | null;
+  components: InfraComponent[];
+};
+
+export async function fetchInfraHealth(): Promise<InfraHealth> {
+  const r = await fetch("/api/platform/infra", { credentials: "include" });
+  if (!r.ok) throw new Error(`infra ${r.status}`);
+  return r.json();
+}

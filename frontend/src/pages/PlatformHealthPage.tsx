@@ -13,6 +13,8 @@ import SchedulerCard from "@/components/health/SchedulerCard";
 import ScansCard from "@/components/health/ScansCard";
 import CacheCard from "@/components/health/CacheCard";
 import DataHealthCard from "@/components/health/DataHealthCard";
+import InfraCard from "@/components/health/InfraCard";
+import { useInfraHealth } from "@/hooks/useInfraHealth";
 import LogStream from "@/components/health/LogStream";
 import { usePlatformHealthStream } from "@/hooks/usePlatformHealthStream";
 
@@ -77,6 +79,9 @@ export default function PlatformHealthPage() {
 
   // Prefer the live snapshot from SSE; fall back to REST until first event.
   const health = snapshot ?? initialHealth ?? null;
+  // Letta separatamente dallo snapshot SSE: interroga Prometheus, che vive
+  // fuori dall'app e puo' non rispondere senza che l'app abbia nulla che non va.
+  const infra = useInfraHealth();
   const [paused, setPaused] = useState(false);
 
   // Clicking a data source in the "Fonti dati" card filters the live-log
@@ -337,6 +342,7 @@ export default function PlatformHealthPage() {
           <ScansCard scans={health.scans} />
           <CacheCard cache={health.cache} />
           <DataHealthCard data={health.data_health} deploy={health.deploy} />
+          <InfraCard data={infra.data} />
         </div>
       )}
 

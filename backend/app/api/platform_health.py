@@ -23,6 +23,7 @@ from app.schemas.platform import (
     DataHealthOut,
     DeployHealthOut,
     DetectorPerformanceOut,
+    InfraHealthOut,
     LogRecordOut,
     PlatformHealthOut,
     RecentScanOut,
@@ -34,6 +35,7 @@ from app.services import (
     data_source_metrics,
     detector_performance_service,
     health_rollup,
+    infra_health_service,
     signal_drift_service,
     source_catalog,
     yfinance_health,
@@ -289,6 +291,24 @@ def signal_drift(
         rows, window_days=window_days, min_n=min_n
     )
     return SignalDriftOut(summary=summary, detectors=rows)
+
+
+@router.get("/infra", response_model=InfraHealthOut)
+def infra_health(_user: User = Depends(get_current_user)) -> InfraHealthOut:
+    """Cluster + observability rollup, read from Prometheus (read-only).
+
+    Answers here what previously required Grafana: scrape targets up/down and
+    WHICH are down, alerts firing (Watchdog excluded — it fires by design),
+    pod restarts in 24h, memory against the container limit, days to
+    certificate expiry, and ArgoCD's sync/health.
+
+    Never 500s and never fakes a number: when Prometheus cannot be reached
+    (any local run) `available` is false, every count is null and `error`
+    says why. A card of zeros would read as a clean bill of health, which is
+    the exact failure this is built to prevent — the app's own metrics target
+    was down for months behind uniformly green dashboards.
+    """
+    return InfraHealthOut(**infra_health_service.compute_infra_health())
 
 
 @router.get("/detector-performance", response_model=DetectorPerformanceOut)

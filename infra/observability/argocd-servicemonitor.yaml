@@ -1,0 +1,37 @@
+# Scrape ArgoCD's application metrics, so the app's own Salute page can state
+# the deploy's sync/health instead of asking the user to open the ArgoCD UI.
+#
+# Without this, `argocd_app_info` simply does not exist in Prometheus. The
+# infra card handles that honestly — it says "non monitorato" rather than
+# inventing a sync status — but "non monitorato" is a worse answer than the
+# real one when the metrics are one manifest away.
+#
+# `argocd-metrics` is the application-controller's metrics Service and is the
+# one carrying argocd_app_info{name,sync_status,health_status}; argocd-server
+# -metrics carries API-server metrics instead and does not answer this
+# question. A ServiceMonitor (not a PodMonitor) because that Service exists
+# precisely to be scraped and selects a single controller pod, so there is no
+# double-scrape risk of the kind that made the app itself use a PodMonitor.
+#
+# `release: kps` matches the convention of the other objects here. Verified
+# against this cluster, it is NOT load-bearing: the Prometheus CR carries an
+# empty serviceMonitorSelector and an empty namespaceSelector, which the
+# operator reads as "every ServiceMonitor, every namespace". Kept anyway, so
+# the object still gets picked up if that selector is ever narrowed.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: argocd-application-controller
+  namespace: monitoring
+  labels:
+    release: kps
+spec:
+  namespaceSelector:
+    matchNames: [argocd]
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: argocd-metrics
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: 60s

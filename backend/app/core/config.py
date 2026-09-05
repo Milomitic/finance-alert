@@ -62,6 +62,13 @@ class Settings(BaseSettings):
     login_max_failed_attempts: int = 5
     login_lockout_seconds: int = 60
     public_base_url: str = "http://localhost:8000"
+
+    # In-cluster Prometheus, read by the Salute page's infrastructure card.
+    # Empty here on purpose: the service falls back to the k8s service DNS
+    # name, which resolves inside the cluster and simply does not on a laptop
+    # — where the card then says "non raggiungibile" rather than inventing a
+    # healthy-looking row of zeros.
+    prometheus_url: str = ""
     telegram_bot_token: str = ""
     telegram_chat_id: str = ""
     telegram_delivery_mode: str = "digest"  # only "digest" implemented in Fase 2
