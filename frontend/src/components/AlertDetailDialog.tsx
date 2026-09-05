@@ -22,6 +22,7 @@ import { SignalChartSvg } from "@/components/SignalChartSvg";
 import { SignalSnapshotView } from "@/components/SignalSnapshotView";
 import { PlaybookView } from "@/components/PlaybookView";
 import { TrackTradeForm } from "@/components/TrackTradeForm";
+import { StockLogo } from "@/components/dashboard/StockLogo";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -279,7 +280,8 @@ export function AlertDetailDialog({ alert, onClose }: Props) {
               </Button>
             </div>
           </div>
-          <DialogTitle className="text-2xl flex items-baseline gap-2 flex-wrap">
+          <DialogTitle className="text-2xl flex items-center gap-2 flex-wrap">
+            {alert.ticker && <StockLogo ticker={alert.ticker} size="sm" />}
             {alert.ticker ? (
               <Link
                 to={`/stocks/${encodeURIComponent(alert.ticker)}`}

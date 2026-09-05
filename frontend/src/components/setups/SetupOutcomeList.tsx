@@ -1,6 +1,7 @@
 import { CheckCircle2, CircleSlash } from "lucide-react";
 import { Link } from "react-router-dom";
 
+import { StockLogo } from "@/components/dashboard/StockLogo";
 import { Card, CardContent } from "@/components/ui/card";
 import type { Setup } from "@/hooks/useSetups";
 import { resolvedAfterDays } from "@/hooks/useSetups";
@@ -53,6 +54,8 @@ function OutcomeRow({ setup }: { setup: Setup }) {
           <Icon className="h-3 w-3" aria-hidden />
           {converted ? "Convertito" : "Scaduto"}
         </span>
+
+        <StockLogo ticker={setup.ticker} size="xs" />
 
         <span className="min-w-0 flex-1">
           <span className="flex items-baseline gap-1.5">

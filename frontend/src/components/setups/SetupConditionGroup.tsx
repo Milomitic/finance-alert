@@ -1,5 +1,6 @@
 import { Clock, TrendingDown, TrendingUp } from "lucide-react";
 
+import { StockLogo } from "@/components/dashboard/StockLogo";
 import { Card, CardContent } from "@/components/ui/card";
 import { waitingDays, type Setup } from "@/hooks/useSetups";
 import type { ConditionGroup } from "@/lib/setupGrouping";
@@ -41,7 +42,10 @@ function PriorityBar({ value }: { value: number }) {
  *  pages that use it show a handful of rows, where the stack reads better. */
 function InlineIdentity({ ticker, name }: { ticker: string; name: string | null }) {
   return (
-    <span className="flex items-baseline gap-2 min-w-0">
+    // items-center, not items-baseline: a logo has no baseline to sit on, and
+    // aligning the row on one leaves it floating above the text.
+    <span className="flex items-center gap-2 min-w-0">
+      <StockLogo ticker={ticker} size="xs" />
       <span className="text-sm font-bold tabular-nums shrink-0">{ticker}</span>
       {name && (
         <span className="text-xs text-muted-foreground truncate" title={name}>

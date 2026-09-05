@@ -1,6 +1,7 @@
 import { Clock, Crosshair, Target, TrendingDown, TrendingUp } from "lucide-react";
 import { Link } from "react-router-dom";
 
+import { StockLogo } from "@/components/dashboard/StockLogo";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -113,7 +114,8 @@ export function SetupDetailDialog({ setup, onClose }: Props) {
                 </span>
               </div>
 
-              <DialogTitle className="text-2xl flex items-baseline gap-2 flex-wrap">
+              <DialogTitle className="text-2xl flex items-center gap-2 flex-wrap">
+                <StockLogo ticker={setup.ticker} size="sm" />
                 <Link
                   to={`/stocks/${encodeURIComponent(setup.ticker)}`}
                   onClick={onClose}

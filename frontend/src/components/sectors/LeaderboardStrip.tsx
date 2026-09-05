@@ -2,6 +2,7 @@ import { Activity, Layers2, Star } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Link } from "react-router-dom";
 
+import { StockLogo } from "@/components/dashboard/StockLogo";
 import { Card, CardContent } from "@/components/ui/card";
 import { CardSkeleton } from "@/components/ui/card-skeleton";
 import { SectionTitle } from "@/components/ui/section-title";
@@ -61,6 +62,7 @@ function Board({ icon, label, legend, rows, plainValue, emptyNote }: BoardProps)
                   <span className="w-3.5 shrink-0 text-[0.7059rem] tabular-nums text-muted-foreground">
                     {i + 1}
                   </span>
+                  <StockLogo ticker={r.ticker} size="xs" />
                   <span className="min-w-0 flex-1">
                     <span className="flex items-baseline gap-1.5">
                       <span className="text-sm font-medium truncate">{r.ticker}</span>
