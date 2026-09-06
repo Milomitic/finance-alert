@@ -85,7 +85,13 @@ const TONE_LABEL: Record<ScoreTone, string> = {
 };
 
 /** Tailwind text-color class for a 0–100 score. */
-export function scoreColor(score: number): string {
+export function scoreColor(score: number | null | undefined): string {
+  // Un punteggio ASSENTE non e' un punteggio basso. Senza questo ramo un null
+  // cadrebbe nella banda <40 e un titolo SENZA punteggio si mostrerebbe come
+  // il peggiore della pagina — lo stesso difetto dell'assente presentato come
+  // negativo che ricorre altrove in questo repo. Un vero zero resta "weak":
+  // quello e' una misura.
+  if (score === null || score === undefined) return "text-muted-foreground";
   return SCORE_TEXT_TONE[scoreTone(score)];
 }
 

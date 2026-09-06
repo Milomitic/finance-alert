@@ -16,7 +16,21 @@ import { cn } from "@/lib/utils";
  * pages never render together). Literal class strings per the Tailwind-purger
  * rule (CLAUDE.md): the purger only sees string literals, so composing these
  * from a template would strip them from the production build, invisibly. */
-function scoreColor(score: number | null | undefined): string {
+/** Colore per una MEDIA di settore, su una scala deliberatamente diversa da
+ *  quella dei titoli in `lib/scoreMeta`.
+ *
+ *  Non e' una svista: `avg_score` e' la media di un intero comparto, e le
+ *  medie si comprimono verso il centro. Un settore che segna 72 e' raro in un
+ *  modo in cui un singolo titolo a 72 non lo e', quindi le soglie stanno piu'
+ *  in basso (30/50/70 invece di 40/60/80).
+ *
+ *  Il nome e' diverso apposta. Con due funzioni chiamate `scoreColor` la
+ *  divergenza sembrava un errore di copia — ed era diventata tale in
+ *  `SectorDetailTables`, che colorava il composite dei SINGOLI titoli su
+ *  questa scala: lo stesso titolo leggeva "buono" sulla sua pagina e neutro
+ *  nella tabella di settore. Vincolato da scoreConsistency.test.ts.
+ */
+export function avgScoreColor(score: number | null | undefined): string {
   if (score === null || score === undefined) return "text-muted-foreground";
   if (score >= 70) return "text-emerald-600 dark:text-emerald-400";
   if (score >= 50) return "text-foreground";
@@ -39,7 +53,7 @@ export function IndustryListItem({ industry }: { industry: IndustryRow }) {
       <div
         className={cn(
           "text-sm font-semibold tabular-nums shrink-0 w-12 text-right",
-          scoreColor(industry.avg_score),
+          avgScoreColor(industry.avg_score),
         )}
       >
         {fmtNum(industry.avg_score, 0)}
@@ -67,7 +81,7 @@ export function IndustryRankRow({ industry }: { industry: IndustryRow }) {
       <div
         className={cn(
           "text-sm font-semibold tabular-nums shrink-0 w-12 text-right",
-          scoreColor(industry.avg_score),
+          avgScoreColor(industry.avg_score),
         )}
       >
         {fmtNum(industry.avg_score, 0)}

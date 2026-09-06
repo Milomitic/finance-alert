@@ -9,6 +9,7 @@ import { SectionTitle } from "@/components/ui/section-title";
 import type { SectorStockRow } from "@/hooks/useSectorDetail";
 import { fmtMarketCap, fmtNum } from "@/lib/sectorFormat";
 import { getStockFlagCode } from "@/lib/stockMeta";
+import { scoreColor } from "@/lib/scoreMeta";
 import { cn } from "@/lib/utils";
 
 /* Score→text-color for the DETAIL page's tables — a bolder palette
@@ -16,13 +17,6 @@ import { cn } from "@/lib/utils";
  * overview hub uses a softer emerald/rose map and the two pages never
  * render together, so sharing would shift this table's colors. Literal
  * class strings per the Tailwind-purger rule (CLAUDE.md). */
-function scoreColor(score: number | null): string {
-  if (score === null) return "text-muted-foreground";
-  if (score >= 70) return "text-green-600 dark:text-green-400 font-semibold";
-  if (score >= 50) return "text-foreground";
-  if (score >= 30) return "text-amber-600 dark:text-amber-400";
-  return "text-red-600 dark:text-red-400";
-}
 
 function CountryFlag({ country, ticker }: { country: string | null; ticker: string }) {
   // Best-effort flag rendering — mirrors StockHeader's pattern. If the
