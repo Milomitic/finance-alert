@@ -13,6 +13,50 @@ import { cn } from "@/lib/utils";
  * dropped into any scroll container — standalone in ConfluenceCard, or as a
  * column inside the Segnali panel. Read-only; clicking a row opens the
  * stock page. */
+/** Direzione + numero di segnali concordi, in UNA riga.
+ *
+ * Andava a capo: dentro uno slot da 72px il pill e' un inline-flex con
+ * l'icona e il testo "Short 3", e un testo va a capo sul suo spazio come
+ * qualunque altro. Due righe di altezza su ogni riga di una lista che serve
+ * a essere scorsa con l'occhio.
+ *
+ * Due proprieta' lo impediscono, e servono entrambe. `whitespace-nowrap`
+ * toglie il punto di rottura. E lo slot e' in REM, non in px: la dimensione
+ * della radice cresce a 1536px e 1920px (index.css), quindi l'etichetta si
+ * allarga sugli schermi grandi mentre un `w-[72px]` resterebbe fermo — il
+ * ritorno a capo tornerebbe proprio dove c'e' piu' spazio. E' la trappola
+ * annotata in CLAUDE.md: i token in rem scalano, i px scritti a mano no.
+ *
+ * Lo slot resta a larghezza fissa perche' "Long" e' piu' stretto di "Short":
+ * senza, le colonne successive ballerebbero da una riga all'altra.
+ */
+export function DirectionPill({
+  direction,
+  nSignals,
+}: {
+  direction: "bull" | "bear" | string;
+  nSignals: number;
+}) {
+  const bull = direction === "bull";
+  const DirIcon = bull ? TrendingUp : TrendingDown;
+  const word = bull ? "Long" : "Short";
+  return (
+    <span className="w-[4.9rem] shrink-0">
+      <span
+        className={cn(
+          "inline-flex items-center gap-0.5 whitespace-nowrap rounded px-1.5 py-0.5",
+          "text-[0.7059rem] font-semibold leading-tight",
+          bull ? TONE_BG.bullish : TONE_BG.bearish,
+        )}
+        title={`${nSignals} segnali concordi · direzione ${word.toLowerCase()}`}
+      >
+        <DirIcon className="h-3 w-3 shrink-0" />
+        {`${word} ${nSignals}`}
+      </span>
+    </span>
+  );
+}
+
 export function ConfluenceRows({ limit = 8 }: { limit?: number }) {
   const q = useConfluence(7, true);
   const items = (q.data ?? []).slice(0, limit);
@@ -33,9 +77,9 @@ export function ConfluenceRows({ limit = 8 }: { limit?: number }) {
   return (
     <ul className="divide-y">
       {items.map((c) => {
-        const DirIcon = c.direction === "bull" ? TrendingUp : TrendingDown;
-        const tone = c.direction === "bull" ? TONE_BG.bullish : TONE_BG.bearish;
         const pct = Math.round(c.strength);
+        // Serve ancora al title della riga; l'icona e il tono ora vivono
+        // dentro DirectionPill.
         const dirWord = c.direction === "bull" ? "Long" : "Short";
         return (
           <li key={c.ticker}>
@@ -53,20 +97,7 @@ export function ConfluenceRows({ limit = 8 }: { limit?: number }) {
                   rows regardless of word width ("Short" vs "Long") or whether
                   the flag icons are present. */}
               <div className="shrink-0 flex items-center gap-2">
-                {/* Direction + concurring count — fixed-width, left-aligned
-                    cell so every "Long/Short" starts at the same x. */}
-                <span className="w-[72px] shrink-0">
-                  <span
-                    className={cn(
-                      "inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[0.7059rem] font-semibold",
-                      tone,
-                    )}
-                    title={`${c.n_signals} segnali concordi · direzione ${dirWord.toLowerCase()}`}
-                  >
-                    <DirIcon className="h-3 w-3" />
-                    {dirWord} {c.n_signals}
-                  </span>
-                </span>
+                <DirectionPill direction={c.direction} nSignals={c.n_signals} />
                 {/* Flag icons — fixed-width slot so present/absent doesn't
                     shift the bar/score columns. */}
                 <span className="w-8 shrink-0 flex items-center gap-0.5">
