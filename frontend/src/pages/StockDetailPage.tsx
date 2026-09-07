@@ -290,7 +290,7 @@ export default function StockDetailPage() {
             can never collapse to zero. */}
         <div className="flex flex-col gap-3 lg:h-full lg:min-h-0">
           <StockSetupsCard ticker={ticker} />
-          <div className="h-[300px] lg:h-auto lg:flex-1 lg:min-h-[220px]">
+          <div className="lg:h-auto lg:flex-1 lg:min-h-[220px]">
             <StockAlertsHistoryCard alerts={d.alerts_history} ticker={ticker} />
           </div>
         </div>
@@ -316,13 +316,13 @@ export default function StockDetailPage() {
         <div className="lg:h-full lg:min-h-0">
           <FundamentalsCard ticker={ticker} />
         </div>
-        <div className="h-[520px] lg:h-full lg:min-h-0">
+        <div className="lg:h-full lg:min-h-0">
           <MicroDataCard ticker={ticker} stock={d.stock} kpis={d.kpis} />
         </div>
-        <div className="h-[520px] lg:h-full lg:min-h-0">
+        <div className="lg:h-full lg:min-h-0">
           <NewsCard ticker={ticker} />
         </div>
-        <div className="h-[480px] lg:h-full lg:min-h-0">
+        <div className="lg:h-full lg:min-h-0">
           <AnalystTargetCard ticker={ticker} />
         </div>
       </div>

@@ -267,7 +267,7 @@ function HomePageContent() {
           still: measured, the page grew from 5.4 to 6.0 screens at 1280px, and
           the whole point of moving Segnali up was to make the page shorter. */}
       {summaryData ? (
-        <div className="md:h-[520px] dense-4:h-[420px]">
+        <div className="lg:h-[520px] dense-4:h-[420px]">
           <AlertsCompactPanel
             topStocks={summaryData.top_stocks_30d}
             recentAlerts={summaryData.recent_alerts}
@@ -377,13 +377,13 @@ function HomePageContent() {
           id="breadth"
           className="grid grid-cols-1 md:grid-cols-2 dense-3:grid-cols-[2fr_1fr_1fr] gap-3 dense-3:h-[520px] [&>*]:min-w-0 scroll-mt-4"
         >
-          <div className="h-[440px] dense-3:h-full min-h-0"><BreadthMatrixTable data={m.by_index} /></div>
-          <div className="h-[440px] dense-3:h-full min-h-0">
+          <div className="lg:h-[440px] dense-3:h-full min-h-0"><BreadthMatrixTable data={m.by_index} /></div>
+          <div className="lg:h-[440px] dense-3:h-full min-h-0">
             <Suspense fallback={<CardSkeleton label="RSI DISTRIBUTION" rows={6} className="h-full" />}>
               <RsiHistogramCard rsi={m.rsi_distribution} indices={m.by_index} />
             </Suspense>
           </div>
-          <div className="h-[440px] dense-3:h-full min-h-0"><SectorsHeatmapCard sectors={m.sectors} /></div>
+          <div className="lg:h-[440px] dense-3:h-full min-h-0"><SectorsHeatmapCard sectors={m.sectors} /></div>
         </div>
       ) : (
         <BreadthRowSkeleton />
@@ -432,10 +432,10 @@ function HomePageContent() {
         <div className="dense-3:h-full dense-3:min-h-0">
           <TopPicksCard />
         </div>
-        <div className="h-[420px] dense-3:h-full dense-3:min-h-0">
+        <div className="lg:h-[420px] dense-3:h-full dense-3:min-h-0">
           <SuperinvestorPicksCard />
         </div>
-        <div className="h-[420px] dense-3:h-full dense-3:min-h-0">
+        <div className="lg:h-[420px] dense-3:h-full dense-3:min-h-0">
           <AnalystActionsCard />
         </div>
       </div>
