@@ -40,6 +40,10 @@ export function useStockSearch(params: SearchParams) {
     // exchange for an invariant that cannot rot.
     queryKey: ["stocks-search", effective],
     queryFn: ({ signal }) => stocks.search(effective, signal),
+    // Senza questo, ogni montaggio di rotta sparava una ricerca vuota il cui
+    // risultato veniva poi scartato (con `q` vuoto la lista e' comunque []).
+    // Una richiesta buttata a ogni navigazione.
+    enabled: (params.q ?? "").trim().length > 0,
     placeholderData: keepPreviousData,
     staleTime: 30_000,
   });

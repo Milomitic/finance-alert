@@ -21,7 +21,11 @@ export function useCatalogStatus() {
   return useQuery({
     queryKey: ["catalog-status"],
     queryFn: () => api<CatalogStatus>("/api/catalog/status"),
-    refetchInterval: 30_000,
+    // Nessun polling: il produttore e' `run_refresh_all`, un cron
+    // SETTIMANALE (sabato 03:00). Interrogarlo ogni 30 s significava
+    // chiedere 20.160 volte fra un aggiornamento e il successivo. Il
+    // trigger manuale invalida gia' la query, che e' l'unico momento in cui
+    // il dato puo' cambiare da sotto.
   });
 }
 

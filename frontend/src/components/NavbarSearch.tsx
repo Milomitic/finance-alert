@@ -66,7 +66,10 @@ export function NavbarSearch() {
   const inputRef = useRef<HTMLInputElement>(null);
 
   const search = useStockSearch({ q: q || undefined, limit: 8 });
-  const market = useMarketSummary();
+  // Solo quando la tendina e' aperta o si sta digitando: i suoi tre
+  // consumatori (arricchimento per ticker, match sugli indici, top movers)
+  // alimentano esclusivamente il menu, e il payload pesa ~284 kB.
+  const market = useMarketSummary({ enabled: open || q.trim().length > 0 });
 
   // Map ticker → change_pct (and market_cap fallback) from market snapshot
   const enrichByTicker = useMemo(() => {

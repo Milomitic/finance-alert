@@ -128,6 +128,15 @@ export function StockLogo({ ticker, size = "sm" }: Props) {
 
   return (
     <img
+      /* Registra la sorgente che ha FUNZIONATO, non solo il fallimento
+         totale. `rememberResolved` veniva chiamata solo nel ramo `exhausted`,
+         quindi un logo che risolve alla seconda o terza CDN — le quotate
+         europee e asiatiche, cioe' il motivo per cui la catena esiste — non
+         veniva memorizzato: al montaggio successivo si ripartiva da 0 e si
+         ri-chiedeva un URL gia' noto come 404. I 404 delle CDN di solito non
+         portano header di cache, quindi era un giro di rete vero, ogni volta.
+         Il commento sopra prometteva gia' questo comportamento. */
+      onLoad={() => rememberResolved(ticker, srcIdx)}
       src={sources[srcIdx]}
       alt={`${ticker} logo`}
       width={px}

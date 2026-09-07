@@ -1,11 +1,21 @@
 import { Settings as SettingsIcon } from "lucide-react";
+import { Suspense, lazy } from "react";
 
 import { EngineHealthPanel } from "@/components/EngineHealthPanel";
 import { CalibrationPanel } from "@/components/settings/CalibrationPanel";
 import { CatalogRefreshPanel } from "@/components/settings/CatalogRefreshPanel";
 import { DetectorPerformancePanel } from "@/components/settings/DetectorPerformancePanel";
-import { EquityCurvePanel } from "@/components/settings/EquityCurvePanel";
+
 import { ScanLogPanel } from "@/components/settings/ScanLogPanel";
+
+/* Pigro: unico consumatore di Recharts della pagina, ~358 kB grezzi. La
+   pagina e' un muro di otto pannelli e questo sta in fondo, quindi il grafico
+   arriva mentre si scorre invece che prima di poter leggere il primo. */
+const EquityCurvePanel = lazy(() =>
+  import("@/components/settings/EquityCurvePanel").then((m) => ({
+    default: m.EquityCurvePanel,
+  })),
+);
 import { ScoreIcPanel } from "@/components/settings/ScoreIcPanel";
 import { SignalEffectivenessPanel } from "@/components/settings/SignalEffectiveness";
 
@@ -41,7 +51,9 @@ export default function SettingsPage() {
       <SignalEffectivenessPanel />
       <CalibrationPanel />
       <DetectorPerformancePanel />
-      <EquityCurvePanel />
+      <Suspense fallback={<div className="h-48 animate-pulse rounded-lg bg-muted/30" />}>
+        <EquityCurvePanel />
+      </Suspense>
       <ScoreIcPanel />
       <ScanLogPanel />
       <CatalogRefreshPanel />

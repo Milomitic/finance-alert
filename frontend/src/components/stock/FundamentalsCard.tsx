@@ -1,11 +1,12 @@
 import { ArrowDownRight, ArrowUpRight, BarChart3, CalendarClock } from "lucide-react";
-import { useMemo, useState } from "react";
-import {
-  Bar, CartesianGrid, ComposedChart, Legend, Line, ReferenceLine,
-  ResponsiveContainer, Tooltip, XAxis, YAxis,
-} from "recharts";
+import { Suspense, lazy, useMemo, useState } from "react";
 
 import { stocks } from "@/api/stocks";
+import type { ChartPoint } from "./MiniTrendChart";
+
+/* Pigro: e' l'unico uso di Recharts sulla pagina, 374 kB grezzi per una
+   scheda sotto la piega. Vedi MiniTrendChart.tsx. */
+const MiniTrendChart = lazy(() => import("./MiniTrendChart"));
 import type {
   FundamentalsAnnual, FundamentalsEarnings, FundamentalsQuarterly,
 } from "@/api/types";
@@ -65,90 +66,7 @@ function yoy(curr: number | null, prev: number | null | undefined): string {
 
 /* ─── Chart components ──────────────────────────────────────────────────── */
 
-interface ChartPoint {
-  label: string;
-  revenue?: number | null;
-  revenue_est?: number | null;
-  eps?: number | null;
-  eps_est?: number | null;
-}
 
-function MiniTrendChart({
-  data, hasEstimate,
-}: { data: ChartPoint[]; hasEstimate: boolean }) {
-  if (data.length === 0) {
-    return <div className="text-sm text-muted-foreground text-center py-6">Nessun dato per il grafico</div>;
-  }
-  // Revenue is huge ($B) — scale into billions for the bar values; Y-axis label
-  // says "$B". EPS stays in dollars on the right axis.
-  const scaled = data.map((p) => ({
-    ...p,
-    revenue: p.revenue != null ? p.revenue / 1e9 : null,
-    revenue_est: p.revenue_est != null ? p.revenue_est / 1e9 : null,
-  }));
-  // Detect EPS sign range so we draw the zero reference line only when needed
-  const epsValues = scaled.flatMap((p) => [p.eps, p.eps_est]).filter((v): v is number => v != null);
-  const hasNegativeEps = epsValues.some((v) => v < 0);
-  const hasPositiveEps = epsValues.some((v) => v > 0);
-  const showZeroLine = hasNegativeEps && hasPositiveEps;
-  // EPS line: indigo so it's distinct from Revenue blue and reads well over
-  // both light and dark backgrounds. The estimate line is the same hue but
-  // muted + dashed.
-  const EPS_COLOR = "#6366f1";       // indigo-500
-  const EPS_EST_COLOR = "#a5b4fc";   // indigo-300
-
-  return (
-    <ResponsiveContainer width="100%" height="100%">
-      <ComposedChart
-        data={scaled}
-        margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
-        barCategoryGap="35%"
-        barGap={2}
-      >
-        <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
-        <XAxis dataKey="label" fontSize={10} tickLine={false} axisLine={false} />
-        <YAxis
-          yAxisId="rev" orientation="left" fontSize={10} tickLine={false} axisLine={false} width={36}
-          tickFormatter={(v) => `${v.toFixed(0)}B`}
-        />
-        <YAxis
-          yAxisId="eps" orientation="right" fontSize={10} tickLine={false} axisLine={false} width={36}
-          tickFormatter={(v) => `$${v.toFixed(1)}`}
-        />
-        <Tooltip
-          contentStyle={{ fontSize: 12, borderRadius: 6, padding: "4px 8px" }}
-          formatter={(value: unknown, name: unknown) => {
-            const n = typeof value === "number" ? value : Number(value);
-            const nm = String(name ?? "");
-            if (nm === "Revenue" || nm === "Revenue est") return [`$${n.toFixed(1)}B`, nm];
-            if (nm === "EPS" || nm === "EPS est") return [`$${n.toFixed(2)}`, nm];
-            return [String(value), nm];
-          }}
-        />
-        <Legend wrapperStyle={{ fontSize: 10, paddingTop: 4 }} iconSize={8} />
-        {showZeroLine && (
-          <ReferenceLine yAxisId="eps" y={0} stroke="#64748b" strokeOpacity={0.6}
-            strokeDasharray="2 2" />
-        )}
-        {hasEstimate && (
-          <Bar yAxisId="rev" dataKey="revenue_est" name="Revenue est"
-            fill="#94a3b8" fillOpacity={0.45} radius={[2, 2, 0, 0]} maxBarSize={32} />
-        )}
-        <Bar yAxisId="rev" dataKey="revenue" name="Revenue"
-          fill="#3b82f6" radius={[2, 2, 0, 0]} maxBarSize={32} />
-        {hasEstimate && (
-          <Line yAxisId="eps" type="monotone" dataKey="eps_est" name="EPS est"
-            stroke={EPS_EST_COLOR} strokeDasharray="4 3" strokeWidth={1.5}
-            dot={{ r: 2, fill: EPS_EST_COLOR, stroke: EPS_EST_COLOR }} />
-        )}
-        <Line yAxisId="eps" type="monotone" dataKey="eps" name="EPS"
-          stroke={EPS_COLOR} strokeWidth={2.5}
-          dot={{ r: 3, fill: EPS_COLOR, stroke: EPS_COLOR }}
-          activeDot={{ r: 5, fill: EPS_COLOR, stroke: "#fff", strokeWidth: 2 }} />
-      </ComposedChart>
-    </ResponsiveContainer>
-  );
-}
 
 /* ─── Quarter mapping helpers ───────────────────────────────────────────── */
 
@@ -272,7 +190,13 @@ function AnnualTabBody({
   return (
     <>
       <div style={{ height: 200 }} className="shrink-0">
-        <MiniTrendChart data={chartData} hasEstimate={hasEstimate} />
+        <Suspense
+          fallback={
+            <div className="h-full w-full animate-pulse rounded bg-muted/40" />
+          }
+        >
+          <MiniTrendChart data={chartData} hasEstimate={hasEstimate} />
+        </Suspense>
       </div>
       <div className="mt-2 flex-1 min-h-0 overflow-y-auto pr-1 -mr-1">
         <table className="w-full text-[0.7647rem] tabular-nums">
@@ -466,7 +390,13 @@ function QuarterlyTabBody({
   return (
     <>
       <div style={{ height: 200 }} className="shrink-0">
-        <MiniTrendChart data={chartData} hasEstimate={hasEstimate} />
+        <Suspense
+          fallback={
+            <div className="h-full w-full animate-pulse rounded bg-muted/40" />
+          }
+        >
+          <MiniTrendChart data={chartData} hasEstimate={hasEstimate} />
+        </Suspense>
       </div>
       <div className="mt-2 flex-1 min-h-0 overflow-y-auto pr-1 -mr-1">
         <table className="w-full text-[0.7647rem] tabular-nums">

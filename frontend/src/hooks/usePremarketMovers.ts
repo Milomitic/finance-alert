@@ -14,8 +14,18 @@ export function usePremarketMovers() {
   return useQuery({
     queryKey: KEY,
     queryFn: () => dashboard.premarketMovers(),
-    refetchInterval: (q) =>
-      q.state.data?.refreshing ? 2_000 : 30_000,
+    refetchInterval: (q) => {
+      const d = q.state.data;
+      // Durante un refresh si va veloce, perche' la card mostra il progresso.
+      if (d?.refreshing) return 2_000;
+      // A mercato USA APERTO il pre-market non esiste: il job che alimenta
+      // questa cache gira solo nella finestra ~03:55-09:35 ET, e fuori di
+      // quella non fa nulla. I 30 s erano quindi 2 richieste al minuto per
+      // tutto il giorno contro un produttore fermo. `market_open` era gia'
+      // nel payload — lo stesso campo che ora decide il testo del vuoto.
+      if (d?.market_open) return false;
+      return 30_000;
+    },
     refetchIntervalInBackground: false,
     staleTime: 5_000,
   });
