@@ -9,21 +9,13 @@ import { CardRefreshButton } from "@/components/stock/CardRefreshButton";
 import { CardUpdatedAt } from "@/components/stock/CardUpdatedAt";
 import { useCardRefresh } from "@/hooks/useCardRefresh";
 import { useStockFundamentals } from "@/hooks/useStockFundamentals";
+import { fmtBig } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 interface Props {
   ticker: string;
 }
 
-function fmtBig(v: number | null | undefined): string {
-  if (v == null) return "—";
-  const abs = Math.abs(v);
-  const sign = v < 0 ? "-" : "";
-  if (abs >= 1e9) return `${sign}$${(abs / 1e9).toFixed(2)}B`;
-  if (abs >= 1e6) return `${sign}$${(abs / 1e6).toFixed(2)}M`;
-  if (abs >= 1e3) return `${sign}$${(abs / 1e3).toFixed(0)}K`;
-  return `${sign}$${abs.toLocaleString()}`;
-}
 
 function fmtShares(v: number | null): string {
   if (v == null) return "—";

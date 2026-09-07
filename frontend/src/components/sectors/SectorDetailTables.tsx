@@ -7,7 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { MetricCardList, type MetricColumn } from "@/components/ui/metric-card-list";
 import { SectionTitle } from "@/components/ui/section-title";
 import type { SectorStockRow } from "@/hooks/useSectorDetail";
-import { fmtMarketCap, fmtNum } from "@/lib/sectorFormat";
+import { fmtMarketCap, fmtNum } from "@/lib/format";
 import { getStockFlagCode } from "@/lib/stockMeta";
 import { scoreColor } from "@/lib/scoreMeta";
 import { cn } from "@/lib/utils";

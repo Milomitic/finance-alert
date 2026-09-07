@@ -15,7 +15,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { CardSkeleton } from "@/components/ui/card-skeleton";
 import { QueryError } from "@/components/ui/query-error";
 import { useSectorDetail } from "@/hooks/useSectorDetail";
-import { fmtNum } from "@/lib/sectorFormat";
+import { fmtNum } from "@/lib/format";
 import { getSectorIcon, getSectorIconColor } from "@/lib/sectorMeta";
 import { cn } from "@/lib/utils";
 

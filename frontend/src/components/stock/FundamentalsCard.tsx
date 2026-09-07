@@ -16,6 +16,7 @@ import { CardRefreshButton } from "@/components/stock/CardRefreshButton";
 import { CardUpdatedAt } from "@/components/stock/CardUpdatedAt";
 import { useCardRefresh } from "@/hooks/useCardRefresh";
 import { useStockFundamentals } from "@/hooks/useStockFundamentals";
+import { fmtBig } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -24,15 +25,6 @@ interface Props {
 
 /* ─── Formatting helpers ────────────────────────────────────────────────── */
 
-function fmtBig(v: number | null | undefined): string {
-  if (v == null) return "—";
-  const abs = Math.abs(v);
-  const s = v < 0 ? "-" : "";
-  if (abs >= 1e12) return `${s}$${(abs / 1e12).toFixed(2)}T`;
-  if (abs >= 1e9) return `${s}$${(abs / 1e9).toFixed(1)}B`;
-  if (abs >= 1e6) return `${s}$${(abs / 1e6).toFixed(0)}M`;
-  return `${s}$${abs.toLocaleString()}`;
-}
 
 function fmtPctSurp(v: number | null | undefined): { text: string; color: string } {
   if (v == null) return { text: "—", color: "text-muted-foreground" };

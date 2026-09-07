@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 
+import { fmtBig } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 /**
@@ -50,16 +51,6 @@ export interface AllocItem {
   deltaPct?: number | null;
 }
 
-function fmtBig(v: number | null | undefined): string {
-  if (v == null) return "—";
-  const a = Math.abs(v);
-  const s = v < 0 ? "-" : "";
-  if (a >= 1e12) return `${s}$${(a / 1e12).toFixed(2)}T`;
-  if (a >= 1e9) return `${s}$${(a / 1e9).toFixed(2)}B`;
-  if (a >= 1e6) return `${s}$${(a / 1e6).toFixed(0)}M`;
-  if (a >= 1e3) return `${s}$${(a / 1e3).toFixed(0)}K`;
-  return `${s}$${a.toFixed(0)}`;
-}
 
 function fmtPct(v: number | null | undefined): string {
   return v == null ? "—" : `${v.toFixed(1)}%`;

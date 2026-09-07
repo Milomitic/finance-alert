@@ -6,21 +6,13 @@ import { AllocationBars } from "@/components/dashboard/AllocationBars";
 import { Card, CardContent } from "@/components/ui/card";
 import { SectionTitle } from "@/components/ui/section-title";
 import { useTickerInstitutionalHolders } from "@/hooks/useInstitutionals";
+import { fmtBig } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 interface Props {
   ticker: string;
 }
 
-function fmtBig(v: number | null | undefined): string {
-  if (v == null) return "—";
-  const abs = Math.abs(v);
-  const sign = v < 0 ? "-" : "";
-  if (abs >= 1e9) return `${sign}$${(abs / 1e9).toFixed(2)}B`;
-  if (abs >= 1e6) return `${sign}$${(abs / 1e6).toFixed(2)}M`;
-  if (abs >= 1e3) return `${sign}$${(abs / 1e3).toFixed(0)}K`;
-  return `${sign}$${abs.toLocaleString()}`;
-}
 
 function fmtPct(v: number | null | undefined, digits = 1): string {
   if (v == null) return "—";

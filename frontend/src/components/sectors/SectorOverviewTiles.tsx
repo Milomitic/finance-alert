@@ -1,5 +1,5 @@
 import type { IndustryRow } from "@/hooks/useSectorDetail";
-import { fmtNum } from "@/lib/sectorFormat";
+import { fmtNum } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 /* Industry row components for the sectors overview hub.

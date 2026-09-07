@@ -4,33 +4,11 @@ import { Link } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { SectionTitle } from "@/components/ui/section-title";
 import { useInstitutionalsAggregate } from "@/hooks/useInstitutionals";
+import { fmtBig } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 import { StockLogo } from "./StockLogo";
 
-/** Dashboard sidebar card: top tickers held across the most
- *  institutional / superinvestor portfolios.
- *
- *  Why this card exists at the dashboard level: the user opening the
- *  dashboard wants a "what does smart money like" header signal
- *  alongside the alerts feed. The /institutionals page does the
- *  full deep-dive; this card surfaces the top-N consensus picks so
- *  the user can spot meaningful tickers without leaving the dashboard.
- *
- *  Sort key is `holder_count DESC` so a ticker held by 60 funds at
- *  $10M each beats one held by 1 fund at $50B. The latter is a
- *  conviction story — surface it on the InstitutionalsPage, not in
- *  this consensus card.
- */
-function fmtBig(v: number | null | undefined): string {
-  if (v == null) return "—";
-  const abs = Math.abs(v);
-  const sign = v < 0 ? "-" : "";
-  if (abs >= 1e12) return `${sign}$${(abs / 1e12).toFixed(2)}T`;
-  if (abs >= 1e9) return `${sign}$${(abs / 1e9).toFixed(1)}B`;
-  if (abs >= 1e6) return `${sign}$${(abs / 1e6).toFixed(0)}M`;
-  return `${sign}$${abs.toLocaleString()}`;
-}
 
 export function SuperinvestorPicksCard() {
   const q = useInstitutionalsAggregate({ most_picked_limit: 10 });

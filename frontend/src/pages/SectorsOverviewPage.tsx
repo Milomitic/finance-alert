@@ -8,7 +8,7 @@ import { SectorLensTable } from "@/components/sectors/SectorLensTable";
 import { Card, CardContent } from "@/components/ui/card";
 import { CardSkeleton } from "@/components/ui/card-skeleton";
 import { useLeaderboards, useSectorsOverview } from "@/hooks/useSectorDetail";
-import { fmtNum } from "@/lib/sectorFormat";
+import { fmtNum } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 /* ─── Sectors Overview Hub ──────────────────────────────────────────────────
