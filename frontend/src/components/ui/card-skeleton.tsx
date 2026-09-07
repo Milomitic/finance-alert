@@ -72,22 +72,3 @@ export function CardSkeleton({
     </Card>
   );
 }
-
-/**
- * Row-style skeleton (logo + 2-line stack + right-side value),
- * intended for list cards (TopPicks, AnalystActions, PremarketMovers).
- * Keep the visual identical across cards so the eye gets one
- * "loading-row" idiom instead of N variations.
- */
-export function ListRowSkeleton() {
-  return (
-    <li className="flex items-center gap-2 px-3 py-1.5 border-b border-border/40 last:border-b-0">
-      <div className="h-7 w-7 rounded-full bg-muted/50 animate-pulse shrink-0" />
-      <div className="flex-1 min-w-0 space-y-1">
-        <div className="h-3 w-20 rounded bg-muted/50 animate-pulse" />
-        <div className="h-2.5 w-28 rounded bg-muted/40 animate-pulse" />
-      </div>
-      <div className="h-3.5 w-12 rounded bg-muted/40 animate-pulse shrink-0" />
-    </li>
-  );
-}

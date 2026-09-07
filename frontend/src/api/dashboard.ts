@@ -56,9 +56,4 @@ export const dashboard = {
     api<AnalystAction[]>(`/api/dashboard/analyst-actions?limit=${limit}`),
   premarketMovers: () =>
     api<PremarketMovers>("/api/dashboard/premarket-movers"),
-  refreshPremarketMovers: () =>
-    api<{ accepted: boolean }>(
-      "/api/dashboard/premarket-movers/refresh",
-      { method: "POST" },
-    ),
 };

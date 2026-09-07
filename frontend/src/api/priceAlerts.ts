@@ -1,9 +1,5 @@
 import { api } from "./client";
-import type {
-  PriceAlert,
-  PriceAlertCreate,
-  PriceAlertUpdate,
-} from "./types";
+import type { PriceAlert, PriceAlertCreate } from "./types";
 
 export const priceAlerts = {
   list: (ticker: string) =>
@@ -22,12 +18,9 @@ export const priceAlerts = {
         body: JSON.stringify(body),
       }
     ),
-  update: (id: number, body: PriceAlertUpdate) =>
-    api<PriceAlert>(`/api/price-alerts/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    }),
-  remove: (id: number) =>
-    api<void>(`/api/price-alerts/${id}`, { method: "DELETE" }),
+  /* `update` e `remove` vivevano qui, raggiungibili solo dai due hook che
+     nessuna schermata montava: si puo' CREARE un price alert e mai
+     modificarlo o eliminarlo. Gli endpoint PATCH/DELETE del backend restano;
+     manca l'interfaccia, e tenere il wrapper faceva sembrare il contrario.
+     Rimossi 2026-09-07. */
 };

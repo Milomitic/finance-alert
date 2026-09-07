@@ -1,11 +1,3 @@
-import {
-  CalendarClock,
-  Flame,
-  Gauge,
-  Globe,
-  Landmark,
-  type LucideIcon,
-} from "lucide-react";
 
 import type { MacroImportance } from "@/api/types";
 
@@ -25,30 +17,10 @@ export const IMPORTANCE_BG: Record<MacroImportance, string> = {
   low: "bg-slate-100 dark:bg-slate-800/60 text-slate-700 dark:text-slate-200 border-slate-300/80 dark:border-slate-700/60",
 };
 
-/** Saturated solid bar used as the chip's left ribbon — the "stamp" cue. */
-export const IMPORTANCE_RIBBON: Record<MacroImportance, string> = {
-  high: "bg-rose-500 dark:bg-rose-400",
-  medium: "bg-amber-500 dark:bg-amber-400",
-  low: "bg-slate-400 dark:bg-slate-500",
-};
-
-export const IMPORTANCE_DOT: Record<MacroImportance, string> = {
-  high: "bg-rose-500 dark:bg-rose-400 shadow-[0_0_0_3px_rgba(244,63,94,0.18)]",
-  medium:
-    "bg-amber-500 dark:bg-amber-400 shadow-[0_0_0_3px_rgba(245,158,11,0.18)]",
-  low: "bg-slate-400 dark:bg-slate-500",
-};
-
 export const IMPORTANCE_LABEL: Record<MacroImportance, string> = {
   high: "Alta",
   medium: "Media",
   low: "Bassa",
-};
-
-export const IMPORTANCE_ICON: Record<MacroImportance, LucideIcon> = {
-  high: Flame,
-  medium: Gauge,
-  low: Globe,
 };
 
 /** How many of the 3 dots are "filled" for a given importance tier.
@@ -379,6 +351,3 @@ export function formatLongDate(iso: string): string {
   const s = f.format(d);
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
-
-export const CALENDAR_ICON: LucideIcon = CalendarClock;
-export const MACRO_ICON: LucideIcon = Landmark;

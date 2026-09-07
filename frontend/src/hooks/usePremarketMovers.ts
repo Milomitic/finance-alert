@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 
 import { dashboard } from "@/api/dashboard";
 
@@ -18,16 +18,5 @@ export function usePremarketMovers() {
       q.state.data?.refreshing ? 2_000 : 30_000,
     refetchIntervalInBackground: false,
     staleTime: 5_000,
-  });
-}
-
-/** Fires the on-demand recompute (the card's manual refresh button).
- *  On success we immediately invalidate so the next poll picks up
- *  `refreshing: true` and the fast 2s cadence kicks in. */
-export function useRefreshPremarketMovers() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: () => dashboard.refreshPremarketMovers(),
-    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
   });
 }

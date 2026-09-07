@@ -28,34 +28,6 @@ export function formatShortDate(iso: string | null | undefined): string {
   });
 }
 
-/** Format an ISO date as "DD/MM" (day + month only, no year, no time).
- *  Used by the alerts table's "Rilevato" column where the year/time add
- *  noise — at a glance the user just wants the day it was detected. */
-export function formatDayMonth(iso: string | null | undefined): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString("it-IT", {
-    day: "2-digit",
-    month: "2-digit",
-  });
-}
-
-/** Format an ISO datetime as "DD/MM/YY HH:MM". Used for triggered_at where
- *  the wall-clock moment matters (when did the system notice). */
-export function formatDateTime(iso: string | null | undefined): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleString("it-IT", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
 /** Number of full days between two ISO dates/datetimes. Floored toward
  *  zero so "same calendar day" = 0 even when the times differ within
  *  the day. */

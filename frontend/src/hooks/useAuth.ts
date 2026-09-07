@@ -1,6 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { auth } from "@/api/auth";
-import { ApiError } from "@/api/client";
 
 export function useMe() {
   return useQuery({
@@ -25,8 +24,4 @@ export function useLogout() {
     mutationFn: () => auth.logout(),
     onSuccess: () => qc.removeQueries({ queryKey: ["me"] }),
   });
-}
-
-export function isUnauthorized(err: unknown): boolean {
-  return err instanceof ApiError && err.status === 401;
 }
