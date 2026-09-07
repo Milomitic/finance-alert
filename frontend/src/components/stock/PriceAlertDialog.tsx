@@ -7,6 +7,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { cn } from "@/lib/utils";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -18,15 +19,24 @@ interface Props {
   editing?: PriceAlert | null;
   onClose: () => void;
   onSubmit: (body: { target_price: number; direction: "above" | "below"; note: string | null }) => void;
+  /** Assente = nessun comando di eliminazione. Compare solo in modifica: in
+   *  creazione non c'e' ancora nulla da distruggere. */
+  onDelete?: (id: number) => void;
 }
 
 export function PriceAlertDialog({
-  open, initialPrice, initialDirection, editing, onClose, onSubmit,
+  open, initialPrice, initialDirection, editing, onClose, onSubmit, onDelete,
 }: Props) {
   const [price, setPrice] = useState<string>("");
   const [direction, setDirection] = useState<"above" | "below">("above");
   const [note, setNote] = useState<string>("");
   const [error, setError] = useState<string>("");
+  /* Conferma IN LOCO: il pulsante diventa "Confermi?" invece di aprire un
+     secondo modale sopra il primo. Eliminare distrugge una riga scritta a
+     mano, senza annulla e senza cestino, quindi va chiesto — ma un dialog
+     impilato su un dialog pesa piu' di quanto la decisione meriti, e il
+     doppio passo nello stesso punto lascia il puntatore dov'e' gia'. */
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -40,6 +50,9 @@ export function PriceAlertDialog({
       setNote("");
     }
     setError("");
+    // La conferma non sopravvive alla chiusura: riaprire deve ripartire da
+    // "Elimina", non da un dialog gia' armato.
+    setConfirmingDelete(false);
   }, [open, editing, initialPrice, initialDirection]);
 
   const submit = () => {
@@ -92,9 +105,35 @@ export function PriceAlertDialog({
           </div>
           {error && <div className="text-sm text-destructive">{error}</div>}
         </div>
-        <DialogFooter>
-          <Button variant="ghost" onClick={onClose}>Annulla</Button>
-          <Button onClick={submit}>{editing ? "Salva" : "Crea"}</Button>
+        <DialogFooter className="sm:justify-between">
+          {editing && onDelete ? (
+            <Button
+              variant={confirmingDelete ? "destructive" : "ghost"}
+              className={cn(
+                "min-h-[36px]",
+                !confirmingDelete && "text-destructive hover:text-destructive",
+              )}
+              onClick={() => {
+                if (!confirmingDelete) {
+                  setConfirmingDelete(true);
+                  return;
+                }
+                onDelete(editing.id);
+              }}
+            >
+              {confirmingDelete ? "Confermi? Elimina" : "Elimina"}
+            </Button>
+          ) : (
+            <span />
+          )}
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" className="min-h-[36px]" onClick={onClose}>
+              Annulla
+            </Button>
+            <Button className="min-h-[36px]" onClick={submit}>
+              {editing ? "Salva" : "Crea"}
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

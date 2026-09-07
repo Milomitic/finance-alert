@@ -14,7 +14,12 @@ import { rebaseBenchmark } from "@/lib/benchmarkOverlay";
 import { downloadChartPng } from "@/lib/chartExport";
 import { useStockFundamentals } from "@/hooks/useStockFundamentals";
 import { useMarketDetail } from "@/hooks/useMarketDetail";
-import { useCreatePriceAlert, useStockPriceAlerts } from "@/hooks/useStockPriceAlerts";
+import {
+  useCreatePriceAlert,
+  useDeletePriceAlert,
+  useStockPriceAlerts,
+  useUpdatePriceAlert,
+} from "@/hooks/useStockPriceAlerts";
 import { useLiveQuote } from "@/hooks/useLiveQuote";
 import { useStockDetail } from "@/hooks/useStockDetail";
 import { useStockDrawings } from "@/hooks/useStockDrawings";
@@ -33,6 +38,7 @@ import {
 import { MacdPanel } from "@/components/stock/MacdPanel";
 import { NewsCard } from "@/components/stock/NewsCard";
 import { PriceAlertDialog } from "@/components/stock/PriceAlertDialog";
+import { PriceAlertsStrip } from "@/components/stock/PriceAlertsStrip";
 // PriceAlertsCard removed from the layout (per user feedback) — its
 // slot in the right sidebar now hosts InsidersAnalystCard. Price-alert
 // CRUD via dialog/chart-click still works (the import is no longer
@@ -62,6 +68,8 @@ export default function StockDetailPage() {
   const detail = useStockDetail(ticker, range);
   const priceAlertsQuery = useStockPriceAlerts(ticker);
   const createPa = useCreatePriceAlert(ticker);
+  const updatePa = useUpdatePriceAlert(ticker);
+  const deletePa = useDeletePriceAlert(ticker);
   const drawings = useStockDrawings(ticker);
   // Live quote drives the chart's rightmost candle merge (see
   // mergeLiveQuoteIntoOhlcv). The query is also used by StockHeader;
@@ -142,6 +150,11 @@ export default function StockDetailPage() {
   const [mode, setMode] = useState<DrawingMode>("none");
   const [pendingPrice, setPendingPrice] = useState<number | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  /* Null = creazione (il click sul grafico porta il prezzo), altrimenti e' il
+     price alert che si sta modificando. Lo stesso dialog serve entrambi i
+     casi: era gia' costruito per farlo — accetta `editing`, cambia titolo e
+     pulsante — e nessuno gliela passava. */
+  const [editingAlert, setEditingAlert] = useState<PriceAlert | null>(null);
   // Line tool: the first clicked point, awaiting the second click that
   // completes the trend line. Cleared whenever we leave "trend" mode.
   const [pendingTrend, setPendingTrend] = useState<{ x: number; y: number } | null>(null);
@@ -162,6 +175,7 @@ export default function StockDetailPage() {
   const handleChartClick = (price: number, time?: number) => {
     if (mode === "alert") {
       setPendingPrice(price);
+      setEditingAlert(null);
       setDialogOpen(true);
       setMode("none");
     } else if (mode === "hline") {
@@ -505,6 +519,19 @@ export default function StockDetailPage() {
               </ResizableSection>
             )}
 
+            {/* I price alert del titolo, gestibili dove sono disegnati. Non
+                una card nella sidebar: quella e' stata rimossa su richiesta
+                ("non vale una card intera"), e questa riga non esiste quando
+                non ci sono alert. */}
+            <PriceAlertsStrip
+              alerts={priceAlerts}
+              onEdit={(a) => {
+                setEditingAlert(a);
+                setPendingPrice(null);
+                setDialogOpen(true);
+              }}
+            />
+
             {/* RSI sub-panel — togglable + resizable.
                 Default height bumped 140→200 so the 30/70 reference lines
                 have room to breathe and the curve isn't squashed.
@@ -568,22 +595,30 @@ export default function StockDetailPage() {
               Empty list still renders a 1-line "no fund holds this"
               note so the sidebar shape doesn't shift between stocks. */}
           <InstitutionalHoldersCard ticker={ticker} />
-          {/* InsidersAnalystCard now occupies the slot the PriceAlertsCard
-              used to hold. Per user feedback the price-alerts list isn't
-              worth a full sidebar card — alerts can still be created via
-              chart click, and the user prefers seeing the most-recent
-              insider transactions next to the score signal. */}
+          {/* InsidersAnalystCard occupa lo slot che teneva la PriceAlertsCard.
+              Per feedback dell'utente la lista dei price alert non vale una
+              card intera nella sidebar, e quella decisione resta: gli alert si
+              creano col click sul grafico e si gestiscono da `PriceAlertsStrip`,
+              una riga di chip sotto al grafico che non esiste quando non ce ne
+              sono. Fino al 2026-09-07 non si gestivano affatto — il percorso di
+              modifica ed eliminazione non era mai stato costruito. */}
           <InsidersAnalystCard ticker={ticker} />
         </div>
       </div>
 
       <PriceAlertDialog
         open={dialogOpen}
+        editing={editingAlert}
         initialPrice={pendingPrice ?? undefined}
         initialDirection={pendingPrice != null && pendingPrice > lastClose ? "above" : "below"}
         onClose={() => setDialogOpen(false)}
         onSubmit={(body) => {
-          createPa.mutate(body);
+          if (editingAlert) updatePa.mutate({ id: editingAlert.id, body });
+          else createPa.mutate(body);
+          setDialogOpen(false);
+        }}
+        onDelete={(id) => {
+          deletePa.mutate(id);
           setDialogOpen(false);
         }}
       />
