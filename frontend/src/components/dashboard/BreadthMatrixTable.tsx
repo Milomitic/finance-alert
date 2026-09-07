@@ -154,13 +154,18 @@ export function BreadthMatrixTable({ data }: Props) {
   }, [data, sort]);
 
   return (
-    <Card>
-      <CardContent className="p-0">
+    /* `h-full overflow-hidden flex flex-col` come RsiHistogramCard e
+       SectorsHeatmapCard. Era l'unica delle tre senza: si dimensionava sul
+       contenuto, quindi nella riga a tre colonne restava piu' bassa delle
+       vicine — e senza `overflow-hidden` sotto lg, dove il tetto degli
+       scroller viene sciolto, dipingeva sopra la riga successiva. */
+    <Card className="h-full overflow-hidden flex flex-col">
+      <CardContent className="p-0 flex-1 min-h-0 flex flex-col">
         <div className="flex items-center px-4 py-2.5 bg-muted/40 border-b">
           <span className="text-sm font-semibold uppercase tracking-wide">Breadth per indice</span>
           <span className="text-sm text-muted-foreground ml-3">snapshot ultima chiusura · clicca header per ordinare</span>
         </div>
-        <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
+        <div className="flex-1 min-h-0 overflow-x-auto overflow-y-auto">
           <table className="w-full border-collapse text-sm tabular-nums">
             <thead>
               <tr className="bg-muted/30 text-xs uppercase tracking-wide text-muted-foreground">

@@ -222,9 +222,11 @@ export function MarketTickerTape() {
   // One rail width per N seconds — the same "duration" semantics the CSS had,
   // so the tuned desktop pace is unchanged. The phone window is ~5x narrower,
   // so the same pixel speed shows two tickers and a long wait; it read as
-  // stalled rather than live. 28s already conceded that; 18s finishes the job.
+  // stalled rather than live. 28s conceded that, 18s overshot — at that pace a
+  // symbol crosses the narrow window faster than it can be read. 24s is where
+  // it still feels alive and a name stays legible on the way past.
   const isPhone = useIsPhone();
-  const railRef = useAutoScroll(isPhone ? 18 : 60);
+  const railRef = useAutoScroll(isPhone ? 24 : 60);
   const assets = q.data?.assets ?? [];
 
   // Loading / empty: thin animated bar to keep the layout stable.

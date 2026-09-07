@@ -61,7 +61,7 @@ function SpotlightRowSkeleton() {
 function BreadthRowSkeleton() {
   return (
     // Lower row: breadth (wide, bottom-left) + RSI + Sectors (lg:h-[520px]).
-    <div className="grid grid-cols-1 md:grid-cols-2 dense-3:grid-cols-[2fr_1fr_1fr] gap-3 dense-3:h-[520px] [&>*]:min-w-0">
+    <div className="grid grid-cols-1 md:grid-cols-2 dense-3:grid-cols-[2fr_1fr_1fr] gap-3 dense-3:h-[460px] [&>*]:min-w-0">
       <CardSkeleton label="BREADTH PER INDICE" rows={8} strongHeader />
       <CardSkeleton label="RSI DISTRIBUTION" rows={6} strongHeader />
       <CardSkeleton label="SETTORI" rows={6} strongHeader />
@@ -217,7 +217,12 @@ function HomePageContent() {
       <MarketTickerTape />
       <div className="flex flex-wrap items-center justify-between gap-2 px-1">
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 min-w-0">
-          <h2 className="text-base font-semibold tracking-tight">Dashboard</h2>
+          {/* Nascosto sul telefono: la barra di navigazione dice gia' dove
+              siamo, e su uno schermo stretto questa riga costava ~60px di
+              intestazione prima di qualunque contenuto. */}
+          <h2 className="hidden sm:block text-base font-semibold tracking-tight">
+            Dashboard
+          </h2>
           <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
             <Clock className="h-3 w-3" />
             {m?.computed_at && (
@@ -238,7 +243,12 @@ function HomePageContent() {
         {/* Scan + digest controls — moved here from the hero strip so the
             hero is all market context. The ScanProgressToast (mounted in
             Layout) carries the in-flight progress UI. */}
-        <ScanHeaderButton nextScanAt={nextScanAt} />
+        {/* Anche i comandi di scan manuale sono da desktop: sono azioni
+            amministrative rare, e sul telefono occupavano una riga intera
+            sopra la prima informazione utile. Gli orari restano. */}
+        <div className="hidden sm:block">
+          <ScanHeaderButton nextScanAt={nextScanAt} />
+        </div>
       </div>
       {/* Market-driven rows: each renders its own skeleton while the
           market summary is still in flight (the inline field guards
@@ -371,11 +381,18 @@ function HomePageContent() {
           of text plus its value), so sector labels and the RSI legend clipped.
           The fixed row height moves with the column count for the same reason:
           at 2 columns the row is twice as tall, and a height pinned at lg
-          would crop it. */}
+          would crop it.
+
+          520 -> 460 e Breadth vincolata come le altre due: era l'unica con una
+          `<Card>` nuda, senza `h-full`, quindi si dimensionava sul proprio
+          contenuto e finiva ~75px piu' bassa delle vicine. Le due a destra
+          scendono verso di lei invece del contrario — il suo scroller interno
+          gia' esisteva (`max-h-[400px]`), quindi il vincolo non taglia niente
+          che non fosse gia' scorribile. */}
       {m?.by_index && m.rsi_distribution && m.sectors ? (
         <div
           id="breadth"
-          className="grid grid-cols-1 md:grid-cols-2 dense-3:grid-cols-[2fr_1fr_1fr] gap-3 dense-3:h-[520px] [&>*]:min-w-0 scroll-mt-4"
+          className="grid grid-cols-1 md:grid-cols-2 dense-3:grid-cols-[2fr_1fr_1fr] gap-3 dense-3:h-[460px] [&>*]:min-w-0 scroll-mt-4"
         >
           <div className="lg:h-[440px] dense-3:h-full min-h-0"><BreadthMatrixTable data={m.by_index} /></div>
           <div className="lg:h-[440px] dense-3:h-full min-h-0">

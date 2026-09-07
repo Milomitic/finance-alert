@@ -6,6 +6,7 @@ import type { PremarketMover } from "@/api/dashboard";
 import { Card, CardContent } from "@/components/ui/card";
 import { SectionTitle } from "@/components/ui/section-title";
 import { usePremarketMovers } from "@/hooks/usePremarketMovers";
+import { StockIdentity } from "@/components/dashboard/StockIdentity";
 import { cn } from "@/lib/utils";
 
 /* ─── MarketEventsRail — the deliberately thin one ──────────────────────── *
@@ -13,17 +14,17 @@ import { cn } from "@/lib/utils";
  * Three event feeds (52-week highs/lows, volume spikes, US pre-market) in one
  * narrow column, each row reduced to ticker + one number.
  *
- * WHY IT DROPS THE COMPANY NAME. The dashboard's activity row used to be four
- * equal cards, each carrying ticker + name + price + Δ% + volume + ×avg. At a
- * 1280px viewport that gave every card ~230px against list rows whose fixed
- * numeric columns alone wanted 241px, so the name column resolved to 0px and
- * rendered as nothing. The information was not reduced — it was silently lost,
- * and only on some screens.
+ * IL NOME DELL'AZIENDA C'E'. Per un periodo non c'era, e la ragione era
+ * buona: quando la riga delle attivita' erano quattro card uguali, a 1280px
+ * ognuna aveva ~230px contro colonne numeriche che ne volevano gia' 241, e la
+ * colonna del nome si riduceva a 0px — l'informazione non veniva ridotta,
+ * spariva in silenzio, e solo su alcuni schermi.
  *
- * So this rail reduces on purpose instead. Top movers and Volumi keep full
- * rows because they are the two lists actually read every day; these three are
- * "did anything unusual happen" feeds, and a ticker plus one number answers
- * that. The name and the full detail are one click away on the stock page.
+ * Quel vincolo non c'e' piu': questa card occupa una colonna sua o l'intera
+ * larghezza sotto le altre due, quindi lo spazio c'e'. Le righe usano
+ * `StockIdentity`, lo STESSO componente di Top movers e Volumi — cosi' il
+ * carattere e' uniforme per costruzione invece che per copia, e il logo aiuta
+ * a riconoscere un titolo prima di leggerne il codice.
  *
  * Everything here stays visible at every width — nothing hides behind a tab,
  * which is the property that made this preferable to folding the four cards
@@ -52,11 +53,13 @@ function RailHeader({ label, count }: { label: string; count?: number }) {
  *  contract — the ticker truncates, the number never does. */
 function RailRow({
   ticker,
+  name,
   value,
   tone,
   title,
 }: {
   ticker: string;
+  name: string | null;
   value: string;
   tone: "pos" | "neg" | "warn" | "mute";
   title: string;
@@ -66,12 +69,12 @@ function RailRow({
       <Link
         to={`/stocks/${encodeURIComponent(ticker)}`}
         title={title}
-        className="flex items-baseline gap-2 px-3 py-1 hover:bg-accent/30 transition-colors"
+        className="flex items-center gap-2 px-3 py-1.5 hover:bg-accent/30 transition-colors"
       >
-        <span className="text-[12.5px] font-semibold truncate min-w-0">{ticker}</span>
+        <StockIdentity ticker={ticker} name={name} />
         <span
           className={cn(
-            "ml-auto shrink-0 text-[0.7059rem] font-semibold tabular-nums",
+            "ml-auto shrink-0 text-[0.7647rem] font-semibold tabular-nums",
             tone === "pos" && "text-emerald-800 dark:text-emerald-400",
             tone === "neg" && "text-red-600 dark:text-red-400",
             tone === "warn" && "text-amber-600 dark:text-amber-400",
@@ -133,6 +136,7 @@ export function MarketEventsRail({ movers }: Props) {
                   <RailRow
                     key={`h-${m.ticker}`}
                     ticker={m.ticker}
+                    name={m.name}
                     value={`$${m.last_close.toFixed(2)}`}
                     tone="pos"
                     title={`${m.name} — nuovo massimo 52 settimane`}
@@ -142,6 +146,7 @@ export function MarketEventsRail({ movers }: Props) {
                   <RailRow
                     key={`l-${m.ticker}`}
                     ticker={m.ticker}
+                    name={m.name}
                     value={`$${m.last_close.toFixed(2)}`}
                     tone="neg"
                     title={`${m.name} — nuovo minimo 52 settimane`}
@@ -161,6 +166,7 @@ export function MarketEventsRail({ movers }: Props) {
                   <RailRow
                     key={m.ticker}
                     ticker={m.ticker}
+                    name={m.name}
                     value={`${m.vol_ratio.toFixed(1)}×`}
                     tone="warn"
                     title={`${m.name} — ${m.vol_ratio.toFixed(1)}× il volume medio a 20 giorni`}
@@ -181,6 +187,7 @@ export function MarketEventsRail({ movers }: Props) {
                   <RailRow
                     key={`pg-${m.ticker}`}
                     ticker={m.ticker}
+                    name={m.name}
                     value={`+${m.change_pct.toFixed(1)}%`}
                     tone="pos"
                     title={`${m.name} — $${m.price.toFixed(2)} in pre-market`}
@@ -190,6 +197,7 @@ export function MarketEventsRail({ movers }: Props) {
                   <RailRow
                     key={`pl-${m.ticker}`}
                     ticker={m.ticker}
+                    name={m.name}
                     value={`${m.change_pct.toFixed(1)}%`}
                     tone="neg"
                     title={`${m.name} — $${m.price.toFixed(2)} in pre-market`}
