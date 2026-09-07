@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 
 import type { RiskTier, TopPickItem } from "@/api/types";
 import { StockIdentity } from "@/components/dashboard/StockIdentity";
+import { QueryError } from "@/components/ui/query-error";
 import { Card, CardContent } from "@/components/ui/card";
 import { SectionTitle } from "@/components/ui/section-title";
 import { useTopPicks } from "@/hooks/useTopPicks";
@@ -126,6 +127,12 @@ function PicksColumn({ col }: { col: { key: ColumnKey; label: string } }) {
             <RowSkeleton key={i} />
           ))}
         </ul>
+      ) : q.isError ? (
+        /* Un errore non e' un vuoto: prima cadevano nello stesso ramo, quindi
+           un 500 si leggeva come "non c'e' niente da mostrare". */
+        <div className="flex-1 p-4">
+          <QueryError message="delle classifiche" onRetry={q.refetch} isRetrying={q.isFetching} />
+        </div>
       ) : isEmpty ? (
         <div className="flex-1 flex items-center justify-center p-4 text-xs text-muted-foreground">
           Nessun dato

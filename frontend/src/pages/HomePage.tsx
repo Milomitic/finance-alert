@@ -113,12 +113,18 @@ function MarketUnavailable() {
   );
 }
 
-function MarketError({ onRetry }: { onRetry: () => void }) {
+function MarketError({
+  onRetry,
+  label = "del riepilogo di mercato",
+}: {
+  onRetry: () => void;
+  label?: string;
+}) {
   return (
     <Card>
       <CardContent className="p-4 flex items-center gap-3 text-sm">
         <AlertCircle className="h-5 w-5 text-destructive" />
-        <span>Errore nel caricamento del riepilogo di mercato.</span>
+        <span>Errore nel caricamento {label}.</span>
         <button onClick={onRetry} className="ml-auto text-blue-600 hover:underline flex items-center gap-1">
           <RefreshCw className="h-3 w-3" /> Riprova
         </button>
@@ -272,6 +278,13 @@ function HomePageContent() {
         </div>
       ) : summary.isLoading ? (
         <AlertsPanelSkeleton />
+      ) : summary.isError ? (
+        /* Spariva. In un'app che si chiama finance-ALERT il pannello dei
+           segnali cadeva su `null` quando la fetch falliva: nessun messaggio,
+           nessun retry, nessuno spazio vuoto — si leggeva come "oggi non c'e'
+           nessun segnale". Il ramo di errore del mercato esisteva gia' sopra;
+           questo mancava. */
+        <MarketError label="dei segnali" onRetry={() => summary.refetch()} />
       ) : null}
       {/* Row 2: same [3fr_2fr] split as HeroStrip — breadth matrix on
           the left (the wider, table-shaped artifact) + live-volume

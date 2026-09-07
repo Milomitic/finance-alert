@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 
 import { dashboard, type AnalystAction } from "@/api/dashboard";
 import { StockLogo } from "@/components/dashboard/StockLogo";
+import { QueryError } from "@/components/ui/query-error";
 import { Card, CardContent } from "@/components/ui/card";
 import { SectionTitle } from "@/components/ui/section-title";
 import { cn } from "@/lib/utils";
@@ -237,6 +238,12 @@ export function AnalystActionsCard() {
               <RowSkeleton key={i} />
             ))}
           </ul>
+        ) : q.isError ? (
+          /* Un errore diceva "nessun upgrade/downgrade recente": una
+             affermazione sul mercato, fatta quando la fetch non e' arrivata. */
+          <div className="p-4">
+            <QueryError message="delle azioni analisti" onRetry={q.refetch} isRetrying={q.isFetching} />
+          </div>
         ) : isEmpty ? (
           <div className="flex-1 min-h-0 flex items-center justify-center px-4 text-center">
             <div className="text-xs text-muted-foreground">

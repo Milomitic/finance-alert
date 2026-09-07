@@ -61,6 +61,23 @@ export function MarketMoodStrip({ global, byIndex }: Props) {
   const mood = MOOD[global.mood];
   const regions = regionMoods(byIndex);
 
+  /* Con zero titoli misurati la striscia stampava comunque "Neutrale" in
+     grassetto, con l'icona, accanto a `0.0% > EMA200`, `A/D 0/0`, `+0.00%`.
+     Nessuno di quei numeri e' una misura: sono l'assenza di una misura,
+     presentata come se fosse un verdetto di mercato — e nel testo piu' grande
+     della dashboard. La dottrina del repo sta in ui/no-value.tsx: "un trattino
+     e' onesto; uno zero e' una bugia silenziosa, e sicura di se'." */
+  if (!global.stocks_with_data) {
+    return (
+      <Card className="flex items-center gap-2 border px-4 py-2.5 text-sm text-muted-foreground">
+        <Minus className="h-5 w-5 shrink-0" aria-hidden />
+        <span>
+          Nessun dato di ampiezza — nessuna lettura di mercato da mostrare.
+        </span>
+      </Card>
+    );
+  }
+
   return (
     <Card
       className={cn(

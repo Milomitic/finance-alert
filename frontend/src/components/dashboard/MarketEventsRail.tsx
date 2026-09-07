@@ -197,7 +197,19 @@ export function MarketEventsRail({ movers }: Props) {
                 ))}
               </ul>
             ) : (
-              <Empty label="Sessione USA aperta" />
+              /* Diceva sempre "Sessione USA aperta", anche a cache fredda,
+                 anche su errore, anche a mercato chiuso. Alle 3 del mattino
+                 con gli USA chiusi affermava che la sessione fosse aperta.
+                 `pm.market_open` era gia' nel payload, inutilizzato. */
+              <Empty
+                label={
+                  premarketQ.isError
+                    ? "Dati pre-market non raggiungibili"
+                    : pm?.market_open
+                      ? "Sessione USA aperta"
+                      : "Nessun dato pre-market"
+                }
+              />
             )}
           </section>
         </div>

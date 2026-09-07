@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 
 import { StockIdentity } from "@/components/dashboard/StockIdentity";
 import { Card, CardContent } from "@/components/ui/card";
+import { QueryError } from "@/components/ui/query-error";
 import { SectionTitle } from "@/components/ui/section-title";
 import { useConfluence } from "@/hooks/useAlerts";
 import { TONE_BG } from "@/lib/alertMeta";
@@ -64,6 +65,19 @@ export function ConfluenceRows({ limit = 8 }: { limit?: number }) {
     return (
       <div className="px-3 py-6 text-center text-xs text-muted-foreground">
         Caricamento…
+      </div>
+    );
+  }
+  if (q.isError) {
+    // "Nessuna confluenza attiva" e' un'affermazione sul mercato. Quando la
+    // fetch fallisce non sappiamo se ce ne siano.
+    return (
+      <div className="px-4 py-5">
+        <QueryError
+          message="delle confluenze"
+          onRetry={q.refetch}
+          isRetrying={q.isFetching}
+        />
       </div>
     );
   }
