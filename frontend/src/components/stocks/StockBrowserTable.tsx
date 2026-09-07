@@ -5,6 +5,7 @@ import { Link } from "react-router-dom";
 import type { StockSortBy, SortDir } from "@/api/stocks";
 import type { StockSearchItem } from "@/api/types";
 import { StockLogo } from "@/components/dashboard/StockLogo";
+import { useIsBelowMd } from "@/hooks/useMediaQuery";
 import { useLiveQuotes } from "@/hooks/useLiveQuote";
 import { HolderCountBadge } from "@/components/stocks/HolderCountBadge";
 import { Button } from "@/components/ui/button";
@@ -327,6 +328,7 @@ export function StockBrowserTable({
 
   // Sorting is fully server-side now (incl. change_pct via stock_metrics) —
   // render items in the order the API returned them.
+  const belowMd = useIsBelowMd();
   const displayItems = items;
 
   /* Near-live prices for the rows ON SCREEN, same source the dashboard uses.
@@ -384,7 +386,15 @@ export function StockBrowserTable({
         {/* ─── Mobile: stacked cards (no horizontal scroll on a phone).
             The desktop table's clickable column headers don't exist
             here, so search + sort move into a dedicated toolbar. ─── */}
-        <div className="md:hidden">
+        {/* UN SOLO ramo montato, non due nascosti da CSS.
+            Misurato con un profiler React: a pageSize=200 la tabella teneva
+            12.817 nodi DOM — 200 <tr> E 200 <li> insieme, 63 nodi per riga
+            logica — perche' entrambi i layout stavano nell'albero e il CSS ne
+            nascondeva uno. Meta' del montaggio (297 ms) e meta' di ogni tick
+            di prezzo si spendevano sul ramo che l'utente non puo' vedere.
+            La soglia JS e' la stessa del breakpoint CSS che sostituisce. */}
+        {belowMd && (
+        <div>
           <div className="flex flex-col gap-2 border-b p-3">
             <TableSearchInput
               value={q}
@@ -534,10 +544,12 @@ export function StockBrowserTable({
             </ul>
           )}
         </div>
+        )}
 
         {/* ─── Desktop/tablet: the full sortable table (scrolls
             horizontally inside its own container if it overflows). ─── */}
-        <div className="hidden md:block overflow-x-auto">
+        {!belowMd && (
+        <div className="overflow-x-auto">
           {/* Column-visibility context menu — rendered outside <table> so
               Radix portals the dropdown to <body> without nesting issues. */}
           <ColumnVisibilityMenu
@@ -873,6 +885,7 @@ export function StockBrowserTable({
             </tbody>
           </table>
         </div>
+        )}
       </CardContent>
     </Card>
   );

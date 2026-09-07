@@ -36,3 +36,9 @@ export function useMediaQuery(query: string): boolean {
 /** Below Tailwind's `sm` (640px) — i.e. phones. Kept as one constant so the
  *  JS breakpoint can never drift away from the CSS one. */
 export const useIsPhone = () => useMediaQuery("(max-width: 639px)");
+
+/** Below Tailwind's `md` (768px). Stessa ragione del costante qui sopra: la
+ *  soglia JS non deve poter divergere da quella CSS. La usa
+ *  `StockBrowserTable`, che ha due layout completi — righe di tabella e card
+ *  — e ne deve montare UNO SOLO. */
+export const useIsBelowMd = () => useMediaQuery("(max-width: 767px)");
