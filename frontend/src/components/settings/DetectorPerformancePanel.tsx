@@ -188,14 +188,29 @@ function DetectorRow({ row }: { row: DetectorPerfRow }) {
             <span className="font-semibold">{meta.label}</span>
           </span>
         </td>
-        <td className="text-right px-3 py-2 font-bold">{t.n}</td>
-        <td className={cn("text-right px-3 py-2 font-semibold", hitTone(t.abs_hit_rate))}>
+        {/* Righe sopra, finestre indipendenti sotto. Senza il secondo numero
+            il grigio di tutte le celle sembra un pannello spento invece che
+            la risposta: 1.884 righe sono 16 osservazioni. */}
+        <td className="text-right px-3 py-2">
+          <span className="font-bold">{t.n}</span>
+          {t.effective_n != null && (
+            <span
+              className="block text-[0.6765rem] font-normal text-muted-foreground"
+              title="Finestre forward non sovrapposte: e' questo il numero su cui e' dimensionato l'intervallo, non il conteggio delle righe."
+            >
+              {t.effective_n} finestre
+            </span>
+          )}
+        </td>
+        {/* Mai colorato: l'hit assoluto contiene il beta, quindi tingerlo
+            premia l'essere long in un mercato che sale. */}
+        <td className="text-right px-3 py-2 text-muted-foreground">
           {pct(t.abs_hit_rate)}
         </td>
         <td
           className={cn(
             "text-right px-3 py-2 font-semibold",
-            hitTone(t.mkt_neutral_hit_rate),
+            cellTone(t),
           )}
         >
           {pct(t.mkt_neutral_hit_rate)}
@@ -277,7 +292,7 @@ function BreakdownTable({
               <td
                 className={cn(
                   "px-2 py-1 text-right font-semibold",
-                  !c.low_confidence && hitTone(c.abs_hit_rate),
+                  "text-muted-foreground",
                 )}
               >
                 {pct(c.abs_hit_rate)}
@@ -285,7 +300,7 @@ function BreakdownTable({
               <td
                 className={cn(
                   "px-2 py-1 text-right font-semibold",
-                  !c.low_confidence && hitTone(c.mkt_neutral_hit_rate),
+                  cellTone(c),
                 )}
               >
                 {pct(c.mkt_neutral_hit_rate)}
@@ -329,10 +344,25 @@ function ret(v: number | null): string {
 }
 
 /* Stessa scala della tabella "Efficacia segnali": ≥55% verde, <45% rosso. */
-function hitTone(v: number | null): string {
-  if (v == null) return "text-muted-foreground";
-  if (v >= 55) return "text-emerald-700 dark:text-emerald-400";
-  if (v < 45) return "text-rose-700 dark:text-rose-400";
+/** Colore per una cella del cubo — deciso dal VERDETTO, non dalla percentuale.
+ *
+ *  Prima colorava sulla stima puntuale: >=55 verde, <45 rosso, senza guardare
+ *  il campione. Ma l'API consegna gia' `effective_n` e `skill_verdict`
+ *  costruiti apposta per impedirlo, e il pannello gemello due riquadri piu'
+ *  su li usa. Il risultato erano due pannelli, stesso endpoint, conclusioni
+ *  opposte: quello leggeva "non concludente" con l'intervallo di Wilson,
+ *  questo dipingeva di verde gli stessi detector. Vinceva quello letto per
+ *  ultimo.
+ *
+ *  Sul magazzino vero `candle_reversal` ha 1.884 righe ma SEDICI finestre
+ *  indipendenti e un intervallo 23,6-67,4. Tutti i detector risultano non
+ *  concludenti, e CLAUDE.md annota che quella e' la risposta giusta, non un
+ *  difetto. Vincolato da DetectorPerformancePanel.test.tsx. */
+export function cellTone(c: {
+  skill_verdict?: string | null;
+}): string {
+  if (c.skill_verdict === "above") return "text-emerald-700 dark:text-emerald-400";
+  if (c.skill_verdict === "below") return "text-rose-700 dark:text-rose-400";
   return "";
 }
 
