@@ -1,4 +1,4 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
@@ -190,5 +190,83 @@ describe("FirstPaintGate — the reveal must not depend on an animation", () => 
     // The whole point: nothing on this element defers its visibility.
     expect(wrapper.className).not.toMatch(/transition/);
     expect(wrapper.className).not.toMatch(/animate-/);
+  });
+});
+
+describe("a warm cache is not a load", () => {
+  /* The complaint that produced these: "it reloads every time I click back to
+   * the homepage". Two causes, and this file guards the second.
+   *
+   * The first was `gcTime`. It was never set, so React Query's five-minute
+   * default applied: navigate away, come back six minutes later, and the
+   * cache had been garbage-collected — every query a first-load again, the
+   * gate closed, the bar ran from zero. Raised in lib/query-client.ts.
+   *
+   * The second is here. Even with data in hand the gate mounted its overlay
+   * and held it for `minShowMs`, so returning to a page you had just left
+   * flashed a loading bar over content that was already there. A bar that
+   * appears when nothing is loading teaches the reader to distrust it.
+   */
+
+  it("never paints the overlay when every query is already cached", () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    qc.setQueryData(["warm"], { ok: true });
+
+    const { container } = withClient(
+      <FirstPaintGate><p>contenuto</p></FirstPaintGate>,
+      qc,
+    );
+
+    // Visible immediately, and no overlay in the tree at all — not an overlay
+    // at opacity 0, which would still cover the page for a frame.
+    expect(screen.getByText("contenuto")).toBeVisible();
+    expect(container.querySelector(".fixed")).toBeNull();
+  });
+
+  it("does not re-gate when only ONE panel is missing", async () => {
+    /* A partially warm cache is not a first paint. It is a return visit with
+     * one stale panel, and covering the whole page with a bar over content the
+     * reader already has is precisely the flash this change removes — the
+     * missing panel can show its own skeleton in its own box.
+     *
+     * I first wrote this test asserting the opposite, on the reasoning that
+     * "one cached query plus one in flight is still a load". It is not: the
+     * gate exists to hide a page ASSEMBLING ITSELF from nothing, and there is
+     * nothing to assemble when the layout is already on screen.
+     */
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    qc.setQueryData(["warm"], { ok: true });
+    qc.prefetchQuery({ queryKey: ["cold"], queryFn: () => new Promise(() => {}) });
+
+    const { container } = withClient(
+      <FirstPaintGate><p>contenuto</p></FirstPaintGate>,
+      qc,
+    );
+
+    expect(screen.getByText("contenuto")).toBeVisible();
+    expect(container.querySelector(".fixed")).toBeNull();
+  });
+});
+
+describe("a cold boot is still gated", () => {
+  it("gates when the children mount the queries themselves", async () => {
+    /* The trap the component's own docstring names, re-entered from the other
+     * side. Reading the pending count at FIRST RENDER is not "is the cache
+     * warm" — on a cold boot the children have not mounted yet either, so the
+     * count is zero for the same reason, and a gate keyed on it would open
+     * immediately and gate nothing. The discriminator has to be whether the
+     * cache holds data, not whether a request happens to be in flight in the
+     * first frame.
+     */
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+    function Child() {
+      useQuery({ queryKey: ["cold"], queryFn: () => new Promise(() => {}) });
+      return <p>contenuto</p>;
+    }
+
+    const { container } = withClient(<FirstPaintGate><Child /></FirstPaintGate>, qc);
+
+    await waitFor(() => expect(container.querySelector(".fixed")).not.toBeNull());
   });
 });

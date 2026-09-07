@@ -1,4 +1,4 @@
-import { useIsFetching } from "@tanstack/react-query";
+import { useIsFetching, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 
 import { setFirstPaintActive } from "@/lib/firstPaint";
@@ -59,10 +59,29 @@ export function FirstPaintGate({
     predicate: (q) => q.state.data === undefined && q.state.status !== "error",
   });
 
-  const [open, setOpen] = useState(false);
+  /* Cache calda = nessun caricamento: il cancello nasce aperto e l'overlay non
+     viene mai montato — nemmeno a opacita' zero, che coprirebbe comunque la
+     pagina per un frame. Prima si montava sempre e si teneva per `minShowMs`,
+     quindi tornare su una pagina appena lasciata faceva lampeggiare una barra
+     sopra contenuto gia' presente, e una barra che compare quando non sta
+     caricando niente insegna a non fidarsi della barra.
+
+     ⚠️ IL DISCRIMINANTE E' LA CACHE, NON `pending`. Guardare le query in volo
+     al primo render sembra equivalente e non lo e': a boot freddo i figli non
+     si sono ancora montati, quindi il conteggio e' zero per la stessa ragione,
+     il cancello si aprirebbe subito e non proteggerebbe nulla. E' la stessa
+     trappola descritta in cima a questo file, presa dall'altro lato — provata,
+     e vincolata dal test "gates when the children mount the queries
+     themselves". Un dato gia' in cache invece esiste solo se una visita
+     precedente lo ha messo li'. */
+  const qc = useQueryClient();
+  const [warm] = useState(() =>
+    qc.getQueryCache().getAll().some((q) => q.state.data !== undefined),
+  );
+  const [open, setOpen] = useState(warm);
   // Stays mounted for one fade after `open` flips, so the overlay can fade OUT
   // rather than vanish between two frames.
-  const [overlayMounted, setOverlayMounted] = useState(true);
+  const [overlayMounted, setOverlayMounted] = useState(!warm);
   const startedAt = useRef(Date.now());
   // Highest number of in-flight first-loads seen so far. This is the
   // denominator: it can only grow, so the ratio never walks backwards when a
