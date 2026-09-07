@@ -133,8 +133,8 @@ const TF_PRIORITY: Record<string, "primary" | "secondary"> = {
 function compositeTone(score: number): string {
   // Backend emits -3..+3 composite. Tinted so the user reads bullishness
   // at a glance without parsing the number.
-  if (score >= 2) return "bg-emerald-500/25 text-emerald-700 dark:text-emerald-300 border-emerald-300/50";
-  if (score === 1) return "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-300/30";
+  if (score >= 2) return "bg-emerald-500/25 text-emerald-800 dark:text-emerald-300 border-emerald-300/50";
+  if (score === 1) return "bg-emerald-500/15 text-emerald-800 dark:text-emerald-400 border-emerald-300/30";
   if (score === 0) return "bg-muted/40 text-muted-foreground border-border/40";
   if (score === -1) return "bg-rose-500/15 text-rose-700 dark:text-rose-400 border-rose-300/30";
   return "bg-rose-500/25 text-rose-700 dark:text-rose-300 border-rose-300/50";
@@ -355,7 +355,7 @@ function ScoreSparkline({ ticker }: { ticker: string }) {
   if (points.length < MIN_SPARK_DAYS) {
     return (
       <span
-        className="mt-0.5 text-[0.6765rem] italic text-muted-foreground/70"
+        className="mt-0.5 text-[0.6765rem] italic text-muted-foreground"
         title={`Andamento giornaliero dello score — il grafico appare dopo ${MIN_SPARK_DAYS} giorni di storico`}
       >
         storico score: {points.length}/{MIN_SPARK_DAYS} giorni
@@ -381,7 +381,7 @@ function ScoreSparkline({ ticker }: { ticker: string }) {
   const lastIdx = points.length - 1;
   return (
     <span
-      className="mt-0.5 inline-flex items-center gap-1.5 text-muted-foreground/70"
+      className="mt-0.5 inline-flex items-center gap-1.5 text-muted-foreground"
       title={tooltip}
     >
       <svg
@@ -413,7 +413,7 @@ function ScoreSparkline({ ticker }: { ticker: string }) {
         <span
           className={
             delta >= 0
-              ? "text-emerald-600 dark:text-emerald-400"
+              ? "text-emerald-800 dark:text-emerald-400"
               : "text-rose-600 dark:text-rose-400"
           }
         >
@@ -610,10 +610,10 @@ Vs settore: mediana ${fmtRaw(comp.sector_median, m.format)}`
                         <span className="text-foreground/85 truncate">
                           {m.label}
                         </span>
-                        <span className="tabular-nums text-muted-foreground/80 shrink-0">
+                        <span className="tabular-nums text-muted-foreground shrink-0">
                           {fmtRaw(comp.raw, m.format)}
                           {comp.sector_median != null && (
-                            <span className="text-[0.7059rem] text-muted-foreground/50 ml-1">
+                            <span className="text-[0.7059rem] text-muted-foreground ml-1">
                               ({fmtRaw(comp.sector_median, m.format)})
                             </span>
                           )}
@@ -628,7 +628,7 @@ Vs settore: mediana ${fmtRaw(comp.sector_median, m.format)}`
                           {Math.round(compScore)}
                         </span>
                         <span
-                          className="tabular-nums text-muted-foreground/60 shrink-0 text-[0.7059rem]"
+                          className="tabular-nums text-muted-foreground shrink-0 text-[0.7059rem]"
                           title={`Peso ${(comp.weight * 100).toFixed(0)}% nel pilastro`}
                         >
                           ×{(comp.weight * 100).toFixed(0)}
@@ -647,13 +647,13 @@ Vs settore: mediana ${fmtRaw(comp.sector_median, m.format)}`
                   hurting me right now". */}
               {missingList.length > 0 && (
                 <details className="text-[0.7059rem]">
-                  <summary className="cursor-pointer text-muted-foreground/70 hover:text-muted-foreground italic select-none">
+                  <summary className="cursor-pointer text-muted-foreground hover:text-muted-foreground italic select-none">
                     {missingList.length} componente{missingList.length === 1 ? "" : "i"} senza dato
-                    <span className="ml-1 text-muted-foreground/50">
+                    <span className="ml-1 text-muted-foreground">
                       (esclus{missingList.length === 1 ? "o" : "i"} dal calcolo)
                     </span>
                   </summary>
-                  <ul className="mt-1 space-y-0.5 text-muted-foreground/70">
+                  <ul className="mt-1 space-y-0.5 text-muted-foreground">
                     {missingList.map(([name, comp]) => {
                       const m = metaFor(name);
                       return (
@@ -678,7 +678,7 @@ Vs settore: mediana ${fmtRaw(comp.sector_median, m.format)}`
                   weight that was active. Communicates the
                   missing-data-neutralization invariant explicitly. */}
               {meta && (
-                <div className="pt-1.5 border-t border-border/40 text-[0.7059rem] text-muted-foreground/80 italic">
+                <div className="pt-1.5 border-t border-border/40 text-[0.7059rem] text-muted-foreground italic">
                   {meta.components_present} di {meta.components_total}{" "}
                   componenti attivi
                   {meta.components_present < meta.components_total &&
@@ -761,7 +761,7 @@ function QualityExtrasRow({ extras }: { extras?: StockScore["quality_extras"] })
         .filter(([, v]) => v != null)
     : [];
   if (!govItems.length && !an) return null;
-  const govTone = (v: number) => (v <= 3 ? "text-emerald-600 dark:text-emerald-400" : v >= 7 ? "text-rose-600 dark:text-rose-400" : "text-amber-600 dark:text-amber-400");
+  const govTone = (v: number) => (v <= 3 ? "text-emerald-800 dark:text-emerald-400" : v >= 7 ? "text-rose-600 dark:text-rose-400" : "text-amber-600 dark:text-amber-400");
   return (
     <div className="mt-2 border-t border-border/40 pt-2 space-y-1 text-[0.7059rem]"
       title="Dati informativi (governance + analisti): mostrati come contesto, NON entrano nel punteggio Qualità qui sopra.">
@@ -771,9 +771,9 @@ function QualityExtrasRow({ extras }: { extras?: StockScore["quality_extras"] })
           {an.recommendation_mean != null && (
             <span title="Consenso 1 (strong buy) – 5 (sell)">rec <span className="font-semibold tabular-nums text-foreground/80">{an.recommendation_mean.toFixed(2)}</span></span>
           )}
-          {an.n_analysts != null && <span className="text-muted-foreground/70">· {an.n_analysts} analisti</span>}
+          {an.n_analysts != null && <span className="text-muted-foreground">· {an.n_analysts} analisti</span>}
           {an.target_upside_pct != null && (
-            <span className={cn("font-semibold tabular-nums", an.target_upside_pct >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400")}
+            <span className={cn("font-semibold tabular-nums", an.target_upside_pct >= 0 ? "text-emerald-800 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400")}
               title={`Target medio ${an.price_target?.toFixed(2)} vs prezzo`}>
               {an.target_upside_pct >= 0 ? "+" : ""}{an.target_upside_pct}% al target
             </span>
@@ -934,7 +934,7 @@ export function StockScoreCard({ ticker }: Props) {
               </span>{" "}
               del settore
               {data.peer_n != null && (
-                <span className="text-muted-foreground/70"> (n={data.peer_n})</span>
+                <span className="text-muted-foreground"> (n={data.peer_n})</span>
               )}
             </span>
           )}

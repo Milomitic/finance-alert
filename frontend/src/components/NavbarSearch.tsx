@@ -187,7 +187,7 @@ export function NavbarSearch() {
     const change = i.avg_change_pct;
     const changeColor =
       change == null ? "text-muted-foreground" :
-      change > 0 ? "text-green-600 dark:text-green-400" :
+      change > 0 ? "text-green-800 dark:text-green-400" :
       change < 0 ? "text-red-600 dark:text-red-400" : "";
     return (
       <button
@@ -234,7 +234,7 @@ export function NavbarSearch() {
     const mc = s.market_cap ?? enriched?.market_cap ?? null;
     const changeColor =
       change == null ? "text-muted-foreground" :
-      change > 0 ? "text-green-600 dark:text-green-400" :
+      change > 0 ? "text-green-800 dark:text-green-400" :
       change < 0 ? "text-red-600 dark:text-red-400" : "";
     return (
       <button
@@ -270,7 +270,7 @@ export function NavbarSearch() {
           </div>
           <div className="text-xs text-muted-foreground truncate mt-0.5">{s.name}</div>
           {mc != null && (
-            <div className="text-[0.6765rem] text-muted-foreground/80 mt-0.5">
+            <div className="text-[0.6765rem] text-muted-foreground mt-0.5">
               Mkt cap <strong className="text-muted-foreground tabular-nums">{fmtMc(mc)}</strong>
             </div>
           )}
@@ -292,7 +292,7 @@ export function NavbarSearch() {
     const change = enriched?.change_pct;
     const changeColor =
       change == null ? "text-muted-foreground" :
-      change > 0 ? "text-green-600 dark:text-green-400" :
+      change > 0 ? "text-green-800 dark:text-green-400" :
       change < 0 ? "text-red-600 dark:text-red-400" : "";
     const Icon = kind === "recent" ? History : TrendingUp;
     // Recent + top-movers don't carry a Stock object (only the ticker
@@ -309,7 +309,7 @@ export function NavbarSearch() {
           isHighlighted(idx) ? "bg-accent" : "hover:bg-accent/50",
         )}
       >
-        <Icon className="h-3.5 w-3.5 text-muted-foreground/60 shrink-0" />
+        <Icon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
         <StockLogo ticker={ticker} size="sm" />
         <span className="font-bold text-sm tabular-nums">{ticker}</span>
         {flag && (

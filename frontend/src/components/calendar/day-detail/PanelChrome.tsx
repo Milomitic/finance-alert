@@ -27,7 +27,7 @@ export function SectionTitle({
           {count}
         </span>
       </div>
-      <span className="text-[0.7647rem] uppercase tracking-wider text-muted-foreground/70">
+      <span className="text-[0.7647rem] uppercase tracking-wider text-muted-foreground">
         {hint}
       </span>
     </div>
@@ -51,7 +51,7 @@ export function CountChip({
       className={cn(
         "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[0.7647rem] font-semibold uppercase tracking-wider",
         dim
-          ? "border-border/60 text-muted-foreground/60"
+          ? "border-border/60 text-muted-foreground"
           : tone === "sector"
             ? "border-sky-300/70 dark:border-sky-700/60 bg-sky-50 dark:bg-sky-950/40 text-sky-800 dark:text-sky-200"
             : "border-amber-300/70 dark:border-amber-700/60 bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-200",

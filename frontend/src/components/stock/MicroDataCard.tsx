@@ -58,7 +58,7 @@ interface Row {
  * stay readable — `t.green20Plus("ROE")` instead of inlining 3 lines per row.
  * Italian phrasing matches the rest of the UI. */
 
-const GREEN = "text-green-600";
+const GREEN = "text-green-800";
 const RED = "text-red-600";
 const AMBER = "text-amber-600";
 
@@ -175,7 +175,7 @@ function buildSnapshotRows(stock: Stock, kpis: StockKpis): Row[] {
   let volRatioClass = "";
   const vr = kpis.vol_ratio;
   if (vr != null && Number.isFinite(vr)) {
-    if (vr >= 1.5) volRatioClass = "text-emerald-600 dark:text-emerald-400";
+    if (vr >= 1.5) volRatioClass = "text-emerald-800 dark:text-emerald-400";
     else if (vr < 0.5) volRatioClass = "text-rose-600 dark:text-rose-400";
   }
 

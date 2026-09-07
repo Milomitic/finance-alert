@@ -46,7 +46,7 @@ export function StockSetupsCard({ ticker }: { ticker: string }) {
                     className={cn(
                       "text-xs font-semibold",
                       bull
-                        ? "text-emerald-600 dark:text-emerald-400"
+                        ? "text-emerald-800 dark:text-emerald-400"
                         : "text-rose-600 dark:text-rose-400",
                     )}
                   >

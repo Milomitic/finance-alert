@@ -167,7 +167,7 @@ function EarningsChip({
                 className={cn(
                   "text-right font-semibold",
                   beat
-                    ? "text-emerald-700 dark:text-emerald-300"
+                    ? "text-emerald-800 dark:text-emerald-300"
                     : "text-rose-700 dark:text-rose-300",
                 )}
               >
@@ -178,7 +178,7 @@ function EarningsChip({
                 className={cn(
                   "text-right font-semibold",
                   beat
-                    ? "text-emerald-700 dark:text-emerald-300"
+                    ? "text-emerald-800 dark:text-emerald-300"
                     : "text-rose-700 dark:text-rose-300",
                 )}
               >

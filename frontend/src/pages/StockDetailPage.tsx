@@ -396,7 +396,7 @@ export default function StockDetailPage() {
               />
               {/* CENTER — indicators */}
               <div className="mx-auto flex items-center gap-2 flex-wrap justify-center">
-                <span className="text-[0.7059rem] uppercase tracking-wider font-semibold text-muted-foreground/70 shrink-0 hidden md:block">
+                <span className="text-[0.7059rem] uppercase tracking-wider font-semibold text-muted-foreground shrink-0 hidden md:block">
                   Indicatori
                 </span>
                 <IndicatorToggles

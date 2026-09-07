@@ -265,7 +265,7 @@ export function RunProgressToast({ status, labels, onStop, isStopping }: Props) 
   const iconClass: Record<typeof variant, string> = {
     running: "text-primary",
     stale: "text-amber-600 dark:text-amber-400",
-    success: "text-emerald-600 dark:text-emerald-400",
+    success: "text-emerald-800 dark:text-emerald-400",
     failed: "text-rose-600 dark:text-rose-400",
   };
 
@@ -353,7 +353,7 @@ export function RunProgressToast({ status, labels, onStop, isStopping }: Props) 
               )}
               {dismissCountdown != null && (
                 <span
-                  className="ml-auto text-[0.7059rem] uppercase tracking-wider text-muted-foreground/70 tabular-nums"
+                  className="ml-auto text-[0.7059rem] uppercase tracking-wider text-muted-foreground tabular-nums"
                   title="La notifica si chiuderà automaticamente"
                 >
                   chiusura in {dismissCountdown}s
@@ -391,7 +391,7 @@ export function RunProgressToast({ status, labels, onStop, isStopping }: Props) 
                 </div>
                 {stepInfo.step.durationHintSec && (
                   <span
-                    className="text-[0.7059rem] text-muted-foreground/70 tabular-nums"
+                    className="text-[0.7059rem] text-muted-foreground tabular-nums"
                     title="Durata tipica di questo passo"
                   >
                     ~{stepInfo.step.durationHintSec[0]}-
@@ -491,7 +491,7 @@ export function RunProgressToast({ status, labels, onStop, isStopping }: Props) 
                     <strong
                       className={
                         c.highlightWhenPositive && (c.value ?? 0) > 0
-                          ? "text-emerald-600 dark:text-emerald-400"
+                          ? "text-emerald-800 dark:text-emerald-400"
                           : undefined
                       }
                     >
@@ -566,7 +566,7 @@ function CounterCell({
           : "bg-muted/60",
       )}
     >
-      <div className="uppercase tracking-wider text-[0.7059rem] text-muted-foreground/80">
+      <div className="uppercase tracking-wider text-[0.7059rem] text-muted-foreground">
         {label}
       </div>
       <div className="text-base font-bold tabular-nums">{value}</div>

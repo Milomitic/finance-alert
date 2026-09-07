@@ -68,7 +68,7 @@ export function MarketStateBadge({
     return (
       <span
         className={cn(
-          "inline-flex items-center gap-1 uppercase tracking-wider text-emerald-700 dark:text-emerald-300",
+          "inline-flex items-center gap-1 uppercase tracking-wider text-emerald-800 dark:text-emerald-300",
           sz.text,
           className,
         )}

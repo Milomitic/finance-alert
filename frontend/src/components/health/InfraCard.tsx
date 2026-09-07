@@ -28,7 +28,7 @@ import { cn } from "@/lib/utils";
 type Tone = "ok" | "warn" | "bad" | "muted";
 
 const TONE: Record<Tone, string> = {
-  ok: "text-emerald-700 dark:text-emerald-300",
+  ok: "text-emerald-800 dark:text-emerald-300",
   warn: "text-amber-700 dark:text-amber-300",
   bad: "text-rose-700 dark:text-rose-300",
   muted: "text-muted-foreground",

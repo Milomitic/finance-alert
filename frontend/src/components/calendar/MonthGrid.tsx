@@ -109,7 +109,7 @@ export function MonthGrid({
               className={cn(
                 "relative flex items-center justify-between px-3 py-2.5 border-r last:border-r-0",
                 "text-[0.7647rem] font-mono font-semibold uppercase tracking-[0.18em]",
-                isWeekendCol ? "text-muted-foreground/65" : "text-muted-foreground",
+                isWeekendCol ? "text-muted-foreground" : "text-muted-foreground",
               )}
             >
               <span>{wd.short}</span>

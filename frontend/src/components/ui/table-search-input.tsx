@@ -36,7 +36,7 @@ export function TableSearchInput({
 }: Props) {
   return (
     <label className={cn("relative flex items-center min-w-0", className)}>
-      <Search className="absolute left-1.5 h-3 w-3 text-muted-foreground/70 pointer-events-none" />
+      <Search className="absolute left-1.5 h-3 w-3 text-muted-foreground pointer-events-none" />
       <input
         type="search"
         value={value}
@@ -47,7 +47,7 @@ export function TableSearchInput({
           // Override any uppercase + wide tracking inherited from
           // a column header so the placeholder reads naturally.
           "text-[0.7059rem] font-normal normal-case tracking-normal",
-          "placeholder:text-muted-foreground/60",
+          "placeholder:text-muted-foreground",
           "focus:outline-none focus:ring-1 focus:ring-primary/40 focus:bg-background",
         )}
         aria-label={ariaLabel}

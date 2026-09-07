@@ -75,7 +75,7 @@ export function IndexPanoramaCard({ data, filters, onTileFilter }: Props) {
 
   const TONE_FG: Record<string, string> = {
     default: "",
-    good: "text-green-600 dark:text-green-400",
+    good: "text-green-800 dark:text-green-400",
     warn: "text-amber-600 dark:text-amber-400",
     bad: "text-red-600 dark:text-red-400",
   };
@@ -243,7 +243,7 @@ export function IndexPanoramaCard({ data, filters, onTileFilter }: Props) {
             const active = !!(t.filter && filters && t.filter.isActive(filters));
             const inner = (
               <>
-                <Icon className="h-3.5 w-3.5 text-muted-foreground/60 mx-auto mb-1" />
+                <Icon className="h-3.5 w-3.5 text-muted-foreground mx-auto mb-1" />
                 <div className="text-[0.6765rem] uppercase tracking-wide text-muted-foreground">{t.label}</div>
                 <div className={cn("text-lg font-bold tabular-nums mt-0.5", fg)}>{t.value}</div>
               </>

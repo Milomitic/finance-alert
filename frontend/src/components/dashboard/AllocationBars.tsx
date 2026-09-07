@@ -154,7 +154,7 @@ export function AllocationBars({
         <span className="text-[0.7059rem] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
           {title}
         </span>
-        <span className="text-[0.6765rem] text-muted-foreground/80">{caption}</span>
+        <span className="text-[0.6765rem] text-muted-foreground">{caption}</span>
       </div>
       {sorted.length === 0 ? (
         <div className="py-3 text-center text-xs text-muted-foreground">
@@ -211,7 +211,7 @@ export function AllocationBars({
                     it.exited
                       ? "text-red-700 dark:text-red-300"
                       : (it.deltaPct ?? 0) > 0
-                        ? "text-emerald-700 dark:text-emerald-300"
+                        ? "text-emerald-800 dark:text-emerald-300"
                         : (it.deltaPct ?? 0) < 0
                           ? "text-amber-700 dark:text-amber-300"
                           : "text-muted-foreground",

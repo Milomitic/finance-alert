@@ -57,7 +57,7 @@ function PriceTargetBar({ pt }: { pt: AnalystPriceTarget }) {
               className={cn(
                 "font-bold tabular-nums text-[0.7647rem]",
                 upside > 0
-                  ? "text-emerald-700 dark:text-emerald-300"
+                  ? "text-emerald-800 dark:text-emerald-300"
                   : "text-rose-700 dark:text-rose-300",
               )}
               title={`Upside implicito: ${upside.toFixed(1)}% sul prezzo corrente`}
@@ -189,7 +189,7 @@ function RatingBar({ r }: { r: AnalystRating }) {
       <div className="flex mt-1 text-[0.7647rem] tabular-nums">
         {buy > 0 && (
           <span
-            className="text-center text-emerald-700 dark:text-emerald-300 font-semibold"
+            className="text-center text-emerald-800 dark:text-emerald-300 font-semibold"
             style={{ width: pct(buy) }}
           >
             {buy} buy
@@ -267,7 +267,7 @@ const TONE_CLASSES: Record<ReturnType<typeof gradeTone>, string> = {
 function actionIcon(action: string) {
   const a = action.toLowerCase();
   if (a === "up" || a === "upgrade") {
-    return <ArrowUp className="h-3 w-3 text-emerald-600 dark:text-emerald-400 shrink-0" />;
+    return <ArrowUp className="h-3 w-3 text-emerald-800 dark:text-emerald-400 shrink-0" />;
   }
   if (a === "down" || a === "downgrade") {
     return <ArrowDown className="h-3 w-3 text-rose-600 dark:text-rose-400 shrink-0" />;
@@ -298,7 +298,7 @@ function priceTargetTone(action: string | null | undefined): {
 } {
   switch (action) {
     case "Raises":
-      return { cls: "text-emerald-700 dark:text-emerald-300", arrow: "↑" };
+      return { cls: "text-emerald-800 dark:text-emerald-300", arrow: "↑" };
     case "Lowers":
       return { cls: "text-rose-700 dark:text-rose-300", arrow: "↓" };
     case "Initiates":
@@ -331,7 +331,7 @@ function PriceTargetChip({ a }: { a: AnalystAction }) {
     // for this particular row. Hover-title explains the n/d.
     return (
       <span
-        className="inline-flex items-center gap-0.5 tabular-nums shrink-0 text-muted-foreground/70 italic"
+        className="inline-flex items-center gap-0.5 tabular-nums shrink-0 text-muted-foreground italic"
         title={
           a.from_news
             ? "Target non riportato nel titolo/summary della news"
@@ -584,7 +584,7 @@ export function AnalystTargetCard({ ticker }: Props) {
             className="mb-1 shrink-0"
             right={
               actions.length > 0 ? (
-                <span className="tabular-nums text-[0.7059rem] text-muted-foreground/70">
+                <span className="tabular-nums text-[0.7059rem] text-muted-foreground">
                   {actions.length} totali
                 </span>
               ) : undefined

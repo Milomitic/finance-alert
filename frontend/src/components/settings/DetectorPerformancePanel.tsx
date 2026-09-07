@@ -279,7 +279,7 @@ function BreakdownTable({
               key={c.key}
               className={cn(
                 "border-b border-border/40",
-                c.low_confidence && "text-muted-foreground/70",
+                c.low_confidence && "text-muted-foreground",
               )}
             >
               <td className="px-2 py-1">
@@ -361,14 +361,14 @@ function ret(v: number | null): string {
 export function cellTone(c: {
   skill_verdict?: string | null;
 }): string {
-  if (c.skill_verdict === "above") return "text-emerald-700 dark:text-emerald-400";
+  if (c.skill_verdict === "above") return "text-emerald-800 dark:text-emerald-400";
   if (c.skill_verdict === "below") return "text-rose-700 dark:text-rose-400";
   return "";
 }
 
 function retTone(v: number | null): string {
   if (v == null) return "text-muted-foreground";
-  if (v > 0) return "text-emerald-700 dark:text-emerald-400";
+  if (v > 0) return "text-emerald-800 dark:text-emerald-400";
   if (v < 0) return "text-rose-700 dark:text-rose-400";
   return "";
 }

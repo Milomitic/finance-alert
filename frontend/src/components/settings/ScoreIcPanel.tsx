@@ -38,10 +38,10 @@ const nfIc = new Intl.NumberFormat("it-IT", {
  *  point — so cells stay muted; a hypothetical significant one would go
  *  green/red. */
 function icClass(cell: ScoreIcPillar | undefined): string {
-  if (!cell) return "text-muted-foreground/50";
+  if (!cell) return "text-muted-foreground";
   if (Math.abs(cell.t_stat) < 2) return "text-muted-foreground";
   return cell.ic_mean > 0
-    ? "text-emerald-600 dark:text-emerald-400"
+    ? "text-emerald-800 dark:text-emerald-400"
     : "text-rose-600 dark:text-rose-400";
 }
 
@@ -132,7 +132,7 @@ export function ScoreIcPanel() {
                                 {cell ? (
                                   <>
                                     {nfIc.format(cell.ic_mean)}
-                                    <span className="block text-[0.7059rem] text-muted-foreground/70">
+                                    <span className="block text-[0.7059rem] text-muted-foreground">
                                       t={cell.t_stat.toFixed(2)}
                                     </span>
                                   </>

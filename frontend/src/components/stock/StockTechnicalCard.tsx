@@ -17,7 +17,7 @@ const DIMS: { key: "trend" | "momentum" | "structure" | "volume" | "rel_strength
 ];
 
 const POSTURE_CLS: Record<string, string> = {
-  Forte: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300",
+  Forte: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300",
   Neutro: "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300",
   Debole: "bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300",
 };

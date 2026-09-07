@@ -181,7 +181,7 @@ export function SignalSnapshotView({
                 </span>
               )}
               {cal.tag === "edge" && (
-                <span className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[0.6765rem] font-semibold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60"
+                <span className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[0.6765rem] font-semibold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60"
                   title="Edge storico positivo al netto del mercato (beta-stripped)">
                   edge storico
                 </span>
@@ -203,14 +203,14 @@ export function SignalSnapshotView({
                 "flex items-center gap-1.5 pl-[5.5rem] -mt-1 text-[0.7059rem] tabular-nums",
                 driftFlagged.delta < 0
                   ? "text-rose-600 dark:text-rose-400"
-                  : "text-emerald-600 dark:text-emerald-400",
+                  : "text-emerald-800 dark:text-emerald-400",
               )}
               title={`Hit-rate recente sui segnali maturati (${driftFlagged.n_matured}) vs base storico calibrato`}
             >
               {driftFlagged.delta < 0 ? "▼ in calo" : "▲ in salita"}:{" "}
               {Math.round(driftFlagged.recent_hit_rate)}% recenti vs{" "}
               {Math.round(driftFlagged.base_rate)}% storico
-              <span className="text-muted-foreground/70">(n {driftFlagged.n_matured})</span>
+              <span className="text-muted-foreground">(n {driftFlagged.n_matured})</span>
             </div>
           )}
 
@@ -274,7 +274,7 @@ export function SignalSnapshotView({
                       )}
                       {step.kind === "confirmation" && (
                         <span
-                          className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[0.6765rem] font-semibold leading-none bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60"
+                          className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[0.6765rem] font-semibold leading-none bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60"
                           title="Evento co-temporale che rinforza il segnale"
                         >
                           conferma
@@ -285,7 +285,7 @@ export function SignalSnapshotView({
                     {gloss && (
                       <div className="text-[0.7059rem] text-sky-700/80 dark:text-sky-300/80 italic mt-0.5">{gloss}</div>
                     )}
-                    <div className="text-[0.7059rem] text-muted-foreground/70 tabular-nums mt-0.5">{step.date}</div>
+                    <div className="text-[0.7059rem] text-muted-foreground tabular-nums mt-0.5">{step.date}</div>
                   </li>
                 );
               })}

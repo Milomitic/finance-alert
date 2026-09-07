@@ -417,7 +417,7 @@ export function AlertDetailDialog({ alert, onClose }: Props) {
                       className={cn(
                         "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold",
                         hit
-                          ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300"
+                          ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300"
                           : "bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300",
                       )}
                     >
@@ -432,7 +432,7 @@ export function AlertDetailDialog({ alert, onClose }: Props) {
                         className={cn(
                           "font-bold tabular-nums",
                           fwd != null && fwd >= 0
-                            ? "text-emerald-600 dark:text-emerald-400"
+                            ? "text-emerald-800 dark:text-emerald-400"
                             : "text-rose-600 dark:text-rose-400",
                         )}
                       >
@@ -448,7 +448,7 @@ export function AlertDetailDialog({ alert, onClose }: Props) {
                           className={cn(
                             "font-bold tabular-nums",
                             mkt >= 0
-                              ? "text-emerald-600 dark:text-emerald-400"
+                              ? "text-emerald-800 dark:text-emerald-400"
                               : "text-rose-600 dark:text-rose-400",
                           )}
                         >

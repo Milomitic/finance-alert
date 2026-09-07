@@ -64,13 +64,13 @@ function actionMeta(action: string | null): {
     case "new":
       return {
         label: "Nuovo",
-        tone: "text-emerald-700 dark:text-emerald-300",
+        tone: "text-emerald-800 dark:text-emerald-300",
         bg: "bg-emerald-50 dark:bg-emerald-950/40",
       };
     case "add":
       return {
         label: "Add",
-        tone: "text-emerald-700 dark:text-emerald-300",
+        tone: "text-emerald-800 dark:text-emerald-300",
         bg: "bg-emerald-50 dark:bg-emerald-950/40",
       };
     case "reduce":
@@ -98,7 +98,7 @@ function actionMeta(action: string | null): {
 
 function qoqColor(v: number | null | undefined): string {
   if (v == null) return "text-muted-foreground";
-  if (v > 0) return "text-emerald-700 dark:text-emerald-300";
+  if (v > 0) return "text-emerald-800 dark:text-emerald-300";
   if (v < 0) return "text-red-700 dark:text-red-300";
   return "text-muted-foreground";
 }

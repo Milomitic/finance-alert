@@ -45,8 +45,8 @@ interface Props {
  *   1: bg-rose-600/30   text-rose-700/-300
  *   2: bg-rose-500/15   text-rose-700/-400
  *   3: (transparent — neutral)
- *   4: bg-emerald-500/15 text-emerald-700/-400
- *   5: bg-emerald-600/30 text-emerald-700/-300
+ *   4: bg-emerald-500/15 text-emerald-800/-400
+ *   5: bg-emerald-600/30 text-emerald-800/-300
  *
  * Per-indicator scoring rules (encoded in the row's `score` callback):
  *   - RSI(14): >70 = 5 strong, 60-70 = 4, 40-60 = 3, 30-40 = 2, <30 = 1
@@ -66,8 +66,8 @@ const SCALE_BG: Record<ScaleScore, string> = {
   1: "bg-rose-600/30 text-rose-700 dark:text-rose-300",
   2: "bg-rose-500/15 text-rose-700 dark:text-rose-400",
   3: "text-foreground/70",
-  4: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
-  5: "bg-emerald-600/30 text-emerald-700 dark:text-emerald-300",
+  4: "bg-emerald-500/15 text-emerald-800 dark:text-emerald-400",
+  5: "bg-emerald-600/30 text-emerald-800 dark:text-emerald-300",
 };
 
 function fmtNum(v: number | null, digits = 1, suffix = ""): string {
@@ -215,7 +215,7 @@ function MatrixRowComponent({
 }) {
   return (
     <tr className="hover:bg-muted/20 transition-colors">
-      <td className="py-1 pr-2 text-xs text-muted-foreground/90 truncate">
+      <td className="py-1 pr-2 text-xs text-muted-foreground truncate">
         <Tooltip>
           <TooltipTrigger asChild>
             <span className="cursor-help">{row.label}</span>
@@ -292,7 +292,7 @@ export function TechnicalKpiCard({ ticker, kind = "stock" }: Props) {
         <div className="mt-3 overflow-x-auto">
           <table className="w-full text-sm border-separate border-spacing-y-0.5">
             <thead>
-              <tr className="text-[0.6765rem] uppercase tracking-wider text-muted-foreground/70">
+              <tr className="text-[0.6765rem] uppercase tracking-wider text-muted-foreground">
                 <th className="text-left font-semibold pb-1.5 pr-2">
                   Indicatore
                 </th>

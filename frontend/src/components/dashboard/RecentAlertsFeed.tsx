@@ -68,7 +68,7 @@ export function RecentAlertsFeed({ alerts }: Props) {
               forza == null
                 ? ""
                 : forza >= 70
-                  ? "text-emerald-600 dark:text-emerald-400"
+                  ? "text-emerald-800 dark:text-emerald-400"
                   : forza >= 50
                     ? "text-amber-600 dark:text-amber-400"
                     : "text-rose-600 dark:text-rose-400";

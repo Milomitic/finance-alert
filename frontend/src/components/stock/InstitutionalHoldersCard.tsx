@@ -41,9 +41,9 @@ function actionMeta(action: string | null): {
 } {
   switch (action) {
     case "new":
-      return { label: "Nuovo", tone: "text-emerald-700 dark:text-emerald-300" };
+      return { label: "Nuovo", tone: "text-emerald-800 dark:text-emerald-300" };
     case "add":
-      return { label: "Add", tone: "text-emerald-700 dark:text-emerald-300" };
+      return { label: "Add", tone: "text-emerald-800 dark:text-emerald-300" };
     case "reduce":
       return { label: "Reduce", tone: "text-amber-700 dark:text-amber-300" };
     case "sold_out":
@@ -69,7 +69,7 @@ function HolderHeader() {
     <li
       className={cn(
         HOLDER_GRID,
-        "pb-1 text-[0.6765rem] uppercase tracking-wider text-muted-foreground/70 font-semibold",
+        "pb-1 text-[0.6765rem] uppercase tracking-wider text-muted-foreground font-semibold",
       )}
     >
       <span className="truncate">Fondo</span>

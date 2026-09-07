@@ -25,7 +25,7 @@ const nfPct = new Intl.NumberFormat("it-IT", {
 function pnlClass(v: number | null): string {
   if (v == null || v === 0) return "text-muted-foreground";
   return v > 0
-    ? "text-emerald-600 dark:text-emerald-400"
+    ? "text-emerald-800 dark:text-emerald-400"
     : "text-rose-600 dark:text-rose-400";
 }
 

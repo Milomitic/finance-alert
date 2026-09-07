@@ -97,7 +97,7 @@ export function barToLegend(
   };
 }
 
-const upTone = "text-emerald-700 dark:text-emerald-300";
+const upTone = "text-emerald-800 dark:text-emerald-300";
 const downTone = "text-red-700 dark:text-red-300";
 
 /** Fixed top-left OHLCV legend. Render inside a `relative` chart container.

@@ -35,7 +35,7 @@ function OutcomeRow({ setup }: { setup: Setup }) {
   // Literal tone classes, never composed — the Tailwind purger only sees
   // string literals and would strip a template-built class (CLAUDE.md).
   const badge = converted
-    ? "border-emerald-300/60 bg-emerald-50 text-emerald-700 dark:border-emerald-700/50 dark:bg-emerald-950/40 dark:text-emerald-300"
+    ? "border-emerald-300/60 bg-emerald-50 text-emerald-800 dark:border-emerald-700/50 dark:bg-emerald-950/40 dark:text-emerald-300"
     : "border-border bg-muted/50 text-muted-foreground";
   const Icon = converted ? CheckCircle2 : CircleSlash;
 

@@ -41,7 +41,7 @@ function RailHeader({ label, count }: { label: string; count?: number }) {
         {label}
       </span>
       {count != null && (
-        <span className="text-[0.6765rem] tabular-nums text-muted-foreground/70 shrink-0">{count}</span>
+        <span className="text-[0.6765rem] tabular-nums text-muted-foreground shrink-0">{count}</span>
       )}
     </div>
   );
@@ -72,7 +72,7 @@ function RailRow({
         <span
           className={cn(
             "ml-auto shrink-0 text-[0.7059rem] font-semibold tabular-nums",
-            tone === "pos" && "text-emerald-600 dark:text-emerald-400",
+            tone === "pos" && "text-emerald-800 dark:text-emerald-400",
             tone === "neg" && "text-red-600 dark:text-red-400",
             tone === "warn" && "text-amber-600 dark:text-amber-400",
             tone === "mute" && "text-muted-foreground",

@@ -157,7 +157,7 @@ function MostPickedRow({ row }: { row: TickerAggregate }) {
 function ActionRow({ row, kind }: { row: ActionAggregate; kind: "buy" | "sell" }) {
   const tone =
     kind === "buy"
-      ? "text-emerald-700 dark:text-emerald-300"
+      ? "text-emerald-800 dark:text-emerald-300"
       : "text-red-700 dark:text-red-300";
   return (
     <tr className="hover:bg-muted/30">
@@ -389,7 +389,7 @@ export default function InstitutionalsPage() {
             {/* Caption di onestà: il 13F non è un feed real-time — chi
                 legge deve sapere che le posizioni possono avere fino a
                 ~135 giorni (trimestre + finestra di deposito). */}
-            <p className="text-xs text-muted-foreground/80">
+            <p className="text-xs text-muted-foreground">
               13F: dati trimestrali, depositati fino a 45gg dopo il fine trimestre.
             </p>
           </div>
@@ -526,7 +526,7 @@ export default function InstitutionalsPage() {
             <SectionTitle
               icon={TrendingUp}
               label="Acquisti recenti"
-              tone="text-emerald-700 dark:text-emerald-300"
+              tone="text-emerald-800 dark:text-emerald-300"
               className="mb-1"
             />
             {/* Sub-line clarifies the editorial model: 13F-HR is

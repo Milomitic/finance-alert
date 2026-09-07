@@ -83,7 +83,7 @@ export function SuperinvestorPicksCard() {
                     {/* Holder count is the headline metric: the more
                         funds that own it, the more "consensus" the
                         position. Total $ shown as secondary. */}
-                    <span className="text-xs font-bold text-emerald-700 dark:text-emerald-300 tabular-nums shrink-0">
+                    <span className="text-xs font-bold text-emerald-800 dark:text-emerald-300 tabular-nums shrink-0">
                       {row.holder_count}
                       <span className="ml-0.5 font-normal text-muted-foreground">fondi</span>
                     </span>

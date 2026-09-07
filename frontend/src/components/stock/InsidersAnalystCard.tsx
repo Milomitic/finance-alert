@@ -67,7 +67,7 @@ function txnTone(text: string): string {
     !isNonOpenMarket &&
     (lc.includes("purchase") || lc.includes("buy") || lc.includes("acquisition (open market)"))
   ) {
-    return "text-green-700 dark:text-green-300";
+    return "text-green-800 dark:text-green-300";
   }
   // Bearish: open-market divestiture. Same row can be labelled
   // "Sale", "Sale (Multiple)", or "Disposition (Open Market)" /
@@ -206,7 +206,7 @@ function InsiderHeader() {
     <li
       className={cn(
         INSIDER_GRID,
-        "pb-1 text-[0.6765rem] uppercase tracking-wider text-muted-foreground/70 font-semibold",
+        "pb-1 text-[0.6765rem] uppercase tracking-wider text-muted-foreground font-semibold",
       )}
     >
       <span className="truncate">Insider</span>
@@ -244,7 +244,7 @@ function InsiderRow({ t }: { t: InsiderTransaction }) {
         // Hover-title preserves the full verbose role; the visible
         // label uses the canonical abbreviation (CEO / CFO / EVP / …)
         // so it doesn't truncate to "..." in the cramped slot.
-        className="text-[0.7059rem] italic text-muted-foreground/80 truncate"
+        className="text-[0.7059rem] italic text-muted-foreground truncate"
         title={t.position || ""}
       >
         {t.position ? abbreviatePosition(t.position) : "—"}
@@ -340,7 +340,7 @@ export function InsidersAnalystCard({ ticker }: Props) {
         ) : latest.length === 0 ? (
           <div className="text-sm text-muted-foreground text-center py-3">
             Nessuna transazione insider direzionale recente
-            <span className="block text-[10.5px] text-muted-foreground/70 mt-1">
+            <span className="block text-[10.5px] text-muted-foreground mt-1">
               (acquisti/vendite open-market — vest, exercise e award sono filtrati)
             </span>
           </div>

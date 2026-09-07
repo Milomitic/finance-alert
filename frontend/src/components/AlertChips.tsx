@@ -82,7 +82,7 @@ export function AlertToneChip({ alert, size = "md", className }: Props) {
           ? "px-1 py-0.5 text-[0.6765rem]"
           : "px-2 py-0.5 text-xs",
         meta.tone === "bullish"
-          ? "border-emerald-300/70 dark:border-emerald-700/60 text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40"
+          ? "border-emerald-300/70 dark:border-emerald-700/60 text-emerald-800 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40"
           : "border-rose-300/70 dark:border-rose-700/60 text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40",
         className,
       )}
@@ -104,7 +104,7 @@ export function AlertToneCell({ alert, size = "md" }: Props) {
     return (
       <span
         className={cn(
-          "text-muted-foreground/60",
+          "text-muted-foreground",
           size === "sm" ? "text-[0.7059rem]" : "text-sm",
         )}
       >
@@ -156,7 +156,7 @@ export function AlertNatureCell({ alert, size = "md" }: Props) {
     return (
       <span
         className={cn(
-          "text-muted-foreground/60",
+          "text-muted-foreground",
           size === "sm" ? "text-[0.7059rem]" : "text-sm",
         )}
       >

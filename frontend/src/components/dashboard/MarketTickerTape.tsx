@@ -147,7 +147,7 @@ function TickerItem({ asset }: { asset: LiveAsset }) {
     changePct == null
       ? "text-muted-foreground"
       : changePct > 0
-      ? "text-emerald-600 dark:text-emerald-400"
+      ? "text-emerald-800 dark:text-emerald-400"
       : changePct < 0
       ? "text-rose-600 dark:text-rose-400"
       : "text-muted-foreground";

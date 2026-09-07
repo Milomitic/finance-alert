@@ -53,7 +53,7 @@ const HEALTH_META: Record<
     label: "Operativa",
     dot: "bg-emerald-500",
     bar: "bg-emerald-500",
-    chip: "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/60",
+    chip: "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/60",
     Icon: CheckCircle2,
   },
   degraded: {
@@ -144,7 +144,7 @@ const CATEGORIES: {
     Icon: Gavel, tint: "bg-violet-50 dark:bg-violet-950/40 text-violet-600 dark:text-violet-300 border-violet-200 dark:border-violet-800/60",
     ops: ["upgrades", "recommendation", "analyst"] },
   { key: "earnings", label: "Earnings", desc: "EPS / revenue: stime e dati effettivi",
-    Icon: CalendarClock, tint: "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/60",
+    Icon: CalendarClock, tint: "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/60",
     ops: ["earnings"] },
   { key: "macro", label: "Macro", desc: "Serie FRED · consensus calendario",
     Icon: Globe, tint: "bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-300 border-amber-200 dark:border-amber-800/60",
@@ -269,7 +269,7 @@ function SourceRow({
       <div className="mt-0.5 pl-4 text-[0.7059rem] text-muted-foreground tabular-nums">
         {total > 0 ? (
           <>
-            <span className="text-emerald-700 dark:text-emerald-400 font-medium">{m.success}</span> ok
+            <span className="text-emerald-800 dark:text-emerald-400 font-medium">{m.success}</span> ok
             {m.failure > 0 && (
               <>
                 {" · "}
@@ -480,7 +480,7 @@ function BreakerChip({ breaker }: { breaker: Record<string, unknown> }) {
     ? "bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800/60"
     : isHalfOpen
     ? "bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800/60"
-    : "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/60";
+    : "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/60";
 
   let detail: React.ReactNode = null;
   if (isOpen && blockedUntil != null) {

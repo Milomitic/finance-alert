@@ -127,7 +127,7 @@ function vsEma200(m: StockSearchItem["metrics"]): number | null {
  *  drawdown = rosso. Plain string literals (Tailwind purger contract). */
 function pctFromHighTone(v: number | null): string {
   if (v == null) return "text-muted-foreground";
-  if (v >= -5) return "text-green-600 dark:text-green-400";
+  if (v >= -5) return "text-green-800 dark:text-green-400";
   if (v <= -20) return "text-red-600 dark:text-red-400";
   return "";
 }
@@ -135,7 +135,7 @@ function pctFromHighTone(v: number | null): string {
 /** Tone per "vs EMA200": sopra = verde, sotto = rosso. Plain literals. */
 function vsEma200Tone(v: number | null): string {
   if (v == null) return "text-muted-foreground";
-  if (v > 0) return "text-green-600 dark:text-green-400";
+  if (v > 0) return "text-green-800 dark:text-green-400";
   if (v < 0) return "text-red-600 dark:text-red-400";
   return "";
 }
@@ -204,7 +204,7 @@ function ScoreTrendArrow({ delta }: { delta: number | null | undefined }) {
     <span
       className={cn(
         "text-[0.6765rem] font-semibold align-middle ml-0.5",
-        up ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400",
+        up ? "text-green-800 dark:text-green-400" : "text-red-600 dark:text-red-400",
       )}
       title={`Δ score vs ~7 giorni fa: ${up ? "+" : ""}${delta.toFixed(1)}`}
     >
@@ -440,7 +440,7 @@ export function StockBrowserTable({
                 const flag = getStockFlagCode(s.country, s.ticker);
                 const changeColor = change == null
                   ? "text-muted-foreground"
-                  : change > 0 ? "text-green-600 dark:text-green-400"
+                  : change > 0 ? "text-green-800 dark:text-green-400"
                   : change < 0 ? "text-red-600 dark:text-red-400"
                   : "";
                 const compositeCls = item.score.composite != null
@@ -681,7 +681,7 @@ export function StockBrowserTable({
                 const flag = getStockFlagCode(s.country, s.ticker);
                 const changeColor = change == null
                   ? "text-muted-foreground"
-                  : change > 0 ? "text-green-600 dark:text-green-400"
+                  : change > 0 ? "text-green-800 dark:text-green-400"
                   : change < 0 ? "text-red-600 dark:text-red-400"
                   : "";
                 const compositeCls = item.score.composite != null

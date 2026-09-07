@@ -237,7 +237,7 @@ export function LiveVolumeMoversCard({ movers, computedAt }: Props) {
                       className={cn(
                         "shrink-0 text-[0.7647rem] font-semibold tabular-nums w-[62px] text-right",
                         displayChange != null && displayChange >= 0
-                          ? "text-emerald-600 dark:text-emerald-400"
+                          ? "text-emerald-800 dark:text-emerald-400"
                           : displayChange != null
                             ? "text-rose-600 dark:text-rose-400"
                             : "text-muted-foreground",
@@ -290,7 +290,7 @@ export function LiveVolumeMoversCard({ movers, computedAt }: Props) {
                           ? "bg-orange-100 dark:bg-orange-950/40 text-orange-800 dark:text-orange-200"
                           : volRatio != null && volRatio >= 2
                             ? "bg-muted/70 text-foreground/80"
-                            : "text-muted-foreground/70",
+                            : "text-muted-foreground",
                       )}
                       title={
                         volRatio != null
@@ -355,7 +355,7 @@ export function ScoreChip({ score }: { score: number | null | undefined }) {
   if (score == null || !Number.isFinite(score)) {
     return (
       <span
-        className="shrink-0 text-xs tabular-nums rounded px-2 py-0.5 min-w-[44px] text-center text-muted-foreground/60"
+        className="shrink-0 text-xs tabular-nums rounded px-2 py-0.5 min-w-[44px] text-center text-muted-foreground"
         title="Score non ancora calcolato"
       >
         —

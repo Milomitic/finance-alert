@@ -30,7 +30,7 @@ const MOOD: Record<MoodKey, { label: string; icon: ReactNode; fg: string; bg: st
   bullish: {
     label: "Bullish",
     icon: <TrendingUp className="h-5 w-5" />,
-    fg: "text-green-700 dark:text-green-300",
+    fg: "text-green-800 dark:text-green-300",
     bg: "bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950/40 dark:to-emerald-950/30 border-green-300/60 dark:border-green-700/50",
   },
   bearish: {
@@ -52,7 +52,7 @@ function pct(v: number) {
 }
 
 function toneFor(v: number) {
-  if (v > 0) return "text-green-700 dark:text-green-300";
+  if (v > 0) return "text-green-800 dark:text-green-300";
   if (v < 0) return "text-red-700 dark:text-red-300";
   return "text-muted-foreground";
 }

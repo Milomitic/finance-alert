@@ -25,7 +25,7 @@ export function NoValue({
     <span
       title={hint}
       aria-label={hint}
-      className={cn("text-muted-foreground/70 tabular-nums", className)}
+      className={cn("text-muted-foreground tabular-nums", className)}
     >
       n/d
     </span>

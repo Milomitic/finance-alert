@@ -103,7 +103,7 @@ export function WeekGrid({
                   </span>
                 </span>
                 {evs.length > 0 && (
-                  <span className="shrink-0 text-[10.5px] font-mono uppercase tracking-wider text-muted-foreground/70 tabular-nums">
+                  <span className="shrink-0 text-[10.5px] font-mono uppercase tracking-wider text-muted-foreground tabular-nums">
                     {evs.length}
                   </span>
                 )}
@@ -121,7 +121,7 @@ export function WeekGrid({
                     ))}
                   </div>
                 ) : evs.length === 0 ? (
-                  <div className="flex h-full min-h-[6rem] items-center justify-center text-[0.7059rem] text-muted-foreground/50">
+                  <div className="flex h-full min-h-[6rem] items-center justify-center text-[0.7059rem] text-muted-foreground">
                     —
                   </div>
                 ) : (
@@ -156,7 +156,7 @@ function WeekEarningsRow({ event }: { event: EarningsEvent }) {
   const resultColor = !reported
     ? "text-foreground"
     : beat
-      ? "text-emerald-700 dark:text-emerald-300"
+      ? "text-emerald-800 dark:text-emerald-300"
       : "text-rose-700 dark:text-rose-300";
   return (
     <Link
@@ -210,24 +210,24 @@ function WeekEarningsRow({ event }: { event: EarningsEvent }) {
             stima. Prima della pubblicazione si mostra la sola stima. */}
         <span className="ml-1 flex min-w-0 flex-col gap-0.5 text-[0.7059rem] tabular-nums leading-tight">
           <span className="truncate">
-            <span className="text-muted-foreground/70">EPS </span>
+            <span className="text-muted-foreground">EPS </span>
             {reported ? (
               <>
                 <span className={cn("font-semibold", resultColor)}>{formatEps(event.eps_reported)}</span>
-                <span className="text-muted-foreground/60"> vs {formatEps(event.eps_estimate)}</span>
+                <span className="text-muted-foreground"> vs {formatEps(event.eps_estimate)}</span>
               </>
             ) : (
               <span className="font-semibold text-foreground/80">stim. {formatEps(event.eps_estimate)}</span>
             )}
           </span>
           <span className="truncate">
-            <span className="text-muted-foreground/70">Ric. </span>
+            <span className="text-muted-foreground">Ric. </span>
             {event.revenue_reported != null ? (
               <>
                 <span className={cn("font-semibold", resultColor)}>
                   {formatRevenueEstimate(event.revenue_reported)}
                 </span>
-                <span className="text-muted-foreground/60">
+                <span className="text-muted-foreground">
                   {" vs "}{formatRevenueEstimate(event.revenue_estimate)}
                 </span>
               </>
@@ -236,7 +236,7 @@ function WeekEarningsRow({ event }: { event: EarningsEvent }) {
                 stim. {formatRevenueEstimate(event.revenue_estimate)}
               </span>
             ) : (
-              <span className="text-muted-foreground/50">n/d</span>
+              <span className="text-muted-foreground">n/d</span>
             )}
           </span>
         </span>

@@ -318,7 +318,7 @@ function MultiSelect({ label, options, selected, onChange }: MultiSelectProps) {
 // (Tailwind purger contract from CLAUDE.md). Tone classes mirror the
 // scoreMeta module's RISK_TONE map.
 const RISK_OPTIONS: { value: "conservative" | "moderate" | "aggressive"; label: string; tone: string }[] = [
-  { value: "conservative", label: "Conservative", tone: "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300" },
+  { value: "conservative", label: "Conservative", tone: "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-300" },
   { value: "moderate",     label: "Moderate",     tone: "bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-300" },
   { value: "aggressive",   label: "Aggressive",   tone: "bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300" },
 ];
@@ -953,7 +953,7 @@ export function StockFiltersCard({ state, onChange, filters }: Props) {
             <span className="text-xs text-muted-foreground mr-1">Attivi:</span>
             {state.indexCodes.map((v) => (
               <Badge key={`i-${v}`} variant="secondary" className="text-xs gap-1 pr-1">
-                <span className="text-muted-foreground/80">Indice:</span> {v}
+                <span className="text-muted-foreground">Indice:</span> {v}
                 <button
                   onClick={() => removeChip("indexCodes", v)}
                   className="ml-0.5 rounded hover:bg-background/60 p-0.5"
@@ -965,7 +965,7 @@ export function StockFiltersCard({ state, onChange, filters }: Props) {
             ))}
             {state.sectors.map((v) => (
               <Badge key={`s-${v}`} variant="secondary" className="text-xs gap-1 pr-1">
-                <span className="text-muted-foreground/80">Settore:</span> {v}
+                <span className="text-muted-foreground">Settore:</span> {v}
                 <button
                   onClick={() => removeChip("sectors", v)}
                   className="ml-0.5 rounded hover:bg-background/60 p-0.5"
@@ -977,7 +977,7 @@ export function StockFiltersCard({ state, onChange, filters }: Props) {
             ))}
             {state.industries.map((v) => (
               <Badge key={`ind-${v}`} variant="secondary" className="text-xs gap-1 pr-1">
-                <span className="text-muted-foreground/80">Industry:</span> {v}
+                <span className="text-muted-foreground">Industry:</span> {v}
                 <button
                   onClick={() => removeChip("industries", v)}
                   className="ml-0.5 rounded hover:bg-background/60 p-0.5"
@@ -989,7 +989,7 @@ export function StockFiltersCard({ state, onChange, filters }: Props) {
             ))}
             {state.exchanges.map((v) => (
               <Badge key={`e-${v}`} variant="secondary" className="text-xs gap-1 pr-1">
-                <span className="text-muted-foreground/80">Exchange:</span> {v}
+                <span className="text-muted-foreground">Exchange:</span> {v}
                 <button
                   onClick={() => removeChip("exchanges", v)}
                   className="ml-0.5 rounded hover:bg-background/60 p-0.5"
@@ -1001,7 +1001,7 @@ export function StockFiltersCard({ state, onChange, filters }: Props) {
             ))}
             {state.countries.map((v) => (
               <Badge key={`c-${v}`} variant="secondary" className="text-xs gap-1 pr-1">
-                <span className="text-muted-foreground/80">Paese:</span> {v}
+                <span className="text-muted-foreground">Paese:</span> {v}
                 <button
                   onClick={() => removeChip("countries", v)}
                   className="ml-0.5 rounded hover:bg-background/60 p-0.5"
@@ -1025,7 +1025,7 @@ export function StockFiltersCard({ state, onChange, filters }: Props) {
             )}
             {state.riskTiers.map((v) => (
               <Badge key={`r-${v}`} variant="secondary" className="text-xs gap-1 pr-1">
-                <span className="text-muted-foreground/80">Rischio:</span> {v}
+                <span className="text-muted-foreground">Rischio:</span> {v}
                 <button
                   onClick={() => removeChip("riskTiers", v)}
                   className="ml-0.5 rounded hover:bg-background/60 p-0.5"
@@ -1037,7 +1037,7 @@ export function StockFiltersCard({ state, onChange, filters }: Props) {
             ))}
             {state.minScore != null && (
               <Badge variant="secondary" className="text-xs gap-1 pr-1">
-                <span className="text-muted-foreground/80">Score ≥</span> {state.minScore}
+                <span className="text-muted-foreground">Score ≥</span> {state.minScore}
                 <button
                   onClick={() => onChange({ ...state, minScore: null })}
                   className="ml-0.5 rounded hover:bg-background/60 p-0.5"
@@ -1049,7 +1049,7 @@ export function StockFiltersCard({ state, onChange, filters }: Props) {
             )}
             {state.scoreMax != null && (
               <Badge variant="secondary" className="text-xs gap-1 pr-1">
-                <span className="text-muted-foreground/80">Score ≤</span> {state.scoreMax}
+                <span className="text-muted-foreground">Score ≤</span> {state.scoreMax}
                 <button
                   onClick={() => onChange({ ...state, scoreMax: null })}
                   className="ml-0.5 rounded hover:bg-background/60 p-0.5"
@@ -1061,67 +1061,67 @@ export function StockFiltersCard({ state, onChange, filters }: Props) {
             )}
             {state.profitabilityMin != null && (
               <Badge variant="secondary" className="text-xs gap-1 pr-1">
-                <span className="text-muted-foreground/80">Profitt. ≥</span> {state.profitabilityMin}
+                <span className="text-muted-foreground">Profitt. ≥</span> {state.profitabilityMin}
                 <button onClick={() => onChange({ ...state, profitabilityMin: null })} className="ml-0.5 rounded hover:bg-background/60 p-0.5" aria-label="Rimuovi soglia profittabilità"><X className="h-3 w-3" /></button>
               </Badge>
             )}
             {state.sustainabilityMin != null && (
               <Badge variant="secondary" className="text-xs gap-1 pr-1">
-                <span className="text-muted-foreground/80">Sosten. ≥</span> {state.sustainabilityMin}
+                <span className="text-muted-foreground">Sosten. ≥</span> {state.sustainabilityMin}
                 <button onClick={() => onChange({ ...state, sustainabilityMin: null })} className="ml-0.5 rounded hover:bg-background/60 p-0.5" aria-label="Rimuovi soglia sostenibilità"><X className="h-3 w-3" /></button>
               </Badge>
             )}
             {state.growthMin != null && (
               <Badge variant="secondary" className="text-xs gap-1 pr-1">
-                <span className="text-muted-foreground/80">Crescita ≥</span> {state.growthMin}
+                <span className="text-muted-foreground">Crescita ≥</span> {state.growthMin}
                 <button onClick={() => onChange({ ...state, growthMin: null })} className="ml-0.5 rounded hover:bg-background/60 p-0.5" aria-label="Rimuovi soglia crescita"><X className="h-3 w-3" /></button>
               </Badge>
             )}
             {state.valueMin != null && (
               <Badge variant="secondary" className="text-xs gap-1 pr-1">
-                <span className="text-muted-foreground/80">Valore ≥</span> {state.valueMin}
+                <span className="text-muted-foreground">Valore ≥</span> {state.valueMin}
                 <button onClick={() => onChange({ ...state, valueMin: null })} className="ml-0.5 rounded hover:bg-background/60 p-0.5" aria-label="Rimuovi soglia valore"><X className="h-3 w-3" /></button>
               </Badge>
             )}
             {state.sentimentMin != null && (
               <Badge variant="secondary" className="text-xs gap-1 pr-1">
-                <span className="text-muted-foreground/80">Sentiment ≥</span> {state.sentimentMin}
+                <span className="text-muted-foreground">Sentiment ≥</span> {state.sentimentMin}
                 <button onClick={() => onChange({ ...state, sentimentMin: null })} className="ml-0.5 rounded hover:bg-background/60 p-0.5" aria-label="Rimuovi soglia sentiment"><X className="h-3 w-3" /></button>
               </Badge>
             )}
             {state.marketCapMin != null && (
               <Badge variant="secondary" className="text-xs gap-1 pr-1">
-                <span className="text-muted-foreground/80">Mkt cap ≥</span> {(state.marketCapMin / 1e9).toFixed(0)}B$
+                <span className="text-muted-foreground">Mkt cap ≥</span> {(state.marketCapMin / 1e9).toFixed(0)}B$
                 <button onClick={() => removeChip("marketCapMin", "")} className="ml-0.5 rounded hover:bg-background/60 p-0.5" aria-label="Rimuovi soglia market cap minima"><X className="h-3 w-3" /></button>
               </Badge>
             )}
             {state.marketCapMax != null && (
               <Badge variant="secondary" className="text-xs gap-1 pr-1">
-                <span className="text-muted-foreground/80">Mkt cap ≤</span> {(state.marketCapMax / 1e9).toFixed(0)}B$
+                <span className="text-muted-foreground">Mkt cap ≤</span> {(state.marketCapMax / 1e9).toFixed(0)}B$
                 <button onClick={() => removeChip("marketCapMax", "")} className="ml-0.5 rounded hover:bg-background/60 p-0.5" aria-label="Rimuovi soglia market cap massima"><X className="h-3 w-3" /></button>
               </Badge>
             )}
             {state.techMin != null && (
               <Badge variant="secondary" className="text-xs gap-1 pr-1">
-                <span className="text-muted-foreground/80">Tecnico ≥</span> {state.techMin}
+                <span className="text-muted-foreground">Tecnico ≥</span> {state.techMin}
                 <button onClick={() => removeChip("techMin", "")} className="ml-0.5 rounded hover:bg-background/60 p-0.5" aria-label="Rimuovi soglia tecnico"><X className="h-3 w-3" /></button>
               </Badge>
             )}
             {state.postures.map((v) => (
               <Badge key={`p-${v}`} variant="secondary" className="text-xs gap-1 pr-1">
-                <span className="text-muted-foreground/80">Postura:</span> {v}
+                <span className="text-muted-foreground">Postura:</span> {v}
                 <button onClick={() => removeChip("postures", v)} className="ml-0.5 rounded hover:bg-background/60 p-0.5" aria-label={`Rimuovi postura ${v}`}><X className="h-3 w-3" /></button>
               </Badge>
             ))}
             {state.rsiMin != null && (
               <Badge variant="secondary" className="text-xs gap-1 pr-1">
-                <span className="text-muted-foreground/80">RSI ≥</span> {state.rsiMin}
+                <span className="text-muted-foreground">RSI ≥</span> {state.rsiMin}
                 <button onClick={() => removeChip("rsiMin", "")} className="ml-0.5 rounded hover:bg-background/60 p-0.5" aria-label="Rimuovi soglia RSI minima"><X className="h-3 w-3" /></button>
               </Badge>
             )}
             {state.rsiMax != null && (
               <Badge variant="secondary" className="text-xs gap-1 pr-1">
-                <span className="text-muted-foreground/80">RSI ≤</span> {state.rsiMax}
+                <span className="text-muted-foreground">RSI ≤</span> {state.rsiMax}
                 <button onClick={() => removeChip("rsiMax", "")} className="ml-0.5 rounded hover:bg-background/60 p-0.5" aria-label="Rimuovi soglia RSI massima"><X className="h-3 w-3" /></button>
               </Badge>
             )}
@@ -1151,31 +1151,31 @@ export function StockFiltersCard({ state, onChange, filters }: Props) {
             )}
             {state.signalsWithinDays != null && (
               <Badge variant="secondary" className="text-xs gap-1 pr-1">
-                <span className="text-muted-foreground/80">Segnali:</span> {signalsWindowLabel(state.signalsWithinDays)}
+                <span className="text-muted-foreground">Segnali:</span> {signalsWindowLabel(state.signalsWithinDays)}
                 <button onClick={() => removeChip("signalsWithinDays", "")} className="ml-0.5 rounded hover:bg-background/60 p-0.5" aria-label="Rimuovi filtro con segnali"><X className="h-3 w-3" /></button>
               </Badge>
             )}
             {state.priceMin != null && (
               <Badge variant="secondary" className="text-xs gap-1 pr-1">
-                <span className="text-muted-foreground/80">Prezzo ≥</span> {state.priceMin}
+                <span className="text-muted-foreground">Prezzo ≥</span> {state.priceMin}
                 <button onClick={() => removeChip("priceMin", "")} className="ml-0.5 rounded hover:bg-background/60 p-0.5" aria-label="Rimuovi soglia prezzo minima"><X className="h-3 w-3" /></button>
               </Badge>
             )}
             {state.priceMax != null && (
               <Badge variant="secondary" className="text-xs gap-1 pr-1">
-                <span className="text-muted-foreground/80">Prezzo ≤</span> {state.priceMax}
+                <span className="text-muted-foreground">Prezzo ≤</span> {state.priceMax}
                 <button onClick={() => removeChip("priceMax", "")} className="ml-0.5 rounded hover:bg-background/60 p-0.5" aria-label="Rimuovi soglia prezzo massima"><X className="h-3 w-3" /></button>
               </Badge>
             )}
             {state.changeMin != null && (
               <Badge variant="secondary" className="text-xs gap-1 pr-1">
-                <span className="text-muted-foreground/80">Δ% ≥</span> {state.changeMin}
+                <span className="text-muted-foreground">Δ% ≥</span> {state.changeMin}
                 <button onClick={() => removeChip("changeMin", "")} className="ml-0.5 rounded hover:bg-background/60 p-0.5" aria-label="Rimuovi soglia variazione minima"><X className="h-3 w-3" /></button>
               </Badge>
             )}
             {state.changeMax != null && (
               <Badge variant="secondary" className="text-xs gap-1 pr-1">
-                <span className="text-muted-foreground/80">Δ% ≤</span> {state.changeMax}
+                <span className="text-muted-foreground">Δ% ≤</span> {state.changeMax}
                 <button onClick={() => removeChip("changeMax", "")} className="ml-0.5 rounded hover:bg-background/60 p-0.5" aria-label="Rimuovi soglia variazione massima"><X className="h-3 w-3" /></button>
               </Badge>
             )}
@@ -1187,13 +1187,13 @@ export function StockFiltersCard({ state, onChange, filters }: Props) {
             )}
             {state.volRatioMin != null && (
               <Badge variant="secondary" className="text-xs gap-1 pr-1">
-                <span className="text-muted-foreground/80">Vol× ≥</span> {state.volRatioMin}
+                <span className="text-muted-foreground">Vol× ≥</span> {state.volRatioMin}
                 <button onClick={() => removeChip("volRatioMin", "")} className="ml-0.5 rounded hover:bg-background/60 p-0.5" aria-label="Rimuovi soglia vol ratio minima"><X className="h-3 w-3" /></button>
               </Badge>
             )}
             {state.volumeMin != null && (
               <Badge variant="secondary" className="text-xs gap-1 pr-1">
-                <span className="text-muted-foreground/80">Vol ≥</span> {state.volumeMin.toLocaleString()}
+                <span className="text-muted-foreground">Vol ≥</span> {state.volumeMin.toLocaleString()}
                 <button onClick={() => removeChip("volumeMin", "")} className="ml-0.5 rounded hover:bg-background/60 p-0.5" aria-label="Rimuovi soglia volume minima"><X className="h-3 w-3" /></button>
               </Badge>
             )}

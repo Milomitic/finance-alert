@@ -122,7 +122,7 @@ export function getAlertMeta(alert: Alert): AlertKindMeta {
  * template-string composition — the classes will silently disappear in prod. */
 
 export const TONE_BG: Record<AlertTone, string> = {
-  bullish: "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300",
+  bullish: "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-300",
   bearish: "bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300",
   warning: "bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300",
   neutral: "bg-slate-100 dark:bg-slate-800/60 text-slate-700 dark:text-slate-300",
@@ -136,7 +136,7 @@ export const TONE_BORDER_LEFT: Record<AlertTone, string> = {
 };
 
 export const TONE_TEXT: Record<AlertTone, string> = {
-  bullish: "text-emerald-600 dark:text-emerald-400",
+  bullish: "text-emerald-800 dark:text-emerald-400",
   bearish: "text-rose-600 dark:text-rose-400",
   warning: "text-amber-600 dark:text-amber-400",
   neutral: "text-slate-600 dark:text-slate-400",

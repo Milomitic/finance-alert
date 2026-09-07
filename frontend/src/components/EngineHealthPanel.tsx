@@ -159,7 +159,7 @@ function FlagRow({ flag }: { flag: KpiFlag }) {
       ? { Icon: XCircle, cls: "text-rose-700 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/30 border-rose-200 dark:border-rose-900/50" }
       : flag.level === "warn"
         ? { Icon: AlertTriangle, cls: "text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-900/50" }
-        : { Icon: CheckCircle2, cls: "text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-900/50" };
+        : { Icon: CheckCircle2, cls: "text-emerald-800 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-900/50" };
   const { Icon } = cfg;
   return (
     <div className={cn("flex items-start gap-2 rounded-md border px-2.5 py-1.5", cfg.cls)}>
@@ -185,7 +185,7 @@ function StatCell({
 }) {
   return (
     <div className="rounded border bg-muted/30 px-3 py-2">
-      <div className="text-[0.6765rem] uppercase tracking-wider text-muted-foreground/80">
+      <div className="text-[0.6765rem] uppercase tracking-wider text-muted-foreground">
         {label}
       </div>
       <div

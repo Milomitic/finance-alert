@@ -26,7 +26,7 @@ interface SentimentChipMeta {
 
 const SENTIMENT_META: Record<NonNullable<StockNewsItem["sentiment"]>, SentimentChipMeta | null> = {
   bullish: {
-    cls: "border-emerald-300/70 dark:border-emerald-700/60 text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40",
+    cls: "border-emerald-300/70 dark:border-emerald-700/60 text-emerald-800 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40",
     Icon: TrendingUp,
     label: "bullish",
   },

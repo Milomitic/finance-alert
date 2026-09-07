@@ -25,7 +25,7 @@ import { cn } from "@/lib/utils";
 /* Tone maps as plain string literals — Tailwind's purger only sees literals
    (see CLAUDE.md), don't refactor to template composition. */
 const SIDE_CHIP: Record<Position["side"], string> = {
-  long: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300",
+  long: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300",
   short: "bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300",
 };
 const SIDE_LABEL: Record<Position["side"], string> = {
@@ -34,7 +34,7 @@ const SIDE_LABEL: Record<Position["side"], string> = {
 };
 const EXIT_CHIP: Record<string, string> = {
   stop: "bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300",
-  target: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300",
+  target: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300",
   manual: "bg-muted text-muted-foreground",
 };
 const EXIT_LABEL: Record<string, string> = {
@@ -70,7 +70,7 @@ function PnlCell({ pct, abs }: { pct: number | null; abs: number | null }) {
       className={cn(
         "font-bold tabular-nums",
         positive
-          ? "text-emerald-600 dark:text-emerald-400"
+          ? "text-emerald-800 dark:text-emerald-400"
           : "text-rose-600 dark:text-rose-400",
       )}
     >
@@ -215,7 +215,7 @@ export default function PositionsPage() {
                           <TableCell className="text-right tabular-nums text-rose-600 dark:text-rose-400">
                             {fmtPrice(p.stop_price)}
                           </TableCell>
-                          <TableCell className="text-right tabular-nums text-emerald-600 dark:text-emerald-400">
+                          <TableCell className="text-right tabular-nums text-emerald-800 dark:text-emerald-400">
                             {fmtPrice(p.target_price)}
                           </TableCell>
                           <TableCell className="text-right tabular-nums">

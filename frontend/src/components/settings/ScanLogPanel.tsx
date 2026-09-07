@@ -127,13 +127,13 @@ function KpiCell({
 }) {
   const toneCls =
     tone === "pos"
-      ? "text-emerald-700 dark:text-emerald-400"
+      ? "text-emerald-800 dark:text-emerald-400"
       : tone === "neg"
         ? "text-rose-700 dark:text-rose-400"
         : "text-foreground";
   return (
     <div className="rounded border bg-muted/30 px-3 py-2">
-      <div className="text-[0.6765rem] uppercase tracking-wider text-muted-foreground/80">
+      <div className="text-[0.6765rem] uppercase tracking-wider text-muted-foreground">
         {label}
       </div>
       <div className={cn("text-base font-bold tabular-nums", toneCls)}>
@@ -172,7 +172,7 @@ function ScanLogRow({ run }: { run: ScanRunSummary }) {
       </td>
       <td className="px-2 py-2">
         {run.status === "success" && (
-          <span className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-400">
+          <span className="inline-flex items-center gap-1 text-emerald-800 dark:text-emerald-400">
             <CheckCircle2 className="h-3.5 w-3.5" />
             success
           </span>
@@ -210,7 +210,7 @@ function ScanLogRow({ run }: { run: ScanRunSummary }) {
       </td>
       <td className="text-right px-2 py-2">
         {run.alerts_fired != null && run.alerts_fired > 0 ? (
-          <span className="text-emerald-700 dark:text-emerald-400 font-semibold">
+          <span className="text-emerald-800 dark:text-emerald-400 font-semibold">
             {run.alerts_fired}
           </span>
         ) : (

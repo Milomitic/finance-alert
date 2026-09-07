@@ -276,7 +276,7 @@ function EarningsTableRow({ event }: { event: EarningsEvent }) {
               </span>
             )}
             <ArrowUpRight
-              className="h-3 w-3 text-muted-foreground/40 group-hover/row:text-foreground/70 transition-colors shrink-0"
+              className="h-3 w-3 text-muted-foreground group-hover/row:text-foreground/70 transition-colors shrink-0"
               aria-hidden
             />
           </div>
@@ -324,7 +324,7 @@ function NumCell({
     <div
       className={cn(
         "text-right text-[0.8235rem] font-semibold tabular-nums",
-        tone === "pos" && "text-emerald-700 dark:text-emerald-400",
+        tone === "pos" && "text-emerald-800 dark:text-emerald-400",
         tone === "neg" && "text-rose-700 dark:text-rose-400",
       )}
     >
@@ -336,7 +336,7 @@ function NumCell({
 function RiskCell({ tier }: { tier: RiskTier | null }) {
   if (!tier)
     return (
-      <div className="text-right text-[0.8235rem] text-muted-foreground/60">—</div>
+      <div className="text-right text-[0.8235rem] text-muted-foreground">—</div>
     );
   return (
     <div className="flex justify-end">

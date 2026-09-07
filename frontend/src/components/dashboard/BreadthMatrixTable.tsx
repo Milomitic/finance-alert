@@ -65,11 +65,11 @@ function rowHighlight(r: IndexBreadth): string {
 function cellTone(value: number | null, kind: "pct" | "change"): string {
   if (value === null) return "text-muted-foreground";
   if (kind === "pct") {
-    if (value >= 70) return "text-green-600 dark:text-green-400 font-semibold";
+    if (value >= 70) return "text-green-800 dark:text-green-400 font-semibold";
     if (value <= 40) return "text-red-600 dark:text-red-400 font-semibold";
   }
   if (kind === "change") {
-    if (value > 0) return "text-green-600 dark:text-green-400";
+    if (value > 0) return "text-green-800 dark:text-green-400";
     if (value < 0) return "text-red-600 dark:text-red-400";
   }
   return "";
@@ -210,7 +210,7 @@ export function BreadthMatrixTable({ data }: Props) {
                   <td className={cn("text-right px-3 py-2", r.rsi_overbought_count > 0 ? "text-red-600" : "")}>{r.rsi_overbought_count}</td>
                   <td className={cn("text-right px-3 py-2", cellTone(r.avg_change_pct, "change"))}>{fmtChange(r.avg_change_pct)}</td>
                   <td className="text-right px-3 py-2">{fmtNum(r.advancers)}/{fmtNum(r.decliners)}</td>
-                  <td className="text-right px-3 py-2 text-green-600 dark:text-green-400">{r.new_52w_highs}</td>
+                  <td className="text-right px-3 py-2 text-green-800 dark:text-green-400">{r.new_52w_highs}</td>
                   <td className={cn("text-right px-3 py-2", r.new_52w_lows > 0 ? "text-red-600" : "")}>{r.new_52w_lows}</td>
                   <td className="text-right px-3 py-2 pr-4">{r.volume_spikes_count}</td>
                 </tr>

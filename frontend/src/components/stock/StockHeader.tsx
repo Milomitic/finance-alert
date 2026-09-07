@@ -111,7 +111,7 @@ export function StockHeader({ stock, kpis, ohlcv }: Props) {
     change == null
       ? { bg: "bg-card", stripe: "bg-slate-300 dark:bg-slate-600", text: "text-muted-foreground", arrow: "" }
       : change > 0
-        ? { bg: "bg-card", stripe: "bg-emerald-500", text: "text-emerald-700 dark:text-emerald-300", arrow: "▲" }
+        ? { bg: "bg-card", stripe: "bg-emerald-500", text: "text-emerald-800 dark:text-emerald-300", arrow: "▲" }
         : change < 0
           ? { bg: "bg-card", stripe: "bg-rose-500", text: "text-rose-700 dark:text-rose-300", arrow: "▼" }
           : { bg: "bg-card", stripe: "bg-slate-300 dark:bg-slate-600", text: "text-muted-foreground", arrow: "" };
@@ -254,7 +254,7 @@ export function StockHeader({ stock, kpis, ohlcv }: Props) {
                 quel caso il prezzo mostrato È già la chiusura). */}
             {(isMarketOpen || isPremarket) && live.data?.prev_close != null && (
               <div
-                className="text-[0.7059rem] uppercase tracking-wider text-muted-foreground/80 mt-0.5"
+                className="text-[0.7059rem] uppercase tracking-wider text-muted-foreground mt-0.5"
                 title={
                   isPremarket
                     ? "Chiusura di ieri — riferimento da cui si calcola il movimento pre-apertura"

@@ -74,7 +74,7 @@ function GradeChip({
 function priceTargetTone(action: string | null | undefined): { cls: string; arrow: string } {
   switch (action) {
     case "Raises":
-      return { cls: "text-emerald-700 dark:text-emerald-300", arrow: "↑" };
+      return { cls: "text-emerald-800 dark:text-emerald-300", arrow: "↑" };
     case "Lowers":
       return { cls: "text-rose-700 dark:text-rose-300", arrow: "↓" };
     case "Initiates":
@@ -123,7 +123,7 @@ function TargetUpsideChip({ a }: { a: AnalystAction }) {
     <span
       className={cn(
         "shrink-0 w-[52px] text-right tabular-nums text-[0.7059rem] font-semibold",
-        up ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400",
+        up ? "text-emerald-800 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400",
       )}
       title={`Target ${up ? "sopra" : "sotto"} il prezzo attuale ($${cur.toFixed(2)}) del ${Math.abs(pct).toFixed(1)}%`}
     >
@@ -162,7 +162,7 @@ function ActionRow({ a }: { a: AnalystAction }) {
         </span>
         {a.from_news && (
           <span
-            className="inline-flex items-center gap-0.5 text-[9.5px] text-muted-foreground/70 shrink-0"
+            className="inline-flex items-center gap-0.5 text-[9.5px] text-muted-foreground shrink-0"
             title="Estratto da una notizia (non dal feed strutturato)"
           >
             <Newspaper className="h-2.5 w-2.5" /> news
@@ -249,7 +249,7 @@ export function AnalystActionsCard() {
             <div className="text-xs text-muted-foreground">
               Nessun upgrade/downgrade recente.
               <br />
-              <span className="text-muted-foreground/70">
+              <span className="text-muted-foreground">
                 Compaiono qui i cambi di rating (upgrade / downgrade /
                 initiation) degli ultimi 90 giorni man mano che i
                 fondamentali vengono aggiornati.

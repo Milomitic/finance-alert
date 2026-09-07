@@ -97,7 +97,7 @@ export function SetupDetailDialog({ setup, onClose }: Props) {
                   className={cn(
                     "inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs font-semibold",
                     bull
-                      ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
+                      ? "bg-emerald-500/15 text-emerald-800 dark:text-emerald-300"
                       : "bg-rose-500/15 text-rose-700 dark:text-rose-300",
                   )}
                 >

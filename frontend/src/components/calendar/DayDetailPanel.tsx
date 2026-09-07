@@ -199,7 +199,7 @@ function DayDetailContent({
       <div className="flex-1 min-h-0 overflow-y-auto">
         {events.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center text-center px-6 py-14">
-            <CalendarOff className="h-10 w-10 text-muted-foreground/40" />
+            <CalendarOff className="h-10 w-10 text-muted-foreground" />
             <p className="mt-3 text-base text-muted-foreground">
               Nessun evento registrato per questa giornata.
             </p>

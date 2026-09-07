@@ -101,7 +101,7 @@ export function CatalogRefreshPanel() {
                       </td>
                       <td className="px-3 py-2">
                         {idx.last_status === "success" && (
-                          <span className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-400">
+                          <span className="inline-flex items-center gap-1 text-emerald-800 dark:text-emerald-400">
                             <CheckCircle2 className="h-3.5 w-3.5" />
                             success
                           </span>
@@ -131,7 +131,7 @@ export function CatalogRefreshPanel() {
                       <td className="text-right px-3 py-2">
                         {idx.stocks_added != null ? (
                           <span>
-                            <span className="text-emerald-700 dark:text-emerald-400">
+                            <span className="text-emerald-800 dark:text-emerald-400">
                               +{idx.stocks_added}
                             </span>
                             {" / "}

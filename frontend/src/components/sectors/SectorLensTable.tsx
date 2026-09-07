@@ -97,7 +97,7 @@ function Sparkline({ points }: { points: { date: string; avg: number }[] }) {
 
 function toneClass(v: number | null): string {
   if (v === null) return "text-muted-foreground";
-  if (v > 0) return "text-emerald-600 dark:text-emerald-400";
+  if (v > 0) return "text-emerald-800 dark:text-emerald-400";
   if (v < 0) return "text-red-600 dark:text-red-400";
   return "text-muted-foreground";
 }

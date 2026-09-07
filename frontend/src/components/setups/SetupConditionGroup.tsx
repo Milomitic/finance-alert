@@ -78,7 +78,7 @@ function DistanceCell({ value }: { value: number | null }) {
   }
   const tone =
     value <= 0.25
-      ? "text-emerald-600 dark:text-emerald-400 font-semibold"
+      ? "text-emerald-800 dark:text-emerald-400 font-semibold"
       : value <= 1
         ? "text-foreground"
         : "text-muted-foreground";
@@ -173,7 +173,7 @@ export function SetupConditionGroup({
           <span
             className={cn(
               "inline-flex items-center gap-1.5 font-semibold text-sm",
-              bull ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400",
+              bull ? "text-emerald-800 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400",
             )}
           >
             {bull ? (

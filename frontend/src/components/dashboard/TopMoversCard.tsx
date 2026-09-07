@@ -124,7 +124,7 @@ function MoverRow({ m, field, window, live, computedAt, livePrice, livePulse, fl
   const v = m[field] ?? null;
   const positive = v != null ? v >= 0 : true;
   const color = positive
-    ? "text-green-600 dark:text-green-400"
+    ? "text-green-800 dark:text-green-400"
     : "text-red-600 dark:text-red-400";
   const composite = m.composite ?? null;
   const displayPrice = livePrice ?? m.last_close ?? null;
@@ -246,7 +246,7 @@ function MoverRow({ m, field, window, live, computedAt, livePrice, livePulse, fl
                   ? "text-orange-700 dark:text-orange-300 font-semibold"
                   : multiplier >= 2
                     ? "text-foreground/70"
-                    : "text-muted-foreground/60",
+                    : "text-muted-foreground",
               )}
             >
               {multiplierEstimated ? "~" : ""}
@@ -270,7 +270,7 @@ function ColumnHeader({ side }: { side: Side }) {
       className={cn(
         "shrink-0 px-3 py-1 text-[10.5px] uppercase tracking-[0.16em] font-bold border-b",
         side === "gainers"
-          ? "bg-green-50/70 dark:bg-green-950/30 text-green-700 dark:text-green-300"
+          ? "bg-green-50/70 dark:bg-green-950/30 text-green-800 dark:text-green-300"
           : "bg-red-50/70 dark:bg-red-950/30 text-red-700 dark:text-red-300",
       )}
     >

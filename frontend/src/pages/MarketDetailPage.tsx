@@ -146,7 +146,7 @@ export default function MarketDetailPage() {
     changePct == null
       ? { bg: "bg-card", stripe: "bg-slate-300 dark:bg-slate-600", text: "text-muted-foreground", arrow: "" }
       : changePct > 0
-        ? { bg: "bg-emerald-50/50 dark:bg-emerald-950/15", stripe: "bg-emerald-500", text: "text-emerald-700 dark:text-emerald-300", arrow: "▲" }
+        ? { bg: "bg-emerald-50/50 dark:bg-emerald-950/15", stripe: "bg-emerald-500", text: "text-emerald-800 dark:text-emerald-300", arrow: "▲" }
         : changePct < 0
           ? { bg: "bg-rose-50/50 dark:bg-rose-950/15", stripe: "bg-rose-500", text: "text-rose-700 dark:text-rose-300", arrow: "▼" }
           : { bg: "bg-card", stripe: "bg-slate-300 dark:bg-slate-600", text: "text-muted-foreground", arrow: "" };
@@ -215,7 +215,7 @@ export default function MarketDetailPage() {
             <div className="flex items-center gap-1.5 text-sm uppercase tracking-wide">
               {isLive ? (
                 <span
-                  className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-300 font-semibold"
+                  className="inline-flex items-center gap-1 text-emerald-800 dark:text-emerald-300 font-semibold"
                   title="Mercato aperto · prezzo live"
                 >
                   <span className="relative inline-flex h-2 w-2">
@@ -252,7 +252,7 @@ export default function MarketDetailPage() {
             {/* Prev close caption when live — same UX as stock detail. */}
             {isLive && d.quote?.prev_close != null && (
               <div
-                className="text-[0.7059rem] uppercase tracking-wider text-muted-foreground/80 mt-0.5"
+                className="text-[0.7059rem] uppercase tracking-wider text-muted-foreground mt-0.5"
                 title="Chiusura della sessione precedente"
               >
                 Prev close:{" "}
@@ -262,7 +262,7 @@ export default function MarketDetailPage() {
               </div>
             )}
             {d.quote?.currency && (
-              <div className="text-[0.6765rem] uppercase tracking-wider text-muted-foreground/70 mt-0.5">
+              <div className="text-[0.6765rem] uppercase tracking-wider text-muted-foreground mt-0.5">
                 {d.quote.currency}
               </div>
             )}
@@ -353,7 +353,7 @@ export default function MarketDetailPage() {
         <TechnicalKpiCard ticker={d.symbol} kind="market" />
         <Card>
           <CardContent className="p-4">
-            <div className="text-[0.7059rem] uppercase tracking-wider font-semibold text-muted-foreground/70 mb-2">
+            <div className="text-[0.7059rem] uppercase tracking-wider font-semibold text-muted-foreground mb-2">
               KPI di prezzo
             </div>
             <div className="grid grid-cols-2 gap-2 [&>*]:min-w-0">
@@ -378,7 +378,7 @@ export default function MarketDetailPage() {
         </Card>
         <Card>
           <CardContent className="p-4">
-            <div className="text-[0.7059rem] uppercase tracking-wider font-semibold text-muted-foreground/70 mb-2">
+            <div className="text-[0.7059rem] uppercase tracking-wider font-semibold text-muted-foreground mb-2">
               Meta
             </div>
             <dl className="space-y-1 text-sm">
@@ -402,7 +402,7 @@ export default function MarketDetailPage() {
                   <dd className={cn(
                     "font-semibold",
                     d.quote.market_state === "OPEN"
-                      ? "text-emerald-600 dark:text-emerald-400"
+                      ? "text-emerald-800 dark:text-emerald-400"
                       : "text-muted-foreground",
                   )}>
                     {d.quote.market_state}

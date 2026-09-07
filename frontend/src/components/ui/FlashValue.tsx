@@ -68,14 +68,14 @@ export function FlashValue({
       className={cn(
         "inline-block transition-colors duration-700 rounded px-1 -mx-1",
         dir === "up" &&
-          "bg-emerald-500/25 text-emerald-700 dark:text-emerald-300",
+          "bg-emerald-500/25 text-emerald-800 dark:text-emerald-300",
         dir === "down" &&
           "bg-rose-500/25 text-rose-700 dark:text-rose-300",
         className,
       )}
     >
       {showArrow && dir === "up" && (
-        <span className="text-emerald-500 dark:text-emerald-400 text-[0.7em] mr-0.5 align-middle">
+        <span className="text-emerald-700 dark:text-emerald-400 text-[0.7em] mr-0.5 align-middle">
           ▲
         </span>
       )}

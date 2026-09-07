@@ -19,7 +19,7 @@ type Props = {
 const LEVEL_TONE: Record<string, string> = {
   DEBUG: "text-slate-500 dark:text-slate-400",
   INFO: "text-sky-700 dark:text-sky-300",
-  SUCCESS: "text-emerald-700 dark:text-emerald-300",
+  SUCCESS: "text-emerald-800 dark:text-emerald-300",
   WARNING: "text-amber-700 dark:text-amber-300",
   ERROR: "text-red-700 dark:text-red-300",
   CRITICAL: "text-red-800 dark:text-red-300 font-bold",
@@ -226,7 +226,7 @@ export default function LogStream({
           >
             {copiedAll ? (
               <>
-                <Check className="h-4 w-4 text-emerald-600" />
+                <Check className="h-4 w-4 text-emerald-800" />
                 <span className="text-xs">Copiato</span>
               </>
             ) : (

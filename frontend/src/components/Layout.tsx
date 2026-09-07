@@ -93,7 +93,7 @@ function NavList({
             <span
               key={entry.to}
               title={`${entry.label} — Disponibile nelle prossime fasi`}
-              className={cn(base, "cursor-not-allowed text-muted-foreground/60")}
+              className={cn(base, "cursor-not-allowed text-muted-foreground")}
             >
               <Icon className="h-4 w-4 shrink-0" />
               {!collapsed && entry.label}

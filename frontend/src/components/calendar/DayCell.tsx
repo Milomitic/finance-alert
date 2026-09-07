@@ -109,14 +109,14 @@ export const DayCell = forwardRef<HTMLDivElement, DayCellProps>(
                 ? "inline-flex h-6 w-6 items-center justify-center rounded-full bg-sky-500 text-white font-bold shadow-sm dark:bg-sky-500/90"
                 : day.inMonth
                   ? "text-foreground/85 px-0.5"
-                  : "text-muted-foreground/60 px-0.5",
+                  : "text-muted-foreground px-0.5",
             )}
           >
             {day.day}
           </span>
           {events.length > CHIP_LIMIT && (
             <span
-              className="text-[12.5px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70"
+              className="text-[12.5px] font-semibold uppercase tracking-[0.12em] text-muted-foreground"
               aria-hidden
             >
               {events.length} eventi

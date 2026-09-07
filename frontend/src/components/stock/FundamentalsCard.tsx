@@ -31,7 +31,7 @@ function fmtPctSurp(v: number | null | undefined): { text: string; color: string
   const sign = v >= 0 ? "+" : "";
   return {
     text: `${sign}${v.toFixed(2)}%`,
-    color: v > 0 ? "text-green-600 dark:text-green-400" : v < 0 ? "text-red-600 dark:text-red-400" : "text-muted-foreground",
+    color: v > 0 ? "text-green-800 dark:text-green-400" : v < 0 ? "text-red-600 dark:text-red-400" : "text-muted-foreground",
   };
 }
 
@@ -42,7 +42,7 @@ function fmtPctSurp(v: number | null | undefined): { text: string; color: string
  *  without having to read across to the rightmost column. */
 function beatTone(reported: number | null | undefined, estimate: number | null | undefined): string {
   if (reported == null || estimate == null) return "";
-  if (reported > estimate) return "text-green-600 dark:text-green-400";
+  if (reported > estimate) return "text-green-800 dark:text-green-400";
   if (reported < estimate) return "text-red-600 dark:text-red-400";
   return "";
 }

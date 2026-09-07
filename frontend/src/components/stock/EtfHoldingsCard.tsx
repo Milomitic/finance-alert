@@ -68,7 +68,7 @@ export function EtfHoldingsCard({ ticker }: Props) {
               className={cn(
                 "shrink-0 inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[0.7059rem] font-semibold tabular-nums",
                 wChange >= 0
-                  ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/60"
+                  ? "bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/60"
                   : "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800/60",
               )}
               title={
@@ -107,7 +107,7 @@ function HoldingRow({ h, maxWeight }: { h: EtfHolding; maxWeight: number }) {
     h.change_pct == null
       ? "text-muted-foreground"
       : h.change_pct >= 0
-        ? "text-emerald-600 dark:text-emerald-400"
+        ? "text-emerald-800 dark:text-emerald-400"
         : "text-rose-600 dark:text-rose-400";
   const barPct = maxWeight > 0 ? Math.max(3, (h.weight / maxWeight) * 100) : 0;
 
@@ -189,7 +189,7 @@ function sparkUp(closes: number[]): boolean {
 /** Minimal 30-day sparkline. Green up / red down per the row's signal. */
 function MiniSpark({ closes, up }: { closes: number[]; up: boolean }) {
   if (!closes || closes.length < 2) {
-    return <span className="block text-center text-muted-foreground/40 text-xs">—</span>;
+    return <span className="block text-center text-muted-foreground text-xs">—</span>;
   }
   const min = Math.min(...closes);
   const max = Math.max(...closes);

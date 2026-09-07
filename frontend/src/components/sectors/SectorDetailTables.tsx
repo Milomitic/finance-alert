@@ -29,7 +29,7 @@ function CountryFlag({ country, ticker }: { country: string | null; ticker: stri
         {country}
       </span>
     ) : (
-      <span className="text-muted-foreground/60">—</span>
+      <span className="text-muted-foreground">—</span>
     );
   }
   return (
@@ -93,7 +93,7 @@ export function PicksCard({
 }) {
   const accentTone =
     accent === "green"
-      ? "text-emerald-700 dark:text-emerald-300"
+      ? "text-emerald-800 dark:text-emerald-300"
       : "text-rose-700 dark:text-rose-300";
   const Icon = accent === "green" ? TrendingUp : TrendingDown;
   return (
@@ -321,7 +321,7 @@ export function SortableStocksTable({ rows }: { rows: SectorStockRow[] }) {
         <div className="hidden sm:block overflow-x-auto">
           <table className="w-full text-sm tabular-nums">
             <thead>
-              <tr className="text-[0.6765rem] uppercase tracking-wider text-muted-foreground/80 border-b border-border/60">
+              <tr className="text-[0.6765rem] uppercase tracking-wider text-muted-foreground border-b border-border/60">
                 {COLUMNS.map((col) => {
                   const active = col.key === sortKey;
                   const Indicator = active

@@ -383,7 +383,7 @@ function KpiCell({
   const sizeCls = size === "xl" ? "text-3xl" : "text-2xl";
   const toneCls =
     tone === "pos"
-      ? "text-emerald-600 dark:text-emerald-400"
+      ? "text-emerald-800 dark:text-emerald-400"
       : tone === "neg"
         ? "text-rose-600 dark:text-rose-400"
         : "text-foreground";
@@ -435,7 +435,7 @@ function ImportanceStars({ importance }: { importance: "high" | "medium" | "low"
           key={i}
           className={cn(
             "text-base leading-none",
-            i < filled ? "text-amber-500" : "text-muted-foreground/30",
+            i < filled ? "text-amber-500" : "text-muted-foreground",
           )}
         >
           ★

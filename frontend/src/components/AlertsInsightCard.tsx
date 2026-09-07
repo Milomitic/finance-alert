@@ -32,7 +32,7 @@ const HZ_CHIP: Record<string, { letter: string; label: string; cls: string }> = 
 
 function HorizonChips({ horizons }: { horizons: string[] }) {
   const ordered = HZ_ORDER.filter((h) => horizons.includes(h));
-  if (ordered.length === 0) return <span className="text-muted-foreground/50">—</span>;
+  if (ordered.length === 0) return <span className="text-muted-foreground">—</span>;
   return (
     <div className="flex gap-0.5">
       {ordered.map((h) => (
@@ -52,7 +52,7 @@ function DirPill({ direction, className }: { direction: string; className?: stri
       className={cn(
         "inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[0.6765rem] font-bold uppercase tracking-wide shrink-0",
         bull
-          ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300"
+          ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300"
           : "bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300",
         className,
       )}
@@ -84,7 +84,7 @@ function TopHeader() {
     // there are no columns left for a header to label. Kept visible would
     // have printed "TITONO" — the labels themselves overlapping, which is
     // how this bug announced itself in the first place.
-    <div className="hidden sm:flex items-center gap-2 px-2 pb-1.5 mb-1 border-b border-border/40 text-[0.6765rem] uppercase tracking-wider text-muted-foreground/70 font-semibold">
+    <div className="hidden sm:flex items-center gap-2 px-2 pb-1.5 mb-1 border-b border-border/40 text-[0.6765rem] uppercase tracking-wider text-muted-foreground font-semibold">
       <span className="w-4 shrink-0" />
       <span className="flex-1 min-w-0">Titolo</span>
       <span className="w-[4.25rem] shrink-0">Tono</span>
@@ -143,7 +143,7 @@ function TopRow({
         className="flex flex-wrap sm:flex-nowrap items-center gap-x-2 gap-y-1 px-2 py-1 rounded-md hover:bg-accent/50 transition-colors min-w-0 cursor-pointer"
         title={`${c.name ?? c.ticker} · forza confluenza ${pct} · forza max ${maxForza ?? "—"} · ${c.n_signals} segnali${c.effective_n != null ? ` (${c.effective_n} indip.)` : ""}${c.multi_horizon ? " · multi-orizzonte" : ""}${c.contested ? " · conteso" : ""} — clic per filtrare la tabella`}
       >
-        <span className="w-4 shrink-0 text-right text-xs font-mono tabular-nums text-muted-foreground/60">{rank}</span>
+        <span className="w-4 shrink-0 text-right text-xs font-mono tabular-nums text-muted-foreground">{rank}</span>
         {/* Titolo — logo + ticker + name in ONE flex-1 cell so the meta columns
             align with the header. */}
         <div className="min-w-0 flex-1 basis-[calc(100%-1.5rem)] sm:basis-auto flex items-center gap-2">
@@ -172,7 +172,7 @@ function TopRow({
           {c.contested && <Swords className="h-3 w-3 shrink-0 text-amber-500" aria-label="Conteso" />}
           {c.direction === "bull" && c.multi_horizon && (
             <TrendingUp
-              className="h-3 w-3 shrink-0 text-emerald-500"
+              className="h-3 w-3 shrink-0 text-emerald-700"
               aria-label="Convinzione: multi-orizzonte rialzista"
               // Data note: mh-bull has a positive directional DRIFT edge
               // (study 2026-06-09) — a conviction/selection signal, NOT a
@@ -187,7 +187,7 @@ function TopRow({
           {maxForza ?? "—"}
         </span>
         {/* Segnali */}
-        <span className="w-8 shrink-0 text-right text-[0.7059rem] text-muted-foreground/80 tabular-nums">{c.n_signals}</span>
+        <span className="w-8 shrink-0 text-right text-[0.7059rem] text-muted-foreground tabular-nums">{c.n_signals}</span>
         {/* Forza (bar + value) */}
         <div className="w-[5.25rem] shrink-0 flex items-center justify-end gap-1.5">
           <StrengthBar value={pct} bull={bull} width="w-12" />
@@ -246,7 +246,7 @@ function ExtremeCell({
       </Link>
       {c.name && <span className="text-[0.7059rem] text-muted-foreground truncate min-w-0">{c.name}</span>}
       <DirPill direction={c.direction} className="ml-auto" />
-      <span className={cn("font-bold tabular-nums shrink-0", bull ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400")}>
+      <span className={cn("font-bold tabular-nums shrink-0", bull ? "text-emerald-800 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400")}>
         {Math.round(c.strength)}
       </span>
     </div>
@@ -261,7 +261,7 @@ function StatCell({ icon: Icon, label, value, tone }: {
 }) {
   return (
     <div className="rounded-lg border bg-muted/30 px-2.5 py-2">
-      <div className="flex items-center gap-1 text-[0.6765rem] uppercase tracking-wider text-muted-foreground/80">
+      <div className="flex items-center gap-1 text-[0.6765rem] uppercase tracking-wider text-muted-foreground">
         <Icon className="h-3.5 w-3.5" />
         <span className="truncate">{label}</span>
       </div>
@@ -400,7 +400,7 @@ export function AlertsInsightCard({
                   {/* Each label spans (and centers over) its own bar segment. */}
                   <div className="flex text-[0.7647rem] mb-1">
                     <span
-                      className="text-center font-semibold text-emerald-600 dark:text-emerald-400 whitespace-nowrap"
+                      className="text-center font-semibold text-emerald-800 dark:text-emerald-400 whitespace-nowrap"
                       style={{ width: `${bullPct}%` }}
                     >
                       {nBull} long · {bullPct}%

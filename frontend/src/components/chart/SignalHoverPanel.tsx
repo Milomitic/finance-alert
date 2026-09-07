@@ -13,7 +13,7 @@ const toneDot: Record<SignalHoverItem["tone"], string> = {
 };
 
 function outcomeGlyph(outcome: boolean | null | undefined): { text: string; cls: string } {
-  if (outcome === true) return { text: "✓", cls: "text-emerald-600 dark:text-emerald-400" };
+  if (outcome === true) return { text: "✓", cls: "text-emerald-800 dark:text-emerald-400" };
   if (outcome === false) return { text: "✗", cls: "text-red-600 dark:text-red-400" };
   return { text: "· in maturazione", cls: "text-muted-foreground" };
 }

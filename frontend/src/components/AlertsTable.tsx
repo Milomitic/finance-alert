@@ -531,7 +531,7 @@ export function AlertsTable({
                     pct >= 70 ? "bg-emerald-500" : pct >= 50 ? "bg-amber-500" : "bg-rose-500";
                   const txt =
                     pct >= 70
-                      ? "text-emerald-600 dark:text-emerald-400"
+                      ? "text-emerald-800 dark:text-emerald-400"
                       : pct >= 50
                         ? "text-amber-600 dark:text-amber-400"
                         : "text-rose-600 dark:text-rose-400";
@@ -612,7 +612,7 @@ export function AlertsTable({
                         className={cn(
                           "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-semibold tabular-nums",
                           hit
-                            ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300"
+                            ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300"
                             : "bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300",
                         )}
                         title={title}

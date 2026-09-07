@@ -568,7 +568,7 @@ export function AlertFilters({ value, onChange }: Props) {
               <FilterChip
                 label={
                   <>
-                    <span className="text-muted-foreground/80">Segnale:</span>{" "}
+                    <span className="text-muted-foreground">Segnale:</span>{" "}
                     {signalKindLabel}
                   </>
                 }
@@ -580,14 +580,14 @@ export function AlertFilters({ value, onChange }: Props) {
               <FilterChip
                 label={
                   <>
-                    <span className="text-muted-foreground/80">Tono:</span>{" "}
+                    <span className="text-muted-foreground">Tono:</span>{" "}
                     {toneLabel}
                   </>
                 }
                 onClear={() => onChange({ ...value, tone: undefined })}
                 className={
                   value.tone === "bull"
-                    ? "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 border-emerald-200/70 dark:border-emerald-800/60"
+                    ? "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-300 border-emerald-200/70 dark:border-emerald-800/60"
                     : "bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300 border-rose-200/70 dark:border-rose-800/60"
                 }
               />
@@ -596,7 +596,7 @@ export function AlertFilters({ value, onChange }: Props) {
               <FilterChip
                 label={
                   <>
-                    <span className="text-muted-foreground/80">Esito:</span>{" "}
+                    <span className="text-muted-foreground">Esito:</span>{" "}
                     {outcomeLabel}
                   </>
                 }
@@ -608,7 +608,7 @@ export function AlertFilters({ value, onChange }: Props) {
               <FilterChip
                 label={
                   <>
-                    <span className="text-muted-foreground/80">Orizzonte:</span>{" "}
+                    <span className="text-muted-foreground">Orizzonte:</span>{" "}
                     {horizonLabel}
                   </>
                 }
@@ -620,7 +620,7 @@ export function AlertFilters({ value, onChange }: Props) {
               <FilterChip
                 label={
                   <>
-                    <span className="text-muted-foreground/80">Forza ≥</span>{" "}
+                    <span className="text-muted-foreground">Forza ≥</span>{" "}
                     {value.strength_min}%
                   </>
                 }
@@ -632,7 +632,7 @@ export function AlertFilters({ value, onChange }: Props) {
               <FilterChip
                 label={
                   <>
-                    <span className="text-muted-foreground/80">Periodo:</span>{" "}
+                    <span className="text-muted-foreground">Periodo:</span>{" "}
                     {periodLabel}
                   </>
                 }

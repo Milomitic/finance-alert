@@ -17,7 +17,7 @@ function Cell({
     tone === "rose"
       ? "text-rose-600 dark:text-rose-400"
       : tone === "emerald"
-        ? "text-emerald-600 dark:text-emerald-400"
+        ? "text-emerald-800 dark:text-emerald-400"
         : "text-foreground";
   return (
     <div className="rounded-md border border-border/60 px-2.5 py-1.5">
@@ -35,9 +35,9 @@ function Cell({
 export function PlaybookView({ playbook }: { playbook: Playbook }) {
   const p = playbook;
   const isLong = p.side === "long";
-  const accent = isLong ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400";
+  const accent = isLong ? "text-emerald-800 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400";
   const chipCls = isLong
-    ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300"
+    ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300"
     : "bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300";
   return (
     <div className="space-y-2">
@@ -76,7 +76,7 @@ export function PlaybookView({ playbook }: { playbook: Playbook }) {
           <span className={cn("font-medium", accent)}>{p.leverageNote}</span>
         </div>
       </div>
-      <div className="text-[0.6765rem] text-muted-foreground/70 italic">
+      <div className="text-[0.6765rem] text-muted-foreground italic">
         Stime educative su base tecnica, non un consiglio finanziario o di investimento.
       </div>
     </div>

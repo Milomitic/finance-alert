@@ -39,7 +39,7 @@ interface Props {
    *  toggle group, etc. Kept right-aligned so the icon+label stays anchored
    *  to the left. */
   right?: React.ReactNode;
-  /** Tailwind tone class override (e.g. "text-emerald-700 dark:text-emerald-300").
+  /** Tailwind tone class override (e.g. "text-emerald-800 dark:text-emerald-300").
    *  Defaults to `text-muted-foreground`. */
   tone?: string;
   className?: string;

@@ -131,7 +131,7 @@ function StatsStrip({ stats }: { stats: SetupStats }) {
             <div
               className={cn(
                 "text-2xl font-bold tabular-nums leading-tight mt-0.5",
-                t.tone === "ok" && "text-emerald-700 dark:text-emerald-400",
+                t.tone === "ok" && "text-emerald-800 dark:text-emerald-400",
                 t.tone === "bad" && "text-rose-700 dark:text-rose-400",
               )}
             >

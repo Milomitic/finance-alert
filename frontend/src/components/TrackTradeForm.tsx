@@ -64,7 +64,7 @@ export function TrackTradeForm({ ticker, alertId, playbook }: Props) {
   if (mut.isSuccess) {
     return (
       <div className="mt-2 flex items-center gap-2 flex-wrap rounded-md border border-emerald-300/70 bg-emerald-50/60 dark:bg-emerald-950/20 px-3 py-2 text-sm">
-        <Check className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+        <Check className="h-4 w-4 text-emerald-800 dark:text-emerald-400 shrink-0" />
         <span>Posizione aperta su {ticker}.</span>
         <Link
           to="/positions"
@@ -157,7 +157,7 @@ export function TrackTradeForm({ ticker, alertId, playbook }: Props) {
         >
           Annulla
         </Button>
-        <span className="text-[0.6765rem] text-muted-foreground/70 italic ml-auto hidden sm:inline">
+        <span className="text-[0.6765rem] text-muted-foreground italic ml-auto hidden sm:inline">
           Senza size il P&amp;L è solo in %.
         </span>
       </div>

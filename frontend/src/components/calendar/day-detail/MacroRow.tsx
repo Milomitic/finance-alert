@@ -164,7 +164,7 @@ function MacroInsightStrip({ event }: { event: MacroEvent }) {
           className={cn(
             "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[0.7059rem] font-semibold tabular-nums",
             surprise > 0
-              ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300"
+              ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300"
               : surprise < 0
                 ? "bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300"
                 : "bg-muted text-muted-foreground",
@@ -241,7 +241,7 @@ function KpiSlot({
 }) {
   const valueTone =
     tone === "pos"
-      ? "text-emerald-600 dark:text-emerald-400"
+      ? "text-emerald-800 dark:text-emerald-400"
       : tone === "neg"
         ? "text-rose-600 dark:text-rose-400"
         : "text-foreground";
@@ -275,7 +275,7 @@ function KpiSlot({
 
   return (
     <div className="flex flex-col gap-0.5 min-w-0" title={hint}>
-      <span className="text-[0.6765rem] uppercase tracking-wider text-muted-foreground/80">
+      <span className="text-[0.6765rem] uppercase tracking-wider text-muted-foreground">
         {label}
       </span>
       <span
@@ -291,7 +291,7 @@ function KpiSlot({
         <span
           className={cn(
             "text-[10.5px] tabular-nums font-medium",
-            deltaTone === "pos" && "text-emerald-600 dark:text-emerald-400",
+            deltaTone === "pos" && "text-emerald-800 dark:text-emerald-400",
             deltaTone === "neg" && "text-rose-600 dark:text-rose-400",
             deltaTone === "neutral" && "text-muted-foreground",
           )}
@@ -300,7 +300,7 @@ function KpiSlot({
         </span>
       )}
       {dateBadge && (
-        <span className="text-[0.6471rem] text-muted-foreground/70 tabular-nums">
+        <span className="text-[0.6471rem] text-muted-foreground tabular-nums">
           {dateBadge}
         </span>
       )}

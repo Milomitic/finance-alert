@@ -36,7 +36,7 @@ const STATUS_INFO: Record<
     desc: "Nessuna anomalia rilevata negli ultimi minuti.",
     Icon: CheckCircle2,
     bg: "bg-emerald-50 dark:bg-emerald-950/40",
-    fg: "text-emerald-700 dark:text-emerald-300",
+    fg: "text-emerald-800 dark:text-emerald-300",
     border: "border-emerald-200 dark:border-emerald-800/60",
   },
   degraded: {
@@ -248,7 +248,7 @@ export default function PlatformHealthPage() {
             <div
               className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border text-sm font-medium ${
                 connected
-                  ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/60"
+                  ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/60"
                   : "bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800/60"
               }`}
               title={

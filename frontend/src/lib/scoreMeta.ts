@@ -8,7 +8,7 @@ import type { RiskTier, ScoreCategory } from "@/api/types";
 
 export const RISK_TONE: Record<RiskTier, string> = {
   conservative:
-    "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 border-emerald-200/70 dark:border-emerald-800/60",
+    "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-300 border-emerald-200/70 dark:border-emerald-800/60",
   moderate:
     "bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-300 border-sky-200/70 dark:border-sky-800/60",
   aggressive:
@@ -54,7 +54,7 @@ export const SCORE_TEXT_TONE: Record<ScoreTone, string> = {
   weak: "text-rose-600 dark:text-rose-400",
   mediocre: "text-amber-600 dark:text-amber-400",
   good: "text-sky-600 dark:text-sky-400",
-  excellent: "text-emerald-600 dark:text-emerald-400",
+  excellent: "text-emerald-800 dark:text-emerald-400",
 };
 
 /** Tailwind bg-color class for a 0–100 score, used to fill the thin sub-score
