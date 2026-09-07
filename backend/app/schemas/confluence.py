@@ -7,6 +7,11 @@ class ConfluenceComponentOut(BaseModel):
     alert_id: int
     rule_kind: str
     signal_name: str
+    #: Forza. Primario. Vedi `ConfluenceComponent.strength` per il motivo per
+    #: cui non veniva inviato e per cosa costava al consumatore.
+    strength: float
+    #: Alias transitorio dello stesso numero, tenuto perche' qualcosa potrebbe
+    #: ancora leggerlo. CLAUDE.md lo dichiara in via di ritiro.
     confidence: float
     tone: str
     horizon: str

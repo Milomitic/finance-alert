@@ -108,12 +108,19 @@ export interface CatalogStatus {
 }
 
 /** Signal-engine alerts use the "signal:<detector-name>" convention for
- *  rule_kind (e.g. "signal:volume_breakout"); they have rule_id === null. */
+ *  rule_kind (e.g. "signal:volume_breakout").
+ *
+ *  This used to add "…they have rule_id === null", and `Alert` declared
+ *  `rule_id: number | null` as REQUIRED. `AlertOut` in the backend has no such
+ *  field and never did — it survives there only as a comment on the model —
+ *  so the value was `undefined` at runtime while the type promised otherwise,
+ *  and the `=== null` check the sentence invited would have been silently
+ *  false. Nothing read it; two test fixtures set it purely to satisfy the
+ *  phantom. Removed 2026-09-07. */
 export type SignalKind = `signal:${string}`;
 
 export interface Alert {
   id: number;
-  rule_id: number | null;
   /** ISO date (YYYY-MM-DD) of the market-data bar where the rule's
    *  condition matched. May differ from `triggered_at` (the wall-clock
    *  moment the row was created): a scan run on Monday morning may detect

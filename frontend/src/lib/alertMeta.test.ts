@@ -10,7 +10,7 @@ import {
 
 function signalAlert(over: Partial<Alert> = {}): Alert {
   return {
-    id: 1, rule_id: null, rule_kind: "signal:volume_breakout", stock_id: 1,
+    id: 1, rule_kind: "signal:volume_breakout", stock_id: 1,
     ticker: "AAA", name: "AAA Co", triggered_at: "2026-05-01T00:00:00Z",
     signal_date: "2026-05-01", trigger_price: 10,
     snapshot: { tone: "bull", strength: 82, chain: [{ date: "2026-05-01", label: "Breakout bull", detail: "" }] },

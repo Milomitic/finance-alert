@@ -15,7 +15,6 @@ function signal(
 ): Alert {
   return {
     id: nextId++,
-    rule_id: 1,
     signal_date,
     rule_kind: "signal:trend_pullback",
     stock_id: 1,

@@ -5,8 +5,10 @@ export interface ConfluenceComponent {
   alert_id: number;
   rule_kind: string;
   signal_name: string;
-  /** Per-signal Forza (pattern strength). Optional `strength` is the new
-   *  primary; `confidence` stays as the legacy fallback (transitional alias). */
+  /** Per-signal Forza. Primario, e ora davvero inviato: il backend lo
+   *  dichiarava solo come `confidence`, quindi questo campo non arrivava mai e
+   *  il consumatore restava sul ripiego mentre questo commento affermava il
+   *  contrario. `confidence` resta come alias legacy. */
   strength?: number;
   confidence: number;
   /** Per-signal Probabilità (historical hit-rate). Optional — absent on

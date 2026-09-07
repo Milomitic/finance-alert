@@ -47,10 +47,27 @@ class ConfluenceComponent:
     alert_id: int
     rule_kind: str          # "signal:<name>"
     signal_name: str
+    #: Il valore E' la Forza: la query legge `$.strength` dallo snapshot e
+    #: ricade su `$.confidence` solo per le righe pre-split. Il campo si chiama
+    #: ancora `confidence` perche' e' il nome sul quale e' costruita la
+    #: dataclass; `strength` qui sotto e' il nome vero e quello che va sul filo.
     confidence: float
     tone: str               # "bull" | "bear"
     horizon: str            # "short" | "medium" | "long"
     signal_date: str | None
+
+    @property
+    def strength(self) -> float:
+        """Forza, con il nome che porta ovunque nel resto del motore.
+
+        Il frontend era gia' scritto per la migrazione — dichiara `strength`
+        come primario e `confidence` come alias legacy — ma il campo non
+        veniva mai inviato, quindi quell'espressione stava permanentemente sul
+        ramo di ripiego mentre il suo commento affermava il contrario.
+        Pydantic scarta gli attributi non dichiarati, quindi bastava che
+        l'attributo non esistesse perche' sparisse in silenzio.
+        """
+        return self.confidence
 
 
 @dataclass
