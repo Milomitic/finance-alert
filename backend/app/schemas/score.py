@@ -126,3 +126,9 @@ class TechnicalScoreOut(BaseModel):
     signals: float | None = None
     posture: str
     computed_at: datetime
+    # Posizione del composite fra i pari di SETTORE (1 = il piu' forte), col
+    # denominatore accanto. Nessun percentile d'universo: `rel_strength` e'
+    # gia' misurata sull'intero catalogo, quindi sarebbe il percentile di un
+    # percentile. None se il titolo non ha settore o composite.
+    sector_rank: int | None = None
+    sector_peers: int | None = None

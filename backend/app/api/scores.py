@@ -47,6 +47,7 @@ from app.services import (
     score_service,
     stock_fundamentals_service,
     technical_score_service,
+    technical_sector_rank,
 )
 from app.services.scan_status import build_scan_status_out
 
@@ -280,6 +281,15 @@ def get_stock_technical(
         signals=ts.signals,
         posture=ts.posture,
         computed_at=ts.computed_at,
+        **dict(
+            zip(
+                ("sector_rank", "sector_peers"),
+                technical_sector_rank.sector_rank(
+                    db, ts.stock_id, stock.sector, ts.composite
+                ),
+                strict=True,
+            )
+        ),
     )
 
 
@@ -327,6 +337,15 @@ def recompute_stock_technical(
         signals=ts.signals,
         posture=ts.posture,
         computed_at=ts.computed_at,
+        **dict(
+            zip(
+                ("sector_rank", "sector_peers"),
+                technical_sector_rank.sector_rank(
+                    db, ts.stock_id, stock.sector, ts.composite
+                ),
+                strict=True,
+            )
+        ),
     )
 
 

@@ -68,6 +68,25 @@ export function StockTechnicalCard({ ticker }: { ticker: string | undefined }) {
                 {data.composite.toFixed(0)}
               </span>
               <span className="text-xs text-muted-foreground">/ 100 composito</span>
+              {/* Rango di SETTORE. Non c'e' un rango d'universo perche' la
+                  "Forza relativa" qui sotto e' gia' misurata su tutto il
+                  catalogo: sarebbe il percentile di un percentile. Questo dice
+                  un'altra cosa — un titolo puo' essere anonimo nell'universo e
+                  il piu' forte di un settore debole.
+                  Con un solo pari non e' una classifica e non la si mostra. */}
+              {data.sector_rank != null &&
+                data.sector_peers != null &&
+                data.sector_peers > 1 && (
+                  <span
+                    className="text-[0.7059rem] text-muted-foreground"
+                    title={`Posizione del composito tecnico fra i ${data.sector_peers} titoli del settore con un punteggio calcolato (1 = il più forte). La Forza relativa qui sotto è invece misurata sull'intero catalogo.`}
+                  >
+                    <span className="font-semibold text-foreground/80 tabular-nums">
+                      {data.sector_rank}ª
+                    </span>{" "}
+                    su {data.sector_peers} nel settore
+                  </span>
+                )}
               {data.signals != null && (
                 <span className="ml-auto self-center text-[0.7059rem] text-muted-foreground">
                   Segnale recente: confidenza{" "}

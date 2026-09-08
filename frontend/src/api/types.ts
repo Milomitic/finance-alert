@@ -1341,6 +1341,13 @@ export interface TechnicalScoreDetail {
   signals: number | null;
   posture: string;
   computed_at: string;
+  /** Posizione del composite fra i pari di SETTORE (1 = il piu' forte), col
+   *  denominatore accanto. Nessun percentile d'universo: `rel_strength` e' gia'
+   *  misurata sull'intero catalogo, quindi sarebbe il percentile di un
+   *  percentile. Il denominatore non e' ornamento — "1 su 1" non e' una
+   *  classifica, e solo il totale permette di dirlo. */
+  sector_rank?: number | null;
+  sector_peers?: number | null;
 }
 
 /** Point-in-time Information-Coefficient study of the Qualità pillars
