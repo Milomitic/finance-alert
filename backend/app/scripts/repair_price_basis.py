@@ -48,6 +48,7 @@ later, which is not a corporate action. Read the table before passing
 from __future__ import annotations
 
 import argparse
+from datetime import date, datetime, timedelta
 
 from loguru import logger
 from sqlalchemy import text
@@ -55,6 +56,118 @@ from sqlalchemy import text
 from app.core.db import SessionLocal
 from app.models import OhlcvDaily, Stock
 from app.services.ohlcv_service import _rebase_full_history, find_basis_breaks
+
+# Sotto questo rapporto di prezzo nessun verdetto automatico viene emesso: un
+# -80% in una seduta esiste (EYPT: x0.330), un -95% no. Vedi _source_verdict.
+_MIN_REAL_RATIO = 0.20
+# Quante volte il controvalore mediano deve salire perche' la giornata sia un
+# evento e non una riclassificazione. EYPT: x12.3. Uno split conserva i soldi.
+_TURNOVER_SPIKE = 4.0
+# Sedute di calendario prima della rottura su cui si calcola il controvalore
+# tipico. ~6 mesi: abbastanza da essere stabile, abbastanza vicino da essere
+# lo stesso titolo.
+_BASELINE_DAYS = 180
+
+
+def _as_date(value: object) -> date:
+    """The break date arrives as a `date` from Postgres and as a STRING from
+    SQLite, which store the column differently. Reading it as whatever it is
+    kept a `TypeError` hidden in production and visible only on the dev DB —
+    the reverse of the usual trap, and the reason this helper exists."""
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    return date.fromisoformat(str(value)[:10])
+
+
+def _source_verdict(ticker: str, when: object) -> str:
+    """Run CLAUDE.md's triage against the SOURCE and print what it found.
+
+    The decisive question is not "does yfinance declare a split" — it is
+    **does a fresh download still contain the break**. Verified on EYPT
+    (2026-09-08): yfinance applies declared splits to the price series even
+    with `auto_adjust=False`, checked against EYPT's own 1:10 of 2020-12-09,
+    where the series is continuous across the date (x0.871, ordinary noise)
+    while 2026-08-17 shows x0.330. So:
+
+      fresh download is CLEAN      -> our stored copy drifted from a healthy
+                                      source                      -> --apply
+      fresh REPRODUCES the break   -> the source has it too, and the money
+                                      says which kind:
+          dollar volume SPIKED     -> a real price move. DO NOT REPAIR; the
+                                      stored history is already correct and
+                                      --truncate would destroy good bars.
+          dollar volume ORDINARY   -> a 90% gap with no money changing hands
+                                      is not a price move. Bad data, and
+                                      neither repair mode may fit (see INDV).
+
+    That last discriminator is the one `find_basis_breaks` cannot apply: it
+    sees SHARE volume, where a split and a panic both go up. Turnover
+    separates them, because a split divides the same money into more shares.
+    EYPT traded $254M against a $20.7M median over the prior six months —
+    twelve times normal, a news event. KLAC's x0.097 came with x0.9 turnover,
+    which is a split.
+
+    Only the network call is caught, and a failure returns "?" rather than a
+    verdict — an unreachable source means unknown, never clean. Everything
+    after the fetch is arithmetic, and a fault there is a BUG that must be
+    loud: the first version of this function caught both and reported a
+    TypeError in its own code as "source unreachable".
+    """
+    day = _as_date(when)
+    try:
+        import yfinance as yf
+
+        hist = yf.Ticker(ticker).history(period="10y", auto_adjust=False)
+    except Exception as exc:  # noqa: BLE001 - qualunque guasto di rete = non lo sappiamo
+        return f"? sorgente non raggiungibile ({str(exc)[:40]})"
+
+    if hist.empty:
+        return "? la sorgente non ha restituito storico"
+
+    dates = [_as_date(i) for i in hist.index]
+    closes = [float(c) for c in hist["Close"]]
+    volumes = [float(v) if v == v else None for v in hist["Volume"]]
+    fresh = find_basis_breaks(dates, closes, volumes)
+
+    if not any(b.date == day for b in fresh):
+        return "download fresco PULITO su questa data -> --apply"
+
+    # La mediana si prende sulle sedute che PRECEDONO la rottura, non su tutti
+    # i dieci anni: il controvalore di un titolo cambia molto in un decennio, e
+    # un fondo di paragone lontano risponde a un'altra domanda. EYPT segna x12
+    # contro le sue ultime 6 sedute-mese e x186 contro la sua storia intera —
+    # stessa conclusione qui, ma non sarebbe sempre cosi'.
+    window_start = day - timedelta(days=_BASELINE_DAYS)
+    prior = [
+        c * v
+        for d, c, v in zip(dates, closes, volumes, strict=True)
+        if v is not None and window_start <= d < day
+    ]
+    on_day = [
+        c * v
+        for d, c, v in zip(dates, closes, volumes, strict=True)
+        if d == day and v is not None
+    ]
+    if not on_day or len(prior) < 40:
+        return "la sorgente riproduce la rottura; troppo poco storico prima per il test volumi"
+
+    median = sorted(prior)[len(prior) // 2]
+    mult = on_day[0] / median if median else 0.0
+    ratio = closes[dates.index(day)] / closes[dates.index(day) - 1] if dates.index(day) else 1.0
+    tail = f"la sorgente la riproduce; salto x{ratio:.3f}, $ scambiati x{mult:.1f}"
+
+    # Il volume da solo non basta, e SOXS e' il controesempio: x19.2 di
+    # controvalore su un salto x0.054. Un ETF a leva 3 che si azzera ogni
+    # giorno non puo' perdere il 94.6% in una seduta — servirebbe -31.5% sul
+    # sottostante. Sotto _MIN_REAL_RATIO nessun verdetto viene emesso: un
+    # salto simile non e' un prezzo, qualunque cosa dica il volume.
+    if ratio < _MIN_REAL_RATIO:
+        return f"{tail} -> salto troppo grande per un prezzo: indaga a mano"
+    if mult >= _TURNOVER_SPIKE:
+        return f"{tail} -> MOVIMENTO REALE, non riparare"
+    return f"{tail} -> volume ordinario su un salto grande: dati sbagliati, indaga"
 
 
 def scan(db, only: set[str] | None = None) -> list[tuple[Stock, list]]:
@@ -141,6 +254,11 @@ def main() -> None:
              "break the source itself reproduces (see SOXS in _truncate)",
     )
     ap.add_argument("--ticker", action="append", help="limit to these tickers")
+    ap.add_argument(
+        "--no-source-check",
+        action="store_true",
+        help="skip asking yfinance whether each flagged date is a real split",
+    )
     args = ap.parse_args()
 
     only = set(args.ticker) if args.ticker else None
@@ -161,6 +279,16 @@ def main() -> None:
                     f"{'x' + format(b.price_ratio, '.3f'):>10}{vr:>10}"
                     f"{format(b.matched_ratio, '.0f') + ':1':>9}"
                 )
+
+        if not args.no_source_check:
+            print()
+            print("verdetto della sorgente (una richiesta per rottura):")
+            for stock, breaks in found:
+                for b in breaks:
+                    print(f"  {stock.ticker:<10}{str(b.date):<12}{_source_verdict(stock.ticker, b.date)}")
+            print()
+            print("Un movimento reale NON va riparato: la storia archiviata e' gia' corretta,")
+            print("e --truncate distruggerebbe barre buone. Vedi la nota EYPT in CLAUDE.md.")
 
         if args.truncate:
             _truncate(db, found)

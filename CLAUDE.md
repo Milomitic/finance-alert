@@ -511,15 +511,53 @@ three-day glitch, and `--apply` reproduces it. Left alone deliberately.
 pair of opposite breaks close together is a data defect in the window between
 them, and wants a bar-level repair that does not exist yet.
 
-### EYPT: deferred on purpose, re-check it
+### EYPT: RESOLVED — there was never anything to repair (2026-09-08)
 
-EYPT breaks at 2026-08-17 (x0.330, volume x20.8) — the shape of a 3:1 forward
-split, but yfinance declares none, and truncating would leave **13 bars** of
-2,514. The break is recent, and Yahoo does sometimes apply a split adjustment
-to history days or weeks late. Destroying ten years for something the source
-may fix on its own is the wrong trade, so it waits. Re-run the read-only pass
-periodically: if the fresh download goes clean, `--apply` restores it properly;
-if the break is still there in a month or two, truncate then.
+It waited a month for Yahoo to apply a late split adjustment. Yahoo never did,
+because there was no split.
+
+**The decisive test, and it is not the one the triage above prescribes.**
+yfinance applies declared splits to the price series *even with*
+`auto_adjust=False`. Verified on EYPT's own declared 1:10 of 2020-12-09, where
+the series is continuous across the date (x0.871 — ordinary daily noise) while
+2026-08-17 shows x0.330. It follows that **a break which SURVIVES a fresh
+download cannot be an unadjusted split**: if it were, the source would already
+have absorbed it.
+
+**The second discriminator is the MONEY, not the shares.** A split divides the
+same turnover into more shares, so dollar volume on the day is ordinary. EYPT
+traded $254M against a $20.7M median over the prior six months — sixteen times
+normal, with +12% / +15% / -14% daily swings after it. That is a biotech news
+event, and the stored history is CORRECT. Truncating would have destroyed 2,501
+good bars to fix a defect that does not exist.
+
+`find_basis_breaks` cannot make this call: it sees SHARE volume, where a split
+and a panic both go up. Turnover separates them.
+
+**Both checks are now in `repair_price_basis` and print on every read-only
+run** — `_source_verdict`, one download per flagged break, `--no-source-check`
+to skip. It reproduces the hand triage recorded above (DD/FCIT.L "fresh clean
+-> --apply"; ARWR/KDP/INDV "source reproduces"). Three lessons are baked into
+it, each from a wrong first version:
+
+1. **Magnitude gates the verdict.** SOXS shows x0.054 with elevated turnover,
+   and the first version called it a real move. A 3x leveraged ETF that resets
+   daily cannot fall 94.6% in a session — it would need -31.5% on the
+   underlying. Below `_MIN_REAL_RATIO` (0.20) no automatic verdict is issued at
+   all. -67% happens; -95% does not.
+2. **The turnover baseline must be the sedute BEFORE the break, not the whole
+   history.** Against a 10-year median EYPT reads x186 and SOXS x19.2; against
+   the prior six months, x15.9 and **x1.6**. That reclassified SOXS from a
+   wrong "real move" to "investigate" — the baseline was not cosmetic.
+3. **Only the network call is caught.** The first version wrapped the
+   arithmetic too, and reported a `TypeError` in its own code as "source
+   unreachable". The bug: the break date is a `date` from Postgres and a
+   **string** from SQLite, so it was invisible in production and only broke on
+   the dev DB — the reverse of the usual trap. `_as_date` normalises it.
+
+INDV is unchanged by this and its verdict stands: two opposite breaks three
+sessions apart, x0.0 turnover on the first. Not a split, not a price move —
+corrupt bars, wanting a bar-level repair that does not exist.
 
 ## Catalog ticker rows — duplicates RESOLVED (2026-05)
 
