@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { Pause, Play, Trash2, AlertTriangle, AlertCircle, Info, Bug, Check, Copy, Filter, X } from "lucide-react";
 import type { LogRecord } from "@/api/platformHealth";
+import type { StreamedLog } from "@/hooks/usePlatformHealthStream";
 
 type Props = {
-  records: LogRecord[];
+  records: StreamedLog[];
   paused: boolean;
   onTogglePause: () => void;
   onClear: () => void;
@@ -49,6 +50,62 @@ function fmtRecord(r: LogRecord): string {
   return `${new Date(r.ts * 1000).toLocaleTimeString()} ${r.level} ${r.module} ${r.message}`;
 }
 
+/* Una riga, memoizzata.
+ *
+ * Lo stream apre un EventSource e chiama setLogs per OGNI messaggio che il
+ * backend emette, quindi questa lista si ridisegna in continuo mentre la
+ * pagina e' aperta. Senza memo ogni riga in arrivo ne ricalcola 500; con memo
+ * e una chiave stabile ne monta una sola e le altre 499 vengono saltate.
+ *
+ * Chiude su niente: LEVEL_*, fmtRecord e navigator sono tutti fuori dal
+ * componente, quindi `r` e' l'unica prop e il confronto superficiale di memo
+ * e' esatto — i record non vengono mai mutati sul posto, il buffer si
+ * ricostruisce con uno spread. */
+const LogRow = memo(function LogRow({ r }: { r: StreamedLog }) {
+  const Icon = LEVEL_ICON[r.level];
+  const bgClass = LEVEL_BG[r.level] ?? "";
+  const borderClass = bgClass ? "border-l-4" : "border-l-4 border-l-transparent";
+  return (
+    <div
+      className={`group flex items-start gap-3 px-5 py-1.5 ${borderClass} ${bgClass} hover:bg-muted/40 transition-colors`}
+    >
+      <span className="text-muted-foreground shrink-0 w-[80px] tabular-nums">
+        {new Date(r.ts * 1000).toLocaleTimeString()}
+      </span>
+      <span
+        className={`shrink-0 w-[100px] font-semibold inline-flex items-center gap-1 ${
+          LEVEL_TONE[r.level] ?? ""
+        }`}
+      >
+        {Icon && <Icon className="h-3.5 w-3.5 shrink-0" />}
+        {r.level}
+      </span>
+      {/* Colonna modulo nascosta sotto sm: su mobile 208px di
+          snake_case rubavano tutto lo spazio al messaggio (che
+          resta ispezionabile via title). */}
+      <span
+        className="text-muted-foreground shrink-0 w-52 truncate font-normal hidden sm:block"
+        title={r.module}
+      >
+        {r.module}
+      </span>
+      <span className="flex-1 break-all" title={r.module}>{r.message}</span>
+      {/* Copia riga — visibile solo al passaggio del mouse. */}
+      <button
+        type="button"
+        onClick={() => {
+          navigator.clipboard.writeText(fmtRecord(r)).catch(() => {});
+        }}
+        className="shrink-0 rounded p-0.5 text-muted-foreground opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-foreground transition-opacity"
+        title="Copia questa riga"
+        aria-label="Copia questa riga di log"
+      >
+        <Copy className="h-3.5 w-3.5" />
+      </button>
+    </div>
+  );
+});
+
 export default function LogStream({
   records,
   paused,
@@ -79,7 +136,7 @@ export default function LogStream({
   // record), so the underlying SSE buffer keeps filling in the background and
   // we instantly catch up on resume. The header's "in buffer" count stays live
   // off `records`, so it's clear the stream is still receiving while paused.
-  const [frozen, setFrozen] = useState<LogRecord[] | null>(null);
+  const [frozen, setFrozen] = useState<StreamedLog[] | null>(null);
   useEffect(() => {
     setFrozen(paused ? records : null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -263,51 +320,9 @@ export default function LogStream({
             Nessun log corrisponde ai filtri.
           </div>
         )}
-        {filtered.map((r, i) => {
-          const Icon = LEVEL_ICON[r.level];
-          const bgClass = LEVEL_BG[r.level] ?? "";
-          const borderClass = bgClass ? "border-l-4" : "border-l-4 border-l-transparent";
-          return (
-            <div
-              key={`${r.ts}-${i}`}
-              className={`group flex items-start gap-3 px-5 py-1.5 ${borderClass} ${bgClass} hover:bg-muted/40 transition-colors`}
-            >
-              <span className="text-muted-foreground shrink-0 w-[80px] tabular-nums">
-                {new Date(r.ts * 1000).toLocaleTimeString()}
-              </span>
-              <span
-                className={`shrink-0 w-[100px] font-semibold inline-flex items-center gap-1 ${
-                  LEVEL_TONE[r.level] ?? ""
-                }`}
-              >
-                {Icon && <Icon className="h-3.5 w-3.5 shrink-0" />}
-                {r.level}
-              </span>
-              {/* Colonna modulo nascosta sotto sm: su mobile 208px di
-                  snake_case rubavano tutto lo spazio al messaggio (che
-                  resta ispezionabile via title). */}
-              <span
-                className="text-muted-foreground shrink-0 w-52 truncate font-normal hidden sm:block"
-                title={r.module}
-              >
-                {r.module}
-              </span>
-              <span className="flex-1 break-all" title={r.module}>{r.message}</span>
-              {/* Copia riga — visibile solo al passaggio del mouse. */}
-              <button
-                type="button"
-                onClick={() => {
-                  navigator.clipboard.writeText(fmtRecord(r)).catch(() => {});
-                }}
-                className="shrink-0 rounded p-0.5 text-muted-foreground opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-foreground transition-opacity"
-                title="Copia questa riga"
-                aria-label="Copia questa riga di log"
-              >
-                <Copy className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          );
-        })}
+        {filtered.map((r) => (
+          <LogRow key={r.seq} r={r} />
+        ))}
       </div>
     </section>
   );
