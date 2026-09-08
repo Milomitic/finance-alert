@@ -48,14 +48,18 @@ later, which is not a corporate action. Read the table before passing
 from __future__ import annotations
 
 import argparse
-from datetime import date, datetime, timedelta
+from datetime import timedelta
 
 from loguru import logger
 from sqlalchemy import text
 
 from app.core.db import SessionLocal
 from app.models import OhlcvDaily, Stock
-from app.services.ohlcv_service import _rebase_full_history, find_basis_breaks
+from app.services.ohlcv_service import (
+    _rebase_full_history,
+    as_date,
+    find_basis_breaks,
+)
 
 # Sotto questo rapporto di prezzo nessun verdetto automatico viene emesso: un
 # -80% in una seduta esiste (EYPT: x0.330), un -95% no. Vedi _source_verdict.
@@ -67,18 +71,6 @@ _TURNOVER_SPIKE = 4.0
 # tipico. ~6 mesi: abbastanza da essere stabile, abbastanza vicino da essere
 # lo stesso titolo.
 _BASELINE_DAYS = 180
-
-
-def _as_date(value: object) -> date:
-    """The break date arrives as a `date` from Postgres and as a STRING from
-    SQLite, which store the column differently. Reading it as whatever it is
-    kept a `TypeError` hidden in production and visible only on the dev DB —
-    the reverse of the usual trap, and the reason this helper exists."""
-    if isinstance(value, datetime):
-        return value.date()
-    if isinstance(value, date):
-        return value
-    return date.fromisoformat(str(value)[:10])
 
 
 def _source_verdict(ticker: str, when: object) -> str:
@@ -115,7 +107,7 @@ def _source_verdict(ticker: str, when: object) -> str:
     loud: the first version of this function caught both and reported a
     TypeError in its own code as "source unreachable".
     """
-    day = _as_date(when)
+    day = as_date(when)
     try:
         import yfinance as yf
 
@@ -126,7 +118,7 @@ def _source_verdict(ticker: str, when: object) -> str:
     if hist.empty:
         return "? la sorgente non ha restituito storico"
 
-    dates = [_as_date(i) for i in hist.index]
+    dates = [as_date(i) for i in hist.index]
     closes = [float(c) for c in hist["Close"]]
     volumes = [float(v) if v == v else None for v in hist["Volume"]]
     fresh = find_basis_breaks(dates, closes, volumes)

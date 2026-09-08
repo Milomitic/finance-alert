@@ -1,7 +1,7 @@
 """Fetch OHLCV from yfinance and upsert into ohlcv_daily."""
 import math
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any
 
 import pandas as pd
@@ -151,6 +151,86 @@ class BasisBreak:
     price_ratio: float
     volume_ratio: float | None
     matched_ratio: float
+
+
+def as_date(value: object) -> date:
+    """Normalise a stored date to a `date`.
+
+    Postgres hands the column back as a `date` and SQLite as a STRING, so code
+    that reads it as whatever it is works in production and breaks only on the
+    dev DB — the reverse of the usual trap, and how a `TypeError` first reached
+    a user-facing message dressed up as "source unreachable" (2026-09-08).
+    """
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    return date.fromisoformat(str(value)[:10])
+
+
+@dataclass(frozen=True)
+class BarQuality:
+    """How much of a stored series is real market data, and from when."""
+
+    total: int
+    untraded: int
+    flat: int
+    clean_from: date | None
+    clean_bars: int
+
+
+def assess_bar_quality(
+    dates: list[date],
+    opens: list[float | None],
+    highs: list[float | None],
+    lows: list[float | None],
+    closes: list[float],
+    volumes: list[float | None],
+) -> BarQuality:
+    """Separate bars that were TRADED from bars that merely have a price.
+
+    `find_basis_breaks` above answers "did the basis change". This answers a
+    prior question it cannot: "was there a market here at all". A zero-volume
+    bar means no trade occurred, so whatever sits in `close` was carried over
+    from the last session that had one — a number, but not a price anyone paid.
+
+    WHY VOLUME AND NOT FLATNESS. A real illiquid session can print
+    o==h==l==c and still be honest: one price, but trades behind it. In INDV's
+    history all 562 zero-volume bars are also flat, while 524 flat bars carry
+    genuine volume; using flatness as the marker would condemn those 524 on
+    suspicion. `flat` is reported because it is informative, and it is not what
+    the cut is made on.
+
+    `clean_from` is the start of the TRAILING run with no untraded bars, not
+    the longest run anywhere. A long clean stretch in 2017 is worth nothing if
+    2023 is broken: what a repair keeps is the tail.
+
+    Reading the two numbers together is the whole point, and INDV is the worked
+    example. 562 untraded bars out of 2,583 could mean scattered damage; it
+    does not, because `clean_bars` is 672 — every one of them sits in a prefix
+    that ends when Indivior moved its primary listing to Nasdaq in 2024. A
+    short `clean_bars` beside a small `untraded` says the opposite: damage is
+    spread thin, and dropping those bars beats cutting the series.
+    """
+    total = len(dates)
+    untraded_idx = [i for i, v in enumerate(volumes) if not v]
+    flat = sum(
+        1
+        for o, h, low, c in zip(opens, highs, lows, closes, strict=True)
+        if o is not None and h is not None and low is not None and o == h == low == c
+    )
+
+    if total == 0:
+        return BarQuality(0, 0, 0, None, 0)
+    if not untraded_idx:
+        return BarQuality(total, 0, flat, dates[0], total)
+
+    start = untraded_idx[-1] + 1
+    if start >= total:
+        return BarQuality(total, len(untraded_idx), flat, None, 0)
+    return BarQuality(
+        total, len(untraded_idx), flat, dates[start], total - start
+    )
 
 
 def _near_split_ratio(ratio: float) -> float | None:
