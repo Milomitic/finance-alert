@@ -449,11 +449,15 @@ export function AlertFilters({ value, onChange }: Props) {
         {/* Forza minima — number input 0-100. Drives the API `strength_min`
             param. */}
         <div>
-          <Label className="text-xs uppercase tracking-wider text-muted-foreground">
+          <Label
+            htmlFor="alert-strength-min"
+            className="text-xs uppercase tracking-wider text-muted-foreground"
+          >
             Forza minima
           </Label>
-          <div className="mt-1 inline-flex items-center gap-1.5 h-9 px-2 rounded border border-input w-full">
+          <div className="mt-1 inline-flex items-center gap-1.5 h-9 px-2 rounded border border-input w-full focus-within:ring-1 focus-within:ring-ring">
             <input
+              id="alert-strength-min"
               type="number"
               min={0}
               max={100}
@@ -494,31 +498,39 @@ export function AlertFilters({ value, onChange }: Props) {
         {period === "custom" && (
           <div className="flex items-end gap-3 flex-wrap">
             <div>
-              <Label className="text-xs uppercase tracking-wider text-muted-foreground">
+              <Label
+                htmlFor="alert-date-from"
+                className="text-xs uppercase tracking-wider text-muted-foreground"
+              >
                 Dal
               </Label>
               <input
+                id="alert-date-from"
                 type="date"
                 value={value.date_from ?? ""}
                 max={value.date_to ?? undefined}
                 onChange={(e) =>
                   onChange({ ...value, date_from: e.target.value || undefined })
                 }
-                className="mt-1 block h-9 px-2 rounded border border-input bg-transparent text-sm tabular-nums focus:outline-none"
+                className="mt-1 block h-9 px-2 rounded border border-input bg-transparent text-sm tabular-nums focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               />
             </div>
             <div>
-              <Label className="text-xs uppercase tracking-wider text-muted-foreground">
+              <Label
+                htmlFor="alert-date-to"
+                className="text-xs uppercase tracking-wider text-muted-foreground"
+              >
                 Al
               </Label>
               <input
+                id="alert-date-to"
                 type="date"
                 value={value.date_to ?? ""}
                 min={value.date_from ?? undefined}
                 onChange={(e) =>
                   onChange({ ...value, date_to: e.target.value || undefined })
                 }
-                className="mt-1 block h-9 px-2 rounded border border-input bg-transparent text-sm tabular-nums focus:outline-none"
+                className="mt-1 block h-9 px-2 rounded border border-input bg-transparent text-sm tabular-nums focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               />
             </div>
             <span className="text-xs text-muted-foreground italic pb-2">

@@ -137,6 +137,7 @@ function StyleEditor({
         <span className="text-sm">Custom:</span>
         <input
           type="color"
+          aria-label="Colore personalizzato della linea"
           value={style.color}
           onChange={(e) => onChange({ ...style, color: e.target.value })}
           className="h-7 w-12 cursor-pointer rounded border"
@@ -148,6 +149,7 @@ function StyleEditor({
       <div className="flex items-center gap-2 mb-1">
         <input
           type="range"
+          aria-label="Spessore della linea"
           min={1} max={4} step={1}
           value={style.width}
           onChange={(e) => onChange({ ...style, width: Number(e.target.value) })}

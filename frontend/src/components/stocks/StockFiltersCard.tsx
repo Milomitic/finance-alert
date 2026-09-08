@@ -207,12 +207,13 @@ function PresetsMenu({
           <input
             type="text"
             value={name}
+            aria-label="Nome del preset da salvare"
             onChange={(e) => setName(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter") save();
             }}
             placeholder="Nome preset…"
-            className="flex-1 h-8 px-2 text-sm rounded border border-input bg-transparent focus:outline-none"
+            className="flex-1 h-8 px-2 text-sm rounded border border-input bg-transparent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           />
           <Button size="sm" className="h-8 text-xs" onClick={save} disabled={!name.trim()}>
             Salva
@@ -336,13 +337,14 @@ function PillarInput({
   return (
     <div className="flex items-center gap-1.5">
       <span className="text-xs text-muted-foreground w-28 shrink-0">{label}</span>
-      <div className="inline-flex items-center gap-1 h-7 px-1.5 rounded border border-input">
+      <div className="inline-flex items-center gap-1 h-7 px-1.5 rounded border border-input focus-within:ring-1 focus-within:ring-ring">
         <span className="text-xs text-muted-foreground">≥</span>
         <input
           type="number"
           min={0}
           max={100}
           step={5}
+          aria-label={`${label} minimo`}
           placeholder="—"
           value={value ?? ""}
           onChange={(e) => {
@@ -397,11 +399,12 @@ function NumberRange({
   const inputCls =
     "bg-transparent text-sm tabular-nums focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none";
   return (
-    <div className="inline-flex items-center gap-1 h-9 px-2 rounded border border-input">
+    <div className="inline-flex items-center gap-1 h-9 px-2 rounded border border-input focus-within:ring-1 focus-within:ring-ring">
       <span className="text-xs text-muted-foreground">{label}</span>
       <input
         type="number"
         step={step}
+        aria-label={`${label} minimo`}
         placeholder={minPlaceholder}
         value={min ?? ""}
         onChange={(e) => parse(e.target.value, onMinChange)}
@@ -411,6 +414,7 @@ function NumberRange({
       <input
         type="number"
         step={step}
+        aria-label={`${label} massimo`}
         placeholder={maxPlaceholder}
         value={max ?? ""}
         onChange={(e) => parse(e.target.value, onMaxChange)}
@@ -709,7 +713,7 @@ export function StockFiltersCard({ state, onChange, filters }: Props) {
           >
             <div className="flex items-center gap-2 flex-wrap">
               {/* Composite score range: min + max inline. */}
-              <div className="inline-flex items-center gap-1 h-9 px-2 rounded border border-input">
+              <div className="inline-flex items-center gap-1 h-9 px-2 rounded border border-input focus-within:ring-1 focus-within:ring-ring">
                 <span className="text-xs text-muted-foreground">Score</span>
                 <input
                   type="number"
@@ -717,6 +721,7 @@ export function StockFiltersCard({ state, onChange, filters }: Props) {
                   max={100}
                   step={5}
                   placeholder="min"
+                  aria-label="Score minimo"
                   value={state.minScore ?? ""}
                   onChange={(e) => {
                     const raw = e.target.value;
@@ -733,6 +738,7 @@ export function StockFiltersCard({ state, onChange, filters }: Props) {
                   max={100}
                   step={5}
                   placeholder="max"
+                  aria-label="Score massimo"
                   value={state.scoreMax ?? ""}
                   onChange={(e) => {
                     const raw = e.target.value;
@@ -810,7 +816,7 @@ export function StockFiltersCard({ state, onChange, filters }: Props) {
             onToggle={() => toggleArea("tecnici")}
           >
             <div className="flex items-center gap-2 flex-wrap">
-              <div className="inline-flex items-center gap-1 h-9 px-2 rounded border border-input">
+              <div className="inline-flex items-center gap-1 h-9 px-2 rounded border border-input focus-within:ring-1 focus-within:ring-ring">
                 <span className="text-xs text-muted-foreground">Tecnico</span>
                 <input
                   type="number"
@@ -818,6 +824,7 @@ export function StockFiltersCard({ state, onChange, filters }: Props) {
                   max={100}
                   step={5}
                   placeholder="min"
+                  aria-label="Punteggio tecnico minimo"
                   value={state.techMin ?? ""}
                   onChange={(e) => {
                     const raw = e.target.value;
@@ -828,7 +835,7 @@ export function StockFiltersCard({ state, onChange, filters }: Props) {
                   className="w-10 bg-transparent text-sm tabular-nums focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                 />
               </div>
-              <div className="inline-flex items-center gap-1 h-9 px-2 rounded border border-input">
+              <div className="inline-flex items-center gap-1 h-9 px-2 rounded border border-input focus-within:ring-1 focus-within:ring-ring">
                 <span className="text-xs text-muted-foreground">Postura</span>
                 {(["Forte", "Neutro", "Debole"] as const).map((pp) => {
                   const on = state.postures.includes(pp);
@@ -860,7 +867,7 @@ export function StockFiltersCard({ state, onChange, filters }: Props) {
               <ToggleChip label="vicino min 52s" active={state.near52wLow} onToggle={() => set({ near52wLow: !state.near52wLow })} />
               {/* "Con segnali" con finestra di recenza — pill group come la
                   Postura. Cliccare la finestra attiva la spegne (toggle). */}
-              <div className="inline-flex items-center gap-1 h-9 px-2 rounded border border-input">
+              <div className="inline-flex items-center gap-1 h-9 px-2 rounded border border-input focus-within:ring-1 focus-within:ring-ring">
                 <span className="text-xs text-muted-foreground">Segnali</span>
                 {SIGNAL_WINDOW_OPTIONS.map((opt) => {
                   const on = state.signalsWithinDays === opt.days;
@@ -909,13 +916,14 @@ export function StockFiltersCard({ state, onChange, filters }: Props) {
               <ToggleChip label="vol spike >2×" active={state.volSpike} onToggle={() => set({ volSpike: !state.volSpike })} />
               {/* Soglia continua Vol× — la sorella regolabile del preset
                   vol spike (>2×): es. 1.5 = volume ≥ 1.5× la media 20g. */}
-              <div className="inline-flex items-center gap-1 h-9 px-2 rounded border border-input">
+              <div className="inline-flex items-center gap-1 h-9 px-2 rounded border border-input focus-within:ring-1 focus-within:ring-ring">
                 <span className="text-xs text-muted-foreground">Vol× ≥</span>
                 <input
                   type="number"
                   min={0}
                   step={0.5}
                   placeholder="—"
+                  aria-label="Rapporto volume minimo"
                   value={state.volRatioMin ?? ""}
                   onChange={(e) => {
                     const raw = e.target.value;
@@ -927,13 +935,14 @@ export function StockFiltersCard({ state, onChange, filters }: Props) {
                 />
               </div>
               {/* Volume min (share count). Wide-ish single input. */}
-              <div className="inline-flex items-center gap-1 h-9 px-2 rounded border border-input">
+              <div className="inline-flex items-center gap-1 h-9 px-2 rounded border border-input focus-within:ring-1 focus-within:ring-ring">
                 <span className="text-xs text-muted-foreground">Vol min</span>
                 <input
                   type="number"
                   min={0}
                   step={100000}
                   placeholder="azioni"
+                  aria-label="Volume minimo in azioni"
                   value={state.volumeMin ?? ""}
                   onChange={(e) => {
                     const raw = e.target.value;

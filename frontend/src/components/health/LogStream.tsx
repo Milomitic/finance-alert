@@ -205,6 +205,7 @@ export default function LogStream({
           </select>
           <input
             type="text"
+            aria-label="Filtra per modulo"
             placeholder="Modulo"
             value={moduleFilter}
             onChange={(e) => setModuleFilter(e.target.value)}
@@ -212,6 +213,7 @@ export default function LogStream({
           />
           <input
             type="text"
+            aria-label="Cerca nel testo dei log"
             placeholder="Cerca testo…"
             value={searchFilter}
             onChange={(e) => setSearchFilter(e.target.value)}
