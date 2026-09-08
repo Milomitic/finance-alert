@@ -499,17 +499,44 @@ Six down to two. Always back the rows up first — `\copy (...) TO STDOUT` piped
 to a local file; the pg pod's filesystem is read-only, so a server-side path
 fails.
 
-### Two breaks that REVERSE within days are bad data, not a split (INDV)
+### INDV: RESOLVED — 1,765 bars that were never traded (2026-09-08)
 
-INDV shows x0.159 on 2022-11-23 and x6.719 on 2022-11-28 — down ~6x, back up
-~6x, three sessions apart, and `volume_ratio` is null on both. No corporate
-action does that. It is a handful of corrupt bars, and **neither repair mode
-fits**: `--truncate` at the first break would delete 1,635 rows (6 years) for a
-three-day glitch, and `--apply` reproduces it. Left alone deliberately.
+The note here read: two opposite breaks close together are a data defect in the
+window between them, wanting a bar-level repair that does not exist yet. The
+first half is right. The second was wrong about the SIZE, and building the
+repair is what showed it.
 
-**The discriminator to remember:** a real split is a ONE-WAY basis change. A
-pair of opposite breaks close together is a data defect in the window between
-them, and wants a bar-level repair that does not exist yet.
+    2016-2023   1,911 bars   36-89% with o==h==l==c   14-52% at zero volume
+    2024-2026     672 bars              0%                       0%
+
+Indivior moved its primary listing to Nasdaq. Everything before is a thin
+secondary line where the price was CARRIED rather than observed, and the
+November 2022 pair is that line's most visible artifact, not the defect.
+Deleting three days would have left 1,908 bars of the same provenance.
+
+Truncated at 2023-06-02, the start of the trailing run with no untraded bars:
+-1,765 rows, 818 left (above the 200 `has_full_data` floor). Both detectors
+now report INDV clean. Backup:
+`backend/data/basis-repair-backups/INDV_pre_2023-06-02.csv`.
+
+**The general rule this leaves behind: bar COUNT is the wrong objective.**
+Dropping INDV's untraded bars costs 562 and truncating costs 1,765 — the
+cheaper option loses three times fewer bars and leaves 1,203 of them 61% flat.
+What matters is whether what remains is a coherent record.
+
+`assess_bar_quality` + `app.scripts.repair_bar_quality` (read-only by default,
+`--drop-untraded` for scattered damage, `--truncate-to-clean` for a bad
+prefix). The marker is zero VOLUME, never a flat bar: a real illiquid session
+can print o==h==l==c honestly, and 524 of INDV's flat bars carry genuine
+volume.
+
+⚠️ **The catalogue-wide scan found 267 tickers holding 9,216 untraded bars** —
+about a quarter of the universe, invisible until now because `find_basis_breaks`
+only fires on ~3x jumps and a carried price rarely makes one. 161 want
+`--drop-untraded` (scattered), 93 want it because their clean tail is under 200
+bars, 13 look like INDV. Worst: FER 1,619, SW 1,112, FERG 726, EDV.L 619,
+AMCR 596, CLSK 395. **NOT applied** — that is a destructive change across 267
+tickers and it needs a decision, not an agent's initiative.
 
 ### EYPT: RESOLVED — there was never anything to repair (2026-09-08)
 
