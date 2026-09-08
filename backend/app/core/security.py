@@ -38,4 +38,7 @@ def read_session_token(token: str, max_age_seconds: int | None = None) -> str | 
         raise ValueError("Session expired") from e
     except BadSignature:
         return None
-    return data.get("u")
+    if not isinstance(data, dict):
+        return None
+    username = data.get("u")
+    return username if isinstance(username, str) and 0 < len(username) <= 64 else None

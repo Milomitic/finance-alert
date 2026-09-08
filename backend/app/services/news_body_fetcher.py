@@ -26,8 +26,8 @@ gets us 80% of the value at 0% of the dependency cost.
 
 Quota / quality guards
 ──────────────────────
-- 5s timeout per URL — analyst articles aren't worth blocking on.
-- 8s circuit breaker after 3 consecutive failures on a domain
+- 5s network budget per URL (OS DNS resolution uses its own timeout).
+- 15-minute circuit breaker after 3 consecutive failures on a domain
   (paywall / anti-bot guard) to avoid wasting budget hammering hosts
   that won't give us anything.
 - Per-URL cache (24h TTL): articles don't change post-publication,
@@ -47,11 +47,14 @@ from __future__ import annotations
 import datetime as _dt
 import re
 import threading
+from collections import OrderedDict
 from html import unescape
 from urllib.parse import urlparse
 
-import requests
 from loguru import logger
+from urllib3.exceptions import HTTPError
+
+from app.core.public_http import fetch_public_text
 
 _TIMEOUT = 5.0
 _MAX_BYTES = 200 * 1024  # 200 KB hard cap on body length
@@ -87,11 +90,26 @@ _HOST_FAIL_THRESHOLD = 3
 _HOST_BLOCK_DURATION = _dt.timedelta(minutes=15)
 
 # Per-URL response cache. Articles are immutable after publication,
-# so a 24h cache is comfortable; the dict stays bounded by the
-# number of articles linked from L1-cached news payloads (~hundreds).
-_BODY_CACHE: dict[str, tuple[_dt.datetime, str | None]] = {}
+# so a 24h cache is comfortable. Explicit LRU capacity also bounds dead URLs,
+# including negative cache entries, across a long-lived cloud process.
+_BODY_CACHE: OrderedDict[str, tuple[_dt.datetime, str | None]] = OrderedDict()
+_MAX_CACHE_ENTRIES = 128
+_MAX_TRACKED_HOSTS = 128
+_FETCH_SLOTS = threading.BoundedSemaphore(4)
 _BODY_TTL = _dt.timedelta(hours=24)
 _CACHE_LOCK = threading.Lock()
+
+
+def _cache_body(url: str, body: str | None) -> None:
+    now = _dt.datetime.now(_dt.UTC)
+    with _CACHE_LOCK:
+        expired = [key for key, (ts, _) in _BODY_CACHE.items() if now - ts >= _BODY_TTL]
+        for key in expired:
+            del _BODY_CACHE[key]
+        _BODY_CACHE[url] = (now, body)
+        _BODY_CACHE.move_to_end(url)
+        while len(_BODY_CACHE) > _MAX_CACHE_ENTRIES:
+            _BODY_CACHE.popitem(last=False)
 
 
 def _host_blocked(host: str) -> bool:
@@ -109,6 +127,10 @@ def _host_blocked(host: str) -> bool:
 
 
 def _record_host_failure(host: str) -> None:
+    if host not in _HOST_FAIL_COUNT and len(_HOST_FAIL_COUNT) >= _MAX_TRACKED_HOSTS:
+        oldest = next(iter(_HOST_FAIL_COUNT))
+        _HOST_FAIL_COUNT.pop(oldest, None)
+        _HOST_BLOCKED_UNTIL.pop(oldest, None)
     n = _HOST_FAIL_COUNT.get(host, 0) + 1
     _HOST_FAIL_COUNT[host] = n
     if n >= _HOST_FAIL_THRESHOLD:
@@ -164,7 +186,7 @@ def fetch_article_body(url: str | None) -> str | None:
     Production callers should treat this as best-effort — the
     extractor must still work when None is returned. Errors are
     logged at DEBUG level (high-volume; INFO would spam)."""
-    if not url:
+    if not url or len(url) > 4096 or any(ord(c) <= 32 or ord(c) == 127 for c in url):
         return None
 
     # Cache check first — articles don't mutate post-publication.
@@ -172,11 +194,13 @@ def fetch_article_body(url: str | None) -> str | None:
     with _CACHE_LOCK:
         cached = _BODY_CACHE.get(url)
         if cached is not None and (now - cached[0]) < _BODY_TTL:
+            _BODY_CACHE.move_to_end(url)
             return cached[1]
+        _BODY_CACHE.pop(url, None)
 
     try:
         parsed = urlparse(url)
-        host = (parsed.netloc or "").lower()
+        host = (parsed.hostname or "").lower().rstrip(".")
     except ValueError:
         return None
     if not host:
@@ -185,78 +209,38 @@ def fetch_article_body(url: str | None) -> str | None:
     # Skip known paywalled domains — fetching is just burning a
     # 5-second timeout for nothing.
     if host in _PAYWALL_HOSTS:
-        with _CACHE_LOCK:
-            _BODY_CACHE[url] = (now, None)
+        _cache_body(url, None)
         return None
 
     # Per-host circuit breaker.
-    if _host_blocked(host):
+    with _CACHE_LOCK:
+        blocked = _host_blocked(host)
+    if blocked or not _FETCH_SLOTS.acquire(blocking=False):
         return None
 
     try:
-        resp = requests.get(
-            url,
-            headers={
-                "User-Agent": _USER_AGENT,
-                "Accept": "text/html,application/xhtml+xml,*/*;q=0.8",
-                "Accept-Language": "en-US,en;q=0.9",
-            },
-            timeout=_TIMEOUT,
-            allow_redirects=True,
-            # Stream so we can cap at _MAX_BYTES without downloading a
-            # 10 MB attachment in full.
-            stream=True,
+        raw_html = fetch_public_text(
+            url, max_bytes=_MAX_BYTES, timeout=_TIMEOUT, user_agent=_USER_AGENT,
         )
-    except requests.RequestException as e:
-        logger.debug(f"[news_body] {host} fetch failed: {e}")
-        _record_host_failure(host)
-        with _CACHE_LOCK:
-            _BODY_CACHE[url] = (now, None)
-        return None
-
-    try:
-        if resp.status_code != 200:
-            logger.debug(f"[news_body] {host} HTTP {resp.status_code} for {url}")
-            _record_host_failure(host)
-            with _CACHE_LOCK:
-                _BODY_CACHE[url] = (now, None)
-            return None
-        ctype = resp.headers.get("Content-Type", "").lower()
-        if "html" not in ctype and "text" not in ctype:
-            # Probably a PDF / image — not interesting.
-            return None
-        # Stream-read up to MAX_BYTES bytes.
-        chunks: list[bytes] = []
-        total = 0
-        for chunk in resp.iter_content(chunk_size=8192):
-            if not chunk:
-                continue
-            chunks.append(chunk)
-            total += len(chunk)
-            if total >= _MAX_BYTES:
-                break
-        try:
-            raw_html = b"".join(chunks).decode(
-                resp.encoding or "utf-8", errors="replace"
-            )
-        except (LookupError, UnicodeDecodeError):
-            raw_html = b"".join(chunks).decode("utf-8", errors="replace")
         text = _html_to_text(raw_html)
-        _record_host_success(host)
         with _CACHE_LOCK:
-            _BODY_CACHE[url] = (now, text or None)
+            _record_host_success(host)
+        _cache_body(url, text or None)
         return text or None
+    except (HTTPError, OSError, ValueError) as exc:
+        # Exception messages may contain credentials/query strings from URLs.
+        logger.debug(f"[news_body] {host} fetch failed: {type(exc).__name__}")
+        with _CACHE_LOCK:
+            _record_host_failure(host)
+        _cache_body(url, None)
+        return None
     finally:
-        # Stream connections must be closed to free the socket.
-        try:
-            resp.close()
-        except Exception:  # noqa: BLE001
-            pass
+        _FETCH_SLOTS.release()
 
 
 def _clear_caches_for_tests() -> None:
     """Reset all internal state. Tests use this to isolate fetches."""
     with _CACHE_LOCK:
         _BODY_CACHE.clear()
-    _HOST_FAIL_COUNT.clear()
-    _HOST_BLOCKED_UNTIL.clear()
+        _HOST_FAIL_COUNT.clear()
+        _HOST_BLOCKED_UNTIL.clear()

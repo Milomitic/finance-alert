@@ -319,6 +319,8 @@ def get_quotes_batch(
         .scalars().all()
     )
     valid = [t for t in requested if t in known]
+    # Catalog reads are complete; release SQL capacity before upstream I/O.
+    db.close()
     quotes_map = live_quote_service.get_quotes_batch(valid)
     return LiveQuotesBatchOut(
         quotes=[LiveQuoteOut(**quotes_map[t].__dict__) for t in valid if t in quotes_map],
@@ -799,6 +801,7 @@ def get_stock_quote(
     ).scalars().first()
     if exists is None:
         raise HTTPException(status_code=404, detail=f"Ticker not found: {ticker}")
+    db.close()
     q = live_quote_service.get_quote(ticker)
     return LiveQuoteOut(**q.__dict__)
 

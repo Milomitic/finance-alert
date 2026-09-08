@@ -17,16 +17,12 @@ deliberate. Marketaux allows 100 calls a DAY and is routinely exhausted by
 mid-morning; spending an unlimited source first keeps that tiny budget for the
 cases this one misses.
 
-No new dependency: the payload is small, flat RSS 2.0, parsed with the
-standard library. `defusedxml` would be the right call for untrusted XML, but
-this is a fixed, well-known endpoint over TLS, and adding a dependency to the
-production image for one parser is a worse trade than disabling the two ElementTree
-features that make XML dangerous — see `_parse` below.
+External RSS remains untrusted even over TLS. The parser rejects DTDs,
+entities and external references explicitly, as does the SEC XML importer.
 """
 from __future__ import annotations
 
 import time
-import xml.etree.ElementTree as ET  # noqa: S405 — hardened at the parser, see _parse
 from dataclasses import dataclass
 from datetime import UTC
 from email.utils import parsedate_to_datetime
@@ -34,6 +30,8 @@ from threading import Lock
 from urllib.parse import quote
 
 import httpx
+from defusedxml import ElementTree
+from defusedxml.common import DefusedXmlException
 from loguru import logger
 
 from app.core.errors import UpstreamTimeout, UpstreamUnavailable
@@ -92,16 +90,8 @@ def _parse_date(raw: str | None) -> str | None:
 
 
 def _parse(xml_text: str) -> list[NewsItem]:
-    """RSS 2.0 to items.
-
-    Hardened where it matters: entity expansion is what makes XML parsing
-    dangerous (the billion-laughs class), and ElementTree's default parser has
-    no DTD processing and no external entity resolution, so the remaining
-    exposure is a malformed document — handled by the caller's ParseError
-    branch. Anything unparseable yields an empty list rather than a partial
-    one, because half a news list is indistinguishable from a short one.
-    """
-    root = ET.fromstring(xml_text)  # noqa: S314 — see docstring
+    """RSS 2.0 to items, rejecting DTD/entity payloads before expansion."""
+    root = ElementTree.fromstring(xml_text, forbid_dtd=True)
     out: list[NewsItem] = []
     for item in root.iter("item"):
         title = (item.findtext("title") or "").strip()
@@ -155,7 +145,7 @@ def fetch_company_news(ticker: str, *, limit: int = 15) -> list[NewsItem]:
     try:
         xml_text = _get(ticker)
         items = _parse(xml_text)
-    except ET.ParseError as exc:
+    except (ElementTree.ParseError, DefusedXmlException) as exc:
         # The failure yfinance's own news path hides: a non-XML body (an error
         # page, a consent wall) is a FAILURE, not an empty result. Recorded as
         # one so the health page cannot report coverage it does not have.

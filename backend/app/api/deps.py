@@ -21,8 +21,9 @@ def get_db() -> Iterator[Session]:
 
 def get_current_user(
     request: Request,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
 ) -> User:
+    # Release the authentication connection before sending an SSE response.
     token = request.cookies.get(settings.session_cookie_name)
     if not token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
@@ -37,6 +38,10 @@ def get_current_user(
     user = db.execute(select(User).where(User.username == username)).scalar_one_or_none()
     if user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+    # This function-scoped session is distinct from a route's request-scoped
+    # get_db dependency. Return the loaded user detached so a subsequent slow
+    # provider call does not reserve even the authentication connection.
+    db.close()
     return user
 
 
@@ -61,7 +66,12 @@ def require_json(request: Request) -> None:
     so a forged form POST still lands in the 415 branch below.
     """
     if request.method in {"POST", "PATCH", "PUT", "DELETE"}:
-        ctype = request.headers.get("content-type", "").split(";")[0].strip()
+        if request.headers.get("sec-fetch-site", "").lower() == "cross-site":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Cross-site mutations are not allowed",
+            )
+        ctype = request.headers.get("content-type", "").split(";")[0].strip().lower()
         if not ctype and not _has_body(request):
             return  # body-less mutation (no header, no payload) is fine
         if ctype != "application/json":

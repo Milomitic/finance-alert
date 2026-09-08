@@ -388,7 +388,6 @@ def logs(
 @router.get("/stream")
 async def stream(
     request: Request,
-    db: Session = Depends(get_db),
     _user: User = Depends(get_current_user),
 ) -> StreamingResponse:
     """SSE stream emitting:
@@ -415,11 +414,19 @@ async def stream(
 
     unsub = log_buffer.subscribe(on_log)
 
+    def _read_scans() -> list[RecentScanOut]:
+        # Own the session in the worker that uses it. Never retain a transaction
+        # between SSE events or block the event loop on a synchronous DB call.
+        from app.core.db import SessionLocal
+
+        with SessionLocal() as db:
+            return _recent_scans(db)
+
     async def _snapshot_payload() -> str:
         sources = source_catalog.full_snapshot()
         breaker = yfinance_health.status()
         scheduler_jobs = health_rollup.scheduler_jobs_payload()
-        scans = _recent_scans(db)
+        scans = await asyncio.to_thread(_read_scans)
         overall, reasons = health_rollup.compute_rollup(
             sources=sources, breaker=breaker,
             scheduler=scheduler_jobs, scans=scans,
@@ -472,6 +479,8 @@ async def stream(
         finally:
             if snapshot_task is not None:
                 snapshot_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await snapshot_task
             unsub()
 
     return StreamingResponse(

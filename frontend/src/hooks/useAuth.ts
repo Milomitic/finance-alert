@@ -6,6 +6,7 @@ export function useMe() {
     queryKey: ["me"],
     queryFn: () => auth.me(),
     retry: false,
+    refetchOnWindowFocus: true,
   });
 }
 
@@ -22,6 +23,12 @@ export function useLogout() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: () => auth.logout(),
-    onSuccess: () => qc.removeQueries({ queryKey: ["me"] }),
+    onSuccess: async () => {
+      // Stop old requests before discarding private data; a late response
+      // must not repopulate the cache after the session has ended.
+      await qc.cancelQueries();
+      qc.clear();
+      qc.setQueryData(["me"], null);
+    },
   });
 }

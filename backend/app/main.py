@@ -433,6 +433,10 @@ async def security_headers(request: Request, call_next):
     simply never added once TLS landed."""
     response = await call_next(request)
     response.headers.setdefault("Content-Security-Policy", _CSP)
+    if request.url.path.startswith("/api/"):
+        # Authenticated financial data must not survive logout in HTTP caches.
+        # This still permits in-memory TanStack Query caching within a session.
+        response.headers["Cache-Control"] = "no-store"
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
     response.headers.setdefault("X-Frame-Options", "DENY")
     response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")

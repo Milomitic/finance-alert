@@ -28,6 +28,16 @@ class _FailState:
 
 _lock = threading.Lock()
 _state: dict[str, _FailState] = {}
+_MAX_TRACKED_USERS = 4096
+
+
+def _prune_expired(now: float) -> None:
+    expired = [
+        username for username, state in _state.items()
+        if now - state.last_failure >= settings.login_lockout_seconds
+    ]
+    for username in expired:
+        del _state[username]
 
 
 def _now() -> float:
@@ -40,10 +50,17 @@ def retry_after_seconds(username: str) -> int | None:
     None. Non muta lo stato — vedi docstring modulo sul perché un 429 non
     estende la finestra."""
     with _lock:
+        now = _now()
+        if len(_state) >= _MAX_TRACKED_USERS:
+            _prune_expired(now)
         st = _state.get(username)
+        # Preserve existing lockouts when random usernames fill the table.
+        # Unknown accounts wait for capacity instead of evicting a victim.
+        if st is None and len(_state) >= _MAX_TRACKED_USERS:
+            return max(1, settings.login_lockout_seconds)
         if st is None or st.failures < settings.login_max_failed_attempts:
             return None
-        remaining = settings.login_lockout_seconds - (_now() - st.last_failure)
+        remaining = settings.login_lockout_seconds - (now - st.last_failure)
         if remaining <= 0:
             return None
         return max(1, math.ceil(remaining))
@@ -53,9 +70,12 @@ def record_failure(username: str) -> None:
     """Registra un fallimento reale (credenziali sbagliate) e fa scorrere la
     finestra di lockout."""
     with _lock:
+        if len(_state) >= _MAX_TRACKED_USERS:
+            _prune_expired(_now())
         st = _state.get(username)
         if st is None:
-            _state[username] = _FailState(failures=1, last_failure=_now())
+            if len(_state) < _MAX_TRACKED_USERS:
+                _state[username] = _FailState(failures=1, last_failure=_now())
         else:
             st.failures += 1
             st.last_failure = _now()

@@ -140,6 +140,7 @@ def _no_real_network(monkeypatch: pytest.MonkeyPatch) -> None:
 
     import httpx
     import requests.adapters
+    import urllib3.connectionpool
     import yfinance
 
     monkeypatch.setattr(yfinance, "download", _blocked_network_call)
@@ -150,6 +151,7 @@ def _no_real_network(monkeypatch: pytest.MonkeyPatch) -> None:
         httpx.AsyncHTTPTransport, "handle_async_request", _blocked_network_call
     )
     monkeypatch.setattr(urllib.request, "urlopen", _blocked_network_call)
+    monkeypatch.setattr(urllib3.connectionpool.HTTPConnectionPool, "urlopen", _blocked_network_call)
 
 
 @pytest.fixture

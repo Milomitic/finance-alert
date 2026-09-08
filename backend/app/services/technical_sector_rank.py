@@ -15,7 +15,7 @@ Ranking is on the technical COMPOSITE, which is what the card leads with.
 
 from __future__ import annotations
 
-from sqlalchemy import func, select
+from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
 from app.models import Stock, TechnicalScore
@@ -42,24 +42,19 @@ def sector_rank(
     if sector is None or composite is None:
         return (None, None)
 
-    peers = db.execute(
-        select(func.count())
+    peers, stronger = db.execute(
+        select(
+            func.count(),
+            func.sum(case((
+                (TechnicalScore.composite > composite)
+                & (TechnicalScore.stock_id != stock_id), 1,
+            ), else_=0)),
+        )
         .select_from(TechnicalScore)
         .join(Stock, Stock.id == TechnicalScore.stock_id)
         .where(Stock.sector == sector)
-    ).scalar() or 0
+    ).one()
     if not peers:
         return (None, None)
 
-    stronger = db.execute(
-        select(func.count())
-        .select_from(TechnicalScore)
-        .join(Stock, Stock.id == TechnicalScore.stock_id)
-        .where(
-            Stock.sector == sector,
-            TechnicalScore.composite > composite,
-            TechnicalScore.stock_id != stock_id,
-        )
-    ).scalar() or 0
-
-    return (stronger + 1, peers)
+    return ((stronger or 0) + 1, peers)

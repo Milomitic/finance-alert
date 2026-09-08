@@ -54,9 +54,10 @@ import time
 from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import date, datetime
-from xml.etree import ElementTree as ET
 
 import requests
+from defusedxml import ElementTree
+from defusedxml.common import DefusedXmlException
 from loguru import logger
 
 from app.services.institutional_scraper import (
@@ -432,8 +433,8 @@ def _parse_info_table(xml_text: str) -> Iterable[ScrapedHolding]:
     parsing — keep this function pure-ish.
     """
     try:
-        root = ET.fromstring(xml_text)
-    except ET.ParseError as e:
+        root = ElementTree.fromstring(xml_text, forbid_dtd=True)
+    except (ElementTree.ParseError, DefusedXmlException) as e:
         logger.warning(f"[sec_13f] XML parse error: {e}")
         return
 
