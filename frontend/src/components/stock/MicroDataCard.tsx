@@ -61,21 +61,28 @@ interface Row {
 /* I tre toni della card, misurati contro entrambi gli sfondi (--card e' bianco
  * al chiaro, hsl(0 0% 10%) al buio). Soglia WCAG AA per il testo normale: 4.5.
  *
- *                    card chiara   card scura
- *   text-green-800       7.13        2.44   <- fallito
- *   text-red-600         4.83        3.60   <- fallito
- *   text-amber-600       3.19        5.46   <- fallito, ma AL CHIARO
+ *                      card chiara   card scura
+ *   text-emerald-800       7.68        2.27
+ *   text-rose-600          4.70        3.71
+ *   text-amber-700         5.02        6.24
+ *   ...-400 al buio        9.05 / 6.47 / 10.43
  *
- * Mancavano le varianti dark del tutto, quindi due toni su tre erano
- * illeggibili al buio su 27 punti d'uso; l'ambra invece cadeva alla LUCE, che
- * non stavo cercando. amber-700 sta a 5.02 su bianco. Le varianti -400 stanno
- * a 9.99 / 6.29 / 10.43 sulla card scura.
+ * Mancavano le varianti dark del tutto: due toni su tre erano illeggibili al
+ * buio su 27 punti d'uso (green-800 a 2.44, red-600 a 3.60), e l'ambra cadeva
+ * invece alla LUCE (amber-600 a 3.19). Le tinte sono poi passate a
+ * emerald/rose con l'unificazione della tavolozza direzionale, che conserva
+ * AA su entrambi i fondi — il margine piu' stretto e' rose-600 alla luce,
+ * 4.70 contro il 4.83 di red-600.
+ *
+ * I nomi dicono BUONO/CATTIVO, non un colore: si chiamavano GOOD/BAD e
+ * contenevano emerald/rose, cioe' l'esatto tipo di piccola bugia che poi
+ * corrobora un commento sbagliato.
  *
  * Restano stringhe letterali: il purger di Tailwind vede solo quelle, e una
  * classe composta sparirebbe in silenzio dal build di produzione. */
-const GREEN = "text-green-800 dark:text-green-400";
-const RED = "text-red-600 dark:text-red-400";
-const AMBER = "text-amber-700 dark:text-amber-400";
+const GOOD = "text-emerald-800 dark:text-emerald-400";
+const BAD = "text-rose-600 dark:text-rose-400";
+const WARN = "text-amber-700 dark:text-amber-400";
 
 function pctTone(opts: {
   /** Threshold for the green branch (fraction, e.g. 0.20 = 20%). */
@@ -93,20 +100,20 @@ function pctTone(opts: {
   return (v) => {
     if (v < redBelow) {
       return {
-        cls: RED,
+        cls: BAD,
         reason: `${opts.label} ${(v * 100).toFixed(1)}% — sotto ${(redBelow * 100).toFixed(0)}%: valore negativo, segnala perdita o distruzione di valore.`,
       };
     }
     if (opts.amberBelow != null && v < opts.amberBelow && v >= redBelow) {
       return {
-        cls: AMBER,
+        cls: WARN,
         reason: `${opts.label} ${(v * 100).toFixed(1)}% — sotto ${(opts.amberBelow * 100).toFixed(0)}%: valore basso rispetto alla soglia sana di riferimento.`,
       };
     }
     if (v > opts.greenAbove) {
       const ctx = opts.greenContext ? ` (${opts.greenContext})` : "";
       return {
-        cls: GREEN,
+        cls: GOOD,
         reason: `${opts.label} ${(v * 100).toFixed(1)}% — sopra ${(opts.greenAbove * 100).toFixed(0)}%: valore eccellente${ctx}.`,
       };
     }
@@ -122,13 +129,13 @@ function signTone(label: string, format: "pct" | "usd"): (v: number) => ToneSign
   return (v) => {
     if (v > 0) {
       return {
-        cls: GREEN,
+        cls: GOOD,
         reason: `${label} ${fmt(v)} positivo: andamento favorevole.`,
       };
     }
     if (v < 0) {
       return {
-        cls: RED,
+        cls: BAD,
         reason: `${label} ${fmt(v)} negativo: andamento sfavorevole.`,
       };
     }
@@ -189,13 +196,13 @@ function buildSnapshotRows(stock: Stock, kpis: StockKpis): Row[] {
   // toneFor() because we're already pre-formatting the value as "1.23×".
   //
   // It said green/red and wrote emerald/rose — the card's other 27 tones use
-  // GREEN/RED, so one row of the same table was drawn from a different
+  // GOOD/BAD, so one row of the same table was drawn from a different
   // palette. Now it uses the constants the comment already named.
   let volRatioClass = "";
   const vr = kpis.vol_ratio;
   if (vr != null && Number.isFinite(vr)) {
-    if (vr >= 1.5) volRatioClass = GREEN;
-    else if (vr < 0.5) volRatioClass = RED;
+    if (vr >= 1.5) volRatioClass = GOOD;
+    else if (vr < 0.5) volRatioClass = BAD;
   }
 
   return [
@@ -250,10 +257,10 @@ function intCount(v: number): string {
 /** Recommendation-mean tone: 1.0 strong-buy → 5.0 sell. */
 function recommendationTone(v: number): ToneSignal | null {
   if (v <= 2.0) {
-    return { cls: GREEN, reason: `Recommendation mean ${v.toFixed(2)} ≤ 2: consenso analisti orientato a Buy / Strong Buy.` };
+    return { cls: GOOD, reason: `Recommendation mean ${v.toFixed(2)} ≤ 2: consenso analisti orientato a Buy / Strong Buy.` };
   }
   if (v >= 3.5) {
-    return { cls: RED, reason: `Recommendation mean ${v.toFixed(2)} ≥ 3.5: consenso analisti orientato a Sell / Underperform.` };
+    return { cls: BAD, reason: `Recommendation mean ${v.toFixed(2)} ≥ 3.5: consenso analisti orientato a Sell / Underperform.` };
   }
   return null;
 }
@@ -262,10 +269,10 @@ function recommendationTone(v: number): ToneSignal | null {
 function riskScoreTone(label: string): (v: number) => ToneSignal | null {
   return (v) => {
     if (v <= 3) {
-      return { cls: GREEN, reason: `${label} ${v.toFixed(0)} (scala 1-10, basso = buono).` };
+      return { cls: GOOD, reason: `${label} ${v.toFixed(0)} (scala 1-10, basso = buono).` };
     }
     if (v >= 7) {
-      return { cls: RED, reason: `${label} ${v.toFixed(0)} (scala 1-10, alto = preoccupante).` };
+      return { cls: BAD, reason: `${label} ${v.toFixed(0)} (scala 1-10, alto = preoccupante).` };
     }
     return null;
   };
@@ -292,9 +299,9 @@ function buildColumns(m: MicroData): { left: Row[]; right: Row[] } {
       tip: "Price/Earnings (trailing 12 mesi). Quanto stai pagando per ogni dollaro di utile dell'ultimo anno. Mediana storica del mercato US: 15-20.",
       toneFor: (v) =>
         v < 0
-          ? { cls: RED, reason: `P/E ${v.toFixed(1)} negativo: utili negativi (azienda in perdita TTM).` }
+          ? { cls: BAD, reason: `P/E ${v.toFixed(1)} negativo: utili negativi (azienda in perdita TTM).` }
           : v > 40
-            ? { cls: AMBER, reason: `P/E ${v.toFixed(1)} sopra 40: valutazione molto alta vs media storica del mercato (~15-20). Implica grosse aspettative di crescita o sopravvalutazione.` }
+            ? { cls: WARN, reason: `P/E ${v.toFixed(1)} sopra 40: valutazione molto alta vs media storica del mercato (~15-20). Implica grosse aspettative di crescita o sopravvalutazione.` }
             : null,
     },
     {
@@ -316,9 +323,9 @@ function buildColumns(m: MicroData): { left: Row[]; right: Row[] } {
       tip: "P/E ÷ tasso di crescita atteso. Convenzione: <1 = sottovalutato rispetto alla crescita, >2 = caro vs crescita.",
       toneFor: (v) =>
         v < 1 && v > 0
-          ? { cls: GREEN, reason: `PEG ${v.toFixed(2)} sotto 1: P/E inferiore al tasso di crescita atteso → potenzialmente sottovalutato.` }
+          ? { cls: GOOD, reason: `PEG ${v.toFixed(2)} sotto 1: P/E inferiore al tasso di crescita atteso → potenzialmente sottovalutato.` }
           : v > 2
-            ? { cls: AMBER, reason: `PEG ${v.toFixed(2)} sopra 2: prezzo elevato rispetto alla crescita prevista.` }
+            ? { cls: WARN, reason: `PEG ${v.toFixed(2)} sopra 2: prezzo elevato rispetto alla crescita prevista.` }
             : null,
     },
     {
@@ -439,8 +446,8 @@ function buildColumns(m: MicroData): { left: Row[]; right: Row[] } {
       tip: "Flusso di cassa libero (TTM): cassa generata dopo capex. Positivo = l'azienda genera cassa autonomamente; negativo = brucia cassa, dipende da finanziamenti.",
       toneFor: (v) =>
         v > 0
-          ? { cls: GREEN, reason: `FCF positivo (${bigUsd(v)}): l'azienda genera cassa libera, può rimborsare debito o tornare valore agli azionisti.` }
-          : { cls: RED, reason: `FCF negativo (${bigUsd(v)}): l'azienda brucia cassa, dipende da debito/equity per finanziarsi.` },
+          ? { cls: GOOD, reason: `FCF positivo (${bigUsd(v)}): l'azienda genera cassa libera, può rimborsare debito o tornare valore agli azionisti.` }
+          : { cls: BAD, reason: `FCF negativo (${bigUsd(v)}): l'azienda brucia cassa, dipende da debito/equity per finanziarsi.` },
     },
     {
       label: "Operating CF",
@@ -498,13 +505,13 @@ function buildColumns(m: MicroData): { left: Row[]; right: Row[] } {
       tip: "Gross Profit / Revenue. Margine lordo: indica il pricing power vs i costi diretti. >40% = forte; <10% = business commodity-like.",
       toneFor: (v) => {
         if (v < 0) {
-          return { cls: RED, reason: `Gross margin ${(v * 100).toFixed(1)}% negativo: i costi diretti superano i ricavi.` };
+          return { cls: BAD, reason: `Gross margin ${(v * 100).toFixed(1)}% negativo: i costi diretti superano i ricavi.` };
         }
         if (v < 0.10) {
-          return { cls: AMBER, reason: `Gross margin ${(v * 100).toFixed(1)}% sotto 10%: pricing power debole o costi diretti alti — tipico di business commodity.` };
+          return { cls: WARN, reason: `Gross margin ${(v * 100).toFixed(1)}% sotto 10%: pricing power debole o costi diretti alti — tipico di business commodity.` };
         }
         if (v > 0.40) {
-          return { cls: GREEN, reason: `Gross margin ${(v * 100).toFixed(1)}% sopra 40%: pricing power forte / costi diretti contenuti.` };
+          return { cls: GOOD, reason: `Gross margin ${(v * 100).toFixed(1)}% sopra 40%: pricing power forte / costi diretti contenuti.` };
         }
         return null;
       },
@@ -524,7 +531,7 @@ function buildColumns(m: MicroData): { left: Row[]; right: Row[] } {
       tip: "Total Debt / Total Equity. Leva finanziaria: quanto debito ha l'azienda relativamente al capitale proprio. Yahoo lo restituisce come %, quindi >200 = debito > 2× equity. Convenzione: <100 = leva moderata; >200 = leva elevata.",
       toneFor: (v) =>
         v > 200
-          ? { cls: AMBER, reason: `Debt/Equity ${v.toFixed(0)}% sopra 200%: il debito supera 2× l'equity → rischio finanziario elevato, sensibile a tassi e cicli.` }
+          ? { cls: WARN, reason: `Debt/Equity ${v.toFixed(0)}% sopra 200%: il debito supera 2× l'equity → rischio finanziario elevato, sensibile a tassi e cicli.` }
           : null,
     },
     {
@@ -534,10 +541,10 @@ function buildColumns(m: MicroData): { left: Row[]; right: Row[] } {
       tip: "Current Assets / Current Liabilities. Indica se l'azienda può coprire le passività di breve termine. Convenzione: <1 = potenziali problemi di liquidità; >2 = ottima liquidità.",
       toneFor: (v) => {
         if (v < 1) {
-          return { cls: AMBER, reason: `Current ratio ${v.toFixed(2)} sotto 1: gli asset correnti non coprono completamente le passività di breve.` };
+          return { cls: WARN, reason: `Current ratio ${v.toFixed(2)} sotto 1: gli asset correnti non coprono completamente le passività di breve.` };
         }
         if (v > 2) {
-          return { cls: GREEN, reason: `Current ratio ${v.toFixed(2)} sopra 2: ottima liquidità di breve termine.` };
+          return { cls: GOOD, reason: `Current ratio ${v.toFixed(2)} sopra 2: ottima liquidità di breve termine.` };
         }
         return null;
       },
@@ -549,7 +556,7 @@ function buildColumns(m: MicroData): { left: Row[]; right: Row[] } {
       tip: "Liquidità più stringente del current ratio: esclude inventario. (Cash + Receivables) / Current Liabilities.",
       toneFor: (v) =>
         v < 1
-          ? { cls: AMBER, reason: `Quick ratio ${v.toFixed(2)} sotto 1: liquidità senza inventario insufficiente a coprire passività di breve.` }
+          ? { cls: WARN, reason: `Quick ratio ${v.toFixed(2)} sotto 1: liquidità senza inventario insufficiente a coprire passività di breve.` }
           : null,
     },
     // ── Growth ─────────────────────────────────────────────────────
@@ -643,7 +650,7 @@ function buildColumns(m: MicroData): { left: Row[]; right: Row[] } {
       tip: "Days-to-cover: giorni necessari per coprire tutte le posizioni short al volume medio. Alto = pressione short significativa.",
       toneFor: (v) =>
         v >= 5
-          ? { cls: AMBER, reason: `Short ratio ${v.toFixed(2)}: posizioni short consistenti rispetto al volume medio — possibile sentiment ribassista o squeeze potential.` }
+          ? { cls: WARN, reason: `Short ratio ${v.toFixed(2)}: posizioni short consistenti rispetto al volume medio — possibile sentiment ribassista o squeeze potential.` }
           : null,
     },
     {
@@ -653,7 +660,7 @@ function buildColumns(m: MicroData): { left: Row[]; right: Row[] } {
       tip: "% del float venduto allo scoperto. >10% indica forte interesse short; >20% può preludere a uno short squeeze su catalyst positivi.",
       toneFor: (v) =>
         v >= 0.10
-          ? { cls: AMBER, reason: `Short ${(v * 100).toFixed(1)}% del float: interesse short significativo, attenzione a movimenti su catalyst.` }
+          ? { cls: WARN, reason: `Short ${(v * 100).toFixed(1)}% del float: interesse short significativo, attenzione a movimenti su catalyst.` }
           : null,
     },
     // ── Holdings ───────────────────────────────────────────────────

@@ -45,7 +45,7 @@ function Stat({ label, value, tone }: { label: string; value: string; tone?: "up
         className={cn(
           "text-lg font-semibold tabular-nums",
           tone === "up" && "text-emerald-800 dark:text-emerald-400",
-          tone === "down" && "text-red-600 dark:text-red-400",
+          tone === "down" && "text-rose-600 dark:text-rose-400",
           tone === "muted" && "text-muted-foreground",
         )}
       >

@@ -57,7 +57,7 @@ function rowHighlight(r: IndexBreadth): string {
     return "bg-yellow-50/60 dark:bg-yellow-900/10";
   }
   if (r.pct_above_ema200 !== null && r.pct_above_ema200 <= 45 && (r.avg_change_pct ?? 0) < 0) {
-    return "bg-red-50/60 dark:bg-red-900/10";
+    return "bg-rose-50/60 dark:bg-rose-900/10";
   }
   return "";
 }
@@ -65,12 +65,12 @@ function rowHighlight(r: IndexBreadth): string {
 function cellTone(value: number | null, kind: "pct" | "change"): string {
   if (value === null) return "text-muted-foreground";
   if (kind === "pct") {
-    if (value >= 70) return "text-green-800 dark:text-green-400 font-semibold";
-    if (value <= 40) return "text-red-600 dark:text-red-400 font-semibold";
+    if (value >= 70) return "text-emerald-800 dark:text-emerald-400 font-semibold";
+    if (value <= 40) return "text-rose-600 dark:text-rose-400 font-semibold";
   }
   if (kind === "change") {
-    if (value > 0) return "text-green-800 dark:text-green-400";
-    if (value < 0) return "text-red-600 dark:text-red-400";
+    if (value > 0) return "text-emerald-800 dark:text-emerald-400";
+    if (value < 0) return "text-rose-600 dark:text-rose-400";
   }
   return "";
 }
@@ -212,11 +212,11 @@ export function BreadthMatrixTable({ data }: Props) {
                   <td className={cn("text-right px-3 py-2", cellTone(r.pct_above_ema200, "pct"))}>{fmtPct(r.pct_above_ema200)}</td>
                   <td className={cn("text-right px-3 py-2", cellTone(r.pct_above_ema50, "pct"))}>{fmtPct(r.pct_above_ema50)}</td>
                   <td className={cn("text-right px-3 py-2", r.rsi_oversold_count > 0 ? "text-amber-600" : "")}>{r.rsi_oversold_count}</td>
-                  <td className={cn("text-right px-3 py-2", r.rsi_overbought_count > 0 ? "text-red-600" : "")}>{r.rsi_overbought_count}</td>
+                  <td className={cn("text-right px-3 py-2", r.rsi_overbought_count > 0 ? "text-rose-600" : "")}>{r.rsi_overbought_count}</td>
                   <td className={cn("text-right px-3 py-2", cellTone(r.avg_change_pct, "change"))}>{fmtChange(r.avg_change_pct)}</td>
                   <td className="text-right px-3 py-2">{fmtNum(r.advancers)}/{fmtNum(r.decliners)}</td>
-                  <td className="text-right px-3 py-2 text-green-800 dark:text-green-400">{r.new_52w_highs}</td>
-                  <td className={cn("text-right px-3 py-2", r.new_52w_lows > 0 ? "text-red-600" : "")}>{r.new_52w_lows}</td>
+                  <td className="text-right px-3 py-2 text-emerald-800 dark:text-emerald-400">{r.new_52w_highs}</td>
+                  <td className={cn("text-right px-3 py-2", r.new_52w_lows > 0 ? "text-rose-600" : "")}>{r.new_52w_lows}</td>
                   <td className="text-right px-3 py-2 pr-4">{r.volume_spikes_count}</td>
                 </tr>
               ))}

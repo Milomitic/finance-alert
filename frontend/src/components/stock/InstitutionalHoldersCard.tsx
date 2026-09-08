@@ -47,7 +47,7 @@ function actionMeta(action: string | null): {
     case "reduce":
       return { label: "Reduce", tone: "text-amber-700 dark:text-amber-300" };
     case "sold_out":
-      return { label: "Sold out", tone: "text-red-700 dark:text-red-300" };
+      return { label: "Sold out", tone: "text-rose-700 dark:text-rose-300" };
     case "hold":
       return { label: "Hold", tone: "text-muted-foreground" };
     default:

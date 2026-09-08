@@ -6,7 +6,7 @@ type Props = { jobs: SchedulerJobStat[] };
 
 const RESULT_BADGE: Record<string, { Icon: React.ComponentType<{ className?: string }>; classes: string }> = {
   ok: { Icon: CheckCircle2, classes: "text-emerald-800" },
-  error: { Icon: XCircle, classes: "text-red-600" },
+  error: { Icon: XCircle, classes: "text-rose-600" },
   missed: { Icon: AlertTriangle, classes: "text-amber-600" },
 };
 
@@ -187,7 +187,7 @@ export default function SchedulerCard({ jobs }: Props) {
               </div>
               <div className="text-right text-[0.7059rem] text-muted-foreground tabular-nums shrink-0">
                 <div className="text-emerald-800 dark:text-emerald-400 font-medium">{j.runs}</div>
-                {j.errors > 0 && <div className="text-red-700 dark:text-red-400">{j.errors} err</div>}
+                {j.errors > 0 && <div className="text-rose-700 dark:text-rose-400">{j.errors} err</div>}
               </div>
             </div>
           );

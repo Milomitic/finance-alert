@@ -60,12 +60,12 @@ export function IndexPanoramaCard({ data, filters, onTileFilter }: Props) {
   const moodIcon = mood === "bullish" ? TrendingUp : mood === "bearish" ? TrendingDown : Minus;
   const MoodIcon = moodIcon;
   const moodBg =
-    mood === "bullish" ? "bg-gradient-to-br from-green-50 to-emerald-100 dark:from-green-950/30 dark:to-emerald-900/20 border-green-300/60 dark:border-green-700/60" :
-    mood === "bearish" ? "bg-gradient-to-br from-red-50 to-rose-100 dark:from-red-950/30 dark:to-rose-900/20 border-red-300/60 dark:border-red-700/60" :
+    mood === "bullish" ? "bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-950/30 dark:to-emerald-900/20 border-emerald-300/60 dark:border-emerald-700/60" :
+    mood === "bearish" ? "bg-gradient-to-br from-rose-50 to-rose-100 dark:from-rose-950/30 dark:to-rose-900/20 border-rose-300/60 dark:border-rose-700/60" :
     "bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900/30 dark:to-slate-800/20 border-slate-300/60 dark:border-slate-700/60";
   const moodFg =
-    mood === "bullish" ? "text-green-800 dark:text-green-200" :
-    mood === "bearish" ? "text-red-800 dark:text-red-200" :
+    mood === "bullish" ? "text-emerald-800 dark:text-emerald-200" :
+    mood === "bearish" ? "text-rose-800 dark:text-rose-200" :
     "text-slate-800 dark:text-slate-200";
   const moodLabel = mood === "bullish" ? "Bullish" : mood === "bearish" ? "Bearish" : "Neutral";
   const moodHelp =
@@ -75,9 +75,9 @@ export function IndexPanoramaCard({ data, filters, onTileFilter }: Props) {
 
   const TONE_FG: Record<string, string> = {
     default: "",
-    good: "text-green-800 dark:text-green-400",
+    good: "text-emerald-800 dark:text-emerald-400",
     warn: "text-amber-600 dark:text-amber-400",
-    bad: "text-red-600 dark:text-red-400",
+    bad: "text-rose-600 dark:text-rose-400",
   };
 
   const tiles: KpiTile[] = [
@@ -220,8 +220,8 @@ export function IndexPanoramaCard({ data, filters, onTileFilter }: Props) {
           <span
             className={cn(
               "ml-auto inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-semibold",
-              mood === "bullish" && "bg-green-200/80 dark:bg-green-900/50 text-green-900 dark:text-green-100",
-              mood === "bearish" && "bg-red-200/80 dark:bg-red-900/50 text-red-900 dark:text-red-100",
+              mood === "bullish" && "bg-emerald-200/80 dark:bg-emerald-900/50 text-emerald-900 dark:text-emerald-100",
+              mood === "bearish" && "bg-rose-200/80 dark:bg-rose-900/50 text-rose-900 dark:text-rose-100",
               mood === "neutral" && "bg-slate-200/80 dark:bg-slate-700/50 text-slate-900 dark:text-slate-100",
             )}
             title={moodHelp}

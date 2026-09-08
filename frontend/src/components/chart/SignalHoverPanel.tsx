@@ -7,14 +7,14 @@ import type { SignalHoverItem } from "@/lib/signalMarkers";
  *  row: tone dot + detector label + Forza + realized outcome. */
 const toneDot: Record<SignalHoverItem["tone"], string> = {
   bullish: "bg-emerald-500",
-  bearish: "bg-red-500",
+  bearish: "bg-rose-500",
   warning: "bg-amber-500",
   neutral: "bg-muted-foreground",
 };
 
 function outcomeGlyph(outcome: boolean | null | undefined): { text: string; cls: string } {
   if (outcome === true) return { text: "✓", cls: "text-emerald-800 dark:text-emerald-400" };
-  if (outcome === false) return { text: "✗", cls: "text-red-600 dark:text-red-400" };
+  if (outcome === false) return { text: "✗", cls: "text-rose-600 dark:text-rose-400" };
   return { text: "· in maturazione", cls: "text-muted-foreground" };
 }
 

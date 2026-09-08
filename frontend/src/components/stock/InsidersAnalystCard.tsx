@@ -67,7 +67,7 @@ function txnTone(text: string): string {
     !isNonOpenMarket &&
     (lc.includes("purchase") || lc.includes("buy") || lc.includes("acquisition (open market)"))
   ) {
-    return "text-green-800 dark:text-green-300";
+    return "text-emerald-800 dark:text-emerald-300";
   }
   // Bearish: open-market divestiture. Same row can be labelled
   // "Sale", "Sale (Multiple)", or "Disposition (Open Market)" /

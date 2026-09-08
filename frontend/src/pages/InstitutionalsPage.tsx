@@ -158,7 +158,7 @@ function ActionRow({ row, kind }: { row: ActionAggregate; kind: "buy" | "sell" }
   const tone =
     kind === "buy"
       ? "text-emerald-800 dark:text-emerald-300"
-      : "text-red-700 dark:text-red-300";
+      : "text-rose-700 dark:text-rose-300";
   return (
     <tr className="hover:bg-muted/30">
       <td className="px-2 py-2">
@@ -567,7 +567,7 @@ export default function InstitutionalsPage() {
             <SectionTitle
               icon={TrendingDown}
               label="Vendite recenti"
-              tone="text-red-700 dark:text-red-300"
+              tone="text-rose-700 dark:text-rose-300"
               className="mb-1"
             />
             <p className="text-xs text-muted-foreground mb-2">

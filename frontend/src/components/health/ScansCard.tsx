@@ -15,8 +15,8 @@ const STATUS_BADGE: Record<
   success: { label: "Success", classes: "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/60", Icon: CheckCircle2 },
   ok: { label: "Success", classes: "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/60", Icon: CheckCircle2 },
   running: { label: "Running", classes: "bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 border-sky-200 dark:border-sky-800/60", Icon: Loader2 },
-  failed: { label: "Failed", classes: "bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800/60", Icon: XCircle },
-  error: { label: "Failed", classes: "bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800/60", Icon: XCircle },
+  failed: { label: "Failed", classes: "bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800/60", Icon: XCircle },
+  error: { label: "Failed", classes: "bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800/60", Icon: XCircle },
 };
 
 function fmtDuration(s: number | null): string {

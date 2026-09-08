@@ -76,7 +76,7 @@ function RailRow({
           className={cn(
             "ml-auto shrink-0 text-[0.7647rem] font-semibold tabular-nums",
             tone === "pos" && "text-emerald-800 dark:text-emerald-400",
-            tone === "neg" && "text-red-600 dark:text-red-400",
+            tone === "neg" && "text-rose-600 dark:text-rose-400",
             tone === "warn" && "text-amber-600 dark:text-amber-400",
             tone === "mute" && "text-muted-foreground",
           )}

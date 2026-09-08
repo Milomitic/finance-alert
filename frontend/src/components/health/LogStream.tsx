@@ -22,8 +22,8 @@ const LEVEL_TONE: Record<string, string> = {
   INFO: "text-sky-700 dark:text-sky-300",
   SUCCESS: "text-emerald-800 dark:text-emerald-300",
   WARNING: "text-amber-700 dark:text-amber-300",
-  ERROR: "text-red-700 dark:text-red-300",
-  CRITICAL: "text-red-800 dark:text-red-300 font-bold",
+  ERROR: "text-rose-700 dark:text-rose-300",
+  CRITICAL: "text-rose-800 dark:text-rose-300 font-bold",
 };
 
 const LEVEL_BG: Record<string, string> = {

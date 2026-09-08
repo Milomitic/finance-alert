@@ -190,8 +190,8 @@ export function NavbarSearch() {
     const change = i.avg_change_pct;
     const changeColor =
       change == null ? "text-muted-foreground" :
-      change > 0 ? "text-green-800 dark:text-green-400" :
-      change < 0 ? "text-red-600 dark:text-red-400" : "";
+      change > 0 ? "text-emerald-800 dark:text-emerald-400" :
+      change < 0 ? "text-rose-600 dark:text-rose-400" : "";
     return (
       <button
         type="button"
@@ -237,8 +237,8 @@ export function NavbarSearch() {
     const mc = s.market_cap ?? enriched?.market_cap ?? null;
     const changeColor =
       change == null ? "text-muted-foreground" :
-      change > 0 ? "text-green-800 dark:text-green-400" :
-      change < 0 ? "text-red-600 dark:text-red-400" : "";
+      change > 0 ? "text-emerald-800 dark:text-emerald-400" :
+      change < 0 ? "text-rose-600 dark:text-rose-400" : "";
     return (
       <button
         type="button"
@@ -295,8 +295,8 @@ export function NavbarSearch() {
     const change = enriched?.change_pct;
     const changeColor =
       change == null ? "text-muted-foreground" :
-      change > 0 ? "text-green-800 dark:text-green-400" :
-      change < 0 ? "text-red-600 dark:text-red-400" : "";
+      change > 0 ? "text-emerald-800 dark:text-emerald-400" :
+      change < 0 ? "text-rose-600 dark:text-rose-400" : "";
     const Icon = kind === "recent" ? History : TrendingUp;
     // Recent + top-movers don't carry a Stock object (only the ticker
     // string), so country comes from the ticker suffix. Bare tickers

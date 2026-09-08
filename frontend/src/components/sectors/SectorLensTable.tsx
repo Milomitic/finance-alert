@@ -64,7 +64,7 @@ function SignalSplit({ s }: { s: SectorSummary }) {
     >
       <span className="flex h-1.5 w-14 shrink-0 rounded-full overflow-hidden bg-muted">
         <span className="bg-emerald-500" style={{ flex: s.signals_7d_bull }} />
-        <span className="bg-red-500" style={{ flex: s.signals_7d_bear }} />
+        <span className="bg-rose-500" style={{ flex: s.signals_7d_bear }} />
       </span>
       <span className="tabular-nums text-xs text-muted-foreground">{s.signals_7d}</span>
     </span>
@@ -98,7 +98,7 @@ function Sparkline({ points }: { points: { date: string; avg: number }[] }) {
 function toneClass(v: number | null): string {
   if (v === null) return "text-muted-foreground";
   if (v > 0) return "text-emerald-800 dark:text-emerald-400";
-  if (v < 0) return "text-red-600 dark:text-red-400";
+  if (v < 0) return "text-rose-600 dark:text-rose-400";
   return "text-muted-foreground";
 }
 

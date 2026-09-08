@@ -12,12 +12,12 @@ interface Props {
 }
 
 function bgFor(change: number): string {
-  if (change >= 1.0) return "bg-green-300 dark:bg-green-800/60 text-green-900 dark:text-green-100";
-  if (change >= 0.5) return "bg-green-200 dark:bg-green-900/60 text-green-900 dark:text-green-100";
-  if (change >= 0.0) return "bg-green-100 dark:bg-green-900/40 text-green-900 dark:text-green-100";
-  if (change >= -0.5) return "bg-red-100 dark:bg-red-900/40 text-red-900 dark:text-red-100";
-  if (change >= -1.0) return "bg-red-200 dark:bg-red-900/60 text-red-900 dark:text-red-100";
-  return "bg-red-300 dark:bg-red-800/60 text-red-900 dark:text-red-100";
+  if (change >= 1.0) return "bg-emerald-300 dark:bg-emerald-800/60 text-emerald-900 dark:text-emerald-100";
+  if (change >= 0.5) return "bg-emerald-200 dark:bg-emerald-900/60 text-emerald-900 dark:text-emerald-100";
+  if (change >= 0.0) return "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-900 dark:text-emerald-100";
+  if (change >= -0.5) return "bg-rose-100 dark:bg-rose-900/40 text-rose-900 dark:text-rose-100";
+  if (change >= -1.0) return "bg-rose-200 dark:bg-rose-900/60 text-rose-900 dark:text-rose-100";
+  return "bg-rose-300 dark:bg-rose-800/60 text-rose-900 dark:text-rose-100";
 }
 
 export function SectorsHeatmapCard({ sectors }: Props) {

@@ -98,7 +98,7 @@ export function barToLegend(
 }
 
 const upTone = "text-emerald-800 dark:text-emerald-300";
-const downTone = "text-red-700 dark:text-red-300";
+const downTone = "text-rose-700 dark:text-rose-300";
 
 /** Fixed top-left OHLCV legend. Render inside a `relative` chart container.
  *  Two lines: O/H/L/C on top, Vol + Δ% below (no date — it's on the time

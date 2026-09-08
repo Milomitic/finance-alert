@@ -11,10 +11,10 @@ import { cn } from "@/lib/utils";
  * SectorDetailPage so the page file stays an orchestrator. */
 
 const SCORE_BUCKETS = [
-  { label: "<20", color: "bg-red-500" },
+  { label: "<20", color: "bg-rose-500" },
   { label: "20-39", color: "bg-orange-500" },
   { label: "40-59", color: "bg-amber-500" },
-  { label: "60-79", color: "bg-green-500" },
+  { label: "60-79", color: "bg-emerald-500" },
   { label: "≥80", color: "bg-emerald-600" },
 ];
 

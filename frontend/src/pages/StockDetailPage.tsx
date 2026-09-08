@@ -430,7 +430,7 @@ export default function StockDetailPage() {
                   </span>
                 )}
                 {mode === "erase" && (
-                  <span className="text-[0.7059rem] font-medium text-red-600 animate-pulse whitespace-nowrap">
+                  <span className="text-[0.7059rem] font-medium text-rose-600 animate-pulse whitespace-nowrap">
                     Clicca una linea da cancellare
                   </span>
                 )}

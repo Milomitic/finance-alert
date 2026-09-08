@@ -82,8 +82,8 @@ function actionMeta(action: string | null): {
     case "sold_out":
       return {
         label: "Sold out",
-        tone: "text-red-700 dark:text-red-300",
-        bg: "bg-red-50 dark:bg-red-950/40",
+        tone: "text-rose-700 dark:text-rose-300",
+        bg: "bg-rose-50 dark:bg-rose-950/40",
       };
     case "hold":
       return {
@@ -99,7 +99,7 @@ function actionMeta(action: string | null): {
 function qoqColor(v: number | null | undefined): string {
   if (v == null) return "text-muted-foreground";
   if (v > 0) return "text-emerald-800 dark:text-emerald-300";
-  if (v < 0) return "text-red-700 dark:text-red-300";
+  if (v < 0) return "text-rose-700 dark:text-rose-300";
   return "text-muted-foreground";
 }
 
@@ -216,7 +216,7 @@ export default function InstitutionalDetailPage() {
           <ArrowLeft className="h-4 w-4" />
           Torna alla lista
         </Link>
-        <div className="mt-4 text-sm text-red-700">Portfolio non trovato.</div>
+        <div className="mt-4 text-sm text-rose-700">Portfolio non trovato.</div>
       </div>
     );
   }

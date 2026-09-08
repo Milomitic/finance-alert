@@ -589,6 +589,46 @@ unique constraint. Resurrect that branch only if duplicates ever reappear.
 
 ---
 
+## One palette per meaning: rose/emerald = direction, red = broken (2026-09-08)
+
+The app carried TWO complete up/down palettes — `green`/`red` and
+`emerald`/`rose` — each self-consistent inside a given file, which is why a
+file-level check said everything was fine. It was not: following each page's
+IMPORT CLOSURE showed **9 of 17 pages rendering both on one screen**, and
+`MarketMoodStrip` had them in a single declaration
+(`from-red-50 to-rose-50`). Two colours for one meaning, side by side.
+
+Measured before deciding, since `red` could legitimately have meant "error":
+66% of `red-*` uses sat beside a green or a directional identifier
+(change/up/down/gain/loss), 17% were error-semantic, and most of the remaining
+17% were directional too (bearish mood, "Sold out", RSI overbought). About
+four fifths of `red` meant "down" — the same thing `rose` meant.
+
+**The rule now, and the reason it can be checked:**
+
+- `rose` / `emerald` — market direction. Down and up.
+- `red` / `green` — something is broken. Errors, failed scans, CRITICAL log
+  levels, "not found".
+
+80 lines converted, 13 deliberately left. Afterwards 2 pages still show both,
+and both are CORRECT: PlatformHealthPage renders ERROR/CRITICAL levels and
+failed scans beside directional data, SectorDetailPage an error message. 22
+`red-*` tokens remain, all error-semantic. **If that count grows, someone has
+coloured a price move red.**
+
+Every swap was checked against WCAG AA on both card backgrounds before it was
+made — the shades map 1:1 and all pairs hold. The tightest is `red-600` ->
+`rose-600` on white, 4.83 -> 4.70, still above the 4.5 threshold but with less
+room; do not darken the background behind it.
+
+⚠️ **A rename makes comments lie.** `MicroDataCard`'s constants were
+`GREEN`/`RED`/`AMBER` holding emerald/rose values, directly beneath a comment
+documenting the contrast of `green-800` and `red-600` — numbers for classes the
+file no longer used. Renamed to `GOOD`/`BAD`/`WARN`, which is what they always
+meant, and the measurements re-stated. Same failure mode as the dead
+`_RANGE_PERIODS` table below: the stale note is believable precisely because
+something next to it corroborates it.
+
 ## Frontend tone classes (Tailwind purger)
 
 Tone-class maps in `lib/alertMeta.ts` and similar files MUST stay as plain

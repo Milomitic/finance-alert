@@ -209,7 +209,7 @@ export function AllocationBars({
                   className={cn(
                     "truncate text-[0.6765rem] uppercase tracking-wider tabular-nums",
                     it.exited
-                      ? "text-red-700 dark:text-red-300"
+                      ? "text-rose-700 dark:text-rose-300"
                       : (it.deltaPct ?? 0) > 0
                         ? "text-emerald-800 dark:text-emerald-300"
                         : (it.deltaPct ?? 0) < 0

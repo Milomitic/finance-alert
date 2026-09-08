@@ -53,7 +53,7 @@ const STATUS_INFO: Record<
     Icon: XCircle,
     bg: "bg-red-50 dark:bg-red-950/40",
     fg: "text-red-700 dark:text-red-300",
-    border: "border-red-200 dark:border-red-800/60",
+    border: "border-rose-200 dark:border-rose-800/60",
   },
 };
 

@@ -128,16 +128,16 @@ function vsEma200(m: StockSearchItem["metrics"]): number | null {
  *  drawdown = rosso. Plain string literals (Tailwind purger contract). */
 function pctFromHighTone(v: number | null): string {
   if (v == null) return "text-muted-foreground";
-  if (v >= -5) return "text-green-800 dark:text-green-400";
-  if (v <= -20) return "text-red-600 dark:text-red-400";
+  if (v >= -5) return "text-emerald-800 dark:text-emerald-400";
+  if (v <= -20) return "text-rose-600 dark:text-rose-400";
   return "";
 }
 
 /** Tone per "vs EMA200": sopra = verde, sotto = rosso. Plain literals. */
 function vsEma200Tone(v: number | null): string {
   if (v == null) return "text-muted-foreground";
-  if (v > 0) return "text-green-800 dark:text-green-400";
-  if (v < 0) return "text-red-600 dark:text-red-400";
+  if (v > 0) return "text-emerald-800 dark:text-emerald-400";
+  if (v < 0) return "text-rose-600 dark:text-rose-400";
   return "";
 }
 
@@ -205,7 +205,7 @@ function ScoreTrendArrow({ delta }: { delta: number | null | undefined }) {
     <span
       className={cn(
         "text-[0.6765rem] font-semibold align-middle ml-0.5",
-        up ? "text-green-800 dark:text-green-400" : "text-red-600 dark:text-red-400",
+        up ? "text-emerald-800 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400",
       )}
       title={`Δ score vs ~7 giorni fa: ${up ? "+" : ""}${delta.toFixed(1)}`}
     >
@@ -450,8 +450,8 @@ export function StockBrowserTable({
                 const flag = getStockFlagCode(s.country, s.ticker);
                 const changeColor = change == null
                   ? "text-muted-foreground"
-                  : change > 0 ? "text-green-800 dark:text-green-400"
-                  : change < 0 ? "text-red-600 dark:text-red-400"
+                  : change > 0 ? "text-emerald-800 dark:text-emerald-400"
+                  : change < 0 ? "text-rose-600 dark:text-rose-400"
                   : "";
                 const compositeCls = item.score.composite != null
                   ? scoreColor(item.score.composite)
@@ -693,8 +693,8 @@ export function StockBrowserTable({
                 const flag = getStockFlagCode(s.country, s.ticker);
                 const changeColor = change == null
                   ? "text-muted-foreground"
-                  : change > 0 ? "text-green-800 dark:text-green-400"
-                  : change < 0 ? "text-red-600 dark:text-red-400"
+                  : change > 0 ? "text-emerald-800 dark:text-emerald-400"
+                  : change < 0 ? "text-rose-600 dark:text-rose-400"
                   : "";
                 const compositeCls = item.score.composite != null
                   ? scoreColor(item.score.composite)
@@ -766,7 +766,7 @@ export function StockBrowserTable({
                         <span className="inline-flex items-center justify-end gap-1.5">
                           {isLiveRow(item) && (
                             <span
-                              className="h-1.5 w-1.5 shrink-0 rounded-full bg-green-500"
+                              className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500"
                               title="Prezzo in tempo quasi reale"
                             />
                           )}
@@ -795,7 +795,7 @@ export function StockBrowserTable({
                       <td className={cn(
                         "px-3 py-1.5 text-right tabular-nums",
                         rsi == null ? "text-muted-foreground"
-                          : rsi >= 70 ? "text-red-600 dark:text-red-400"
+                          : rsi >= 70 ? "text-rose-600 dark:text-rose-400"
                           : rsi <= 30 ? "text-amber-600 dark:text-amber-400"
                           : "",
                       )}>
