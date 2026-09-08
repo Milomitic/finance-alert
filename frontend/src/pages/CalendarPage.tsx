@@ -30,6 +30,21 @@ type CalendarView = "month" | "week";
 
 /* Prominent Month/Week switch — the request asks for a clearly-visible
  * toggle. Segmented control with icon + label per option. */
+/* `Opt` used to be declared inside ViewToggle's body, which made it a fresh
+ * component type on every render. Pressing "Settimana" changes `view`, so both
+ * buttons were destroyed and rebuilt by the very click that selected one —
+ * taking focus to <body> with them, and re-announcing aria-pressed on a node
+ * the screen reader had not been following. Same defect as DrawingToolbar; see
+ * DrawingToolbar.test.tsx for the reproduction. */
+const VIEW_OPTIONS: {
+  value: CalendarView;
+  label: string;
+  icon: typeof CalendarDays;
+}[] = [
+  { value: "month", label: "Mese", icon: CalendarDays },
+  { value: "week", label: "Settimana", icon: Columns3 },
+];
+
 function ViewToggle({
   view,
   onChange,
@@ -37,37 +52,28 @@ function ViewToggle({
   view: CalendarView;
   onChange: (v: CalendarView) => void;
 }) {
-  const Opt = ({
-    value,
-    label,
-    Icon,
-  }: {
-    value: CalendarView;
-    label: string;
-    Icon: typeof CalendarDays;
-  }) => {
-    const active = view === value;
-    return (
-      <button
-        type="button"
-        onClick={() => onChange(value)}
-        aria-pressed={active}
-        className={cn(
-          "inline-flex items-center gap-1.5 h-9 px-3.5 text-sm font-semibold rounded-md transition-colors",
-          active
-            ? "bg-background shadow-sm text-foreground"
-            : "text-muted-foreground hover:text-foreground",
-        )}
-      >
-        <Icon className="h-4 w-4" />
-        {label}
-      </button>
-    );
-  };
   return (
     <div className="inline-flex items-center rounded-lg border bg-muted/40 p-1">
-      <Opt value="month" label="Mese" Icon={CalendarDays} />
-      <Opt value="week" label="Settimana" Icon={Columns3} />
+      {VIEW_OPTIONS.map(({ value, label, icon: Icon }) => {
+        const active = view === value;
+        return (
+          <button
+            key={value}
+            type="button"
+            onClick={() => onChange(value)}
+            aria-pressed={active}
+            className={cn(
+              "inline-flex items-center gap-1.5 h-9 px-3.5 text-sm font-semibold rounded-md transition-colors",
+              active
+                ? "bg-background shadow-sm text-foreground"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            <Icon className="h-4 w-4" aria-hidden />
+            {label}
+          </button>
+        );
+      })}
     </div>
   );
 }

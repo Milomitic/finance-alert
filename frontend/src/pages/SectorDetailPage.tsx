@@ -54,6 +54,11 @@ export default function SectorDetailPage() {
   const decoded = decodeURIComponent(name);
   const q = useSectorDetail(decoded);
 
+  // `getSectorIcon` is a lookup into a module-level Record<string, LucideIcon>,
+  // so this reference is one of a fixed set of components — stable across
+  // renders, not created during one. `react-hooks/static-components` sees a
+  // capitalized local const used as JSX and cannot prove where it came from;
+  // the disable is at the usage below, where the rule reports.
   const Icon = getSectorIcon(decoded);
   const iconColor = getSectorIconColor(decoded);
 
@@ -96,6 +101,7 @@ export default function SectorDetailPage() {
     <div className="p-6 space-y-6 max-w-[1400px] mx-auto">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
+          {/* eslint-disable-next-line react-hooks/static-components -- lookup, not a component created during render; see the const above */}
           <Icon className={cn("h-7 w-7", iconColor)} strokeWidth={1.75} />
           <div>
             <h1 className="text-2xl font-semibold">{decoded}</h1>
