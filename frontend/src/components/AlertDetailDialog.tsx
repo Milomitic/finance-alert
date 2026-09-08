@@ -19,6 +19,7 @@ import type { Alert, SignalChainStep, SignalSnapshot } from "@/api/types";
 import { AlertKindChip, AlertToneChip } from "@/components/AlertChips";
 import { HolderCountBadge } from "@/components/stocks/HolderCountBadge";
 import { SignalChartSvg } from "@/components/SignalChartSvg";
+import { SignalBreadthRow } from "@/components/alert/SignalBreadthRow";
 import { SignalSnapshotView } from "@/components/SignalSnapshotView";
 import { PlaybookView } from "@/components/PlaybookView";
 import { TrackTradeForm } from "@/components/TrackTradeForm";
@@ -487,6 +488,14 @@ export function AlertDetailDialog({ alert, onClose }: Props) {
               Snapshot del trigger
             </div>
           )}
+          {/* Ampiezza prima dello snapshot: dice se leggere i numeri sotto
+              come un fatto del titolo o come una condizione di mercato. */}
+          <div className="mb-3">
+            <SignalBreadthRow
+              others={alert.same_day_others}
+              sameSector={alert.same_day_sector}
+            />
+          </div>
           {isSignalKind(alert.rule_kind) ? (
             <SignalSnapshotView
               snapshot={alert.snapshot ?? {}}

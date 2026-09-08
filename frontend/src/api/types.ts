@@ -148,6 +148,12 @@ export interface Alert {
   snapshot: Record<string, unknown>;
   read_at: string | null;
   archived_at: string | null;
+  /** Quanti ALTRI titoli hanno fatto scattare lo stesso detector lo stesso
+   *  giorno, e quanti di quelli condividono il settore. Contesto, MAI
+   *  conferma: la coincidenza di segnali e' risultata nulla in due studi
+   *  indipendenti. Null per gli alert legacy senza `signal_date`. */
+  same_day_others?: number | null;
+  same_day_sector?: number | null;
   /** Realized outcome from the signal_outcomes warehouse (LEFT JOIN on
    *  alert_id). All four are null while the signal's forward horizon hasn't
    *  elapsed yet — the UI shows "in maturazione" for a signal alert that has

@@ -15,7 +15,9 @@ from sqlalchemy.orm import Session
 
 from app.core.visibility import visible_country_clause
 from app.models import Alert, OhlcvDaily, Stock
+from app.services import signal_breadth_service
 from app.services.alert_service import derive_rule_kind
+from app.services.signal_breadth_service import Breadth
 
 RANGE_DAYS: dict[str, int | None] = {
     "1m": 30, "3m": 90, "6m": 180, "1y": 365, "5y": 5 * 365, "all": None,
@@ -78,6 +80,12 @@ class StockDetail:
     # rule_kind=None — leaving the stock-detail "Alert storici" table
     # without its Regola/Tono chips populated.
     alerts_history: list[tuple[Alert, str | None]]
+    # Per alert id: how many OTHER stocks fired the same detector that day, and
+    # how many of those share this stock's sector. Context for reading the
+    # alert — a trend_pullback that came with 43 others is a market condition,
+    # a gap_and_go that came alone is about the stock. Never a confirmation:
+    # see signal_breadth_service.
+    signal_breadth: dict[int, "Breadth"]
 
 
 @dataclass
@@ -298,4 +306,10 @@ def get_detail(db: Session, ticker: str, range_key: str = "1d") -> StockDetail |
         kpis=kpis,
         effective_rules=effective_rules,
         alerts_history=alerts_history,
+        signal_breadth=signal_breadth_service.breadth_for(
+            db,
+            [a for a, _ in alerts_history],
+            stock_id=stock.id,
+            sector=stock.sector,
+        ),
     )

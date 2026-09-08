@@ -43,6 +43,13 @@ class AlertOut(BaseModel):
     snapshot: dict[str, Any]
     read_at: datetime | None
     archived_at: datetime | None
+    # ── Ampiezza: quanti ALTRI titoli hanno fatto scattare lo stesso detector
+    # lo stesso giorno, e quanti di quelli condividono il settore. Contesto,
+    # mai conferma — la concurrence e' risultata nulla in due studi
+    # indipendenti (CLAUDE.md). Serve a distinguere un movimento del titolo da
+    # una condizione di mercato. None per gli alert legacy senza signal_date.
+    same_day_others: int | None = None
+    same_day_sector: int | None = None
     # ── Realised outcome (signal_outcomes warehouse, LEFT JOIN on alert_id) ──
     # All four are None while the signal's forward horizon hasn't elapsed yet
     # (the UI shows "in corso" for a signal alert with signal_date + no

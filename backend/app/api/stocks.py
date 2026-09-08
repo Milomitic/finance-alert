@@ -458,6 +458,14 @@ def get_stock_detail(
                 trigger_price=float(a.trigger_price),
                 snapshot=__import__("json").loads(a.snapshot or "{}"),
                 read_at=a.read_at, archived_at=a.archived_at,
+                same_day_others=(
+                    detail.signal_breadth[a.id].others
+                    if a.id in detail.signal_breadth else None
+                ),
+                same_day_sector=(
+                    detail.signal_breadth[a.id].same_sector
+                    if a.id in detail.signal_breadth else None
+                ),
             )
             for (a, rule_kind) in detail.alerts_history
         ],
