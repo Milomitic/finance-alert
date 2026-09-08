@@ -30,9 +30,50 @@ VALID_SIDES = ("long", "short")
 VALID_EXIT_REASONS = ("stop", "target", "manual")
 
 
+def _fx_currency(stock: Stock | None) -> str | None:
+    """The currency to convert with: prices are stored in MAJOR units (GBp is
+    already scaled to GBP by live_quote), so a residual minor-unit code maps to
+    its major before any rate lookup."""
+    cur = getattr(stock, "currency", None)
+    if cur is None:
+        return None
+    return "GBP" if is_minor_unit(cur) else cur
+
+
+def _rate_for_stock(db: Session, stock_id: int) -> float | None:
+    """USD per 1 unit of the stock's currency right now, or None."""
+    stock = db.get(Stock, stock_id)
+    return fx_service.rate_for(_fx_currency(stock))
+
+
 def _sign(side: str) -> int:
     """P&L direction multiplier: a short profits when the price FALLS."""
     return 1 if side == "long" else -1
+
+
+def _check_levels(side: str, stop: float | None, target: float | None) -> None:
+    """The stop/target order must match the side.
+
+    Deliberately liberal on stop vs ENTRY — a stop above entry on a long is a
+    locked-in-profit trailing stop, legitimate and common. What cannot stand is
+    a stop on the wrong side of the TARGET, because `_evaluate_hits` closes on
+
+        sign * (price - stop) <= 0   ->   reason = "stop"
+
+    so a long at 100 whose stop sits at 120 is stopped out at the next
+    live-movers sweep or scan end, with a Telegram push, recorded as
+    exit_reason="stop". The user's hand-kept journal loses the position and is
+    told it was stopped out of it.
+
+    It lived inside `open_position` until 2026-09-08 and `update_position`
+    checked positivity only, so the same state was one PATCH away.
+    """
+    if stop is None or target is None:
+        return
+    if side == "long" and stop >= target:
+        raise ValueError("per un long lo stop deve stare sotto il target")
+    if side == "short" and stop <= target:
+        raise ValueError("per uno short lo stop deve stare sopra il target")
 
 
 def open_position(
@@ -61,11 +102,7 @@ def open_position(
             raise ValueError(f"{label} must be positive, got {v}")
     if size is not None and size <= 0:
         raise ValueError(f"size must be positive, got {size}")
-    if stop_price is not None and target_price is not None:
-        if side == "long" and stop_price >= target_price:
-            raise ValueError("per un long lo stop deve stare sotto il target")
-        if side == "short" and stop_price <= target_price:
-            raise ValueError("per uno short lo stop deve stare sopra il target")
+    _check_levels(side, stop_price, target_price)
     pos = Position(
         stock_id=stock_id,
         alert_id=alert_id,
@@ -75,6 +112,9 @@ def open_position(
         target_price=target_price,
         size=size,
         notes=notes,
+        # Stamped now so the realised result can stop moving when the trade
+        # closes — see the note on the columns.
+        entry_fx_rate=_rate_for_stock(db, stock_id),
     )
     db.add(pos)
     db.commit()
@@ -105,6 +145,7 @@ def close_position(
     pos.closed_at = datetime.now(UTC)
     pos.exit_price = exit_price
     pos.exit_reason = exit_reason
+    pos.exit_fx_rate = _rate_for_stock(db, pos.stock_id)
     db.commit()
     db.refresh(pos)
     return pos
@@ -125,13 +166,26 @@ def update_position(
         raise LookupError(f"position {position_id} not found")
     if pos.closed_at is not None:
         raise ValueError(f"position {position_id} already closed")
+    for label, v in (("stop_price", stop_price), ("target_price", target_price)):
+        if v is not None and v <= 0:
+            raise ValueError(f"{label} must be positive")
+
+    # Validate the RESULT of the edit, not each argument on its own: changing
+    # one level has to be checked against the level already stored, and
+    # changing both at once must be judged on the pair that will exist rather
+    # than on the incoherent intermediate. Nothing is written until it passes,
+    # so a rejected PATCH cannot half-apply.
+    final_stop = stop_price if stop_price is not None else (
+        float(pos.stop_price) if pos.stop_price is not None else None
+    )
+    final_target = target_price if target_price is not None else (
+        float(pos.target_price) if pos.target_price is not None else None
+    )
+    _check_levels(pos.side, final_stop, final_target)
+
     if stop_price is not None:
-        if stop_price <= 0:
-            raise ValueError("stop_price must be positive")
         pos.stop_price = stop_price
     if target_price is not None:
-        if target_price <= 0:
-            raise ValueError("target_price must be positive")
         pos.target_price = target_price
     if notes is not None:
         pos.notes = notes
@@ -253,7 +307,17 @@ def _enrich(
             out["realized_pct"] = sign * (exit_p - entry) / entry * 100.0
             if size is not None:
                 out["realized_abs"] = sign * (exit_p - entry) * size
-        out["realized_usd"] = fx_service.to_usd(out["realized_abs"], fx_cur)
+        # The realised leg is HISTORY: convert at the rate stamped when the
+        # position closed, so the number stops moving. Rows opened before the
+        # rate book have no stamp and keep converting at the current rate —
+        # exactly what was already happening to them, so nothing the user has
+        # been reading changes value.
+        if out["realized_abs"] is None:
+            out["realized_usd"] = None
+        elif pos.exit_fx_rate is not None:
+            out["realized_usd"] = out["realized_abs"] * float(pos.exit_fx_rate)
+        else:
+            out["realized_usd"] = fx_service.to_usd(out["realized_abs"], fx_cur)
         return out
     price = price_fn(stock.ticker) if price_fn is not None else _live_price(stock.ticker)
     source = "live" if price is not None else None

@@ -471,3 +471,98 @@ def test_notify_skipped_when_telegram_disabled(db, monkeypatch):
     # And directly: the sender returns a typed skip without touching HTTP.
     res = notifier_service.notify_position_closed([])
     assert res.sent is False and res.reason == "no_alerts"
+
+
+# ---------------------------------------------------------------------------
+# update: the stop/target order must survive an edit, not only a creation
+# ---------------------------------------------------------------------------
+#
+# `open_position` refuses a long whose stop sits at or above its target, and
+# its docstring says why: "the position would auto-close on its first
+# evaluation tick". `update_position` validated each level for positivity ONLY,
+# so the same state was reachable one PATCH later — and the consequence is not
+# cosmetic. `_evaluate_hits` closes on
+#
+#     sign * (price - stop) <= 0   ->   reason = "stop"
+#
+# so a long at 100 whose stop is moved to 120 is stopped out at the next
+# live-movers sweep or scan end, with a Telegram push, recorded as
+# exit_reason="stop". A hand-kept journal loses the position and is told it was
+# stopped out of it.
+#
+# The rule stays the creation's rule, deliberately: stop vs TARGET relative to
+# side. Stop vs ENTRY is left alone — a stop above entry on a long is a
+# locked-in-profit trailing stop, which is legitimate and common.
+
+
+def test_update_rejects_a_long_stop_at_or_above_its_target(db):
+    s = _seed_stock(db, "X")
+    pos = position_service.open_position(
+        db, stock_id=s.id, entry_price=100.0, stop_price=90.0, target_price=110.0,
+    )
+    with pytest.raises(ValueError, match="sotto il target"):
+        position_service.update_position(db, pos.id, stop_price=120.0)
+
+
+def test_update_rejects_a_short_stop_at_or_below_its_target(db):
+    s = _seed_stock(db, "X")
+    pos = position_service.open_position(
+        db, stock_id=s.id, side="short", entry_price=100.0,
+        stop_price=110.0, target_price=90.0,
+    )
+    with pytest.raises(ValueError, match="sopra il target"):
+        position_service.update_position(db, pos.id, stop_price=80.0)
+
+
+def test_update_rejects_a_target_that_crosses_the_existing_stop(db):
+    # The same defect from the other side: moving the TARGET under the stop.
+    s = _seed_stock(db, "X")
+    pos = position_service.open_position(
+        db, stock_id=s.id, entry_price=100.0, stop_price=90.0, target_price=110.0,
+    )
+    with pytest.raises(ValueError, match="sotto il target"):
+        position_service.update_position(db, pos.id, target_price=85.0)
+
+
+def test_update_validates_the_RESULT_not_the_argument(db):
+    # Changing both at once to a coherent pair must pass, even though the
+    # intermediate state (new stop vs old target) is incoherent.
+    s = _seed_stock(db, "X")
+    pos = position_service.open_position(
+        db, stock_id=s.id, entry_price=100.0, stop_price=90.0, target_price=110.0,
+    )
+    updated = position_service.update_position(
+        db, pos.id, stop_price=200.0, target_price=250.0,
+    )
+    assert (float(updated.stop_price), float(updated.target_price)) == (200.0, 250.0)
+
+
+def test_update_still_allows_a_trailing_stop_above_entry(db):
+    # The liberal part of the rule, and it must stay liberal: locking in profit
+    # on a long means a stop ABOVE the entry price.
+    s = _seed_stock(db, "X")
+    pos = position_service.open_position(
+        db, stock_id=s.id, entry_price=100.0, stop_price=95.0, target_price=130.0,
+    )
+    updated = position_service.update_position(db, pos.id, stop_price=115.0)
+    assert float(updated.stop_price) == 115.0
+
+
+def test_update_of_a_position_with_no_target_only_checks_positivity(db):
+    # Nothing to cross when the other level is absent.
+    s = _seed_stock(db, "X")
+    pos = position_service.open_position(db, stock_id=s.id, entry_price=100.0, stop_price=90.0)
+    assert float(position_service.update_position(db, pos.id, stop_price=150.0).stop_price) == 150.0
+
+
+def test_update_leaves_the_position_untouched_when_it_refuses(db):
+    # A rejected PATCH must not half-apply: the stop stays what it was.
+    s = _seed_stock(db, "X")
+    pos = position_service.open_position(
+        db, stock_id=s.id, entry_price=100.0, stop_price=90.0, target_price=110.0,
+    )
+    with pytest.raises(ValueError):
+        position_service.update_position(db, pos.id, stop_price=120.0, notes="nota")
+    db.refresh(pos)
+    assert float(pos.stop_price) == 90.0
+    assert pos.notes is None

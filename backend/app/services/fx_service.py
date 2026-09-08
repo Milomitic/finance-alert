@@ -110,8 +110,21 @@ def _fetch_live_rate(currency: str) -> float | None:
         return None
 
 
-def _get_rate(currency: str) -> float:
-    """Resolve USD per 1 unit of `currency`. Cache → live → fallback."""
+def _get_rate(currency: str) -> float | None:
+    """USD per 1 unit of `currency`. Cache → live → table → None.
+
+    It ended `FX_RATES_FALLBACK.get(cur, 1.0)`, so a currency absent from the
+    table converted 1:1 and 100 units of anything became 100 USD — a missing
+    rate wearing the most plausible possible value. Now an unresolvable
+    currency is UNKNOWN and the caller shows nothing.
+
+    The distinction this must not destroy: a KNOWN currency whose live fetch
+    fails still falls back to the hardcoded approximation. That is a
+    deliberate, documented degradation, and every currency in the live
+    catalogue (USD, GBP, EUR, HKD, JPY, KRW, GBp, NOK, AUD, DKK) lands there.
+    Nothing in production reaches the None branch today; it is a trap for the
+    next listing the catalogue picks up.
+    """
     cur = currency.upper()
     if cur == "USD":
         return 1.0
@@ -120,26 +133,44 @@ def _get_rate(currency: str) -> float:
         entry = _CACHE.get(cur)
         if entry is not None and (now - entry[0]) < _TTL_SECONDS:
             return entry[1]
-    # Cache miss / stale — try live, fall back to hardcoded.
     live = _fetch_live_rate(cur)
-    rate = live if live is not None else FX_RATES_FALLBACK.get(cur, 1.0)
+    rate = live if live is not None else FX_RATES_FALLBACK.get(cur)
+    if rate is None:
+        # Not cached: an unknown code is cheap to re-check and a new listing
+        # should start converting as soon as the table or the feed knows it.
+        logger.debug(f"[fx] no rate for {cur} — reporting unknown, not parity")
+        return None
     with _CACHE_LOCK:
         _CACHE[cur] = (now, rate)
     return rate
 
 
+def rate_for(currency: str | None) -> float | None:
+    """The rate a caller should STORE alongside an amount, or None.
+
+    Positions stamp this at open and at close so a realised result stops
+    moving once the trade is history — see position_service.
+    """
+    if currency is None or not currency.strip():
+        return None
+    return _get_rate(currency)
+
+
 def to_usd(amount: float | None, currency: str | None) -> float | None:
     """Convert `amount` from `currency` to USD.
 
-    None or non-finite amounts → None.
-    Missing / unknown currency → assume USD (no conversion).
+    None amount → None. Missing or unresolvable currency → None as well:
+    assuming USD because the field is empty is a guess presented as a fact,
+    and converting 1:1 because the code is unknown is the same guess wearing a
+    number. No stock in the live catalogue has either, so refusing costs
+    nothing and prevents the next one from being silently mispriced.
     """
     if amount is None:
         return None
     if currency is None or not currency.strip():
-        return amount
+        return None
     rate = _get_rate(currency)
-    return amount * rate
+    return None if rate is None else amount * rate
 
 
 def clear_cache() -> None:

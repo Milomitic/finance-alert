@@ -48,4 +48,14 @@ class Position(Base):
     exit_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 4), nullable=True)
     # "stop" | "target" | "manual" — how the position was closed.
     exit_reason: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    # USD per 1 unit of the stock's currency, stamped when the position was
+    # opened and when it was closed. `realized_usd` used to convert at READ
+    # time, so a trade closed months ago reported a different USD result every
+    # time the rate moved. The realised leg now uses `exit_fx_rate`; the
+    # unrealised leg still marks to the CURRENT rate, because an open position
+    # is a mark-to-market and should move with the currency. NULL on rows that
+    # predate the book — they keep converting at the current rate, which is
+    # what was already happening to them.
+    entry_fx_rate: Mapped[Decimal | None] = mapped_column(Numeric(18, 8), nullable=True)
+    exit_fx_rate: Mapped[Decimal | None] = mapped_column(Numeric(18, 8), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
