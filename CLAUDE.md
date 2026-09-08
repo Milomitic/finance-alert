@@ -621,6 +621,66 @@ read as a bug in the bar. Fixed in `76bd68a`.
 3. **Frontend tests run in CI.** They did not before — the job was `npm ci` +
    `npm run build` only, so 85 tests could go red and merge anyway.
 
+### Two ways a regression test passes while the bug is present (2026-09-08)
+
+Both cost a round-trip in one session, and both LOOK like a passing test.
+
+**`toEqual` on DOM nodes compares STRUCTURE, not identity.** The LogStream
+test asserts that a row survives an append — i.e. that its DOM element is the
+SAME OBJECT afterwards. Written with `expect(after).toEqual(before)` it passed
+cleanly with the bug reintroduced, because a freshly remounted row is
+structurally identical to the one it replaced: same tag, same classes, same
+text. `toBe` is the assertion; `toEqual` is the trap, and it is the one that
+reads more naturally.
+
+**A test can be true of nothing.** `StockFiltersCard`'s a11y test asserts every
+numeric filter has an accessible name — but three of the four filter areas are
+CLOSED by default, so a bare mount renders almost none of them and the
+assertion holds vacuously. It opens every area first AND asserts the count from
+below (`toBeGreaterThanOrEqual(9)`), so a change that stops rendering them goes
+red instead of quiet. Any "every X has property P" test needs a floor on the
+number of X.
+
+The rule already in this file — confirm the test fails with the fix reverted —
+is what caught both. It is two commands and it is not optional.
+
+### `React.memo` does nothing when the key is unstable
+
+Worth knowing before reaching for memo on any list. LogStream keyed rows on
+`${r.ts}-${i}` where `i` indexes a list that is REVERSED for display, so one
+arriving record shifted every index, every key changed, and React was not
+re-rendering 500 rows — it was unmounting and rebuilding them. Memo cannot help
+there: a changed key is a different element, not a re-render.
+
+Order matters. Stable identity first, then memo. And identity often cannot be
+fixed at the render site — `LogRecord` has no id, so the counter had to go in
+`usePlatformHealthStream`, which owns the buffer.
+
+The related trap on the OTHER side: memo is pure overhead when a prop is
+rebuilt every render. `StockBrowserTable`'s rows key on `s.id` (stable), but
+the row calls `rowChange(item)`, which closes over a map that is replaced on
+every quote tick — so memo would compare a fresh function against the old one
+and skip nothing. Making it pay means giving each row SCALAR props, i.e.
+moving the per-row lookup up into the parent, in both layouts. Measured cost
+of not doing it, after `31f2002` removed the hidden second layout: ~32 ms every
+15 s (`FAST_MS` in `useLiveQuote.ts`) while a market is open. Deliberately not
+done.
+
+### The gated lint config now carries TWO rules
+
+`eslint.hooks.config.js` gained `react-hooks/static-components` on 2026-09-08.
+Its bar was the file's own: the rule had to be at ZERO first, so a red result
+still always means something is broken. It is not stylistic — a component
+declared inside another component's body is a new TYPE every render, React
+reconciles by type, and the subtree is destroyed and rebuilt. Both offenders
+were toggle groups, so the remount was caused by the very click it punished,
+and keyboard focus went to `<body>`.
+
+One documented false positive: `const Icon = getSectorIcon(x)` is a LOOKUP into
+a module-level map, so the reference is stable, but the rule sees a capitalized
+local const used as JSX. There is exactly one such disable, in
+`SectorDetailPage`. Do not add more without checking it really is a lookup.
+
 ### Writing tests that can actually see this class of bug
 
 A test that renders a component in ONE state cannot detect a hook-order fault.
