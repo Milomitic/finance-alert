@@ -22,7 +22,19 @@ write_files:
       set -euxo pipefail
       systemctl disable --now firewalld || true
       PUBIP="$(curl -s --max-time 10 ifconfig.me || true)"
-      EXEC="--write-kubeconfig-mode 644"
+      # 644 put cluster-admin credentials in reach of every local account:
+      # the node runs chrony, dbus, polkitd, the OCI agent and a handful of
+      # container UIDs, any of which could read /etc/rancher/k3s/k3s.yaml.
+      # 640 with a group keeps `kubectl` working for the operator (opc is put
+      # in `k3s` below) without leaving it world-readable.
+      #
+      # Changing this alone does NOT fix a machine that already exists — the
+      # mode is baked into the running systemd unit — so the live node was
+      # corrected separately on 2026-09-09. Rebuilding from this file now
+      # starts correct instead of inheriting the hole.
+      groupadd -f k3s
+      usermod -aG k3s opc || true
+      EXEC="--write-kubeconfig-mode 640 --write-kubeconfig-group k3s"
       [ -n "$PUBIP" ] && EXEC="$EXEC --tls-san $PUBIP"
       curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="$EXEC" sh -
       # readiness marker other tooling can poll for

@@ -202,9 +202,15 @@ jobs:
     needs: image
     runs-on: ubuntu-latest
     steps:
-      # Its own job, like `audit`: a real gate (a fixable CRITICAL/HIGH in the
-      # image turns CI red and visible) but deliberately OFF the bump chain, so a
-      # scan finding does not block a release. `--ignore-unfixed` is the crux:
+      # A real gate, and since 2026-09-09 it is ON the bump chain: `bump` needs
+      # this job and `audit`, so a fixable CRITICAL/HIGH stops the promotion
+      # instead of shipping beside a red X.
+      #
+      # This REVERSES what the note here used to say — "deliberately OFF the
+      # bump chain, so a scan finding does not block a release" — and the
+      # reason it said that is worth keeping in view: a gate that blocks
+      # constantly gets switched off. `--ignore-unfixed` is what makes it
+      # safe to block, and it is the crux:
       # base-image OS CVEs with no upstream fix yet would otherwise red the
       # pipeline forever, which trains everyone to ignore it (exactly how the
       # pip/npm audit rotted). We only fail on things we can actually act on.
@@ -221,7 +227,18 @@ jobs:
   bump:
     name: gitops — bump image tag
     if: github.event_name == 'push' && github.ref == 'refs/heads/cloud'
-    needs: image
+    # The image is BUILT and pushed regardless (publishing before the scan is
+    # fine); what waits for the gates is the PROMOTION. Until 2026-09-09 this
+    # was `needs: image` alone, so a failing `audit` or `image-scan` turned CI
+    # red and the GitOps tag advanced anyway — the deploy went out beside its
+    # own failure notice, which is how a red X stops being read.
+    #
+    # Both gates only fail on things that can actually be acted on: `audit` on
+    # a known CVE with a fix, `image-scan` with --ignore-unfixed. A genuine
+    # emergency ships by removing a dependency here in a commit, which leaves
+    # the deroga in the git history where it can be reviewed, rather than in
+    # someone's memory.
+    needs: [image, audit, image-scan]
     runs-on: ubuntu-latest
     permissions:
       contents: write

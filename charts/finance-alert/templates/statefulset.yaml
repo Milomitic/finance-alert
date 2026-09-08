@@ -114,6 +114,45 @@ spec:
                   name: {{ include "finance-alert.secretName" . }}
                   key: FRED_API_KEY
                   optional: true
+            # Telegram — the digest, the per-signal push and the health
+            # transition alerts all need BOTH of these. Third time this exact
+            # trap has been found in this file: a capability shipped in the app,
+            # its key absent from this list, and the feature silently off. See
+            # the Finnhub note (429 of 999 tickers newsless) and the FRED one
+            # (macro frozen for 60 days) above — same shape, and neither
+            # surfaced as an error.
+            #
+            # These two go further than Finnhub/FRED did: the key is absent
+            # from the Secret as well, so wiring them here does not turn
+            # Telegram on. It makes the Secret the ONLY thing left to fill,
+            # which is where the fix ends and the operator's part begins.
+            - name: TELEGRAM_BOT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "finance-alert.secretName" . }}
+                  key: TELEGRAM_BOT_TOKEN
+                  optional: true
+            - name: TELEGRAM_CHAT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "finance-alert.secretName" . }}
+                  key: TELEGRAM_CHAT_ID
+                  optional: true
+            # Twelve Data — used on earnings paths as a fallback.
+            - name: TWELVEDATA_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "finance-alert.secretName" . }}
+                  key: TWELVEDATA_API_KEY
+                  optional: true
+            # NOT a secret, and that is why it stayed missing: it is a URL, so
+            # it belongs to the chart rather than to the Secret nobody thought
+            # to extend. Derived from the ingress host so it cannot drift from
+            # the address the app is actually served on; the app's own default
+            # is http://localhost:8000, which is correct for a laptop and wrong
+            # for every link the pod puts in a Telegram message.
+            - name: PUBLIC_BASE_URL
+              value: {{ .Values.publicBaseUrl | default (printf "https://%s" .Values.ingress.host) | quote }}
             # M7-P4 cutover switch. OFF (default) = the app keeps its embedded
             # SQLite on the PVC — the pre-M7 behaviour AND the instant rollback
             # (flip the flag back to false and the untouched .db is authoritative
