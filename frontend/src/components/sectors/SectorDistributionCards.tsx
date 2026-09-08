@@ -10,11 +10,16 @@ import { cn } from "@/lib/utils";
  * self-contained and reads one slice of the sector KPIs. Extracted from
  * SectorDetailPage so the page file stays an orchestrator. */
 
+/* Scala SEQUENZIALE, non direzionale: deve attraversare tinte distinte, non
+ * due gradazioni della stessa. L'unificazione della tavolozza ha portato gli
+ * estremi a emerald-500 + emerald-600 — due verdi adiacenti al posto di un
+ * gradino — e `lime` rimette una tinta fra l'ambra e l'emerald senza voler
+ * dire "in rialzo". */
 const SCORE_BUCKETS = [
   { label: "<20", color: "bg-rose-500" },
   { label: "20-39", color: "bg-orange-500" },
   { label: "40-59", color: "bg-amber-500" },
-  { label: "60-79", color: "bg-emerald-500" },
+  { label: "60-79", color: "bg-lime-500" },
   { label: "≥80", color: "bg-emerald-600" },
 ];
 

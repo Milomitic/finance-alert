@@ -31,13 +31,13 @@ const MOOD: Record<MoodKey, { label: string; icon: ReactNode; fg: string; bg: st
     label: "Bullish",
     icon: <TrendingUp className="h-5 w-5" />,
     fg: "text-emerald-800 dark:text-emerald-300",
-    bg: "bg-gradient-to-r from-emerald-50 to-emerald-50 dark:from-emerald-950/40 dark:to-emerald-950/30 border-emerald-300/60 dark:border-emerald-700/50",
+    bg: "bg-gradient-to-r from-emerald-50 to-emerald-100 dark:from-emerald-950/40 dark:to-emerald-900/30 border-emerald-300/60 dark:border-emerald-700/50",
   },
   bearish: {
     label: "Bearish",
     icon: <TrendingDown className="h-5 w-5" />,
     fg: "text-rose-700 dark:text-rose-300",
-    bg: "bg-gradient-to-r from-rose-50 to-rose-50 dark:from-rose-950/40 dark:to-rose-950/30 border-rose-300/60 dark:border-rose-700/50",
+    bg: "bg-gradient-to-r from-rose-50 to-rose-100 dark:from-rose-950/40 dark:to-rose-900/30 border-rose-300/60 dark:border-rose-700/50",
   },
   neutral: {
     label: "Neutrale",
