@@ -788,10 +788,29 @@ rebuilt every render. `StockBrowserTable`'s rows key on `s.id` (stable), but
 the row calls `rowChange(item)`, which closes over a map that is replaced on
 every quote tick — so memo would compare a fresh function against the old one
 and skip nothing. Making it pay means giving each row SCALAR props, i.e.
-moving the per-row lookup up into the parent, in both layouts. Measured cost
-of not doing it, after `31f2002` removed the hidden second layout: ~32 ms every
-15 s (`FAST_MS` in `useLiveQuote.ts`) while a market is open. Deliberately not
-done.
+moving the per-row lookup up into the parent, in both layouts.
+
+**CLOSED on 2026-09-08, not deferred. Do not re-open it as a perf task.**
+Stating the objective plainly is what settled it: only the rows whose price
+moved would re-render instead of all 200, on a cycle that runs every 15 s
+(`FAST_MS` in `useLiveQuote.ts`). That is roughly two dropped frames, four
+times a minute, and only when it coincides with the user scrolling or clicking.
+
+⚠️ **The "~32 ms" this note used to quote was INFERRED, not measured.** The real
+measurement is 63.0 ms for one changed quote against 66.5 ms for all 200 — taken
+BEFORE `31f2002` removed the hidden second layout. Halving it assumes removing
+half the DOM halves reconciliation, which is plausible and is not a fact. If
+anyone re-opens this, measure first.
+
+And memo does not touch the MOUNT cost (297 ms before `31f2002`, about half
+that now) — it only affects re-renders. "The screener is slow to open" and "the
+screener stutters" look identical on screen and are different problems; this
+work addresses only the second.
+
+The one honest reason to do it anyway is legibility: the row reads ~10 values
+out of closures, and explicit props would make it testable in isolation. That
+is a maintainability argument, and it should be made as one — not sold as
+performance.
 
 ### The gated lint config now carries TWO rules
 
