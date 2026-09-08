@@ -368,6 +368,51 @@ If a push somehow fails to trigger CI (observed once, cause not established —
 the ref had moved and no run was ever created), dispatching will not fix it.
 Only another push event will build and deploy.
 
+## Telegram: the app and Alertmanager share ONE bot (2026-09-09)
+
+Infra alerting was working the whole time and the app's was not, which is the
+kind of asymmetry that hides because both are "Telegram".
+
+Measured on the live Alertmanager: `alertmanager_notifications_total{
+integration="telegram"} = 306` with **zero** failures across every reason. Its
+route has had a real bot_token/chat_id since setup. The APP's Secret had
+neither, and the chart did not even reference them — see the F03 note in
+`statefulset.yaml`, the third instance of that shape after Finnhub and FRED.
+
+The app's keys were copied FROM the Alertmanager Secret on 2026-09-09 (same
+bot, same chat), verified identical by hash, and proven end to end by sending
+through `notifier_service._send_telegram` rather than a bare curl — configured
+is not delivers, which is exactly what the 306/0 counter established for the
+other side.
+
+⚠️ **They are now coupled.** Rotating the bot token in one place breaks the
+other silently: the app would log a send failure nobody reads, and Alertmanager
+would increment `notifications_failed_total`, which nothing watches. If you
+rotate, update BOTH `alertmanager-kps-alertmanager` (via the kube-prometheus
+values) and `finance-alert-prod`.
+
+**What turning it on starts:** the daily digest at 08:00 (`digest_hour`), the
+per-signal push if `telegram_push_signals` is enabled, and health-transition
+alerts (`telegram_notify_health`, default True, max one per state per 6h). To
+stop them, remove the two keys from `finance-alert-prod` and restart the pod.
+
+## Node disk: 82% full, and that is monitored (2026-09-09)
+
+Worth not re-investigating. The node's root filesystem is 30G with ~5.6G free,
+and every `local-path` PVC is a directory on it — app, Postgres, Prometheus,
+Loki, Grafana, Alertmanager all share that headroom, and local-path does NOT
+enforce the sizes the PVCs declare.
+
+There is no runaway consumer: containerd holds 7.4G for 28 images (k3s GCs them
+itself), the PVCs 4.1G (Prometheus 2.5G is the largest), the OS ~4.8G. The 7G
+under `/var/lib/kubelet/pods` is mostly the same PVC content seen through its
+bind mounts, counted twice by `du`.
+
+`kps-node-exporter` already ships `NodeFilesystemAlmostOutOfSpace` (fires under
+5% free) and `NodeFilesystemSpaceFillingUp` (predictive, 24h), and the delivery
+path is the proven one above. So this is watched, not urgent — but the fix when
+it fires is a bigger disk or shorter Prometheus retention, not a prune.
+
 ## Database migrations (alembic)
 
 - Migration files live in `backend/alembic/versions/`
