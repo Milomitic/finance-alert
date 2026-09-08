@@ -58,9 +58,24 @@ interface Row {
  * stay readable — `t.green20Plus("ROE")` instead of inlining 3 lines per row.
  * Italian phrasing matches the rest of the UI. */
 
-const GREEN = "text-green-800";
-const RED = "text-red-600";
-const AMBER = "text-amber-600";
+/* I tre toni della card, misurati contro entrambi gli sfondi (--card e' bianco
+ * al chiaro, hsl(0 0% 10%) al buio). Soglia WCAG AA per il testo normale: 4.5.
+ *
+ *                    card chiara   card scura
+ *   text-green-800       7.13        2.44   <- fallito
+ *   text-red-600         4.83        3.60   <- fallito
+ *   text-amber-600       3.19        5.46   <- fallito, ma AL CHIARO
+ *
+ * Mancavano le varianti dark del tutto, quindi due toni su tre erano
+ * illeggibili al buio su 27 punti d'uso; l'ambra invece cadeva alla LUCE, che
+ * non stavo cercando. amber-700 sta a 5.02 su bianco. Le varianti -400 stanno
+ * a 9.99 / 6.29 / 10.43 sulla card scura.
+ *
+ * Restano stringhe letterali: il purger di Tailwind vede solo quelle, e una
+ * classe composta sparirebbe in silenzio dal build di produzione. */
+const GREEN = "text-green-800 dark:text-green-400";
+const RED = "text-red-600 dark:text-red-400";
+const AMBER = "text-amber-700 dark:text-amber-400";
 
 function pctTone(opts: {
   /** Threshold for the green branch (fraction, e.g. 0.20 = 20%). */
@@ -172,11 +187,15 @@ function buildSnapshotRows(stock: Stock, kpis: StockKpis): Row[] {
   // Volume ratio coloring: green if >1.5× (unusual buying/selling activity),
   // red if <0.5× (very thin session). Kept here as a static class rather than
   // toneFor() because we're already pre-formatting the value as "1.23×".
+  //
+  // It said green/red and wrote emerald/rose — the card's other 27 tones use
+  // GREEN/RED, so one row of the same table was drawn from a different
+  // palette. Now it uses the constants the comment already named.
   let volRatioClass = "";
   const vr = kpis.vol_ratio;
   if (vr != null && Number.isFinite(vr)) {
-    if (vr >= 1.5) volRatioClass = "text-emerald-800 dark:text-emerald-400";
-    else if (vr < 0.5) volRatioClass = "text-rose-600 dark:text-rose-400";
+    if (vr >= 1.5) volRatioClass = GREEN;
+    else if (vr < 0.5) volRatioClass = RED;
   }
 
   return [
