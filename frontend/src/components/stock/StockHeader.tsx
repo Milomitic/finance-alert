@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 
 import type { OhlcvBar, Stock, StockKpis } from "@/api/types";
 import { MarketStateBadge } from "@/components/dashboard/MarketStateBadge";
+import { EtfMembershipChips } from "@/components/stock/EtfMembershipChips";
 import { StockLogo } from "@/components/dashboard/StockLogo";
 import { Card, CardContent } from "@/components/ui/card";
 import { FlashValue } from "@/components/ui/FlashValue";
@@ -177,6 +178,9 @@ export function StockHeader({ stock, kpis, ohlcv }: Props) {
                   {stock.sector}
                 </Link>
               )}
+              {/* Fondi che tengono questo titolo fra le posizioni piu' grandi.
+                  La formulazione e' vincolata da un test: vedi il componente. */}
+              <EtfMembershipChips ticker={stock.ticker} funds={stock.in_etfs} />
             </div>
           </div>
 

@@ -20,6 +20,12 @@ class StockOut(BaseModel):
     # fundamental Qualità score by design). Defaulted for back-compat with
     # constructors that predate the column.
     instrument_type: str = "equity"
+    # Funds carrying this stock among their LARGEST positions — not full
+    # membership. The cache behind it keeps 25 holdings per fund, so SPY's
+    # 200th constituent correctly gets nothing here, and the UI must say
+    # "top holding of" rather than "in". Empty for ETFs and for anything the
+    # cache has not seen. See etf_holdings_service.etfs_containing.
+    in_etfs: list[str] = []
 
 
 class StockScoreRefOut(BaseModel):

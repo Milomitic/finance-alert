@@ -97,6 +97,65 @@ def get_holdings(db: Session, ticker: str) -> list[EtfHolding]:
     return holdings
 
 
+def etfs_containing(db: Session, ticker: str) -> list[str]:
+    """Which funds carry `ticker`, from the cache `get_holdings` already fills.
+
+    The reverse of `get_holdings`, and it reads ONLY what is cached — a stock
+    detail page must never fan out to yfinance across two dozen funds.
+
+    ⚠️ IT CANNOT INVERT THE CACHE LITERALLY. `get_holdings` substitutes a
+    physical ETF's basket for a leveraged fund's swaps (`_LEVERAGED_UNDERLYING`,
+    see its note above), so SOXL's cached row IS SOXX's basket. Read straight,
+    the live cache returns
+
+        NVDA -> SOXL, QQQ, SOXX, SPY, XLK, SOXS
+
+    with the 3x bull and the 3x bear both present. NVDA is inside neither, and
+    a page claiming a stock sits in a fund AND in its inverse is worse than one
+    that says nothing. Every row is therefore attributed to
+    `underlying_of(row) or row`, which collapses the pair back onto SOXX.
+
+    THE CAP IS THE OTHER HALF OF THE HONESTY. `_MAX_HOLDINGS` is 25, so this
+    answers "is among the largest positions of", never "is a member of": SPY
+    has 503 constituents and a stock ranked 200th correctly gets nothing here.
+    Whatever renders this must say which claim it is making, because the
+    ABSENCE of a label would otherwise read as "not in that fund".
+    """
+    from app.models.fetch_cache import FetchCache
+
+    want = (ticker or "").strip().upper()
+    if not want:
+        return []
+
+    rows = (
+        db.query(FetchCache.ticker, FetchCache.payload)
+        .filter(FetchCache.kind == _KIND)
+        .all()
+    )
+
+    found: set[str] = set()
+    for row_ticker, payload in rows:
+        try:
+            data = json.loads(payload)
+            if data.get("v") != _CACHE_V:
+                continue
+            symbols = {
+                str(h.get("symbol", "")).strip().upper()
+                for h in data.get("holdings", [])
+            }
+        except Exception as e:  # noqa: BLE001 — one bad row must not 500 a page
+            logger.debug(f"[etf_holdings] reverse map skipped {row_ticker}: {e}")
+            continue
+
+        if want not in symbols:
+            continue
+        fund = (underlying_of(row_ticker) or row_ticker).upper()
+        if fund != want:  # an ETF listing itself is noise on its own page
+            found.add(fund)
+
+    return sorted(found)
+
+
 def _fetch_from_yf(ticker: str) -> list[EtfHolding]:
     """Pull top_holdings from yfinance. Returns [] for non-funds, on the
     yfinance breaker being open, or any error (never raises)."""

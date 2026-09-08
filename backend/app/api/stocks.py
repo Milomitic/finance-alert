@@ -346,7 +346,11 @@ def get_one(
     ).scalars().first()
     if stock is None:
         raise HTTPException(status_code=404, detail="Stock not found")
-    return StockOut.model_validate(stock)
+    out = StockOut.model_validate(stock)
+    # Cache-only read, so this costs one indexed query and never a network
+    # fan-out across two dozen funds on a page load.
+    out.in_etfs = etf_holdings_service.etfs_containing(db, stock.ticker)
+    return out
 
 
 

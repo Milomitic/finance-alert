@@ -16,6 +16,13 @@ export interface Stock {
    *  (excluded by design); the screener badges them. Optional for
    *  back-compat with cached pre-field responses. */
   instrument_type?: "equity" | "etf";
+  /** Funds that carry this stock among their LARGEST positions — the reverse
+   *  of the ETF-components view, built from the same 25-holding cache. It is
+   *  NOT full membership: SPY has 503 constituents and only its top 25 are
+   *  known here, so an empty list means "not a top holding", never "not in
+   *  any fund". The chip wording has to carry that. Optional for back-compat
+   *  with cached pre-field responses. */
+  in_etfs?: string[];
 }
 
 /** A row in the screener result. Stock anagrafica plus a join to the
