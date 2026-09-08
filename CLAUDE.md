@@ -530,13 +530,35 @@ prefix). The marker is zero VOLUME, never a flat bar: a real illiquid session
 can print o==h==l==c honestly, and 524 of INDV's flat bars carry genuine
 volume.
 
-⚠️ **The catalogue-wide scan found 267 tickers holding 9,216 untraded bars** —
-about a quarter of the universe, invisible until now because `find_basis_breaks`
-only fires on ~3x jumps and a carried price rarely makes one. 161 want
-`--drop-untraded` (scattered), 93 want it because their clean tail is under 200
-bars, 13 look like INDV. Worst: FER 1,619, SW 1,112, FERG 726, EDV.L 619,
-AMCR 596, CLSK 395. **NOT applied** — that is a destructive change across 267
-tickers and it needs a decision, not an agent's initiative.
+### The catalogue-wide sweep: 13 done, 254 deliberately left (2026-09-08)
+
+The scan `repair_bar_quality` made possible found **267 tickers holding 9,216
+untraded bars** — a quarter of the universe, invisible until then because
+`find_basis_breaks` only fires on ~3x jumps and a carried-over price rarely
+makes one.
+
+**The 13 that look like INDV are done.** Their prefix is a different DATA
+REGIME, not scattered damage, and the plausibility check run before applying
+is what confirms the tool was not guessing: the cut dates land on real
+corporate events. AMCR 2019-06-11 is its NYSE listing after the Bemis merger;
+SW 2024-07-08 is the birth of Smurfit Westrock; FER 2024-05-03 is Ferrovial
+moving its primary listing; DKNG, ASTS and HIMS cut at the end of their SPAC
+shells' histories. 8,132 rows, every count matching both the tool's prediction
+and the CSV exported before the delete. All keep 200+ bars (SW is shortest at
+544). Backups in `backend/data/basis-repair-backups/`.
+
+**The remaining 254, holding 4,151 bars, are NOT a defect to repair.** They are
+LOCAL MARKET HOLIDAYS that yfinance fills with a carried price, and the
+evidence is that DB1.DE and MUV2.DE have an IDENTICAL date list — 60 bars each,
+including 3 October, German Unity Day. Two different stocks sharing exact dates
+means it is the Frankfurt calendar, not the stocks. BMPS.MI clusters on the
+Milan year-end. The worst offenders are almost all non-US lines (.MI, .HK, .DE)
+for the same reason: yfinance's calendar follows the NYSE.
+
+Dropping them is defensible — a day with no market should not be a bar — but
+the median ticker loses 0.65% of its series and 91 of the 254 have exactly ONE
+bad bar. **Deliberately not applied.** Reach for `--drop-untraded` when
+something downstream actually misreads a carried price, not as housekeeping.
 
 ### EYPT: RESOLVED — there was never anything to repair (2026-09-08)
 
