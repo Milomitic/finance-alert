@@ -393,7 +393,9 @@ export default function StocksBrowserPage() {
     limit: pageSize,
     offset: page * pageSize,
   };
-  const searchQ = useStockSearch(apiParams);
+  // Lo screener naviga l'universo per FILTRI: il testo e' opzionale e
+  // pretenderlo lasciava la pagina vuota su /stocks e /stocks?min_score=60.
+  const searchQ = useStockSearch(apiParams, { requireText: false });
 
   const items = searchQ.data?.items ?? [];
   const total = searchQ.data?.total ?? 0;

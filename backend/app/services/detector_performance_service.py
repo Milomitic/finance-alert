@@ -12,9 +12,11 @@ This service computes that whole cube in one pass:
     `mkt_neutral_hit` is not null — the universe benchmark can be missing),
     and the mean forward return.
 
-HONESTY GUARDRAIL: every cell carries `low_confidence: n < min_n` (default 30,
-mirroring `signal_drift_service._DEFAULT_MIN_N` and the harness's per-detector
-reporting floor) — the UI must render thin cells as suggestive, not conclusive.
+HONESTY GUARDRAIL: every cell carries `low_confidence: effective_n < min_n`
+(default 30, counted in INDEPENDENT WINDOWS rather than rows —
+the same basis the Wilson interval is sized on, so the badge and the interval
+cannot answer differently) — the UI must render thin cells as suggestive, not
+conclusive.
 The `meta` envelope states the warehouse's actual coverage (total rows,
 detectors present vs the 17-detector universe, date range) because the
 warehouse is young: long-horizon (63d) outcomes mature months after their
@@ -196,7 +198,18 @@ def _cell(key: str, rows: Sequence, min_n: int) -> dict:
         "skill_ci_high": ci_high,
         "skill_verdict": verdict,
         "avg_fwd_return": round(avg_fwd, 2),
-        "low_confidence": n < min_n,
+        # Counted in INDEPENDENT WINDOWS, not rows — the same basis the
+        # Wilson interval above is sized on. It keyed on the raw row count
+        # until 2026-09-08, so candle_reversal rendered "1884 esiti · 16
+        # finestre · 23.6-67.4" with no low-n badge: "sample is fine" printed
+        # beside an interval 44 points wide. Two honesty guardrails in one
+        # cell, disagreeing, and the weaker one wore the badge.
+        #
+        # It is now true for every live cell, and that is the FINDING rather
+        # than a regression — CLAUDE.md already states all 16 detectors are
+        # inconclusive on this warehouse. What had to change with it is the
+        # UI's greying: a flag that is always on cannot also dim every cell.
+        "low_confidence": eff_n < min_n,
     }
 
 
@@ -335,8 +348,13 @@ def compute_equity_curve(
     """Hypothetical cumulative equity from following every matured signal that
     matches the filters, ordered by signal date.
 
-    Two curves: absolute (compound the realised forward returns) and
-    market-neutral (compound the tone-signed excess vs the universe mean). This
+    Two curves, BOTH signed by tone: absolute (compound the DIRECTIONAL
+    return — the underlying's move for a bull, its negative for a bear) and
+    market-neutral (compound the tone-signed excess vs the universe median).
+    The absolute leg compounded the raw underlying return until 2026-09-08, so
+    a bear signal on a stock that fell rendered win rate 100% beside -10%
+    equity and +10% market-neutral: three numbers, one panel, one of them out
+    of step. This
     is a growth-of-1 ILLUSTRATION — one unit per signal, sequential, with NO
     overlap handling, position sizing, or costs — not a tradeable backtest P&L.
     The market-neutral curve is the honest, beta-stripped read. Read-only over
@@ -348,6 +366,10 @@ def compute_equity_curve(
             SignalOutcome.fwd_return,
             SignalOutcome.mkt_neutral_excess,
             SignalOutcome.abs_hit,
+            # Needed to sign the absolute leg: `fwd_return` is the underlying's
+            # return, and following a bear signal on a stock that fell is a
+            # gain. Without it the curve contradicted the win rate beside it.
+            SignalOutcome.tone,
         )
         .where(SignalOutcome.horizon_days == horizon_days)
         .order_by(SignalOutcome.signal_date.asc(), SignalOutcome.id.asc())
@@ -371,14 +393,26 @@ def compute_equity_curve(
     ret_sum = 0.0
     by_date: dict[str, dict] = {}
     for r in rows:
-        eq *= 1.0 + r.fwd_return
+        # `fwd_return` is the UNDERLYING's return, which is correct for what it
+        # is and wrong to compound directly: this curve claims to be the
+        # outcome of FOLLOWING the signal, and following a bear signal on a
+        # stock that fell is a gain. Every other tone-sensitive field already
+        # flips — `abs_hit` at signal_outcome_service:255 and
+        # `mkt_neutral_excess` at :261 — so the curve was the one leg out of
+        # step, and it showed: one bear signal on a 100 -> 90 move rendered
+        # win rate 100%, absolute -10%, market-neutral +10%, all in one panel.
+        #
+        # The panel's own warning that sequential compounding without overlap,
+        # sizing and costs is illustrative does NOT cover a sign error.
+        directional = r.fwd_return if r.tone == "bull" else -r.fwd_return
+        eq *= 1.0 + directional
         excess = r.mkt_neutral_excess if r.mkt_neutral_excess is not None else 0.0
         eqmn *= 1.0 + excess
         peak = max(peak, eq)
         if peak > 0:
             max_dd = max(max_dd, (peak - eq) / peak)
         wins += int(r.abs_hit or 0)
-        ret_sum += r.fwd_return
+        ret_sum += directional
         # One point per date — the equity after that date's last signal — for a
         # clean, monotone time axis (several signals can share a date).
         by_date[r.signal_date.isoformat()] = {

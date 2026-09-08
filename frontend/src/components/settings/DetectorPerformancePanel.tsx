@@ -219,7 +219,7 @@ function DetectorRow({ row }: { row: DetectorPerfRow }) {
           {ret(t.avg_fwd_return)}
         </td>
         <td className="px-2 py-2 text-right">
-          {t.low_confidence && <LowNChip />}
+          {t.low_confidence && <LowNChip windows={t.effective_n} />}
         </td>
       </tr>
       {expanded && (
@@ -285,10 +285,20 @@ function BreakdownTable({
               <td className="px-2 py-1">
                 <span className="inline-flex items-center gap-1.5">
                   {labels[c.key] ?? c.key}
-                  {c.low_confidence && <LowNChip />}
+                  {c.low_confidence && <LowNChip windows={c.effective_n} />}
                 </span>
               </td>
-              <td className="px-2 py-1 text-right">{c.n}</td>
+              {/* Anche qui righe sopra e finestre sotto: senza il secondo
+                  numero il grigio di ogni riga sembrerebbe un pannello spento
+                  invece della risposta. Stessa ragione della tabella sopra. */}
+              <td className="px-2 py-1 text-right">
+                {c.n}
+                {c.effective_n != null && (
+                  <span className="block text-[0.6471rem] text-muted-foreground">
+                    {c.effective_n} fin.
+                  </span>
+                )}
+              </td>
               <td
                 className={cn(
                   "px-2 py-1 text-right font-semibold",
@@ -322,13 +332,27 @@ function BreakdownTable({
 }
 
 /* Chip "campione sottile" — sempre sotto la soglia min_n del backend (30). */
-function LowNChip() {
+/* Il chip diceva "n<30" con tooltip "sotto la soglia di 30 esiti maturati" —
+ * cioe' il conteggio delle RIGHE. Ma l'intervallo accanto e' dimensionato
+ * sulle finestre indipendenti, quindi candle_reversal mostrava "1.884 esiti ·
+ * 16 finestre · 23,6-67,4" SENZA chip: "campione a posto" stampato accanto a
+ * un intervallo largo 44 punti. Due garanzie nella stessa cella, in
+ * disaccordo, e il badge stava sulla piu' debole.
+ *
+ * Ora conta finestre. Il blocco replay non ne ha (l'artefatto conserva solo i
+ * conteggi), quindi li' il chip torna a parlare di righe e lo dice. */
+function LowNChip({ windows }: { windows?: number | null }) {
+  const byWindows = windows != null;
   return (
     <span
       className="px-1 py-px rounded text-[0.6471rem] uppercase tracking-wider font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
-      title="Campione sotto la soglia di 30 esiti maturati: valore indicativo, non conclusivo."
+      title={
+        byWindows
+          ? `${windows} finestre forward non sovrapposte: sotto la soglia di 30 osservazioni indipendenti, quindi il valore è indicativo e l'intervallo lo mostra. Le righe sono molte di più e non aggiungono evidenza.`
+          : "Campione sotto la soglia di 30 esiti maturati: valore indicativo, non conclusivo."
+      }
     >
-      n&lt;30
+      {byWindows ? "poche finestre" : "n<30"}
     </span>
   );
 }

@@ -65,7 +65,8 @@ export function NavbarSearch() {
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const search = useStockSearch({ q: q || undefined, limit: 8 });
+  // Ricerca rapida: a casella vuota non c'e' niente da chiedere.
+  const search = useStockSearch({ q: q || undefined, limit: 8 }, { requireText: true });
   // Solo quando la tendina e' aperta o si sta digitando: i suoi tre
   // consumatori (arricchimento per ticker, match sugli indici, top movers)
   // alimentano esclusivamente il menu, e il payload pesa ~284 kB.

@@ -14,7 +14,23 @@ function useDebounced<T>(value: T, delay: number): T {
   return debounced;
 }
 
-export function useStockSearch(params: SearchParams) {
+/* `requireText` is REQUIRED, not defaulted, and that is the fix.
+ *
+ * One hook serves two callers with opposite needs. The navbar's quick search
+ * should stay text-gated: without it every route mount fired an empty search
+ * whose result was discarded. That guard was added for the navbar and applied
+ * to the HOOK, so the screener — which browses the universe by filter and
+ * often has no text at all — stopped calling the API. /stocks and
+ * /stocks?min_score=60 issued zero requests and rendered as though nothing
+ * matched, while the backend supported the filter-only search the whole time.
+ *
+ * A default would let a third caller inherit the wrong policy by saying
+ * nothing, which is exactly how this happened. Making it explicit costs one
+ * word per call site. */
+export function useStockSearch(
+  params: SearchParams,
+  { requireText }: { requireText: boolean },
+) {
   // Debounce only the text query — filters apply immediately
   const debouncedQ = useDebounced(params.q ?? "", DEBOUNCE_MS);
   const effective: SearchParams = { ...params, q: debouncedQ || undefined };
@@ -40,10 +56,11 @@ export function useStockSearch(params: SearchParams) {
     // exchange for an invariant that cannot rot.
     queryKey: ["stocks-search", effective],
     queryFn: ({ signal }) => stocks.search(effective, signal),
-    // Senza questo, ogni montaggio di rotta sparava una ricerca vuota il cui
-    // risultato veniva poi scartato (con `q` vuoto la lista e' comunque []).
-    // Una richiesta buttata a ogni navigazione.
-    enabled: (params.q ?? "").trim().length > 0,
+    // Vedi la nota sulla firma: la ricerca rapida della navbar salta la
+    // richiesta a casella vuota (il risultato sarebbe [] e verrebbe buttato),
+    // lo screener deve interrogare comunque perche' i suoi filtri vivono
+    // altrove.
+    enabled: requireText ? (params.q ?? "").trim().length > 0 : true,
     placeholderData: keepPreviousData,
     staleTime: 30_000,
   });

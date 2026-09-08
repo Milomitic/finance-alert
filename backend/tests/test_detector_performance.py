@@ -182,32 +182,72 @@ def test_tone_breakdown_splits_bull_bear(db: Session):
 
 
 def test_low_confidence_flag_per_cell(db: Session):
-    """35 bull + 5 bear rows: the total and the bull cell clear min_n=30, the
-    bear cell (n=5) is flagged low_confidence — the honesty guardrail is per
-    CELL, not per detector."""
-    for _ in range(35):
-        _mk_outcome(db, tone="bull")
+    """The guardrail is per CELL, and it counts INDEPENDENT WINDOWS.
+
+    This test used to pile 35 bull rows on one date and assert the cell was
+    confident. It is not: 35 signals on the same morning share the whole
+    forward window, so they are one observation. The rows are now spread far
+    enough apart to be independent, which is what min_n was always meant to
+    ask for.
+    """
+    for i in range(6):
+        _mk_outcome(db, tone="bull", signal_date=date(2026, 1, 1) + timedelta(days=40 * i))
     for _ in range(5):
-        _mk_outcome(db, tone="bear")
+        _mk_outcome(db, tone="bear", signal_date=date(2026, 6, 1))
     db.commit()
 
-    row = perf.compute_detector_performance(db)["detectors"][0]
-    assert row["total"]["n"] == 40
+    row = perf.compute_detector_performance(db, min_n=5)["detectors"][0]
+    assert row["total"]["n"] == 11
     assert row["total"]["low_confidence"] is False
     tones = _cells_by_key(row["by_tone"])
     assert tones["bull"]["low_confidence"] is False
+    # Five bear rows on ONE day are one window, not five.
+    assert tones["bear"]["effective_n"] == 1
     assert tones["bear"]["low_confidence"] is True
 
 
 def test_min_n_parameter_moves_the_flag(db: Session):
-    for _ in range(10):
-        _mk_outcome(db)
+    # Ten rows on ten well-separated dates = ten independent windows.
+    for i in range(10):
+        _mk_outcome(db, signal_date=date(2026, 1, 1) + timedelta(days=40 * i))
     db.commit()
 
     assert perf.compute_detector_performance(db, min_n=30)["detectors"][0][
         "total"]["low_confidence"] is True
     assert perf.compute_detector_performance(db, min_n=5)["detectors"][0][
         "total"]["low_confidence"] is False
+
+
+def test_a_pile_of_rows_on_one_day_is_NOT_a_sample(db: Session):
+    """The defect this rule was changed to fix.
+
+    `low_confidence` keyed on the RAW row count while the Wilson interval
+    beside it is sized on `effective_n`. So candle_reversal rendered
+    "1884 esiti · 16 finestre · intervallo 23.6-67.4" with no low-n chip —
+    "sample is fine" printed next to an interval 44 points wide. Two honesty
+    guardrails in one cell, disagreeing, and the weaker one wore the badge.
+    """
+    for _ in range(200):
+        _mk_outcome(db, signal_date=date(2026, 6, 1))
+    db.commit()
+
+    cell = perf.compute_detector_performance(db, min_n=30)["detectors"][0]["total"]
+
+    assert cell["n"] == 200
+    assert cell["effective_n"] == 1
+    assert cell["low_confidence"] is True
+
+
+def test_the_badge_and_the_verdict_cannot_disagree(db: Session):
+    # An inconclusive interval beside a confident badge is the exact pairing
+    # that was on screen.
+    for _ in range(200):
+        _mk_outcome(db, signal_date=date(2026, 6, 1))
+    db.commit()
+
+    cell = perf.compute_detector_performance(db, min_n=30)["detectors"][0]["total"]
+
+    assert not (cell["skill_verdict"] == "inconclusive" and not cell["low_confidence"])
 
 
 def test_archived_alerts_are_still_measured(db: Session):
@@ -451,7 +491,12 @@ def test_detector_performance_endpoint_returns_cube(client: TestClient, db: Sess
     assert regimes["n/d"]["low_confidence"] is True
     bands = {c["key"]: c for c in row["by_strength"]}
     assert bands[">=75"]["n"] == 31
-    assert bands[">=75"]["low_confidence"] is False
+    # 31 rows, all on the SAME date, are one independent window — so the cell
+    # is low_confidence despite the row count clearing min_n. This assertion
+    # read `is False` while the flag keyed on raw n; the shape of the cube is
+    # what this test is for, and the flag now follows the interval's basis.
+    assert bands[">=75"]["effective_n"] == 1
+    assert bands[">=75"]["low_confidence"] is True
     assert bands["<60"]["n"] == 1
 
 
@@ -553,3 +598,4 @@ def test_unlabeled_rows_get_no_verdict_rather_than_a_zero(db: Session):
     assert cell["skill_verdict"] is None
     assert cell["skill_ci_low"] is None
     assert cell["skill_ci_high"] is None
+
