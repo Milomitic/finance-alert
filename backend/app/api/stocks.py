@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user, get_db
 from app.core.errors import UpstreamError
 from app.core.visibility import visible_country_clause
-from app.models import OhlcvDaily, Stock, User
+from app.models import Index, OhlcvDaily, Stock, StockIndex, User
 from app.schemas.alert import AlertOut
 from app.schemas.stock import (
     FilterOptionsOut,
@@ -350,6 +350,17 @@ def get_one(
     # Cache-only read, so this costs one indexed query and never a network
     # fan-out across two dozen funds on a page load.
     out.in_etfs = etf_holdings_service.etfs_containing(db, stock.ticker)
+    # Index membership was already in the catalogue and read by nothing but
+    # the screener's filter list — 813 of 986 stocks carry one.
+    out.in_indices = [
+        IndexOptionOut(code=code, name=name)
+        for code, name in db.execute(
+            select(Index.code, Index.name)
+            .join(StockIndex, StockIndex.index_id == Index.id)
+            .where(StockIndex.stock_id == stock.id)
+            .order_by(Index.code)
+        ).all()
+    ]
     return out
 
 

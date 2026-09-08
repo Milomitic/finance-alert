@@ -168,3 +168,61 @@ def test_exchange_suffixes_are_not_mistaken_for_share_classes():
     assert _normalize_ticker("ENEL.MI", "BIT")[0] == "ENEL.MI"
     assert _normalize_ticker("0005.HK", "HKEX")[0] == "0005.HK"
     assert _normalize_ticker("AAPL", "NASDAQ")[0] == "AAPL"
+
+
+class TestIndexNamesFollowTheSource:
+    """`_ensure_index` used to write name/country only on CREATE.
+
+    So the names seeded in 2026-05 were frozen forever while INDEX_SOURCES
+    carried the corrected ones, and production drifted:
+
+        code      DB (from seed.py)          code says            members
+        HSI30     "Hang Seng top 30"         "Hang Seng top 50"        50
+        FTSE100   "FTSE 100 top 50 (London)" "FTSE 100 (London)"      100
+
+    Both DB names contradicted their own membership count, and the comment
+    beside HSI30 in INDEX_SOURCES reads "display name NOW reflects the wider
+    top-50 cut" — the intent was there, the write was not. Nobody noticed
+    because nothing displayed the name prominently; the stock detail page is
+    about to.
+    """
+
+    def test_an_existing_index_takes_the_current_name(self, db):
+        from app.models import Index
+        from app.services.catalog_refresh_service import _ensure_index
+
+        db.add(Index(code="HSI30", name="Hang Seng top 30", country="HK"))
+        db.commit()
+
+        idx = _ensure_index(db, "HSI30", "Hang Seng top 50", "HK")
+
+        assert idx.name == "Hang Seng top 50"
+
+    def test_an_existing_index_takes_the_current_country(self, db):
+        from app.models import Index
+        from app.services.catalog_refresh_service import _ensure_index
+
+        db.add(Index(code="FTSE100", name="FTSE 100 (London)", country=None))
+        db.commit()
+
+        assert _ensure_index(db, "FTSE100", "FTSE 100 (London)", "GB").country == "GB"
+
+    def test_a_new_index_is_still_created(self, db):
+        from app.services.catalog_refresh_service import _ensure_index
+
+        idx = _ensure_index(db, "NEWX", "Brand New", "US")
+
+        assert (idx.code, idx.name, idx.country) == ("NEWX", "Brand New", "US")
+
+    def test_it_does_not_write_when_nothing_changed(self, db):
+        # An UPDATE per refresh per index is harmless but pointless; more to
+        # the point, a no-op must not mark the row dirty.
+        from app.models import Index
+        from app.services.catalog_refresh_service import _ensure_index
+
+        db.add(Index(code="DJI", name="Dow Jones Industrial Average", country="US"))
+        db.commit()
+
+        _ensure_index(db, "DJI", "Dow Jones Industrial Average", "US")
+
+        assert not db.dirty

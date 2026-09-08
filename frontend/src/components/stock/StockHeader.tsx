@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import type { OhlcvBar, Stock, StockKpis } from "@/api/types";
 import { MarketStateBadge } from "@/components/dashboard/MarketStateBadge";
 import { EtfMembershipChips } from "@/components/stock/EtfMembershipChips";
+import { IndexMembershipChips } from "@/components/stock/IndexMembershipChips";
 import { StockLogo } from "@/components/dashboard/StockLogo";
 import { Card, CardContent } from "@/components/ui/card";
 import { FlashValue } from "@/components/ui/FlashValue";
@@ -178,8 +179,11 @@ export function StockHeader({ stock, kpis, ohlcv }: Props) {
                   {stock.sector}
                 </Link>
               )}
-              {/* Fondi che tengono questo titolo fra le posizioni piu' grandi.
-                  La formulazione e' vincolata da un test: vedi il componente. */}
+              {/* Appartenenze. Gli INDICI vengono prima perche' l'appartenenza
+                  e' completa; i FONDI dopo perche' dicono solo "fra i primi 25".
+                  Le due formulazioni sono vincolate da test separati — sembrano
+                  la stessa chip e affermano cose diverse. */}
+              <IndexMembershipChips ticker={stock.ticker} indices={stock.in_indices} />
               <EtfMembershipChips ticker={stock.ticker} funds={stock.in_etfs} />
             </div>
           </div>

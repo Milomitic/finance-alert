@@ -228,11 +228,27 @@ def _finalize_log(log: CatalogRefreshLog, result: RefreshResult) -> None:
 
 
 def _ensure_index(db: Session, code: str, name: str, country: str) -> Index:
+    """Create the index, or bring an existing row up to the source of truth.
+
+    It used to write name/country on CREATE only, which froze whatever seed.py
+    inserted in 2026-05 while INDEX_SOURCES moved on. Production drifted into
+    names that contradicted their own membership: "Hang Seng top 30" on 50
+    constituents, "FTSE 100 top 50 (London)" on 100 — and the comment beside
+    HSI30 above says the display name "now reflects the wider top-50 cut",
+    which it did in the code and never in the database.
+
+    The code is the source of truth for the name; the row follows it.
+    """
     idx = db.execute(select(Index).where(Index.code == code)).scalar_one_or_none()
     if idx is None:
         idx = Index(code=code, name=name, country=country)
         db.add(idx)
         db.flush()
+        return idx
+    if idx.name != name:
+        idx.name = name
+    if country and idx.country != country:
+        idx.country = country
     return idx
 
 

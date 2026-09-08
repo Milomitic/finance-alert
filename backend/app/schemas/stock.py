@@ -5,6 +5,11 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict
 
 
+class IndexOptionOut(BaseModel):
+    code: str
+    name: str
+
+
 class StockOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
@@ -26,6 +31,10 @@ class StockOut(BaseModel):
     # "top holding of" rather than "in". Empty for ETFs and for anything the
     # cache has not seen. See etf_holdings_service.etfs_containing.
     in_etfs: list[str] = []
+    # Index membership, and unlike `in_etfs` this one is COMPLETE: the
+    # catalogue tracks every constituent it ingests, so an absent code means
+    # "not in that index" and the UI may say "in" without hedging.
+    in_indices: list[IndexOptionOut] = []
 
 
 class StockScoreRefOut(BaseModel):
@@ -94,11 +103,6 @@ class StockSearchOut(BaseModel):
     # table — every row of a refresh shares a computed_at). None when no
     # scan has persisted metrics yet. UTC, ISO-serialized.
     metrics_computed_at: datetime | None = None
-
-
-class IndexOptionOut(BaseModel):
-    code: str
-    name: str
 
 
 class FilterOptionsOut(BaseModel):

@@ -23,6 +23,11 @@ export interface Stock {
    *  any fund". The chip wording has to carry that. Optional for back-compat
    *  with cached pre-field responses. */
   in_etfs?: string[];
+  /** Indici di cui il titolo fa parte. A differenza di `in_etfs` questo e'
+   *  COMPLETO — il catalogo tiene tutti i costituenti che ingerisce — quindi
+   *  l'assenza di un codice significa davvero "non e' in quell'indice".
+   *  Opzionale per retrocompatibilita' con risposte in cache precedenti. */
+  in_indices?: IndexOption[];
 }
 
 /** A row in the screener result. Stock anagrafica plus a join to the
