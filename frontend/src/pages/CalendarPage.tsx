@@ -243,7 +243,7 @@ export default function CalendarPage() {
     });
   }, []);
 
-  const events: CalendarEvent[] = q.data?.events ?? [];
+  const events: CalendarEvent[] = useMemo(() => q.data?.events ?? [], [q.data?.events]);
   const selectedDayEvents = useMemo(
     () => (selectedDate ? events.filter((e) => e.date === selectedDate) : []),
     [events, selectedDate],

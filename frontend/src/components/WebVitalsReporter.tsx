@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useLocation } from "react-router-dom";
+import { onCLS, onINP, onLCP } from "web-vitals";
 
 type VitalMetric = "LCP" | "INP" | "CLS";
 
@@ -18,44 +18,26 @@ function report(metric: VitalMetric, value: number, route: string): void {
   }).catch(() => undefined);
 }
 
-/** Collects one bounded sample per vital and sends it when the route is left
- * or the page is hidden. Unsupported browsers simply produce no samples. */
+// Core Web Vitals describe a document navigation, not each SPA route. Register
+// once, including under StrictMode; do not replay buffered entries on every route.
+let initialized = false;
+
 export function WebVitalsReporter() {
-  const { pathname } = useLocation();
   useEffect(() => {
-    if (typeof PerformanceObserver === "undefined") return;
-    const observers: PerformanceObserver[] = [];
-    let lcp: number | null = null;
-    let inp: number | null = null;
-    let cls = 0;
-    const observe = (type: "largest-contentful-paint" | "layout-shift" | "event", callback: (entry: PerformanceEntry) => void) => {
-      if (!(PerformanceObserver as typeof PerformanceObserver & { supportedEntryTypes?: string[] }).supportedEntryTypes?.includes(type)) return;
-      const observer = new PerformanceObserver((list) => list.getEntries().forEach(callback));
-      observer.observe({ type, buffered: true } as PerformanceObserverInit);
-      observers.push(observer);
+    if (initialized) return;
+    initialized = true;
+    const entryRoute = window.location.pathname;
+    const sent = new Set<string>();
+    const send = (metric: { id: string; name: VitalMetric; value: number }) => {
+      if (sent.has(metric.id)) return;
+      sent.add(metric.id);
+      report(metric.name, metric.value, entryRoute);
     };
-    observe("largest-contentful-paint", (entry) => { lcp = entry.startTime; });
-    observe("event", (entry) => {
-      const duration = (entry as PerformanceEventTiming).duration;
-      if (duration > 0) inp = Math.max(inp ?? 0, duration);
-    });
-    observe("layout-shift", (entry) => {
-      const shift = entry as PerformanceEntry & { hadRecentInput?: boolean; value?: number };
-      if (!shift.hadRecentInput) cls += shift.value ?? 0;
-    });
-    const flush = () => {
-      if (lcp != null) report("LCP", lcp, pathname);
-      if (inp != null) report("INP", inp, pathname);
-      report("CLS", cls, pathname);
-    };
-    window.addEventListener("pagehide", flush, { once: true });
-    return () => {
-      flush();
-      observers.forEach((observer) => observer.disconnect());
-      window.removeEventListener("pagehide", flush);
-    };
-  }, [pathname]);
+    // The library implements CLS session windows, INP interaction grouping,
+    // visibility handling and bfcache lifecycle, unlike raw observer maxima.
+    onCLS(send);
+    onINP(send);
+    onLCP(send);
+  }, []);
   return null;
 }
-
-

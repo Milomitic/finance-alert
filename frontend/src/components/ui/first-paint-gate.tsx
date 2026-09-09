@@ -107,7 +107,7 @@ export function FirstPaintGate({
     if (open) return;
     const id = setInterval(() => setElapsed(Date.now() - startedAt), 80);
     return () => clearInterval(id);
-  }, [open]);
+  }, [open, startedAt]);
 
   useEffect(() => {
     if (open) return;
@@ -120,7 +120,7 @@ export function FirstPaintGate({
     const wait = Math.max(0, minShowMs - (Date.now() - startedAt));
     const t = setTimeout(() => setOpen(true), wait);
     return () => clearTimeout(t);
-  }, [open, pending, minShowMs]);
+  }, [open, pending, minShowMs, startedAt]);
 
   // Unmount the overlay only once its fade-out has finished.
   useEffect(() => {

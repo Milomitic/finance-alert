@@ -55,3 +55,16 @@ def test_rum_accepts_valid_sample_and_bounds_contract(client: TestClient) -> Non
         json={"metric": "LCP", "value": -1, "route": "/", "device": "desktop"},
     )
     assert invalid_value.status_code == 422
+
+
+@pytest.mark.parametrize(("path", "expected"), [
+    ("/stocks/AAPL?range=1y", "/stocks/:ticker"),
+    ("/stocks/MSFT", "/stocks/:ticker"),
+    ("/calendar#day", "/calendar"),
+    ("/arbitrary/private-value", "/other"),
+    ("/stocks/a/b", "/other"),
+])
+def test_route_labels_have_finite_cardinality(path: str, expected: str) -> None:
+    from app.api.rum import _route
+
+    assert _route(path) == expected

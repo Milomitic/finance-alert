@@ -83,10 +83,10 @@ export function NavbarSearch() {
 
   // Search response items now wrap each Stock in a {stock, score} envelope.
   // The navbar search doesn't use score data — unwrap to the plain Stock[].
-  const stockItems: Stock[] =
+  const stockItems: Stock[] = useMemo(() =>
     q.trim().length > 0
       ? (search.data?.items ?? []).map((it) => it.stock)
-      : [];
+      : [], [q, search.data?.items]);
 
   // Index matches: filter by code or name match (case-insensitive)
   const indexMatches: IndexBreadth[] = useMemo(() => {

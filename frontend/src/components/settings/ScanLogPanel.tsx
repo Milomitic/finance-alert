@@ -24,7 +24,7 @@ import { cn } from "@/lib/utils";
 export function ScanLogPanel() {
   const [kindFilter, setKindFilter] = useState<"" | "alerts_scan" | "score_recompute">("");
   const q = useScanLog(20, kindFilter || undefined);
-  const runs = q.data?.runs ?? [];
+  const runs = useMemo(() => q.data?.runs ?? [], [q.data?.runs]);
 
   const kpis = useMemo(() => computeScanLogKpis(runs), [runs]);
 

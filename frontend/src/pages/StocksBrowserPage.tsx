@@ -123,13 +123,14 @@ const METRICS_STALE_MS = 26 * 60 * 60 * 1000;
  *  as-of of every stock_metrics row (one computed_at per refresh). Turns
  *  amber when older than the stale threshold. Hidden when the backend has
  *  no metrics yet (fresh install / pre-scan). */
-function MetricsAsOf({ iso, now }: { iso: string | null | undefined; now: number }) {
+function MetricsAsOf({ iso }: { iso: string | null | undefined }) {
+  const now = useNowTick(60_000);
   if (!iso) return null;
   const dt = new Date(iso);
   if (Number.isNaN(dt.getTime())) return null;
   const stale = now - dt.getTime() > METRICS_STALE_MS;
   const time = dt.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" });
-  const sameDay = dt.toDateString() === new Date().toDateString();
+  const sameDay = dt.toDateString() === new Date(now).toDateString();
   const label = sameDay
     ? `metriche al ${time}`
     : `metriche al ${dt.toLocaleDateString("it-IT", { day: "2-digit", month: "2-digit" })} ${time}`;
@@ -191,7 +192,6 @@ function PaginationStrip({
 }
 
 export default function StocksBrowserPage() {
-  const now = useNowTick();
   const [searchParams, setSearchParams] = useSearchParams();
   // Page index (0-based) initialized from the URL so back-nav / shared links
   // land on the same page instead of silently resetting to page 1.
@@ -471,7 +471,7 @@ export default function StocksBrowserPage() {
             total={total}
             isColumnVisible={isColumnVisible}
           />
-          <MetricsAsOf iso={searchQ.data?.metrics_computed_at} now={now} />
+          <MetricsAsOf iso={searchQ.data?.metrics_computed_at} />
         </div>
         <PaginationStrip
           page={page}

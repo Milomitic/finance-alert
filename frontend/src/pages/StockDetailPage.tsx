@@ -59,7 +59,7 @@ import { StockTechnicalCard } from "@/components/stock/StockTechnicalCard";
 import { TechnicalKpiCard } from "@/components/stock/TechnicalKpiCard";
 
 export default function StockDetailPage() {
-  const now = useNowTick();
+  const now = useNowTick(60_000);
   const { ticker = "" } = useParams<{ ticker: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
   // v2 timeframe vocabulary: default to 1d (was "1y" range). Backend

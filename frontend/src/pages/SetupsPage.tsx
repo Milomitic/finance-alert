@@ -159,7 +159,7 @@ export default function SetupsPage() {
   const [view, setView] = useState<"active" | "closed">("active");
   const q = useSetups(tone, undefined, view);
 
-  const all = q.data?.setups ?? [];
+  const all = useMemo(() => q.data?.setups ?? [], [q.data?.setups]);
   const detectors = useMemo(() => detectorCounts(all), [all]);
   const groups = useMemo(
     () => groupByCondition(detector ? all.filter((s) => s.detector === detector) : all, sort),

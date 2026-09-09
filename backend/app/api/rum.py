@@ -30,8 +30,18 @@ class WebVitalIn(BaseModel):
 def _route(value: str) -> str:
     # Keep Prometheus cardinality bounded even if a future client sends a
     # dynamic route. Query strings and IDs never belong in a RUM label.
-    clean = value.split("?", 1)[0].split("#", 1)[0]
-    return clean if clean.startswith("/") else "/"
+    clean = value.split("?", 1)[0].split("#", 1)[0].rstrip("/") or "/"
+    static = {"/", "/login", "/sectors", "/alerts", "/setups", "/positions",
+              "/health", "/calendar", "/stocks", "/institutionals", "/settings"}
+    if clean in static:
+        return clean
+    dynamic = {"stocks": "ticker", "markets": "symbol", "sectors": "name",
+               "macro": "seriesId", "institutionals": "slug"}
+    parts = clean.split("/")
+    if len(parts) == 3 and parts[0] == "" and parts[1] in dynamic and parts[2]:
+        return f"/{parts[1]}/:{dynamic[parts[1]]}"
+    return "/other"
+
 
 
 @router.post("/web-vitals", status_code=202, dependencies=[Depends(require_json)])

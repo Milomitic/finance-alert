@@ -38,7 +38,7 @@ function fmtDate(iso: string | null): string {
 }
 
 export default function ScansCard({ scans }: Props) {
-  const now = useNowTick();
+  const now = useNowTick(60_000);
   const last = scans[0];
   const last24h = scans.filter((s) => {
     if (!s.completed_at) return false;
