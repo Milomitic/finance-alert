@@ -256,7 +256,8 @@ Both? Do both.
 
 ## ⚠️ `npm audit fix` / `npm install` on Windows breaks `npm ci` on Linux
 
-**This has now bitten twice.** `frontend/package-lock.json` must be a
+**This has now bitten THREE times** (2026-09-09 was the third, by another
+agent — see the postscript below). `frontend/package-lock.json` must be a
 **cross-platform SUPERSET**: it needs the optional platform binaries for BOTH
 Windows (dev) and Linux (Docker/CI). Any `npm install` / `npm audit fix` run on
 Windows rewrites the lock with **only** the Windows set, and CI dies with:
@@ -283,6 +284,45 @@ npm ci                 # windows side
 ```
 
 Commit the lock only when both pass.
+
+### Third occurrence, and what it costs when Docker is not available (2026-09-09)
+
+Worth recording because the agent that hit it had read this file, and the
+failure still looked like success locally. Windows `npm ci`, `npm run build`
+and the full vitest suite all passed; Docker Desktop was not running, so the
+Linux half of the recipe above was skipped and the superset was never checked.
+
+The push produced **two red pipelines in a row** with the exact error quoted
+above:
+
+    npm error Missing: @emnapi/core@1.11.3 from lock file
+    npm error Missing: @emnapi/runtime@1.11.3 from lock file
+    npm error Missing: @emnapi/wasi-threads@1.2.3 from lock file
+
+Note the third line. The first repair commit restored the two packages this
+file names and was STILL red, because `@emnapi/core` carries a nested
+`@emnapi/wasi-threads` of its own. **Fixing the packages listed here is not the
+same as fixing the lock** — read the actual error each time.
+
+On both red runs `backend`, `postgres` and `dependency audit` were green while
+`image`, `trivy` and `gitops` were **skipped**. That is the documented shape:
+six of seven jobs look fine and nothing deploys.
+
+**If Docker is unavailable, CI is a valid substitute detector** — it runs a
+clean `npm ci` on Linux, which is the only check that matters. It is noisier
+(a red run per attempt, and no deploy until green) but it is not guesswork.
+Push, then read the `frontend` job. Do NOT declare a lock change safe on a
+green Windows run alone; that is what produced all three occurrences.
+
+The net diff is what to verify before merging any lock change: **zero
+`node_modules/*` keys removed.** The trap always REMOVES Linux entries, so a
+removal count above zero is the signature, and it is one command:
+
+```bash
+git diff <base>..<head> -- frontend/package-lock.json | grep -E '^-\s+"node_modules/' | sort > /tmp/r
+git diff <base>..<head> -- frontend/package-lock.json | grep -E '^\+\s+"node_modules/' | sort > /tmp/a
+comm -23 /tmp/r /tmp/a   # must be EMPTY
+```
 
 ### Better, when it is ONE transitive package: edit the three fields
 
@@ -367,6 +407,29 @@ so nothing reaches the cluster. Green is not deployed; check the job list.
 If a push somehow fails to trigger CI (observed once, cause not established —
 the ref had moved and no run was ever created), dispatching will not fix it.
 Only another push event will build and deploy.
+
+## ⚠️ Do NOT `chmod 600` the node's kubeconfig (2026-09-09)
+
+It reads like elementary hygiene and it **locks you out of the cluster**. Cost
+a recovery via `sudo` when I did exactly this, and an external audit's backlog
+recommends it in those words, so it will be proposed again.
+
+On the node `kubectl` is a **symlink to `k3s`**, and k3s ignores
+`~/.kube/config`: it reads `/etc/rancher/k3s/k3s.yaml`, which is owned by root.
+Tightening that file to `600` leaves every `kubectl` the `opc` user runs — the
+SSH path this repo operates through — with no readable credentials, and the
+error names a missing config rather than a permission problem.
+
+The file DID need fixing: it was world-readable, and it holds cluster-admin.
+The shape that is both closed and usable is a group, already in
+`infra/terraform/cloud-init/k3s.yaml`:
+
+    EXEC="--write-kubeconfig-mode 640 --write-kubeconfig-group k3s"
+    groupadd -f k3s && usermod -aG k3s opc
+
+Mode `640` with group `k3s` removes world access and keeps `opc` working.
+**A permissions recommendation for a k3s node must name the k3s.yaml path and
+the group, or it is a lockout.**
 
 ## Telegram: the app and Alertmanager share ONE bot (2026-09-09)
 
