@@ -1,6 +1,6 @@
 import type { IChartApi } from "lightweight-charts";
 import { AlertCircle, ChevronDown, Loader2, SlidersHorizontal } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 
 import type { PriceAlert } from "@/api/types";
@@ -11,7 +11,10 @@ import { liveExtendIndicators } from "@/lib/liveIndicators";
 import { mergeLiveQuoteIntoOhlcv } from "@/lib/liveOhlcvMerge";
 import { buildEarningsMarkers, buildSignalOverlay } from "@/lib/signalMarkers";
 import { rebaseBenchmark } from "@/lib/benchmarkOverlay";
+import { defaultVisibleRange } from "@/lib/chartClamp";
+import { DEFAULT_RANGE, resolveRange, writeRange } from "@/lib/chartPrefs";
 import { downloadChartPng } from "@/lib/chartExport";
+import { defaultVisibleBars } from "@/lib/timeframeZoom";
 import { useStockFundamentals } from "@/hooks/useStockFundamentals";
 import { useMarketDetail } from "@/hooks/useMarketDetail";
 import {
@@ -65,7 +68,10 @@ export default function StockDetailPage() {
   // v2 timeframe vocabulary: default to 1d (was "1y" range). Backend
   // accepts 30m/1h/1d/1w/1m/all, with legacy keys (incl. 4h) still
   // mapped for bookmarked URLs. See `services/timeframe_service`.
-  const range = searchParams.get("range") ?? "1d";
+  // L'URL vince sulla preferenza salvata: un link `?range=1h` deve aprirsi a
+  // 1h per chi lo riceve, altrimenti due persone guardano grafici diversi
+  // dallo stesso indirizzo e chi lo ha mandato non puo accorgersene.
+  const range = resolveRange(searchParams.get("range"));
 
   const detail = useStockDetail(ticker, range);
   const priceAlertsQuery = useStockPriceAlerts(ticker);
@@ -124,6 +130,19 @@ export default function StockDetailPage() {
   // price so the divergence reads as relative performance.
   const [benchmark, setBenchmark] = useState(""); // "" = no overlay
   const chartApiRef = useRef<IChartApi | null>(null);
+  /* Riporta la vista dove il grafico si apre. Usa `defaultVisibleRange`, cioe
+   * LA STESSA funzione dell'effetto di caricamento: un reset che atterra dove
+   * il grafico non parte mai non e un reset.
+   *
+   * Basta agire sul grafico principale: RSI e MACD ricevono la finestra da
+   * `useChartSync`, che la propaga gia clampata ai loro conteggi di barre. */
+  const resetZoom = useCallback(() => {
+    const ts = chartApiRef.current?.timeScale();
+    if (!ts) return;
+    const rest = defaultVisibleRange(mergedOhlcv.length, defaultVisibleBars(range));
+    if (rest) ts.setVisibleLogicalRange(rest as never);
+    else ts.fitContent();
+  }, [mergedOhlcv.length, range]);
   const benchmarkDetail = useMarketDetail(benchmark, range);
   const benchmarkLine = useMemo(
     () => (benchmark ? rebaseBenchmark(mergedOhlcv, benchmarkDetail.data?.bars ?? []) : []),
@@ -369,7 +388,10 @@ export default function StockDetailPage() {
               {/* LEFT — timeframe + chart-render options */}
               <RangeSelector
                 value={range}
-                onChange={(r) => setSearchParams({ range: r })}
+                onChange={(r) => {
+                  writeRange(r);
+                  setSearchParams({ range: r });
+                }}
               />
               {/* Phone-only disclosure. The timeframe stays out (it is the one
                   control that gets used on every visit); everything else hides
@@ -409,6 +431,7 @@ export default function StockDetailPage() {
                 onExport={() =>
                   downloadChartPng(chartApiRef.current, `${ticker}-${range}.png`)
                 }
+                onResetZoom={resetZoom}
               />
               {/* CENTER — indicators */}
               <div className="mx-auto flex items-center gap-2 flex-wrap justify-center">
@@ -457,7 +480,10 @@ export default function StockDetailPage() {
                 </span>
                 <button
                   className="underline underline-offset-2 hover:opacity-80"
-                  onClick={() => setSearchParams({ range: "1d" })}
+                  onClick={() => {
+                    writeRange(DEFAULT_RANGE);
+                    setSearchParams({ range: DEFAULT_RANGE });
+                  }}
                 >
                   Passa a 1G per dati aggiornati
                 </button>

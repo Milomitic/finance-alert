@@ -1,4 +1,4 @@
-import { AreaChart, CandlestickChart, Download, LineChart, X } from "lucide-react";
+import { AreaChart, CandlestickChart, Download, LineChart, Maximize2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import type { ChartType } from "@/components/stock/PriceChart";
@@ -22,6 +22,13 @@ interface Props {
   compareTicker: string;
   onCompareTicker: (ticker: string) => void;
   onExport: () => void;
+  /** Riporta il grafico alla finestra di partenza del timeframe corrente.
+   *
+   *  Nasce con la pan piu libera: prima il limite era sei barre oltre i dati e
+   *  non ci si poteva perdere, adesso si spinge il prezzo quasi fuori schermo
+   *  ed e giusto che si possa — ma senza una via di ritorno il gesto e a senso
+   *  unico e l'unico rimedio era ricaricare la pagina. */
+  onResetZoom: () => void;
 }
 
 const TYPES: { key: ChartType; label: string; Icon: typeof LineChart }[] = [
@@ -35,6 +42,7 @@ const TYPES: { key: ChartType; label: string; Icon: typeof LineChart }[] = [
  *  language. */
 export function ChartOptionsToolbar({
   chartType, onChartType, benchmark, onBenchmark, compareTicker, onCompareTicker, onExport,
+  onResetZoom,
 }: Props) {
   // Local input state; commit the compare ticker on Enter / blur so we don't
   // fire a fetch on every keystroke.
@@ -113,6 +121,15 @@ export function ChartOptionsToolbar({
           </button>
         )}
       </div>
+      <button
+        type="button"
+        onClick={onResetZoom}
+        title="Reimposta zoom e posizione"
+        aria-label="Reimposta zoom e posizione"
+        className="h-8 w-8 rounded-md border bg-muted/30 text-muted-foreground hover:text-foreground transition-colors flex items-center justify-center"
+      >
+        <Maximize2 className="h-4 w-4" />
+      </button>
       <button
         type="button"
         onClick={onExport}

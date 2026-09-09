@@ -1128,6 +1128,35 @@ number of X.
 The rule already in this file — confirm the test fails with the fix reverted —
 is what caught both. It is two commands and it is not optional.
 
+### ⚠️ Node 25's `localStorage` shadows jsdom's, and it is BROKEN (2026-09-10)
+
+The "`--localstorage-file` was provided without a valid path" warning printed
+on every vitest run for a while. It was not noise.
+
+Node 25 ships a global `localStorage`, and under vitest it REPLACES jsdom's:
+`globalThis.localStorage === window.localStorage` and neither has a callable
+`setItem`, `getItem` or `clear`. Reaching for `window.localStorage` instead of
+the bare global does not help — measured, they are the same broken object.
+
+**Why that is worse than a missing feature.** Every storage-backed module here
+wraps its access in try/catch, correctly, because a private window or a
+browser blocking site data really can throw. So the broken object is swallowed
+silently, the code takes its "storage unavailable" branch, and a test asserting
+that a preference PERSISTS passes without anything ever having been stored.
+That is the "a test can be true of nothing" failure recorded twice above, in a
+third disguise — and it applies to every localStorage feature in the app:
+saved views, column visibility, the sidebar state, the chart timeframe.
+
+`src/test/setup.ts` now installs an in-memory `Storage` on both `globalThis`
+and `window`, cleared in the same `afterEach` as the DOM. Storage is global
+and outlives a test file otherwise, so a preference written by one test would
+be read as a "remembered" value by the next.
+
+Nothing broke when storage started actually working, so no existing test was
+depending on the broken behaviour — but none of them could see a regression in
+persistence either. Assertions about what SURVIVES a reload are only
+meaningful after this setup.
+
 ### `React.memo` does nothing when the key is unstable
 
 Worth knowing before reaching for memo on any list. LogStream keyed rows on

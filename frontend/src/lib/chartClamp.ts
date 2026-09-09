@@ -68,3 +68,33 @@ export function clampLogicalRange(
   if (t < minTo) { t = minTo; f = t - width; }
   return { from: f, to: t };
 }
+
+/** The chart's resting window for a timeframe: the most recent
+ *  `defaultVisibleBars(timeframe)` bars plus the right margin.
+ *
+ *  Returns null when the timeframe has no default (legacy keys) or the series
+ *  is shorter than the default — both cases mean "fit the whole thing", which
+ *  is `fitContent()` and not a logical range.
+ *
+ *  Extracted from PriceChart's data effect so the "reset zoom" control can
+ *  restore the SAME window the chart opens at. A second definition of "default
+ *  view" is a second thing to drift, and the reset is worthless if it lands
+ *  somewhere the chart never starts.
+ *
+ *  ⚠️ MarketChart computes a similar window and is deliberately NOT on this
+ *  function. It sets no `rightOffset`, so it rests at `barCount - 1` with no
+ *  margin, and that is internally consistent for it. Moving it here would
+ *  silently shift the resting view of every index, FX and crypto chart.
+ */
+export function defaultVisibleRange(
+  barCount: number,
+  visibleBars: number | null,
+): { from: number; to: number } | null {
+  if (visibleBars === null || barCount <= visibleBars) return null;
+  return {
+    from: barCount - visibleBars,
+    // Include the right margin so the latest candle is not glued to the
+    // border — matches `rightOffset` and the pan clamp's bound.
+    to: barCount - 1 + EDGE_MARGIN_BARS,
+  };
+}

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { clampLogicalRange, MIN_VISIBLE_BARS } from "./chartClamp";
+import { clampLogicalRange, defaultVisibleRange, EDGE_MARGIN_BARS, MIN_VISIBLE_BARS } from "./chartClamp";
 
 /* Panning was walled in six bars past the data, and hitting the wall while
  * zoomed out silently WIDENED the window to the whole series — the zoom
@@ -99,5 +99,57 @@ describe("serie troppo corte", () => {
 
     expect(out.to - out.from).toBe(30);
     expect(out.from).toBeLessThanOrEqual(0);
+  });
+});
+
+/* La finestra di riposo, ora una funzione sola.
+ *
+ * Il pulsante "reimposta zoom" nasce insieme alla pan piu libera: prima il
+ * limite era sei barre oltre i dati e non ci si poteva perdere, adesso si
+ * spinge il prezzo quasi fuori schermo — ed e giusto che si possa, ma senza una
+ * via di ritorno il gesto e a senso unico e l'unico rimedio era ricaricare.
+ *
+ * Il punto di questi test: il reset deve atterrare ESATTAMENTE dove il grafico
+ * si apre. Una seconda definizione di "vista predefinita" e una seconda cosa
+ * che puo divergere, e un reset che atterra dove il grafico non parte mai non
+ * e un reset.
+ */
+describe("la finestra di riposo", () => {
+  it("mostra le ultime N barre piu il margine destro", () => {
+    const out = defaultVisibleRange(1000, 252)!;
+
+    expect(out.from).toBe(1000 - 252);
+    expect(out.to).toBe(1000 - 1 + EDGE_MARGIN_BARS);
+  });
+
+  it("la larghezza include il margine, come il rightOffset del grafico", () => {
+    // Se il margine sparisse da qui, l'ultima candela resterebbe incollata al
+    // bordo dopo ogni reset mentre al caricamento no.
+    const out = defaultVisibleRange(1000, 252)!;
+
+    expect(out.to - out.from).toBe(252 - 1 + EDGE_MARGIN_BARS);
+  });
+
+  it("una serie piu corta del default non ha finestra: si adatta tutta", () => {
+    // null significa `fitContent()`, che non e un intervallo logico.
+    expect(defaultVisibleRange(100, 252)).toBeNull();
+  });
+
+  it("nemmeno quando combacia esattamente", () => {
+    expect(defaultVisibleRange(252, 252)).toBeNull();
+  });
+
+  it("un timeframe senza default si adatta tutto", () => {
+    // Le chiavi legacy (1y/3m/6m/5y) restituiscono null da defaultVisibleBars.
+    expect(defaultVisibleRange(1000, null)).toBeNull();
+  });
+
+  it("la finestra che produce sopravvive al clamp della pan", () => {
+    // La verifica che lega le due funzioni: il reset non deve atterrare in una
+    // posizione che il clamp poi corregge, o la vista salterebbe subito dopo.
+    const out = defaultVisibleRange(1000, 252)!;
+    const clamped = clampLogicalRange(out.from, out.to, 1000)!;
+
+    expect(clamped).toEqual(out);
   });
 });

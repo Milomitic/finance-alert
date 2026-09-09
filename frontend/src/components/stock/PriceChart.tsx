@@ -11,7 +11,7 @@ import type { IndicatorStyle } from "@/components/stock/IndicatorToggles";
 import type { RegisterChart } from "@/hooks/useChartSync";
 import type { LinePoint } from "@/lib/benchmarkOverlay";
 import type { SignalHoverItem } from "@/lib/signalMarkers";
-import { EDGE_MARGIN_BARS } from "@/lib/chartClamp";
+import { EDGE_MARGIN_BARS, defaultVisibleRange } from "@/lib/chartClamp";
 import { defaultVisibleBars, isIntraday } from "@/lib/timeframeZoom";
 
 interface Props {
@@ -500,17 +500,9 @@ export function PriceChart({
     // the full upstream history. `null` (e.g. timeframe=all) → fitContent.
     const ts = chartRef.current?.timeScale();
     if (!ts) return;
-    const n = defaultVisibleBars(timeframe);
-    if (n !== null && ohlcv.length > n) {
-      ts.setVisibleLogicalRange({
-        from: ohlcv.length - n,
-        // Include the right margin so the latest candle isn't glued to the
-        // border (matches rightOffset + the pan/zoom clamp bound).
-        to: ohlcv.length - 1 + EDGE_MARGIN_BARS,
-      });
-    } else {
-      ts.fitContent();
-    }
+    const rest = defaultVisibleRange(ohlcv.length, defaultVisibleBars(timeframe));
+    if (rest) ts.setVisibleLogicalRange(rest as never);
+    else ts.fitContent();
   }, [ohlcv, timeframe]);
 
   // Chart-type switch: show exactly one price series (candle / line / area).
