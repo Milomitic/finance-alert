@@ -76,11 +76,11 @@ The plugin Application in `infra/gitops/barman-cloud-plugin.yaml` is a bootstrap
 
 ```bash
 kubectl apply --server-side -f infra/gitops/barman-cloud-plugin.yaml
-kubectl -n cnpg-system rollout status deployment/barman-cloud-plugin --timeout=5m
+kubectl -n cnpg-system rollout status deployment/barman-cloud-plugin-plugin-barman-cloud --timeout=5m
 # Then push/sync the cloud branch and verify:
 kubectl -n finance-alert get objectstore pg-backups
 kubectl -n finance-alert get backup -l cnpg.io/cluster=pg
-kubectl -n monitoring get podmonitor pg
+kubectl -n monitoring get podmonitor finance-alert-postgres
 ```
 
-After the first successful plugin Backup, perform a restore rehearsal in an isolated namespace before removing the legacy `barmanObjectStore` block. Keep the same object-store prefix and verify the resulting recovery window is 30 days.
+Switch the Cluster atomically: remove the legacy backup configuration and add the WAL plugin in the same update. After the first successful plugin Backup, perform a restore rehearsal in an isolated cluster. Keep the same object-store prefix and verify the resulting recovery window is 30 days.
