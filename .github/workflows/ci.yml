@@ -10,6 +10,20 @@ name: ci
 on:
   push:
     branches: [cloud, master]
+    # A docs-only commit used to build a full arm64 image, push it to GHCR,
+    # bump the GitOps tag and roll the pod. Measured on the node 2026-09-09:
+    # SIX app images retained, containerd at 8.1G against 4.8G free on the
+    # root volume, and two of those images came from documentation commits
+    # made that same morning. Tests prove nothing about a markdown file, and
+    # the rollout is pure churn on the one resource that is actually scarce.
+    #
+    # Skipping the RUN is what breaks the chain: no `image` job means no tag
+    # bump, so ArgoCD syncs the commit, finds no manifest change and leaves
+    # the pod alone. A commit touching BOTH docs and code still builds --
+    # paths-ignore skips only when EVERY changed file matches.
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
   pull_request:
   workflow_dispatch:
 

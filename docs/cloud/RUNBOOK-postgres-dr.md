@@ -1,8 +1,10 @@
 # Runbook — PostgreSQL disaster recovery (M7/M9)
 
-**The restore path below was executed and verified end-to-end on 2026-07-16**: a
-throwaway cluster was bootstrapped from *nothing but the Object Storage backup*
-and came up with data identical to live. This is not a theoretical procedure.
+**The restore path below was executed and verified end-to-end on 2026-07-16 and
+again on 2026-09-09**: a throwaway cluster was bootstrapped from *nothing but
+the Object Storage backup* and came up with data identical to live. This is not
+a theoretical procedure. See the drill log at the bottom for what each run
+measured.
 
 > Supersedes the Object-Storage half of `RUNBOOK-db-migration.md`, which is now
 > the **SQLite-era / localhost** procedure. The cloud app runs on Postgres.
@@ -193,3 +195,40 @@ are configured" into "backups are known to work". Clean up afterwards:
 kubectl --kubeconfig=$KC delete cluster pg-restore -n finance-alert
 kubectl --kubeconfig=$KC delete pvc pg-restore-1 -n finance-alert --ignore-not-found
 ```
+
+### Drill log
+
+| Date | Result | Notes |
+|---|---|---|
+| 2026-07-16 | pass | First end-to-end proof of the procedure. |
+| 2026-09-09 | pass | 110 s to `Cluster in healthy state`. All four row counts identical to live. |
+
+**2026-09-09, what it actually established.** The July run proved the
+*mechanism*. It could not prove anything about the objects sitting in the
+bucket today, which is the whole reason the cadence rule above exists.
+
+    stocks=1010  alerts=8679  ohlcv=2476821  outcomes=5031    <- restored
+    stocks=1010  alerts=8679  ohlcv=2476821  outcomes=5031    <- live
+    28 tables | alembic a3f71c9d2e40 | fa_app rolsuper=false
+
+The alembic revision is the load-bearing line. `a3f71c9d2e40` is the position
+FX rate book, applied the DAY BEFORE the drill, and `positions.entry_fx_rate`
+/ `exit_fx_rate` were both present in the restored database. So the backup is
+not merely restorable, it is CURRENT: a schema change made yesterday survives
+a restore taken from the bucket today. A drill that only counts rows cannot
+tell you that, because row counts would match even against a stale schema.
+
+Note the table count is **28**, not the ~26 this runbook predicted in July. The
+schema grows; treat the number as "matches live", never as a constant.
+
+**Budget ~2 GB of transient disk, and check first.** Gotcha 4 says to check
+free space without saying how much. Measured: the root volume went 82% -> 89%
+during the drill and settled at 84% after deleting the cluster and its PVC.
+It did not return to 82% because an unrelated image pull landed in the same
+window, not because the drill leaked. On a node with under ~3 GB free, free
+space first.
+
+**The deprecation warning is now emitted on every apply** (gotcha 3):
+`Native support for Barman Cloud backups and recovery is deprecated and will be
+completely removed in CloudNativePG 1.31.0`. The drill still passes, but this
+is the operator telling you the clock is running on the in-tree plugin.
