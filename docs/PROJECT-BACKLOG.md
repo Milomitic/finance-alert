@@ -30,11 +30,13 @@ Questo file è il backlog operativo canonico. Ogni nuova attività deve avere un
 | FA-010 | P1 | UX | Rendere visibili e recuperabili gli errori delle mutazioni | **READY / LOCAL** | Hook posizioni con toast successo/errore e dettaglio API; form trade mantiene errore inline. |
 | FA-011 | P1 | UX mobile | Focus trap, ESC, scroll lock e restore del drawer | **READY / LOCAL** | Comportamento dialog implementato; verifica browser reale dopo deploy. |
 | FA-012 | P1 | UX/search | Stati errore e semantica combobox | **READY / LOCAL** | Stato errore con retry e ruoli `combobox`/`listbox`/`option` implementati. |
-| FA-013 | P2 | UX/navigation | Preservare filtri/calendar/search nell’URL e migliorare il 404 | **OPEN** | 404 migliorato localmente; copertura URL completa ancora da verificare. |
-| FA-014 | P2 | Sessioni | Revoca server-side e logout tra schede | **OPEN / P3** | Sessioni revocabili e logout propagato tra tab. |
+| FA-013 | P2 | UX/navigation | Preservare filtri/calendar/search nell’URL e migliorare il 404 | **READY / LOCAL** | Calendar state serializzato in URL e pagina 404 dedicata con link di recupero; build frontend passata. Verifica browser cross-session ancora da fare dopo deploy. |
+| FA-014 | P2 | Sessioni | Revoca server-side e logout tra schede | **READY / LOCAL** | Token firmati revocabili fino a scadenza; logout revoca il cookie e invalida cache/propaga l’evento alle altre schede. Test backend mirati: 13 pass. Deploy multi-replica richiede store condiviso per la blacklist. |
 | FA-015 | P3 | Logging/storage | Guardrail dimensione Loki e monitoraggio disco nodo | **READY / LOCAL** | Alert PVC >80% e filesystem root <15% aggiunti; retention Loki resta 30d. Stato osservato: ~152 MB su PVC 2 GiB, filesystem ~84%; verifica live dopo sync. |
-| FA-016 | P2 | Prodotto | Decomporre le 72 proposte dell’audit UI/UX | **OPEN** | Selezionare tranche e criteri nel presente backlog; report dettagliato in `frontend-ux-audit-2026-09-09/`. |
+| FA-016 | P2 | Prodotto | Decomporre le 72 proposte dell’audit UI/UX | **READY / LOCAL** | Roadmap numerata UX-001..UX-072 con sei tranche, risultati attesi e criteri comuni in [docs/frontend-ux-audit-2026-09-09.md](frontend-ux-audit-2026-09-09.md). |
 | FA-017 | P2 | Sicurezza | Triage dei finding Bandit e hardening dei casi confermati | **READY / LOCAL** | Validazione URL HTTP(S) aggiunta; classificazione in [docs/security-bandit-triage.md](security-bandit-triage.md). Nessun high; audit npm/pip senza vulnerabilità note. |
+
+| FA-018 | P2 | Accessibilita | Aggiungere descrizione accessibile al dialog degli alert prezzo | **READY / LOCAL** | `PriceAlertDialog` espone ora `DialogDescription` screen-reader-only; il warning Radix di descrizione mancante e stato corretto. |
 
 ## Ordine operativo
 
@@ -44,11 +46,11 @@ Questo file è il backlog operativo canonico. Ogni nuova attività deve avere un
 4. FA-006: attendere dati reali e intervenire solo sui percorsi con percentili significativi.
 5. FA-007 e FA-008: RUM reale e pulizia lint.
 6. FA-009–FA-013: tranche UX ad alto impatto.
-7. FA-014–FA-017: sessioni, storage, triage sicurezza e roadmap prodotto.
+7. FA-014–FA-018: sessioni, storage, triage sicurezza, accessibilita e roadmap prodotto.
 
 ## Vincoli e fatti da non confondere
 
 - Il cluster usa ancora CNPG **1.30.0** e backup legacy `barmanObjectStore`; gli ultimi backup osservati sono completati.
-- I commit `cae2986`, `d5d32de` e `3697899` sono locali e non sono in produzione.
+- I commit locali non ancora sincronizzati su `origin/cloud` includono `cae2986`, `d5d32de`, `3697899`, `af4ec64`, `4ea9447`, `e2a3c88` e `79e30ff`; la produzione contiene solo il fix metrics `cb524d5`.
 - I manifest plugin sono ora preparati nel repository locale, ma non applicati al cluster.
 - Il Python globale non contiene le dipendenze backend: usare `uv run --project backend pytest`.

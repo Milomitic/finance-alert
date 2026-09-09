@@ -69,3 +69,11 @@ def test_session_cookie_is_secure_in_production(client: TestClient, monkeypatch)
     resp = client.post("/api/auth/login", json={"username": "admin", "password": "secret123"})
     assert resp.status_code == 200
     assert "secure" in resp.headers["set-cookie"].lower()
+def test_logout_revokes_the_session_token(client: TestClient) -> None:
+    client.post("/api/auth/login", json={"username": "admin", "password": "secret123"})
+    old_token = client.cookies.get("finance_alert_session")
+    assert old_token
+    assert client.post("/api/auth/logout").status_code == 204
+    # A copied cookie must not remain usable after logout.
+    client.cookies.set("finance_alert_session", old_token)
+    assert client.get("/api/auth/me").status_code == 401

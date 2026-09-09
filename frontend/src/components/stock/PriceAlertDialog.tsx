@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import type { PriceAlert } from "@/api/types";
 import { Button } from "@/components/ui/button";
 import {
-  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -69,6 +69,9 @@ export function PriceAlertDialog({
       <DialogContent className="max-w-sm">
         <DialogHeader>
           <DialogTitle>{editing ? "Modifica price alert" : "Nuovo price alert"}</DialogTitle>
+          <DialogDescription className="sr-only">
+            Imposta il prezzo obiettivo, la direzione e una nota opzionale per questo alert.
+          </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
           <div>

@@ -1,10 +1,10 @@
 """Auth router."""
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db, require_json
 from app.core.config import settings
-from app.core.security import create_session_token
+from app.core.security import create_session_token, revoke_session_token
 from app.models import User
 from app.schemas.auth import LoginRequest, MeResponse
 from app.services import login_throttle
@@ -52,7 +52,10 @@ def login(
     status_code=status.HTTP_204_NO_CONTENT,
     dependencies=[Depends(require_json)],
 )
-def logout() -> Response:
+def logout(request: Request) -> Response:
+    token = request.cookies.get(settings.session_cookie_name)
+    if token:
+        revoke_session_token(token)
     response = Response(status_code=status.HTTP_204_NO_CONTENT)
     response.delete_cookie(key=settings.session_cookie_name, path="/")
     return response

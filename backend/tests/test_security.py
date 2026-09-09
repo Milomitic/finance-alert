@@ -26,3 +26,11 @@ def test_session_token_expired() -> None:
     token = security.create_session_token("admin")
     with pytest.raises(ValueError):
         security.read_session_token(token, max_age_seconds=-1)
+
+def test_revoked_session_token_is_rejected() -> None:
+    from app.core import security
+
+    token = security.create_session_token("admin")
+    assert security.read_session_token(token) == "admin"
+    security.revoke_session_token(token)
+    assert security.read_session_token(token) is None
