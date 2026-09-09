@@ -256,8 +256,8 @@ Both? Do both.
 
 ## ⚠️ `npm audit fix` / `npm install` on Windows breaks `npm ci` on Linux
 
-**This has now bitten THREE times** (2026-09-09 was the third, by another
-agent — see the postscript below). `frontend/package-lock.json` must be a
+**This has now bitten FIVE times**, three of them on 2026-09-09 alone — see
+the postscripts below. `frontend/package-lock.json` must be a
 **cross-platform SUPERSET**: it needs the optional platform binaries for BOTH
 Windows (dev) and Linux (Docker/CI). Any `npm install` / `npm audit fix` run on
 Windows rewrites the lock with **only** the Windows set, and CI dies with:
@@ -323,6 +323,30 @@ git diff <base>..<head> -- frontend/package-lock.json | grep -E '^-\s+"node_modu
 git diff <base>..<head> -- frontend/package-lock.json | grep -E '^\+\s+"node_modules/' | sort > /tmp/a
 comm -23 /tmp/r /tmp/a   # must be EMPTY
 ```
+
+### Fifth occurrence, caught BEFORE the push (2026-09-09)
+
+The check above is worth running because it works. Adding a single dev
+dependency — `npm install --save-dev axe-core` on Windows — removed
+`@emnapi/runtime` in the same breath. That is the exact package a commit two
+hours earlier (`c1d3d2e fix(ci): keep optional linux dependency in lockfile`)
+had just put back after occurrence four.
+
+    RIMOSSE: "node_modules/@emnapi/runtime"
+    AGGIUNTE: "node_modules/axe-core"
+
+So the rule is stronger than "be careful with `npm audit fix`": **any** npm
+write on Windows can drop the Linux half, including a routine
+`install --save-dev` of one unrelated package. Run the removal check after
+every one of them.
+
+**The repair, when Docker is unavailable and only one entry was lost.** Do not
+regenerate the lock. Take the removed block verbatim out of `git show
+HEAD:frontend/package-lock.json`, re-insert it in alphabetical position, assert
+the file still parses as JSON, then re-run the removal check and `npm ci`. The
+net diff is then the one package you meant to add and nothing else, which is
+the only shape that cannot regress CI.
+
 
 ### Better, when it is ONE transitive package: edit the three fields
 
@@ -470,6 +494,37 @@ values) and `finance-alert-prod`.
 per-signal push if `telegram_push_signals` is enabled, and health-transition
 alerts (`telegram_notify_health`, default True, max one per state per 6h). To
 stop them, remove the two keys from `finance-alert-prod` and restart the pod.
+
+## axe runs in CI, and what a green run does NOT mean (2026-09-09)
+
+`axe-core` now runs inside the ordinary vitest suite, so it is gated by the
+existing `frontend` job with **no workflow change** — `npm run test:run`
+already picks up `*.axe.test.tsx`. Helper and rationale in
+`src/test/axe.ts`; surfaces covered are the shared shell (`Layout`) and the
+densest form (`StockFiltersCard`), both at zero.
+
+⚠️ **jsdom loads no stylesheet, so an entire class of real defect is invisible
+to it.** Tailwind classes are inert strings there. That means axe here cannot
+see colour contrast, touch target size, focus visibility, or anything decided
+by `display:none` versus `sr-only` — and that last one is precisely how the
+logout button lost its accessible name on phones the same day. Two of the four
+defects found by hand that morning could NOT have been caught by this suite.
+
+What it does catch is the structural half: controls with no accessible name,
+invalid or orphaned ARIA, duplicate ids, unlabelled form fields, broken
+heading order. Treat a green run as a floor, never as WCAG AA.
+
+Two rules are disabled with a reason, and neither is to make the report green.
+`color-contrast` cannot run without computed styles and returns "incomplete"
+rather than a violation, which is noise that teaches people to skim. `region`
+is a property of a whole page and fails for a component mounted in a bare div.
+
+**Two traps the tests had to avoid, both already documented here in other
+forms.** The filters card opens three of its four areas only on click, so
+scanning a bare mount would report zero violations about an almost empty card —
+the field count is asserted from below first. And a negative control asserts
+that axe DOES flag a button with no name, because otherwise every green
+assertion could be a misconfigured scanner reporting nothing.
 
 ## Endpoint latency: what it actually is, and why it was unreadable (2026-09-09)
 
