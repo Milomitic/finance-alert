@@ -471,6 +471,45 @@ per-signal push if `telegram_push_signals` is enabled, and health-transition
 alerts (`telegram_notify_health`, default True, max one per state per 6h). To
 stop them, remove the two keys from `finance-alert-prod` and restart the pod.
 
+## Ingress rate limit: 50/s, burst 100 — and how to test one (2026-09-09)
+
+Until this date `kubectl get middleware -A` returned **No resources found**:
+the app was on a public address with nothing in front of it, on a node it
+shares with Postgres, Prometheus, Loki and Grafana. `rateLimit` is now a
+Traefik Middleware in the chart, on only in `values-oci.yaml`.
+
+**The numbers, and why not stricter.** A stock detail page fans out to ~20 API
+calls on load, so `burst: 100` absorbs a page open. `average: 50` per second is
+about two orders of magnitude above real browsing and two below a flood, which
+is the only band worth defending on one node. No `inFlightReq` beside it on
+purpose: the health page holds an SSE connection open for its whole life, so a
+concurrency cap counts every open tab as a permanent occupant and locks the
+owner out of their own dashboard.
+
+⚠️ **A burst test that comes back all-200 usually means your TEST is too slow,
+not that the limiter is off.** This cost two rounds. From a browser-like client
+over the internet, 300 requests at 40-way parallelism measured **45.7 req/s** —
+*below the 50/s limit*, so zero 429s was the correct answer and proved nothing.
+Repeating it from INSIDE the cluster changed nothing (46.1 req/s), because the
+script joined each batch before starting the next, so throughput was
+`parallelism / batch latency` and a fresh TLS handshake dominated every request.
+
+What actually generates load: **persistent connections and continuous workers**.
+24 sockets, keep-alive, 40 sequential requests each — 276 req/s, and the limiter
+answered:
+
+    960 richieste in 3.48s     200: 276     429: 684
+
+Those 276 are not arbitrary. A token bucket permits `burst + average x elapsed`
+= 100 + 50 x 3.48 = **274**, against 276 measured. The limiter is doing exactly
+what it is configured to do, and that arithmetic is the check to repeat if the
+numbers are ever changed.
+
+**Corollary worth keeping:** a single remote client on an ordinary connection
+tops out around 46 req/s against this endpoint and therefore *cannot* trip the
+limit. It only ever engages against something genuinely abusive, so a spurious
+429 for the owner is not a realistic failure mode at these settings.
+
 ## Node disk: 82% full, and that is monitored (2026-09-09)
 
 Worth not re-investigating. The node's root filesystem is 30G with ~5.6G free,
