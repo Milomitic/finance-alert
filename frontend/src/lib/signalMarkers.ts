@@ -52,6 +52,32 @@ export interface SignalOverlay {
   byTime: Map<number, SignalHoverItem[]>;
 }
 
+/** Marker palette and weight.
+ *
+ * ⚠️ These were `#17b551` and `#dc2626` — a GREEN and a RED. CLAUDE.md's
+ * palette rule is that rose/emerald mean market DIRECTION and red/green mean
+ * something is broken, and a signal's bull/bear tone is direction, so the
+ * chart was speaking the error palette for a directional fact. Same shades as
+ * the rest of the app now, which also means a marker and the row it matches in
+ * the alerts table finally agree.
+ *
+ * ⚠️⚠️ **Size is UNIFORM, and that is a decision rather than an omission.**
+ * The obvious way to make signals "more visible" is to scale each marker by
+ * its Forza. This repo already removed exactly that shape once: the trade
+ * playbook sized the risk budget on Forza until the warehouse showed the top
+ * band realising 42.3% against 52-53% for the others, and the ramp went with
+ * nothing put in its place. A bigger arrow says "look at this one" — the same
+ * claim, made in pixels instead of numbers, and with the same absence of
+ * evidence behind it. Every marker is legible; none is ranked.
+ */
+const BULL = "#059669"; // emerald-600
+const BEAR = "#e11d48"; // rose-600
+const MIXED = "#d97706"; // amber-600 — bull and bear tied on the same bar
+
+/** A touch above the default 1. Enough to read against a dense candle body
+ *  without turning the price action into a background for the markers. */
+const MARKER_SIZE = 1.3;
+
 const EMPTY: SignalOverlay = { markers: [], byTime: new Map() };
 
 /** Map each alert onto the chart bar that CONTAINS its signal day, then build
@@ -108,11 +134,14 @@ export function buildSignalOverlay(ohlcv: OhlcvBar[], alerts: Alert[]): SignalOv
       time: barT as UTCTimestamp,
       position: isBull ? "belowBar" : isBear ? "aboveBar" : "inBar",
       shape: isBull ? "arrowUp" : isBear ? "arrowDown" : "circle",
-      color: isBull ? "#17b551" : isBear ? "#dc2626" : "#d97706",
-      // No on-chart text — the arrow conveys position + tone, and the detail
-      // (detector · Forza · outcome, and the count when several fired on one
-      // bar) lives in the hover panel. Verbose labels cluttered the candles.
-      text: "",
+      color: isBull ? BULL : isBear ? BEAR : MIXED,
+      size: MARKER_SIZE,
+      // Still no detector name on the chart — verbose labels buried the
+      // candles, and the detail (detector, Forza, outcome) lives in the hover
+      // panel. The COUNT is the one thing the arrow cannot convey: three
+      // signals on one bar and one signal on one bar were the same glyph, so
+      // the busiest days on the chart looked like the quietest.
+      text: items.length > 1 ? String(items.length) : "",
     });
   }
   markers.sort((a, b) => (a.time as number) - (b.time as number));
@@ -152,7 +181,11 @@ export function buildEarningsMarkers(
     if (barT == null || seen.has(barT)) continue; // one flag per bar
     seen.add(barT);
     const s = e.surprise_pct;
-    const color = typeof s === "number" ? (s >= 0 ? "#0d9488" : "#b91c1c") : "#64748b";
+    // Beat/miss is a DIRECTIONAL fact, so it takes the directional palette for
+    // the same reason the signal markers above do. Teal stays for the beat: it
+    // is deliberately not the signal emerald, so an earnings flag and a bull
+    // signal on the same bar remain distinguishable.
+    const color = typeof s === "number" ? (s >= 0 ? "#0d9488" : BEAR) : "#64748b";
     markers.push({
       time: barT as UTCTimestamp,
       position: "belowBar",

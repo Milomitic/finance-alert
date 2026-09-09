@@ -74,7 +74,13 @@ describe("buildSignalOverlay", () => {
       signal("2026-07-09", "bear"),
     ]);
     expect(markers).toHaveLength(1);
-    expect(markers[0].text).toBe(""); // no on-chart clutter; count is in the hover panel
+    // Changed deliberately 2026-09-09. This used to assert "" on the reasoning
+    // that the count belongs in the hover panel — but three signals on a bar
+    // and one signal on a bar drew the IDENTICAL glyph, so the busiest days on
+    // the chart looked like the quietest and the only way to find them was to
+    // hover every arrow. The detector name is still kept off the chart; it is
+    // the part that buried the candles.
+    expect(markers[0].text).toBe("3");
     expect(markers[0].shape).toBe("arrowUp"); // 2 bull vs 1 bear → bull majority
     const t = Math.floor(Date.parse("2026-07-09") / 1000);
     expect(byTime.get(t)).toHaveLength(3);
@@ -113,7 +119,11 @@ describe("buildEarningsMarkers", () => {
     expect(beat[0].color).toBe("#0d9488"); // beat → teal
 
     const miss = buildEarningsMarkers(OHLCV, [{ date: "2026-07-08", surprise_pct: -1.5 }]);
-    expect(miss[0].color).toBe("#b91c1c"); // miss → red
+    // Rose, not red: a miss is a DIRECTIONAL fact, and CLAUDE.md reserves
+    // red/green for "something is broken". Teal stays for the beat rather than
+    // moving to emerald, so an earnings flag and a bull signal on the same bar
+    // stay distinguishable.
+    expect(miss[0].color).toBe("#e11d48");
 
     const unknown = buildEarningsMarkers(OHLCV, [{ date: "2026-07-08", surprise_pct: null }]);
     expect(unknown[0].color).toBe("#64748b"); // unknown → slate
@@ -133,5 +143,47 @@ describe("buildEarningsMarkers", () => {
       { date: "2026-07-08", surprise_pct: 2 },
     ]);
     expect(m).toHaveLength(1);
+  });
+});
+
+describe("i marker sono leggibili senza classificare i segnali", () => {
+  it("usa la tavolozza direzionale, non quella degli errori", () => {
+    // rose/emerald = direzione, red/green = qualcosa e rotto (CLAUDE.md). Un
+    // segnale bull/bear e direzione, e prima parlava la tavolozza sbagliata.
+    const bull = buildSignalOverlay(OHLCV, [signal("2026-07-09", "bull")]).markers;
+    const bear = buildSignalOverlay(OHLCV, [signal("2026-07-09", "bear")]).markers;
+
+    expect(bull[0].color).toBe("#059669");
+    expect(bear[0].color).toBe("#e11d48");
+  });
+
+  it("non usa piu il verde e il rosso di sistema", () => {
+    const bull = buildSignalOverlay(OHLCV, [signal("2026-07-09", "bull")]).markers;
+    const bear = buildSignalOverlay(OHLCV, [signal("2026-07-09", "bear")]).markers;
+
+    expect([bull[0].color, bear[0].color]).not.toContain("#17b551");
+    expect([bull[0].color, bear[0].color]).not.toContain("#dc2626");
+  });
+
+  it("un solo segnale non porta un conteggio", () => {
+    // "1" accanto a ogni freccia sarebbe rumore: il conteggio serve solo dove
+    // aggiunge qualcosa che la freccia non dice.
+    const { markers } = buildSignalOverlay(OHLCV, [signal("2026-07-09", "bull")]);
+
+    expect(markers[0].text).toBe("");
+  });
+
+  it("NON dimensiona i marker in base alla Forza", () => {
+    // La regressione da impedire, non una svista. Un marker piu grande dice
+    // "guarda questo", cioe la stessa affermazione che il playbook faceva
+    // dimensionando il rischio sulla Forza — rimossa perche la banda 90-99
+    // realizza 42,3% contro 52-53% delle altre. Tutti leggibili, nessuno
+    // classificato.
+    const weak = { snapshot: { tone: "bull", strength: 12 } };
+    const strong = { snapshot: { tone: "bull", strength: 98 } };
+    const debole = buildSignalOverlay(OHLCV, [signal("2026-07-09", "bull", weak)]).markers;
+    const forte = buildSignalOverlay(OHLCV, [signal("2026-07-09", "bull", strong)]).markers;
+
+    expect(debole[0].size).toBe(forte[0].size);
   });
 });
