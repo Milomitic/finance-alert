@@ -92,8 +92,21 @@ spec:
 
   # Continuous WAL archiving is provided by the Barman Cloud Plugin.
   # The ObjectStore carries the 30d retention policy.
+  #
+  # `enabled: true` is the operator's own default and is declared here on
+  # purpose (FA-021). The CRD gives this list no `x-kubernetes-list-type`, so
+  # it is ATOMIC: server-side apply cannot merge it entry by entry the way it
+  # merges `postgresql.parameters`, where the operator injects 23 extra keys
+  # and ArgoCD correctly ignores them because it owns only its own seven. One
+  # extra key inside a list element makes the WHOLE list differ, which is why
+  # `Cluster/pg` sat permanently OutOfSync with an empty `argocd app diff`.
+  #
+  # Declaring the field is the fix rather than an `ignoreDifferences` on
+  # `/spec/plugins`: that would silence a genuine change to the archiver
+  # configuration too, and an ignored diff is a worse outcome than a noisy one.
   plugins:
     - name: barman-cloud.cloudnative-pg.io
+      enabled: true
       isWALArchiver: true
       parameters:
         barmanObjectName: pg-backups
