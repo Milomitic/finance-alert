@@ -24,6 +24,8 @@ from app.schemas.platform import (
     DeployHealthOut,
     DetectorPerformanceOut,
     InfraHealthOut,
+    InfraLogSourceOut,
+    InfraLogsOut,
     LogRecordOut,
     PlatformHealthOut,
     RecentScanOut,
@@ -36,6 +38,7 @@ from app.services import (
     detector_performance_service,
     health_rollup,
     infra_health_service,
+    loki_log_service,
     signal_drift_service,
     source_catalog,
     yfinance_health,
@@ -383,6 +386,44 @@ def logs(
         level=level, module=module, search=search, limit=limit
     )
     return [LogRecordOut(**r) for r in records]
+
+
+@router.get("/infra-logs/sources", response_model=list[InfraLogSourceOut])
+def infra_log_sources(
+    _user: User = Depends(get_current_user),
+) -> list[InfraLogSourceOut]:
+    """What the picker may ask for. Served from the same table the query uses,
+    so the UI cannot offer a source the backend would refuse."""
+    return [InfraLogSourceOut(**s) for s in loki_log_service.sources_payload()]
+
+
+@router.get("/infra-logs", response_model=InfraLogsOut)
+def infra_logs(
+    source: Annotated[str, Query()],
+    level: Annotated[str | None, Query()] = None,
+    limit: Annotated[int, Query(ge=1, le=1000)] = 300,
+    minutes: Annotated[int, Query(ge=1, le=1440)] = 60,
+    _user: User = Depends(get_current_user),
+) -> InfraLogsOut:
+    """Logs for one infrastructure component, from Loki.
+
+    `source` is a KEY into a closed table, never a LogQL expression: this
+    endpoint must not become an authenticated proxy for arbitrary reads of
+    every namespace's output.
+
+    A failed query returns `reachable: false` with no records rather than a
+    200 with an empty list. They look identical over the wire and mean the
+    opposite — a quiet component versus a log pipeline that is down.
+    """
+    records = loki_log_service.query(
+        source, level=level, limit=limit, minutes=minutes
+    )
+    if records is None:
+        return InfraLogsOut(source=source, reachable=False, records=[])
+    return InfraLogsOut(
+        source=source, reachable=True,
+        records=[LogRecordOut(**r) for r in records],
+    )
 
 
 @router.get("/stream")

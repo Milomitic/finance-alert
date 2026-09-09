@@ -15,6 +15,23 @@ type Props = {
    * ["yfinance","yahoo"]) so coverage isn't limited to the bare source name. */
   sourceFilter?: { label: string; tokens: string[] } | null;
   onClearSourceFilter?: () => void;
+  /** Which log ORIGIN is on screen: the app's own SSE stream, or one
+   * infrastructure component queried from Loki. A selector rather than a
+   * merge — one is pushed live, the other is the answer to a query over a past
+   * window, and a single interleaved list could not explain why half of it
+   * moves and half does not. */
+  origin?: {
+    options: { key: string; label: string; note?: string }[];
+    value: string;
+    onChange: (key: string) => void;
+    windowMinutes: number;
+    onWindowChange: (minutes: number) => void;
+    /** null = the app stream (nothing to reach) or the first request is still
+     * in flight; false = Loki did not answer. Only false is a claim about the
+     * log pipeline, and an empty list must never be shown as if it were one. */
+    reachable: boolean | null;
+    loading: boolean;
+  } | null;
 };
 
 const LEVEL_TONE: Record<string, string> = {
@@ -113,6 +130,7 @@ export default function LogStream({
   onClear,
   sourceFilter,
   onClearSourceFilter,
+  origin = null,
 }: Props) {
   // Default filter: hide noisy INFO from the live view (per user request).
   // The full buffer is still available via the dropdown.
@@ -127,9 +145,16 @@ export default function LogStream({
   // overriding the threshold while still displaying "WARNING+". The level then
   // applies normally (intersected with the source), so re-picking WARNING+
   // narrows a source view to just its warnings.
+  const onInfra = !!origin && origin.value !== "app";
+
+  // Infra records carry a HEURISTIC level: these components share no log
+  // format, so `loki_log_service._parse_level` falls back to INFO for anything
+  // it cannot classify. Opening such a source at the WARNING+ default would
+  // hide unclassified errors behind an empty panel, so infra always opens at
+  // ALL. Same reason the source drill-down below does it.
   useEffect(() => {
-    setLevelFilter(sourceFilter ? "ALL" : "WARNING");
-  }, [sourceFilter]);
+    setLevelFilter(sourceFilter || onInfra ? "ALL" : "WARNING");
+  }, [sourceFilter, onInfra]);
 
   // Pause = freeze the visible buffer so the tail stops jumping while you read.
   // Snapshot the records ONLY when `paused` toggles (not on every incoming
@@ -202,9 +227,13 @@ export default function LogStream({
       <header className="flex items-start justify-between gap-3 px-5 pt-4 pb-3 border-b flex-wrap">
         <div className="space-y-1.5">
           <h2 className="text-lg font-semibold tracking-tight">
-            Log live
+            {onInfra
+              ? `Log · ${origin?.options.find((o) => o.key === origin.value)?.label ?? origin?.value}`
+              : "Log live"}
             <span className="ml-2 text-xs font-normal text-muted-foreground">
-              {filtered.length} visibili · {records.length} in buffer
+              {onInfra
+                ? `${filtered.length} righe`
+                : `${filtered.length} visibili · ${records.length} in buffer`}
             </span>
           </h2>
           <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
@@ -248,6 +277,34 @@ export default function LogStream({
         {/* flex-wrap: su mobile i controlli scendono su più righe invece di
             sbordare orizzontalmente. */}
         <div className="flex items-center gap-2 text-sm flex-wrap">
+          {origin && origin.options.length > 0 && (
+            <select
+              value={origin.value}
+              onChange={(e) => origin.onChange(e.target.value)}
+              className="rounded-md border bg-background px-2.5 py-1.5 font-medium"
+              title="Quale componente stai guardando"
+            >
+              <option value="app">App (live)</option>
+              {origin.options.map((o) => (
+                <option key={o.key} value={o.key} title={o.note}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          )}
+          {onInfra && origin && (
+            <select
+              value={origin.windowMinutes}
+              onChange={(e) => origin.onWindowChange(Number(e.target.value))}
+              className="rounded-md border bg-background px-2.5 py-1.5 font-medium"
+              title="Finestra temporale interrogata su Loki"
+            >
+              <option value={15}>ultimi 15 min</option>
+              <option value={60}>ultima ora</option>
+              <option value={360}>ultime 6 ore</option>
+              <option value={1440}>ultime 24 ore</option>
+            </select>
+          )}
           <select
             value={levelFilter}
             onChange={(e) => setLevelFilter(e.target.value)}
@@ -314,10 +371,26 @@ export default function LogStream({
         </div>
       </header>
 
+      {/* Irraggiungibile e vuoto vogliono reazioni opposte e sullo schermo sono
+          identici, quindi non condividono mai lo stesso messaggio. */}
+      {onInfra && origin?.reachable === false && (
+        <div className="mx-5 mb-3 rounded-md border border-red-300 dark:border-red-800/60 bg-red-50 dark:bg-red-950/30 px-3 py-2 text-sm text-red-800 dark:text-red-300">
+          <AlertCircle className="mr-1.5 inline h-4 w-4 align-text-bottom" />
+          Loki non ha risposto. Queste righe non sono assenti: non è stato
+          possibile leggerle.
+        </div>
+      )}
+
       <div className="max-h-[480px] overflow-auto font-mono text-[12.5px] leading-relaxed">
-        {filtered.length === 0 && (
+        {/* Quando il banner sopra ha gia detto che Loki non risponde, ripeterlo
+            qui non aggiunge nulla: lo stato vuoto tace. */}
+        {filtered.length === 0 && !(onInfra && origin?.reachable === false) && (
           <div className="px-5 py-8 text-center text-muted-foreground italic text-sm">
-            Nessun log corrisponde ai filtri.
+            {onInfra
+              ? origin?.loading
+                ? "Interrogazione in corso…"
+                : "Nessuna riga in questa finestra. Il componente è stato silenzioso, non assente — allarga la finestra per verificarlo."
+              : "Nessun log corrisponde ai filtri."}
           </div>
         )}
         {filtered.map((r) => (

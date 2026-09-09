@@ -137,6 +137,47 @@ export type LogRecord = {
   exception: string | null;
 };
 
+/** One selectable infrastructure log source (ArgoCD, Postgres, Traefik...). */
+export type InfraLogSource = {
+  key: string;
+  label: string;
+  note: string;
+};
+
+/** Infra logs for one source.
+ *
+ * `reachable` is the field that must survive every refactor. An empty
+ * `records` is ambiguous on its own — a quiet component and a log pipeline
+ * that is down look identical — and those want opposite reactions from
+ * whoever is reading the panel. The app's own SSE stream needs no equivalent
+ * because it reads an in-process buffer that cannot be unreachable.
+ */
+export type InfraLogs = {
+  source: string;
+  reachable: boolean;
+  records: LogRecord[];
+};
+
+export async function fetchInfraLogSources(): Promise<InfraLogSource[]> {
+  const r = await fetch("/api/platform/infra-logs/sources", { credentials: "include" });
+  if (!r.ok) throw new Error(`infra-log-sources ${r.status}`);
+  return r.json();
+}
+
+export async function fetchInfraLogs(
+  source: string,
+  opts: { minutes: number; limit?: number },
+): Promise<InfraLogs> {
+  const q = new URLSearchParams({
+    source,
+    minutes: String(opts.minutes),
+    limit: String(opts.limit ?? 300),
+  });
+  const r = await fetch(`/api/platform/infra-logs?${q}`, { credentials: "include" });
+  if (!r.ok) throw new Error(`infra-logs ${r.status}`);
+  return r.json();
+}
+
 export async function fetchHealth(): Promise<PlatformHealth> {
   const r = await fetch("/api/platform/health", { credentials: "include" });
   if (!r.ok) throw new Error(`health ${r.status}`);

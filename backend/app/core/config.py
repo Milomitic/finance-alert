@@ -69,6 +69,7 @@ class Settings(BaseSettings):
     # — where the card then says "non raggiungibile" rather than inventing a
     # healthy-looking row of zeros.
     prometheus_url: str = ""
+    loki_url: str = ""
     telegram_bot_token: str = ""
     telegram_chat_id: str = ""
     telegram_delivery_mode: str = "digest"  # only "digest" implemented in Fase 2

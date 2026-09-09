@@ -187,6 +187,27 @@ class LogRecordOut(BaseModel):
     exception: str | None = None
 
 
+class InfraLogSourceOut(BaseModel):
+    """One selectable infrastructure log source."""
+    key: str
+    label: str
+    note: str
+
+
+class InfraLogsOut(BaseModel):
+    """Infra logs for one source.
+
+    `reachable` is the field that must not be dropped. An empty `records` list
+    is ambiguous on its own -- it is either a quiet component or a log pipeline
+    that is down, and those want opposite reactions from whoever is reading.
+    The app's own SSE stream never needs this because it reads an in-process
+    buffer that cannot be unreachable.
+    """
+    source: str
+    reachable: bool
+    records: list[LogRecordOut] = []
+
+
 class SignalDriftRowOut(BaseModel):
     """One detector's drift verdict: realised recent hit-rate vs the calibrated
     base rate, with the Wilson band that decides significance. All rates are

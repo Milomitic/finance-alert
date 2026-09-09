@@ -17,6 +17,7 @@ import InfraCard from "@/components/health/InfraCard";
 import { useInfraHealth } from "@/hooks/useInfraHealth";
 import LogStream from "@/components/health/LogStream";
 import { usePlatformHealthStream } from "@/hooks/usePlatformHealthStream";
+import { APP_ORIGIN, useInfraLogs, useInfraLogSources } from "@/hooks/useInfraLogs";
 
 type OverallStatus = "operational" | "degraded" | "outage";
 
@@ -83,6 +84,15 @@ export default function PlatformHealthPage() {
   // fuori dall'app e puo' non rispondere senza che l'app abbia nulla che non va.
   const infra = useInfraHealth();
   const [paused, setPaused] = useState(false);
+
+  // Which component's logs are on screen. The app's own stream stays the
+  // default: it is the one that arrives live, and switching away is a
+  // deliberate act of looking at the infrastructure instead.
+  const [logOrigin, setLogOrigin] = useState<string>(APP_ORIGIN);
+  const [logWindow, setLogWindow] = useState<number>(60);
+  const infraLogSources = useInfraLogSources();
+  const infraLogs = useInfraLogs(logOrigin, logWindow);
+  const onInfraOrigin = logOrigin !== APP_ORIGIN;
 
   // Clicking a data source in the "Fonti dati" card filters the live-log
   // table to that source and scrolls it into view, so its errors (e.g. a
@@ -348,12 +358,21 @@ export default function PlatformHealthPage() {
 
       <div ref={logStreamRef} className="scroll-mt-4">
         <LogStream
-          records={logs}
+          records={onInfraOrigin ? infraLogs.records : logs}
           paused={paused}
           onTogglePause={() => setPaused((p) => !p)}
           onClear={() => setLogs([])}
-          sourceFilter={sourceFilter}
+          sourceFilter={onInfraOrigin ? null : sourceFilter}
           onClearSourceFilter={() => setSourceFilter(null)}
+          origin={{
+            options: infraLogSources.data ?? [],
+            value: logOrigin,
+            onChange: setLogOrigin,
+            windowMinutes: logWindow,
+            onWindowChange: setLogWindow,
+            reachable: infraLogs.reachable,
+            loading: infraLogs.loading,
+          }}
         />
       </div>
     </div>
