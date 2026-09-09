@@ -7,6 +7,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { currencySymbol } from "@/lib/money";
 import { cn } from "@/lib/utils";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -19,6 +20,11 @@ interface Props {
   editing?: PriceAlert | null;
   onClose: () => void;
   onSubmit: (body: { target_price: number; direction: "above" | "below"; note: string | null }) => void;
+  /** Valuta di quotazione del titolo. L'etichetta diceva "($)" per tutti,
+   *  mentre 312 titoli su 1010 non sono in dollari: una soglia a 150 su un
+   *  titolo di Milano sotto un simbolo del dollaro non e ambigua, e falsa.
+   *  Assente = nessuna unita mostrata, mai una di ripiego. */
+  currency?: string | null;
   /** Assente = nessun comando di eliminazione. Compare solo in modifica: in
    *  creazione non c'e' ancora nulla da distruggere. */
   onDelete?: (id: number) => void;
@@ -26,7 +32,9 @@ interface Props {
 
 export function PriceAlertDialog({
   open, initialPrice, initialDirection, editing, onClose, onSubmit, onDelete,
+  currency = null,
 }: Props) {
+  const unit = currencySymbol(currency);
   const [price, setPrice] = useState<string>("");
   const [direction, setDirection] = useState<"above" | "below">("above");
   const [note, setNote] = useState<string>("");
@@ -75,7 +83,9 @@ export function PriceAlertDialog({
         </DialogHeader>
         <div className="space-y-3">
           <div>
-            <Label htmlFor="price">Target price ($)</Label>
+            <Label htmlFor="price">
+              Prezzo obiettivo{unit ? ` (${unit})` : ""}
+            </Label>
             <Input
               id="price"
               type="number"

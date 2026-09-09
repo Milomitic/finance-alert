@@ -39,6 +39,8 @@ interface Props {
   /** Active timeframe key (30m/1h/1d/...) — drives the initial visible
    *  range so e.g. 30m doesn't render 60 days of 30-min bars at once. */
   timeframe?: string;
+  /** Listing currency, for the legend's unit. */
+  currency?: string | null;
   /** Signal markers (arrows) drawn on the candles — one per bar, tone by
    *  bull/bear majority. Built by `buildSignalOverlay` in the parent. */
   signalMarkers?: SeriesMarker<Time>[];
@@ -92,7 +94,7 @@ function pointsToChartData(points: IndicatorPoint[] | undefined) {
 export function PriceChart({
   ohlcv, indicators, styles,
   priceAlerts, horizontalDrawings = [], trendDrawings = [],
-  onChartClick, onReady, timeframe,
+  onChartClick, onReady, timeframe, currency = null,
   signalMarkers = [], signalsByTime, earningsMarkers = [],
   chartType = "candle",
   benchmarkLine = [], benchmarkColor = "#7c3aed", benchmarkLabel, chartApiRef,
@@ -689,7 +691,7 @@ export function PriceChart({
           the signal detail — a flex column so the panel always sits directly
           below the legend regardless of how many lines the legend wraps to. */}
       <div className="absolute top-2 left-2 z-10 flex flex-col items-start gap-1 pointer-events-none">
-        <OhlcLegend legend={legend} inline />
+        <OhlcLegend legend={legend} inline currency={currency} />
         <SignalHoverPanel signals={hoverSignals} />
       </div>
     </div>

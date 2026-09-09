@@ -82,7 +82,7 @@ describe("deleting asks first, because it cannot be undone", () => {
 describe("the editor still edits", () => {
   it("pre-fills from the alert being edited", () => {
     open();
-    expect(screen.getByLabelText(/target price/i)).toHaveValue(189.5);
+    expect(screen.getByLabelText(/prezzo obiettivo/i)).toHaveValue(189.5);
     expect(screen.getByDisplayValue("resistenza")).toBeInTheDocument();
   });
 
@@ -90,7 +90,7 @@ describe("the editor still edits", () => {
     const onSubmit = vi.fn();
     open({ onSubmit });
 
-    const price = screen.getByLabelText(/target price/i);
+    const price = screen.getByLabelText(/prezzo obiettivo/i);
     await userEvent.clear(price);
     await userEvent.type(price, "200");
     await userEvent.click(screen.getByRole("button", { name: /salva/i }));
@@ -104,12 +104,40 @@ describe("the editor still edits", () => {
     const onSubmit = vi.fn();
     open({ onSubmit });
 
-    const price = screen.getByLabelText(/target price/i);
+    const price = screen.getByLabelText(/prezzo obiettivo/i);
     await userEvent.clear(price);
     await userEvent.type(price, "0");
     await userEvent.click(screen.getByRole("button", { name: /salva/i }));
 
     expect(onSubmit).not.toHaveBeenCalled();
     expect(screen.getByText(/prezzo positivo/i)).toBeInTheDocument();
+  });
+});
+
+describe("la soglia dichiara la valuta del titolo, non il dollaro", () => {
+  it("un titolo di Milano mostra l'euro", () => {
+    // L'etichetta diceva "Target price ($)" per tutti. 312 titoli su 1010 non
+    // sono in dollari: una soglia a 150 su un titolo di Milano sotto un
+    // simbolo del dollaro non e ambigua, e falsa.
+    open({ currency: "EUR" });
+
+    expect(screen.getByLabelText(/prezzo obiettivo \(€\)/i)).toBeInTheDocument();
+  });
+
+  it("una quotata londinese mostra la sterlina, non i pence", () => {
+    // I prezzi memorizzati sono gia in sterline; 'GBp' e un'etichetta rimasta
+    // indietro, e ripeterla qui metterebbe un errore di cento volte sotto un
+    // campo in cui si scrive un numero.
+    open({ currency: "GBp" });
+
+    expect(screen.getByLabelText(/prezzo obiettivo \(£\)/i)).toBeInTheDocument();
+  });
+
+  it("senza valuta non inventa un'unita", () => {
+    open({ currency: null });
+
+    const label = screen.getByLabelText(/prezzo obiettivo/i);
+    expect(label).toBeInTheDocument();
+    expect(screen.queryByText(/\(\$\)/)).not.toBeInTheDocument();
   });
 });

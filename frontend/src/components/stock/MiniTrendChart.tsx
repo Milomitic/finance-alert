@@ -1,3 +1,4 @@
+import { currencySymbol } from "@/lib/money";
 import {
   Bar, CartesianGrid, ComposedChart, Legend, Line, ReferenceLine,
   ResponsiveContainer, Tooltip, XAxis, YAxis,
@@ -23,8 +24,12 @@ export interface ChartPoint {
 }
 
 export default function MiniTrendChart({
-  data, hasEstimate,
-}: { data: ChartPoint[]; hasEstimate: boolean }) {
+  data, hasEstimate, currency = null,
+}: { data: ChartPoint[]; hasEstimate: boolean; currency?: string | null }) {
+  // Ricavi e utile per azione sono nella valuta di RENDICONTAZIONE, che per
+  // una quotata e la sua valuta di quotazione. Gli assi dicevano dollari per
+  // tutti, su un catalogo dove un titolo su tre non e in dollari.
+  const unit = currencySymbol(currency) ?? "";
   if (data.length === 0) {
     return <div className="text-sm text-muted-foreground text-center py-6">Nessun dato per il grafico</div>;
   }
@@ -62,15 +67,15 @@ export default function MiniTrendChart({
         />
         <YAxis
           yAxisId="eps" orientation="right" fontSize={10} tickLine={false} axisLine={false} width={36}
-          tickFormatter={(v) => `$${v.toFixed(1)}`}
+          tickFormatter={(v) => `${unit}${v.toFixed(1)}`}
         />
         <Tooltip
           contentStyle={{ fontSize: 12, borderRadius: 6, padding: "4px 8px" }}
           formatter={(value: unknown, name: unknown) => {
             const n = typeof value === "number" ? value : Number(value);
             const nm = String(name ?? "");
-            if (nm === "Revenue" || nm === "Revenue est") return [`$${n.toFixed(1)}B`, nm];
-            if (nm === "EPS" || nm === "EPS est") return [`$${n.toFixed(2)}`, nm];
+            if (nm === "Revenue" || nm === "Revenue est") return [`${unit}${n.toFixed(1)}B`, nm];
+            if (nm === "EPS" || nm === "EPS est") return [`${unit}${n.toFixed(2)}`, nm];
             return [String(value), nm];
           }}
         />

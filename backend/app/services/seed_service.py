@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.models import Index, Stock, StockIndex
 from app.services.country_normalizer import canonical_country
+from app.services.currency_units import major_unit_currency
 from app.services.exchange_codes import canonical_exchange
 from app.services.industry_normalizer import canonical_industry
 from app.services.sector_normalizer import canonical_sector
@@ -56,7 +57,10 @@ def _upsert_stock(db: Session, row: dict[str, str]) -> tuple[Stock, bool]:
             sector=sector_canonical,
             industry=industry_canonical,
             country=country_canonical,
-            currency=row.get("currency") or None,
+            # Boundary contract, same shape as `canonical_country` above: a
+            # seed row carrying yfinance's raw 'GBp' must not reach the column.
+            # Prices are stored in pounds, so the label has to say pounds.
+            currency=major_unit_currency(row.get("currency")) or None,
         )
         db.add(stock)
         db.flush()
@@ -67,7 +71,7 @@ def _upsert_stock(db: Session, row: dict[str, str]) -> tuple[Stock, bool]:
     stock.sector = sector_canonical or stock.sector
     stock.industry = industry_canonical or stock.industry
     stock.country = country_canonical or stock.country
-    stock.currency = row.get("currency") or stock.currency
+    stock.currency = major_unit_currency(row.get("currency")) or stock.currency
     return stock, False
 
 

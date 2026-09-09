@@ -18,10 +18,13 @@ import { CardUpdatedAt } from "@/components/stock/CardUpdatedAt";
 import { useCardRefresh } from "@/hooks/useCardRefresh";
 import { useStockFundamentals } from "@/hooks/useStockFundamentals";
 import { fmtBig } from "@/lib/format";
+import { formatMoney } from "@/lib/money";
 import { cn } from "@/lib/utils";
 
 interface Props {
   ticker: string;
+  /** Valuta di quotazione: l'utile per azione e denaro come il prezzo. */
+  currency?: string | null;
 }
 
 /* ─── Formatting helpers ────────────────────────────────────────────────── */
@@ -130,13 +133,14 @@ function aggregateAnnualEarnings(
 }
 
 function AnnualTabBody({
-  annual, earnings, currFyEpsEstimate, currFyRevenueEstimate,
+  annual, earnings, currFyEpsEstimate, currFyRevenueEstimate, currency,
 }: {
   annual: FundamentalsAnnual[];
   earnings: FundamentalsEarnings[];
   /** Consensus full-year EPS/revenue for the FY in progress (yfinance
    *  estimate tables, `0y` avg). Null on thin-coverage tickers. */
   currFyEpsEstimate: number | null;
+  currency: string | null;
   currFyRevenueEstimate: number | null;
 }) {
   const annualEarnings = useMemo(() => aggregateAnnualEarnings(earnings), [earnings]);
@@ -195,7 +199,7 @@ function AnnualTabBody({
             <div className="h-full w-full animate-pulse rounded bg-muted/40" />
           }
         >
-          <MiniTrendChart data={chartData} hasEstimate={hasEstimate} />
+          <MiniTrendChart data={chartData} hasEstimate={hasEstimate} currency={currency} />
         </Suspense>
       </div>
       <div className="mt-2 flex-1 min-h-0 overflow-y-auto pr-1 -mr-1">
@@ -254,7 +258,7 @@ function AnnualTabBody({
                     <td className="px-1.5 py-1 text-right">—</td>
                     <td className="px-1.5 py-1 text-right">—</td>
                     <td className="px-1.5 py-1 text-right font-semibold not-italic">
-                      {currFyEpsEstimate != null ? `$${currFyEpsEstimate.toFixed(2)}` : "—"}
+                      {formatMoney(currFyEpsEstimate, currency)}
                     </td>
                     <td className="px-1.5 py-1 text-right">—</td>
                   </tr>
@@ -288,13 +292,13 @@ function AnnualTabBody({
                       figure but NOT comparable to the adjusted consensus,
                       so no beat/miss colour claim here. */}
                   <td className="px-1.5 py-1 text-right text-muted-foreground">
-                    {a.eps != null ? `$${a.eps.toFixed(2)}` : "—"}
+                    {formatMoney(a.eps, currency)}
                   </td>
                   <td className={cn("px-1.5 py-1 text-right font-semibold", epsAdjTone)}>
-                    {epsAdj != null ? `$${epsAdj.toFixed(2)}` : "—"}
+                    {formatMoney(epsAdj, currency)}
                   </td>
                   <td className="px-1.5 py-1 text-right text-muted-foreground">
-                    {agg?.eps_est ? `$${agg.eps_est.toFixed(2)}` : "—"}
+                    {formatMoney(agg?.eps_est ?? null, currency)}
                   </td>
                   <td className={cn("px-1.5 py-1 text-right font-semibold", surp.color)}>
                     <span className="inline-flex items-center gap-0.5 justify-end">
@@ -314,6 +318,7 @@ function AnnualTabBody({
 
 function QuarterlyTabBody({
   quarterly, earnings, nextEarningsDate, nextEarningsWhen, nextEpsEstimate, nextRevenueEstimate,
+  currency,
 }: {
   quarterly: FundamentalsQuarterly[];
   earnings: FundamentalsEarnings[];
@@ -322,6 +327,7 @@ function QuarterlyTabBody({
   nextEarningsWhen: "pre" | "after" | null;
   nextEpsEstimate: number | null;
   nextRevenueEstimate: number | null;
+  currency: string | null;
 }) {
   // **Dedup earnings by fiscal quarter**, keeping the most recent release per
   // quarter. yfinance occasionally returns two earnings entries that both map
@@ -395,7 +401,7 @@ function QuarterlyTabBody({
             <div className="h-full w-full animate-pulse rounded bg-muted/40" />
           }
         >
-          <MiniTrendChart data={chartData} hasEstimate={hasEstimate} />
+          <MiniTrendChart data={chartData} hasEstimate={hasEstimate} currency={currency} />
         </Suspense>
       </div>
       <div className="mt-2 flex-1 min-h-0 overflow-y-auto pr-1 -mr-1">
@@ -463,7 +469,7 @@ function QuarterlyTabBody({
                 <td className="px-1.5 py-1 text-right text-muted-foreground italic">—</td>
                 <td className="px-1.5 py-1 text-right text-muted-foreground italic">—</td>
                 <td className="px-1.5 py-1 text-right text-blue-700 dark:text-blue-300 font-semibold">
-                  {nextEpsEstimate != null ? `$${nextEpsEstimate.toFixed(2)}` : "—"}
+                  {formatMoney(nextEpsEstimate, currency)}
                 </td>
                 <td className="px-1.5 py-1 text-right text-muted-foreground italic">—</td>
               </tr>
@@ -494,14 +500,14 @@ function QuarterlyTabBody({
                   <td className="px-1.5 py-1 text-right text-muted-foreground">
                     {(() => {
                       const g = epsGaapByQuarter.get(fq);
-                      return g != null ? `$${g.toFixed(2)}` : "—";
+                      return formatMoney(g, currency);
                     })()}
                   </td>
                   <td className={cn("px-1.5 py-1 text-right font-semibold", epsTone)}>
-                    {e.eps_reported != null ? `$${e.eps_reported.toFixed(2)}` : "—"}
+                    {formatMoney(e.eps_reported, currency)}
                   </td>
                   <td className="px-1.5 py-1 text-right text-muted-foreground">
-                    {e.eps_estimate != null ? `$${e.eps_estimate.toFixed(2)}` : "—"}
+                    {formatMoney(e.eps_estimate, currency)}
                   </td>
                   <td className={cn("px-1.5 py-1 text-right font-semibold", surp.color)}>
                     <span className="inline-flex items-center gap-0.5 justify-end">
@@ -523,7 +529,7 @@ function QuarterlyTabBody({
 
 type TabKey = "annual" | "quarterly";
 
-export function FundamentalsCard({ ticker }: Props) {
+export function FundamentalsCard({ ticker, currency = null }: Props) {
   const q = useStockFundamentals(ticker);
   const { refresh, isRefreshing, refreshError } = useCardRefresh({
     queryKey: ["stocks", ticker, "fundamentals"],
@@ -615,7 +621,7 @@ export function FundamentalsCard({ ticker }: Props) {
               {f.next_earnings_date ? (
                 <span
                   className="inline-flex items-center gap-1 text-sm px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-950/30 border border-blue-200/60 dark:border-blue-900/40 text-blue-700 dark:text-blue-300"
-                  title={`Prossima earnings — EPS atteso: ${f.next_eps_estimate != null ? `$${f.next_eps_estimate.toFixed(2)}` : "—"}`}
+                  title={`Prossima earnings — EPS atteso: ${formatMoney(f.next_eps_estimate, currency)}`}
                 >
                   <CalendarClock className="h-3 w-3" />
                   {shortDate(f.next_earnings_date)}
@@ -671,6 +677,7 @@ export function FundamentalsCard({ ticker }: Props) {
             <div className="flex-1 min-h-0 flex flex-col">
               {effective === "annual" && hasAnnual && (
                 <AnnualTabBody
+                  currency={currency}
                   annual={f.annual}
                   earnings={f.earnings}
                   currFyEpsEstimate={f.curr_fy_eps_estimate ?? null}
@@ -679,6 +686,7 @@ export function FundamentalsCard({ ticker }: Props) {
               )}
               {effective === "quarterly" && hasQuarterly && (
                 <QuarterlyTabBody
+                  currency={currency}
                   quarterly={f.quarterly}
                   earnings={f.earnings}
                   nextEarningsDate={f.next_earnings_date}

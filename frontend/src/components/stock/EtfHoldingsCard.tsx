@@ -7,6 +7,7 @@ import { StockLogo } from "@/components/dashboard/StockLogo";
 import { Card, CardContent } from "@/components/ui/card";
 import { SectionTitle } from "@/components/ui/section-title";
 import { useEtfHoldings } from "@/hooks/useEtfHoldings";
+import { formatMoney } from "@/lib/money";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -152,7 +153,7 @@ function HoldingRow({ h, maxWeight }: { h: EtfHolding; maxWeight: number }) {
       {/* Price + day variation */}
       <div className="text-right tabular-nums shrink-0 w-[72px]">
         <div className="text-sm font-semibold leading-tight">
-          {h.price != null ? `$${h.price.toFixed(2)}` : "—"}
+          {formatMoney(h.price, h.currency)}
         </div>
         <div className={cn("text-[0.7059rem] font-semibold leading-tight", changeColor)}>
           {h.change_pct != null

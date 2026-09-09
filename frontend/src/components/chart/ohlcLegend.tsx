@@ -3,6 +3,7 @@
  *  MarketChart renders the IDENTICAL fixed top-left legend: latest bar by
  *  default, hovered bar while the crosshair is over a candle — the classic
  *  TradingView corner legend that never occludes the candles. */
+import { currencySymbol } from "@/lib/money";
 import { isIntraday } from "@/lib/timeframeZoom";
 import { cn } from "@/lib/utils";
 
@@ -107,13 +108,22 @@ const downTone = "text-rose-700 dark:text-rose-300";
 export function OhlcLegend({
   legend,
   inline = false,
+  currency = null,
 }: {
   legend: LegendDatum | null;
   /** When true, drop the self-positioning so a parent can stack the legend
    *  with sibling overlays (e.g. the signal hover panel). Default keeps the
    *  standalone absolute top-left placement used by MarketChart. */
   inline?: boolean;
+  /** Listing currency of the series. Stated ONCE at the head of the row
+   *  rather than repeated on O, H, L and C: four symbols in a four-value
+   *  monospace row is noise, and the unit belongs to the whole legend.
+   *
+   *  Null is the correct value for market assets — an index level and an FX
+   *  cross are not denominated in anything — and renders nothing at all. */
+  currency?: string | null;
 }) {
+  const unit = currencySymbol(currency);
   if (!legend) return null;
   return (
     <div
@@ -127,6 +137,14 @@ export function OhlcLegend({
       )}
     >
       <div className="flex flex-wrap items-center gap-x-2.5 sm:gap-x-4 gap-y-0.5">
+        {unit && (
+          <span
+            className="text-muted-foreground font-semibold"
+            title="Valuta di quotazione: vale per O, H, L e C"
+          >
+            {unit}
+          </span>
+        )}
         <span>
           <span className="text-muted-foreground">O</span> {fmtPrice(legend.open)}
         </span>

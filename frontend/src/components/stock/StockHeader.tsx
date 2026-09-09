@@ -9,6 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { FlashValue } from "@/components/ui/FlashValue";
 import { useLiveQuote } from "@/hooks/useLiveQuote";
 import { useNowTick } from "@/hooks/useNowTick";
+import { formatMoney, formatMoneySigned } from "@/lib/money";
 import { getStockFlagCode } from "@/lib/stockMeta";
 import { cn } from "@/lib/utils";
 
@@ -240,7 +241,14 @@ export function StockHeader({ stock, kpis, ohlcv }: Props) {
                     </span>
                   )}
                 </div>
-                <FlashValue value={displayPrice} format={(v) => `$${v.toFixed(2)}`} className="text-4xl sm:text-5xl font-bold leading-none" />
+                {/* La valuta e quella di QUOTAZIONE, non il dollaro: 312 titoli su
+                    1010 non sono in dollari e questo era il numero piu grande
+                    della pagina con il simbolo sbagliato sopra. */}
+                <FlashValue
+                  value={displayPrice}
+                  format={(v) => formatMoney(v, stock.currency)}
+                  className="text-4xl sm:text-5xl font-bold leading-none"
+                />
               </>
             )}
             {change != null && (
@@ -248,7 +256,7 @@ export function StockHeader({ stock, kpis, ohlcv }: Props) {
                 <span className="text-lg">{tone.arrow}</span>
                 {changeAbs != null && (
                   <span className="text-base font-semibold opacity-80">
-                    {changeAbs >= 0 ? "+" : ""}{changeAbs.toFixed(2)}
+                    {formatMoneySigned(changeAbs, stock.currency)}
                   </span>
                 )}
                 <span>{change >= 0 ? "+" : ""}{change.toFixed(2)}%</span>
@@ -273,7 +281,7 @@ export function StockHeader({ stock, kpis, ohlcv }: Props) {
               >
                 Prev close:{" "}
                 <span className="text-foreground/80 font-semibold tabular-nums">
-                  ${live.data.prev_close.toFixed(2)}
+                  {formatMoney(live.data.prev_close, stock.currency)}
                 </span>
               </div>
             )}

@@ -47,6 +47,25 @@ def scale_minor_to_major(currency: str | None, value: float | None) -> float | N
     return value
 
 
+def major_unit_currency(currency: str | None) -> str | None:
+    """Return the code to DISPLAY a stored value under: GBp/GBX -> GBP.
+
+    The value-side twin of `scale_minor_to_major`. Once a price has been
+    scaled to pounds, carrying 'GBp' beside it is a factor-of-100 lie: the
+    number is pounds and the label says pence. `live_quote_service` has
+    applied exactly this rule to its quotes since the pence work; this is the
+    same rule, owned here so the catalog and every display path share it.
+
+    ⚠️ NOT interchangeable with `scale_minor_to_major`. That one converts the
+    NUMBER and must run once, at ingest. This one converts the LABEL and is
+    idempotent, so it is safe on any path — including one that reads a value
+    somebody else already scaled, which is every display path we have.
+    """
+    if is_minor_unit(currency):
+        return "GBP"
+    return currency
+
+
 def get_native_currency(ticker: str) -> str | None:
     """Return yfinance's raw `fast_info["currency"]` for a ticker, or None
     on any error (rate-limit, network, ticker not found, etc.).

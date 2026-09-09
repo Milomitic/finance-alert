@@ -330,7 +330,7 @@ export default function StockDetailPage() {
             `relative h-full` + absolute-inset child, so a fixed-height
             wrapper is exactly the containing block it needs. */}
         <div className="lg:h-full lg:min-h-0">
-          <FundamentalsCard ticker={ticker} />
+          <FundamentalsCard ticker={ticker} currency={d.stock.currency} />
         </div>
         <div className="lg:h-full lg:min-h-0">
           <MicroDataCard ticker={ticker} stock={d.stock} kpis={d.kpis} />
@@ -339,7 +339,7 @@ export default function StockDetailPage() {
           <NewsCard ticker={ticker} />
         </div>
         <div className="lg:h-full lg:min-h-0">
-          <AnalystTargetCard ticker={ticker} />
+          <AnalystTargetCard ticker={ticker} currency={d.stock.currency} />
         </div>
       </div>
 
@@ -491,6 +491,7 @@ export default function StockDetailPage() {
                 <PriceChart
                   key={range}
                   ohlcv={mergedOhlcv}
+                  currency={d.stock.currency}
                   indicators={ind}
                   styles={{
                     ema20: indicators.ema20,
@@ -527,6 +528,7 @@ export default function StockDetailPage() {
                 non ci sono alert. */}
             <PriceAlertsStrip
               alerts={priceAlerts}
+              currency={d.stock.currency}
               onEdit={(a) => {
                 setEditingAlert(a);
                 setPendingPrice(null);
@@ -610,6 +612,7 @@ export default function StockDetailPage() {
 
       <PriceAlertDialog
         open={dialogOpen}
+        currency={d.stock.currency}
         editing={editingAlert}
         initialPrice={pendingPrice ?? undefined}
         initialDirection={pendingPrice != null && pendingPrice > lastClose ? "above" : "below"}

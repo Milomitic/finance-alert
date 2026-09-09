@@ -9,10 +9,16 @@ import { CardRefreshButton } from "@/components/stock/CardRefreshButton";
 import { CardUpdatedAt } from "@/components/stock/CardUpdatedAt";
 import { useCardRefresh } from "@/hooks/useCardRefresh";
 import { useStockFundamentals } from "@/hooks/useStockFundamentals";
+import { formatMoney } from "@/lib/money";
 import { cn } from "@/lib/utils";
 
 interface Props {
   ticker: string;
+  /** Valuta di quotazione. I target di yfinance arrivano NELLA STESSA unita
+   *  della quotazione — il backend li scala insieme al prezzo (vedi
+   *  `pence_scale` in stock_fundamentals_service) — quindi qui vanno resi
+   *  nella valuta del titolo, non in dollari. */
+  currency?: string | null;
 }
 
 /* ─── Price-target range bar ────────────────────────────────────────────── */
@@ -27,7 +33,7 @@ interface Props {
  * three numbers alone — a current price near low + a wide range = upside,
  * current near high + tight range = limited upside.
  */
-function PriceTargetBar({ pt }: { pt: AnalystPriceTarget }) {
+function PriceTargetBar({ pt, currency }: { pt: AnalystPriceTarget; currency: string | null }) {
   const { low, high, mean, median, current } = pt;
   if (low == null || high == null || mean == null || high <= low) return null;
 
@@ -71,7 +77,7 @@ function PriceTargetBar({ pt }: { pt: AnalystPriceTarget }) {
 
       {/* Mean target as the headline number */}
       <div className="flex items-baseline gap-2 mb-3 tabular-nums">
-        <span className="text-2xl font-bold">${mean.toFixed(2)}</span>
+        <span className="text-2xl font-bold">{formatMoney(mean, currency)}</span>
         <span className="text-[0.7647rem] text-muted-foreground">target medio</span>
       </div>
 
@@ -99,7 +105,7 @@ function PriceTargetBar({ pt }: { pt: AnalystPriceTarget }) {
             <div
               className="absolute -top-1 -translate-x-1/2 h-4 w-0.5 bg-foreground"
               style={{ left: `${meanPos}%` }}
-              title={`Mean: $${mean.toFixed(2)}`}
+              title={`Media: ${formatMoney(mean, currency)}`}
             />
           )}
           {/* Median tick (lighter, only if it differs noticeably from mean) */}
@@ -109,7 +115,7 @@ function PriceTargetBar({ pt }: { pt: AnalystPriceTarget }) {
               <div
                 className="absolute -top-0.5 -translate-x-1/2 h-3 w-0.5 bg-foreground/40"
                 style={{ left: `${medianPos}%` }}
-                title={`Median: $${median.toFixed(2)}`}
+                title={`Mediana: ${formatMoney(median, currency)}`}
               />
             )}
           {/* Current-price marker — diamond, sits on top of bar */}
@@ -117,7 +123,7 @@ function PriceTargetBar({ pt }: { pt: AnalystPriceTarget }) {
             <div
               className="absolute -top-1 -translate-x-1/2 h-4 w-4 rotate-45 bg-foreground border-2 border-background"
               style={{ left: `${currentPos}%` }}
-              title={`Prezzo corrente: $${current!.toFixed(2)}`}
+              title={`Prezzo corrente: ${formatMoney(current!, currency)}`}
             />
           )}
         </div>
@@ -125,10 +131,10 @@ function PriceTargetBar({ pt }: { pt: AnalystPriceTarget }) {
         {/* Low / high labels under the bar */}
         <div className="flex items-center justify-between mt-1.5 text-[0.7647rem] tabular-nums text-muted-foreground">
           <span title="Target più basso fra gli analisti">
-            low <span className="font-semibold text-foreground/70">${low.toFixed(2)}</span>
+            low <span className="font-semibold text-foreground/70">{formatMoney(low, currency)}</span>
           </span>
           <span title="Target più alto fra gli analisti">
-            high <span className="font-semibold text-foreground/70">${high.toFixed(2)}</span>
+            high <span className="font-semibold text-foreground/70">{formatMoney(high, currency)}</span>
           </span>
         </div>
       </div>
@@ -320,7 +326,7 @@ function priceTargetTone(action: string | null | undefined): {
  *  sometimes only have firm + action). Previously the chip simply
  *  vanished, leaving misaligned rows and the impression that some
  *  analyst actions had "lost" their target field. */
-function PriceTargetChip({ a }: { a: AnalystAction }) {
+function PriceTargetChip({ a, currency }: { a: AnalystAction; currency: string | null }) {
   const hasTarget =
     a.current_price_target != null && Number.isFinite(a.current_price_target);
   const ptTone = priceTargetTone(a.price_target_action);
@@ -348,7 +354,7 @@ function PriceTargetChip({ a }: { a: AnalystAction }) {
   // Drop cents when the target is a round number to save 3 chars of width
   // — yfinance's analyst targets are almost always whole-dollar values
   // (e.g. $296, $350) so this almost always trims.
-  const fmt = Number.isInteger(target) ? `$${target}` : `$${target.toFixed(2)}`;
+  const fmt = formatMoney(target, currency, Number.isInteger(target) ? { decimals: 0 } : {});
   return (
     <span
       className={cn(
@@ -362,7 +368,7 @@ function PriceTargetChip({ a }: { a: AnalystAction }) {
   );
 }
 
-function ActionsList({ actions }: { actions: AnalystAction[] }) {
+function ActionsList({ actions, currency }: { actions: AnalystAction[]; currency: string | null }) {
   if (actions.length === 0) {
     return (
       <div className="text-[0.7647rem] text-muted-foreground italic px-1 py-2">
@@ -452,7 +458,7 @@ function ActionsList({ actions }: { actions: AnalystAction[] }) {
                 form a clean column (a 1- vs 2-digit price no longer shifts the
                 whole group). Reads as a "rating + target" unit with the grade. */}
             <span className="shrink-0 w-14 flex justify-end">
-              <PriceTargetChip a={a} />
+              <PriceTargetChip a={a} currency={currency} />
             </span>
             {/* `whitespace-nowrap` is the critical bit: without it, dates
                 like "11 mag" can break between the day and the month when
@@ -482,7 +488,7 @@ function ActionsList({ actions }: { actions: AnalystAction[] }) {
  *   2. Buy/hold/sell distribution bar (latest snapshot)
  *   3. Scrollable list of upgrades/downgrades/initiations
  */
-export function AnalystTargetCard({ ticker }: Props) {
+export function AnalystTargetCard({ ticker, currency = null }: Props) {
   const q = useStockFundamentals(ticker);
   const { refresh, isRefreshing, refreshError } = useCardRefresh({
     queryKey: ["stocks", ticker, "fundamentals"],
@@ -560,7 +566,7 @@ export function AnalystTargetCard({ ticker }: Props) {
 
         {hasPT && pt && (
           <div className="shrink-0">
-            <PriceTargetBar pt={pt} />
+            <PriceTargetBar pt={pt} currency={currency} />
           </div>
         )}
 
@@ -591,7 +597,7 @@ export function AnalystTargetCard({ ticker }: Props) {
             }
           />
           <div className="overflow-y-auto pr-1 max-h-[180px]">
-            <ActionsList actions={actions} />
+            <ActionsList actions={actions} currency={currency} />
           </div>
         </div>
       </CardContent>

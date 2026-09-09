@@ -24,6 +24,7 @@ import { useMarketSummary } from "@/hooks/useMarketSummary";
 import { usePrefetchStockDetail } from "@/hooks/usePrefetchStockDetail";
 import { RISK_LABEL, RISK_TONE, scoreColor } from "@/lib/scoreMeta";
 import { getStockFlagCode } from "@/lib/stockMeta";
+import { formatMoney } from "@/lib/money";
 import { cn } from "@/lib/utils";
 
 /** Toggleable columns for the desktop screener table.
@@ -222,22 +223,13 @@ function fmtMc(v: number | null | undefined): string {
   return `$${v.toLocaleString()}`;
 }
 
-// Currency symbols for the "Prezzo" column. Falls back to the ISO code
-// when a symbol isn't widely recognized — better to show "HKD 18.40"
-// than "? 18.40" or just a number.
-const CURRENCY_SYMBOL: Record<string, string> = {
-  USD: "$", EUR: "€", GBP: "£", JPY: "¥", CHF: "CHF",
-  CAD: "C$", AUD: "A$", HKD: "HK$", CNY: "¥", KRW: "₩",
-};
-
-function fmtClose(v: number | null | undefined, currency: string | undefined): string {
-  if (v == null) return "—";
-  const sym = currency ? CURRENCY_SYMBOL[currency] ?? `${currency} ` : "";
-  // Penny stocks need 4 decimals, the rest 2. Avoids hiding a 0.0234
-  // close behind a "0.02" rounding.
-  const digits = v < 1 ? 4 : 2;
-  return `${sym}${v.toFixed(digits)}`;
-}
+// The symbol map that used to live here is now `lib/money.ts`, shared with
+// the stock detail page — which had no map at all and hard-coded `$` on 312
+// non-dollar stocks. Two things came back fixed: 'GBp' found no entry here and
+// rendered "GBp 35.04", a pence label on a pounds price, and CNY carried the
+// same '¥' glyph as JPY.
+const fmtClose = (v: number | null | undefined, currency: string | undefined) =>
+  formatMoney(v, currency);
 
 interface HeaderProps {
   column: TableSortKey;

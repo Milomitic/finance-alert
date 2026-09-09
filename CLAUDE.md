@@ -955,6 +955,69 @@ meant, and the measurements re-stated. Same failure mode as the dead
 `_RANGE_PERIODS` table below: the stale note is believable precisely because
 something next to it corroborates it.
 
+## Money on screen: one owner, and the two ways to get it wrong (2026-09-10)
+
+312 of the 1010 catalogued stocks are not quoted in dollars — 97 GBP, 87 EUR,
+59 HKD, 40 JPY, 20 KRW and a tail — and the stock detail page hard-coded `$`
+beside every price. Not ambiguous for a third of the universe: **wrong**.
+
+There were THREE formatters and they disagreed. The screener had a symbol map
+and got it right; PositionsPage had an `Intl` helper; the detail page had
+neither. `lib/money.ts` is now the single owner, the frontend twin of
+`currency_units` on the backend — which consolidated the same problem after
+finding the pence logic quintuplicated across five services.
+
+⚠️ **Do NOT reach for `Intl` + `currencyDisplay: "narrowSymbol"`.** It reads
+like the obvious way to get `$` instead of `USD`, and it renders USD, HKD and
+AUD as the SAME `$`, recreating the whole defect on the 59 Hong Kong names.
+`it-IT` without it renders USD as the string "USD", which is why the app had a
+hand map in the first place. The map is the answer; `money.test.ts` pins the
+four dollars apart and pins `¥` apart from `CN¥` (the screener's map had one
+glyph for both).
+
+⚠️ **A missing currency must never become USD.** The old helper read
+`currency && /^[A-Z]{3}$/.test(currency) ? currency : "USD"`, which prints
+dollars for a stock whose currency did not load AND — since the regex demands
+uppercase — rejects yfinance's `GBp` and prints dollars for a London stock
+specifically. `fx_service` settled this in its own docstring: an unresolvable
+currency is UNKNOWN and the caller shows nothing. Market assets (indices, FX,
+crypto) rely on it — an index level is not money.
+
+### `Stock.currency` had six stale `GBp` rows, and the prices were FINE
+
+Worth reading before "fixing" anything that looks like a pence bug. All 99
+`.L` stocks have `ohlcv_in_pounds = true`: the migration divided by 100 at
+ingest and the NUMBERS are correct. Six rows (BA.L, BP.L, BRBY.L, GLEN.L,
+RR.L, SHEL.L) kept yfinance's raw `GBp` LABEL beside a pounds value.
+
+The check that settles it without any outside price knowledge: the six sit at
+5.57-35.04, inside the 0.80-175.70 range of the 93 rows already labelled GBP.
+Pence would be a hundred times larger. Shell's own market cap confirms it
+independently — 196 billion against a 35.04 price is only arithmetic in
+pounds.
+
+`currency_units.major_unit_currency` owns the LABEL rule (idempotent, safe on
+any display path); `scale_minor_to_major` owns the VALUE rule (runs exactly
+once, at ingest). **They are not interchangeable and running the second one
+twice is the ×100 bug in reverse.** Migration `8fc285de13e2` repaired the rows
+and `seed_service` normalizes at the boundary, the way `canonical_country`
+does — repairing without closing the door lets the next CSV import undo it.
+
+### ⚠️ `stock.market_cap` is in the LISTING currency, and the screener sorts on it
+
+NOT fixed, and it is a real defect, so do not re-discover it. `risk.py` hit
+this exact trap and its test records the damage: 158 names cleared the 200e9
+mega-cap bar in native currency against only 83 in USD, so **75 stocks were
+scored as stable mega-caps without being anything of the kind** (7270.T at
+$10.9bn, 033780.KS at $14.4bn). It now calls `to_usd` first.
+
+The screener's market-cap column and NavbarSearch still print `$` on the raw
+figure AND the column is SORTABLE, so a 19,812bn KRW cap outranks a 3,500bn
+USD one. Fixing it is a decision, not a relabel: converting to USD keeps the
+sort meaningful and changes the numbers on screen; labelling each cap with its
+own currency is honest and makes the sort meaningless. Do not slap
+`formatMoney` on it — that picks the second option by accident.
+
 ## Frontend tone classes (Tailwind purger)
 
 Tone-class maps in `lib/alertMeta.ts` and similar files MUST stay as plain

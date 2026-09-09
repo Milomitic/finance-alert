@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { SectionTitle } from "@/components/ui/section-title";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useStockFundamentals } from "@/hooks/useStockFundamentals";
+import { formatMoney } from "@/lib/money";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -176,8 +177,8 @@ function fmtCompactNum(v: number | null | undefined): string {
   return v.toLocaleString();
 }
 
-function fmtPrice(v: number | null | undefined): string {
-  return v != null && Number.isFinite(v) ? `$${v.toFixed(2)}` : "—";
+function fmtPrice(v: number | null | undefined, currency: string | null): string {
+  return formatMoney(v, currency);
 }
 
 /** Build the 4 trading-snapshot rows that get prepended to the valuation list.
@@ -188,7 +189,7 @@ function fmtPrice(v: number | null | undefined): string {
 function buildSnapshotRows(stock: Stock, kpis: StockKpis): Row[] {
   const range52 =
     kpis.low_52w != null && kpis.high_52w != null
-      ? `${fmtPrice(kpis.low_52w)} – ${fmtPrice(kpis.high_52w)}`
+      ? `${fmtPrice(kpis.low_52w, stock.currency)} – ${fmtPrice(kpis.high_52w, stock.currency)}`
       : "—";
 
   // Volume ratio coloring: green if >1.5× (unusual buying/selling activity),
@@ -278,7 +279,7 @@ function riskScoreTone(label: string): (v: number) => ToneSignal | null {
   };
 }
 
-function buildColumns(m: MicroData): { left: Row[]; right: Row[] } {
+function buildColumns(m: MicroData, currency: string | null): { left: Row[]; right: Row[] } {
   // Two-column layout. The card scrolls internally, so column lengths
   // can differ — picking a clean grouping wins over strict row parity.
   //
@@ -367,26 +368,26 @@ function buildColumns(m: MicroData): { left: Row[]; right: Row[] } {
     {
       label: "Book Value/share",
       raw: m.book_value,
-      format: (v) => `$${v.toFixed(2)}`,
+      format: (v) => formatMoney(v, currency),
       tip: "Book value per azione (equity netto / azioni in circolazione).",
     },
     // ── EPS magnitudes (separate from growth which sits in RIGHT) ──
     {
       label: "EPS (TTM)",
       raw: m.eps_trailing ?? null,
-      format: (v) => `$${v.toFixed(2)}`,
+      format: (v) => formatMoney(v, currency),
       tip: "EPS trailing 12 mesi: utile per azione realizzato negli ultimi 4 trimestri.",
     },
     {
       label: "EPS (Forward)",
       raw: m.eps_forward ?? null,
-      format: (v) => `$${v.toFixed(2)}`,
+      format: (v) => formatMoney(v, currency),
       tip: "EPS atteso nei prossimi 12 mesi (consenso analisti).",
     },
     {
       label: "EPS (curr. yr)",
       raw: m.eps_current_year ?? null,
-      format: (v) => `$${v.toFixed(2)}`,
+      format: (v) => formatMoney(v, currency),
       tip: "EPS atteso per l'anno fiscale corrente.",
     },
     // ── Income / revenue magnitudes ─────────────────────────────────
@@ -399,7 +400,7 @@ function buildColumns(m: MicroData): { left: Row[]; right: Row[] } {
     {
       label: "Revenue/share",
       raw: m.revenue_per_share ?? null,
-      format: (v) => `$${v.toFixed(2)}`,
+      format: (v) => formatMoney(v, currency),
       tip: "Total revenue / azioni in circolazione. Utile per confrontare aziende con buyback aggressivi vs no.",
     },
     {
@@ -430,7 +431,7 @@ function buildColumns(m: MicroData): { left: Row[]; right: Row[] } {
     {
       label: "Cash/share",
       raw: m.total_cash_per_share ?? null,
-      format: (v) => `$${v.toFixed(2)}`,
+      format: (v) => formatMoney(v, currency),
       tip: "Cassa per azione. Spesso usato come confronto col prezzo (azioni a sconto vs cash).",
     },
     {
@@ -609,7 +610,7 @@ function buildColumns(m: MicroData): { left: Row[]; right: Row[] } {
     {
       label: "Dividend rate",
       raw: m.dividend_rate ?? null,
-      format: (v) => `$${v.toFixed(2)}`,
+      format: (v) => formatMoney(v, currency),
       tip: "Dividendo annuo per azione (USD). 0 = l'azienda non distribuisce dividendi.",
     },
     {
@@ -886,7 +887,7 @@ export function MicroDataCard({ ticker, stock, kpis }: Props) {
     );
   }
 
-  const cols = buildColumns(q.data?.micro ?? ({} as MicroData));
+  const cols = buildColumns(q.data?.micro ?? ({} as MicroData), stock?.currency ?? null);
   // Prepend snapshot rows to the LEFT column so "Market cap" is the very first
   // row of the card — the user's stated priority. The right column starts with
   // ROE so the two columns stay roughly the same length.

@@ -1,6 +1,7 @@
 import { Bell, BellOff, Check } from "lucide-react";
 
 import type { PriceAlert } from "@/api/types";
+import { formatMoney } from "@/lib/money";
 import { cn } from "@/lib/utils";
 
 /* I price alert del titolo, come riga di chip sotto al grafico.
@@ -21,15 +22,16 @@ import { cn } from "@/lib/utils";
  * Nessuno stato vuoto, di proposito: un riquadro che occupa spazio per dire
  * "non hai alert" direbbe quello che il grafico dice gia' non avendo linee. */
 
-const fmt = (v: number) =>
-  v >= 1000 ? v.toLocaleString("it-IT", { maximumFractionDigits: 0 }) : v.toFixed(2);
-
 export function PriceAlertsStrip({
   alerts,
   onEdit,
+  currency = null,
 }: {
   alerts: PriceAlert[];
   onEdit: (a: PriceAlert) => void;
+  /** Valuta di quotazione del titolo. Le soglie erano rese con un simbolo
+   *  del dollaro fisso, che su un titolo di Milano o Hong Kong e falso. */
+  currency?: string | null;
 }) {
   if (alerts.length === 0) return null;
 
@@ -66,7 +68,7 @@ export function PriceAlertsStrip({
           >
             <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden />
             <span className="font-semibold">
-              {a.direction === "above" ? "↑" : "↓"} ${fmt(a.target_price)}
+              {a.direction === "above" ? "↑" : "↓"} {formatMoney(a.target_price, currency)}
             </span>
             {a.note && (
               <span className="max-w-[10rem] truncate text-muted-foreground">
