@@ -30,5 +30,11 @@ export function useColumnVisibility(tableId: string, columns: ColumnDef[]) {
     });
   }, []);
   const isVisible = useCallback((id: string) => !hidden.has(id), [hidden]);
-  return { columns, isVisible, toggle, hidden };
+  /** Replace the whole hidden set at once — used when a saved view is applied.
+   *  Toggling one id at a time would need the caller to diff the two sets and
+   *  would write to localStorage once per column. */
+  const replace = useCallback((ids: readonly string[]) => {
+    setHidden(new Set(ids));
+  }, []);
+  return { columns, isVisible, toggle, replace, hidden };
 }

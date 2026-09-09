@@ -10,6 +10,12 @@ import {
 } from "@/components/ui/popover";
 import { CATEGORY_LABEL } from "@/lib/scoreMeta";
 import { cn } from "@/lib/utils";
+import {
+  parseAll,
+  toStored,
+  type ScreenerView,
+  type SortDirection,
+} from "@/lib/screenerViews";
 
 /** Filter state for the stock browser. The text-search field has been
  *  intentionally removed — the navbar's global ticker search covers that
@@ -113,10 +119,27 @@ function normalizePreset(saved: FiltersState): FiltersState {
 
 const PRESETS_KEY = "screenerFilterPresets";
 
-function loadPresets(): Record<string, FiltersState> {
+/** What a saved view records BEYOND the filters. Optional so the card still
+ *  works where no table sits under it: without this the menu quietly saves a
+ *  sort of "ticker/asc" for a caller that has no sort at all, and applying it
+ *  would look like a bug in the table rather than in the wiring. */
+export interface ViewContext {
+  sortBy: string;
+  sortDir: SortDirection;
+  hiddenColumns: string[];
+  defaults: { sortBy: string; sortDir: SortDirection };
+  onApply: (view: ScreenerView<FiltersState>) => void;
+}
+
+function loadPresets(
+  defaults: { sortBy: string; sortDir: SortDirection },
+): Record<string, ScreenerView<FiltersState>> {
   try {
-    const parsed = JSON.parse(localStorage.getItem(PRESETS_KEY) ?? "{}");
-    return parsed && typeof parsed === "object" ? parsed : {};
+    const parsed: unknown = JSON.parse(localStorage.getItem(PRESETS_KEY) ?? "{}");
+    // Reads BOTH shapes: the bare filter objects saved before views existed,
+    // and the versioned envelope. The migration happens here so nobody has to
+    // run anything and no saved work is lost.
+    return parseAll<FiltersState>(parsed, defaults, (raw) => normalizePreset(raw as FiltersState));
   } catch {
     return {};
   }
@@ -128,16 +151,24 @@ function loadPresets(): Record<string, FiltersState> {
 function PresetsMenu({
   state,
   onChange,
+  view,
 }: {
   state: FiltersState;
   onChange: (next: FiltersState) => void;
+  view?: ViewContext;
 }) {
-  const [presets, setPresets] = useState<Record<string, FiltersState>>(loadPresets);
+  const defaults = view?.defaults ?? { sortBy: "ticker", sortDir: "asc" as SortDirection };
+  const [presets, setPresets] = useState<Record<string, ScreenerView<FiltersState>>>(() =>
+    loadPresets(defaults),
+  );
   const [name, setName] = useState("");
-  const persist = (next: Record<string, FiltersState>) => {
+  const persist = (next: Record<string, ScreenerView<FiltersState>>) => {
     setPresets(next);
     try {
-      localStorage.setItem(PRESETS_KEY, JSON.stringify(next));
+      localStorage.setItem(
+        PRESETS_KEY,
+        JSON.stringify(Object.fromEntries(Object.entries(next).map(([k, v]) => [k, toStored(v)]))),
+      );
     } catch {
       /* storage full/unavailable — presets stay in-memory for the session */
     }
@@ -145,7 +176,18 @@ function PresetsMenu({
   const save = () => {
     const n = name.trim();
     if (!n) return;
-    persist({ ...presets, [n]: state });
+    // The whole configuration, not just the filters: a view that restored the
+    // filters and left the sort and columns as they were is the gap this
+    // replaces.
+    persist({
+      ...presets,
+      [n]: {
+        filters: state,
+        sortBy: view?.sortBy ?? defaults.sortBy,
+        sortDir: view?.sortDir ?? defaults.sortDir,
+        hiddenColumns: view?.hiddenColumns ?? [],
+      },
+    });
     setName("");
   };
   const names = Object.keys(presets).sort((a, b) => a.localeCompare(b));
@@ -166,13 +208,15 @@ function PresetsMenu({
       <PopoverContent align="start" className="w-72 p-0">
         <div className="px-3 py-2 border-b">
           <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-            Preset filtri
+            {view ? "Viste salvate" : "Preset filtri"}
           </span>
         </div>
         <div className="max-h-60 overflow-y-auto p-1">
           {names.length === 0 ? (
             <div className="text-xs text-muted-foreground p-3">
-              Nessun preset salvato. Imposta i filtri e salvali qui sotto.
+              {view
+                ? "Nessuna vista salvata. Imposta filtri, ordinamento e colonne, poi salvali qui sotto."
+                : "Nessun preset salvato. Imposta i filtri e salvali qui sotto."}
             </div>
           ) : (
             <ul>
@@ -180,9 +224,15 @@ function PresetsMenu({
                 <li key={n} className="flex items-center gap-1 rounded hover:bg-accent">
                   <button
                     type="button"
-                    onClick={() => onChange(normalizePreset(presets[n]))}
+                    onClick={() => {
+                      const saved = presets[n];
+                      // Without a table under us only the filters can be
+                      // restored, and saying so beats half-restoring silently.
+                      if (view) view.onApply(saved);
+                      else onChange(saved.filters);
+                    }}
                     className="flex-1 text-left px-2 py-1.5 text-sm truncate"
-                    title={`Applica il preset "${n}"`}
+                    title={view ? `Applica la vista "${n}": filtri, ordinamento e colonne` : `Applica il preset "${n}"`}
                   >
                     {n}
                   </button>
@@ -228,6 +278,10 @@ interface Props {
   state: FiltersState;
   onChange: (next: FiltersState) => void;
   filters: FilterOptions | undefined;
+  /** Sort and columns, so a saved view is the whole configuration. Optional:
+   *  where the card renders without a table under it, the menu keeps its old
+   *  filters-only behaviour rather than pretending to restore a sort. */
+  view?: ViewContext;
 }
 
 interface MultiSelectProps {
@@ -528,7 +582,7 @@ function CollapsibleArea({
   );
 }
 
-export function StockFiltersCard({ state, onChange, filters }: Props) {
+export function StockFiltersCard({ state, onChange, filters, view }: Props) {
   const indexOptions = (filters?.indices ?? []).map((i) => ({
     value: i.code,
     label: `${i.code} — ${i.name}`,
@@ -626,7 +680,7 @@ export function StockFiltersCard({ state, onChange, filters }: Props) {
               </Badge>
             )}
           </div>
-          <PresetsMenu state={state} onChange={onChange} />
+          <PresetsMenu state={state} onChange={onChange} view={view} />
           {totalActive > 0 && (
             <Button
               variant="ghost"

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
 import type { SearchParams, SortDir, StockSortBy } from "@/api/stocks";
@@ -27,6 +27,7 @@ import {
 } from "@/components/stocks/StockFiltersCard";
 import { useMarketSummary } from "@/hooks/useMarketSummary";
 import { useNowTick } from "@/hooks/useNowTick";
+import type { ScreenerView } from "@/lib/screenerViews";
 
 /** Allowed page sizes shown in the dropdown. 25 / 50 / 100 / 200. */
 const PAGE_SIZES = [25, 50, 100, 200] as const;
@@ -334,9 +335,25 @@ export default function StocksBrowserPage() {
   // Column show/hide for the desktop table — lifted here so the toolbar
   // "Colonne" button and the table's header right-click menu share ONE
   // persisted state (localStorage key "colvis:screener").
-  const { isVisible: isColumnVisible, toggle: toggleColumn } = useColumnVisibility(
-    "screener",
-    SCREENER_COLS as unknown as ColumnDef[],
+  const {
+    isVisible: isColumnVisible,
+    toggle: toggleColumn,
+    replace: replaceHiddenColumns,
+    hidden: hiddenColumns,
+  } = useColumnVisibility("screener", SCREENER_COLS as unknown as ColumnDef[]);
+
+  // A saved view is filters + sort + columns. Restoring it also resets the
+  // page: staying on page 7 of a different result set shows an empty table and
+  // reads as "the view is broken".
+  const applySavedView = useCallback(
+    (saved: ScreenerView<FiltersState>) => {
+      setState(saved.filters);
+      setSortBy(parseSortBy(saved.sortBy));
+      setSortDir(parseSortDir(saved.sortDir));
+      replaceHiddenColumns(saved.hiddenColumns);
+      setPage(0);
+    },
+    [replaceHiddenColumns],
   );
 
   const market = useMarketSummary();
@@ -425,6 +442,16 @@ export default function StocksBrowserPage() {
         state={state}
         onChange={setState}
         filters={filtersQ.data}
+        view={{
+          sortBy,
+          sortDir,
+          hiddenColumns: [...hiddenColumns],
+          // The TABLE's defaults, not the current sort: a view saved before
+          // sort was recorded must land in a known state rather than inherit
+          // whatever the user happened to have set a moment earlier.
+          defaults: { sortBy: "ticker", sortDir: "asc" },
+          onApply: applySavedView,
+        }}
       />
 
       {/* Index panorama header (shown when exactly 1 index is selected).
