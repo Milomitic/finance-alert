@@ -26,6 +26,7 @@ Questo file è il backlog operativo canonico. Ogni nuova attività deve avere un
 | FA-006 | P2 | Performance | Analizzare i percorsi lenti sui percentili reali | **WAITING DATA** | Bucket/latenze già strumentati. Chiusura dopo almeno 7 giorni di traffico: p50/p95/p99 per endpoint, top regressioni e fix misurato prima/dopo. |
 | FA-007 | P2 | Frontend | Introdurre RUM per Web Vitals (LCP, INP, CLS), separato mobile/desktop | **OPEN** | Dashboard p75 per route e dispositivo, soglie e regressioni visibili. Il build pass non equivale a una misura reale. |
 | FA-008 | P2 | Frontend | Ridurre e presidiare i finding ESLint React Hooks | **OPEN** | Baseline verificata: 60 finding (45 errori, 15 warning). Chiusura per tranche con lint a zero o eccezioni motivate e scadenziate. |
+| FA-017 | P2 | Sicurezza | Triage dei finding Bandit e hardening dei casi confermati | **OPEN** | Ultimo report: 0 high, 10 medium, 25 low; npm audit e pip-audit senza vulnerabilità note. Chiusura: ogni medium/low classificato (fix, eccezione motivata o falso positivo) e report aggiornato. |
 | FA-009 | P1 | UX | Correggere etichette valuta/prezzo nelle posizioni e nei flussi correlati | **OPEN** | Valuta mostrata con codice/simbolo coerente con il dato e test UI per almeno EUR/USD. |
 | FA-010 | P1 | UX | Rendere visibili e recuperabili gli errori delle mutazioni (salvataggi, aggiornamenti, eliminazioni) | **OPEN** | Errore API esposto con messaggio, retry e stato non ambiguo; test di failure path. |
 | FA-011 | P1 | UX mobile | Correggere drawer mobile: focus, ESC, scroll lock e ritorno del focus | **OPEN** | Test keyboard/mobile: focus intrappolato nel drawer, ESC chiude, body non scrolla, focus torna al trigger. |
@@ -43,7 +44,7 @@ Questo file è il backlog operativo canonico. Ogni nuova attività deve avere un
 4. **FA-006**: attendere la finestra dati e intervenire solo sui percorsi con percentili significativi.
 5. **FA-007** e **FA-008**: RUM reale e pulizia lint.
 6. **FA-009**–**FA-013**: tranche UX ad alto impatto.
-7. **FA-014**–**FA-016**: hardening e roadmap prodotto.
+7. **FA-014**–**FA-017**: hardening, triage sicurezza e roadmap prodotto.
 
 ## Vincoli e fatti da non confondere
 
@@ -51,4 +52,5 @@ Questo file è il backlog operativo canonico. Ogni nuova attività deve avere un
 - Il commit locale `cae2986` non è ancora in produzione.
 - I file locali `infra/gitops/barman-cloud-plugin.yaml` e `infra/gitops/postgres/objectstore.yaml` sono bozze non tracciate e non applicate; non fanno parte dello stato produttivo.
 - Il report UI/UX è analisi; le attività FA-009–FA-013 non sono ancora correzioni applicate.
+
 
