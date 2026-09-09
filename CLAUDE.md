@@ -431,6 +431,18 @@ Mode `640` with group `k3s` removes world access and keeps `opc` working.
 **A permissions recommendation for a k3s node must name the k3s.yaml path and
 the group, or it is a lockout.**
 
+**Exercised on the live node 2026-09-09, and it needed to be.** The unit had
+carried the flags since 2026-09-08 while the running k3s had been up since
+17 July with a bare `k3s server` argv, so the correct permissions on disk came
+from a manual `chmod`/`chgrp` and the unit had never once been executed. A
+staged-but-unexercised unit on the single node that runs everything is a
+reboot hazard, not a fix. `systemctl restart k3s` proved it: k3s rewrote
+`k3s.yaml` itself at `640 root:k3s`, whose default is `600 root:root`, so only
+the flags can produce it. API ready in ~3s, all 28 pods stayed Running with
+zero restarts, ingress 200. Note `/proc/<pid>/cmdline` shows a bare
+`k3s server` because k3s rewrites its own proctitle — read the FILE it
+produced, not the argv, to tell whether the flags applied.
+
 ## Telegram: the app and Alertmanager share ONE bot (2026-09-09)
 
 Infra alerting was working the whole time and the app's was not, which is the
