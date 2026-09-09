@@ -228,6 +228,19 @@ export default function Layout() {
       return false;
     }
   });
+  // The tab said "Finance-Alert" on every page, so a window with the screener,
+  // a stock and the calendar open showed three identical tabs. The label comes
+  // from NAV, the same array that renders the menu, so the two cannot drift.
+  //
+  // Detail routes (/stocks/NVDA, /alerts/123) are deliberately NOT guessed
+  // from a prefix: /stocks/NVDA is a stock, not "Screener", and a confidently
+  // wrong title is worse than a generic one. Those pages can set their own.
+  useEffect(() => {
+    const exact = NAV.find((entry) => entry.to === location.pathname);
+    const label = exact?.label ?? (location.pathname === "/settings" ? "Impostazioni" : null);
+    document.title = label ? `${label} · Finance-Alert` : "Finance-Alert";
+  }, [location.pathname]);
+
   useEffect(() => {
     try {
       localStorage.setItem("sidebar-collapsed", sidebarCollapsed ? "1" : "0");
@@ -299,6 +312,17 @@ export default function Layout() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
+      {/* FIRST focusable element in the document, deliberately. Placed after
+          the sidebar it skipped nothing: the rail's collapse toggle and its
+          ~12 links came first, which is precisely what a keyboard user needs
+          to get past. A regression test asserts the ordering, because the
+          link looks correct wherever it sits. */}
+      <a
+        href="#contenuto"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-3 focus:top-3 focus:z-50 focus:rounded-md focus:border focus:bg-background focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:shadow-md"
+      >
+        Salta al contenuto
+      </a>
       {/* Desktop sidebar — hidden below lg; the mobile drawer below
           replaces it on phones/tablets. Collapses to a w-16 icon rail
           via the toggle; the width animates while labels swap in/out. */}
@@ -420,10 +444,14 @@ export default function Layout() {
             className="shrink-0"
           >
             <LogOut className="h-4 w-4 sm:mr-2" />
-            <span className="hidden sm:inline">Esci</span>
+            {/* sr-only rather than hidden: `hidden` removes the word from the
+                accessibility tree too, so on a phone this button was an icon
+                with no name at all. This way the accessible name is the same
+                text desktop users read, from one source. */}
+            <span className="sr-only sm:not-sr-only">Esci</span>
           </Button>
         </header>
-        <main className="flex-1 min-w-0 overflow-y-auto p-3 sm:p-6">
+        <main id="contenuto" className="flex-1 min-w-0 overflow-y-auto p-3 sm:p-6">
           {/* Keyed by pathname so the boundary is a fresh instance per route:
               boundaries never clear their own error state, so without this a
               single crash would leave every subsequent page blank until a full
