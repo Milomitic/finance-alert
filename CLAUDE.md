@@ -527,6 +527,29 @@ bind mounts, counted twice by `du`.
 path is the proven one above. So this is watched, not urgent — but the fix when
 it fires is a bigger disk or shorter Prometheus retention, not a prune.
 
+### Both time-series stores are already CAPPED (measured 2026-09-09)
+
+Checked rather than assumed, and it closes the question. Neither store can run
+away:
+
+| Store | Bound | PVC |
+|---|---|---|
+| Prometheus | `retentionSize: 2500MB` — a hard SIZE cap | 3Gi |
+| Loki | `retention_period: 720h` with the compactor on a 10m interval | 2Gi |
+
+Prometheus drops the oldest blocks before exceeding 2.5 GB, so its 30d
+retention is an upper bound it will not reach. Loki is capped on TIME, not
+size — the one theoretical gap, since `local-path` does not enforce a PVC's
+declared size — but 30 days of this cluster's log volume is well inside 2 GB,
+and the oldest line actually retained measured 23 days.
+
+**And containerd garbage-collects itself, with evidence.** Over one morning it
+went 8.1G -> 6.8G and the retained app images 6 -> 2, with no intervention. Do
+not prune images by hand; the earlier reading of "7.4G for 28 images" was a
+snapshot of that cycle, not a leak. Disk over the same morning: 82% -> 89%
+during a restore drill -> 79% after. The drill's ~2 GB is the only transient
+worth planning for.
+
 ## Database migrations (alembic)
 
 - Migration files live in `backend/alembic/versions/`
