@@ -315,6 +315,10 @@ def conversion_stats(db: Session) -> dict:
     positive = sum(1 for aid in alert_ids if labels.get(aid) == 1)
     negative = sum(1 for aid in alert_ids if labels.get(aid) == 0)
 
+    outcomes = _converted_outcomes(db, alert_ids)
+    returns = _return_summary(outcomes)
+    by_detector = _per_detector(converted, expired, outcomes)
+
     def _median(xs: list[int]) -> float | None:
         if not xs:
             return None
@@ -340,6 +344,10 @@ def conversion_stats(db: Session) -> dict:
         "converted_positive": positive,
         "converted_negative": negative,
         "converted_pending": len(converted) - positive - negative,
+        # Efficacy as a RATE, with everything needed to disbelieve it. The
+        # counts above already say 7 and 3; a bare "70%" would not.
+        **returns,
+        "by_detector": by_detector,
         "avg_lead_days": round(sum(leads) / len(leads), 1) if leads else None,
         # The median and the range beside the mean: one number cannot say
         # whether the warning was reliably a week or anywhere from a day to a
@@ -386,3 +394,164 @@ def prune_to_top_per_detector(db: Session) -> int:
     if dropped:
         logger.info(f"[setups] {dropped} dropped out of the per-detector shortlist")
     return dropped
+
+
+def _converted_outcomes(db: Session, alert_ids: list[int]) -> list[SignalOutcome]:
+    """Matured warehouse rows for the alerts these setups converted into."""
+    if not alert_ids:
+        return []
+    return list(
+        db.execute(
+            select(SignalOutcome).where(SignalOutcome.alert_id.in_(alert_ids))
+        ).scalars().all()
+    )
+
+
+def _pct(x: float | None) -> float | None:
+    return None if x is None else round(x * 100.0, 2)
+
+
+def _median_of(xs: list[float]) -> float | None:
+    if not xs:
+        return None
+    ys = sorted(xs)
+    mid = len(ys) // 2
+    return ys[mid] if len(ys) % 2 else (ys[mid - 1] + ys[mid]) / 2.0
+
+
+def _return_summary(outcomes: list[SignalOutcome]) -> dict:
+    """What a converted setup was WORTH, not just whether it was right.
+
+    Two return series side by side, deliberately. `mkt_neutral_excess` is the
+    honest one — it strips the market drift a bull-tone setup would collect for
+    free — and `fwd_return` is what the stock actually did. CLAUDE.md's worked
+    example is `high52_momentum` at 54.0 absolute against 50.5 market-neutral,
+    where 3.5 of the 4 points above a coin flip were simply being long. One
+    number alone lets that hide; the pair makes it visible.
+
+    The MEDIAN leads because forward returns are right-skewed: a single
+    multi-bagger drags a mean upward and would describe a typical setup that
+    does not exist. The mean is kept beside it precisely so the gap shows.
+
+    The interval comes from `independent_blocks` + `sized_interval`, the same
+    treatment every other efficacy number in this repo gets: setups that fire
+    days apart share most of their forward window, so the row count is not the
+    sample size.
+    """
+    from app.services.detector_performance_service import (
+        _DEFAULT_MIN_N,
+        independent_blocks,
+        sized_interval,
+    )
+
+    judged = [o for o in outcomes if o.mkt_neutral_hit is not None]
+    excess = [o.mkt_neutral_excess for o in judged if o.mkt_neutral_excess is not None]
+    absolute = [o.fwd_return for o in outcomes if o.fwd_return is not None]
+
+    n = len(judged)
+    hits = sum(1 for o in judged if o.mkt_neutral_hit == 1)
+    rate = round(hits / n * 100.0, 1) if n else None
+
+    horizon = max((o.horizon_days for o in judged), default=None)
+    eff_n = (
+        independent_blocks([o.signal_date for o in judged], horizon)
+        if n and horizon
+        else 0
+    )
+    ci = sized_interval(rate_pct=rate, effective_n=eff_n) if rate is not None and eff_n else None
+
+    return {
+        "converted_judged": n,
+        # Percent, market-neutral. The counts are already exposed separately;
+        # this is the same fact in the form a person compares against 50.
+        "converted_hit_rate": rate,
+        "converted_effective_n": eff_n,
+        "converted_horizon_days": horizon,
+        "converted_ci_low": ci[0] if ci else None,
+        "converted_ci_high": ci[1] if ci else None,
+        # Thin evidence is FLAGGED, never hidden: a rate the reader cannot see
+        # is worse than one they can distrust.
+        "converted_low_confidence": eff_n < _DEFAULT_MIN_N,
+        "median_excess_pct": _pct(_median_of([float(x) for x in excess])),
+        "mean_excess_pct": _pct(
+            sum(float(x) for x in excess) / len(excess) if excess else None
+        ),
+        "median_return_pct": _pct(_median_of([float(x) for x in absolute])),
+        "mean_return_pct": _pct(
+            sum(float(x) for x in absolute) / len(absolute) if absolute else None
+        ),
+    }
+
+
+def _per_detector(
+    converted: list[StockSetup],
+    expired: list[StockSetup],
+    outcomes: list[SignalOutcome],
+) -> list[dict]:
+    """One row per setup detector: does THIS setup convert, and is it worth it.
+
+    The aggregate answers "does the feature work". It cannot answer "which
+    setup should I trust", and averaging a detector that converts nine times
+    out of ten with one that never converts hides both.
+
+    Every row carries its own denominators. A detector with two resolved
+    setups gets a conversion rate of 50% that means nothing, so `resolved` and
+    `judged` travel beside every rate rather than in a tooltip.
+    """
+    from app.services.detector_performance_service import (
+        _DEFAULT_MIN_N,
+        independent_blocks,
+        sized_interval,
+    )
+
+    by_alert = {o.alert_id: o for o in outcomes}
+    names = sorted({r.detector for r in converted} | {r.detector for r in expired})
+
+    rows: list[dict] = []
+    for name in names:
+        conv = [r for r in converted if r.detector == name]
+        exp = [r for r in expired if r.detector == name]
+        resolved = len(conv) + len(exp)
+
+        mine = [
+            by_alert[r.converted_alert_id]
+            for r in conv
+            if r.converted_alert_id and r.converted_alert_id in by_alert
+        ]
+        judged = [o for o in mine if o.mkt_neutral_hit is not None]
+        hits = sum(1 for o in judged if o.mkt_neutral_hit == 1)
+        rate = round(hits / len(judged) * 100.0, 1) if judged else None
+
+        horizon = max((o.horizon_days for o in judged), default=None)
+        eff_n = (
+            independent_blocks([o.signal_date for o in judged], horizon)
+            if judged and horizon
+            else 0
+        )
+        ci = sized_interval(rate_pct=rate, effective_n=eff_n) if rate is not None and eff_n else None
+        excess = [
+            float(o.mkt_neutral_excess) for o in judged if o.mkt_neutral_excess is not None
+        ]
+
+        rows.append({
+            "detector": name,
+            "converted": len(conv),
+            "expired": len(exp),
+            "resolved": resolved,
+            "conversion_rate": round(len(conv) / resolved * 100.0, 1) if resolved else None,
+            "judged": len(judged),
+            "positive": hits,
+            "negative": len(judged) - hits,
+            "hit_rate": rate,
+            "effective_n": eff_n,
+            "horizon_days": horizon,
+            "ci_low": ci[0] if ci else None,
+            "ci_high": ci[1] if ci else None,
+            "low_confidence": eff_n < _DEFAULT_MIN_N,
+            "median_excess_pct": _pct(_median_of(excess)),
+        })
+
+    # Most-resolved first: the rows with something to say lead, and a detector
+    # with one setup does not sit above one with forty because it got lucky.
+    rows.sort(key=lambda r: (-r["resolved"], r["detector"]))
+    return rows

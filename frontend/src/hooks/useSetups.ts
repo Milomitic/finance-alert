@@ -89,6 +89,58 @@ export interface SetupStats {
   median_lead_days: number | null;
   lead_days_min: number | null;
   lead_days_max: number | null;
+
+  /** How many converted setups have a market-neutral verdict, and the rate
+   *  that follows from them. `converted_hit_rate` is a percentage to compare
+   *  against 50, which is what a zero-skill setup scores. */
+  converted_judged: number;
+  converted_hit_rate: number | null;
+  /** ⚠️ NOT the row count. Setups firing days apart share most of their
+   *  forward window, so the honest denominator is the number of
+   *  non-overlapping horizon-length windows. The point estimate uses every
+   *  row; only the INTERVAL is charged the overlap. */
+  converted_effective_n: number;
+  converted_horizon_days: number | null;
+  converted_ci_low: number | null;
+  converted_ci_high: number | null;
+  /** Thin evidence is flagged, never hidden: a rate the reader can distrust
+   *  beats a blank they cannot interrogate. */
+  converted_low_confidence: boolean;
+
+  /** What a converted setup was WORTH, in percent.
+   *
+   *  Both series on purpose. `excess` is market-neutral and is the honest one;
+   *  `return` is what the stock actually did. CLAUDE.md's worked example is a
+   *  detector reading 54.0 absolute against 50.5 market-neutral, where most of
+   *  the apparent edge was simply being long — one number alone lets that
+   *  hide. The MEDIAN leads because forward returns are right-skewed. */
+  median_excess_pct: number | null;
+  mean_excess_pct: number | null;
+  median_return_pct: number | null;
+  mean_return_pct: number | null;
+
+  by_detector: SetupDetectorStat[];
+}
+
+/** One setup family's report card. Every rate travels with the denominator
+ *  that produced it: 50% on two resolved setups means nothing, and a tooltip
+ *  is not where that belongs. */
+export interface SetupDetectorStat {
+  detector: string;
+  converted: number;
+  expired: number;
+  resolved: number;
+  conversion_rate: number | null;
+  judged: number;
+  positive: number;
+  negative: number;
+  hit_rate: number | null;
+  effective_n: number;
+  horizon_days: number | null;
+  ci_low: number | null;
+  ci_high: number | null;
+  low_confidence: boolean;
+  median_excess_pct: number | null;
 }
 
 export interface SetupsResponse {

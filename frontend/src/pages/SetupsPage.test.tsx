@@ -57,6 +57,18 @@ const stats: SetupStats = {
   lead_days_max: null,
   conversion_rate: null,
   avg_lead_days: null,
+  converted_judged: 0,
+  converted_hit_rate: null,
+  converted_effective_n: 0,
+  converted_horizon_days: null,
+  converted_ci_low: null,
+  converted_ci_high: null,
+  converted_low_confidence: true,
+  median_excess_pct: null,
+  mean_excess_pct: null,
+  median_return_pct: null,
+  mean_return_pct: null,
+  by_detector: [],
 };
 
 describe("SetupsPage", () => {

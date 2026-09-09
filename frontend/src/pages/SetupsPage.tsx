@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { CardSkeleton } from "@/components/ui/card-skeleton";
 import { QueryError } from "@/components/ui/query-error";
 import { SectionTitle } from "@/components/ui/section-title";
+import SetupDetectorStats from "@/components/setups/SetupDetectorStats";
 import { SetupOutcomeList } from "@/components/setups/SetupOutcomeList";
 import { useSetups, type Setup, type SetupStats } from "@/hooks/useSetups";
 import { detectorCounts, detectorLabel, groupByCondition, type SetupSortKey } from "@/lib/setupGrouping";
@@ -102,6 +103,63 @@ function StatsStrip({ stats }: { stats: SetupStats }) {
               : null,
     },
     {
+      // The rate the counts above imply, put where a person compares it: 50 is
+      // what a setup with no skill scores. The interval comes with it, sized
+      // on non-overlapping windows rather than rows, because setups firing
+      // days apart share most of their forward window and a row-count band
+      // would look far narrower than the evidence allows.
+      label: "Efficacia",
+      value:
+        stats.converted_hit_rate === null
+          ? "—"
+          : `${Math.round(stats.converted_hit_rate)}%`,
+      hint:
+        stats.converted_hit_rate === null
+          ? "serve almeno un esito maturo"
+          : `${stats.converted_ci_low?.toFixed(0)}–${stats.converted_ci_high?.toFixed(0)}% su ${
+              stats.converted_effective_n
+            } finestre indipendenti${stats.converted_low_confidence ? " · non concludente" : ""}`,
+      tone:
+        stats.converted_hit_rate === null ||
+        (stats.converted_ci_low !== null &&
+          stats.converted_ci_high !== null &&
+          stats.converted_ci_low <= 50 &&
+          stats.converted_ci_high >= 50)
+          ? // A band straddling 50 has said nothing, so it gets no colour.
+            null
+          : stats.converted_hit_rate > 50
+            ? "ok"
+            : "bad",
+    },
+    {
+      // What the setup was WORTH, not just whether it was right. Median, not
+      // mean: forward returns are right-skewed and one large winner would
+      // describe a typical setup that does not exist. The absolute return sits
+      // in the hint beside it on purpose — when the two diverge, the gap IS
+      // the market drift the setup collected for free.
+      label: "Rendimento mediano",
+      value:
+        stats.median_excess_pct === null
+          ? "—"
+          : `${stats.median_excess_pct > 0 ? "+" : ""}${stats.median_excess_pct.toFixed(1)}%`,
+      hint:
+        stats.median_excess_pct === null
+          ? "eccesso sulla mediana dell'universo"
+          : `market-neutral · assoluto ${
+              stats.median_return_pct === null
+                ? "n/d"
+                : `${stats.median_return_pct > 0 ? "+" : ""}${stats.median_return_pct.toFixed(1)}%`
+            }`,
+      tone:
+        stats.median_excess_pct === null
+          ? null
+          : stats.median_excess_pct > 0
+            ? "ok"
+            : stats.median_excess_pct < 0
+              ? "bad"
+              : null,
+    },
+    {
       label: "Anticipo mediano",
       value: stats.median_lead_days === null ? "—" : `${stats.median_lead_days}g`,
       hint:
@@ -121,7 +179,7 @@ function StatsStrip({ stats }: { stats: SetupStats }) {
   ];
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 [&>*]:min-w-0">
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 [&>*]:min-w-0">
       {tiles.map((t) => (
         <Card key={t.label}>
           <CardContent className="p-3">
@@ -181,6 +239,13 @@ export default function SetupsPage() {
       </div>
 
       {q.data && <StatsStrip stats={q.data.stats} />}
+
+      {/* Above the tables on BOTH tabs, deliberately. The strip says whether
+          the feature works; this says which setup families do, and that is the
+          question a person carries into either list. It is the same data on
+          both, because a family's record does not change depending on which
+          tab you are reading. */}
+      {q.data && <SetupDetectorStats rows={q.data.stats.by_detector} />}
 
       {/* Three controls became eight. The page had exactly one axis — tone —
           which meant no way to ask "show me only the squeezes" or "who has
