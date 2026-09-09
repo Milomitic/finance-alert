@@ -69,3 +69,18 @@ pulls it from public GHCR. Verified end-to-end on 2026-07-15.
 - ArgoCD UI: `kubectl -n argocd port-forward svc/argocd-server 8080:443` then
   https://localhost:8080 (initial admin password:
   `kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d`).
+
+## PostgreSQL backup plugin rollout (FA-002–FA-005)
+
+The plugin Application in `infra/gitops/barman-cloud-plugin.yaml` is a bootstrap manifest, not a child of the existing `finance-alert` Argo Application. Apply it once and wait for the plugin deployment to become ready before syncing the Postgres manifests; otherwise the Cluster resource can be rejected while it references an unavailable plugin.
+
+```bash
+kubectl apply --server-side -f infra/gitops/barman-cloud-plugin.yaml
+kubectl -n cnpg-system rollout status deployment/barman-cloud-plugin --timeout=5m
+# Then push/sync the cloud branch and verify:
+kubectl -n finance-alert get objectstore pg-backups
+kubectl -n finance-alert get backup -l cnpg.io/cluster=pg
+kubectl -n monitoring get podmonitor pg
+```
+
+After the first successful plugin Backup, perform a restore rehearsal in an isolated namespace before removing the legacy `barmanObjectStore` block. Keep the same object-store prefix and verify the resulting recovery window is 30 days.
