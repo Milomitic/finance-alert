@@ -51,6 +51,6 @@ Questo file è il backlog operativo canonico. Ogni nuova attività deve avere un
 ## Vincoli e fatti da non confondere
 
 - Il cluster usa ancora CNPG **1.30.0** e backup legacy `barmanObjectStore`; gli ultimi backup osservati sono completati.
-- I commit locali non ancora sincronizzati su `origin/cloud` includono `cae2986`, `d5d32de`, `3697899`, `af4ec64`, `4ea9447`, `e2a3c88` e `79e30ff`; la produzione contiene solo il fix metrics `cb524d5`.
+- I commit locali non ancora sincronizzati su `origin/cloud` includono `cae2986`, `d5d32de`, `3697899`, `af4ec64`, `4ea9447`, `e2a3c88`, `79e30ff` e `c5d3e8b`; la produzione contiene solo il fix metrics `cb524d5`.
 - I manifest plugin sono ora preparati nel repository locale, ma non applicati al cluster.
 - Il Python globale non contiene le dipendenze backend: usare `uv run --project backend pytest`.
