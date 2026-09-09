@@ -25,7 +25,7 @@ Questo file è il backlog operativo canonico. Ogni nuova attività deve avere un
 | FA-005 | P2 | Kubernetes | Rimuovere `spec.monitoring.enablePodMonitor` deprecato | **READY / LOCAL** | Campo rimosso e PodMonitor esplicito aggiunto; verifica live dopo sync. |
 | FA-006 | P2 | Performance | Analizzare i percorsi lenti sui percentili reali | **WAITING DATA** | Bucket/latenze già strumentati; attendere almeno 7 giorni e misurare p50/p95/p99 prima/dopo. |
 | FA-007 | P2 | Frontend | Introdurre RUM per Web Vitals LCP/INP/CLS | **READY / LOCAL** | Reporter browser, endpoint autenticato e metriche Prometheus implementati; servono deploy e p75 reali. |
-| FA-008 | P2 | Frontend | Ridurre e presidiare i finding ESLint React Hooks | **OPEN** | Baseline 60 finding: 45 errori, 15 warning. |
+| FA-008 | P2 | Frontend | Ridurre e presidiare i finding ESLint React Hooks | **OPEN** | Un finding reale di immutabilita corretto in `SignalSnapshotView`; baseline scesa a 59 finding (44 errori, 15 warning). Il gate dedicato `lint:hooks` resta verde; rimangono soprattutto regole v7 da risolvere per tranche. |
 | FA-009 | P1 | UX | Correggere etichette valuta/prezzo nelle posizioni | **READY / LOCAL** | Prezzi e P&L usano la valuta nativa con fallback USD; build/test frontend passano. |
 | FA-010 | P1 | UX | Rendere visibili e recuperabili gli errori delle mutazioni | **READY / LOCAL** | Hook posizioni con toast successo/errore e dettaglio API; form trade mantiene errore inline. |
 | FA-011 | P1 | UX mobile | Focus trap, ESC, scroll lock e restore del drawer | **READY / LOCAL** | Comportamento dialog implementato; verifica browser reale dopo deploy. |

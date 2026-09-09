@@ -115,7 +115,6 @@ export function SignalSnapshotView({
 
   // Number assigned only to TECHNICAL steps (no source); these are plotted on
   // the chart, so the number here matches the chart marker.
-  let techCounter = 0;
 
   return (
     <div className="space-y-4">
@@ -248,7 +247,9 @@ export function SignalSnapshotView({
             <ol className="relative border-l border-border/60 ml-2.5 space-y-3">
               {chain.map((step, i) => {
                 const badge = step.source ? SOURCE_BADGE[step.source] : null;
-                const num = step.source ? null : (techCounter += 1);
+                const num = step.source
+                  ? null
+                  : chain.slice(0, i + 1).filter((item) => !item.source).length;
                 const gloss = glossForStep(step.label, step.detail, s.tone, s.annotations?.levels ?? []);
                 return (
                   <li key={`${step.date}-${i}`} className="ml-4 relative">
