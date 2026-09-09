@@ -26,6 +26,7 @@ const SectorsOverviewPage = lazy(() => import("@/pages/SectorsOverviewPage"));
 const SettingsPage = lazy(() => import("@/pages/SettingsPage"));
 const StockDetailPage = lazy(() => import("@/pages/StockDetailPage"));
 const StocksBrowserPage = lazy(() => import("@/pages/StocksBrowserPage"));
+const NotFoundPage = lazy(() => import("@/pages/NotFoundPage"));
 
 /** Centered spinner shown while a lazily-loaded route chunk is fetched.
  *  Matches the existing Loader2 + animate-spin pattern used across pages. */
@@ -77,7 +78,7 @@ export default function App() {
           <Route path="/settings" element={<SettingsPage />} />
           {/* /rules removed: rule engine deleted backend-side; alerts are signals-only. */}
         </Route>
-        <Route path="*" element={<div className="p-8">404</div>} />
+        <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </Suspense>
   );

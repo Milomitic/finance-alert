@@ -24,8 +24,7 @@ spec:
   # happening — the same shape as the OOMKill that went unnoticed for nine
   # days. The alert rules that consume this live in
   # infra/observability/app-alert-rules.yaml.
-  monitoring:
-    enablePodMonitor: true
+  # Metrics are scraped by the GitOps-managed PodMonitor in podmonitor.yaml.
   # PG16 (matches the CI test lane). arm64 variant verified on GHCR.
   imageName: ghcr.io/cloudnative-pg/postgresql:16
   primaryUpdateStrategy: unsupervised
@@ -91,23 +90,10 @@ spec:
       database: finance_alert
       owner: fa_app
 
-  # Point-in-time recovery: continuous WAL archiving + base backups to OCI
-  # Object Storage via its S3-compatible API (barman-cloud). The in-tree
-  # barmanObjectStore is kept operational until the Barman Cloud Plugin is
-  # installed and the atomic migration is applied (required before CNPG 1.31).
-  backup:
-    retentionPolicy: "30d"
-    barmanObjectStore:
-      destinationPath: s3://finance-alert-backups/
-      endpointURL: https://axaqdeicu0wx.compat.objectstorage.eu-milan-1.oraclecloud.com
-      s3Credentials:
-        accessKeyId:
-          name: pg-wal-s3
-          key: ACCESS_KEY_ID
-        secretAccessKey:
-          name: pg-wal-s3
-          key: SECRET_ACCESS_KEY
-      wal:
-        compression: gzip
-      data:
-        compression: gzip
+  # Continuous WAL archiving is provided by the Barman Cloud Plugin.
+  # The ObjectStore carries the 30d retention policy.
+  plugins:
+    - name: barman-cloud.cloudnative-pg.io
+      isWALArchiver: true
+      parameters:
+        barmanObjectName: pg-backups

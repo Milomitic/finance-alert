@@ -259,8 +259,8 @@ spec:
         # --- The backup you only find out about when you need it -------------
         # The backups run, and were restored end-to-end once (RUNBOOK-postgres-
         # dr.md, 2026-07-16 — more than most projects can say). What was
-        # missing is the CONTINUOUS check: `count(cnpg_*)` returned zero on
-        # 2026-08-27, because the Cluster never enabled its PodMonitor. So a
+        # missing was the CONTINUOUS check: the backup metrics were not scraped on
+        # 2026-08-27, because the Cluster metrics PodMonitor was absent. So a
         # rotated OCI key or a bucket refusing PUTs would stop the nightly
         # backup and nothing anywhere would say so, until a restore was needed.
         # Same shape as the OOMKill that went unnoticed for nine days.
@@ -269,7 +269,7 @@ spec:
         # a maintenance window is not yet a story worth waking up for.
         - alert: FinanceAlertPostgresBackupStale
           expr: |
-            time() - max(cnpg_collector_last_available_backup_timestamp) > 36 * 3600
+            time() - max(barman_cloud_cloudnative_pg_io_last_available_backup_timestamp) > 36 * 3600
           for: 1h
           labels:
             severity: critical
@@ -284,8 +284,8 @@ spec:
         # fires on the first failed night, before the 36h window has elapsed.
         - alert: FinanceAlertPostgresBackupFailing
           expr: |
-            max(cnpg_collector_last_failed_backup_timestamp)
-              > max(cnpg_collector_last_available_backup_timestamp)
+            max(barman_cloud_cloudnative_pg_io_last_failed_backup_timestamp)
+              > max(barman_cloud_cloudnative_pg_io_last_available_backup_timestamp)
           for: 30m
           labels:
             severity: critical

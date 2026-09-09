@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 
 import { positions } from "@/api/positions";
+import { ApiError } from "@/api/client";
 import type { PositionCreate, PositionUpdate } from "@/api/types";
 
 /** All positions (open + closed), polled every 15s while the tab is
@@ -17,11 +19,21 @@ export function usePositions(enabled = true) {
   });
 }
 
+function describePositionError(err: unknown, fallback: string): string {
+  if (err instanceof ApiError) return `${fallback}: ${err.detail || err.status}`;
+  if (err instanceof Error) return `${fallback}: ${err.message}`;
+  return fallback;
+}
+
 export function useOpenPosition() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: PositionCreate) => positions.open(body),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["positions"] }),
+    onSuccess: () => {
+      toast.success("Posizione aperta");
+      return qc.invalidateQueries({ queryKey: ["positions"] });
+    },
+    onError: (err) => toast.error(describePositionError(err, "Errore apertura posizione")),
   });
 }
 
@@ -30,7 +42,11 @@ export function useUpdatePosition() {
   return useMutation({
     mutationFn: ({ id, body }: { id: number; body: PositionUpdate }) =>
       positions.update(id, body),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["positions"] }),
+    onSuccess: (_data, vars) => {
+      toast.success(vars.body.close ? "Posizione chiusa" : "Posizione aggiornata");
+      return qc.invalidateQueries({ queryKey: ["positions"] });
+    },
+    onError: (err) => toast.error(describePositionError(err, "Errore aggiornamento posizione")),
   });
 }
 
@@ -38,6 +54,10 @@ export function useDeletePosition() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: number) => positions.remove(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["positions"] }),
+    onSuccess: () => {
+      toast.success("Posizione eliminata");
+      return qc.invalidateQueries({ queryKey: ["positions"] });
+    },
+    onError: (err) => toast.error(describePositionError(err, "Errore eliminazione posizione")),
   });
 }

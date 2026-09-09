@@ -18,39 +18,37 @@ Questo file è il backlog operativo canonico. Ogni nuova attività deve avere un
 
 | ID | Priorità | Area | Attività | Stato | Evidenza / criterio di chiusura |
 |---|---:|---|---|---|---|
-| FA-001 | P0 | Sicurezza | Proteggere `/metrics` dall’ingress pubblico con allowlist loopback | **DONE / PROD** | Commit `cb524d5` pushato su `origin/cloud`; probe esterno HTTP 403, `/api/health` HTTP 200, Prometheus interno `up=1`. |
-| FA-002 | P1 | Backup | Portare la retention PostgreSQL da 7 a 30 giorni | **READY / LOCAL** | Commit locale `cae2986`; modifica a Cluster, ScheduledBackup e runbook. La produzione resta a 7 giorni finché il commit non viene pushato e sincronizzato. |
-| FA-003 | P1 | Backup | Migrare dal Barman integrato CNPG al Barman Cloud Plugin prima di CNPG 1.31 | **BLOCKED** | Plugin/ObjectStore/Cluster/ScheduledBackup/runbook/alert devono essere migrati atomicamente. Dry-run server riuscito; installazione reale non eseguita. Chiusura: plugin Healthy, nuovo backup completato, restore point verificato. Riferimento: [guida ufficiale di migrazione](https://cloudnative-pg.io/plugin-barman-cloud/docs/migration/). |
-| FA-004 | P1 | Osservabilità | Aggiornare gli alert dai metric name legacy CNPG ai metric name del plugin | **OPEN** | Dipende da FA-003. Chiusura: alert testati sui metric name `barman_cloud_cloudnative_pg_io_*` e assenza di regole legacy attive. |
-| FA-005 | P2 | Kubernetes | Rimuovere la dipendenza da `spec.monitoring.enablePodMonitor` deprecato | **OPEN** | Definire e gestire il PodMonitor esplicitamente; dry-run senza warning di deprecazione. |
-| FA-006 | P2 | Performance | Analizzare i percorsi lenti sui percentili reali | **WAITING DATA** | Bucket/latenze già strumentati. Chiusura dopo almeno 7 giorni di traffico: p50/p95/p99 per endpoint, top regressioni e fix misurato prima/dopo. |
-| FA-007 | P2 | Frontend | Introdurre RUM per Web Vitals (LCP, INP, CLS), separato mobile/desktop | **OPEN** | Dashboard p75 per route e dispositivo, soglie e regressioni visibili. Il build pass non equivale a una misura reale. |
-| FA-008 | P2 | Frontend | Ridurre e presidiare i finding ESLint React Hooks | **OPEN** | Baseline verificata: 60 finding (45 errori, 15 warning). Chiusura per tranche con lint a zero o eccezioni motivate e scadenziate. |
-| FA-017 | P2 | Sicurezza | Triage dei finding Bandit e hardening dei casi confermati | **OPEN** | Ultimo report: 0 high, 10 medium, 25 low; npm audit e pip-audit senza vulnerabilità note. Chiusura: ogni medium/low classificato (fix, eccezione motivata o falso positivo) e report aggiornato. |
-| FA-009 | P1 | UX | Correggere etichette valuta/prezzo nelle posizioni e nei flussi correlati | **OPEN** | Valuta mostrata con codice/simbolo coerente con il dato e test UI per almeno EUR/USD. |
-| FA-010 | P1 | UX | Rendere visibili e recuperabili gli errori delle mutazioni (salvataggi, aggiornamenti, eliminazioni) | **OPEN** | Errore API esposto con messaggio, retry e stato non ambiguo; test di failure path. |
-| FA-011 | P1 | UX mobile | Correggere drawer mobile: focus, ESC, scroll lock e ritorno del focus | **OPEN** | Test keyboard/mobile: focus intrappolato nel drawer, ESC chiude, body non scrolla, focus torna al trigger. |
-| FA-012 | P1 | UX/search | Stati errore e semantica combobox nella ricerca | **OPEN** | Errore distinto da “nessun risultato”; ruoli ARIA, tastiera e annunci verificati. |
-| FA-013 | P2 | UX/navigation | Preservare stato filtri/calendar/search nell’URL e migliorare il 404 | **OPEN** | Deep-link riproduce lo stato; 404 offre ritorno e destinazione utile; test browser. |
-| FA-014 | P2 | Sessioni | Revoca server-side e sincronizzazione logout tra schede | **OPEN / P3** | Sessioni revocabili, evento logout propagato tra tab. Priorità bassa per il modello single-owner. |
-| FA-015 | P3 | Logging/storage | Aggiungere guardrail di dimensione a Loki e monitoraggio disco nodo | **OPEN / monitoraggio** | Alert su PVC e filesystem; policy di retention/size esplicita. Stato attuale: Loki ~152 MB su PVC 2 GiB, retention 30 giorni, filesystem nodo ~84%. |
-| FA-016 | P2 | Prodotto | Decomporre e pianificare le 72 proposte dell’audit UI/UX completo | **OPEN** | Selezionare tranche con priorità e criteri di accettazione nel presente backlog; report dettagliato: `frontend-ux-audit-2026-09-09/finance-alert-frontend-ui-ux-improvements.md`. |
+| FA-001 | P0 | Sicurezza | Proteggere `/metrics` dall’ingress pubblico con allowlist loopback | **DONE / PROD** | Commit `cb524d5` pushato; probe esterno 403, health 200, Prometheus interno `up=1`. |
+| FA-002 | P1 | Backup | Portare la retention PostgreSQL da 7 a 30 giorni | **READY / LOCAL** | Commit `cae2986`; la produzione resta a 7 giorni finché non viene pushato e sincronizzato. |
+| FA-003 | P1 | Backup | Migrare dal Barman integrato CNPG al Barman Cloud Plugin prima di CNPG 1.31 | **READY / LOCAL** | Manifest plugin/ObjectStore/Cluster/ScheduledBackup/runbook pronti e YAML validato; deploy reale ancora necessario. [Guida ufficiale](https://cloudnative-pg.io/plugin-barman-cloud/docs/migration/). |
+| FA-004 | P1 | Osservabilità | Aggiornare gli alert ai metric name del plugin | **READY / LOCAL** | Regole aggiornate a `barman_cloud_cloudnative_pg_io_*`; verifica live dopo FA-003. |
+| FA-005 | P2 | Kubernetes | Rimuovere `spec.monitoring.enablePodMonitor` deprecato | **READY / LOCAL** | Campo rimosso e PodMonitor esplicito aggiunto; verifica live dopo sync. |
+| FA-006 | P2 | Performance | Analizzare i percorsi lenti sui percentili reali | **WAITING DATA** | Bucket/latenze già strumentati; attendere almeno 7 giorni e misurare p50/p95/p99 prima/dopo. |
+| FA-007 | P2 | Frontend | Introdurre RUM per Web Vitals LCP/INP/CLS | **READY / LOCAL** | Reporter browser, endpoint autenticato e metriche Prometheus implementati; servono deploy e p75 reali. |
+| FA-008 | P2 | Frontend | Ridurre e presidiare i finding ESLint React Hooks | **OPEN** | Baseline 60 finding: 45 errori, 15 warning. |
+| FA-009 | P1 | UX | Correggere etichette valuta/prezzo nelle posizioni | **READY / LOCAL** | Prezzi e P&L usano la valuta nativa con fallback USD; build/test frontend passano. |
+| FA-010 | P1 | UX | Rendere visibili e recuperabili gli errori delle mutazioni | **READY / LOCAL** | Hook posizioni con toast successo/errore e dettaglio API; form trade mantiene errore inline. |
+| FA-011 | P1 | UX mobile | Focus trap, ESC, scroll lock e restore del drawer | **READY / LOCAL** | Comportamento dialog implementato; verifica browser reale dopo deploy. |
+| FA-012 | P1 | UX/search | Stati errore e semantica combobox | **READY / LOCAL** | Stato errore con retry e ruoli `combobox`/`listbox`/`option` implementati. |
+| FA-013 | P2 | UX/navigation | Preservare filtri/calendar/search nell’URL e migliorare il 404 | **OPEN** | 404 migliorato localmente; copertura URL completa ancora da verificare. |
+| FA-014 | P2 | Sessioni | Revoca server-side e logout tra schede | **OPEN / P3** | Sessioni revocabili e logout propagato tra tab. |
+| FA-015 | P3 | Logging/storage | Guardrail dimensione Loki e monitoraggio disco nodo | **OPEN / monitoraggio** | Alert PVC/filesystem e policy esplicita; stato attuale Loki ~152 MB su PVC 2 GiB, retention 30d, filesystem ~84%. |
+| FA-016 | P2 | Prodotto | Decomporre le 72 proposte dell’audit UI/UX | **OPEN** | Selezionare tranche e criteri nel presente backlog; report dettagliato in `frontend-ux-audit-2026-09-09/`. |
+| FA-017 | P2 | Sicurezza | Triage dei finding Bandit e hardening dei casi confermati | **READY / LOCAL** | Validazione URL HTTP(S) aggiunta; classificazione in [docs/security-bandit-triage.md](security-bandit-triage.md). Nessun high; audit npm/pip senza vulnerabilità note. |
 
 ## Ordine operativo
 
-1. **FA-002**: push, sync Argo e verifica che la retention effettiva sia 30 giorni.
-2. **FA-003**: installare il plugin, creare ObjectStore, migrare Cluster e ScheduledBackup con cambio atomico, poi verificare backup/restore.
-3. **FA-004** e **FA-005**: chiudere warning e alert dopo la migrazione.
-4. **FA-006**: attendere la finestra dati e intervenire solo sui percorsi con percentili significativi.
-5. **FA-007** e **FA-008**: RUM reale e pulizia lint.
-6. **FA-009**–**FA-013**: tranche UX ad alto impatto.
-7. **FA-014**–**FA-017**: hardening, triage sicurezza e roadmap prodotto.
+1. FA-002: push, sync Argo e verifica retention effettiva a 30 giorni.
+2. FA-003: installare plugin, creare ObjectStore, migrare Cluster/ScheduledBackup, verificare backup e restore.
+3. FA-004 e FA-005: chiudere alert e warning dopo la migrazione.
+4. FA-006: attendere dati reali e intervenire solo sui percorsi con percentili significativi.
+5. FA-007 e FA-008: RUM reale e pulizia lint.
+6. FA-009–FA-013: tranche UX ad alto impatto.
+7. FA-014–FA-017: sessioni, storage, triage sicurezza e roadmap prodotto.
 
 ## Vincoli e fatti da non confondere
 
-- Il cluster usa ancora CNPG **1.30.0** e backup legacy `barmanObjectStore`; gli ultimi backup osservati risultano completati.
-- Il commit locale `cae2986` non è ancora in produzione.
-- I file locali `infra/gitops/barman-cloud-plugin.yaml` e `infra/gitops/postgres/objectstore.yaml` sono bozze non tracciate e non applicate; non fanno parte dello stato produttivo.
-- Il report UI/UX è analisi; le attività FA-009–FA-013 non sono ancora correzioni applicate.
-
-
+- Il cluster usa ancora CNPG **1.30.0** e backup legacy `barmanObjectStore`; gli ultimi backup osservati sono completati.
+- I commit `cae2986`, `d5d32de` e `3697899` sono locali e non sono in produzione.
+- I manifest plugin sono ora preparati nel repository locale, ma non applicati al cluster.
+- Il Python globale non contiene le dipendenze backend: usare `uv run --project backend pytest`.

@@ -43,9 +43,18 @@ const EXIT_LABEL: Record<string, string> = {
   manual: "Manuale",
 };
 
-function fmtPrice(n: number | null | undefined): string {
+function fmtPrice(n: number | null | undefined, currency: string | null): string {
   if (n == null || !Number.isFinite(n)) return "—";
-  return `$${n >= 1 ? n.toFixed(2) : n.toFixed(3)}`;
+  const code = currency && /^[A-Z]{3}$/.test(currency) ? currency : "USD";
+  try {
+    return new Intl.NumberFormat("it-IT", {
+      style: "currency",
+      currency: code,
+      maximumFractionDigits: n >= 1 ? 2 : 3,
+    }).format(n);
+  } catch {
+    return `${n >= 1 ? n.toFixed(2) : n.toFixed(3)} ${code}`;
+  }
 }
 
 function fmtPct(n: number | null | undefined): string {
@@ -62,7 +71,7 @@ function fmtDate(iso: string | null): string {
   });
 }
 
-function PnlCell({ pct, abs }: { pct: number | null; abs: number | null }) {
+function PnlCell({ pct, abs, currency }: { pct: number | null; abs: number | null; currency: string | null }) {
   if (pct == null) return <span className="text-muted-foreground">—</span>;
   const positive = pct >= 0;
   return (
@@ -78,7 +87,7 @@ function PnlCell({ pct, abs }: { pct: number | null; abs: number | null }) {
       {abs != null && (
         <span className="ml-1 text-xs font-medium opacity-80">
           ({abs >= 0 ? "+" : ""}
-          {abs.toFixed(2)}$)
+          {fmtPrice(abs, currency)})
         </span>
       )}
     </span>
@@ -210,16 +219,16 @@ export default function PositionsPage() {
                             <SideChip side={p.side} />
                           </TableCell>
                           <TableCell className="text-right tabular-nums">
-                            {fmtPrice(p.entry_price)}
+                            {fmtPrice(p.entry_price, p.currency)}
                           </TableCell>
                           <TableCell className="text-right tabular-nums text-rose-600 dark:text-rose-400">
-                            {fmtPrice(p.stop_price)}
+                            {fmtPrice(p.stop_price, p.currency)}
                           </TableCell>
                           <TableCell className="text-right tabular-nums text-emerald-800 dark:text-emerald-400">
-                            {fmtPrice(p.target_price)}
+                            {fmtPrice(p.target_price, p.currency)}
                           </TableCell>
                           <TableCell className="text-right tabular-nums">
-                            {fmtPrice(p.last_price)}
+                            {fmtPrice(p.last_price, p.currency)}
                             {p.price_source === "live" && (
                               <span
                                 className="ml-1 inline-block h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse align-middle"
@@ -236,7 +245,7 @@ export default function PositionsPage() {
                             )}
                           </TableCell>
                           <TableCell className="text-right">
-                            <PnlCell pct={p.unrealized_pct} abs={p.unrealized_abs} />
+                            <PnlCell pct={p.unrealized_pct} abs={p.unrealized_abs} currency={p.currency} />
                           </TableCell>
                           <TableCell className="text-right tabular-nums text-muted-foreground">
                             {fmtDate(p.opened_at)}
@@ -302,10 +311,10 @@ export default function PositionsPage() {
                             <SideChip side={p.side} />
                           </TableCell>
                           <TableCell className="text-right tabular-nums">
-                            {fmtPrice(p.entry_price)}
+                            {fmtPrice(p.entry_price, p.currency)}
                           </TableCell>
                           <TableCell className="text-right tabular-nums">
-                            {fmtPrice(p.exit_price)}
+                            {fmtPrice(p.exit_price, p.currency)}
                           </TableCell>
                           <TableCell>
                             <span
@@ -318,7 +327,7 @@ export default function PositionsPage() {
                             </span>
                           </TableCell>
                           <TableCell className="text-right">
-                            <PnlCell pct={p.realized_pct} abs={p.realized_abs} />
+                            <PnlCell pct={p.realized_pct} abs={p.realized_abs} currency={p.currency} />
                           </TableCell>
                           <TableCell className="text-right tabular-nums text-muted-foreground">
                             {fmtDate(p.closed_at)}

@@ -27,6 +27,7 @@ from app.api import platform_health as platform_health_router
 from app.api import positions as positions_router
 from app.api import price_alerts as price_alerts_router
 from app.api import rule_performance as rule_performance_router
+from app.api import rum as rum_router
 from app.api import scan_log as scan_log_router
 from app.api import scores as scores_router
 from app.api import sectors as sectors_router
@@ -506,6 +507,7 @@ app.include_router(sectors_router.router)
 app.include_router(calendar_router.router)
 app.include_router(institutionals_router.router)
 app.include_router(platform_health_router.router)
+app.include_router(rum_router.router)
 app.include_router(kpi_router.router)
 
 

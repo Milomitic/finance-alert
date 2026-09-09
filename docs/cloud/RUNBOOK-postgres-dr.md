@@ -17,7 +17,7 @@ measured.
 |---|---|---|
 | Base backups | `s3://finance-alert-backups/` (private OCI bucket, versioned) | `ScheduledBackup pg-daily` @ 02:00 + on demand |
 | WAL segments | same bucket, gzip | continuous (`archive_command`) |
-| Retention | `spec.backup.retentionPolicy: 30d` | barman prunes |
+| Retention | `ObjectStore.spec.retentionPolicy: 30d` | plugin prunes |
 
 Together they give **point-in-time recovery**: any instant covered by a base
 backup plus the WAL that follows it.
@@ -64,7 +64,9 @@ kind: Backup
 metadata: {name: pre-change, namespace: finance-alert}
 spec:
   cluster: {name: pg}
-  method: barmanObjectStore
+  method: plugin
+  pluginConfiguration:
+    name: barman-cloud.cloudnative-pg.io
 ```
 
 ---
@@ -98,14 +100,11 @@ spec:
       # recoveryTarget: {targetTime: "2026-07-16 09:30:00+00"}
   externalClusters:
     - name: pg-origin
-      barmanObjectStore:
-        destinationPath: s3://finance-alert-backups/
-        endpointURL: https://axaqdeicu0wx.compat.objectstorage.eu-milan-1.oraclecloud.com
-        serverName: pg          # the ORIGIN cluster's name inside the bucket
-        s3Credentials:
-          accessKeyId: {name: pg-wal-s3, key: ACCESS_KEY_ID}
-          secretAccessKey: {name: pg-wal-s3, key: SECRET_ACCESS_KEY}
-        wal: {compression: gzip}
+      plugin:
+        name: barman-cloud.cloudnative-pg.io
+        parameters:
+          barmanObjectName: pg-backups
+          serverName: pg          # the ORIGIN cluster's name inside the bucket
 ```
 
 ```bash
@@ -174,9 +173,9 @@ with the same password and 401 with a wrong one.
    archiving *and* base backups fail while everything else looks healthy.
 2. **`serverName` is the ORIGIN cluster's name** (`pg`), not the new cluster's —
    barman namespaces objects in the bucket by server name.
-3. **In-tree barman is deprecated** (removed in CloudNativePG 1.31). At the next
-   operator upgrade, migrate `spec.backup.barmanObjectStore` to the **Barman
-   Cloud Plugin**.
+3. **In-tree barman is deprecated** (removed in CloudNativePG 1.31). The live
+   manifests now target the **Barman Cloud Plugin**; verify the plugin is Healthy
+   and run a successful backup before upgrading the operator.
 4. **Disk.** The node root volume was ~85% full; a restore adds a second PVC.
    Check free space before starting.
 5. **TLS is enforced** (`pg_hba`: `hostssl …` + `hostnossl … reject`). Clients

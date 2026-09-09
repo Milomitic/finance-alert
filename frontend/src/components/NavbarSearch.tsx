@@ -196,6 +196,9 @@ export function NavbarSearch() {
     return (
       <button
         type="button"
+        id={`navbar-search-option-${idx}`}
+        role="option"
+        aria-selected={isHighlighted(idx)}
         onClick={() => goToIndex(i.code)}
         onMouseEnter={() => setHighlight(idx)}
         className={cn(
@@ -243,6 +246,9 @@ export function NavbarSearch() {
     return (
       <button
         type="button"
+        id={`navbar-search-option-${idx}`}
+        role="option"
+        aria-selected={isHighlighted(idx)}
         onClick={() => goToTicker(s.ticker)}
         onMouseEnter={() => setHighlight(idx)}
         className={cn(
@@ -306,6 +312,9 @@ export function NavbarSearch() {
     return (
       <button
         type="button"
+        id={`navbar-search-option-${idx}`}
+        role="option"
+        aria-selected={isHighlighted(idx)}
         onClick={() => goToTicker(ticker)}
         onMouseEnter={() => setHighlight(idx)}
         className={cn(
@@ -350,6 +359,15 @@ export function NavbarSearch() {
           onChange={(e) => { setQ(e.target.value); setOpen(true); }}
           onFocus={() => setOpen(true)}
           onKeyDown={onKeyDown}
+          role="combobox"
+          aria-expanded={open}
+          aria-controls="navbar-search-results"
+          aria-autocomplete="list"
+          aria-activedescendant={
+            open && flatRows[highlight]
+              ? `navbar-search-option-${highlight}`
+              : undefined
+          }
           // The long form is cut mid-word at 375px, and the keyboard hint
           // is nonsense on a device with no keyboard. CSS cannot shorten a
           // placeholder — only the string itself can.
@@ -371,7 +389,7 @@ export function NavbarSearch() {
       </div>
 
       {open && (
-        <div className="absolute left-0 right-0 top-full mt-2 z-50 rounded-lg border bg-popover shadow-2xl overflow-hidden">
+        <div id="navbar-search-results" role="listbox" aria-label="Risultati ricerca" className="absolute left-0 right-0 top-full mt-2 z-50 rounded-lg border bg-popover shadow-2xl overflow-hidden">
           {/* Loading state */}
           {q.trim().length > 0 && search.isLoading && (
             <div className="px-4 py-3 text-sm text-muted-foreground">Ricerca in corso…</div>
@@ -380,7 +398,18 @@ export function NavbarSearch() {
           {/* Search-with-results state */}
           {q.trim().length > 0 && !search.isLoading && (
             <div className="max-h-[600px] overflow-y-auto">
-              {totalResults === 0 ? (
+              {search.isError ? (
+                <div className="px-4 py-6 text-sm text-center" role="alert">
+                  <p className="text-rose-600 dark:text-rose-400">Ricerca non disponibile.</p>
+                  <button
+                    type="button"
+                    className="mt-2 text-sm font-medium underline underline-offset-2"
+                    onClick={() => void search.refetch()}
+                  >
+                    Riprova
+                  </button>
+                </div>
+              ) : totalResults === 0 ? (
                 <div className="px-4 py-6 text-sm text-muted-foreground text-center">
                   Nessun risultato per "<strong className="text-foreground">{q}</strong>"
                 </div>

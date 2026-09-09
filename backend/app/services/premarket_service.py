@@ -269,6 +269,10 @@ def _nasdaq_premarket_volume(ticker: str) -> int | None:
     yfinance; only the volume column degrades to n/d. Bounded to the
     ~20 displayed names (caller), never the full pool."""
     url = _NASDAQ_INFO_URL.format(sym=urllib.parse.quote(ticker))
+    parsed = urllib.parse.urlparse(url)
+    if parsed.scheme != "https" or not parsed.netloc:
+        logger.warning("[premarket] refusing non-HTTPS Nasdaq URL")
+        return None
     # Organic traffic feeds the same (nasdaq, premarket) counter the 30-min
     # probe uses, so the Salute card reflects the real enrichment calls too
     # (audit 2026-07-08: organic call sites bypassed data_source_metrics).
@@ -276,7 +280,7 @@ def _nasdaq_premarket_volume(ticker: str) -> int | None:
     recorded_ok = False
     try:
         req = urllib.request.Request(url, headers=_NASDAQ_HEADERS)
-        with urllib.request.urlopen(req, timeout=8) as resp:
+        with urllib.request.urlopen(req, timeout=8) as resp:  # noqa: S310 - HTTPS URL validated above
             payload = json.loads(resp.read())
         # HTTP + JSON parse succeeded → the SOURCE is healthy, regardless of
         # whether we're inside the pre-market window (returning None below

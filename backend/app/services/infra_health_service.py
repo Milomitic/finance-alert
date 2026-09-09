@@ -91,12 +91,20 @@ def _prom_url() -> str:
     return (getattr(settings, "prometheus_url", None) or _DEFAULT_PROM).rstrip("/")
 
 
+def _is_http_url(url: str) -> bool:
+    parsed = urllib.parse.urlparse(url)
+    return parsed.scheme in {"http", "https"} and bool(parsed.netloc)
+
+
 def _fetch(expr: str) -> dict | None:
     """One instant query. Returns the decoded envelope, or None on any
     failure — the caller distinguishes "no answer" from "answered zero"."""
     url = f"{_prom_url()}/api/v1/query?query={urllib.parse.quote(expr)}"
+    if not _is_http_url(url):
+        logger.warning("prometheus_url must use http(s); query skipped")
+        return None
     try:
-        with urllib.request.urlopen(url, timeout=_TIMEOUT_S) as r:  # noqa: S310
+        with urllib.request.urlopen(url, timeout=_TIMEOUT_S) as r:  # noqa: S310 - scheme validated above
             return json.loads(r.read())
     except (urllib.error.URLError, OSError, ValueError, TimeoutError):
         # Debug, not warning: on a laptop with no cluster this fires on every

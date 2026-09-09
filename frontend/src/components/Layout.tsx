@@ -17,7 +17,7 @@ import {
   Sun,
   X,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { NavbarSearch } from "@/components/NavbarSearch";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ScanProgressToast } from "@/components/ScanProgressToast";
@@ -215,6 +215,9 @@ export default function Layout() {
   const location = useLocation();
   const { theme, toggle: toggleTheme } = useTheme();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const mobileMenuTriggerRef = useRef<HTMLButtonElement>(null);
+  const mobileCloseRef = useRef<HTMLButtonElement>(null);
+  const previouslyFocusedRef = useRef<HTMLElement | null>(null);
   // Desktop sidebar collapse (icon-rail). Persisted so the choice
   // survives reloads. Lazy init reads localStorage once; the effect
   // mirrors every change back. Defaults to expanded.
@@ -238,6 +241,45 @@ export default function Layout() {
   useEffect(() => {
     setMobileNavOpen(false);
   }, [location.pathname]);
+
+  // Treat the mobile navigation as a dialog: move focus inside on open,
+  // trap Tab, close on Escape, and return focus to the hamburger on close.
+  useEffect(() => {
+    if (!mobileNavOpen) {
+      const trigger = previouslyFocusedRef.current ?? mobileMenuTriggerRef.current;
+      if (trigger && document.contains(trigger)) trigger.focus();
+      previouslyFocusedRef.current = null;
+      return;
+    }
+    mobileCloseRef.current?.focus();
+    const drawer = mobileCloseRef.current?.closest("aside");
+    if (!drawer) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setMobileNavOpen(false);
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const focusable = Array.from(
+        drawer.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ),
+      );
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    drawer.addEventListener("keydown", onKeyDown);
+    return () => drawer.removeEventListener("keydown", onKeyDown);
+  }, [mobileNavOpen]);
 
   // Lock body scroll while the drawer overlay is open so the page
   // behind it doesn't scroll under the user's thumb.
@@ -322,6 +364,7 @@ export default function Layout() {
             <div className="flex items-center justify-between pr-2">
               <SidebarBrand />
               <Button
+                ref={mobileCloseRef}
                 variant="ghost"
                 size="icon"
                 aria-label="Chiudi menu"
@@ -356,11 +399,12 @@ export default function Layout() {
           {/* Hamburger — only on screens without the persistent
               sidebar. */}
           <Button
+            ref={mobileMenuTriggerRef}
             variant="ghost"
             size="icon"
             className="lg:hidden shrink-0"
             aria-label="Apri menu"
-            onClick={() => setMobileNavOpen(true)}
+            onClick={() => { previouslyFocusedRef.current = document.activeElement as HTMLElement; setMobileNavOpen(true); }}
           >
             <Menu className="h-5 w-5" />
           </Button>

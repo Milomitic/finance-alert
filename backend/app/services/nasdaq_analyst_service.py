@@ -240,10 +240,14 @@ def fetch_analyst(ticker: str) -> NasdaqAnalyst | None:
 
     from app.services import data_source_metrics
     url = _URL.format(sym=urllib.parse.quote(ticker.upper()))
+    parsed = urllib.parse.urlparse(url)
+    if parsed.scheme != "https" or not parsed.netloc:
+        logger.warning("[nasdaq] refusing non-HTTPS analyst URL")
+        return None
     _record_rate_call()
     try:
         req = urllib.request.Request(url, headers=_HEADERS)
-        with urllib.request.urlopen(req, timeout=_TIMEOUT) as resp:
+        with urllib.request.urlopen(req, timeout=_TIMEOUT) as resp:  # noqa: S310 - HTTPS URL validated above
             payload = json.loads(resp.read())
     except urllib.error.HTTPError as exc:
         if exc.code in (403, 429):

@@ -1,0 +1,27 @@
+# Install before changing the Postgres Cluster. Operator stays pinned at 1.30.
+# Bootstrap: kubectl apply -f infra/gitops/barman-cloud-plugin.yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: barman-cloud-plugin
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://cloudnative-pg.github.io/charts
+    chart: plugin-barman-cloud
+    targetRevision: 0.8.0 # plugin v0.15.0, CNPG >=1.26, Kubernetes >=1.29
+    helm:
+      values: |
+        resources:
+          requests: {cpu: 50m, memory: 100Mi}
+          limits: {memory: 256Mi}
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: cnpg-system
+  syncPolicy:
+    automated:
+      selfHeal: true
+      prune: false
+    syncOptions:
+      - ServerSideApply=true

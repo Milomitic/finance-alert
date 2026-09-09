@@ -1,0 +1,20 @@
+# Explicit CNPG metrics scrape. The operator-managed enablePodMonitor field is deprecated;
+# keeping this resource in Git gives us ownership of the scrape configuration.
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: finance-alert-postgres
+  namespace: monitoring
+  labels:
+    release: kps
+    app.kubernetes.io/part-of: finance-alert
+spec:
+  namespaceSelector:
+    matchNames: [finance-alert]
+  selector:
+    matchLabels:
+      cnpg.io/cluster: pg
+  podMetricsEndpoints:
+    - port: metrics
+      path: /metrics
+      interval: 60s
