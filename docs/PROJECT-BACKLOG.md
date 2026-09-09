@@ -32,7 +32,7 @@ Questo file è il backlog operativo canonico. Ogni nuova attività deve avere un
 | FA-012 | P1 | UX/search | Stati errore e semantica combobox | **READY / LOCAL** | Stato errore con retry e ruoli `combobox`/`listbox`/`option` implementati. |
 | FA-013 | P2 | UX/navigation | Preservare filtri/calendar/search nell’URL e migliorare il 404 | **OPEN** | 404 migliorato localmente; copertura URL completa ancora da verificare. |
 | FA-014 | P2 | Sessioni | Revoca server-side e logout tra schede | **OPEN / P3** | Sessioni revocabili e logout propagato tra tab. |
-| FA-015 | P3 | Logging/storage | Guardrail dimensione Loki e monitoraggio disco nodo | **OPEN / monitoraggio** | Alert PVC/filesystem e policy esplicita; stato attuale Loki ~152 MB su PVC 2 GiB, retention 30d, filesystem ~84%. |
+| FA-015 | P3 | Logging/storage | Guardrail dimensione Loki e monitoraggio disco nodo | **READY / LOCAL** | Alert PVC >80% e filesystem root <15% aggiunti; retention Loki resta 30d. Stato osservato: ~152 MB su PVC 2 GiB, filesystem ~84%; verifica live dopo sync. |
 | FA-016 | P2 | Prodotto | Decomporre le 72 proposte dell’audit UI/UX | **OPEN** | Selezionare tranche e criteri nel presente backlog; report dettagliato in `frontend-ux-audit-2026-09-09/`. |
 | FA-017 | P2 | Sicurezza | Triage dei finding Bandit e hardening dei casi confermati | **READY / LOCAL** | Validazione URL HTTP(S) aggiunta; classificazione in [docs/security-bandit-triage.md](security-bandit-triage.md). Nessun high; audit npm/pip senza vulnerabilità note. |
 

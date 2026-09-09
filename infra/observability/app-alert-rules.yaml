@@ -333,3 +333,32 @@ spec:
             description: >-
               Da 5 minuti /metrics non risponde: l'app è giù, oppure il
               PodMonitor non la trova più.
+        # Storage guardrails: Loki has a 30d time limit, but filesystem-backed
+        # retention also needs a hard capacity signal before the 2Gi PVC or node
+        # root volume becomes the outage.
+        - alert: FinanceAlertLokiPVCFilling
+          expr: |
+            kubelet_volume_stats_used_bytes{namespace="monitoring",persistentvolumeclaim=~"loki.*"}
+              / kubelet_volume_stats_capacity_bytes{namespace="monitoring",persistentvolumeclaim=~"loki.*"}
+              > 0.80
+          for: 30m
+          labels:
+            severity: warning
+          annotations:
+            summary: "PVC Loki oltre l'80%"
+            description: >-
+              Il PVC filesystem di Loki sta raggiungendo il limite fisico; riduci
+              retention o aumenta lo storage prima che la scrittura dei log fallisca.
+
+        - alert: FinanceAlertNodeRootFilling
+          expr: |
+            (node_filesystem_avail_bytes{mountpoint="/",fstype!~"tmpfs|overlay"}
+              / node_filesystem_size_bytes{mountpoint="/",fstype!~"tmpfs|overlay"}) < 0.15
+          for: 30m
+          labels:
+            severity: critical
+          annotations:
+            summary: "filesystem root del nodo sotto il 15% libero"
+            description: >-
+              Il nodo condiviso sta esaurendo il disco; backup, database e
+              osservabilità possono degradare insieme.
