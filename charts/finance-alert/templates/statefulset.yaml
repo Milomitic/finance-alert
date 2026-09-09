@@ -26,6 +26,15 @@ spec:
       labels:
         {{- include "finance-alert.selectorLabels" . | nindent 8 }}
     spec:
+      # The app never talks to the Kubernetes API: no client library in
+      # pyproject.toml and no reference to KUBERNETES_SERVICE_*, a
+      # ServiceAccount or /var/run/secrets anywhere under app/. The health page
+      # reads Prometheus and Loki over plain HTTP services instead. So the
+      # projected token was a cluster credential mounted into an
+      # internet-facing process for no reason, and anything that read the
+      # filesystem got it for free. Verified BEFORE setting this, because the
+      # failure would be a 403 at runtime rather than a refusal to start.
+      automountServiceAccountToken: false
       # Pod-level security: run as the non-root app user baked into the image
       # (UID 10001). fsGroup makes the mounted PVC group-owned by 10001 so the
       # app can write app.db/logs — the volume is created as root by the
@@ -35,6 +44,14 @@ spec:
         runAsUser: 10001
         runAsGroup: 10001
         fsGroup: 10001
+        # Without this the pod runs seccomp "Unconfined" — every syscall the
+        # kernel offers. RuntimeDefault is containerd's own profile and blocks
+        # the ones a normal workload never issues. It is not free of risk: a
+        # blocked syscall surfaces as EPERM from inside the process, not as a
+        # scheduling error, so confirm the pod actually serves traffic after
+        # rolling it rather than trusting Running.
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: app
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
