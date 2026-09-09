@@ -19,32 +19,49 @@ from urllib3.util import Timeout
 _MAX_REDIRECTS = 3
 
 
+class ArticlePolicyError(ValueError):
+    """This module refused the URL. The remote was never asked, or its answer
+    was rejected for a reason of OURS.
+
+    It exists so a caller can tell "we blocked this" apart from "the source
+    failed", which the messages alone could not: every refusal here used to be
+    a bare `ValueError`, so a private-address block and a 403 from a paywall
+    arrived identical. That mattered once the policy shipped, because a filter
+    that quietly drops legitimate sources looks exactly like a provider going
+    down. Subclasses `ValueError` so existing `except ValueError` callers are
+    unaffected.
+
+    NOT raised for a non-2xx response or a timeout: those are the remote's
+    answer, not our refusal, and they stay a plain `ValueError` / `TimeoutError`.
+    """
+
+
 def _public_target(url: str) -> tuple[str, str, int, str, str]:
     if len(url) > 4096 or any(ord(c) <= 32 or ord(c) == 127 for c in url):
-        raise ValueError("Invalid article URL")
+        raise ArticlePolicyError("Invalid article URL")
     parts = urlsplit(url)
     if parts.scheme not in {"http", "https"} or not parts.hostname:
-        raise ValueError("Only HTTP(S) article URLs are allowed")
+        raise ArticlePolicyError("Only HTTP(S) article URLs are allowed")
     if parts.username is not None or parts.password is not None or "%" in parts.hostname:
-        raise ValueError("Credentials and scoped addresses are not allowed")
+        raise ArticlePolicyError("Credentials and scoped addresses are not allowed")
     host = parts.hostname.rstrip(".").encode("idna").decode("ascii")
     port = parts.port if parts.port is not None else (443 if parts.scheme == "https" else 80)
     if port != (443 if parts.scheme == "https" else 80):
-        raise ValueError("Non-standard article port")
+        raise ArticlePolicyError("Non-standard article port")
     addresses = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
     if not addresses:
-        raise ValueError("No address for article host")
+        raise ArticlePolicyError("No address for article host")
     for entry in addresses:
         address = ipaddress.ip_address(entry[4][0])
         if not address.is_global or address.is_reserved or address.is_multicast:
-            raise ValueError("Non-public article destination")
+            raise ArticlePolicyError("Non-public article destination")
         if isinstance(address, ipaddress.IPv6Address):
             if (
                 address.ipv4_mapped or address.sixtofour or address.teredo
                 or address in ipaddress.ip_network("64:ff9b::/96")
                 or address in ipaddress.ip_network("64:ff9b:1::/48")
             ):
-                raise ValueError("Transition addresses are not allowed")
+                raise ArticlePolicyError("Transition addresses are not allowed")
     path = parts.path or "/"
     if parts.query:
         path += "?" + parts.query
@@ -87,20 +104,20 @@ def fetch_public_text(url: str, *, max_bytes: int, timeout: float, user_agent: s
                 if response.status in {301, 302, 303, 307, 308}:
                     location = response.headers.get("Location")
                     if not location or hop == _MAX_REDIRECTS:
-                        raise ValueError("Article redirect limit")
+                        raise ArticlePolicyError("Article redirect limit")
                     next_url = urljoin(url, location)
                     if scheme == "https" and urlsplit(next_url).scheme != "https":
-                        raise ValueError("HTTPS downgrade")
+                        raise ArticlePolicyError("HTTPS downgrade")
                     url = next_url
                     continue
                 if response.status != 200:
                     raise ValueError("Article HTTP failure")
                 content_type = response.headers.get("Content-Type", "").lower()
                 if not (content_type.startswith("text/") or "application/xhtml+xml" in content_type):
-                    raise ValueError("Article is not text")
+                    raise ArticlePolicyError("Article is not text")
                 # Do not decompress attacker-controlled compressed responses.
                 if response.headers.get("Content-Encoding", "identity").lower() != "identity":
-                    raise ValueError("Unexpected compressed article")
+                    raise ArticlePolicyError("Unexpected compressed article")
                 chunks = bytearray()
                 while len(chunks) < max_bytes:
                     if time.monotonic() >= deadline:
@@ -112,4 +129,4 @@ def fetch_public_text(url: str, *, max_bytes: int, timeout: float, user_agent: s
                 return chunks.decode("utf-8", errors="replace")
             finally:
                 response.close()
-    raise ValueError("Article redirect limit")
+    raise ArticlePolicyError("Article redirect limit")

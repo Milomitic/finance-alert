@@ -215,6 +215,47 @@ spec:
               ultimi giorni. Su un universo di circa mille nomi questo non è
               un delisting, è la pipeline dei prezzi che non sta scrivendo.
 
+        # --- Our own filter turning into the outage -------------------------
+        # The news-body fetch is optional: every failure returns nothing and
+        # the extractor falls back to title+summary. That is the right design
+        # and it is also why the failure is invisible — a source WE refuse and
+        # a source that is DOWN both surface as "no body".
+        #
+        # It stopped being theoretical when the SSRF policy shipped on
+        # 2026-09-09. A guard that starts rejecting legitimate publishers (a
+        # CDN moving to a non-standard port, a new redirect chain, a resolver
+        # returning something the policy calls non-public) looks exactly like
+        # the publishers going down. Measured the day it shipped: 10 of 14
+        # hosts returned a body and all four failures were the sites' own
+        # 403/401/bot challenge, so the healthy value of `policy` is ~zero.
+        #
+        # Ratio, not a raw count, so it does not fire simply because the app
+        # got busier — with the volume floor beside it, because a ratio over
+        # three fetches an hour is noise. `cached`, `breaker`, `saturated` and
+        # `paywall_skip` are excluded: none of them asked the network, so
+        # including them would dilute the very share being measured.
+        - alert: FinanceAlertArticlePolicyRejecting
+          expr: |
+            (
+              sum(rate(finance_alert_article_fetch_total{outcome="policy"}[1h]))
+              /
+              sum(rate(finance_alert_article_fetch_total{outcome=~"ok|empty|policy|http|timeout|error"}[1h]))
+            ) > 0.2
+            and
+            sum(rate(finance_alert_article_fetch_total{outcome=~"ok|empty|policy|http|timeout|error"}[1h])) > 0.0028
+          for: 2h
+          labels:
+            severity: warning
+          annotations:
+            summary: "il filtro sugli articoli sta rifiutando oltre un quinto delle fonti"
+            description: >-
+              Più del 20% dei recuperi articolo viene bloccato dalla nostra
+              policy, non dalla fonte. Il valore sano è vicino a zero: quando
+              la policy è stata introdotta i fallimenti erano tutti 403/401 dei
+              siti, contati come 'http'. Se 'policy' sale è il nostro filtro
+              che ha iniziato a tagliare editori legittimi. Confronta le
+              etichette di finance_alert_article_fetch_total.
+
         # --- The backup you only find out about when you need it -------------
         # The backups run, and were restored end-to-end once (RUNBOOK-postgres-
         # dr.md, 2026-07-16 — more than most projects can say). What was

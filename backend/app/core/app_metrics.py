@@ -30,7 +30,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 from loguru import logger
-from prometheus_client import Gauge
+from prometheus_client import Counter, Gauge
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -124,6 +124,28 @@ CATALOG_STOCKS = Gauge(
 BASIS_BREAKS = Gauge(
     "finance_alert_basis_breaks",
     "Tickers with a price-basis discontinuity in stored OHLCV.",
+)
+
+# Why a body was or was not attached to a news item. The enrichment is
+# best-effort by design -- every caller must work when it returns nothing --
+# and that is exactly what made it unobservable: a source we BLOCK and a source
+# that is DOWN both surface as "no body", and the per-URL reason was logged at
+# DEBUG, which production never emits.
+#
+# The distinction is not academic. When the SSRF policy shipped (2026-09-09) the
+# only way to tell whether it had quietly cut off legitimate publishers was to
+# run a probe by hand against the live cache. Measured then: 10 of 14 hosts
+# returned a body, and all four failures were the sites' own 403/401/bot
+# challenge rather than the policy. This counter is so the next person does not
+# need the probe.
+#
+# `outcome` is a small closed set. Deliberately NOT labelled by host: that is
+# unbounded cardinality, and the per-host story is already told by the
+# circuit-breaker counters inside the fetcher.
+ARTICLE_FETCH = Counter(
+    "finance_alert_article_fetch_total",
+    "News article body fetches by outcome.",
+    ["outcome"],
 )
 
 

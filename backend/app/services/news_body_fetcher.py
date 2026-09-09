@@ -54,7 +54,8 @@ from urllib.parse import urlparse
 from loguru import logger
 from urllib3.exceptions import HTTPError
 
-from app.core.public_http import fetch_public_text
+from app.core.app_metrics import ARTICLE_FETCH
+from app.core.public_http import ArticlePolicyError, fetch_public_text
 
 _TIMEOUT = 5.0
 _MAX_BYTES = 200 * 1024  # 200 KB hard cap on body length
@@ -185,8 +186,13 @@ def fetch_article_body(url: str | None) -> str | None:
 
     Production callers should treat this as best-effort — the
     extractor must still work when None is returned. Errors are
-    logged at DEBUG level (high-volume; INFO would spam)."""
-    if not url or len(url) > 4096 or any(ord(c) <= 32 or ord(c) == 127 for c in url):
+    logged at DEBUG level (high-volume; INFO would spam), so the
+    `finance_alert_article_fetch_total` counter is what makes the
+    reason visible in production: every exit below records one."""
+    if not url:
+        return None
+    if len(url) > 4096 or any(ord(c) <= 32 or ord(c) == 127 for c in url):
+        ARTICLE_FETCH.labels(outcome="policy").inc()
         return None
 
     # Cache check first — articles don't mutate post-publication.
@@ -195,6 +201,7 @@ def fetch_article_body(url: str | None) -> str | None:
         cached = _BODY_CACHE.get(url)
         if cached is not None and (now - cached[0]) < _BODY_TTL:
             _BODY_CACHE.move_to_end(url)
+            ARTICLE_FETCH.labels(outcome="cached").inc()
             return cached[1]
         _BODY_CACHE.pop(url, None)
 
@@ -202,20 +209,30 @@ def fetch_article_body(url: str | None) -> str | None:
         parsed = urlparse(url)
         host = (parsed.hostname or "").lower().rstrip(".")
     except ValueError:
+        ARTICLE_FETCH.labels(outcome="policy").inc()
         return None
     if not host:
+        ARTICLE_FETCH.labels(outcome="policy").inc()
         return None
 
     # Skip known paywalled domains — fetching is just burning a
     # 5-second timeout for nothing.
     if host in _PAYWALL_HOSTS:
         _cache_body(url, None)
+        ARTICLE_FETCH.labels(outcome="paywall_skip").inc()
         return None
 
-    # Per-host circuit breaker.
+    # Per-host circuit breaker. Split from the slot check below because they
+    # mean opposite things: "this host keeps failing us" versus "we are at our
+    # own concurrency ceiling". Collapsed into one `or` they were the same
+    # silent None, which is the confusion this counter exists to end.
     with _CACHE_LOCK:
         blocked = _host_blocked(host)
-    if blocked or not _FETCH_SLOTS.acquire(blocking=False):
+    if blocked:
+        ARTICLE_FETCH.labels(outcome="breaker").inc()
+        return None
+    if not _FETCH_SLOTS.acquire(blocking=False):
+        ARTICLE_FETCH.labels(outcome="saturated").inc()
         return None
 
     try:
@@ -226,10 +243,24 @@ def fetch_article_body(url: str | None) -> str | None:
         with _CACHE_LOCK:
             _record_host_success(host)
         _cache_body(url, text or None)
+        ARTICLE_FETCH.labels(outcome="ok" if text else "empty").inc()
         return text or None
     except (HTTPError, OSError, ValueError) as exc:
+        # ArticlePolicyError before ValueError and TimeoutError before OSError:
+        # each is a subclass of the one after it, so the broad name would
+        # swallow the specific one and the counter would report the opposite of
+        # what happened.
+        if isinstance(exc, ArticlePolicyError):
+            outcome = "policy"
+        elif isinstance(exc, TimeoutError):
+            outcome = "timeout"
+        elif isinstance(exc, ValueError):
+            outcome = "http"
+        else:
+            outcome = "error"
+        ARTICLE_FETCH.labels(outcome=outcome).inc()
         # Exception messages may contain credentials/query strings from URLs.
-        logger.debug(f"[news_body] {host} fetch failed: {type(exc).__name__}")
+        logger.debug(f"[news_body] {host} fetch failed: {type(exc).__name__} ({outcome})")
         with _CACHE_LOCK:
             _record_host_failure(host)
         _cache_body(url, None)
