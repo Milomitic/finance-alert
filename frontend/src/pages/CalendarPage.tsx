@@ -6,6 +6,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 
 import type { CalendarEvent, MacroImportance } from "@/api/types";
 import {
@@ -103,19 +104,46 @@ function ViewToggle({
  * usually re-uses the cache for adjacent ranges. */
 
 export default function CalendarPage() {
-  // Cursor: any date inside the target period (month or week). Initialize
-  // to today so the page lands on the current one.
-  const [cursor, setCursor] = useState<Date>(() => new Date());
-  const [view, setView] = useState<CalendarView>("month");
-  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialDate = searchParams.get("date");
+  const parsedDate = initialDate ? new Date(`${initialDate}T12:00:00`) : new Date();
+  const initialView = searchParams.get("view");
+  const initialKind = searchParams.get("kind");
+  const initialImportance = searchParams.get("importance")?.split(",").filter(
+    (value): value is MacroImportance => value === "high" || value === "medium" || value === "low",
+  );
+  // Cursor and filters are initialized from the URL so calendar deep-links are
+  // reproducible after reload or sharing. Subsequent changes are serialized below.
+  const [cursor, setCursor] = useState<Date>(() =>
+    Number.isNaN(parsedDate.getTime()) ? new Date() : parsedDate,
+  );
+  const [view, setView] = useState<CalendarView>(
+    initialView === "week" ? "week" : "month",
+  );
+  const [selectedDate, setSelectedDate] = useState<string | null>(
+    searchParams.get("selected") || null,
+  );
 
   // Filters
-  const [kind, setKind] = useState<CalendarKindFilter>("all");
+  const [kind, setKind] = useState<CalendarKindFilter>(
+    initialKind === "earnings" || initialKind === "macro" ? initialKind : "all",
+  );
   const [importance, setImportance] = useState<Set<MacroImportance>>(
-    () => new Set(["high", "medium", "low"]),
+    () => new Set(initialImportance?.length ? initialImportance : ["high", "medium", "low"]),
   );
 
   const today = useMemo(() => new Date(), []);
+
+  useEffect(() => {
+    const next = new URLSearchParams(searchParams);
+    next.set("date", cursor.toISOString().slice(0, 10));
+    next.set("view", view);
+    if (kind === "all") next.delete("kind"); else next.set("kind", kind);
+    if (importance.size === 3) next.delete("importance");
+    else next.set("importance", Array.from(importance).sort().join(","));
+    if (selectedDate) next.set("selected", selectedDate); else next.delete("selected");
+    if (next.toString() !== searchParams.toString()) setSearchParams(next, { replace: true });
+  }, [cursor, view, kind, importance, selectedDate, searchParams, setSearchParams]);
 
   // Fetch range + nav metadata, adapted to the active view. Month view
   // spans the full 6-week grid (so adjacent-month edges still render);
@@ -375,4 +403,3 @@ export default function CalendarPage() {
     </div>
   );
 }
-
