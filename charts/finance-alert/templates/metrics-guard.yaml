@@ -1,0 +1,53 @@
+{{- if and .Values.ingress.enabled .Values.ingress.metricsGuard.enabled }}
+{{- if ne .Values.ingress.className "traefik" }}
+{{- fail "ingress.metricsGuard requires the Traefik ingress class and Middleware CRD" }}
+{{- end }}
+# Prometheus scrapes pods directly. Only loopback peers may use this router.
+# Do not trust forwarded headers or allow pod/node CIDRs at the public edge.
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: {{ include "finance-alert.fullname" . }}-metrics-private
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+  labels:
+    {{- include "finance-alert.labels" . | nindent 4 }}
+spec:
+  ipAllowList:
+    sourceRange:
+      - "127.0.0.1/32"
+      - "::1/128"
+---
+# Higher priority than the app's catch-all. Restricts /metrics and its children.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "finance-alert.fullname" . }}-metrics-private
+  labels:
+    {{- include "finance-alert.labels" . | nindent 4 }}
+  annotations:
+    {{- with omit .Values.ingress.annotations "cert-manager.io/cluster-issuer" "cert-manager.io/issuer" "traefik.ingress.kubernetes.io/router.middlewares" "traefik.ingress.kubernetes.io/router.priority" }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+    traefik.ingress.kubernetes.io/router.priority: "10000"
+    traefik.ingress.kubernetes.io/router.middlewares: {{ printf "%s-%s-metrics-private@kubernetescrd" .Release.Namespace (include "finance-alert.fullname" .) }}
+spec:
+  ingressClassName: traefik
+  rules:
+    - http:
+        paths:
+          - path: /metrics
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "finance-alert.fullname" . }}
+                port:
+                  number: {{ .Values.service.port }}
+      {{- if .Values.ingress.host }}
+      host: {{ .Values.ingress.host | quote }}
+      {{- end }}
+  {{- with .Values.ingress.tls }}
+  tls:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+{{- end }}

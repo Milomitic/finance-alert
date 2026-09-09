@@ -21,6 +21,14 @@ Sizing lives in `infra/observability/kube-prometheus-stack.values.yaml` and
 `loki-stack.values.yaml` (short retention, modest limits, 60s scrape, small
 `local-path` PVCs).
 
+## Public access boundary (verified 2026-09-09)
+
+Public HTTPS is reachable without an NSG source-IP restriction that protects the app.
+The dedicated /metrics Traefik router now applies an IPAllowList (loopback only),
+returning 403 to external clients. Prometheus uses the PodMonitor directly and
+still reports up=1. HTTP-01 uses port 80 and says nothing about protection on 443.
+Do not rely on the historical NSG descriptions below for application authorization.
+
 ## App metrics
 `backend/app/main.py` mounts `prometheus-fastapi-instrumentator` → `GET /metrics`
 (registered BEFORE the SPA catch-all). Prometheus discovers it via

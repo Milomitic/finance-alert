@@ -366,7 +366,8 @@ app = FastAPI(title="Finance Alert", version="0.1.0", lifespan=lifespan)
 # times/counts every HTTP request; expose() registers GET /metrics. It MUST be
 # registered here — BEFORE the SPA catch-all `/{full_path:path}` further down —
 # or the index.html fallback would shadow it. Prometheus scrapes it in-cluster
-# via the ClusterIP Service; the public ingress is IP-allowlisted at the NSG.
+# directly via the PodMonitor. Public HTTPS is reachable from the internet;
+# the dedicated /metrics ingress uses an IPAllowList to block public access.
 # The per-handler histogram's DEFAULT buckets are (0.1, 0.5, 1) and that made
 # every latency question unanswerable. Measured 2026-09-09: p95 came back as
 # exactly 1.000 for nine different handlers, which is not a latency at all — it

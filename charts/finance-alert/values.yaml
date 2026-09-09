@@ -46,6 +46,9 @@ ingress:
   # Traefik Middleware CRD and the local kind cluster has no ingress at all.
   # See templates/middleware-ratelimit.yaml for why these numbers and why
   # there is no concurrency cap beside them.
+  # Block public metrics; Prometheus uses the internal PodMonitor.
+  metricsGuard:
+    enabled: false
   rateLimit:
     enabled: false
     average: 50

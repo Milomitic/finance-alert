@@ -62,7 +62,7 @@ dettaglio ricche e un motore di alert. Funzioni principali:
 |---|---|---|
 | Dove gira | PC dell'utente (Windows 11) | VM Ampere A1 su OCI Always-Free |
 | DB | SQLite (`./backend/data/app.db`) | **PostgreSQL** (CloudNativePG su k3s) |
-| Esposizione | nessuna (LAN opzionale su `0.0.0.0`) | **HTTPS pubblico** su `80-225-80-141.sslip.io`, :443 IP-allowlistato via NSG |
+| Esposizione | nessuna (LAN opzionale su `0.0.0.0`) | **HTTPS pubblico** su `80-225-80-141.sslip.io`, :443 pubblica; /metrics bloccato all'ingress |
 | Orchestrazione | processo singolo / `just up` | k3s + Helm + ArgoCD (GitOps) |
 
 Lo stesso codice serve entrambi: il DB è astratto via SQLAlchemy con un helper
@@ -167,7 +167,7 @@ Stessa immagine, stesso codice; cambiano DB, esposizione e chi lo tiene in piedi
 ```
                          Internet
                             │
-   :80  0.0.0.0/0 ──────────┤   :443  solo IP allowlistato (NSG)
+   :80  0.0.0.0/0 ──────────┤   :443  pubblico; /metrics filtrato
    SOLO challenge ACME      │   ← qui vive tutto il resto
    (404 su tutto il resto)  │
                     ┌───────▼────────────┐
@@ -599,7 +599,7 @@ cluster (:6443) è NSG-allowlistato al solo IP del proprietario.
 
 | Layer | Cosa |
 |---|---|
-| **Rete** | NSG allowlista l'IP del proprietario su :22/:443/:6443. **:80 è aperta a 0.0.0.0/0** — necessaria per il challenge ACME (i validator Let's Encrypt hanno IP rotanti) e serve **solo quello**: app e Grafana sono `websecure`-only, quindi `http://<ip>/qualunque-cosa` → 404. ⚠️ **Ogni nuovo Ingress deve essere websecure-only, o è pubblico all'istante** (è già successo a Grafana). |
+| **Rete** | Accesso amministrativo :22/:6443 ristretto; **:443 pubblica** (verificato 2026-09-09). /metrics ha una route IPAllowList dedicata; lo scrape interno usa il PodMonitor. **:80 è aperta a 0.0.0.0/0** — necessaria per il challenge ACME (i validator Let's Encrypt hanno IP rotanti) e serve **solo quello**: app e Grafana sono `websecure`-only, quindi `http://<ip>/qualunque-cosa` → 404. ⚠️ **Ogni nuovo Ingress deve essere websecure-only, o è pubblico all'istante** (è già successo a Grafana). |
 | **Trasporto** | TLS Let's Encrypt su `80-225-80-141.sslip.io`, rinnovo automatico via cert-manager. |
 | **App↔DB** | TLS **imposto**: `pg_hba` = `hostssl … scram-sha-256` + `hostnossl … reject`. Provato: `sslmode=disable` → `FATAL … no encryption`. |
 | **Privilegi DB** | L'app usa `fa_app`, **non-superuser** (no CREATEDB/CREATEROLE), owner del solo DB `finance_alert`. Il superuser Postgres non ha login esterno. |

@@ -78,6 +78,8 @@ ingress:
         - 80-225-80-141.sslip.io
       secretName: finance-alert-tls
   # ON in the cloud: this is the only deployment reachable from the internet.
+  metricsGuard:
+    enabled: true
   rateLimit:
     enabled: true
 
