@@ -11,9 +11,18 @@ metadata:
   name: {{ include "finance-alert.fullname" . }}
   labels:
     {{- include "finance-alert.labels" . | nindent 4 }}
-  {{- with .Values.ingress.annotations }}
+  {{- if or .Values.ingress.annotations .Values.ingress.rateLimit.enabled }}
   annotations:
+    {{- with .Values.ingress.annotations }}
     {{- toYaml . | nindent 4 }}
+    {{- end }}
+    {{- if .Values.ingress.rateLimit.enabled }}
+    # Traefik addresses a Middleware CRD as <namespace>-<name>@kubernetescrd.
+    # Built here rather than hand-written in values so the reference cannot
+    # drift from the object: a typo does not error, it silently applies NO
+    # middleware and the ingress serves unlimited as before.
+    traefik.ingress.kubernetes.io/router.middlewares: {{ printf "%s-%s-ratelimit@kubernetescrd" .Release.Namespace (include "finance-alert.fullname" .) }}
+    {{- end }}
   {{- end }}
 spec:
   {{- if .Values.ingress.className }}

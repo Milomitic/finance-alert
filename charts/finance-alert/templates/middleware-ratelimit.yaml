@@ -1,0 +1,42 @@
+{{- /*
+Per-source-IP request ceiling at the edge.
+
+The app is one uvicorn process on one shared 2-vCPU node, published on a public
+address with no limit of any kind in front of it: `kubectl get middleware -A`
+returned "No resources found" the day this was written. Any script could open
+the tap as wide as it liked, and the first thing to fall over would not be the
+app alone -- Postgres, Prometheus, Loki and Grafana are co-tenants on the same
+node.
+
+The numbers are set for a HUMAN using the app, not for a benchmark. A stock
+detail page fans out to roughly twenty API calls on load, so the burst has to
+absorb a page open without ever showing the owner a 429; sustained traffic well
+under a request per second is what real browsing looks like. `average: 50` is
+therefore about two orders of magnitude above normal use and still two orders
+of magnitude below a flood, which is the only band worth defending on a single
+node. Being stricter would buy nothing against an attacker and would eventually
+cost the owner a spurious 429.
+
+`inFlightReq` is deliberately NOT used beside it: the health page holds a
+Server-Sent Events connection open for its whole life, so a concurrency cap
+would count every open tab as a permanent occupant and lock the owner out of
+their own dashboard.
+
+Traefik 3.7 groups by client IP by default and Traefik here is the first hop
+(no proxy in front), so the remote address IS the client and no ipStrategy
+depth is needed. Setting one would silently collapse every visitor into a
+single bucket, turning a per-client limit into a global one.
+*/ -}}
+{{- if and .Values.ingress.enabled .Values.ingress.rateLimit.enabled }}
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: {{ include "finance-alert.fullname" . }}-ratelimit
+  labels:
+    {{- include "finance-alert.labels" . | nindent 4 }}
+spec:
+  rateLimit:
+    average: {{ .Values.ingress.rateLimit.average }}
+    burst: {{ .Values.ingress.rateLimit.burst }}
+    period: {{ .Values.ingress.rateLimit.period | quote }}
+{{- end }}

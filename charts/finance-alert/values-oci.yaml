@@ -77,6 +77,9 @@ ingress:
     - hosts:
         - 80-225-80-141.sslip.io
       secretName: finance-alert-tls
+  # ON in the cloud: this is the only deployment reachable from the internet.
+  rateLimit:
+    enabled: true
 
 # The Secret is NOT managed by the chart in the cloud: ArgoCD renders from git
 # only, and committing key material is out of the question. A durable Secret

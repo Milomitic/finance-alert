@@ -42,6 +42,15 @@ ingress:
   pathType: Prefix
   annotations: {}
   tls: []
+  # Per-client-IP ceiling at the edge, off by default because it needs the
+  # Traefik Middleware CRD and the local kind cluster has no ingress at all.
+  # See templates/middleware-ratelimit.yaml for why these numbers and why
+  # there is no concurrency cap beside them.
+  rateLimit:
+    enabled: false
+    average: 50
+    burst: 100
+    period: 1s
 
 # Probe tuning. The app runs `alembic upgrade head` before uvicorn binds, so
 # readiness must tolerate a slow first boot (fresh DB migration).
