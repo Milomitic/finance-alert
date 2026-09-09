@@ -471,6 +471,46 @@ per-signal push if `telegram_push_signals` is enabled, and health-transition
 alerts (`telegram_notify_health`, default True, max one per state per 6h). To
 stop them, remove the two keys from `finance-alert-prod` and restart the pod.
 
+## Endpoint latency: what it actually is, and why it was unreadable (2026-09-09)
+
+The audit's "other slow paths" item guessed at SQL sessions around fundamentals
+and repeated ETF sparkline queries. Measuring first gave a different answer,
+and the first thing it found was that the measurement was broken.
+
+**Every p95 read exactly 1.000, for nine different handlers.** That is not a
+latency. `http_request_duration_seconds` — the only latency series carrying a
+`handler` label — shipped with the library's default buckets `(0.1, 0.5, 1)`,
+so any quantile above one second falls in `+Inf` and `histogram_quantile`
+returns the highest finite edge. It looks like a number and it is a ceiling.
+
+The real figures, from `sum/count` over 24h, which no bucket can distort:
+
+| handler | media |
+|---|---|
+| /api/stocks/quotes | 4.57 s |
+| /api/stocks/{ticker}/multi-tf-kpis | 2.57 s |
+| /api/stocks/{ticker}/fundamentals | 2.10 s |
+| /api/dashboard/live-assets | 1.68 s |
+| /api/stocks/{ticker}/quote | 1.17 s |
+| /api/stocks/{ticker}/detail | 0.56 s |
+
+So the slow paths are the QUOTE paths, dominated by the upstream this file
+already documents at 43-50s under Yahoo rate limiting — not the SQL sessions
+the audit expected. The buckets are now `(0.1, 0.5, 1, 2.5, 5, 10, 30, 60)` and
+`tests/test_latency_buckets.py` pins the ceiling.
+
+⚠️ **The sibling metric is a decoy.** `http_request_duration_highr_seconds` has
+had fine buckets out to 60s all along, which is why nothing looked wrong at a
+glance — but it carries NO handler label, so it can say the app is slow and
+never which endpoint. Splitting resolution that way is the helper's design.
+Read `..._seconds` for per-endpoint work and `..._highr_seconds` for the whole
+app, and never assume the fine buckets you found belong to the series you are
+grouping by.
+
+Two readings that are correct and look alarming: the SSE handlers average 432 s
+because that is a connection's LIFETIME, not a wait; and `/api/health` is 18k
+of the ~20k daily requests because it is the liveness probe.
+
 ## Ingress rate limit: 50/s, burst 100 — and how to test one (2026-09-09)
 
 Until this date `kubectl get middleware -A` returned **No resources found**:

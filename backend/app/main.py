@@ -10,7 +10,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from loguru import logger
-from prometheus_fastapi_instrumentator import Instrumentator
+from prometheus_fastapi_instrumentator import Instrumentator, metrics
 from starlette.responses import JSONResponse
 
 from app.api import alerts as alerts_router
@@ -367,7 +367,29 @@ app = FastAPI(title="Finance Alert", version="0.1.0", lifespan=lifespan)
 # registered here — BEFORE the SPA catch-all `/{full_path:path}` further down —
 # or the index.html fallback would shadow it. Prometheus scrapes it in-cluster
 # via the ClusterIP Service; the public ingress is IP-allowlisted at the NSG.
-Instrumentator().instrument(app).expose(app, endpoint="/metrics", include_in_schema=False)
+# The per-handler histogram's DEFAULT buckets are (0.1, 0.5, 1) and that made
+# every latency question unanswerable. Measured 2026-09-09: p95 came back as
+# exactly 1.000 for nine different handlers, which is not a latency at all — it
+# is the highest finite bucket edge, returned because the quantile fell in the
+# +Inf bucket. Meanwhile the true means were 4.6s for /api/stocks/quotes, 2.6s
+# for multi-tf-kpis and 2.1s for fundamentals, every one of them above the last
+# measurable boundary.
+#
+# The library's OTHER histogram, `http_request_duration_highr_seconds`, already
+# has fine buckets out to 60s but carries no handler label, so it can say the
+# app is slow and never which endpoint. Splitting resolution that way is the
+# helper's design, not a mistake, but it leaves per-endpoint percentiles blind
+# above one second — the only range this app actually lives in, since quotes
+# depend on an upstream that has been measured at 43-50s under rate limiting.
+#
+# 30 and 60 exist to bound that documented worst case. The cost is ~2x the
+# series in one metric family, which is nothing against a Prometheus already
+# capped at 2500MB.
+Instrumentator().add(
+    metrics.default(
+        latency_lowr_buckets=(0.1, 0.5, 1, 2.5, 5, 10, 30, 60),
+    )
+).instrument(app).expose(app, endpoint="/metrics", include_in_schema=False)
 
 # Compress every response over 1KB: :8000 serves both the SPA bundle (~1MB of
 # JS) and fat JSON payloads (market-summary ~264KB, stock detail ~1.4MB) that
