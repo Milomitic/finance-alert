@@ -17,7 +17,7 @@ measured.
 |---|---|---|
 | Base backups | `s3://finance-alert-backups/` (private OCI bucket, versioned) | `ScheduledBackup pg-daily` @ 02:00 + on demand |
 | WAL segments | same bucket, gzip | continuous (`archive_command`) |
-| Retention | `spec.backup.retentionPolicy: 7d` | barman prunes |
+| Retention | `spec.backup.retentionPolicy: 30d` | barman prunes |
 
 Together they give **point-in-time recovery**: any instant covered by a base
 backup plus the WAL that follows it.

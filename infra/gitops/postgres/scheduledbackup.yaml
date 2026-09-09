@@ -1,6 +1,6 @@
 # Daily base backup of the finance-alert Postgres to OCI Object Storage (M7-P2).
 # WAL is archived continuously (spec.backup on the Cluster); a periodic base
-# backup bounds recovery time and lets old WAL be pruned (retentionPolicy 7d).
+# backup bounds recovery time and lets old WAL be pruned (retentionPolicy 30d).
 apiVersion: postgresql.cnpg.io/v1
 kind: ScheduledBackup
 metadata:

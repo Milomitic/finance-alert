@@ -92,11 +92,11 @@ spec:
       owner: fa_app
 
   # Point-in-time recovery: continuous WAL archiving + base backups to OCI
-  # Object Storage via its S3-compatible API (barman-cloud). Credentials live in
-  # the pg-wal-s3 Secret — an OCI Customer Secret Key created out-of-band, NEVER
-  # in git. OCI's S3 endpoint is per-tenancy-namespace (axaqdeicu0wx) + region.
+  # Object Storage via its S3-compatible API (barman-cloud). The in-tree
+  # barmanObjectStore is kept operational until the Barman Cloud Plugin is
+  # installed and the atomic migration is applied (required before CNPG 1.31).
   backup:
-    retentionPolicy: "7d"
+    retentionPolicy: "30d"
     barmanObjectStore:
       destinationPath: s3://finance-alert-backups/
       endpointURL: https://axaqdeicu0wx.compat.objectstorage.eu-milan-1.oraclecloud.com
