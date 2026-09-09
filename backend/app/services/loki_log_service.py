@@ -137,27 +137,55 @@ def _loki_url() -> str:
     return (getattr(settings, "loki_url", None) or _DEFAULT_LOKI).rstrip("/")
 
 
-# logfmt (`level=error`), bracketed (`[ERROR]`), JSON (`"level":"info"`) and the
-# bare word. Ordered widest-LAST so a structured field wins over the same word
-# appearing inside a message.
+# Terminal colour codes, stripped before anything is matched. Traefik wraps its
+# level in them, so a pattern that ignores this reads `\x1b[31mERR\x1b[0m` as
+# ordinary text and calls a real error INFO. Measured on the live instance,
+# where every single Traefik error was mislabelled that way.
+_ANSI = re.compile(r"\x1b\[[0-9;]*m")
+
+# One entry per format actually observed in this cluster, widest LAST so a
+# structured field always beats the same word appearing inside a message.
+#
+#   JSON      CNPG, Grafana, ArgoCD     {"level":"error", ...}
+#   logfmt    Prometheus, Loki          level=ERROR ...
+#   klog      cert-manager, Traefik     E0909 08:19:33.081435  1 util.go:328]
+#   bracket   assorted                  [ERROR]
+#   bare      last resort               ... ERR ...
+#
+# klog is the one that is easy to miss: Kubernetes client libraries encode the
+# level as a SINGLE LEADING LETTER before a date, so nothing in the line spells
+# the word out. Every cert-manager error arrived as INFO until this was added.
 _LEVEL_PATTERNS = (
     re.compile(r'"level"\s*:\s*"(\w+)"', re.I),
     re.compile(r"\blevel=([A-Za-z]+)", re.I),
-    re.compile(r"\[(TRACE|DEBUG|INFO|WARN|WARNING|ERROR|FATAL|CRITICAL)\]", re.I),
-    re.compile(r"\b(TRACE|DEBUG|INFO|WARN|WARNING|ERROR|FATAL|CRITICAL)\b"),
+    re.compile(r"^([EWIFD])\d{4}\s"),
+    re.compile(
+        r"\[(TRACE|TRC|DEBUG|DBG|INFO|INF|WARN|WRN|WARNING|ERROR|ERR|FATAL|CRITICAL)\]",
+        re.I,
+    ),
+    re.compile(
+        r"\b(TRACE|TRC|DEBUG|DBG|INFO|INF|WARN|WRN|WARNING|ERROR|ERR|FATAL|CRITICAL)\b"
+    ),
 )
 
 _LEVEL_MAP = {
+    # spelled out
     "TRACE": "DEBUG", "DEBUG": "DEBUG", "INFO": "INFO", "INFORMATION": "INFO",
     "NOTICE": "INFO", "WARN": "WARNING", "WARNING": "WARNING",
-    "ERROR": "ERROR", "ERR": "ERROR", "FATAL": "CRITICAL",
-    "CRITICAL": "CRITICAL", "PANIC": "CRITICAL",
+    "ERROR": "ERROR", "FATAL": "CRITICAL", "CRITICAL": "CRITICAL",
+    "PANIC": "CRITICAL",
+    # three-letter forms (Traefik / zerolog)
+    "TRC": "DEBUG", "DBG": "DEBUG", "INF": "INFO", "WRN": "WARNING",
+    "ERR": "ERROR",
+    # klog single letters
+    "E": "ERROR", "W": "WARNING", "I": "INFO", "F": "CRITICAL", "D": "DEBUG",
 }
 
 
 def _parse_level(line: str) -> str:
     """Best-effort level. INFO when nothing is recognisable — see the module
     docstring for why a caller must not read that as "not an error"."""
+    line = _ANSI.sub("", line)
     for pattern in _LEVEL_PATTERNS:
         m = pattern.search(line)
         if m:

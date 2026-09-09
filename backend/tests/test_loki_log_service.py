@@ -102,6 +102,27 @@ class TestLevelParsing:
     def test_it_recognises_the_formats_these_components_use(self, line, expected):
         assert loki._parse_level(line) == expected
 
+    def test_ansi_colour_codes_do_not_hide_the_level(self):
+        # Traefik wraps its level in terminal colours. Every one of its errors
+        # was arriving as INFO until the codes were stripped first — found by
+        # reading the live logs this feature had just made visible.
+        line = "[90m2026-09-09T08:41:49Z[0m [31mERR[0m error=x"
+        assert loki._parse_level(line) == "ERROR"
+
+    @pytest.mark.parametrize(
+        "line,expected",
+        [
+            ("E0909 08:19:33.081435       1 util.go:328] OnDelete", "ERROR"),
+            ("W0909 08:19:33.0       1 x.go:1] attenzione", "WARNING"),
+            ("I0909 08:19:33.0       1 x.go:1] normale", "INFO"),
+        ],
+    )
+    def test_klog_encodes_the_level_as_one_leading_letter(self, line, expected):
+        # cert-manager and Traefik's Kubernetes client both use this. Nothing
+        # in the line spells the word, so a word-matching parser reads every
+        # error as INFO — which is what it did.
+        assert loki._parse_level(line) == expected
+
     def test_an_unrecognisable_line_is_INFO(self):
         # Documented fallback. It is exactly why the UI must not open an infra
         # source filtered at WARNING: an unclassified error would be hidden.

@@ -19,8 +19,14 @@ metadata:
     {{- if .Values.ingress.rateLimit.enabled }}
     # Traefik addresses a Middleware CRD as <namespace>-<name>@kubernetescrd.
     # Built here rather than hand-written in values so the reference cannot
-    # drift from the object: a typo does not error, it silently applies NO
-    # middleware and the ingress serves unlimited as before.
+    # drift from the object.
+    #
+    # What a dangling reference actually does, observed on 2026-09-09 in the
+    # window between ArgoCD applying this annotation and creating the object:
+    # Traefik logs `ERR error="middleware ... does not exist"` and SERVES THE
+    # REQUEST ANYWAY, unlimited. So the error is real but it is only in the
+    # log, and until the infra log panel existed nobody was reading it. A typo
+    # here costs a rate limit that silently is not there.
     traefik.ingress.kubernetes.io/router.middlewares: {{ printf "%s-%s-ratelimit@kubernetescrd" .Release.Namespace (include "finance-alert.fullname" .) }}
     {{- end }}
   {{- end }}
