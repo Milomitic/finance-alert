@@ -38,6 +38,8 @@ Questo file è il backlog operativo canonico. Ogni nuova attività deve avere un
 
 | FA-018 | P2 | Accessibilita | Aggiungere descrizione accessibile al dialog degli alert prezzo | **READY / LOCAL** | `PriceAlertDialog` espone ora `DialogDescription` screen-reader-only; il warning Radix di descrizione mancante e stato corretto. |
 
+| FA-019 | P0 | Release | Push e sincronizzazione cloud dei commit locali | **BLOCKED** | Il codice locale è pronto; push e CD non sono eseguibili finché l’auto-review non rimuove il blocco usage limit. |
+
 ## Ordine operativo
 
 1. FA-002: push, sync Argo e verifica retention effettiva a 30 giorni.
@@ -47,10 +49,11 @@ Questo file è il backlog operativo canonico. Ogni nuova attività deve avere un
 5. FA-007 e FA-008: RUM reale e pulizia lint.
 6. FA-009–FA-013: tranche UX ad alto impatto.
 7. FA-014–FA-018: sessioni, storage, triage sicurezza, accessibilita e roadmap prodotto.
+8. FA-019: riprovare push/CD quando il blocco auto-review è rimosso.
 
 ## Vincoli e fatti da non confondere
 
 - Il cluster usa ancora CNPG **1.30.0** e backup legacy `barmanObjectStore`; gli ultimi backup osservati sono completati.
-- I commit locali non ancora sincronizzati su `origin/cloud` includono `cae2986`, `d5d32de`, `3697899`, `af4ec64`, `4ea9447`, `e2a3c88`, `79e30ff` e `c5d3e8b`; la produzione contiene solo il fix metrics `cb524d5`.
+- I commit locali non ancora sincronizzati su `origin/cloud` includono `cae2986`, `d5d32de`, `3697899`, `af4ec64`, `4ea9447`, `e2a3c88`, `79e30ff`, `c5d3e8b`, `832c7dd` e `73e6d5d`; la produzione contiene solo il fix metrics `cb524d5`.
 - I manifest plugin sono ora preparati nel repository locale, ma non applicati al cluster.
 - Il Python globale non contiene le dipendenze backend: usare `uv run --project backend pytest`.
