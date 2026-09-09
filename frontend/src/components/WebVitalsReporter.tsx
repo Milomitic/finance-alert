@@ -1,7 +1,6 @@
 import { useEffect } from "react";
 import { useLocation } from "react-router-dom";
 
-const VITALS = ["largest-contentful-paint", "layout-shift", "event"] as const;
 type VitalMetric = "LCP" | "INP" | "CLS";
 
 function report(metric: VitalMetric, value: number, route: string): void {
@@ -29,7 +28,7 @@ export function WebVitalsReporter() {
     let lcp: number | null = null;
     let inp: number | null = null;
     let cls = 0;
-    const observe = (type: (typeof VITALS)[number], callback: (entry: PerformanceEntry) => void) => {
+    const observe = (type: "largest-contentful-paint" | "layout-shift" | "event", callback: (entry: PerformanceEntry) => void) => {
       if (!(PerformanceObserver as typeof PerformanceObserver & { supportedEntryTypes?: string[] }).supportedEntryTypes?.includes(type)) return;
       const observer = new PerformanceObserver((list) => list.getEntries().forEach(callback));
       observer.observe({ type, buffered: true } as PerformanceObserverInit);
@@ -58,3 +57,5 @@ export function WebVitalsReporter() {
   }, [pathname]);
   return null;
 }
+
+
