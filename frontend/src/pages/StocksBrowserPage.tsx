@@ -26,6 +26,7 @@ import {
   type FiltersState,
 } from "@/components/stocks/StockFiltersCard";
 import { useMarketSummary } from "@/hooks/useMarketSummary";
+import { useNowTick } from "@/hooks/useNowTick";
 
 /** Allowed page sizes shown in the dropdown. 25 / 50 / 100 / 200. */
 const PAGE_SIZES = [25, 50, 100, 200] as const;
@@ -122,11 +123,11 @@ const METRICS_STALE_MS = 26 * 60 * 60 * 1000;
  *  as-of of every stock_metrics row (one computed_at per refresh). Turns
  *  amber when older than the stale threshold. Hidden when the backend has
  *  no metrics yet (fresh install / pre-scan). */
-function MetricsAsOf({ iso }: { iso: string | null | undefined }) {
+function MetricsAsOf({ iso, now }: { iso: string | null | undefined; now: number }) {
   if (!iso) return null;
   const dt = new Date(iso);
   if (Number.isNaN(dt.getTime())) return null;
-  const stale = Date.now() - dt.getTime() > METRICS_STALE_MS;
+  const stale = now - dt.getTime() > METRICS_STALE_MS;
   const time = dt.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" });
   const sameDay = dt.toDateString() === new Date().toDateString();
   const label = sameDay
@@ -190,6 +191,7 @@ function PaginationStrip({
 }
 
 export default function StocksBrowserPage() {
+  const now = useNowTick();
   const [searchParams, setSearchParams] = useSearchParams();
   // Page index (0-based) initialized from the URL so back-nav / shared links
   // land on the same page instead of silently resetting to page 1.
@@ -469,7 +471,7 @@ export default function StocksBrowserPage() {
             total={total}
             isColumnVisible={isColumnVisible}
           />
-          <MetricsAsOf iso={searchQ.data?.metrics_computed_at} />
+          <MetricsAsOf iso={searchQ.data?.metrics_computed_at} now={now} />
         </div>
         <PaginationStrip
           page={page}

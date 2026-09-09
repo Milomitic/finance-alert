@@ -1,5 +1,5 @@
 import { useIsFetching, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { setFirstPaintActive } from "@/lib/firstPaint";
 import { cn } from "@/lib/utils";
@@ -82,7 +82,7 @@ export function FirstPaintGate({
   // Stays mounted for one fade after `open` flips, so the overlay can fade OUT
   // rather than vanish between two frames.
   const [overlayMounted, setOverlayMounted] = useState(!warm);
-  const startedAt = useRef(Date.now());
+  const [startedAt] = useState(() => Date.now());
   // Highest number of in-flight first-loads seen so far. This is the
   // denominator: it can only grow, so the ratio never walks backwards when a
   // late panel mounts and adds a query of its own.
@@ -105,7 +105,7 @@ export function FirstPaintGate({
   // opens, so nothing keeps ticking behind a page the reader is using.
   useEffect(() => {
     if (open) return;
-    const id = setInterval(() => setElapsed(Date.now() - startedAt.current), 80);
+    const id = setInterval(() => setElapsed(Date.now() - startedAt), 80);
     return () => clearInterval(id);
   }, [open]);
 
@@ -117,7 +117,7 @@ export function FirstPaintGate({
 
   useEffect(() => {
     if (open || pending !== 0) return;
-    const wait = Math.max(0, minShowMs - (Date.now() - startedAt.current));
+    const wait = Math.max(0, minShowMs - (Date.now() - startedAt));
     const t = setTimeout(() => setOpen(true), wait);
     return () => clearTimeout(t);
   }, [open, pending, minShowMs]);

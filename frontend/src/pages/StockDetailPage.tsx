@@ -21,6 +21,7 @@ import {
   useUpdatePriceAlert,
 } from "@/hooks/useStockPriceAlerts";
 import { useLiveQuote } from "@/hooks/useLiveQuote";
+import { useNowTick } from "@/hooks/useNowTick";
 import { useStockDetail } from "@/hooks/useStockDetail";
 import { useStockDrawings } from "@/hooks/useStockDrawings";
 import { AnalystTargetCard } from "@/components/stock/AnalystTargetCard";
@@ -58,6 +59,7 @@ import { StockTechnicalCard } from "@/components/stock/StockTechnicalCard";
 import { TechnicalKpiCard } from "@/components/stock/TechnicalKpiCard";
 
 export default function StockDetailPage() {
+  const now = useNowTick();
   const { ticker = "" } = useParams<{ ticker: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
   // v2 timeframe vocabulary: default to 1d (was "1y" range). Backend
@@ -90,10 +92,10 @@ export default function StockDetailPage() {
     if (!last?.date) return null;
     const lastMs = new Date(last.date).getTime();
     if (!Number.isFinite(lastMs)) return null;
-    const ageDays = (Date.now() - lastMs) / 86_400_000;
+    const ageDays = (now - lastMs) / 86_400_000;
     if (ageDays <= 3) return null;
     return new Date(lastMs).toLocaleDateString("it-IT", { day: "numeric", month: "short" });
-  }, [mergedOhlcv, range]);
+  }, [mergedOhlcv, range, now]);
   // Extend the backend (EOD) indicator series with a live tail so EMA / BB /
   // RSI / MACD reach the same in-session candle the chart shows. Patches only
   // the last point — history is left exactly as the backend computed it.

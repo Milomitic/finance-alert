@@ -8,6 +8,7 @@ import { StockLogo } from "@/components/dashboard/StockLogo";
 import { Card, CardContent } from "@/components/ui/card";
 import { FlashValue } from "@/components/ui/FlashValue";
 import { useLiveQuote } from "@/hooks/useLiveQuote";
+import { useNowTick } from "@/hooks/useNowTick";
 import { getStockFlagCode } from "@/lib/stockMeta";
 import { cn } from "@/lib/utils";
 
@@ -85,6 +86,7 @@ export function StockHeader({ stock, kpis, ohlcv }: Props) {
   // when it errored (e.g. yfinance breaker open), or when the live price
   // isn't available (e.g. delisted ticker).
   const live = useLiveQuote(stock.ticker);
+  const now = useNowTick();
   const liveOk = live.data && live.data.price != null && live.data.error == null;
   const isMarketOpen = liveOk && live.data!.market_state === "OPEN";
   // US pre-market: the live price is a pre-open quote and `change_pct` is the
@@ -101,7 +103,7 @@ export function StockHeader({ stock, kpis, ohlcv }: Props) {
   const displayPrice = liveOk ? live.data!.price! : kpis.last_close;
   const change = liveOk ? (live.data!.change_pct ?? null) : kpis.change_pct;
   const changeAbs = liveOk ? live.data!.change_abs : null;
-  const liveAge = liveOk ? Date.now() / 1000 - live.data!.fetched_at : null;
+  const liveAge = liveOk ? now / 1000 - live.data!.fetched_at : null;
 
   // Tone: stripe on left + text accent. Card background stays neutral
   // (`bg-card`) so only the SVG sparkline's area gradient colors the

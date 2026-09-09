@@ -1,6 +1,7 @@
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Radar, CheckCircle2, XCircle, Loader2, Bell } from "lucide-react";
 import type { RecentScan } from "@/api/platformHealth";
+import { useNowTick } from "@/hooks/useNowTick";
 
 type Props = { scans: RecentScan[] };
 
@@ -37,10 +38,11 @@ function fmtDate(iso: string | null): string {
 }
 
 export default function ScansCard({ scans }: Props) {
+  const now = useNowTick();
   const last = scans[0];
   const last24h = scans.filter((s) => {
     if (!s.completed_at) return false;
-    return Date.now() - new Date(s.completed_at).getTime() < 86400_000;
+    return now - new Date(s.completed_at).getTime() < 86400_000;
   });
   const successRate24h =
     last24h.length > 0
