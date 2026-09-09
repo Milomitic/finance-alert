@@ -39,6 +39,7 @@ Questo file è il backlog operativo canonico. Ogni nuova attività deve avere un
 | FA-020 | P1 | Accessibilita | Lingua del documento, link di salto, nome del logout e titolo per rotta | **DONE / PROD** | `lang="it"`, link "Salta al contenuto" primo elemento focalizzabile, label logout `sr-only` e `document.title` derivato da `NAV`; 7 test dedicati, suite frontend 290 pass; immagine `42693fb` verificata in produzione. |
 | FA-018 | P2 | Accessibilita | Aggiungere descrizione accessibile al dialog degli alert prezzo | **DONE / PROD** | `PriceAlertDialog` espone `DialogDescription` screen-reader-only; warning Radix corretto, codice deployato e suite frontend verde. |
 | FA-019 | P0 | Release | Push e sincronizzazione cloud dei commit locali | **DONE / PROD** | Push verificato; CI 34366785799 completata con tutti i job verdi, Argo `Synced/Healthy`, StatefulSet sull’immagine `42693fb1b09195be96065cfdc1bda0be176c014a`, health esterno 200 e `/metrics` esterno 403. |
+| FA-021 | P2 | GitOps | Eliminare lo stato Argo `OutOfSync` del Cluster CNPG quando il diff effettivo è vuoto | **OPEN** | `postgres-cluster` è `Healthy` ma segnala `OutOfSync` solo su `Cluster/pg`; `argocd app diff --core` non produce diff. Va isolato il campo gestito dall’operatore e configurato un ignoreDifferences mirato, senza nascondere modifiche desiderate. |
 
 ## Ordine operativo
 
