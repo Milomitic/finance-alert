@@ -257,7 +257,6 @@ export default function StocksBrowserPage() {
       return;
     }
     setPage(0);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q, state, sortBy, sortDir, pageSize]);
 
   // Persist state to URL when it changes (for shareable links). The page

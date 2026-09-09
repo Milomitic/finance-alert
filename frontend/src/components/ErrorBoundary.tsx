@@ -43,8 +43,9 @@ export class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, info: ErrorInfo): void {
     this.setState({ info });
-    // Also log to browser console for power users
-    // eslint-disable-next-line no-console
+    // Also log to browser console for power users. No eslint-disable here:
+    // `no-console` is not enabled in this config, so the directive that used
+    // to sit on this line suppressed nothing and merely implied a rule exists.
     console.error(`[ErrorBoundary${this.props.label ? ` ${this.props.label}` : ""}]`, error, info);
   }
 

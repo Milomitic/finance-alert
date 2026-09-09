@@ -21,7 +21,11 @@ export function useColumnVisibility(tableId: string, columns: ColumnDef[]) {
   const toggle = useCallback((id: string) => {
     setHidden((prev) => {
       const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
+      // if/else rather than a ternary-as-statement: both branches here are
+      // called for their side effect, and in that shape a dropped `()` would
+      // evaluate to a method reference and silently do nothing.
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
   }, []);

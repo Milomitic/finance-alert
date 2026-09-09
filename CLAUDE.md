@@ -929,10 +929,22 @@ The bug is invisible in dev.
   (also: `npx tsc -b` for type-only check)
 - **Single test file**: append the file path to the pytest command
 
-⚠️ `npm run lint` (the FULL config) reports ~57 pre-existing stylistic errors
-from eslint-plugin-react-hooks v7 — exhaustive-deps, set-state-in-effect,
-static-components, purity. They are NOT gated and a red result there is
-expected. Cleaning them is a separate job. `lint:hooks` is the gated subset.
+⚠️ `npm run lint` (the FULL config) reports **60** pre-existing findings from
+eslint-plugin-react-hooks v7 (measured 2026-09-09): only-export-components 21,
+exhaustive-deps 15, set-state-in-effect 13, refs 5, purity 5, immutability 1.
+They are NOT gated and a red result there is expected. `lint:hooks` is the
+gated subset.
+
+What was cleaned on 2026-09-09, and why the rest was not: nine
+`no-unused-vars` findings were placeholders this codebase already marks with a
+leading underscore, so the rule was CONFIGURED to read that convention rather
+than the code renamed to satisfy an unconfigured rule. Two `eslint-disable`
+directives suppressed rules that are not enabled, so they documented a
+constraint that did not exist. One ternary-as-statement became an if/else,
+because in that shape a dropped `()` evaluates to a method reference and
+silently does nothing. That category is now at zero and is still NOT gated —
+`eslint.hooks.config.js` requires a violation to break something a user can
+feel, and an unused variable does not.
 
 ---
 

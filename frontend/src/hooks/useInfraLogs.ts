@@ -1,5 +1,4 @@
 import { useQuery } from "@tanstack/react-query";
-import { useRef } from "react";
 
 import { fetchInfraLogs, fetchInfraLogSources } from "@/api/platformHealth";
 import type { StreamedLog } from "./usePlatformHealthStream";
@@ -26,29 +25,32 @@ export function useInfraLogSources() {
   });
 }
 
-/** Stable per-row identity across polls.
+/** Stable per-row identity across polls, derived purely from the row.
  *
  * The rows need keys, and the obvious index key is the exact bug this repo
  * already paid for once: the list is newest-first, so ONE new line shifts every
  * index, every key changes, and React unmounts and rebuilds the whole list
  * under the reader's cursor. Keying on the row's own content survives a
- * prepend. The counter only disambiguates lines that are byte-identical at the
- * same nanosecond on the same pod, which is rare and harmless when it happens.
+ * prepend.
+ *
+ * A counter in a ref would also have worked and was the first version, but a
+ * ref read during render is exactly what `react-hooks/refs` forbids: under
+ * concurrent rendering a discarded render would still have advanced it. FNV-1a
+ * over the row's own bytes needs no state at all, which makes the identity a
+ * property of the record rather than of when we happened to see it.
+ *
+ * Collisions are possible in principle. The cost of one is a single remounted
+ * row, and keys only need to be unique among the few hundred siblings on
+ * screen, so it is not worth defending against.
  */
-function makeSeqAssigner() {
-  const seen = new Map<string, number>();
-  let next = 0;
-  return (ts: number, module: string, message: string): number => {
-    const id = `${ts}|${module}|${message}`;
-    const hit = seen.get(id);
-    if (hit !== undefined) return hit;
-    const seq = next++;
-    seen.set(id, seq);
-    // Unbounded growth would be a leak on a long-lived page. The panel shows
-    // at most a few hundred rows, so a generous ceiling is plenty.
-    if (seen.size > 5000) seen.clear();
-    return seq;
-  };
+function rowKey(ts: number, module: string, message: string): number {
+  const id = `${ts}|${module}|${message}`;
+  let h = 0x811c9dc5;
+  for (let i = 0; i < id.length; i++) {
+    h ^= id.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return h >>> 0;
 }
 
 export type InfraLogsState = {
@@ -64,8 +66,6 @@ export function useInfraLogs(
   source: string | null,
   windowMinutes: number,
 ): InfraLogsState {
-  const assignSeq = useRef(makeSeqAssigner());
-
   const q = useQuery({
     queryKey: ["infra-logs", source, windowMinutes],
     queryFn: () => fetchInfraLogs(source as string, { minutes: windowMinutes }),
@@ -80,7 +80,7 @@ export function useInfraLogs(
 
   const records = (q.data?.records ?? []).map((r) => ({
     ...r,
-    seq: assignSeq.current(r.ts, r.module, r.message),
+    seq: rowKey(r.ts, r.module, r.message),
   }));
 
   return {

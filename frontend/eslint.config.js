@@ -18,5 +18,18 @@ export default defineConfig([
     languageOptions: {
       globals: globals.browser,
     },
+    rules: {
+      // The codebase already marks an intentionally unused binding with a
+      // leading underscore -- `_`, `_band`, `_opts`, `_snap`. Nine findings
+      // were all of that shape: correctly written code the linter had not been
+      // told how to read. Configuring the rule is the fix; renaming the
+      // placeholders to satisfy an unconfigured rule would have been the tail
+      // wagging the dog.
+      '@typescript-eslint/no-unused-vars': ['error', {
+        argsIgnorePattern: '^_',
+        varsIgnorePattern: '^_',
+        caughtErrorsIgnorePattern: '^_',
+      }],
+    },
   },
 ])

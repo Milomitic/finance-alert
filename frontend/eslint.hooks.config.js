@@ -6,12 +6,20 @@ import { defineConfig, globalIgnores } from 'eslint/config'
  * react-hooks/static-components.
  *
  * Why a second config instead of putting `npm run lint` in the pipeline. The
- * full config currently reports ~57 errors, nearly all of them stylistic rules
- * that arrived with eslint-plugin-react-hooks v7 (exhaustive-deps,
- * set-state-in-effect, static-components, purity). Gating on all of them would
- * block every deploy for reasons unrelated to the change being deployed, so it
- * would be switched off within a week. Cleaning them up is worth doing, and is
- * a separate job.
+ * full config reports 60 findings (measured 2026-09-09), nearly all of them
+ * rules that arrived with eslint-plugin-react-hooks v7: only-export-components
+ * 21, exhaustive-deps 15, set-state-in-effect 13, refs 5, purity 5,
+ * immutability 1. Gating on all of them would block every deploy for reasons
+ * unrelated to the change being deployed, so it would be switched off within a
+ * week. Cleaning them up is worth doing, and is a separate job.
+ *
+ * `@typescript-eslint/no-unused-vars` reached ZERO on 2026-09-09 and is
+ * deliberately NOT gated here, which is worth recording because the temptation
+ * was real. Nine of its findings were placeholders the codebase already marks
+ * with a leading underscore (`_`, `_band`, `_opts`) and the fix was to
+ * configure the rule to read that convention, not to rename the code. But an
+ * unused variable breaks nothing a user can feel, and that is the second half
+ * of the bar below. Being at zero earns a rule consideration, not entry.
  *
  * rules-of-hooks is not in that category. A hook called conditionally is not a
  * style opinion: React identifies hooks by call order, so the violation throws
