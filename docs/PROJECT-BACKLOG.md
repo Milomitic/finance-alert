@@ -46,8 +46,9 @@ Questo file è il backlog operativo canonico. Ogni nuova attività deve avere un
 
 ## Cosa resta aperto (2026-09-10)
 
-Nessuna attivita e bloccata e nessuna e in corso di rilascio. Le sei voci qui
-sotto sono tutto quello che il backlog tiene aperto.
+Nessuna attivita e bloccata e nessuna e in corso di rilascio. Le sette voci qui
+sotto sono tutto quello che il backlog tiene aperto: due in attesa di dati, due
+in attesa di un collaudo su dispositivo reale, tre aperte.
 
 | ID | Cosa serve per chiuderla | Chi puo sbloccarla |
 |---|---|---|
