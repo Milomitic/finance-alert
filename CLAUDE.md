@@ -984,11 +984,16 @@ The bug is invisible in dev.
   (also: `npx tsc -b` for type-only check)
 - **Single test file**: append the file path to the pytest command
 
-⚠️ `npm run lint` (the FULL config) reports **60** pre-existing findings from
-eslint-plugin-react-hooks v7 (measured 2026-09-09): only-export-components 21,
-exhaustive-deps 15, set-state-in-effect 13, refs 5, purity 5, immutability 1.
-They are NOT gated and a red result there is expected. `lint:hooks` is the
-gated subset.
+⚠️ `npm run lint` (the FULL config) reports **47** pre-existing findings —
+39 errors + 8 warnings, re-counted 2026-09-10: only-export-components 21,
+set-state-in-effect 13, exhaustive-deps 8, refs 5. They are NOT gated and a red
+result there is expected. `lint:hooks` is the gated subset.
+
+The count read 60 on 2026-09-09 (with exhaustive-deps 15, purity 5,
+immutability 1). The last two categories are now at zero and were not cleaned
+deliberately — they fell out of ordinary work. **Re-count before quoting this
+number**; a stale figure here is exactly the failure mode the `_RANGE_PERIODS`
+note below describes, where a believable number corroborates a wrong belief.
 
 What was cleaned on 2026-09-09, and why the rest was not: nine
 `no-unused-vars` findings were placeholders this codebase already marks with a

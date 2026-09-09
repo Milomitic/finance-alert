@@ -1,8 +1,8 @@
 # Finance Alert — backlog unico
 
-Ultimo aggiornamento: 2026-09-09  
+Ultimo aggiornamento: 2026-09-10  
 Repository: `finance-alert-cloud`  
-Branch di lavoro: `codex/security-performance-review`
+Branch di lavoro: `cloud` (l'unico che CI costruisce e che il CD rilascia)
 
 Questo file è il backlog operativo canonico. Ogni nuova attività deve avere un ID qui; un’attività si chiude solo quando il codice è stato pushato, sincronizzato dal CD e verificato nell’ambiente target.
 
@@ -26,7 +26,7 @@ Questo file è il backlog operativo canonico. Ogni nuova attività deve avere un
 | FA-005 | P2 | Kubernetes | Rimuovere `spec.monitoring.enablePodMonitor` deprecato | **DONE / PROD** | PodMonitor finance-alert-postgres presente in monitoring, scrape up=1; enablePodMonitor=false restituito dal default del server. |
 | FA-006 | P2 | Performance | Analizzare i percorsi lenti sui percentili reali | **WAITING DATA** | Bucket/latenze già strumentati; attendere almeno 7 giorni e misurare p50/p95/p99 prima/dopo. |
 | FA-007 | P2 | Frontend | Introdurre RUM per Web Vitals LCP/INP/CLS | **WAITING DATA** | `web-vitals` ufficiale per CLS/INP/LCP e route a cardinalita finita sono in produzione sull’immagine `42693fb`. Servono sessioni browser reali per popolare i percentili e validare il payload. |
-| FA-008 | P2 | Frontend | Ridurre e presidiare i finding ESLint React Hooks | **OPEN** | Conteggio verificato: 39 errori e 8 warning su 306 file. Le ottimizzazioni principali sono state applicate; restano finding da classificare e correggere, inclusi 21 warning Fast Refresh. |
+| FA-008 | P2 | Frontend | Ridurre e presidiare i finding ESLint React Hooks | **OPEN** | Riconteggiato il 2026-09-10: **39 errori e 8 warning**, tutti in quattro regole — `react-refresh/only-export-components` 21, `react-hooks/set-state-in-effect` 13, `react-hooks/exhaustive-deps` 8, `react-hooks/refs` 5. Le categorie `purity` e `immutability` che CLAUDE.md elencava sono ora a zero. Nessuna e gated: `eslint.hooks.config.js` richiede che una violazione rompa qualcosa che l'utente sente, ed e la barra da rispettare prima di aggiungere una regola al gate. |
 | FA-009 | P1 | UX | Correggere etichette valuta/prezzo nelle posizioni | **DONE / PROD** | Prezzi e P&L usano la valuta nativa con fallback USD; codice incluso nell’immagine `42693fb`, build e suite frontend verdi. |
 | FA-010 | P1 | UX | Rendere visibili e recuperabili gli errori delle mutazioni | **DONE / PROD** | Hook posizioni con toast successo/errore e dettaglio API; form trade mantiene errore inline; codice incluso nell’immagine `42693fb`, build e suite frontend verdi. |
 | FA-011 | P1 | UX mobile | Focus trap, ESC, scroll lock e restore del drawer | **IN PROGRESS** | Comportamento dialog deployato; manca la verifica manuale su browser/dispositivo reale per focus trap, ESC, scroll lock e restore. |
@@ -34,24 +34,43 @@ Questo file è il backlog operativo canonico. Ogni nuova attività deve avere un
 | FA-013 | P2 | UX/navigation | Preservare filtri/calendar/search nell’URL e migliorare il 404 | **IN PROGRESS** | 404 e stato calendar/search serializzato in URL sono deployati; resta verifica browser di back/forward e serializzazione date locali. |
 | FA-014 | P2 | Sessioni | Revoca server-side e logout tra schede | **OPEN** | Revoca in memoria e logout tra schede pubblicati. La blacklist si perde al riavvio anche con una sola replica: serve persistenza condivisa prima di chiudere la revoca server. |
 | FA-015 | P3 | Logging/storage | Guardrail dimensione Loki e monitoraggio disco nodo | **OPEN** | Regole pubblicate; guardia filesystem root disponibile. Il kubelet local-path non espone volume_stats per Loki: la regola PVC non ha dati e non puo essere dichiarata operativa. |
-| FA-016 | P2 | Prodotto | Decomporre le 72 proposte dell’audit UI/UX | **OPEN** | Il documento frontend-ux-audit-2026-09-09.md contiene 72 nuove proposte, non una riconciliazione verificata del precedente audit. Alcune capability sono gia presenti. Riconciliare prima di pianificare nuove funzionalita. |
+| FA-016 | P2 | Prodotto | Decomporre le 72 proposte dell’audit UI/UX | **DONE** | Riconciliazione completata il 2026-09-10: tutte e 72 le voci hanno ora **Stato** ed **Evidenza** in [frontend-ux-audit-2026-09-09.md](frontend-ux-audit-2026-09-09.md). Esito: 34 gia presenti, 31 mancanti, 5 parziali, 1 in attesa di dati, 1 rifiutata (UX-061 watchlist, rimossa deliberatamente). **Quasi meta della roadmap era gia costruita**, quindi pianificarla come lavoro nuovo avrebbe riscritto codice in produzione. Due verdetti sono stati corretti in corsa da un grep senza confini di parola: `mute` sta dentro `text-muted-foreground`. Le 31 mancanti sono candidate, non lavoro impegnato: entrano qui con un ID quando l'utente le chiede. |
 | FA-017 | P2 | Sicurezza | Triage dei finding Bandit e hardening dei casi confermati | **DONE / PROD** | Validazione URL HTTP(S) aggiunta; classificazione in [docs/security-bandit-triage.md](security-bandit-triage.md). Nessun high; audit npm/pip e CI 34366785799 verdi; codice deployato nell’immagine `42693fb`. |
 | FA-020 | P1 | Accessibilita | Lingua del documento, link di salto, nome del logout e titolo per rotta | **DONE / PROD** | `lang="it"`, link "Salta al contenuto" primo elemento focalizzabile, label logout `sr-only` e `document.title` derivato da `NAV`; 7 test dedicati, suite frontend 290 pass; immagine `42693fb` verificata in produzione. |
-| FA-022 | P2 | UX/screener | Viste salvate: filtri, ordinamento e colonne insieme | **READY / LOCAL** | Estende i preset esistenti invece di affiancarli. Formato versionato con migrazione in LETTURA: i preset gia nel browser sono oggetti di soli filtri senza marcatore e continuano a funzionare, applicandosi con l'ordinamento PREDEFINITO della tabella e non con quello corrente. 16 test fra `screenerViews.test.ts` e `StockFiltersCard.views.test.tsx`; suite frontend 314 pass. |
+| FA-022 | P2 | UX/screener | Viste salvate: filtri, ordinamento e colonne insieme | **DONE / PROD** | Estende i preset esistenti invece di affiancarli. Formato versionato con migrazione in LETTURA: i preset gia nel browser sono oggetti di soli filtri senza marcatore e continuano a funzionare, applicandosi con l'ordinamento PREDEFINITO della tabella e non con quello corrente. 16 test fra `screenerViews.test.ts` e `StockFiltersCard.views.test.tsx`; suite frontend 314 pass. Commit `f88a8d5`, CI verde, immagine rilasciata. |
+| FA-023 | P2 | UX/grafici | Marker dei segnali leggibili e pan che si ferma invece di resettare | **DONE / PROD** | Commit `9363ed9`. I marker passano alla palette direzionale rosa/emerald imposta da CLAUDE.md (rosso/verde significa "rotto"), guadagnano un gradino di dimensione e **portano il conteggio** quando piu segnali cadono sulla stessa barra: prima tre segnali e uno disegnavano lo stesso glifo, quindi i giorni piu affollati sembravano i piu tranquilli. La dimensione NON dipende dalla Forza, ed e fissato da un test: sarebbe la stessa affermazione della rampa di rischio rimossa dal playbook, dove la banda 90-99 ha realizzato 42,3% contro 52-53%. Il clamp e riscritto per **far scorrere la finestra senza mai cambiarne la larghezza** — la vecchia versione tappava i due bordi in modo indipendente, allargava la finestra all'intera serie e lo zoom si azzerava. 11 test in `chartClamp.test.ts`, che prima non ne aveva pur governando tre pannelli. |
+| FA-024 | P2 | Prodotto | Statistiche su rendimenti ed efficacia nelle pagine setup ed esiti | **DONE / PROD** | Commit `3a6ee82`, immagine `3a6ee82d` verificata in produzione con le cinque Application `Synced/Healthy`. `conversion_stats` guadagna rendimento **market-neutral e assoluto in coppia** (pubblicarne uno solo lascia che un setup rialzista si intesti la deriva del mercato), mediana in testa e media accanto, tasso di efficacia con intervallo di Wilson dimensionato su `independent_blocks` e non sulle righe, piu `by_detector`. Il pannello per famiglia rende **il tasso con la sua banda contro il 50%**, non una barra del tasso: una banda che attraversa il 50 diventa grigia e legge "non concludente". 13 test backend, 11 frontend. |
 | FA-018 | P2 | Accessibilita | Aggiungere descrizione accessibile al dialog degli alert prezzo | **DONE / PROD** | `PriceAlertDialog` espone `DialogDescription` screen-reader-only; warning Radix corretto, codice deployato e suite frontend verde. |
 | FA-019 | P0 | Release | Push e sincronizzazione cloud dei commit locali | **DONE / PROD** | Push verificato; CI 34366785799 completata con tutti i job verdi, Argo `Synced/Healthy`, StatefulSet sull’immagine `42693fb1b09195be96065cfdc1bda0be176c014a`, health esterno 200 e `/metrics` esterno 403. |
 | FA-021 | P2 | GitOps | Eliminare lo stato Argo `OutOfSync` del Cluster CNPG quando il diff effettivo è vuoto | **DONE / PROD** | Verificato live 2026-09-09: `postgres-cluster` torna `Synced/Healthy` e tutte e cinque le Application sono sincronizzate; il cluster resta sano 1/1 e nessun pod si e riavviato. Causa isolata: l'operatore aggiunge `enabled: true` alla voce di `spec.plugins`, e il CRD non dichiara `x-kubernetes-list-type`, quindi la lista è ATOMICA e una chiave in più rende diversa tutta la lista. `postgresql.parameters` non causa drift benché l'operatore vi inietti 23 chiavi: è una mappa e ArgoCD possiede solo le sue sette. Rimedio: dichiarare il campo nel manifest, **non** un `ignoreDifferences` su `/spec/plugins`, che silenzierebbe anche una modifica vera all'archiviatore. |
 
-## Ordine operativo
+## Cosa resta aperto (2026-09-10)
 
-1. FA-002: push, sync Argo e verifica retention effettiva a 30 giorni.
-2. FA-003: installare plugin, creare ObjectStore, migrare Cluster/ScheduledBackup, verificare backup e restore.
-3. FA-004 e FA-005: chiudere alert e warning dopo la migrazione.
-4. FA-006: attendere dati reali e intervenire solo sui percorsi con percentili significativi.
-5. FA-007 e FA-008: RUM reale e pulizia lint.
-6. FA-009–FA-013: tranche UX ad alto impatto.
-7. FA-014–FA-018: sessioni, storage, triage sicurezza, accessibilita e roadmap prodotto.
-8. FA-019: push/CD sbloccato; verificare ogni successivo rilascio.
+Nessuna attivita e bloccata e nessuna e in corso di rilascio. Le sei voci qui
+sotto sono tutto quello che il backlog tiene aperto.
+
+| ID | Cosa serve per chiuderla | Chi puo sbloccarla |
+|---|---|---|
+| FA-006 | 7+ giorni di traffico reale, poi p50/p95/p99 per handler | il tempo |
+| FA-007 | sessioni browser reali che popolino i percentili RUM | il tempo |
+| FA-011 | verifica su browser/dispositivo reale di focus trap, ESC, scroll lock, restore | l'utente |
+| FA-013 | verifica browser di back/forward e serializzazione date locali | l'utente |
+| FA-008 | classificare e correggere 47 finding ESLint non gated | lavoro |
+| FA-014 | store condiviso e persistente per la revoca sessioni | lavoro |
+| FA-015 | il kubelet local-path non espone `volume_stats` per Loki: la regola PVC non ha dati | una sorgente diversa |
+
+⚠️ **FA-006 e FA-007 non sono lavoro rimandato, sono misure che maturano.**
+Trattarle come task da spingere significa concludere su campioni che non hanno
+ancora senso — lo stesso errore che il magazzino esiti rende esplicito sullo
+schermo con "non concludente".
+
+FA-011 e FA-013 sono le uniche due che aspettano l'utente: il codice e in
+produzione, manca il collaudo su un dispositivo vero, che jsdom non puo fare
+(CLAUDE.md: senza stili calcolati axe non vede focus visibile ne target touch).
+
+Le 31 voci mancanti dell'audit UI/UX **non sono in questa lista di proposito**.
+Sono candidate riconciliate, non lavoro impegnato: prendono un ID qui quando
+l'utente ne chiede una.
 
 ## Evidenze e limiti
 
