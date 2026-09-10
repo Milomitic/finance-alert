@@ -1,13 +1,15 @@
 """Auth router."""
+from datetime import UTC, datetime
+
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db, require_json
 from app.core.config import settings
-from app.core.security import create_session_token, revoke_session_token
+from app.core.security import create_session_token, revoke_session_token, token_key
 from app.models import User
 from app.schemas.auth import LoginRequest, MeResponse
-from app.services import login_throttle
+from app.services import login_throttle, session_revocation_service
 from app.services.auth_service import authenticate
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -52,10 +54,17 @@ def login(
     status_code=status.HTTP_204_NO_CONTENT,
     dependencies=[Depends(require_json)],
 )
-def logout(request: Request) -> Response:
+def logout(request: Request, db: Session = Depends(get_db)) -> Response:
     token = request.cookies.get(settings.session_cookie_name)
     if token:
-        revoke_session_token(token)
+        # In memoria per questa richiesta e per quelle successive, sulla
+        # tabella perche sopravviva al prossimo riavvio — e ogni deploy e un
+        # riavvio, su un branch che rilascia a ogni push. La finestra che si
+        # chiude e `session_max_age_days`, sette giorni.
+        expires_at = revoke_session_token(token)
+        session_revocation_service.persist(
+            db, token_key(token), datetime.fromtimestamp(expires_at, tz=UTC)
+        )
     response = Response(status_code=status.HTTP_204_NO_CONTENT)
     response.delete_cookie(key=settings.session_cookie_name, path="/")
     return response

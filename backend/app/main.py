@@ -298,6 +298,35 @@ def _ensure_admin_on_boot() -> None:
         logger.warning(f"[startup] ensure admin user failed (non-fatal): {exc}")
 
 
+def _hydrate_revoked_sessions() -> None:
+    """Restore the session revocation list from the DB.
+
+    Without this the list lives only in process memory, so a restart un-revokes
+    every token someone deliberately logged out of — for the remaining
+    `session_max_age_days`, seven days. And a restart is not rare here: every
+    deploy is one, and the GitOps loop deploys on every push to `cloud`.
+
+    Best-effort like the caches above: an unreachable table must not stop the
+    app from booting. The failure mode is the OLD behaviour, not a worse one.
+    """
+    from app.core.db import SessionLocal
+    from app.core.security import hydrate_revoked
+    from app.services import session_revocation_service
+
+    try:
+        with SessionLocal() as db:
+            purged = session_revocation_service.purge_expired(db)
+            entries = session_revocation_service.load_active(db)
+        total = hydrate_revoked(entries)
+        if entries or purged:
+            logger.info(
+                f"[startup] revocations restored: {len(entries)} active "
+                f"({total} in memory), {purged} expired rows purged"
+            )
+    except Exception as exc:  # noqa: BLE001 — boot-time best effort
+        logger.warning(f"[startup] revocation hydration failed (non-fatal): {exc}")
+
+
 def _hydrate_run_metrics() -> None:
     """Restore `finance_alert_last_successful_run_timestamp_seconds` from the DB.
 
@@ -341,6 +370,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     _ensure_admin_on_boot()
     _hydrate_fetch_caches()
     _hydrate_run_metrics()
+    _hydrate_revoked_sessions()
     # Pre-fill the live-log ring buffer from the on-disk log tail so the
     # Salute log view (and its per-source filter) survives restarts.
     hydrate_log_buffer_from_disk()

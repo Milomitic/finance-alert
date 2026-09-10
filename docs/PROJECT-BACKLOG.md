@@ -32,7 +32,7 @@ Questo file è il backlog operativo canonico. Ogni nuova attività deve avere un
 | FA-011 | P1 | UX mobile | Focus trap, ESC, scroll lock e restore del drawer | **IN PROGRESS** | Comportamento dialog deployato; manca la verifica manuale su browser/dispositivo reale per focus trap, ESC, scroll lock e restore. |
 | FA-012 | P1 | UX/search | Stati errore e semantica combobox | **DONE / PROD** | Stato errore con retry e ruoli `combobox`/`listbox`/`option` implementati e inclusi nell’immagine `42693fb`; build e suite frontend verdi. |
 | FA-013 | P2 | UX/navigation | Preservare filtri/calendar/search nell’URL e migliorare il 404 | **IN PROGRESS** | 404 e stato calendar/search serializzato in URL sono deployati; resta verifica browser di back/forward e serializzazione date locali. |
-| FA-014 | P2 | Sessioni | Revoca server-side e logout tra schede | **OPEN** | Revoca in memoria e logout tra schede pubblicati. La blacklist si perde al riavvio anche con una sola replica: serve persistenza condivisa prima di chiudere la revoca server. |
+| FA-014 | P2 | Sessioni | Revoca server-side e logout tra schede | **DONE / PROD** | Tabella `revoked_sessions` (migrazione `50c3faa68285`) piu idratazione in `lifespan`. La lista viveva in un dizionario di processo: un riavvio riportava in vita ogni token di cui qualcuno aveva fatto logout, per i **sette giorni** di `session_max_age_days`, e ogni deploy e un riavvio. Solo il digest SHA-256 finisce a tabella, mai il token. **Le letture restano in memoria di proposito**: `read_session_token` gira a ogni richiesta autenticata e `/api/health` da solo e 18k delle ~20k giornaliere, quindi una SELECT per richiesta pagherebbe una domanda la cui risposta e quasi sempre no. ⚠️ Questo NON risolve piu repliche: la revoca raggiunge subito il database ma la memoria dell'altra replica lo impara al proprio riavvio. Oggi la replica e una; per due servirebbe una rilettura a TTL o un pub/sub. 22 test. |
 | FA-015 | P3 | Logging/storage | Guardrail dimensione Loki e monitoraggio disco nodo | **OPEN** | Regole pubblicate; guardia filesystem root disponibile. Il kubelet local-path non espone volume_stats per Loki: la regola PVC non ha dati e non puo essere dichiarata operativa. |
 | FA-016 | P2 | Prodotto | Decomporre le 72 proposte dell’audit UI/UX | **DONE** | Riconciliazione completata il 2026-09-10: tutte e 72 le voci hanno ora **Stato** ed **Evidenza** in [frontend-ux-audit-2026-09-09.md](frontend-ux-audit-2026-09-09.md). Esito: 34 gia presenti, 31 mancanti, 5 parziali, 1 in attesa di dati, 1 rifiutata (UX-061 watchlist, rimossa deliberatamente). **Quasi meta della roadmap era gia costruita**, quindi pianificarla come lavoro nuovo avrebbe riscritto codice in produzione. Due verdetti sono stati corretti in corsa da un grep senza confini di parola: `mute` sta dentro `text-muted-foreground`. Le 31 mancanti sono candidate, non lavoro impegnato: entrano qui con un ID quando l'utente le chiede. |
 | FA-017 | P2 | Sicurezza | Triage dei finding Bandit e hardening dei casi confermati | **DONE / PROD** | Validazione URL HTTP(S) aggiunta; classificazione in [docs/security-bandit-triage.md](security-bandit-triage.md). Nessun high; audit npm/pip e CI 34366785799 verdi; codice deployato nell’immagine `42693fb`. |
@@ -48,9 +48,9 @@ Questo file è il backlog operativo canonico. Ogni nuova attività deve avere un
 
 ## Cosa resta aperto (2026-09-10)
 
-Nessuna attivita e bloccata e nessuna e in corso di rilascio. Le otto voci qui
+Nessuna attivita e bloccata e nessuna e in corso di rilascio. Le sette voci qui
 sotto sono tutto quello che il backlog tiene aperto: due in attesa di dati, due
-in attesa di un collaudo su dispositivo reale, tre aperte, una che aspetta una
+in attesa di un collaudo su dispositivo reale, due aperte, una che aspetta una
 decisione.
 
 | ID | Cosa serve per chiuderla | Chi puo sbloccarla |
@@ -60,7 +60,6 @@ decisione.
 | FA-011 | verifica su browser/dispositivo reale di focus trap, ESC, scroll lock, restore | l'utente |
 | FA-013 | verifica browser di back/forward e serializzazione date locali | l'utente |
 | FA-008 | classificare e correggere 47 finding ESLint non gated | lavoro |
-| FA-014 | store condiviso e persistente per la revoca sessioni | lavoro |
 | FA-015 | il kubelet local-path non espone `volume_stats` per Loki: la regola PVC non ha dati | una sorgente diversa |
 | FA-026 | decidere se il market cap si converte in USD o si etichetta per valuta | l'utente |
 

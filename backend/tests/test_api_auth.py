@@ -77,3 +77,38 @@ def test_logout_revokes_the_session_token(client: TestClient) -> None:
     # A copied cookie must not remain usable after logout.
     client.cookies.set("finance_alert_session", old_token)
     assert client.get("/api/auth/me").status_code == 401
+
+
+def test_logout_writes_the_revocation_to_the_database(client: TestClient, db) -> None:
+    """Il test sopra passa anche con la sola lista in memoria.
+
+    E il difetto che la tabella chiude: fino al 2026-09-10 la revoca viveva in
+    un dizionario di processo, quindi un riavvio riportava in vita ogni token
+    di cui qualcuno aveva fatto logout, per i sette giorni di
+    `session_max_age_days`. Un riavvio non e raro qui: ogni deploy e uno.
+    """
+    from app.core.security import token_key
+    from app.models.revoked_session import RevokedSession
+
+    client.post("/api/auth/login", json={"username": "admin", "password": "secret123"})
+    token = client.cookies.get("finance_alert_session")
+    assert token
+
+    assert client.post("/api/auth/logout").status_code == 204
+
+    row = db.get(RevokedSession, token_key(token))
+    assert row is not None
+    # Solo il digest, mai il token.
+    assert token not in row.token_hash
+
+
+def test_a_logout_without_a_cookie_writes_nothing(client: TestClient, db) -> None:
+    # Il controllo negativo: senza di esso una logout che scrivesse una riga
+    # per ogni chiamata supererebbe comunque il test sopra.
+    from app.models.revoked_session import RevokedSession
+
+    before = db.query(RevokedSession).count()
+
+    assert client.post("/api/auth/logout").status_code == 204
+
+    assert db.query(RevokedSession).count() == before

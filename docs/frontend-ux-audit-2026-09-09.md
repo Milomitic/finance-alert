@@ -10,8 +10,8 @@ L'audit e stato scritto senza controllare cosa l'app gia facesse, quindi la colo
 
 | Stato | Voci |
 |---|---:|
-| Presente | 34 |
-| Manca | 31 |
+| Presente | 38 |
+| Manca | 27 |
 | Parziale | 5 |
 | In attesa di dati | 1 |
 | Non si fa | 1 |
@@ -20,6 +20,11 @@ L'audit e stato scritto senza controllare cosa l'app gia facesse, quindi la colo
 nuovo avrebbe significato riscrivere il crosshair sincronizzato, l'export CSV
 filtrato, le colonne persistenti, il confronto benchmark e le azioni bulk sugli
 alert — tutte gia in produzione.
+
+Quattro voci sono state chiuse dopo la riconciliazione, il 2026-09-10: UX-040 e
+UX-063 con la valuta di quotazione (FA-025), UX-037 e UX-039 con il timeframe
+persistente e il comando di reset sul grafico. La tabella qui sopra e
+ricalcolata dalle righe, non scritta a mano.
 
 ⚠️ Due verdetti sono stati corretti durante la riconciliazione, e la causa e la
 stessa: **una parola cercata al posto del codice letto**. Il crosshair
@@ -90,10 +95,10 @@ sistema letto/non letto: non va reintrodotta senza che l'utente la chieda.
 
 | ID | Intervento | Risultato atteso | Stato | Evidenza |
 |---|---|---|---|---|
-| UX-037 | Preset timeframe persistenti | Il grafico riapre nell'orizzonte scelto | **Manca** | nessuna chiave localStorage per il range del grafico |
+| UX-037 | Preset timeframe persistenti | Il grafico riapre nell'orizzonte scelto | **Presente** | `lib/chartPrefs.ts`; l'URL ha sempre la precedenza sulla preferenza |
 | UX-038 | Crosshair sincronizzato tra pannelli | Una data è confrontabile su tutti i grafici | **Presente** | `useChartSync.ts`, canale `crosshairMove` |
-| UX-039 | Zoom/reset sempre visibili | Recupero rapido dopo esplorazione | **Manca** | `fitContent()` esiste ma non e un controllo esposto |
-| UX-040 | Legenda con unità e valuta | Nessuna ambiguità sui numeri | **Manca** | `ohlcLegend.tsx` non riporta la valuta |
+| UX-039 | Zoom/reset sempre visibili | Recupero rapido dopo esplorazione | **Presente** | comando nella toolbar, usa `defaultVisibleRange` come l'effetto di caricamento |
+| UX-040 | Legenda con unità e valuta | Nessuna ambiguità sui numeri | **Presente** | valuta dichiarata una volta in testa alla riga |
 | UX-041 | Tooltip accessibile da tastiera | I dati non dipendono solo dal puntatore | **Manca** |  |
 | UX-042 | Download immagine/CSV del grafico | Risultati riutilizzabili fuori dall'app | **Presente** | `lib/chartExport.ts` |
 | UX-043 | Overlays per earnings/dividendi | Il contesto fondamentale è sul prezzo | **Presente** | `lib/signalMarkers.ts` |
@@ -126,7 +131,7 @@ sistema letto/non letto: non va reintrodotta senza che l'utente la chieda.
 |---|---|---|---|---|
 | UX-061 | Watchlist ordinabile | Monitoraggio costruito sull'ordine dell'utente | **Non si fa** | la watchlist e stata rimossa deliberatamente |
 | UX-062 | Note e tag sui titoli | Memoria operativa vicino al dato | **Manca** |  |
-| UX-063 | Price alert con valuta nativa | Soglie coerenti con il mercato | **Manca** | `PriceAlertDialog.tsx` tratta la soglia come numero puro |
+| UX-063 | Price alert con valuta nativa | Soglie coerenti con il mercato | **Presente** | etichetta e chip nella valuta di quotazione |
 | UX-064 | Canali notifica configurabili | Ogni alert raggiunge il canale scelto | **Manca** | esiste solo Telegram |
 | UX-065 | Digest giornaliero | Riduzione del rumore durante la giornata | **Presente** | `digest_hour` nel notifier |
 | UX-066 | Quiet hours | Nessuna notifica in finestre definite | **Manca** |  |

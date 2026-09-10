@@ -15,6 +15,7 @@ from app.models.market_snapshot import MarketSnapshot
 from app.models.ohlcv import OhlcvDaily
 from app.models.position import Position
 from app.models.price_alert import PriceAlert
+from app.models.revoked_session import RevokedSession
 from app.models.scan_run import ScanRun
 from app.models.score_history import ScoreHistory
 from app.models.signal_outcome import SignalOutcome
@@ -46,6 +47,7 @@ __all__ = [
     "SignalOutcome",
     "ScoreHistory",
     "KpiSnapshot",
+    "RevokedSession",
     "FetchCache",
     "MacroSeries",
     "MacroObservation",
