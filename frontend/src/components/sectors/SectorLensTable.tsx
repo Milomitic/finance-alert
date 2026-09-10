@@ -5,6 +5,7 @@ import { Link } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { SectionTitle } from "@/components/ui/section-title";
 import type { SectorSummary } from "@/hooks/useSectorDetail";
+import { GAP_TEXT } from "@/lib/lensGap";
 import { GAP_NOTABLE, type SortKey, lensGap, sortSectors } from "@/lib/sectorLens";
 import { cn } from "@/lib/utils";
 
@@ -112,7 +113,7 @@ const COLUMNS: { key: SortKey; label: string; help: string; num?: boolean }[] = 
   { key: "stock_count", label: "N", help: "Stock nel settore", num: true },
   { key: "avg_score", label: "Qualità", help: "Media dei compositi fondamentali (0–100)" },
   { key: "avg_technical", label: "Tecnico", help: "Media dei compositi tecnici (0–100)" },
-  { key: "gap", label: "Divario", help: "Tecnico − Qualità: dove le due lenti non concordano", num: true },
+  { key: "gap", label: "Divario", help: "Tecnico − Qualità: positivo = il prezzo corre davanti ai fondamentali. Una discrepanza da guardare, non un'occasione", num: true },
   { key: "change_pct", label: "Δ%", help: "Variazione media giornaliera del settore", num: true },
   { key: "signals", label: "Segnali 7g", help: "Rialzisti vs ribassisti negli ultimi 7 giorni" },
 ];
@@ -220,10 +221,19 @@ export function SectorLensTable({ sectors, activeSector, onHover }: Props) {
                     </td>
                     <td className="px-3 py-1.5"><LensBar value={s.avg_score} /></td>
                     <td className="px-3 py-1.5"><LensBar value={s.avg_technical} /></td>
+                    {/* ⚠️ Niente rosa/smeraldo qui. In questo progetto quella
+                        tavolozza significa una cosa sola — direzione di
+                        mercato — e la colonna Δ% accanto la usa per una
+                        direzione vera. Il Divario non e una direzione: +20 e
+                        −20 sono due oggetti diversi, non «buono» e «cattivo»,
+                        e colorarli cosi affermerebbe un ordinamento che le
+                        prove dell'app negano. Il segno dice da che parte, il
+                        punto dice che vale la pena guardare. */}
                     <td
                       className={cn(
-                        "px-3 py-1.5 text-right tabular-nums font-semibold",
-                        toneClass(gap),
+                        "px-3 py-1.5 text-right tabular-nums",
+                        GAP_TEXT,
+                        notable && "font-semibold",
                       )}
                       title={
                         notable

@@ -25,12 +25,24 @@ import { usePrefetchStockDetail } from "@/hooks/usePrefetchStockDetail";
 import { RISK_LABEL, RISK_TONE, scoreColor } from "@/lib/scoreMeta";
 import { getStockFlagCode } from "@/lib/stockMeta";
 import { formatMoney } from "@/lib/money";
+import { GAP_TEXT, formatGap, lensGapOf } from "@/lib/lensGap";
 import { cn } from "@/lib/utils";
 
 /** Toggleable columns for the desktop screener table.
  *  The identity column (Ticker + name) is always-on.
  *  Exported so the page can drive the same list from the toolbar
  *  "Colonne" button (visibility state lives in the page now). */
+/** ⚠️ Il fatto che impedisce di leggere male la colonna, e che sta nel titolo
+ *  invece che in un documento: le due lenti sono entrambe su 0-100 ma NON sono
+ *  centrate allo stesso modo, quindi 0 non significa «le due concordano». Il
+ *  titolo mediano legge -12,7 (misurato in produzione il 2026-09-10 su 925
+ *  titoli con entrambe le lenti). Senza questa frase un -13 si legge come una
+ *  discrepanza, mentre e' la normalita. */
+const DIVARIO_HELP =
+  "Tecnico − Qualità. Positivo = il prezzo corre davanti ai fondamentali. " +
+  "Sull'universo il valore tipico è circa −13, non 0: le due lenti non sono " +
+  "centrate sulla stessa scala. È una discrepanza da guardare, non un'occasione.";
+
 export const SCREENER_COLS = [
   { id: "exchange",       label: "Exchange" },
   { id: "settore",        label: "Settore" },
@@ -50,6 +62,7 @@ export const SCREENER_COLS = [
   { id: "value",          label: "Valore" },
   { id: "sentiment",      label: "Sentiment" },
   { id: "tech_composite",  label: "Tecnico" },
+  { id: "divario",         label: "Divario" },
   { id: "tech_trend",      label: "T-Trend" },
   { id: "tech_momentum",   label: "T-Mom" },
   { id: "tech_structure",  label: "T-Strut" },
@@ -242,10 +255,13 @@ interface HeaderProps {
    *  in the title attribute so power users know why their Δ% sort doesn't
    *  walk the universe. */
   clientOnly?: boolean;
+  /** Spiegazione della colonna, quando l'etichetta da sola non basta. Il
+   *  Divario ne ha bisogno: senza, «+3» e un numero senza unita ne verso. */
+  title?: string;
 }
 
 function SortableHeader({
-  column, label, align = "left", sortBy, sortDir, onClick, clientOnly,
+  column, label, align = "left", sortBy, sortDir, onClick, clientOnly, title,
 }: HeaderProps) {
   const active = sortBy === column;
   return (
@@ -253,7 +269,7 @@ function SortableHeader({
       <button
         type="button"
         onClick={() => onClick(column)}
-        title={clientOnly ? "Ordina la pagina corrente (lato client)" : undefined}
+        title={title ?? (clientOnly ? "Ordina la pagina corrente (lato client)" : undefined)}
         className={cn(
           "inline-flex items-center gap-1 hover:text-foreground transition-colors uppercase tracking-wide font-semibold",
           active && "text-foreground",
@@ -645,6 +661,17 @@ export function StockBrowserTable({
                 {isVisible("tech_composite") && (
                   <SortableHeader column="tech_composite" label="Tecnico" align="right" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} />
                 )}
+                {isVisible("divario") && (
+                  <SortableHeader
+                    column="divario"
+                    label="Divario"
+                    align="right"
+                    sortBy={sortBy}
+                    sortDir={sortDir}
+                    onClick={onSortChange}
+                    title={DIVARIO_HELP}
+                  />
+                )}
                 {isVisible("tech_trend") && (
                   <SortableHeader column="tech_trend" label="T-Trend" align="right" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} />
                 )}
@@ -843,6 +870,22 @@ export function StockBrowserTable({
                         {item.technical.posture && (
                           <span className="block text-[0.6765rem] text-muted-foreground leading-none">{item.technical.posture}</span>
                         )}
+                      </td>
+                    )}
+                    {isVisible("divario") && (
+                      /* Le due lenti ortogonali sulla stessa riga da sempre, e
+                         la loro differenza mai fatta: un titolo con Qualita 81
+                         e Tecnico 40 e un oggetto diverso da uno con 81 e 80, e
+                         nessuna delle due colonne lo dice da sola.
+
+                         ⚠️ Neutro, e senza marcatore per riga. Vedi
+                         `lib/lensGap.ts`: la tavolozza rosa/smeraldo qui
+                         affermerebbe che «positivo e buono», e un marcatore
+                         avrebbe bisogno di un riferimento sull'universo che la
+                         riga non porta con se. A trovare le code ci pensa
+                         l'ordinamento, che e lato server. */
+                      <td className={cn("px-3 py-1.5 text-right text-sm tabular-nums", GAP_TEXT)}>
+                        {formatGap(lensGapOf(item.score.composite, item.technical.composite), 0)}
                       </td>
                     )}
                     {(["trend", "momentum", "structure", "volume", "rel_strength"] as const).map((dim) => {

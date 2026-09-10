@@ -42,6 +42,8 @@ const VALID_SORT_BY = new Set<StockSortBy>([
   "price", "change_pct", "rsi14", "vol_ratio", "vol_today",
   // Espressione SQL: distanza % dal massimo 52w (SCR-2).
   "pct_off_high",
+  // Espressione SQL: Divario Tecnico − Qualità.
+  "divario",
 ]);
 
 const VALID_RISK = new Set(["conservative", "moderate", "aggressive"] as const);

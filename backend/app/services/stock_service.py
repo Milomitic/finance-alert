@@ -24,6 +24,25 @@ from app.models import (
 # per ordinare/filtrare l'intero universo, non solo la pagina corrente.
 PCT_OFF_HIGH_EXPR = ((StockMetrics.last_close / StockMetrics.high_252) - 1.0) * 100.0
 
+# Divario fra le due lenti ortogonali: Tecnico meno Qualita.
+#
+# Il segno segue la convenzione gia in uso per i settori (`lensGap` nel
+# frontend, `avg_technical - avg_score`): positivo = il prezzo corre davanti ai
+# fondamentali. Due Divari con segno opposto su due pagine sarebbero la stessa
+# classe di difetto che questo progetto ha gia pagato con le unita.
+#
+# ⚠️ E ordinabile perche serve a TROVARE le code, e ordinare 50 righe di una
+# lista paginata lato client le presenterebbe come una classifica
+# dell'universo — lo stesso difetto della colonna market cap. Qui l'espressione
+# vive nel SORT, quindi ordina tutte le 925 righe che hanno entrambe le lenti.
+# Stesso schema di PCT_OFF_HIGH_EXPR sopra.
+#
+# ⚠️ NON e un segnale. Lo studio score-IC dice che il composito Qualita non
+# prevede i rendimenti, quindi un Divario grande e una discrepanza da guardare,
+# non un'occasione — ed e una differenza fra due indicatori su scale distinte,
+# non uno sconto economico.
+DIVARIO_EXPR = TechnicalScore.composite - StockScore.composite
+
 # Allowed sort columns; whitelist guards against SQL injection / typos.
 # Columns from JOINed tables (`composite`, `risk_tier`) are sortable too —
 # the search query LEFT JOINs stock_scores / technical_scores / stock_metrics
@@ -62,6 +81,11 @@ SORTABLE_COLUMNS: dict[str, object] = {
     # SQL expression (not a plain column): % dal massimo 52w. DESC = più
     # vicini al massimo per primi; ASC = drawdown più profondi per primi.
     "pct_off_high": PCT_OFF_HIGH_EXPR,
+    # Divario Tecnico − Qualità. DESC = il prezzo corre più avanti dei
+    # fondamentali; ASC = i fondamentali sono più avanti del prezzo. Le righe
+    # con una sola lente hanno Divario NULL e finiscono in fondo in entrambi i
+    # versi (`nullslast` più sotto): sconosciuto non è zero.
+    "divario": DIVARIO_EXPR,
 }
 
 

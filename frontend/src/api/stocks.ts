@@ -39,7 +39,12 @@ export type StockSortBy =
   | "vol_today"
   /** Espressione SQL server-side: (last_close/high_252 − 1)·100 — ordina
    *  l'intero universo per distanza dal massimo 52w, non solo la pagina. */
-  | "pct_off_high";
+  | "pct_off_high"
+  /** Espressione SQL server-side: Tecnico − Qualità. Ordinare lato client le
+   *  50 righe della pagina le presenterebbe come una classifica dell'universo,
+   *  che e' il difetto della colonna market cap; qui l'espressione vive nel
+   *  SORT e vede tutte le righe. */
+  | "divario";
 export type SortDir = "asc" | "desc";
 
 export interface SearchParams {

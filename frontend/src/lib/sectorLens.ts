@@ -1,3 +1,4 @@
+import { GAP_NOTABLE_SECTOR, lensGapOf } from "@/lib/lensGap";
 import type { SectorSummary } from "@/hooks/useSectorDetail";
 
 /* Derived readings shared by the sector matrix and the sector table.
@@ -11,10 +12,14 @@ import type { SectorSummary } from "@/hooks/useSectorDetail";
  *  "3 orthogonal lenses"). Their DIFFERENCE is the reading neither number
  *  carries alone: a sector can be fundamentally sound and technically dead
  *  (Utilities, 57.3 vs 43.6) or the reverse (Financials, 54.8 vs 66.0).
- *  Null when either lens is missing — an unknown gap must not read as zero. */
+ *  Null when either lens is missing — an unknown gap must not read as zero.
+ *
+ *  ⚠️ L'aritmetica e il segno vivono in `lib/lensGap.ts`, non qui: da quando
+ *  lo screener mostra lo stesso Divario sui singoli titoli, due definizioni
+ *  separate potrebbero divergere di segno e nessuno dei due schermi lo
+ *  direbbe. Questa resta la forma comoda per un settore. */
 export function lensGap(s: SectorSummary): number | null {
-  if (s.avg_score === null || s.avg_technical === null) return null;
-  return s.avg_technical - s.avg_score;
+  return lensGapOf(s.avg_score, s.avg_technical);
 }
 
 /** Signals fired in the last 7 days, bull minus bear. The raw total says how
@@ -36,8 +41,11 @@ export function bullShare(s: SectorSummary): number | null {
  *  noise between two independently-computed 0-100 scores. Marking every
  *  sector would make the mark meaningless; at 8 points, 2 of 11 sectors carry
  *  it on today's data (Financials +11.2, Utilities -13.7), which is the point.
- */
-export const GAP_NOTABLE = 8;
+ *
+ *  ⚠️ Vale sui SETTORI e solo li: sono medie di undici panieri, a varianza
+ *  bassa per costruzione. Sui singoli titoli la stessa soglia marcherebbe il
+ *  77% delle righe — misurato in produzione, vedi `GAP_TYPICAL_STOCK`. */
+export const GAP_NOTABLE = GAP_NOTABLE_SECTOR;
 
 /** GICS names abbreviated for the scatter's point labels ONLY.
  *

@@ -1,3 +1,4 @@
+import { lensGapOf } from "@/lib/lensGap";
 import { ChevronDown, Download } from "lucide-react";
 import { useState } from "react";
 
@@ -51,6 +52,9 @@ const CSV_FIELDS: { id: string; header: string; value: (it: StockSearchItem) => 
   { id: "value",          header: "value",           value: (it) => it.score.value },
   { id: "sentiment",      header: "sentiment",       value: (it) => it.score.sentiment },
   { id: "tech_composite", header: "tech_composite",  value: (it) => it.technical.composite },
+  // Il file esportato deve dire le stesse cose dello schermo: una colonna che
+  // c'e' a video e non nel CSV manda a rifare il calcolo a mano.
+  { id: "divario",        header: "divario",         value: (it) => lensGapOf(it.score.composite, it.technical.composite) },
   { id: "tech_trend",     header: "tech_trend",      value: (it) => it.technical.trend },
   { id: "tech_momentum",  header: "tech_momentum",   value: (it) => it.technical.momentum },
   { id: "tech_structure", header: "tech_structure",  value: (it) => it.technical.structure },
