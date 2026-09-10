@@ -55,6 +55,7 @@ Questo file è il backlog operativo canonico. Ogni nuova attività deve avere un
 | FA-037 | P2 | Struttura | Due pagine di diagnostica, una delle quali si chiama Impostazioni | **OPEN** | `/settings` e 62 righe e monta otto pannelli tutti diagnostici; il file lo dice di se, Admin / diagnostic surface. Gli unici controlli sono filtri **effimeri** su uno studio: nessuno persiste. Le preferenze vere esistono sparse — tema e sidebar in `Layout`, `chart-timeframe` in `chartPrefs`, viste salvate nel filtro screener, colonne in `useColumnVisibility` — e il toggle del tema sta **accanto** al link Impostazioni, non dentro. Proposta: una Diagnostica con schede Piattaforma e Motore, che separa disponibilita del sistema da capacita predittiva, e l'ingranaggio libero per le preferenze. Audit §5.1. |
 | FA-038 | P3 | UX/navigazione | Il ritorno manca sulle due pagine di dettaglio piu visitate | **DONE / PROD** | Commit `66aa10c`. Il modello non e stato inventato: `SectorDetail` e `InstitutionalDetail` lo avevano gia, un `<Link>` verso la pagina padre col suo nome. Aggiunto a `/stocks/:ticker` (Screener) e `/markets/:symbol` (Dashboard). ⚠️ E `MacroDetail` passa da `navigate(-1)` a un `<Link>`: un ritorno alla storia del browser non porta da nessuna parte quando la pagina si apre da un link ricevuto, cioe esattamente quando serve. Il test legge il SORGENTE delle cinque pagine e cerca la destinazione: montarle vorrebbe react-query, il router e i grafici, cioe testare l'infrastruttura invece del ritorno. **Un primo tentativo costruiva un finto componente dentro il test** e avrebbe asserito che il TEST rende un'ancora: buttato, era vero di niente. |
 | FA-039 | P3 | Frontend | L'AbortSignal e supportato dal client e quasi mai propagato | **OPEN** | `api/client.ts` inoltra davvero `signal` a fetch: il supporto e reale. Ma nel frontend esistono **due sole** occorrenze di `Abort` in tutto il sorgente e **nessun** `AbortController`. Su 58 `queryFn` in produzione **una** destruttura il `signal` di React Query, `useStockSearch`; nei moduli `api/`, su 54 wrapper uno solo espone il parametro, quindi un hook non potrebbe inoltrarlo nemmeno volendo. Completare qui prima di valutare un secondo client. Audit §9. |
+| FA-040 | P3 | UX/igiene | Colonne vuote, righe mozzate, nomi che spariscono su mobile | **DONE / PROD** | Voce 2.4 del piano, chiusa dal commit `24f976d` piu lo snap sulle confluenze. (a) Su *In formazione* «Livello d'innesco» e «Distanza» mostravano un trattino su TUTTE le righe dei gruppi la cui condizione non e un attraversamento di prezzo. ⚠️ Ma un trattino non e sempre uno spreco: su una riga singola dice «questo innesco non e un attraversamento di prezzo», ed e informazione vera. La colonna sparisce solo quando NESSUNA riga del gruppo la riempie, e i test lo fissano in entrambe le direzioni. (b) In `AllocationBars` il nome era l'unica traccia flessibile, quindi su un telefono da 390px gli restavano meno di cento pixel e sui fondi spariva: restavano le percentuali senza sapere di chi. Sotto `sm` va su due righe. (c) Le righe mozzate a meta altezza nascono da una riga ad altezza fissa che non e un multiplo del passo: `snap-y snap-proximity` fa fermare lo scorrimento su righe intere, e `proximity` invece di `mandatory` perche non combatta chi scorre piano. ⚠️ **Terza volta oggi con la stessa forma**, in tre componenti non imparentati: cede sempre l'ETICHETTA e sopravvive la decorazione. Registrato in CLAUDE.md con la regola e le tre soluzioni. |
 | FA-018 | P2 | Accessibilita | Aggiungere descrizione accessibile al dialog degli alert prezzo | **DONE / PROD** | `PriceAlertDialog` espone `DialogDescription` screen-reader-only; warning Radix corretto, codice deployato e suite frontend verde. |
 | FA-019 | P0 | Release | Push e sincronizzazione cloud dei commit locali | **DONE / PROD** | Push verificato; CI 34366785799 completata con tutti i job verdi, Argo `Synced/Healthy`, StatefulSet sull’immagine `42693fb1b09195be96065cfdc1bda0be176c014a`, health esterno 200 e `/metrics` esterno 403. |
 | FA-021 | P2 | GitOps | Eliminare lo stato Argo `OutOfSync` del Cluster CNPG quando il diff effettivo è vuoto | **DONE / PROD** | Verificato live 2026-09-09: `postgres-cluster` torna `Synced/Healthy` e tutte e cinque le Application sono sincronizzate; il cluster resta sano 1/1 e nessun pod si e riavviato. Causa isolata: l'operatore aggiunge `enabled: true` alla voce di `spec.plugins`, e il CRD non dichiara `x-kubernetes-list-type`, quindi la lista è ATOMICA e una chiave in più rende diversa tutta la lista. `postgresql.parameters` non causa drift benché l'operatore vi inietti 23 chiavi: è una mappa e ArgoCD possiede solo le sue sette. Rimedio: dichiarare il campo nel manifest, **non** un `ignoreDifferences` su `/spec/plugins`, che silenzierebbe anche una modifica vera all'archiviatore. |
@@ -74,11 +75,11 @@ correzione, che era la condizione d'ingresso posta dal piano — e non era una
 formalita: il blocco 52W non aveva alcuna asserzione, ed e per questo che il
 difetto e sopravvissuto a un rename restando invisibile per mesi.
 
-**La Tranche 2 e quasi chiusa.** FA-027 (il dettaglio titolo che disegnava i
-valori sopra le etichette), FA-036 (le pastiglie del calendario senza ticker) e
-FA-038 (il ritorno mancante) sono in produzione. Resta la voce 2.4 del piano,
-l'igiene: colonne vuote per il 100% delle righe, righe tagliate a meta altezza,
-e l'identita che si comprime a zero su mobile mentre la misura resta.
+**La Tranche 2 e chiusa.** FA-027 (i valori disegnati sopra le etichette),
+FA-036 (le pastiglie del calendario senza ticker), FA-038 (il ritorno mancante)
+e FA-040 (l'igiene: colonne vuote, righe mozzate, nomi che sparivano su
+mobile). **La prossima e la Tranche 3**, la struttura, che apre con FA-037: le
+due pagine di diagnostica, una delle quali si chiama Impostazioni.
 
 ⚠️ **Due dei tre difetti erano gia stati trovati e gia corretti, con la soglia
 sbagliata.** FA-027 risolveva sotto `sm` una colonna che e stretta da `lg` in
@@ -88,8 +89,8 @@ chiuso, il che e' precisamente cio che lo ha tenuto nascosto: una correzione
 parziale avvalora la convinzione che il caso sia risolto. **Quando un commento
 dice di aver sistemato qualcosa, rifare il conto costa meno che fidarsi.**
 
-Le tredici voci qui sotto sono quello che resta: due in attesa di dati, due in
-attesa di un collaudo su dispositivo reale, otto aperte, una che aspetta una
+Le dieci voci qui sotto sono quello che resta: due in attesa di dati, due in
+attesa di un collaudo su dispositivo reale, cinque aperte, una che aspetta una
 decisione.
 
 **Le prime da fare sono FA-030 fino a FA-033**, i quattro difetti di significato

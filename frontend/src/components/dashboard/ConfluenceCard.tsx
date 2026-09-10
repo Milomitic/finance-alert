@@ -96,7 +96,7 @@ export function ConfluenceRows({ limit = 8 }: { limit?: number }) {
         // dentro DirectionPill.
         const dirWord = c.direction === "bull" ? "Long" : "Short";
         return (
-          <li key={c.ticker}>
+          <li key={c.ticker} className="snap-start">
             {/* Single row: identity (logo + ticker/name, "solito formato") on
                 the left, then direction + concurring-signal count + strength —
                 all on one line. The identity name truncates first when tight. */}
@@ -169,7 +169,19 @@ export function ConfluenceCard({ limit = 8 }: { limit?: number }) {
             right={<span className="text-xs text-muted-foreground">2+ segnali concordi</span>}
           />
         </div>
-        <div className="flex-1 min-h-0 overflow-y-auto">
+        {/* ⚠️ `snap-y snap-proximity`: lo scorrimento si ferma su righe intere.
+            La card vive in una riga ad altezza FISSA (`dense-3:h-[460px]` in
+            HomePage), che non e un multiplo del passo delle righe: l'ultima
+            visibile restava tagliata a meta altezza, e una riga mozzata non
+            legge come "c'e dell'altro", legge come un errore di disegno.
+
+            `proximity` e non `mandatory` di proposito: aggancia solo quando si
+            e gia vicini a una riga, quindi non combatte chi scorre piano in un
+            elenco denso. Non allinea il primo rendering — per quello servirebbe
+            che il contenitore conoscesse il passo delle righe, che non conosce
+            — ma toglie il taglio da ogni posizione di riposo, che e dove lo si
+            guarda. */}
+        <div className="flex-1 min-h-0 overflow-y-auto snap-y snap-proximity">
           <ConfluenceRows limit={limit} />
         </div>
       </CardContent>
