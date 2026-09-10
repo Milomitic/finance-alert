@@ -1034,6 +1034,16 @@ export interface StockScore {
       n_analysts?: number;
       price_target?: number;
       target_upside_pct?: number;
+      /** Il prezzo su cui `target_upside_pct` e calcolato, e la sua data.
+       *
+       *  ⚠️ Viaggiano con la percentuale e non sono decorativi. Lo stesso
+       *  target rendeva +11.5% qui e +4.3% nel pannello analisti sulla stessa
+       *  pagina, perche i due partivano da prezzi diversi e nessuno dei due
+       *  diceva quale: la contraddizione non era leggibile a schermo. E la
+       *  stessa regola che questo repo applica ai tassi — un numero senza il
+       *  proprio denominatore non si pubblica. */
+      upside_base_price?: number;
+      upside_base_as_of?: string;
     } | null;
   } | null;
 }

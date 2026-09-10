@@ -686,10 +686,25 @@ function QualityExtrasRow({ extras }: { extras?: StockScore["quality_extras"] })
           )}
           {an.n_analysts != null && <span className="text-muted-foreground">· {an.n_analysts} analisti</span>}
           {an.target_upside_pct != null && (
-            <span className={cn("font-semibold tabular-nums", an.target_upside_pct >= 0 ? "text-emerald-800 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400")}
-              title={`Target medio ${an.price_target?.toFixed(2)} vs prezzo`}>
-              {an.target_upside_pct >= 0 ? "+" : ""}{an.target_upside_pct}% al target
-            </span>
+            <>
+              <span className={cn("font-semibold tabular-nums", an.target_upside_pct >= 0 ? "text-emerald-800 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400")}
+                title={
+                  an.upside_base_price != null
+                    ? `Target medio ${an.price_target?.toFixed(2)} sulla chiusura ${an.upside_base_price.toFixed(2)}${an.upside_base_as_of ? ` del ${an.upside_base_as_of}` : ""}`
+                    : `Target medio ${an.price_target?.toFixed(2)}`
+                }>
+                {an.target_upside_pct >= 0 ? "+" : ""}{an.target_upside_pct}% al target
+              </span>
+              {/* La base, a schermo e non solo nel tooltip: e' l'unica cosa
+                  che rende leggibile perche' questa percentuale e quella del
+                  pannello analisti possono differire sullo stesso target. */}
+              {an.upside_base_price != null && (
+                <span className="text-[0.6765rem] tabular-nums">
+                  su {an.upside_base_price.toFixed(2)}
+                  {an.upside_base_as_of ? ` del ${an.upside_base_as_of.slice(5).split("-").reverse().join("/")}` : ""}
+                </span>
+              )}
+            </>
           )}
         </div>
       )}

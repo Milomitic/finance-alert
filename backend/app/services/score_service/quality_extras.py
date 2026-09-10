@@ -4,7 +4,11 @@ v1 capstone): governance + analyst context that is NOT part of the composite.
 from __future__ import annotations
 
 
-def quality_extras(fundamentals, current_price: float | None = None) -> dict | None:
+def quality_extras(
+    fundamentals,
+    current_price: float | None = None,
+    current_price_as_of: str | None = None,
+) -> dict | None:
     """Read-time INFORMATIONAL enrichment for the Qualità score: surface the
     already-loaded-but-unscored governance + analyst signals (Engine Quality v1,
     proposal capstone). NOT part of the composite — purely additive context.
@@ -45,8 +49,23 @@ def quality_extras(fundamentals, current_price: float | None = None) -> dict | N
             target = getattr(pt, "current", None)
     if target is not None:
         analyst["price_target"] = round(float(target), 2)
+        # ⚠️ L'upside NON si pubblica senza la sua base.
+        #
+        # Lo stesso target rendeva +11.5% qui e +4.3% nel pannello analisti
+        # sulla stessa pagina, perche' i due partivano da prezzi diversi:
+        # questo dall'ultima chiusura in `ohlcv_daily`, quello da
+        # `pt.current` di yfinance, vecchio quanto la cache dei fondamentali.
+        # Nessuno dei due diceva quale stesse usando, quindi la contraddizione
+        # non era leggibile a schermo — sembravano due misure diverse.
+        #
+        # E' la stessa regola che questo repo applica ai tassi: un numero
+        # senza il proprio denominatore non si pubblica. Qui il denominatore
+        # e' il prezzo base, e viaggia con la percentuale.
         if current_price and current_price > 0:
             analyst["target_upside_pct"] = round((float(target) / current_price - 1.0) * 100, 1)
+            analyst["upside_base_price"] = round(float(current_price), 2)
+            if current_price_as_of:
+                analyst["upside_base_as_of"] = current_price_as_of
 
     if not gov and not analyst:
         return None

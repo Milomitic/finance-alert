@@ -66,10 +66,18 @@ function PriceTargetBar({ pt, currency }: { pt: AnalystPriceTarget; currency: st
                   ? "text-emerald-800 dark:text-emerald-300"
                   : "text-rose-700 dark:text-rose-300",
               )}
-              title={`Upside implicito: ${upside.toFixed(1)}% sul prezzo corrente`}
+              title={
+                `Upside implicito: ${upside.toFixed(1)}% sul prezzo ${formatMoney(current, currency)} ` +
+                "riportato dalla stessa fonte dei target. NON e il prezzo live " +
+                "dell'intestazione, che si aggiorna ogni 15 secondi: le due " +
+                "percentuali verso lo stesso target possono quindi differire."
+              }
             >
               {upside >= 0 ? "+" : ""}
               {upside.toFixed(1)}%
+              <span className="ml-1 font-normal text-muted-foreground text-[0.6765rem]">
+                su {formatMoney(current, currency)}
+              </span>
             </span>
           ) : undefined
         }
