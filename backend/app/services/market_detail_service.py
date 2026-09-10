@@ -27,7 +27,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from threading import Lock
 
 from loguru import logger
@@ -189,13 +189,27 @@ def _fetch_fresh(symbol: str, range_key: str) -> MarketDetailDC | None:
     high_window = max(closes)
     low_window = min(closes)
 
-    # 52w window always — independent of `range_key`. We pull a
-    # separate 1y series via a second request so a "1m" view still
-    # surfaces the 52w high/low. Keeps the panel's KPI strip stable
-    # across range changes.
+    # 52w window always — independent of `range_key`. Daily, weekly and
+    # monthly chart histories already contain at least one year in the normal
+    # case, so reuse their closing bars and trim them to the final 52 weeks.
+    # Intraday histories need a daily series: their last bar is not the market
+    # close and using every intraday close would change the meaning of this
+    # KPI. This keeps the number stable across chart timeframes and avoids an
+    # unnecessary second request for the daily-or-coarser views.
     high_52w: float | None = None
     low_52w: float | None = None
-    if range_key in ("1m", "3m", "6m"):
+    last_bar_day = _as_date(bars[-1].date)
+    cutoff_52w = last_bar_day - timedelta(weeks=52)
+    can_reuse_chart_bars = (
+        interval in {"1d", "1wk", "1mo"}
+        and _as_date(bars[0].date) <= cutoff_52w
+    )
+    if can_reuse_chart_bars:
+        closes_52w = [b.close for b in bars if _as_date(b.date) >= cutoff_52w]
+        if closes_52w:
+            high_52w = max(closes_52w)
+            low_52w = min(closes_52w)
+    else:
         try:
             import yfinance as yf2
 
@@ -216,10 +230,6 @@ def _fetch_fresh(symbol: str, range_key: str) -> MarketDetailDC | None:
                 f"[market_detail] 52w fetch failed for {symbol}: {e!r} "
                 "— high/low 52w left empty"
             )
-    else:
-        # 1y / 5y / all — the in-range high/low IS already ≥ 52w.
-        high_52w = high_window
-        low_52w = low_window
 
     indicators = _compute_indicators(bars)
 
@@ -284,6 +294,11 @@ def _is_finite(v: float) -> bool:
         return v == v and v not in (float("inf"), float("-inf"))
     except (TypeError, ValueError):
         return False
+
+
+def _as_date(value: date) -> date:
+    """Normalize intraday datetimes before comparing annual boundaries."""
+    return value.date() if isinstance(value, datetime) else value
 
 
 def _safe_float(v: object, fallback: float) -> float:

@@ -358,11 +358,11 @@ export default function MarketDetailPage() {
             </div>
             <div className="grid grid-cols-2 gap-2 [&>*]:min-w-0">
               <KpiCell
-                label="52W high"
+                label="52W high (chiusure)"
                 value={d.high_52w != null ? formatMarketPrice(d.high_52w, d.category) : "—"}
               />
               <KpiCell
-                label="52W low"
+                label="52W low (chiusure)"
                 value={d.low_52w != null ? formatMarketPrice(d.low_52w, d.category) : "—"}
               />
               <KpiCell
