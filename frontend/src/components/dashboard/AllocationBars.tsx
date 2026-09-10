@@ -173,9 +173,25 @@ export function AllocationBars({
    *   name   : minmax(0,1fr) → truncates instead of overflowing
    *   action : fixed 4.5rem → REDUCE/ADD/USCITO start at the same x
    *   bar    : fixed 7rem → narrower bars, all the same width
-   *   nums   : auto, right-aligned, tabular */
+   *   nums   : auto, right-aligned, tabular
+   *
+   * ⚠️ SU DUE RIGHE SOTTO `sm`, e non e' un dettaglio estetico. Il nome e'
+   * l'unica traccia flessibile, quindi su schermo stretto assorbiva l'intero
+   * deficit: azione, barra e numeri sono a larghezza fissa o `shrink-0` e
+   * sommano ~184px piu i gap, che su un telefono da 390px lasciavano al nome
+   * meno di cento pixel — e sui fondi, dove i nomi sono lunghi
+   * ("BERKSHIRE HATHAWAY INC DEL"), spariva del tutto. Restavano le
+   * percentuali senza sapere di CHI.
+   *
+   * Una barra al 3,5% senza sapere di chi non e' un'informazione parziale, e'
+   * rumore. Sotto `sm` il nome e la sua azione stanno sulla prima riga e la
+   * barra coi numeri sulla seconda: l'identita e la misura restano nella
+   * stessa unita di lettura, e nessuna delle due cede all'altra.
+   *
+   * Classi letterali, mai composte — il purger di Tailwind vede solo quelle
+   * (CLAUDE.md). */
   const ROW =
-    "grid grid-cols-[minmax(0,1fr)_4.5rem_7rem_auto] items-center gap-3";
+    "grid grid-cols-[minmax(0,1fr)_auto] sm:grid-cols-[minmax(0,1fr)_4.5rem_7rem_auto] items-center gap-x-3 gap-y-1";
 
   return (
     <div className="min-w-0">

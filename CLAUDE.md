@@ -1053,6 +1053,53 @@ Full audit with causes and file refs:
 [docs/frontend-audit-2026-09-10.md](docs/frontend-audit-2026-09-10.md).
 Backlog IDs FA-030 to FA-039.
 
+## When space runs out, the IDENTITY gives way and the decoration survives (2026-09-10)
+
+Found three times in one afternoon, in three unrelated components, always the
+same shape: the flexible track is the one that says WHAT you are looking at,
+and everything beside it is `shrink-0`.
+
+| Component | What compressed to nothing | What survived intact |
+|---|---|---|
+| `SectionTitle` | the card's name -> `F` for `FUNDAMENTALS` | timestamp + refresh button |
+| `EventChip` (calendar) | the ticker -> `D ▲`, `A…` | logo, arrow, dot |
+| `AllocationBars` | the fund/holding name | the percentage and the bar |
+
+Each reads as reasonable in isolation: a chip should not wrap, a timestamp
+should not break. But together they mean the LABEL is the only thing that can
+absorb a deficit, so it absorbs all of it. A bar at 3.5% with no name is not
+partial information, it is noise.
+
+**The rule: identity and measure belong in the same unit of reading.** When
+they do not both fit, wrap or stack — do not let the name go to zero. Concrete
+shapes used here: `flex-wrap` so the trailing slot drops below (SectionTitle),
+one item per row instead of two columns (calendar), a two-row grid under `sm`
+(AllocationBars).
+
+⚠️ **All of these are LITERAL class strings.** A responsive template composed
+at runtime (`` `sm:grid-cols-[${cols.join("_")}]` ``) is dropped by the
+Tailwind purger and the bug is invisible in dev — the rule the tone-class
+section below already states, in a second disguise. Where a grid needs several
+shapes, write each one out; four literals beat one template.
+
+### The corollary that cost the most time: a partial fix HIDES the defect
+
+Two of the three had already been found, already been "fixed", and the fix had
+the wrong threshold. Worse, the comment beside the code described the defect
+in detail, with measurements, and declared it closed:
+
+- `StockDetailPage` — *"side by side these two got ~170px each... the Qualità
+  gauge collided with its risk badge"*. Fixed under `sm`; the column is narrow
+  from `lg` UP, where it becomes the `1fr` of `[2fr_1fr]` and yields ~133px.
+- `DayCell` — *"Two columns is what made the tickers vanish... thirty-one
+  labels were invisible"*. Moved to `dense-3` (1400px) on a "two 85px chips"
+  calculation. 85px does not hold a ticker, and the screenshot that reopened
+  the case is at **1440px** — inside the two-column branch.
+
+This is the `_RANGE_PERIODS` failure in another form: dead code corroborates a
+stale note, and a partial fix corroborates a closed case. **When a comment says
+something was fixed, redo the arithmetic — it costs less than trusting it.**
+
 ## Frontend tone classes (Tailwind purger)
 
 Tone-class maps in `lib/alertMeta.ts` and similar files MUST stay as plain

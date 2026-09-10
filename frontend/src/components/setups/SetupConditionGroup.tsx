@@ -58,8 +58,52 @@ function InlineIdentity({ ticker, name }: { ticker: string; name: string | null 
 
 /** The column template, declared once so the header and every row cannot drift
  *  apart — the failure mode of hand-aligned "tables" built out of divs. */
-const COLS =
-  "grid grid-cols-[minmax(0,1fr)_auto] sm:grid-cols-[minmax(0,1fr)_132px_88px_92px_64px] items-center gap-x-3";
+/* Una colonna vuota per OGNI riga del gruppo non va renderizzata.
+ *
+ * Alcune famiglie di condizione non hanno un livello di prezzo da attraversare
+ * — lo dice gia il tooltip di `DistanceCell`: "questo innesco non e un
+ * attraversamento di prezzo" — quindi per quei gruppi «Livello d'innesco» e
+ * «Distanza» mostrano un trattino su tutte le righe. Due colonne che occupano
+ * larghezza per non dire nulla, su una tabella che gia taglia «Attesa» a
+ * destra.
+ *
+ * ⚠️ I quattro template sono LETTERALI e non composti a runtime. Il purger di
+ * Tailwind legge solo stringhe letterali: un
+ * `` `sm:grid-cols-[${cols.join("_")}]` `` verrebbe eliminato dal bundle di
+ * produzione e il difetto sarebbe invisibile in sviluppo. E la stessa regola
+ * che CLAUDE.md impone alle mappe di tono.
+ *
+ * ⚠️ E la decisione e per GRUPPO, non globale: dove la colonna porta un dato
+ * resta. Nascondere una colonna perche' una riga non la riempie sarebbe il
+ * difetto opposto. */
+const BASE = "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3";
+
+const COLS = {
+  levelAndDistance: `${BASE} sm:grid-cols-[minmax(0,1fr)_132px_88px_92px_64px]`,
+  levelOnly: `${BASE} sm:grid-cols-[minmax(0,1fr)_132px_88px_64px]`,
+  distanceOnly: `${BASE} sm:grid-cols-[minmax(0,1fr)_88px_92px_64px]`,
+  neither: `${BASE} sm:grid-cols-[minmax(0,1fr)_88px_64px]`,
+} as const;
+
+/** Quali colonne opzionali questo gruppo ha davvero da mostrare. */
+export interface GroupColumns {
+  level: boolean;
+  distance: boolean;
+  cols: string;
+}
+
+export function columnsFor(setups: Setup[]): GroupColumns {
+  const level = setups.some((x) => x.annotations?.levels?.[0] != null);
+  const distance = setups.some((x) => x.distance_atr != null);
+  const cols = level
+    ? distance
+      ? COLS.levelAndDistance
+      : COLS.levelOnly
+    : distance
+      ? COLS.distanceOnly
+      : COLS.neither;
+  return { level, distance, cols };
+}
 
 /** Distance to the trigger, in ATR. Colour is the reading, not decoration:
  *  under a quarter of an average session's range is a genuinely different
@@ -98,22 +142,26 @@ function DistanceCell({ value }: { value: number | null }) {
   );
 }
 
-function GroupHeaderRow() {
+function GroupHeaderRow({ columns }: { columns: GroupColumns }) {
   return (
-    <li className={cn(COLS, "px-3 py-1 border-b bg-muted/20")}>
+    <li className={cn(columns.cols, "px-3 py-1 border-b bg-muted/20")}>
       <span className="text-[0.6765rem] uppercase tracking-[0.14em] text-muted-foreground">Titolo</span>
+      {columns.level && (
       <span className="hidden sm:block text-[0.6765rem] uppercase tracking-[0.14em] text-muted-foreground">
         Livello d'innesco
       </span>
+      )}
       <span className="text-[0.6765rem] uppercase tracking-[0.14em] text-muted-foreground justify-self-end sm:justify-self-start">
         Priorità
       </span>
+      {columns.distance && (
       <span
         className="hidden sm:block text-[0.6765rem] uppercase tracking-[0.14em] text-muted-foreground"
         title="Distanza dal livello d'innesco, in multipli dell'ATR del titolo"
       >
         Distanza
       </span>
+      )}
       <span className="hidden sm:block text-[0.6765rem] uppercase tracking-[0.14em] text-muted-foreground justify-self-end">
         Attesa
       </span>
@@ -121,7 +169,15 @@ function GroupHeaderRow() {
   );
 }
 
-function SetupLine({ setup, onOpen }: { setup: Setup; onOpen: (s: Setup) => void }) {
+function SetupLine({
+  setup,
+  onOpen,
+  columns,
+}: {
+  setup: Setup;
+  onOpen: (s: Setup) => void;
+  columns: GroupColumns;
+}) {
   const days = waitingDays(setup);
   const level = setup.annotations?.levels?.[0];
   return (
@@ -133,21 +189,23 @@ function SetupLine({ setup, onOpen }: { setup: Setup; onOpen: (s: Setup) => void
       <button
         type="button"
         onClick={() => onOpen(setup)}
-        className={cn(COLS, "w-full text-left px-3 py-1 hover:bg-accent/30 transition-colors")}
+        className={cn(columns.cols, "w-full text-left px-3 py-1 hover:bg-accent/30 transition-colors")}
       >
         <InlineIdentity ticker={setup.ticker} name={setup.name} />
 
         {/* The trigger level is what you would actually set an alert on, so it
             sits next to the name rather than in a footnote. */}
-        <span className="hidden sm:block text-xs text-muted-foreground tabular-nums truncate">
-          {level ? `${level.label} ${level.price.toFixed(2)}` : "—"}
-        </span>
+        {columns.level && (
+          <span className="hidden sm:block text-xs text-muted-foreground tabular-nums truncate">
+            {level ? `${level.label} ${level.price.toFixed(2)}` : "—"}
+          </span>
+        )}
 
         <span className="justify-self-end sm:justify-self-start">
           <PriorityBar value={setup.convenience} />
         </span>
 
-        <DistanceCell value={setup.distance_atr} />
+        {columns.distance && <DistanceCell value={setup.distance_atr} />}
 
         <span className="hidden sm:flex items-center gap-1 justify-self-end text-xs text-muted-foreground whitespace-nowrap">
           <Clock className="h-3 w-3" aria-hidden />
@@ -166,6 +224,9 @@ export function SetupConditionGroup({
   onOpen: (s: Setup) => void;
 }) {
   const bull = group.tone === "bull";
+  // Calcolato sul gruppo, non sulla singola riga: una colonna sparisce solo
+  // se NESSUN setup del gruppo la riempie.
+  const columns = columnsFor(group.setups);
   return (
     <Card className="overflow-hidden">
       <CardContent className="p-0">
@@ -205,9 +266,9 @@ export function SetupConditionGroup({
           {/* Column names, per group. They were missing entirely: the rows
               carried four unlabelled values and the reader had to infer which
               number was a price, which a score and which a count. */}
-          <GroupHeaderRow />
+          <GroupHeaderRow columns={columns} />
           {group.setups.map((s) => (
-            <SetupLine key={s.id} setup={s} onOpen={onOpen} />
+            <SetupLine key={s.id} setup={s} onOpen={onOpen} columns={columns} />
           ))}
         </ul>
       </CardContent>
