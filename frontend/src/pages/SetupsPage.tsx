@@ -2,6 +2,7 @@ import { Hourglass, Target } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { SetupConditionGroup } from "@/components/setups/SetupConditionGroup";
+import { AlertDetailDialog } from "@/components/AlertDetailDialog";
 import { SetupDetailDialog } from "@/components/setups/SetupDetailDialog";
 import { Card, CardContent } from "@/components/ui/card";
 import { CardSkeleton } from "@/components/ui/card-skeleton";
@@ -9,6 +10,7 @@ import { QueryError } from "@/components/ui/query-error";
 import { SectionTitle } from "@/components/ui/section-title";
 import SetupDetectorStats from "@/components/setups/SetupDetectorStats";
 import { SetupOutcomeList } from "@/components/setups/SetupOutcomeList";
+import { useAlert } from "@/hooks/useAlerts";
 import { useSetups, type Setup, type SetupStats } from "@/hooks/useSetups";
 import { detectorCounts, detectorLabel, groupByCondition, type SetupSortKey } from "@/lib/setupGrouping";
 import { cn } from "@/lib/utils";
@@ -215,6 +217,11 @@ export default function SetupsPage() {
   // whether the feature works — conversion rate and lead time both come from
   // them — and until now the page could not show a single one.
   const [view, setView] = useState<"active" | "closed">("active");
+  // Il segnale in cui un setup e scattato. Per id, non per ricerca nella lista
+  // alert: quella e paginata, e un setto convertito ad agosto non e in nessuna
+  // pagina che si stia guardando.
+  const [signalId, setSignalId] = useState<number | null>(null);
+  const signal = useAlert(signalId);
   const q = useSetups(tone, undefined, view);
 
   const all = useMemo(() => q.data?.setups ?? [], [q.data?.setups]);
@@ -357,7 +364,11 @@ export default function SetupsPage() {
             </CardContent>
           </Card>
         ) : view === "closed" ? (
-          <SetupOutcomeList setups={all} />
+          <SetupOutcomeList
+            setups={all}
+            onOpenSignal={setSignalId}
+            pendingAlertId={signal.isFetching ? signalId : null}
+          />
         ) : (
           <div className="space-y-3">
             {groups.map((g) => (
@@ -367,6 +378,13 @@ export default function SetupsPage() {
         )}
       </div>
       <SetupDetailDialog setup={openSetup} onClose={() => setOpenSetup(null)} />
+      {/* Il terzo anello: setup → segnale → posizione. Lo stesso dialogo che
+          la pagina Segnali e la pagina Posizioni aprono, e che contiene
+          `TrackTradeForm`, cioe il modo in cui un segnale diventa posizione. */}
+      <AlertDetailDialog
+        alert={signal.data ?? null}
+        onClose={() => setSignalId(null)}
+      />
     </div>
   );
 }

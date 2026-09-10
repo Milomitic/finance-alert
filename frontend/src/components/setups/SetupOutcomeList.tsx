@@ -1,4 +1,4 @@
-import { CheckCircle2, CircleSlash } from "lucide-react";
+import { Bell, CheckCircle2, CircleSlash } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { StockLogo } from "@/components/dashboard/StockLogo";
@@ -19,6 +19,17 @@ import { cn } from "@/lib/utils";
  * other half of it. Hiding the expiries would make the feature look better
  * than it is, which is the same rule that stops `expire_stale_setups` from
  * deleting them.
+ *
+ * ⚠️ Una riga convertita porta al SEGNALE in cui e scattata. `converted_alert_id`
+ * e scritto quando l'alert nasce — e un fatto registrato, non un'inferenza — e
+ * arrivava fin qui senza essere reso, esattamente come `Position.alert_id`
+ * sulle posizioni. I due insieme rendono percorribile la catena che i dati gia
+ * contengono: **setup → segnale → posizione**.
+ *
+ * ⚠️ Il pulsante sta FUORI dall'ancora, non dentro. Un controllo interattivo
+ * annidato in un `<a>` e HTML non valido e si comporta male da tastiera: la
+ * riga e diventata un contenitore con due bersagli distinti invece di un unico
+ * link che ne conteneva un altro.
  */
 
 function fmtDate(iso: string | null | undefined): string {
@@ -29,7 +40,15 @@ function fmtDate(iso: string | null | undefined): string {
     : d.toLocaleDateString("it-IT", { day: "2-digit", month: "short" });
 }
 
-function OutcomeRow({ setup }: { setup: Setup }) {
+function OutcomeRow({
+  setup,
+  onOpenSignal,
+  pending = false,
+}: {
+  setup: Setup;
+  onOpenSignal?: (alertId: number) => void;
+  pending?: boolean;
+}) {
   const converted = setup.status === "converted";
   const waited = resolvedAfterDays(setup);
   // Literal tone classes, never composed — the Tailwind purger only sees
@@ -39,11 +58,13 @@ function OutcomeRow({ setup }: { setup: Setup }) {
     : "border-border bg-muted/50 text-muted-foreground";
   const Icon = converted ? CheckCircle2 : CircleSlash;
 
+  const alertId = converted ? setup.converted_alert_id : null;
+
   return (
-    <li>
+    <li className="flex items-center transition-colors hover:bg-accent/40">
       <Link
         to={`/stocks/${encodeURIComponent(setup.ticker)}`}
-        className="flex items-center gap-3 px-3 py-2 hover:bg-accent/40 transition-colors"
+        className="flex min-w-0 flex-1 items-center gap-3 px-3 py-2"
       >
         <span
           className={cn(
@@ -76,11 +97,34 @@ function OutcomeRow({ setup }: { setup: Setup }) {
           {fmtDate(setup.resolved_at)}
         </span>
       </Link>
+
+      {/* Solo sulle convertite: una scaduta non e diventata nessun segnale, e
+          `converted_alert_id` e nullo per costruzione. */}
+      {alertId != null && onOpenSignal && (
+        <button
+          type="button"
+          onClick={() => onOpenSignal(alertId)}
+          disabled={pending}
+          aria-label={`Segnale in cui e scattato il setup su ${setup.ticker}`}
+          title="Apri il segnale in cui questo setup e scattato"
+          className="mr-2 inline-flex shrink-0 items-center rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50"
+        >
+          <Bell className={cn("h-3.5 w-3.5", pending && "animate-pulse")} />
+        </button>
+      )}
     </li>
   );
 }
 
-export function SetupOutcomeList({ setups }: { setups: Setup[] }) {
+export function SetupOutcomeList({
+  setups,
+  onOpenSignal,
+  pendingAlertId = null,
+}: {
+  setups: Setup[];
+  onOpenSignal?: (alertId: number) => void;
+  pendingAlertId?: number | null;
+}) {
   if (setups.length === 0) {
     return (
       <Card>
@@ -97,7 +141,14 @@ export function SetupOutcomeList({ setups }: { setups: Setup[] }) {
       <CardContent className="p-0">
         <ol className="divide-y">
           {setups.map((s) => (
-            <OutcomeRow key={s.id} setup={s} />
+            <OutcomeRow
+              key={s.id}
+              setup={s}
+              onOpenSignal={onOpenSignal}
+              pending={
+                pendingAlertId != null && pendingAlertId === s.converted_alert_id
+              }
+            />
           ))}
         </ol>
       </CardContent>
