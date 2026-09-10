@@ -1316,7 +1316,10 @@ export interface TickerHolder {
   shares: number | null;
   value_usd: number | null;
   portfolio_pct: number | null;
-  qoq_change_pct: number | null;
+  /** Quarter-on-quarter change in share count, in percent. */
+  shares_change_pct: number | null;
+  /** Quarter-on-quarter change in portfolio weight, in percentage points. */
+  portfolio_weight_delta_pp: number | null;
   action: string | null;
 }
 
@@ -1376,4 +1379,3 @@ export interface ScoreIcReport {
   };
   results?: Record<string, Record<string, ScoreIcPillar>>;
 }
-

@@ -73,4 +73,18 @@ describe("la colonna mostra il movimento, non il verbo della transazione", () =>
     ]} />);
     expect(screen.getByText("=")).toBeInTheDocument();
   });
+
+  it("never renders an impossible portfolio-weight move above 100pp", () => {
+    render(<AllocationBars title="t" items={[
+      item({ key: "bad", label: "Dato errato", deltaPct: 7663.7 }),
+    ]} />);
+    expect(screen.queryByText("+7663.7pp")).not.toBeInTheDocument();
+  });
+
+  it("falls back to the share change with its percent unit", () => {
+    render(<AllocationBars title="t" items={[
+      item({ key: "shares", label: "Quote", sharesChangePct: 20 }),
+    ]} />);
+    expect(screen.getByText("+20.0%")).toBeInTheDocument();
+  });
 });

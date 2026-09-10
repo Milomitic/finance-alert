@@ -31,6 +31,7 @@ Design notes
 """
 from __future__ import annotations
 
+import math
 from collections import defaultdict
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
@@ -1042,8 +1043,84 @@ class TickerHolder:
     shares: int | None
     value_usd: int | None
     portfolio_pct: float | None
-    qoq_change_pct: float | None
+    shares_change_pct: float | None
+    portfolio_weight_delta_pp: float | None
     action: str | None
+
+
+def _previous_portfolio_weights(
+    db: Session,
+    ticker: str,
+    current_period_by_institution: dict[int, date],
+) -> dict[int, float | None]:
+    """Return the ticker weight in each fund's immediately prior filing.
+
+    The previous *filing* matters here, not merely the previous row containing
+    the ticker: skipping a quarter where the position was absent would invent
+    a weight delta across non-consecutive snapshots.
+    """
+    if not current_period_by_institution:
+        return {}
+
+    filing_rows = db.execute(
+        select(
+            InstitutionalFiling.institutional_id,
+            InstitutionalFiling.id,
+            InstitutionalFiling.period_end_date,
+        )
+        .where(
+            InstitutionalFiling.institutional_id.in_(current_period_by_institution)
+        )
+        .order_by(
+            InstitutionalFiling.institutional_id,
+            InstitutionalFiling.period_end_date.desc(),
+        )
+    ).all()
+
+    previous_filing_by_institution: dict[int, int] = {}
+    for institutional_id, filing_id, period_end in filing_rows:
+        current_period = current_period_by_institution[institutional_id]
+        if (
+            period_end < current_period
+            and institutional_id not in previous_filing_by_institution
+        ):
+            previous_filing_by_institution[institutional_id] = filing_id
+
+    if not previous_filing_by_institution:
+        return {}
+
+    institution_by_filing = {
+        filing_id: institutional_id
+        for institutional_id, filing_id in previous_filing_by_institution.items()
+    }
+    weights: dict[int, float | None] = {
+        institutional_id: None
+        for institutional_id in previous_filing_by_institution
+    }
+    rows = db.execute(
+        select(
+            InstitutionalHolding.filing_id,
+            InstitutionalHolding.portfolio_pct,
+        ).where(
+            InstitutionalHolding.filing_id.in_(institution_by_filing),
+            InstitutionalHolding.ticker == ticker,
+        )
+    ).all()
+    for filing_id, portfolio_pct in rows:
+        weights[institution_by_filing[filing_id]] = portfolio_pct
+    return weights
+
+
+def _portfolio_weight_delta_pp(
+    current_weight: float | None,
+    previous_weight: float | None,
+) -> float | None:
+    if current_weight is None or previous_weight is None:
+        return None
+    delta = float(current_weight) - float(previous_weight)
+    if not math.isfinite(delta) or abs(delta) > 100:
+        return None
+    return round(delta, 4)
 
 
 def holders_for_ticker(
@@ -1117,6 +1194,11 @@ def holders_for_ticker(
     trusted_new = _substantiated_new(
         db, ((r[0], r[5]) for r in rows if r[10] == "new")
     )
+    previous_weights = _previous_portfolio_weights(
+        db,
+        ticker,
+        {r[0]: r[5] for r in rows},
+    )
 
     out: list[TickerHolder] = []
     for (
@@ -1136,7 +1218,11 @@ def holders_for_ticker(
                 shares=shares,
                 value_usd=value_usd,
                 portfolio_pct=portfolio_pct,
-                qoq_change_pct=qoq_change_pct,
+                shares_change_pct=qoq_change_pct,
+                portfolio_weight_delta_pp=_portfolio_weight_delta_pp(
+                    portfolio_pct,
+                    previous_weights.get(inst_id),
+                ),
                 action=action,
             )
         )
@@ -1275,6 +1361,11 @@ def historical_holders_for_ticker(
     trusted_new = _substantiated_new(
         db, ((r[0], r[5]) for r in rows if r[10] == "new")
     )
+    previous_weights = _previous_portfolio_weights(
+        db,
+        ticker,
+        {r[0]: r[5] for r in rows},
+    )
 
     out: list[TickerHolder] = []
     for (
@@ -1296,7 +1387,11 @@ def historical_holders_for_ticker(
                 shares=shares,
                 value_usd=value_usd,
                 portfolio_pct=portfolio_pct,
-                qoq_change_pct=qoq_change_pct,
+                shares_change_pct=qoq_change_pct,
+                portfolio_weight_delta_pp=_portfolio_weight_delta_pp(
+                    portfolio_pct,
+                    previous_weights.get(inst_id),
+                ),
                 action=action,
             )
         )

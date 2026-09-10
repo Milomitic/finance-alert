@@ -49,6 +49,9 @@ export interface AllocItem {
    *  POINTS. Shown instead of the action verb — see the note on the action
    *  column in the render body. */
   deltaPct?: number | null;
+  /** Quarter-on-quarter change in share count, in percent. Used only when a
+   *  comparable previous portfolio weight is unavailable. */
+  sharesChangePct?: number | null;
 }
 
 
@@ -59,9 +62,35 @@ function fmtPct(v: number | null | undefined): string {
 /** Quarter-on-quarter move in the fund's weight, in percentage points.
  *  Signed, because the sign IS the information. */
 function fmtDelta(v: number | null | undefined): string {
-  if (v == null || !Number.isFinite(v)) return "";
+  if (v == null || !Number.isFinite(v) || Math.abs(v) > 100) return "";
   if (Math.abs(v) < 0.05) return "=";
   return `${v > 0 ? "+" : "−"}${Math.abs(v).toFixed(1)}pp`;
+}
+
+function fmtSharesChange(v: number | null | undefined): string {
+  if (v == null || !Number.isFinite(v)) return "";
+  if (Math.abs(v) < 0.05) return "=";
+  return `${v > 0 ? "+" : "−"}${Math.abs(v).toFixed(1)}%`;
+}
+
+function movementOf(item: AllocItem): {
+  label: string;
+  value: number | null;
+  title: string;
+} {
+  const weightLabel = fmtDelta(item.deltaPct);
+  if (weightLabel) {
+    return {
+      label: weightLabel,
+      value: item.deltaPct ?? null,
+      title: "Variazione del peso in portafoglio rispetto al trimestre precedente",
+    };
+  }
+  return {
+    label: fmtSharesChange(item.sharesChangePct),
+    value: item.sharesChangePct ?? null,
+    title: "Variazione delle quote rispetto al trimestre precedente",
+  };
 }
 
 /** Conviction buckets by portfolio weight. Literal classes only. */
@@ -164,6 +193,7 @@ export function AllocationBars({
         <ul className="space-y-1.5">
           {sorted.map((it) => {
             const tone = weightTone(it.pct);
+            const movement = movementOf(it);
             // min 4% so a tiny-but-present position stays visible.
             const w = Math.max(4, Math.round((barOf(it) / maxBar) * 100));
             // Literal class strings, never composed — the Tailwind purger
@@ -210,19 +240,19 @@ export function AllocationBars({
                     "truncate text-[0.6765rem] uppercase tracking-wider tabular-nums",
                     it.exited
                       ? "text-rose-700 dark:text-rose-300"
-                      : (it.deltaPct ?? 0) > 0
+                      : (movement.value ?? 0) > 0
                         ? "text-emerald-800 dark:text-emerald-300"
-                        : (it.deltaPct ?? 0) < 0
+                        : (movement.value ?? 0) < 0
                           ? "text-amber-700 dark:text-amber-300"
                           : "text-muted-foreground",
                   )}
                   title={
                     it.exited
                       ? "Il fondo non detiene piu la posizione"
-                      : "Variazione del peso in portafoglio rispetto al trimestre precedente"
+                      : movement.title
                   }
                 >
-                  {it.exited ? _ACTION_LABEL.sold_out : fmtDelta(it.deltaPct)}
+                  {it.exited ? _ACTION_LABEL.sold_out : movement.label}
                 </span>
                 {/* Col 3: bar (fixed-width track → narrower + aligned).
                     A closed position gets a hollow, dashed track: it reads as
