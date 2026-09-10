@@ -137,11 +137,23 @@ export const DayCell = forwardRef<HTMLDivElement, DayCellProps>(
          * were invisible that way, tickers and macro events alike ("AIR.PA",
          * "QCOM", "FOMC rate decision"), on a page that otherwise looked fine.
          *
-         * dense-3 (1400px) puts the cell near 175px, which fits two 85px chips.
-         * Below that the cell shows fewer chips and an honest "+N" overflow
-         * rather than a row of blanks. */}
+         * ⚠️ E `dense-3` (1400px) NON bastava. Quella soglia era calcolata su
+         * "due chip da 85px", ma 85px non contengono un ticker: a 1440px —
+         * dentro il ramo a due colonne — le pastiglie rendevano `D ▲`, `A…`,
+         * `O…`, cioe' di nuovo il difetto che il commento sopra descrive come
+         * risolto. Rifatto il conto: perche' il ticker sia leggibile servono
+         * ~5 caratteri a 14px in grassetto (~45px) piu il logo (16px), i gap
+         * (~8px) e la freccia (~12px), quindi ~81px di chip; due piu il gap
+         * fanno ~166px di cella, cioe' ~1180px di griglia piu la barra
+         * laterale e i padding: **un viewport oltre i 1480px**.
+         *
+         * Invece di rincorrere la soglia, UNA COLONNA SEMPRE. Il "+N" esiste
+         * gia' ed e' onesto — lo dice questo stesso commento — mentre una fila
+         * di pastiglie senza nome non lo e': su un calendario earnings il
+         * ticker E' l'informazione, e una cella che ne mostra due illeggibili
+         * vale meno di una che ne mostra una leggibile piu un "+3". */}
         {hasEvents && (
-          <div className="relative grid grid-cols-1 dense-3:grid-cols-2 gap-x-1 gap-y-1 min-h-0">
+          <div className="relative grid grid-cols-1 gap-x-1 gap-y-1 min-h-0">
             {visible.map((ev, i) => (
               <EventChip
                 key={
