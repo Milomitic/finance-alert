@@ -10,7 +10,7 @@ from app.models import Index, Stock, StockIndex
 from app.services.country_normalizer import canonical_country
 from app.services.currency_units import major_unit_currency
 from app.services.exchange_codes import canonical_exchange
-from app.services.industry_normalizer import canonical_industry
+from app.services.industry_normalizer import canonical_industry, is_fund_industry
 from app.services.sector_normalizer import canonical_sector
 
 
@@ -43,6 +43,21 @@ def _upsert_stock(db: Session, row: dict[str, str]) -> tuple[Stock, bool]:
     # Industry similarly canonicalized — see `industry_normalizer.py`.
     industry_raw = row.get("industry") or None
     industry_canonical = canonical_industry(industry_raw)
+    # ⚠️ Il tipo di strumento va derivato QUI, dall'industria GREZZA, perche
+    # `canonical_industry` manda "Leveraged ETF" e "Exchange Traded Fund" su
+    # OTHER di proposito — per non inquinare i gruppi di confronto azionari —
+    # e cosi facendo cancella l'unico segnale che dice che la riga e un fondo.
+    # Un passaggio successivo non potrebbe piu distinguere un ETF a leva da
+    # una societa senza industria.
+    #
+    # Prima di questo, `instrument_type` era scritto UNA SOLA VOLTA da una
+    # migration con lista di 24 ticker fissi, e nessun percorso di ingestione
+    # lo valorizzava: ogni riga nuova nasceva `equity`. Misurato in produzione,
+    # il buco era una riga sola (QQQ), ma il meccanismo lo avrebbe riaperto al
+    # prossimo fondo aggiunto.
+    instrument_type = "etf" if is_fund_industry(industry_raw) else "equity"
+    # Il boundary contract come per country e currency: si normalizza dove il
+    # valore ENTRA nella colonna, non dove viene letto.
     # Country folded to ISO-2 at the same boundary: the DB column is
     # normalized (migration 2026-07) and a legacy CSV with "United
     # States" must not reintroduce full names. See `country_normalizer.py`.
@@ -61,6 +76,7 @@ def _upsert_stock(db: Session, row: dict[str, str]) -> tuple[Stock, bool]:
             # seed row carrying yfinance's raw 'GBp' must not reach the column.
             # Prices are stored in pounds, so the label has to say pounds.
             currency=major_unit_currency(row.get("currency")) or None,
+            instrument_type=instrument_type,
         )
         db.add(stock)
         db.flush()
@@ -72,6 +88,13 @@ def _upsert_stock(db: Session, row: dict[str, str]) -> tuple[Stock, bool]:
     stock.industry = industry_canonical or stock.industry
     stock.country = country_canonical or stock.country
     stock.currency = major_unit_currency(row.get("currency")) or stock.currency
+    # Un riseed corregge una classificazione sbagliata. ⚠️ Solo in salita:
+    # se il CSV dichiara un fondo la riga diventa `etf`, ma una riga gia
+    # marcata `etf` NON torna `equity` per un CSV che tace — le 24 righe
+    # classificate dalla migration del 2026-07 non hanno l'industria giusta
+    # nei seed, e un riseed le declasserebbe tutte.
+    if instrument_type == "etf":
+        stock.instrument_type = "etf"
     return stock, False
 
 

@@ -564,6 +564,27 @@ _SYNONYMS: dict[str, str] = {
 }
 
 
+# ⚠️ Le tre etichette sopra finiscono in OTHER **di proposito**, e quella
+# scelta CANCELLA l'unico segnale che dice che la riga e un fondo. Va quindi
+# letto PRIMA di normalizzare: dopo, un ETF a leva e indistinguibile da una
+# societa senza industria.
+#
+# Questo modulo possiede il vocabolario delle industrie, quindi possiede anche
+# la domanda "questa etichetta descrive un fondo". Un chiamante che se la
+# rispondesse da solo cercherebbe "ETF" dentro la stringa, e "Netflix"
+# contiene "etf": e il falso positivo da sottostringa che questo repository
+# ha gia pagato altrove.
+_FUND_INDUSTRIES = frozenset({"leveraged etf", "exchange traded fund", "etf"})
+
+
+def is_fund_industry(raw: str | None) -> bool:
+    """True quando l'industria GREZZA descrive un fondo, non una societa.
+
+    Confronto sull'etichetta INTERA, mai su una sottostringa.
+    """
+    return raw is not None and raw.strip().lower() in _FUND_INDUSTRIES
+
+
 # ─── Idempotency: every canonical label maps to itself ──────────────────────
 # Belt-and-braces: ensure each canonical bucket name itself is a key in
 # `_SYNONYMS` (case-insensitive) so `canonical_industry(canonical_label)`
