@@ -42,16 +42,26 @@ Questo file è il backlog operativo canonico. Ogni nuova attività deve avere un
 | FA-023 | P2 | UX/grafici | Marker dei segnali leggibili e pan che si ferma invece di resettare | **DONE / PROD** | Commit `9363ed9`. I marker passano alla palette direzionale rosa/emerald imposta da CLAUDE.md (rosso/verde significa "rotto"), guadagnano un gradino di dimensione e **portano il conteggio** quando piu segnali cadono sulla stessa barra: prima tre segnali e uno disegnavano lo stesso glifo, quindi i giorni piu affollati sembravano i piu tranquilli. La dimensione NON dipende dalla Forza, ed e fissato da un test: sarebbe la stessa affermazione della rampa di rischio rimossa dal playbook, dove la banda 90-99 ha realizzato 42,3% contro 52-53%. Il clamp e riscritto per **far scorrere la finestra senza mai cambiarne la larghezza** — la vecchia versione tappava i due bordi in modo indipendente, allargava la finestra all'intera serie e lo zoom si azzerava. 11 test in `chartClamp.test.ts`, che prima non ne aveva pur governando tre pannelli. |
 | FA-024 | P2 | Prodotto | Statistiche su rendimenti ed efficacia nelle pagine setup ed esiti | **DONE / PROD** | Commit `3a6ee82`, immagine `3a6ee82d` verificata in produzione con le cinque Application `Synced/Healthy`. `conversion_stats` guadagna rendimento **market-neutral e assoluto in coppia** (pubblicarne uno solo lascia che un setup rialzista si intesti la deriva del mercato), mediana in testa e media accanto, tasso di efficacia con intervallo di Wilson dimensionato su `independent_blocks` e non sulle righe, piu `by_detector`. Il pannello per famiglia rende **il tasso con la sua banda contro il 50%**, non una barra del tasso: una banda che attraversa il 50 diventa grigia e legge "non concludente". 13 test backend, 11 frontend. |
 | FA-026 | P1 | Dati | Il market cap e nella valuta di quotazione e lo screener ci ordina | **OPEN** | Trovato mentre si sistemava la valuta (2026-09-10). `stock.market_cap` NON e in dollari: `risk.py` ha gia pagato questo difetto, e il suo test lo quantifica — 158 nomi superavano la soglia mega-cap in valuta nativa contro 83 in USD, quindi **75 titoli erano classificati mega-cap stabili senza esserlo**. La colonna market cap dello screener stampa `$` sul numero grezzo ed e **ordinabile**, quindi un cap da 19.812 miliardi di won supera uno da 3.500 miliardi di dollari. Non e una rietichettatura: convertire in USD tiene l'ordinamento sensato e cambia i numeri a schermo, etichettare ogni cap con la sua valuta e onesto e rende l'ordinamento privo di senso. Serve una decisione prima del codice. |
+| FA-027 | P1 | UX/dettaglio | Il dettaglio titolo perde titoli e valori a 1440px | **OPEN** | Rilevato sugli screenshot del 2026-09-10, con la causa misurata: `StockDetailPage.tsx:281` divide in `[2fr_1fr]` e spezza poi la colonna destra in due, lasciando **~133px di contenuto utile** per scheda — e i valori vengono disegnati SOPRA le etichette (`Sostenib45lità`, `Valore71`), non troncati accanto. La riga bassa (`:344`, `[1.5fr_1fr_1fr_1fr]` con `lg:h-[520px]` fisso) riduce tre schede a 244px, da cui titoli `F`, `VALUATION…`, `ANAL…`. **Il layout corretto esiste gia su mobile**, dove la stessa scheda rende i cinque pilastri come barre etichettate: il rimedio e dare alla colonna destra la larghezza che il mobile ha gia, non progettare qualcosa di nuovo. Vedi [frontend-ui-review-2026-09-10.md](frontend-ui-review-2026-09-10.md) §4.1. |
+| FA-028 | P2 | UX/dashboard | La barra indici e vuota su desktop e viva su tablet e mobile | **OPEN** | Sei indici, dodici `n/d`, nella striscia piu in alto della pagina piu aperta. Nella **stessa sessione di acquisizione** tablet e mobile mostrano `FUT S&P 500 7649 ↓ -0.44%`: il componente sa ricadere sui futures a mercati chiusi e su due viewport su tre lo fa. Due su tre funzionanti escludono un'indisponibilita della sorgente. Da riprodurre prima di ipotizzare la causa. §4.3. |
+| FA-029 | P2 | UX/correlazioni | Una posizione non sa da quale segnale e nata | **OPEN** | `Position.alert_id` esiste nel tipo e arriva al frontend; la pagina Posizioni non lo usa, mentre il suo sottotitolo promette "trade tracciati dal piano operativo dei segnali". Costo: un link. Insieme va resa la geometria: entry, stop, target e prezzo sono quattro colonne dove una barra risponde a colpo d'occhio alla sola domanda che conta su una posizione aperta. §5.1 e §5.2. |
 | FA-018 | P2 | Accessibilita | Aggiungere descrizione accessibile al dialog degli alert prezzo | **DONE / PROD** | `PriceAlertDialog` espone `DialogDescription` screen-reader-only; warning Radix corretto, codice deployato e suite frontend verde. |
 | FA-019 | P0 | Release | Push e sincronizzazione cloud dei commit locali | **DONE / PROD** | Push verificato; CI 34366785799 completata con tutti i job verdi, Argo `Synced/Healthy`, StatefulSet sull’immagine `42693fb1b09195be96065cfdc1bda0be176c014a`, health esterno 200 e `/metrics` esterno 403. |
 | FA-021 | P2 | GitOps | Eliminare lo stato Argo `OutOfSync` del Cluster CNPG quando il diff effettivo è vuoto | **DONE / PROD** | Verificato live 2026-09-09: `postgres-cluster` torna `Synced/Healthy` e tutte e cinque le Application sono sincronizzate; il cluster resta sano 1/1 e nessun pod si e riavviato. Causa isolata: l'operatore aggiunge `enabled: true` alla voce di `spec.plugins`, e il CRD non dichiara `x-kubernetes-list-type`, quindi la lista è ATOMICA e una chiave in più rende diversa tutta la lista. `postgresql.parameters` non causa drift benché l'operatore vi inietti 23 chiavi: è una mappa e ArgoCD possiede solo le sue sette. Rimedio: dichiarare il campo nel manifest, **non** un `ignoreDifferences` su `/spec/plugins`, che silenzierebbe anche una modifica vera all'archiviatore. |
 
 ## Cosa resta aperto (2026-09-10)
 
-Nessuna attivita e bloccata e nessuna e in corso di rilascio. Le sette voci qui
+Nessuna attivita e bloccata e nessuna e in corso di rilascio. Le dieci voci qui
 sotto sono tutto quello che il backlog tiene aperto: due in attesa di dati, due
-in attesa di un collaudo su dispositivo reale, due aperte, una che aspetta una
-decisione.
+in attesa di un collaudo su dispositivo reale, cinque aperte, una che aspetta
+una decisione.
+
+Le ultime tre vengono dalla revisione su screenshot del 2026-09-10
+([frontend-ui-review-2026-09-10.md](frontend-ui-review-2026-09-10.md)), che
+misura una cosa sola e la ripete su tre assi: **il desktop e il viewport
+peggiore dell'app**. 35 contenitori con scorrimento interno sulla dashboard
+desktop contro 9 su mobile, 29 sul dettaglio titolo contro 5, e la barra indici
+vuota solo li.
 
 | ID | Cosa serve per chiuderla | Chi puo sbloccarla |
 |---|---|---|
@@ -62,6 +72,9 @@ decisione.
 | FA-008 | classificare e correggere 47 finding ESLint non gated | lavoro |
 | FA-015 | il kubelet local-path non espone `volume_stats` per Loki: la regola PVC non ha dati | una sorgente diversa |
 | FA-026 | decidere se il market cap si converte in USD o si etichetta per valuta | l'utente |
+| FA-027 | togliere una griglia al dettaglio titolo | lavoro |
+| FA-028 | riprodurre la barra indici vuota su desktop | lavoro |
+| FA-029 | collegare posizione e segnale, e rendere la geometria | lavoro |
 
 ⚠️ **FA-006 e FA-007 non sono lavoro rimandato, sono misure che maturano.**
 Trattarle come task da spingere significa concludere su campioni che non hanno
