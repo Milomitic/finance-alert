@@ -284,11 +284,22 @@ export default function StockDetailPage() {
           kpis={d.kpis}
           ohlcv={mergedOhlcv}
         />
-        {/* Stacked on a phone. Side by side these two got ~170px each, which
-            is below what either card's internals need: the Qualità gauge
-            collided with its risk badge, "Top N% del settore" was cut mid-
-            sentence, and the technical card's timestamp fell off the edge. */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-stretch [&>*]:min-w-0">
+        {/* ⚠️ Il breakpoint e' `lg:grid-cols-1`, e non e' un dettaglio.
+            Il commento precedente descriveva GIA' questo difetto — "side by
+            side these two got ~170px each... the Qualità gauge collided with
+            its risk badge, Top N% del settore was cut mid-sentence" — e lo
+            risolveva solo sotto `sm`. Ma la colonna e' stretta proprio DA `lg`
+            in su, dove diventa l'`1fr` di `[2fr_1fr]`: a 1440px il contenuto
+            e' 1136px, la colonna 375px, meno il gap e il padding restano
+            **~133px di contenuto utile per scheda**, cioe' meno dei ~170px che
+            il commento gia' definiva insufficienti.
+
+            Da qui i valori disegnati SOPRA le etichette: `Sostenib45lità`,
+            `Valore71`. Non troncati accanto — sovrapposti.
+
+            Sotto `lg` la colonna e' invece a tutta pagina, quindi li' due
+            schede affiancate ci stanno e `sm:grid-cols-2` resta giusto. */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-3 items-stretch [&>*]:min-w-0">
           <StockScoreCard ticker={ticker} />
           <StockTechnicalCard ticker={ticker} />
         </div>

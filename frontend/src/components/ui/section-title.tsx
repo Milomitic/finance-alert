@@ -55,9 +55,21 @@ export function SectionTitle({
   return (
     <div
       className={cn(
-        "flex items-center justify-between gap-3",
-        // Left side wraps icon+label; the trailing slot stays right-aligned
-        // via justify-between above.
+        // ⚠️ `flex-wrap` e' quello che salva il NOME della scheda.
+        //
+        // Lo slot destro e' `shrink-0` e l'etichetta e' `truncate`: senza
+        // wrap, quando lo spazio manca cede sempre e solo il titolo. Sul
+        // dettaglio titolo a 1440px, dove quattro schede si dividono la riga
+        // e ne restano ~244px ciascuna, si leggeva `F` al posto di
+        // `FUNDAMENTALS` e `VALUATION…` al posto di `VALUATION & QUALITY` —
+        // mentre il timestamp e il pulsante di refresh accanto restavano
+        // interi. Una scheda senza nome non si sa cosa sia; un timestamp che
+        // va a capo si legge lo stesso.
+        //
+        // Col wrap: se ci stanno entrambi non cambia niente, altrimenti lo
+        // slot va sotto e il titolo resta. Il `truncate` sull'etichetta
+        // rimane come ultima difesa per i casi davvero stretti.
+        "flex flex-wrap items-center justify-between gap-x-3 gap-y-1",
         className,
       )}
     >
@@ -76,7 +88,8 @@ export function SectionTitle({
         <Icon className="h-[18px] w-[18px] shrink-0" aria-hidden />
         <span className="truncate">{label}</span>
       </div>
-      {right && <div className="shrink-0">{right}</div>}
+      {/* `ml-auto` tiene lo slot a destra anche quando va a capo da solo. */}
+      {right && <div className="shrink-0 ml-auto">{right}</div>}
     </div>
   );
 }
