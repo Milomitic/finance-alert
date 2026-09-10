@@ -1,9 +1,12 @@
-import { Archive, Briefcase, Loader2, Trash2, XCircle } from "lucide-react";
+import { Archive, Bell, Briefcase, Loader2, Trash2, XCircle } from "lucide-react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 
 import type { Position } from "@/api/types";
+import { AlertDetailDialog } from "@/components/AlertDetailDialog";
 import { StockLogo } from "@/components/dashboard/StockLogo";
 import { PortfolioSummary } from "@/components/PortfolioSummary";
+import { PositionGeometry } from "@/components/positions/PositionGeometry";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { SectionTitle } from "@/components/ui/section-title";
@@ -15,11 +18,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useAlert } from "@/hooks/useAlerts";
 import {
   useDeletePosition,
   usePositions,
   useUpdatePosition,
 } from "@/hooks/usePositions";
+import { formatMoney, formatMoneySigned } from "@/lib/money";
 import { cn } from "@/lib/utils";
 
 /* Tone maps as plain string literals — Tailwind's purger only sees literals
@@ -43,19 +48,13 @@ const EXIT_LABEL: Record<string, string> = {
   manual: "Manuale",
 };
 
-function fmtPrice(n: number | null | undefined, currency: string | null): string {
-  if (n == null || !Number.isFinite(n)) return "—";
-  const code = currency && /^[A-Z]{3}$/.test(currency) ? currency : "USD";
-  try {
-    return new Intl.NumberFormat("it-IT", {
-      style: "currency",
-      currency: code,
-      maximumFractionDigits: n >= 1 ? 2 : 3,
-    }).format(n);
-  } catch {
-    return `${n >= 1 ? n.toFixed(2) : n.toFixed(3)} ${code}`;
-  }
-}
+/* ⚠️ Qui viveva `fmtPrice`, il terzo dei tre formattatori di denaro che
+   l'app aveva e che non erano d'accordo. Faceva due cose dannose in una riga:
+   `currency && /^[A-Z]{3}$/.test(currency) ? currency : "USD"` stampa dollari
+   per un titolo la cui valuta non e arrivata, e — pretendendo tre lettere
+   MAIUSCOLE — rifiuta il `GBp` di yfinance e stampa dollari proprio per un
+   titolo di Londra. `lib/money.ts` e il proprietario unico e non inventa una
+   valuta che non c'e: vedi «Money on screen» in CLAUDE.md. */
 
 function fmtPct(n: number | null | undefined): string {
   if (n == null || !Number.isFinite(n)) return "—";
@@ -86,25 +85,66 @@ function PnlCell({ pct, abs, currency }: { pct: number | null; abs: number | nul
       {fmtPct(pct)}
       {abs != null && (
         <span className="ml-1 text-xs font-medium opacity-80">
-          ({abs >= 0 ? "+" : ""}
-          {fmtPrice(abs, currency)})
+          ({formatMoneySigned(abs, currency)})
         </span>
       )}
     </span>
   );
 }
 
-function TickerCell({ p }: { p: Position }) {
+/** Il titolo, e — quando la posizione e nata da un segnale — la via per
+ *  tornarci.
+ *
+ *  ⚠️ `alert_id` era nel payload dal primo giorno e non portava da nessuna
+ *  parte, mentre il sottotitolo di questa pagina prometteva «trade tracciati
+ *  dal piano operativo dei segnali». La regola, la catena di conferme e la
+ *  Forza che hanno prodotto il trade erano a un intero di distanza e
+ *  irraggiungibili.
+ *
+ *  Il dettaglio si apre QUI, non su `/alerts`: mandare altrove costringerebbe
+ *  a perdere la lista delle posizioni per guardare una cosa sola, e il dialogo
+ *  e lo stesso componente che ha aperto questa posizione — `TrackTradeForm`
+ *  vive dentro di lui. Il giro si chiude dove era cominciato.
+ *
+ *  Il collegamento manca sulle posizioni aperte a mano, e va bene: dice che
+ *  quelle non sono nate da un segnale. */
+function TickerCell({
+  p,
+  onOpenSignal,
+  pending = false,
+}: {
+  p: Position;
+  onOpenSignal?: (alertId: number) => void;
+  pending?: boolean;
+}) {
   return (
     <div className="flex items-center gap-2 min-w-0">
       <StockLogo ticker={p.ticker} size="xs" />
       <div className="min-w-0">
-        <Link
-          to={`/stocks/${encodeURIComponent(p.ticker)}`}
-          className="font-semibold hover:underline underline-offset-2"
-        >
-          {p.ticker}
-        </Link>
+        <div className="flex items-center gap-1.5">
+          <Link
+            to={`/stocks/${encodeURIComponent(p.ticker)}`}
+            className="font-semibold hover:underline underline-offset-2"
+          >
+            {p.ticker}
+          </Link>
+          {p.alert_id != null && onOpenSignal && (
+            <button
+              type="button"
+              onClick={() => onOpenSignal(p.alert_id as number)}
+              disabled={pending}
+              aria-label={`Segnale che ha aperto la posizione su ${p.ticker}`}
+              title="Apri il segnale che ha aperto questa posizione"
+              className="inline-flex items-center rounded p-0.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50"
+            >
+              {pending ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Bell className="h-3.5 w-3.5" />
+              )}
+            </button>
+          )}
+        </div>
         {p.name && (
           <div className="text-xs text-muted-foreground truncate max-w-[16ch]">
             {p.name}
@@ -132,6 +172,10 @@ export default function PositionsPage() {
   const q = usePositions();
   const update = useUpdatePosition();
   const remove = useDeletePosition();
+  // Il segnale da mostrare, per id. La lista alert e paginata e non serve a
+  // niente qui: questo id puo essere di mesi fa. `useAlert` lo prende da solo.
+  const [signalId, setSignalId] = useState<number | null>(null);
+  const signal = useAlert(signalId);
 
   const all = q.data ?? [];
   const open = all.filter((p) => p.closed_at == null);
@@ -200,9 +244,13 @@ export default function PositionsPage() {
                       <TableRow>
                         <TableHead>Titolo</TableHead>
                         <TableHead>Lato</TableHead>
-                        <TableHead className="text-right">Entry</TableHead>
-                        <TableHead className="text-right">Stop</TableHead>
-                        <TableHead className="text-right">Target</TableHead>
+                        {/* Entry, Stop e Target erano tre colonne di numeri:
+                            rispondere a «sono piu vicino allo stop o al
+                            target?» costava tre sottrazioni per riga. La barra
+                            e quella risposta, i tre numeri restano sotto. */}
+                        <TableHead title="Da stop a target, con l'ingresso e il prezzo. E una misura geometrica: la distanza dallo stop non e la perdita massima, perche un gap apre dove trova mercato.">
+                          Geometria
+                        </TableHead>
                         <TableHead className="text-right">Prezzo</TableHead>
                         <TableHead className="text-right">P&amp;L</TableHead>
                         <TableHead className="text-right">Aperta il</TableHead>
@@ -213,22 +261,20 @@ export default function PositionsPage() {
                       {open.map((p) => (
                         <TableRow key={p.id}>
                           <TableCell>
-                            <TickerCell p={p} />
+                            <TickerCell
+                              p={p}
+                              onOpenSignal={setSignalId}
+                              pending={signal.isFetching && signalId === p.alert_id}
+                            />
                           </TableCell>
                           <TableCell>
                             <SideChip side={p.side} />
                           </TableCell>
-                          <TableCell className="text-right tabular-nums">
-                            {fmtPrice(p.entry_price, p.currency)}
-                          </TableCell>
-                          <TableCell className="text-right tabular-nums text-rose-600 dark:text-rose-400">
-                            {fmtPrice(p.stop_price, p.currency)}
-                          </TableCell>
-                          <TableCell className="text-right tabular-nums text-emerald-800 dark:text-emerald-400">
-                            {fmtPrice(p.target_price, p.currency)}
+                          <TableCell>
+                            <PositionGeometry p={p} />
                           </TableCell>
                           <TableCell className="text-right tabular-nums">
-                            {fmtPrice(p.last_price, p.currency)}
+                            {formatMoney(p.last_price, p.currency)}
                             {p.price_source === "live" && (
                               <span
                                 className="ml-1 inline-block h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse align-middle"
@@ -305,16 +351,26 @@ export default function PositionsPage() {
                       {closed.map((p) => (
                         <TableRow key={p.id}>
                           <TableCell>
-                            <TickerCell p={p} />
+                            {/* Il collegamento al segnale c'e anche qui — e
+                                anzi qui che serve di piu, perche rivedere un
+                                trade chiuso vuol dire rileggere la regola che
+                                lo ha aperto. La barra invece no: su una
+                                posizione chiusa la domanda e dove sia finita,
+                                e il chip di uscita la risponde gia. */}
+                            <TickerCell
+                              p={p}
+                              onOpenSignal={setSignalId}
+                              pending={signal.isFetching && signalId === p.alert_id}
+                            />
                           </TableCell>
                           <TableCell>
                             <SideChip side={p.side} />
                           </TableCell>
                           <TableCell className="text-right tabular-nums">
-                            {fmtPrice(p.entry_price, p.currency)}
+                            {formatMoney(p.entry_price, p.currency)}
                           </TableCell>
                           <TableCell className="text-right tabular-nums">
-                            {fmtPrice(p.exit_price, p.currency)}
+                            {formatMoney(p.exit_price, p.currency)}
                           </TableCell>
                           <TableCell>
                             <span
@@ -351,6 +407,13 @@ export default function PositionsPage() {
           </Card>
         </>
       )}
+
+      {/* Lo stesso dialogo della pagina Segnali, con dentro `TrackTradeForm`:
+          il componente da cui questa posizione e nata. */}
+      <AlertDetailDialog
+        alert={signal.data ?? null}
+        onClose={() => setSignalId(null)}
+      />
     </div>
   );
 }

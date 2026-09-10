@@ -124,6 +124,12 @@ export interface SignalCalibrationTable {
 export const alerts = {
   list: (params: AlertListParams = {}) =>
     api<AlertList>(`/api/alerts${toQuery(params)}`),
+  /** Un solo segnale, per id — la stessa forma di una riga della lista.
+   *
+   *  Serve alle posizioni: `Position.alert_id` esiste da sempre nel payload e
+   *  non portava da nessuna parte, perche la lista e paginata e il segnale che
+   *  ha aperto una posizione di due mesi fa non e nella pagina corrente. */
+  byId: (id: number) => api<Alert>(`/api/alerts/${id}`),
   patch: (id: number, body: { archived?: boolean }) =>
     api<Alert>(`/api/alerts/${id}`, {
       method: "PATCH",

@@ -778,6 +778,38 @@ def export_csv(
     )
 
 
+@router.get("/{alert_id}", response_model=AlertOut)
+def get_one(
+    alert_id: int,
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+) -> AlertOut:
+    """Un solo segnale, per id.
+
+    Serve alle posizioni. `Position.alert_id` arriva gia al frontend e non
+    porta da nessuna parte: la lista alert e paginata, e il segnale che ha
+    aperto una posizione due mesi fa non e nella pagina corrente ne in nessuna
+    pagina che l'utente stia guardando. Senza questo endpoint il collegamento
+    fra una posizione e la regola che l'ha prodotta resta un intero nel
+    payload.
+
+    Restituisce la STESSA forma della lista (`AlertOut`), perche il dialogo di
+    dettaglio e lo stesso componente.
+
+    ⚠️ Deve restare DOPO ogni rotta letterale di questo router — `/confluence`,
+    `/scan-status`, `/scan-status/stream`, `/signal-calibration`,
+    `/export.csv`. FastAPI prova le rotte nell'ordine di dichiarazione, e un
+    `{alert_id}` tipizzato `int` messo prima ingoierebbe quelle parole
+    tentando di convertirle in numero: 422 al posto della risposta, su
+    endpoint che funzionavano. Il `patch` qui sotto sta in fondo per la stessa
+    ragione.
+    """
+    item = alert_service.get_alert_detail(db, alert_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="Alert not found")
+    return AlertOut(**item)
+
+
 @router.patch("/{alert_id}", response_model=AlertOut, dependencies=[Depends(require_json)])
 def patch(
     alert_id: int,

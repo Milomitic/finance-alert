@@ -247,34 +247,78 @@ def list_alerts(
     earnings_by_ticker = _next_earnings_dates_cached(
         {ticker_val for _, ticker_val, *_ in page if ticker_val}
     )
-    items = []
-    for alert, ticker_val, name_val, o_hit, o_fwd, o_horizon, o_mkt in page:
-        items.append(
-            {
-                "id": alert.id,
-                "rule_kind": derive_rule_kind(None, alert.signal_name),
-                "stock_id": alert.stock_id,
-                "ticker": ticker_val,
-                "name": name_val,
-                "triggered_at": alert.triggered_at,
-                "signal_date": alert.signal_date,
-                "trigger_price": float(alert.trigger_price),
-                "snapshot": alert.snapshot,
-                "read_at": alert.read_at,
-                "archived_at": alert.archived_at,
-                # Realised outcome (signal_outcomes warehouse). All None while
-                # the signal is still maturing (or for legacy/price alerts) —
-                # the UI shows "in corso" for pending signal alerts.
-                "outcome_hit": bool(o_hit) if o_hit is not None else None,
-                "outcome_fwd_return": round(float(o_fwd), 4) if o_fwd is not None else None,
-                "outcome_horizon_days": int(o_horizon) if o_horizon is not None else None,
-                "outcome_mkt_excess": round(float(o_mkt), 4) if o_mkt is not None else None,
-                # Earnings-proximity risk flag (cache-only; null when the
-                # fundamentals cache is cold for the ticker).
-                "next_earnings_date": earnings_by_ticker.get(ticker_val),
-            }
-        )
+    items = [
+        _row_to_item(row, earnings_by_ticker.get(row[1]))
+        for row in page
+    ]
     return items, total, has_more
+
+
+def _row_to_item(row: Any, next_earnings: date | None) -> dict[str, Any]:
+    """Una riga della query joined -> il dict che l'API serializza.
+
+    Estratto da `list_alerts` quando e nato `get_alert_detail`: due percorsi
+    che costruiscono a mano la stessa forma divergono, e qui la divergenza
+    sarebbe silenziosa — il frontend riceverebbe un alert con meno campi solo
+    quando lo apre da una posizione invece che dalla lista.
+    """
+    alert, ticker_val, name_val, o_hit, o_fwd, o_horizon, o_mkt = row
+    return {
+        "id": alert.id,
+        "rule_kind": derive_rule_kind(None, alert.signal_name),
+        "stock_id": alert.stock_id,
+        "ticker": ticker_val,
+        "name": name_val,
+        "triggered_at": alert.triggered_at,
+        "signal_date": alert.signal_date,
+        "trigger_price": float(alert.trigger_price),
+        "snapshot": alert.snapshot,
+        "read_at": alert.read_at,
+        "archived_at": alert.archived_at,
+        # Realised outcome (signal_outcomes warehouse). All None while
+        # the signal is still maturing (or for legacy/price alerts) —
+        # the UI shows "in corso" for pending signal alerts.
+        "outcome_hit": bool(o_hit) if o_hit is not None else None,
+        "outcome_fwd_return": round(float(o_fwd), 4) if o_fwd is not None else None,
+        "outcome_horizon_days": int(o_horizon) if o_horizon is not None else None,
+        "outcome_mkt_excess": round(float(o_mkt), 4) if o_mkt is not None else None,
+        # Earnings-proximity risk flag (cache-only; null when the
+        # fundamentals cache is cold for the ticker).
+        "next_earnings_date": next_earnings,
+    }
+
+
+def get_alert_detail(db: Session, alert_id: int) -> dict[str, Any] | None:
+    """Un solo alert, nella STESSA forma della lista.
+
+    Serve a raggiungere un segnale per id — da una posizione, che porta
+    `alert_id` nel proprio payload — senza dipendere da quale pagina della
+    lista lo contenga.
+
+    ⚠️ Nessun filtro su `archived`. Un segnale archiviato ha comunque generato
+    la posizione che si sta guardando, e nasconderlo qui riprodurrebbe in
+    piccolo il difetto che il magazzino esiti ha gia pagato in grande: filtrare
+    una misura su un campo che scrive l'UTENTE. L'archiviazione traccia l'eta,
+    non la rilevanza.
+    """
+    row = db.execute(
+        select(
+            Alert,
+            Stock.ticker.label("ticker"),
+            Stock.name.label("name"),
+            SignalOutcome.abs_hit.label("outcome_abs_hit"),
+            SignalOutcome.fwd_return.label("outcome_fwd_return"),
+            SignalOutcome.horizon_days.label("outcome_horizon_days"),
+            SignalOutcome.mkt_neutral_excess.label("outcome_mkt_excess"),
+        )
+        .join(Stock, Stock.id == Alert.stock_id)
+        .outerjoin(SignalOutcome, SignalOutcome.alert_id == Alert.id)
+        .where(Alert.id == alert_id)
+    ).first()
+    if row is None:
+        return None
+    earnings = _next_earnings_dates_cached({row[1]} if row[1] else set())
+    return _row_to_item(row, earnings.get(row[1]))
 
 
 def get_alert(db: Session, alert_id: int) -> Alert | None:
