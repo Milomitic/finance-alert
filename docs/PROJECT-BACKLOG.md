@@ -70,6 +70,12 @@ una decisione.
 dei numeri. Un titolo troncato si riconosce; un numero sbagliato con l'unita
 sbagliata accanto no.
 
+Sequenza, criteri di chiusura e verifiche richieste all'utente:
+[implementation-plan-2026-09-10.md](implementation-plan-2026-09-10.md).
+⚠️ Una sola voce e bloccata da una scelta e non da lavoro: **FA-026**, dove
+convertire il market cap in USD, etichettarlo per valuta o fare entrambe le
+cose cambia numeri gia visibili a schermo. Il piano raccomanda la terza.
+
 Le voci da FA-027 in poi vengono dall'audit unificato
 ([frontend-audit-2026-09-10.md](frontend-audit-2026-09-10.md)), che fonde la
 revisione Claude e quella GPT Astra 6 sulla stessa acquisizione di 426
