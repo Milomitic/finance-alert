@@ -162,11 +162,20 @@ export default function MacroDetailPage() {
 
   return (
     <div className="max-w-6xl mx-auto p-6 space-y-6">
-      {/* Header bar with back link + indicator title + flag */}
+      {/* Header bar with back link + indicator title + flag.
+          ⚠️ Era un `navigate(-1)`, che non porta da nessuna parte quando la
+          pagina si apre da un link ricevuto e la storia del browser e vuota —
+          proprio il caso in cui un ritorno serve. Ora punta al Calendario, da
+          cui questa pagina si raggiunge, come fanno gia SectorDetail e
+          InstitutionalDetail verso i loro elenchi. */}
       <div className="flex items-center gap-3">
-        <Button variant="ghost" size="sm" onClick={() => navigate(-1)}>
-          <ArrowLeft className="h-4 w-4 mr-1" /> Indietro
-        </Button>
+        <Link
+          to="/calendar"
+          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:underline shrink-0"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Calendario
+        </Link>
         <div className="flex items-center gap-2 flex-1 min-w-0">
           {flagAsset ? (
             <img

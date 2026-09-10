@@ -1,5 +1,6 @@
 import {
   AlertCircle,
+  ArrowLeft,
   Bitcoin,
   CircleDot,
   Coins,
@@ -9,7 +10,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { useState } from "react";
-import { useParams, useSearchParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { CardSkeleton } from "@/components/ui/card-skeleton";
@@ -163,6 +164,19 @@ export default function MarketDetailPage() {
 
   return (
     <div className="space-y-3">
+      {/* Il ritorno al contesto di provenienza.
+          Modello copiato da `SectorDetailPage` e `InstitutionalDetailPage`,
+          che lo avevano gia: un `<Link>` verso la pagina padre invece di un
+          `navigate(-1)`, perche dice DOVE porta ed e l'unico dei due che
+          funziona su un caricamento diretto, dove la storia del browser e
+          vuota — cioe' esattamente quando si apre un link ricevuto. */}
+      <Link
+        to="/"
+        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:underline"
+      >
+        <ArrowLeft className="h-4 w-4" />
+        Dashboard
+      </Link>
       {/* Header — full StockHeader-style hero with gradient sparkline +
           prev close + tone-tinted bg + left accent stripe. Same visual
           language as /stocks/:ticker so the user feels at home no matter

@@ -1,7 +1,7 @@
 import type { IChartApi } from "lightweight-charts";
-import { AlertCircle, ChevronDown, Loader2, SlidersHorizontal } from "lucide-react";
+import { AlertCircle, ArrowLeft, ChevronDown, Loader2, SlidersHorizontal } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useParams, useSearchParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 
 import type { PriceAlert } from "@/api/types";
 import { Card, CardContent } from "@/components/ui/card";
@@ -272,6 +272,19 @@ export default function StockDetailPage() {
 
   return (
     <div className="space-y-3">
+      {/* Il ritorno al contesto di provenienza.
+          Modello copiato da `SectorDetailPage` e `InstitutionalDetailPage`,
+          che lo avevano gia: un `<Link>` verso la pagina padre invece di un
+          `navigate(-1)`, perche dice DOVE porta ed e l'unico dei due che
+          funziona su un caricamento diretto, dove la storia del browser e
+          vuota — cioe' esattamente quando si apre un link ricevuto. */}
+      <Link
+        to="/stocks"
+        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:underline"
+      >
+        <ArrowLeft className="h-4 w-4" />
+        Screener
+      </Link>
       {/* Top hero row: identity/price header (left, 2fr) + the Stock score and
           Technical score cards sharing the right column (1fr, split 50/50).
           The [2fr_1fr] template MATCHES the Company-overview / Segnali row
