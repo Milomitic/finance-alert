@@ -42,6 +42,7 @@ class CuratedSeries:
     importance: Importance
     unit: str | None  # "pct" | "level" | "index" | "yield" | None
     description: str | None = None
+    source_scale: str | None = None  # ones | thousands | millions | billions
 
 
 # Curated set of FRED series. Each row defines one indicator the user
@@ -58,7 +59,7 @@ CURATED_SERIES: tuple[CuratedSeries, ...] = (
     # ── US ──────────────────────────────────────────────────────────
     CuratedSeries("CPIAUCSL", 10,  "US CPI release",                "US", "high",   "index", "Consumer Price Index All Urban Consumers"),
     CuratedSeries("PPIACO",   46,  "US PPI release",                "US", "medium", "index", "Producer Price Index All Commodities"),
-    CuratedSeries("PAYEMS",   50,  "US NFP / Non-Farm Payrolls",    "US", "high",   "level", "Total Non-Farm Payrolls (thousands)"),
+    CuratedSeries("PAYEMS",   50,  "US NFP / Non-Farm Payrolls",    "US", "high",   "level", "Total Non-Farm Payrolls (thousands)", "thousands"),
     CuratedSeries("UNRATE",   50,  "US Unemployment Rate",          "US", "medium", "pct",   "Civilian Unemployment Rate"),
     # Why DFEDTARU (Daily Fed Funds Target Rate, Upper Bound) and not
     # FEDFUNDS: FEDFUNDS is the MONTHLY-AVERAGED effective rate, published
@@ -76,8 +77,8 @@ CURATED_SERIES: tuple[CuratedSeries, ...] = (
     # is attached to the hardcoded FOMC events at calendar-build time
     # (see `_convert_macro` in `calendar_service`).
     CuratedSeries("DFEDTARU", None, "FOMC rate decision",            "US", "high",   "pct",   "Federal Funds Target Rate (upper bound) — set by the FOMC, daily."),
-    CuratedSeries("GDPC1",    53,  "US GDP (real)",                 "US", "high",   "level", "Real GDP, chained 2017 dollars"),
-    CuratedSeries("RSAFS",    9,   "US Retail Sales",               "US", "medium", "level", "Retail Sales (Advance)"),
+    CuratedSeries("GDPC1",    53,  "US GDP (real)",                 "US", "high",   "level", "Real GDP, chained 2017 dollars", "billions"),
+    CuratedSeries("RSAFS",    9,   "US Retail Sales",               "US", "medium", "level", "Retail Sales (Advance)", "millions"),
     CuratedSeries("DGS10",    None, "US 10y Treasury yield",        "US", "low",    "pct",   "10-Year Treasury Constant Maturity Rate"),
     CuratedSeries("DGS2",     None, "US 2y Treasury yield",         "US", "low",    "pct",   "2-Year Treasury Constant Maturity Rate"),
     # ── Eurozone / EU ──────────────────────────────────────────────
@@ -111,6 +112,7 @@ def _ensure_series(db: Session) -> dict[str, MacroSeries]:
                 importance=c.importance,
                 unit=c.unit,
                 description=c.description,
+                source_scale=c.source_scale,
             )
             db.add(row)
         else:
@@ -121,6 +123,10 @@ def _ensure_series(db: Session) -> dict[str, MacroSeries]:
             row.importance = c.importance
             row.unit = c.unit
             row.description = c.description
+            # `source_scale` is declared here, not inferred at read time: only
+            # the curated map knows that PAYEMS ships thousands and GDPC1
+            # billions, and a formatter that guesses is the ×1000 bug.
+            row.source_scale = c.source_scale
         out[c.fred_series_id] = row
     db.flush()
     return out

@@ -226,7 +226,11 @@ def get_macro_detail(
         if len(changes) > 1 or len(obs_rows) == 1:
             obs_rows = changes
 
-    # Build release history with previous_value = the observation
+    acquired_at = (
+        series.last_refreshed_at.isoformat() if series.last_refreshed_at else None
+    )
+
+    # Build observation history with previous_value = the observation
     # immediately before this one, so the table can show "Precedente"
     # per row without a frontend pass over the same data. obs_rows is
     # newest-first, so the previous value for row i is the value at
@@ -236,7 +240,9 @@ def get_macro_detail(
         prev_v = obs_rows[i + 1].value if i + 1 < len(obs_rows) else None
         history.append(
             MacroReleaseOut(
-                release_date=row.date,
+                observation_period=row.date,
+                publication_date=None,
+                acquired_at=acquired_at,
                 period_label=_period_label(row.date),
                 actual_value=row.value,
                 expected_value=None,  # not backfilled — see docstring
@@ -285,8 +291,10 @@ def get_macro_detail(
                     # Pending — swap actual→None and bubble the prior
                     # known value into PRECEDENTE.
                     latest = MacroReleaseOut(
-                        release_date=today_utc,
-                        period_label=_period_label(today_utc),
+                        observation_period=None,
+                        publication_date=today_utc,
+                        acquired_at=acquired_at,
+                        period_label=None,
                         actual_value=None,
                         expected_value=None,
                         previous_value=latest.actual_value,
@@ -313,12 +321,11 @@ def get_macro_detail(
         region=series.region,
         currency=currency_for_region(series.region),
         importance=series.importance,  # type: ignore[arg-type]
-        unit=series.unit,
+        value_kind=series.unit,
+        source_scale=series.source_scale,
         description=series.description,
         source=series.source,
-        last_refreshed_at=(
-            series.last_refreshed_at.isoformat() if series.last_refreshed_at else None
-        ),
+        data_acquired_at=acquired_at,
         latest=latest,
         history=history,
         upcoming=list(upcoming_rows),

@@ -3,9 +3,10 @@ import { useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   Bar,
-  BarChart,
   CartesianGrid,
   Cell,
+  ComposedChart,
+  Line,
   ReferenceLine,
   ResponsiveContainer,
   Tooltip,
@@ -59,27 +60,59 @@ export default function MacroDetailPage() {
     const cutoff = new Date();
     cutoff.setFullYear(cutoff.getFullYear() - cfg.years);
     return detail.data.history.filter(
-      (h) => new Date(h.release_date) >= cutoff,
+      (h) => h.observation_period != null && new Date(h.observation_period) >= cutoff,
     );
   }, [detail.data, range]);
 
   // Chart data: oldest → newest for natural left-to-right reading.
   // Recharts iterates in array order, so this is the only place we
   // reverse the history (the API returns newest-first).
+  // ⚠️ Il default segue il TIPO di valore, e non e una preferenza estetica.
+  // Un livello disegnato su cinque anni e il muro piatto descritto piu sotto:
+  // per le serie di livello si parte dalla variazione, che e la grandezza di
+  // cui si parla. Percentuali, rendimenti e indici partono dal livello, che li
+  // e' gia' quella giusta.
+  //
+  // `null` significa "non ancora scelto dall'utente": cosi il default puo
+  // seguire il tipo appena i dati arrivano, senza sovrascrivere una scelta
+  // fatta a mano.
+  const [modeChoice, setModeChoice] = useState<"level" | "change" | null>(null);
   const chartData = useMemo(
     () =>
       filteredHistory
         .slice()
         .reverse()
-        .filter((r) => r.actual_value != null)
+        .filter((r) => r.actual_value != null && r.observation_period != null)
         .map((r) => ({
-          date: r.release_date,
+          date: r.observation_period as string,
           value: r.actual_value as number,
           period: r.period_label ?? "",
         })),
     [filteredHistory],
   );
 
+  /* Il livello contro la variazione.
+   *
+   * ⚠️ Un LIVELLO disegnato a barre partendo da zero non mostra niente. Su
+   * cinque anni di occupati non agricoli si vedono sessanta barre identiche,
+   * perche la variazione mensile vale ~150 mila contro un livello di 159
+   * milioni: un millesimo dell'altezza della barra. E la variazione e proprio
+   * la domanda che si fa a quel dato.
+   *
+   * Quindi: barre per le variazioni, linea per i livelli, e la scelta e
+   * esplicita invece che implicita nel tipo di grafico. La variazione e una
+   * trasformazione NOSTRA — FRED conserva l'unita originale — e la didascalia
+   * lo dice, perche un numero calcolato da noi non deve sembrare della fonte.
+   */
+  const deltaData = useMemo(
+    () =>
+      chartData
+        .map((p, i) =>
+          i === 0 ? null : { ...p, value: p.value - chartData[i - 1].value },
+        )
+        .filter((p): p is (typeof chartData)[number] => p !== null),
+    [chartData],
+  );
   if (id == null || Number.isNaN(id)) {
     return (
       <div className="p-8 text-sm text-muted-foreground">
@@ -119,7 +152,12 @@ export default function MacroDetailPage() {
 
   const d = detail.data;
   const flagAsset = regionFlagAsset(d.region);
-  const unit = d.unit ?? "";
+  const valueKind = d.value_kind ?? "";
+  const sourceScale = d.source_scale ?? null;
+  // Il default segue il tipo di valore; una scelta manuale lo sovrascrive.
+  const mode: "level" | "change" =
+    modeChoice ?? (valueKind === "level" ? "change" : "level");
+  const plotted = mode === "change" ? deltaData : chartData;
   const latest = d.latest;
 
   return (
@@ -152,15 +190,33 @@ export default function MacroDetailPage() {
       <Card>
         <CardContent className="p-5">
           <div className="flex items-baseline gap-3 mb-4 flex-wrap">
+            {/* ⚠️ Diceva "Ultima release" seguita dalla data dell'OSSERVAZIONE,
+                quindi il dato di agosto risultava pubblicato il 1 agosto: una
+                lettura datata prima che il periodo che misura fosse finito.
+                FRED consegna il periodo di riferimento e non la data di
+                pubblicazione, quindi la seconda non si mostra finche' non
+                arriva davvero dal calendario dei rilasci. */}
             <div className="text-xs uppercase tracking-wider text-muted-foreground">
-              Ultima release
+              {latest?.publication_date ? "Pubblicato" : "Periodo di riferimento"}
             </div>
             <div className="text-sm font-medium tabular-nums">
-              {latest ? formatMacroDate(latest.release_date) : "—"}
+              {latest?.publication_date
+                ? formatMacroDate(latest.publication_date)
+                : latest?.observation_period
+                  ? formatMacroDate(latest.observation_period)
+                  : "—"}
             </div>
             {latest?.period_label && (
               <div className="text-sm text-muted-foreground tabular-nums">
                 ({latest.period_label})
+              </div>
+            )}
+            {latest?.acquired_at && (
+              <div
+                className="text-xs text-muted-foreground"
+                title="Quando abbiamo scaricato la serie. E' un'eta' della nostra copia, non una data della fonte."
+              >
+                · dati acquisiti {formatMacroDate(latest.acquired_at)}
               </div>
             )}
           </div>
@@ -169,20 +225,23 @@ export default function MacroDetailPage() {
             <KpiCell
               label="Attuale"
               value={latest?.actual_value}
-              unit={unit}
+              valueKind={valueKind}
+              sourceScale={sourceScale}
               size="xl"
               tone={surpriseTone(latest)}
             />
             <KpiCell
               label="Previsto"
               value={latest?.expected_value}
-              unit={unit}
+              valueKind={valueKind}
+              sourceScale={sourceScale}
               size="lg"
             />
             <KpiCell
               label="Precedente"
               value={latest?.previous_value}
-              unit={unit}
+              valueKind={valueKind}
+              sourceScale={sourceScale}
               size="lg"
             />
           </div>
@@ -237,7 +296,25 @@ export default function MacroDetailPage() {
       {/* Chart + range tabs */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-base">Storico release</CardTitle>
+          <CardTitle className="text-base">Storico osservazioni</CardTitle>
+          <div className="flex items-center gap-3">
+            <div className="flex gap-1">
+              {(["level", "change"] as const).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setModeChoice(m)}
+                  className={cn(
+                    "px-2.5 py-1 text-xs rounded font-medium transition-colors",
+                    m === mode
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-muted/50 text-muted-foreground hover:bg-muted",
+                  )}
+                >
+                  {m === "level" ? "Livello" : "Variazione"}
+                </button>
+              ))}
+            </div>
           <div className="flex gap-1">
             {RANGES.map((r) => (
               <button
@@ -255,17 +332,18 @@ export default function MacroDetailPage() {
               </button>
             ))}
           </div>
+          </div>
         </CardHeader>
         <CardContent>
-          {chartData.length === 0 ? (
+          {plotted.length === 0 ? (
             <div className="h-[280px] flex items-center justify-center text-sm text-muted-foreground">
               Nessun dato nel range selezionato.
             </div>
           ) : (
             <div className="h-[320px]">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={chartData}
+                <ComposedChart
+                  data={plotted}
                   margin={{ top: 8, right: 12, left: 4, bottom: 4 }}
                 >
                   <CartesianGrid stroke="hsl(var(--border))" strokeDasharray="3 3" vertical={false} />
@@ -279,19 +357,42 @@ export default function MacroDetailPage() {
                     minTickGap={40}
                   />
                   <YAxis
+                    // Un livello non parte da zero: forzarcelo e' cio' che
+                    // schiaccia cinque anni di occupati in un muro piatto.
+                    domain={mode === "level" ? ["auto", "auto"] : undefined}
                     tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }}
                     axisLine={{ stroke: "hsl(var(--border))" }}
                     tickLine={{ stroke: "hsl(var(--border))" }}
-                    tickFormatter={(v: number) => formatMacroValue(v, unit)}
-                    width={60}
+                    tickFormatter={(v: number) =>
+                      formatMacroValue(v, valueKind, sourceScale)
+                    }
+                    width={64}
                   />
                   <Tooltip
                     cursor={{ fill: "hsl(var(--muted) / 0.4)" }}
-                    content={<ChartTooltip unit={unit} />}
+                    content={
+                      <ChartTooltip
+                        valueKind={valueKind}
+                        sourceScale={sourceScale}
+                      />
+                    }
                   />
-                  <ReferenceLine y={0} stroke="hsl(var(--border))" />
+                  {mode === "change" && (
+                    <ReferenceLine y={0} stroke="hsl(var(--border))" />
+                  )}
+                  {mode === "level" && (
+                    <Line
+                      type="monotone"
+                      dataKey="value"
+                      stroke="hsl(var(--primary))"
+                      strokeWidth={2}
+                      dot={false}
+                      isAnimationActive={false}
+                    />
+                  )}
+                  {mode === "change" && (
                   <Bar dataKey="value" radius={[2, 2, 0, 0]}>
-                    {chartData.map((p, i) => (
+                    {plotted.map((p, i) => (
                       <Cell
                         key={i}
                         fill={
@@ -302,7 +403,8 @@ export default function MacroDetailPage() {
                       />
                     ))}
                   </Bar>
-                </BarChart>
+                  )}
+                </ComposedChart>
               </ResponsiveContainer>
             </div>
           )}
@@ -318,7 +420,12 @@ export default function MacroDetailPage() {
           <table className="w-full text-sm tabular-nums">
             <thead>
               <tr className="text-xs uppercase tracking-wider text-muted-foreground border-b border-border">
-                <th className="text-left font-semibold pb-2">Data di rilascio</th>
+                <th
+                  className="text-left font-semibold pb-2"
+                  title="Il periodo che il dato misura. La data di pubblicazione non e' fornita dalla fonte per le osservazioni storiche."
+                >
+                  Periodo osservato
+                </th>
                 <th className="text-left font-semibold pb-2 hidden sm:table-cell">Periodo</th>
                 <th className="text-right font-semibold pb-2">Attuale</th>
                 <th className="text-right font-semibold pb-2">Previsto</th>
@@ -328,21 +435,29 @@ export default function MacroDetailPage() {
             <tbody>
               {filteredHistory.slice(0, 50).map((r) => (
                 <tr
-                  key={r.release_date}
+                  key={r.observation_period ?? r.period_label}
                   className="border-b border-border/40 hover:bg-muted/30 transition-colors"
                 >
-                  <td className="py-2 text-left">{formatMacroDate(r.release_date)}</td>
+                  <td className="py-2 text-left">
+                    {r.observation_period ? formatMacroDate(r.observation_period) : "—"}
+                  </td>
                   <td className="py-2 text-left text-muted-foreground hidden sm:table-cell">
                     {r.period_label ?? "—"}
                   </td>
                   <td className="py-2 text-right font-semibold">
-                    {r.actual_value != null ? formatMacroValue(r.actual_value, unit) : "—"}
+                    {r.actual_value != null
+                      ? formatMacroValue(r.actual_value, valueKind, sourceScale)
+                      : "—"}
                   </td>
                   <td className="py-2 text-right text-muted-foreground">
-                    {r.expected_value != null ? formatMacroValue(r.expected_value, unit) : "—"}
+                    {r.expected_value != null
+                      ? formatMacroValue(r.expected_value, valueKind, sourceScale)
+                      : "—"}
                   </td>
                   <td className="py-2 text-right">
-                    {r.previous_value != null ? formatMacroValue(r.previous_value, unit) : "—"}
+                    {r.previous_value != null
+                      ? formatMacroValue(r.previous_value, valueKind, sourceScale)
+                      : "—"}
                   </td>
                 </tr>
               ))}
@@ -370,13 +485,15 @@ export default function MacroDetailPage() {
 function KpiCell({
   label,
   value,
-  unit,
+  valueKind,
+  sourceScale,
   size = "lg",
   tone,
 }: {
   label: string;
   value: number | null | undefined;
-  unit: string;
+  valueKind: string;
+  sourceScale?: string | null;
   size?: "lg" | "xl";
   tone?: "pos" | "neg" | "neutral";
 }) {
@@ -393,7 +510,7 @@ function KpiCell({
         {label}
       </div>
       <div className={cn(sizeCls, "font-bold tabular-nums leading-tight", toneCls)}>
-        {value != null ? formatMacroValue(value, unit) : "—"}
+        {value != null ? formatMacroValue(value, valueKind, sourceScale) : "—"}
       </div>
     </div>
   );
@@ -452,11 +569,13 @@ interface ChartTooltipPayloadEntry {
 function ChartTooltip({
   active,
   payload,
-  unit,
+  valueKind,
+  sourceScale,
 }: {
   active?: boolean;
   payload?: ChartTooltipPayloadEntry[];
-  unit: string;
+  valueKind: string;
+  sourceScale?: string | null;
 }) {
   if (!active || !payload?.length) return null;
   const p = payload[0].payload;
@@ -465,7 +584,7 @@ function ChartTooltip({
       <div className="font-medium">{formatMacroDate(p.date)}</div>
       {p.period && <div className="text-muted-foreground tabular-nums">{p.period}</div>}
       <div className="font-bold tabular-nums mt-0.5">
-        {formatMacroValue(p.value, unit)}
+        {formatMacroValue(p.value, valueKind, sourceScale)}
       </div>
     </div>
   );
@@ -490,19 +609,45 @@ function formatMacroDate(iso: string): string {
   });
 }
 
-function formatMacroValue(v: number, unit: string): string {
+/** How many base units one stored unit represents.
+ *
+ *  ⚠️ This is the whole point of the fix. A PAYEMS observation of 159100 is
+ *  expressed in THOUSANDS, so it means 159.1 million people. The old
+ *  formatter compacted the stored number directly and printed "159.1K" — a
+ *  thousandfold understatement, rendered two inches below a card that says,
+ *  verbatim, `Total Non-Farm Payrolls (thousands)`. The scale was in the
+ *  payload and the formatter ignored it. */
+const SCALE_FACTOR: Record<string, number> = {
+  ones: 1,
+  thousands: 1e3,
+  millions: 1e6,
+  billions: 1e9,
+};
+
+export function formatMacroValue(
+  v: number,
+  valueKind: string,
+  sourceScale?: string | null,
+): string {
   if (!Number.isFinite(v)) return "—";
-  if (unit === "pct" || unit === "yield") {
-    return `${v.toFixed(2)}%`;
+  if (valueKind === "pct" || valueKind === "yield") return `${v.toFixed(2)}%`;
+  if (valueKind === "index") return v.toFixed(1);
+  if (valueKind !== "level") return v.toFixed(2);
+
+  const factor = sourceScale ? SCALE_FACTOR[sourceScale] : undefined;
+  if (factor === undefined) {
+    // Scale unknown. Show the stored number and apply NO transform: a suffix
+    // here would be a claim about a magnitude we cannot resolve. The number
+    // itself is still a true statement, so it is shown rather than hidden —
+    // the same choice `lib/money.ts` makes when a currency is missing.
+    return v.toLocaleString("it-IT", { maximumFractionDigits: 0 });
   }
-  if (unit === "level") {
-    const abs = Math.abs(v);
-    if (abs >= 1e12) return `${(v / 1e12).toFixed(2)}T`;
-    if (abs >= 1e9) return `${(v / 1e9).toFixed(2)}B`;
-    if (abs >= 1e6) return `${(v / 1e6).toFixed(1)}M`;
-    if (abs >= 1e3) return `${(v / 1e3).toFixed(1)}K`;
-    return v.toFixed(0);
-  }
-  if (unit === "index") return v.toFixed(1);
-  return v.toFixed(2);
+
+  const real = v * factor;
+  const abs = Math.abs(real);
+  if (abs >= 1e12) return `${(real / 1e12).toFixed(2)}T`;
+  if (abs >= 1e9) return `${(real / 1e9).toFixed(2)}B`;
+  if (abs >= 1e6) return `${(real / 1e6).toFixed(1)}M`;
+  if (abs >= 1e3) return `${(real / 1e3).toFixed(1)}K`;
+  return real.toFixed(0);
 }

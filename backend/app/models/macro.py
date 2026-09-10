@@ -60,6 +60,11 @@ class MacroSeries(Base):
     # How to display the value in the UI (pct / level / index / yield).
     # The calendar's insight panel formats numbers based on this.
     unit: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    # Scale used by the upstream series. A PAYEMS value of 159_100 is
+    # expressed in thousands and therefore represents 159.1 million people.
+    # Keeping this separate from `unit` prevents compact formatters from
+    # applying a second, contradictory suffix.
+    source_scale: Mapped[str | None] = mapped_column(String(16), nullable=True)
     # Optional Italian description shown in the tooltip / detail card.
     description: Mapped[str | None] = mapped_column(String(255), nullable=True)
     # Publishing organization, surfaced in the macro detail page header
@@ -78,8 +83,9 @@ class MacroSeries(Base):
 
 class MacroObservation(Base):
     """Historical observations for a `MacroSeries`. One row per (series,
-    date). `value` is NULL when FRED reports "." (no data for that
-    period — e.g. revisions or hold-out months).
+    date). `date` is the observation/reference period, not the publication
+    date. `value` is NULL when FRED reports "." (no data for that period —
+    e.g. revisions or hold-out months).
     """
     __tablename__ = "macro_observations"
     __table_args__ = (

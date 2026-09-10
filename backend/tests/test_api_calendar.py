@@ -258,14 +258,23 @@ def test_macro_detail_full_payload(authed_client: TestClient, db: Session):
     assert data["source"] == "Test Authority"
     assert data["importance"] == "high"
 
-    # latest = newest observation; previous_value = the one before
+    # latest = newest observation; previous_value = the one before. An
+    # observation date is a reference period, never a fabricated publication.
     assert data["latest"]["actual_value"] == 2.1
     assert data["latest"]["previous_value"] == 1.5
     assert data["latest"]["period_label"] == "Mar"
     assert data["latest"]["expected_value"] is None  # no historical consensus
+    assert data["latest"]["observation_period"] == "2026-03-15"
+    assert data["latest"]["publication_date"] is None
+    assert "release_date" not in data["latest"]
 
     # history newest → oldest, full set
     assert [r["actual_value"] for r in data["history"]] == [2.1, 1.5, 1.0]
+    assert [r["observation_period"] for r in data["history"]] == [
+        "2026-03-15",
+        "2026-02-15",
+        "2026-01-15",
+    ]
     # First row's previous = second row's actual
     assert data["history"][0]["previous_value"] == 1.5
     # Oldest row has no previous
@@ -379,3 +388,120 @@ def test_scan_log_filter_by_kind(authed_client: TestClient, db: Session):
     assert resp.status_code == 200
     kinds = {r["kind"] for r in resp.json()["runs"]}
     assert kinds == {"score_recompute"}
+
+
+def test_macro_detail_carries_the_scale_and_keeps_the_three_dates_apart(
+    authed_client: TestClient, db: Session
+):
+    """La scala deve ARRIVARE al frontend, o la correzione e decorativa.
+
+    Il difetto: la scheda dell'indicatore rende `Total Non-Farm Payrolls
+    (thousands)` e il formatter stampava `159.1K` sul valore memorizzato
+    159100, cioe sbagliava di mille volte. **L'unita era nel payload e il
+    formatter la ignorava** — ma poteva ignorarla solo perche l'API non la
+    esponeva affatto: `unit` diceva "level" per una serie in migliaia e per
+    una in miliardi allo stesso modo.
+
+    E le tre date restano tre: il periodo osservato, la pubblicazione e il
+    momento in cui l'abbiamo scaricata. Prima erano un campo solo, costruito
+    dal periodo, quindi il dato di agosto risultava pubblicato il 1 agosto:
+    una lettura datata prima che il periodo che misura fosse finito.
+    """
+    from datetime import date as _d
+
+    from app.models.macro import MacroObservation, MacroSeries
+
+    series = MacroSeries(
+        fred_series_id="PAYEMSTEST",
+        fred_release_id=50,
+        label="Occupati non agricoli",
+        region="US",
+        importance="high",
+        unit="level",
+        source_scale="thousands",
+        description="Total Non-Farm Payrolls (thousands)",
+        source="BLS",
+        last_refreshed_at=datetime(2026, 9, 10, 6, 0, tzinfo=UTC),
+    )
+    db.add(series)
+    db.flush()
+    db.add_all([
+        MacroObservation(series_id=series.id, date=_d(2026, 7, 1), value=158_900.0),
+        MacroObservation(series_id=series.id, date=_d(2026, 8, 1), value=159_100.0),
+    ])
+    db.commit()
+
+    data = authed_client.get(f"/api/macro/{series.id}").json()
+
+    # La scala viaggia, distinta dal tipo di valore.
+    assert data["source_scale"] == "thousands"
+    assert data["value_kind"] == "level"
+
+    # I nomi vecchi non ci sono piu. Serve dirlo: un frontend che leggesse
+    # ancora `unit` otterrebbe `undefined` e renderebbe di nuovo il numero
+    # grezzo, cioe il difetto tornerebbe in silenzio.
+    assert "unit" not in data
+    assert "last_refreshed_at" not in data
+
+    # Tre date, tre campi.
+    latest = data["latest"]
+    assert latest["observation_period"] == "2026-08-01"
+    # ⚠️ FRED non consegna la data di pubblicazione delle osservazioni. Non si
+    # ricostruisce dal periodo: era esattamente quello il bug.
+    assert latest["publication_date"] is None
+    assert latest["acquired_at"] is not None
+    assert data["data_acquired_at"] is not None
+
+
+def test_a_series_without_a_declared_scale_says_so_instead_of_guessing(
+    authed_client: TestClient, db: Session
+):
+    """Il controllo negativo.
+
+    Senza di esso un'API che restituisse sempre "ones" supererebbe il test
+    sopra, e il frontend compatterebbe di nuovo qualunque cosa. Una scala
+    ignota deve arrivare come `null`, cosi il formatter puo rifiutarsi di
+    applicare un suffisso invece di inventarne uno.
+    """
+    from datetime import date as _d
+
+    from app.models.macro import MacroObservation, MacroSeries
+
+    series = MacroSeries(
+        fred_series_id="SENZASCALA",
+        fred_release_id=1,
+        label="Serie senza scala",
+        region="US",
+        importance="low",
+        unit="level",
+        source="Test",
+    )
+    db.add(series)
+    db.flush()
+    db.add(MacroObservation(series_id=series.id, date=_d(2026, 8, 1), value=42.0))
+    db.commit()
+
+    data = authed_client.get(f"/api/macro/{series.id}").json()
+
+    assert data["source_scale"] is None
+    assert data["value_kind"] == "level"
+
+
+def test_the_curated_map_declares_the_scale_where_fred_has_one():
+    """La scala e DICHIARATA nella mappa curata, non dedotta a valle.
+
+    Solo quella mappa sa che PAYEMS spedisce migliaia e GDPC1 miliardi. Un
+    formatter che lo indovina e il bug ×1000; una serie di livello a cui
+    nessuno ha assegnato la scala deve restare senza, non prendere un
+    valore plausibile.
+    """
+    from app.scripts.refresh_fred import CURATED_SERIES
+
+    by_id = {c.fred_series_id: c for c in CURATED_SERIES}
+
+    assert by_id["PAYEMS"].source_scale == "thousands"
+    assert by_id["GDPC1"].source_scale == "billions"
+    assert by_id["RSAFS"].source_scale == "millions"
+    # Una percentuale non ha scala da dichiarare: il campo resta vuoto invece
+    # di prendere "ones" per riempirlo.
+    assert by_id["UNRATE"].source_scale is None

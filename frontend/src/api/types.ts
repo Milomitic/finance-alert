@@ -1169,7 +1169,21 @@ export interface MacroEvent {
 /** One historical release row, returned by `/api/macro/{series_id}`.
  *  Used by the detail page's bar chart + history table. */
 export interface MacroRelease {
-  release_date: string;
+  /** The reference period the reading DESCRIBES — August's payrolls, not the
+   *  day they were published. FRED observations carry this and nothing else.
+   *
+   *  ⚠️ Kept apart from `publication_date` on purpose. The two used to be one
+   *  field built from the observation date, so August's NFP was shown as
+   *  released on 1 August when it is actually published in early September:
+   *  a reading dated before the period it measures had even ended. */
+  observation_period?: string | null;
+  /** When the figure was PUBLISHED. Null on historical rows: FRED does not
+   *  supply it, and reconstructing it from the period is the bug above. Only
+   *  the scheduled-release path can fill it. */
+  publication_date?: string | null;
+  /** When WE fetched it. The third distinct date, and the only one that says
+   *  how stale the screen is. */
+  acquired_at?: string | null;
   /** Italian short-month label of the period the release refers to —
    *  "Apr", "Mag", "Set". Mirrors the "(Apr)" suffix Investing shows. */
   period_label?: string | null;
@@ -1192,10 +1206,21 @@ export interface MacroSeriesDetail {
   region: string;
   currency?: string | null;
   importance: MacroImportance;
-  unit?: string | null;
+  /** What SHAPE the value has: "pct" | "level" | "index" | "yield". Renamed
+   *  from `unit` because it never carried the unit — a level in thousands and
+   *  a level in billions both read "level", which is exactly how PAYEMS got a
+   *  second "K" glued onto a number already in thousands. */
+  value_kind?: string | null;
+  /** The SCALE the upstream series stores its numbers in: "ones" |
+   *  "thousands" | "millions" | "billions". A PAYEMS value of 159100 means
+   *  159.1 million people. Null means unknown, and a formatter must then
+   *  refuse to compact rather than guess. */
+  source_scale?: string | null;
   description?: string | null;
   source?: string | null;
-  last_refreshed_at?: string | null;
+  /** When WE fetched the series. Renamed from `last_refreshed_at`, which read
+   *  like a property of the DATA and is a property of our cache. */
+  data_acquired_at?: string | null;
   /** Most-recent release with previous_value pointing at the one before. */
   latest?: MacroRelease | null;
   /** Newest → oldest. The chart reverses for left-to-right rendering. */

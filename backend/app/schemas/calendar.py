@@ -123,8 +123,13 @@ class MacroReleaseOut(BaseModel):
     historical backfill — the feed is week-of). Older rows therefore
     have `expected = None`, displayed as "—" in the UI.
     """
-    release_date: date
-    period_label: str | None = None  # e.g. "Apr" — derived from release_date
+    # FRED observations identify the reference period. They do not carry the
+    # corresponding publication date, so the two fields stay separate and
+    # publication_date remains null unless the schedule supplies it directly.
+    observation_period: date | None = None
+    publication_date: date | None = None
+    acquired_at: str | None = None
+    period_label: str | None = None  # e.g. "Apr" — derived from observation period
     actual_value: float | None = None
     expected_value: float | None = None
     previous_value: float | None = None  # the reading immediately before this one
@@ -147,10 +152,11 @@ class MacroSeriesDetailOut(BaseModel):
     region: str
     currency: str | None = None
     importance: Literal["high", "medium", "low"]
-    unit: str | None = None
+    value_kind: str | None = None
+    source_scale: str | None = None
     description: str | None = None
     source: str | None = None
-    last_refreshed_at: str | None = None
+    data_acquired_at: str | None = None
     # Latest release — actual/expected/previous in one place.
     latest: MacroReleaseOut | None = None
     # Full release history (newest → oldest in the API for natural
