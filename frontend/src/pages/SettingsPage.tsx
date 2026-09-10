@@ -30,22 +30,33 @@ import { SignalEffectivenessPanel } from "@/components/settings/SignalEffectiven
  * Was a placeholder ("Disponibile nelle prossime fasi") in the
  * sidebar for the entire 3A-3C lifetime; ships in Fase 3E.
  */
-export default function SettingsPage() {
+export default function SettingsPage({ embedded = false }: { embedded?: boolean } = {}) {
   return (
     <div className="space-y-5 max-w-6xl">
-      <header className="space-y-1">
-        <div className="flex items-center gap-2 text-[0.6765rem] font-mono font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-          <SettingsIcon className="h-3 w-3" />
-          <span>Amministrazione · diagnostica</span>
-        </div>
-        <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight leading-tight">
-          Impostazioni
-        </h1>
-        <p className="text-sm text-muted-foreground max-w-2xl">
-          Statistiche di efficacia dei segnali e stato dei refresh
-          catalogo per indice.
-        </p>
-      </header>
+      {/* ⚠️ Questa pagina non ha mai contenuto una sola impostazione: otto
+          pannelli, tutti diagnostici, e il suo stesso occhiello diceva
+          «Amministrazione · diagnostica». Il titolo «Impostazioni» mandava a
+          cercare qui le preferenze, che vivono altrove, e mandava a cercare
+          altrove la diagnostica del motore, che vive qui.
+
+          Dentro Diagnostica il titolo lo mette la pagina contenitore. Fuori
+          resta, perche la rotta `/settings` continua a esistere per i vecchi
+          segnalibri — ma dice cosa contiene davvero. */}
+      {!embedded && (
+        <header className="space-y-1">
+          <div className="flex items-center gap-2 text-[0.6765rem] font-mono font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+            <SettingsIcon className="h-3 w-3" />
+            <span>Diagnostica · motore</span>
+          </div>
+          <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight leading-tight">
+            Motore
+          </h1>
+          <p className="text-sm text-muted-foreground max-w-2xl">
+            Statistiche di efficacia dei segnali e stato dei refresh
+            catalogo per indice.
+          </p>
+        </header>
+      )}
 
       <EngineHealthPanel />
       <SignalEffectivenessPanel />

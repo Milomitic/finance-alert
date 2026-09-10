@@ -1,6 +1,6 @@
 import { lazy, Suspense } from "react";
 import { Loader2 } from "lucide-react";
-import { Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes } from "react-router-dom";
 
 import Layout from "@/components/Layout";
 import ProtectedRoute from "@/components/ProtectedRoute";
@@ -18,12 +18,11 @@ const InstitutionalDetailPage = lazy(() => import("@/pages/InstitutionalDetailPa
 const InstitutionalsPage = lazy(() => import("@/pages/InstitutionalsPage"));
 const LoginPage = lazy(() => import("@/pages/LoginPage"));
 const MacroDetailPage = lazy(() => import("@/pages/MacroDetailPage"));
-const PlatformHealthPage = lazy(() => import("@/pages/PlatformHealthPage"));
 const PositionsPage = lazy(() => import("@/pages/PositionsPage"));
 const MarketDetailPage = lazy(() => import("@/pages/MarketDetailPage"));
 const SectorDetailPage = lazy(() => import("@/pages/SectorDetailPage"));
 const SectorsOverviewPage = lazy(() => import("@/pages/SectorsOverviewPage"));
-const SettingsPage = lazy(() => import("@/pages/SettingsPage"));
+const DiagnosticsPage = lazy(() => import("@/pages/DiagnosticsPage"));
 const StockDetailPage = lazy(() => import("@/pages/StockDetailPage"));
 const StocksBrowserPage = lazy(() => import("@/pages/StocksBrowserPage"));
 const NotFoundPage = lazy(() => import("@/pages/NotFoundPage"));
@@ -66,7 +65,15 @@ export default function App() {
           {/* Tracked trades (B3-6): playbook entries persisted as positions
               with live P&L + auto stop/target closing. */}
           <Route path="/positions" element={<PositionsPage />} />
-          <Route path="/health" element={<PlatformHealthPage />} />
+          {/* Diagnostica: una destinazione, due schede.
+              ⚠️ Le due rotte storiche NON spariscono, reindirizzano — i
+              segnalibri esistenti continuano a funzionare, e `replace` evita
+              che il tasto indietro rimbalzi sul redirect. */}
+          <Route path="/diagnostics" element={<DiagnosticsPage />} />
+          <Route
+            path="/health"
+            element={<Navigate to="/diagnostics?vista=piattaforma" replace />}
+          />
           <Route path="/calendar" element={<CalendarPage />} />
           <Route path="/macro/:seriesId" element={<MacroDetailPage />} />
           <Route path="/stocks" element={<StocksBrowserPage />} />
@@ -75,7 +82,10 @@ export default function App() {
           <Route path="/sectors/:name" element={<SectorDetailPage />} />
           <Route path="/institutionals" element={<InstitutionalsPage />} />
           <Route path="/institutionals/:slug" element={<InstitutionalDetailPage />} />
-          <Route path="/settings" element={<SettingsPage />} />
+          <Route
+            path="/settings"
+            element={<Navigate to="/diagnostics?vista=motore" replace />}
+          />
           {/* /rules removed: rule engine deleted backend-side; alerts are signals-only. */}
         </Route>
         <Route path="*" element={<NotFoundPage />} />

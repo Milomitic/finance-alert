@@ -58,7 +58,7 @@ const STATUS_INFO: Record<
   },
 };
 
-export default function PlatformHealthPage() {
+export default function PlatformHealthPage({ embedded = false }: { embedded?: boolean } = {}) {
   const { data: initialLogs } = useQuery({
     queryKey: ["platform-logs-initial"],
     queryFn: () => fetchLogs({ limit: 500 }),
@@ -223,12 +223,21 @@ export default function PlatformHealthPage() {
       {/* Header — title + global status pill, à la Claude status */}
       <header className="space-y-3">
         <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div className="space-y-1.5">
-            <h1 className="text-2xl sm:text-4xl font-bold tracking-tight">Salute piattaforma</h1>
+          {/* Dentro Diagnostica il titolo lo mette la pagina contenitore: due
+              intestazioni per una schermata sono una in piu. I comandi sotto
+              restano, perche appartengono a QUESTA vista e non alla scheda. */}
+          {embedded ? (
             <p className="text-base text-muted-foreground">
               Stato live di sorgenti dati, scheduler, scan e log — aggiornato in tempo reale via SSE.
             </p>
-          </div>
+          ) : (
+            <div className="space-y-1.5">
+              <h1 className="text-2xl sm:text-4xl font-bold tracking-tight">Salute piattaforma</h1>
+              <p className="text-base text-muted-foreground">
+                Stato live di sorgenti dati, scheduler, scan e log — aggiornato in tempo reale via SSE.
+              </p>
+            </div>
+          )}
           <div className="flex items-center gap-2">
             <button
               type="button"

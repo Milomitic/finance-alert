@@ -13,7 +13,6 @@ import {
   Moon,
   PanelLeftClose,
   PanelLeftOpen,
-  Settings,
   Sun,
   X,
 } from "lucide-react";
@@ -62,9 +61,15 @@ const NAV: NavEntry[] = [
   // Tracked trades: playbook entries persisted as positions with live P&L
   // and auto stop/target hit detection. Briefcase = "portfolio" flavor.
   { to: "/positions", label: "Posizioni", icon: Briefcase, enabled: true },
-  { to: "/health", label: "Salute", icon: HeartPulse, enabled: true },
-  // "Impostazioni" intentionally NOT here — it's pinned to the sidebar footer
-  // (see SidebarFooter) next to the theme toggle, so both stay visible.
+  // ⚠️ Una sola destinazione diagnostica, con due schede dentro.
+  //
+  // Erano due pagine con nomi diversi e posti diversi: «Salute» qui e
+  // «Impostazioni» in fondo alla barra, sotto un ingranaggio — cioe nel posto
+  // dove ogni applicazione mette le preferenze, mentre quella pagina conteneva
+  // otto pannelli diagnostici e zero impostazioni. Chi cercava «perche il
+  // motore dice questo» doveva sapere che la risposta stava sotto un
+  // ingranaggio; chi cercava una preferenza la cercava li e non la trovava.
+  { to: "/diagnostics", label: "Diagnostica", icon: HeartPulse, enabled: true },
 ];
 
 /** The nav link list — shared verbatim by the desktop sidebar and the
@@ -163,44 +168,32 @@ function ThemeToggleButton({
   );
 }
 
-/** Sidebar footer pinned below the nav: the Impostazioni link (moved out of the
- *  main nav so it sits with the theme control), and on a new line below it —
- *  right-aligned — the icon-only theme toggle. Always visible because the shell
- *  is a fixed-height column with the scroll on the nav, not the whole page. */
+/** Sidebar footer pinned below the nav: il controllo del tema.
+ *
+ *  ⚠️ Qui c'era un link «Impostazioni» sotto un ingranaggio, e portava a una
+ *  pagina di diagnostica. E stato tolto invece di essere rinominato: la
+ *  diagnostica ha adesso la sua voce nel menu principale, e l'ingranaggio
+ *  significa preferenze ovunque.
+ *
+ *  ⚠️ E NON e stato sostituito da una pagina di preferenze vuota. Le
+ *  preferenze reali esistono ma vivono ognuna accanto alla funzione che
+ *  serve — tema e barra laterale qui, timeframe del grafico nel grafico,
+ *  viste salvate nel filtro, colonne nella tabella — e una destinazione vuota
+ *  creata per simmetria del menu sarebbe un posto dove non trovare niente.
+ *  L'ingranaggio torna quando c'e qualcosa da metterci dentro.
+ *
+ *  Il tema resta qui perche e l'unica preferenza globale che l'app abbia. */
 function SidebarFooter({
   theme,
   onToggle,
   collapsed = false,
-  onNavigate,
 }: {
   theme: Theme;
   onToggle: () => void;
   collapsed?: boolean;
-  onNavigate?: () => void;
 }) {
-  const base = cn(
-    "flex items-center rounded text-base transition-colors",
-    collapsed ? "justify-center px-0 py-2.5" : "gap-2 px-3 py-2",
-  );
   return (
     <div className="p-3 flex flex-col gap-1">
-      <NavLink
-        to="/settings"
-        onClick={onNavigate}
-        title={collapsed ? "Impostazioni" : undefined}
-        aria-label={collapsed ? "Impostazioni" : undefined}
-        className={({ isActive }) =>
-          cn(
-            base,
-            isActive
-              ? "bg-primary text-primary-foreground"
-              : "text-foreground hover:bg-accent",
-          )
-        }
-      >
-        <Settings className="h-4 w-4 shrink-0" />
-        {!collapsed && "Impostazioni"}
-      </NavLink>
       <div className={cn("flex", collapsed ? "justify-center" : "justify-end")}>
         <ThemeToggleButton theme={theme} onToggle={onToggle} />
       </div>
@@ -237,7 +230,9 @@ export default function Layout() {
   // wrong title is worse than a generic one. Those pages can set their own.
   useEffect(() => {
     const exact = NAV.find((entry) => entry.to === location.pathname);
-    const label = exact?.label ?? (location.pathname === "/settings" ? "Impostazioni" : null);
+    // `/settings` e `/health` ora reindirizzano su `/diagnostics`, che e in
+    // NAV: il caso speciale che c'era qui non serve piu.
+    const label = exact?.label ?? null;
     document.title = label ? `${label} · Finance-Alert` : "Finance-Alert";
   }, [location.pathname]);
 
@@ -405,7 +400,6 @@ export default function Layout() {
             <SidebarFooter
               theme={theme}
               onToggle={toggleTheme}
-              onNavigate={() => setMobileNavOpen(false)}
             />
           </aside>
         </div>
