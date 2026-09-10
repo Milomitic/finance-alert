@@ -1018,6 +1018,41 @@ sort meaningful and changes the numbers on screen; labelling each cap with its
 own currency is honest and makes the sort meaningless. Do not slap
 `formatMoney` on it — that picks the second option by accident.
 
+## Units are the third recurring defect class, after palettes and rates (2026-09-10)
+
+The honesty rules in this file are applied to STATISTICS and not to
+ARITHMETIC. A rate must carry its denominator and an interval must be sized on
+independent windows -- meanwhile a full UI audit found four values on screen
+wearing the wrong unit, three of them off by a large factor.
+
+| Where | What is shown | What it is |
+|---|---|---|
+| Macro detail | `159.1K` | a value already in thousands, so 1000x |
+| Institutional panel | `+7663.7PP` | a SHARE-count % change, not weight points |
+| Screener | `$2.86T` beside `HK$165.60` | a HKD figure under a USD symbol |
+| Market detail | `52W LOW 4.40` | the all-time low, on 5 of 6 timeframes |
+
+**Three checks that need no code reading and would have caught three of four:**
+
+1. **A percentage of a whole cannot change by more than 100 points.**
+   `|delta_pp| <= 100`, always. Three values above it sat on one screen.
+2. **Two boxes with different labels must not print the same number.**
+   `52W high` equalled `Range high` to the cent -- one measurement wearing two
+   names.
+3. **A compact suffix must know the stored scale.** The macro card literally
+   renders `Total Non-Farm Payrolls (thousands)` two inches from `159.1K`. The
+   unit was in the payload and the formatter ignored it.
+
+⚠️ **The dangerous half is never the absurd value.** An S&P 500 low of 4.40
+denounces itself. The same bug on 5m/30m produces a 60-day low labelled "52
+weeks", which is PLAUSIBLE and therefore believed. When a window bug is found,
+fix every timeframe, not the one that looked wrong -- and note that the 52W
+block had NO test, so the regression was invisible from `2faee27` onward.
+
+Full audit with causes and file refs:
+[docs/frontend-audit-2026-09-10.md](docs/frontend-audit-2026-09-10.md).
+Backlog IDs FA-030 to FA-039.
+
 ## Frontend tone classes (Tailwind purger)
 
 Tone-class maps in `lib/alertMeta.ts` and similar files MUST stay as plain
