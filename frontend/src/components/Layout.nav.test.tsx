@@ -3,7 +3,9 @@ import { render, screen, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
-import Layout, { NAV, NAV_GROUPS } from "./Layout";
+import { NAV, NAV_GROUPS } from "@/lib/nav";
+
+import Layout from "./Layout";
 
 /* ─── Il raggruppamento della navigazione ─────────────────────────────────
  *
@@ -127,5 +129,41 @@ describe("un'ancora in fondo non deve sembrare dentro il gruppo sopra", () => {
     const primo = barra.children[0];
     expect(primo.textContent).toContain("Dashboard");
     expect(primo.querySelector('[data-nav-separator="true"]')).toBeNull();
+  });
+});
+
+describe("la shell esporta solo componenti", () => {
+  /* ⚠️ Un file che esporta componenti E costanti rompe il Fast Refresh —
+   * `react-refresh/only-export-components`. Questo repo non gated quella
+   * regola per scelta (la barra scritta e che una violazione rompa qualcosa
+   * che si sente, e un refresh lento non lo e), e la regola sta a 24 finding,
+   * quindi non si puo accendere senza una campagna.
+   *
+   * Ma `Layout.tsx` e il file che TUTTE le pagine attraversano, ed e proprio
+   * quello in cui la separazione mancava: i dati della navigazione ci vivevano
+   * dentro. Un pin mirato protegge il file che conta senza pretendere di
+   * ripulire gli altri ventiquattro — che e' il modo in cui FA-008 e scritta:
+   * «da fare quando si tocca il file, non come campagna».
+   */
+  it("Layout non esporta costanti accanto al componente", async () => {
+    const src = (await import("./Layout.tsx?raw")).default as string;
+    const esportazioni = [...src.matchAll(/^export\s+(const|let|function|interface|type|\{)/gm)]
+      .map((m) => m[0].trim());
+    // L'unico export ammesso e il default, cioe il componente.
+    expect(esportazioni).toEqual([]);
+    expect(src).toMatch(/export default function Layout/);
+  });
+
+  it("e i dati della navigazione vivono in un modulo che non rende nulla", async () => {
+    /* ⚠️ L'asserzione e sul CONTENUTO, non sulla sintassi. Il primo tentativo
+     * cercava un `<` per escludere il JSX e falliva sui generici TypeScript
+     * (`ComponentType<...>`): un controllo che grida sul codice giusto viene
+     * cancellato dal primo che lo incontra. Qui la proprieta che conta e che il
+     * modulo non definisca componenti — nessun default, nessuna funzione con
+     * l'iniziale maiuscola. */
+    const src = (await import("@/lib/nav.ts?raw")).default as string;
+    expect(src).toContain("export const NAV_GROUPS");
+    expect(src).not.toMatch(/export default/);
+    expect(src).not.toMatch(/function\s+[A-Z]/);
   });
 });

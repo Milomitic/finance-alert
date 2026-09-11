@@ -1251,10 +1251,18 @@ d = json.load(urllib.request.urlopen(req, timeout=60))
   (also: `npx tsc -b` for type-only check)
 - **Single test file**: append the file path to the pytest command
 
-⚠️ `npm run lint` (the FULL config) reports **47** pre-existing findings —
-39 errors + 8 warnings, re-counted 2026-09-10: only-export-components 21,
-set-state-in-effect 13, exhaustive-deps 8, refs 5. They are NOT gated and a red
+⚠️ `npm run lint` (the FULL config) reports **52** pre-existing findings —
+44 errors + 8 warnings, re-counted 2026-09-11: only-export-components 24,
+set-state-in-effect 14, exhaustive-deps 9, refs 5. They are NOT gated and a red
 result there is expected. `lint:hooks` is the gated subset.
+
+⚠️ **The number grew from 47 and the growth was partly MINE**, which is the
+thing to check first when this count moves. `Layout.tsx` gained an
+`only-export-components` the moment FA-044 exported `NAV` beside the component;
+it is fixed by moving the nav data to `lib/nav.ts`, which is better design
+anyway — the data is not a component, and the navigation test now reads it
+without mounting the app. Before treating this count as a backlog to burn down,
+diff it against what the current session added.
 
 The count read 60 on 2026-09-09 (with exhaustive-deps 15, purity 5,
 immutability 1). The last two categories are now at zero and were not cleaned
