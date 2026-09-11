@@ -14,6 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { formatMoney } from "@/lib/money";
 import { isDelayedDetection } from "@/lib/alertDates";
 import { PROBABILITA_TOOLTIP, snapshotForza, snapshotProbabilita } from "@/lib/alertMeta";
 import { cn } from "@/lib/utils";
@@ -135,7 +136,7 @@ export function RecentAlertsFeed({ alerts }: Props) {
                 </TableCell>
                 {/* Prezzo */}
                 <TableCell className="py-2 text-right tabular-nums font-semibold">
-                  ${a.trigger_price}
+                  {formatMoney(a.trigger_price, a.currency)}
                 </TableCell>
                 {/* Data — signal_date primary; orange clock flags a lagged
                     detection (>=1 day after the market bar). */}

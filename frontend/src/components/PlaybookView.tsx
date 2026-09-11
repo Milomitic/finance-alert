@@ -1,9 +1,6 @@
+import { formatMoney } from "@/lib/money";
 import type { Playbook } from "@/lib/tradePlaybook";
 import { cn } from "@/lib/utils";
-
-function price(n: number): string {
-  return n >= 1 ? n.toFixed(2) : n.toFixed(3);
-}
 
 function Cell({
   label, value, hint, tone,
@@ -32,7 +29,17 @@ function Cell({
 
 /* Renders a rule-based trade playbook (action, entry/stop/targets, duration,
    risk + leverage). Descriptive, with a not-financial-advice disclaimer. */
-export function PlaybookView({ playbook }: { playbook: Playbook }) {
+export function PlaybookView({
+  playbook,
+  currency,
+}: {
+  playbook: Playbook;
+  /** Valuta di quotazione del titolo. ⚠️ Obbligatoria e non opzionale con un
+   *  default: un default sarebbe il dollaro, cioe' il difetto che questa
+   *  prop esiste per chiudere. `null` dice «sconosciuta» e fa rendere il
+   *  numero nudo, che e' una cosa diversa da «dollari». */
+  currency: string | null;
+}) {
   const p = playbook;
   const isLong = p.side === "long";
   const accent = isLong ? "text-emerald-800 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400";
@@ -52,10 +59,10 @@ export function PlaybookView({ playbook }: { playbook: Playbook }) {
             The plan describes a geometry; it does not tell you to enter. */}
       </div>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-        <Cell label="Entry" value={`$${price(p.entry)}`} />
-        <Cell label="Stop" value={`$${price(p.stop)}`} hint={`-${p.stopPct.toFixed(1)}%${p.stopCapped ? " - cap vol." : ""}`} tone="rose" />
+        <Cell label="Entry" value={formatMoney(p.entry, currency)} />
+        <Cell label="Stop" value={formatMoney(p.stop, currency)} hint={`-${p.stopPct.toFixed(1)}%${p.stopCapped ? " - cap vol." : ""}`} tone="rose" />
         {p.targets.map((t) => (
-          <Cell key={t.label} label={`${t.label} - R:R ${t.rr.toFixed(1)}`} value={`$${price(t.price)}`} tone="emerald" />
+          <Cell key={t.label} label={`${t.label} - R:R ${t.rr.toFixed(1)}`} value={formatMoney(t.price, currency)} tone="emerald" />
         ))}
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">

@@ -158,6 +158,10 @@ export interface Alert {
   ticker: string | null;
   name: string | null;
   triggered_at: string;
+  /** Valuta di quotazione del titolo, grezza (`GBp` compreso: l'etichetta la
+   *  normalizza `displayCurrency`). null = sconosciuta, mai dollari per
+   *  difetto — 2.669 segnali su 8.905 sono su titoli non quotati in dollari. */
+  currency?: string | null;
   trigger_price: number;
   snapshot: Record<string, unknown>;
   read_at: string | null;

@@ -35,6 +35,7 @@ import {
 import { usePatchAlert } from "@/hooks/useAlertMutations";
 import { useHolderCounts } from "@/hooks/useInstitutionals";
 import { useSignalOhlcv } from "@/hooks/useSignalOhlcv";
+import { formatMoney } from "@/lib/money";
 import { earningsProximityDays as sharedEarningsProximityDays } from "@/lib/earningsProximity";
 import { daysBetween, isDelayedDetection } from "@/lib/alertDates";
 import {
@@ -320,7 +321,9 @@ export function AlertDetailDialog({ alert, onClose }: Props) {
               Prezzo trigger
             </div>
             <div className="text-2xl font-bold tabular-nums mt-1 leading-tight">
-              ${alert.trigger_price.toFixed(2)}
+              {/* ⚠️ Era `$` cablato. Misurato in produzione, 2.669 segnali su
+                  8.905 — il 30% — sono su titoli non quotati in dollari. */}
+              {formatMoney(alert.trigger_price, alert.currency)}
             </div>
           </div>
 
@@ -344,7 +347,7 @@ export function AlertDetailDialog({ alert, onClose }: Props) {
             {invLevel != null ? (
               <>
                 <div className="text-2xl font-bold tabular-nums mt-1 leading-tight">
-                  ${invLevel.toFixed(2)}
+                  {formatMoney(invLevel, alert.currency)}
                 </div>
                 {inv?.reason && (
                   <div className="text-[0.7059rem] text-muted-foreground mt-0.5 leading-snug">
@@ -551,7 +554,7 @@ export function AlertDetailDialog({ alert, onClose }: Props) {
               </div>
               {pb ? (
                 <>
-                  <PlaybookView playbook={pb} />
+                  <PlaybookView playbook={pb} currency={alert.currency ?? null} />
                   {/* B3-6: persiste entry/stop/target del piano come
                       posizione tracciata (P&L live + chiusura automatica
                       su stop/target). Prefill dal playbook + alert_id. */}

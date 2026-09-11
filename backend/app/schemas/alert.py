@@ -40,6 +40,9 @@ class AlertOut(BaseModel):
     # showing only `triggered_at` in that case.
     signal_date: date | None = None
     trigger_price: float
+    #: Valuta di quotazione del titolo, grezza (`GBp` compreso: l'etichetta la
+    #: normalizza chi rende). None = sconosciuta, mai dollari per difetto.
+    currency: str | None = None
     snapshot: dict[str, Any]
     read_at: datetime | None
     archived_at: datetime | None

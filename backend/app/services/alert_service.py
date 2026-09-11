@@ -202,6 +202,7 @@ def list_alerts(
             Alert,
             Stock.ticker.label("ticker"),
             Stock.name.label("name"),
+            Stock.currency.label("currency"),
             SignalOutcome.abs_hit.label("outcome_abs_hit"),
             SignalOutcome.fwd_return.label("outcome_fwd_return"),
             SignalOutcome.horizon_days.label("outcome_horizon_days"),
@@ -256,13 +257,22 @@ def _row_to_item(row: Any, next_earnings: date | None) -> dict[str, Any]:
     sarebbe silenziosa — il frontend riceverebbe un alert con meno campi solo
     quando lo apre da una posizione invece che dalla lista.
     """
-    alert, ticker_val, name_val, o_hit, o_fwd, o_horizon, o_mkt = row
+    alert, ticker_val, name_val, currency_val, o_hit, o_fwd, o_horizon, o_mkt = row
     return {
         "id": alert.id,
         "rule_kind": derive_rule_kind(None, alert.signal_name),
         "stock_id": alert.stock_id,
         "ticker": ticker_val,
         "name": name_val,
+        # La valuta di QUOTAZIONE del titolo, grezza. ⚠️ Senza, ogni prezzo di
+        # un segnale veniva reso con `$`: misurato in produzione, 2.669 alert
+        # su 8.905 — il 30% — sono su titoli non quotati in dollari.
+        #
+        # Non normalizzata qui: `GBp` -> `GBP` e la regola dell'ETICHETTA, e la
+        # possiede `currency_units.major_unit_currency` sul backend e
+        # `displayCurrency` su ogni percorso di resa. Applicarla anche qui
+        # darebbe due proprietari alla stessa regola.
+        "currency": currency_val,
         "triggered_at": alert.triggered_at,
         "signal_date": alert.signal_date,
         "trigger_price": float(alert.trigger_price),
@@ -300,6 +310,7 @@ def get_alert_detail(db: Session, alert_id: int) -> dict[str, Any] | None:
             Alert,
             Stock.ticker.label("ticker"),
             Stock.name.label("name"),
+            Stock.currency.label("currency"),
             SignalOutcome.abs_hit.label("outcome_abs_hit"),
             SignalOutcome.fwd_return.label("outcome_fwd_return"),
             SignalOutcome.horizon_days.label("outcome_horizon_days"),
