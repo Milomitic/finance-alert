@@ -50,6 +50,25 @@ export interface Setup {
    *  setup actually gave. Only set on converted rows. */
   lead_days?: number | null;
   converted_alert_id?: number | null;
+  /** L'ultimo giorno in cui il setup puo ancora essere pendente.
+   *
+   *  ⚠️ E il TETTO da `first_seen_at`, non la scadenza scorrevole da
+   *  `last_seen_at`: quella si sposta in avanti a ogni scansione finche le
+   *  condizioni tengono, quindi e permanentemente a dieci giorni da oggi e
+   *  non dice quando il setup si risolve. Misurato in produzione l'11
+   *  settembre 2026 su 60 righe: scorrevole p50 9g e max 10g, tetto p50 14g
+   *  e max 27g. Il proprietario della regola e `setup_service.pending_until`.
+   *
+   *  E un limite superiore, non una previsione: il setup puo convertire o
+   *  decadere prima. */
+  pending_until?: string | null;
+  /** Prossima trimestrale del ticker, SOLO da cache: la lista non puo
+   *  innescare una chiamata yfinance. Null = SCONOSCIUTO, che non e «nessuna
+   *  trimestrale» — la stessa distinzione fra `—` e `0` applicata ai numeri.
+   *
+   *  Viaggia grezza, senza un booleano «dentro la finestra»: i consumatori
+   *  hanno finestre diverse e la regola vive in `lib/earningsProximity.ts`. */
+  next_earnings_date?: string | null;
 }
 
 export type SetupStatus = "active" | "converted" | "expired";

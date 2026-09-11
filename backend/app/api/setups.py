@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user, get_db
 from app.models import Stock, StockSetup, User
 from app.models.stock_setup import STATUS_ACTIVE, STATUS_CONVERTED, STATUS_EXPIRED
-from app.services import setup_service
+from app.services import setup_service, stock_fundamentals_service
 
 router = APIRouter(prefix="/api/setups", tags=["setups"])
 
@@ -57,6 +57,20 @@ class SetupOut(BaseModel):
     #: setup actually gave. Only set on converted rows.
     lead_days: int | None = None
     converted_alert_id: int | None = None
+    #: L'ultimo giorno in cui il setup puo ancora essere pendente — il TETTO da
+    #: `first_seen_at`, non la scadenza scorrevole da `last_seen_at`, che si
+    #: sposta a ogni scansione e non direbbe quando il setup si risolve. Il
+    #: proprietario della regola e `setup_service.pending_until`.
+    pending_until: str | None = None
+    #: Prossima trimestrale del ticker, SOLO da cache: questo path non puo
+    #: innescare una chiamata yfinance. Null = sconosciuto, che non e «nessuna
+    #: trimestrale» — chi rende la riga non deve trasformare l'uno nell'altro.
+    #:
+    #: ⚠️ Viaggia GREZZA, senza un booleano «dentro la finestra» calcolato qui.
+    #: I consumatori hanno finestre diverse — l'orizzonte di un segnale e la
+    #: vita residua di un setup — e un booleano precalcolato ne servirebbe uno
+    #: solo, obbligando l'altro a ricostruirsi comunque la data.
+    next_earnings_date: str | None = None
 
 
 class SetupListOut(BaseModel):
@@ -114,8 +128,16 @@ def list_setups(
         q = q.order_by(StockSetup.resolved_at.desc().nullslast())
     q = q.limit(limit)
 
+    rows = db.execute(q).all()
+    # Un solo passaggio cache-only sui ticker DISTINTI della pagina: nessuna
+    # query, nessuna rete, al piu `limit` letture da un dict. Stessa forma del
+    # passaggio che `list_alerts` fa sulla propria pagina.
+    earnings_by_ticker = stock_fundamentals_service.next_earnings_dates_cached(
+        {stock.ticker for _, stock in rows}
+    )
+
     out: list[SetupOut] = []
-    for row, stock in db.execute(q).all():
+    for row, stock in rows:
         try:
             ann = json.loads(row.annotations_json) if row.annotations_json else None
         except (ValueError, TypeError):
@@ -138,6 +160,16 @@ def list_setups(
                 resolved_at=row.resolved_at.isoformat() if row.resolved_at else None,
                 lead_days=row.lead_days,
                 converted_alert_id=row.converted_alert_id,
+                pending_until=(
+                    d.isoformat()
+                    if (d := setup_service.pending_until(row.first_seen_at))
+                    else None
+                ),
+                next_earnings_date=(
+                    e.isoformat()
+                    if (e := earnings_by_ticker.get(stock.ticker))
+                    else None
+                ),
             )
         )
     return SetupListOut(setups=out, stats=setup_service.conversion_stats(db))

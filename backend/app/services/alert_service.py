@@ -154,26 +154,20 @@ def _apply_filters(
 def _next_earnings_dates_cached(tickers: set[str]) -> dict[str, date]:
     """{ticker: next_earnings_date} for the given tickers, CACHE-ONLY.
 
-    Reads `stock_fundamentals_service._CACHE` directly (same pattern as
-    `calendar_service._earnings_for_stock` — see the two-tier-cache note in
-    CLAUDE.md): NEVER triggers a yfinance roundtrip from the alerts list
-    path. A cold/missing cache entry (or an unparsable date) is simply
-    absent from the result → the API field stays null and the UI hides the
-    earnings-proximity badge. Lazy import keeps the alerts module light.
+    Delega: il corpo vive in `stock_fundamentals_service`, che possiede la
+    cache. Questa lettura aveva un secondo consumatore dal 2026-09-11 — la
+    lista setup, che chiede la stessa cosa per una finestra diversa — e due
+    copie della stessa regola divergono in silenzio: basta che una smetta di
+    tagliare la data a dieci caratteri perche le due pagine mostrino
+    trimestrali diverse per lo stesso titolo senza che nessuna delle due lo
+    dica. Stessa forma di `lib/money.ts` e di `currency_units`.
+
+    Il nome resta qui perche i due chiamanti interni lo usano; l'import e
+    pigro per non appesantire il modulo alert.
     """
     from app.services import stock_fundamentals_service
 
-    out: dict[str, date] = {}
-    for t in tickers:
-        cached = stock_fundamentals_service._CACHE.get(t)
-        raw = cached.next_earnings_date if cached is not None else None
-        if not raw:
-            continue
-        try:
-            out[t] = date.fromisoformat(str(raw)[:10])
-        except (ValueError, TypeError):
-            continue
-    return out
+    return stock_fundamentals_service.next_earnings_dates_cached(tickers)
 
 
 def list_alerts(

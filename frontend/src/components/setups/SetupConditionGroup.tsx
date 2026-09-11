@@ -1,8 +1,9 @@
-import { Clock, TrendingDown, TrendingUp } from "lucide-react";
+import { CalendarClock, Clock, TrendingDown, TrendingUp } from "lucide-react";
 
 import { StockLogo } from "@/components/dashboard/StockLogo";
 import { Card, CardContent } from "@/components/ui/card";
 import { waitingDays, type Setup } from "@/hooks/useSetups";
+import { daysUntil, earningsProximityDays } from "@/lib/earningsProximity";
 import type { ConditionGroup } from "@/lib/setupGrouping";
 import { cn } from "@/lib/utils";
 
@@ -142,6 +143,46 @@ function DistanceCell({ value }: { value: number | null }) {
   );
 }
 
+/** La trimestrale cade dentro la finestra di attesa di questo setup.
+ *
+ * Risponde alla sola domanda che *In formazione* e il calendario non possono
+ * porre da sole: **il setup si risolve prima o dopo la trimestrale?** Una
+ * trimestrale sovrascrive la tesi tecnica, quindi un setup che scade dopo di
+ * essa e un oggetto diverso da uno che scade prima.
+ *
+ * ⚠️ Solo un'icona, e il resto nel titolo accessibile. La cella dell'attesa
+ * porta gia un numero di giorni («da quanto aspetta»), e affiancargliene un
+ * secondo («fra quanto pubblica») produrrebbe due numeri che si leggono
+ * uguali e significano cose opposte — il difetto di unita che l'audit del 10
+ * settembre ha trovato quattro volte.
+ *
+ * ⚠️ Ambra, non rosa/smeraldo. In questo progetto quella tavolozza significa
+ * direzione di mercato; una trimestrale in arrivo non ha direzione, e ambra e
+ * gia il colore che il badge sugli alert usa per la stessa cosa.
+ *
+ * ⚠️ Vive nella cella dell'attesa, non accanto al ticker. Un elemento
+ * `shrink-0` messo dentro l'identita toglierebbe larghezza al NOME, che e
+ * l'unica traccia flessibile della riga: e la forma esatta del difetto che
+ * CLAUDE.md registra tre volte in un pomeriggio — cede l'etichetta e
+ * sopravvive la decorazione. Il costo accettato e che sotto `sm` sparisce
+ * insieme all'attesa che qualifica.
+ */
+function EarningsMarker({ setup }: { setup: Setup }) {
+  const gg = earningsProximityDays(setup.next_earnings_date, daysUntil(setup.pending_until));
+  if (gg === null) return null;
+  const quando = gg === 0 ? "oggi" : gg === 1 ? "fra 1 giorno" : `fra ${gg} giorni`;
+  const label = `Trimestrale il ${setup.next_earnings_date?.slice(0, 10)}, ${quando}: cade dentro la finestra di attesa del setup`;
+  return (
+    <CalendarClock
+      data-testid="setup-earnings-marker"
+      role="img"
+      aria-label={label}
+      className="h-3 w-3 shrink-0 text-amber-600 dark:text-amber-400"
+    />
+  );
+}
+
+
 function GroupHeaderRow({ columns }: { columns: GroupColumns }) {
   return (
     <li className={cn(columns.cols, "px-3 py-1 border-b bg-muted/20")}>
@@ -208,6 +249,7 @@ function SetupLine({
         {columns.distance && <DistanceCell value={setup.distance_atr} />}
 
         <span className="hidden sm:flex items-center gap-1 justify-self-end text-xs text-muted-foreground whitespace-nowrap">
+          <EarningsMarker setup={setup} />
           <Clock className="h-3 w-3" aria-hidden />
           {days === null ? "—" : days === 0 ? "oggi" : `${days}g`}
         </span>

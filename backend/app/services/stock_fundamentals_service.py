@@ -306,6 +306,42 @@ _TTL_SECONDS = 7 * 24 * 60 * 60
 _NEGATIVE_TTL_SECONDS = 6 * 60 * 60
 
 
+def next_earnings_dates_cached(tickers: set[str]) -> dict[str, date]:
+    """{ticker: next_earnings_date} per i ticker chiesti, SOLO DA CACHE.
+
+    Proprietario unico della regola, perche dal 2026-09-11 i consumatori sono
+    due — la lista alert e la lista setup — e la stessa lettura scritta due
+    volte diverge in silenzio: basta che una smetta di tagliare la data a
+    dieci caratteri perche lo stesso titolo mostri trimestrali diverse su due
+    schermi. E la forma di `lib/money.ts` e di `currency_units`: l'aritmetica
+    sta in un posto solo e i chiamanti delegano.
+
+    ⚠️ Non innesca MAI una chiamata yfinance. Legge `_CACHE` e basta: una voce
+    fredda, mancante o con una data illeggibile semplicemente non compare nel
+    risultato, quindi il campo API resta nullo e nessun marcatore viene reso.
+    Sconosciuto non e «nessuna trimestrale» — la stessa distinzione fra `—` e
+    `0` che il resto dell'app applica ai numeri.
+
+    Il taglio `[:10]` non e difensivo: yfinance restituisce sia `2026-09-18`
+    sia `2026-09-18 00:00:00`, e le due forme devono produrre la stessa data.
+
+    La cache e un singleton di processo: su un boot freddo puo essere vuota
+    finche `hydrate_l1_from_db()` non gira (lo fa il `lifespan`). Un risultato
+    vuoto qui non e un errore, e le liste si popolano al passaggio successivo.
+    """
+    out: dict[str, date] = {}
+    for t in tickers:
+        cached = _CACHE.get(t)
+        raw = cached.next_earnings_date if cached is not None else None
+        if not raw:
+            continue
+        try:
+            out[t] = date.fromisoformat(str(raw)[:10])
+        except (ValueError, TypeError):
+            continue
+    return out
+
+
 def _is_permanent_error(err: str | None) -> bool:
     """True when an error string represents a stable, ticker-specific failure
     (404, no-data, partial fetch with empty info) — safe to cache. False

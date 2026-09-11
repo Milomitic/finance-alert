@@ -35,6 +35,7 @@ import {
 import { usePatchAlert } from "@/hooks/useAlertMutations";
 import { useHolderCounts } from "@/hooks/useInstitutionals";
 import { useSignalOhlcv } from "@/hooks/useSignalOhlcv";
+import { earningsProximityDays as sharedEarningsProximityDays } from "@/lib/earningsProximity";
 import { daysBetween, isDelayedDetection } from "@/lib/alertDates";
 import {
   TONE_BORDER_LEFT,
@@ -89,25 +90,28 @@ function formatRelative(iso: string): string {
 const HORIZON_FALLBACK_DAYS: Record<string, number> = { short: 5, medium: 21, long: 63 };
 
 /** Days until the next earnings release IF it falls inside the signal's
- *  horizon window, else null (also null for past dates from a stale cache). */
+ *  horizon window, else null.
+ *
+ *  ⚠️ Solo la FINESTRA e calcolata qui: la regola — leggi la data, contala da
+ *  oggi, scarta il passato, confronta col limite — vive in
+ *  `lib/earningsProximity.ts`. Questa funzione ne conteneva una copia privata
+ *  finche il consumatore era uno solo; dal 2026-09-11 ce n'e un secondo (la
+ *  riga del setup, con una finestra diversa) e due copie della stessa regola
+ *  divergono in silenzio. Stessa forma di `lib/money.ts` e `lib/lensGap.ts`.
+ *
+ *  Quello che resta qui e giustamente locale: l'orizzonte di un segnale e una
+ *  proprieta del segnale, non della regola. */
 function earningsProximityDays(a: {
   next_earnings_date?: string | null;
   outcome_horizon_days?: number | null;
   snapshot: Record<string, unknown>;
 }): number | null {
-  if (!a.next_earnings_date) return null;
-  const ts = Date.parse(a.next_earnings_date.slice(0, 10));
-  if (Number.isNaN(ts)) return null;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const days = Math.round((ts - today.getTime()) / 86_400_000);
-  if (days < 0) return null; // già passati (cache non aggiornata) → niente badge
   const hzKey = (a.snapshot as { horizon?: unknown }).horizon;
   const horizon =
     a.outcome_horizon_days ??
     (typeof hzKey === "string" ? HORIZON_FALLBACK_DAYS[hzKey] : undefined) ??
     14;
-  return days <= horizon ? days : null;
+  return sharedEarningsProximityDays(a.next_earnings_date, horizon);
 }
 
 function SnapshotRow({

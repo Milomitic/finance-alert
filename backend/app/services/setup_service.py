@@ -54,6 +54,32 @@ _MAX_AGE_DAYS = 28
 _MIN_SCANS_BEFORE_EXPIRY = 3
 
 
+def pending_until(first_seen_at: datetime | None) -> date | None:
+    """L'ultimo giorno in cui questo setup puo ancora essere pendente.
+
+    ⚠️ E il TETTO da `first_seen_at`, non la scadenza scorrevole da
+    `last_seen_at`. Le due regole chiudono entrambe un setup, ma solo una sta
+    ferma: `_EXPIRE_AFTER_DAYS` si sposta in avanti a ogni scansione finche le
+    condizioni tengono, quindi non dice quando il setup si risolve — dice
+    quanto sopravvive senza essere rivisto, ed e permanentemente a dieci
+    giorni da oggi.
+
+    Misurato in produzione il 2026-09-11 su 60 setup in lista: finestra
+    scorrevole p50 9g e max 10g, tetto p50 14g e max 27g, con il tetto
+    vincolante su 9 righe su 60. Prendere il `min()` delle due sembra
+    prudente e coincide quasi sempre con la scorrevole, quindi
+    SOTTO-RIPORTEREBBE proprio il caso per cui un consumatore chiede questa
+    data: un evento a dodici giorni dentro un setup che ne ha quattordici.
+
+    E un limite superiore, non una previsione: il setup puo convertire o
+    decadere prima. Chi lo consuma deve dire «l'evento cade dentro la
+    finestra», mai «il setup sara ancora aperto quel giorno».
+    """
+    if first_seen_at is None:
+        return None
+    return first_seen_at.date() + timedelta(days=_MAX_AGE_DAYS)
+
+
 def upsert_setup(
     db: Session,
     *,
