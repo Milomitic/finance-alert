@@ -96,3 +96,36 @@ describe("i gruppi della navigazione", () => {
     }
   });
 });
+
+describe("un'ancora in fondo non deve sembrare dentro il gruppo sopra", () => {
+  /* ⚠️ Trovato dalla verifica A SCHERMO, e jsdom non poteva dirlo: nel DOM
+   * `Diagnostica` e fuori da ogni gruppo — il test sopra lo asserisce e passa —
+   * ma resa senza stacco, subito sotto `Posizioni`, si LEGGE come l'ultima
+   * voce di Monitoraggio. Struttura giusta, lettura sbagliata.
+   *
+   * E la ragione per cui il quinto criterio di chiusura del piano esiste e
+   * spetta a chi guarda: «il contrasto e il target touch non sono misurabili
+   * dai test». Questo non e contrasto, ma e la stessa classe — una proprieta
+   * dell'aspetto che nessuna asserzione sul DOM stava misurando.
+   *
+   * La verifica possibile qui e sul CONFINE: un gruppo senza etichetta che
+   * segue un gruppo etichettato deve portare un separatore. */
+  it("il gruppo senza etichetta che segue uno etichettato porta un separatore", () => {
+    renderAt();
+    const barra = screen.getAllByRole("navigation")[0];
+    const gruppi = Array.from(barra.children);
+    const i = gruppi.findIndex((g) => g.textContent?.includes("Diagnostica"));
+    expect(i).toBeGreaterThan(0);
+    expect(gruppi[i].querySelector('[data-nav-separator="true"]')).not.toBeNull();
+  });
+
+  it("⚠️ il PRIMO gruppo non ne porta uno: non c'e niente da separare", () => {
+    // Un separatore in cima sarebbe una riga di cornice sopra il nulla, cioe
+    // lo stesso difetto dell'intestazione su una voce sola.
+    renderAt();
+    const barra = screen.getAllByRole("navigation")[0];
+    const primo = barra.children[0];
+    expect(primo.textContent).toContain("Dashboard");
+    expect(primo.querySelector('[data-nav-separator="true"]')).toBeNull();
+  });
+});

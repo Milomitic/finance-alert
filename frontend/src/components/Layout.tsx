@@ -154,12 +154,23 @@ function NavList({
           aria-label={group.label ?? undefined}
           className="flex flex-col gap-1"
         >
+          {/* ⚠️ Un gruppo SENZA etichetta che segue uno etichettato porta
+              comunque un confine. Trovato dalla verifica a schermo: nel DOM
+              `Diagnostica` e fuori da ogni gruppo — il test lo asserisce e
+              passa — ma resa senza stacco, subito sotto `Posizioni`, si LEGGE
+              come l'ultima voce di Monitoraggio. Struttura giusta, lettura
+              sbagliata, ed e esattamente la classe di difetto che il quinto
+              criterio di chiusura del piano affida a chi guarda.
+              Il primo gruppo non ne porta: sopra non c'e niente da separare. */}
+          {!group.label && gi > 0 && (
+            <Separator data-nav-separator="true" className="my-1.5" />
+          )}
           {group.label &&
             (collapsed ? (
               // Nel binario a 64px un'intestazione di testo sarebbe
               // illeggibile: resta il confine, che e' la meta dell'informazione
               // che l'intestazione porta.
-              <Separator className="my-1.5" />
+              <Separator data-nav-separator="true" className="my-1.5" />
             ) : (
               <div className="px-3 pt-3 pb-1 text-[0.65rem] font-medium uppercase tracking-[0.14em] text-muted-foreground">
                 {group.label}
