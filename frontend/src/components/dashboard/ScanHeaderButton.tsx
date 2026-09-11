@@ -35,6 +35,15 @@ interface Props {
   nextScanAt?: string | null;
 }
 
+/* ⚠️ Il testo dei tooltip rimandava a un pannello fisso mentre un
+ * run era in corso, mandando a cercare un pannello in un angolo preciso.
+ * Da quando quel pannello compare solo per un run che
+ * l'utente ha chiesto (`trigger === "manual"`), quella frase e FALSA proprio
+ * nel caso in cui viene mostrata — il bottone e disabilitato perche qualcosa
+ * gira, e quel qualcosa e quasi sempre il cron. E la forma «un rename fa
+ * mentire i commenti» applicata al testo che legge l'utente, che e' peggio:
+ * un commento sbagliato inganna chi mantiene, una frase sbagliata inganna chi
+ * usa. `money.test.ts` e `RunProgressToast.test.tsx` pinnano la coppia. */
 export function ScanHeaderButton(_: Props) {
   const status = useScanStatus().data;
   const recomputeStatus = useScoreRecomputeStatus().data;
@@ -71,8 +80,8 @@ export function ScanHeaderButton(_: Props) {
         </TooltipTrigger>
         <TooltipContent side="bottom" className="text-[0.7059rem]">
           {isRunning
-            ? "Uno scan è già in corso — vedi il toast in basso a destra"
-            : "Avvia uno scan in background. La notifica seguirà l'avanzamento."}
+            ? "Uno scan è già in corso. Se l'ha avviato la pianificazione non compare alcun pannello: l'avanzamento è in Diagnostica."
+            : "Avvia uno scan in background. Avendolo chiesto tu, un pannello ne seguirà l'avanzamento."}
         </TooltipContent>
       </Tooltip>
 
@@ -102,8 +111,8 @@ export function ScanHeaderButton(_: Props) {
         </TooltipTrigger>
         <TooltipContent side="bottom" className="text-[0.7059rem]">
           {isRecomputeRunning
-            ? "Ricalcolo già in corso — vedi il toast in basso a destra"
-            : "Forza il ricalcolo del composite score per tutte le stock (~30-60s). La notifica seguirà l'avanzamento."}
+            ? "Un ricalcolo è già in corso. Se l'ha avviato la pianificazione non compare alcun pannello: l'avanzamento è in Diagnostica."
+            : "Forza il ricalcolo del composite score per tutte le stock (~30-60s). Avendolo chiesto tu, un pannello ne seguirà l'avanzamento."}
         </TooltipContent>
       </Tooltip>
 

@@ -23,9 +23,23 @@ import { cn } from "@/lib/utils";
  * Per-kind differences (headline copy, phase labels, counter labels) are
  * injected via the `labels` prop so this file owns the visual contract once.
  *
+ * ⚠️ COMPARE SOLO PER UN RUN CHE L'UTENTE HA CHIESTO (`trigger === "manual"`).
+ * Prima si apriva a ogni scan, e la maggior parte degli scan non li chiede
+ * nessuno: il cron ne lancia due al giorno piu uno all'avvio del processo, e
+ * il pannello copriva l'angolo in basso a destra mentre si stava leggendo
+ * altro, per un lavoro che non riguarda chi guarda. Ora il cron gira in
+ * silenzio; il suo stato resta leggibile in Diagnostica.
+ *
+ * La distinzione non e inventata qui: `ScanRun.trigger` e `"cron" | "manual"`
+ * nel modello ed e gia nel payload. Chiedere al DATO chi ha avviato il run e
+ * piu solido che tenere uno stato condiviso fra il bottone e il toast, che
+ * vivono in due punti diversi dell'albero. Un trigger sconosciuto (righe
+ * vecchie, campo assente) vale silenzio: ignoto non e «l'ha chiesto lui», e il
+ * valore di riposo deve essere quello che non interrompe.
+ *
  * Lifecycle:
  *   1. Hidden when no run has been triggered.
- *   2. Appears the moment a run starts (poll observes `is_running=true`).
+ *   2. Appears the moment a run the USER started is observed running.
  *   3. Updates with phase + progress as the worker reports heartbeats.
  *   4. Stays for 30s AFTER `completed_at` so the user sees the success/fail
  *      summary even if they were on a different tab during the run.
@@ -209,6 +223,9 @@ export function RunProgressToast({ status, labels, onStop, isStopping }: Props) 
 
   if (firstPaintActive) return null;
   if (!status || !status.last_run_id) return null;
+  // ⚠️ Sopra ogni altro filtro: un run che l'utente non ha chiesto non apre
+  // niente, ne mentre gira ne nella finestra dopo il completamento.
+  if (status.trigger !== "manual") return null;
   if (dismissedRunId === status.last_run_id) return null;
 
   const isRunning = status.is_running;
