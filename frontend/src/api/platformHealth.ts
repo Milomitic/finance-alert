@@ -345,3 +345,36 @@ export async function fetchInfraHealth(): Promise<InfraHealth> {
   if (!r.ok) throw new Error(`infra ${r.status}`);
   return r.json();
 }
+
+/** Una fonte NON sana che alimenta un tipo di dato.
+ *
+ * ⚠️ Nessun campo per il motivo dell'errore, e non e una dimenticanza del
+ * client: il backend non lo manda. `last_failure_reason` e una stringa grezza
+ * dell'upstream, non redatta, e fra quelle misurate c'e una URL che puo
+ * portare un token in query string. Sulla pagina Diagnostica ha senso; su una
+ * scheda di prodotto sarebbe uno stack trace con dentro un rischio di
+ * credenziale, e il modo piu solido di non farlo uscire e non avere il campo.
+ *
+ * ⚠️ `unavailable` non compare mai qui: e plan-gated, cioe un fatto di
+ * configurazione permanente, e questa lista e fatta di incidenti. La
+ * distinzione e gia quella di `DataSourcesCard`. */
+export type DegradedSource = {
+  source: string;
+  label: string;
+  /** Cambia cosa il lettore deve concludere: una primaria giu spiega
+   *  un'assenza, una riserva giu al piu un impoverimento. */
+  role: "primary" | "fallback" | "scheduled" | string;
+  health: "degraded" | "failing" | "stale" | string;
+};
+
+/** Le fonti non sane che alimentano `op` (news, fundamentals, live_quote…).
+ *
+ * Un `op` sconosciuto torna 422 e non una lista vuota: vuota significa «tutto
+ * sano», quindi un refuso renderebbe una scheda muta per sempre. */
+export async function fetchDegradedSources(op: string): Promise<DegradedSource[]> {
+  const r = await fetch(`/api/platform/source-health?op=${encodeURIComponent(op)}`, {
+    credentials: "include",
+  });
+  if (!r.ok) throw new Error(`source-health ${r.status}`);
+  return r.json();
+}

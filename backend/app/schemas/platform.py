@@ -358,3 +358,26 @@ class InfraHealthOut(BaseModel):
     # a fabricated sync status is not.
     argocd: dict | None = None
     components: list[InfraComponentOut] = []
+
+
+class DegradedSourceOut(BaseModel):
+    """Una fonte non sana che alimenta un tipo di dato.
+
+    ⚠️ Nessun campo per il motivo dell'errore, e non e una dimenticanza.
+    `last_failure_reason` e una stringa grezza dell'upstream, troncata a 200
+    caratteri e non redatta; fra quelle misurate in produzione c'e
+    `HTTPSConnectionPool(host='finnhub.io', port=443): ...`, cioe una URL che
+    puo portare un token in query string. Sulla pagina Diagnostica ha senso —
+    la guarda un operatore e il contesto e quello. Su una scheda di prodotto
+    sarebbe uno stack trace con dentro un rischio di credenziale, e il modo
+    piu solido di non farlo uscire e non avere il campo.
+    """
+    source: str
+    label: str
+    #: "primary" | "fallback" | "scheduled". Il ruolo cambia cosa il lettore
+    #: deve concludere: una primaria giu spiega un'assenza, una riserva giu
+    #: spiega al piu un impoverimento.
+    role: str
+    #: "degraded" | "failing" | "unavailable" | "stale". Mai "idle": una
+    #: riserva mai servita e sana per omissione.
+    health: str

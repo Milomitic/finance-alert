@@ -214,6 +214,47 @@ class SourceWithUsage:
     calls_last_day: int | None
 
 
+# Stati che una scheda di prodotto deve saper spiegare. Due esclusioni, ed
+# entrambe eviterebbero una riga PERMANENTE su una scheda che funziona — cioe'
+# rumore che insegna a ignorare l'avviso proprio quando diventa vero.
+#
+# `idle`: mai chiamata. Una riserva mai servita e sana per omissione.
+#
+# ⚠️ `unavailable`: plan-gated, cioe TUTTI i fallimenti sono HTTP 403 — il
+# piano gratuito non comprende quell'endpoint. E un fatto di configurazione
+# permanente, non un incidente, e l'app lo aveva GIA deciso: `DataSourcesCard`
+# lo colloca sotto `stale` nella gerarchia e lo dipinge slate con la nota
+# «non un incidente». Includerlo qui avrebbe dato due significati allo stesso
+# stato su due schermi — la forma esatta del difetto delle due tavolozze.
+# Misurato l'11 settembre 2026: `finnhub/upgrades` e `unavailable` con 0
+# successi su 1272 chiamate, e sarebbe stato permanente.
+#
+# `stale` invece C'E: i contatori sono verdi ma niente ha confermato la fonte
+# nel suo ritmo, ed e il modo in cui un cron morto resta invisibile.
+_DEGRADED_STATES = frozenset({"degraded", "failing", "stale"})
+
+
+def known_ops() -> set[str]:
+    """I tipi di dato che il catalogo conosce.
+
+    Serve a rifiutare un `op` sconosciuto invece di rendere una lista vuota:
+    vuota e indistinguibile da «tutto sano», quindi un refuso nel frontend
+    renderebbe una scheda muta per sempre e nessuno lo vedrebbe mai.
+    """
+    return {spec.op for spec in KNOWN_SOURCES}
+
+
+def degraded_for_op(op: str) -> list[SourceWithUsage]:
+    """Le sole fonti NON sane che alimentano questo tipo di dato.
+
+    E la meta consumabile di `full_snapshot()`: la catena che il piano
+    autorizza e fonte -> tipo di dato -> scheda, e si ferma li. Quanto un
+    degrado costi a UN titolo specifico non lo sa nessuno, e affermarlo
+    sarebbe inventare una misura.
+    """
+    return [s for s in full_snapshot() if s.op == op and s.health in _DEGRADED_STATES]
+
+
 def _zero_metric(source: str, op: str) -> SourceMetric:
     """A 'never called' synthetic metric to use as base when no counter exists."""
     return SourceMetric(

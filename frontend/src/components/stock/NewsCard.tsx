@@ -4,6 +4,7 @@ import { stocks } from "@/api/stocks";
 import type { StockNewsItem } from "@/api/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { SectionTitle } from "@/components/ui/section-title";
+import { SourceDegradedNote } from "@/components/stock/SourceDegradedNote";
 import { CardErrorOverlay } from "@/components/stock/CardErrorOverlay";
 import { CardRefreshButton } from "@/components/stock/CardRefreshButton";
 import { CardUpdatedAt } from "@/components/stock/CardUpdatedAt";
@@ -161,6 +162,13 @@ export function NewsCard({ ticker }: Props) {
             </div>
           }
         />
+
+        {/* La fonte degradata, detta DOVE il dato si consuma.
+            Salute sapeva che Marketaux era fuori servizio; qui si vedevano
+            solo meno articoli, quindi il degrado era visibile a chi andava a
+            cercarlo. ⚠️ Fuori dallo scroller apposta: dentro scorrerebbe via
+            insieme alla lista che sta spiegando. */}
+        <SourceDegradedNote op="news" className="mb-2 shrink-0" />
 
         {/* Scroller. flex-1 + min-h-0 lets the list shrink to fit the card
             height (set by the grid row), and overflow-y-auto contains the

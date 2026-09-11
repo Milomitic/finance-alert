@@ -9,7 +9,7 @@ import json
 from datetime import UTC, datetime
 from typing import Annotated
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Query, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from loguru import logger
 from sqlalchemy import desc, func, select
@@ -21,6 +21,7 @@ from app.core.log_buffer import _INSTANCE as log_buffer
 from app.models import Alert, ScanRun, User
 from app.schemas.platform import (
     DataHealthOut,
+    DegradedSourceOut,
     DeployHealthOut,
     DetectorPerformanceOut,
     InfraHealthOut,
@@ -264,6 +265,42 @@ def _data_health(db: Session) -> DataHealthOut:
     except Exception:  # noqa: BLE001
         out.basis_breaks = None
     return out
+
+
+@router.get("/source-health", response_model=list[DegradedSourceOut])
+def source_health_by_op(
+    op: str = Query(..., description="Tipo di dato, es. news / fundamentals / live_quote"),
+    _user: User = Depends(get_current_user),
+) -> list[DegradedSourceOut]:
+    """Le fonti NON sane che alimentano un tipo di dato.
+
+    Voce 4.4 del piano, audit §7.5: Salute sapeva che Marketaux era fuori
+    servizio e la scheda News mostrava solo meno articoli, quindi il degrado
+    era visibile solo a chi andava a cercarlo. Un'assenza inspiegata e peggio
+    di un'assenza spiegata — la stessa distinzione fra `—` e `0` che il repo
+    applica ai numeri.
+
+    ⚠️ Deliberatamente STRETTO, e non e il ritorno di `/api/health/data-sources`:
+    quell'endpoint fu cancellato perche duplicava l'INTERO snapshot. Qui il
+    contratto e quattro campi sulle sole righe non sane, pensato per una scheda
+    di prodotto — nessun contatore, nessuna quota, nessun timestamp, nessun
+    motivo d'errore.
+
+    ⚠️ Un `op` sconosciuto e un 422, non una lista vuota. Vuota significa
+    «tutto sano», quindi un refuso nel frontend renderebbe una scheda muta per
+    sempre e nessuno lo vedrebbe: e la forma del test vero di niente, applicata
+    a un contratto invece che a un'asserzione.
+    """
+    ops = source_catalog.known_ops()
+    if op not in ops:
+        raise HTTPException(
+            status_code=422,
+            detail=f"op sconosciuto: {op!r}. Tipi noti: {', '.join(sorted(ops))}",
+        )
+    return [
+        DegradedSourceOut(source=s.source, label=s.label, role=s.role, health=s.health)
+        for s in source_catalog.degraded_for_op(op)
+    ]
 
 
 @router.get("/signal-drift", response_model=SignalDriftOut)
