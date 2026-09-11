@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
@@ -96,5 +97,37 @@ describe("la scheda del browser dice quale pagina è aperta", () => {
     // worse than a plain one, so prefix matching is deliberately not used.
     renderAt("/stocks/NVDA");
     expect(document.title).toBe("Finance-Alert");
+  });
+});
+
+describe("il drawer mobile si comporta da modale: deve anche dirlo", () => {
+  /* ⚠️ Trovato collaudando FA-011 su un browser vero. Il comportamento c'e
+   * tutto — focus che entra, trap in avanti e all'indietro, ESC che chiude,
+   * focus restituito al bottone che l'ha aperto, scorrimento bloccato — ma il
+   * contenitore non portava ne `role` ne `aria-modal`.
+   *
+   * La differenza non e teorica: senza quelle due parole un lettore di schermo
+   * non annuncia un confine e non sa che il resto della pagina e fuori gioco,
+   * quindi l'utente sente il trap come «il fuoco non si muove piu» invece che
+   * come «sono dentro un pannello». Il comportamento senza la semantica e la
+   * forma peggiore, perche funziona per chi guarda e confonde chi ascolta.
+   *
+   * ⚠️ axe non lo prende: un `div` senza ruolo non viola nessuna regola: e
+   * l'ASSENZA di una dichiarazione, non una dichiarazione sbagliata. Serve
+   * un'asserzione che sappia cosa quel contenitore sta facendo. */
+  it("dichiara ruolo e modalita quando e aperto", async () => {
+    renderAt("/");
+    const apri = screen.getByRole("button", { name: /apri menu/i });
+    await userEvent.click(apri);
+    const dialog = screen.getByRole("dialog");
+    expect(dialog.getAttribute("aria-modal")).toBe("true");
+    expect(dialog.getAttribute("aria-label")).toBeTruthy();
+  });
+
+  it("e quando e chiuso non c'e affatto, non e solo nascosto", () => {
+    // Il drawer si monta solo da aperto, quindi resta fuori dall'albero di
+    // accessibilita invece di restarci come contenuto invisibile.
+    renderAt("/");
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 });

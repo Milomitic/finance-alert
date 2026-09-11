@@ -463,7 +463,23 @@ export default function Layout() {
       {/* Mobile drawer: overlay + slide-in panel. Rendered only when
           open so it stays out of the a11y tree otherwise. */}
       {mobileNavOpen && (
-        <div className="fixed inset-0 z-50 lg:hidden">
+        /* ⚠️ `role` + `aria-modal` non sono decorazione: il drawer si
+           COMPORTA gia da modale — il fuoco entra, resta in trappola nelle due
+           direzioni, ESC chiude e il fuoco torna al bottone, lo scorrimento e
+           bloccato — ma senza queste due parole un lettore di schermo non
+           annuncia un confine e non sa che il resto della pagina e fuori
+           gioco. L'utente sente il trap come «il fuoco non si muove piu»
+           invece che come «sono dentro un pannello», che e' la forma peggiore:
+           funziona per chi guarda e confonde chi ascolta.
+           Trovato collaudando FA-011 su un browser vero; axe non lo prende,
+           perche un `div` senza ruolo non viola nulla — e un'ASSENZA, non una
+           dichiarazione sbagliata. */
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Menu di navigazione"
+          className="fixed inset-0 z-50 lg:hidden"
+        >
           <button
             type="button"
             aria-label="Chiudi menu"

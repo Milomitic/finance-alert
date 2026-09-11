@@ -1,4 +1,5 @@
 import { ArrowLeft, Home, SearchX } from "lucide-react";
+import { useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
@@ -7,6 +8,15 @@ import { Button } from "@/components/ui/button";
  * and lets the user return without relying on browser chrome. */
 export default function NotFoundPage() {
   const navigate = useNavigate();
+  /* ⚠️ Il titolo se lo mette da sola, e puo farlo solo perche questa rotta e
+   * montata FUORI da `Layout` — `path="*"` e fratello del blocco con il
+   * layout, quindi l'effetto che intitola le rotte da `NAV` non gira mai qui e
+   * la scheda restava sul generico «Finance-Alert». Una pagina DENTRO Layout
+   * non potrebbe fare lo stesso: gli effetti dei figli girano prima di quelli
+   * del genitore, e il titolo verrebbe sovrascritto subito dopo. */
+  useEffect(() => {
+    document.title = "Pagina non trovata · Finance-Alert";
+  }, []);
   return (
     <main className="flex min-h-screen items-center justify-center bg-background px-6 py-12">
       <div className="w-full max-w-md space-y-5 text-center">

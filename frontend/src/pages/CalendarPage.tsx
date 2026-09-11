@@ -25,6 +25,7 @@ import {
   formatWeekLabel,
   todayISO,
 } from "@/lib/calendarMeta";
+import { toLocalIsoDate } from "@/lib/localDate";
 import { cn } from "@/lib/utils";
 
 type CalendarView = "month" | "week";
@@ -136,7 +137,11 @@ export default function CalendarPage() {
 
   useEffect(() => {
     const next = new URLSearchParams(searchParams);
-    next.set("date", cursor.toISOString().slice(0, 10));
+    // ⚠️ Il giorno LOCALE, non quello di Greenwich. La riga sotto rilegge con
+    // `new Date(`${d}T12:00:00`)`, cioe in locale: scrivere in UTC e leggere
+    // in locale sposta il giorno per una finestra larga quanto il fuso — a
+    // ovest e la sera, cioe quando un calendario si guarda davvero.
+    next.set("date", toLocalIsoDate(cursor));
     next.set("view", view);
     if (kind === "all") next.delete("kind"); else next.set("kind", kind);
     if (importance.size === 3) next.delete("importance");
