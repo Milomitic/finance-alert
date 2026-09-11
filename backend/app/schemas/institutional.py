@@ -51,6 +51,19 @@ class InstitutionalDetailOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     institutional: InstitutionalSummaryOut
     holdings: list[HoldingDetailOut]
+    #: Righe della dichiarazione IN TUTTO — la pagina ne porta al piu `limit`.
+    #:
+    #: ⚠️ Diverso da `institutional.total_positions`, e i due differiscono su
+    #: 145 dichiarazioni su 356, in ENTRAMBE le direzioni: sui fondi SEC le
+    #: righe eccedono le posizioni dichiarate (righe sintetiche per le uscite),
+    #: sui fondi Dataroma mancano (scrape incompleto). Due misure di cose
+    #: diverse, entrambe corrette per cio che contano.
+    holdings_total: int = 0
+    #: Le righe che servono agli AGGREGATI di portafoglio (top per peso + un
+    #: pugno di uscite), indipendenti dalla pagina. ⚠️ Un aggregato che cambia
+    #: quando scorri non e un aggregato — e le uscite non comparirebbero MAI in
+    #: una prima pagina ordinata per peso, perche hanno peso zero.
+    composition: list[HoldingDetailOut] = []
     filed_date: date | None = None
     available_periods: list[date]
 

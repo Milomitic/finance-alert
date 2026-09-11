@@ -37,9 +37,21 @@ export const institutionals = {
     return api<AggregateStats>(`/api/institutionals/aggregate${suffix}`, { signal });
   },
 
-  detail: (slug: string, periodEnd?: string, signal?: AbortSignal) => {
-    const suffix = periodEnd ? `?period_end=${periodEnd}` : "";
-    return api<InstitutionalDetail>(`/api/institutionals/${slug}${suffix}`, { signal });
+  detail: (
+    slug: string,
+    periodEnd?: string,
+    signal?: AbortSignal,
+    opts: { limit?: number; offset?: number } = {},
+  ) => {
+    const p = new URLSearchParams();
+    if (periodEnd) p.set("period_end", periodEnd);
+    if (opts.limit != null) p.set("limit", String(opts.limit));
+    if (opts.offset != null) p.set("offset", String(opts.offset));
+    const qs = p.toString();
+    return api<InstitutionalDetail>(
+      `/api/institutionals/${slug}${qs ? `?${qs}` : ""}`,
+      { signal },
+    );
   },
 
   /** Smart-money badge: batch {ticker: n_funds} over each fund's

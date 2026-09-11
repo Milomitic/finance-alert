@@ -113,17 +113,25 @@ def holder_counts(
 def get_detail(
     slug: str,
     period_end: Annotated[date | None, Query()] = None,
+    # ⚠️ Il valore di riposo e una PAGINA, non «tutte». Il difetto di FA-034 era
+    # l'assenza di un limite: lasciarlo aperto per difetto rimetterebbe il caso
+    # di partenza per ogni chiamante che non passa nulla. La dichiarazione piu
+    # grande in produzione porta 7.530 righe.
+    limit: Annotated[int, Query(ge=1, le=500)] = 100,
+    offset: Annotated[int, Query(ge=0)] = 0,
     db: Session = Depends(get_db),
     _user: User = Depends(get_current_user),
 ) -> InstitutionalDetailOut:
     detail = institutional_service.get_institutional_detail(
-        db, slug, period_end=period_end
+        db, slug, period_end=period_end, limit=limit, offset=offset
     )
     if detail is None:
         raise HTTPException(status_code=404, detail="Institutional not found")
     return InstitutionalDetailOut(
         institutional=InstitutionalSummaryOut.model_validate(detail.institutional),
         holdings=[HoldingDetailOut.model_validate(h) for h in detail.holdings],
+        holdings_total=detail.holdings_total,
+        composition=[HoldingDetailOut.model_validate(h) for h in detail.composition],
         filed_date=detail.filed_date,
         available_periods=detail.available_periods,
     )

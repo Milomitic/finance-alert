@@ -1,5 +1,5 @@
 import { ArrowLeft, Building2, ExternalLink } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 
 import type { HoldingDetail } from "@/api/types";
@@ -9,6 +9,7 @@ import { CardSkeleton } from "@/components/ui/card-skeleton";
 import { SectionTitle } from "@/components/ui/section-title";
 import { AllocationBars } from "@/components/dashboard/AllocationBars";
 import { useInstitutionalDetail } from "@/hooks/useInstitutionals";
+import { nextOffset, PAGE_SIZE } from "@/hooks/useInstitutionalHoldings";
 import { fmtBig } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -188,8 +189,19 @@ export default function InstitutionalDetailPage() {
   // dei primi filing spariscono). Stato locale, si resetta al cambio
   // pagina — comportamento voluto.
   const [onlyChanges, setOnlyChanges] = useState(false);
+  /* Quante pagine EXTRA sono state chieste. ⚠️ Accumula invece di sostituire:
+     la pagina calcola aggregati di livello-portafoglio, e una finestra che
+     scorre li farebbe leggere su un sottoinsieme diverso a ogni click — numeri
+     che cambiano perche hai scorso. Si azzera al cambio di periodo, perche
+     quella e un'altra dichiarazione. */
+  const [pagineExtra, setPagineExtra] = useState(0);
+  useEffect(() => setPagineExtra(0), [slug, periodParam]);
 
-  const q = useInstitutionalDetail(slug, periodParam);
+  const q = useInstitutionalDetail(
+    slug,
+    periodParam,
+    PAGE_SIZE * (pagineExtra + 1),
+  );
 
   if (q.isLoading) {
     // Mirror the loaded layout: header strip + 2-col body (allocation
@@ -223,9 +235,17 @@ export default function InstitutionalDetailPage() {
 
   const { institutional, holdings, available_periods, filed_date } = q.data;
   const totalValue = institutional.total_value_usd ?? 0;
-  const top10Pct = holdings
+  /* ⚠️ Dalla COMPOSIZIONE, non dalla pagina. Il backend la manda a parte
+     proprio perche un aggregato calcolato sul prefisso caricato cambierebbe a
+     ogni «mostra altre». Ricade sulla pagina solo se il campo non arriva, per
+     una risposta vecchia in cache. */
+  const composizione = q.data.composition ?? holdings;
+  const top10Pct = composizione
+    .filter((h) => h.action !== "sold_out")
     .slice(0, 10)
     .reduce((sum, h) => sum + (h.portfolio_pct ?? 0), 0);
+  const righeTotali = q.data.holdings_total ?? holdings.length;
+  const prossimo = nextOffset(q.data.holdings_total, holdings.length);
   // Il filtro tocca SOLO la tabella holdings; l'infografica di
   // composizione resta sul portafoglio intero (i pesi hanno senso
   // solo sul totale).
@@ -283,11 +303,30 @@ export default function InstitutionalDetailPage() {
         <Card>
           <CardContent className="p-3">
             <div className="text-[0.7647rem] uppercase tracking-wide text-muted-foreground">
-              Posizioni
+              Posizioni dichiarate
             </div>
             <div className="text-2xl font-semibold tabular-nums">
               {institutional.total_positions ?? "—"}
             </div>
+            {/* ⚠️ I due numeri contano cose diverse e su 145 dichiarazioni su
+                356 differiscono — in ENTRAMBE le direzioni. Sui fondi SEC le
+                righe eccedono, perche `compute_qoq_deltas` inserisce righe
+                sintetiche per le uscite e non aggiorna `total_positions`; sui
+                fondi Dataroma MANCANO, con zero uscite, perche lo scrape ne ha
+                prese meno di quante il fondo ne dichiari.
+                Percio' la nota dice cosa conta ciascuno e NON spiega la
+                differenza: spiegarla con le uscite sarebbe vero in 107 casi su
+                145 e falso negli altri 38. Prima non c'era etichetta affatto e
+                i due numeri sembravano lo stesso, uno dei due sbagliato. */}
+            {institutional.total_positions != null
+              && righeTotali !== institutional.total_positions && (
+              <div
+                className="text-[0.7059rem] text-muted-foreground mt-0.5 leading-snug"
+                title="«Dichiarate» viene dalla dichiarazione del fondo; «in tabella» sono le righe che ne abbiamo. Possono differire in entrambi i sensi: le uscite aggiungono righe che il fondo non conta piu, e uno scrape incompleto ne toglie."
+              >
+                {righeTotali.toLocaleString("it-IT")} in tabella
+              </div>
+            )}
           </CardContent>
         </Card>
         <Card>
@@ -363,7 +402,7 @@ export default function InstitutionalDetailPage() {
             max={12}
             metric="weight"
             emptyHint="Nessuna posizione tracciata per questo periodo."
-            items={holdings.map((h) => ({
+            items={composizione.map((h) => ({
               key: h.ticker,
               label: h.company_name || h.ticker,
               href:
@@ -400,9 +439,11 @@ export default function InstitutionalDetailPage() {
                 >
                   Solo variazioni
                 </button>
-                <span className="text-sm text-muted-foreground tabular-nums">
-                  {visibleHoldings.length}
-                  {onlyChanges ? ` / ${holdings.length}` : ""}
+                <span
+                  className="text-sm text-muted-foreground tabular-nums"
+                  title={`${visibleHoldings.length} righe mostrate su ${righeTotali} nella dichiarazione`}
+                >
+                  {visibleHoldings.length} / {righeTotali}
                 </span>
               </span>
             }
@@ -442,6 +483,27 @@ export default function InstitutionalDetailPage() {
                 )}
               </tbody>
             </table>
+            {/* ⚠️ «Mostra altre» invece di una paginazione che sostituisce.
+                Sostituire farebbe leggere gli aggregati su una finestra
+                scorrevole; accumulando, il prefisso caricato parte sempre
+                dalla posizione piu pesante. Il pulsante sparisce quando non
+                c'e piu niente da chiedere — e sparisce anche quando il totale
+                non e noto, perche un pulsante che chiede una pagina forse
+                inesistente e peggio della sua assenza. */}
+            {prossimo != null && (
+              <div className="flex justify-center py-2">
+                <button
+                  type="button"
+                  onClick={() => setPagineExtra((n) => n + 1)}
+                  disabled={q.isFetching}
+                  className="rounded border px-3 py-1.5 text-sm hover:bg-muted disabled:opacity-60"
+                >
+                  {q.isFetching
+                    ? "Caricamento…"
+                    : `Mostra altre ${Math.min(PAGE_SIZE, righeTotali - holdings.length)} righe`}
+                </button>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>

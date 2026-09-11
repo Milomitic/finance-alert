@@ -31,10 +31,20 @@ export function useInstitutionalsAggregate(params?: {
   });
 }
 
-export function useInstitutionalDetail(slug: string, periodEnd?: string) {
+/** Il dettaglio di una dichiarazione, con le holdings a PAGINE.
+ *
+ *  ⚠️ `limit` fa parte della chiave: una finestra piu grande e un risultato
+ *  diverso, e condividere la cache fra le due servirebbe una pagina corta a
+ *  chi ne ha chiesta una lunga. */
+export function useInstitutionalDetail(
+  slug: string,
+  periodEnd?: string,
+  limit?: number,
+) {
   return useQuery({
-    queryKey: ["institutionals", "detail", slug, periodEnd ?? "latest"],
-    queryFn: ({ signal }) => institutionals.detail(slug, periodEnd, signal),
+    queryKey: ["institutionals", "detail", slug, periodEnd ?? "latest", limit ?? "default"],
+    queryFn: ({ signal }) =>
+      institutionals.detail(slug, periodEnd, signal, limit != null ? { limit } : {}),
     enabled: Boolean(slug),
     staleTime: STALE_LONG,
     retry: 1,

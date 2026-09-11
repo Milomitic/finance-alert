@@ -34,7 +34,7 @@ from __future__ import annotations
 import math
 from collections import defaultdict
 from collections.abc import Iterable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 
 from loguru import logger
@@ -538,6 +538,26 @@ class InstitutionalDetail:
     holdings: list[HoldingDetail]
     filed_date: date | None
     available_periods: list[date]
+    #: Quante righe ha la dichiarazione IN TUTTO, non quante ne porta questa
+    #: pagina. Senza, una pagina corta e indistinguibile da «e finito».
+    #:
+    #: ⚠️ NON e `institutional.total_positions`, e i due differiscono su 145
+    #: dichiarazioni su 356 — in entrambe le direzioni. Sui fondi SEC le righe
+    #: eccedono le posizioni dichiarate, perche `compute_qoq_deltas` inserisce
+    #: righe sintetiche per le uscite e non aggiorna mai `total_positions`; sui
+    #: fondi Dataroma MANCANO, con zero uscite, perche lo scrape ne ha prese
+    #: meno di quante il fondo ne dichiari. Sono due misure di cose diverse ed
+    #: entrambe sono corrette per cio che contano.
+    holdings_total: int = 0
+    #: Le sole righe che servono agli AGGREGATI di livello-portafoglio — top 10
+    #: per peso, infografica di composizione, presenza di posizioni chiuse.
+    #:
+    #: ⚠️ Viaggia a parte dalla pagina perche un aggregato che cambia quando
+    #: scorri non e un aggregato. E le uscite sono il caso che lo dimostra:
+    #: hanno `portfolio_pct` a zero o nullo, quindi nell'ordinamento per peso
+    #: finiscono ULTIME e nessuna prima pagina ne contiene una, per quanto
+    #: grande — in produzione la dichiarazione maggiore ne ha 1.301 su 7.530.
+    composition: list[HoldingDetail] = field(default_factory=list)
 
 
 def get_institutional_detail(
@@ -545,6 +565,8 @@ def get_institutional_detail(
     slug: str,
     *,
     period_end: date | None = None,
+    limit: int = 100,
+    offset: int = 0,
 ) -> InstitutionalDetail | None:
     """Return one institutional + the requested filing's holdings.
 
@@ -588,28 +610,72 @@ def get_institutional_detail(
             filings[0],
         )
 
-    # Enrich holdings with catalog data via LEFT JOIN. We dedupe by
-    # ticker (catalog has duplicate rows — see CLAUDE.md), picking the
-    # first match by id.
-    rows = db.execute(
-        select(
-            InstitutionalHolding,
-            Stock.id, Stock.country, Stock.sector,
-        )
-        .outerjoin(Stock, Stock.ticker == InstitutionalHolding.ticker)
+    holdings_total = int(db.execute(
+        select(func.count())
+        .select_from(InstitutionalHolding)
+        .where(InstitutionalHolding.filing_id == target.id)
+    ).scalar_one())
+
+    # ⚠️ La pagina si prende SENZA il join sul catalogo, e non e un dettaglio
+    # di stile. Lo stesso ticker puo stare su piu righe di `stocks` — il
+    # vincolo unico e su `(ticker, exchange)` — e un LEFT JOIN che moltiplica
+    # una riga, seguito da una deduplicazione in Python, restituirebbe una
+    # pagina piu CORTA del limite chiesto, in silenzio. Oggi il fan-out e zero
+    # (misurato in produzione su 377.995 righe), ma CLAUDE.md chiede
+    # esplicitamente di tenere la difesa perche un bug di ingestione puo farlo
+    # riemergere: qui la difesa e strutturale invece che difensiva, perche la
+    # pagina non puo proprio moltiplicarsi.
+    pagina = db.execute(
+        select(InstitutionalHolding)
         .where(InstitutionalHolding.filing_id == target.id)
         .order_by(
             InstitutionalHolding.portfolio_pct.desc().nullslast(),
             InstitutionalHolding.value_usd.desc().nullslast(),
+            InstitutionalHolding.id.asc(),
         )
-    ).all()
+        .limit(limit)
+        .offset(offset)
+    ).scalars().all()
 
-    seen_tickers: set[str] = set()
+    # Una sola lettura del catalogo per i ticker di QUESTA pagina. Il primo che
+    # arriva vince, che e il pattern difensivo di CLAUDE.md applicato dove non
+    # puo influenzare quante righe escono.
+    catalogo: dict[str, tuple[int, str | None, str | None]] = {}
+    tickers = [h.ticker for h in pagina if h.ticker]
+    if tickers:
+        for sid, tk, paese, settore in db.execute(
+            select(Stock.id, Stock.ticker, Stock.country, Stock.sector)
+            .where(Stock.ticker.in_(tickers))
+            .order_by(Stock.id.asc())
+        ).all():
+            catalogo.setdefault(tk, (sid, paese, settore))
+
+    # Le piu pesanti + un pugno di uscite: l'infografica taglia a `max` da sola,
+    # ma senza uscite nell'elenco non puo riservare loro alcuno slot.
+    _VIVE, _USCITE = 15, 5
+    vive = db.execute(
+        select(InstitutionalHolding)
+        .where(
+            InstitutionalHolding.filing_id == target.id,
+            (InstitutionalHolding.action.is_(None))
+            | (InstitutionalHolding.action != "sold_out"),
+        )
+        .order_by(InstitutionalHolding.portfolio_pct.desc().nullslast())
+        .limit(_VIVE)
+    ).scalars().all()
+    uscite = db.execute(
+        select(InstitutionalHolding)
+        .where(
+            InstitutionalHolding.filing_id == target.id,
+            InstitutionalHolding.action == "sold_out",
+        )
+        .order_by(InstitutionalHolding.value_usd.desc().nullslast())
+        .limit(_USCITE)
+    ).scalars().all()
+
     holdings: list[HoldingDetail] = []
-    for h, stock_id, country, sector in rows:
-        if h.ticker in seen_tickers:
-            continue
-        seen_tickers.add(h.ticker)
+    for h in pagina:
+        stock_id, country, sector = catalogo.get(h.ticker, (None, None, None))
         holdings.append(
             HoldingDetail(
                 ticker=h.ticker,
@@ -634,11 +700,32 @@ def get_institutional_detail(
         total_value_usd=target.total_value_usd,
         total_positions=target.total_positions,
     )
+    def _dettaglio(h: InstitutionalHolding) -> HoldingDetail:
+        sid, paese, settore = catalogo_comp.get(h.ticker, (None, None, None))
+        return HoldingDetail(
+            ticker=h.ticker, company_name=h.company_name, shares=h.shares,
+            value_usd=h.value_usd, portfolio_pct=h.portfolio_pct,
+            qoq_change_pct=h.qoq_change_pct, qoq_change_shares=h.qoq_change_shares,
+            action=h.action, stock_id=sid, stock_country=paese, stock_sector=settore,
+        )
+
+    catalogo_comp: dict[str, tuple[int, str | None, str | None]] = {}
+    tk_comp = [h.ticker for h in [*vive, *uscite] if h.ticker]
+    if tk_comp:
+        for sid, tk, paese, settore in db.execute(
+            select(Stock.id, Stock.ticker, Stock.country, Stock.sector)
+            .where(Stock.ticker.in_(tk_comp))
+            .order_by(Stock.id.asc())
+        ).all():
+            catalogo_comp.setdefault(tk, (sid, paese, settore))
+
     return InstitutionalDetail(
         institutional=summary,
         holdings=holdings,
         filed_date=target.filed_date,
         available_periods=[f.period_end_date for f in filings],
+        holdings_total=holdings_total,
+        composition=[_dettaglio(h) for h in [*vive, *uscite]],
     )
 
 

@@ -1312,6 +1312,17 @@ export interface HoldingDetail {
 }
 
 export interface InstitutionalDetail {
+  /** Righe della dichiarazione IN TUTTO — `holdings` ne porta al piu `limit`.
+   *
+   *  ⚠️ Diverso da `institutional.total_positions`, e i due differiscono su 145
+   *  dichiarazioni su 356 in ENTRAMBE le direzioni: sui fondi SEC le righe
+   *  eccedono (righe sintetiche per le uscite), sui fondi Dataroma mancano
+   *  (scrape incompleto). Due misure di cose diverse. */
+  holdings_total?: number;
+  /** Le righe per gli AGGREGATI di portafoglio, indipendenti dalla pagina:
+   *  le piu pesanti piu un pugno di uscite. Le uscite hanno peso zero e non
+   *  comparirebbero mai in un prefisso ordinato per peso. */
+  composition?: HoldingDetail[];
   institutional: InstitutionalSummary;
   holdings: HoldingDetail[];
   filed_date: string | null;
