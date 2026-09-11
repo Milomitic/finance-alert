@@ -12,5 +12,5 @@ export const auth = {
       method: "POST",
       body: "{}",
     }),
-  me: () => api<Me>("/api/auth/me"),
+  me: (signal?: AbortSignal) => api<Me>("/api/auth/me", { signal }),
 };

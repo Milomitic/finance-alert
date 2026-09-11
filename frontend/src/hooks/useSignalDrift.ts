@@ -8,8 +8,8 @@ import { fetchSignalDrift, type SignalDriftRow } from "@/api/platformHealth";
 export function useSignalDrift() {
   return useQuery({
     queryKey: ["signals", "drift"],
-    queryFn: async () => {
-      const { detectors } = await fetchSignalDrift();
+    queryFn: async ({ signal }) => {
+      const { detectors } = await fetchSignalDrift(signal);
       const byDetector = new Map<string, SignalDriftRow>();
       for (const row of detectors) byDetector.set(row.detector, row);
       return byDetector;

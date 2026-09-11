@@ -162,30 +162,26 @@ function toQuery(params: SearchParams): string {
 export const stocks = {
   search: (params: SearchParams = {}, signal?: AbortSignal) =>
     api<StockSearch>(`/api/stocks/search${toQuery(params)}`, { signal }),
-  filters: () => api<FilterOptions>("/api/stocks/filters"),
-  byTicker: (ticker: string) =>
-    api<Stock>(`/api/stocks/${encodeURIComponent(ticker)}`),
-  detail: (ticker: string, range = "1y") =>
+  filters: (signal?: AbortSignal) => api<FilterOptions>("/api/stocks/filters", { signal }),
+  byTicker: (ticker: string, signal?: AbortSignal) =>
+    api<Stock>(`/api/stocks/${encodeURIComponent(ticker)}`, { signal }),
+  detail: (ticker: string, range = "1y", signal?: AbortSignal) =>
     api<StockDetail>(
-      `/api/stocks/${encodeURIComponent(ticker)}/detail?range=${range}`
-    ),
+      `/api/stocks/${encodeURIComponent(ticker)}/detail?range=${range}`, { signal }),
   /** `force=true` bypasses the backend cache and re-fetches upstream; an
    *  upstream failure surfaces as a 502 ApiError (used by the card refresh). */
-  fundamentals: (ticker: string, opts: { force?: boolean } = {}) =>
+  fundamentals: (ticker: string, opts: { force?: boolean } = {}, signal?: AbortSignal) =>
     api<Fundamentals>(
       `/api/stocks/${encodeURIComponent(ticker)}/fundamentals${
         opts.force ? "?force=true" : ""
-      }`
-    ),
+      }`, { signal }),
   /** `force=true` bypasses the cache + raises on upstream failure (502). */
-  news: (ticker: string, limit = 5, opts: { force?: boolean } = {}) =>
+  news: (ticker: string, limit = 5, opts: { force?: boolean } = {}, signal?: AbortSignal) =>
     api<StockNews>(
       `/api/stocks/${encodeURIComponent(ticker)}/news?limit=${limit}${
         opts.force ? "&force=true" : ""
-      }`
-    ),
-  ohlcv: (ticker: string, bars = 120) =>
+      }`, { signal }),
+  ohlcv: (ticker: string, bars = 120, signal?: AbortSignal) =>
     api<OhlcvBar[]>(
-      `/api/stocks/${encodeURIComponent(ticker)}/ohlcv?bars=${bars}`
-    ),
+      `/api/stocks/${encodeURIComponent(ticker)}/ohlcv?bars=${bars}`, { signal }),
 };

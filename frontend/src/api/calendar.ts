@@ -31,10 +31,10 @@ function toQuery(params: CalendarParams): string {
 }
 
 export const calendar = {
-  events: (params: CalendarParams = {}) =>
-    api<Calendar>(`/api/calendar${toQuery(params)}`),
+  events: (params: CalendarParams = {}, signal?: AbortSignal) =>
+    api<Calendar>(`/api/calendar${toQuery(params)}`, { signal }),
   /** Detail payload for one macro indicator — series metadata, latest
    *  release, full history, upcoming dates. Used by the /macro/:id page. */
-  macroDetail: (seriesId: number) =>
-    api<MacroSeriesDetail>(`/api/macro/${seriesId}`),
+  macroDetail: (seriesId: number, signal?: AbortSignal) =>
+    api<MacroSeriesDetail>(`/api/macro/${seriesId}`, { signal }),
 };

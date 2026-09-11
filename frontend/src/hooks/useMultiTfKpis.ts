@@ -43,9 +43,10 @@ export interface MultiTfKpis {
 export function useStockMultiTfKpis(ticker: string) {
   return useQuery({
     queryKey: ["multi-tf-kpis", "stock", ticker],
-    queryFn: () =>
+    queryFn: ({ signal }) =>
       api<MultiTfKpis>(
         `/api/stocks/${encodeURIComponent(ticker)}/multi-tf-kpis`,
+        { signal },
       ),
     staleTime: 5 * 60_000,
     enabled: !!ticker,
@@ -56,9 +57,10 @@ export function useStockMultiTfKpis(ticker: string) {
 export function useMarketMultiTfKpis(symbol: string) {
   return useQuery({
     queryKey: ["multi-tf-kpis", "market", symbol],
-    queryFn: () =>
+    queryFn: ({ signal }) =>
       api<MultiTfKpis>(
         `/api/markets/${encodeURIComponent(symbol)}/multi-tf-kpis`,
+        { signal },
       ),
     staleTime: 5 * 60_000,
     enabled: !!symbol,

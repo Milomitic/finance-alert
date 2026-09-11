@@ -30,8 +30,8 @@ function isClosed(state: string | null | undefined): boolean {
 export function useLiveQuote(ticker: string | undefined, enabled: boolean = true) {
   return useQuery({
     queryKey: ["live-quote", ticker],
-    queryFn: () =>
-      api<LiveQuote>(`/api/stocks/${encodeURIComponent(ticker!)}/quote`),
+    queryFn: ({ signal }) =>
+      api<LiveQuote>(`/api/stocks/${encodeURIComponent(ticker!)}/quote`, { signal }),
     enabled: !!ticker && enabled,
     refetchInterval: (query) =>
       isClosed(query.state.data?.market_state) ? CLOSED_MS : FAST_MS,
@@ -64,7 +64,7 @@ export function useLiveQuotes(tickers: string[], enabled: boolean = true) {
   const key = sorted.join(",");
   return useQuery({
     queryKey: ["live-quotes-batch", key],
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       // Split into <=50-ticker chunks, fetch in parallel, merge.
       const chunks: string[][] = [];
       for (let i = 0; i < sorted.length; i += _BATCH_SIZE) {
@@ -74,6 +74,7 @@ export function useLiveQuotes(tickers: string[], enabled: boolean = true) {
         chunks.map((c) =>
           api<{ quotes: LiveQuote[] }>(
             `/api/stocks/quotes?tickers=${encodeURIComponent(c.join(","))}`,
+            { signal },
           ),
         ),
       );

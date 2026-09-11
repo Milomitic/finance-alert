@@ -39,8 +39,8 @@ export function useEquityCurve(f: EquityFilters) {
   if (f.strengthMin > 0) params.set("strength_min", String(f.strengthMin));
   return useQuery({
     queryKey: ["equity-curve", f],
-    queryFn: () =>
-      api<EquityCurve>(`/api/rule-performance/equity-curve?${params.toString()}`),
+    queryFn: ({ signal }) =>
+      api<EquityCurve>(`/api/rule-performance/equity-curve?${params.toString()}`, { signal }),
     staleTime: 60_000,
   });
 }

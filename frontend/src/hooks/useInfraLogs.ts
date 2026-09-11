@@ -20,7 +20,7 @@ export { APP_ORIGIN };
 export function useInfraLogSources() {
   return useQuery({
     queryKey: ["infra-log-sources"],
-    queryFn: fetchInfraLogSources,
+    queryFn: ({ signal }) => fetchInfraLogSources(signal),
     staleTime: 60 * 60 * 1000, // a closed table in the backend; it never moves
   });
 }
@@ -68,7 +68,7 @@ export function useInfraLogs(
 ): InfraLogsState {
   const q = useQuery({
     queryKey: ["infra-logs", source, windowMinutes],
-    queryFn: () => fetchInfraLogs(source as string, { minutes: windowMinutes }),
+    queryFn: ({ signal }) => fetchInfraLogs(source as string, { minutes: windowMinutes }, signal),
     enabled: !!source && source !== APP_ORIGIN,
     refetchInterval: 15_000,
     staleTime: 10_000,

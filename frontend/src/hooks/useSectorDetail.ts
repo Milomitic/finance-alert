@@ -84,8 +84,8 @@ export interface SectorDetail {
 export function useSectorDetail(name: string) {
   return useQuery({
     queryKey: ["sector-detail", name],
-    queryFn: () =>
-      api<SectorDetail>(`/api/sectors/${encodeURIComponent(name)}/detail`),
+    queryFn: ({ signal }) =>
+      api<SectorDetail>(`/api/sectors/${encodeURIComponent(name)}/detail`, { signal }),
     enabled: name.length > 0,
     staleTime: 5 * 60 * 1000,
   });
@@ -147,7 +147,7 @@ export interface SectorsOverview {
 export function useSectorsOverview() {
   return useQuery({
     queryKey: ["sectors-overview"],
-    queryFn: () => api<SectorsOverview>("/api/sectors/overview"),
+    queryFn: ({ signal }) => api<SectorsOverview>("/api/sectors/overview", { signal }),
     // Same staleness window as the detail page — the underlying scores
     // refresh after each `recompute_all`, ~minutes-old data is fine.
     staleTime: 5 * 60 * 1000,
@@ -187,7 +187,7 @@ export interface Leaderboards {
 export function useLeaderboards(limit = 6) {
   return useQuery({
     queryKey: ["sectors-leaderboards", limit],
-    queryFn: () => api<Leaderboards>(`/api/sectors/leaderboards?limit=${limit}`),
+    queryFn: ({ signal }) => api<Leaderboards>(`/api/sectors/leaderboards?limit=${limit}`, { signal }),
     staleTime: 5 * 60 * 1000,
   });
 }

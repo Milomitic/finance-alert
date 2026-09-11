@@ -25,7 +25,7 @@ export function useScanStatus() {
 
   const q = useQuery({
     queryKey: KEY,
-    queryFn: () => alerts.scanStatus(),
+    queryFn: ({ signal }) => alerts.scanStatus(signal),
     // SSE drives updates; poll only as a FALLBACK when the stream is down and
     // the tab is visible (a hidden idle tab catches up on focus).
     refetchInterval: () => {

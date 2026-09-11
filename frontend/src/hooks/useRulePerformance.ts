@@ -55,8 +55,8 @@ export interface CalibrationCurve {
 export function useCalibration(days = 365, horizon = 20) {
   return useQuery({
     queryKey: ["calibration", days, horizon],
-    queryFn: () =>
-      api<Calibration>(`/api/rule-performance/calibration?days=${days}&window=${horizon}`),
+    queryFn: ({ signal }) =>
+      api<Calibration>(`/api/rule-performance/calibration?days=${days}&window=${horizon}`, { signal }),
     staleTime: 5 * 60 * 1000,
   });
 }

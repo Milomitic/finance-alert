@@ -158,8 +158,8 @@ export type InfraLogs = {
   records: LogRecord[];
 };
 
-export async function fetchInfraLogSources(): Promise<InfraLogSource[]> {
-  const r = await fetch("/api/platform/infra-logs/sources", { credentials: "include" });
+export async function fetchInfraLogSources(signal?: AbortSignal): Promise<InfraLogSource[]> {
+  const r = await fetch("/api/platform/infra-logs/sources", { credentials: "include", signal });
   if (!r.ok) throw new Error(`infra-log-sources ${r.status}`);
   return r.json();
 }
@@ -167,19 +167,20 @@ export async function fetchInfraLogSources(): Promise<InfraLogSource[]> {
 export async function fetchInfraLogs(
   source: string,
   opts: { minutes: number; limit?: number },
+  signal?: AbortSignal,
 ): Promise<InfraLogs> {
   const q = new URLSearchParams({
     source,
     minutes: String(opts.minutes),
     limit: String(opts.limit ?? 300),
   });
-  const r = await fetch(`/api/platform/infra-logs?${q}`, { credentials: "include" });
+  const r = await fetch(`/api/platform/infra-logs?${q}`, { credentials: "include", signal });
   if (!r.ok) throw new Error(`infra-logs ${r.status}`);
   return r.json();
 }
 
-export async function fetchHealth(): Promise<PlatformHealth> {
-  const r = await fetch("/api/platform/health", { credentials: "include" });
+export async function fetchHealth(signal?: AbortSignal): Promise<PlatformHealth> {
+  const r = await fetch("/api/platform/health", { credentials: "include", signal });
   if (!r.ok) throw new Error(`health ${r.status}`);
   return r.json();
 }
@@ -196,8 +197,8 @@ export type SignalDriftRow = {
   drift_flag: boolean;
 };
 
-export async function fetchSignalDrift(): Promise<{ detectors: SignalDriftRow[] }> {
-  const r = await fetch("/api/platform/signal-drift", { credentials: "include" });
+export async function fetchSignalDrift(signal?: AbortSignal): Promise<{ detectors: SignalDriftRow[] }> {
+  const r = await fetch("/api/platform/signal-drift", { credentials: "include", signal });
   if (!r.ok) throw new Error(`signal-drift ${r.status}`);
   return r.json();
 }
@@ -260,9 +261,10 @@ export type DetectorPerformance = {
   detectors: DetectorPerfRow[]; // sorted by descending total n
 };
 
-export async function fetchDetectorPerformance(): Promise<DetectorPerformance> {
+export async function fetchDetectorPerformance(signal?: AbortSignal): Promise<DetectorPerformance> {
   const r = await fetch("/api/platform/detector-performance", {
     credentials: "include",
+    signal,
   });
   if (!r.ok) throw new Error(`detector-performance ${r.status}`);
   return r.json();
@@ -290,18 +292,21 @@ export async function fetchProbeProgress(): Promise<{
   return r.json();
 }
 
-export async function fetchLogs(params: {
-  level?: string;
-  module?: string;
-  search?: string;
-  limit?: number;
-}): Promise<LogRecord[]> {
+export async function fetchLogs(
+  params: {
+    level?: string;
+    module?: string;
+    search?: string;
+    limit?: number;
+  },
+  signal?: AbortSignal,
+): Promise<LogRecord[]> {
   const q = new URLSearchParams();
   if (params.level) q.set("level", params.level);
   if (params.module) q.set("module", params.module);
   if (params.search) q.set("search", params.search);
   if (params.limit) q.set("limit", String(params.limit));
-  const r = await fetch(`/api/platform/logs?${q}`, { credentials: "include" });
+  const r = await fetch(`/api/platform/logs?${q}`, { credentials: "include", signal });
   if (!r.ok) throw new Error(`logs ${r.status}`);
   return r.json();
 }
@@ -340,8 +345,8 @@ export type InfraHealth = {
   components: InfraComponent[];
 };
 
-export async function fetchInfraHealth(): Promise<InfraHealth> {
-  const r = await fetch("/api/platform/infra", { credentials: "include" });
+export async function fetchInfraHealth(signal?: AbortSignal): Promise<InfraHealth> {
+  const r = await fetch("/api/platform/infra", { credentials: "include", signal });
   if (!r.ok) throw new Error(`infra ${r.status}`);
   return r.json();
 }
@@ -371,9 +376,13 @@ export type DegradedSource = {
  *
  * Un `op` sconosciuto torna 422 e non una lista vuota: vuota significa «tutto
  * sano», quindi un refuso renderebbe una scheda muta per sempre. */
-export async function fetchDegradedSources(op: string): Promise<DegradedSource[]> {
+export async function fetchDegradedSources(
+  op: string,
+  signal?: AbortSignal,
+): Promise<DegradedSource[]> {
   const r = await fetch(`/api/platform/source-health?op=${encodeURIComponent(op)}`, {
     credentials: "include",
+    signal,
   });
   if (!r.ok) throw new Error(`source-health ${r.status}`);
   return r.json();

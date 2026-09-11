@@ -8,7 +8,7 @@ import { fetchInfraHealth } from "@/api/platformHealth";
 export function useInfraHealth() {
   return useQuery({
     queryKey: ["platform", "infra"],
-    queryFn: fetchInfraHealth,
+    queryFn: ({ signal }) => fetchInfraHealth(signal),
     staleTime: 30_000,
     refetchInterval: 60_000,
   });

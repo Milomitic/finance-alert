@@ -51,9 +51,9 @@ export type PremarketMovers = {
 };
 
 export const dashboard = {
-  summary: () => api<DashboardSummary>("/api/dashboard/summary"),
-  analystActions: (limit = 40) =>
-    api<AnalystAction[]>(`/api/dashboard/analyst-actions?limit=${limit}`),
-  premarketMovers: () =>
-    api<PremarketMovers>("/api/dashboard/premarket-movers"),
+  summary: (signal?: AbortSignal) => api<DashboardSummary>("/api/dashboard/summary", { signal }),
+  analystActions: (limit = 40, signal?: AbortSignal) =>
+    api<AnalystAction[]>(`/api/dashboard/analyst-actions?limit=${limit}`, { signal }),
+  premarketMovers: (signal?: AbortSignal) =>
+    api<PremarketMovers>("/api/dashboard/premarket-movers", { signal }),
 };

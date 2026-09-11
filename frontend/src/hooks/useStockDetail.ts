@@ -23,7 +23,7 @@ export function useStockDetail(ticker: string, range: string = "1y", enabled = t
   return useQuery({
     enabled: enabled && !!ticker,
     queryKey: ["stock-detail", ticker, range],
-    queryFn: () => stocks.detail(ticker, range),
+    queryFn: ({ signal }) => stocks.detail(ticker, range, signal),
     placeholderData: (prev, prevQuery) => {
       // Only reuse the previous query result when its ticker matches
       // the new one (i.e. only the `range` changed). Different ticker

@@ -15,7 +15,7 @@ export function useMe() {
   }, [qc]);
   return useQuery({
     queryKey: ["me"],
-    queryFn: () => auth.me(),
+    queryFn: ({ signal }) => auth.me(signal),
     retry: false,
     refetchOnWindowFocus: true,
   });

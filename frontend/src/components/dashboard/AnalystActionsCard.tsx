@@ -208,7 +208,7 @@ function RowSkeleton() {
 export function AnalystActionsCard() {
   const q = useQuery({
     queryKey: ["analyst-actions"],
-    queryFn: () => dashboard.analystActions(40),
+    queryFn: ({ signal }) => dashboard.analystActions(40, signal),
     // Analyst actions only change when fundamentals are re-fetched
     // (weekly TTL). A 5-min client cache avoids re-pinging on every
     // dashboard revisit while staying fresh enough.

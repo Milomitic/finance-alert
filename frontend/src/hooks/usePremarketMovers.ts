@@ -13,7 +13,7 @@ const KEY = ["dashboard", "premarket-movers"] as const;
 export function usePremarketMovers() {
   return useQuery({
     queryKey: KEY,
-    queryFn: () => dashboard.premarketMovers(),
+    queryFn: ({ signal }) => dashboard.premarketMovers(signal),
     refetchInterval: (q) => {
       const d = q.state.data;
       // Durante un refresh si va veloce, perche' la card mostra il progresso.

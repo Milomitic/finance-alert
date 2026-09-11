@@ -41,11 +41,11 @@ interface ScanLogResponse {
 export function useScanLog(limit = 20, kind?: "alerts_scan" | "score_recompute") {
   return useQuery({
     queryKey: ["scan-log", limit, kind],
-    queryFn: () => {
+    queryFn: ({ signal }) => {
       const sp = new URLSearchParams();
       sp.set("limit", String(limit));
       if (kind) sp.set("kind", kind);
-      return api<ScanLogResponse>(`/api/scan-runs/recent?${sp.toString()}`);
+      return api<ScanLogResponse>(`/api/scan-runs/recent?${sp.toString()}`, { signal });
     },
     refetchInterval: 30_000,
     staleTime: 10_000,

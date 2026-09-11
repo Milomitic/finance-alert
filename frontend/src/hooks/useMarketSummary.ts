@@ -12,7 +12,7 @@ export function useMarketSummary({ enabled = true }: { enabled?: boolean } = {})
   return useQuery({
     enabled,
     queryKey: ["dashboard", "market-summary"],
-    queryFn: () => market.summary(),
+    queryFn: ({ signal }) => market.summary(signal),
     // This payload (~264KB) is scan-derived — it only changes when a scan
     // completes. useScanStatus invalidates ["dashboard"] on that transition, so
     // the old 30s background poll on every page (incl. hidden tabs) was pure

@@ -2,8 +2,8 @@ import { api } from "./client";
 import type { Position, PositionCreate, PositionUpdate } from "./types";
 
 export const positions = {
-  list: (status: "open" | "closed" | "all" = "all") =>
-    api<Position[]>(`/api/positions?status=${status}`),
+  list: (status: "open" | "closed" | "all" = "all", signal?: AbortSignal) =>
+    api<Position[]>(`/api/positions?status=${status}`, { signal }),
   open: (body: PositionCreate) =>
     api<Position>("/api/positions", {
       method: "POST",

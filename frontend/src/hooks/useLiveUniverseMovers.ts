@@ -25,7 +25,7 @@ export interface LiveMoversResponse {
 export function useLiveUniverseMovers(enabled: boolean = true) {
   return useQuery({
     queryKey: ["live-universe-movers"],
-    queryFn: () => api<LiveMoversResponse>("/api/dashboard/live-movers"),
+    queryFn: ({ signal }) => api<LiveMoversResponse>("/api/dashboard/live-movers", { signal }),
     enabled,
     refetchInterval: 60_000,
     refetchIntervalInBackground: false,

@@ -65,9 +65,10 @@ export interface MarketDetail {
 export function useMarketDetail(symbol: string, range: string = "1y") {
   return useQuery({
     queryKey: ["market-detail", symbol, range],
-    queryFn: () =>
+    queryFn: ({ signal }) =>
       api<MarketDetail>(
         `/api/markets/${encodeURIComponent(symbol)}/detail?range=${range}`,
+        { signal },
       ),
     staleTime: 60_000,
     enabled: !!symbol,

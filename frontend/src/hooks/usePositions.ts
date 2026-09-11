@@ -11,7 +11,7 @@ import type { PositionCreate, PositionUpdate } from "@/api/types";
 export function usePositions(enabled = true) {
   return useQuery({
     queryKey: ["positions"],
-    queryFn: () => positions.list("all"),
+    queryFn: ({ signal }) => positions.list("all", signal),
     staleTime: 10_000,
     refetchInterval: 15_000,
     refetchIntervalInBackground: false,

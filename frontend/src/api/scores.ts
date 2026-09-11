@@ -29,19 +29,18 @@ function toQuery(params: TopPicksParams): string {
 }
 
 export const scores = {
-  forStock: (ticker: string) =>
-    api<StockScore>(`/api/stocks/${encodeURIComponent(ticker)}/score`),
-  technicalForStock: (ticker: string) =>
-    api<TechnicalScoreDetail>(`/api/stocks/${encodeURIComponent(ticker)}/technical`),
+  forStock: (ticker: string, signal?: AbortSignal) =>
+    api<StockScore>(`/api/stocks/${encodeURIComponent(ticker)}/score`, { signal }),
+  technicalForStock: (ticker: string, signal?: AbortSignal) =>
+    api<TechnicalScoreDetail>(`/api/stocks/${encodeURIComponent(ticker)}/technical`, { signal }),
   /**
    * Daily composite snapshots (score_history) for one lens, ascending,
    * capped to the last `days` days (7-365). Feeds the sparkline on the
    * score card; `points` may hold 0-1 entries while history accrues.
    */
-  scoreHistory: (ticker: string, lens: ScoreLens = "qualita", days = 180) =>
+  scoreHistory: (ticker: string, lens: ScoreLens = "qualita", days = 180, signal?: AbortSignal) =>
     api<ScoreHistoryOut>(
-      `/api/stocks/${encodeURIComponent(ticker)}/score-history?lens=${lens}&days=${days}`,
-    ),
+      `/api/stocks/${encodeURIComponent(ticker)}/score-history?lens=${lens}&days=${days}`, { signal }),
   /**
    * Force a fresh score recomputation for one stock and persist it. Used by
    * the "refresh score" button on the detail page when the persisted score
@@ -81,13 +80,13 @@ export const scores = {
   recomputeAll: () =>
     api<{ accepted: true }>(`/api/scores/recompute-all`, { method: "POST" }),
   /** Latest ScanRun row where kind='score_recompute'. Polled by the toast hook. */
-  recomputeStatus: () => api<ScanStatusInfo>(`/api/scores/recompute-status`),
+  recomputeStatus: (signal?: AbortSignal) => api<ScanStatusInfo>(`/api/scores/recompute-status`, { signal }),
   /** Cooperative cancel (or force-close on stale) of the running recompute. */
   recomputeStop: () =>
     api<ScanStopResultInfo>(`/api/scores/recompute-stop`, { method: "POST" }),
-  top: (opts: TopPicksParams = {}) =>
-    api<TopPicks>(`/api/scores/top${toQuery(opts)}`),
+  top: (opts: TopPicksParams = {}, signal?: AbortSignal) =>
+    api<TopPicks>(`/api/scores/top${toQuery(opts)}`, { signal }),
   /** The pillar-IC transparency study (why the composite is a descriptor,
    *  not a return predictor). Static artifact — cache hard. */
-  icReport: () => api<ScoreIcReport>(`/api/scores/ic-report`),
+  icReport: (signal?: AbortSignal) => api<ScoreIcReport>(`/api/scores/ic-report`, { signal }),
 };

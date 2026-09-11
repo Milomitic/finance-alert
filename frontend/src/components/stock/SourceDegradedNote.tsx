@@ -31,7 +31,7 @@ const RUOLO: Record<string, string> = {
 export function SourceDegradedNote({ op, className }: { op: string; className?: string }) {
   const q = useQuery({
     queryKey: ["platform", "source-health", op],
-    queryFn: () => fetchDegradedSources(op),
+    queryFn: ({ signal }) => fetchDegradedSources(op, signal),
     // Contesto, non un segnale vivo: la scheda non deve inseguire lo stato
     // delle fonti come fa la pagina Salute, che ha uno stream apposta.
     staleTime: 2 * 60 * 1000,

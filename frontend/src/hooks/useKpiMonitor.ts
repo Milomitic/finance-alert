@@ -80,7 +80,7 @@ export interface KpiMonitor {
 export function useKpiMonitor(days = 90) {
   return useQuery({
     queryKey: ["kpi-monitor", days],
-    queryFn: () => api<KpiMonitor>(`/api/kpi/monitor?days=${days}`),
+    queryFn: ({ signal }) => api<KpiMonitor>(`/api/kpi/monitor?days=${days}`, { signal }),
     staleTime: 5 * 60 * 1000,
   });
 }

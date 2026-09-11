@@ -128,8 +128,12 @@ describe("il segnale che ha aperto la posizione", () => {
 
     await userEvent.click(btn);
 
+    // ⚠️ Sull'URL, non sulla lista esatta degli argomenti. Da S-2 ogni
+    // `queryFn` inoltra l'AbortSignal, quindi `api()` riceve `(url, { signal })`
+    // e un `toHaveBeenCalledWith(url)` fallisce su un dettaglio che non e
+    // quello che questo test misura: che venga chiesto QUEL segnale, per id.
     await waitFor(() =>
-      expect(api).toHaveBeenCalledWith("/api/alerts/77"),
+      expect(api.mock.calls.map((c) => c[0])).toContain("/api/alerts/77"),
     );
   });
 

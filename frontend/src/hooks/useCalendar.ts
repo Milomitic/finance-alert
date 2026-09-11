@@ -10,7 +10,7 @@ import { calendar, type CalendarParams } from "@/api/calendar";
 export function useCalendar(params: CalendarParams) {
   return useQuery({
     queryKey: ["calendar", params],
-    queryFn: () => calendar.events(params),
+    queryFn: ({ signal }) => calendar.events(params, signal),
     staleTime: 5 * 60_000,
     retry: 1,
   });
@@ -23,7 +23,7 @@ export function useCalendar(params: CalendarParams) {
 export function useMacroDetail(seriesId: number | undefined) {
   return useQuery({
     queryKey: ["macro-detail", seriesId],
-    queryFn: () => calendar.macroDetail(seriesId as number),
+    queryFn: ({ signal }) => calendar.macroDetail(seriesId as number, signal),
     enabled: seriesId != null,
     staleTime: 5 * 60_000,
     retry: 1,

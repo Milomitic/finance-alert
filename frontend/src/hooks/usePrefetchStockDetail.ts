@@ -22,7 +22,7 @@ export function usePrefetchStockDetail(delayMs = 150) {
     timer.current = setTimeout(() => {
       qc.prefetchQuery({
         queryKey: ["stock-detail", ticker, range],
-        queryFn: () => stocks.detail(ticker, range),
+        queryFn: ({ signal }) => stocks.detail(ticker, range, signal),
         staleTime: 30_000,
       });
     }, delayMs);

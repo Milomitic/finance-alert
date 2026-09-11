@@ -50,7 +50,7 @@ export function useStockDrawings(ticker: string) {
 
   const query = useQuery({
     queryKey: key,
-    queryFn: () => drawingsApi.list(ticker),
+    queryFn: ({ signal }) => drawingsApi.list(ticker, signal),
     enabled: !!ticker,
     staleTime: 60_000,
   });

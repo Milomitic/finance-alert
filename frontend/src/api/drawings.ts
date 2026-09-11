@@ -25,8 +25,8 @@ export type DrawingCreateBody =
   | { kind: "trend"; x1: number; y1: number; x2: number; y2: number };
 
 export const drawings = {
-  list: (ticker: string) =>
-    api<StockDrawings>(`/api/stocks/${encodeURIComponent(ticker)}/drawings`),
+  list: (ticker: string, signal?: AbortSignal) =>
+    api<StockDrawings>(`/api/stocks/${encodeURIComponent(ticker)}/drawings`, { signal }),
   create: (ticker: string, body: DrawingCreateBody) =>
     api<{ id: number; kind: string }>(
       `/api/stocks/${encodeURIComponent(ticker)}/drawings`,

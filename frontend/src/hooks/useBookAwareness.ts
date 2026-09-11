@@ -15,7 +15,7 @@ const BOOK_STALE_MS = 5 * 60_000; // 5min
 export function useOpenPositionStockIds(): Set<number> {
   const q = useQuery({
     queryKey: ["positions", "open-stock-ids"],
-    queryFn: () => positions.list("open"),
+    queryFn: ({ signal }) => positions.list("open", signal),
     staleTime: BOOK_STALE_MS,
     retry: 1,
   });
@@ -30,7 +30,7 @@ export function useOpenPositionStockIds(): Set<number> {
 export function useActivePriceAlertStockIds(): Set<number> {
   const q = useQuery({
     queryKey: ["price-alerts", "active-stock-ids"],
-    queryFn: () => priceAlerts.listActive(),
+    queryFn: ({ signal }) => priceAlerts.listActive(signal),
     staleTime: BOOK_STALE_MS,
     retry: 1,
   });

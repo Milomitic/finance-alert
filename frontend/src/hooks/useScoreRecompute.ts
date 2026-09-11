@@ -28,7 +28,7 @@ export function useScoreRecomputeStatus() {
 
   const q = useQuery({
     queryKey: RECOMPUTE_KEY,
-    queryFn: () => scores.recomputeStatus(),
+    queryFn: ({ signal }) => scores.recomputeStatus(signal),
     // SSE drives updates; poll only as a FALLBACK when the stream is down and
     // the tab is visible.
     refetchInterval: () => {

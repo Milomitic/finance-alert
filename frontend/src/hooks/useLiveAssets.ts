@@ -39,7 +39,7 @@ export interface LiveAssetsResponse {
 export function useLiveAssets() {
   return useQuery({
     queryKey: ["live-assets"],
-    queryFn: () => api<LiveAssetsResponse>("/api/dashboard/live-assets"),
+    queryFn: ({ signal }) => api<LiveAssetsResponse>("/api/dashboard/live-assets", { signal }),
     refetchInterval: 15_000,
     refetchIntervalInBackground: false,
     staleTime: 5_000,

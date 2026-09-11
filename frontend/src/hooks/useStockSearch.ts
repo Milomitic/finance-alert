@@ -69,7 +69,7 @@ export function useStockSearch(
 export function useStockFilters() {
   return useQuery({
     queryKey: ["stocks-filters"],
-    queryFn: () => stocks.filters(),
+    queryFn: ({ signal }) => stocks.filters(signal),
     staleTime: 5 * 60_000,   // 5min, filters change rarely
   });
 }

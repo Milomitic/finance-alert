@@ -5,7 +5,7 @@ import { alerts, type AlertListParams } from "@/api/alerts";
 export function useAlertsList(params: AlertListParams) {
   return useQuery({
     queryKey: ["alerts", params],
-    queryFn: () => alerts.list(params),
+    queryFn: ({ signal }) => alerts.list(params, signal),
     placeholderData: keepPreviousData,
   });
 }
@@ -20,7 +20,7 @@ export function useAlertsList(params: AlertListParams) {
 export function useAlert(id: number | null) {
   return useQuery({
     queryKey: ["alert", id],
-    queryFn: () => alerts.byId(id as number),
+    queryFn: ({ signal }) => alerts.byId(id as number, signal),
     enabled: id != null,
     staleTime: 5 * 60_000,
   });
@@ -30,7 +30,7 @@ export function useAlert(id: number | null) {
 export function useConfluence(days = 7, enabled = true) {
   return useQuery({
     queryKey: ["confluence", days],
-    queryFn: () => alerts.confluence(days),
+    queryFn: ({ signal }) => alerts.confluence(days, signal),
     enabled,
     staleTime: 60_000,
   });

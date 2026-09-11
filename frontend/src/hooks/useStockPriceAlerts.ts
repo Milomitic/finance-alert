@@ -6,7 +6,7 @@ import type { PriceAlertCreate, PriceAlertUpdate } from "@/api/types";
 export function useStockPriceAlerts(ticker: string) {
   return useQuery({
     queryKey: ["price-alerts", ticker],
-    queryFn: () => priceAlerts.list(ticker),
+    queryFn: ({ signal }) => priceAlerts.list(ticker, signal),
     staleTime: 10_000,
   });
 }

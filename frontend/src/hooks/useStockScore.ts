@@ -31,7 +31,7 @@ export function useStockScore(ticker: string | undefined): UseStockScoreResult {
   const qc = useQueryClient();
   const query = useQuery<StockScore, ApiError>({
     queryKey: ["stock-score", ticker],
-    queryFn: () => scores.forStock(ticker!),
+    queryFn: ({ signal }) => scores.forStock(ticker!, signal),
     enabled: !!ticker,
     // Score recomputes after every scan (~hourly cadence). 1h client cache
     // avoids re-fetching on tab switches without serving stale-stale data.

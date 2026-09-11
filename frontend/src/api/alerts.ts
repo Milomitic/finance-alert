@@ -122,14 +122,14 @@ export interface SignalCalibrationTable {
 }
 
 export const alerts = {
-  list: (params: AlertListParams = {}) =>
-    api<AlertList>(`/api/alerts${toQuery(params)}`),
+  list: (params: AlertListParams = {}, signal?: AbortSignal) =>
+    api<AlertList>(`/api/alerts${toQuery(params)}`, { signal }),
   /** Un solo segnale, per id — la stessa forma di una riga della lista.
    *
    *  Serve alle posizioni: `Position.alert_id` esiste da sempre nel payload e
    *  non portava da nessuna parte, perche la lista e paginata e il segnale che
    *  ha aperto una posizione di due mesi fa non e nella pagina corrente. */
-  byId: (id: number) => api<Alert>(`/api/alerts/${id}`),
+  byId: (id: number, signal?: AbortSignal) => api<Alert>(`/api/alerts/${id}`, { signal }),
   patch: (id: number, body: { archived?: boolean }) =>
     api<Alert>(`/api/alerts/${id}`, {
       method: "PATCH",
@@ -165,13 +165,13 @@ export const alerts = {
       method: "POST",
       body: "{}",
     }),
-  scanStatus: () => api<ScanStatusInfo>("/api/alerts/scan-status"),
+  scanStatus: (signal?: AbortSignal) => api<ScanStatusInfo>("/api/alerts/scan-status", { signal }),
   /** Per-detector calibration table (base_rate, beta-stripped skill, edge_pct,
    *  n, honesty tag). Detector-level + ~static, so cache it aggressively. */
-  signalCalibration: () =>
-    api<SignalCalibrationTable>("/api/alerts/signal-calibration"),
+  signalCalibration: (signal?: AbortSignal) =>
+    api<SignalCalibrationTable>("/api/alerts/signal-calibration", { signal }),
   /** Confluence clusters: active signal alerts grouped by ticker+direction,
    *  strongest first. `days` = active-window length (default 7). */
-  confluence: (days = 7) =>
-    api<Confluence[]>(`/api/alerts/confluence?days=${days}`),
+  confluence: (days = 7, signal?: AbortSignal) =>
+    api<Confluence[]>(`/api/alerts/confluence?days=${days}`, { signal }),
 };

@@ -10,8 +10,8 @@ import type { EtfHoldings } from "@/api/types";
 export function useEtfHoldings(ticker: string | undefined) {
   return useQuery({
     queryKey: ["stocks", ticker, "etf-holdings"],
-    queryFn: () =>
-      api<EtfHoldings>(`/api/stocks/${encodeURIComponent(ticker!)}/etf-holdings`),
+    queryFn: ({ signal }) =>
+      api<EtfHoldings>(`/api/stocks/${encodeURIComponent(ticker!)}/etf-holdings`, { signal }),
     enabled: !!ticker,
     // Holdings are backend-cached 7d; per-component quotes are 10s-cached
     // server-side. A 2-min client window refreshes variations on revisit

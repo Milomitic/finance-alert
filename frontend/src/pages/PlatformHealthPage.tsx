@@ -61,7 +61,7 @@ const STATUS_INFO: Record<
 export default function PlatformHealthPage({ embedded = false }: { embedded?: boolean } = {}) {
   const { data: initialLogs } = useQuery({
     queryKey: ["platform-logs-initial"],
-    queryFn: () => fetchLogs({ limit: 500 }),
+    queryFn: ({ signal }) => fetchLogs({ limit: 500 }, signal),
   });
   const {
     data: initialHealth,
@@ -71,7 +71,7 @@ export default function PlatformHealthPage({ embedded = false }: { embedded?: bo
     refetch: refetchHealth,
   } = useQuery({
     queryKey: ["platform-health"],
-    queryFn: fetchHealth,
+    queryFn: ({ signal }) => fetchHealth(signal),
   });
 
   const { snapshot, logs, setLogs, connected } = usePlatformHealthStream(

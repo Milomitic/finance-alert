@@ -9,7 +9,7 @@ import { fetchDetectorPerformance } from "@/api/platformHealth";
 export function useDetectorPerformance(enabled = true) {
   return useQuery({
     queryKey: ["signals", "detector-performance"],
-    queryFn: fetchDetectorPerformance,
+    queryFn: ({ signal }) => fetchDetectorPerformance(signal),
     enabled,
     staleTime: 30 * 60_000, // 30m — outcomes mature only at scan end
     gcTime: 60 * 60_000,

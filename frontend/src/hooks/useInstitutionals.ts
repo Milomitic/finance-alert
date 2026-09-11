@@ -12,7 +12,7 @@ export function useInstitutionalsList(params?: {
 }) {
   return useQuery({
     queryKey: ["institutionals", "list", params],
-    queryFn: () => institutionals.list(params),
+    queryFn: ({ signal }) => institutionals.list(params, signal),
     staleTime: STALE_LONG,
     retry: 1,
   });
@@ -25,7 +25,7 @@ export function useInstitutionalsAggregate(params?: {
 }) {
   return useQuery({
     queryKey: ["institutionals", "aggregate", params],
-    queryFn: () => institutionals.aggregate(params),
+    queryFn: ({ signal }) => institutionals.aggregate(params, signal),
     staleTime: STALE_LONG,
     retry: 1,
   });
@@ -34,7 +34,7 @@ export function useInstitutionalsAggregate(params?: {
 export function useInstitutionalDetail(slug: string, periodEnd?: string) {
   return useQuery({
     queryKey: ["institutionals", "detail", slug, periodEnd ?? "latest"],
-    queryFn: () => institutionals.detail(slug, periodEnd),
+    queryFn: ({ signal }) => institutionals.detail(slug, periodEnd, signal),
     enabled: Boolean(slug),
     staleTime: STALE_LONG,
     retry: 1,
@@ -50,7 +50,7 @@ export function useHolderCounts(tickers: string[]) {
   const key = [...tickers].sort().join(",");
   return useQuery({
     queryKey: ["institutionals", "holder-counts", key],
-    queryFn: () => institutionals.holderCounts(tickers),
+    queryFn: ({ signal }) => institutionals.holderCounts(tickers, signal),
     enabled: tickers.length > 0,
     staleTime: STALE_LONG,
     retry: 1,
@@ -64,7 +64,7 @@ export function useTickerInstitutionalHolders(
 ) {
   return useQuery({
     queryKey: ["institutionals", "for-ticker", ticker, limit, includeHistorical],
-    queryFn: () => institutionals.forTicker(ticker, limit, includeHistorical),
+    queryFn: ({ signal }) => institutionals.forTicker(ticker, limit, includeHistorical, signal),
     enabled: Boolean(ticker),
     staleTime: STALE_MEDIUM,
     retry: 1,

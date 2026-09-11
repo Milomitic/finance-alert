@@ -9,7 +9,7 @@ import type { TechnicalScoreDetail } from "@/api/types";
 export function useStockTechnical(ticker: string | undefined) {
   const query = useQuery<TechnicalScoreDetail, ApiError>({
     queryKey: ["stock-technical", ticker],
-    queryFn: () => scores.technicalForStock(ticker!),
+    queryFn: ({ signal }) => scores.technicalForStock(ticker!, signal),
     enabled: !!ticker,
     staleTime: 60 * 60_000,
     retry: (failureCount, error) => {

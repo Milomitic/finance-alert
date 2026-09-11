@@ -20,7 +20,7 @@ export interface CatalogStatus {
 export function useCatalogStatus() {
   return useQuery({
     queryKey: ["catalog-status"],
-    queryFn: () => api<CatalogStatus>("/api/catalog/status"),
+    queryFn: ({ signal }) => api<CatalogStatus>("/api/catalog/status", { signal }),
     // Nessun polling: il produttore e' `run_refresh_all`, un cron
     // SETTIMANALE (sabato 03:00). Interrogarlo ogni 30 s significava
     // chiedere 20.160 volte fra un aggiornamento e il successivo. Il

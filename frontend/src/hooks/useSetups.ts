@@ -174,7 +174,7 @@ export function useSetups(
 ) {
   return useQuery({
     queryKey: ["setups", tone ?? "all", ticker ?? "*", status],
-    queryFn: () => {
+    queryFn: ({ signal }) => {
       const p = new URLSearchParams();
       if (tone) p.set("tone", tone);
       if (status !== "active") p.set("status", status);
@@ -182,7 +182,7 @@ export function useSetups(
       // not — see the API note. The global list stays capped.
       if (ticker) p.set("ticker", ticker);
       const qs = p.toString();
-      return api<SetupsResponse>(`/api/setups${qs ? `?${qs}` : ""}`);
+      return api<SetupsResponse>(`/api/setups${qs ? `?${qs}` : ""}`, { signal });
     },
     staleTime: 5 * 60 * 1000,
   });

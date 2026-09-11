@@ -14,7 +14,7 @@ export function useScoreHistory(
 ) {
   return useQuery<ScoreHistoryOut, ApiError>({
     queryKey: ["scores", "history", ticker, lens],
-    queryFn: () => scores.scoreHistory(ticker!, lens, days),
+    queryFn: ({ signal }) => scores.scoreHistory(ticker!, lens, days, signal),
     enabled: !!ticker,
     staleTime: 30 * 60_000,
   });
