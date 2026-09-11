@@ -59,7 +59,16 @@ def test_filter_options_distinct(db: Session) -> None:
 
 
 def _seed_market_caps(db: Session) -> None:
-    """Insert 12 stocks with monotonic market caps (1B, 2B, ..., 12B)."""
+    """Insert 12 stocks with monotonic market caps (1B, 2B, ..., 12B).
+
+    ⚠️ `currency` NON e decorativa da FA-026: l'ordinamento per capitalizzazione
+    passa per la conversione in dollari, e una riga senza valuta ha
+    `market_cap_usd` NULL e finisce in fondo in entrambi i versi — sconosciuto
+    non e zero. Senza questa riga il test misurerebbe il tiebreaker sul ticker
+    invece della paginazione globale, che e cio che dice di misurare.
+    Nel catalogo reale nessuno dei 984 titoli con capitalizzazione e privo di
+    valuta, quindi la fixture qui si allinea alla produzione.
+    """
     for i in range(1, 13):
         db.add(
             Stock(
@@ -69,6 +78,7 @@ def _seed_market_caps(db: Session) -> None:
                 sector="Tech",
                 country="US",
                 market_cap=i * 1_000_000_000,
+                currency="USD",
             )
         )
     db.commit()

@@ -2,7 +2,7 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, computed_field
 
 
 class IndexOptionOut(BaseModel):
@@ -20,6 +20,9 @@ class StockOut(BaseModel):
     industry: str | None
     country: str | None
     currency: str | None
+    #: Nella valuta di QUOTAZIONE — yfinance restituisce `marketCap` denominato
+    #: nella valuta di scambio. La cifra resta nativa a schermo, coerente con il
+    #: prezzo accanto; a ordinare ci pensa `market_cap_usd`.
     market_cap: int | None
     # "equity" | "etf" — lets the UI badge ETF/ETN rows (they carry no
     # fundamental Qualità score by design). Defaulted for back-compat with
@@ -35,6 +38,28 @@ class StockOut(BaseModel):
     # catalogue tracks every constituent it ingests, so an absent code means
     # "not in that index" and the UI may say "in" without hedging.
     in_indices: list[IndexOptionOut] = []
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def market_cap_usd(self) -> float | None:
+        """La stessa capitalizzazione in dollari, per confrontare e ordinare.
+
+        ⚠️ CAMPO CALCOLATO e non colonna, cosi ogni percorso che serve uno
+        `StockOut` lo porta con lo stesso significato. Valorizzarlo solo nello
+        screener avrebbe dato al `null` due letture diverse — «valuta ignota»
+        di la, «non calcolato» altrove — che e la forma di difetto che questo
+        repo ha gia pagato con le due tavolozze.
+
+        Senza rete: `to_usd_cached` legge la cache piu la tabella di riserva,
+        perche `_get_rate` farebbe una chiamata yfinance per valuta su cache
+        fredda. L'import e pigro per non legare gli schemi ai servizi.
+
+        None = valuta mancante o non riconosciuta. Mai parita: assumere USD
+        perche il campo e vuoto e un'ipotesi presentata come un fatto.
+        """
+        from app.services.fx_service import to_usd_cached
+
+        return to_usd_cached(self.market_cap, self.currency)
 
 
 class StockScoreRefOut(BaseModel):

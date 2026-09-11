@@ -2,7 +2,7 @@
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 
-from sqlalchemy import and_, distinct, exists, func, nullslast, or_, select
+from sqlalchemy import and_, case, distinct, exists, func, nullslast, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.visibility import visible_country_clause
@@ -43,6 +43,40 @@ PCT_OFF_HIGH_EXPR = ((StockMetrics.last_close / StockMetrics.high_252) - 1.0) * 
 # non uno sconto economico.
 DIVARIO_EXPR = TechnicalScore.composite - StockScore.composite
 
+def market_cap_usd_expr():
+    """`Stock.market_cap` convertito in dollari, come ESPRESSIONE SQL.
+
+    FA-026, opzione C del piano: ordinare in USD, mostrare in valuta nativa.
+
+    ⚠️ Vive nel SORT, come `DIVARIO_EXPR` e `pct_off_high`, e per la stessa
+    ragione: ordinare lato client le 50 righe della pagina le presenterebbe
+    come una classifica dell'UNIVERSO. Qui l'espressione vede tutte le righe.
+
+    ⚠️ Perche non e una rietichettatura. Misurato in produzione l'11 settembre
+    2026 su 984 titoli con capitalizzazione: la top 10 in valuta nativa e la
+    top 10 convertita **non hanno un titolo in comune** — la prima e fatta di
+    dieci nomi coreani, perche una cifra in KRW e circa 1300 volte piu grande.
+    `risk.py` aveva gia pagato lo stesso difetto classificando 75 titoli come
+    mega-cap stabili senza esserlo.
+
+    I tassi arrivano da `fx_service.cached_rates()`, che non tocca la rete: su
+    cache fredda `_get_rate` farebbe una chiamata yfinance per valuta, e qui
+    sarebbero fino a nove round-trip dentro una query di lista.
+
+    Una valuta che la mappa non conosce da NULL, non parita: l'ordinamento la
+    manda in fondo in entrambi i versi (`nullslast`), perche sconosciuto non e
+    zero — e zero, per una capitalizzazione, sarebbe per giunta un valore vero.
+    """
+    from app.services import fx_service
+
+    tassi = fx_service.cached_rates()
+    return case(
+        *[(Stock.currency == codice, Stock.market_cap * tasso)
+          for codice, tasso in sorted(tassi.items())],
+        else_=None,
+    )
+
+
 # Allowed sort columns; whitelist guards against SQL injection / typos.
 # Columns from JOINed tables (`composite`, `risk_tier`) are sortable too —
 # the search query LEFT JOINs stock_scores / technical_scores / stock_metrics
@@ -51,7 +85,12 @@ DIVARIO_EXPR = TechnicalScore.composite - StockScore.composite
 SORTABLE_COLUMNS: dict[str, object] = {
     "ticker": Stock.ticker,
     "name": Stock.name,
-    "market_cap": Stock.market_cap,
+    # ⚠️ NON `Stock.market_cap`: quella cifra e nella valuta di QUOTAZIONE, e
+    # ordinarci sopra mette dieci titoli coreani in cima all'universo — la top
+    # 10 nativa e quella in dollari non hanno un titolo in comune. Il valore e
+    # una FUNZIONE e non una colonna perche i tassi si muovono: va risolta a
+    # ogni query, non congelata all'import.
+    "market_cap": market_cap_usd_expr,
     "sector": Stock.sector,
     "industry": Stock.industry,
     "exchange": Stock.exchange,
@@ -383,6 +422,11 @@ def _apply_sort(stmt, f: StockFilter):
     order and rows could appear/skip across pages.
     """
     col = SORTABLE_COLUMNS.get(f.sort_by, Stock.ticker)
+    # Alcune voci sono FUNZIONI, non colonne: dipendono da uno stato che si
+    # muove (i tassi di cambio) e congelarle all'import le renderebbe vecchie
+    # quanto il processo.
+    if callable(col):
+        col = col()
     direction = (f.sort_dir or "asc").lower()
     if direction not in ("asc", "desc"):
         direction = "asc"

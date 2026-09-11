@@ -105,9 +105,13 @@ def big_client(db: Session) -> TestClient:
     db.flush()
     for i in range(1, 13):
         db.add(
+            # `currency` non e decorativa da FA-026: l'ordinamento per
+            # capitalizzazione passa per la conversione in dollari, e una riga
+            # senza valuta finisce in fondo in entrambi i versi.
             Stock(
                 ticker=f"T{i:02d}", exchange="NASDAQ", name=f"Company {i:02d}",
                 sector="Tech", country="US", market_cap=i * 1_000_000_000,
+                currency="USD",
             )
         )
     db.commit()

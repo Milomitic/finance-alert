@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { useMarketSummary } from "@/hooks/useMarketSummary";
 import { useStockSearch } from "@/hooks/useStockSearch";
 import { getIndexMeta } from "@/lib/indexMeta";
+import { formatCompactMoney } from "@/lib/money";
 import { getFlagFromTicker, getStockFlagCode } from "@/lib/stockMeta";
 import { useIsPhone } from "@/hooks/useMediaQuery";
 import { cn } from "@/lib/utils";
@@ -36,13 +37,7 @@ function pushRecent(ticker: string) {
 }
 
 // ── helpers ───────────────────────────────────────────────
-function fmtMc(v: number | null | undefined): string {
-  if (v == null) return "—";
-  if (v >= 1e12) return `$${(v / 1e12).toFixed(2)}T`;
-  if (v >= 1e9) return `$${(v / 1e9).toFixed(1)}B`;
-  if (v >= 1e6) return `$${(v / 1e6).toFixed(0)}M`;
-  return `$${v.toLocaleString()}`;
-}
+
 
 // ── flat result row for unified keyboard nav ──────────────
 type RowKind = "index" | "stock" | "recent" | "mover";
@@ -281,7 +276,7 @@ export function NavbarSearch() {
           <div className="text-xs text-muted-foreground truncate mt-0.5">{s.name}</div>
           {mc != null && (
             <div className="text-[0.6765rem] text-muted-foreground mt-0.5">
-              Mkt cap <strong className="text-muted-foreground tabular-nums">{fmtMc(mc)}</strong>
+              Mkt cap <strong className="text-muted-foreground tabular-nums">{formatCompactMoney(mc, s.currency)}</strong>
             </div>
           )}
         </div>

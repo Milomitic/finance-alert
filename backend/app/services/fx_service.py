@@ -145,6 +145,57 @@ def _get_rate(currency: str) -> float | None:
     return rate
 
 
+def cached_rates() -> dict[str, float]:
+    """{codice: USD per unita}, SOLO da cache piu la tabella di riserva.
+
+    Gemello di `_get_rate` per i path che non possono permettersi la rete:
+    quello, su cache fredda, fa una chiamata yfinance per valuta, e su una
+    lista dello screener sarebbero fino a nove round-trip dentro una query.
+    E la stessa regola che `calendar_service` dichiara nel proprio docstring e
+    che `next_earnings_dates_cached` applica alle trimestrali.
+
+    ⚠️ Il degrado e DICHIARATO, non silenzioso: senza cache si usa
+    `FX_RATES_FALLBACK`, che deriva di circa il 5% l'anno. Per ORDINARE
+    capitalizzazioni e irrilevante — fra una mega-cap e la successiva ci sono
+    ordini di grandezza, non punti percentuali — e la cifra a schermo resta
+    quella nativa, quindi il tasso non tocca nessun numero che l'utente legge
+    come esatto.
+
+    Le unita minori sono incluse come ALIAS: `GBp` porta il tasso della
+    sterlina e non quello diviso cento, perche il valore memorizzato e gia
+    nell'unita maggiore — dividere di nuovo sarebbe il bug x100 al contrario.
+    Il proprietario della regola resta `currency_units.major_unit_currency`.
+    """
+    from app.services.currency_units import major_unit_currency
+
+    out: dict[str, float] = dict(FX_RATES_FALLBACK)
+    with _CACHE_LOCK:
+        for cur, (_, rate) in _CACHE.items():
+            if rate is not None:
+                out[cur] = rate
+    out["USD"] = 1.0
+    for alias in ("GBp", "GBX", "gbp", "gbx"):
+        maggiore = major_unit_currency(alias)
+        if maggiore and maggiore in out:
+            out[alias] = out[maggiore]
+    return out
+
+
+def to_usd_cached(amount: float | None, currency: str | None) -> float | None:
+    """`to_usd` senza rete. None quando l'importo o il tasso mancano.
+
+    ⚠️ Una valuta ignota resta ignota: assumere USD perche il campo e vuoto e
+    un'ipotesi presentata come un fatto, e convertire 1:1 perche il codice non
+    si riconosce e la stessa ipotesi che indossa un numero.
+    """
+    if amount is None or currency is None or not currency.strip():
+        return None
+    rate = cached_rates().get(currency.strip())
+    if rate is None:
+        rate = cached_rates().get(currency.strip().upper())
+    return None if rate is None else amount * rate
+
+
 def rate_for(currency: str | None) -> float | None:
     """The rate a caller should STORE alongside an amount, or None.
 

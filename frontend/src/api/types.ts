@@ -11,7 +11,21 @@ export interface Stock {
   industry: string | null;
   country: string | null;
   currency: string | null;
+  /** Nella valuta di QUOTAZIONE: yfinance restituisce `marketCap` denominato
+   *  nella valuta di scambio. La cifra resta nativa a schermo, coerente con il
+   *  prezzo sulla stessa riga. */
   market_cap: number | null;
+  /** La stessa capitalizzazione in dollari — il valore su cui il SERVER ordina.
+   *
+   *  ⚠️ Ordinare sulla cifra nativa non e un'etichetta sbagliata su una
+   *  classifica giusta: misurato in produzione l'11 settembre 2026 su 984
+   *  titoli, la top 10 nativa e quella convertita non hanno un titolo in
+   *  comune — la prima e fatta di dieci nomi coreani, perche una cifra in KRW
+   *  e circa 1300 volte piu grande.
+   *
+   *  null = valuta mancante o non convertibile, mai parita: quelle righe
+   *  finiscono in fondo in entrambi i versi dell'ordinamento. */
+  market_cap_usd?: number | null;
   /** "equity" | "etf" — ETF/ETN rows carry no fundamental Qualità score
    *  (excluded by design); the screener badges them. Optional for
    *  back-compat with cached pre-field responses. */

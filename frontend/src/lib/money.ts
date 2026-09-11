@@ -113,3 +113,37 @@ export function formatMoneySigned(
   const sign = value > 0 ? "+" : value < 0 ? "-" : "";
   return `${sign}${formatMoney(Math.abs(value), currency, opts)}`;
 }
+
+/** Una capitalizzazione in forma compatta, nella valuta della riga:
+ *  `$3.00T`, `HK$2.86T`, `£196.0B`, `₩450.5T`.
+ *
+ *  ⚠️ Esisteva in DUE copie private identiche — `StockBrowserTable` e
+ *  `NavbarSearch` — ed entrambe cablavano `$` su una cifra che per 312 titoli
+ *  su 1010 non e in dollari. Stessa forma che ha portato `formatMoney` qui:
+ *  cinque formattatori che stampavano valute diverse per lo stesso prezzo.
+ *
+ *  ⚠️ La cifra resta NATIVA e non si converte a schermo: il prezzo accanto,
+ *  sulla stessa riga, e nella valuta di quotazione, e convertirne solo una
+ *  renderebbe la riga incoerente. A rendere sensata la CLASSIFICA ci pensa
+ *  l'ordinamento lato server, che passa per `market_cap_usd` e vede tutte le
+ *  righe dell'universo — misurato l'11 settembre 2026, la top 10 nativa e
+ *  quella in dollari non hanno un titolo in comune.
+ *
+ *  Valuta ignota → numero NUDO. Prendere in prestito il dollaro perche il
+ *  campo e vuoto e un'ipotesi presentata come un fatto: la stessa regola che
+ *  `formatMoney` applica e che `fx_service` dichiara nel proprio docstring.
+ *
+ *  Le soglie e le cifre decimali sono quelle delle due copie che sostituisce:
+ *  due decimali sui mille miliardi, uno sui miliardi, zero sui milioni. */
+export function formatCompactMoney(
+  value: number | null | undefined,
+  currency: string | null | undefined,
+): string {
+  if (value == null || !Number.isFinite(value)) return "—";
+  const sym = currencySymbol(currency) ?? "";
+  const abs = Math.abs(value);
+  if (abs >= 1e12) return `${sym}${(value / 1e12).toFixed(2)}T`;
+  if (abs >= 1e9) return `${sym}${(value / 1e9).toFixed(1)}B`;
+  if (abs >= 1e6) return `${sym}${(value / 1e6).toFixed(0)}M`;
+  return `${sym}${value.toLocaleString()}`;
+}

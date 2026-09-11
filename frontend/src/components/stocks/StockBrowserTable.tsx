@@ -24,7 +24,7 @@ import { useMarketSummary } from "@/hooks/useMarketSummary";
 import { usePrefetchStockDetail } from "@/hooks/usePrefetchStockDetail";
 import { RISK_LABEL, RISK_TONE, scoreColor } from "@/lib/scoreMeta";
 import { getStockFlagCode } from "@/lib/stockMeta";
-import { formatMoney } from "@/lib/money";
+import { formatCompactMoney, formatMoney } from "@/lib/money";
 import { GAP_TEXT, formatGap, lensGapOf } from "@/lib/lensGap";
 import { cn } from "@/lib/utils";
 
@@ -228,13 +228,16 @@ function ScoreTrendArrow({ delta }: { delta: number | null | undefined }) {
   );
 }
 
-function fmtMc(v: number | null | undefined): string {
-  if (v == null) return "—";
-  if (v >= 1e12) return `$${(v / 1e12).toFixed(2)}T`;
-  if (v >= 1e9) return `$${(v / 1e9).toFixed(1)}B`;
-  if (v >= 1e6) return `$${(v / 1e6).toFixed(0)}M`;
-  return `$${v.toLocaleString()}`;
-}
+/* La capitalizzazione, nella valuta della RIGA.
+ *
+ * ⚠️ Cablava `$` su una cifra che per 312 titoli su 1010 non e in dollari, e
+ * la colonna e ORDINABILE — quindi non era un'etichetta sbagliata su una
+ * classifica giusta: misurato in produzione, la top 10 nativa e quella in
+ * dollari non hanno un titolo in comune. La cifra resta nativa, coerente con
+ * il prezzo accanto; a ordinare ci pensa il server, su `market_cap_usd`, che
+ * vede tutte le righe dell'universo e non le 50 della pagina. */
+const fmtMc = (v: number | null | undefined, currency: string | null | undefined) =>
+  formatCompactMoney(v, currency);
 
 // The symbol map that used to live here is now `lib/money.ts`, shared with
 // the stock detail page — which had no map at all and hard-coded `$` on 312
@@ -514,7 +517,7 @@ export function StockBrowserTable({
                           </span>
                         )}
                         <span className="text-muted-foreground">
-                          MC {fmtMc(s.market_cap)}
+                          MC {fmtMc(s.market_cap, s.currency)}
                         </span>
                         <span className="inline-flex items-center gap-1 text-muted-foreground">
                           {flag && (
@@ -798,7 +801,22 @@ export function StockBrowserTable({
                       </td>
                     )}
                     {isVisible("market_cap") && (
-                      <td className="px-3 py-1.5 text-right">{fmtMc(s.market_cap)}</td>
+                      <td
+                        className="px-3 py-1.5 text-right"
+                        // Il valore convertito come SUGGERIMENTO, non a video:
+                        // e la chiave di ordinamento e serve a confrontare due
+                        // righe di mercati diversi, non a sostituire la cifra
+                        // che il resto della riga usa. Assente quando la valuta
+                        // non e convertibile — e li non si scrive niente,
+                        // perche un trattino nel titolo non lo legge nessuno.
+                        title={
+                          s.market_cap_usd != null && s.currency !== "USD"
+                            ? `≈ ${formatCompactMoney(s.market_cap_usd, "USD")} — il valore su cui si ordina`
+                            : undefined
+                        }
+                      >
+                        {fmtMc(s.market_cap, s.currency)}
+                      </td>
                     )}
                     {isVisible("delta_pct") && (
                       <td className={cn("px-3 py-1.5 text-right", changeColor)}>

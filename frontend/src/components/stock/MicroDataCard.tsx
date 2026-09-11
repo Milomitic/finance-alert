@@ -5,7 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { SectionTitle } from "@/components/ui/section-title";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useStockFundamentals } from "@/hooks/useStockFundamentals";
-import { formatMoney } from "@/lib/money";
+import { formatCompactMoney, formatMoney } from "@/lib/money";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -157,6 +157,18 @@ function pctRaw(v: number): string {
 function num(v: number, digits = 2): string {
   return v.toFixed(digits);
 }
+
+
+/** ⚠️ Formatta i valori dei FONDAMENTALI (enterprise value, ricavi, EBITDA),
+ *  non la capitalizzazione: quella e passata a `formatCompactMoney` con la
+ *  valuta della riga (FA-026).
+ *
+ *  Il `$` qui resta, e resta come domanda aperta, non come scelta: la valuta
+ *  di un valore di bilancio e una proprieta della METRICA — yfinance li serve
+ *  nella valuta di rendicontazione, che per una societa quotata a Hong Kong
+ *  puo non essere la valuta di quotazione — e il payload non la dichiara.
+ *  Cambiarlo qui sarebbe indovinare, ed e per questo che il controllo sulla
+ *  sorgente in `money.test.ts` esenta questo caso con il motivo scritto. */
 function bigUsd(v: number): string {
   const abs = Math.abs(v);
   const sign = v < 0 ? "-" : "";
@@ -209,7 +221,10 @@ function buildSnapshotRows(stock: Stock, kpis: StockKpis): Row[] {
   return [
     {
       label: "Market cap",
-      preformatted: stock.market_cap != null ? bigUsd(stock.market_cap) : "—",
+      // La capitalizzazione qui portava `$` cablato come nello screener: e la
+      // stessa cifra e lo stesso difetto, e per 312 titoli su 1010 non e in
+      // dollari. Un proprietario solo, `lib/money.ts`.
+      preformatted: formatCompactMoney(stock.market_cap, stock.currency),
       tip: "Capitalizzazione di mercato (prezzo × azioni in circolazione). T=trillion, B=billion, M=million.",
       emphasis: true,
     },
