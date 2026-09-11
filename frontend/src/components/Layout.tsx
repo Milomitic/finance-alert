@@ -36,41 +36,98 @@ interface NavEntry {
   enabled: boolean;
 }
 
-const NAV: NavEntry[] = [
-  { to: "/", label: "Dashboard", icon: LayoutDashboard, enabled: true },
-  // /sectors is the post-watchlist hub: cross-sector overview with
-  // breadth, score medians, top-movers, and tile drill-downs into
-  // the per-sector detail page.
-  //
-  // `ScanSearch` (a magnifier inside scan brackets) rather than the old
-  // `Grid3x3`: the grid told you the LAYOUT of the page, not what it is for.
-  // Beside it in the nav sits Screener with a Filter icon, and the two read as
-  // a pair — filtrare contro esplorare. The brackets carry the analysed,
-  // machine-assisted flavour a plain `Search` would not.
-  { to: "/sectors", label: "Esplora", icon: ScanSearch, enabled: true },
-  // /stocks route stays; the page is conceptually a screener (filters +
-  // ranking) so that's the label. Filter icon to telegraph the function.
-  { to: "/stocks", label: "Screener", icon: Filter, enabled: true },
-  { to: "/calendar", label: "Calendario", icon: CalendarDays, enabled: true },
-  { to: "/institutionals", label: "Superinvestor", icon: Building2, enabled: true },
-  // Rules used to be a separate page; now lives in the AlertsPage right
-  // sidebar so the user composes rules + reviews their alerts in one
-  // surface. The /rules route was removed.
-  { to: "/alerts", label: "Segnali", icon: Bell, enabled: true },
-  { to: "/setups", label: "In formazione", icon: Hourglass, enabled: true },
-  // Tracked trades: playbook entries persisted as positions with live P&L
-  // and auto stop/target hit detection. Briefcase = "portfolio" flavor.
-  { to: "/positions", label: "Posizioni", icon: Briefcase, enabled: true },
-  // ⚠️ Una sola destinazione diagnostica, con due schede dentro.
-  //
-  // Erano due pagine con nomi diversi e posti diversi: «Salute» qui e
-  // «Impostazioni» in fondo alla barra, sotto un ingranaggio — cioe nel posto
-  // dove ogni applicazione mette le preferenze, mentre quella pagina conteneva
-  // otto pannelli diagnostici e zero impostazioni. Chi cercava «perche il
-  // motore dice questo» doveva sapere che la risposta stava sotto un
-  // ingranaggio; chi cercava una preferenza la cercava li e non la trovava.
-  { to: "/diagnostics", label: "Diagnostica", icon: HeartPulse, enabled: true },
+/** Un gruppo di destinazioni. `label: null` = nessuna intestazione: la voce
+ *  sta da sola, come un'ancora in cima o in fondo alla barra. */
+interface NavGroup {
+  label: string | null;
+  items: NavEntry[];
+}
+
+/* ─── La barra raggruppata ────────────────────────────────────────────────
+ *
+ * Voce 5.2 del piano. Nove destinazioni in un elenco piatto non dicono che
+ * Esplora, Screener, Calendario e Superinvestor rispondono tutte alla stessa
+ * domanda — «che cosa c'e la fuori» — mentre In formazione, Segnali e
+ * Posizioni rispondono a un'altra: «che cosa sto seguendo».
+ *
+ * ⚠️ Sono ETICHETTE, non pagine: nessuna rotta cambia e nessuna destinazione
+ * nasce. Rinominare gli indirizzi (`/sectors` che si chiama «Esplora» e un
+ * difetto vero di leggibilita) romperebbe i segnalibri senza risolvere niente
+ * che si veda, e il piano lo tiene fuori da questa tranche apposta.
+ *
+ * ⚠️ Due voci restano SENZA gruppo, e il piano ne prevedeva tre di gruppi.
+ * «Strumenti» avrebbe contenuto Stato e Metodo — ma FA-037 le ha gia fuse in
+ * una destinazione sola, quindi il gruppo avrebbe avuto un figlio unico, cioe
+ * una riga di cornice con zero informazione. Dashboard era gia un'ancora; ora
+ * Diagnostica e la sua simmetrica in fondo.
+ */
+const NAV_GROUPS: NavGroup[] = [
+  {
+    label: null,
+    items: [
+      { to: "/", label: "Dashboard", icon: LayoutDashboard, enabled: true },
+    ],
+  },
+  {
+    label: "Analisi",
+    items: [
+      // /sectors is the post-watchlist hub: cross-sector overview with
+      // breadth, score medians, top-movers, and tile drill-downs into
+      // the per-sector detail page.
+      //
+      // `ScanSearch` (a magnifier inside scan brackets) rather than the old
+      // `Grid3x3`: the grid told you the LAYOUT of the page, not what it is
+      // for. Beside it sits Screener with a Filter icon, and the two read as a
+      // pair — filtrare contro esplorare.
+      { to: "/sectors", label: "Esplora", icon: ScanSearch, enabled: true },
+      // /stocks route stays; the page is conceptually a screener (filters +
+      // ranking) so that's the label. Filter icon to telegraph the function.
+      { to: "/stocks", label: "Screener", icon: Filter, enabled: true },
+      { to: "/calendar", label: "Calendario", icon: CalendarDays, enabled: true },
+      { to: "/institutionals", label: "Superinvestor", icon: Building2, enabled: true },
+    ],
+  },
+  {
+    // ⚠️ L'ordine non e estetico: e la vita di un'idea. Un setup diventa un
+    // segnale che diventa una posizione, e da settembre 2026 quella catena e
+    // percorribile davvero — `converted_alert_id` e `Position.alert_id` la
+    // rendono nei dati. Segnali stava prima di In formazione, cioe la barra
+    // raccontava la storia al contrario.
+    label: "Monitoraggio",
+    items: [
+      { to: "/setups", label: "In formazione", icon: Hourglass, enabled: true },
+      // Rules used to be a separate page; now lives in the AlertsPage right
+      // sidebar so the user composes rules + reviews their alerts in one
+      // surface. The /rules route was removed.
+      { to: "/alerts", label: "Segnali", icon: Bell, enabled: true },
+      // Tracked trades: playbook entries persisted as positions with live P&L
+      // and auto stop/target hit detection. Briefcase = "portfolio" flavor.
+      { to: "/positions", label: "Posizioni", icon: Briefcase, enabled: true },
+    ],
+  },
+  {
+    label: null,
+    items: [
+      // ⚠️ Una sola destinazione diagnostica, con due schede dentro.
+      //
+      // Erano due pagine con nomi diversi e posti diversi: «Salute» qui e
+      // «Impostazioni» in fondo alla barra, sotto un ingranaggio — cioe nel
+      // posto dove ogni applicazione mette le preferenze, mentre quella pagina
+      // conteneva otto pannelli diagnostici e zero impostazioni.
+      { to: "/diagnostics", label: "Diagnostica", icon: HeartPulse, enabled: true },
+    ],
+  },
 ];
+
+/** L'elenco piatto, DERIVATO dai gruppi e non scritto a mano.
+ *
+ * Il titolo della scheda si legge da qui, e la barra si rende dai gruppi: due
+ * elenchi mantenuti a mano divergerebbero al primo inserimento, e la
+ * divergenza sarebbe muta — una destinazione nuova con il titolo generico,
+ * oppure un titolo per una voce che dalla barra e sparita. */
+export const NAV: NavEntry[] = NAV_GROUPS.flatMap((g) => g.items);
+
+export { NAV_GROUPS };
 
 /** The nav link list — shared verbatim by the desktop sidebar and the
  *  mobile drawer so there's a single source of truth for entries +
@@ -87,7 +144,28 @@ function NavList({
 }) {
   return (
     <nav className="flex flex-1 flex-col gap-1 p-3 overflow-y-auto min-h-0">
-      {NAV.map((entry) => {
+      {NAV_GROUPS.map((group, gi) => (
+        <div
+          key={group.label ?? `anchor-${gi}`}
+          // Gruppo VERO, non solo disegnato: con `aria-label` un lettore di
+          // schermo annuncia «Analisi, gruppo» invece di leggere nove voci di
+          // seguito, che e' esattamente la piattezza che questa voce corregge.
+          role={group.label ? "group" : undefined}
+          aria-label={group.label ?? undefined}
+          className="flex flex-col gap-1"
+        >
+          {group.label &&
+            (collapsed ? (
+              // Nel binario a 64px un'intestazione di testo sarebbe
+              // illeggibile: resta il confine, che e' la meta dell'informazione
+              // che l'intestazione porta.
+              <Separator className="my-1.5" />
+            ) : (
+              <div className="px-3 pt-3 pb-1 text-[0.65rem] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                {group.label}
+              </div>
+            ))}
+          {group.items.map((entry) => {
         const Icon = entry.icon;
         const base = cn(
           "flex items-center rounded text-base transition-colors",
@@ -128,7 +206,9 @@ function NavList({
             {!collapsed && entry.label}
           </NavLink>
         );
-      })}
+          })}
+        </div>
+      ))}
     </nav>
   );
 }
