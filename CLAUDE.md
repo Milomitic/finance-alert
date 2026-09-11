@@ -1110,6 +1110,128 @@ The bug is invisible in dev.
 
 ---
 
+## Tre trappole dell'armamentario, non del prodotto (2026-09-11)
+
+Tutte e tre hanno prodotto un rosso — o un verde — che NON riguardava il codice
+in esame, e ognuna e costata tempo perche il primo istinto e stato correggere
+il prodotto.
+
+### ⚠️ `vi.fn()` che lancia fa fallire il test anche quando l'errore E gestito
+
+Un mock di vitest che lancia, o che restituisce una promise gia rifiutata,
+viene riportato come fallimento del test indipendentemente da chi lo gestisce.
+Mettere un `catch` sulla promise originale NON basta: il rifiuto segnalato e
+quello DERIVATO che il mock crea per osservare la risoluzione.
+
+Isolato con una sonda di dieci righe, che e la mossa da rifare invece di
+tentare varianti: lo stesso `useQuery` con una `queryFn` che lancia
+direttamente passa; con un `vi.fn()` di mezzo fallisce. Quindi non e
+react-query e non e il componente.
+
+La forma che funziona — **il finto restituisce sempre, a lanciare e il
+guscio**:
+
+```ts
+vi.mock("@/api/x", async (orig) => ({
+  ...(await orig<Record<string, unknown>>()),
+  fetchThing: async (a: string) => {
+    const r = fetchMock(a);
+    if (r instanceof Error) throw r;   // il lancio non esce dal vi.fn()
+    return r;
+  },
+}));
+// nel test:  fetchMock.mockReturnValue(new Error("boom"))
+```
+
+Va commentata sul posto, altrimenti il prossimo lettore la legge come una
+complicazione inutile e la semplifica, riaprendo un rosso che non riguarda il
+prodotto. Esempio vivo in `SourceDegradedNote.test.tsx`.
+
+Corollario: quando aspetti che una query in ERRORE si sia risolta, aspetta lo
+stato (`qc.getQueryState(key)?.status === "error"`), non che il mock sia stato
+chiamato. La chiamata e sincrona, quindi quell'attesa passa subito e il test
+finisce prima che react-query agganci il proprio handler.
+
+### ⚠️ Un test sui giorni fra due date e VACUO in UTC — cioe in CI
+
+Terza istanza di «un test puo essere vero di niente», dopo `toEqual` sui nodi
+DOM e la scheda filtri con tre aree chiuse.
+
+`Date.parse("2026-09-18")` e mezzanotte **UTC**; «oggi» calcolato con
+`setHours(0,0,0,0)` e mezzanotte **locale**. La differenza vale `n + offset`:
+
+| Fuso | Differenza | `floor` vs `round` |
+|---|---|---|
+| Roma (UTC+2) | `n + 0,083` | identici |
+| **CI (UTC)** | `n` | **identici** |
+| New York (UTC-4) | `n − 0,208` | divergono |
+
+Un test che asserisce l'arrotondamento passa quindi anche sostituendo
+`Math.round` con `Math.floor`, sia in locale sia dove conta. Il fuso va
+IMPOSTO — `process.env.TZ` e rileggibile a runtime da Node, anche dopo che una
+`Date` e gia stata costruita, ed e reversibile:
+
+```ts
+const env = nodeEnv(); const tz = env.TZ;
+try { env.TZ = "America/New_York"; vi.setSystemTime(...); /* asserzioni */ }
+finally { env.TZ = tz; }
+```
+
+Reso capace di fallire, il test ha trovato subito un difetto vero:
+`Math.round` di un valore in (-0.5, 0) vale `-0`, e `Object.is(-0, 0)` e falso.
+
+⚠️ Non installare `@types/node` per tipare `process`: qualunque scrittura npm
+su Windows puo togliere il ramo Linux dal lockfile. Tre righe di dichiarazione
+con un cast su `globalThis` fanno lo stesso lavoro — vedi
+`earningsProximity.test.ts`.
+
+### ⚠️ `git checkout --` NON e un ripristino: e un ritorno a HEAD
+
+Questo file dice gia «si toglie la correzione **su una copia**, si esegue, si
+ripristina». Il modo di sbagliarlo e usare `git checkout -- <file>` come
+"ripristino": su codice committato i due coincidono, su lavoro in corso
+**distrugge tutto cio che non e in indice**. Costato due volte in una sessione,
+e la seconda dopo la prima.
+
+```bash
+cp <file> "$SCRATCH/$(basename <file>).bak"   # PRIMA di rompere
+# ... rompi, esegui, leggi il rosso ...
+cp "$SCRATCH/$(basename <file>).bak" <file>   # ripristino vero
+```
+
+Il sintomo e ingannevole: la suite torna rossa su TUTTI i test invece che su
+uno, il che si legge come «ho rotto qualcos'altro» mentre il codice e
+semplicemente sparito.
+
+## Leggere metriche IN-PROCESS dal pod: serve HTTP, non `kubectl exec python` (2026-09-11)
+
+`data_source_metrics` (e ogni contatore in memoria) vive nel worker uvicorn.
+`kubectl exec ... python -` avvia un processo NUOVO che non ha mai chiamato
+nulla, quindi riporta ogni fonte `idle` — una risposta plausibile e falsa. E la
+stessa trappola della cache fondamentali, ma **peggiore**, perche li esiste
+`hydrate_l1_from_db()` e qui non esiste alcun hydrate: i contatori non sono
+persistiti.
+
+L'unico modo e interrogare il worker vivo dall'interno del pod. Due ostacoli,
+entrambi risolti nella ricetta:
+
+```python
+# kubectl exec -i -n finance-alert finance-alert-finance-alert-0 -- python -
+import json, urllib.request
+from app.core.security import create_session_token
+from app.core.config import settings
+tok  = f"{settings.session_cookie_name}={create_session_token(settings.admin_username)}"
+host = settings.allowed_hosts.split(",")[0].strip()          # <- indispensabile
+req  = urllib.request.Request("http://127.0.0.1:8000/api/platform/health",
+                              headers={"Cookie": tok, "Host": host})
+d = json.load(urllib.request.urlopen(req, timeout=60))
+```
+
+- **`curl` non e nell'immagine.** Usa `urllib` dal Python che c'e gia.
+- **Senza l'header `Host` la risposta e HTTP 400.** Il middleware di
+  `main.py` valida l'host su ogni path tranne `/api/health` e `/metrics`, e
+  `127.0.0.1:8000` non e fra gli host ammessi. Il 400 non dice perche.
+
 ## Test commands
 
 - **Backend lint (GATED, and the one that's easy to forget)**:

@@ -57,6 +57,9 @@ Questo file è il backlog operativo canonico. Ogni nuova attività deve avere un
 | FA-039 | P3 | Frontend | L'AbortSignal e supportato dal client e quasi mai propagato | **OPEN** | `api/client.ts` inoltra davvero `signal` a fetch: il supporto e reale. Ma nel frontend esistono **due sole** occorrenze di `Abort` in tutto il sorgente e **nessun** `AbortController`. Su 58 `queryFn` in produzione **una** destruttura il `signal` di React Query, `useStockSearch`; nei moduli `api/`, su 54 wrapper uno solo espone il parametro, quindi un hook non potrebbe inoltrarlo nemmeno volendo. Completare qui prima di valutare un secondo client. Audit §9. |
 | FA-040 | P3 | UX/igiene | Colonne vuote, righe mozzate, nomi che spariscono su mobile | **DONE / PROD** | Voce 2.4 del piano, chiusa dal commit `24f976d` piu lo snap sulle confluenze. (a) Su *In formazione* «Livello d'innesco» e «Distanza» mostravano un trattino su TUTTE le righe dei gruppi la cui condizione non e un attraversamento di prezzo. ⚠️ Ma un trattino non e sempre uno spreco: su una riga singola dice «questo innesco non e un attraversamento di prezzo», ed e informazione vera. La colonna sparisce solo quando NESSUNA riga del gruppo la riempie, e i test lo fissano in entrambe le direzioni. (b) In `AllocationBars` il nome era l'unica traccia flessibile, quindi su un telefono da 390px gli restavano meno di cento pixel e sui fondi spariva: restavano le percentuali senza sapere di chi. Sotto `sm` va su due righe. (c) Le righe mozzate a meta altezza nascono da una riga ad altezza fissa che non e un multiplo del passo: `snap-y snap-proximity` fa fermare lo scorrimento su righe intere, e `proximity` invece di `mandatory` perche non combatta chi scorre piano. ⚠️ **Terza volta oggi con la stessa forma**, in tre componenti non imparentati: cede sempre l'ETICHETTA e sopravvive la decorazione. Registrato in CLAUDE.md con la regola e le tre soluzioni. |
 | FA-041 | P2 | UX/screener | Il Divario fra le due lenti esiste solo per i settori | **DONE / PROD** | Voce 4.2 del piano, audit §7.3. Commit `e0df074`, sette job CI verdi sul run 34606029076. Lo screener aveva `composite` e `tech_composite` sulla STESSA riga da sempre e non ne faceva la differenza. **Ordinabile lato server** come `pct_off_high`: `DIVARIO_EXPR` vive nel SORT e ordina tutte le 925 righe con entrambe le lenti — ordinare lato client le 50 righe della pagina le presenterebbe come una classifica dell'universo, che e il difetto della colonna market cap di FA-026. Le righe con una lente sola hanno Divario NULL e finiscono in fondo in ENTRAMBI i versi: sconosciuto non e zero, e zero e per giunta il valore che significa «le due coincidono». ⚠️ **Misurato prima di decidere, e la misura ha cambiato il progetto**: su 925 titoli `|Divario|` ha p50 17,9 e p90 44,2, e il titolo mediano legge **-13, non 0** — le due lenti sono entrambe su 0-100 ma non centrate allo stesso modo, quindi un Divario nullo non vuol dire «le due concordano», e la frase sta nel titolo della colonna. Percio' lo screener **non marca le righe notevoli**: la soglia degli 8 punti dei settori marcherebbe il 77,2% dei titoli, e qualunque costante scritta nel codice invecchia in silenzio mentre i punteggi si muovono (la trappola `_RANGE_PERIODS`). A trovare le code ci pensa l'ordinamento, che vede tutte le righe. ⚠️ **Niente rosa/smeraldo**: in questo progetto quella tavolozza significa direzione di mercato e la colonna Δ% accanto la usa per una direzione vera, mentre +20 e -20 qui sono due oggetti diversi e non «buono» e «cattivo» — e lo studio score-IC nega che il composito Qualita preveda i rendimenti. Proprietario unico dell'aritmetica e del segno: `lib/lensGap.ts`, con `sectorLens` che delega. |
+| FA-042 | P2 | UX/setup | La trimestrale dentro la finestra di attesa di un setup | **DONE / PROD** | Voce 4.3 del piano, audit §7.4. Commit `ac1d7c6`, sette job CI verdi, pod `Running ready=true` sull'immagine corrispondente. *In formazione* diceva da quanto un setup aspetta e il calendario quando il ticker pubblica; separate, nessuna delle due poteva chiedere se **il setup si risolve prima o dopo la trimestrale** — e una trimestrale sovrascrive la tesi tecnica. ⚠️ **Misurato prima di decidere, e la misura ha cambiato due cose.** Su 60 setup in lista l'11 settembre, 43 con data in cache: la trimestrale piu vicina e a **11 giorni**, la mediana a 55, con due grappoli (40-60 = stagione Q3, 150-195 = chi ha appena riportato). Quindi oggi il marcatore **non si accende su nessuna riga, e quella e la risposta giusta**: lo zero e una fotografia del calendario, non una proprieta della funzione — l'errore speculare a FA-041, dove una soglia si accendeva sul 77% delle righe e per questo non marcava niente. Seconda conseguenza: la finestra e il **tetto** da `first_seen_at` e non la scadenza scorrevole da `last_seen_at`, che si sposta a ogni scansione ed e permanentemente a dieci giorni da oggi (misurato: scorrevole p50 9g max 10g, tetto p50 14g max 27g, tetto vincolante su 9 righe su 60) — il `min()` sembra prudente e SOTTO-RIPORTEREBBE il caso per cui la funzione esiste. Consolidati due proprietari unici, `stock_fundamentals_service.next_earnings_dates_cached` e `lib/earningsProximity.ts`: la regola esisteva gia due volte e un terzo consumatore avrebbe fatto tre copie. ⚠️ Due test si sono rivelati **vuoti** e il controllo negativo li ha scoperti: quello sull'arrotondamento passava anche con `Math.floor` perche a est di Greenwich e in CI (UTC) i due coincidono — forzato `TZ=America/New_York` ha trovato un difetto vero, `-0`; e uno chiedeva via HTTP uno stato che lo schema vieta. Sette controlli negativi verificati. 2068 backend, 515 frontend. |
+| FA-043 | P2 | UX/diagnostica | Una sorgente degradata non lo dice dove il dato si consuma | **DONE / PROD** | Voce 4.4 del piano, audit §7.5. Commit `a39cdc4`, sette job CI verdi, immagine servita in produzione prima del rollout di `2970cb2`. Salute sapeva che Marketaux era fuori servizio; la scheda News mostrava solo meno articoli, quindi il degrado era visibile a chi andava a cercarlo. ⚠️ La catena autorizzata e **fonte -> tipo di dato -> scheda e si ferma li**: quanto un degrado costi a UN titolo non lo sa nessuno, e un test lo pinna cercando «articoli» e «meno» nel testo reso. ⚠️ **Il motivo dell'errore non esce dall'endpoint**: `last_failure_reason` e grezzo e non redatto, e fra quelli misurati c'e una URL che puo portare un token in query string — il contratto ha quattro campi e nessuno dove un token possa finire. ⚠️ **`unavailable` non e un degrado** e l'app lo aveva gia deciso: significa plan-gated (tutti HTTP 403) e `DataSourcesCard` lo dipinge slate con la nota «non un incidente»; includerlo avrebbe dato due significati allo stesso stato su due schermi, e in pratica una riga permanente (`finnhub/upgrades`: 0 successi su 1272). ⚠️ **La prima misura era falsa**: `kubectl exec python -` legge i contatori da un processo nuovo e riporta 19 fonti su 19 `idle`, perche `data_source_metrics` vive in memoria e non ha un `hydrate`. Interrogato il worker via HTTP dall'interno del pod: `overall: outage`, `marketaux/news` failing (429, quota 56/100), `yfinance/fundamentals` e `yfinance/live_quote` failing per rate limit. **Seguito dichiarato e non fatto**: le due fonti piu consumate dell'app sono degradate adesso e restano mute — il meccanismo e generale (`<SourceDegradedNote op=… />`) ma il piano nomina la scheda News. Quattro controlli negativi verificati. 2077 backend, 522 frontend. |
+| FA-044 | P3 | UX/navigazione | Nove destinazioni in un elenco piatto | **DONE / PROD** | Voce 5.2 del piano, l'ultima. Commit `2970cb2` (era `422bfb9` prima del rebase), sette job CI verdi, pod `Running ready=true restarts=0` sull'immagine corrispondente. Esplora, Screener, Calendario e Superinvestor rispondono tutte a «che cosa c'e la fuori»; In formazione, Segnali e Posizioni a «che cosa sto seguendo». ⚠️ Sono **etichette**, non pagine: nessuna rotta cambia. `/sectors` che si chiama «Esplora» resta un difetto di leggibilita degli indirizzi, e rinominarlo romperebbe i segnalibri senza risolvere niente che si veda — il piano lo esclude dalla stessa tranche. ⚠️ **Due gruppi invece di tre**: «Strumenti» avrebbe contenuto Stato e Metodo, che FA-037 ha gia fuso in una destinazione sola, quindi avrebbe avuto un figlio unico — una riga di cornice con zero informazione. Un test pinna che nessun gruppo etichettato possa avere meno di due voci. ⚠️ **L'ordine di Monitoraggio e cambiato**: era Segnali prima di In formazione, cioe la barra raccontava la storia al contrario, mentre da FA-029 e FA-042 la catena setup -> segnale -> posizione e percorribile nei dati. `NAV` e **derivato** dai gruppi e non riscritto, perche il titolo della scheda si legge da li e due liste a mano divergerebbero al primo inserimento. Quattro controlli negativi verificati, incluso quello che conta: una destinazione persa nel raggruppamento, che e' il momento esatto in cui una voce sparisce mentre la barra continua a sembrare piena. 529 frontend. |
 | FA-018 | P2 | Accessibilita | Aggiungere descrizione accessibile al dialog degli alert prezzo | **DONE / PROD** | `PriceAlertDialog` espone `DialogDescription` screen-reader-only; warning Radix corretto, codice deployato e suite frontend verde. |
 | FA-019 | P0 | Release | Push e sincronizzazione cloud dei commit locali | **DONE / PROD** | Push verificato; CI 34366785799 completata con tutti i job verdi, Argo `Synced/Healthy`, StatefulSet sull’immagine `42693fb1b09195be96065cfdc1bda0be176c014a`, health esterno 200 e `/metrics` esterno 403. |
 | FA-021 | P2 | GitOps | Eliminare lo stato Argo `OutOfSync` del Cluster CNPG quando il diff effettivo è vuoto | **DONE / PROD** | Verificato live 2026-09-09: `postgres-cluster` torna `Synced/Healthy` e tutte e cinque le Application sono sincronizzate; il cluster resta sano 1/1 e nessun pod si e riavviato. Causa isolata: l'operatore aggiunge `enabled: true` alla voce di `spec.plugins`, e il CRD non dichiara `x-kubernetes-list-type`, quindi la lista è ATOMICA e una chiave in più rende diversa tutta la lista. `postgresql.parameters` non causa drift benché l'operatore vi inietti 23 chiavi: è una mappa e ArgoCD possiede solo le sue sette. Rimedio: dichiarare il campo nel manifest, **non** un `ignoreDifferences` su `/spec/plugins`, che silenzierebbe anche una modifica vera all'archiviatore. |
@@ -76,12 +79,30 @@ correzione, che era la condizione d'ingresso posta dal piano — e non era una
 formalita: il blocco 52W non aveva alcuna asserzione, ed e per questo che il
 difetto e sopravvissuto a un rename restando invisibile per mesi.
 
-**Le Tranche 1, 2 e 3 sono chiuse, e la 4 e la 5 lo sono a meta.** Della
-Tranche 4 (le connessioni fra oggetti) sono chiuse FA-029 posizione-segnale e
-FA-041 il Divario nello screener; restano **4.3** il calendario dentro i setup
-e **4.4** la sorgente degradata dove il dato si consuma. Della Tranche 5 e
-chiusa FA-037 le due diagnostiche; resta **5.2** il raggruppamento della
-navigazione.
+**Le cinque TRANCHE del piano sono chiuse.** La 4 (le connessioni fra oggetti)
+con FA-029 posizione-segnale, FA-041 il Divario nello screener, FA-042 la
+trimestrale nella finestra del setup e FA-043 la sorgente degradata; la 5 con
+FA-037 le due diagnostiche e FA-044 il raggruppamento della navigazione.
+
+⚠️ **«Le tranche sono chiuse» non e «il piano e chiuso», e la differenza non e
+una sottigliezza.** Il piano contiene anche quattro spike e una decisione, e
+soprattutto pone cinque criteri di chiusura di cui il QUINTO e la verifica a
+schermo, che spetta all'utente — la divisione del lavoro e scritta in testa al
+documento: jsdom non calcola gli stili, quindi contrasto, focus visibile e
+target touch non sono misurabili dai test, e nessuna quantita di CI verde li
+sostituisce. Delle sei voci chiuse fra il 10 e l'11 settembre, **zero hanno il
+quinto criterio soddisfatto**.
+
+Questa nota esiste perche l'affermazione «il piano e completo» e stata fatta e
+poi corretta nella stessa sessione. E la forma gia registrata qui due volte —
+una correzione parziale che avvalora la convinzione che il caso sia chiuso — e
+qui il commento accanto al codice sarebbe stato il backlog stesso.
+
+Restano quindi, oltre alle verifiche a schermo: **D-1 / FA-026**, che aspetta
+una decisione e non lavoro; gli spike **S-1** (riprodurre la barra indici
+vuota), **S-2** (propagare l'`AbortSignal`) e **S-3** (i finding ESLint non
+gated); e **S-4**, bloccato da fuori — il kubelet local-path non espone
+`volume_stats`, quindi serve una sorgente diversa, non lavoro.
 
 ⚠️ **Le prime due voci della Tranche 4 sono rimaste committate e non pushate
 per una sessione intera**, e il working tree pulito lo nascondeva: «interrotto»
@@ -116,10 +137,19 @@ la tabella sotto ne elencava undici, ed e la stessa forma del conteggio ESLint
 in CLAUDE.md: un numero plausibile accanto a una tabella che lo smentisce viene
 creduto, perche nessuno lo riconta.
 
-**Le prime da fare sono le tre voci residue del piano** — 4.3 il calendario
-dentro i setup, 4.4 la sorgente degradata, 5.2 il raggruppamento della
-navigazione — e nessuna delle tre ha un ID FA perche nasce dal piano e non
-dall'audit numerato.
+**Le tre voci residue del piano sono state chiuse l'11 settembre** e hanno
+preso un ID qui — FA-042, FA-043, FA-044 — perche il file lo richiede a ogni
+attivita e nascere dal piano invece che dall'audit numerato non e una
+deroga: senza ID il Divario era rimasto fuori dal backlog canonico per un
+giorno intero.
+
+⚠️ **Un seguito misurato e dichiarato, non dimenticato.** FA-043 ha reso
+generale il meccanismo «fonte degradata sulla scheda che la consuma», ma lo ha
+cablato solo sulla scheda News, che e quella nominata dal piano. La misura
+sullo stesso processo dice che `yfinance/fundamentals` e `yfinance/live_quote`
+sono **failing adesso** — cioe le due fonti piu consumate dell'app — e le loro
+schede restano mute. Estenderlo costa due righe per scheda e nessuna nuova
+decisione.
 
 Sequenza, criteri di chiusura e verifiche richieste all'utente:
 [implementation-plan-2026-09-10.md](implementation-plan-2026-09-10.md).
