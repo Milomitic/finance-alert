@@ -101,7 +101,14 @@ spec:
                 allowPrivilegeEscalation: false
                 readOnlyRootFilesystem: true
                 capabilities: { drop: ["ALL"] }
+              volumeMounts:
+                - name: tmp
+                  mountPath: /tmp
+              # ⚠️ kubectl scrive una cache sotto $HOME e il filesystem radice e'
+              # in sola lettura: senza questi due, ogni invocazione fallisce.
               env:
+                - name: HOME
+                  value: /tmp
                 - name: NAMESPACE
                   valueFrom:
                     fieldRef: { fieldPath: metadata.namespace }
@@ -144,7 +151,15 @@ spec:
                   AVVIO=$(kubectl get pod -n "$NAMESPACE" \
                     -l app.kubernetes.io/name=finance-alert \
                     -o jsonpath='{.items[0].status.startTime}')
-                  ETA_MIN=$(( ( $(date -u +%s) - $(date -u -d "$AVVIO" +%s) ) / 60 ))
+                  # ⚠️ `date -d "<ISO>"` NON esiste in BusyBox: serve `-D` col
+                  # formato d'ingresso. Verificato dentro l'immagine prima di
+                  # scriverlo qui — la prima stesura usava la sintassi GNU e
+                  # avrebbe calcolato un'eta' vuota, quindi zero, quindi
+                  # «dentro la finestra di rollout» per sempre: un allarme che
+                  # non suona mai.
+                  ORA=$(date -u +%s)
+                  NATO=$(date -u -D "%Y-%m-%dT%H:%M:%SZ" -d "$AVVIO" +%s 2>/dev/null || echo "$ORA")
+                  ETA_MIN=$(( (ORA - NATO) / 60 ))
                   echo "pod avviato da: ${ETA_MIN} min"
 
                   if [ "$DESIDERATO" = "$IN_ESECUZIONE" ] && [ "$PRONTO" = "true" ]; then
@@ -171,4 +186,7 @@ spec:
                   # Esce 1 cosi' il Job risulta Failed e resta visibile in
                   # `kubectl get jobs` anche se Telegram non e' configurato.
                   exit 1
+          volumes:
+            - name: tmp
+              emptyDir: {}
 {{- end }}

@@ -127,4 +127,9 @@ parityCheck:
   # normale del GitOps (~3 minuti). Allarmare li' insegnerebbe a ignorare
   # l'allarme, che e' il modo in cui un allarme smette di funzionare.
   toleranceMinutes: 20
-  image: bitnami/kubectl:1.31
+  # ⚠️ NON `bitnami/kubectl`: il catalogo Bitnami su Docker Hub e' stato
+  # ritirato e l'immagine non esiste piu' — il primo CronJob e' rimasto
+  # in ImagePullBackOff per 34 minuti. E non `rancher/kubectl`, che non
+  # contiene nemmeno `sh`. Questa ha sh, wget, kubectl e gira come
+  # non-root: verificato con una sonda dentro il cluster, non dedotto.
+  image: alpine/k8s:1.31.3
