@@ -390,6 +390,17 @@ gh api "repos/Milomitic/finance-alert/actions/runs?per_page=5"   --jq '.workflow
 gh api "repos/Milomitic/finance-alert/actions/runs?head_sha=$(git rev-parse HEAD)" --jq .total_count
 ```
 
+⚠️ **`gh run watch --exit-status` non e' un'alternativa: ha restituito 0 su una
+run FALLITA** (2026-09-12, run 34698869490, `conclusion: failure` su trivy).
+Blocca fino alla fine, il che e' utile, ma il suo codice di uscita non va letto
+come l'esito. L'unica lettura affidabile e' la lista dei job, che dice anche
+QUALI sono stati saltati — e `gitops` saltato significa che non e' stato
+rilasciato niente:
+
+```bash
+gh api "repos/Milomitic/finance-alert/actions/runs/<id>/jobs"   --jq '.jobs[] | "\(.conclusion // .status)\t\(.name)"'
+```
+
 ### ⚠️ "Synced + Healthy" does NOT mean your change is on screen
 
 Cost a round-trip on 2026-09-04 ("non vedo le modifiche"). Everything looked
@@ -431,6 +442,78 @@ so nothing reaches the cluster. Green is not deployed; check the job list.
 If a push somehow fails to trigger CI (observed once, cause not established —
 the ref had moved and no run was ever created), dispatching will not fix it.
 Only another push event will build and deploy.
+
+## ⚠️ Un passo periodico NON puo' essere un livello Docker senza un ingresso che cambi (2026-09-12)
+
+Il livello che scarica le patch di sicurezza Debian **non e' stato eseguito per
+24 giorni** ed era scritto bene. Terza istanza della forma «presente,
+documentato, creduto efficace, inerte», dopo l'unit k3s e il `_RANGE_PERIODS`
+morto — e la prima che ha fermato un rilascio.
+
+### Come si e' presentata
+
+Il 12 settembre trivy ha rotto la pipeline con **12 CVE (3 CRITICAL)** su
+`perl-base`, `libsqlite3-0`, `libpcre2-8-0` e `gzip`. Tutte con la correzione
+gia' pubblicata da Debian, tutte nell'immagine base, **nessuna introdotta dal
+commit che stava passando** (era solo TSX, senza nuove dipendenze). `gitops` e'
+stato saltato, quindi il lavoro e' rimasto fuori dalla produzione.
+
+Il primo istinto — cercare quale dipendenza ho aggiunto — e' sbagliato e costa
+tempo. La domanda giusta e' perche' l'`apt-get upgrade` che il Dockerfile gia'
+faceva non le avesse prese.
+
+### La causa, dal log della build e non per ipotesi
+
+    #19 [runtime 2/13] RUN apt-get update && apt-get upgrade -y ...
+    #19 CACHED
+
+CI costruisce con `cache-from: type=gha`, e buildkit riusa un livello finche' il
+suo comando e i livelli sopra sono identici. Quel `RUN` **non nominava nulla di
+variabile**: costruito il 19 agosto (per chiudere un fallimento trivy identico
+su util-linux), e' stato riusato a ogni build successiva. L'archivio di
+sicurezza e' stato letto una volta e mai piu'.
+
+⚠️ **La cache non distingue «identico» da «ancora valido»**, e un livello di
+patch di sicurezza e' l'unico posto dove i due non coincidono: il comando e'
+identico per definizione, il suo risultato no. Vale per qualunque passo che
+debba girare PERIODICAMENTE — aggiornamenti di pacchetti, fetch di liste di
+revoca, rigenerazione di artefatti datati.
+
+### La correzione
+
+`ARG APT_SECURITY_DATE`, a cui il workflow passa `date -u +%Y-%m-%d`. Tre
+dettagli che sembrano pignoleria e sono il motivo per cui funziona:
+
+1. **L'ARG sta subito SOPRA il `RUN` che lo consuma.** Piu' in alto
+   invaliderebbe anche i livelli precedenti; piu' in basso non toccherebbe la
+   chiave di cache di questo.
+2. **Va REFERENZIATO dentro il comando** (`RUN echo "... ${APT_SECURITY_DATE}"
+   && apt-get update && ...`). Un ARG dichiarato e non usato non entra nella
+   chiave: si otterrebbe lo stesso identico difetto, con l'aggravante di
+   sembrare risolto.
+3. **Granularita' giornaliera, non per push.** Il costo e' una build lenta al
+   giorno — quel livello e tutti i suoi discendenti, `uv sync` compreso.
+
+⚠️ **NON pinnare i nomi dei pacchetti vulnerabili.** Il commento nel Dockerfile
+lo scartava gia' per il motivo giusto e vale la pena ripeterlo: la prossima
+advisory cade su pacchetti diversi, e una lista di nomi va aggiornata a mano
+esattamente quando conta — cioe' invecchia in silenzio.
+
+### La verifica, che non e' «CI verde»
+
+Quattro criteri espliciti, tutti misurati sul rilascio di `9458682`:
+
+1. nel log del job immagine il passo **non** deve leggere `CACHED` — deve
+   durare decine di secondi e stampare i pacchetti (`Setting up perl-base
+   (5.40.1-6+deb13u1)`);
+2. `trivy` passa;
+3. `gitops` gira e bumpa il tag;
+4. il pod serve il tag nuovo, e `GIT_SHA` letto DA DENTRO il container lo
+   conferma (`kubectl exec ... printenv GIT_SHA`).
+
+⚠️ Un quinto controllo vale la pena quando la modifica e' frontend: **il tag
+giusto non garantisce il bundle giusto**. Si verifica direttamente —
+`kubectl exec ... grep -l "<stringa della modifica>" /app/frontend/dist/assets/*.js`.
 
 ## ⚠️ Do NOT `chmod 600` the node's kubeconfig (2026-09-09)
 
