@@ -1,0 +1,37 @@
+{
+  "_perche": "Arretrato MISURATO di accessibilita', non un obiettivo. Il gate impedisce che cresca; non pretende che sia zero, perche' un cancello che nasce rosso viene disattivato. Rigenerare con E2E_UPDATE_BASELINE=1 npm run e2e, e solo dopo aver CORRETTO qualcosa - mai per far passare la CI.",
+  "rotte": {
+    "/": {
+      "aria-hidden-focus": 1,
+      "aria-valid-attr-value": 2
+    },
+    "/alerts": {
+      "button-name": 53,
+      "empty-table-header": 2,
+      "nested-interactive": 12
+    },
+    "/setups": {},
+    "/positions": {},
+    "/stocks": {
+      "button-name": 1
+    },
+    "/calendar": {
+      "aria-prohibited-attr": 1,
+      "color-contrast": 3,
+      "nested-interactive": 2
+    },
+    "/sectors": {
+      "color-contrast": 10,
+      "definition-list": 1,
+      "dlitem": 8
+    },
+    "/institutionals": {},
+    "/diagnostics": {
+      "label-title-only": 2,
+      "scrollable-region-focusable": 1
+    },
+    "/stocks/AAPL": {
+      "scrollable-region-focusable": 3
+    }
+  }
+}

@@ -142,6 +142,96 @@ jobs:
         run: npm run test:run
       - run: npm run build
 
+  ui-gate:
+    name: gate UI — layout e accessibilità in un browser vero
+    runs-on: ubuntu-latest
+    # ⚠️ Questo job esiste perché jsdom NON FA LAYOUT. L'11 settembre 2026 la
+    # suite vitest era verde su 590 test e OTTO rotte traboccavano su un
+    # telefono, in produzione: `getBoundingClientRect` restituisce zeri in
+    # jsdom, quindi nessun test di quella suite poteva vederlo. Lo stesso vale
+    # per contrasto, dimensione dei bersagli e visibilità del focus — CLAUDE.md
+    # lo registra già per axe. Qui gli stili sono calcolati davvero.
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: install (lockfile)
+        working-directory: frontend
+        run: npm ci
+      - name: build (il bundle VERO, servito da FastAPI come in produzione)
+        working-directory: frontend
+        run: npm run build
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.11"
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+      - name: install backend
+        working-directory: backend
+        run: uv sync --frozen
+
+      # ⚠️ IL SEME NON È FACOLTATIVO. In CI il database nasce vuoto, e una
+      # pagina senza righe non può traboccare: il gate sarebbe verde per
+      # costruzione. È la forma «un test può essere vero di niente» che
+      # CLAUDE.md registra quattro volte. I pavimenti di contenuto in
+      # `e2e/fixtures.ts` falliscono se questo passo smette di funzionare,
+      # quindi il silenzio non è un esito possibile.
+      - name: schema + seme deterministico
+        working-directory: backend
+        env:
+          DATABASE_URL: sqlite:///./data/e2e.db
+        run: |
+          mkdir -p data
+          uv run python -c "from app.core.db import engine, Base; import app.models; Base.metadata.create_all(engine)"
+          uv run python -m app.scripts.seed_e2e
+
+      - name: avvia l'app come la serve la produzione
+        working-directory: backend
+        env:
+          DATABASE_URL: sqlite:///./data/e2e.db
+        run: |
+          nohup uv run uvicorn app.main:app --host 127.0.0.1 --port 8000 > /tmp/uvicorn.log 2>&1 &
+          for i in $(seq 1 60); do
+            curl -sf http://127.0.0.1:8000/api/health >/dev/null && exit 0
+            sleep 1
+          done
+          echo "::error::il backend non è salito"; cat /tmp/uvicorn.log; exit 1
+
+      # Il token è firmato dall'app stessa e vive solo nell'ambiente del passo.
+      # ⚠️ Non passa da un file servito: la ricetta di riproduzione locale in
+      # CLAUDE.md scrive una pagina in `public/`, che è una directory
+      # VERSIONATA e va cancellata a mano ogni volta.
+      - name: sessione
+        id: sess
+        working-directory: backend
+        run: |
+          TOK=$(uv run python -c "from app.core.security import create_session_token; from app.core.config import settings; print(f'{settings.session_cookie_name}={create_session_token(settings.admin_username)}')")
+          echo "::add-mask::$TOK"
+          echo "cookie=$TOK" >> "$GITHUB_OUTPUT"
+
+      - name: browser
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: gate
+        working-directory: frontend
+        env:
+          E2E_BASE_URL: http://127.0.0.1:8000
+          E2E_SESSION_COOKIE: ${{ steps.sess.outputs.cookie }}
+        run: npx playwright test
+
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: frontend/test-results/
+          retention-days: 7
+
   audit:
     name: dependency audit (fails on a known CVE)
     runs-on: ubuntu-latest
@@ -180,7 +270,11 @@ jobs:
   image:
     name: arm64 image → GHCR
     if: github.event_name == 'push' && github.ref == 'refs/heads/cloud'
-    needs: [backend, backend-postgres, frontend]
+    # ⚠️ `ui-gate` è nella catena: un bundle che sborda dallo schermo o che
+    # aggiunge violazioni di accessibilità non deve diventare un'immagine.
+    # È la stessa scelta fatta il 2026-09-09 mettendo trivy sulla catena del
+    # bump — un cancello fuori dalla catena è un avviso, non un cancello.
+    needs: [backend, backend-postgres, frontend, ui-gate]
     runs-on: ubuntu-latest
     timeout-minutes: 90
     permissions:

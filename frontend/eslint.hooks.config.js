@@ -59,7 +59,15 @@ import { defineConfig, globalIgnores } from 'eslint/config'
  * still ~50 findings and still a separate job.
  */
 export default defineConfig([
-  globalIgnores(['dist']),
+  /* `e2e/` non contiene React.
+   *
+   * ⚠️ Va escluso, non silenziato riga per riga: Playwright passa alle sue
+   * fixture una funzione chiamata `use`, e `rules-of-hooks` la legge come un
+   * hook React chiamato fuori da un componente. E' un falso positivo
+   * strutturale — si ripresenterebbe a ogni nuova fixture — e disattivare la
+   * regola sul posto insegnerebbe a farlo anche dove conta. La cartella gira
+   * in Node sotto Playwright, dove nessuna regola dei hook ha significato. */
+  globalIgnores(['dist', 'e2e']),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [tseslint.configs.base],

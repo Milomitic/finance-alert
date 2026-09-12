@@ -84,3 +84,9 @@ scripts/.env
 # fully regenerable by app.scripts.conditional_screen_replay). The REPORT it
 # produces is small and IS committed — the rows are not.
 backend/app/data/conditional_screen_*.csv.gz
+
+# Gate UI end-to-end: rapporti, tracce e il DB del seme deterministico.
+frontend/test-results/
+frontend/playwright-report/
+frontend/blob-report/
+backend/data/e2e.db

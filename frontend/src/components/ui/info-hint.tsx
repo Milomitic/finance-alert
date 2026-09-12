@@ -53,7 +53,13 @@ export function InfoHint({ label, text, className }: Props) {
             // `shrink-0` perché la regola di questo repo è che a cedere non
             // sia mai l'identità della colonna: se lo spazio manca, a
             // stringersi è l'etichetta, non il suo aiuto.
-            "inline-flex shrink-0 items-center justify-center rounded-full text-muted-foreground/70",
+            // ⚠️ 24x24 e' il minimo di WCAG 2.2 SC 2.5.8 «Target Size», e
+            // questo bottone nasceva a 15x15 — misurato dal gate e2e il
+            // giorno stesso in cui e' stato scritto. L'icona resta di 14px:
+            // a crescere e' l'area toccabile, non il disegno, con un margine
+            // negativo che impedisce all'area piu' grande di allargare la
+            // riga dell'intestazione.
+            "inline-flex h-6 w-6 -my-1 shrink-0 items-center justify-center rounded-full text-muted-foreground/70",
             "transition-colors hover:text-foreground focus-visible:outline-none",
             "focus-visible:ring-1 focus-visible:ring-ring align-middle",
             className,
