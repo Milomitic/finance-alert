@@ -59,6 +59,23 @@ def codice_mai_eseguito() -> Arretrato | None:
     )
 
 
+def mutanti_sopravvissuti() -> Arretrato | None:
+    """Righe ESEGUITE dai test la cui correttezza nessuno verifica.
+
+    ⚠️ E' il numero piu' scomodo dei tre, e per questo il piu' utile: la
+    copertura dice che una riga e' partita, questo dice se un suo errore
+    verrebbe notato. Misurato su quattro moduli a proprietario unico.
+    """
+    d = _leggi("mutation_baseline.json")
+    if not d:
+        return None
+    return Arretrato(
+        conteggio=len(d.get("sopravvissuti", [])),
+        totale=d.get("totale_mutanti"),
+        perche=d.get("_perche", ""),
+    )
+
+
 def violazioni_a11y() -> Arretrato | None:
     d = _leggi("a11y_baseline.json")
     if not d:

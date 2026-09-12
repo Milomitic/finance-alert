@@ -51,7 +51,22 @@ def test_a11y_e_misurata():
     )
 
 
-@pytest.mark.parametrize("nome", ["dead_code_baseline.json", "a11y_baseline.json"])
+def test_mutanti_sono_misurati():
+    d = _carica("mutation_baseline.json")
+    assert d["totale_mutanti"] > 50, "troppo pochi mutanti per essere una passata vera"
+    assert d["uccisi"] > 0, (
+        "zero uccisi significa che la suite bersaglio non girava: ogni mutante "
+        "sarebbe 'sopravvissuto' e il numero non direbbe niente sui test."
+    )
+    # ⚠️ E nemmeno tutti uccisi: 43 su 130 e' la misura reale, e un 100%
+    # improvviso su questi moduli sarebbe piu' probabilmente un bersaglio
+    # sbagliato che un trionfo.
+    assert len(d["sopravvissuti"]) > 0
+
+
+@pytest.mark.parametrize("nome", [
+    "dead_code_baseline.json", "a11y_baseline.json", "mutation_baseline.json",
+])
 def test_ogni_linea_di_base_dice_perche_esiste(nome):
     """Un arretrato senza la sua ragione diventa un obiettivo da azzerare.
 

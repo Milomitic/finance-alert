@@ -214,6 +214,7 @@ def _verification() -> VerificationOut:
     return VerificationOut(
         codice_mai_eseguito=_out(verification_posture.codice_mai_eseguito()),
         violazioni_a11y=_out(verification_posture.violazioni_a11y()),
+        mutanti_sopravvissuti=_out(verification_posture.mutanti_sopravvissuti()),
     )
 
 

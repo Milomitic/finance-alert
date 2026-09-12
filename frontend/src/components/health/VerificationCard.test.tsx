@@ -13,7 +13,8 @@ import VerificationCard from "./VerificationCard";
 function dati(over: Partial<Verification> = {}): Verification {
   return {
     codice_mai_eseguito: { conteggio: 351, totale: 1366, perche: "Arretrato misurato, non obiettivo: molte sono legittime." },
-    violazioni_a11y: { conteggio: 102, totale: 10, perche: "Violazioni preesistenti; il cancello vieta la crescita." },
+    violazioni_a11y: { conteggio: 103, totale: 10, perche: "Violazioni preesistenti; il cancello vieta la crescita." },
+    mutanti_sopravvissuti: { conteggio: 85, totale: 130, perche: "Righe eseguite la cui correttezza nessuno verifica." },
     ...over,
   };
 }
@@ -33,7 +34,9 @@ describe("VerificationCard", () => {
      * comportamento. */
     const testo = (document.body.textContent ?? "").replace(/[.,\s  ]/g, "");
     expect(testo).toContain("su1366censite");
-    expect(screen.getByText("102")).toBeInTheDocument();
+    expect(screen.getByText("103")).toBeInTheDocument();
+    expect(screen.getByText("85")).toBeInTheDocument();
+    expect(testo).toContain("su130mutanti");
     expect(testo).toContain("su10rotte");
   });
 

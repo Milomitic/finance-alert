@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+import json
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -194,9 +195,40 @@ def _albero_pulito(percorsi: list[str]) -> bool:
     return esito.returncode == 0 and not esito.stdout.strip()
 
 
+#: Arretrato MISURATO di sopravvissuti, come le altre linee di base del repo.
+#:
+#: ⚠️ Perche' una baseline e non uno zero: la prima passata completa ha dato
+#: 130 mutanti, 43 uccisi, **87 sopravvissuti**. Pretendere lo zero
+#: significherebbe scrivere decine di test in un colpo o — molto piu'
+#: probabile — dichiarare equivalenti ottantacinque mutanti che non lo sono,
+#: cioe' mentire in un file che esiste per dire la verita'. E un cancello che
+#: nasce rosso viene spento, come `eslint.hooks.config.js` registra gia'.
+#:
+#: Il contratto e' quindi il CRICCHETTO, identico a quello di a11y e del codice
+#: morto: il numero non puo' CRESCERE. Ogni test nuovo che uccide un mutante
+#: stringe la linea.
+LINEA_BASE = RADICE / "app" / "data" / "mutation_baseline.json"
+
+_PERCHE_BASE = (
+    "Sopravvissuti MISURATI, non tollerati per sempre: ogni riga qui e' una "
+    "riga eseguita dai test la cui CORRETTEZZA nessuno verifica. Il cancello "
+    "impedisce che il numero cresca; cala scrivendo test. Rigenerare con "
+    "--scrivi solo DOPO aver ucciso qualcosa, mai per far passare la CI."
+)
+
+
+def _carica_base() -> set[str]:
+    try:
+        return set(json.loads(LINEA_BASE.read_text(encoding="utf-8")).get("sopravvissuti", []))
+    except (FileNotFoundError, ValueError):
+        return set()
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--modulo", help="sottostringa per restringere i bersagli")
+    ap.add_argument("--scrivi", action="store_true",
+                    help="rigenera la linea di base invece di confrontarla")
     args = ap.parse_args()
 
     bersagli = {
@@ -248,21 +280,35 @@ def main() -> int:
 
     print(f"\n{'=' * 60}")
     uccisi = totale - len(sopravvissuti)
-    noti = [s for s in sopravvissuti if s in EQUIVALENTI]
-    nuovi = [s for s in sopravvissuti if s not in EQUIVALENTI]
+    base = _carica_base()
+    nuovi = [s for s in sopravvissuti if s not in EQUIVALENTI and s not in base]
+    uccisi_da_poco = sorted(base - set(sopravvissuti))
     print(
-        f"mutanti: {totale}, uccisi {uccisi}, sopravvissuti "
-        f"{len(sopravvissuti)} (di cui {len(noti)} equivalenti dichiarati)"
+        f"mutanti: {totale}, uccisi {uccisi}, sopravvissuti {len(sopravvissuti)} "
+        f"({len(EQUIVALENTI)} equivalenti dichiarati, {len(base)} in linea di base)"
     )
-    if noti:
-        print("\nequivalenti noti:")
-        for s in noti:
-            print(f"  {s}")
 
     if not _albero_pulito(list(bersagli)):
         print("\nATTENZIONE: un file non e' stato ripristinato. Controlla `git diff`.",
               file=sys.stderr)
         return 2
+
+    if args.scrivi:
+        LINEA_BASE.parent.mkdir(parents=True, exist_ok=True)
+        LINEA_BASE.write_text(json.dumps({
+            "_perche": _PERCHE_BASE,
+            "totale_mutanti": totale,
+            "uccisi": uccisi,
+            "sopravvissuti": sorted(s for s in sopravvissuti if s not in EQUIVALENTI),
+        }, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        print(f"linea di base scritta: {len(sopravvissuti)} sopravvissuti")
+        return 0
+
+    if uccisi_da_poco:
+        print(f"\n{len(uccisi_da_poco)} mutanti ORA UCCISI: stringi la linea di base "
+              "con --scrivi")
+        for s in uccisi_da_poco[:8]:
+            print(f"  {s}")
 
     if nuovi:
         print("\nSOPRAVVISSUTI NUOVI - righe la cui correttezza nessun test verifica:",

@@ -11,7 +11,7 @@
 # immagine costruita adesso sarebbe pulita?» — che e' quasi sempre si' e non
 # dice niente su cio' che serve i clienti. Qui si legge il tag da
 # `values-oci.yaml`, cioe' esattamente cio' che ArgoCD ha applicato.
-name: notturno — l'immagine in produzione e' ancora sana?
+name: notturno — presidi che costano troppo per stare su ogni push
 
 on:
   schedule:
@@ -84,3 +84,39 @@ jobs:
           ignore-unfixed: true
           severity: CRITICAL,HIGH
           vuln-type: os,library
+
+  mutazione:
+    name: mutazione — i test noterebbero un errore?
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    # ⚠️ Solo di notte, mai su push. Una passata muta ~100 righe e per ciascuna
+    # riesegue i test mirati: è minuti, non secondi. Un cancello che si fa
+    # aspettare a ogni push viene disattivato, ed è il modo in cui un cancello
+    # smette di esistere pur restando nel file.
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.11"
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+      - run: uv sync --frozen
+      # ⚠️ Lo strumento SCRIVE nei file sorgente e li ripristina, e rifiuta di
+      # partire se l'albero è già sporco. In CI il checkout è pulito per
+      # costruzione, quindi la precondizione è soddisfatta e non va aggirata:
+      # serve a impedire che un'interruzione renda indistinguibile il lavoro di
+      # qualcuno da un ripristino mancato.
+      - name: mutanti sui moduli a proprietario unico
+        run: uv run python -m app.scripts.mutation_probe
+      - name: l'albero deve essere tornato pulito
+        # Controllo indipendente dal `finally` dello script: se un ripristino
+        # fallisse, il job deve dirlo invece di lasciare il sospetto.
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "::error::lo strumento non ha ripristinato i sorgenti"
+            git status --porcelain
+            exit 1
+          fi
+          echo "albero pulito"

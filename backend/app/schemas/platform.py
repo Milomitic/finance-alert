@@ -201,6 +201,7 @@ class VerificationOut(BaseModel):
 
     codice_mai_eseguito: ArretratoOut | None = None
     violazioni_a11y: ArretratoOut | None = None
+    mutanti_sopravvissuti: ArretratoOut | None = None
 
 
 class PlatformHealthOut(BaseModel):

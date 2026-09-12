@@ -135,6 +135,10 @@ export type Arretrato = {
 export type Verification = {
   codice_mai_eseguito: Arretrato | null;
   violazioni_a11y: Arretrato | null;
+  /** Il numero piu' scomodo dei tre: righe ESEGUITE dai test la cui
+   *  correttezza nessuno verifica. La copertura dice che una riga e' partita,
+   *  questo dice se un suo errore verrebbe notato. */
+  mutanti_sopravvissuti: Arretrato | null;
 };
 
 export type PlatformHealth = {

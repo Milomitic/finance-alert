@@ -515,6 +515,115 @@ Quattro criteri espliciti, tutti misurati sul rilascio di `9458682`:
 giusto non garantisce il bundle giusto**. Si verifica direttamente —
 `kubectl exec ... grep -l "<stringa della modifica>" /app/frontend/dist/assets/*.js`.
 
+## I presidi di verifica: che cosa c'e', e che cosa NON prova (2026-09-12)
+
+Il divario piu' grande di questo progetto non e' fra codice scritto e codice
+corretto — quello e' gia' presidiato bene. E' fra **codice corretto e codice che
+ha effettivamente girato**, e ne esistono quattro istanze documentate: l'unit
+k3s, il `_RANGE_PERIODS` morto, il livello `apt` inerte 24 giorni, e otto
+traboccamenti mobile invisibili a 590 test verdi. Otto presidi li chiudono.
+Ognuno ha un limite, e i limiti contano quanto i presidi.
+
+| Presidio | Dove | Che cosa intercetta | Che cosa NON vede |
+|---|---|---|---|
+| Gate UI (Playwright) | `ui-gate`, su push | Traboccamento a 375/768/1440, a11y con stili veri, focus, bersagli tattili | **Un solo motore (chromium)**: un difetto solo-WebKit passa |
+| Provenienza immagine | `image`, su push | Il livello patch non e' girato | Niente, se il file non c'e': dice NON SO |
+| Notturno trivy | `nightly.yml` | CVE sull'immagine DISPIEGATA | Solo una volta al giorno |
+| Codice mai eseguito | `backend`, su push | Funzioni nuove che nessun test chiama | Righe eseguite ma non verificate |
+| Censimento istogrammi | `backend`, su push | Una serie nuova con un tetto non scelto | Se il tetto e' scelto male ma dichiarato |
+| Mutazione | `nightly.yml` | Righe eseguite la cui correttezza nessuno verifica | Quattro moduli soltanto |
+| Parita' immagine | CronJob nel cluster | Il pod non esegue il tag desiderato, da oltre 20 min | Nulla prima dei 20 min (finestra GitOps) |
+| Deriva del nodo | script a mano | Configurazione dichiarata e mai eseguita | Gira solo quando lo si lancia |
+
+### ⚠️ Una linea di base va generata DOVE viene applicata
+
+Costato due giri di CI, su due presidi diversi, per la stessa ragione.
+
+`dead_code_baseline.json` generata su Windows dichiarava sei funzioni in meno
+delle morte in CI — `spa_fallback` perche' senza `frontend/dist` il fallback SPA
+non viene montato, le altre per configurazione locale che accende rami spenti in
+CI. `a11y_baseline.json` aveva lo stesso problema al contrario: `/calendar` in
+locale ha dati veri e rende un elemento interattivo in meno.
+
+In entrambi i casi la baseline locale e' piu' STRETTA, quindi fa arrossare la CI
+su codice che nessuno ha toccato. **Rigenerarle dai risultati di CI**, e
+aspettarsi che in locale qualche voce appaia come «ora coperta»: e' una nota,
+non un errore. Entrambi i file lo dicono in un campo `_ambiente`.
+
+### ⚠️ Un cancello che nasce rosso viene spento
+
+Regola che `eslint.hooks.config.js` si era gia' data e che vale per tutti:
+**una regola entra nel cancello solo DOPO essere stata misurata a zero**,
+altrimenti un rosso non distingue «hai rotto qualcosa adesso» da «esiste un
+arretrato». Dove l'arretrato e' reale si congela una linea di base e si
+sorveglia il DELTA — a11y 103 violazioni su 10 rotte, codice morto 351 funzioni
+su 1.366 — con un test separato che impedisce di svuotare il file per far
+passare la CI. Entrambi i numeri sono a schermo nella scheda «Verifica» del
+cruscotto: un arretrato che nessuno vede non cala mai.
+
+### ⚠️ Il pavimento di contenuto, di nuovo, e stavolta ha salvato tutto
+
+Il gate UI asserisce che ogni rotta abbia reso un minimo di caratteri PRIMA di
+misurarne il layout. Al primo passaggio in CI ogni rotta rendeva **0 caratteri**
+— senza sessione valida `ProtectedRoute` rimanda al login — e senza quel
+pavimento le dieci asserzioni sul traboccamento sarebbero passate misurando il
+nulla. Il gate avrebbe riportato verde per sempre.
+
+Corollario che e' costato un giro in piu': il messaggio diceva il SINTOMO («la
+pagina e' vuota»), non la causa. La fixture interroga ora un endpoint PROTETTO
+prima di ogni test, e al primo tentativo ha stampato `401 {"detail":"User not
+found"}` — il token era firmato ma l'utente non esisteva, perche' in CI il
+database nasce da `create_all`. **Un messaggio d'errore che nomina la causa vale
+quanto il controllo che lo produce.**
+
+### Il seme e' parte del cancello, non un accessorio
+
+`app.scripts.seed_e2e` semina 12 titoli, 36 segnali, 2.232 barre e l'utente
+admin, deterministici e senza rete. I NOMI SONO LUNGHI e le valute non tutte USD
+di proposito: sono l'input avversariale, e seminare «Acme Inc» renderebbe il
+gate cieco proprio alla compressione dell'identita' che questo progetto ha gia'
+sbagliato (audit §4.6, FA-040).
+
+⚠️ E il seme rende il gate RIPETIBILE, che e' l'altra meta'. `/calendar`
+sbordava di 19px in CI e non in locale, perche' in locale il calendario aveva
+dati e la striscia filtri si disponeva diversamente. Una misura che dipende da
+cosa c'e' nel database non e' una misura.
+
+### ⚠️ `flex-wrap` va messo a OGNI livello che puo' diventare una riga lunga
+
+Terza istanza in un giorno — /stocks, /calendar, e i gruppi annidati di
+/calendar. Il wrap manda a capo gli ELEMENTI; non spezza un elemento che da solo
+supera la riga. Su /calendar `max-w-full` sul contenitore esterno ha portato lo
+sbordo da 19px a 14px e non l'ha chiuso: mancava sui due gruppi interni.
+
+### Mutazione: perche' un motore fatto in casa
+
+`mutmut` era la prima scelta, installato e configurato. `mutmut run` risponde
+**«To run mutmut on Windows, please use the WSL»**. Configurarlo per la sola CI
+avrebbe significato spedire un cancello mai visto girare — la forma esatta che
+questo lavoro sta chiudendo — quindi e' stato rimosso (portava tre dipendenze,
+fra cui una TUI) e sostituito da `app.scripts.mutation_probe`: meno operatori,
+gira ovunque, si legge in una pagina.
+
+⚠️ Rimuovere una dipendenza con `uv remove` ha aggiornato `click` di tre minor
+senza che nessuno lo chiedesse. Il lockfile e' stato ripristinato dal backup: un
+`uv remove` non e' l'inverso di un `uv add`.
+
+**La passata completa: 130 mutanti, 43 uccisi, 85 sopravvissuti** — un
+punteggio del 33% su quattro moduli a proprietario unico. Il numero e' scomodo
+ed e' quello vero: pretendere lo zero avrebbe significato o scrivere decine di
+test in un colpo, o dichiarare equivalenti ottantacinque mutanti che non lo
+sono, cioe' mentire in un file che esiste per dire la verita'. Congelato come
+linea di base con cricchetto sulla crescita, come a11y e codice morto, e a
+schermo nella scheda Verifica.
+
+Al primo giro su `image_provenance` ha trovato **quattro sopravvissuti, due dei
+quali lacune vere**: il bordo esclusivo della soglia (`>` contro `>=`, il
+fuori-di-uno piu' comune che esista) e il taglio a dieci caratteri di una data
+con orario. Entrambi su righe COPERTE dai test. Gli altri due sono equivalenti e
+stanno in `EQUIVALENTI` con la ragione scritta — **una lista di sopravvissuti
+senza spiegazione e' indistinguibile da una lista di difetti.**
+
 ## ⚠️ Do NOT `chmod 600` the node's kubeconfig (2026-09-09)
 
 It reads like elementary hygiene and it **locks you out of the cluster**. Cost

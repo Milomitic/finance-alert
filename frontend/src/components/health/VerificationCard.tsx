@@ -70,7 +70,8 @@ export default function VerificationCard({
   if (!verification) return null;
   const codice = verification.codice_mai_eseguito;
   const a11y = verification.violazioni_a11y;
-  if (!codice && !a11y) return null;
+  const mutanti = verification.mutanti_sopravvissuti;
+  if (!codice && !a11y && !mutanti) return null;
 
   return (
     <Card>
@@ -99,9 +100,16 @@ export default function VerificationCard({
           unita="rotte"
           perche={a11y?.perche ?? ""}
         />
+        <Riga
+          etichetta="Mutanti sopravvissuti"
+          conteggio={mutanti?.conteggio ?? null}
+          totale={mutanti?.totale ?? null}
+          unita="mutanti"
+          perche={mutanti?.perche ?? ""}
+        />
         <p className="mt-1 text-[0.6471rem] leading-snug text-muted-foreground">
           I cancelli vietano che questi numeri <strong>crescano</strong>; non
-          pretendono lo zero, perché entrambi contengono voci legittime.
+          pretendono lo zero, perché ognuno contiene voci legittime.
         </p>
       </CardContent>
     </Card>
