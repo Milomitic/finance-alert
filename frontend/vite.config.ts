@@ -14,6 +14,18 @@ export default defineConfig({
     // types change is needed.
     environment: "jsdom",
     setupFiles: ["./src/test/setup.ts"],
+    // ⚠️ `e2e/` appartiene a Playwright, non a vitest.
+    //
+    // L'`include` predefinito di vitest e' **/*.{test,spec}.ts, che cattura
+    // anche gli spec Playwright: vitest prova a caricarli, fallisce
+    // sull'import di @playwright/test, e il job diventa rosso mentre i test
+    // veri sono tutti verdi. E' successo al primo push del gate UI.
+    //
+    // ⚠️ La forma dell'errore merita una nota: il riepilogo diceva
+    // «Tests 595 passed» e «Test Files 2 failed» su due righe diverse, quindi
+    // leggendo solo la prima si conclude «verde». Leggere SEMPRE la riga dei
+    // FILE, non solo quella dei test.
+    exclude: ["e2e/**", "node_modules/**", "dist/**"],
   },
   build: {
     rollupOptions: {

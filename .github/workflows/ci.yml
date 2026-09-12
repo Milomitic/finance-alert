@@ -185,15 +185,29 @@ jobs:
         working-directory: backend
         env:
           DATABASE_URL: sqlite:///./data/e2e.db
+          SECRET_KEY: ${{ steps.chiave.outputs.valore }}
         run: |
           mkdir -p data
           uv run python -c "from app.core.db import engine, Base; import app.models; Base.metadata.create_all(engine)"
           uv run python -m app.scripts.seed_e2e
 
+      # ⚠️ Chiave USA-E-GETTA, generata nel job e mai persistita: firma solo
+      # il cookie di questa esecuzione, su un database seminato che vive
+      # quanto il runner. Non e' un segreto da proteggere e non deve finire
+      # nei Secrets del repo — metterlo li' creerebbe una chiave di lunga vita
+      # dove ne basta una di novanta secondi.
+      - name: chiave di sessione effimera
+        id: chiave
+        run: |
+          K=$(openssl rand -hex 32)
+          echo "::add-mask::$K"
+          echo "valore=$K" >> "$GITHUB_OUTPUT"
+
       - name: avvia l'app come la serve la produzione
         working-directory: backend
         env:
           DATABASE_URL: sqlite:///./data/e2e.db
+          SECRET_KEY: ${{ steps.chiave.outputs.valore }}
         run: |
           nohup uv run uvicorn app.main:app --host 127.0.0.1 --port 8000 > /tmp/uvicorn.log 2>&1 &
           for i in $(seq 1 60); do
@@ -209,6 +223,8 @@ jobs:
       - name: sessione
         id: sess
         working-directory: backend
+        env:
+          SECRET_KEY: ${{ steps.chiave.outputs.valore }}
         run: |
           TOK=$(uv run python -c "from app.core.security import create_session_token; from app.core.config import settings; print(f'{settings.session_cookie_name}={create_session_token(settings.admin_username)}')")
           echo "::add-mask::$TOK"
