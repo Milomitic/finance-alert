@@ -61,6 +61,18 @@ for (const rotta of ROTTE) {
 
     const m = await traboccamento(page);
 
+    /* Diagnostica per il caso in cui il pavimento non sia raggiunto: dire
+     * SOLO «0 caratteri» manda a cercare nel layout un guasto che di solito
+     * sta nei dati o nella sessione. */
+    const contesto = m.chars < rotta.minChars
+      ? await page.evaluate(() => ({
+          url: location.pathname,
+          haMain: !!document.querySelector("main"),
+          titolo: document.title,
+          corpo: (document.body.innerText || "").replace(/\s+/g, " ").slice(0, 160),
+        }))
+      : null;
+
     /* ⚠️ IL PAVIMENTO VIENE PRIMA. Se la pagina e' vuota non puo' traboccare,
      * e un'asserzione di non-traboccamento su una pagina vuota e' vera di
      * niente. Questa riga e' cio' che rende falsificabile quella sotto. */
@@ -69,7 +81,8 @@ for (const rotta of ROTTE) {
       `${rotta.path} ha reso ${m.chars} caratteri: sotto il pavimento di ` +
         `${rotta.minChars}. Il seme (app.scripts.seed_e2e) non ha funzionato, ` +
         `oppure la pagina e' rotta — in entrambi i casi il controllo sul ` +
-        `layout qui sotto NON misurerebbe nulla.`,
+        `layout qui sotto NON misurerebbe nulla. Contesto: ` +
+        JSON.stringify(contesto),
     ).toBeGreaterThanOrEqual(rotta.minChars);
 
     expect(

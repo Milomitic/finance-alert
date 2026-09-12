@@ -58,8 +58,24 @@ jobs:
       # E701/E702…) live in pyproject `ignore` / per-file-ignores, documented there.
       - name: ruff (full config)
         run: uv run ruff check app tests
-      - name: pytest (network-guarded suite)
-        run: uv run pytest tests/ -q
+      # La suite gira UNA volta sotto coverage: stesso costo di prima piu'
+      # qualche secondo, e in cambio si puo' chiedere quali funzioni non sono
+      # mai partite.
+      - name: pytest (suite con guardia di rete), sotto coverage
+        run: |
+          uv run coverage run --source=app -m pytest tests/ -q
+          uv run coverage json -o .coverage.json
+
+      # ⚠️ NON una percentuale di copertura: quella misura quante righe sono
+      # state toccate e si Goodhart-izza al primo tentativo di alzarla. Questo
+      # chiede una cosa sola — «questa funzione e' mai partita?» — e sorveglia
+      # il DELTA, perche' l'arretrato esistente e' in buona parte legittimo.
+      #
+      # Il difetto che chiude: `_RANGE_PERIODS` era codice morto che AVVALORAVA
+      # una nota sbagliata in CLAUDE.md, quindi chi andava a verificare lo
+      # trovava e ci credeva. Il codice morto non sta fermo.
+      - name: nessuna NUOVA funzione mai eseguita
+        run: uv run python -m app.scripts.dead_code_report
 
   backend-postgres:
     name: backend — real-Postgres portability (M7)
