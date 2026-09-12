@@ -62,7 +62,39 @@ FROM python:3.11-slim AS runtime
 #
 # Runs before USER app (this stage is still root here) and cleans the apt
 # lists so the layer does not carry a package index into production.
-RUN apt-get update \
+#
+# ⚠️⚠️ QUESTO PASSO E' RIMASTO INERTE DAL 19 AGOSTO AL 12 SETTEMBRE, e il
+# motivo e' che NON dipendeva da niente che cambi.
+#
+# CI costruisce con `cache-from: type=gha`, quindi buildkit riusa un livello
+# finche' il suo comando e i livelli sopra sono identici. Questo `RUN` non
+# nominava nulla di variabile: costruito una volta, e' stato riusato a ogni
+# build successiva e le patch non sono MAI state riscaricate. Nel log si legge
+# per quello che e':
+#
+#     #19 [runtime 2/13] RUN apt-get update && apt-get upgrade -y ...
+#     #19 CACHED
+#
+# Il 12 settembre trivy ha rotto la pipeline con 12 CVE (3 CRITICAL) su perl,
+# libsqlite3, libpcre2 e gzip, TUTTE con la correzione gia' pubblicata da
+# Debian -- cioe' esattamente il fallimento che questo passo era stato scritto
+# per chiudere, ricomparso perche' il passo non veniva eseguito. E' la stessa
+# forma dell'unit k3s registrata in CLAUDE.md: presente, documentata, creduta
+# efficace, mai eseguita.
+#
+# `APT_SECURITY_DATE` e' l'ingresso variabile che mancava. CI gli passa la
+# data odierna, quindi il livello si ricostruisce al massimo UNA VOLTA AL
+# GIORNO e legge l'archivio di sicurezza di quel giorno. Il costo e' una build
+# lenta al giorno (questo livello e i suoi discendenti, `uv sync` compreso);
+# il beneficio e' che il cancello torna a misurare qualcosa.
+#
+# ⚠️ Deve stare QUI, subito sopra il RUN che lo consuma: piu' in alto
+# invaliderebbe anche i livelli precedenti, piu' in basso non toccherebbe la
+# chiave di cache di questo. E deve essere REFERENZIATO dentro il comando --
+# un ARG dichiarato e non usato non entra nella chiave di cache.
+ARG APT_SECURITY_DATE=unknown
+RUN echo "archivio sicurezza Debian: ${APT_SECURITY_DATE}" \
+ && apt-get update \
  && apt-get upgrade -y --no-install-recommends \
  && apt-get clean \
  && rm -rf /var/lib/apt/lists/*

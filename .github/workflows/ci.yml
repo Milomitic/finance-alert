@@ -195,6 +195,14 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      # La data e' l'unico ingresso che fa ri-eseguire `apt-get upgrade` nel
+      # Dockerfile. Senza, `cache-from: type=gha` riusa quel livello per
+      # sempre e le patch di sicurezza non vengono MAI riscaricate: e' come
+      # il 12 settembre trivy ha trovato 12 CVE gia' corrette a monte. Il
+      # commento esteso sta accanto all'ARG nel Dockerfile.
+      # Granularita' giornaliera: una build lenta al giorno, non una a push.
+      - id: apt
+        run: echo "date=$(date -u +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
       - uses: docker/build-push-action@v6
         with:
           context: .
@@ -204,6 +212,7 @@ jobs:
           # commit is actually running - see the ARG in the Dockerfile.
           build-args: |
             GIT_SHA=${{ github.sha }}
+            APT_SECURITY_DATE=${{ steps.apt.outputs.date }}
           tags: |
             ghcr.io/milomitic/finance-alert:${{ github.sha }}
             ghcr.io/milomitic/finance-alert:latest
