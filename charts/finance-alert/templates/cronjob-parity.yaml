@@ -1,0 +1,174 @@
+{{- if .Values.parityCheck.enabled }}
+{{- /*
+  Il cluster che verifica SE STESSO.
+
+  ⚠️ Esiste perche' «CI verde» e «ArgoCD Synced/Healthy» non rispondono alla
+  domanda che conta dopo un rilascio: il bump del tag immagine e' un commit
+  SUCCESSIVO a quello del codice — CI puo' scriverlo solo dopo aver costruito
+  l'immagine — quindi esiste sempre una finestra in cui ogni semaforo e' verde
+  e il pod esegue l'immagine precedente. Finora quella finestra si chiudeva da
+  sola in ~3 minuti e nessuno se ne accorgeva; quando NON si chiude (immagine
+  non scaricabile, rollout bloccato, ArgoCD fermo) non se ne accorge nessuno
+  lo stesso, ed e' il caso che conta.
+
+  ⚠️ Perche' DENTRO il cluster e non in CI: ArgoCD e' pull-based e CI non
+  raggiunge il nodo — e' la postura giusta, documentata in GITOPS.md, e non va
+  invertita per comodita' di un controllo. Il confronto lo fa quindi chi i due
+  valori li ha gia' entrambi sotto mano.
+
+  Confronta il tag DESIDERATO (quello dello StatefulSet, che ArgoCD tiene
+  allineato al repo) con quello EFFETTIVAMENTE in esecuzione sul pod. Se
+  divergono oltre la soglia di tolleranza, lo dice su Telegram — lo stesso
+  canale che gia' consegna digest e allarmi di salute, misurato a 306 invii con
+  zero fallimenti.
+
+  ⚠️ Sola lettura sul cluster: `get` su pod e statefulset, niente altro. Il
+  ServiceAccount non puo' modificare nulla.
+*/}}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "finance-alert.fullname" . }}-parity
+  labels:
+    {{- include "finance-alert.labels" . | nindent 4 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "finance-alert.fullname" . }}-parity
+  labels:
+    {{- include "finance-alert.labels" . | nindent 4 }}
+rules:
+  # Solo lettura, solo due risorse, solo in questo namespace.
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+  - apiGroups: ["apps"]
+    resources: ["statefulsets"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "finance-alert.fullname" . }}-parity
+  labels:
+    {{- include "finance-alert.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "finance-alert.fullname" . }}-parity
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "finance-alert.fullname" . }}-parity
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "finance-alert.fullname" . }}-parity
+  labels:
+    {{- include "finance-alert.labels" . | nindent 4 }}
+spec:
+  schedule: {{ .Values.parityCheck.schedule | quote }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  startingDeadlineSeconds: 300
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      ttlSecondsAfterFinished: 3600
+      template:
+        metadata:
+          labels:
+            {{- include "finance-alert.labels" . | nindent 12 }}
+        spec:
+          serviceAccountName: {{ include "finance-alert.fullname" . }}-parity
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+          containers:
+            - name: parity
+              # kubectl "nudo": l'immagine dell'app non lo contiene, e
+              # aggiungerlo la' significherebbe mettere un client del cluster
+              # dentro il processo esposto su internet.
+              image: {{ .Values.parityCheck.image | quote }}
+              imagePullPolicy: IfNotPresent
+              resources:
+                requests: { cpu: "10m", memory: "32Mi" }
+                limits: { cpu: "100m", memory: "64Mi" }
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: { drop: ["ALL"] }
+              env:
+                - name: NAMESPACE
+                  valueFrom:
+                    fieldRef: { fieldPath: metadata.namespace }
+                - name: STS
+                  value: {{ include "finance-alert.fullname" . | quote }}
+                - name: TOLLERANZA_MIN
+                  value: {{ .Values.parityCheck.toleranceMinutes | quote }}
+                - name: TELEGRAM_BOT_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ include "finance-alert.secretName" . }}
+                      key: TELEGRAM_BOT_TOKEN
+                      optional: true
+                - name: TELEGRAM_CHAT_ID
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ include "finance-alert.secretName" . }}
+                      key: TELEGRAM_CHAT_ID
+                      optional: true
+              command: ["/bin/sh", "-c"]
+              args:
+                - |
+                  set -u
+                  DESIDERATO=$(kubectl get statefulset "$STS" -n "$NAMESPACE" \
+                    -o jsonpath='{.spec.template.spec.containers[0].image}')
+                  IN_ESECUZIONE=$(kubectl get pod -n "$NAMESPACE" \
+                    -l app.kubernetes.io/name=finance-alert \
+                    -o jsonpath='{.items[0].status.containerStatuses[0].image}')
+                  PRONTO=$(kubectl get pod -n "$NAMESPACE" \
+                    -l app.kubernetes.io/name=finance-alert \
+                    -o jsonpath='{.items[0].status.containerStatuses[0].ready}')
+                  echo "desiderato:    $DESIDERATO"
+                  echo "in esecuzione: $IN_ESECUZIONE"
+                  echo "pronto:        $PRONTO"
+
+                  # ⚠️ La divergenza da sola NON e' un guasto: subito dopo un
+                  # bump e' la finestra normale del GitOps, e allarmare li'
+                  # insegnerebbe a ignorare l'allarme. Conta solo se DURA — si
+                  # guarda da quanto il pod e' avviato.
+                  AVVIO=$(kubectl get pod -n "$NAMESPACE" \
+                    -l app.kubernetes.io/name=finance-alert \
+                    -o jsonpath='{.items[0].status.startTime}')
+                  ETA_MIN=$(( ( $(date -u +%s) - $(date -u -d "$AVVIO" +%s) ) / 60 ))
+                  echo "pod avviato da: ${ETA_MIN} min"
+
+                  if [ "$DESIDERATO" = "$IN_ESECUZIONE" ] && [ "$PRONTO" = "true" ]; then
+                    echo "PARITA' OK"
+                    exit 0
+                  fi
+                  if [ "$ETA_MIN" -lt "$TOLLERANZA_MIN" ]; then
+                    echo "divergenza dentro la finestra di rollout (${ETA_MIN} < ${TOLLERANZA_MIN} min): non allarmo"
+                    exit 0
+                  fi
+
+                  MSG="Finance-Alert: il pod NON esegue l'immagine desiderata da ${ETA_MIN} min.
+                  desiderato: ${DESIDERATO##*:}
+                  in esecuzione: ${IN_ESECUZIONE##*:}
+                  pronto: ${PRONTO}"
+                  echo "$MSG"
+                  if [ -n "${TELEGRAM_BOT_TOKEN:-}" ] && [ -n "${TELEGRAM_CHAT_ID:-}" ]; then
+                    wget -q -O- --post-data="chat_id=${TELEGRAM_CHAT_ID}&text=${MSG}" \
+                      "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" >/dev/null \
+                      && echo "avviso inviato" || echo "invio Telegram fallito"
+                  else
+                    echo "Telegram non configurato: l'avviso resta nei log del Job"
+                  fi
+                  # Esce 1 cosi' il Job risulta Failed e resta visibile in
+                  # `kubectl get jobs` anche se Telegram non e' configurato.
+                  exit 1
+{{- end }}

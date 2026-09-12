@@ -114,3 +114,17 @@ secret:
 postgres:
   enabled: false
   secretName: pg-app
+
+# Il cluster verifica se stesso: il pod esegue davvero l'immagine desiderata?
+#
+# ⚠️ Ne' una CI verde ne' un ArgoCD Synced rispondono a questa domanda, perche'
+# il bump del tag e' un commit successivo a quello del codice. Dettagli e RBAC
+# in templates/cronjob-parity.yaml.
+parityCheck:
+  enabled: false
+  schedule: "*/15 * * * *"
+  # ⚠️ La divergenza conta solo se DURA: subito dopo un bump e' la finestra
+  # normale del GitOps (~3 minuti). Allarmare li' insegnerebbe a ignorare
+  # l'allarme, che e' il modo in cui un allarme smette di funzionare.
+  toleranceMinutes: 20
+  image: bitnami/kubectl:1.31

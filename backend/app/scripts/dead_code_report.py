@@ -16,6 +16,15 @@ il servizio sotto non solleva quel tipo.
 sono state toccate e si Goodhart-izza al primo tentativo di alzarla; questo
 chiede una cosa sola e verificabile: «questa funzione e' mai partita?».
 
+⚠️ LA COPERTURA DIPENDE DALL'AMBIENTE, e la linea di base e' quella di CI.
+Sei funzioni risultavano vive su Windows e morte in CI al primo giro:
+`spa_fallback` perche' senza `frontend/dist` il fallback SPA non viene montato,
+le altre perche' una configurazione locale accendeva rami che in CI restano
+spenti. Rigenerare la linea di base in locale produce un file piu' STRETTO, che
+fa arrossare la CI su codice che nessuno ha toccato. Rigenerarla quindi dai
+risultati di CI, o accettare che in locale alcune voci appaiano come «ora
+coperte» — e' una nota, non un errore.
+
 La risposta interessante non e' il numero, e' il DELTA. L'arretrato esiste e in
 buona parte e' legittimo (script one-off, rami difensivi, percorsi che toccano
 la rete). Quello che non deve succedere e' che ne nasca uno nuovo senza che

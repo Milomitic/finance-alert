@@ -25,12 +25,16 @@ from __future__ import annotations
 
 import json
 import random
+import secrets
 from datetime import UTC, date, datetime, timedelta
 
+from app.core.config import settings
 from app.core.db import SessionLocal
+from app.core.security import hash_password
 from app.models.alert import Alert
 from app.models.ohlcv import OhlcvDaily
 from app.models.stock import Stock
+from app.models.user import User
 
 #: Ticker, nome, borsa, settore, industria, valuta, market cap (valuta locale).
 #: La coda non-USD e i nomi oltre i 30 caratteri sono il carico utile.
@@ -66,6 +70,25 @@ def main() -> None:
     rng = random.Random(20260912)  # deterministico: un gate che cambia esito da solo non e' un gate
     db = SessionLocal()
     try:
+        # ⚠️ L'UTENTE, prima di tutto il resto.
+        #
+        # Un token firmato correttamente NON basta: `read_session_token`
+        # verifica la firma, ma la dipendenza di autenticazione poi CERCA
+        # l'utente e risponde 401 «User not found» se non c'e'. In CI il
+        # database nasce da `create_all`, quindi vuoto, e ogni rotta protetta
+        # rimandava al login — il gate misurava la pagina di accesso e
+        # riportava «la pagina e' vuota», che e' il sintomo e non la causa.
+        #
+        # La password non serve a nessuno: il gate entra col cookie firmato,
+        # mai dal modulo di login. E' casuale e non viene stampata proprio
+        # perche' non deve diventare una credenziale di cui fidarsi.
+        if db.query(User).filter(User.username == settings.admin_username).first() is None:
+            db.add(User(
+                username=settings.admin_username,
+                password_hash=hash_password(secrets.token_urlsafe(32)),
+            ))
+            db.flush()
+
         stocks: list[Stock] = []
         for ticker, nome, borsa, settore, industria, valuta, cap in CATALOGO:
             s = (
@@ -126,8 +149,8 @@ def main() -> None:
                         }),
                     ))
         db.commit()
-        print(f"seme e2e: {len(stocks)} titoli, {db.query(Alert).count()} segnali, "
-              f"{db.query(OhlcvDaily).count()} barre")
+        print(f"seme e2e: {db.query(User).count()} utenti, {len(stocks)} titoli, "
+              f"{db.query(Alert).count()} segnali, {db.query(OhlcvDaily).count()} barre")
     finally:
         db.close()
 

@@ -1,5 +1,5 @@
 {
-  "_perche": "Funzioni di app/ che nessun test esegue. Arretrato MISURATO, non obiettivo: molte sono legittime (script one-off, rami difensivi, percorsi di rete). Il gate impedisce che ne compaiano di NUOVE senza che qualcuno se ne accorga — perche' il codice morto avvalora la documentazione stale, come fece _RANGE_PERIODS. Rigenerare solo dopo aver cancellato o coperto qualcosa, mai per far passare la CI.",
+  "_perche": "Funzioni di app/ che nessun test esegue. Arretrato MISURATO, non obiettivo: molte sono legittime (script one-off, rami difensivi, percorsi di rete). Il gate impedisce che ne compaiano di NUOVE senza che qualcuno se ne accorga - perche' il codice morto avvalora la documentazione stale, come fece _RANGE_PERIODS. Rigenerare solo dopo aver cancellato o coperto qualcosa, mai per far passare la CI.",
   "totale_funzioni": 1366,
   "morte": [
     "app/api/alerts.py::_run_scan_in_background",
@@ -31,6 +31,7 @@
     "app/api/stocks.py::_overlaps_yf",
     "app/api/stocks.py::get_etf_holdings",
     "app/core/config.py::ensure_data_dir",
+    "app/main.py::spa_fallback",
     "app/scheduler/jobs/db_backup.py::_backup_dir",
     "app/scheduler/jobs/health_probes_job.py::_check_rollup_transition",
     "app/scheduler/jobs/health_probes_job.py::run_health_probes_fast",
@@ -226,9 +227,14 @@
     "app/services/etf_holdings_service.py::get_holdings",
     "app/services/finnhub_earnings_service.py::_safe_float",
     "app/services/finnhub_earnings_service.py::_safe_int",
+    "app/services/finnhub_news_service.py::_is_blocked",
     "app/services/finnhub_news_service.py::_normalise_action",
+    "app/services/finnhub_news_service.py::_rate_limited",
+    "app/services/finnhub_news_service.py::_record_rate_call",
     "app/services/finnhub_news_service.py::_trip_breaker",
     "app/services/finnhub_news_service.py::status",
+    "app/services/forexfactory_consensus.py::_cdata_or_text",
+    "app/services/forexfactory_consensus.py::_parse_xml",
     "app/services/forexfactory_consensus.py::_write_disk_fallback",
     "app/services/forexfactory_consensus.py::consensus_value_for_label",
     "app/services/fred_service.py::_is_enabled",
@@ -347,5 +353,6 @@
     "app/signals/detectors/pead.py::_same_or_after",
     "app/signals/events_fundamental.py::_infer_direction",
     "app/signals/setups/base.py::proximity"
-  ]
+  ],
+  "_ambiente": "ATTENZIONE: la copertura DIPENDE DALL'AMBIENTE, e questa linea di base e' quella di CI (Linux, senza frontend/dist, senza .env locale). Sei funzioni risultavano vive su Windows e morte in CI - `spa_fallback` perche' senza dist il fallback SPA non viene montato, le altre per configurazione assente. Rigenerandola in locale si otterrebbe un file piu' STRETTO che fa arrossare la CI su codice che nessuno ha toccato. In locale il confronto segnala queste voci come 'ora coperte': e' atteso, ed e' una nota, non un errore."
 }
