@@ -1,29 +1,12 @@
 {
   "_perche": "Sopravvissuti MISURATI, non tollerati per sempre: ogni riga qui e' una riga eseguita dai test la cui CORRETTEZZA nessuno verifica. Il cancello impedisce che il numero cresca; cala scrivendo test. Rigenerare con --scrivi solo DOPO aver ucciso qualcosa, mai per far passare la CI.",
-  "totale_mutanti": 130,
-  "uccisi": 43,
+  "totale_mutanti": 27,
+  "uccisi": 22,
   "sopravvissuti": [
     "app/services/fx_service.py:100  Or -> And",
-    "app/services/fx_service.py:104  1 -> 2",
     "app/services/fx_service.py:105  0 -> 1",
-    "app/services/fx_service.py:105  LtE -> Lt",
-    "app/services/fx_service.py:134  0 -> 1",
-    "app/services/fx_service.py:134  Lt -> LtE",
-    "app/services/fx_service.py:179  And -> Or",
-    "app/services/fx_service.py:191  Or -> And",
-    "app/services/fx_service.py:205  Or -> And",
     "app/services/fx_service.py:37  6 -> 7",
     "app/services/fx_service.py:37  60 -> 61",
-    "app/services/fx_service.py:46  1 -> 2",
-    "app/services/fx_service.py:47  1 -> 2",
-    "app/services/fx_service.py:48  1 -> 2",
-    "app/services/fx_service.py:49  1 -> 2",
-    "app/services/fx_service.py:50  1 -> 2",
-    "app/services/fx_service.py:51  1 -> 2",
-    "app/services/fx_service.py:61  1 -> 2",
-    "app/services/fx_service.py:66  1 -> 2",
-    "app/services/fx_service.py:67  1 -> 2",
-    "app/services/fx_service.py:69  1 -> 2",
     "app/services/setup_service.py:115  Lt -> LtE",
     "app/services/setup_service.py:165  Or -> And",
     "app/services/setup_service.py:179  And -> Or",
@@ -83,6 +66,5 @@
     "app/services/setup_service.py:574  0 -> 1",
     "app/services/setup_service.py:575  1 -> 2",
     "app/services/setup_service.py:576  Lt -> LtE"
-  ],
-  "_nota_duplicati": "Le chiavi sono 'file:riga  prima -> dopo' e NON sono uniche: due mutazioni identiche sulla stessa riga (per esempio due '1 -> 2' in una stessa espressione) producono la stessa chiave. Deduplicate, o il conteggio a schermo direbbe piu' sopravvissuti di quanti il confronto ne consideri."
+  ]
 }

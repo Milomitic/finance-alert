@@ -281,7 +281,16 @@ def main() -> int:
 
     print(f"\n{'=' * 60}")
     uccisi = totale - len(sopravvissuti)
-    base = _carica_base()
+    # ⚠️ Il confronto va RISTRETTO ai moduli effettivamente mutati.
+    #
+    # Con `--modulo fx_service` la linea di base contiene anche i 59
+    # sopravvissuti di `setup_service`, che questa passata non ha nemmeno
+    # guardato: confrontarli tutti faceva riportare «76 mutanti ora uccisi»
+    # dove i veri erano venti. Un numero che si congratula da solo e' la forma
+    # esatta di difetto che questo strumento esiste per trovare — e ce l'aveva
+    # dentro.
+    prefissi = tuple(bersagli)
+    base = {b for b in _carica_base() if b.startswith(prefissi)}
     nuovi = [s for s in sopravvissuti if s not in EQUIVALENTI and s not in base]
     uccisi_da_poco = sorted(base - set(sopravvissuti))
     print(
@@ -305,7 +314,14 @@ def main() -> int:
             # confronto usa un insieme. Senza `set` il conteggio scritto e
             # quello confrontato divergerebbero, come e' gia' successo con le
             # chiavi del rapporto sul codice morto.
-            "sopravvissuti": sorted({s for s in sopravvissuti if s not in EQUIVALENTI}),
+            # ⚠️ Si conservano i sopravvissuti dei moduli NON eseguiti in
+            # questa passata: con `--modulo` la riscrittura li cancellerebbe,
+            # e la prossima passata completa li riporterebbe come NUOVI. Una
+            # linea di base che dimentica non e' un cricchetto.
+            "sopravvissuti": sorted(
+                {s for s in sopravvissuti if s not in EQUIVALENTI}
+                | {b for b in _carica_base() if not b.startswith(prefissi)}
+            ),
         }, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
         print(f"linea di base scritta: {len(sopravvissuti)} sopravvissuti")
         return 0
