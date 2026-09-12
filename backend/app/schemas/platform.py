@@ -158,6 +158,22 @@ class DeployHealthOut(BaseModel):
     # e' la conferma che il rollout e' avvenuto.
     uptime_seconds: int | None = None
     started_at: str | None = None
+    # ── Provenienza dell'immagine (image_provenance) ────────────────────────
+    # Quando questa immagine e' stata costruita, e quando ha letto l'archivio
+    # di sicurezza Debian.
+    #
+    # ⚠️ La seconda data non e' un dettaglio da build: il 12 settembre 2026 il
+    # livello che scarica le patch e' risultato inerte da 24 giorni perche' la
+    # cache di buildkit lo riusava. Nessun cruscotto lo mostrava, quindi
+    # l'unico modo di scoprirlo e' stato che trivy rompesse la pipeline. Ora la
+    # data e' impressa nell'artefatto e leggibile da qui.
+    #
+    # `None` ovunque significa NON SO (immagine costruita a mano, o sviluppo):
+    # non va letto come «fresca».
+    image_built_at: str | None = None
+    apt_security_date: str | None = None
+    apt_age_days: int | None = None
+    apt_stale: bool | None = None
 
 
 class PlatformHealthOut(BaseModel):

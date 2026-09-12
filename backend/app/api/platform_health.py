@@ -38,6 +38,7 @@ from app.services import (
     data_source_metrics,
     detector_performance_service,
     health_rollup,
+    image_provenance,
     infra_health_service,
     loki_log_service,
     signal_drift_service,
@@ -176,10 +177,22 @@ def _deploy_health() -> DeployHealthOut:
     started = getattr(_deploy_health, "_boot", None)
     if started is None:
         started = _deploy_health._boot = time.time()  # noqa: SLF001
+    # Provenienza: cosa l'immagine puo' dimostrare di se'. Proprietario unico
+    # della regola di eta' e della soglia e' `image_provenance` — qui si legge
+    # soltanto. Mai solleva: in sviluppo il file non esiste e i campi restano
+    # None, che significa NON SO e non «fresca».
+    prov = image_provenance.read_provenance()
+    apt_date = prov.apt_security_date if prov else None
     return DeployHealthOut(
         git_sha=os.environ.get("GIT_SHA") or None,
         uptime_seconds=int(time.time() - started),
         started_at=datetime.fromtimestamp(started, UTC).isoformat(),
+        image_built_at=(
+            prov.built_at.isoformat() if prov and prov.built_at else None
+        ),
+        apt_security_date=apt_date.isoformat() if apt_date else None,
+        apt_age_days=image_provenance.apt_age_days(apt_date),
+        apt_stale=image_provenance.is_stale(apt_date),
     )
 
 

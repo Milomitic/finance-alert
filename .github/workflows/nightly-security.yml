@@ -1,0 +1,86 @@
+# Presidio notturno sull'immagine CHE STA GIRANDO.
+#
+# ⚠️ Perche' esiste, e perche' guarda l'immagine dispiegata invece di
+# ricostruirne una: trivy gira solo quando qualcuno spinge. In una settimana
+# tranquilla l'immagine in produzione invecchia contro un archivio CVE che si
+# muove ogni giorno, e nessuno lo sa. Il 12 settembre 2026 il divario era di 24
+# giorni e si e' scoperto per caso, quando un push ha finalmente rieseguito il
+# cancello.
+#
+# ⚠️ Scansionare una RICOSTRUZIONE risponderebbe alla domanda sbagliata — «una
+# immagine costruita adesso sarebbe pulita?» — che e' quasi sempre si' e non
+# dice niente su cio' che serve i clienti. Qui si legge il tag da
+# `values-oci.yaml`, cioe' esattamente cio' che ArgoCD ha applicato.
+name: notturno — l'immagine in produzione e' ancora sana?
+
+on:
+  schedule:
+    # 03:17 UTC. Un minuto non tondo di proposito: gli orari tondi sono i piu'
+    # congestionati sui runner condivisi e le run schedulate vengono ritardate.
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  scan-deployed:
+    name: trivy sull'immagine dispiegata + eta' delle patch
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: cloud
+
+      - id: tag
+        name: quale immagine sta girando davvero
+        run: |
+          set -euo pipefail
+          TAG=$(grep -E '^\s*tag:' charts/finance-alert/values-oci.yaml | head -1 | sed 's/.*"\(.*\)".*/\1/')
+          test -n "$TAG" || { echo "::error::tag non leggibile da values-oci.yaml"; exit 1; }
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "immagine dispiegata: $TAG"
+
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # L'eta' delle patch, letta dall'immagine stessa. Non e' una CVE: e' il
+      # segnale che PRECEDE le CVE, e per questo si legge anche quando trivy e'
+      # verde. Non fa fallire il job — una settimana senza push e' legittima —
+      # ma finisce nel riepilogo della run.
+      - name: eta' dell'archivio di sicurezza
+        continue-on-error: true
+        run: |
+          set -uo pipefail
+          PROV=$(docker run --rm --platform linux/arm64 \
+            ghcr.io/milomitic/finance-alert:${{ steps.tag.outputs.tag }} \
+            cat /etc/image-provenance.json 2>/dev/null || echo '{}')
+          echo "provenienza: $PROV"
+          APT=$(printf '%s' "$PROV" | sed -n 's/.*"apt_security_date":"\([^"]*\)".*/\1/p')
+          if [ -z "$APT" ] || [ "$APT" = "unknown" ]; then
+            echo "### ⚠️ L'immagine dispiegata non dichiara la data delle patch" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          ETA=$(( ( $(date -u +%s) - $(date -u -d "$APT" +%s) ) / 86400 ))
+          echo "### Patch di sicurezza lette il $APT — $ETA giorni fa" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$ETA" -gt 7 ]; then
+            echo "Oltre la soglia di 7 giorni: un push qualunque ricostruisce l'immagine." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      # Il cancello vero. Stessa configurazione del job su push, cosi' i due
+      # non possono divergere in silenzio dando due verdetti diversi sulla
+      # stessa immagine.
+      - name: trivy
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ghcr.io/milomitic/finance-alert:${{ steps.tag.outputs.tag }}
+          format: table
+          exit-code: "1"
+          ignore-unfixed: true
+          severity: CRITICAL,HIGH
+          vuln-type: os,library

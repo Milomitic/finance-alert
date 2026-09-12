@@ -256,3 +256,74 @@ def test_deploy_block_reports_what_is_running(client):
     dep = body["deploy"]
     assert "git_sha" in dep
     assert dep["uptime_seconds"] is not None and dep["uptime_seconds"] >= 0
+
+
+class TestProvenienzaImmagine:
+    """Il blocco `deploy` porta cosa l'immagine puo' dimostrare di se'.
+
+    Non e' cosmesi da cruscotto: il 12 settembre 2026 il livello che scarica le
+    patch Debian e' risultato inerte da 24 giorni e NESSUNA superficie dell'app
+    lo mostrava, quindi l'unico modo di scoprirlo e' stato che trivy rompesse
+    la pipeline. Queste date rendono quel guasto leggibile prima.
+    """
+
+    def test_i_campi_esistono_e_in_sviluppo_dicono_NON_SO(self, client):
+        """In sviluppo `/etc/image-provenance.json` non esiste.
+
+        ⚠️ Il contratto e' che i campi ci siano e valgano `None`, non che
+        spariscano: un campo assente si legge come «questa versione non lo
+        sa», un `None` esplicito come «non lo so ADESSO». Il cruscotto deve
+        poter distinguere le due cose."""
+        r = client.get("/api/platform/health")
+        assert r.status_code == 200
+        deploy = r.json()["deploy"]
+        for campo in ("image_built_at", "apt_security_date", "apt_age_days", "apt_stale"):
+            assert campo in deploy, campo
+        assert deploy["apt_stale"] is None
+
+    def test_con_una_provenienza_fresca_il_payload_la_riporta(self, client, tmp_path, monkeypatch):
+        import json
+
+        from app.services import image_provenance
+
+        f = tmp_path / "image-provenance.json"
+        f.write_text(json.dumps({
+            "apt_security_date": _oggi_iso(),
+            "built_at": "2026-09-12T14:39:33Z",
+        }), encoding="utf-8")
+        monkeypatch.setattr(image_provenance, "PROVENANCE_PATH", f)
+
+        deploy = client.get("/api/platform/health").json()["deploy"]
+        assert deploy["apt_age_days"] == 0
+        assert deploy["apt_stale"] is False
+        assert deploy["image_built_at"] is not None
+
+    def test_una_provenienza_VECCHIA_viene_segnalata(self, client, tmp_path, monkeypatch):
+        """Il controllo negativo del test sopra: se questo non diventasse
+        `True`, «stantia» sarebbe una parola che non si accende mai — e un
+        semaforo sempre verde e' esattamente il guasto che stiamo chiudendo."""
+        import json
+        from datetime import UTC, datetime, timedelta
+
+        from app.services import image_provenance
+
+        vecchia = (
+            datetime.now(UTC).date()
+            - timedelta(days=image_provenance.STALE_AFTER_DAYS + 3)
+        )
+        f = tmp_path / "image-provenance.json"
+        f.write_text(json.dumps({
+            "apt_security_date": vecchia.isoformat(),
+            "built_at": "2026-08-19T10:00:00Z",
+        }), encoding="utf-8")
+        monkeypatch.setattr(image_provenance, "PROVENANCE_PATH", f)
+
+        deploy = client.get("/api/platform/health").json()["deploy"]
+        assert deploy["apt_stale"] is True
+        assert deploy["apt_age_days"] == image_provenance.STALE_AFTER_DAYS + 3
+
+
+def _oggi_iso() -> str:
+    from datetime import UTC, datetime
+
+    return datetime.now(UTC).date().isoformat()

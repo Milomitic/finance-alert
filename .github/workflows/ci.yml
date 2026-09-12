@@ -218,6 +218,30 @@ jobs:
             ghcr.io/milomitic/finance-alert:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
+      # ── Il gate anti-cache ──────────────────────────────────────────────
+      # ⚠️ Questo passo esiste perche' il livello delle patch di sicurezza e'
+      # rimasto INERTE per 24 giorni senza che niente lo dicesse: buildkit ne
+      # riusava la cache e la pipeline restava verde finche' trivy non ha
+      # trovato 12 CVE gia' corrette a monte.
+      #
+      # Asserisce sull'ARTEFATTO, non sul log. Leggere `CACHED` dall'output di
+      # buildkit dipenderebbe dal suo formato e si romperebbe in silenzio a un
+      # aggiornamento dell'action; il file e' scritto dentro lo STESSO `RUN`
+      # delle patch, quindi se la data e' di oggi le patch sono state
+      # scaricate oggi. Non c'e' modo di avere l'una senza le altre.
+      #
+      # Gira sotto qemu (gia' predisposto sopra): e' un `cat`, il costo e'
+      # trascurabile e l'immagine e' quella VERA appena pubblicata.
+      - name: le patch di sicurezza devono essere di oggi
+        run: |
+          set -euo pipefail
+          ATTESA='${{ steps.apt.outputs.date }}'
+          LETTO=$(docker run --rm --platform linux/arm64             ghcr.io/milomitic/finance-alert:${{ github.sha }}             cat /etc/image-provenance.json)
+          echo "provenienza letta dall'immagine: $LETTO"
+          if ! printf '%s' "$LETTO" | grep -q "\"apt_security_date\":\"$ATTESA\""; then
+            echo "::error::Il livello apt non e' stato eseguito: atteso $ATTESA."             "Buildkit ha riusato la cache — vedi la sezione sulla trappola in CLAUDE.md."
+            exit 1
+          fi
 
   image-scan:
     name: trivy image scan (fails on FIXABLE critical/high)

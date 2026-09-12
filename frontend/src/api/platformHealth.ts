@@ -100,6 +100,21 @@ export type DeployHealth = {
   git_sha: string | null;
   uptime_seconds: number | null;
   started_at: string | null;
+  /** Quando questa immagine e' stata costruita. */
+  image_built_at: string | null;
+  /** Quando questa immagine ha letto l'archivio di sicurezza Debian.
+   *
+   *  ⚠️ Non e' un dettaglio da build. Il 12 settembre 2026 il livello Docker
+   *  che scarica le patch e' risultato inerte da 24 giorni — buildkit ne
+   *  riusava la cache — e nessuna superficie dell'app lo mostrava, quindi si
+   *  e' scoperto solo quando trivy ha rotto la pipeline con tre CVE CRITICAL.
+   *  Ora la data e' impressa nell'artefatto e leggibile da qui. */
+  apt_security_date: string | null;
+  apt_age_days: number | null;
+  /** `true` stantia, `false` fresca, **`null` ignota** — e i tre stati sono
+   *  distinti apposta: collassare `null` su `false` direbbe «va tutto bene»
+   *  proprio quando non si sa nulla. */
+  apt_stale: boolean | null;
 };
 
 export type PlatformHealth = {

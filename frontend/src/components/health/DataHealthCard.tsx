@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle2, Database, GitCommitHorizontal } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Database, GitCommitHorizontal, ShieldCheck } from "lucide-react";
 
 import type { DataHealth, DeployHealth } from "@/api/platformHealth";
 import { Card, CardContent } from "@/components/ui/card";
@@ -172,6 +172,65 @@ export default function DataHealthCard({
           >
             {deploy?.git_sha ? deploy.git_sha.slice(0, 8) : "sconosciuto"}
           </code>
+        </div>
+
+        {/* Le patch di sicurezza dell'immagine, e da quanto.
+            ⚠️ Questa riga esiste per un guasto vero. Il livello Docker che
+            scarica le patch Debian e' rimasto INERTE per 24 giorni — buildkit
+            ne riusava la cache perche' il comando non nominava niente di
+            variabile — e nessuna superficie dell'app lo mostrava: si e'
+            scoperto solo quando trivy ha rotto la pipeline con tre CVE
+            CRITICAL gia' corrette a monte. La data e' ora impressa
+            nell'artefatto dentro lo STESSO livello delle patch, quindi se si
+            legge «oggi» le patch sono di oggi: non c'e' modo di avere l'una
+            senza le altre.
+            ⚠️ Tre stati e non due: ignota non e' fresca. */}
+        <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+          <ShieldCheck
+            className={cn(
+              "h-3.5 w-3.5 shrink-0",
+              deploy?.apt_stale === true
+                ? "text-amber-600 dark:text-amber-400"
+                : "text-muted-foreground",
+            )}
+            aria-hidden
+          />
+          <span className="text-[0.6471rem] uppercase tracking-wider text-muted-foreground">
+            Patch sicurezza
+          </span>
+          {deploy?.apt_security_date ? (
+            <span
+              className={cn(
+                "text-[0.7059rem] tabular-nums",
+                deploy.apt_stale === true &&
+                  "font-semibold text-amber-700 dark:text-amber-400",
+              )}
+            >
+              {deploy.apt_security_date}
+              {deploy.apt_age_days != null && (
+                <span className="ml-1 text-muted-foreground">
+                  ·{" "}
+                  {deploy.apt_age_days === 0
+                    ? "oggi"
+                    : deploy.apt_age_days === 1
+                      ? "ieri"
+                      : `${deploy.apt_age_days} giorni fa`}
+                </span>
+              )}
+            </span>
+          ) : (
+            /* Non "0 giorni": assente non e' zero. Un trattino qui dice che
+               l'immagine non dichiara la data, che e' un'informazione diversa
+               da "costruita oggi" e non va confusa con essa. */
+            <span className="text-[0.7059rem] text-muted-foreground">
+              non dichiarate
+            </span>
+          )}
+          {deploy?.apt_stale === true && (
+            <span className="text-[0.6471rem] text-amber-700 dark:text-amber-400">
+              — un push qualunque ricostruisce l'immagine
+            </span>
+          )}
         </div>
 
         {/* Una chiave mancante degrada un'intera funzione a un WARNING nei log e

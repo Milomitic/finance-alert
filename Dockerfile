@@ -97,7 +97,23 @@ RUN echo "archivio sicurezza Debian: ${APT_SECURITY_DATE}" \
  && apt-get update \
  && apt-get upgrade -y --no-install-recommends \
  && apt-get clean \
- && rm -rf /var/lib/apt/lists/*
+ && rm -rf /var/lib/apt/lists/* \
+ && printf '{"apt_security_date":"%s","built_at":"%s"}' \
+      "${APT_SECURITY_DATE}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+      > /etc/image-provenance.json
+
+# ── Provenienza, scritta NELL'artefatto ─────────────────────────────────────
+# ⚠️ Questo file e' il gate anti-cache, e la forma conta.
+#
+# Controllare che il livello sia girato leggendo `CACHED` nel log della build
+# osserva il PROCESSO: dipende dal formato di buildkit e non si puo' fare da
+# dentro l'app. Scrivere la data nell'IMMAGINE e' un'asserzione positiva
+# sull'ARTEFATTO — se il livello non gira, la data resta quella vecchia e
+# chiunque la legga se ne accorge: la CI, un test, e il cruscotto.
+#
+# Sta nello STESSO RUN delle patch, non in uno successivo: due livelli
+# separati possono essere invalidati indipendentemente, e un file-data fresco
+# accanto a patch vecchie sarebbe peggio di nessun file.
 
 # uv: copied as a static binary from its official image — no curl|sh, no pip
 # bootstrap, version-pinned. It manages the venv below and then is only
