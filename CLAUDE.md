@@ -1100,6 +1100,109 @@ This is the `_RANGE_PERIODS` failure in another form: dead code corroborates a
 stale note, and a partial fix corroborates a closed case. **When a comment says
 something was fixed, redo the arithmetic — it costs less than trusting it.**
 
+## Larghezza su mobile: il difetto c'e, ma il CONTROLLO ovvio non lo vede (2026-09-12)
+
+Otto rotte traboccavano a 375px e nessuna barra di scorrimento orizzontale
+compariva. Cercarle con il controllo che viene in mente per primo —
+`document.documentElement.scrollWidth > clientWidth` — restituisce **sempre
+zero**, su ogni pagina, anche mentre il contenuto esce dallo schermo.
+
+**Perche.** `html` e `body` sono `overflow-x: clip`, quindi il documento non
+puo scorrere di lato: taglia e basta. E `<main>` porta
+`flex-1 min-w-0 overflow-y-auto p-3`, dove `overflow-y: auto` **forza per
+specifica** `overflow-x` da `visible` ad `auto` (i due assi non possono essere
+uno visibile e uno scorrevole). Quindi:
+
+- il traboccamento diventa una barra DENTRO `<main>`, non a livello di pagina;
+- qualunque rilevatore che salta i discendenti di un contenitore che scorre —
+  cioe la regola giusta, perche una tabella in `overflow-x-auto` scorre di
+  proposito — **scarta l'intera applicazione**, perche `<main>` e la radice di
+  tutto.
+
+Il primo rilevatore scritto qui ha riportato «zero offensori» su ogni rotta ed
+era una risposta falsa, la stessa forma di «un test puo essere vero di niente»
+gia registrata tre volte in questo file. **Il controllo negativo l'ha mancata**:
+la sonda larga 900px era appesa a `document.body`, cioe FUORI da `<main>`, e
+veniva vista. Spostata dentro `<main>`, il rilevatore taceva.
+
+**La ricetta che funziona**, e il riquadro da usare e quello di `<main>`:
+
+```js
+const main = document.querySelector("main");
+const limite = main.getBoundingClientRect().left + main.clientWidth;
+// offensore = right > limite+1, nessun antenato (fino a main ESCLUSO)
+// con overflow-x auto|scroll|hidden|clip, elemento visibile
+// poi si tengono solo i piu ESTERNI, altrimenti si legge la stessa riga 12 volte
+```
+
+E si misura con `resize_window` preset **mobile**: una larghezza CUSTOM
+(390x844) e stata accettata dallo strumento e **non ha cambiato il layout** —
+la pagina continuava a leggere 533px, con `maxTouchPoints: 0`. Il preset porta
+375px, UA Android e 5 punti di tocco. Leggere sempre `window.innerWidth` dalla
+pagina prima di credere a un viewport.
+
+### Le due cause vere, che non sono larghezze scritte a mano
+
+Un grep di `w-[NNNpx]` non trova niente: gli otto siti erano tutti **contenuto
+che non sa stringersi**.
+
+1. **`flex-wrap` sul contenitore non spezza un ELEMENTO troppo largo.** Manda a
+   capo gli item; se un singolo item ha min-content maggiore della riga, esce
+   lo stesso e si porta dietro il genitore. Su `/calendar` e `/stocks` il wrap
+   c'era gia ed era inutile: serviva scendere al gruppo interno
+   (`min-w-[13.5rem]` sull'etichetta del mese, 412px di riga; la barra
+   «Righe per pagina…» da 445px).
+
+2. **`truncate` su un flex item non entra in funzione senza `min-w-0`.** Un
+   flex item ha `min-width: auto`, cioe si rifiuta di scendere sotto la propria
+   min-content: con un'etichetta lunga la min-content e l'etichetta INTERA, il
+   contenitore viene sfondato e il troncamento non scatta mai perche lo spazio
+   «c'e». `SectionTitle` — il titolo canonico di OGNI scheda — ne era privo, e
+   il commento accanto descriveva in dettaglio un difetto simile dichiarandolo
+   chiuso. Stessa forma del `_RANGE_PERIODS` morto: **quando un commento dice
+   che una cosa e risolta, rifare l'aritmetica**.
+
+Un `<select>` merita una nota a parte: si dimensiona sull'**opzione piu lunga**,
+non sul contenitore, e ignora il genitore finche non gli si mette
+`min-w-0 max-w-full`.
+
+## `title=` e una spiegazione che su un telefono NON esiste (2026-09-12)
+
+Misurato: **112 attributi `title`** con prosa lunga, quasi tutti su
+intestazioni di tabella. Su un dispositivo touch `title` non si apre mai — non
+c'e un hover da produrre e il long-press apre il menu contestuale del sistema.
+Erano spiegazioni scritte, spedite nel bundle, e invisibili a meta degli
+utenti. Il difetto e di ACCESSO, non di spazio, ed e per questo che non si
+vedeva: su desktop funzionava tutto.
+
+`components/ui/info-hint.tsx` e l'unico proprietario del rimpiazzo, e
+`TableHead` accetta `hint=` che lo monta da solo. Tre cose che sembrano
+dettagli e non lo sono:
+
+- **Radix Tooltip e la scelta sbagliata.** Si chiude su `pointerdown`, che e
+  esattamente il gesto di un tap: sarebbe lo stesso difetto con un'altra
+  libreria. Popover apre al click, che touch e mouse producono entrambi.
+- **Il click deve APRIRE, non commutare.** Col mouse `pointerenter` ha gia
+  aperto, quindi un toggle richiude subito e **col mouse il pannello non si
+  apre mai al click**. Si disinnesca il toggle interno di Radix con
+  `preventDefault()`, che `composeEventHandlers` rispetta.
+- **Serve il portale e serve `collisionPadding`.** Il grilletto vive dentro
+  `overflow-x-auto`, quindi un figlio posizionato verrebbe tagliato; e il
+  default `collisionPadding: 0` incolla il pannello al bordo — misurato su
+  375px cadeva a 376, un pixel dentro la zona che `overflow-x: clip` taglia.
+
+⚠️ **Non convertire cio che e un DATO.** Le didascalie delle piastrelle
+`/setups` portano bande di confidenza, minimi/massimi e «non concludente»:
+metterle dietro un tocco significa mostrare un tasso senza il campione che lo
+regge, cioe rompere la regola di onesta che questo file impone altrove. Sono
+state lasciate a schermo di proposito; e passata nel popup solo la prosa.
+
+Il censimento sta in `components/mobileLayout.test.ts` (jsdom non fa layout,
+quindi le classi sono fissate alla sorgente, con un pavimento su ogni conteggio
+e un'asserzione che le spiegazioni esistano ancora ALTROVE — senza, cancellarle
+tutte passerebbe). **Ha trovato subito nove intestazioni che il grep a mano
+aveva mancato**, perche stavano su piu righe.
+
 ## Frontend tone classes (Tailwind purger)
 
 Tone-class maps in `lib/alertMeta.ts` and similar files MUST stay as plain
