@@ -53,7 +53,12 @@ export function MonthNav({
       {/* Period label — the typographic centerpiece. Wide tracking to
           let the word breathe. tabular-nums so a change with the same
           digit count doesn't jitter the layout. */}
-      <div className="px-3 min-w-[13.5rem] text-center">
+      {/* ⚠️ Il pavimento serve a non far ballare il layout quando il nome
+          del mese cambia lunghezza — ma a 13.5rem la riga misurava 412px su
+          un viewport di 375 e spingeva "Oggi" fuori schermo. Su mobile il
+          pavimento scende a 9rem, che regge "Settembre 2026" senza jitter;
+          da `sm` in su resta quello di prima. */}
+      <div className="px-3 min-w-[9rem] sm:min-w-[13.5rem] text-center">
         <div className="text-2xl font-semibold tracking-tight tabular-nums leading-none">
           {label}
         </div>

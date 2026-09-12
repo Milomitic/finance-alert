@@ -69,7 +69,18 @@ export function SectionTitle({
         // Col wrap: se ci stanno entrambi non cambia niente, altrimenti lo
         // slot va sotto e il titolo resta. Il `truncate` sull'etichetta
         // rimane come ultima difesa per i casi davvero stretti.
-        "flex flex-wrap items-center justify-between gap-x-3 gap-y-1",
+        // ⚠️ `min-w-0` non e' decorativo, ed e' il pezzo che mancava al
+        // ragionamento qui sopra. Questa radice e' quasi sempre un FLEX ITEM
+        // del proprio contenitore, e un flex item ha `min-width: auto`, cioe'
+        // si rifiuta di scendere sotto la propria larghezza min-content. Con
+        // un'etichetta lunga la min-content e' l'etichetta INTERA: il titolo
+        // si allarga oltre il genitore e il `truncate` sotto non entra mai in
+        // funzione, perche' lo spazio "c'e'" — e' il contenitore ad essere
+        // sfondato. Misurato su /setups a 375px: "Setup attivi — 50 in 5
+        // condizioni" rendeva questa riga 375px dentro un genitore di 350,
+        // 13px oltre il bordo dello schermo. Con `min-w-0`: 350, e il
+        // troncamento riprende a fare il suo mestiere.
+        "flex flex-wrap items-center justify-between gap-x-3 gap-y-1 min-w-0",
         className,
       )}
     >

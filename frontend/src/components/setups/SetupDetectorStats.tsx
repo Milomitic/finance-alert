@@ -1,6 +1,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import type { SetupDetectorStat } from "@/hooks/useSetups";
 import { cn } from "@/lib/utils";
+import { InfoHint } from "@/components/ui/info-hint";
 
 /* Which setup families actually work.
  *
@@ -89,6 +90,12 @@ function Num({ value, suffix = "" }: { value: number | null; suffix?: string }) 
   );
 }
 
+const METODO =
+  "L'efficacia è market-neutral: il setup ha battuto la mediana dell'universo " +
+  "nella propria direzione. Il conteggio delle finestre indipendenti, non delle " +
+  "righe, dimensiona la banda — setup che scattano a pochi giorni di distanza " +
+  "condividono quasi tutta la finestra futura e non sono osservazioni separate.";
+
 export default function SetupDetectorStats({ rows }: { rows: SetupDetectorStat[] }) {
   if (rows.length === 0) return null;
 
@@ -101,6 +108,16 @@ export default function SetupDetectorStats({ rows }: { rows: SetupDetectorStat[]
             <span className="ml-2 text-xs font-normal text-muted-foreground">
               {rows.length} famigli{rows.length === 1 ? "a" : "e"}
             </span>
+            {/* La nota metodologica stava sotto la tabella come paragrafo:
+                303 caratteri che su un telefono occupavano 120px di altezza
+                sopra il contenuto successivo, per dire una cosa che si legge
+                una volta sola. Il TESTO non cambia — cambia quando viene
+                chiesto. */}
+            <InfoHint
+              className="ml-1.5"
+              label="Per tipo di setup"
+              text={METODO}
+            />
           </h3>
           <span className="text-xs text-muted-foreground">
             efficacia contro il 50% · banda = incertezza
@@ -158,13 +175,6 @@ export default function SetupDetectorStats({ rows }: { rows: SetupDetectorStat[]
           </table>
         </div>
 
-        <p className="px-4 py-2 text-xs text-muted-foreground border-t">
-          L'efficacia è market-neutral: il setup ha battuto la mediana
-          dell'universo nella propria direzione. Il conteggio delle finestre
-          indipendenti, non delle righe, dimensiona la banda — setup che
-          scattano a pochi giorni di distanza condividono quasi tutta la
-          finestra futura e non sono osservazioni separate.
-        </p>
       </CardContent>
     </Card>
   );

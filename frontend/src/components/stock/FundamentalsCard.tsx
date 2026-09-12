@@ -20,6 +20,13 @@ import { useStockFundamentals } from "@/hooks/useStockFundamentals";
 import { fmtBig } from "@/lib/format";
 import { formatMoney } from "@/lib/money";
 import { cn } from "@/lib/utils";
+import { InfoHint } from "@/components/ui/info-hint";
+
+const EPS_GAAP_TRIMESTRALE =
+  "EPS GAAP del trimestre (conto economico) — include poste straordinarie (es. costi di fusione, impairment).";
+
+const EPS_GAAP_ANNUALE =
+  "EPS GAAP (conto economico) — include poste straordinarie (es. costi di fusione, impairment). Può divergere fortemente dalla somma degli EPS adjusted trimestrali.";
 
 interface Props {
   ticker: string;
@@ -212,15 +219,22 @@ function AnnualTabBody({
               <th className="px-1.5 py-1 text-right">Net Inc</th>
               <th
                 className="px-1.5 py-1 text-right"
-                title="EPS GAAP (conto economico) — include poste straordinarie (es. costi di fusione, impairment). Può divergere fortemente dalla somma degli EPS adjusted trimestrali."
               >
-                EPS<span className="ml-0.5 text-[0.6471rem] align-top text-muted-foreground">GAAP</span>
+                <span className="inline-flex items-center gap-1">
+                  <span>
+                    EPS
+                    <span className="ml-0.5 text-[0.6471rem] align-top text-muted-foreground">GAAP</span>
+                  </span>
+                  <InfoHint label="EPS GAAP" text={EPS_GAAP_ANNUALE} />
+                </span>
               </th>
               <th
                 className="px-1.5 py-1 text-right"
-                title="EPS adjusted — somma degli EPS reported trimestrali (esclude le poste straordinarie). È la metrica confrontata col consensus analisti (Est EPS) e usata per la Surprise."
               >
-                EPS adj.
+                <span className="inline-flex items-center gap-1">
+                  EPS adj.
+                  <InfoHint label="EPS adj." text="EPS adjusted — somma degli EPS reported trimestrali (esclude le poste straordinarie). È la metrica confrontata col consensus analisti (Est EPS) e usata per la Surprise." />
+                </span>
               </th>
               <th className="px-1.5 py-1 text-right">Est EPS</th>
               <th className="px-1.5 py-1 text-right">Surp</th>
@@ -413,15 +427,22 @@ function QuarterlyTabBody({
               <th className="px-1.5 py-1 text-right">Est Rev</th>
               <th
                 className="px-1.5 py-1 text-right"
-                title="EPS GAAP del trimestre (conto economico) — include poste straordinarie (es. costi di fusione, impairment)."
               >
-                EPS<span className="ml-0.5 text-[0.6471rem] align-top text-muted-foreground">GAAP</span>
+                <span className="inline-flex items-center gap-1">
+                  <span>
+                    EPS
+                    <span className="ml-0.5 text-[0.6471rem] align-top text-muted-foreground">GAAP</span>
+                  </span>
+                  <InfoHint label="EPS GAAP" text={EPS_GAAP_TRIMESTRALE} />
+                </span>
               </th>
               <th
                 className="px-1.5 py-1 text-right"
-                title="EPS adjusted reported — la cifra confrontata col consensus (Est EPS) e usata per la Surprise."
               >
-                EPS adj.
+                <span className="inline-flex items-center gap-1">
+                  EPS adj.
+                  <InfoHint label="EPS adj." text="EPS adjusted reported — la cifra confrontata col consensus (Est EPS) e usata per la Surprise." />
+                </span>
               </th>
               <th className="px-1.5 py-1 text-right">Est EPS</th>
               <th className="px-1.5 py-1 text-right">Surp</th>

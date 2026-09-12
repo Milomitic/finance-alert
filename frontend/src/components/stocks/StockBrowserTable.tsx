@@ -26,6 +26,7 @@ import { RISK_LABEL, RISK_TONE, scoreColor } from "@/lib/scoreMeta";
 import { getStockFlagCode } from "@/lib/stockMeta";
 import { formatCompactMoney, formatMoney } from "@/lib/money";
 import { GAP_TEXT, formatGap, lensGapOf } from "@/lib/lensGap";
+import { InfoHint } from "@/components/ui/info-hint";
 import { cn } from "@/lib/utils";
 
 /** Toggleable columns for the desktop screener table.
@@ -641,7 +642,7 @@ export function StockBrowserTable({
                   <SortableHeader column="pct_off_high" label="% da max 52w" align="right" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} />
                 )}
                 {isVisible("vs_ema200") && (
-                  <th className="px-3 py-1.5 text-right text-base uppercase tracking-wide font-semibold" title="Distanza % dalla EMA200">vs EMA200</th>
+                  <th className="px-3 py-1.5 text-right text-base uppercase tracking-wide font-semibold"><span className="inline-flex items-center gap-1">vs EMA200<InfoHint label="vs EMA200" text="Distanza % dalla EMA200" /></span></th>
                 )}
                 {isVisible("score") && (
                   <SortableHeader column="composite" label="Score" align="right" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} />

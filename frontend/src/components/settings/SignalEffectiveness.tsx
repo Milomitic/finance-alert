@@ -6,6 +6,7 @@ import { QueryError } from "@/components/ui/query-error";
 import { SectionTitle } from "@/components/ui/section-title";
 import { useDetectorPerformance } from "@/hooks/useDetectorPerformance";
 import { getAlertKindMeta } from "@/lib/alertMeta";
+import { InfoHint } from "@/components/ui/info-hint";
 import { cn } from "@/lib/utils";
 
 /* Efficacia dei segnali, letta dal magazzino degli esiti.
@@ -85,29 +86,44 @@ export function SignalEffectivenessTable({ rows }: { rows: DetectorPerfRow[] }) 
         <thead className="border-b bg-muted/30 text-muted-foreground">
           <tr className="text-left">
             <th className="px-3 py-2 font-semibold">Segnale</th>
-            <th className="px-3 py-2 text-right font-semibold" title="Esiti maturati nel magazzino.">
-              Righe
+            <th className="px-3 py-2 text-right font-semibold">
+              <span className="inline-flex items-center gap-1">
+                Righe
+                <InfoHint label="Righe" text="Esiti maturati nel magazzino." />
+              </span>
             </th>
             <th
               className="px-3 py-2 text-right font-semibold"
-              title="Finestre forward non sovrapposte coperte da quelle righe. E' questo il numero che decide quanto la percentuale sia affidabile."
             >
-              Finestre
+              <span className="inline-flex items-center gap-1">
+                Finestre
+                <InfoHint label="Finestre" text="Finestre forward non sovrapposte coperte da quelle righe. E' questo il numero che decide quanto la percentuale sia affidabile." />
+              </span>
             </th>
             <th
               className="px-3 py-2 text-right font-semibold"
-              title="Il prezzo si e' mosso nella direzione segnalata. Include il beta: in un mercato che sale, ogni segnale rialzista parte avvantaggiato."
             >
-              Hit assoluto
+              <span className="inline-flex items-center gap-1">
+                Hit assoluto
+                <InfoHint label="Hit assoluto" text="Il prezzo si e' mosso nella direzione segnalata. Include il beta: in un mercato che sale, ogni segnale rialzista parte avvantaggiato." />
+              </span>
             </th>
             <th
               className="px-3 py-2 text-right font-semibold"
-              title="Ha battuto la mediana dell'universo nella propria direzione. E' la parte che non si spiega col mercato."
             >
-              Skill
+              <span className="inline-flex items-center gap-1">
+                Skill
+                <InfoHint label="Skill" text="Ha battuto la mediana dell'universo nella propria direzione. E' la parte che non si spiega col mercato." />
+              </span>
             </th>
-            <th className="px-3 py-2 text-right font-semibold" title="Intervallo di Wilson al 95% sulla skill, dimensionato sulle finestre indipendenti.">
-              Intervallo 95%
+            <th className="px-3 py-2 text-right font-semibold">
+              <span className="inline-flex items-center gap-1">
+                Intervallo 95%
+                <InfoHint
+                  label="Intervallo 95%"
+                  text="Intervallo di Wilson al 95% sulla skill, dimensionato sulle finestre indipendenti."
+                />
+              </span>
             </th>
             <th className="px-3 py-2 text-left font-semibold">Verdetto</th>
           </tr>

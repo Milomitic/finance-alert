@@ -89,6 +89,7 @@ import {
 import { QueryError } from "@/components/ui/query-error";
 import { fmtBig } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { InfoHint } from "@/components/ui/info-hint";
 
 /* InstitutionalsPage — overview of all tracked institutional/superinvestor
  * portfolios.
@@ -378,23 +379,29 @@ export default function InstitutionalsPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <header className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
+      <header className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
           <Building2 className="h-7 w-7 text-foreground/80" />
           <div>
             <h1 className="text-2xl font-semibold">Superinvestor &amp; istituzionali</h1>
-            <p className="text-sm text-muted-foreground">
-              Portafogli 13F-equivalenti tracciati. {counts} fondi disponibili.
-            </p>
-            {/* Caption di onestà: il 13F non è un feed real-time — chi
-                legge deve sapere che le posizioni possono avere fino a
-                ~135 giorni (trimestre + finestra di deposito). */}
-            <p className="text-xs text-muted-foreground">
-              13F: dati trimestrali, depositati fino a 45gg dopo il fine trimestre.
+            <p className="flex items-center gap-1 text-sm text-muted-foreground">
+              <span className="min-w-0">
+                Portafogli 13F-equivalenti tracciati. {counts} fondi disponibili.
+              </span>
+              {/* Caption di onestà: il 13F non è un feed real-time — chi legge
+                  deve sapere che le posizioni possono avere fino a ~135 giorni
+                  (trimestre + finestra di deposito).
+                  ⚠️ Era una seconda riga di testo sotto questa: su 375px
+                  occupava 51px di altezza sopra la lista, per una precisazione
+                  che si legge una volta. Il contenuto non cambia. */}
+              <InfoHint
+                label="13F"
+                text="Dati trimestrali, depositati fino a 45 giorni dopo la fine del trimestre: una posizione può avere fino a ~135 giorni."
+              />
             </p>
           </div>
         </div>
-        <div className="flex gap-1 text-sm">
+        <div className="flex flex-wrap gap-1 text-sm">
           <button
             type="button"
             className={cn(

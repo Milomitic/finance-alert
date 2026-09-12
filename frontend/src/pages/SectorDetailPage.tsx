@@ -98,9 +98,9 @@ export default function SectorDetailPage() {
   const d = q.data;
 
   return (
-    <div className="p-6 space-y-6 max-w-[1400px] mx-auto">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
+    <div className="p-4 sm:p-6 space-y-6 max-w-[1400px] mx-auto">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
           {/* eslint-disable-next-line react-hooks/static-components -- lookup, not a component created during render; see the const above */}
           <Icon className={cn("h-7 w-7", iconColor)} strokeWidth={1.75} />
           <div>

@@ -54,8 +54,8 @@ export function RecentAlertsFeed({ alerts }: Props) {
             <TableHead className="text-xs">Titolo</TableHead>
             <TableHead className="text-xs">Natura</TableHead>
             <TableHead className="text-xs">Regola</TableHead>
-            <TableHead className="text-xs text-right" title="Forza del pattern (0-100)">Forza</TableHead>
-            <TableHead className="text-xs text-right" title={PROBABILITA_TOOLTIP}>Prob.</TableHead>
+            <TableHead className="text-xs text-right" hint="Forza del pattern (0-100)">Forza</TableHead>
+            <TableHead className="text-xs text-right" hint={PROBABILITA_TOOLTIP}>Prob.</TableHead>
             <TableHead className="text-xs text-right">Prezzo</TableHead>
             <TableHead className="text-xs text-right pr-4">Data</TableHead>
           </TableRow>

@@ -12,6 +12,7 @@ import { SectionTitle } from "@/components/ui/section-title";
 import { useDetectorPerformance } from "@/hooks/useDetectorPerformance";
 import { getAlertKindMeta } from "@/lib/alertMeta";
 import { cn } from "@/lib/utils";
+import { InfoHint } from "@/components/ui/info-hint";
 
 /* ─── DetectorPerformancePanel — esplora esiti per detector ─────────────── *
  *
@@ -88,9 +89,11 @@ export function DetectorPerformancePanel() {
                         </th>
                         <th
                           className="text-right px-3 py-2 font-semibold"
-                          title="Hit-rate market-neutral: quota di segnali che hanno battuto la media dell'universo nella loro direzione (skill al netto del mercato)."
                         >
-                          Hit neutro
+                          <span className="inline-flex items-center gap-1">
+                            Hit neutro
+                            <InfoHint label="Hit neutro" text="Hit-rate market-neutral: quota di segnali che hanno battuto la media dell'universo nella loro direzione (skill al netto del mercato)." />
+                          </span>
                         </th>
                         <th className="text-right px-3 py-2 font-semibold">
                           Fwd medio

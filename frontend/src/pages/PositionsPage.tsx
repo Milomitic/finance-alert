@@ -248,7 +248,7 @@ export default function PositionsPage() {
                             rispondere a «sono piu vicino allo stop o al
                             target?» costava tre sottrazioni per riga. La barra
                             e quella risposta, i tre numeri restano sotto. */}
-                        <TableHead title="Da stop a target, con l'ingresso e il prezzo. E una misura geometrica: la distanza dallo stop non e la perdita massima, perche un gap apre dove trova mercato.">
+                        <TableHead hint="Da stop a target, con l'ingresso e il prezzo. E una misura geometrica: la distanza dallo stop non e la perdita massima, perche un gap apre dove trova mercato.">
                           Geometria
                         </TableHead>
                         <TableHead className="text-right">Prezzo</TableHead>

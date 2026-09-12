@@ -356,7 +356,7 @@ export default function InstitutionalDetailPage() {
             </div>
             <div className="flex items-center gap-2">
               <select
-                className="rounded border bg-background px-2 py-1 text-base"
+                className="min-w-0 max-w-full rounded border bg-background px-2 py-1 text-base"
                 value={periodParam ?? institutional.latest_period_end ?? ""}
                 onChange={(e) => {
                   const v = e.target.value;

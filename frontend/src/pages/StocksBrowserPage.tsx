@@ -470,7 +470,11 @@ export default function StocksBrowserPage() {
           dropdown sits on the left so the user can choose density before
           paging; prev/next on the right matches the bottom strip's layout. */}
       <div className="flex items-center justify-between gap-2 px-1 flex-wrap">
-        <div className="flex items-center gap-2">
+        {/* ⚠️ `flex-wrap` sul contenitore esterno non basta: manda a capo gli
+            ELEMENTI, non spezza un elemento che da solo e' piu largo della
+            riga. Questo gruppo misurava 445px su 375 e usciva dallo schermo
+            portandosi dietro il genitore. Il wrap va dove la riga si rompe. */}
+        <div className="flex flex-wrap items-center gap-2 gap-y-1">
           <span className="text-xs text-muted-foreground">Righe per pagina</span>
           <Select
             value={String(pageSize)}

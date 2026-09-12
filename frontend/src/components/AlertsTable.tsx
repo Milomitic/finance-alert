@@ -24,6 +24,7 @@ import {
   isDelayedDetection,
 } from "@/lib/alertDates";
 import { PROBABILITA_TOOLTIP, isSignalKind, snapshotForza, snapshotProbabilita } from "@/lib/alertMeta";
+import { InfoHint } from "@/components/ui/info-hint";
 import { cn } from "@/lib/utils";
 
 /** Toggleable columns for the non-embedded alerts table.
@@ -91,7 +92,7 @@ function SortableHeader({
   column,
   label,
   align = "left",
-  title,
+  hint,
   sortBy,
   sortDir,
   onSort,
@@ -99,7 +100,7 @@ function SortableHeader({
   column: string;
   label: string;
   align?: "left" | "right";
-  title?: string;
+  hint?: string;
   sortBy: string;
   sortDir: "asc" | "desc";
   onSort: (col: string) => void;
@@ -112,21 +113,31 @@ function SortableHeader({
         align === "right" ? "text-right" : "text-left",
       )}
     >
-      <button
-        type="button"
-        onClick={() => onSort(column)}
-        title={title}
+      {/* L'aiuto e' FRATELLO del bottone di ordinamento, non figlio: un
+          <button> dentro un <button> e' HTML non valido, e il browser
+          scioglie l'annidamento in modi che rompono il click e la
+          navigazione da tastiera. */}
+      <span
         className={cn(
-          "inline-flex items-center gap-1 hover:text-foreground transition-colors",
-          active && "text-foreground",
+          "inline-flex items-center gap-1",
           align === "right" && "ml-auto",
         )}
       >
-        <span>{label}</span>
-        {active && sortDir === "desc" && <ArrowDown className="h-3 w-3" />}
-        {active && sortDir === "asc" && <ArrowUp className="h-3 w-3" />}
-        {!active && <ArrowUpDown className="h-3 w-3 opacity-30" />}
-      </button>
+        <button
+          type="button"
+          onClick={() => onSort(column)}
+          className={cn(
+            "inline-flex items-center gap-1 hover:text-foreground transition-colors",
+            active && "text-foreground",
+          )}
+        >
+          <span>{label}</span>
+          {active && sortDir === "desc" && <ArrowDown className="h-3 w-3" />}
+          {active && sortDir === "asc" && <ArrowUp className="h-3 w-3" />}
+          {!active && <ArrowUpDown className="h-3 w-3 opacity-30" />}
+        </button>
+        {hint && <InfoHint label={label} text={hint} />}
+      </span>
     </th>
   );
 }
@@ -240,13 +251,13 @@ export function AlertsTable({
               <SortableHeader
                 column="signal_date"
                 label="Data segnale"
-                title="Data della barra di mercato in cui la regola è scattata"
+                hint="Data della barra di mercato in cui la regola è scattata"
                 sortBy={sortBy}
                 sortDir={sortDir}
                 onSort={onSort}
               />
             ) : (
-              <TableHead className="text-base" title="Data della barra di mercato in cui la regola è scattata">
+              <TableHead className="text-base" hint="Data della barra di mercato in cui la regola è scattata">
                 Data segnale
               </TableHead>
             )
@@ -256,13 +267,13 @@ export function AlertsTable({
               <SortableHeader
                 column="triggered_at"
                 label="Rilevato"
-                title="Quando il sistema ha registrato il segnale"
+                hint="Quando il sistema ha registrato il segnale"
                 sortBy={sortBy}
                 sortDir={sortDir}
                 onSort={onSort}
               />
             ) : (
-              <TableHead className="text-base" title="Quando il sistema ha registrato il segnale">
+              <TableHead className="text-base" hint="Quando il sistema ha registrato il segnale">
                 Rilevato
               </TableHead>
             )
@@ -318,17 +329,17 @@ export function AlertsTable({
             <TableHead className="text-base">Catena</TableHead>
           )}
           {showNatura && (
-            <TableHead className="text-base" title="Natura del segnale: continuazione del trend o inversione">
+            <TableHead className="text-base" hint="Natura del segnale: continuazione del trend o inversione">
               Natura
             </TableHead>
           )}
           {showTono && (
-            <TableHead className="text-base" title="Direzione semantica del segnale (rialzista / ribassista / neutra)">
+            <TableHead className="text-base" hint="Direzione semantica del segnale (rialzista / ribassista / neutra)">
               Tono
             </TableHead>
           )}
           {showOrizzonte && (
-            <TableHead className="text-base" title="Orizzonte temporale del segnale (breve / medio / lungo)">
+            <TableHead className="text-base" hint="Orizzonte temporale del segnale (breve / medio / lungo)">
               Orizzonte
             </TableHead>
           )}
@@ -338,13 +349,13 @@ export function AlertsTable({
                 column="strength"
                 label="Forza"
                 align="right"
-                title="Forza del pattern (0-100)"
+                hint="Forza del pattern (0-100)"
                 sortBy={sortBy}
                 sortDir={sortDir}
                 onSort={onSort}
               />
             ) : (
-              <TableHead className="text-base text-right" title="Forza del pattern (0-100)">
+              <TableHead className="text-base text-right" hint="Forza del pattern (0-100)">
                 Forza
               </TableHead>
             )
@@ -357,14 +368,14 @@ export function AlertsTable({
               that read as "best signals first" and was nothing of the kind.
               The "Tipo segnale" filter selects detectors properly. */}
           {showProbabilita && (
-            <TableHead className="text-base text-right" title={PROBABILITA_TOOLTIP}>
+            <TableHead className="text-base text-right" hint={PROBABILITA_TOOLTIP}>
               Prob.
             </TableHead>
           )}
           {showEsito && (
             <TableHead
               className="text-base"
-              title="Esito realizzato del segnale all'orizzonte di riferimento: verde = direzione azzeccata, rosso = mancata, … = in maturazione"
+              hint="Esito realizzato del segnale all'orizzonte di riferimento: verde = direzione azzeccata, rosso = mancata, … = in maturazione"
             >
               Esito
             </TableHead>

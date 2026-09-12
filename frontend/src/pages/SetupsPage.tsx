@@ -14,6 +14,7 @@ import { useAlert } from "@/hooks/useAlerts";
 import { useSetups, type Setup, type SetupStats } from "@/hooks/useSetups";
 import { detectorCounts, detectorLabel, groupByCondition, type SetupSortKey } from "@/lib/setupGrouping";
 import { cn } from "@/lib/utils";
+import { InfoHint } from "@/components/ui/info-hint";
 
 /* ─── Setups — cosa si sta formando, PRIMA del segnale ─────────────────────
  *
@@ -46,7 +47,14 @@ function StatsStrip({ stats }: { stats: SetupStats }) {
   const tiles: {
     label: string;
     value: string;
+    /** Cifra o intervallo che accompagna il valore: resta SEMPRE a schermo.
+     *  Bande di confidenza, minimi/massimi, "non concludente" — nasconderli
+     *  dietro un tocco significherebbe mostrare un tasso senza il campione
+     *  che lo regge, che e' esattamente cio' che questo repo non fa. */
     hint?: string;
+    /** Spiegazione in prosa: non e' un dato, si legge una volta, e su un
+     *  telefono costava due righe per piastrella. Va nel popup. */
+    note?: string;
     tone?: "ok" | "bad" | null;
   }[] = [
     {
@@ -176,7 +184,7 @@ function StatsStrip({ stats }: { stats: SetupStats }) {
       // effettivamente SURFACED: uno che l'utente non ha mai visto non gli ha
       // promesso niente, quindi contarne l'esito misurerebbe qualcosa che la
       // funzione non ha mai offerto. In produzione sono 71 su ~1.800 righe.
-      hint: "setup effettivamente mostrati in lista, non l'intera tabella",
+      note: "Conta i setup effettivamente mostrati in lista, non l'intera tabella.",
     },
   ];
 
@@ -185,8 +193,9 @@ function StatsStrip({ stats }: { stats: SetupStats }) {
       {tiles.map((t) => (
         <Card key={t.label}>
           <CardContent className="p-3">
-            <div className="text-[0.6765rem] uppercase tracking-wider text-muted-foreground font-mono truncate">
-              {t.label}
+            <div className="flex items-center gap-1 text-[0.6765rem] uppercase tracking-wider text-muted-foreground font-mono">
+              <span className="truncate">{t.label}</span>
+              {t.note && <InfoHint label={t.label} text={t.note} />}
             </div>
             <div
               className={cn(

@@ -165,7 +165,7 @@ function TopRow({
         {/* Meta columns: a full second line on a phone, and at sm+
             `contents` dissolves this wrapper so the original
             seven-column row is preserved exactly. */}
-        <div className="flex w-full items-center gap-2 pl-6 sm:pl-0 sm:w-auto sm:contents">
+        <div className="flex w-full flex-wrap items-center gap-x-1.5 gap-y-1 pl-3 sm:flex-nowrap sm:gap-2 sm:pl-0 sm:w-auto sm:contents">
         {/* Tono (+ contested flag + bull multi-horizon conviction) */}
         <div className="w-[4.25rem] shrink-0 flex items-center gap-1">
           <DirPill direction={c.direction} />
