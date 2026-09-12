@@ -28,12 +28,12 @@ class TestLettura:
     def test_legge_le_due_date(self, tmp_path):
         p = _scrivi(tmp_path, json.dumps({
             "apt_security_date": "2026-09-12",
-            "built_at": "2026-09-12T14:39:33Z",
+            "apt_layer_built_at": "2026-09-12T14:39:33Z",
         }))
         prov = ip.read_provenance(p)
         assert prov is not None
         assert prov.apt_security_date == date(2026, 9, 12)
-        assert prov.built_at is not None
+        assert prov.apt_layer_built_at is not None
 
     def test_file_assente_non_esplode_e_non_inventa(self, tmp_path):
         """In sviluppo il file non c'e'. Deve dire NON SO, non una data finta:
@@ -46,12 +46,12 @@ class TestLettura:
         valore che compare quando qualcuno costruisce a mano SENZA passare il
         build-arg, cioe' esattamente il caso in cui non si sa nulla."""
         p = _scrivi(tmp_path, json.dumps({
-            "apt_security_date": "unknown", "built_at": "unknown",
+            "apt_security_date": "unknown", "apt_layer_built_at": "unknown",
         }))
         prov = ip.read_provenance(p)
         assert prov is not None
         assert prov.apt_security_date is None
-        assert prov.built_at is None
+        assert prov.apt_layer_built_at is None
 
     def test_json_corrotto_degrada_a_none(self, tmp_path):
         assert ip.read_provenance(_scrivi(tmp_path, "{non json")) is None
@@ -88,7 +88,7 @@ class TestSoglia:
         assert 3 <= ip.STALE_AFTER_DAYS <= 14
 
 
-@pytest.mark.parametrize("payload", ['{"built_at": "2026-09-12T00:00:00Z"}', "{}"])
+@pytest.mark.parametrize("payload", ['{"apt_layer_built_at": "2026-09-12T00:00:00Z"}', "{}"])
 def test_campi_mancanti_non_esplodono(tmp_path, payload):
     prov = ip.read_provenance(_scrivi(tmp_path, payload))
     assert prov is not None
@@ -124,13 +124,13 @@ class TestLacuneTrovateDalMutante:
     def test_una_data_con_orario_viene_troncata_al_giorno(self, tmp_path):
         """Il mutante `[:10]` -> `[:11]` sopravviveva perche' ogni fixture
         passava una data nuda, dove i due tagli coincidono. Ma il Dockerfile
-        scrive `built_at` come timestamp completo, e nulla impedisce che un
+        scrive `apt_layer_built_at` come timestamp completo, e nulla impedisce che un
         domani `apt_security_date` lo diventi: il taglio deve restare al
         giorno, o `fromisoformat` riceverebbe `2026-09-12T` e solleverebbe.
         """
         p = _scrivi(tmp_path, json.dumps({
             "apt_security_date": "2026-09-12T14:39:33Z",
-            "built_at": "2026-09-12T14:39:33Z",
+            "apt_layer_built_at": "2026-09-12T14:39:33Z",
         }))
         prov = ip.read_provenance(p)
         assert prov is not None

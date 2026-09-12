@@ -100,8 +100,10 @@ export type DeployHealth = {
   git_sha: string | null;
   uptime_seconds: number | null;
   started_at: string | null;
-  /** Quando questa immagine e' stata costruita. */
-  image_built_at: string | null;
+  /** ⚠️ Istante in cui il LIVELLO delle patch e' stato costruito, NON
+   *  l'immagine: con la cache riusata (ogni push dello stesso giorno) due
+   *  immagini diverse riportano lo stesso valore. */
+  apt_layer_built_at: string | null;
   /** Quando questa immagine ha letto l'archivio di sicurezza Debian.
    *
    *  ⚠️ Non e' un dettaglio da build. Il 12 settembre 2026 il livello Docker

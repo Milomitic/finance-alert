@@ -56,7 +56,12 @@ class Provenance:
     """Le due date impresse nell'immagine. `None` significa NON SO."""
 
     apt_security_date: date | None
-    built_at: datetime | None
+    #: ⚠️ L'istante in cui il LIVELLO delle patch e' stato costruito, non
+    #: l'immagine. Quando la cache lo riusa — ogni push dello stesso giorno —
+    #: due immagini diverse riportano lo stesso valore, ed e' voluto: la
+    #: granularita' scelta e' giornaliera. Il nome lo dice, perche' `built_at`
+    #: sarebbe stato letto come data dell'immagine.
+    apt_layer_built_at: datetime | None
 
 
 def _as_date(raw: object) -> date | None:
@@ -97,7 +102,7 @@ def read_provenance(path: Path | str | None = None) -> Provenance | None:
         return None
     return Provenance(
         apt_security_date=_as_date(dati.get("apt_security_date")),
-        built_at=_as_datetime(dati.get("built_at")),
+        apt_layer_built_at=_as_datetime(dati.get("apt_layer_built_at")),
     )
 
 

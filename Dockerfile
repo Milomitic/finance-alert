@@ -98,7 +98,7 @@ RUN echo "archivio sicurezza Debian: ${APT_SECURITY_DATE}" \
  && apt-get upgrade -y --no-install-recommends \
  && apt-get clean \
  && rm -rf /var/lib/apt/lists/* \
- && printf '{"apt_security_date":"%s","built_at":"%s"}' \
+ && printf '{"apt_security_date":"%s","apt_layer_built_at":"%s"}' \
       "${APT_SECURITY_DATE}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
       > /etc/image-provenance.json
 
@@ -110,6 +110,13 @@ RUN echo "archivio sicurezza Debian: ${APT_SECURITY_DATE}" \
 # dentro l'app. Scrivere la data nell'IMMAGINE e' un'asserzione positiva
 # sull'ARTEFATTO — se il livello non gira, la data resta quella vecchia e
 # chiunque la legga se ne accorge: la CI, un test, e il cruscotto.
+#
+# ⚠️ `apt_layer_built_at` e NON `built_at`: e' l'istante in cui questo
+# LIVELLO e' stato costruito, non l'immagine. Quando la cache lo riusa —
+# cioe' per tutti i push dello stesso giorno, che e' il comportamento
+# voluto — due immagini diverse riportano lo stesso valore. Il primo nome
+# era `built_at` e sarebbe stato letto come data dell'immagine: verificato
+# il 12 settembre, due rilasci diversi con lo stesso istante al secondo.
 #
 # Sta nello STESSO RUN delle patch, non in uno successivo: due livelli
 # separati possono essere invalidati indipendentemente, e un file-data fresco

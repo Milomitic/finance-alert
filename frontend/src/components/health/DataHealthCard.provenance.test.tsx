@@ -24,7 +24,7 @@ function deploy(over: Partial<DeployHealth> = {}): DeployHealth {
     git_sha: "9458682c401a57b8f8fd13070a80d601442960ed",
     uptime_seconds: 120,
     started_at: "2026-09-12T14:50:00Z",
-    image_built_at: "2026-09-12T14:39:33Z",
+    apt_layer_built_at: "2026-09-12T14:39:33Z",
     apt_security_date: "2026-09-12",
     apt_age_days: 0,
     apt_stale: false,

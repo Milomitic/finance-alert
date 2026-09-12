@@ -281,7 +281,7 @@ class TestProvenienzaImmagine:
         r = client.get("/api/platform/health")
         assert r.status_code == 200
         deploy = r.json()["deploy"]
-        for campo in ("image_built_at", "apt_security_date", "apt_age_days", "apt_stale"):
+        for campo in ("apt_layer_built_at", "apt_security_date", "apt_age_days", "apt_stale"):
             assert campo in deploy, campo
         assert deploy["apt_stale"] is None
 
@@ -293,14 +293,14 @@ class TestProvenienzaImmagine:
         f = tmp_path / "image-provenance.json"
         f.write_text(json.dumps({
             "apt_security_date": _oggi_iso(),
-            "built_at": "2026-09-12T14:39:33Z",
+            "apt_layer_built_at": "2026-09-12T14:39:33Z",
         }), encoding="utf-8")
         monkeypatch.setattr(image_provenance, "PROVENANCE_PATH", f)
 
         deploy = client.get("/api/platform/health").json()["deploy"]
         assert deploy["apt_age_days"] == 0
         assert deploy["apt_stale"] is False
-        assert deploy["image_built_at"] is not None
+        assert deploy["apt_layer_built_at"] is not None
 
     def test_una_provenienza_VECCHIA_viene_segnalata(self, client, tmp_path, monkeypatch):
         """Il controllo negativo del test sopra: se questo non diventasse
@@ -318,7 +318,7 @@ class TestProvenienzaImmagine:
         f = tmp_path / "image-provenance.json"
         f.write_text(json.dumps({
             "apt_security_date": vecchia.isoformat(),
-            "built_at": "2026-08-19T10:00:00Z",
+            "apt_layer_built_at": "2026-08-19T10:00:00Z",
         }), encoding="utf-8")
         monkeypatch.setattr(image_provenance, "PROVENANCE_PATH", f)
 

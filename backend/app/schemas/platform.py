@@ -170,7 +170,9 @@ class DeployHealthOut(BaseModel):
     #
     # `None` ovunque significa NON SO (immagine costruita a mano, o sviluppo):
     # non va letto come «fresca».
-    image_built_at: str | None = None
+    # ⚠️ Istante del LIVELLO delle patch, non dell'immagine: con la cache
+    # riusata due immagini diverse riportano lo stesso valore.
+    apt_layer_built_at: str | None = None
     apt_security_date: str | None = None
     apt_age_days: int | None = None
     apt_stale: bool | None = None

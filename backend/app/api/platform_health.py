@@ -191,8 +191,10 @@ def _deploy_health() -> DeployHealthOut:
         git_sha=os.environ.get("GIT_SHA") or None,
         uptime_seconds=int(time.time() - started),
         started_at=datetime.fromtimestamp(started, UTC).isoformat(),
-        image_built_at=(
-            prov.built_at.isoformat() if prov and prov.built_at else None
+        apt_layer_built_at=(
+            prov.apt_layer_built_at.isoformat()
+            if prov and prov.apt_layer_built_at
+            else None
         ),
         apt_security_date=apt_date.isoformat() if apt_date else None,
         apt_age_days=image_provenance.apt_age_days(apt_date),
