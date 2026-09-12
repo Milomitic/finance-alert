@@ -175,9 +175,24 @@ def cached_rates() -> dict[str, float]:
                 out[cur] = rate
     out["USD"] = 1.0
     for alias in ("GBp", "GBX", "gbp", "gbx"):
-        maggiore = major_unit_currency(alias)
-        if maggiore and maggiore in out:
-            out[alias] = out[maggiore]
+        # ⚠️ `major_unit_currency` NON normalizza il caso: per "gbp" restituisce
+        # "gbp", che non e' una chiave di `out`. Prima di questa riga il ciclo
+        # elencava quattro alias e ne consegnava DUE — cioe' il codice
+        # dichiarava una gestione che non avveniva, la stessa forma del
+        # commento che mente.
+        #
+        # Si normalizza QUI e non in `major_unit_currency`: quella funzione e'
+        # proprietaria unica della regola dell'etichetta e gira anche al
+        # momento dell'ingest, dove cambiare il comportamento sul caso avrebbe
+        # conseguenze che questa correzione non ha misurato.
+        #
+        # Oggi nessuna riga in produzione usa una valuta minuscola (misurato:
+        # 9 valute distinte, tutte maiuscole), quindi era latente — ma il
+        # prossimo feed che minuscolizza troverebbe il ciclo pronto.
+        maggiore = major_unit_currency(alias) or ""
+        chiave = maggiore if maggiore in out else maggiore.upper()
+        if chiave in out:
+            out[alias] = out[chiave]
     return out
 
 

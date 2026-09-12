@@ -68,6 +68,7 @@ BERSAGLI: dict[str, list[str]] = {
         "tests/test_fx_honesty.py",
         "tests/test_position_fx.py",
         "tests/test_risk_market_cap_currency.py",
+        "tests/test_fx_lacune_mutanti.py",
     ],
     # Il tetto di 28 giorni sull'attesa di un setup: la scelta fra finestra
     # scorrevole e tetto e' stata misurata, e un fuori-di-uno la disfa.
