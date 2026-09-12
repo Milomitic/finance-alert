@@ -93,3 +93,45 @@ def test_campi_mancanti_non_esplodono(tmp_path, payload):
     prov = ip.read_provenance(_scrivi(tmp_path, payload))
     assert prov is not None
     assert prov.apt_security_date is None
+
+
+class TestLacuneTrovateDalMutante:
+    """Due lacune che `app.scripts.mutation_probe` ha scoperto il primo giorno.
+
+    Entrambe erano righe COPERTE — i test le eseguivano — la cui correttezza
+    nessuno verificava. E' la differenza fra «questa riga e' partita» e «un suo
+    errore verrebbe notato», che la copertura non sa distinguere.
+    """
+
+    def test_il_bordo_della_soglia_e_ESCLUSIVO(self):
+        """Esattamente alla soglia NON e' ancora stantia.
+
+        Il mutante `>` -> `>=` a riga 122 sopravviveva: nessun test toccava il
+        bordo, quindi il fuori-di-uno piu' comune che esista sarebbe passato.
+        La scelta e' esclusiva di proposito — a 7 giorni netti l'immagine e'
+        ancora dentro la finestra dichiarata.
+        """
+        from datetime import date, timedelta
+
+        oggi = date(2026, 9, 19)
+        esatta = oggi - timedelta(days=ip.STALE_AFTER_DAYS)
+        assert ip.apt_age_days(esatta, oggi=oggi) == ip.STALE_AFTER_DAYS
+        assert ip.is_stale(esatta, oggi=oggi) is False
+
+        oltre = oggi - timedelta(days=ip.STALE_AFTER_DAYS + 1)
+        assert ip.is_stale(oltre, oggi=oggi) is True
+
+    def test_una_data_con_orario_viene_troncata_al_giorno(self, tmp_path):
+        """Il mutante `[:10]` -> `[:11]` sopravviveva perche' ogni fixture
+        passava una data nuda, dove i due tagli coincidono. Ma il Dockerfile
+        scrive `built_at` come timestamp completo, e nulla impedisce che un
+        domani `apt_security_date` lo diventi: il taglio deve restare al
+        giorno, o `fromisoformat` riceverebbe `2026-09-12T` e solleverebbe.
+        """
+        p = _scrivi(tmp_path, json.dumps({
+            "apt_security_date": "2026-09-12T14:39:33Z",
+            "built_at": "2026-09-12T14:39:33Z",
+        }))
+        prov = ip.read_provenance(p)
+        assert prov is not None
+        assert prov.apt_security_date == date(2026, 9, 12)

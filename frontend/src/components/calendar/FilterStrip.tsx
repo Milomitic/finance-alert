@@ -102,7 +102,12 @@ export function FilterStrip({
     // dipende da cosa c'e' nel database non e' ripetibile.
     <div className="inline-flex max-w-full flex-wrap items-stretch gap-1 rounded-lg border bg-card p-1 shadow-sm">
       {/* Kind segment */}
-      <div className="flex items-stretch gap-1">
+      {/* ⚠️ Anche qui: `max-w-full` sul contenitore esterno aveva ridotto
+          lo sbordo da 19px a 14px ma non lo aveva chiuso, perche' questo
+          gruppo resta una riga sola. Il wrap va messo DOVE la riga si
+          rompe, non solo in cima — e' la stessa lezione di /stocks e
+          /calendar del 12 settembre. Misurato dal gate e2e in CI. */}
+      <div className="flex flex-wrap items-stretch gap-1">
         {KIND_OPTIONS.map((opt) => {
           const Icon = opt.icon;
           const isActive = kind === opt.value;
@@ -146,7 +151,7 @@ export function FilterStrip({
       {/* Importance segment */}
       <div
         className={cn(
-          "flex items-stretch gap-1",
+          "flex flex-wrap items-stretch gap-1",
           importanceDisabled && "opacity-50",
         )}
       >
