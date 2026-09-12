@@ -14,7 +14,6 @@
     "app/services/fx_service.py:205  Or -> And",
     "app/services/fx_service.py:37  6 -> 7",
     "app/services/fx_service.py:37  60 -> 61",
-    "app/services/fx_service.py:37  60 -> 61",
     "app/services/fx_service.py:46  1 -> 2",
     "app/services/fx_service.py:47  1 -> 2",
     "app/services/fx_service.py:48  1 -> 2",
@@ -40,14 +39,12 @@
     "app/services/setup_service.py:258  Or -> And",
     "app/services/setup_service.py:32  10 -> 11",
     "app/services/setup_service.py:341  1 -> 2",
-    "app/services/setup_service.py:341  1 -> 2",
     "app/services/setup_service.py:341  Eq -> NotEq",
     "app/services/setup_service.py:342  0 -> 1",
     "app/services/setup_service.py:342  1 -> 2",
     "app/services/setup_service.py:342  Eq -> NotEq",
     "app/services/setup_service.py:351  2 -> 3",
     "app/services/setup_service.py:352  1 -> 2",
-    "app/services/setup_service.py:352  2 -> 3",
     "app/services/setup_service.py:352  2 -> 3",
     "app/services/setup_service.py:362  1 -> 2",
     "app/services/setup_service.py:362  Eq -> NotEq",
@@ -64,7 +61,6 @@
     "app/services/setup_service.py:445  1 -> 2",
     "app/services/setup_service.py:445  2 -> 3",
     "app/services/setup_service.py:478  1 -> 2",
-    "app/services/setup_service.py:478  1 -> 2",
     "app/services/setup_service.py:478  Eq -> NotEq",
     "app/services/setup_service.py:479  1 -> 2",
     "app/services/setup_service.py:484  And -> Or",
@@ -78,7 +74,6 @@
     "app/services/setup_service.py:539  Eq -> NotEq",
     "app/services/setup_service.py:545  And -> Or",
     "app/services/setup_service.py:548  1 -> 2",
-    "app/services/setup_service.py:548  1 -> 2",
     "app/services/setup_service.py:548  Eq -> NotEq",
     "app/services/setup_service.py:549  1 -> 2",
     "app/services/setup_service.py:554  And -> Or",
@@ -88,5 +83,6 @@
     "app/services/setup_service.py:574  0 -> 1",
     "app/services/setup_service.py:575  1 -> 2",
     "app/services/setup_service.py:576  Lt -> LtE"
-  ]
+  ],
+  "_nota_duplicati": "Le chiavi sono 'file:riga  prima -> dopo' e NON sono uniche: due mutazioni identiche sulla stessa riga (per esempio due '1 -> 2' in una stessa espressione) producono la stessa chiave. Deduplicate, o il conteggio a schermo direbbe piu' sopravvissuti di quanti il confronto ne consideri."
 }

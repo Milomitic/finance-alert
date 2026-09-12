@@ -609,10 +609,10 @@ gira ovunque, si legge in una pagina.
 senza che nessuno lo chiedesse. Il lockfile e' stato ripristinato dal backup: un
 `uv remove` non e' l'inverso di un `uv add`.
 
-**La passata completa: 130 mutanti, 43 uccisi, 85 sopravvissuti** — un
+**La passata completa: 130 mutanti, 43 uccisi, 80 sopravvissuti unici** — un
 punteggio del 33% su quattro moduli a proprietario unico. Il numero e' scomodo
 ed e' quello vero: pretendere lo zero avrebbe significato o scrivere decine di
-test in un colpo, o dichiarare equivalenti ottantacinque mutanti che non lo
+test in un colpo, o dichiarare equivalenti ottanta mutanti che non lo
 sono, cioe' mentire in un file che esiste per dire la verita'. Congelato come
 linea di base con cricchetto sulla crescita, come a11y e codice morto, e a
 schermo nella scheda Verifica.

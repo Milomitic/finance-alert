@@ -284,8 +284,8 @@ def main() -> int:
     nuovi = [s for s in sopravvissuti if s not in EQUIVALENTI and s not in base]
     uccisi_da_poco = sorted(base - set(sopravvissuti))
     print(
-        f"mutanti: {totale}, uccisi {uccisi}, sopravvissuti {len(sopravvissuti)} "
-        f"({len(EQUIVALENTI)} equivalenti dichiarati, {len(base)} in linea di base)"
+        f"mutanti: {totale}, uccisi {uccisi}, sopravvissuti {len(set(sopravvissuti))} "
+        f"unici ({len(EQUIVALENTI)} equivalenti dichiarati, {len(base)} in linea di base)"
     )
 
     if not _albero_pulito(list(bersagli)):
@@ -299,7 +299,12 @@ def main() -> int:
             "_perche": _PERCHE_BASE,
             "totale_mutanti": totale,
             "uccisi": uccisi,
-            "sopravvissuti": sorted(s for s in sopravvissuti if s not in EQUIVALENTI),
+            # ⚠️ Deduplicati: la chiave "file:riga  prima -> dopo" non e' unica
+            # — due mutazioni identiche sulla stessa riga la condividono — e il
+            # confronto usa un insieme. Senza `set` il conteggio scritto e
+            # quello confrontato divergerebbero, come e' gia' successo con le
+            # chiavi del rapporto sul codice morto.
+            "sopravvissuti": sorted({s for s in sopravvissuti if s not in EQUIVALENTI}),
         }, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
         print(f"linea di base scritta: {len(sopravvissuti)} sopravvissuti")
         return 0
