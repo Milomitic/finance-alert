@@ -173,13 +173,39 @@ Monitoraggio. Struttura giusta, lettura sbagliata; corretto con un separatore
 e ora pinnato da un test sul confine. Il secondo e FA-045, che e piu grande di
 cosi e resta aperto.
 
-⚠️ **Un seguito misurato e dichiarato, non dimenticato.** FA-043 ha reso
-generale il meccanismo «fonte degradata sulla scheda che la consuma», ma lo ha
-cablato solo sulla scheda News, che e quella nominata dal piano. La misura
-sullo stesso processo dice che `yfinance/fundamentals` e `yfinance/live_quote`
-sono **failing adesso** — cioe le due fonti piu consumate dell'app — e le loro
-schede restano mute. Estenderlo costa due righe per scheda e nessuna nuova
-decisione.
+⚠️ **CHIUSO il 2026-09-13, e la promessa era sbagliata su meta.** Il seguito
+di FA-043 prometteva la nota su `fundamentals` E `live_quote`, «due righe per
+scheda, nessuna nuova decisione». La decisione c'era, ed e stata presa
+diversamente per i due:
+
+- **`fundamentals` cablato**, in ENTRAMBI i rami di `FundamentalsCard`. Quello
+  vuoto conta piu' dell'altro: dice «dati non disponibili per questo ticker» e
+  basta, cioe un'assenza INSPIEGATA, mentre yfinance e l'unica fonte e non ha
+  ripiego. Col dato presente serve lo stesso, perche un degrado non produce una
+  tabella vuota ma una tabella VECCHIA servita dalla cache L2, che da una
+  fresca non si distingue.
+- **`live_quote` NON cablato, di proposito.** `StockHeader` e
+  `MarketStateBadge` mostrano gia `market_state === "STALE"`: due meccanismi per
+  lo stesso significato sulla stessa schermata sono il difetto delle due
+  tavolozze in un'altra forma, e qui potrebbero anche CONTRADDIRSI — `STALE` e
+  per-quotazione e vivo, la nota e per-fonte e cachata due minuti. Un test
+  protegge l'omissione dal prossimo «completamento» E verifica che lo stato
+  per-quotazione esista ancora, perche se sparisse la ragione cadrebbe.
+
+⚠️ **E la premessa era scaduta.** Il backlog diceva `fundamentals` e
+`live_quote` «failing adesso»; rimisurato sul worker vivo il 13 settembre,
+l'unica fonte degradata e `marketaux/news` — gia coperta. Il lavoro resta
+giusto (quelle fonti degradano davvero, sotto rate limiting yfinance e
+misurata a 43-50s), ma non e stato verificato guardando la produzione.
+
+⚠️ Il controllo che mancava: `known_ops()` documenta da mesi che «un refuso nel
+frontend renderebbe una scheda muta per sempre e nessuno lo vedrebbe mai» —
+l'endpoint risponde 422, ma la nota non ritenta e non avvisa in caso di errore,
+deliberatamente. Le due scelte sono giuste separatamente e insieme producono il
+silenzio. `tests/test_source_degraded_ops.py` censisce ogni `op` montato nel
+frontend e lo confronta col catalogo; vive nel BACKEND e legge i sorgenti del
+frontend, perche duplicare l'elenco in TypeScript creerebbe la seconda copia
+che il controllo esiste per impedire.
 
 Sequenza, criteri di chiusura e verifiche richieste all'utente:
 [implementation-plan-2026-09-10.md](implementation-plan-2026-09-10.md).

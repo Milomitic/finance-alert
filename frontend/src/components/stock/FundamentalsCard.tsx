@@ -13,6 +13,7 @@ import type {
 import { Card, CardContent } from "@/components/ui/card";
 import { SectionTitle } from "@/components/ui/section-title";
 import { CardErrorOverlay } from "@/components/stock/CardErrorOverlay";
+import { SourceDegradedNote } from "@/components/stock/SourceDegradedNote";
 import { CardRefreshButton } from "@/components/stock/CardRefreshButton";
 import { CardUpdatedAt } from "@/components/stock/CardUpdatedAt";
 import { useCardRefresh } from "@/hooks/useCardRefresh";
@@ -584,6 +585,12 @@ export function FundamentalsCard({ ticker, currency = null }: Props) {
           <div className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-2">
             Fundamentals
           </div>
+          {/* ⚠️ QUI la nota conta piu' che altrove: questo ramo dice «dati non
+              disponibili» e basta, cioe' un'assenza INSPIEGATA. Se yfinance —
+              unica fonte dei fondamentali, senza ripiego — e' degradata, la
+              differenza fra «questo titolo non li ha» e «la fonte e' giu
+              adesso» e tutta la risposta. */}
+          <SourceDegradedNote op="fundamentals" className="mb-2 shrink-0" />
           <div className="py-12 flex items-center justify-center text-sm text-muted-foreground text-center px-3">
             {f?.error ? `Errore: ${f.error}` : "Dati non disponibili per questo ticker."}
           </div>
@@ -632,6 +639,11 @@ export function FundamentalsCard({ ticker, currency = null }: Props) {
   return (
     <Card className="h-full overflow-hidden">
       <CardContent className="p-3 h-full flex flex-col">
+        {/* ⚠️ Anche col dato presente: yfinance e' l'UNICA fonte dei
+            fondamentali, quindi un suo degrado non produce una tabella vuota
+            ma una tabella VECCHIA — servita dalla cache L2 — che non si
+            distingue da una fresca. La nota e' l'unica cosa che le separa. */}
+        <SourceDegradedNote op="fundamentals" className="mb-2 shrink-0" />
         {/* Header */}
         <SectionTitle
           icon={BarChart3}
