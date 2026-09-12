@@ -176,6 +176,33 @@ class DeployHealthOut(BaseModel):
     apt_stale: bool | None = None
 
 
+class ArretratoOut(BaseModel):
+    """Un arretrato MISURATO, col suo totale e la ragione per cui non e' zero.
+
+    ⚠️ La ragione viaggia col numero di proposito. Un arretrato mostrato nudo
+    diventa un obiettivo da azzerare a forza, e qui azzerarlo sarebbe sbagliato:
+    contiene voci legittime (script one-off, rami difensivi, link di testo in
+    tabelle dense). Il cancello sorveglia la CRESCITA, non pretende lo zero.
+    """
+
+    conteggio: int
+    #: Il denominatore quando esiste (funzioni censite, rotte censite).
+    #: ⚠️ Un tasso senza campione e' la cosa che questo progetto non fa.
+    totale: int | None = None
+    perche: str = ""
+
+
+class VerificationOut(BaseModel):
+    """Quanto e' sorvegliata questa build, letto dall'immagine stessa.
+
+    `None` significa NON SO — la linea di base non e' nell'immagine — e non va
+    letto come «nessun arretrato».
+    """
+
+    codice_mai_eseguito: ArretratoOut | None = None
+    violazioni_a11y: ArretratoOut | None = None
+
+
 class PlatformHealthOut(BaseModel):
     data_sources: list[DataSourceMetricOut]
     yfinance_breaker: dict   # the existing yfinance_health.status() shape
@@ -191,6 +218,10 @@ class PlatformHealthOut(BaseModel):
     suggestions: list[GapSuggestionOut] = []
     data_health: DataHealthOut | None = None
     deploy: DeployHealthOut | None = None
+    # Gli arretrati che i cancelli fanno rispettare, a schermo invece che solo
+    # in CI: un arretrato che nessuno vede non cala mai.
+    verification: VerificationOut | None = None
+
 
 
 class LogRecordOut(BaseModel):

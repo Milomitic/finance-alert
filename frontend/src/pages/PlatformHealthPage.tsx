@@ -14,6 +14,7 @@ import ScansCard from "@/components/health/ScansCard";
 import CacheCard from "@/components/health/CacheCard";
 import DataHealthCard from "@/components/health/DataHealthCard";
 import InfraCard from "@/components/health/InfraCard";
+import VerificationCard from "@/components/health/VerificationCard";
 import { useInfraHealth } from "@/hooks/useInfraHealth";
 import LogStream from "@/components/health/LogStream";
 import { usePlatformHealthStream } from "@/hooks/usePlatformHealthStream";
@@ -362,6 +363,11 @@ export default function PlatformHealthPage({ embedded = false }: { embedded?: bo
           <CacheCard cache={health.cache} />
           <DataHealthCard data={health.data_health} deploy={health.deploy} />
           <InfraCard data={infra.data} />
+          {/* Gli arretrati che i cancelli CI fanno rispettare, accanto alla
+              salute del sistema e non dentro la scheda Motore: non parlano
+              della capacita' predittiva, parlano di quanto e' sorvegliato
+              cio' che gira. */}
+          <VerificationCard verification={health.verification} />
         </div>
       )}
 

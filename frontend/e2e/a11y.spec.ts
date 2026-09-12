@@ -1,6 +1,13 @@
 import { ROTTE, expect, test } from "./fixtures";
 
-import LINEA_BASE from "./a11y-baseline.json" with { type: "json" };
+/* ⚠️ La linea di base vive in `backend/app/data/`, non accanto a questo file.
+ *
+ * Non e' disordine: quella cartella viene COPIATA NELL'IMMAGINE, `frontend/e2e`
+ * no. Tenendola li' il numero e' leggibile anche dall'app in esecuzione, e la
+ * scheda «Verifica» del cruscotto mostra lo stesso valore che questo gate fa
+ * rispettare — un solo file, un solo proprietario. Due copie divergerebbero, e
+ * quella a schermo sarebbe la piu' vecchia delle due. */
+import LINEA_BASE from "../../backend/app/data/a11y_baseline.json" with { type: "json" };
 
 const AXE = "node_modules/axe-core/axe.min.js";
 
@@ -241,7 +248,7 @@ test.afterAll(async () => {
   if (!AGGIORNA || !Object.keys(raccolto).length) return;
   const fs = await import("node:fs");
   fs.writeFileSync(
-    "e2e/a11y-baseline.json",
+    "../backend/app/data/a11y_baseline.json",
     JSON.stringify({ _perche: BASE_PERCHE, rotte: raccolto }, null, 2) + "\n",
     "utf-8",
   );

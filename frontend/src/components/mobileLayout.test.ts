@@ -83,16 +83,24 @@ describe("traboccamento orizzontale a 375px", () => {
         "più lunga, non sul contenitore",
     },
     {
+      file: "components/calendar/FilterStrip.tsx",
+      pattern: /inline-flex max-w-full flex-wrap/,
+      misura:
+        "/calendar +19px: un `inline-flex` si dimensiona sulla propria " +
+        "max-content, quindi il `flex-wrap` accanto non entra mai in funzione. " +
+        "Trovato dal gate e2e in CI, non dalla passata a mano.",
+    },
+    {
       file: "components/AlertsInsightCard.tsx",
       pattern: /flex w-full flex-wrap items-center gap-x-1\.5 gap-y-1 pl-3/,
       misura: "/alerts +9px: sei colonne a larghezza fissa più un rientro pl-6",
     },
   ];
 
-  it("copre tutti gli otto siti misurati", () => {
+  it("copre tutti i siti misurati", () => {
     // Se qualcuno cancella una voce invece di correggere il codice, il
     // conteggio lo dice.
-    expect(PIN).toHaveLength(8);
+    expect(PIN).toHaveLength(9);
   });
 
   it.each(PIN)("$file resta corretto — $misura", ({ file, pattern }) => {

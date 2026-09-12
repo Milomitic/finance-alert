@@ -117,6 +117,26 @@ export type DeployHealth = {
   apt_stale: boolean | null;
 };
 
+/** Un arretrato MISURATO, col suo totale e la ragione per cui non e' zero.
+ *
+ *  ⚠️ La ragione viaggia col numero apposta: un arretrato mostrato nudo diventa
+ *  un obiettivo da azzerare a forza, e qui azzerarlo sarebbe la correzione
+ *  sbagliata — contiene voci legittime. I cancelli vietano la CRESCITA. */
+export type Arretrato = {
+  conteggio: number;
+  /** Il denominatore quando esiste. Un conteggio senza campione non si
+   *  interpreta, ed e' la regola che questo progetto applica ai tassi. */
+  totale: number | null;
+  perche: string;
+};
+
+/** Quanto e' sorvegliata questa build, letto dall'immagine stessa.
+ *  `null` significa NON SO, mai «nessun arretrato». */
+export type Verification = {
+  codice_mai_eseguito: Arretrato | null;
+  violazioni_a11y: Arretrato | null;
+};
+
 export type PlatformHealth = {
   data_sources: DataSourceMetric[];
   yfinance_breaker: Record<string, unknown>;
@@ -140,6 +160,8 @@ export type PlatformHealth = {
   suggestions?: GapSuggestion[];
   data_health?: DataHealth | null;
   deploy?: DeployHealth | null;
+  /** Arretrati misurati che i cancelli CI fanno rispettare. */
+  verification?: Verification | null;
 };
 
 export type LogRecord = {

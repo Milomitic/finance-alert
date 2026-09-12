@@ -18,7 +18,7 @@
     "/calendar": {
       "aria-prohibited-attr": 1,
       "color-contrast": 3,
-      "nested-interactive": 2
+      "nested-interactive": 3
     },
     "/sectors": {
       "color-contrast": 10,
@@ -33,5 +33,6 @@
     "/stocks/AAPL": {
       "scrollable-region-focusable": 3
     }
-  }
+  },
+  "_ambiente": "ATTENZIONE: questi conteggi dipendono dall'AMBIENTE e questa linea di base e' quella di CI. In locale il calendario ha dati veri e rende un elemento interattivo in meno; rigenerando qui si otterrebbe un file piu' STRETTO che fa arrossare la CI su codice che nessuno ha toccato. Stessa lezione della linea di base del codice morto: una baseline derivata da una misura va generata DOVE viene applicata."
 }

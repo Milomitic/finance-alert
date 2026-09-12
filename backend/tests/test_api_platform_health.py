@@ -64,6 +64,10 @@ def test_health_endpoint_returns_expected_keys(client: TestClient):
         "overall", "reasons", "suggestions",
         "data_health",
         "deploy",
+        # Arretrati misurati che i cancelli fanno rispettare (codice mai
+        # eseguito, violazioni a11y note): a schermo e non solo in CI, perche'
+        # un arretrato che nessuno vede non cala mai.
+        "verification",
     }
     assert isinstance(body["data_sources"], list)
     assert isinstance(body["scheduler"], list)

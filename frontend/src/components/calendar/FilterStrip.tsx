@@ -90,7 +90,17 @@ export function FilterStrip({
   importanceDisabled,
 }: FilterStripProps) {
   return (
-    <div className="inline-flex flex-wrap items-stretch gap-1 rounded-lg border bg-card p-1 shadow-sm">
+    // ⚠️ `max-w-full` con `inline-flex`: senza, l'elemento si dimensiona sulla
+    // propria max-content e il `flex-wrap` accanto non entra MAI in funzione —
+    // il wrap manda a capo gli item solo dentro una larghezza data, e qui la
+    // larghezza era quella dei sei filtri in fila. Misurato dal gate e2e:
+    // 19px fuori dallo schermo su un viewport di 375px.
+    //
+    // ⚠️ Sfuggito alla passata a mano del 12 settembre perche' in locale il
+    // calendario aveva dati e la striscia si disponeva diversamente. E' il
+    // motivo per cui il gate gira su un seme DETERMINISTICO: una misura che
+    // dipende da cosa c'e' nel database non e' ripetibile.
+    <div className="inline-flex max-w-full flex-wrap items-stretch gap-1 rounded-lg border bg-card p-1 shadow-sm">
       {/* Kind segment */}
       <div className="flex items-stretch gap-1">
         {KIND_OPTIONS.map((opt) => {

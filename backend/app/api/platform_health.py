@@ -20,6 +20,7 @@ from app.core.app_metrics import STALE_OHLCV_WINDOW_DAYS
 from app.core.log_buffer import _INSTANCE as log_buffer
 from app.models import Alert, ScanRun, User
 from app.schemas.platform import (
+    ArretratoOut,
     DataHealthOut,
     DegradedSourceOut,
     DeployHealthOut,
@@ -32,6 +33,7 @@ from app.schemas.platform import (
     RecentScanOut,
     SchedulerJobStatOut,
     SignalDriftOut,
+    VerificationOut,
 )
 from app.services import (
     cache_metrics,
@@ -43,6 +45,7 @@ from app.services import (
     loki_log_service,
     signal_drift_service,
     source_catalog,
+    verification_posture,
     yfinance_health,
 )
 
@@ -166,6 +169,7 @@ def health_snapshot(
         suggestions=_gap_suggestions(),
         data_health=_data_health(db),
         deploy=_deploy_health(),
+        verification=_verification(),
     )
 
 
@@ -193,6 +197,23 @@ def _deploy_health() -> DeployHealthOut:
         apt_security_date=apt_date.isoformat() if apt_date else None,
         apt_age_days=image_provenance.apt_age_days(apt_date),
         apt_stale=image_provenance.is_stale(apt_date),
+    )
+
+
+def _verification() -> VerificationOut:
+    """Gli arretrati che i cancelli fanno rispettare, letti dall'immagine.
+
+    Mai solleva: una linea di base assente diventa `None`, che significa NON SO
+    e non «nessun arretrato».
+    """
+    def _out(a):
+        if a is None:
+            return None
+        return ArretratoOut(conteggio=a.conteggio, totale=a.totale, perche=a.perche)
+
+    return VerificationOut(
+        codice_mai_eseguito=_out(verification_posture.codice_mai_eseguito()),
+        violazioni_a11y=_out(verification_posture.violazioni_a11y()),
     )
 
 
