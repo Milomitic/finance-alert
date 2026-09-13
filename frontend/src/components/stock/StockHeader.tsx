@@ -18,6 +18,14 @@ interface Props {
   kpis: StockKpis;
   /** Optional OHLCV history — drawn as a faded sparkline background. */
   ohlcv?: OhlcvBar[];
+  /** Contenuto da mostrare SOTTO identita' e prezzo, dentro questa card e
+   *  quindi in sovrimpressione allo sparkline.
+   *
+   *  ⚠️ Uno slot e non un import diretto del profilo: questa scheda non deve
+   *  sapere che cosa le si mette sotto, o diventerebbe la scheda del profilo
+   *  con un prezzo in cima. Chi compone la pagina decide, e sotto il Full HD
+   *  non passa nulla — a quelle larghezze il profilo ha una riga sua. */
+  sotto?: React.ReactNode;
 }
 
 /**
@@ -79,7 +87,7 @@ export function HeaderSparkline({ closes, up }: { closes: number[]; up: boolean 
   );
 }
 
-export function StockHeader({ stock, kpis, ohlcv }: Props) {
+export function StockHeader({ stock, kpis, ohlcv, sotto }: Props) {
   const flag = getStockFlagCode(stock.country, stock.ticker);
 
   // Live quote — polls every 15s. Falls back to the kpis snapshot (last
@@ -130,7 +138,15 @@ export function StockHeader({ stock, kpis, ohlcv }: Props) {
       <HeaderSparkline closes={closes} up={sparkUp} />
       <div className={cn("absolute left-0 top-0 bottom-0 w-1.5 z-10", tone.stripe)} aria-hidden />
       {/* Smaller padding now that the KPI strip is gone */}
-      <CardContent className="relative z-10 h-full flex flex-col justify-center p-4 pl-7">
+      {/* ⚠️ `justify-center` solo QUANDO la card contiene la sola identita'.
+          Con il profilo sotto, centrare verticalmente lascerebbe l'aria in
+          cima e in fondo e schiaccerebbe i due blocchi l'uno sull'altro. */}
+      <CardContent
+        className={cn(
+          "relative z-10 h-full flex flex-col p-4 pl-7",
+          sotto ? "justify-start gap-4" : "justify-center",
+        )}
+      >
         <div className="flex items-center gap-6 flex-wrap">
           {/* Identity column: logo aligned + vertically centered with the
               ticker/name on one row; the exchange/sector tags sit BELOW. */}
@@ -288,6 +304,12 @@ export function StockHeader({ stock, kpis, ohlcv }: Props) {
           </div>
         </div>
 
+        {/* ⚠️ Il divisore e' `border-border/40` e non pieno: sotto c'e' lo
+            sparkline, e una riga netta lo taglierebbe a meta' invece di
+            separare due blocchi che condividono lo stesso sfondo. */}
+        {sotto && (
+          <div className="min-w-0 border-t border-border/40 pt-3">{sotto}</div>
+        )}
       </CardContent>
     </Card>
   );

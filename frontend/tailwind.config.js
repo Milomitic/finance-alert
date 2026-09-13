@@ -37,6 +37,18 @@ export default {
   			// the CARD needs ~710px. On a 2-across page row that arrives here.
   			// Below it the rows drop volume and ×avg and keep the name.
   			'row-full': '1750px',
+  			// Oltre il Full HD. Serve perche' la colonna destra della pagina
+  			// dettaglio titolo e' l'`1fr` di `[2fr_1fr]`: a 1440px vale 375px,
+  			// che diviso in due lascia ~133px per scheda — meno dei ~170px che
+  			// il commento in StockDetailPage gia' definiva insufficienti, ed e'
+  			// il motivo per cui le due schede di score sono impilate da `lg`.
+  			// A 2560px la stessa colonna vale ~830px e due schede affiancate
+  			// ne prendono ~410 ciascuna: il vincolo sparisce.
+  			//
+  			// ⚠️ 1921 e non 1920: «maggiore di Full HD» significa oltre, e a
+  			// 1920 netti la colonna vale ~620px, ancora stretta per il grafico
+  			// del profilo che va in sovrimpressione nell'intestazione.
+  			'over-fhd': '1921px',
   		},
   		borderRadius: {
   			lg: 'var(--radius)',

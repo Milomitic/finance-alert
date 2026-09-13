@@ -77,5 +77,30 @@ export default defineConfig({
       name: "desktop",
       use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 } },
     },
+    {
+      /* ⚠️ Il quarto viewport esiste per una ragione precisa, non per
+       * completismo. La pagina dettaglio titolo si RIASSETTA oltre i 1920px —
+       * il profilo societa' si sposta dentro l'intestazione, i due score si
+       * affiancano, i segnali scendono sotto — e i tre viewport qui sopra sono
+       * TUTTI sotto quella soglia. Senza questo progetto la disposizione nuova
+       * non sarebbe misurata da niente: ne' da vitest (jsdom non fa layout),
+       * ne' dal gate, ne' dai test unitari, che vedono solo i pezzi.
+       *
+       * 2560x1440 e' la larghezza QHD comune, 639px oltre la soglia: abbastanza
+       * dentro il ramo da non misurarne il bordo per sbaglio. */
+      name: "over-fhd",
+      use: { ...devices["Desktop Chrome"], viewport: { width: 2560, height: 1440 } },
+      /* ⚠️ SOLO la specifica del riassetto, non tutte le rotte.
+       *
+       * Il traboccamento a 2560px sulle altre nove rotte non e' mai stato
+       * misurato, e CLAUDE.md ha una regola esplicita su questo: «un cancello
+       * che nasce rosso viene spento» — una regola entra nel gate dopo essere
+       * stata misurata a zero, altrimenti un rosso non distingue «hai rotto
+       * qualcosa adesso» da «esiste un arretrato».
+       *
+       * Allargare questo progetto a `layout.spec.ts` e' una riga, e va fatto
+       * DOPO aver misurato le dieci rotte a questa larghezza. */
+      testMatch: /stock-detail-riassetto\.spec\.ts/,
+    },
   ],
 });

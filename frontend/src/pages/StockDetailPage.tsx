@@ -53,13 +53,26 @@ import { BENCHMARKS, ChartOptionsToolbar } from "@/components/stock/ChartOptions
 import { RangeSelector } from "@/components/stock/RangeSelector";
 import { ResizableSection } from "@/components/stock/ResizableSection";
 import { RsiPanel } from "@/components/stock/RsiPanel";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { StockAlertsHistoryCard } from "@/components/stock/StockAlertsHistoryCard";
-import { StockSetupsCard } from "@/components/stock/StockSetupsCard";
 import { StockHeader } from "@/components/stock/StockHeader";
 import { EtfHoldingsCard } from "@/components/stock/EtfHoldingsCard";
 import { StockScoreCard } from "@/components/stock/StockScoreCard";
 import { StockTechnicalCard } from "@/components/stock/StockTechnicalCard";
 import { TechnicalKpiCard } from "@/components/stock/TechnicalKpiCard";
+
+/** Soglia «oltre il Full HD», in pixel.
+ *
+ * ⚠️ 1921 e non 1920: «maggiore di Full HD» significa OLTRE, e a 1920 netti la
+ * colonna destra vale ~620px — ancora stretta per due schede di score
+ * affiancate.
+ *
+ * ⚠️ Deve coincidere col breakpoint `over-fhd` di `tailwind.config.js`, che
+ * governa la META' in CSS di questo stesso cambio (la griglia degli score).
+ * Due soglie che divergono aprirebbero una finestra di larghezze in cui il
+ * profilo e' gia' salito nell'intestazione e gli score sono ancora impilati.
+ * `stockDetailLayout.test.ts` legge entrambi i file e li confronta. */
+export const OVER_FHD_PX = 1921;
 
 export default function StockDetailPage() {
   const now = useNowTick(60_000);
@@ -110,6 +123,26 @@ export default function StockDetailPage() {
       detail.data ? liveExtendIndicators(detail.data.indicators, mergedOhlcv) : null,
     [detail.data, mergedOhlcv],
   );
+  /* ⚠️ Oltre il Full HD la pagina si RIORGANIZZA, non si limita a stirarsi.
+   *
+   * La colonna destra e' l'`1fr` di `[2fr_1fr]`: a 1440px vale 375px, che
+   * divisi in due lasciano ~133px per scheda — il commento qui sotto lo
+   * documenta gia' come insufficiente. A 2560px la stessa colonna vale ~830px
+   * e il vincolo sparisce, quindi le due schede di score tornano affiancate,
+   * il profilo sale dentro l'intestazione e i segnali scendono sotto gli
+   * score.
+   *
+   * ⚠️ In JS e non solo in CSS perche' cambia CHI sta DOVE, non come appare:
+   * il profilo viene montato in un genitore diverso. Con le classi si
+   * monterebbe due volte — due fetch, due alberi — e una delle due copie
+   * sarebbe sempre nascosta ma misurata e letta dagli assistivi.
+   *
+   * ⚠️ Il valore deve coincidere col breakpoint `over-fhd` di Tailwind, usato
+   * per la griglia degli score. Un test lo pinna, perche' due soglie che
+   * divergono darebbero una finestra in cui il profilo e' nell'intestazione e
+   * gli score sono ancora impilati. */
+  const oltreFhd = useMediaQuery(`(min-width: ${OVER_FHD_PX}px)`);
+
   // Signal markers overlay: map the stock's alert history onto the chart bars
   // so the user sees WHERE each detector fired (arrow per bar, tone by
   // majority) with a hover panel of detector · Forza · realized outcome.
@@ -296,6 +329,11 @@ export default function StockDetailPage() {
           stock={d.stock}
           kpis={d.kpis}
           ohlcv={mergedOhlcv}
+          sotto={
+            oltreFhd ? (
+              <CompanyOverviewCard ticker={ticker} stock={d.stock} variante="nudo" />
+            ) : undefined
+          }
         />
         {/* ⚠️ Il breakpoint e' `lg:grid-cols-1`, e non e' un dettaglio.
             Il commento precedente descriveva GIA' questo difetto — "side by
@@ -312,9 +350,23 @@ export default function StockDetailPage() {
 
             Sotto `lg` la colonna e' invece a tutta pagina, quindi li' due
             schede affiancate ci stanno e `sm:grid-cols-2` resta giusto. */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-3 items-stretch [&>*]:min-w-0">
-          <StockScoreCard ticker={ticker} />
-          <StockTechnicalCard ticker={ticker} />
+        <div className="flex flex-col gap-3 min-w-0">
+          {/* `over-fhd:grid-cols-2` chiude la finestra descritta sopra: oltre
+              i 1920px la colonna vale ~830px, cioe' ~410px per scheda, sopra
+              i ~170px che il commento definiva insufficienti. */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 over-fhd:grid-cols-2 gap-3 items-stretch [&>*]:min-w-0">
+            <StockScoreCard ticker={ticker} />
+            <StockTechnicalCard ticker={ticker} />
+          </div>
+          {/* I segnali scendono SOTTO gli score affiancati, restando nella
+              stessa colonna: e' la stessa lettura di prima (presente sopra,
+              passato sotto) senza la riga separata, che oltre il Full HD
+              resterebbe con la meta' sinistra vuota. */}
+          {oltreFhd && (
+            <div className="flex-1 min-h-[220px]">
+              <StockAlertsHistoryCard alerts={d.alerts_history} ticker={ticker} />
+            </div>
+          )}
         </div>
       </div>
 
@@ -329,10 +381,19 @@ export default function StockDetailPage() {
           and scrolls internally when there are more rows than fit.
           The profile is the page's lead content and dictates the row
           height; the alerts card adapts. Stacks vertically below `lg`. */}
-      {/* min-h, not h: this row now holds TWO stacked cards on the right when a
-          setup exists, and a hard 300px box sized for one made the second
-          overflow and paint over the row below. A floor keeps the empty-state
-          proportions; the row grows only when there is something to grow for. */}
+      {/* min-h, not h: un box rigido da 300px dimensionato su una scheda sola
+          faceva traboccare la seconda sopra la riga sotto. Il pavimento
+          conserva le proporzioni dello stato vuoto e la riga cresce solo
+          quando c'e' qualcosa per cui crescere.
+          (La scheda «In formazione» che condivideva questa colonna e' stata
+          rimossa su richiesta: i setup restano su /setups.) */}
+      {/* ⚠️ Montata per intero solo FINO al Full HD. Oltre, i suoi due
+          contenuti sono gia' altrove (il profilo dentro l'intestazione, i
+          segnali sotto gli score) e questa riga resterebbe vuota. Il ramo e'
+          in JS e non in CSS proprio per questo: `hidden` lascerebbe montati
+          due profili e due storici, cioe' due query e due alberi, uno dei
+          quali invisibile ma misurato e letto dagli assistivi. */}
+      {!oltreFhd && (
       <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-3 lg:min-h-[300px] [&>*]:min-w-0">
         {/* Both cards fill the fixed row height (h-full inside each): the
             profile's prose scrolls internally if its condensed summary still
@@ -348,12 +409,12 @@ export default function StockDetailPage() {
             The history keeps a floor so its internal `flex-1 min-h-0` pane
             can never collapse to zero. */}
         <div className="flex flex-col gap-3 lg:h-full lg:min-h-0">
-          <StockSetupsCard ticker={ticker} />
           <div className="lg:h-auto lg:flex-1 lg:min-h-[220px]">
             <StockAlertsHistoryCard alerts={d.alerts_history} ticker={ticker} />
           </div>
         </div>
       </div>
+      )}
 
       {/* Four side-by-side cards: Fundamentals | Valuation+KPIs | News | Analyst.
           Weighted columns `[1.5fr_1fr_1fr_1fr]` give Fundamentals ~33% (it has

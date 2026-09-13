@@ -52,9 +52,25 @@ interface Props {
    *  fundamentals payload doesn't have (exchange, currency) and to
    *  fall back when yfinance returns nothing for the profile fields. */
   stock: Stock;
+  /** `"card"` (default) rende la scheda con la sua cornice; `"nudo"` rende il
+   *  solo contenuto, per chi la ospita dentro un'altra card.
+   *
+   *  ⚠️ Oltre il Full HD il profilo vive dentro `StockHeader`, sopra lo
+   *  sparkline. Una `Card` annidata porta `bg-card`, che e' OPACO: coprirebbe
+   *  esattamente il grafico su cui deve stare in sovrimpressione. Non e' una
+   *  preferenza estetica — la cornice va tolta perche' nasconde il contenuto
+   *  di qualcun altro.
+   *
+   *  ⚠️ E in modalita' nuda sparisce anche il trucco dell'altezza. Nella
+   *  scheda la descrizione e' `lg:absolute lg:inset-0` per non gonfiare una
+   *  riga ad altezza fissa; dentro l'intestazione quell'altezza non esiste, e
+   *  un figlio assoluto in un genitore senza altezza collassa a zero — cioe'
+   *  il testo sparirebbe invece di scorrere. */
+  variante?: "card" | "nudo";
 }
 
-export function CompanyOverviewCard({ ticker, stock }: Props) {
+export function CompanyOverviewCard({ ticker, stock, variante = "card" }: Props) {
+  const inCornice = variante === "card";
   const q = useStockFundamentals(ticker);
   const profile = q.data?.profile ?? null;
 
@@ -88,21 +104,21 @@ export function CompanyOverviewCard({ ticker, stock }: Props) {
     !!founded;
 
   if (q.isLoading) {
-    return (
+    const scheletro = <div className="h-24 animate-pulse rounded bg-muted/40" />;
+    return inCornice ? (
       <Card>
-        <CardContent className="p-4">
-          <div className="h-24 animate-pulse rounded bg-muted/40" />
-        </CardContent>
+        <CardContent className="p-4">{scheletro}</CardContent>
       </Card>
+    ) : (
+      scheletro
     );
   }
   if (!hasAnything) {
     return null;
   }
 
-  return (
-    <Card className="overflow-hidden lg:h-full lg:flex lg:flex-col">
-      <CardContent className="p-4 sm:p-5 lg:flex-1 lg:min-h-0 lg:flex lg:flex-col">
+  const corpo = (
+    <>
         <SectionTitle icon={Building2} label="Profilo società" />
 
         {/* Two-column body. The card's max height is driven by the right
@@ -114,15 +130,20 @@ export function CompanyOverviewCard({ ticker, stock }: Props) {
             when its content exceeds the row height.
             On mobile (<lg) the columns stack and the description flows
             naturally — no absolute trick needed. */}
-        <div className="mt-4 lg:flex-1 lg:min-h-0 grid grid-cols-1 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)] gap-5 lg:gap-8">
+        <div
+          className={cn(
+            "mt-4 grid grid-cols-1 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)] gap-5 lg:gap-8",
+            inCornice && "lg:flex-1 lg:min-h-0",
+          )}
+        >
           {/* ── Description ──────────────────────────────────────────── */}
-          <div className="min-w-0 lg:relative">
+          <div className={cn("min-w-0", inCornice && "lg:relative")}>
             <div
               className={cn(
                 "space-y-3 text-sm leading-relaxed text-foreground/85",
                 // Absolute container on lg+ → content doesn't push the
                 // grid-row height; instead it scrolls inside the row.
-                "lg:absolute lg:inset-0 lg:overflow-y-auto lg:pr-2",
+                inCornice && "lg:absolute lg:inset-0 lg:overflow-y-auto lg:pr-2",
               )}
             >
               {description ? (
@@ -181,6 +202,15 @@ export function CompanyOverviewCard({ ticker, stock }: Props) {
             )}
           </dl>
         </div>
+    </>
+  );
+
+  if (!inCornice) return <div className="min-w-0">{corpo}</div>;
+
+  return (
+    <Card className="overflow-hidden lg:h-full lg:flex lg:flex-col">
+      <CardContent className="p-4 sm:p-5 lg:flex-1 lg:min-h-0 lg:flex lg:flex-col">
+        {corpo}
       </CardContent>
     </Card>
   );
