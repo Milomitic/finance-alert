@@ -6,6 +6,7 @@ import { waitingDays, type Setup } from "@/hooks/useSetups";
 import { daysUntil, earningsProximityDays } from "@/lib/earningsProximity";
 import type { ConditionGroup } from "@/lib/setupGrouping";
 import { cn } from "@/lib/utils";
+import { columnsFor } from "@/lib/setupColumns";
 
 /* ─── One condition, stated once, then who is waiting for it ─────────────── *
  *
@@ -57,53 +58,11 @@ function InlineIdentity({ ticker, name }: { ticker: string; name: string | null 
   );
 }
 
-/** The column template, declared once so the header and every row cannot drift
- *  apart — the failure mode of hand-aligned "tables" built out of divs. */
-/* Una colonna vuota per OGNI riga del gruppo non va renderizzata.
- *
- * Alcune famiglie di condizione non hanno un livello di prezzo da attraversare
- * — lo dice gia il tooltip di `DistanceCell`: "questo innesco non e un
- * attraversamento di prezzo" — quindi per quei gruppi «Livello d'innesco» e
- * «Distanza» mostrano un trattino su tutte le righe. Due colonne che occupano
- * larghezza per non dire nulla, su una tabella che gia taglia «Attesa» a
- * destra.
- *
- * ⚠️ I quattro template sono LETTERALI e non composti a runtime. Il purger di
- * Tailwind legge solo stringhe letterali: un
- * `` `sm:grid-cols-[${cols.join("_")}]` `` verrebbe eliminato dal bundle di
- * produzione e il difetto sarebbe invisibile in sviluppo. E la stessa regola
- * che CLAUDE.md impone alle mappe di tono.
- *
- * ⚠️ E la decisione e per GRUPPO, non globale: dove la colonna porta un dato
- * resta. Nascondere una colonna perche' una riga non la riempie sarebbe il
- * difetto opposto. */
-const BASE = "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3";
-
-const COLS = {
-  levelAndDistance: `${BASE} sm:grid-cols-[minmax(0,1fr)_132px_88px_92px_64px]`,
-  levelOnly: `${BASE} sm:grid-cols-[minmax(0,1fr)_132px_88px_64px]`,
-  distanceOnly: `${BASE} sm:grid-cols-[minmax(0,1fr)_88px_92px_64px]`,
-  neither: `${BASE} sm:grid-cols-[minmax(0,1fr)_88px_64px]`,
-} as const;
-
 /** Quali colonne opzionali questo gruppo ha davvero da mostrare. */
 export interface GroupColumns {
   level: boolean;
   distance: boolean;
   cols: string;
-}
-
-export function columnsFor(setups: Setup[]): GroupColumns {
-  const level = setups.some((x) => x.annotations?.levels?.[0] != null);
-  const distance = setups.some((x) => x.distance_atr != null);
-  const cols = level
-    ? distance
-      ? COLS.levelAndDistance
-      : COLS.levelOnly
-    : distance
-      ? COLS.distanceOnly
-      : COLS.neither;
-  return { level, distance, cols };
 }
 
 /** Distance to the trigger, in ATR. Colour is the reading, not decoration:
@@ -181,7 +140,6 @@ function EarningsMarker({ setup }: { setup: Setup }) {
     />
   );
 }
-
 
 function GroupHeaderRow({ columns }: { columns: GroupColumns }) {
   return (

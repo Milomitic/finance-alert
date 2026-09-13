@@ -2,10 +2,12 @@ import { ArrowDown, ArrowUp } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 
-import { NoValue, hasValue } from "@/components/ui/no-value";
+import { NoValue } from "@/components/ui/no-value";
+import { hasValue } from "@/lib/hasValue";
 import { useIsPhone } from "@/hooks/useMediaQuery";
 import { useLiveAssets, type LiveAsset } from "@/hooks/useLiveAssets";
 import { cn } from "@/lib/utils";
+import { advanceScroll } from "@/lib/tickerScroll";
 
 /* ─── MarketTickerTape ──────────────────────────────────────────────────── *
  *
@@ -34,26 +36,6 @@ import { cn } from "@/lib/utils";
  * rather than disappearing — the dashboard's visual rhythm depends
  * on this band being there.
  */
-
-/* A frame longer than this means the tab was backgrounded or the main thread
- * stalled — rAF simply stops delivering. Uncapped, the first frame back
- * carries the whole gap and teleports the tape. */
-const MAX_FRAME_S = 0.5;
-
-/** Next scroll offset, wrapping at `half` (one rail width). Pure, so the
- *  wrap and the dt cap are testable without a layout engine. */
-export function advanceScroll(
-  current: number,
-  half: number,
-  pxPerSecond: number,
-  dtSeconds: number,
-): number {
-  // Before layout `scrollWidth` is 0. Wrapping on that would pin the tape at
-  // the origin forever, which reads as "the ticker is broken".
-  if (!(half > 0)) return current;
-  const next = current + pxPerSecond * Math.min(dtSeconds, MAX_FRAME_S);
-  return next >= half ? next - half : next;
-}
 
 /** Drive the rail's own scroll position, yielding to the user on contact. */
 function useAutoScroll(durationSeconds: number) {

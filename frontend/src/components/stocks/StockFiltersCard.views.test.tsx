@@ -2,7 +2,8 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { EMPTY_FILTERS, StockFiltersCard } from "./StockFiltersCard";
+import { StockFiltersCard } from "./StockFiltersCard";
+import { EMPTY_FILTERS } from "@/lib/screenerFilters";
 
 /* A saved view is filters + sort + columns.
  *

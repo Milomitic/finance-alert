@@ -1666,10 +1666,13 @@ d = json.load(urllib.request.urlopen(req, timeout=60))
   (also: `npx tsc -b` for type-only check)
 - **Single test file**: append the file path to the pytest command
 
-⚠️ `npm run lint` (the FULL config) reports **31** pre-existing findings,
-re-counted 2026-09-13: only-export-components 25, refs 5. They are NOT gated
-and a red result there is expected. `lint:hooks` is the gated subset — e ora
-gatta QUATTRO regole, non due.
+⚠️ `npm run lint` (the FULL config) reports **ZERO** findings, misurato
+2026-09-13. Era 60 a settembre e 31 stamattina. **Un rosso li' adesso e' una
+regressione, non l'arretrato** — la frase «a red result there is expected», che
+questo file ha portato per mesi, non vale piu'.
+
+`lint:hooks` gatta SETTE regole: rules-of-hooks, static-components,
+set-state-in-effect, exhaustive-deps, refs, purity, immutability.
 
 **set-state-in-effect (14) ed exhaustive-deps (9) sono a ZERO e sono entrate
 nel gate** il 2026-09-13. La barra e' quella che `eslint.hooks.config.js` si e'
@@ -1679,6 +1682,18 @@ pulizia — fra gli altri, l'evidenziazione della ricerca che puntava a una riga
 di una lista gia' accorciata (Invio apriva il titolo sbagliato), lo spessore
 applicato a una sola delle due linee del pannello MACD, e l'orologio dell'asse
 che non si accendeva passando a un intervallo intraday.
+
+**only-export-components (25) e' a zero e NON e' gatta, deliberatamente.**
+Rompe il Fast Refresh, che costa a chi sviluppa e non a chi usa: la seconda
+meta' della barra di `eslint.hooks.config.js` chiede che una violazione rompa
+qualcosa che un utente SENTE. Stessa ragione per cui `no-unused-vars` sta
+fuori. Le 25 sono state sciolte spostando funzioni e costanti in `lib/` — il
+precedente e' `NAV` -> `lib/nav.ts` — perche' un dato non e' un componente.
+
+⚠️ E NON e' stato gatto `npm run lint` per intero, benche' oggi sia a zero: un
+gate su una config che segue le `recommended` di un plugin diventa rosso quando
+il plugin aggiunge una regola, cioe' su una decisione di qualcun altro e su
+codice che nessuno ha toccato. Le regole si nominano una per una.
 
 ⚠️ **Nessuna delle due si chiude nel modo ovvio**, ed e' la parte che costa
 tempo se non la si sa:

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { advanceScroll } from "@/lib/tickerScroll";
 
-import { advanceScroll } from "./MarketTickerTape";
+
 
 /* The ticker tape advanced itself with a CSS `transform: translateX` inside an
  * `overflow: hidden` box. That is the cheapest possible marquee and it was the

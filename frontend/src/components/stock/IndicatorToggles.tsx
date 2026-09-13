@@ -31,7 +31,9 @@ export interface IndicatorMeta {
 // strings (ema20/ema50/ema200) and the labels both reflect the new
 // indicator type; the API field names switched in lockstep on the
 // backend side.
-export const INDICATOR_CATALOG: IndicatorMeta[] = [
+/* Non esportato: lo usa solo questo file. Esportarlo rompeva il Fast
+ * Refresh senza che nessuno ne avesse bisogno. */
+const INDICATOR_CATALOG: IndicatorMeta[] = [
   { key: "ema20",  label: "EMA 20",    group: "overlay", defaultColor: "#a855f7", description: "Media mobile esponenziale 20gg" },
   { key: "ema50",  label: "EMA 50",    group: "overlay", defaultColor: "#3b82f6", description: "Media mobile esponenziale 50gg" },
   { key: "ema200", label: "EMA 200",   group: "overlay", defaultColor: "#f59e0b", description: "Media mobile esponenziale 200gg (trend lungo)" },
@@ -39,20 +41,6 @@ export const INDICATOR_CATALOG: IndicatorMeta[] = [
   { key: "rsi",    label: "RSI(14)",   group: "panel",   defaultColor: "#7c3aed", description: "Pannello separato — RSI 14gg" },
   { key: "macd",   label: "MACD",      group: "panel",   defaultColor: "#ef4444", description: "Pannello separato — MACD 12/26/9" },
 ];
-
-// Default-on indicators: all three EMAs + Bollinger as overlays; RSI + MACD
-// as separate panels. EMA20 enabled by default (was off): users want a
-// short-term trend reference alongside the mid- and long-term ones, and
-// the now-relocated indicator badges (right price scale instead of inline)
-// mean an extra line doesn't visually crowd the candles.
-export const DEFAULT_INDICATOR_STATE: IndicatorState = {
-  ema20:  { visible: true,  color: "#a855f7", width: 1 },
-  ema50:  { visible: true,  color: "#3b82f6", width: 1 },
-  ema200: { visible: true,  color: "#f59e0b", width: 1 },
-  bb:     { visible: true,  color: "#0ea5e9", width: 1 },
-  rsi:    { visible: true,  color: "#7c3aed", width: 1 },
-  macd:   { visible: true,  color: "#ef4444", width: 1 },
-};
 
 interface Props {
   state: IndicatorState;

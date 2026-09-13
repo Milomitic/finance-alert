@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { winRateLabel } from "@/lib/winRate";
 
-import { winRateLabel } from "./PortfolioSummary";
+
 
 /* "win rate 100%" on one closed trade.
  *

@@ -32,9 +32,3 @@ export function NoValue({
   );
 }
 
-/** True when a number is safe to display. Rejects null, undefined, NaN and
- *  Infinity — the last two arrive from divisions on absent upstream data and
- *  render as literal "NaN%" if nobody checks. */
-export function hasValue(v: number | null | undefined): v is number {
-  return v != null && Number.isFinite(v);
-}

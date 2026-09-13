@@ -31,8 +31,22 @@ export function useTweenedNumber(
   const animRef = useRef<number>(0);
   const fromRef = useRef<number>(0);
   const startRef = useRef<number>(0);
+  /* ⚠️ Lo specchio di `shown` si aggiorna in un EFFECT, non in render.
+   *
+   * Il ref esiste perche' l'effetto dell'animazione deve conoscere il valore
+   * corrente SENZA dipenderne: `shown` cambia a ogni fotogramma, quindi
+   * metterlo fra le dipendenze farebbe ripartire il tween sessanta volte al
+   * secondo. Ma scriverlo durante il render e' `react-hooks/refs` — «un ref e'
+   * un valore che non serve a renderizzare» — e sotto il render speculativo
+   * una scrittura in render puo' avvenire per un render poi scartato.
+   *
+   * ⚠️ L'effetto e' dichiarato PRIMA di quello dell'animazione, e conta:
+   * React li esegue nell'ordine di dichiarazione, quindi quando il tween parte
+   * il ref porta gia' il valore del commit corrente. */
   const shownRef = useRef<number | null>(shown);
-  shownRef.current = shown;
+  useEffect(() => {
+    shownRef.current = shown;
+  });
 
   /* ⚠️ Gli SNAP si fanno in fase di render, non dentro l'effect.
    *

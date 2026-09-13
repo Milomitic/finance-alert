@@ -17,10 +17,10 @@ import { useStockFilters, useStockSearch } from "@/hooks/useStockSearch";
 import { ExportCsvButton } from "@/components/stocks/ExportCsvButton";
 import { IndexPanoramaCard } from "@/components/stocks/IndexPanoramaCard";
 import {
-  SCREENER_COLS,
   StockBrowserTable,
   type TableSortKey,
 } from "@/components/stocks/StockBrowserTable";
+import { SCREENER_COLS } from "@/lib/screenerColumns";
 import {
   StockFiltersCard,
   type FiltersState,

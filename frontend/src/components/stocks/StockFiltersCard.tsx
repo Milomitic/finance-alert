@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/popover";
 import { CATEGORY_LABEL } from "@/lib/scoreMeta";
 import { cn } from "@/lib/utils";
+import { EMPTY_FILTERS } from "@/lib/screenerFilters";
 import {
   parseAll,
   toStored,
@@ -77,25 +78,9 @@ export interface FiltersState {
   volumeMin: number | null;
 }
 
-/** The all-clear filter state. Single source of truth for "no filters":
- *  used by the Reset button AND as the base when applying a saved preset,
- *  so presets saved before new filter fields were added stay valid. */
-export const EMPTY_FILTERS: FiltersState = {
-  indexCodes: [], sectors: [], industries: [], exchanges: [], countries: [],
-  riskTiers: [], excludeEtf: false, minScore: null, scoreMax: null,
-  profitabilityMin: null, sustainabilityMin: null, growthMin: null,
-  valueMin: null, sentimentMin: null,
-  techMin: null, postures: [],
-  marketCapMin: null, marketCapMax: null,
-  rsiMin: null, rsiMax: null,
-  aboveEma50: false, aboveEma200: false, near52wHigh: false, near52wLow: false,
-  signalsWithinDays: null,
-  priceMin: null, priceMax: null, changeMin: null, changeMax: null,
-  volSpike: false, volRatioMin: null, volumeMin: null,
-};
-
 /** Le finestre offerte dal filtro "con segnali". 1 = solo l'ultima seduta. */
-export const SIGNAL_WINDOW_OPTIONS: { days: number; label: string }[] = [
+/* Non esportato: nessun altro file lo legge. */
+const SIGNAL_WINDOW_OPTIONS: { days: number; label: string }[] = [
   { days: 1, label: "Oggi" },
   { days: 7, label: "7g" },
   { days: 30, label: "30g" },

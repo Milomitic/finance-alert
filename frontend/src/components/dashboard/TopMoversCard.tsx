@@ -3,14 +3,8 @@ import { Link } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 
 import type { Mover, MoversBlock } from "@/api/types";
-import {
-  ScoreChip,
-  fmtVolume,
-} from "@/components/dashboard/LiveVolumeMoversCard";
-import {
-  MarketStateBadge,
-  deriveMarketPhase,
-} from "@/components/dashboard/MarketStateBadge";
+import { ScoreChip } from "@/components/dashboard/LiveVolumeMoversCard";
+import { MarketStateBadge } from "@/components/dashboard/MarketStateBadge";
 import { StockIdentity } from "@/components/dashboard/StockIdentity";
 import { Card, CardContent } from "@/components/ui/card";
 import { FlashValue } from "@/components/ui/FlashValue";
@@ -21,6 +15,8 @@ import { useLiveUniverseMovers } from "@/hooks/useLiveUniverseMovers";
 import { useFlipList } from "@/hooks/useFlipList";
 import { projectVolRatio } from "@/lib/intradayVolume";
 import { cn } from "@/lib/utils";
+import { deriveMarketPhase } from "@/lib/marketPhase";
+import { fmtVolume } from "@/lib/volumeFormat";
 
 interface Props {
   movers: MoversBlock;

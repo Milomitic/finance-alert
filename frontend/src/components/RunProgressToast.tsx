@@ -134,6 +134,39 @@ function elapsedSeconds(status: ScanStatusInfo, nowMs: number): number {
  *  resets `progress_done` to 0, so blending the fetch's elapsed into the
  *  evaluate's rate would yield a phantom rate ~10× too low. The header still
  *  displays the run-total elapsed — only the ETA math wants per-phase. */
+/** Stima del tempo residuo della FASE corrente.
+ *
+ * ⚠️ Componente a se' perche' possiede un ISTANTE, e il chiamante lo rimonta
+ * con una `key` legata a fase + run: cosi' `startMs` si inizializza al
+ * montaggio e una fase nuova e' un cronometro nuovo.
+ *
+ * Le due alternative sono entrambe sbagliate, e il lint le rifiuta:
+ *   - tenere l'istante in un `useRef` e leggerlo in render e' `react-hooks/refs`
+ *     — «un ref e' un valore che NON serve a renderizzare», e questo serviva;
+ *   - scriverlo in stato da dentro un effect e' `set-state-in-effect`.
+ * E metterlo in stato aggiornandolo in render non si puo': `Date.now()` non e'
+ * puro e lo intercetta `react-hooks/purity`. Restava la `key`, che e' anche il
+ * modo piu' onesto di dirlo.
+ *
+ * ⚠️ Serve la fase e non il totale del run: ogni fase azzera `progress_done`,
+ * quindi mescolarci il tempo della fase precedente darebbe un ritmo fantasma
+ * ~10 volte piu' lento. */
+function EtaFase({
+  status, labels, now,
+}: { status: ScanStatusInfo; labels: RunToastLabels; now: number }) {
+  const [startMs] = useState(() => Date.now());
+  const eta = estimateEtaSec(status, (now - startMs) / 1000, labels);
+  if (eta == null || eta <= 0) return null;
+  return (
+    <span
+      className="text-xs text-muted-foreground tabular-nums"
+      title="Stima del tempo residuo. Calibrato sulla velocità misurata o, all'avvio, su un valore di riferimento per la fase corrente."
+    >
+      · ETA ~{formatSecs(eta)}
+    </span>
+  );
+}
+
 function estimateEtaSec(
   status: ScanStatusInfo,
   phaseElapsed: number,
@@ -205,25 +238,7 @@ export function RunProgressToast({ status, labels, onStop, isStopping }: Props) 
   // includes the fetch time and yields a wildly inflated ETA. Reset on each
   // phase change (including sub-phase transitions like fetching:backfill →
   // fetching:incremental) so each phase's baseline gets a clean denominator.
-  const phaseStartRef = useRef<{ phase: string | null; runId: number | null; startMs: number }>(
-    { phase: null, runId: null, startMs: 0 },
-  );
-  /* Le due fette si estraggono FUORI: l'effetto deve reagire al cambio di
-   * fase o di run, non a ogni risposta del polling. Leggere `status` intero
-   * dichiarando solo le due fette era la discrepanza che `exhaustive-deps`
-   * segnalava; aggiungere `status` alle dipendenze avrebbe azzerato il
-   * cronometro a ogni poll, cioe' reso l'ETA — il solo motivo per cui questo
-   * riferimento esiste — permanentemente vicino a zero. */
-  const fase = status?.phase ?? null;
-  const idRun = status?.last_run_id ?? null;
-  useEffect(() => {
-    if (fase === null && idRun === null) return;
-    const cambiataFase = fase !== phaseStartRef.current.phase;
-    const cambiatoRun = idRun !== phaseStartRef.current.runId;
-    if (cambiataFase || cambiatoRun) {
-      phaseStartRef.current = { phase: fase, runId: idRun, startMs: Date.now() };
-    }
-  }, [fase, idRun]);
+
 
   if (firstPaintActive) return null;
   if (!status || !status.last_run_id) return null;
@@ -248,15 +263,6 @@ export function RunProgressToast({ status, labels, onStop, isStopping }: Props) 
       ? Math.round((status.progress_done / status.progress_total) * 100)
       : 0;
   const isStale = status.is_stale;
-  const phaseElapsed =
-    phaseStartRef.current.startMs > 0 &&
-    phaseStartRef.current.phase === status.phase &&
-    phaseStartRef.current.runId === status.last_run_id
-      ? (now - phaseStartRef.current.startMs) / 1000
-      : 0;
-  const etaSec =
-    isRunning && !isStale ? estimateEtaSec(status, phaseElapsed, labels) : null;
-
   const variant = isStale
     ? "stale"
     : isRunning
@@ -364,13 +370,14 @@ export function RunProgressToast({ status, labels, onStop, isStopping }: Props) 
               >
                 {formatSecs(elapsed)}
               </span>
-              {etaSec != null && etaSec > 0 && (
-                <span
-                  className="text-xs text-muted-foreground tabular-nums"
-                  title="Stima del tempo residuo. Calibrato sulla velocità misurata o, all'avvio, su un valore di riferimento per la fase corrente."
-                >
-                  · ETA ~{formatSecs(etaSec)}
-                </span>
+              {isRunning && !isStale && (
+                /* La key rimonta il cronometro a ogni cambio di fase o di run. */
+                <EtaFase
+                  key={`${status.phase}|${status.last_run_id}`}
+                  status={status}
+                  labels={labels}
+                  now={now}
+                />
               )}
               {dismissCountdown != null && (
                 <span

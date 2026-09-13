@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import type { Setup } from "@/hooks/useSetups";
+import { columnsFor } from "@/lib/setupColumns";
 
-import { columnsFor } from "./SetupConditionGroup";
+
 
 /* Una colonna vuota per OGNI riga non va renderizzata.
  *

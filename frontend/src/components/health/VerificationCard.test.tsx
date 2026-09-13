@@ -32,7 +32,7 @@ describe("VerificationCard", () => {
      * (it-IT da' "1.366", un runtime senza dati locali "1,366"). Confrontare
      * la stringa esatta legherebbe il test all'ambiente invece che al
      * comportamento. */
-    const testo = (document.body.textContent ?? "").replace(/[.,\s  ]/g, "");
+    const testo = (document.body.textContent ?? "").replace(/[.,\s  ]/g, "");
     expect(testo).toContain("su1366censite");
     expect(screen.getByText("103")).toBeInTheDocument();
     expect(screen.getByText("80")).toBeInTheDocument();

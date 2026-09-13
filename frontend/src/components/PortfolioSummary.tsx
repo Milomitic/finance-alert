@@ -1,6 +1,7 @@
 import type { Position } from "@/api/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { winRateLabel } from "@/lib/winRate";
 
 /**
  * Portfolio-level rollup over tracked positions (F1). Everything is derived
@@ -48,27 +49,6 @@ function StatTile({ label, value, valueClass, sub }: Tile) {
       {sub && <p className="text-xs text-muted-foreground tabular-nums">{sub}</p>}
     </div>
   );
-}
-
-/** Percentuale minima di posizioni chiuse prima che un tasso sia un tasso.
- *  Stessa soglia gia' in uso in SetupsPage e DataHealthCard: sotto, il limite
- *  inferiore di Wilson al 95% e' cosi' basso che la percentuale non distingue
- *  una strategia buona da una mediocre. */
-const MIN_WIN_RATE_N = 20;
-
-/** Cosa scrivere sotto le posizioni chiuse.
- *
- *  Tre stati, non due. Nulla di chiuso non e' "0%": e' una domanda a cui
- *  ancora non e' stata data risposta. Sotto le 20 chiusure si mostra la
- *  FRAZIONE, che dice esattamente altrettanto senza pretendere di piu' — a
- *  1 su 1 il limite inferiore di Wilson sta intorno al 21%, quindi "100%" e'
- *  compatibile con una strategia che perde quattro volte su cinque. E questa
- *  e' la pagina dei soldi veri, il posto peggiore per un numero che afferma
- *  piu' di quanto sappia. Vincolato da PortfolioSummary.test.tsx. */
-export function winRateLabel(wins: number, closed: number): string {
-  if (closed <= 0) return "—";
-  if (closed < MIN_WIN_RATE_N) return `${wins}/${closed} chiuse in utile`;
-  return `win rate ${Math.round((wins / closed) * 100)}%`;
 }
 
 export function PortfolioSummary({

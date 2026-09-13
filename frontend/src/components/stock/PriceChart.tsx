@@ -4,7 +4,8 @@ import {
   type IChartApi, type ISeriesApi, type SeriesMarker, type Time, type UTCTimestamp,
 } from "lightweight-charts";
 
-import { OhlcLegend, barToLegend, type LegendDatum } from "@/components/chart/ohlcLegend";
+import { OhlcLegend, type LegendDatum } from "@/components/chart/ohlcLegend";
+import { barToLegend } from "@/lib/ohlcLegend";
 import { SignalHoverPanel } from "@/components/chart/SignalHoverPanel";
 import type { IndicatorPoint, IndicatorSeries, OhlcvBar, PriceAlert } from "@/api/types";
 import type { IndicatorStyle } from "@/components/stock/IndicatorToggles";

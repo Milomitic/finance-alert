@@ -35,10 +35,12 @@ import { InsidersAnalystCard } from "@/components/stock/InsidersAnalystCard";
 import { InstitutionalHoldersCard } from "@/components/stock/InstitutionalHoldersCard";
 import { MicroDataCard } from "@/components/stock/MicroDataCard";
 import {
-  DEFAULT_INDICATOR_STATE,
   IndicatorToggles,
-  type IndicatorKey, type IndicatorState, type IndicatorStyle,
+  type IndicatorKey,
+  type IndicatorState,
+  type IndicatorStyle,
 } from "@/components/stock/IndicatorToggles";
+import { DEFAULT_INDICATOR_STATE } from "@/lib/indicatorState";
 import { MacdPanel } from "@/components/stock/MacdPanel";
 import { NewsCard } from "@/components/stock/NewsCard";
 import { PriceAlertDialog } from "@/components/stock/PriceAlertDialog";
@@ -49,7 +51,10 @@ import { PriceAlertsStrip } from "@/components/stock/PriceAlertsStrip";
 // needed here because nothing on this page lists existing alerts).
 import { PriceChart, type ChartType } from "@/components/stock/PriceChart";
 import { cn } from "@/lib/utils";
-import { BENCHMARKS, ChartOptionsToolbar } from "@/components/stock/ChartOptionsToolbar";
+import {
+  ChartOptionsToolbar,
+} from "@/components/stock/ChartOptionsToolbar";
+import { BENCHMARKS } from "@/lib/benchmarks";
 import { RangeSelector } from "@/components/stock/RangeSelector";
 import { ResizableSection } from "@/components/stock/ResizableSection";
 import { RsiPanel } from "@/components/stock/RsiPanel";

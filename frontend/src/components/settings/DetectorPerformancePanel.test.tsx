@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import type { DetectorPerfCell } from "@/api/platformHealth";
+import { cellTone } from "@/lib/detectorPerformance";
 
-import { cellTone } from "./DetectorPerformancePanel";
+
 
 /* Two panels, one endpoint, opposite conclusions.
  *

@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { avgScoreColor } from "./SectorOverviewTiles";
+
 import { scoreColor } from "@/lib/scoreMeta";
+import { avgScoreColor } from "@/lib/sectorScoreColor";
 
 /* One stock score, one colour — wherever it appears.
  *

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { deriveMarketPhase } from "@/lib/marketPhase";
 
-import { deriveMarketPhase } from "./MarketStateBadge";
+
 
 /* The "stale" phase ships with the L2 quote cache: when the backend cannot
  * refresh a quote it serves a restored snapshot flagged market_state="STALE".

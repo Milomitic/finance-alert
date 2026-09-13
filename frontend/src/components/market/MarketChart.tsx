@@ -9,11 +9,12 @@ import {
   type UTCTimestamp,
 } from "lightweight-charts";
 
-import { OhlcLegend, barToLegend, type LegendDatum } from "@/components/chart/ohlcLegend";
+import { OhlcLegend, type LegendDatum } from "@/components/chart/ohlcLegend";
 import type { IndicatorStyle } from "@/components/stock/IndicatorToggles";
 import type { RegisterChart } from "@/hooks/useChartSync";
 import type { MarketDetailBar, MarketIndicatorPoint, MarketIndicators } from "@/hooks/useMarketDetail";
 import { defaultVisibleBars, isIntraday } from "@/lib/timeframeZoom";
+import { barToLegend } from "@/lib/ohlcLegend";
 
 interface Props {
   bars: MarketDetailBar[];

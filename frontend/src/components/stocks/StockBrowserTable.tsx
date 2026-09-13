@@ -28,6 +28,7 @@ import { formatCompactMoney, formatMoney } from "@/lib/money";
 import { GAP_TEXT, formatGap, lensGapOf } from "@/lib/lensGap";
 import { InfoHint } from "@/components/ui/info-hint";
 import { cn } from "@/lib/utils";
+import { SCREENER_COLS } from "@/lib/screenerColumns";
 
 /** Toggleable columns for the desktop screener table.
  *  The identity column (Ticker + name) is always-on.
@@ -43,34 +44,6 @@ const DIVARIO_HELP =
   "Tecnico − Qualità. Positivo = il prezzo corre davanti ai fondamentali. " +
   "Sull'universo il valore tipico è circa −13, non 0: le due lenti non sono " +
   "centrate sulla stessa scala. È una discrepanza da guardare, non un'occasione.";
-
-export const SCREENER_COLS = [
-  { id: "exchange",       label: "Exchange" },
-  { id: "settore",        label: "Settore" },
-  { id: "industry",       label: "Industry" },
-  { id: "prezzo",         label: "Prezzo" },
-  { id: "market_cap",     label: "Mkt Cap" },
-  { id: "delta_pct",      label: "Δ%" },
-  { id: "rsi",            label: "RSI" },
-  { id: "vol_ratio",      label: "Vol×" },
-  { id: "volume",         label: "Volume" },
-  { id: "pct_from_high",  label: "% da max 52w" },
-  { id: "vs_ema200",      label: "vs EMA200" },
-  { id: "score",          label: "Score" },
-  { id: "profitability",  label: "Profittabilità" },
-  { id: "sustainability", label: "Sostenibilità" },
-  { id: "growth",         label: "Crescita" },
-  { id: "value",          label: "Valore" },
-  { id: "sentiment",      label: "Sentiment" },
-  { id: "tech_composite",  label: "Tecnico" },
-  { id: "divario",         label: "Divario" },
-  { id: "tech_trend",      label: "T-Trend" },
-  { id: "tech_momentum",   label: "T-Mom" },
-  { id: "tech_structure",  label: "T-Strut" },
-  { id: "tech_volume",     label: "T-Vol" },
-  { id: "tech_rel_strength", label: "T-RS" },
-  { id: "risk",           label: "Risk" },
-] as const;
 
 /** Sort options offered in the mobile card view (no clickable column
  *  headers there). Mirrors the desktop table's sortable columns. */

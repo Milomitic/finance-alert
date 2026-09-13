@@ -3,7 +3,8 @@ import { describe, expect, it } from "vitest";
 
 import type { Position } from "@/api/types";
 
-import { PositionGeometry, geometry } from "./PositionGeometry";
+import { PositionGeometry } from "./PositionGeometry";
+import { geometry } from "@/lib/positionGeometry";
 
 /* La geometria di una posizione aperta.
  *

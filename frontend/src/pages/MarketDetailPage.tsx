@@ -22,11 +22,11 @@ import { HeaderSparkline } from "@/components/stock/StockHeader";
 import { TechnicalKpiCard } from "@/components/stock/TechnicalKpiCard";
 import { RangeSelector } from "@/components/stock/RangeSelector";
 import {
-  DEFAULT_INDICATOR_STATE,
   IndicatorToggles,
   type IndicatorKey,
   type IndicatorStyle,
 } from "@/components/stock/IndicatorToggles";
+import { DEFAULT_INDICATOR_STATE } from "@/lib/indicatorState";
 import { useChartSync } from "@/hooks/useChartSync";
 import { useMarketDetail } from "@/hooks/useMarketDetail";
 import { cn } from "@/lib/utils";

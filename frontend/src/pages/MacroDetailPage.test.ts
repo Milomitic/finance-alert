@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { formatMacroValue } from "./MacroDetailPage";
+
+import { formatMacroValue } from "@/lib/macroFormat";
 
 /* La scala della serie contro il suffisso compatto.
  *

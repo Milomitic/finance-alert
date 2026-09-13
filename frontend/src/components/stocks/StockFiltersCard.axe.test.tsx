@@ -4,7 +4,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { axeViolations, describeViolations } from "@/test/axe";
 
-import { EMPTY_FILTERS, StockFiltersCard } from "./StockFiltersCard";
+import { StockFiltersCard } from "./StockFiltersCard";
+import { EMPTY_FILTERS } from "@/lib/screenerFilters";
 
 /* The densest form in the app: nine numeric fields, several of them min/max
  * pairs, plus selects and a preset popover. It is exactly the shape where a

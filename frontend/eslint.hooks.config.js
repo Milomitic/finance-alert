@@ -2,8 +2,8 @@ import reactHooks from 'eslint-plugin-react-hooks'
 import tseslint from 'typescript-eslint'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
-/* CI gate for FOUR rules: rules-of-hooks, static-components,
- * set-state-in-effect and exhaustive-deps.
+/* CI gate for SEVEN rules: rules-of-hooks, static-components,
+ * set-state-in-effect, exhaustive-deps, refs, purity, immutability.
  *
  * Why a second config instead of putting `npm run lint` in the pipeline. The
  * full config reported 60 findings on 2026-09-09 and reports **34** today
@@ -108,6 +108,38 @@ import { defineConfig, globalIgnores } from 'eslint/config'
  * aggiornamento in render guardato da `prec !== corrente` no, se si
  * inizializza `prec` col valore corrente. Dove il montaggio conta (LogStream,
  * PriceAlertDialog) la guardia parte da una sentinella.
+ *
+ * ─── refs, purity, immutability, e cio' che NON e' entrato (2026-09-13) ──
+ *
+ * Tutte e tre erano gia' a zero o ci sono state portate, e appartengono alla
+ * stessa famiglia: descrivono cosa rende un render RIPETIBILE. React puo'
+ * renderizzare in modo speculativo e scartare il risultato, quindi un render
+ * che legge un ref, che legge l'orologio o che muta un oggetto puo' produrre
+ * due esiti diversi per lo stesso stato. Non e' teoria: `purity` ha respinto
+ * una correzione scritta in questa stessa sessione — un `Date.now()` in
+ * render, messo li' per togliere un `set-state-in-effect` — e aveva ragione.
+ * La risposta giusta era rimontare il componente con una `key`.
+ *
+ * ⚠️ `react-refresh/only-export-components` e' a ZERO (era 25) e NON e'
+ * entrata, deliberatamente.
+ *
+ * Rompe il Fast Refresh: modificando un file che esporta un componente E
+ * altro, Vite ricarica la pagina invece di sostituire il componente. Costa a
+ * chi SVILUPPA, non a chi usa — e la seconda meta' della barra di questo file
+ * dice che una violazione deve rompere qualcosa che un utente sente. E' la
+ * stessa ragione per cui `no-unused-vars` sta fuori pur essendo a zero da
+ * settembre: essere a zero merita una CONSIDERAZIONE, non l'ingresso.
+ *
+ * Il rischio noto e accettato e' che i 25 tornino. Se un giorno tornassero,
+ * la scelta e' fra ammettere la regola cambiando la barra — dichiarandolo — e
+ * rifare la pulizia; non fra ammetterla di nascosto e fingere che la barra
+ * sia sempre stata questa.
+ *
+ * ⚠️ E NON e' stato gatto `npm run lint` per intero, benche' oggi sia a zero.
+ * Un gate su una config che segue le `recommended` di un plugin diventa rosso
+ * quando il plugin aggiunge una regola — cioe' su una decisione di qualcun
+ * altro, su codice che nessuno ha toccato. E' esattamente la forma che questo
+ * file esiste per evitare. Le regole si nominano una per una.
  */
 export default defineConfig([
   /* `e2e/` non contiene React.
@@ -127,6 +159,9 @@ export default defineConfig([
       'react-hooks/static-components': 'error',
       'react-hooks/set-state-in-effect': 'error',
       'react-hooks/exhaustive-deps': 'error',
+      'react-hooks/refs': 'error',
+      'react-hooks/purity': 'error',
+      'react-hooks/immutability': 'error',
     },
     plugins: { 'react-hooks': reactHooks },
     // The `eslint-disable` comments scattered around the codebase target rules

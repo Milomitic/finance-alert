@@ -3,7 +3,8 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { InitialLoadBar } from "./initial-load-bar";
-import { NoValue, hasValue } from "./no-value";
+import { NoValue } from "./no-value";
+import { hasValue } from "@/lib/hasValue";
 
 describe("hasValue", () => {
   it("rejects the values that render as literal NaN or Infinity", () => {

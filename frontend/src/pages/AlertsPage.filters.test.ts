@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { filtersFromSearch } from "./AlertsPage";
+
+import { filtersFromSearch } from "@/lib/alertFilters";
 
 /* Alert filters live in the URL, so a bookmark outlives the UI that made it.
  *
