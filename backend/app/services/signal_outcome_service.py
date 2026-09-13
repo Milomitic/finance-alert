@@ -175,7 +175,16 @@ def _universe_fwd_medians(
 def _ema(values: np.ndarray, span: int) -> np.ndarray:
     """Causal EWM (pandas-equivalent) over a 1-D array."""
     alpha = 2.0 / (span + 1.0)
-    out = np.empty_like(values)
+    # ⚠️ `zeros_like`, non `empty_like`. La funzione riempie ogni indice, quindi
+    # `empty_like` sarebbe corretta — ma se un giorno smette di riempirli tutti,
+    # l'uscita non e' un valore sbagliato: e' memoria non inizializzata, cioe'
+    # un risultato che a volte coincide per caso con quello giusto. La sonda di
+    # mutazione l'ha dimostrato: spostando `out[0]` a `out[1]` il test che
+    # confronta con pandas PASSAVA, tre volte su tre, perche' il blocco appena
+    # liberato conteneva gia' il valore atteso.
+    # Il costo e' nullo in proporzione: azzerare 20 KB vale ~1% del ciclo Python
+    # interpretato qui sotto.
+    out = np.zeros_like(values)
     acc = values[0]
     out[0] = acc
     for i in range(1, len(values)):

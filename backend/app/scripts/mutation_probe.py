@@ -156,13 +156,30 @@ BERSAGLI: dict[str, list[str]] = {
     # funzionato. Ha gia' avuto un difetto che ne misurava 19 righe su 4.880.
     "app/services/signal_outcome_service.py": [
         "tests/test_signal_outcome_service.py",
-        "tests/test_equity_curve_direction.py",
         "tests/test_signal_drift_service.py",
+        # Esercita `mature_outcomes` per verificare che gli ETF restino fuori
+        # dal magazzino: mancava, ed e' un chiamante DIRETTO.
+        "tests/test_etf_exclusions.py",
+        # Scritto DOPO la passata che qui uccideva 20 su 57: i confini
+        # (colpo a rendimento nullo, maturazione, segno market-neutral,
+        # ricorrenza della EMA, prezzi sotto l'unita').
+        "tests/test_signal_outcome_mutanti.py",
+        # ⚠️ Questo NON importa il servizio: costruisce righe `SignalOutcome` a
+        # mano e verifica il verso della curva dal lato del CONSUMATORE. Resta
+        # in elenco perche' fissa lo stesso contratto (il tono al momento della
+        # maturazione) e costa 0,4 s, ma non aspettarti che uccida mutanti di
+        # questo modulo: non ne esegue una riga.
+        "tests/test_equity_curve_direction.py",
     ],
     # La lente Tecnico: posture e punteggio continuo.
     "app/services/technical_score_service.py": [
         "tests/test_technical_score.py",
         "tests/test_technical_recompute_one.py",
+        # Chiama `recompute_one` attraverso l'endpoint: mancava. ⚠️ Gli altri
+        # sette file che nominano "technical_score" toccano il MODELLO
+        # `TechnicalScore`, non il servizio — includerli allungherebbe ogni
+        # mutante senza poter uccidere niente.
+        "tests/test_api_scores.py",
     ],
     # La de-correlazione per famiglia: N segnali correlati devono contare ~1.3,
     # non N. Se smette di funzionare la confluenza si gonfia in silenzio.
