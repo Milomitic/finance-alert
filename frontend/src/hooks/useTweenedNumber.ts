@@ -34,16 +34,39 @@ export function useTweenedNumber(
   const shownRef = useRef<number | null>(shown);
   shownRef.current = shown;
 
-  useEffect(() => {
+  /* ⚠️ Gli SNAP si fanno in fase di render, non dentro l'effect.
+   *
+   * Sono due: bersaglio assente -> niente da mostrare; primo valore (o ritorno
+   * da `null`) -> si mostra subito, senza animazione. Nessuno dei due e'
+   * un'animazione, sono aggiustamenti di stato a una prop che cambia — ed e'
+   * il caso che React documenta per l'aggiornamento in render.
+   *
+   * La differenza non e' stilistica. Da dentro un effect React ha gia'
+   * DIPINTO il render precedente: sullo schermo compare per un fotogramma il
+   * valore vecchio (o uno zero) e poi salta a quello giusto. Aggiornando in
+   * render, React scarta il risultato e ri-renderizza prima di dipingere:
+   * quel fotogramma sbagliato non esiste. E' anche cio' che
+   * `react-hooks/set-state-in-effect` intende per «renderizzazioni a
+   * cascata».
+   *
+   * ⚠️ La guardia `target !== precedente` e' obbligatoria: senza, l'aggiorna-
+   * mento in render si ri-innescherebbe a ogni passata e il render non
+   * terminerebbe mai. */
+  const [precedente, setPrecedente] = useState(target);
+  if (target !== precedente) {
+    setPrecedente(target);
     if (target == null || !Number.isFinite(target)) {
       setShown(null);
-      return;
-    }
-    // First time / coming from null: snap, no tween.
-    if (shownRef.current == null) {
+    } else if (shown == null) {
       setShown(target);
-      return;
     }
+  }
+
+  useEffect(() => {
+    // Gli snap sono gia' stati applicati in render; qui resta la sola
+    // animazione. Questi due `return` non scrivono stato.
+    if (target == null || !Number.isFinite(target)) return;
+    if (shownRef.current == null) return;
     if (target === shownRef.current) return;
 
     fromRef.current = shownRef.current;

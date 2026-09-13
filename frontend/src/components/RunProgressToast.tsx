@@ -208,18 +208,22 @@ export function RunProgressToast({ status, labels, onStop, isStopping }: Props) 
   const phaseStartRef = useRef<{ phase: string | null; runId: number | null; startMs: number }>(
     { phase: null, runId: null, startMs: 0 },
   );
+  /* Le due fette si estraggono FUORI: l'effetto deve reagire al cambio di
+   * fase o di run, non a ogni risposta del polling. Leggere `status` intero
+   * dichiarando solo le due fette era la discrepanza che `exhaustive-deps`
+   * segnalava; aggiungere `status` alle dipendenze avrebbe azzerato il
+   * cronometro a ogni poll, cioe' reso l'ETA — il solo motivo per cui questo
+   * riferimento esiste — permanentemente vicino a zero. */
+  const fase = status?.phase ?? null;
+  const idRun = status?.last_run_id ?? null;
   useEffect(() => {
-    if (!status) return;
-    const phaseChanged = status.phase !== phaseStartRef.current.phase;
-    const runChanged = status.last_run_id !== phaseStartRef.current.runId;
-    if (phaseChanged || runChanged) {
-      phaseStartRef.current = {
-        phase: status.phase,
-        runId: status.last_run_id,
-        startMs: Date.now(),
-      };
+    if (fase === null && idRun === null) return;
+    const cambiataFase = fase !== phaseStartRef.current.phase;
+    const cambiatoRun = idRun !== phaseStartRef.current.runId;
+    if (cambiataFase || cambiatoRun) {
+      phaseStartRef.current = { phase: fase, runId: idRun, startMs: Date.now() };
     }
-  }, [status?.phase, status?.last_run_id]);
+  }, [fase, idRun]);
 
   if (firstPaintActive) return null;
   if (!status || !status.last_run_id) return null;

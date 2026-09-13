@@ -1666,10 +1666,39 @@ d = json.load(urllib.request.urlopen(req, timeout=60))
   (also: `npx tsc -b` for type-only check)
 - **Single test file**: append the file path to the pytest command
 
-⚠️ `npm run lint` (the FULL config) reports **52** pre-existing findings —
-44 errors + 8 warnings, re-counted 2026-09-11: only-export-components 24,
-set-state-in-effect 14, exhaustive-deps 9, refs 5. They are NOT gated and a red
-result there is expected. `lint:hooks` is the gated subset.
+⚠️ `npm run lint` (the FULL config) reports **31** pre-existing findings,
+re-counted 2026-09-13: only-export-components 25, refs 5. They are NOT gated
+and a red result there is expected. `lint:hooks` is the gated subset — e ora
+gatta QUATTRO regole, non due.
+
+**set-state-in-effect (14) ed exhaustive-deps (9) sono a ZERO e sono entrate
+nel gate** il 2026-09-13. La barra e' quella che `eslint.hooks.config.js` si e'
+sempre dato: misurata a zero PRIMA, e una violazione deve rompere qualcosa che
+un utente sente. Entrambe l'hanno superata con difetti veri trovati durante la
+pulizia — fra gli altri, l'evidenziazione della ricerca che puntava a una riga
+di una lista gia' accorciata (Invio apriva il titolo sbagliato), lo spessore
+applicato a una sola delle due linee del pannello MACD, e l'orologio dell'asse
+che non si accendeva passando a un intervallo intraday.
+
+⚠️ **Nessuna delle due si chiude nel modo ovvio**, ed e' la parte che costa
+tempo se non la si sa:
+
+- `exhaustive-deps` NON si chiude aggiungendo l'oggetto mancante. Sui grafici
+  avrebbe distrutto e ricostruito l'intero grafico a ogni cambio di colore,
+  perdendo zoom e posizione. Si chiude estraendo la FETTA fuori dall'effetto,
+  cosi' che il corpo legga esattamente cio' che dichiara.
+- `set-state-in-effect` si chiude aggiornando lo stato IN RENDER (il pattern
+  che React documenta per «aggiustare lo stato quando cambia una prop»), ma
+  solo se il valore e' PURO: il primo tentativo su `DataSourcesCard` leggeva
+  `Date.now()` in render e `react-hooks/purity` l'ha respinto. Li' la risposta
+  era rimontare il componente con una `key`.
+
+⚠️ E la trappola che ha prodotto l'unico rosso della pulizia, trovata da un
+test e non a ragionamento: **un effect gira anche al PRIMO montaggio, un
+aggiornamento in render guardato da `prec !== corrente` no** — se si
+inizializza `prec` col valore corrente, il primo confronto e' gia' uguale e il
+comportamento al montaggio sparisce. Dove il montaggio conta la guardia parte
+da una sentinella (`null`/`undefined`): vedi `LogStream` e `PriceAlertDialog`.
 
 ⚠️ **The number grew from 47 and the growth was partly MINE**, which is the
 thing to check first when this count moves. `Layout.tsx` gained an

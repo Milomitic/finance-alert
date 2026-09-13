@@ -462,10 +462,27 @@ function BreakerChip({ breaker }: { breaker: Record<string, unknown> }) {
 
   // Local 1s ticker — only while the breaker is tripped — for a smooth
   // countdown that doesn't depend on the health-poll cadence.
+  /* ⚠️ `now` si inizializza al MONTAGGIO, e il montaggio e' garantito dalla
+   * chiave che il chiamante mette su questo componente.
+   *
+   * Il conto alla rovescia deve partire dall'istante in cui il breaker
+   * scatta, non da quando la pagina e' stata aperta — altrimenti una scheda
+   * lasciata aperta dieci minuti mostra un residuo sbagliato di dieci minuti
+   * al primo fotogramma.
+   *
+   * Due strade scartate, e vale la pena dire perche':
+   *   - rimetterlo a ora dentro un effect: e' una renderizzazione a cascata,
+   *     e il fotogramma col numero sbagliato viene comunque DIPINTO;
+   *   - rimetterlo a ora in render: `Date.now()` non e' puro, e React puo'
+   *     renderizzare in modo speculativo. `react-hooks/purity` lo segnala, ed
+   *     e' la regola che ha respinto il primo tentativo di questa correzione.
+   *
+   * Rimontare non costa nulla qui: `now` e' l'unico stato del componente, e
+   * uno stato nuovo del breaker E' un conto alla rovescia nuovo. */
   const [now, setNow] = useState(() => Date.now());
+
   useEffect(() => {
     if (!active) return;
-    setNow(Date.now());
     const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
   }, [active]);
@@ -587,7 +604,13 @@ export default function DataSourcesCard({
               {operational}/{metrics.length} operative
             </span>
           </CardTitle>
-          <BreakerChip breaker={yfinanceBreaker} />
+          {/* ⚠️ La chiave e' lo STATO del breaker: cambiandolo il componente
+              si rimonta e il suo orologio riparte dall'istante giusto. Senza,
+              il conto alla rovescia userebbe l'ora di apertura della pagina. */}
+          <BreakerChip
+            key={String(yfinanceBreaker?.state ?? "closed")}
+            breaker={yfinanceBreaker}
+          />
         </div>
       </CardHeader>
       <CardContent className="p-4 space-y-4">

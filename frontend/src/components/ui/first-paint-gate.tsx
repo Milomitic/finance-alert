@@ -89,9 +89,16 @@ export function FirstPaintGate({
   const [total, setTotal] = useState(0);
   const [elapsed, setElapsed] = useState(0);
 
-  useEffect(() => {
-    setTotal((t) => Math.max(t, pending));
-  }, [pending]);
+  /* ⚠️ Il massimo si alza in RENDER, non in un effect.
+   *
+   * E' un denominatore: deve essere gia' giusto nel render in cui `pending`
+   * sale, altrimenti per un fotogramma si vede «3 su 2» — un rapporto sopra
+   * l'uno, cioe' una barra di avanzamento che sfonda. Da dentro un effect
+   * quel fotogramma viene DIPINTO prima della correzione.
+   *
+   * La guardia rende l'aggiornamento idempotente: sale solo quando c'e'
+   * davvero qualcosa di piu' alto, quindi il render converge subito. */
+  if (pending > total) setTotal(pending);
 
   // Tell the rest of the app it is covered, so the global progress toasts do
   // not paint a second bar over this one. Cleared on unmount as well —

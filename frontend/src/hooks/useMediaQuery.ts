@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import * as React from "react";
 
 /* Subscribe to a CSS media query from JS.
  *
@@ -13,24 +13,50 @@ import { useEffect, useState } from "react";
  * never paints the desktop variant for one frame before correcting itself.
  */
 export function useMediaQuery(query: string): boolean {
-  const [matches, setMatches] = useState(() =>
-    typeof window !== "undefined" && typeof window.matchMedia === "function"
-      ? window.matchMedia(query).matches
-      : false,
+  /* ⚠️ `useSyncExternalStore` e non `useState` + `useEffect`.
+   *
+   * La forma precedente leggeva il match una volta per inizializzare lo stato
+   * e poi lo RILEGGEVA dentro un effect per risincronizzarsi. Funziona, e ha
+   * tre difetti che questa API toglie di netto:
+   *
+   *   - una renderizzazione a cascata a ogni montaggio (lo stato viene
+   *     riscritto subito dopo il primo render, anche quando il valore non e'
+   *     cambiato). E' cio' che `react-hooks/set-state-in-effect` segnalava;
+   *   - una finestra di DISALLINEAMENTO fra il primo render e l'effect: se la
+   *     larghezza cambia in quei millisecondi, il valore letto in render e'
+   *     gia' vecchio e nessuno se ne accorge;
+   *   - due copie della stessa lettura da tenere d'accordo a mano.
+   *
+   * `useSyncExternalStore` e' scritto per esattamente questo: React chiama
+   * `leggi` quando serve e si ri-sottoscrive da solo quando `query` cambia.
+   *
+   * ⚠️ Il terzo argomento e' lo snapshot LATO SERVER. Non c'e' SSR qui, ma
+   * senza di esso l'hook lancia in qualunque ambiente privo di `window` — per
+   * esempio dentro un test che monta un componente prima che jsdom sia
+   * pronto. `false` significa «nessun match», che e' il ramo conservativo:
+   * la stessa scelta che la versione precedente faceva nel suo guard.
+   */
+  const sottoscrivi = React.useCallback(
+    (cambiato: () => void) => {
+      if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+        return () => {};
+      }
+      const mql = window.matchMedia(query);
+      mql.addEventListener("change", cambiato);
+      return () => mql.removeEventListener("change", cambiato);
+    },
+    [query],
   );
 
-  useEffect(() => {
-    if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
-      return;
-    }
-    const mql = window.matchMedia(query);
-    const onChange = (e: MediaQueryListEvent) => setMatches(e.matches);
-    setMatches(mql.matches);
-    mql.addEventListener("change", onChange);
-    return () => mql.removeEventListener("change", onChange);
-  }, [query]);
+  const leggi = React.useCallback(
+    () =>
+      typeof window !== "undefined" && typeof window.matchMedia === "function"
+        ? window.matchMedia(query).matches
+        : false,
+    [query],
+  );
 
-  return matches;
+  return React.useSyncExternalStore(sottoscrivi, leggi, () => false);
 }
 
 /** Below Tailwind's `sm` (640px) — i.e. phones. Kept as one constant so the

@@ -111,10 +111,17 @@ export function NavbarSearch() {
     return rows;
   }, [q, indexMatches, stockItems, recent, topMovers]);
 
-  // Reset highlight when results change
-  useEffect(() => {
+  /* Riporta l'evidenziazione in cima quando i risultati cambiano.
+   *
+   * ⚠️ In render: da effect esiste un fotogramma in cui la riga evidenziata e'
+   * l'ennesima di una lista che nel frattempo si e' accorciata — e se in quel
+   * momento si preme Invio si apre il titolo sbagliato. Qui non e' un difetto
+   * visivo, e' un'azione sbagliata. */
+  const [chiaveRisultati, setChiaveRisultati] = useState(`${flatRows.length}|${q}`);
+  if (chiaveRisultati !== `${flatRows.length}|${q}`) {
+    setChiaveRisultati(`${flatRows.length}|${q}`);
     setHighlight(0);
-  }, [flatRows.length, q]);
+  }
 
   // Close on outside click (mousedown to beat focus loss)
   useEffect(() => {

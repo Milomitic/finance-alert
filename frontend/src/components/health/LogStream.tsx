@@ -152,9 +152,18 @@ export default function LogStream({
   // it cannot classify. Opening such a source at the WARNING+ default would
   // hide unclassified errors behind an empty panel, so infra always opens at
   // ALL. Same reason the source drill-down below does it.
-  useEffect(() => {
+  const chiaveFonte = `${sourceFilter}|${onInfra}`;
+  /* ⚠️ La sentinella `null` NON e' pignoleria: e' la differenza fra l'effect e
+   * l'aggiornamento in render. Un effect gira anche al PRIMO montaggio;
+   * inizializzando la chiave precedente col valore corrente, invece, il primo
+   * render la trova gia' uguale e l'azzeramento non avviene mai. Partendo da
+   * `null` il primo confronto fallisce sempre, quindi il comportamento al
+   * montaggio e' identico a prima. (Trovato da un test, non a ragionamento.) */
+  const [chiaveFontePrec, setChiaveFontePrec] = useState<string | null>(null);
+  if (chiaveFonte !== chiaveFontePrec) {
+    setChiaveFontePrec(chiaveFonte);
     setLevelFilter(sourceFilter || onInfra ? "ALL" : "WARNING");
-  }, [sourceFilter, onInfra]);
+  }
 
   // Pause = freeze the visible buffer so the tail stops jumping while you read.
   // Snapshot the records ONLY when `paused` toggles (not on every incoming
@@ -162,10 +171,22 @@ export default function LogStream({
   // we instantly catch up on resume. The header's "in buffer" count stays live
   // off `records`, so it's clear the stream is still receiving while paused.
   const [frozen, setFrozen] = useState<StreamedLog[] | null>(null);
-  useEffect(() => {
+  /* ⚠️ In render sparisce anche la direttiva `eslint-disable`.
+   *
+   * L'intenzione era «fotografa SOLO quando `paused` commuta, non a ogni
+   * record», e per ottenerla da un effect bisognava omettere `records` dalle
+   * dipendenze e zittire la regola. Aggiornando in render l'intenzione e'
+   * scritta nel codice — la guardia e' la commutazione — e `records` si legge
+   * lecitamente, quindi non c'e' piu' niente da zittire.
+   *
+   * Una direttiva in meno non e' cosmesi: ognuna e' un punto in cui la regola
+   * non guarda piu', e questo repo ne ha gia' trovate due che sopprimevano
+   * regole nemmeno attive. */
+  const [pausedPrec, setPausedPrec] = useState(paused);
+  if (paused !== pausedPrec) {
+    setPausedPrec(paused);
     setFrozen(paused ? records : null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [paused]);
+  }
   const viewRecords = paused ? (frozen ?? records) : records;
 
   const filtered = useMemo(() => {

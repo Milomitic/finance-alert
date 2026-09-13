@@ -1,6 +1,6 @@
 import type { IChartApi } from "lightweight-charts";
 import { AlertCircle, ArrowLeft, ChevronDown, Loader2, SlidersHorizontal } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 
 import type { PriceAlert } from "@/api/types";
@@ -212,9 +212,15 @@ export default function StockDetailPage() {
   // Line tool: the first clicked point, awaiting the second click that
   // completes the trend line. Cleared whenever we leave "trend" mode.
   const [pendingTrend, setPendingTrend] = useState<{ x: number; y: number } | null>(null);
-  useEffect(() => {
+  /* Uscire dalla modalita' «trend» abbandona il primo punto gia' cliccato.
+   * In render perche' il punto in sospeso e' DISEGNATO sul grafico: da effect
+   * resterebbe visibile un fotogramma dopo il cambio di strumento, cioe' un
+   * segno che l'utente non puo' piu' completare ne' capire. */
+  const [modePrec, setModePrec] = useState(mode);
+  if (mode !== modePrec) {
+    setModePrec(mode);
     if (mode !== "trend") setPendingTrend(null);
-  }, [mode]);
+  }
 
   // Chart-sync orchestrator: PriceChart + RsiPanel + MacdPanel each
   // register with this on mount, the hook then forwards every pan/zoom

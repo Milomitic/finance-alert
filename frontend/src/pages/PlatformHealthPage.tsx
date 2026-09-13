@@ -75,7 +75,7 @@ export default function PlatformHealthPage({ embedded = false }: { embedded?: bo
     queryFn: ({ signal }) => fetchHealth(signal),
   });
 
-  const { snapshot, logs, setLogs, connected } = usePlatformHealthStream(
+  const { snapshot, logs, svuota, connected } = usePlatformHealthStream(
     initialLogs ?? []
   );
 
@@ -376,7 +376,7 @@ export default function PlatformHealthPage({ embedded = false }: { embedded?: bo
           records={onInfraOrigin ? infraLogs.records : logs}
           paused={paused}
           onTogglePause={() => setPaused((p) => !p)}
-          onClear={() => setLogs([])}
+          onClear={svuota}
           sourceFilter={onInfraOrigin ? null : sourceFilter}
           onClearSourceFilter={() => setSourceFilter(null)}
           origin={{

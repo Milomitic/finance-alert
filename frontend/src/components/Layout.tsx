@@ -229,11 +229,17 @@ export default function Layout() {
     }
   }, [sidebarCollapsed]);
 
-  // Close the drawer on any route change — covers nav taps, the
-  // navbar search jumping to a stock, browser back/forward, etc.
-  useEffect(() => {
+  /* Chiude il cassetto a ogni cambio di rotta — tocchi sul menu, la ricerca
+   * che salta a un titolo, avanti/indietro del browser.
+   *
+   * ⚠️ In render e non in effect: da effect la pagina nuova viene DIPINTA con
+   * il cassetto ancora aperto sopra, e si vede un lampo di menu sulla rotta
+   * di destinazione. */
+  const [rottaPrec, setRottaPrec] = useState(location.pathname);
+  if (location.pathname !== rottaPrec) {
+    setRottaPrec(location.pathname);
     setMobileNavOpen(false);
-  }, [location.pathname]);
+  }
 
   // Treat the mobile navigation as a dialog: move focus inside on open,
   // trap Tab, close on Escape, and return focus to the hamburger on close.

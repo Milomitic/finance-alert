@@ -1,5 +1,5 @@
 import { ArrowLeft, Building2, ExternalLink } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 
 import type { HoldingDetail } from "@/api/types";
@@ -195,7 +195,16 @@ export default function InstitutionalDetailPage() {
      che cambiano perche hai scorso. Si azzera al cambio di periodo, perche
      quella e un'altra dichiarazione. */
   const [pagineExtra, setPagineExtra] = useState(0);
-  useEffect(() => setPagineExtra(0), [slug, periodParam]);
+  /* In render: il conteggio delle pagine extra ENTRA nella chiave della query
+   * subito sotto. Da effect si farebbe una richiesta con la paginazione del
+   * soggetto precedente prima di correggersi — una chiamata di rete sprecata
+   * e, per un istante, aggregati calcolati sul portafoglio sbagliato. */
+  const chiaveSoggetto = `${slug}|${periodParam}`;
+  const [chiaveSoggettoPrec, setChiaveSoggettoPrec] = useState(chiaveSoggetto);
+  if (chiaveSoggetto !== chiaveSoggettoPrec) {
+    setChiaveSoggettoPrec(chiaveSoggetto);
+    setPagineExtra(0);
+  }
 
   const q = useInstitutionalDetail(
     slug,

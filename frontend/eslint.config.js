@@ -6,7 +6,16 @@ import tseslint from 'typescript-eslint'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist']),
+  /* ⚠️ `e2e/` gira in Node sotto Playwright e non contiene React.
+   *
+   * Playwright passa alle fixture una funzione chiamata `use`, che
+   * `rules-of-hooks` legge come un hook React chiamato fuori da un
+   * componente: un falso positivo STRUTTURALE, che si ripresenta a ogni nuova
+   * fixture. `eslint.hooks.config.js` gia' escludeva la cartella; qui no,
+   * quindi il conteggio totale portava un errore permanente sul nome della
+   * regola piu' importante del gate — il modo piu' rapido per insegnare a
+   * ignorarlo. Si esclude la cartella, non si silenzia la regola sul posto. */
+  globalIgnores(['dist', 'e2e']),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import type { PriceAlert } from "@/api/types";
 import { Button } from "@/components/ui/button";
@@ -47,8 +47,27 @@ export function PriceAlertDialog({
      doppio passo nello stesso punto lascia il puntatore dov'e' gia'. */
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
-  useEffect(() => {
-    if (!open) return;
+  /* ⚠️ Il modulo si azzera in RENDER quando cambia la SESSIONE di modifica.
+   *
+   * «Sessione» = questo dialog, aperto, su questo soggetto. La chiave la
+   * riassume, cosi' riaprire sullo stesso avviso non azzera nulla mentre
+   * passare da un avviso a un altro si'. Da dentro un effect il dialog
+   * verrebbe DIPINTO una volta con i valori dell'avviso precedente: su una
+   * finestra che chiede una conferma di eliminazione, mostrare per un
+   * fotogramma il bersaglio sbagliato non e' un dettaglio estetico. */
+  const sessione = open
+    ? `${editing?.id ?? "nuovo"}|${initialPrice ?? ""}|${initialDirection ?? ""}`
+    : null;
+  /* La sentinella `undefined` distingue «mai visto» da «chiuso» (`null`):
+   * senza, un dialog che monta GIA' aperto non azzererebbe il modulo, che
+   * qui parte da stringhe vuote. Stessa ragione documentata in LogStream. */
+  const [sessionePrec, setSessionePrec] = useState<string | null | undefined>(undefined);
+  if (sessione !== sessionePrec) {
+    setSessionePrec(sessione);
+    if (sessione !== null) azzera();
+  }
+
+  function azzera() {
     if (editing) {
       setPrice(String(editing.target_price));
       setDirection(editing.direction);
@@ -62,7 +81,7 @@ export function PriceAlertDialog({
     // La conferma non sopravvive alla chiusura: riaprire deve ripartire da
     // "Elimina", non da un dialog gia' armato.
     setConfirmingDelete(false);
-  }, [open, editing, initialPrice, initialDirection]);
+  }
 
   const submit = () => {
     const num = parseFloat(price);

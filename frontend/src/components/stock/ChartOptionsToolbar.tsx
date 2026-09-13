@@ -1,5 +1,5 @@
 import { AreaChart, CandlestickChart, Download, LineChart, Maximize2, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import type { ChartType } from "@/components/stock/PriceChart";
 import { cn } from "@/lib/utils";
@@ -47,7 +47,16 @@ export function ChartOptionsToolbar({
   // Local input state; commit the compare ticker on Enter / blur so we don't
   // fire a fetch on every keystroke.
   const [cmp, setCmp] = useState(compareTicker);
-  useEffect(() => setCmp(compareTicker), [compareTicker]);
+  /* Il campo e' controllato localmente e si allinea alla prop quando questa
+   * cambia da fuori (per esempio da un link con un confronto gia' scelto).
+   * In render e non in effect: da effect il campo mostrerebbe per un
+   * fotogramma il valore precedente, e se l'utente stesse digitando in quel
+   * momento il carattere appena battuto verrebbe sovrascritto. */
+  const [cmpProp, setCmpProp] = useState(compareTicker);
+  if (compareTicker !== cmpProp) {
+    setCmpProp(compareTicker);
+    setCmp(compareTicker);
+  }
   const commit = () => onCompareTicker(cmp.trim().toUpperCase());
 
   return (

@@ -106,7 +106,11 @@ export function MarketChart({
         // legend does for these bars (`formatBarDate` defaults tz="UTC").
         // Axis and legend must agree; adding a local-tz formatter here would
         // desync them.
-        timeVisible: isIntraday(timeframe),
+        // Letto dal ref: l'orologio sull'asse viene poi RIAPPLICATO
+        // dall'effetto qui sotto a ogni cambio di intervallo, quindi la
+        // creazione non dipende dalla prop. Al montaggio il ref e' gia'
+        // inizializzato col valore corrente.
+        timeVisible: isIntraday(timeframeRef.current),
         secondsVisible: false,
       },
     });
@@ -181,6 +185,21 @@ export function MarketChart({
     };
   }, [showVolume, onReady]);
 
+  /* ⚠️ L'orologio sull'asse va RIAPPLICATO, non solo impostato alla nascita.
+   *
+   * Il grafico si crea una volta sola (`[showVolume, onReady]`), quindi
+   * passando da giornaliero a 30m l'asse restava senza ore: le barre
+   * diventavano intraday e le etichette continuavano a mostrare solo la data.
+   * Difetto reale e PLAUSIBILE — un asse con sole date non sembra rotto — ed
+   * e' precisamente cio' che `exhaustive-deps` stava segnalando su
+   * `timeframe`. La regola aveva ragione; la correzione non era pero'
+   * aggiungere la dipendenza, che avrebbe ricostruito tutto il grafico. */
+  useEffect(() => {
+    chartRef.current?.applyOptions({
+      timeScale: { timeVisible: isIntraday(timeframe) },
+    });
+  }, [timeframe]);
+
   useEffect(() => {
     const candle = candleRef.current;
     if (!candle) return;
@@ -228,54 +247,83 @@ export function MarketChart({
     }
   }, [bars, showVolume, timeframe]);
 
-  useEffect(() => {
-    if (!ema20Ref.current || !indicators) return;
-    if (styles) {
-      ema20Ref.current.applyOptions({
-        visible: styles.ema20.visible,
-        color: styles.ema20.color,
-        lineWidth: styles.ema20.width as 1 | 2 | 3 | 4,
-      });
-    }
-    ema20Ref.current.setData(pointsToChartData(indicators.ema20));
-  }, [indicators?.ema20, styles?.ema20]);
+  /* ⚠️ Le FETTE si estraggono qui, fuori dagli effetti.
+   *
+   * Prima ogni effetto leggeva `indicators` e `styles` interi e dichiarava
+   * come dipendenza la sola fetta che gli interessava: le due cose non
+   * coincidevano, ed e' esattamente cio' che `exhaustive-deps` segnalava.
+   *
+   * ⚠️ La correzione NON e' aggiungere gli oggetti alle dipendenze: cosi'
+   * cambiare il colore delle Bollinger rieseguirebbe anche i tre effetti
+   * delle EMA, che ricaricherebbero i loro dati per niente. L'intento
+   * originale — «reagisci solo alla tua fetta» — era giusto; mancava solo di
+   * scriverlo in modo che il corpo dell'effetto leggesse davvero solo quella. */
+  const datiEma20 = indicators?.ema20;
+  const datiEma50 = indicators?.ema50;
+  const datiEma200 = indicators?.ema200;
+  const datiBbAlta = indicators?.bb_upper;
+  const datiBbMedia = indicators?.bb_middle;
+  const datiBbBassa = indicators?.bb_lower;
+  const stileEma20 = styles?.ema20;
+  const stileEma50 = styles?.ema50;
+  const stileEma200 = styles?.ema200;
+  const stileBb = styles?.bb;
 
   useEffect(() => {
-    if (!ema50Ref.current || !indicators) return;
-    if (styles) {
-      ema50Ref.current.applyOptions({
-        visible: styles.ema50.visible,
-        color: styles.ema50.color,
-        lineWidth: styles.ema50.width as 1 | 2 | 3 | 4,
+    const serie = ema20Ref.current;
+    if (!serie || !datiEma20) return;
+    if (stileEma20) {
+      serie.applyOptions({
+        visible: stileEma20.visible,
+        color: stileEma20.color,
+        lineWidth: stileEma20.width as 1 | 2 | 3 | 4,
       });
     }
-    ema50Ref.current.setData(pointsToChartData(indicators.ema50));
-  }, [indicators?.ema50, styles?.ema50]);
+    serie.setData(pointsToChartData(datiEma20));
+  }, [datiEma20, stileEma20]);
 
   useEffect(() => {
-    if (!ema200Ref.current || !indicators) return;
-    if (styles) {
-      ema200Ref.current.applyOptions({
-        visible: styles.ema200.visible,
-        color: styles.ema200.color,
-        lineWidth: styles.ema200.width as 1 | 2 | 3 | 4,
+    const serie = ema50Ref.current;
+    if (!serie || !datiEma50) return;
+    if (stileEma50) {
+      serie.applyOptions({
+        visible: stileEma50.visible,
+        color: stileEma50.color,
+        lineWidth: stileEma50.width as 1 | 2 | 3 | 4,
       });
     }
-    ema200Ref.current.setData(pointsToChartData(indicators.ema200));
-  }, [indicators?.ema200, styles?.ema200]);
+    serie.setData(pointsToChartData(datiEma50));
+  }, [datiEma50, stileEma50]);
 
   useEffect(() => {
-    if (!bbUpperRef.current || !bbMiddleRef.current || !bbLowerRef.current || !indicators) return;
-    if (styles) {
-      const w = styles.bb.width as 1 | 2 | 3 | 4;
-      bbUpperRef.current.applyOptions({ visible: styles.bb.visible, color: styles.bb.color, lineWidth: w });
-      bbMiddleRef.current.applyOptions({ visible: styles.bb.visible, color: styles.bb.color, lineWidth: w });
-      bbLowerRef.current.applyOptions({ visible: styles.bb.visible, color: styles.bb.color, lineWidth: w });
+    const serie = ema200Ref.current;
+    if (!serie || !datiEma200) return;
+    if (stileEma200) {
+      serie.applyOptions({
+        visible: stileEma200.visible,
+        color: stileEma200.color,
+        lineWidth: stileEma200.width as 1 | 2 | 3 | 4,
+      });
     }
-    bbUpperRef.current.setData(pointsToChartData(indicators.bb_upper));
-    bbMiddleRef.current.setData(pointsToChartData(indicators.bb_middle));
-    bbLowerRef.current.setData(pointsToChartData(indicators.bb_lower));
-  }, [indicators?.bb_upper, indicators?.bb_middle, indicators?.bb_lower, styles?.bb]);
+    serie.setData(pointsToChartData(datiEma200));
+  }, [datiEma200, stileEma200]);
+
+  useEffect(() => {
+    const alta = bbUpperRef.current;
+    const media = bbMiddleRef.current;
+    const bassa = bbLowerRef.current;
+    if (!alta || !media || !bassa) return;
+    if (!datiBbAlta || !datiBbMedia || !datiBbBassa) return;
+    if (stileBb) {
+      const w = stileBb.width as 1 | 2 | 3 | 4;
+      for (const serie of [alta, media, bassa]) {
+        serie.applyOptions({ visible: stileBb.visible, color: stileBb.color, lineWidth: w });
+      }
+    }
+    alta.setData(pointsToChartData(datiBbAlta));
+    media.setData(pointsToChartData(datiBbMedia));
+    bassa.setData(pointsToChartData(datiBbBassa));
+  }, [datiBbAlta, datiBbMedia, datiBbBassa, stileBb]);
 
   return (
     <div ref={containerRef} className="h-full w-full relative">

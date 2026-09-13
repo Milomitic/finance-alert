@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { cn } from "@/lib/utils";
 
@@ -90,12 +90,23 @@ export function StockLogo({ ticker, size = "sm" }: Props) {
   const [srcIdx, setSrcIdx] = useState(cached != null && cached >= 0 ? cached : 0);
   const [exhausted, setExhausted] = useState(cached === EXHAUSTED);
 
-  // Reset state when ticker changes (e.g. row in a list re-renders with new ticker)
-  useEffect(() => {
+  /* ⚠️ Azzeramento in RENDER, non in un effect.
+   *
+   * Quando una riga di lista viene riusata per un altro titolo, l'indice
+   * della sorgente e il flag «finite» appartengono al ticker PRECEDENTE. Da
+   * dentro un effect React dipinge prima il logo vecchio e lo corregge dopo:
+   * in una tabella che scorre si vede il logo sbagliato accanto al nome
+   * giusto, per un fotogramma. Aggiornando in render quel fotogramma non
+   * esiste — React scarta il risultato e ri-renderizza prima di dipingere.
+   *
+   * La guardia sul ticker precedente e' cio' che fa terminare il render. */
+  const [tickerPrec, setTickerPrec] = useState(ticker);
+  if (ticker !== tickerPrec) {
+    setTickerPrec(ticker);
     const c = ticker ? _resolved[ticker] : undefined;
     setSrcIdx(c != null && c >= 0 ? c : 0);
     setExhausted(c === EXHAUSTED);
-  }, [ticker]);
+  }
 
   if (!ticker) return null;
   const px = SIZE_PX[size];

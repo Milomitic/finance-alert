@@ -38,7 +38,24 @@ function withAlpha(color: string, alpha: number): string {
 const ALPHA_CENTER = 0.08;
 const ALPHA_SIDES = 0.24;
 
-export function RsiPanel({ rsi14, color = "#7c3aed", width = 2, onReady }: Props) {
+/* ⚠️ Il colore e lo spessore di DEFAULT vivono qui, non solo nella firma.
+ *
+ * L'effetto che CREA il grafico li usa come valori iniziali, e l'effetto dello
+ * stile — che gira nello stesso commit, prima che il browser dipinga —
+ * applica subito quelli veri. Cosi' la creazione non LEGGE le prop, quindi non
+ * ne e' dipendente: `exhaustive-deps` e' soddisfatta dicendo la verita'
+ * invece di zittendola con una direttiva.
+ *
+ * ⚠️ L'alternativa ovvia — aggiungere `color` e `width` alle dipendenze della
+ * creazione — sarebbe molto peggio: DISTRUGGEREBBE e ricostruirebbe l'intero
+ * grafico a ogni cambio di colore, perdendo zoom e posizione. Il fatto che una
+ * regola si possa soddisfare in due modi non vuol dire che siano equivalenti. */
+const COLORE_RSI = "#7c3aed";
+const SPESSORE_RSI = 2;
+
+export function RsiPanel({
+  rsi14, color = COLORE_RSI, width = SPESSORE_RSI, onReady,
+}: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const lineRef = useRef<ISeriesApi<"Line"> | null>(null);
@@ -77,8 +94,10 @@ export function RsiPanel({ rsi14, color = "#7c3aed", width = 2, onReady }: Props
     });
     chartRef.current = chart;
 
-    const centerFill = withAlpha(color, ALPHA_CENTER);
-    const sideFill = withAlpha(color, ALPHA_SIDES);
+    // Valori iniziali col default: l'effetto dello stile li riapplica subito
+    // con le prop vere, nello stesso commit.
+    const centerFill = withAlpha(COLORE_RSI, ALPHA_CENTER);
+    const sideFill = withAlpha(COLORE_RSI, ALPHA_SIDES);
 
     // === Background bands first (lowest z) ===
 
@@ -127,8 +146,8 @@ export function RsiPanel({ rsi14, color = "#7c3aed", width = 2, onReady }: Props
 
     // === RSI line on top ===
     lineRef.current = chart.addLineSeries({
-      color,
-      lineWidth: width as 1 | 2 | 3 | 4,
+      color: COLORE_RSI,
+      lineWidth: SPESSORE_RSI,
       priceLineVisible: false,
       lastValueVisible: true,
       // Hard-lock the Y-axis to 0..100 with 50 at center for ALL

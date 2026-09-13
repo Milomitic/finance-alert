@@ -27,7 +27,24 @@ function dateToTime(d: string): UTCTimestamp {
  * volume-style series (green when ≥0, red when <0). Mirrors the look of
  * the RSI panel so the chart stack feels uniform.
  */
-export function MacdPanel({ line, signal, hist, color = "#ef4444", width = 2, onReady }: Props) {
+/* ⚠️ Il colore e lo spessore di DEFAULT vivono qui, non solo nella firma.
+ *
+ * L'effetto che CREA il grafico li usa come valori iniziali, e l'effetto dello
+ * stile — che gira nello stesso commit, prima che il browser dipinga —
+ * applica subito quelli veri. Cosi' la creazione non LEGGE le prop, quindi non
+ * ne e' dipendente: `exhaustive-deps` e' soddisfatta dicendo la verita'
+ * invece di zittendola con una direttiva.
+ *
+ * ⚠️ L'alternativa ovvia — aggiungere `color` e `width` alle dipendenze della
+ * creazione — sarebbe molto peggio: DISTRUGGEREBBE e ricostruirebbe l'intero
+ * grafico a ogni cambio di colore, perdendo zoom e posizione. Il fatto che una
+ * regola si possa soddisfare in due modi non vuol dire che siano equivalenti. */
+const COLORE_MACD = "#ef4444";
+const SPESSORE_MACD = 2;
+
+export function MacdPanel({
+  line, signal, hist, color = COLORE_MACD, width = SPESSORE_MACD, onReady,
+}: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const lineRef = useRef<ISeriesApi<"Line"> | null>(null);
@@ -59,10 +76,10 @@ export function MacdPanel({ line, signal, hist, color = "#ef4444", width = 2, on
     // overlapped the candles. The colored last-value badge on the price
     // scale is enough to identify the line at a glance.
     lineRef.current = chart.addLineSeries({
-      color, lineWidth: width as 1 | 2 | 3 | 4, priceLineVisible: false, lastValueVisible: true,
+      color: COLORE_MACD, lineWidth: SPESSORE_MACD, priceLineVisible: false, lastValueVisible: true,
     });
     signalRef.current = chart.addLineSeries({
-      color: "#0ea5e9", lineWidth: width as 1 | 2 | 3 | 4, priceLineVisible: false, lastValueVisible: true,
+      color: "#0ea5e9", lineWidth: SPESSORE_MACD, priceLineVisible: false, lastValueVisible: true,
     });
     // Zero reference line: the alert rules (macd_histogram_positive /
     // _negative + macd_line_above_signal crossovers) all hinge on the
@@ -97,6 +114,11 @@ export function MacdPanel({ line, signal, hist, color = "#ef4444", width = 2, on
   useEffect(() => {
     if (!lineRef.current) return;
     lineRef.current.applyOptions({ color, lineWidth: width as 1 | 2 | 3 | 4 });
+    /* ⚠️ Anche la linea del SEGNALE. Prima lo spessore veniva applicato solo
+     * alla linea MACD, quindi cambiarlo ne muoveva una delle due e le due
+     * linee dello stesso pannello divergevano di spessore — un difetto vero,
+     * che nessuno aveva notato e che si vede solo mettendole accanto. */
+    signalRef.current?.applyOptions({ lineWidth: width as 1 | 2 | 3 | 4 });
   }, [color, width]);
 
   useEffect(() => {

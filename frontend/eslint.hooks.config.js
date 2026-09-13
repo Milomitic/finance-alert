@@ -2,16 +2,15 @@ import reactHooks from 'eslint-plugin-react-hooks'
 import tseslint from 'typescript-eslint'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
-/* CI gate for TWO rules: react-hooks/rules-of-hooks and
- * react-hooks/static-components.
+/* CI gate for FOUR rules: rules-of-hooks, static-components,
+ * set-state-in-effect and exhaustive-deps.
  *
  * Why a second config instead of putting `npm run lint` in the pipeline. The
- * full config reports 60 findings (measured 2026-09-09), nearly all of them
- * rules that arrived with eslint-plugin-react-hooks v7: only-export-components
- * 21, exhaustive-deps 15, set-state-in-effect 13, refs 5, purity 5,
- * immutability 1. Gating on all of them would block every deploy for reasons
- * unrelated to the change being deployed, so it would be switched off within a
- * week. Cleaning them up is worth doing, and is a separate job.
+ * full config reported 60 findings on 2026-09-09 and reports **34** today
+ * (only-export-components 25, refs 5, e un falso positivo di rules-of-hooks in
+ * `e2e/`, escluso qui sotto). Gating on all of them would block every deploy
+ * for reasons unrelated to the change being deployed, so it would be switched
+ * off within a week. Cleaning them up is worth doing, and is a separate job.
  *
  * `@typescript-eslint/no-unused-vars` reached ZERO on 2026-09-09 and is
  * deliberately NOT gated here, which is worth recording because the temptation
@@ -57,6 +56,58 @@ import { defineConfig, globalIgnores } from 'eslint/config'
  * at zero when you gate it, and a violation must break something a user can
  * feel. The other v7 rules (exhaustive-deps, set-state-in-effect, purity) are
  * still ~50 findings and still a separate job.
+ *
+ * ─── set-state-in-effect ed exhaustive-deps, aggiunte il 2026-09-13 ──────
+ *
+ * Erano 14 e 8. Sono state portate a ZERO prima di entrare qui, che e' la
+ * condizione che questo file si e' dato fin dall'inizio: un cancello che nasce
+ * rosso non distingue «hai rotto qualcosa adesso» da «esiste un arretrato», e
+ * viene spento entro una settimana.
+ *
+ * L'altra meta' della barra e' che una violazione rompa qualcosa che un utente
+ * SENTE. Non e' stata data per buona: e' stata verificata caso per caso
+ * durante la pulizia, e le due regole l'hanno superata con difetti veri.
+ *
+ * `set-state-in-effect` — scrivere stato dentro un effect significa che React
+ * ha gia' DIPINTO il render precedente. Il fotogramma sbagliato esiste:
+ *
+ *   - il logo del titolo PRECEDENTE accanto al nome nuovo, in una tabella che
+ *     scorre (StockLogo);
+ *   - il cassetto del menu che lampeggia sopra la pagina di destinazione
+ *     (Layout);
+ *   - un conto alla rovescia del breaker sbagliato di minuti (DataSourcesCard);
+ *   - e il caso che non e' estetico: nella ricerca, la riga evidenziata era
+ *     l'ennesima di una lista gia' accorciata — premere Invio in quel
+ *     fotogramma apriva il TITOLO SBAGLIATO (NavbarSearch).
+ *
+ * `exhaustive-deps` — qui la regola ha trovato due difetti che nessuno aveva
+ * notato, ed e' la prova migliore che non e' rumore:
+ *
+ *   - in `MacdPanel` lo spessore si applicava alla sola linea MACD e non a
+ *     quella del segnale, quindi due linee dello stesso pannello divergevano;
+ *   - in `MarketChart` l'orologio sull'asse veniva impostato SOLO alla
+ *     creazione: passando a un intervallo intraday le etichette restavano
+ *     con la sola data. Un asse con sole date non sembra rotto — e' la forma
+ *     «plausibile e quindi creduta» che CLAUDE.md registra altrove.
+ *
+ * ⚠️ E va detto come NON si soddisfano, perche' entrambe si possono chiudere
+ * in un modo che peggiora il codice:
+ *
+ *   - `exhaustive-deps` non si chiude aggiungendo l'oggetto mancante alle
+ *     dipendenze. Nei grafici avrebbe DISTRUTTO e ricostruito l'intero
+ *     grafico a ogni cambio di colore, perdendo zoom e posizione. Si chiude
+ *     facendo leggere al corpo dell'effetto solo cio' che dichiara — si
+ *     estrae la fetta fuori;
+ *   - `set-state-in-effect` non si chiude spostando la scrittura in render se
+ *     il valore e' impuro: il primo tentativo su `DataSourcesCard` leggeva
+ *     `Date.now()` in render e `react-hooks/purity` l'ha respinto. Li' la
+ *     risposta era rimontare con una `key`.
+ *
+ * ⚠️ Una trappola specifica dell'aggiornamento in render, trovata da un test e
+ * non a ragionamento: un effect gira ANCHE al primo montaggio, mentre un
+ * aggiornamento in render guardato da `prec !== corrente` no, se si
+ * inizializza `prec` col valore corrente. Dove il montaggio conta (LogStream,
+ * PriceAlertDialog) la guardia parte da una sentinella.
  */
 export default defineConfig([
   /* `e2e/` non contiene React.
@@ -74,6 +125,8 @@ export default defineConfig([
     rules: {
       'react-hooks/rules-of-hooks': 'error',
       'react-hooks/static-components': 'error',
+      'react-hooks/set-state-in-effect': 'error',
+      'react-hooks/exhaustive-deps': 'error',
     },
     plugins: { 'react-hooks': reactHooks },
     // The `eslint-disable` comments scattered around the codebase target rules
