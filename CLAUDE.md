@@ -1292,6 +1292,126 @@ This is the `_RANGE_PERIODS` failure in another form: dead code corroborates a
 stale note, and a partial fix corroborates a closed case. **When a comment says
 something was fixed, redo the arithmetic — it costs less than trusting it.**
 
+## Un seme SEMINATO non basta: conta il NUMERO di estrazioni (2026-09-13)
+
+Il gate UI e' diventato rosso su `/alerts` e `/sectors` per un commit che non
+aveva toccato ne' l'una ne' l'altra (le sue modifiche frontend erano solo
+`InfraCard` e `platformHealth`, cioe' /diagnostics). Cercare il difetto nel
+codice in esame e' stato tempo perso: non era li'.
+
+`seed_e2e` usa `random.Random(20260912)` e sembrava quindi gia' conforme alla
+regola che questo file impone — «una misura che dipende da cosa c'e' nel
+database non e' una misura». La dipendenza non era dai DATI. Era dal TEMPO, su
+due canali distinti, ed entrambi meritano di essere riconosciuti a vista.
+
+### 1. Un `continue` dentro il ciclo cambia quante estrazioni si consumano
+
+    for i in range(BARRE, 0, -1):
+        giorno = oggi - timedelta(days=i)
+        if giorno.weekday() >= 5:
+            continue              # <- salta PRIMA di estrarre
+        prezzo *= 1 + rng.uniform(...)
+
+Questo conta i feriali DENTRO un intervallo fisso di giorni, che non e' un
+numero fisso di feriali: misurato, **215 il sabato e la domenica, 214 il
+lunedi'**. Ogni barra consuma un'estrazione, quindi una barra in meno sposta
+l'INTERA sequenza successiva: tutti i prezzi cambiano, con essi le percentuali
+a schermo, e con esse i colori che le vestono.
+
+⚠️ **Un generatore seminato rende riproducibili i VALORI, non il NUMERO di
+estrazioni.** Se il conteggio dipende da qualcosa di esterno — il giorno della
+settimana, un filtro sui dati, una condizione di rete — il seme non serve a
+niente e il codice sembra deterministico. La forma da cercare e' un `continue`,
+un `if` o un `break` fra l'inizio del ciclo e la prima estrazione.
+
+La correzione: `_giorni_feriali(oggi, N)` rende sempre esattamente N feriali.
+
+### 2. `datetime.now()` in un seme e' l'ora della corsa
+
+    triggered_at = datetime.now(UTC) - timedelta(hours=6 * (i + j))
+
+Gli scarti valgono fino a 78 ore, e la UI legge lo scarto in GIORNI DI
+CALENDARIO fra `signal_date` e `triggered_at` (soglia 4 giorni -> pastiglia «in
+ritardo»). Quello scarto cambia con l'ORA in cui parte il job: **la corsa che
+ha fallito girava alle 00:18 UTC**, dove `now - 6h*k` scivola nel giorno prima
+per i k piccoli. Numero di elementi resi diverso, conteggio axe diverso.
+
+Ancora a **mezzogiorno UTC** (`_ancora(oggi)`): lontano da entrambi i bordi del
+giorno, quindi nessuna ora di partenza puo' spostarlo oltre la mezzanotte.
+
+Diciotto test in `test_seed_e2e_deterministico.py`, col controllo negativo che
+fissa l'INSTABILITA' della vecchia forma — senza, il test nuovo sembra una
+formalita' e qualcuno lo «semplifica» all'indietro.
+
+### Il corollario: un cancello deve NOMINARE il colpevole
+
+«button-name: 53 -> 54» su un arretrato di 53 non dice quale nodo, ne' se la
+colpa e' del commit. La diagnosi e' costata scaricare gli artefatti di CI e
+leggere uno screenshot. Il gate stampa ora i SELETTORI dei criteri cresciuti, e
+la prima esecuzione con quella stampa ha risolto in un colpo due domande
+diverse: su `/alerts` i nodi erano caselle di riga (seme), su `/sectors` erano
+**undici volte lo stesso token `text-sky-600`** — cioe' un difetto unico, non
+undici.
+
+### E il difetto vero che tutto questo ha portato a galla
+
+`amber-600` vale **3,19 : 1** e `sky-600` **4,10 : 1** su fondo scheda, contro
+la soglia AA di 4,5. **Diciassette nodi** in due rotte — 6 su /stocks/AAPL e 11
+su /sectors, di cui 10 gia' in linea di base — tutti da un token solo
+(`SCORE_TEXT_TONE`, proprietario unico di dieci componenti). Sette sono
+comparsi col seme corretto; gli altri dieci erano li' da sempre, accettati come
+arretrato senza che nessuno avesse notato che erano LA STESSA COSA.
+
+⚠️ **Erano invisibili a TUTTI i presidi, e non per una svista.** axe in jsdom
+non carica fogli di stile, quindi non misura contrasto — gia' scritto qui. Il
+gate e2e gli stili ce li ha, ma vede solo i colori che i DATI di quella corsa
+fanno comparire, e col vecchio seme nessun punteggio cadeva nelle fasce
+«mediocre» e «buono». Un difetto di mesi, scoperto da una correzione che
+riguardava altro.
+
+La lezione operativa: **dove un colore dipende da una soglia sui dati, il
+contrasto va calcolato sui TOKEN, non cercato nel DOM.**
+`scoreMeta.contrasto.test.ts` fa aritmetica WCAG sulla tabella dei toni — non
+dipende da quali dati ci sono, quindi non puo' essere vero per caso. Porta un
+controllo negativo (la formula DEVE bocciare i due colori tolti) e una deroga
+dichiarata con la ragione scritta, nella forma di `EQUIVALENTI`.
+
+⚠️ `sky-600` a 4,10 e' il motivo per cui va CALCOLATO: sembra scuro abbastanza.
+E la formula va verificata contro un numero indipendente — questo file
+registrava gia' `rose-600` su bianco a 4,70, e il calcolo nuovo rende 4,70.
+
+⚠️ Le varianti scure NON si scuriscono insieme alle chiare: `amber-400` su
+fondo scuro e' gia' molto sopra soglia e scurirlo lo porterebbe SOTTO. Le due
+meta' di un token si muovono in direzioni opposte.
+
+⚠️ E gli sfondi vanno presi dai token, non a occhio: il fondo muto vero e'
+`#f1f5f9` (`hsl(210 40% 96.1%)`), non il `#f8fafc` che il primo tentativo aveva
+indovinato — piu' SCURO, cioe' la stima era ottimista, sbagliata nella
+direzione che nasconde i difetti. `index.css` non e' leggibile da vitest
+(neutralizza gli import di fogli di stile: sia `import.meta.glob(...?raw)` sia
+l'import statico `?raw` tornano stringa vuota), quindi i valori sono trascritti
+e la trascrizione e' verificata rifacendo la conversione dall'HSL.
+
+### Il quarto viewport, e perche' e' ristretto a una specifica
+
+La pagina dettaglio titolo si riassetta oltre i 1920px. I tre viewport del gate
+— 375, 768, 1440 — sono TUTTI sotto quella soglia, quindi misuravano solo il
+ramo vecchio; e jsdom non fa layout, quindi «affiancate» e «sotto» non sono
+nemmeno esprimibili in vitest. Progetto `over-fhd` a 2560x1440.
+
+⚠️ Gira SOLO su `stock-detail-riassetto.spec.ts`, non su `layout.spec.ts`: il
+traboccamento a 2560px sulle altre nove rotte non e' mai stato misurato, e
+**un cancello che nasce rosso viene spento**. Allargarlo e' una riga, dopo la
+misura.
+
+⚠️ Quando un riassetto cambia CHI sta DOVE (non come appare), il ramo va in JS:
+con `hidden` resterebbero montate due copie — due query, due alberi — e quella
+nascosta verrebbe comunque misurata e letta dagli assistivi. Ne segue che
+esistono DUE soglie, una in `tailwind.config.js` e una nel componente, e vanno
+PINNATE INSIEME: la banda di larghezze fra due soglie divergenti e' il peggio
+delle due disposizioni. Il test che conta di piu' li' e' il CONTEGGIO delle
+copie, perche' una doppia montatura e' invisibile a occhio.
+
 ## Larghezza su mobile: il difetto c'e, ma il CONTROLLO ovvio non lo vede (2026-09-12)
 
 Otto rotte traboccavano a 375px e nessuna barra di scorrimento orizzontale

@@ -18,10 +18,9 @@
     "/calendar": {
       "aria-prohibited-attr": 1,
       "color-contrast": 3,
-      "nested-interactive": 3
+      "nested-interactive": 2
     },
     "/sectors": {
-      "color-contrast": 10,
       "definition-list": 1,
       "dlitem": 8
     },
