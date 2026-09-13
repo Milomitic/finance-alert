@@ -17,10 +17,6 @@
       "mutanti": 90,
       "uccisi": 49
     },
-    "app/signals/detectors/base.py": {
-      "mutanti": 58,
-      "uccisi": 21
-    },
     "app/signals/calibration_map.py": {
       "mutanti": 10,
       "uccisi": 5
@@ -48,6 +44,10 @@
     "app/services/technical_score_service.py": {
       "mutanti": 92,
       "uccisi": 39
+    },
+    "app/signals/detectors/base.py": {
+      "mutanti": 58,
+      "uccisi": 43
     }
   },
   "sopravvissuti": [
@@ -187,43 +187,6 @@
     "app/signals/calibration_map.py::CalibrationMap.horizon_days#0  And -> Or",
     "app/signals/calibration_map.py::CalibrationMap.quality_tag#0  Gt -> GtE",
     "app/signals/calibration_map.py::CalibrationMap.quality_tag#0  Lt -> LtE",
-    "app/signals/calibration_map.py::CalibrationMap.sample_n#0  Or -> And",
-    "app/signals/detectors/base.py::<modulo>#0  True -> False",
-    "app/signals/detectors/base.py::SignalMatch#0  0 -> 1",
-    "app/signals/detectors/base.py::SignalMatch#0  50 -> 51",
-    "app/signals/detectors/base.py::_d#0  10 -> 11",
-    "app/signals/detectors/base.py::concave#0  Gt -> GtE",
-    "app/signals/detectors/base.py::concave#0  LtE -> Lt",
-    "app/signals/detectors/base.py::concave#1  Gt -> GtE",
-    "app/signals/detectors/base.py::concave#1  LtE -> Lt",
-    "app/signals/detectors/base.py::concave#2  Gt -> GtE",
-    "app/signals/detectors/base.py::concave#2  LtE -> Lt",
-    "app/signals/detectors/base.py::concave#3  LtE -> Lt",
-    "app/signals/detectors/base.py::concave#4  LtE -> Lt",
-    "app/signals/detectors/base.py::find_after#0  LtE -> Lt",
-    "app/signals/detectors/base.py::find_after#1  LtE -> Lt",
-    "app/signals/detectors/base.py::interp_adjustment#0  GtE -> Gt",
-    "app/signals/detectors/base.py::interp_adjustment#0  LtE -> Lt",
-    "app/signals/detectors/base.py::interp_adjustment#1  LtE -> Lt",
-    "app/signals/detectors/base.py::interp_adjustment#3  0 -> 1",
-    "app/signals/detectors/base.py::interp_adjustment#6  1 -> 2",
-    "app/signals/detectors/base.py::interp_adjustment#7  1 -> 2",
-    "app/signals/detectors/base.py::log_saturate#0  0 -> 1",
-    "app/signals/detectors/base.py::log_saturate#0  LtE -> Lt",
-    "app/signals/detectors/base.py::log_saturate#1  0 -> 1",
-    "app/signals/detectors/base.py::log_saturate#1  LtE -> Lt",
-    "app/signals/detectors/base.py::score#0  Gt -> GtE",
-    "app/signals/detectors/base.py::score_v2#0  And -> Or",
-    "app/signals/detectors/base.py::soft01#0  0 -> 1",
-    "app/signals/detectors/base.py::soft01#0  LtE -> Lt",
-    "app/signals/detectors/base.py::soft01#0  Or -> And",
-    "app/signals/detectors/base.py::soft01#1  0 -> 1",
-    "app/signals/detectors/base.py::soft01#1  LtE -> Lt",
-    "app/signals/detectors/base.py::trend_maturity_factor#0  120 -> 121",
-    "app/signals/detectors/base.py::trend_maturity_factor#0  250 -> 251",
-    "app/signals/detectors/base.py::trend_maturity_factor#0  60 -> 61",
-    "app/signals/detectors/base.py::trend_maturity_factor#0  Lt -> LtE",
-    "app/signals/detectors/base.py::trend_maturity_factor#1  Lt -> LtE",
-    "app/signals/detectors/base.py::trend_maturity_factor#2  Lt -> LtE"
+    "app/signals/calibration_map.py::CalibrationMap.sample_n#0  Or -> And"
   ]
 }

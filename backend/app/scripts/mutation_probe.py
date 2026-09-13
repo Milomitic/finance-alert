@@ -222,6 +222,80 @@ EQUIVALENTI: dict[str, str] = {
         "ragionevole (3-14) e non il valore esatto, di proposito — il numero e' "
         "una taratura, non un contratto, e fissarlo renderebbe rosso ogni "
         "ripensamento legittimo. Otto giorni resta una soglia sensata.",
+    # ── detectors/base: quindici superstiti, TUTTI equivalenti ──────────
+    #
+    # ⚠️ Lo scorer della Forza chiude a 43 su 58 e i quindici che restano non
+    # sono un arretrato: sono cinque famiglie, e nessuna e' uccidibile da un
+    # test onesto. Vale la pena riconoscerle a vista, perche' ricompaiono.
+    #
+    # (a) Il termine `x <= 0` di una guardia dove la formula rende comunque 0
+    #     in x = 0. (b) I bordi di una curva CONTINUA: al nodo esatto il tratto
+    #     successivo calcola lo stesso numero. (c) Guardie irraggiungibili
+    #     perche' un ramo precedente ha gia' restituito. (d) Un `return`
+    #     difensivo che nessun cammino raggiunge. (e) `frozen=True` senza un
+    #     consumatore che eserciti l'immutabilita'.
+    "app/signals/detectors/base.py::soft01#0  LtE -> Lt":
+        "Il termine `x <= 0` della guardia. Col mutante `x < 0` uno zero passa, "
+        "ma la formula rende `0 / (0 + 0.25*ref)` = 0.0 — lo STESSO valore del "
+        "ramo di guardia. ⚠️ Il gemello sulla stessa riga, `ref <= 0`, NON e' "
+        "equivalente (rende 1.0) ed e' ucciso da "
+        "`test_soft01_respinge_un_riferimento_NULLO`: due termini della stessa "
+        "condizione, esiti opposti.",
+    "app/signals/detectors/base.py::log_saturate#0  LtE -> Lt":
+        "Stessa forma: in x = 0 `log1p(0)` e' zero, quindi il risultato e' 0.0 "
+        "con o senza guardia. Il termine `ceil <= 0` invece divide per zero ed "
+        "e' ucciso.",
+    "app/signals/detectors/base.py::concave#0  LtE -> Lt":
+        "Idem per il termine `x <= 0`: il primo tratto rende `0.45 * (0/a45)` = "
+        "0.0. Il termine `a45 <= 0` e' ucciso.",
+    "app/signals/detectors/base.py::concave#2  LtE -> Lt":
+        "CONTINUITA'. `x <= a45` -> `<`: nel bordo esatto il tratto successivo "
+        "calcola `0.45 + 0.30*(a45-a45)/(a75-a45)` = 0.45, lo stesso valore. Non "
+        "e' una lacuna: e' la prova che la curva non ha salti, e "
+        "`test_concave_e_CONTINUA_sui_tre_nodi` fissa la proprieta' che lo rende "
+        "vero.",
+    "app/signals/detectors/base.py::concave#3  LtE -> Lt":
+        "CONTINUITA' sul secondo nodo: al bordo il tratto successivo rende 0.75.",
+    "app/signals/detectors/base.py::concave#4  LtE -> Lt":
+        "CONTINUITA' sul terzo nodo — e qui il docstring del modulo lo dichiara "
+        "esplicitamente: «The tail is continuous at (a88, 0.88)». La coda in "
+        "a88 vale `_CONCAVE_CEIL - (0.99-0.88)*exp(0)` = 0.88.",
+    "app/signals/detectors/base.py::score#0  Gt -> GtE":
+        "CONTINUITA' del ginocchio. `raw > _CONF_KNEE` -> `>=`: esattamente al "
+        "ginocchio la compressione rende `KNEE + (MAX-KNEE)*0/(1-KNEE)` = KNEE, "
+        "cioe' il valore che il ramo non compresso avrebbe dato.",
+    "app/signals/detectors/base.py::interp_adjustment#0  LtE -> Lt":
+        "CONTINUITA' sul primo punto: col mutante si entra nel ciclo, che per "
+        "`raw == x0` interpola a `y0 + (y1-y0)*0` = y0 — lo stesso "
+        "`pts[0][1]`.",
+    "app/signals/detectors/base.py::interp_adjustment#0  GtE -> Gt":
+        "CONTINUITA' sull'ultimo punto: col mutante l'ultima iterazione del "
+        "ciclo interpola a `y0 + (y1-y0)*1` = y1, cioe' `pts[-1][1]`.",
+    "app/signals/detectors/base.py::interp_adjustment#1  LtE -> Lt":
+        "CONTINUITA' sui nodi interni: al bordo esatto il segmento successivo "
+        "parte da quel punto e rende lo stesso valore.",
+    "app/signals/detectors/base.py::concave#0  Gt -> GtE":
+        "⚠️ IRRAGGIUNGIBILE, e capirlo richiede di guardare il ramo PRECEDENTE. "
+        "`if x <= a75 and a75 > a45`: se a75 == a45 allora per `x <= a45` il "
+        "ramo prima ha gia' restituito, e per `x > a45` la condizione `x <= a75` "
+        "e' falsa. Il secondo termine non decide mai niente. "
+        "`test_concave_sopravvive_ad_ancoraggi_DEGENERI` verifica che non "
+        "esploda — non poteva uccidere questo.",
+    "app/signals/detectors/base.py::concave#1  Gt -> GtE":
+        "Stessa irraggiungibilita' sul nodo successivo (`a88 > a75`). ⚠️ La "
+        "terza della serie, `ceil > a88`, NON e' irraggiungibile — la coda ci "
+        "arriva davvero — e infatti e' UCCISA.",
+    "app/signals/detectors/base.py::interp_adjustment#6  1 -> 2":
+        "`return pts[-1][1]` in coda alla funzione: irraggiungibile. Con raw "
+        "strettamente fra il primo e l'ultimo punto il ciclo trova sempre un "
+        "segmento e restituisce; fuori da quell'intervallo rispondono le due "
+        "guardie sopra. E' un difensivo.",
+    "app/signals/detectors/base.py::interp_adjustment#7  1 -> 2":
+        "Il gemello sulla stessa riga (l'altro letterale), stessa ragione.",
+    "app/signals/detectors/base.py::<modulo>#0  True -> False":
+        "`@dataclass(frozen=True)` su `SignalMatch`: l'immutabilita' non ha un "
+        "consumatore che la eserciti. E' igiene, non comportamento — stessa "
+        "ragione gia' dichiarata per `image_provenance`.",
     # ── confluence_service: tre equivalenti, il resto e' arrotondamento ──
     "app/services/confluence_service.py::<modulo>#0  2 -> 3":
         "`_HORIZON_ORDER = {short: 0, medium: 1, long: 2}` -> long = 3. "
