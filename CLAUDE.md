@@ -532,9 +532,52 @@ Ognuno ha un limite, e i limiti contano quanto i presidi.
 | Codice mai eseguito | `backend`, su push | Funzioni nuove che nessun test chiama | Righe eseguite ma non verificate |
 | Censimento istogrammi | `backend`, su push | Una serie nuova con un tetto non scelto | Se il tetto e' scelto male ma dichiarato |
 | Mutazione | `nightly.yml` | Righe eseguite la cui correttezza nessuno verifica | Dodici moduli su ~200; e l'operatore numerico INCREMENTA soltanto |
-| Parita' immagine | CronJob nel cluster | Il pod non esegue il tag desiderato, da oltre 20 min | Nulla prima dei 20 min (finestra GitOps) |
+| Parita' immagine | CronJob nel cluster | Il pod non esegue il tag desiderato, da oltre 20 min | Nulla prima dei 20 min (finestra GitOps). ⚠️ Ha letto il pod SBAGLIATO per sette ore — vedi sotto |
 | Deriva del nodo | script a mano | Configurazione dichiarata e mai eseguita | Gira solo quando lo si lancia |
 | **Drill di ripristino** | CronJob nel cluster, lunedi' 04:00 | Che il backup si RILEGGA: schema, privilegi, conteggi contro il vivo, e la FRESCHEZZA del dato | Si salta da solo se il nodo ha meno di 3Gi liberi — e allora non verifica niente |
+
+### ⚠️ Il presidio di parita' leggeva il pod sbagliato, e allarmava sempre (2026-09-13)
+
+La quinta istanza di «una risposta pulita e falsa da uno strumento guasto», ed
+e' la piu' istruttiva perche' il presidio funzionava da mesi e si e' rotto senza
+che nessuno toccasse il suo codice.
+
+Il CronJob leggeva
+`kubectl get pod -l app.kubernetes.io/name=finance-alert -o jsonpath='{.items[0]...}'`.
+**Quell'etichetta ce l'ha OGNI pod del chart**, compresi i Job che il chart
+stesso crea: il drill di ripristino e i pod della sonda medesima. `.items[0]`
+prende il primo in ordine ALFABETICO, e `drill-...` viene prima di
+`finance-alert-...` perche' d < f.
+
+Bastato eseguire un drill a mano. Il suo pod e' rimasto `Completed`, la sonda
+ha letto la SUA immagine (`alpine/k8s:1.31.3`), e per sette ore ha ripetuto
+ogni quindici minuti «il pod NON esegue l'immagine desiderata da 409 min» —
+409 minuti essendo l'eta' del pod del DRILL. L'applicazione era sana e in pari
+per tutto il tempo.
+
+⚠️ **Il danno peggiore non e' l'avviso sbagliato.** Sono due cose:
+
+1. Un allarme che suona sempre insegna a ignorarlo — la stessa fatica da
+   allarme per cui la soglia della pastiglia «in ritardo» e' passata da 1 a 4
+   giorni.
+2. **ArgoCD riportava `Degraded` in permanenza**, perche' un Job fallito rende
+   degradata l'intera Application. Cioe' il presidio aveva reso cieco il
+   cruscotto che serve a vedere i degradi VERI.
+
+**La regola: un pod di StatefulSet si NOMINA, non si cerca.** `<sts>-<ordinale>`
+e' garantito dalla specifica, nessun Job puo' chiamarsi cosi', e non e' una
+ricerca ma un indirizzo. Dove un selettore serve davvero, deve fallire se
+trova piu' di una corrispondenza invece di prendere la prima.
+
+E accanto: una lettura VUOTA non e' «uguale a niente». Senza una guardia
+esplicita, due stringhe vuote si confrontano uguali e la sonda dichiara
+«parita' OK» mentre il pod non esiste — lo stesso difetto con il segno
+invertito.
+
+**Verificato sul cluster vivo prima di spedire la correzione**, che e' la parte
+che chiude il cerchio: col comando nuovo desiderato == in esecuzione == il
+commit spinto e pronto true, cioe' «parita' OK». La prova che il guasto
+riportato non esisteva.
 
 ### Il backup era sorvegliato in quattro modi e non era verificato (2026-09-13)
 
