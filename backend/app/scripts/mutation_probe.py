@@ -191,6 +191,11 @@ BERSAGLI: dict[str, list[str]] = {
     "app/services/confluence_service.py": [
         "tests/test_confluence_service.py",
         "tests/test_confluence_strength_field.py",
+        # Scritto DOPO la passata che qui uccideva 17 su 38: la
+        # de-correlazione sul lato RIBASSISTA (il gemello rialzista era gia'
+        # coperto), l'ordine dei gruppi e dei componenti, il filtro di
+        # validita' e i bordi delle soglie.
+        "tests/test_confluence_mutanti.py",
     ],
     # Gli arretrati a schermo. Ci e' appena stato trovato un denominatore
     # perso da una rinomina: esattamente la classe di errore che non solleva
