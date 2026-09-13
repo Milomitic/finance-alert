@@ -531,7 +531,7 @@ Ognuno ha un limite, e i limiti contano quanto i presidi.
 | Notturno trivy | `nightly.yml` | CVE sull'immagine DISPIEGATA | Solo una volta al giorno |
 | Codice mai eseguito | `backend`, su push | Funzioni nuove che nessun test chiama | Righe eseguite ma non verificate |
 | Censimento istogrammi | `backend`, su push | Una serie nuova con un tetto non scelto | Se il tetto e' scelto male ma dichiarato |
-| Mutazione | `nightly.yml` | Righe eseguite la cui correttezza nessuno verifica | Quattro moduli soltanto |
+| Mutazione | `nightly.yml` | Righe eseguite la cui correttezza nessuno verifica | Dodici moduli su ~200; e l'operatore numerico INCREMENTA soltanto |
 | Parita' immagine | CronJob nel cluster | Il pod non esegue il tag desiderato, da oltre 20 min | Nulla prima dei 20 min (finestra GitOps) |
 | Deriva del nodo | script a mano | Configurazione dichiarata e mai eseguita | Gira solo quando lo si lancia |
 | **Drill di ripristino** | CronJob nel cluster, lunedi' 04:00 | Che il backup si RILEGGA: schema, privilegi, conteggi contro il vivo, e la FRESCHEZZA del dato | Si salta da solo se il nodo ha meno di 3Gi liberi — e allora non verifica niente |
@@ -655,13 +655,70 @@ gira ovunque, si legge in una pagina.
 senza che nessuno lo chiedesse. Il lockfile e' stato ripristinato dal backup: un
 `uv remove` non e' l'inverso di un `uv add`.
 
-**La passata completa: 130 mutanti, 43 uccisi, 80 sopravvissuti unici** — un
-punteggio del 33% su quattro moduli a proprietario unico. Il numero e' scomodo
-ed e' quello vero: pretendere lo zero avrebbe significato o scrivere decine di
-test in un colpo, o dichiarare equivalenti ottanta mutanti che non lo
-sono, cioe' mentire in un file che esiste per dire la verita'. Congelato come
-linea di base con cricchetto sulla crescita, come a11y e codice morto, e a
-schermo nella scheda Verifica.
+**La passata completa, 2026-09-13: 465 mutanti, 190 uccisi, 255 sopravvissuti
+in linea di base** — un punteggio del 41% su DODICI moduli. Era 130 mutanti /
+43 uccisi / 33% su quattro. Il numero e' scomodo ed e' quello vero: pretendere
+lo zero avrebbe significato o scrivere decine di test in un colpo, o dichiarare
+equivalenti centinaia di mutanti che non lo sono, cioe' mentire in un file che
+esiste per dire la verita'. Congelato come linea di base con cricchetto sulla
+crescita, come a11y e codice morto, e a schermo nella scheda Verifica.
+
+⚠️ **L'arretrato a schermo salta da 63 a 255 e NON e' un peggioramento.** Il
+denominatore e' passato da 130 a 465 perche' `BERSAGLI` e' cresciuto da 4 a 12
+moduli; il tasso di uccisione SALE dal 33% al 41%. E' esattamente il motivo per
+cui `_totale_mutanti` andava recuperato dopo il rename che l'aveva orfanato:
+senza denominatore, «255» si legge come decadimento invece che come piu' codice
+sorvegliato.
+
+⚠️ **Un elenco di test troppo CORTO in `BERSAGLI` produce falsi sopravvissuti.**
+Al primo giro `base.py` riportava 42 su 58 con due file di test elencati,
+mentre i test veri sono 45 file in `tests/signals/`: stavo per riportare «lo
+scorer della Forza non e' verificato», che era falso. Vale anche all'indietro —
+**18 dei 63 sopravvissuti della vecchia linea di base (≈29%) erano falsi.** Un
+conteggio alto di sopravvissuti SI LEGGE COME RIGORE, ed e' la ragione per cui
+questo errore non si denuncia da solo.
+
+I tre moduli peggiori sono quelli dove un difetto silenzioso produce un numero
+plausibile invece di un errore: `technical_score_service` (107 mutanti, ~15%),
+`signal_outcome_service` (57, ~33%), `confluence_service` (38). Sono i
+candidati naturali dopo `security`.
+
+### `app/core/security.py`: da 0 su 9 a 7 su 9 (2026-09-13)
+
+Il modulo delle sessioni uccideva **ZERO** dei suoi nove mutanti. Non
+significava che fosse sbagliato — significava che nessuna delle sue difese era
+verificata, e una difesa non verificata e' indistinguibile da una assente
+finche' non serve. Due erano lacune vere e gravi:
+
+- `verify_password`, `except ValueError: return False` -> `True`: `checkpw`
+  solleva `ValueError` su un hash MALFORMATO, quindi col mutante una colonna
+  troncata o una migrazione storta autentica CHIUNQUE. I test esistenti
+  provavano solo la coppia giusta e quella sbagliata, cioe' due hash validi.
+- `isinstance(username, str) and 0 < len(username) <= 64` -> `or`: uno username
+  vuoto o da duecento caratteri veniva accettato, e un valore non-stringa
+  faceva esplodere `len()` — un rifiuto pulito diventava un 500.
+
+⚠️ **Avevo previsto 7 uccisi su 9 e ne sono morti 4**, e l'aritmetica era sullo
+schermo prima della previsione: la linea di base diceva `uccisi: 0`, i test
+nuovi coprivano due righe per un totale di quattro mutanti, 0+4=4. Avevo
+assunto che la suite preesistente coprisse il resto proprio mentre leggevo il
+numero che diceva il contrario.
+
+Gli altri tre (riga 45 `<=` -> `<`, righe 62 e 98 `86400` -> `86401`) erano
+lacune piu' quiete: il mutante «+1» e' innocuo, ma quello che dimostra e' che
+**nessuno sorvegliava quelle moltiplicazioni** — `8640` al posto di `86400`
+accorcia ogni sessione a due ore e mezza in silenzio. Chiusi. ⚠️ L'asserzione e'
+scritta `24 * 60 * 60` e non `86400`: copiare la costante renderebbe il test
+una tautologia che cambia insieme alla riga che deve sorvegliare.
+
+⚠️ **E l'operatore numerico della sonda INCREMENTA soltanto**, quindi su un
+parametro di sicurezza puo' esplorare solo la direzione innocua. `rounds=12 ->
+13` e `token_urlsafe(16) -> 17` sopravvivono perche' sono piu' FORTI
+dell'originale — stanno in `EQUIVALENTI` — ma i mutanti che conterebbero,
+`12 -> 11` e `16 -> 15`, la sonda non li genera e sarebbero sopravvissuti nello
+stesso identico modo. Due test fissano quindi un PAVIMENTO senza uccidere
+nessun mutante: e' il buco che lo strumento non sa nominare. **Un punteggio di
+mutazione perfetto su questo modulo non direbbe niente sul costo di bcrypt.**
 
 Al primo giro su `image_provenance` ha trovato **quattro sopravvissuti, due dei
 quali lacune vere**: il bordo esclusivo della soglia (`>` contro `>=`, il

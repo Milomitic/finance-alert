@@ -48,12 +48,29 @@ RADICE = Path(__file__).resolve().parents[2]
 #: I test sono elencati esplicitamente e non dedotti: una passata che lancia
 #: l'intera suite per ogni mutante costerebbe ore, e soprattutto non direbbe
 #: QUALE test avrebbe dovuto proteggere quella riga.
+#:
+#: ⚠️ MA L'ELENCO DEVE ESSERE COMPLETO, e questo e' il rovescio della stessa
+#: medaglia. Un elenco corto non produce un risultato prudente: produce
+#: SOPRAVVISSUTI FALSI, cioe' lacune annunciate dove i test ci sono e
+#: funzionano. Misurato il 2026-09-13: `detectors/base.py` elencava due file e
+#: riportava 42 sopravvissuti su 58 — il modulo che calcola la Forza sembrava
+#: non verificato. La verita' e' che i test stanno in `tests/signals/`, 45
+#: file, e nessuno era elencato.
+#:
+#: Il difetto e' peggiore di una mancanza, perche' un numero alto qui si LEGGE
+#: come rigore. Prima di aggiungere un modulo, cercare tutti i test che lo
+#: nominano o lo importano — e rifarlo quando si aggiungono test.
+#:
+#: ⚠️ Vale anche all'indietro: i quattro moduli originali avevano elenchi
+#: incompleti, quindi una parte della linea di base congelata a settembre era
+#: fatta di sopravvissuti falsi.
 BERSAGLI: dict[str, list[str]] = {
     # La provenienza dell'immagine: piccola, nuova, e il suo unico compito e'
     # distinguere tre stati (fresca / stantia / IGNOTA). Un fuori-di-uno sulla
     # soglia o un `None` collassato su `False` sono difetti silenziosi.
     "app/services/image_provenance.py": [
         "tests/test_image_provenance.py",
+        "tests/test_api_platform_health.py",
     ],
     # L'etichetta della valuta: proprietario unico dopo che la logica dei
     # penny era quintuplicata in cinque servizi.
@@ -61,6 +78,7 @@ BERSAGLI: dict[str, list[str]] = {
         "tests/test_currency_label.py",
         "tests/test_alert_currency.py",
         "tests/test_ohlcv_currency_gate.py",
+        "tests/test_ohlcv_minor_unit_scaling.py",
     ],
     # La conversione in dollari: un errore qui ha gia' fatto passare 75 titoli
     # per mega-cap che non lo erano (vedi risk.py in CLAUDE.md).
@@ -69,11 +87,94 @@ BERSAGLI: dict[str, list[str]] = {
         "tests/test_position_fx.py",
         "tests/test_risk_market_cap_currency.py",
         "tests/test_fx_lacune_mutanti.py",
+        "tests/test_screener_market_cap_usd.py",
     ],
     # Il tetto di 28 giorni sull'attesa di un setup: la scelta fra finestra
     # scorrevole e tetto e' stata misurata, e un fuori-di-uno la disfa.
     "app/services/setup_service.py": [
         "tests/test_setup_service.py",
+        "tests/test_setup_conversion_outcomes.py",
+        "tests/test_setup_earnings_window.py",
+        "tests/test_setup_expiry_ceiling.py",
+        "tests/test_setup_return_stats.py",
+    ],
+    # ─── Ampliamento 2026-09-13: da 4 a 12 moduli ─────────────────────────
+    #
+    # ⚠️ I quattro moduli iniziali erano quelli SCRITTI DA POCO, cioe' quelli
+    # su cui il dubbio era piu' fresco. Sono anche i meno interessanti: il
+    # codice nuovo e' quello che qualcuno ha appena guardato. Questi otto
+    # reggono le conclusioni che l'app mostra a schermo, e alcuni non vengono
+    # riletti da mesi.
+    #
+    # Il criterio non e' «i piu' grandi»: e' dove un errore sarebbe SILENZIOSO,
+    # cioe' produrrebbe un numero plausibile invece di un'eccezione.
+
+    # Il punteggio Forza. ⚠️ Qui un difetto e' gia' passato per tutta la vita
+    # di un detector: gli ancoraggi di `chart_pattern` erano fuori scala e ogni
+    # allarme prodotto era un triangolo a due soli valori di Forza, su 95
+    # allarmi. I test dicevano «il pattern viene emesso» e quello era vero.
+    "app/signals/detectors/base.py": [
+        # ⚠️ L'INTERA cartella, non i due file col nome piu' somigliante: ogni
+        # detector passa da `score_v2`, quindi ogni test di detector e' un
+        # test di questo modulo. Elencarne due ne faceva sopravvivere 42 su 58
+        # e faceva sembrare non verificato il calcolo della Forza.
+        # Costo misurato: 3,3 s a mutante.
+        "tests/signals/",
+    ],
+    # Probabilita', skill e la targa di onesta' (coinflip/negative/edge). Un
+    # errore qui non rompe niente: cambia un'etichetta che l'utente legge come
+    # un giudizio sul motore.
+    "app/signals/calibration_map.py": [
+        "tests/signals/",
+        "tests/test_signal_drift_service.py",
+    ],
+    # Le finestre indipendenti e l'intervallo di Wilson: e' il codice che
+    # impedisce di annunciare un'efficacia che il campione non regge. Un
+    # fuori-di-uno qui STRINGE gli intervalli, cioe' sbaglia nella direzione
+    # che fa sembrare il motore migliore di com'e'.
+    "app/services/detector_performance_service.py": [
+        "tests/test_detector_performance.py",
+        "tests/test_effective_sample.py",
+        "tests/test_equity_curve_direction.py",
+    ],
+    # ⚠️ Le sessioni. Un mutante che sopravvive qui e' un test che non
+    # distingue un token valido da uno scaduto o manomesso.
+    "app/core/security.py": [
+        "tests/test_security.py",
+        "tests/test_api_auth.py",
+        "tests/test_session_revocation_persistence.py",
+        # Scritto DOPO la prima passata, che su questo modulo uccideva 0 su 9:
+        # copre i rami di RIFIUTO (hash malformato, username vuoto/lungo/non
+        # stringa) che nessun test percorreva.
+        "tests/test_security_mutanti.py",
+        # ⚠️ `test_login_throttle.py` e' escluso di proposito: da solo porta la
+        # sotto-suite da ~3 s a 13 s (contiene attese reali) e verifica la
+        # limitazione dei tentativi, non la firma dei token. Un elenco completo
+        # non vuol dire un elenco indiscriminato.
+    ],
+    # Il magazzino degli esiti: l'unica fonte di verita' su se un segnale ha
+    # funzionato. Ha gia' avuto un difetto che ne misurava 19 righe su 4.880.
+    "app/services/signal_outcome_service.py": [
+        "tests/test_signal_outcome_service.py",
+        "tests/test_equity_curve_direction.py",
+        "tests/test_signal_drift_service.py",
+    ],
+    # La lente Tecnico: posture e punteggio continuo.
+    "app/services/technical_score_service.py": [
+        "tests/test_technical_score.py",
+        "tests/test_technical_recompute_one.py",
+    ],
+    # La de-correlazione per famiglia: N segnali correlati devono contare ~1.3,
+    # non N. Se smette di funzionare la confluenza si gonfia in silenzio.
+    "app/services/confluence_service.py": [
+        "tests/test_confluence_service.py",
+        "tests/test_confluence_strength_field.py",
+    ],
+    # Gli arretrati a schermo. Ci e' appena stato trovato un denominatore
+    # perso da una rinomina: esattamente la classe di errore che non solleva
+    # eccezioni.
+    "app/services/verification_posture.py": [
+        "tests/test_verification_posture.py",
     ],
 }
 
@@ -94,6 +195,20 @@ EQUIVALENTI: dict[str, str] = {
         "ragionevole (3-14) e non il valore esatto, di proposito — il numero e' "
         "una taratura, non un contratto, e fissarlo renderebbe rosso ogni "
         "ripensamento legittimo. Otto giorni resta una soglia sensata.",
+    "app/core/security.py:22  12 -> 13":
+        "Il fattore di costo di bcrypt e' una TARATURA, non un contratto: 13 e' "
+        "piu' forte di 12, e qualunque asserzione onesta e' un pavimento "
+        "(`>= 12`), che per definizione non puo' bocciare un valore piu' alto. "
+        "⚠️ Il mutante che conterebbe e' `12 -> 11` e questo operatore non lo "
+        "genera: incrementa soltanto. Il pavimento e' fissato a mano in "
+        "`test_il_costo_di_bcrypt_non_scende_sotto_12`.",
+    "app/core/security.py:52  16 -> 17":
+        "La lunghezza del nonce di sessione. Il jti e' OPACO — non viene mai "
+        "letto, confrontato o misurato dal prodotto: serve solo a rendere ogni "
+        "accesso revocabile per conto suo, quindi piu' entropia non e' un "
+        "comportamento diverso. Stessa asimmetria del costo bcrypt: `16 -> 15` "
+        "sarebbe un indebolimento vero e la sonda non lo produce; il pavimento "
+        "sta in `test_il_nonce_di_sessione_ha_almeno_16_byte_di_entropia`.",
     "app/services/image_provenance.py:54  True -> False":
         "`@dataclass(frozen=True)`: l'immutabilita' non ha un consumatore che "
         "la eserciti. E' igiene, non comportamento; un test che prova a scrivere "
