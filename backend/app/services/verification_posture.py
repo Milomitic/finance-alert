@@ -71,9 +71,36 @@ def mutanti_sopravvissuti() -> Arretrato | None:
         return None
     return Arretrato(
         conteggio=len(d.get("sopravvissuti", [])),
-        totale=d.get("totale_mutanti"),
+        # ⚠️ Il denominatore si SOMMA dai conteggi per modulo.
+        #
+        # Stava in `totale_mutanti`, chiave che non esiste piu': il cricchetto
+        # e' diventato per modulo e il lettore e' rimasto indietro. `.get` ha
+        # restituito None senza rumore, quindi la scheda ha mostrato «63» con
+        # il denominatore a «non dichiarato» — cioe' un arretrato senza la sua
+        # scala, che e' il difetto che questa scheda esiste per non avere.
+        # Nessun errore, nessun test rosso: la rinomina ha spezzato un lettore
+        # in un altro modulo, la stessa forma del «rinominare fa mentire i
+        # commenti» registrata in CLAUDE.md.
+        totale=_totale_mutanti(d),
         perche=d.get("_perche", ""),
     )
+
+
+def _totale_mutanti(d: dict) -> int | None:
+    """Somma dei mutanti generati, o None se il file non lo dice.
+
+    ⚠️ None e non 0: un denominatore assente e uno pari a zero dicono cose
+    opposte, e la scheda rende «non dichiarato» solo per il primo.
+    """
+    per_modulo = d.get("per_modulo")
+    if isinstance(per_modulo, dict) and per_modulo:
+        n = sum(
+            c.get("mutanti", 0) for c in per_modulo.values() if isinstance(c, dict)
+        )
+        return n or None
+    # File precedente al passaggio ai conteggi per modulo (rollout).
+    vecchio = d.get("totale_mutanti")
+    return vecchio if isinstance(vecchio, int) else None
 
 
 def violazioni_a11y() -> Arretrato | None:

@@ -9,6 +9,9 @@ linea di base del codice morto con la ragione scritta.
 
 import ast
 
+import pytest
+
+from app.scripts import mutation_probe
 from app.scripts.mutation_probe import EQUIVALENTI, genera
 
 
@@ -81,3 +84,83 @@ def test_ogni_equivalente_dichiarato_porta_una_RAGIONE():
     assert EQUIVALENTI, "la lista non puo' essere vuota senza che nessuno lo noti"
     for chiave, ragione in EQUIVALENTI.items():
         assert len(ragione) > 60, f"{chiave}: ragione troppo breve per essere una ragione"
+
+
+# ─── La linea di base si LEGGE, e leggerla male costa piu' che non leggerla ──
+#
+# ⚠️ `_carica_conteggi` e' stata trovata mai eseguita dal cancello del codice
+# morto. Non e' un dettaglio di copertura: e' la funzione che rende il
+# cricchetto PER MODULO, ed era gia' la sede di un difetto reale — una passata
+# ristretta a un modulo confrontata contro la linea di base INTERA aveva
+# riportato «76 mutanti uccisi» dove la verita' era 17.
+#
+# Il rischio che resta e' il suo ramo di errore. Torna `{}` su file assente o
+# illeggibile, il che e' giusto per LEGGERE (non si sa nulla) ed e' distruttivo
+# in SCRITTURA: `main --scrivi` fonde i conteggi noti con quelli appena
+# misurati, quindi con `{}` i moduli non toccati in quella passata sparirebbero
+# dal file in silenzio. Il cricchetto tornerebbe verde per sottrazione.
+
+
+def test_i_conteggi_per_modulo_si_leggono_dal_file_vero():
+    """Il pavimento: senza, ogni asserzione sotto e' vera di un file vuoto."""
+    conteggi = mutation_probe._carica_conteggi()
+    assert len(conteggi) >= 4, f"solo {len(conteggi)} moduli nella linea di base"
+    for modulo, c in conteggi.items():
+        assert modulo.endswith(".py"), modulo
+        assert set(c) == {"mutanti", "uccisi"}, c
+        assert 0 <= c["uccisi"] <= c["mutanti"], f"{modulo}: {c}"
+
+
+def test_conteggi_e_lista_non_si_contraddicono():
+    """⚠️ Le due meta' del file contano cose DIVERSE, e serve saperlo.
+
+    `mutanti - uccisi` e' il numero esatto di mutanti sopravvissuti. La lista
+    `sopravvissuti` e' piu' CORTA di due scarti, entrambi voluti:
+
+      - gli EQUIVALENTI dichiarati non ci entrano (sopravvivono, ma con una
+        ragione scritta accanto);
+      - la chiave «file:riga  prima -> dopo» NON e' unica — due mutazioni
+        identiche sulla stessa riga la condividono — e il file conserva un
+        insieme, quindi i doppioni collassano. Il commento accanto alla
+        scrittura lo dichiara.
+
+    Quindi l'uguaglianza NON vale e pretenderla renderebbe questo test rosso su
+    un file corretto (misurato: 63 in lista contro 70 attesi, differenza = 2
+    equivalenti + 5 doppioni). Vale la DISUGUAGLIANZA, che e' comunque la
+    direzione in cui sta il difetto reale: una lista piu' lunga del conteggio
+    significa voci che nessuna passata ha misurato — per esempio una passata
+    ristretta che ha riscritto i conteggi di un modulo lasciando in piedi i
+    sopravvissuti di un altro.
+    """
+    conteggi = mutation_probe._carica_conteggi()
+    vivi = mutation_probe._carica_base()
+    assert vivi, "nessun sopravvissuto: il file non e' stato letto"
+    for modulo, c in conteggi.items():
+        in_lista = sum(1 for s in vivi if s.startswith(modulo))
+        equivalenti = sum(1 for s in EQUIVALENTI if s.startswith(modulo))
+        assert in_lista + equivalenti <= c["mutanti"] - c["uccisi"], (
+            f"{modulo}: lista {in_lista} + equivalenti {equivalenti} superano "
+            f"i {c['mutanti'] - c['uccisi']} sopravvissuti misurati. Il file "
+            "porta voci che nessuna passata ha prodotto."
+        )
+
+
+def test_ogni_modulo_contato_ha_dei_mutanti():
+    """Un modulo con zero mutanti generati non e' «pulito»: e' non misurato, e
+    contarlo come misurato gonfia il denominatore a schermo."""
+    for modulo, c in mutation_probe._carica_conteggi().items():
+        assert c["mutanti"] > 0, f"{modulo} e' in linea di base con zero mutanti"
+
+
+@pytest.mark.parametrize("contenuto", [None, "{non json", '{"per_modulo": 3}'])
+def test_un_file_illeggibile_da_vuoto_e_non_esplode(tmp_path, monkeypatch, contenuto):
+    """⚠️ Vuoto e' la risposta giusta in lettura, ed e' una TRAPPOLA in
+    scrittura: `--scrivi` fonde il noto col misurato, quindi partendo da vuoto
+    cancellerebbe i moduli non toccati dalla passata. Il commento accanto a
+    `--scrivi` lo dice; questo test fissa la meta' che si puo' verificare."""
+    finto = tmp_path / "mutation_baseline.json"
+    if contenuto is not None:
+        finto.write_text(contenuto, encoding="utf-8")
+    monkeypatch.setattr(mutation_probe, "LINEA_BASE", finto)
+    assert mutation_probe._carica_conteggi() == {}
+    assert mutation_probe._carica_base() == set()

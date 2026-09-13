@@ -26,7 +26,7 @@ from __future__ import annotations
 import json
 import random
 import secrets
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 
 from app.core.config import settings
 from app.core.db import SessionLocal
@@ -64,6 +64,48 @@ SEGNALI = [
 ]
 
 BARRE = 260  # sopra la soglia di 200 di `has_full_data`
+
+
+def _giorni_feriali(fino_a: date, quanti: int) -> list[date]:
+    """Esattamente `quanti` giorni feriali, dal piu' vecchio al piu' recente.
+
+    ⚠️ Non e' la stessa cosa di «i feriali dentro gli ultimi N giorni», ed e'
+    la differenza fra un gate ripetibile e uno che cambia esito da solo.
+    Contando all'indietro su un intervallo FISSO di giorni, quanti feriali ci
+    cadono dipende da che giorno della settimana e' oggi: misurato, 215 barre
+    il sabato e la domenica, 214 il lunedi'.
+
+    Il generatore casuale e' seminato, ma consuma UN ESTRAZIONE PER BARRA:
+    una barra in meno sposta tutte le estrazioni successive, quindi l'intera
+    serie di prezzi cambia, e con essa le percentuali a schermo e i colori che
+    le vestono. E' cosi' che la pagina Esplora ha guadagnato una violazione di
+    contrasto in una notte, senza che nessuno toccasse una riga di quel codice.
+    """
+    fuori: list[date] = []
+    g = fino_a
+    while len(fuori) < quanti:
+        g -= timedelta(days=1)
+        if g.weekday() < 5:
+            fuori.append(g)
+    fuori.reverse()
+    return fuori
+
+
+def _ancora(oggi: date) -> datetime:
+    """Mezzogiorno UTC di oggi — l'istante da cui i segnali contano all'indietro.
+
+    ⚠️ Era `datetime.now(UTC)`, cioe' l'ORA in cui gira il job. Gli scarti dei
+    segnali sono ore (fino a 78), quindi lo stesso seme produce una differenza
+    in GIORNI DI CALENDARIO fra `signal_date` e `triggered_at` che cambia con
+    l'ora della giornata: una corsa alle 00:18 UTC — l'ora reale del job che ha
+    fatto arrossare il gate — fa scivolare indietro di un giorno gli scarti
+    piccoli. La UI ne fa una pastiglia «in ritardo» (soglia 4 giorni), quindi
+    il numero di elementi resi dipendeva dall'orologio.
+
+    Mezzogiorno e' lontano da entrambi i bordi del giorno: nessun arrotondamento
+    di fuso puo' spostarlo oltre la mezzanotte.
+    """
+    return datetime.combine(oggi, time(12, 0), tzinfo=UTC)
 
 
 def main() -> None:
@@ -115,10 +157,7 @@ def main() -> None:
             if db.query(OhlcvDaily).filter(OhlcvDaily.stock_id == s.id).count() >= BARRE:
                 continue
             prezzo = rng.uniform(20, 600)
-            for i in range(BARRE, 0, -1):
-                giorno = oggi - timedelta(days=i)
-                if giorno.weekday() >= 5:
-                    continue
+            for giorno in _giorni_feriali(oggi, BARRE):
                 prezzo *= 1 + rng.uniform(-0.025, 0.027)
                 alto = prezzo * (1 + rng.uniform(0, 0.02))
                 basso = prezzo * (1 - rng.uniform(0, 0.02))
@@ -135,7 +174,7 @@ def main() -> None:
                 for j, (nome, tono, catena) in enumerate(SEGNALI[: 2 + (i % 3)]):
                     db.add(Alert(
                         stock_id=s.id,
-                        triggered_at=datetime.now(UTC) - timedelta(hours=6 * (i + j)),
+                        triggered_at=_ancora(oggi) - timedelta(hours=6 * (i + j)),
                         signal_date=oggi - timedelta(days=1 + (i + j) % 5),
                         signal_name=nome,
                         trigger_price=round(rng.uniform(20, 600), 4),

@@ -219,12 +219,21 @@ _PERCHE_BASE = (
 
 
 def _carica_conteggi() -> dict[str, dict[str, int]]:
-    """I conteggi per modulo gia' noti, o vuoto."""
+    """I conteggi per modulo gia' noti, o vuoto.
+
+    ⚠️ Il tipo si CONTROLLA, non si spera. Il valore letto finisce in
+    `{**noti, **conteggi}` dentro `--scrivi`: un file in cui `per_modulo` non
+    e' un oggetto — JSON valido, quindi nessuna eccezione — farebbe esplodere
+    la scrittura a meta', dopo che i mutanti sono gia' stati eseguiti. Con un
+    dizionario vuoto la passata si comporta come se non sapesse niente, che e'
+    la verita'.
+    """
     try:
         d = json.loads(LINEA_BASE.read_text(encoding="utf-8"))
-        return d.get("per_modulo", {})
     except (FileNotFoundError, ValueError):
         return {}
+    per_modulo = d.get("per_modulo") if isinstance(d, dict) else None
+    return per_modulo if isinstance(per_modulo, dict) else {}
 
 
 def _carica_base() -> set[str]:

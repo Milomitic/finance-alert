@@ -68,9 +68,27 @@ async function violazioni(page: import("@playwright/test").Page): Promise<Conteg
   return page.evaluate(async () => {
     // @ts-expect-error axe e' iniettato a runtime
     const res = await window.axe.run(document, { resultTypes: ["violations"] });
-    const out: Record<string, number> = {};
-    for (const v of res.violations) out[v.id] = v.nodes.length;
-    return out;
+    const conteggi: Record<string, number> = {};
+    const bersagli: Record<string, string[]> = {};
+    for (const v of res.violations) {
+      conteggi[v.id] = v.nodes.length;
+      /* ⚠️ Si conservano anche i SELETTORI, non solo quanti sono.
+       *
+       * La prima versione riportava «button-name: 53 -> 54» e nient'altro. Un
+       * numero che cresce di uno su un arretrato di 53 non dice ne' quale
+       * nodo, ne' se e' colpa del commit in esame: la diagnosi e' costata lo
+       * scaricamento degli artefatti di CI e la lettura di uno screenshot, per
+       * scoprire che la causa non era nel codice ma nel SEME.
+       *
+       * CLAUDE.md ha gia' la regola, dal pavimento di contenuto del gate di
+       * layout: «un messaggio d'errore che nomina la causa vale quanto il
+       * controllo che lo produce». Dodici bersagli bastano a riconoscere il
+       * colpevole senza allagare il log. */
+      bersagli[v.id] = v.nodes
+        .slice(0, 12)
+        .map((n: { target: string[] }) => n.target.join(" "));
+    }
+    return { conteggi, bersagli };
   });
 }
 
@@ -91,7 +109,7 @@ for (const rotta of ROTTE) {
     expect(caratteri, `${rotta.path} e' vuota: axe non misurerebbe nulla`)
       .toBeGreaterThanOrEqual(rotta.minChars);
 
-    const trovate = await violazioni(page);
+    const { conteggi: trovate, bersagli } = await violazioni(page);
     raccolto[rotta.path] = trovate;
     if (AGGIORNA) return;
 
@@ -109,9 +127,20 @@ for (const rotta of ROTTE) {
           ` Stringi la linea di base: E2E_UPDATE_BASELINE=1 npm run e2e\n`,
       );
     }
+    /* I nodi dei soli criteri cresciuti: e' la differenza fra «ripara
+     * qualcosa» e «ripara QUESTO». */
+    const dettaglio = cresciute.flatMap((riga) => {
+      const id = riga.split(":")[0];
+      return [`  ${id}:`, ...(bersagli[id] ?? []).map((t) => `    ${t}`)];
+    });
     expect(
       cresciute,
-      `${rotta.path}: nuove violazioni di accessibilita'. ${cresciute.join(" | ")}`,
+      [
+        `${rotta.path}: nuove violazioni di accessibilita'. ${cresciute.join(" | ")}`,
+        ...dettaglio,
+        "  (se i nodi sembrano estranei al commit, sospetta il SEME: e' gia'",
+        "   successo che il conteggio dipendesse dall'ora della corsa.)",
+      ].join("\n"),
     ).toEqual([]);
   });
 }
@@ -146,7 +175,7 @@ test("axe SA trovare una violazione", async ({ page }, info) => {
     b.appendChild(icona);
     document.querySelector("main")!.prepend(b);
   });
-  const trovate = await violazioni(page);
+  const { conteggi: trovate } = await violazioni(page);
   expect(
     trovate["button-name"] ?? 0,
     "axe deve vedere un bottone senza nome accessibile",
@@ -245,12 +274,31 @@ test("il focus da tastiera si VEDE", async ({ page }, info) => {
 });
 
 test.afterAll(async () => {
-  if (!AGGIORNA || !Object.keys(raccolto).length) return;
+  if (!Object.keys(raccolto).length) return;
   const fs = await import("node:fs");
-  fs.writeFileSync(
-    "../backend/app/data/a11y_baseline.json",
-    JSON.stringify({ _perche: BASE_PERCHE, rotte: raccolto }, null, 2) + "\n",
-    "utf-8",
+  const file = JSON.stringify({ _perche: BASE_PERCHE, rotte: raccolto }, null, 2) + "\n";
+
+  /* ⚠️ La linea di base CANDIDATA si scrive SEMPRE, non solo con
+   * E2E_UPDATE_BASELINE, e finisce nella cartella del rapporto — che il job
+   * carica gia' come artefatto.
+   *
+   * CLAUDE.md impone di generare una linea di base DOVE viene applicata: in
+   * locale i conteggi differiscono (dati veri, rami di configurazione diversi),
+   * quindi una rigenerazione da qui nasce piu' stretta e fa arrossare la CI su
+   * codice che nessuno ha toccato. Finora l'unico modo di averla da CI era non
+   * averlo: si leggevano i delta dal log e si correggeva il file a mano, numero
+   * per numero. Adesso la misura vera scende con l'artefatto — che e' anche
+   * l'unico modo onesto di riallinearla dopo un cambio del SEME, il quale
+   * sposta tutti i conteggi insieme senza che nessuna pagina sia peggiorata. */
+  fs.mkdirSync("playwright-report", { recursive: true });
+  fs.writeFileSync("playwright-report/a11y_baseline.candidata.json", file, "utf-8");
+  console.log(
+    "\nlinea di base CANDIDATA in playwright-report/a11y_baseline.candidata.json" +
+      " (artefatto del job). Sostituisce backend/app/data/a11y_baseline.json" +
+      " SOLO dopo aver letto perche' i numeri sono cambiati.\n",
   );
-  console.log(`\nlinea di base riscritta su ${Object.keys(raccolto).length} rotte\n`);
+
+  if (!AGGIORNA) return;
+  fs.writeFileSync("../backend/app/data/a11y_baseline.json", file, "utf-8");
+  console.log(`linea di base riscritta su ${Object.keys(raccolto).length} rotte\n`);
 });

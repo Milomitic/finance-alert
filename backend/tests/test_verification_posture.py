@@ -86,3 +86,43 @@ def test_ogni_linea_di_base_dice_perche_esiste(nome):
     """
     d = _carica(nome)
     assert len(d.get("_perche", "")) > 80, f"{nome}: manca la spiegazione"
+
+
+def test_ogni_arretrato_porta_il_suo_denominatore():
+    """⚠️ Un arretrato senza scala non e' un'informazione.
+
+    «63 mutanti sopravvissuti» significa una cosa su 130 generati e un'altra su
+    1.300. La scheda rende «non dichiarato» quando il totale manca, ed e' la
+    resa corretta — ma qui il totale ESISTE e veniva perso: `mutanti_sopravvissuti`
+    leggeva `totale_mutanti`, chiave che il passaggio al cricchetto per modulo
+    aveva sostituito con `per_modulo`. `.get` ha risposto None in silenzio.
+
+    Nessun test era rosso, perche' nessuno guardava il denominatore: la rinomina
+    ha spezzato un lettore in un ALTRO modulo. Questo test guarda tutti e tre
+    gli arretrati insieme, cosi' la prossima rinomina si ferma qui.
+    """
+    from app.services import verification_posture as vp
+
+    """⚠️ `totale` non e' sempre un denominatore, e la scheda lo sa.
+
+    Per il codice morto e i mutanti e' l'insieme da cui il numeratore e' tratto
+    («357 su 1.388 censite»), quindi deve contenerlo. Per l'a11y e' l'AMPIEZZA
+    della misura — «103 su 10 rotte» — e 103 su 10 e' la lettura giusta, non un
+    errore. Il campo `unita` accanto e' cio' che distingue i due casi a schermo,
+    e il test deve fare la stessa distinzione invece di imporre la piu' stretta
+    delle due a entrambi.
+    """
+    for nome, fn, contiene in (
+        ("codice morto", vp.codice_mai_eseguito, True),
+        ("mutanti", vp.mutanti_sopravvissuti, True),
+        ("a11y", vp.violazioni_a11y, False),
+    ):
+        a = fn()
+        assert a is not None, f"{nome}: nessun arretrato letto"
+        assert a.totale is not None, f"{nome}: denominatore perso"
+        assert a.totale > 0, f"{nome}: totale a zero"
+        if contiene:
+            assert a.totale >= a.conteggio, (
+                f"{nome}: {a.conteggio} su {a.totale} — il numeratore supera il totale"
+            )
+        assert a.perche, f"{nome}: un arretrato senza ragione scritta e' una lista di difetti"
