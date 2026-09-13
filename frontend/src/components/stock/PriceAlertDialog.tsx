@@ -7,10 +7,11 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { SelectField } from "@/components/ui/select-field";
 import { currencySymbol } from "@/lib/money";
 import { cn } from "@/lib/utils";
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+  SelectItem,
 } from "@/components/ui/select";
 
 interface Props {
@@ -96,16 +97,16 @@ export function PriceAlertDialog({
               autoFocus
             />
           </div>
-          <div>
-            <Label>Direzione</Label>
-            <Select value={direction} onValueChange={(v) => setDirection(v as "above" | "below")}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="above">Above (sopra il target)</SelectItem>
-                <SelectItem value="below">Below (sotto il target)</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+          {/* L'etichetta era visibile e non associata: il bottone non aveva
+              nome per chi ascolta. `SelectField` cabla i due id. */}
+          <SelectField
+            label="Direzione"
+            value={direction}
+            onValueChange={(v) => setDirection(v as "above" | "below")}
+          >
+            <SelectItem value="above">Above (sopra il target)</SelectItem>
+            <SelectItem value="below">Below (sotto il target)</SelectItem>
+          </SelectField>
           <div>
             <Label htmlFor="note">Nota (opzionale)</Label>
             <Input

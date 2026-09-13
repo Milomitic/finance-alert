@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
 import type { SearchParams, SortDir, StockSortBy } from "@/api/stocks";
@@ -195,6 +195,10 @@ function PaginationStrip({
 }
 
 export default function StocksBrowserPage() {
+  /** Id dell'etichetta «Righe per pagina», a cui punta il nome accessibile
+   *  della tendina. Generato e non scritto a mano: un id fisso duplicato in
+   *  due montaggi farebbe puntare `aria-labelledby` al primo nodo trovato. */
+  const idRighe = useId();
   const [searchParams, setSearchParams] = useSearchParams();
   // Page index (0-based) initialized from the URL so back-nav / shared links
   // land on the same page instead of silently resetting to page 1.
@@ -475,12 +479,18 @@ export default function StocksBrowserPage() {
             riga. Questo gruppo misurava 445px su 375 e usciva dallo schermo
             portandosi dietro il genitore. Il wrap va dove la riga si rompe. */}
         <div className="flex flex-wrap items-center gap-2 gap-y-1">
-          <span className="text-xs text-muted-foreground">Righe per pagina</span>
+          {/* ⚠️ Il testo c'e' gia': si PUNTA a lui invece di riscriverlo in un
+              `aria-label`, cosi' la parola resta una sola. Non serve
+              trasformarlo in `<label>` — `aria-labelledby` accetta qualunque
+              elemento, e uno `<span>` non cambia il layout della riga. */}
+          <span id={idRighe} className="text-xs text-muted-foreground">
+            Righe per pagina
+          </span>
           <Select
             value={String(pageSize)}
             onValueChange={(v) => setPageSize(Number(v) as PageSize)}
           >
-            <SelectTrigger className="h-8 w-[80px] text-sm">
+            <SelectTrigger aria-labelledby={idRighe} className="h-8 w-[80px] text-sm">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>

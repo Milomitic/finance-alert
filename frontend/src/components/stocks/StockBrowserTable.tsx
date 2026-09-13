@@ -420,7 +420,11 @@ export function StockBrowserTable({
                 value={sortBy}
                 onValueChange={(v) => onSortChange(v as TableSortKey)}
               >
-                <SelectTrigger className="h-8 flex-1 text-sm">
+                {/* ⚠️ `aria-label` e non `aria-labelledby`: qui NON c'e'
+                    un'etichetta a schermo a cui puntare. Il valore si legge
+                    «Ordina: Prezzo», che dice gia' tutto a chi vede, e per
+                    `role="combobox"` il contenuto non vale come nome. */}
+                <SelectTrigger aria-label="Ordina i titoli" className="h-8 flex-1 text-sm">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>

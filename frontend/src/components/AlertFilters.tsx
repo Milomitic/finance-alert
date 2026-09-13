@@ -6,12 +6,9 @@ import { formatShortDate } from "@/lib/alertDates";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
+import { SelectField } from "@/components/ui/select-field";
 import {
-  Select,
-  SelectContent,
   SelectItem,
-  SelectTrigger,
-  SelectValue,
 } from "@/components/ui/select";
 import { SectionTitle } from "@/components/ui/section-title";
 import { useIsPhone } from "@/hooks/useMediaQuery";
@@ -150,6 +147,11 @@ function FilterChip({
   );
 }
 
+/** La tipografia delle etichette dei filtri, in un posto solo: sette
+ *  ripetizioni della stessa stringa sono sette occasioni di farne divergere
+ *  una. */
+const ETICHETTA = "text-xs uppercase tracking-wider text-muted-foreground";
+
 export function AlertFilters({ value, onChange }: Props) {
   const isPhone = useIsPhone();
   // null = "the user has not decided", so the default can depend on whether
@@ -284,167 +286,120 @@ export function AlertFilters({ value, onChange }: Props) {
             viewports, single row on xl+ (9 controls since Esito + Orizzonte
             landed). */}
         <div className={cn("grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-9 gap-3", !open && "hidden")}>
-        <div>
-          <Label className="text-xs uppercase tracking-wider text-muted-foreground">
-            Archivio
-          </Label>
-          <Select
-            value={status}
-            onValueChange={(v) => onChange({ ...value, ...statusToParams(v) })}
-          >
-            <SelectTrigger className="mt-1">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {STATUS_OPTIONS.map((o) => (
-                <SelectItem key={o.value} value={o.value}>
-                  {o.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        {/* ⚠️ `SelectField` e non `Label` + `Select` a mano: le sette tendine
+            erano sette bottoni SENZA NOME per chi usa uno screen reader. Il
+            testo c'era, sopra il controllo, e non era associato a niente — un
+            difetto di sola lettura assistita, quindi invisibile guardando. Il
+            componente cabla etichetta e trigger con id generati, e il tipo di
+            `SelectTrigger` ora rifiuta di compilare senza un nome. */}
+        <SelectField
+          labelClassName={ETICHETTA}
+          label="Archivio"
+          value={status}
+          onValueChange={(v) => onChange({ ...value, ...statusToParams(v) })}
+        >
+          {STATUS_OPTIONS.map((o) => (
+            <SelectItem key={o.value} value={o.value}>
+              {o.label}
+            </SelectItem>
+          ))}
+        </SelectField>
 
         {/* Tipo segnale — maps to rule_kind. "tutti" sentinel clears the filter. */}
-        <div>
-          <Label className="text-xs uppercase tracking-wider text-muted-foreground">
-            Tipo segnale
-          </Label>
-          <Select
-            value={value.rule_kind ?? "tutti"}
-            onValueChange={(v) =>
-              onChange({ ...value, rule_kind: v === "tutti" ? undefined : v })
-            }
-          >
-            <SelectTrigger className="mt-1">
-              <SelectValue placeholder="Tutti" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="tutti">Tutti</SelectItem>
-              {SIGNAL_KINDS.map((k) => (
-                <SelectItem key={k.value} value={k.value}>
-                  {k.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        <SelectField
+          labelClassName={ETICHETTA}
+          label="Tipo segnale"
+          value={value.rule_kind ?? "tutti"}
+          placeholder="Tutti"
+          onValueChange={(v) =>
+            onChange({ ...value, rule_kind: v === "tutti" ? undefined : v })
+          }
+        >
+          <SelectItem value="tutti">Tutti</SelectItem>
+          {SIGNAL_KINDS.map((k) => (
+            <SelectItem key={k.value} value={k.value}>
+              {k.label}
+            </SelectItem>
+          ))}
+        </SelectField>
 
         {/* Tono — bull / bear. "tutti" clears the filter. */}
-        <div>
-          <Label className="text-xs uppercase tracking-wider text-muted-foreground">
-            Tono
-          </Label>
-          <Select
-            value={value.tone ?? "tutti"}
-            onValueChange={(v) =>
-              onChange({ ...value, tone: v === "tutti" ? undefined : v })
-            }
-          >
-            <SelectTrigger className="mt-1">
-              <SelectValue placeholder="Tutti" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="tutti">Tutti</SelectItem>
-              {TONE_OPTIONS.map((t) => (
-                <SelectItem key={t.value} value={t.value}>
-                  {t.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        <SelectField
+          labelClassName={ETICHETTA}
+          label="Tono"
+          value={value.tone ?? "tutti"}
+          placeholder="Tutti"
+          onValueChange={(v) =>
+            onChange({ ...value, tone: v === "tutti" ? undefined : v })
+          }
+        >
+          <SelectItem value="tutti">Tutti</SelectItem>
+          {TONE_OPTIONS.map((t) => (
+            <SelectItem key={t.value} value={t.value}>
+              {t.label}
+            </SelectItem>
+          ))}
+        </SelectField>
 
         {/* Periodo — presets su date_from (Oggi / 7g / 30g) + range custom.
             "tutti" clears both bounds. */}
-        <div>
-          <Label className="text-xs uppercase tracking-wider text-muted-foreground">
-            Periodo
-          </Label>
-          <Select value={period} onValueChange={onPeriodChange}>
-            <SelectTrigger className="mt-1">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {PERIOD_OPTIONS.map((o) => (
-                <SelectItem key={o.value} value={o.value}>
-                  {o.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        <SelectField labelClassName={ETICHETTA} label="Periodo" value={period} onValueChange={onPeriodChange}>
+          {PERIOD_OPTIONS.map((o) => (
+            <SelectItem key={o.value} value={o.value}>
+              {o.label}
+            </SelectItem>
+          ))}
+        </SelectField>
 
         {/* Natura — continuazione / inversione. "tutti" clears. */}
-        <div>
-          <Label className="text-xs uppercase tracking-wider text-muted-foreground">
-            Natura
-          </Label>
-          <Select
-            value={value.nature ?? "tutti"}
-            onValueChange={(v) => onChange({ ...value, nature: v === "tutti" ? undefined : v })}
-          >
-            <SelectTrigger className="mt-1">
-              <SelectValue placeholder="Tutte" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="tutti">Tutte</SelectItem>
-              <SelectItem value="continuazione">Continuazione</SelectItem>
-              <SelectItem value="inversione">Inversione</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+        <SelectField
+          labelClassName={ETICHETTA}
+          label="Natura"
+          value={value.nature ?? "tutti"}
+          placeholder="Tutte"
+          onValueChange={(v) => onChange({ ...value, nature: v === "tutti" ? undefined : v })}
+        >
+          <SelectItem value="tutti">Tutte</SelectItem>
+          <SelectItem value="continuazione">Continuazione</SelectItem>
+          <SelectItem value="inversione">Inversione</SelectItem>
+        </SelectField>
 
         {/* Esito — realised outcome from signal_outcomes: azzeccato / mancato /
             in maturazione. "tutti" clears. */}
-        <div>
-          <Label className="text-xs uppercase tracking-wider text-muted-foreground">
-            Esito
-          </Label>
-          <Select
-            value={value.outcome ?? "tutti"}
-            onValueChange={(v) =>
-              onChange({ ...value, outcome: v === "tutti" ? undefined : v })
-            }
-          >
-            <SelectTrigger className="mt-1">
-              <SelectValue placeholder="Tutti" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="tutti">Tutti</SelectItem>
-              {OUTCOME_OPTIONS.map((o) => (
-                <SelectItem key={o.value} value={o.value}>
-                  {o.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        <SelectField
+          labelClassName={ETICHETTA}
+          label="Esito"
+          value={value.outcome ?? "tutti"}
+          placeholder="Tutti"
+          onValueChange={(v) =>
+            onChange({ ...value, outcome: v === "tutti" ? undefined : v })
+          }
+        >
+          <SelectItem value="tutti">Tutti</SelectItem>
+          {OUTCOME_OPTIONS.map((o) => (
+            <SelectItem key={o.value} value={o.value}>
+              {o.label}
+            </SelectItem>
+          ))}
+        </SelectField>
 
         {/* Orizzonte — breve / medio / lungo (snapshot.horizon). "tutti" clears. */}
-        <div>
-          <Label className="text-xs uppercase tracking-wider text-muted-foreground">
-            Orizzonte
-          </Label>
-          <Select
-            value={value.horizon ?? "tutti"}
-            onValueChange={(v) =>
-              onChange({ ...value, horizon: v === "tutti" ? undefined : v })
-            }
-          >
-            <SelectTrigger className="mt-1">
-              <SelectValue placeholder="Tutti" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="tutti">Tutti</SelectItem>
-              {HORIZON_OPTIONS.map((h) => (
-                <SelectItem key={h.value} value={h.value}>
-                  {h.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        <SelectField
+          labelClassName={ETICHETTA}
+          label="Orizzonte"
+          value={value.horizon ?? "tutti"}
+          placeholder="Tutti"
+          onValueChange={(v) =>
+            onChange({ ...value, horizon: v === "tutti" ? undefined : v })
+          }
+        >
+          <SelectItem value="tutti">Tutti</SelectItem>
+          {HORIZON_OPTIONS.map((h) => (
+            <SelectItem key={h.value} value={h.value}>
+              {h.label}
+            </SelectItem>
+          ))}
+        </SelectField>
 
         {/* Forza minima — number input 0-100. Drives the API `strength_min`
             param. */}

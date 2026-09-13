@@ -10,9 +10,41 @@ const SelectGroup = SelectPrimitive.Group
 
 const SelectValue = SelectPrimitive.Value
 
+/** ⚠️ Un trigger DEVE portare un nome accessibile, e il TIPO lo impone.
+ *
+ * Il difetto e' arrivato in produzione su tutte e sette le tendine dei filtri
+ * Segnali: axe le riportava sotto `button-name` e chi usa uno screen reader
+ * sentiva sette bottoni identici e senza nome. Il testo visibile («TIPO
+ * SEGNALE») stava sopra il controllo e non era associato a nulla.
+ *
+ * ⚠️ Il contenuto del trigger NON e' il suo nome. Radix vi rende il VALORE
+ * corrente («Tutti», «Attivi»), quindi al lettore arriverebbe il valore senza
+ * mai sapere di che campo sia — e per `role="combobox"` axe non accetta il
+ * contenuto come nome. Da qui la regola.
+ *
+ * Perche' un vincolo di tipo e non un controllo a valle: un cancello a11y
+ * misura cio' che la pagina RENDE in quella esecuzione, quindi una tendina
+ * dentro un ramo raro o una scheda chiusa gli sfugge. Il compilatore le vede
+ * tutte, e il messaggio arriva a chi la sta scrivendo invece che a chi legge
+ * un log di CI tre giorni dopo.
+ *
+ * Le due forme ammesse, e quando usarle:
+ *   - `aria-labelledby` quando l'etichetta e' GIA' a schermo — e' la forma da
+ *     preferire, perche' lascia una sola fonte per il testo. Si passano DUE
+ *     id, «etichetta trigger», cosi' il nome diventa «Archivio Attivi»: senza
+ *     il secondo il nome sarebbe solo «Archivio» e il valore scelto non
+ *     verrebbe piu' annunciato da nessuna parte. `SelectField` fa questo
+ *     cablaggio da solo;
+ *   - `aria-label` solo quando NON c'e' un'etichetta visibile (per esempio
+ *     l'ordinamento nella barra dello screener).
+ */
+type NomeAccessibile =
+  | { "aria-label": string; "aria-labelledby"?: undefined }
+  | { "aria-labelledby": string; "aria-label"?: undefined };
+
 const SelectTrigger = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.Trigger>,
-  React.ComponentPropsWithoutRef<typeof SelectPrimitive.Trigger>
+  React.ComponentPropsWithoutRef<typeof SelectPrimitive.Trigger> & NomeAccessibile
 >(({ className, children, ...props }, ref) => (
   <SelectPrimitive.Trigger
     ref={ref}
