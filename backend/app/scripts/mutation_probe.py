@@ -38,6 +38,7 @@ import ast
 import json
 import subprocess
 import sys
+from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -211,7 +212,7 @@ BERSAGLI: dict[str, list[str]] = {
 #: esista) e il taglio a dieci caratteri di una data con orario — e sono state
 #: chiuse con un test. Solo le altre due stanno qui.
 EQUIVALENTI: dict[str, str] = {
-    "app/services/image_provenance.py:47  7 -> 8":
+    "app/services/image_provenance.py::<modulo>#0  7 -> 8":
         "STALE_AFTER_DAYS: il test sulla soglia asserisce un INTERVALLO "
         "ragionevole (3-14) e non il valore esatto, di proposito — il numero e' "
         "una taratura, non un contratto, e fissarlo renderebbe rosso ogni "
@@ -226,7 +227,7 @@ EQUIVALENTI: dict[str, str] = {
     # contrario di cio' per cui questi presidi esistono. Restano in linea di
     # base, misurati e visibili. Qui sotto stanno SOLO quelli dove il codice
     # mutato fa davvero la stessa cosa.
-    "app/services/technical_score_service.py:52  Gt -> GtE":
+    "app/services/technical_score_service.py::_trend#0  Gt -> GtE":
         "`int(price > f)` e i suoi due gemelli. Il bordo si raggiunge solo dove "
         "il prezzo eguaglia ESATTAMENTE la EMA, cioe' su una serie "
         "perfettamente piatta — dove il punteggio di trend non significa "
@@ -235,28 +236,40 @@ EQUIVALENTI: dict[str, str] = {
         "si congelerebbe una taratura per fissare un caso degenere. Il test "
         "`test_una_serie_ferma_NON_legge_come_trend` tiene la guardia larga "
         "(sotto la neutralita') proprio per non farlo.",
-    "app/services/technical_score_service.py:120  GtE -> Gt":
+    "app/services/technical_score_service.py::_trend#1  Gt -> GtE":
+        "Il secondo dei tre confronti di `pts`. Stessa ragione della "
+        "voce `_trend#0` qui sopra: il bordo si raggiunge solo su una serie "
+        "perfettamente piatta. ⚠️ La vecchia chiave `file:riga` li fondeva in "
+        "una voce sola; l'ordinale li separa, ed e' la risoluzione che si "
+        "guadagna.",
+    "app/services/technical_score_service.py::_trend#2  Gt -> GtE":
+        "Il terzo dei tre confronti di `pts`. Stessa ragione della "
+        "voce `_trend#0` qui sopra: il bordo si raggiunge solo su una serie "
+        "perfettamente piatta. ⚠️ La vecchia chiave `file:riga` li fondeva in "
+        "una voce sola; l'ordinale li separa, ed e' la risoluzione che si "
+        "guadagna.",
+    "app/services/technical_score_service.py::_volume#0  GtE -> Gt":
         "`if n >= 10` davanti a `vol.iloc[-10:].mean()`. Con ESATTAMENTE dieci "
         "barre le due strade calcolano la stessa media, perche' `vol[-10:]` E' "
         "`vol`. Identiche, non simili — e comunque `partial_for` sbarra sotto "
         "le trenta.",
-    "app/services/technical_score_service.py:147  Gt -> GtE":
+    "app/services/technical_score_service.py::_blended_return#0  Gt -> GtE":
         "`num / wsum if wsum > 0 else None`. `wsum` somma i pesi delle parti "
         "non nulle e `_blended_return` e' chiamata solo da `partial_for`, che "
         "richiede almeno trenta barre: `_ret(close, min(63, n-1))` ha sempre un "
         "k valido, quindi wsum >= 0,4. Il ramo in cui le due forme divergono "
         "(wsum == 0) e' irraggiungibile.",
-    "app/services/technical_score_service.py:239  GtE -> Gt":
+    "app/services/technical_score_service.py::_recent_signal_facets#0  GtE -> Gt":
         "`Alert.triggered_at >= cutoff` dove cutoff e' `now() - 14 giorni`, un "
         "istante al microsecondo. Un avviso marcato ESATTAMENTE su quel "
         "microsecondo non e' costruibile in modo deterministico: la differenza "
         "esiste e non e' osservabile.",
-    "app/services/technical_score_service.py:347  1 -> 2":
+    "app/services/technical_score_service.py::recompute_one#0  1 -> 2":
         "`.limit(1)` su una `where(stock_id == ...)` dove `stock_id` e' la "
         "CHIAVE PRIMARIA di technical_scores: al massimo esiste una riga, e "
         "`.first()` prende comunque la prima. Il limite e' cintura oltre alle "
         "bretelle, non un filtro.",
-    "app/services/technical_score_service.py:373  1 -> 2":
+    "app/services/technical_score_service.py::recompute_one#1  1 -> 2":
         "Il gemello alla rilettura finale, stessa ragione: chiave primaria, "
         "una riga al massimo.",
     # ── signal_outcome_service: dieci superstiti, tutti dichiarati ───────
@@ -264,71 +277,71 @@ EQUIVALENTI: dict[str, str] = {
     # ⚠️ Il modulo e' passato da 20 a 47 uccisi su 57. Questi dieci non sono i
     # "difficili": sono quelli che NESSUN test onesto puo' uccidere, perche'
     # fissarli congelerebbe una taratura o proverebbe un caso irraggiungibile.
-    "app/services/signal_outcome_service.py:31  200 -> 201":
+    "app/services/signal_outcome_service.py::<modulo>#0  200 -> 201":
         "`_REGIME_EMA`: la EMA lenta e' una TARATURA (CLAUDE.md la fissa a 200 "
         "insieme a 20 e 50) e l'etichetta che ne esce e' grossolana, bull o "
         "bear. Un periodo in piu' sposta il confine solo per le barre gia' "
         "appiccicate alla linea. ⚠️ Il rilievo vero qui non e' il mutante: e' "
         "che `timeframe_service.FIXED_EMA_SLOW` esiste come fonte unica "
         "dichiarata e questo modulo non la importa.",
-    "app/services/signal_outcome_service.py:97  GtE -> Gt":
+    "app/services/signal_outcome_service.py::_load_universe_closes#0  GtE -> Gt":
         "`OhlcvDaily.date >= since` dove `since` e' gia' il minimo trigger "
         "MENO dieci giorni di margine: un giorno in piu' o in meno resta "
         "dentro il margine, e il docstring dimostra che la finestra non cambia "
         "il riferimento al giorno del segnale.",
-    "app/services/signal_outcome_service.py:121  900 -> 901":
+    "app/services/signal_outcome_service.py::_load_stock_closes#0  900 -> 901":
         "SQLite tronca a 999 parametri legati, e 900 e' il margine sotto quel "
         "tetto. Il vincolo e' `< 999`, non `== 900`: 901 lo soddisfa "
         "identicamente. Un test che fissasse 900 impedirebbe di alzarlo a 950 "
         "senza guadagnare niente.",
-    "app/services/signal_outcome_service.py:121  Gt -> GtE":
+    "app/services/signal_outcome_service.py::_load_stock_closes#0  Gt -> GtE":
         "Stesso margine, dal lato dell'operatore: con esattamente 900 titoli "
         "entrambe le strade funzionano (900 < 999).",
-    "app/services/signal_outcome_service.py:160  LtE -> Lt":
+    "app/services/signal_outcome_service.py::_universe_fwd_medians#0  LtE -> Lt":
         "`if len(cs) <= horizon: continue`. Col bordo esatto — serie lunga "
         "quanto l'orizzonte — il ramo che passa produce `cs[:-horizon]` vuoto "
         "e `cs[horizon:]` vuoto, quindi zero osservazioni: le due forme fanno "
         "LA STESSA COSA, non due cose simili.",
-    "app/services/signal_outcome_service.py:166  False -> True":
+    "app/services/signal_outcome_service.py::_universe_fwd_medians#0  False -> True":
         "`zip(..., strict=False)`. I due lati sono filtrati dalla stessa "
         "maschera `ok`, quindi hanno lunghezza uguale per costruzione e "
         "`strict` non ha niente da rilevare. ⚠️ Nota: `strict=True` sarebbe "
         "codice MIGLIORE — trasformerebbe un troncamento silenzioso in un "
         "errore — ma nessun test puo' distinguerli finche' l'invariante "
         "regge, quindi resta un miglioramento, non una lacuna.",
-    "app/services/signal_outcome_service.py:234  10 -> 11":
+    "app/services/signal_outcome_service.py::mature_outcomes#0  10 -> 11":
         "I dieci giorni di margine con cui la finestra dell'universo parte "
         "prima del primo trigger. E' un cuscinetto: allargarlo di un giorno "
         "carica una barra in piu' e non cambia nessun numero calcolato.",
-    "app/services/signal_outcome_service.py:278  Lt -> LtE":
+    "app/services/signal_outcome_service.py::mature_outcomes#1  Lt -> LtE":
         "La guardia `ti < len(ema_arr)` e' IRRAGGIUNGIBILE nel ramo mutato: "
         "`ema_arr` ha la lunghezza di `cs` e `ti` viene da `_trigger_index`, "
         "che rende solo indici validi di `cs`. `ti == len` non accade.",
-    "app/services/signal_outcome_service.py:278  Gt -> GtE":
+    "app/services/signal_outcome_service.py::mature_outcomes#2  Gt -> GtE":
         "`ema_arr[ti] >= 0`. La EMA all'indice `ti` include `cs[ti]` col peso "
         "alpha, e `entry > 0` e' gia' stato verificato venti righe sopra: "
         "quindi `ema_arr[ti] >= alpha * cs[ti] > 0` sempre. Il bordo zero non "
         "esiste.",
-    "app/services/signal_outcome_service.py:278  And -> Or":
+    "app/services/signal_outcome_service.py::mature_outcomes#2  And -> Or":
         "Col primo termine sempre vero (vedi sopra), `and` e `or` "
         "corto-circuitano allo stesso risultato. Il caso in cui divergono — "
         "`ema_arr` vuoto — richiede zero barre, che `_trigger_index` ha gia' "
         "escluso rendendo None.",
-    "app/core/security.py:22  12 -> 13":
+    "app/core/security.py::hash_password#0  12 -> 13":
         "Il fattore di costo di bcrypt e' una TARATURA, non un contratto: 13 e' "
         "piu' forte di 12, e qualunque asserzione onesta e' un pavimento "
         "(`>= 12`), che per definizione non puo' bocciare un valore piu' alto. "
         "⚠️ Il mutante che conterebbe e' `12 -> 11` e questo operatore non lo "
         "genera: incrementa soltanto. Il pavimento e' fissato a mano in "
         "`test_il_costo_di_bcrypt_non_scende_sotto_12`.",
-    "app/core/security.py:52  16 -> 17":
+    "app/core/security.py::create_session_token#0  16 -> 17":
         "La lunghezza del nonce di sessione. Il jti e' OPACO — non viene mai "
         "letto, confrontato o misurato dal prodotto: serve solo a rendere ogni "
         "accesso revocabile per conto suo, quindi piu' entropia non e' un "
         "comportamento diverso. Stessa asimmetria del costo bcrypt: `16 -> 15` "
         "sarebbe un indebolimento vero e la sonda non lo produce; il pavimento "
         "sta in `test_il_nonce_di_sessione_ha_almeno_16_byte_di_entropia`.",
-    "app/services/image_provenance.py:54  True -> False":
+    "app/services/image_provenance.py::<modulo>#0  True -> False":
         "`@dataclass(frozen=True)`: l'immutabilita' non ha un consumatore che "
         "la eserciti. E' igiene, non comportamento; un test che prova a scrivere "
         "su un campo verificherebbe la libreria standard, non questo modulo.",
@@ -341,6 +354,13 @@ class Mutante:
     prima: str
     dopo: str
     sorgente: str
+    #: Nome qualificato della funzione (o classe) che contiene la mutazione,
+    #: `<modulo>` per il codice a livello di file. Insieme a `ordine` forma la
+    #: chiave di linea di base: vedi `chiave()` per il perche'.
+    ambito: str = "<modulo>"
+    #: Quante mutazioni IDENTICHE (stesso ambito, stesso prima -> dopo) sono
+    #: gia' state generate prima di questa.
+    ordine: int = 0
 
 
 #: Scambi di confronto: il fuori-di-uno e' il difetto piu' comune e il piu'
@@ -399,8 +419,65 @@ def _quanti(sorgente: str) -> int:
     return r.visti
 
 
+def _mappa_ambiti(albero: ast.Module) -> list[tuple[int, int, str]]:
+    """(prima_riga, ultima_riga, nome_qualificato) per ogni funzione e classe."""
+    fuori: list[tuple[int, int, str]] = []
+
+    def scendi(nodo: ast.AST, prefisso: str) -> None:
+        for figlio in ast.iter_child_nodes(nodo):
+            if isinstance(figlio, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
+                nome = f"{prefisso}.{figlio.name}" if prefisso else figlio.name
+                fine = figlio.end_lineno or figlio.lineno
+                fuori.append((figlio.lineno, fine, nome))
+                scendi(figlio, nome)
+            else:
+                scendi(figlio, prefisso)
+
+    scendi(albero, "")
+    return fuori
+
+
+def _ambito_di(mappa: list[tuple[int, int, str]], riga: int) -> str:
+    """L'ambito PIU' INTERNO che contiene la riga."""
+    migliore, ampiezza = "<modulo>", None
+    for inizio, fine, nome in mappa:
+        if inizio <= riga <= fine:
+            a = fine - inizio
+            if ampiezza is None or a < ampiezza:
+                ampiezza, migliore = a, nome
+    return migliore
+
+
+def chiave(modulo: str, m: Mutante) -> str:
+    """L'identita' di un mutante nella linea di base.
+
+    ⚠️ NON contiene il numero di riga, e la ragione e' che il numero di riga
+    non e' una proprieta' del mutante: e' una proprieta' del file che lo
+    contiene. Con la vecchia forma `file:riga  prima -> dopo`, aggiungere un
+    COMMENTO spostava ogni voce sotto di esso e la sonda le riportava tutte
+    come «sopravvissuti nuovi» — cioe' `nightly.yml`, che gira senza
+    `continue-on-error`, diventava rosso su codice che nessuno aveva toccato.
+    Misurato: nove righe di commento in `signal_outcome_service` hanno prodotto
+    quattro falsi sopravvissuti, e un riassetto di `technical_score_service` ne
+    avrebbe prodotti 85. Questo file registra tre volte che un cancello che
+    arrossisce su codice intatto viene spento.
+
+    `modulo::funzione#N  prima -> dopo` si sposta solo quando cambia la
+    funzione che lo contiene, che e' esattamente quando ri-misurare e' giusto.
+    L'ordinale `#N` conserva la risoluzione: due mutazioni identiche nella
+    stessa funzione restano due voci, mentre la vecchia chiave le fondeva
+    quando cadevano sulla stessa riga.
+
+    Il numero di riga resta STAMPATO accanto ai sopravvissuti nuovi — serve a
+    chi legge per arrivarci — ma non entra nell'identita'.
+    """
+    return f"{modulo}::{m.ambito}#{m.ordine}  {m.prima} -> {m.dopo}"
+
+
 def genera(percorso: Path) -> list[Mutante]:
     originale = percorso.read_text(encoding="utf-8")
+    ambiti = _mappa_ambiti(ast.parse(originale))
+    visti: Counter[tuple[str, str, str]] = Counter()
     out: list[Mutante] = []
     for i in range(_quanti(originale)):
         albero = ast.parse(originale)
@@ -410,7 +487,10 @@ def genera(percorso: Path) -> list[Mutante]:
             continue
         ast.fix_missing_locations(nuovo)
         riga, prima, dopo = r.applicato
-        out.append(Mutante(riga, prima, dopo, ast.unparse(nuovo)))
+        ambito = _ambito_di(ambiti, riga)
+        ordine = visti[(ambito, prima, dopo)]
+        visti[(ambito, prima, dopo)] += 1
+        out.append(Mutante(riga, prima, dopo, ast.unparse(nuovo), ambito, ordine))
     return out
 
 
@@ -448,7 +528,10 @@ _PERCHE_BASE = (
     "Sopravvissuti MISURATI, non tollerati per sempre: ogni riga qui e' una "
     "riga eseguita dai test la cui CORRETTEZZA nessuno verifica. Il cancello "
     "impedisce che il numero cresca; cala scrivendo test. Rigenerare con "
-    "--scrivi solo DOPO aver ucciso qualcosa, mai per far passare la CI."
+    "--scrivi solo DOPO aver ucciso qualcosa, mai per far passare la CI. "
+    "CHIAVE: modulo::funzione#N  prima -> dopo. Senza numero di riga di "
+    "proposito — con la vecchia forma un COMMENTO spostava ogni voce sotto "
+    "di se' e la notturna arrossiva su codice intatto."
 )
 
 
@@ -504,6 +587,9 @@ def main() -> int:
         return 2
 
     sopravvissuti: list[str] = []
+    # La chiave non porta il numero di riga (vedi `chiave()`), ma chi legge
+    # un sopravvissuto nuovo deve poterci arrivare: si tiene a parte.
+    righe_di: dict[str, int] = {}
     totale = 0
     conteggi: dict[str, dict[str, int]] = {}
     for modulo, test in bersagli.items():
@@ -536,7 +622,9 @@ def main() -> int:
                 stato = "SOPRAVVISSUTO" if vivo else "ucciso"
                 totale += 1
                 if vivo:
-                    sopravvissuti.append(f"{modulo}:{m.riga}  {m.prima} -> {m.dopo}")
+                    k = chiave(modulo, m)
+                    sopravvissuti.append(k)
+                    righe_di[k] = m.riga
                 print(f"  [{n}/{len(mutanti)}] riga {m.riga}: {m.prima} -> {m.dopo}  {stato}")
         finally:
             # Sempre, anche su eccezione o interruzione, e byte per byte.
@@ -584,11 +672,12 @@ def main() -> int:
                 **{k: v for k, v in _carica_conteggi().items() if k not in bersagli},
                 **conteggi,
             },
-            # ⚠️ Deduplicati: la chiave "file:riga  prima -> dopo" non e' unica
-            # — due mutazioni identiche sulla stessa riga la condividono — e il
-            # confronto usa un insieme. Senza `set` il conteggio scritto e
-            # quello confrontato divergerebbero, come e' gia' successo con le
-            # chiavi del rapporto sul codice morto.
+            # ⚠️ L'insieme resta anche se la chiave e' ora UNICA (l'ordinale
+            # `#N` distingue due mutazioni identiche nello stesso ambito, che
+            # la vecchia chiave `file:riga` fondeva): il confronto a valle usa
+            # un insieme, e scrivere una lista con doppioni farebbe divergere
+            # il conteggio scritto da quello confrontato — e' gia' successo
+            # con le chiavi del rapporto sul codice morto.
             # ⚠️ Si conservano i sopravvissuti dei moduli NON eseguiti in
             # questa passata: con `--modulo` la riscrittura li cancellerebbe,
             # e la prossima passata completa li riporterebbe come NUOVI. Una
@@ -611,7 +700,8 @@ def main() -> int:
         print("\nSOPRAVVISSUTI NUOVI - righe la cui correttezza nessun test verifica:",
               file=sys.stderr)
         for s in nuovi:
-            print(f"  {s}", file=sys.stderr)
+            dove = f"   (riga {righe_di[s]})" if s in righe_di else ""
+            print(f"  {s}{dove}", file=sys.stderr)
         print(
             "\nOgnuno e' una lacuna o un equivalente, e la differenza va DECISA, "
             "non rimandata: se e' una lacuna si scrive il test, se e' equivalente "

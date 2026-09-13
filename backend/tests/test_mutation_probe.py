@@ -8,6 +8,7 @@ linea di base del codice morto con la ragione scritta.
 """
 
 import ast
+from pathlib import Path
 
 import pytest
 
@@ -164,3 +165,121 @@ def test_un_file_illeggibile_da_vuoto_e_non_esplode(tmp_path, monkeypatch, conte
     monkeypatch.setattr(mutation_probe, "LINEA_BASE", finto)
     assert mutation_probe._carica_conteggi() == {}
     assert mutation_probe._carica_base() == set()
+
+
+# ─── La chiave di linea di base non deve dipendere dalle righe ────────────
+
+
+_SORGENTE = '''def f(x, y):
+    if x > 0 and y > 0:
+        return x >= 10
+    return False
+
+
+class C:
+    def m(self, z):
+        return z < 5
+'''
+
+
+def _chiavi(tmp_path, testo, nome="m.py"):
+    p = tmp_path / nome
+    p.write_text(testo, encoding="utf-8")
+    return {mutation_probe.chiave("m.py", x) for x in mutation_probe.genera(p)}
+
+
+def _chiavi_vecchia_forma(tmp_path, testo, nome="v.py"):
+    """La forma che c'era prima: `file:riga  prima -> dopo`."""
+    p = tmp_path / nome
+    p.write_text(testo, encoding="utf-8")
+    return {f"m.py:{x.riga}  {x.prima} -> {x.dopo}" for x in mutation_probe.genera(p)}
+
+
+def test_un_COMMENTO_non_sposta_nessuna_chiave(tmp_path):
+    """⚠️ Il difetto che questa chiave esiste per chiudere.
+
+    `mutation_probe` gira in `nightly.yml` senza `continue-on-error` e rende 1
+    quando trova sopravvissuti nuovi. Con la chiave `file:riga`, aggiungere due
+    righe di commento in cima a un modulo sorvegliato spostava OGNI voce sotto
+    di esso: la notturna diventava rossa su codice che nessuno aveva toccato,
+    che e' la forma che CLAUDE.md registra tre volte come fatale a un cancello.
+
+    Misurato quando e' successo davvero: nove righe di commento in
+    `signal_outcome_service` -> quattro falsi sopravvissuti."""
+    assert _chiavi(tmp_path, _SORGENTE) == _chiavi(
+        tmp_path, "# una riga\n# e un'altra\n\n" + _SORGENTE, nome="b.py"
+    )
+
+
+def test_controllo_negativo_la_VECCHIA_forma_si_spostava(tmp_path):
+    """Senza questo, il test sopra sarebbe vero anche di una chiave che non ha
+    risolto niente — per esempio se `genera` rendesse una lista vuota."""
+    prima = _chiavi_vecchia_forma(tmp_path, _SORGENTE)
+    dopo = _chiavi_vecchia_forma(tmp_path, "# una riga\n# e un'altra\n\n" + _SORGENTE,
+                                 nome="v2.py")
+    assert prima, "nessun mutante generato: il confronto sarebbe vuoto"
+    assert prima != dopo, "la vecchia chiave non si spostava: il test e' cieco"
+
+
+def test_l_ambito_e_la_funzione_PIU_INTERNA(tmp_path):
+    """Il metodo dentro la classe deve leggere `C.m`, non `C` e non `<modulo>`:
+    altrimenti due funzioni della stessa classe condividerebbero le chiavi."""
+    p = tmp_path / "a.py"
+    p.write_text(_SORGENTE, encoding="utf-8")
+    ambiti = {x.ambito for x in mutation_probe.genera(p)}
+    assert "C.m" in ambiti
+    assert "f" in ambiti
+
+
+def test_due_mutazioni_IDENTICHE_nello_stesso_ambito_restano_distinte(tmp_path):
+    """L'ordinale `#N` conserva la risoluzione che la vecchia chiave perdeva
+    quando due mutazioni identiche cadevano sulla stessa riga: se una viene
+    uccisa e l'altra no, devono restare due voci."""
+    p = tmp_path / "d.py"
+    p.write_text("def g(a, b):\n    return (a > 0) and (b > 0)\n", encoding="utf-8")
+    mutanti = mutation_probe.genera(p)
+    zeri = [m for m in mutanti if (m.prima, m.dopo) == ("0", "1")]
+    assert len(zeri) == 2, f"attesi due `0 -> 1`, trovati {len(zeri)}"
+    assert len({mutation_probe.chiave("d.py", m) for m in zeri}) == 2
+
+
+def test_ogni_chiave_in_linea_di_base_ha_la_forma_NUOVA():
+    """Il pavimento: una voce nella vecchia forma sopravvivrebbe in silenzio al
+    confronto (non corrisponde a nessun mutante, quindi non viene mai ne'
+    uccisa ne' segnalata) e resterebbe li' per sempre a gonfiare l'arretrato."""
+    vivi = mutation_probe._carica_base()
+    assert vivi, "linea di base vuota: l'asserzione sarebbe vera di niente"
+    for s in vivi:
+        assert "::" in s and "#" in s, f"chiave nella vecchia forma: {s}"
+
+
+def test_ogni_EQUIVALENTE_ha_la_forma_NUOVA():
+    """Stessa ragione, e qui il costo e' peggiore: un equivalente con la chiave
+    sbagliata non protegge piu' niente, e il mutante che dichiarava ricompare
+    come sopravvissuto nuovo — cioe' il cancello arrossisce su una cosa gia'
+    decisa."""
+    for s in EQUIVALENTI:
+        assert "::" in s and "#" in s, f"chiave nella vecchia forma: {s}"
+
+
+def test_ogni_EQUIVALENTE_corrisponde_a_un_mutante_che_ESISTE():
+    """⚠️ Una chiave dichiarata che non corrisponde a nessun mutante non
+    protegge niente, e il modo in cui fallisce e' silenzioso: il mutante che
+    diceva di coprire ricompare come «sopravvissuto nuovo» e il cancello
+    arrossisce su una cosa gia' decisa, mentre la voce resta nel file a
+    sembrare una spiegazione.
+
+    Succede ogni volta che qualcuno modifica la funzione che contiene il
+    mutante — ed e' esattamente il caso in cui la decisione andava rivista, non
+    ereditata. Genera i mutanti di tutti i moduli bersaglio: due secondi, senza
+    eseguire un solo test."""
+    reali = set()
+    for modulo in mutation_probe.BERSAGLI:
+        for m in mutation_probe.genera(Path(modulo)):
+            reali.add(mutation_probe.chiave(modulo, m))
+    assert reali, "nessun mutante generato: l'asserzione sarebbe vera di niente"
+    orfane = sorted(k for k in EQUIVALENTI if k not in reali)
+    assert not orfane, (
+        "queste voci di EQUIVALENTI non corrispondono a nessun mutante e non "
+        f"proteggono piu' niente: {orfane}"
+    )

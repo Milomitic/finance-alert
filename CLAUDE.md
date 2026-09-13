@@ -736,22 +736,46 @@ Nessuno dei due e' stato trovato leggendo il codice.
    modulo da 107 a 93 mutanti, cioe' meno codice non verificato invece di piu'
    test.
 
-### ⚠️ Una linea di base con chiave `file:riga` arrossisce su un COMMENTO
+### La chiave della linea di base NON contiene il numero di riga (2026-09-13)
 
-Difetto noto e NON corretto, da conoscere prima di toccare uno dei dodici
-moduli. `mutation_probe` gira in `nightly.yml` senza `continue-on-error` e
-rende 1 quando trova sopravvissuti nuovi; la chiave della linea di base e'
-`file:riga  prima -> dopo`. Aggiungere un commento sposta ogni riga sotto, e
-tutti i suoi mutanti diventano «NUOVI»: la notturna va rossa su codice che
-nessuno ha toccato — la forma esatta che questo file dice tre volte essere
-fatale a un cancello.
+`modulo::funzione#N  prima -> dopo`. Sembra un dettaglio di formato ed era un
+cancello rotto.
 
-Misurato: un commento di nove righe in `signal_outcome_service` ha prodotto
-quattro falsi sopravvissuti; il riassetto di `technical_score_service` ne
-avrebbe prodotti 85. La mitigazione attuale e' rigenerare la linea di base del
-modulo toccato (`--modulo X --scrivi`, che conserva gli altri). La correzione
-vera e' una chiave indipendente dalla riga — per esempio
-`modulo::funzione#N  prima -> dopo` — e costa una rigenerazione completa.
+**Il difetto.** `mutation_probe` gira in `nightly.yml` senza
+`continue-on-error` e rende 1 quando trova sopravvissuti nuovi. Con la vecchia
+chiave `file:riga  prima -> dopo`, aggiungere un COMMENTO a uno dei dodici
+moduli sorvegliati spostava ogni voce sotto di esso e tutti i suoi mutanti
+diventavano «NUOVI»: la notturna arrossiva su codice che nessuno aveva toccato
+— la forma che questo file registra tre volte come fatale a un cancello, dopo
+le baseline di a11y e codice morto generate nell'ambiente sbagliato.
+
+Misurato mentre succedeva: nove righe di commento in `signal_outcome_service`
+hanno prodotto quattro falsi sopravvissuti, e il riassetto di
+`technical_score_service` ne avrebbe prodotti 85.
+
+⚠️ **Il numero di riga non e' una proprieta' del mutante: e' una proprieta' del
+file che lo contiene.** E' la stessa distinzione che questo file fa altrove fra
+identita' e posizione — un token di revoca si indicizza sul digest, non su dove
+sta la riga.
+
+**Cosa si guadagna oltre alla stabilita'.** L'ordinale `#N` conserva la
+risoluzione che la vecchia chiave perdeva: due mutazioni IDENTICHE sulla stessa
+riga condividevano una voce, quindi ucciderne una sola non si vedeva. I tre
+confronti di `pts` in `_trend` erano un caso reale — una voce sola per tre
+mutanti.
+
+**Cosa la sposta ancora, ed e' voluto:** modificare la funzione che contiene il
+mutante. Che e' esattamente quando ri-misurare e' giusto.
+
+**Quattro test la difendono**, e uno e' un CONTROLLO NEGATIVO che fissa
+l'instabilita' della vecchia forma — senza, il test sulla stabilita' sarebbe
+vero anche di una `genera()` che rende una lista vuota. Piu' due pavimenti:
+ogni chiave in linea di base e ogni EQUIVALENTE devono avere la forma nuova, e
+ogni EQUIVALENTE deve corrispondere a un mutante che ESISTE. ⚠️ Quest'ultimo
+chiude un fallimento silenzioso: una voce orfana non protegge piu' niente, il
+mutante che dichiarava ricompare come nuovo, e la voce resta nel file a sembrare
+una spiegazione. Costa due secondi, perche' generare i mutanti non esegue un
+solo test.
 
 ### `app/core/security.py`: da 0 su 9 a 7 su 9 (2026-09-13)
 

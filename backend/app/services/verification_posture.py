@@ -64,7 +64,17 @@ def mutanti_sopravvissuti() -> Arretrato | None:
 
     ⚠️ E' il numero piu' scomodo dei tre, e per questo il piu' utile: la
     copertura dice che una riga e' partita, questo dice se un suo errore
-    verrebbe notato. Misurato su quattro moduli a proprietario unico.
+    verrebbe notato. Misurato su DODICI moduli a proprietario unico (erano
+    quattro fino al 2026-09-13).
+
+    ⚠️ Il conteggio e' salito da 63 a 189 e nessuna delle due volte era un
+    peggioramento, il che lo rende illeggibile senza il denominatore accanto —
+    ed e' la ragione per cui `_totale_mutanti` esiste. Prima: i moduli
+    sorvegliati sono passati da quattro a dodici, quindi il denominatore e'
+    passato da 130 a 451 e il tasso di uccisione dal 33% al 53%. Poi: la chiave
+    di linea di base ha smesso di contenere il numero di riga, e la forma nuova
+    NON fonde piu' due mutazioni identiche sulla stessa riga — stesse
+    sopravvivenze, contate con piu' risoluzione.
     """
     d = _leggi("mutation_baseline.json")
     if not d:
