@@ -2191,12 +2191,55 @@ Periods do NOT adapt to the range. They are fixed across every timeframe:
 |---|---|---|---|
 | 20/50/200 | 14 | 20 (k=2.0) | 12/26/9 |
 
-Single source of truth: `FIXED_*` in `app/services/timeframe_service.py`. That
-module states the rationale at its own constants — *"Don't adapt these per
-timeframe"* — because **the user asked for it explicitly**: one indicator
-definition everywhere, so the values change with BAR DURATION rather than with
-a lookup table. RSI(14) on 30m bars covers 7 hours; on daily bars, 14 trading
-days. (May 2026 switched the trend lines SMA→EMA keeping 20/50/200.)
+Single source of truth: `FIXED_*` in **`app/indicators/periods.py`** (era in
+`services/timeframe_service.py` fino al 2026-09-14, che ora le ri-esporta). Il
+modulo porta la ragione accanto alle costanti — *"Don't adapt these per
+timeframe"* — perche' **l'utente l'ha chiesto esplicitamente**: una definizione
+di indicatore ovunque, cosi' i valori cambiano con la DURATA DELLA BARRA e non
+con una tabella. RSI(14) su barre da 30m copre 7 ore; su barre giornaliere, 14
+sedute. (Maggio 2026 ha portato le linee di tendenza da SMA a EMA tenendo
+20/50/200.)
+
+### ⚠️ La fonte unica c'era da mesi e NESSUNO la importava (2026-09-14)
+
+Un censimento ha trovato **quattordici** chiamate col periodo scritto a mano su
+cinque file — EMA 20/50/200 e RSI 14 riscritti in `market_detail_service`,
+`market_stats_service`, `signals/context.py`, `technical_score_service`,
+`signal_outcome_service` (`_REGIME_EMA = 200`) e `entry_ic_report`.
+
+**E la causa non era disattenzione: era la COLLOCAZIONE.** Le costanti stavano
+dentro `timeframe_service`, che importa SQLAlchemy, i modelli e loguru.
+`app/signals/context.py` e' calcolo puro (numpy, pandas, `app.indicators`): per
+leggere il numero 200 avrebbe dovuto tirarsi dentro mezzo stack. La costante
+NON ERA IMPORTABILE da chi ne aveva bisogno, quindi nessuno la importava,
+quindi ognuno la riscriveva.
+
+⚠️ **Una fonte unica che nessuno puo' consumare e' una fonte unica solo nel
+commento**, ed e' la stessa forma del `_RANGE_PERIODS` morto: qualcosa di
+inerte che corrobora una nota sbagliata. Quando si dichiara un proprietario
+unico, la domanda da farsi non e' «dove sta bene» ma **«chi deve poterlo
+importare, e cosa si porta dietro se lo fa»**.
+
+Ora vivono in un modulo FOGLIA senza una sola dipendenza.
+`tests/test_periodi_indicatori.py` tiene chiuso il difetto con quattro
+asserzioni, e due meritano una nota:
+
+- ⚠️ Il censimento guarda la SORGENTE, non il comportamento, e non e' pigrizia:
+  `from ... import FIXED_EMA_SLOW` lega il VALORE al momento dell'import, quindi
+  sostituire la costante a runtime non cambia niente in chi l'ha gia' importata
+  e **nessun test di comportamento puo' distinguere `ema(close, FIXED_EMA_SLOW)`
+  da `ema(close, 200)`**. Stessa forma del censimento delle classi mobile.
+- Un test pretende che `periods.py` resti senza dipendenze. E' la proprieta' da
+  cui dipende tutto il resto: se qualcuno gli aggiunge un import di
+  `app.services`, la costante torna non-importabile e il difetto si riapre da
+  solo **col censimento ancora verde**, perche' i consumatori attuali
+  continuerebbero a funzionare.
+
+⚠️ Due cose deliberatamente NON convertite. I periodi ADATTIVI di
+`technical_score._trend` (`ema(close, min(50, max(10, n // 4)))`) sono un'altra
+cosa e devono restare; e il `20` in `context.py` (`max(20, len // 2)`) e' un
+PAVIMENTO sul ripiego a storia corta, non la EMA veloce — due numeri uguali che
+significano cose diverse restano separati.
 
 The bundle keys in the API response (`sma20`/`sma50`/`sma200`, `rsi14`) are
 still SLOT NAMES rather than literal periods, and `indicators.periods` is still

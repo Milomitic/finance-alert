@@ -340,6 +340,12 @@ def _compute_indicators(bars: list[OhlcvBar]) -> IndicatorBundle:
     from app.indicators.bb import bollinger
     from app.indicators.ema import ema as ema_indicator
     from app.indicators.macd import macd as macd_indicator
+    from app.indicators.periods import (
+        FIXED_EMA_FAST,
+        FIXED_EMA_MID,
+        FIXED_EMA_SLOW,
+        FIXED_RSI_PERIOD,
+    )
     from app.indicators.rsi import rsi as rsi_indicator
 
     closes = pd.Series([b.close for b in bars])
@@ -363,12 +369,12 @@ def _compute_indicators(bars: list[OhlcvBar]) -> IndicatorBundle:
         # don't need the per-window length guard the SMA path required.
         # We keep the >=N guard anyway so a 5-bar series doesn't show a
         # near-meaningless EMA200 line on the chart.
-        if len(closes) >= 20:
-            bundle.ema20 = _series_to_points(ema_indicator(closes, 20))
-        if len(closes) >= 50:
-            bundle.ema50 = _series_to_points(ema_indicator(closes, 50))
-        if len(closes) >= 200:
-            bundle.ema200 = _series_to_points(ema_indicator(closes, 200))
+        if len(closes) >= FIXED_EMA_FAST:
+            bundle.ema20 = _series_to_points(ema_indicator(closes, FIXED_EMA_FAST))
+        if len(closes) >= FIXED_EMA_MID:
+            bundle.ema50 = _series_to_points(ema_indicator(closes, FIXED_EMA_MID))
+        if len(closes) >= FIXED_EMA_SLOW:
+            bundle.ema200 = _series_to_points(ema_indicator(closes, FIXED_EMA_SLOW))
     except Exception as e:
         logger.debug(f"[market_detail] EMA compute failed: {e}")
 
@@ -383,7 +389,7 @@ def _compute_indicators(bars: list[OhlcvBar]) -> IndicatorBundle:
 
     try:
         if len(closes) >= 15:
-            bundle.rsi14 = _series_to_points(rsi_indicator(closes, 14))
+            bundle.rsi14 = _series_to_points(rsi_indicator(closes, FIXED_RSI_PERIOD))
     except Exception as e:
         logger.debug(f"[market_detail] RSI compute failed: {e}")
 

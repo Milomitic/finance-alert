@@ -65,6 +65,12 @@ from sqlalchemy import text
 
 from app.core.db import SessionLocal
 from app.indicators.ema import ema as ema_indicator
+from app.indicators.periods import (
+    FIXED_EMA_FAST,
+    FIXED_EMA_MID,
+    FIXED_EMA_SLOW,
+    FIXED_RSI_PERIOD,
+)
 from app.indicators.rsi import rsi as rsi_indicator
 
 # Forward-return horizons in trading days: ~1 week, ~1 month, ~1
@@ -182,9 +188,9 @@ def _compute_signals(s: _StockSeries) -> pd.DataFrame:
     df = pd.DataFrame(index=c.index)
 
     # ── EMAs + trend stack ──────────────────────────────────────────
-    ema20 = ema_indicator(c, 20)
-    ema50 = ema_indicator(c, 50)
-    ema200 = ema_indicator(c, 200)
+    ema20 = ema_indicator(c, FIXED_EMA_FAST)
+    ema50 = ema_indicator(c, FIXED_EMA_MID)
+    ema200 = ema_indicator(c, FIXED_EMA_SLOW)
     df["px_vs_ema200"] = (c - ema200) / ema200
     df["trend_stack"] = (
         (c > ema20).astype(float)
@@ -199,7 +205,7 @@ def _compute_signals(s: _StockSeries) -> pd.DataFrame:
     df["mom_30d"] = c / c.shift(21) - 1.0  # short-term reversal candidate
 
     # ── RSI(14) ─────────────────────────────────────────────────────
-    rsi14 = rsi_indicator(c, 14)
+    rsi14 = rsi_indicator(c, FIXED_RSI_PERIOD)
     df["rsi14"] = rsi14
     # Oversold-bounce hypothesis: low RSI in an uptrend → entry. As a
     # continuous signal we encode "distance below 50, capped" so the

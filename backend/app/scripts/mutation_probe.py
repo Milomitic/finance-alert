@@ -302,13 +302,6 @@ EQUIVALENTI: dict[str, str] = {
     # ⚠️ Il modulo e' passato da 20 a 47 uccisi su 57. Questi dieci non sono i
     # "difficili": sono quelli che NESSUN test onesto puo' uccidere, perche'
     # fissarli congelerebbe una taratura o proverebbe un caso irraggiungibile.
-    "app/services/signal_outcome_service.py::<modulo>#0  200 -> 201":
-        "`_REGIME_EMA`: la EMA lenta e' una TARATURA (CLAUDE.md la fissa a 200 "
-        "insieme a 20 e 50) e l'etichetta che ne esce e' grossolana, bull o "
-        "bear. Un periodo in piu' sposta il confine solo per le barre gia' "
-        "appiccicate alla linea. ⚠️ Il rilievo vero qui non e' il mutante: e' "
-        "che `timeframe_service.FIXED_EMA_SLOW` esiste come fonte unica "
-        "dichiarata e questo modulo non la importa.",
     "app/services/signal_outcome_service.py::_load_universe_closes#0  GtE -> Gt":
         "`OhlcvDaily.date >= since` dove `since` e' gia' il minimo trigger "
         "MENO dieci giorni di margine: un giorno in piu' o in meno resta "
@@ -327,13 +320,16 @@ EQUIVALENTI: dict[str, str] = {
         "quanto l'orizzonte — il ramo che passa produce `cs[:-horizon]` vuoto "
         "e `cs[horizon:]` vuoto, quindi zero osservazioni: le due forme fanno "
         "LA STESSA COSA, non due cose simili.",
-    "app/services/signal_outcome_service.py::_universe_fwd_medians#0  False -> True":
-        "`zip(..., strict=False)`. I due lati sono filtrati dalla stessa "
-        "maschera `ok`, quindi hanno lunghezza uguale per costruzione e "
-        "`strict` non ha niente da rilevare. ⚠️ Nota: `strict=True` sarebbe "
-        "codice MIGLIORE — trasformerebbe un troncamento silenzioso in un "
-        "errore — ma nessun test puo' distinguerli finche' l'invariante "
-        "regge, quindi resta un miglioramento, non una lacuna.",
+    "app/services/signal_outcome_service.py::_universe_fwd_medians#0  True -> False":
+        "`zip(..., strict=True)`. I due lati sono filtrati dalla STESSA maschera "
+        "`ok`, quindi hanno lunghezza uguale per costruzione e `strict` non ha "
+        "niente da rilevare: nessun test puo' distinguere le due forme finche' "
+        "l'invariante regge. ⚠️ La voce diceva `False -> True` ed era descritta "
+        "come «un miglioramento, non una lacuna»: il miglioramento e' stato "
+        "fatto il 2026-09-14, quindi il mutante si e' invertito. Con `False` un "
+        "disallineamento TRONCAVA in silenzio e il riferimento di mercato usciva "
+        "da meno osservazioni di quante ce ne fossero; con `True` diventa un "
+        "errore. Il mutante resta invisibile ai test, il difetto no.",
     "app/services/signal_outcome_service.py::mature_outcomes#0  10 -> 11":
         "I dieci giorni di margine con cui la finestra dell'universo parte "
         "prima del primo trigger. E' un cuscinetto: allargarlo di un giorno "

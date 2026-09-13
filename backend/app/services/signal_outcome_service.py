@@ -24,11 +24,16 @@ from loguru import logger
 from sqlalchemy import exists, select
 from sqlalchemy.orm import Session
 
+from app.indicators.periods import FIXED_EMA_SLOW
 from app.models import Alert, OhlcvDaily, SignalOutcome, Stock
 from app.services.signal_drift_service import _horizon_days
 
 # EMA span for the causal regime label at the trigger bar.
-_REGIME_EMA = 200
+#: La EMA che definisce il regime causale. ⚠️ Era un 200 scritto a mano
+#: mentre `FIXED_EMA_SLOW` esisteva ed era dichiarata fonte unica: la
+#: costante viveva dentro un servizio e non era importabile da chi ne
+#: aveva bisogno. Ora sta in un modulo foglia.
+_REGIME_EMA = FIXED_EMA_SLOW
 
 
 def _to_date(v: object) -> date | None:
@@ -163,7 +168,17 @@ def _universe_fwd_medians(
         cH = cs[horizon:]
         ok = c0 > 0
         rets = cH[ok] / c0[ok] - 1.0
-        for d, r in zip(np.asarray(ds, dtype=object)[:-horizon][ok], rets, strict=False):
+        # ⚠️ `strict=True`, non False. I due lati sono filtrati dalla STESSA
+        # maschera `ok`, quindi hanno lunghezza uguale per costruzione e
+        # `strict` oggi non ha niente da rilevare — ma se quell'invariante si
+        # rompe, `False` TRONCA in silenzio e il riferimento di mercato viene
+        # calcolato su meno osservazioni di quante ce ne siano, senza che
+        # niente lo dica. `True` lo trasforma in un errore.
+        #
+        # Nessun test puo' distinguere le due forme finche' l'invariante
+        # regge: il mutante che le scambia resta in EQUIVALENTI, con la
+        # ragione. E' un miglioramento, non una lacuna chiusa.
+        for d, r in zip(np.asarray(ds, dtype=object)[:-horizon][ok], rets, strict=True):
             by_date[d].append(float(r))
     return {
         d: float(np.median(v))

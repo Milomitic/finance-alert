@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.core.visibility import is_visible_country
 from app.indicators.ema import ema as ema_indicator
+from app.indicators.periods import FIXED_EMA_MID, FIXED_EMA_SLOW, FIXED_RSI_PERIOD
 from app.indicators.rsi import rsi as rsi_indicator
 from app.models import Index, MarketSnapshot, OhlcvDaily, Stock
 from app.models.index import StockIndex
@@ -144,11 +145,11 @@ def compute_stock_metrics(
     new_52w_high = last_close >= high_252
     new_52w_low = last_close <= low_252
 
-    ema50_series = ema_indicator(close, 50)
+    ema50_series = ema_indicator(close, FIXED_EMA_MID)
     ema50 = float(ema50_series.iloc[-1]) if not pd.isna(ema50_series.iloc[-1]) else None
-    ema200_series = ema_indicator(close, 200)
+    ema200_series = ema_indicator(close, FIXED_EMA_SLOW)
     ema200 = float(ema200_series.iloc[-1]) if not pd.isna(ema200_series.iloc[-1]) else None
-    rsi_series = rsi_indicator(close, 14)
+    rsi_series = rsi_indicator(close, FIXED_RSI_PERIOD)
     rsi14 = float(rsi_series.iloc[-1]) if not pd.isna(rsi_series.iloc[-1]) else None
 
     vol_today = int(volume.iloc[-1])

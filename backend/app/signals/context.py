@@ -8,6 +8,7 @@ import pandas as pd
 
 from app.indicators.atr import atr
 from app.indicators.ema import ema
+from app.indicators.periods import FIXED_EMA_MID, FIXED_EMA_SLOW
 
 
 @dataclass(frozen=True)
@@ -25,7 +26,10 @@ class SignalContext:
 def build_context(ohlcv: pd.DataFrame) -> SignalContext:
     close = ohlcv["close"].astype(float)
     last_close = float(close.iloc[-1])
-    period = 200 if len(close) >= 200 else max(20, len(close) // 2)
+    # ⚠️ Il 20 NON e' FIXED_EMA_FAST: e' un pavimento sul ripiego quando la
+    # storia e' corta, non il periodo canonico della EMA veloce. Due numeri
+    # uguali che significano cose diverse restano separati.
+    period = FIXED_EMA_SLOW if len(close) >= FIXED_EMA_SLOW else max(20, len(close) // 2)
     e = ema(close, period)
     if len(e) >= 6 and pd.notna(e.iloc[-1]) and pd.notna(e.iloc[-6]):
         slope = e.iloc[-1] - e.iloc[-6]
@@ -36,14 +40,14 @@ def build_context(ohlcv: pd.DataFrame) -> SignalContext:
     atr_val = float(a.iloc[-1]) if len(a) and pd.notna(a.iloc[-1]) else None
     # Regime label only when the EMA is a true EMA200 (>=200 bars).
     regime: str | None = None
-    if len(close) >= 200 and pd.notna(e.iloc[-1]):
+    if len(close) >= FIXED_EMA_SLOW and pd.notna(e.iloc[-1]):
         regime = "bull" if last_close > float(e.iloc[-1]) else "bear"
     # Trend age: bars since the EMA50/EMA200 spread last changed sign (the
     # golden/death cross that opened the current regime). Backtest shows
     # forward returns peak mid-life and fade when the trend is mature.
     trend_age: int | None = None
-    if len(close) >= 200:
-        sp = (ema(close, 50) - ema(close, 200)).to_numpy()
+    if len(close) >= FIXED_EMA_SLOW:
+        sp = (ema(close, FIXED_EMA_MID) - ema(close, FIXED_EMA_SLOW)).to_numpy()
         cur = sp[-1] > 0
         age = 0
         for i in range(len(sp) - 1, -1, -1):

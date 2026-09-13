@@ -54,26 +54,31 @@ from sqlalchemy.orm import Session
 from app.indicators.bb import bollinger
 from app.indicators.ema import ema as ema_indicator
 from app.indicators.macd import macd
+from app.indicators.periods import (
+    FIXED_BB_K,
+    FIXED_BB_PERIOD,
+    FIXED_EMA_FAST,
+    FIXED_EMA_MID,
+    FIXED_EMA_SLOW,
+    FIXED_MACD_FAST,
+    FIXED_MACD_SIGNAL,
+    FIXED_MACD_SLOW,
+    FIXED_RSI_PERIOD,
+)
 from app.indicators.rsi import rsi as rsi_indicator
 from app.models import OhlcvDaily, Stock
 from app.services.currency_units import is_minor_unit
 
-# Canonical fixed periods. Don't adapt these per timeframe — the user
-# explicitly wants the same indicator definition applied across
-# timeframes so KPI values change naturally with bar duration.
+# ⚠️ I periodi canonici NON stanno piu' qui: vivono in
+# `app/indicators/periods.py`, che e' un modulo FOGLIA. Il motivo e' scritto
+# per esteso li', e vale la pena riassumerlo: da dentro un servizio queste
+# costanti non erano importabili da `app/signals/context.py` — calcolo puro —
+# senza trascinare SQLAlchemy e i modelli, quindi quattro punti dell'app
+# riscrivevano 200 a mano. Una fonte unica che nessuno puo' consumare e' una
+# fonte unica solo nel commento.
 #
-# May 2026: switched from SMA to EMA for the trend lines. Period
-# numbers (20/50/200) preserved — EMA just weights recent bars more
-# heavily, so the same window length produces a more responsive line.
-FIXED_RSI_PERIOD = 14
-FIXED_BB_PERIOD = 20
-FIXED_BB_K = 2.0
-FIXED_EMA_FAST = 20
-FIXED_EMA_MID = 50
-FIXED_EMA_SLOW = 200
-FIXED_MACD_FAST = 12
-FIXED_MACD_SLOW = 26
-FIXED_MACD_SIGNAL = 9
+# Ri-esportate qui perche' `from app.services.timeframe_service import
+# FIXED_*` e' gia' scritto altrove e in CLAUDE.md.
 
 VALID_TIMEFRAMES: tuple[str, ...] = (
     "5m", "30m", "1h", "1d", "1w", "1m",

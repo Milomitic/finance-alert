@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 from app.indicators.adx import adx
 from app.indicators.ema import ema
 from app.indicators.macd import macd
+from app.indicators.periods import FIXED_RSI_PERIOD
 from app.indicators.rsi import rsi
 from app.models import Alert, OhlcvDaily, TechnicalScore
 
@@ -92,7 +93,7 @@ def _momentum(close: pd.Series) -> float:
     # None: il titolo spariva dalla lente Tecnico invece di ricevere un momento
     # neutro. Un ramo inerte che sembra coprire il caso e' peggio di nessun
     # ramo, perche' corrobora la convinzione che sia coperto.
-    rd = rsi(close, 14).dropna()
+    rd = rsi(close, FIXED_RSI_PERIOD).dropna()
     r = float(rd.iloc[-1]) if rd.size else 50.0
     _, _, hist = macd(close)
     hd = hist.dropna()
