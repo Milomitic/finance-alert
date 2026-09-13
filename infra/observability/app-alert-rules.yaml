@@ -295,6 +295,49 @@ spec:
               Il timestamp dell'ultimo backup FALLITO è più recente di quello
               dell'ultimo riuscito.
 
+        # --- Il drill che dimostra il ripristino --------------------------
+        # ⚠️ I due allarmi qui sopra guardano il CATALOGO: che il backup parta,
+        # finisca, sia recente. Nessuno dei due puo' dire se i dati dentro si
+        # rileggono. Il drill settimanale lo prova davvero — e questi due
+        # allarmi sorvegliano il DRILL, perche' un CronJob che smette di girare
+        # in silenzio e' indistinguibile da uno che gira bene.
+        - alert: FinanceAlertRestoreDrillStale
+          # ⚠️ Il primo termine impedisce che l'allarme nasca ROSSO: finche' il
+          # drill non e' riuscito nemmeno una volta la serie vale 0, e senza
+          # quel guardiano suonerebbe dal minuto del primo rilascio. Un
+          # cancello che nasce rosso viene spento.
+          # 10 giorni su una cadenza settimanale: un'esecuzione saltata non e'
+          # ancora una storia, due lo sono.
+          expr: |
+            max(kube_cronjob_status_last_successful_time{cronjob=~".*-drill"}) > 0
+            and
+            time() - max(kube_cronjob_status_last_successful_time{cronjob=~".*-drill"}) > 10 * 24 * 3600
+          for: 1h
+          labels:
+            severity: critical
+          annotations:
+            summary: "il drill di ripristino non riesce da oltre 10 giorni"
+            description: >-
+              Il backup Postgres continua forse a prodursi, ma da oltre dieci
+              giorni nessuno ha dimostrato che si possa RILEGGERE. Controlla i
+              Job `*-drill` nel namespace finance-alert: la causa piu' probabile
+              e' che il drill si stia saltando da solo per mancanza di spazio
+              sul nodo.
+
+        - alert: FinanceAlertRestoreDrillFailing
+          expr: |
+            max(kube_job_status_failed{job_name=~".*-drill.*"}) > 0
+          for: 15m
+          labels:
+            severity: critical
+          annotations:
+            summary: "il drill di ripristino e' FALLITO"
+            description: >-
+              Il ripristino del backup in un cluster di prova non e' andato a
+              buon fine. Questo e' il solo segnale che distingue «il backup
+              esiste» da «il backup serve a qualcosa»: leggi i log del Job per
+              sapere quale verifica e' saltata.
+
         # --- The certificate nobody is watching ------------------------------
         # `count(certmanager_*)` also returned zero on 2026-08-27. The ingress
         # is websecure-only, so an expired certificate is a TOTAL outage, and

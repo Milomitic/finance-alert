@@ -184,11 +184,49 @@ with the same password and 401 with a wrong one.
 
 ---
 
-## Drill cadence
+## Drill cadence — AUTOMATED since 2026-09-13
 
-Re-run the drill after any change to the backup config, and periodically
-otherwise. It costs a few minutes and it is the only thing that turns "backups
-are configured" into "backups are known to work". Clean up afterwards:
+The drill above runs **by itself, every Monday at 04:00 UTC**:
+`charts/finance-alert/templates/cronjob-restore-drill.yaml`.
+
+⚠️ It was automated because the previous version of this section said "and
+periodically otherwise", and **a cadence that depends on someone remembering is
+not a cadence**. The procedure was proven by hand exactly once, in July.
+
+What the CronJob adds over the manual steps below:
+
+- a **pre-flight disk guard**. The node is single and its root filesystem was
+  86% full when this was written; every `local-path` PVC is a directory on it.
+  A restore that fills the disk takes down app, Postgres, Prometheus and Loki
+  together — so under `minFreeGi` the drill SKIPS and says so on Telegram. A
+  skipped, visible drill beats a full node;
+- a **freshness assertion** the manual checks below do not make:
+  `max(ohlcv_daily.date)` must be within `maxBarAgeDays`. A backup pipeline can
+  keep succeeding while archiving the same stale data, and from the outside
+  that is indistinguishable from working;
+- **row counts compared against the LIVE cluster**, not against hardcoded
+  floors that would age into either uselessness or false alarms;
+- **teardown in a `trap`**, so a drill that dies half-way still releases the
+  PVC. Otherwise each failure would eat disk until the node filled.
+
+Two Prometheus alerts watch the drill itself (`FinanceAlertRestoreDrillStale`,
+`FinanceAlertRestoreDrillFailing`) — a CronJob that quietly stops running looks
+exactly like one that keeps passing.
+
+⚠️ **The drill cluster has NO `plugins` block**, so it never mounts the Barman
+plugin and never archives WAL. A recovered cluster that inherits the archiving
+configuration writes into the *same* object-store path as production: the drill
+would corrupt the backup it exists to verify. The safety here is an ABSENT
+block, which is the kind a careless edit re-adds without noticing.
+
+To run it on demand (after any change to the backup config, as before):
+
+```bash
+kubectl --kubeconfig=$KC -n finance-alert create job --from=cronjob/finance-alert-finance-alert-drill drill-manuale-$(date +%s)
+kubectl --kubeconfig=$KC -n finance-alert logs -f job/drill-manuale-…
+```
+
+Manual cleanup, should you ever run the steps by hand:
 
 ```bash
 kubectl --kubeconfig=$KC delete cluster pg-restore -n finance-alert

@@ -1,0 +1,332 @@
+{{- if .Values.restoreDrill.enabled }}
+{{- /*
+  Il backup che si dimostra RIPRISTINABILE, da solo e periodicamente.
+
+  ⚠️ Non duplica nulla di esistente, e vale la pena dire cosa c'era gia':
+  backup base giornalieri su object storage OCI, WAL archiviato in continuo,
+  retention 30d, e due allarmi — `PostgresBackupStale` e
+  `PostgresBackupFailing`. Tutti e quattro sorvegliano il CATALOGO: che il
+  backup parta, finisca e sia recente.
+
+  Nessuno di loro puo' dire se i dati dentro si possono RILEGGERE. Un backup
+  che completa ogni notte e ripristina un database corrotto soddisfa entrambi
+  gli allarmi, per sempre. E' la stessa forma registrata piu' volte in
+  CLAUDE.md: presente, documentato, creduto efficace, mai eseguito.
+
+  Il runbook (docs/cloud/RUNBOOK-postgres-dr.md) porta la procedura, provata a
+  mano UNA volta, e chiude con «re-run the drill ... periodically otherwise».
+  Quella frase e' il buco: una cadenza che dipende da chi se la ricorda non e'
+  una cadenza. Questo file la esegue.
+
+  ─── Tre vincoli di sicurezza, prima della funzionalita' ──────────────────
+
+  1. ⚠️ IL CLUSTER DI PROVA NON ARCHIVIA. Non ha il blocco `plugins`, quindi
+     non monta il Barman Cloud Plugin e non scrive WAL da nessuna parte. Un
+     cluster ripristinato che eredita la configurazione di archiviazione
+     scriverebbe nella STESSA destinazione della produzione: il drill
+     corromperebbe il backup che esiste per verificare. E' l'errore piu'
+     pericoloso disponibile qui, ed e' un blocco ASSENTE — cioe' invisibile a
+     una rilettura distratta. Se qualcuno aggiunge `plugins` al manifesto qui
+     sotto, il danno non si vede finche' non serve il backup.
+
+  2. ⚠️ IL DRILL NON DEVE CAUSARE IL GUASTO DA CUI PROTEGGE. Il nodo e' uno
+     solo, il disco al 86% con 4.5Gi liberi (misurato 2026-09-13), e ogni PVC
+     `local-path` e' una directory su quel disco. Un ripristino che lo riempie
+     spegne app, Postgres, Prometheus e Loki insieme. Percio' lo spazio si
+     misura PRIMA di creare qualunque cosa e, sotto soglia, il drill si SALTA
+     dichiarandolo: un drill saltato e visibile e' molto meglio di un nodo
+     pieno.
+
+  3. ⚠️ LA PULIZIA STA IN `trap`, non in coda allo script. Un drill che
+     fallisce a meta' e lascia il PVC dietro toglie spazio ogni settimana
+     finche' il disco finisce — il fallimento diventerebbe progressivo e
+     silenzioso.
+
+  ─── Che cosa verifica, e perche' proprio quello ───────────────────────────
+
+  Le quattro asserzioni del runbook (tabelle, `alembic_version`, `fa_app` NON
+  superuser, conteggi) piu' una che li' non c'e' e che nessun allarme
+  esistente puo' fare: la FRESCHEZZA del dato ripristinato. Una pipeline di
+  backup puo' continuare a riuscire archiviando sempre lo stesso dato vecchio,
+  e da fuori e' indistinguibile dal funzionamento corretto.
+
+  ⚠️ I conteggi si confrontano con la PRODUZIONE VIVA, non con soglie scritte
+  a mano: una soglia fissa invecchia e, quando invecchia, o non protegge piu'
+  o fa arrossare qualcosa che nessuno ha rotto. L'unica istruzione emessa
+  verso la produzione e' un `SELECT count(*)`.
+*/}}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "finance-alert.fullname" . }}-drill
+  labels:
+    {{- include "finance-alert.labels" . | nindent 4 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "finance-alert.fullname" . }}-drill
+  labels:
+    {{- include "finance-alert.labels" . | nindent 4 }}
+rules:
+  # ⚠️ `delete` sui Cluster e' il permesso piu' pesante di questo ruolo. E'
+  # ristretto al namespace, e il nome di cio' che si crea e si cancella e'
+  # fissato nei valori — ma il RUOLO da solo non impedisce di cancellare `pg`.
+  # Lo impedisce il controllo esplicito sul nome dentro `pulisci()`, che e'
+  # dove va cercata la garanzia.
+  - apiGroups: ["postgresql.cnpg.io"]
+    resources: ["clusters"]
+    verbs: ["get", "list", "create", "delete"]
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"]
+    verbs: ["get", "list", "delete"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+  # Per interrogare i due database con psql.
+  - apiGroups: [""]
+    resources: ["pods/exec"]
+    verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "finance-alert.fullname" . }}-drill
+  labels:
+    {{- include "finance-alert.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "finance-alert.fullname" . }}-drill
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "finance-alert.fullname" . }}-drill
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "finance-alert.fullname" . }}-drill
+  labels:
+    {{- include "finance-alert.labels" . | nindent 4 }}
+spec:
+  schedule: {{ .Values.restoreDrill.schedule | quote }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  startingDeadlineSeconds: 600
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      # Un giorno: il Job deve restare leggibile il giorno dopo, quando si va a
+      # chiedersi perche' e' arrivato un avviso.
+      ttlSecondsAfterFinished: 86400
+      template:
+        metadata:
+          labels:
+            {{- include "finance-alert.labels" . | nindent 12 }}
+        spec:
+          serviceAccountName: {{ include "finance-alert.fullname" . }}-drill
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+          containers:
+            - name: drill
+              image: {{ .Values.restoreDrill.image | quote }}
+              imagePullPolicy: IfNotPresent
+              resources:
+                requests: { cpu: "20m", memory: "64Mi" }
+                limits: { cpu: "200m", memory: "128Mi" }
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: { drop: ["ALL"] }
+              volumeMounts:
+                - name: tmp
+                  mountPath: /tmp
+              env:
+                # kubectl scrive la cache sotto $HOME e la radice e' in sola
+                # lettura: senza questo ogni invocazione fallisce.
+                - name: HOME
+                  value: /tmp
+                - name: NAMESPACE
+                  valueFrom:
+                    fieldRef: { fieldPath: metadata.namespace }
+                - name: ORIGINE
+                  value: {{ .Values.restoreDrill.sourceCluster | quote }}
+                - name: PROVA
+                  value: {{ .Values.restoreDrill.drillCluster | quote }}
+                - name: DB
+                  value: {{ .Values.restoreDrill.database | quote }}
+                - name: OGGETTO
+                  value: {{ .Values.restoreDrill.objectStore | quote }}
+                - name: IMMAGINE_PG
+                  value: {{ .Values.restoreDrill.pgImage | quote }}
+                - name: DIMENSIONE
+                  value: {{ .Values.restoreDrill.storageSize | quote }}
+                - name: MIN_LIBERI_GI
+                  value: {{ .Values.restoreDrill.minFreeGi | quote }}
+                - name: ATTESA_S
+                  value: {{ .Values.restoreDrill.timeoutSeconds | quote }}
+                - name: MAX_ETA_BARRE_GG
+                  value: {{ .Values.restoreDrill.maxBarAgeDays | quote }}
+                - name: MIN_RAPPORTO_PCT
+                  value: {{ .Values.restoreDrill.minRowRatioPct | quote }}
+                - name: PROM
+                  value: {{ .Values.restoreDrill.prometheusUrl | quote }}
+                - name: TELEGRAM_BOT_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ include "finance-alert.secretName" . }}
+                      key: TELEGRAM_BOT_TOKEN
+                      optional: true
+                - name: TELEGRAM_CHAT_ID
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ include "finance-alert.secretName" . }}
+                      key: TELEGRAM_CHAT_ID
+                      optional: true
+              command: ["/bin/sh", "-c"]
+              args:
+                - |
+                  set -u
+
+                  avvisa() {
+                    printf '%s\n' "$1"
+                    [ -n "${TELEGRAM_BOT_TOKEN:-}" ] || return 0
+                    [ -n "${TELEGRAM_CHAT_ID:-}" ] || return 0
+                    wget -qO- --post-data="chat_id=${TELEGRAM_CHAT_ID}&text=$1" \
+                      "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" >/dev/null 2>&1 || true
+                  }
+
+                  # ⚠️ La pulizia si registra PRIMA di creare qualunque cosa, e
+                  # il nome si controlla: un `delete` con una variabile vuota o
+                  # inattesa non deve poter toccare la produzione. Questo `case`
+                  # e' l'unica cosa che sta fra il drill e il database vero.
+                  pulisci() {
+                    case "$PROVA" in
+                      "$ORIGINE"|""|pg)
+                        echo "RIFIUTO di cancellare il cluster '$PROVA'"; return 0 ;;
+                    esac
+                    kubectl delete cluster "$PROVA" -n "$NAMESPACE" \
+                      --ignore-not-found --wait=false >/dev/null 2>&1 || true
+                    kubectl delete pvc -n "$NAMESPACE" \
+                      -l cnpg.io/cluster="$PROVA" --ignore-not-found >/dev/null 2>&1 || true
+                  }
+                  trap pulisci EXIT
+
+                  # ─── 1. lo spazio, prima di tutto ─────────────────────────
+                  LIBERI=$(wget -qO- "${PROM}/api/v1/query?query=node_filesystem_avail_bytes%7Bmountpoint%3D%22%2F%22%7D" 2>/dev/null \
+                    | sed -n 's/.*"value":\[[^,]*,"\([0-9.]*\)".*/\1/p' | head -1)
+                  if [ -z "$LIBERI" ]; then
+                    avvisa "drill ripristino SALTATO: spazio libero del nodo non misurabile (Prometheus non risponde). Un drill che non sa quanto spazio c'e' non parte."
+                    exit 0
+                  fi
+                  LIBERI_GI=$(( ${LIBERI%%.*} / 1073741824 ))
+                  if [ "$LIBERI_GI" -lt "$MIN_LIBERI_GI" ]; then
+                    avvisa "drill ripristino SALTATO: sul nodo restano ${LIBERI_GI}Gi liberi, sotto la soglia di ${MIN_LIBERI_GI}Gi. Non parte per non riempire il disco che condivide con app, Postgres, Prometheus e Loki. Finche' non gira, il backup resta NON verificato."
+                    exit 0
+                  fi
+
+                  # ─── 2. il cluster di prova ──────────────────────────────
+                  pulisci
+                  sleep 5
+                  kubectl apply -f - <<MANIFESTO
+                  apiVersion: postgresql.cnpg.io/v1
+                  kind: Cluster
+                  metadata:
+                    name: ${PROVA}
+                    namespace: ${NAMESPACE}
+                  spec:
+                    instances: 1
+                    imageName: ${IMMAGINE_PG}
+                    env:
+                      - {name: AWS_REQUEST_CHECKSUM_CALCULATION, value: WHEN_REQUIRED}
+                      - {name: AWS_RESPONSE_CHECKSUM_VALIDATION, value: WHEN_REQUIRED}
+                    storage: {size: ${DIMENSIONE}, storageClass: local-path}
+                    resources:
+                      requests: {cpu: 100m, memory: 256Mi}
+                      limits: {memory: 768Mi}
+                    bootstrap:
+                      recovery:
+                        source: origine
+                    externalClusters:
+                      - name: origine
+                        plugin:
+                          name: barman-cloud.cloudnative-pg.io
+                          parameters:
+                            barmanObjectName: ${OGGETTO}
+                            serverName: ${ORIGINE}
+                  MANIFESTO
+                  if [ $? -ne 0 ]; then
+                    avvisa "drill ripristino FALLITO: creazione del cluster di prova rifiutata dall'API."
+                    exit 1
+                  fi
+
+                  # ─── 3. attesa, con scadenza ─────────────────────────────
+                  SCADE=$(( $(date +%s) + ATTESA_S ))
+                  PRONTO=no
+                  STATO=""
+                  while [ "$(date +%s)" -lt "$SCADE" ]; do
+                    STATO=$(kubectl get cluster "$PROVA" -n "$NAMESPACE" \
+                      -o jsonpath='{.status.phase}' 2>/dev/null || true)
+                    case "$STATO" in
+                      *ealthy*) PRONTO=si; break ;;
+                    esac
+                    sleep 15
+                  done
+                  if [ "$PRONTO" != si ]; then
+                    avvisa "drill ripristino FALLITO: il cluster ripristinato non e' diventato sano entro ${ATTESA_S}s (ultimo stato: ${STATO:-ignoto}). Il backup NON e' dimostrato ripristinabile."
+                    exit 1
+                  fi
+
+                  # ─── 4. le verifiche ─────────────────────────────────────
+                  chiedi() {   # $1 = pod, $2 = sql
+                    kubectl exec "$1" -n "$NAMESPACE" -c postgres -- \
+                      psql -d "$DB" -tAc "$2" 2>/dev/null | tr -d ' \r'
+                  }
+
+                  TABELLE=$(chiedi "${PROVA}-1" "select count(*) from information_schema.tables where table_schema='public'")
+                  ALEMBIC=$(chiedi "${PROVA}-1" "select version_num from alembic_version")
+                  SUPER=$(chiedi "${PROVA}-1" "select rolsuper from pg_roles where rolname='fa_app'")
+                  RIGHE_P=$(chiedi "${PROVA}-1" "select count(*) from ohlcv_daily")
+                  ULTIMA=$(chiedi "${PROVA}-1" "select coalesce(max(date)::text,'nessuna') from ohlcv_daily")
+                  ETA=$(chiedi "${PROVA}-1" "select coalesce(extract(day from now()-max(date)::timestamp)::int, 9999) from ohlcv_daily")
+                  RIGHE_V=$(chiedi "${ORIGINE}-1" "select count(*) from ohlcv_daily")
+
+                  GUASTI=""
+                  if ! [ "${TABELLE:-0}" -ge 20 ] 2>/dev/null; then
+                    GUASTI="${GUASTI}
+                  - tabelle nello schema: ${TABELLE:-nessuna} (attese >= 20)"
+                  fi
+                  if [ -z "${ALEMBIC:-}" ]; then
+                    GUASTI="${GUASTI}
+                  - alembic_version assente: lo schema ripristinato non dichiara una versione"
+                  fi
+                  if [ "${SUPER:-t}" != "f" ]; then
+                    GUASTI="${GUASTI}
+                  - fa_app risulta superuser (${SUPER:-ignoto}): un ripristino che scala i privilegi e' un ripristino fallito"
+                  fi
+                  # ⚠️ La freschezza: e' la verifica che nessun allarme
+                  # esistente puo' fare, perche' tutti guardano il catalogo.
+                  if ! [ "${ETA:-9999}" -le "$MAX_ETA_BARRE_GG" ] 2>/dev/null; then
+                    GUASTI="${GUASTI}
+                  - dato ripristinato VECCHIO: ultima barra ${ULTIMA:-ignota}, ${ETA:-?} giorni fa (max ${MAX_ETA_BARRE_GG}). Il backup riesce ma archivia dati fermi."
+                  fi
+                  if [ "${RIGHE_V:-0}" -gt 0 ] 2>/dev/null; then
+                    SOGLIA=$(( RIGHE_V * MIN_RAPPORTO_PCT / 100 ))
+                    if ! [ "${RIGHE_P:-0}" -ge "$SOGLIA" ] 2>/dev/null; then
+                      GUASTI="${GUASTI}
+                  - righe ohlcv_daily: ${RIGHE_P:-0} ripristinate contro ${RIGHE_V} vive (soglia ${SOGLIA})"
+                    fi
+                  fi
+
+                  if [ -n "$GUASTI" ]; then
+                    avvisa "drill ripristino FALLITO — il backup non si rilegge come dovrebbe:${GUASTI}"
+                    exit 1
+                  fi
+                  echo "drill ok: ${TABELLE} tabelle, alembic ${ALEMBIC}, fa_app non-superuser, ultima barra ${ULTIMA} (${ETA}g), ${RIGHE_P}/${RIGHE_V} righe"
+          volumes:
+            - name: tmp
+              emptyDir: {}
+{{- end }}

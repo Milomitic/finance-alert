@@ -135,3 +135,8 @@ parityCheck:
   # contiene nemmeno `sh`. Questa ha sh, wget, kubectl e gira come
   # non-root: verificato con una sonda dentro il cluster, non dedotto.
   image: alpine/k8s:1.31.3
+
+# Il drill di ripristino gira solo qui: e' l'unico ambiente con backup veri
+# su object storage e con un nodo il cui disco vada rispettato.
+restoreDrill:
+  enabled: true

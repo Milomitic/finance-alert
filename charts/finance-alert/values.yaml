@@ -133,3 +133,37 @@ parityCheck:
   # contiene nemmeno `sh`. Questa ha sh, wget, kubectl e gira come
   # non-root: verificato con una sonda dentro il cluster, non dedotto.
   image: alpine/k8s:1.31.3
+
+# ─── Drill di ripristino ───────────────────────────────────────────────────
+# Prova SETTIMANALMENTE che il backup Postgres si possa RILEGGERE, non solo
+# che venga prodotto. Vedi il commento in templates/cronjob-restore-drill.yaml
+# per il perche' i quattro presidi esistenti non bastano.
+restoreDrill:
+  enabled: false
+  # Lunedi' 04:00 UTC: dopo il backup base delle 02:00 e lontano dalle
+  # scansioni. ⚠️ Settimanale e non giornaliero: ogni esecuzione materializza
+  # una copia del database sul disco del nodo, che e' lo stesso disco di tutto
+  # il resto. Il valore del drill sta nel girare REGOLARMENTE, non spesso.
+  schedule: "0 4 * * 1"
+  image: alpine/k8s:1.31.3
+  pgImage: ghcr.io/cloudnative-pg/postgresql:16
+  sourceCluster: pg
+  drillCluster: pg-drill
+  database: finance_alert
+  objectStore: pg-backups
+  # ⚠️ Il database misura 483 MB (2026-09-13). 2Gi lascia margine senza
+  # prenotare i 5Gi della produzione su un disco che ne ha 4.5 liberi.
+  storageSize: 2Gi
+  # Sotto questa soglia il drill si SALTA invece di partire. Il nodo e' uno
+  # solo: un ripristino che riempie il disco spegne tutto.
+  minFreeGi: 3
+  timeoutSeconds: 900
+  # Un backup puo' riuscire ogni notte archiviando sempre lo stesso dato
+  # fermo. 5 giorni copre un fine settimana lungo senza tollerare una serie
+  # storica che ha smesso di aggiornarsi.
+  maxBarAgeDays: 5
+  # Il ripristino e' vecchio fino a 24h rispetto al vivo, quindi non puo'
+  # avere lo stesso numero di righe. 90% distingue «normale ritardo» da
+  # «meta' dei dati non c'e'».
+  minRowRatioPct: 90
+  prometheusUrl: http://kps-prometheus.monitoring.svc:9090
