@@ -206,8 +206,6 @@ export default function AlertsPage() {
         </Button>
       </div>
 
-      <AlertFilters value={filters} onChange={(v) => { setPage(0); setFilters(v); }} />
-
       {/* Confluence digest — always visible above the table (replaced the old
           list/confluence view toggle). Cluster rows drill down into the table. */}
       <AlertsInsightCard
@@ -215,6 +213,16 @@ export default function AlertsPage() {
         loading={conf.isLoading}
         onTickerSelect={selectTicker}
       />
+
+      {/* ⚠️ I filtri stanno SOTTO le confluenze e SOPRA la tabella, e l'ordine
+          e' una scelta di lettura, non estetica.
+          Le confluenze sono un digest: si leggono per prime e si clicca un
+          cluster per restringere la tabella. Con i filtri in cima, il primo
+          controllo della pagina agiva su una tabella che il lettore non aveva
+          ancora visto. Ora i tre blocchi seguono cio' che si fa: guarda il
+          quadro, restringi, leggi le righe — e il controllo sta accanto a cio'
+          che governa. */}
+      <AlertFilters value={filters} onChange={(v) => { setPage(0); setFilters(v); }} />
 
       {/* Drill-down chip: shows the cluster ticker currently filtering the
           table, with an X to go back to the full list. */}
