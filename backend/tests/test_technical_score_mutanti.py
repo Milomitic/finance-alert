@@ -279,3 +279,112 @@ def test_il_lotto_e_il_pulsante_aggiorna_dicono_la_STESSA_postura(db) -> None:
     assert da_pulsante is not None
     assert da_pulsante.composite == pytest.approx(composito_lotto)
     assert da_pulsante.posture == postura_lotto
+
+
+# ─── 6. La lente guarda OGGI, e un titolo fermo non e' in trend ───────────
+
+
+def test_una_serie_ferma_NON_legge_come_trend() -> None:
+    """`pts = int(price > f) + int(f > s) + int(price > s)`, tre bordi ESCLUSI.
+
+    ⚠️ Su una serie perfettamente piatta prezzo, EMA veloce ed EMA lenta sono
+    lo STESSO numero — uno dei rari casi in cui un confronto fra float cade
+    esattamente sul bordo. Coi mutanti `>=` il conteggio passa da zero a tre
+    punti su quattro: «nessun trend» diventa «trend forte» per ogni titolo che
+    non si e' mosso.
+
+    L'asserzione e' sotto la neutralita', non un valore esatto: cosi' fissa il
+    SENSO (l'assenza di trend non e' un trend) e lascia libere le tarature che
+    decidono quanto sotto — il peso dell'ADX, il divisore 40, la miscela
+    0,6/0,4."""
+    df = _senza_escursione()
+    assert svc._trend(df["close"], df) < 50.0
+
+
+def test_la_struttura_legge_l_ULTIMA_barra() -> None:
+    """`price = float(close.iloc[-1])` -> `iloc[-2]`.
+
+    ⚠️ E' una famiglia intera di mutanti (sette in questo modulo): la costante
+    dentro l'indice negativo. Non e' una taratura — e' la lente Tecnico che
+    descrive IERI. Qui l'ultima barra salta al massimo del periodo: con
+    `iloc[-2]` la posizione nel range scende da 100 a ~59."""
+    chiusure = [100.0 + i for i in range(60)] + [200.0]
+    df = pd.DataFrame({"open": chiusure, "high": chiusure, "low": chiusure,
+                       "close": chiusure, "volume": [1000] * len(chiusure)})
+    assert svc._structure(df, df["close"]) == pytest.approx(100.0)
+
+
+def test_la_struttura_funziona_con_escursione_SOTTO_l_unita() -> None:
+    """`rng > 0` -> `rng > 1`.
+
+    Un titolo la cui escursione su 252 barre vale meno di un'unita' di valuta
+    leggerebbe la posizione di ripiego 0,5 invece della sua posizione vera.
+    ⚠️ Non e' ipotetico: 97 titoli del catalogo sono in sterline e stanno sotto
+    le poche unita', quindi un'escursione di 0,06 e' ordinaria."""
+    pen = [0.500 + i * 0.001 for i in range(60)]
+    df = pd.DataFrame({"open": pen, "high": pen, "low": pen, "close": pen,
+                       "volume": [1000] * len(pen)})
+    assert svc._structure(df, df["close"]) == pytest.approx(100.0)
+
+
+def test_l_accumulo_di_volume_funziona_con_prezzi_SOTTO_l_unita() -> None:
+    """`rv[d > 0]` e `rv[d < 0]` -> `> 1` / `< -1`.
+
+    Su un titolo a mezza sterlina nessuna seduta si muove di un'unita' intera:
+    coi mutanti ogni giorno smette di contare, `upv + dnv` va a zero e
+    l'accumulo cade sul ripiego neutro 0,5 per SEMPRE. Il titolo non
+    accumulerebbe mai, ne' in un senso ne' nell'altro."""
+    pen = [0.500 + i * 0.001 for i in range(60)]
+    df = pd.DataFrame({"open": pen, "high": pen, "low": pen, "close": pen,
+                       "volume": [1000] * len(pen)})
+    assert svc._volume(df, df["close"]) > 50.0
+
+
+def _finestra(mosse: list[float]) -> pd.DataFrame:
+    cl = [100.0]
+    for m in mosse:
+        cl.append(cl[-1] + m)
+    return pd.DataFrame({"open": cl, "high": cl, "low": cl, "close": cl,
+                         "volume": [1000] * len(cl)})
+
+
+def test_una_seduta_ferma_non_e_ne_accumulo_ne_distribuzione() -> None:
+    """`d > 0` -> `>=` e `d < 0` -> `<=`, cioe' i giorni PIATTI contati su
+    entrambi i lati.
+
+    ⚠️ Le tre finestre hanno volumi identici, quindi la componente di tendenza
+    del volume e' la stessa in tutte e tre e il confronto isola l'accumulo. E
+    si asserisce un ORDINAMENTO, non un valore: cosi' nessuna taratura
+    (la miscela 0,5/0,5, le finestre) viene congelata.
+
+    Con quattro giorni fermi, l'accumulo deve stare FRA quello della stessa
+    finestra in cui quei giorni fossero discese e quello in cui fossero
+    salite. Se un mutante li conta da un lato, due dei tre coincidono."""
+    su, giu, fermo = 1.0, -1.0, 0.0
+    con_fermi = _finestra([su] + [su] * 11 + [giu] * 4 + [fermo] * 4)
+    come_discese = _finestra([su] + [su] * 11 + [giu] * 4 + [giu] * 4)
+    come_salite = _finestra([su] + [su] * 11 + [giu] * 4 + [su] * 4)
+
+    v_fermi = svc._volume(con_fermi, con_fermi["close"])
+    v_giu = svc._volume(come_discese, come_discese["close"])
+    v_su = svc._volume(come_salite, come_salite["close"])
+
+    assert v_giu < v_fermi, "un giorno fermo viene contato come discesa"
+    assert v_fermi < v_su, "un giorno fermo viene contato come salita"
+
+
+def test_un_ritardo_di_UNA_barra_e_un_rendimento_valido() -> None:
+    """`if k <= 0` -> `k <= 1`: col mutante il rendimento a una barra — il piu'
+    corto che abbia senso — smette di esistere e rende None."""
+    assert svc._ret(pd.Series([10.0, 11.0]), 1) == pytest.approx(0.1)
+
+
+def test_il_rendimento_a_venti_barre_ENTRA_nel_momento() -> None:
+    """`rc = _ret(close, min(20, n - 1)) or 0.0` -> `and 0.0`.
+
+    Col mutante `and`, `rc` vale 0,0 ogni volta che il rendimento e' diverso da
+    zero: la componente di variazione si spegne e resta bloccata al neutro 0,5
+    per qualunque titolo. Un rialzo del 2% al giorno per sessanta sedute
+    perderebbe un terzo del suo momento senza che niente lo segnali."""
+    su = [100.0 * (1.02 ** i) for i in range(60)]
+    assert svc._momentum(pd.Series(su)) > 90.0
