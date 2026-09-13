@@ -38,6 +38,16 @@ from app.models import Alert, Stock
 # n=4 → +7/8, ... asymptote CEIL). Replaces the old flat "+8 capped at 100".
 _CONFLUENCE_CEIL = 98.0
 _CONFLUENCE_DECAY = 0.5
+#: L'ordine di lettura degli orizzonti. ⚠️ I tre valori devono essere DISTINTI
+#: e crescenti: l'ingresso di `sorted` e' un SET, quindi due orizzonti a pari
+#: chiave lascerebbero l'ordine all'iterazione del set — cioe' variabile fra
+#: esecuzioni. E' il contratto, non i numeri: 0/1/2 potrebbero essere 10/20/30.
+#: Fissato da `test_i_tre_orizzonti_hanno_un_ordine_STRETTO`.
+#:
+#: Stava dentro `compute_confluence`, ricostruito a ogni ticker e non
+#: raggiungibile da un test.
+_HORIZON_ORDER: dict[str, int] = {"short": 0, "medium": 1, "long": 2}
+
 _CONTESTED_GAP = 25.0  # bull/bear strengths closer than this -> "contested"
 _MIN_SIGNALS = 2       # a confluence requires at least two agreeing detectors
 
@@ -183,8 +193,8 @@ def compute_confluence(db: Session, *, days: int | None = None) -> list[Confluen
         contested = bool(bull and bear and abs(bs - rs) < _CONTESTED_GAP)
         # Multi-horizon over the PREVAILING-direction components only.
         prevailing = bull if direction == "bull" else bear
-        _order = {"short": 0, "medium": 1, "long": 2}
-        horizons = sorted({c[5] for c in prevailing}, key=lambda h: _order.get(h, 1))
+        horizons = sorted({c[5] for c in prevailing},
+                          key=lambda h: _HORIZON_ORDER.get(h, 1))
         multi_horizon = len(horizons) >= 2
         # De-correlated independent-evidence count among prevailing components.
         eff_n = _effective_n([c[1] for c in prevailing])

@@ -222,3 +222,21 @@ def test_a_PARITA_di_forza_il_multi_orizzonte_RIALZISTA_passa_avanti(db) -> None
     assert len({c.strength for c in gruppi}) == 1, "le due forze non sono pari"
     assert all(c.multi_horizon for c in gruppi)
     assert gruppi[0].ticker == "SU"
+
+
+def test_i_tre_orizzonti_hanno_un_ordine_STRETTO() -> None:
+    """I valori di `_HORIZON_ORDER` devono essere distinti e crescenti.
+
+    ⚠️ Non fissa i NUMERI — 0/1/2 potrebbero essere 10/20/30 — ma la proprieta'
+    da cui dipende la correttezza: l'ingresso di `sorted` e' un SET, quindi due
+    orizzonti a pari chiave lascerebbero l'ordine all'iterazione del set, cioe'
+    variabile fra esecuzioni.
+
+    E' anche il motivo per cui i mutanti su quella riga NON si uccidono
+    attraverso il comportamento: un test che ci provasse sarebbe intermittente,
+    che e' peggio di un mutante vivo. Si asserisce la struttura.
+    """
+    valori = cs._HORIZON_ORDER
+    assert set(valori) == {"short", "medium", "long"}
+    assert len(set(valori.values())) == 3, f"orizzonti a pari chiave: {valori}"
+    assert valori["short"] < valori["medium"] < valori["long"]
