@@ -33,14 +33,6 @@
       "mutanti": 9,
       "uccisi": 7
     },
-    "app/services/signal_outcome_service.py": {
-      "mutanti": 57,
-      "uccisi": 47
-    },
-    "app/services/technical_score_service.py": {
-      "mutanti": 93,
-      "uccisi": 39
-    },
     "app/services/verification_posture.py": {
       "mutanti": 6,
       "uccisi": 3
@@ -48,6 +40,14 @@
     "app/services/confluence_service.py": {
       "mutanti": 38,
       "uccisi": 28
+    },
+    "app/services/signal_outcome_service.py": {
+      "mutanti": 56,
+      "uccisi": 47
+    },
+    "app/services/technical_score_service.py": {
+      "mutanti": 92,
+      "uccisi": 39
     }
   },
   "sopravvissuti": [
@@ -142,7 +142,6 @@
     "app/services/technical_score_service.py::_blended_return#1  1 -> 2",
     "app/services/technical_score_service.py::_blended_return#2  1 -> 2",
     "app/services/technical_score_service.py::_momentum#0  1 -> 2",
-    "app/services/technical_score_service.py::_momentum#0  14 -> 15",
     "app/services/technical_score_service.py::_momentum#0  20 -> 21",
     "app/services/technical_score_service.py::_momentum#1  1 -> 2",
     "app/services/technical_score_service.py::_momentum#2  1 -> 2",
