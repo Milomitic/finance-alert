@@ -180,6 +180,10 @@ BERSAGLI: dict[str, list[str]] = {
         # `TechnicalScore`, non il servizio — includerli allungherebbe ogni
         # mutante senza poter uccidere niente.
         "tests/test_api_scores.py",
+        # Scritto DOPO la passata che qui uccideva 15 su 107: i CONTRATTI
+        # (bande di postura, pavimento di storia, guardie sui denominatori
+        # nulli, estremi della percentile, il titolo giusto), non le tarature.
+        "tests/test_technical_score_mutanti.py",
     ],
     # La de-correlazione per famiglia: N segnali correlati devono contare ~1.3,
     # non N. Se smette di funzionare la confluenza si gonfia in silenzio.

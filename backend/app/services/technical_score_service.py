@@ -79,7 +79,21 @@ def _trend(close: pd.Series, ohlcv: pd.DataFrame) -> float:
 def _momentum(close: pd.Series) -> float:
     n = len(close)
     price = float(close.iloc[-1])
-    r = float(rsi(close, 14).dropna().iloc[-1]) if n > 15 else 50.0
+    # ⚠️ La disponibilita' dell'RSI si guarda sulla serie RIPULITA, non sul
+    # numero di barre — esattamente come fa il MACD due righe sotto.
+    #
+    # La forma precedente era `if n > 15 else 50.0`, e non poteva funzionare
+    # per due ragioni indipendenti. `_momentum` e' chiamata solo da
+    # `partial_for`, che sbarra sotto le 30 barre: `n > 15` era quindi SEMPRE
+    # vero e quel ripiego era codice morto. E il caso che accade davvero non e'
+    # «poche barre» ma una serie PIATTA, dove guadagni e perdite sono entrambi
+    # zero, l'RSI e' tutto NaN e `.iloc[-1]` su una serie vuota solleva
+    # IndexError — raccolto dal `except Exception` di `partial_for`, che rende
+    # None: il titolo spariva dalla lente Tecnico invece di ricevere un momento
+    # neutro. Un ramo inerte che sembra coprire il caso e' peggio di nessun
+    # ramo, perche' corrobora la convinzione che sia coperto.
+    rd = rsi(close, 14).dropna()
+    r = float(rd.iloc[-1]) if rd.size else 50.0
     _, _, hist = macd(close)
     hd = hist.dropna()
     h = float(hd.iloc[-1]) if hd.size else 0.0
@@ -158,6 +172,61 @@ def partial_for(ohlcv: pd.DataFrame) -> dict | None:
         return None
 
 
+def _posture(composite: float) -> str:
+    """Le tre bande della postura, col bordo INCLUSO.
+
+    Proprietario unico. Questa riga era duplicata verbatim in `finalize` e in
+    `recompute_one`: ritarare 66 o 40 in uno dei due avrebbe fatto disaccordare
+    il pulsante «aggiorna» della pagina dettaglio dal ricalcolo di lotto, sullo
+    stesso titolo e nella stessa schermata."""
+    return "Forte" if composite >= 66 else "Neutro" if composite >= 40 else "Debole"
+
+
+def _riga_tecnica(
+    stock_id: int,
+    dims: dict[str, float],
+    *,
+    blended_return: float | None,
+    fac: dict | None,
+    now: datetime,
+) -> TechnicalScore:
+    """La riga persistita, da un solo posto.
+
+    ⚠️ Questo blocco esisteva in DUE copie — `finalize` e `recompute_one` — e
+    la duplicazione ha gia' prodotto un guasto: quando `_recent_signal_facets`
+    passo' da "confidence" a "strength" col taglio Forza/Probabilita', la copia
+    in `finalize` fu aggiornata e questa no, cosi' ogni ricalcolo per un titolo
+    con un segnale recente rendeva 500. Solo sui titoli CHE HANNO un segnale,
+    cioe' quelli interessanti, e con 1.700 test verdi perche' nessuno
+    percorreva il ramo `fac is not None`.
+
+    La correzione di allora sistemo' la copia. Questa toglie la copia.
+
+    I segnali restano la LORO lente (Forza / Probabilita'): il composito e'
+    puro prezzo — la media pesata delle cinque dimensioni — e non viene spinto
+    da loro. La Forza dell'ultimo segnale sopravvive solo come riferimento
+    informativo nel campo `signals`."""
+    composite = sum(_WEIGHTS[k] * dims[k] for k in _WEIGHTS)
+    return TechnicalScore(
+        stock_id=stock_id,
+        composite=round(composite, 1),
+        trend=round(dims["trend"], 1),
+        momentum=round(dims["momentum"], 1),
+        structure=round(dims["structure"], 1),
+        volume=round(dims["volume"], 1),
+        rel_strength=round(dims["rel_strength"], 1),
+        # "strength", non "confidence": `_recent_signal_facets` rende
+        # {"strength", "tone"} dal taglio Forza/Probabilita' in poi.
+        signals=round(fac["strength"], 1) if fac is not None else None,
+        posture=_posture(composite),
+        computed_at=now,
+        breakdown=json.dumps({
+            "dims": {k: round(dims[k], 1) for k in dims},
+            "blended_return": blended_return,
+        }),
+    )
+
+
 def _recent_signal_facets(db: Session, stock_ids: list[int]) -> dict[int, dict]:
     # Best recent signal per stock (last 14 days): max-Forza alert with its
     # tone, parsed from the snapshot. Feeds the informational `signals` field.
@@ -225,30 +294,11 @@ def finalize(db: Session, partials: dict[int, dict]) -> int:
             "volume": p["volume"],
             "rel_strength": rel,
         }
-        composite = sum(_WEIGHTS[k] * dims[k] for k in _WEIGHTS)
-        # Signals are their OWN lens (Forza / Probabilità) — the technical
-        # composite stays PURELY price-action and is NOT nudged by them (that
-        # used to add ±5pp and made a transient signal leak into the continuous
-        # posture). The latest signal's Forza is kept only as an
-        # informational reference in the `signals` field.
-        fac = facets.get(sid)
-        signals_val = round(fac["strength"], 1) if fac is not None else None
-        posture = "Forte" if composite >= 66 else "Neutro" if composite >= 40 else "Debole"
-        db.merge(TechnicalScore(
-            stock_id=sid,
-            composite=round(composite, 1),
-            trend=round(dims["trend"], 1),
-            momentum=round(dims["momentum"], 1),
-            structure=round(dims["structure"], 1),
-            volume=round(dims["volume"], 1),
-            rel_strength=round(rel, 1),
-            signals=signals_val,
-            posture=posture,
-            computed_at=now,
-            breakdown=json.dumps({
-                "dims": {k: round(dims[k], 1) for k in dims},
-                "blended_return": p.get("blended_return"),
-            }),
+        db.merge(_riga_tecnica(
+            sid, dims,
+            blended_return=p.get("blended_return"),
+            fac=facets.get(sid),
+            now=now,
         ))
         count += 1
     return count
@@ -308,34 +358,15 @@ def recompute_one(db: Session, stock_id: int) -> TechnicalScore | None:
         "volume": p["volume"],
         "rel_strength": rel,
     }
-    composite = sum(_WEIGHTS[k] * dims[k] for k in _WEIGHTS)
-    fac = _recent_signal_facets(db, [stock_id]).get(stock_id)
-    # "strength", not "confidence". `_recent_signal_facets` has returned
-    # {"strength", "tone"} since the Forza/Probabilità split; "confidence" is
-    # the legacy alias and is never a key of this dict. The twin in `finalize`
-    # was updated at the time and this one was missed, so every call here with
-    # a recent signal raised KeyError — a 500 from the per-stock recompute
-    # button, and only ever on the stocks that HAVE a signal, which is to say
-    # the interesting ones. The 1,700-test suite passed because no test
-    # exercised the `fac is not None` branch.
-    signals_val = round(fac["strength"], 1) if fac is not None else None
-    posture = "Forte" if composite >= 66 else "Neutro" if composite >= 40 else "Debole"
-    now = datetime.now(UTC)
-    db.merge(TechnicalScore(
-        stock_id=stock_id,
-        composite=round(composite, 1),
-        trend=round(dims["trend"], 1),
-        momentum=round(dims["momentum"], 1),
-        structure=round(dims["structure"], 1),
-        volume=round(dims["volume"], 1),
-        rel_strength=round(rel, 1),
-        signals=signals_val,
-        posture=posture,
-        computed_at=now,
-        breakdown=json.dumps({
-            "dims": {k: round(dims[k], 1) for k in dims},
-            "blended_return": p.get("blended_return"),
-        }),
+    # ⚠️ La riga la costruisce `_riga_tecnica`, proprietario unico condiviso
+    # con `finalize`. Il blocco era duplicato qui, e la duplicazione ha gia'
+    # prodotto un 500 su questa esatta funzione: la ragione per cui non torna
+    # e' strutturale, non una nota da ricordarsi.
+    db.merge(_riga_tecnica(
+        stock_id, dims,
+        blended_return=p.get("blended_return"),
+        fac=_recent_signal_facets(db, [stock_id]).get(stock_id),
+        now=datetime.now(UTC),
     ))
     db.commit()
     return db.execute(
