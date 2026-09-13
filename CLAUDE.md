@@ -534,6 +534,52 @@ Ognuno ha un limite, e i limiti contano quanto i presidi.
 | Mutazione | `nightly.yml` | Righe eseguite la cui correttezza nessuno verifica | Quattro moduli soltanto |
 | Parita' immagine | CronJob nel cluster | Il pod non esegue il tag desiderato, da oltre 20 min | Nulla prima dei 20 min (finestra GitOps) |
 | Deriva del nodo | script a mano | Configurazione dichiarata e mai eseguita | Gira solo quando lo si lancia |
+| **Drill di ripristino** | CronJob nel cluster, lunedi' 04:00 | Che il backup si RILEGGA: schema, privilegi, conteggi contro il vivo, e la FRESCHEZZA del dato | Si salta da solo se il nodo ha meno di 3Gi liberi — e allora non verifica niente |
+
+### Il backup era sorvegliato in quattro modi e non era verificato (2026-09-13)
+
+Backup base giornaliero su object storage OCI, WAL continuo, retention 30d,
+piu' gli allarmi `PostgresBackupStale` e `PostgresBackupFailing`. Quattro
+presidi, tutti sul CATALOGO: che il backup parta, finisca, sia recente.
+
+⚠️ **Nessuno dei quattro puo' dire se i dati dentro si rileggono.** Un backup
+che completa ogni notte e ripristina un database corrotto li soddisfa tutti,
+per sempre. E il runbook — che la procedura ce l'ha, provata a mano una volta a
+luglio — chiudeva con «re-run the drill ... periodically otherwise»: **una
+cadenza che dipende da chi se la ricorda non e' una cadenza.**
+
+Il drill ora gira da solo. Quattro cose che non sono dettagli:
+
+1. **Il cluster di prova NON archivia** — nessun blocco `plugins`. Uno che
+   eredita la configurazione di Barman scrive WAL nella STESSA destinazione
+   della produzione: il drill corromperebbe il backup che esiste per
+   verificare. ⚠️ La garanzia e' un blocco ASSENTE, cioe' la forma che una
+   modifica distratta reintroduce senza accorgersene.
+2. **Il drill non deve causare il guasto da cui protegge.** Nodo singolo, disco
+   all'86%, ogni PVC `local-path` e' una directory li' sopra. Sotto soglia si
+   SALTA dichiarandolo: un drill saltato e visibile batte un nodo pieno.
+3. **La pulizia sta in un `trap`**, non in coda: un fallimento a meta'
+   lascerebbe il PVC e il guasto diventerebbe progressivo.
+4. **La freschezza e' la verifica che i quattro presidi non potevano fare** —
+   `max(ohlcv_daily.date)` entro N giorni. Una pipeline puo' riuscire per mesi
+   archiviando sempre lo stesso dato fermo, e da fuori e' identica a una che
+   funziona.
+
+⚠️ E i conteggi si confrontano con la produzione VIVA, non con soglie scritte a
+mano: una soglia fissa invecchia, e poi o non protegge piu' o fa arrossare
+qualcosa che nessuno ha rotto.
+
+**Prima esecuzione automatica: 2026-09-13, passata** — 29 tabelle, `fa_app`
+non-superuser, ultima barra a 2 giorni, 2.479.695 righe su 2.479.695, teardown
+pulito.
+
+⚠️ Nota di metodo, ed e' la terza istanza in questa sessione. Prima di scrivere
+gli allarmi ho verificato che le metriche esistessero, e la sonda ha risposto
+che mancavano TUTTE E QUATTRO — compresa una che un allarme esistente gia'
+usa. Era rotta la sonda: **`wget` non esiste nel container di Prometheus**.
+Interrogando dal proxy dell'API ci sono tutte. Una risposta pulita e falsa da
+uno strumento guasto e' il difetto piu' ricorrente di questo progetto: prima di
+credere a un «non c'e'», verificare che lo strumento sappia dire «c'e'».
 
 ### ⚠️ Una linea di base va generata DOVE viene applicata
 

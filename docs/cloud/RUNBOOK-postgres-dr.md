@@ -239,6 +239,18 @@ kubectl --kubeconfig=$KC delete pvc pg-restore-1 -n finance-alert --ignore-not-f
 |---|---|---|
 | 2026-07-16 | pass | First end-to-end proof of the procedure. |
 | 2026-09-09 | pass | 110 s to `Cluster in healthy state`. All four row counts identical to live. |
+| 2026-09-13 | pass | **First AUTOMATED run** (CronJob, triggered by hand to prove it runs). 29 tables, alembic `3d8693a96ce6`, `fa_app` non-superuser, last bar 2026-09-11 (2 d), 2 479 695 / 2 479 695 rows. Teardown clean: node back to 4.4 Gi free, no leftover cluster or PVC. |
+
+⚠️ **The identical row counts on 2026-09-13 are not luck, and not a bug.**
+The backup is up to 24 h old, so a difference would be normal — but the last
+bar is Friday 2026-09-11 and the drill ran on a Sunday: markets were shut, no
+scan ingested anything, so the two numbers *must* match. A check whose passing
+condition you cannot explain is not a check; this one is explainable.
+
+Corollary for `maxBarAgeDays`: on the Monday 04:00 schedule the freshest bar is
+normally Friday's, i.e. **3 days old**. The threshold is 5 so an extra public
+holiday does not fire a false alarm — and so a series that genuinely stopped
+updating still does.
 
 **2026-09-09, what it actually established.** The July run proved the
 *mechanism*. It could not prove anything about the objects sitting in the
