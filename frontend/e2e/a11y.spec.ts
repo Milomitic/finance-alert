@@ -290,8 +290,13 @@ test.afterAll(async () => {
    * per numero. Adesso la misura vera scende con l'artefatto — che e' anche
    * l'unico modo onesto di riallinearla dopo un cambio del SEME, il quale
    * sposta tutti i conteggi insieme senza che nessuna pagina sia peggiorata. */
-  fs.mkdirSync("playwright-report", { recursive: true });
-  fs.writeFileSync("playwright-report/a11y_baseline.candidata.json", file, "utf-8");
+  /* ⚠️ In `test-results/`, che e' la cartella che il job CARICA come
+   * artefatto. La prima stesura scriveva in `playwright-report/`: il file
+   * veniva prodotto — il log lo annunciava — e non usciva dalla macchina di
+   * CI. Un artefatto che non viene caricato e' esattamente come non scriverlo,
+   * con in piu' la riga di log che fa credere il contrario. */
+  fs.mkdirSync("test-results", { recursive: true });
+  fs.writeFileSync("test-results/a11y_baseline.candidata.json", file, "utf-8");
   console.log(
     "\nlinea di base CANDIDATA in playwright-report/a11y_baseline.candidata.json" +
       " (artefatto del job). Sostituisce backend/app/data/a11y_baseline.json" +

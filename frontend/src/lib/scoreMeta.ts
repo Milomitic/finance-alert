@@ -49,11 +49,32 @@ function scoreTone(score: number): ScoreTone {
 }
 
 /** Tailwind text-color class for a 0–100 score. Used by the big composite
- *  number in TopPicksCard rows and the gauge centerpiece in StockScoreCard. */
+ *  number in TopPicksCard rows and the gauge centerpiece in StockScoreCard.
+ *
+ *  ⚠️ Le tonalita' chiare sono 700, non 600, e i numeri sono misurati
+ *  (`scoreMeta.contrasto.test.ts` li rifa a ogni esecuzione):
+ *
+ *      amber-600  3,19 : 1   sotto la soglia AA di 4,5
+ *      amber-700  5,02 : 1
+ *      sky-600    4,10 : 1   sotto, e proprio per poco — il caso peggiore
+ *      sky-700    5,93 : 1
+ *
+ *  `sky-600` e' l'esempio di perche' questo va misurato e non guardato: a
+ *  4,10 sembra scuro abbastanza e non lo e'. Le due tonalita' sono rimaste
+ *  invisibili per mesi perche' i dati del gate non facevano MAI cadere un
+ *  punteggio nelle fasce «mediocre» e «buono»; sistemato il seme, sei nodi
+ *  sono comparsi in una volta su /stocks/AAPL.
+ *
+ *  ⚠️ E axe in jsdom non poteva vederle: senza fogli di stile calcolati il
+ *  contrasto non e' misurabile: CLAUDE.md lo registra gia'. Il test che le
+ *  sorveglia fa aritmetica sui token, non ispezione del DOM.
+ *
+ *  Le varianti scure restano 400: su fondo scuro sono gia' molto sopra la
+ *  soglia, e scurirle le porterebbe SOTTO. */
 export const SCORE_TEXT_TONE: Record<ScoreTone, string> = {
   weak: "text-rose-600 dark:text-rose-400",
-  mediocre: "text-amber-600 dark:text-amber-400",
-  good: "text-sky-600 dark:text-sky-400",
+  mediocre: "text-amber-700 dark:text-amber-400",
+  good: "text-sky-700 dark:text-sky-400",
   excellent: "text-emerald-800 dark:text-emerald-400",
 };
 
