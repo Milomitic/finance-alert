@@ -216,6 +216,49 @@ EQUIVALENTI: dict[str, str] = {
         "ragionevole (3-14) e non il valore esatto, di proposito — il numero e' "
         "una taratura, non un contratto, e fissarlo renderebbe rosso ogni "
         "ripensamento legittimo. Otto giorni resta una soglia sensata.",
+    # ── technical_score_service: solo le STRETTAMENTE equivalenti ───────
+    #
+    # ⚠️ Questo modulo chiude a 39 uccisi su 93 e il residuo NON e' un
+    # arretrato: e' una superficie di TARATURA. Le finestre (50/200/252/63/126
+    # /20/10), i periodi di ADX e RSI, il divisore 40, la miscela 0,6/0,4,
+    # l'arrotondamento a un decimale, il tetto di 260 barre — fissarli con un
+    # test significa rendere rossa ogni ritaratura legittima, cioe' il
+    # contrario di cio' per cui questi presidi esistono. Restano in linea di
+    # base, misurati e visibili. Qui sotto stanno SOLO quelli dove il codice
+    # mutato fa davvero la stessa cosa.
+    "app/services/technical_score_service.py:52  Gt -> GtE":
+        "`int(price > f)` e i suoi due gemelli. Il bordo si raggiunge solo dove "
+        "il prezzo eguaglia ESATTAMENTE la EMA, cioe' su una serie "
+        "perfettamente piatta — dove il punteggio di trend non significa "
+        "niente in nessuna delle due forme. ⚠️ E separare «un punto su quattro» "
+        "da «zero punti» richiederebbe di limitare la miscela 0,6+0,4·adx_w: "
+        "si congelerebbe una taratura per fissare un caso degenere. Il test "
+        "`test_una_serie_ferma_NON_legge_come_trend` tiene la guardia larga "
+        "(sotto la neutralita') proprio per non farlo.",
+    "app/services/technical_score_service.py:120  GtE -> Gt":
+        "`if n >= 10` davanti a `vol.iloc[-10:].mean()`. Con ESATTAMENTE dieci "
+        "barre le due strade calcolano la stessa media, perche' `vol[-10:]` E' "
+        "`vol`. Identiche, non simili — e comunque `partial_for` sbarra sotto "
+        "le trenta.",
+    "app/services/technical_score_service.py:147  Gt -> GtE":
+        "`num / wsum if wsum > 0 else None`. `wsum` somma i pesi delle parti "
+        "non nulle e `_blended_return` e' chiamata solo da `partial_for`, che "
+        "richiede almeno trenta barre: `_ret(close, min(63, n-1))` ha sempre un "
+        "k valido, quindi wsum >= 0,4. Il ramo in cui le due forme divergono "
+        "(wsum == 0) e' irraggiungibile.",
+    "app/services/technical_score_service.py:239  GtE -> Gt":
+        "`Alert.triggered_at >= cutoff` dove cutoff e' `now() - 14 giorni`, un "
+        "istante al microsecondo. Un avviso marcato ESATTAMENTE su quel "
+        "microsecondo non e' costruibile in modo deterministico: la differenza "
+        "esiste e non e' osservabile.",
+    "app/services/technical_score_service.py:347  1 -> 2":
+        "`.limit(1)` su una `where(stock_id == ...)` dove `stock_id` e' la "
+        "CHIAVE PRIMARIA di technical_scores: al massimo esiste una riga, e "
+        "`.first()` prende comunque la prima. Il limite e' cintura oltre alle "
+        "bretelle, non un filtro.",
+    "app/services/technical_score_service.py:373  1 -> 2":
+        "Il gemello alla rilettura finale, stessa ragione: chiave primaria, "
+        "una riga al massimo.",
     # ── signal_outcome_service: dieci superstiti, tutti dichiarati ───────
     #
     # ⚠️ Il modulo e' passato da 20 a 47 uccisi su 57. Questi dieci non sono i

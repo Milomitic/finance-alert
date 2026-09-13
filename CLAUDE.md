@@ -678,10 +678,80 @@ scorer della Forza non e' verificato», che era falso. Vale anche all'indietro �
 conteggio alto di sopravvissuti SI LEGGE COME RIGORE, ed e' la ragione per cui
 questo errore non si denuncia da solo.
 
-I tre moduli peggiori sono quelli dove un difetto silenzioso produce un numero
-plausibile invece di un errore: `technical_score_service` (107 mutanti, ~15%),
-`signal_outcome_service` (57, ~33%), `confluence_service` (38). Sono i
-candidati naturali dopo `security`.
+I moduli dove un difetto silenzioso produce un numero plausibile invece di un
+errore sono stati lavorati per primi. Il prossimo candidato e'
+`confluence_service` (38 mutanti).
+
+### ⚠️ Un residuo alto non vuol dire la stessa cosa in due moduli diversi
+
+`signal_outcome_service` chiude a **47 su 57** e `technical_score_service` a
+**39 su 93**, e la differenza NON e' quanto lavoro ci e' stato messo.
+
+Il magazzino degli esiti e' fatto di CONTRATTI: un colpo e' un colpo, il segno
+dell'eccesso segue il tono, una riga nasce solo se la barra futura esiste. Ogni
+mutante li' o rompe una regola o e' irraggiungibile, quindi il residuo scende
+quasi a zero e i dieci superstiti stanno tutti in `EQUIVALENTI` con la ragione.
+
+La lente Tecnico e' fatta di TARATURE: le finestre (50/200/252/63/126/20/10),
+i periodi di ADX e RSI, il divisore 40, la miscela 0,6+0,4·adx_w,
+l'arrotondamento, il tetto di 260 barre. **Fissarle con un test significa
+rendere rossa ogni ritaratura legittima**, cioe' il contrario di cio' per cui
+questi presidi esistono. Le ~46 che restano sono in linea di base, misurate e
+visibili, e non sono un arretrato da smaltire.
+
+⚠️ La regola che ha guidato il triage, e vale oltre la mutazione: **il criterio
+non e' «quanto e' importante» ma «cosa succede a chi ritara».** Fissare
+`adx(ohlcv, 14)` lascia il prossimo davanti a un rosso che non distingue «hai
+rotto qualcosa» da «hai cambiato idea». Fissare che una serie ferma non legga
+come trend non impedisce nessuna ritaratura: nessuno vuole quel
+comportamento. Due asserzioni sulla stessa riga possono cadere da parti
+diverse — su `pos = (price-lo)/rng if rng > 0 else 0.5` il VALORE 0,5 e'
+taratura, il fatto che il denominatore sia protetto e che il ripiego stia a
+meta' scala invece che a un estremo e' contratto.
+
+### Due difetti veri trovati scrivendo quei test (2026-09-13)
+
+Nessuno dei due e' stato trovato leggendo il codice.
+
+1. **Un titolo fermo spariva dalla lente Tecnico.** `_momentum` guardava
+   `if n > 15 else 50.0`, cioe' il numero di BARRE. Doppiamente sbagliato:
+   `_momentum` e' chiamata solo da `partial_for`, che sbarra sotto le trenta,
+   quindi quel ramo era CODICE MORTO; e il caso reale non e' «poche barre» ma
+   una serie PIATTA, dove guadagni e perdite sono entrambi zero, l'RSI e' tutto
+   NaN e `.iloc[-1]` su una serie vuota solleva IndexError — raccolto dal
+   `except Exception` di `partial_for`, che rende None. La riga del MACD due
+   sotto lo faceva gia' nel modo giusto (`if hd.size`). ⚠️ Stessa forma del
+   `_RANGE_PERIODS` morto: un ramo inerte che sembra coprire il caso e' peggio
+   di nessun ramo, perche' corrobora la convinzione che sia coperto.
+
+2. **La costruzione della riga persistita era duplicata** fra `finalize` e
+   `recompute_one`, postura e arrotondamenti compresi — e quella duplicazione
+   aveva GIA' prodotto un 500 in produzione quando `_recent_signal_facets`
+   passo' da "confidence" a "strength" e solo una copia fu aggiornata. La
+   correzione di allora sistemo' la copia. Ora `_posture` e `_riga_tecnica`
+   sono proprietari unici. ⚠️ La sonda l'aveva reso visibile segnalando gli
+   STESSI mutanti due volte, alle righe 236 e 322: non due lacune, la stessa
+   logica non verificata in due posti. **Mutanti in coppia sono un indizio di
+   duplicazione, non di doppio lavoro** — e togliere la copia ha portato il
+   modulo da 107 a 93 mutanti, cioe' meno codice non verificato invece di piu'
+   test.
+
+### ⚠️ Una linea di base con chiave `file:riga` arrossisce su un COMMENTO
+
+Difetto noto e NON corretto, da conoscere prima di toccare uno dei dodici
+moduli. `mutation_probe` gira in `nightly.yml` senza `continue-on-error` e
+rende 1 quando trova sopravvissuti nuovi; la chiave della linea di base e'
+`file:riga  prima -> dopo`. Aggiungere un commento sposta ogni riga sotto, e
+tutti i suoi mutanti diventano «NUOVI»: la notturna va rossa su codice che
+nessuno ha toccato — la forma esatta che questo file dice tre volte essere
+fatale a un cancello.
+
+Misurato: un commento di nove righe in `signal_outcome_service` ha prodotto
+quattro falsi sopravvissuti; il riassetto di `technical_score_service` ne
+avrebbe prodotti 85. La mitigazione attuale e' rigenerare la linea di base del
+modulo toccato (`--modulo X --scrivi`, che conserva gli altri). La correzione
+vera e' una chiave indipendente dalla riga — per esempio
+`modulo::funzione#N  prima -> dopo` — e costa una rigenerazione completa.
 
 ### `app/core/security.py`: da 0 su 9 a 7 su 9 (2026-09-13)
 
