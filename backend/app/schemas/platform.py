@@ -379,6 +379,43 @@ class InfraComponentOut(BaseModel):
     up: bool
 
 
+class TargetDownOut(BaseModel):
+    """Un target di scraping giu', con abbastanza contesto per agire."""
+
+    job: str
+    namespace: str
+    #: `None` quando Prometheus non espone l'etichetta: assente, non "?".
+    instance: str | None = None
+
+
+class AlertFiringOut(BaseModel):
+    """Un alert che sta scattando, con cosa dice e da quando.
+
+    ⚠️ `summary` e `since` vengono dalle ANNOTAZIONI di `/api/v1/alerts`, non
+    dalla serie `ALERTS` che porta solo etichette. Restano `None` quando quel
+    percorso non risponde: il nome da solo e' meno utile, mai sbagliato.
+    """
+
+    name: str
+    severity: str | None = None
+    since: str | None = None
+    summary: str | None = None
+    #: Su quale oggetto sta scattando (pod, istanza o job).
+    target: str | None = None
+
+
+class RestartDetailOut(BaseModel):
+    """Quale contenitore si e' riavviato, quante volte e perche'."""
+
+    pod: str
+    container: str
+    count: int
+    #: Motivo dell'ULTIMA terminazione (OOMKilled, Error, ...). `None` quando
+    #: manca — un pod ricreato da zero non ne ha uno, e inventare una stringa
+    #: la farebbe sembrare un motivo letto.
+    reason: str | None = None
+
+
 class InfraHealthOut(BaseModel):
     """Cluster + observability rollup read from Prometheus.
 
@@ -396,12 +433,17 @@ class InfraHealthOut(BaseModel):
 
     targets_up: int | None = None
     targets_down: int | None = None
-    down_targets: list[str] = []
+    # ⚠️ Oggetti e non stringhe: «1 target giu'» manda a kubectl, il job piu'
+    # l'istanza sono la risposta.
+    down_targets: list[TargetDownOut] = []
     # Watchdog is excluded: it fires forever by design, as the canary proving
     # Alertmanager delivers. Counted, it leaves the card permanently red.
     alerts_firing: int | None = None
-    firing_alerts: list[str] = []
+    firing_alerts: list[AlertFiringOut] = []
     restarts_24h: int | None = None
+    # ⚠️ Il conteggio dei riavvii non e' azionabile da solo: «3» manda a
+    # cercare, «app OOMKilled x3» dice gia' che fare.
+    restart_details: list[RestartDetailOut] = []
     memory_pct: float | None = None
     cert_days: float | None = None
     # None when nobody scrapes argocd-metrics — "non monitorato" is honest,

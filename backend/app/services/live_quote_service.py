@@ -561,6 +561,62 @@ def _eod_fallback_quote(ticker: str) -> LiveQuote:
         )
 
 
+# ─── Quarantena dei ticker morti, letta UNA volta ogni dieci minuti ─────────
+#
+# ⚠️ La regola esiste gia' e ha un proprietario: `ohlcv_service`. Qui si LEGGE,
+# non si ri-implementa — due copie di una regola in due posti sono esattamente
+# la forma che diverge, e quel modulo lo dice gia' di se' ("kept next to
+# split_quarantined and covered by a test that asserts the two agree").
+#
+# ⚠️ E il guardiano sta QUI, nel servizio, non nei chiamanti. Il 26 agosto 2026
+# la stessa diagnosi era gia' stata fatta — il docstring di
+# `not_quarantined_clause` nomina BK, CTRA, APLS, TERN, VSCO e «circa 2.200
+# righe di log in 48 ore» — e la clausola fu aggiunta al solo
+# `live_universe_sweep_service`. I warning sono tornati perche' il difetto non
+# era del chiamante: e' che ogni chiamante doveva ricordarsene. Screener,
+# dettaglio titolo e pagina mercati chiedono le stesse quotazioni per conto
+# proprio, e nessuno dei tre filtrava.
+_QUARANTENA: set[str] = set()
+_QUARANTENA_LETTA_A: float = 0.0
+#: Dieci minuti: la quarantena cambia al ritmo di una scansione, non di un tick,
+#: e una lettura per ticker per sweep sarebbe una query ogni quindici secondi.
+_QUARANTENA_TTL = 10 * 60.0
+
+
+def _ticker_in_quarantena() -> set[str]:
+    """I ticker che l'OHLCV ha gia' dichiarato morti. Mai solleva."""
+    global _QUARANTENA, _QUARANTENA_LETTA_A
+    adesso = time.time()
+    if _QUARANTENA_LETTA_A and (adesso - _QUARANTENA_LETTA_A) < _QUARANTENA_TTL:
+        return _QUARANTENA
+    try:
+        from sqlalchemy import select
+
+        from app.core.db import SessionLocal
+        from app.models import Stock
+        from app.services import ohlcv_service
+
+        with SessionLocal() as db:
+            righe = db.execute(
+                select(Stock.ticker).where(~ohlcv_service.not_quarantined_clause())
+            ).scalars().all()
+        _QUARANTENA = {t for t in righe if t}
+        _QUARANTENA_LETTA_A = adesso
+    except Exception as e:  # noqa: BLE001
+        # Un errore qui non deve impedire le quotazioni: al peggio si torna a
+        # interrogare yfinance per qualche ticker morto, che e' lo stato di
+        # prima e non un peggioramento.
+        logger.debug(f"[live_quote] lettura quarantena fallita: {e}")
+    return _QUARANTENA
+
+
+def reset_quarantena_cache() -> None:
+    """Per i test e per chi cambia la quarantena e vuole vederla subito."""
+    global _QUARANTENA, _QUARANTENA_LETTA_A
+    _QUARANTENA = set()
+    _QUARANTENA_LETTA_A = 0.0
+
+
 def _fetch_fresh(ticker: str, *, allow_remote_today_fetch: bool = True) -> LiveQuote:
     """Hit yfinance fast_info for one ticker. Wrapped for monkeypatching.
 
@@ -574,6 +630,26 @@ def _fetch_fresh(ticker: str, *, allow_remote_today_fetch: bool = True) -> LiveQ
 
     if yfinance_health.is_open(yfinance_health.LANE_QUOTES):
         return _eod_fallback_quote(ticker)
+
+    # ⚠️ Un ticker in quarantena non si chiede: yfinance risponde con un
+    # `AttributeError` sul proprio stato interno ('PriceHistory' object has no
+    # attribute '_dividends'), che non dice niente a chi legge i log e non
+    # viene riconosciuto come guasto dal contatore di salute — quindi produceva
+    # un WARNING ogni quindici secondi, per sempre, senza che nessun cruscotto
+    # lo contasse.
+    if ticker in _ticker_in_quarantena():
+        q = _eod_fallback_quote(ticker)
+        # ⚠️ STALE e non CLOSED. L'ultima barra puo' avere MESI (misurato:
+        # APLS ferma al 2026-05-15, BK al 2026-07-10) e presentarla come «mercato
+        # chiuso» la fa sembrare la chiusura di ieri. CLAUDE.md lo dice senza
+        # margini: un prezzo ripristinato non deve mai presentarsi come vivo.
+        if q.error is None:
+            q.market_state = "STALE"
+        logger.debug(
+            f"[live_quote] {ticker}: in quarantena OHLCV, servita l'ultima barra "
+            f"({q.as_of_date}) invece di interrogare yfinance"
+        )
+        return q
 
     quote = LiveQuote(ticker=ticker, fetched_at=time.time())
 

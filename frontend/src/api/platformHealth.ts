@@ -368,18 +368,53 @@ export type InfraComponent = {
  *  run reads as UNAVAILABLE, never as zero. "0 target giù" and "non ho potuto
  *  chiedere" are opposite statements, and drawing the second as the first is
  *  how a monitoring panel goes green by going blind. */
+/** Un target di scraping giu'. L'istanza accanto al job: su un job con piu'
+ *  endpoint, il solo nome del job non dice QUALE e' caduto. */
+export type TargetDown = {
+  job: string;
+  namespace: string;
+  instance: string | null;
+};
+
+/** Un alert che sta scattando, con cosa dice e da quando.
+ *
+ *  ⚠️ `summary` e `since` arrivano dalle ANNOTAZIONI di Prometheus e restano
+ *  `null` quando quel percorso non risponde: il nome da solo e' meno utile,
+ *  mai sbagliato. */
+export type AlertFiring = {
+  name: string;
+  severity: string | null;
+  since: string | null;
+  summary: string | null;
+  target: string | null;
+};
+
+/** Un contenitore che si e' riavviato nelle 24 ore. */
+export type RestartDetail = {
+  pod: string;
+  container: string;
+  count: number;
+  /** Motivo dell'ULTIMA terminazione. `null` quando manca — un pod ricreato da
+   *  zero non ne ha uno, e inventarlo lo farebbe sembrare letto. */
+  reason: string | null;
+};
+
 export type InfraHealth = {
   available: boolean;
   error: string | null;
   prometheus_url: string | null;
   targets_up: number | null;
   targets_down: number | null;
-  down_targets: string[];
+  down_targets: TargetDown[];
   /** Watchdog excluded — it fires forever by design, as the canary proving
    *  Alertmanager delivers. */
   alerts_firing: number | null;
-  firing_alerts: string[];
+  firing_alerts: AlertFiring[];
   restarts_24h: number | null;
+  /** Quale contenitore si e' riavviato, quante volte e perche'. Il conteggio
+   *  da solo non e' azionabile: «3» manda a cercare, «app OOMKilled x3» dice
+   *  gia' che fare. */
+  restart_details: RestartDetail[];
   memory_pct: number | null;
   cert_days: number | null;
   /** Null when nobody scrapes argocd-metrics: "non monitorato" is honest, a

@@ -53,8 +53,18 @@ def test_a11y_e_misurata():
 
 def test_mutanti_sono_misurati():
     d = _carica("mutation_baseline.json")
-    assert d["totale_mutanti"] > 50, "troppo pochi mutanti per essere una passata vera"
-    assert d["uccisi"] > 0, (
+    # ⚠️ I conteggi sono PER MODULO e il totale e' la loro somma.
+    #
+    # Erano due numeri unici, e una passata mirata (`--modulo fx_service`) li
+    # sovrascriveva coi propri: il file diceva «27 mutanti» invece di 130 e
+    # questo test diventava rosso su un dato corretto ma parziale. Tenendoli
+    # per modulo, una mirata aggiorna solo la propria voce.
+    per_modulo = d["per_modulo"]
+    assert len(per_modulo) >= 3, "troppo pochi moduli misurati"
+    totale = sum(v["mutanti"] for v in per_modulo.values())
+    uccisi = sum(v["uccisi"] for v in per_modulo.values())
+    assert totale > 50, "troppo pochi mutanti per essere una passata vera"
+    assert uccisi > 0, (
         "zero uccisi significa che la suite bersaglio non girava: ogni mutante "
         "sarebbe 'sopravvissuto' e il numero non direbbe niente sui test."
     )

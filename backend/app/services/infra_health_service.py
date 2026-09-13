@@ -85,6 +85,17 @@ _ARGOCD = 'argocd_app_info{name="finance-alert"}'
 # One row per scraped component, so the card can name what is down instead of
 # only counting it.
 _COMPONENTS = 'up{namespace=~"monitoring|argocd|cert-manager|finance-alert"}'
+# ⚠️ Il CONTEGGIO dei riavvii non dice niente di azionabile. «3 riavvii» manda
+# a `kubectl`; «app OOMKilled x3» e' la risposta. Queste due righe portano il
+# contenitore e il motivo dell'ultima terminazione, che sono le sole due cose
+# che cambiano cosa si fa dopo averle lette.
+_RESTARTS_BY_CONTAINER = (
+    f"sum by (pod, container) "
+    f"(increase(kube_pod_container_status_restarts_total{{{_NS},container!=\"\"}}[24h]))"
+)
+_LAST_TERMINATED = (
+    f'kube_pod_container_status_last_terminated_reason{{{_NS},container!=""}}'
+)
 
 
 def _prom_url() -> str:
@@ -111,6 +122,79 @@ def _fetch(expr: str) -> dict | None:
         # page load and would drown the log in expected noise.
         logger.debug(f"prometheus query failed: {expr}")
         return None
+
+
+def _fetch_active_alerts() -> list[dict] | None:
+    """Gli alert attivi con ANNOTAZIONI, da `/api/v1/alerts`.
+
+    ⚠️ Endpoint diverso da `/api/v1/query` di proposito: la serie `ALERTS`
+    porta solo le etichette, quindi da li' si sa il NOME di un alert e non che
+    cosa dice. `summary`/`description` sono annotazioni e vivono solo qui — e
+    sono la differenza fra «KubePodCrashLooping» e «il pod app riavvia da 12
+    minuti». Restituisce None su qualunque problema: assente non e' zero.
+    """
+    url = f"{_prom_url()}/api/v1/alerts"
+    if not _is_http_url(url):
+        return None
+    try:
+        with urllib.request.urlopen(url, timeout=_TIMEOUT_S) as r:  # noqa: S310 - scheme validated above
+            payload = json.loads(r.read())
+    except (urllib.error.URLError, OSError, ValueError, TimeoutError):
+        logger.debug("prometheus /alerts failed")
+        return None
+    if not isinstance(payload, dict) or payload.get("status") != "success":
+        return None
+    data = payload.get("data")
+    if not isinstance(data, dict):
+        return None
+    alerts = data.get("alerts")
+    return alerts if isinstance(alerts, list) else None
+
+
+def _alert_details(
+    serie: list[tuple[dict, float]],
+    fetch_alerts: Callable[[], list[dict] | None] | None = None,
+) -> list[dict]:
+    """Nome + severita' + da quando + che cosa dice, per ogni alert attivo.
+
+    ⚠️ Le ANNOTAZIONI arrivano da `/api/v1/alerts`, le etichette dalla serie
+    `ALERTS`. Si uniscono per nome: la serie e' la fonte autorevole di CHI sta
+    scattando (e' quella che il conteggio usa), le annotazioni aggiungono il
+    testo. Se `/api/v1/alerts` non risponde si degrada al solo nome — meno
+    utile, mai sbagliato.
+    """
+    # ⚠️ Iniettabile, come `fetch`. Questo modulo ha gia' una cucitura per la
+    # rete e i test la usano; una seconda chiamata che la scavalca fa scattare
+    # la guardia anti-rete della suite — ed e' esattamente quello che e'
+    # successo scrivendo questa funzione.
+    attivi = (fetch_alerts() or []) if fetch_alerts is not None else []
+    per_nome: dict[str, dict] = {}
+    for a in attivi:
+        if not isinstance(a, dict):
+            continue
+        lab = a.get("labels") or {}
+        nome = lab.get("alertname")
+        if nome and nome not in per_nome:
+            per_nome[nome] = a
+
+    out: list[dict] = []
+    visti: set[str] = set()
+    for m, _ in serie:
+        nome = m.get("alertname") or "?"
+        if nome in visti:
+            continue
+        visti.add(nome)
+        extra = per_nome.get(nome, {})
+        ann = extra.get("annotations") or {}
+        out.append({
+            "name": nome,
+            "severity": m.get("severity") or (extra.get("labels") or {}).get("severity"),
+            "since": extra.get("activeAt"),
+            "summary": ann.get("summary") or ann.get("description"),
+            # Su quale oggetto: la prima etichetta utile fra queste.
+            "target": m.get("pod") or m.get("instance") or m.get("job") or None,
+        })
+    return sorted(out, key=lambda d: d["name"])
 
 
 def _result(payload: dict | None) -> list[dict] | None:
@@ -161,14 +245,32 @@ def _int(v: float | None) -> int | None:
 
 
 def compute_infra_health(
-    *, fetch: Callable[[str], dict | None] | None = None
+    *,
+    fetch: Callable[[str], dict | None] | None = None,
+    fetch_alerts: Callable[[], list[dict] | None] | None = None,
 ) -> dict:
     """Cluster + observability rollup. Never raises.
 
     `fetch` is injectable so the honesty rules above can be tested without a
     Prometheus — which is also the state this runs in on a laptop.
+
+    ⚠️ `fetch_alerts` e' una SECONDA cucitura perche' le annotazioni degli
+    alert vivono su un endpoint diverso (`/api/v1/alerts`, non
+    `/api/v1/query`). Aggiungerla e' stato obbligatorio, non elegante: la prima
+    stesura chiamava `urlopen` direttamente e faceva scattare la guardia
+    anti-rete della suite in sette test che non c'entravano niente. Una
+    cucitura che vale per un solo percorso di rete su due non e' una cucitura.
     """
     do_fetch = fetch or _fetch
+    # ⚠️ Iniettare UNA cucitura non deve lasciare l'altra aperta sulla rete.
+    #
+    # Chi passa `fetch` sta isolando questo modulo — un test, o un contesto
+    # senza Prometheus. Se in quel caso le annotazioni continuassero a partire
+    # da sole, l'isolamento sarebbe apparente: e' successo, e ha fatto fallire
+    # sette test che non parlavano di alert. Senza un `fetch_alerts` esplicito
+    # si degrada a «niente annotazioni», che e' meno informativo e mai
+    # sbagliato — mai a una chiamata di rete non richiesta.
+    do_fetch_alerts = fetch_alerts or (None if fetch is not None else _fetch_active_alerts)
 
     def ask(expr: str, *, empty_is_zero: bool = False) -> float | None:
         """Isolated sub-query: a metric this cluster does not expose costs its
@@ -209,6 +311,7 @@ def compute_infra_health(
             "alerts_firing": None,
             "firing_alerts": [],
             "restarts_24h": None,
+            "restart_details": [],
             "memory_pct": None,
             "cert_days": None,
             "argocd": None,
@@ -218,13 +321,40 @@ def compute_infra_health(
     down = ask(_DOWN_COUNT, empty_is_zero=True)
     # Naming the down target is the whole value of the row: "1 target giù"
     # sends you to kubectl, "finance-alert/finance-alert" is the answer.
+    # ⚠️ L'ISTANZA accanto al job. «monitoring/kubelet» dice quale job; senza
+    # l'istanza, su un job con piu' endpoint resta da scoprire QUALE e' giu'.
     down_targets = [
-        f"{m.get('namespace', '?')}/{m.get('job', '?')}"
+        {
+            "job": m.get("job") or "?",
+            "namespace": m.get("namespace") or "?",
+            "instance": m.get("instance") or None,
+        }
         for m, _ in ask_series(_DOWN_LIST)
     ]
     firing = ask(_ALERT_COUNT, empty_is_zero=True)
-    firing_alerts = sorted(
-        {m.get("alertname", "?") for m, _ in ask_series(_ALERT_LIST)}
+    firing_alerts = _alert_details(ask_series(_ALERT_LIST), do_fetch_alerts)
+
+    # Riavvii: il conteggio non basta, serve CHI e PERCHE'.
+    motivi = {
+        (m.get("pod"), m.get("container")): m.get("reason")
+        for m, _ in ask_series(_LAST_TERMINATED)
+        if m.get("reason")
+    }
+    restart_details = sorted(
+        (
+            {
+                "pod": m.get("pod") or "?",
+                "container": m.get("container") or "?",
+                "count": int(round(v)),
+                # ⚠️ `None` e non "Unknown": il motivo dell'ULTIMA terminazione
+                # puo' mancare (un pod ricreato da zero non ne ha uno), e
+                # inventare una stringa la farebbe sembrare un motivo letto.
+                "reason": motivi.get((m.get("pod"), m.get("container"))),
+            }
+            for m, v in ask_series(_RESTARTS_BY_CONTAINER)
+            if round(v) >= 1
+        ),
+        key=lambda d: (-d["count"], d["pod"], d["container"]),
     )
 
     argocd = None
@@ -257,6 +387,7 @@ def compute_infra_health(
         "alerts_firing": _int(firing),
         "firing_alerts": firing_alerts,
         "restarts_24h": _int(ask(_RESTARTS, empty_is_zero=True)),
+        "restart_details": restart_details,
         "memory_pct": ask(_MEMORY_PCT),
         "cert_days": ask(_CERT_DAYS),
         "argocd": argocd,

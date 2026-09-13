@@ -123,13 +123,41 @@ def test_down_targets_are_named_not_just_counted():
         if expr.startswith("count(up == 0"):
             return _ok(({}, "1"))
         if expr == "up == 0":
-            return _ok(({"job": "finance-alert", "namespace": "finance-alert"}, "0"))
+            return _ok((
+                {
+                    "job": "finance-alert",
+                    "namespace": "finance-alert",
+                    "instance": "10.42.0.9:8000",
+                },
+                "0",
+            ))
         return _ok()
 
     out = infra.compute_infra_health(fetch=fetch)
 
     assert out["targets_down"] == 1
-    assert out["down_targets"] == ["finance-alert/finance-alert"]
+    # ⚠️ Oggetti e non piu' stringhe: il job da solo non basta quando ne ha
+    # piu' endpoint — resta da scoprire QUALE e' caduto, che e' la stessa
+    # domanda che il nome del job doveva chiudere.
+    assert out["down_targets"] == [{
+        "job": "finance-alert",
+        "namespace": "finance-alert",
+        "instance": "10.42.0.9:8000",
+    }]
+
+
+def test_un_target_senza_istanza_dice_assente_non_punto_interrogativo():
+    """Prometheus puo' non esporre `instance`, ed e' diverso da un'istanza
+    vuota. `None` lo dice; "?" lo travestirebbe da valore letto."""
+    def fetch(expr: str):
+        if expr.startswith("count(up == 0"):
+            return _ok(({}, "1"))
+        if expr == "up == 0":
+            return _ok(({"job": "kubelet", "namespace": "monitoring"}, "0"))
+        return _ok()
+
+    out = infra.compute_infra_health(fetch=fetch)
+    assert out["down_targets"][0]["instance"] is None
 
 
 def test_the_watchdog_is_excluded_from_the_firing_count():
@@ -198,3 +226,103 @@ def test_memory_percentage_passes_through(value: str, expected: float):
         return _ok(({}, value)) if "memory" in expr else _ok()
 
     assert infra.compute_infra_health(fetch=fetch)["memory_pct"] == expected
+
+
+def test_un_alert_porta_severita_da_quando_e_che_cosa_dice():
+    """⚠️ Il nome di un alert non e' una diagnosi.
+
+    «KubePodCrashLooping» manda a cercare; «il pod app riavvia da 12 minuti,
+    warning» dice gia' che fare. Le annotazioni vivono SOLO su
+    `/api/v1/alerts`: la serie `ALERTS` porta le etichette e basta.
+    """
+    def fetch(expr: str):
+        if "ALERTS" in expr and expr.startswith("count("):
+            return _ok(({}, "1"))
+        if expr.startswith("ALERTS"):
+            return _ok((
+                {"alertname": "KubePodCrashLooping", "severity": "warning",
+                 "pod": "finance-alert-0"},
+                "1",
+            ))
+        return _ok()
+
+    def fetch_alerts():
+        return [{
+            "labels": {"alertname": "KubePodCrashLooping"},
+            "annotations": {"summary": "Il pod app riavvia in ciclo"},
+            "activeAt": "2026-09-13T01:00:00Z",
+        }]
+
+    out = infra.compute_infra_health(fetch=fetch, fetch_alerts=fetch_alerts)
+    (a,) = out["firing_alerts"]
+    assert a["name"] == "KubePodCrashLooping"
+    assert a["severity"] == "warning"
+    assert a["target"] == "finance-alert-0"
+    assert a["summary"] == "Il pod app riavvia in ciclo"
+    assert a["since"] == "2026-09-13T01:00:00Z"
+
+
+def test_senza_annotazioni_resta_il_NOME_e_non_si_inventa_nulla():
+    """⚠️ `/api/v1/alerts` puo' non rispondere. Il nome da solo e' meno utile,
+    mai sbagliato — e i campi mancanti restano `None`, non stringhe finte."""
+    def fetch(expr: str):
+        if "ALERTS" in expr and expr.startswith("count("):
+            return _ok(({}, "1"))
+        if expr.startswith("ALERTS"):
+            return _ok(({"alertname": "TargetDown"}, "1"))
+        return _ok()
+
+    out = infra.compute_infra_health(fetch=fetch, fetch_alerts=lambda: None)
+    (a,) = out["firing_alerts"]
+    assert a["name"] == "TargetDown"
+    assert a["summary"] is None
+    assert a["since"] is None
+    assert a["severity"] is None
+
+
+def test_i_riavvii_dicono_QUALE_contenitore_e_PERCHE():
+    """«3 riavvii» manda a kubectl; «app OOMKilled ×3» e' la risposta."""
+    def fetch(expr: str):
+        if expr.startswith("sum by (pod, container)"):
+            return _ok((
+                {"pod": "finance-alert-finance-alert-0", "container": "app"}, "3",
+            ))
+        if expr.startswith("kube_pod_container_status_last_terminated_reason"):
+            return _ok((
+                {"pod": "finance-alert-finance-alert-0", "container": "app",
+                 "reason": "OOMKilled"},
+                "1",
+            ))
+        return _ok()
+
+    out = infra.compute_infra_health(fetch=fetch)
+    (r,) = out["restart_details"]
+    assert r["container"] == "app"
+    assert r["count"] == 3
+    assert r["reason"] == "OOMKilled"
+
+
+def test_un_motivo_mancante_resta_None_e_non_diventa_Unknown():
+    """Un pod ricreato da zero non ha un'ultima terminazione. Inventare una
+    parola la farebbe sembrare letta — stessa regola fra assenza e zero che il
+    repo applica ai numeri, qui applicata a una stringa."""
+    def fetch(expr: str):
+        if expr.startswith("sum by (pod, container)"):
+            return _ok(({"pod": "p", "container": "app"}, "1"))
+        return _ok()
+
+    out = infra.compute_infra_health(fetch=fetch)
+    (r,) = out["restart_details"]
+    assert r["reason"] is None
+
+
+def test_zero_riavvii_non_produce_una_riga():
+    """⚠️ Il controllo negativo dei due sopra: senza, una funzione che elenca
+    sempre qualcosa li passerebbe comunque. E una riga «app ×0» sarebbe rumore
+    permanente nella scheda."""
+    def fetch(expr: str):
+        if expr.startswith("sum by (pod, container)"):
+            return _ok(({"pod": "p", "container": "app"}, "0"))
+        return _ok()
+
+    assert infra.compute_infra_health(fetch=fetch)["restart_details"] == []

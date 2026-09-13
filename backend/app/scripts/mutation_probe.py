@@ -218,6 +218,15 @@ _PERCHE_BASE = (
 )
 
 
+def _carica_conteggi() -> dict[str, dict[str, int]]:
+    """I conteggi per modulo gia' noti, o vuoto."""
+    try:
+        d = json.loads(LINEA_BASE.read_text(encoding="utf-8"))
+        return d.get("per_modulo", {})
+    except (FileNotFoundError, ValueError):
+        return {}
+
+
 def _carica_base() -> set[str]:
     try:
         return set(json.loads(LINEA_BASE.read_text(encoding="utf-8")).get("sopravvissuti", []))
@@ -253,9 +262,20 @@ def main() -> int:
 
     sopravvissuti: list[str] = []
     totale = 0
+    conteggi: dict[str, dict[str, int]] = {}
     for modulo, test in bersagli.items():
         percorso = RADICE / modulo
-        originale = percorso.read_text(encoding="utf-8")
+        # ⚠️ BYTE, non testo. `read_text`/`write_text` traducono i fine riga:
+        # su Windows un file CRLF tornava LF dopo il ripristino, `git status`
+        # lo segnalava come modificato, e il controllo «albero pulito» in fondo
+        # dichiarava un ripristino mancato che non era mai avvenuto. Effetto:
+        # la linea di base NON veniva mai scritta, e il messaggio finiva su
+        # stderr dove una pipeline con `tail` lo nascondeva.
+        #
+        # Ripristinare i byte esatti e' anche l'unica definizione onesta di
+        # «ripristinato»: un file che differisce di un carattere non e' quello
+        # di prima.
+        originale_byte = percorso.read_bytes()
         mutanti = genera(percorso)
         print(f"\n{modulo}: {len(mutanti)} mutanti, test {' '.join(test)}")
 
@@ -276,8 +296,10 @@ def main() -> int:
                     sopravvissuti.append(f"{modulo}:{m.riga}  {m.prima} -> {m.dopo}")
                 print(f"  [{n}/{len(mutanti)}] riga {m.riga}: {m.prima} -> {m.dopo}  {stato}")
         finally:
-            # Sempre, anche su eccezione o interruzione.
-            percorso.write_text(originale, encoding="utf-8")
+            # Sempre, anche su eccezione o interruzione, e byte per byte.
+            percorso.write_bytes(originale_byte)
+        vivi_qui = sum(1 for s in sopravvissuti if s.startswith(modulo))
+        conteggi[modulo] = {"mutanti": len(mutanti), "uccisi": len(mutanti) - vivi_qui}
 
     print(f"\n{'=' * 60}")
     uccisi = totale - len(sopravvissuti)
@@ -307,8 +329,18 @@ def main() -> int:
         LINEA_BASE.parent.mkdir(parents=True, exist_ok=True)
         LINEA_BASE.write_text(json.dumps({
             "_perche": _PERCHE_BASE,
-            "totale_mutanti": totale,
-            "uccisi": uccisi,
+            # ⚠️ I totali sono PER MODULO, non globali.
+            #
+            # Scriverli come numeri unici faceva sovrascrivere il totale
+            # dell'intera passata con quello di una mirata: dopo un
+            # `--modulo fx_service` il file diceva «27 mutanti» invece di 130,
+            # e il test che pretende una passata vera diventava rosso. Tenendo
+            # il conto per modulo, una passata mirata aggiorna solo la propria
+            # voce e il totale resta la somma di cio' che si sa.
+            "per_modulo": {
+                **{k: v for k, v in _carica_conteggi().items() if k not in bersagli},
+                **conteggi,
+            },
             # ⚠️ Deduplicati: la chiave "file:riga  prima -> dopo" non e' unica
             # — due mutazioni identiche sulla stessa riga la condividono — e il
             # confronto usa un insieme. Senza `set` il conteggio scritto e

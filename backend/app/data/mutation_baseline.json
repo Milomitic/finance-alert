@@ -1,7 +1,23 @@
 {
   "_perche": "Sopravvissuti MISURATI, non tollerati per sempre: ogni riga qui e' una riga eseguita dai test la cui CORRETTEZZA nessuno verifica. Il cancello impedisce che il numero cresca; cala scrivendo test. Rigenerare con --scrivi solo DOPO aver ucciso qualcosa, mai per far passare la CI.",
-  "totale_mutanti": 27,
-  "uccisi": 22,
+  "per_modulo": {
+    "app/services/image_provenance.py": {
+      "mutanti": 9,
+      "uccisi": 7
+    },
+    "app/services/currency_units.py": {
+      "mutanti": 4,
+      "uccisi": 4
+    },
+    "app/services/fx_service.py": {
+      "mutanti": 27,
+      "uccisi": 22
+    },
+    "app/services/setup_service.py": {
+      "mutanti": 90,
+      "uccisi": 27
+    }
+  },
   "sopravvissuti": [
     "app/services/fx_service.py:100  Or -> And",
     "app/services/fx_service.py:105  0 -> 1",
