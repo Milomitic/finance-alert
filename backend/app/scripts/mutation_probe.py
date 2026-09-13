@@ -212,6 +212,61 @@ EQUIVALENTI: dict[str, str] = {
         "ragionevole (3-14) e non il valore esatto, di proposito — il numero e' "
         "una taratura, non un contratto, e fissarlo renderebbe rosso ogni "
         "ripensamento legittimo. Otto giorni resta una soglia sensata.",
+    # ── signal_outcome_service: dieci superstiti, tutti dichiarati ───────
+    #
+    # ⚠️ Il modulo e' passato da 20 a 47 uccisi su 57. Questi dieci non sono i
+    # "difficili": sono quelli che NESSUN test onesto puo' uccidere, perche'
+    # fissarli congelerebbe una taratura o proverebbe un caso irraggiungibile.
+    "app/services/signal_outcome_service.py:31  200 -> 201":
+        "`_REGIME_EMA`: la EMA lenta e' una TARATURA (CLAUDE.md la fissa a 200 "
+        "insieme a 20 e 50) e l'etichetta che ne esce e' grossolana, bull o "
+        "bear. Un periodo in piu' sposta il confine solo per le barre gia' "
+        "appiccicate alla linea. ⚠️ Il rilievo vero qui non e' il mutante: e' "
+        "che `timeframe_service.FIXED_EMA_SLOW` esiste come fonte unica "
+        "dichiarata e questo modulo non la importa.",
+    "app/services/signal_outcome_service.py:97  GtE -> Gt":
+        "`OhlcvDaily.date >= since` dove `since` e' gia' il minimo trigger "
+        "MENO dieci giorni di margine: un giorno in piu' o in meno resta "
+        "dentro il margine, e il docstring dimostra che la finestra non cambia "
+        "il riferimento al giorno del segnale.",
+    "app/services/signal_outcome_service.py:121  900 -> 901":
+        "SQLite tronca a 999 parametri legati, e 900 e' il margine sotto quel "
+        "tetto. Il vincolo e' `< 999`, non `== 900`: 901 lo soddisfa "
+        "identicamente. Un test che fissasse 900 impedirebbe di alzarlo a 950 "
+        "senza guadagnare niente.",
+    "app/services/signal_outcome_service.py:121  Gt -> GtE":
+        "Stesso margine, dal lato dell'operatore: con esattamente 900 titoli "
+        "entrambe le strade funzionano (900 < 999).",
+    "app/services/signal_outcome_service.py:160  LtE -> Lt":
+        "`if len(cs) <= horizon: continue`. Col bordo esatto — serie lunga "
+        "quanto l'orizzonte — il ramo che passa produce `cs[:-horizon]` vuoto "
+        "e `cs[horizon:]` vuoto, quindi zero osservazioni: le due forme fanno "
+        "LA STESSA COSA, non due cose simili.",
+    "app/services/signal_outcome_service.py:166  False -> True":
+        "`zip(..., strict=False)`. I due lati sono filtrati dalla stessa "
+        "maschera `ok`, quindi hanno lunghezza uguale per costruzione e "
+        "`strict` non ha niente da rilevare. ⚠️ Nota: `strict=True` sarebbe "
+        "codice MIGLIORE — trasformerebbe un troncamento silenzioso in un "
+        "errore — ma nessun test puo' distinguerli finche' l'invariante "
+        "regge, quindi resta un miglioramento, non una lacuna.",
+    "app/services/signal_outcome_service.py:234  10 -> 11":
+        "I dieci giorni di margine con cui la finestra dell'universo parte "
+        "prima del primo trigger. E' un cuscinetto: allargarlo di un giorno "
+        "carica una barra in piu' e non cambia nessun numero calcolato.",
+    "app/services/signal_outcome_service.py:278  Lt -> LtE":
+        "La guardia `ti < len(ema_arr)` e' IRRAGGIUNGIBILE nel ramo mutato: "
+        "`ema_arr` ha la lunghezza di `cs` e `ti` viene da `_trigger_index`, "
+        "che rende solo indici validi di `cs`. `ti == len` non accade.",
+    "app/services/signal_outcome_service.py:278  Gt -> GtE":
+        "`ema_arr[ti] >= 0`. La EMA all'indice `ti` include `cs[ti]` col peso "
+        "alpha, e `entry > 0` e' gia' stato verificato venti righe sopra: "
+        "quindi `ema_arr[ti] >= alpha * cs[ti] > 0` sempre. Il bordo zero non "
+        "esiste.",
+    "app/services/signal_outcome_service.py:278  And -> Or":
+        "Col primo termine sempre vero (vedi sopra), `and` e `or` "
+        "corto-circuitano allo stesso risultato. Il caso in cui divergono — "
+        "`ema_arr` vuoto — richiede zero barre, che `_trigger_index` ha gia' "
+        "escluso rendendo None.",
     "app/core/security.py:22  12 -> 13":
         "Il fattore di costo di bcrypt e' una TARATURA, non un contratto: 13 e' "
         "piu' forte di 12, e qualunque asserzione onesta e' un pavimento "

@@ -29,10 +29,6 @@
       "mutanti": 50,
       "uccisi": 19
     },
-    "app/services/signal_outcome_service.py": {
-      "mutanti": 57,
-      "uccisi": 19
-    },
     "app/services/technical_score_service.py": {
       "mutanti": 107,
       "uccisi": 17
@@ -48,6 +44,10 @@
     "app/core/security.py": {
       "mutanti": 9,
       "uccisi": 7
+    },
+    "app/services/signal_outcome_service.py": {
+      "mutanti": 57,
+      "uccisi": 47
     }
   },
   "sopravvissuti": [
@@ -145,43 +145,6 @@
     "app/services/setup_service.py:567  1 -> 2",
     "app/services/setup_service.py:574  0 -> 1",
     "app/services/setup_service.py:576  Lt -> LtE",
-    "app/services/signal_outcome_service.py:121  900 -> 901",
-    "app/services/signal_outcome_service.py:121  Gt -> GtE",
-    "app/services/signal_outcome_service.py:131  10 -> 11",
-    "app/services/signal_outcome_service.py:160  LtE -> Lt",
-    "app/services/signal_outcome_service.py:164  0 -> 1",
-    "app/services/signal_outcome_service.py:164  Gt -> GtE",
-    "app/services/signal_outcome_service.py:166  False -> True",
-    "app/services/signal_outcome_service.py:171  GtE -> Gt",
-    "app/services/signal_outcome_service.py:179  0 -> 1",
-    "app/services/signal_outcome_service.py:180  0 -> 1",
-    "app/services/signal_outcome_service.py:181  1 -> 2",
-    "app/services/signal_outcome_service.py:182  1 -> 2",
-    "app/services/signal_outcome_service.py:225  10 -> 11",
-    "app/services/signal_outcome_service.py:225  True -> False",
-    "app/services/signal_outcome_service.py:245  GtE -> Gt",
-    "app/services/signal_outcome_service.py:248  0 -> 1",
-    "app/services/signal_outcome_service.py:248  LtE -> Lt",
-    "app/services/signal_outcome_service.py:255  Gt -> GtE",
-    "app/services/signal_outcome_service.py:255  Lt -> LtE",
-    "app/services/signal_outcome_service.py:261  Eq -> NotEq",
-    "app/services/signal_outcome_service.py:262  0 -> 1",
-    "app/services/signal_outcome_service.py:262  1 -> 2",
-    "app/services/signal_outcome_service.py:262  Gt -> GtE",
-    "app/services/signal_outcome_service.py:269  0 -> 1",
-    "app/services/signal_outcome_service.py:269  And -> Or",
-    "app/services/signal_outcome_service.py:269  Gt -> GtE",
-    "app/services/signal_outcome_service.py:269  Lt -> LtE",
-    "app/services/signal_outcome_service.py:270  Gt -> GtE",
-    "app/services/signal_outcome_service.py:282  And -> Or",
-    "app/services/signal_outcome_service.py:31  200 -> 201",
-    "app/services/signal_outcome_service.py:37  10 -> 11",
-    "app/services/signal_outcome_service.py:37  And -> Or",
-    "app/services/signal_outcome_service.py:37  GtE -> Gt",
-    "app/services/signal_outcome_service.py:39  10 -> 11",
-    "app/services/signal_outcome_service.py:69  And -> Or",
-    "app/services/signal_outcome_service.py:80  False -> True",
-    "app/services/signal_outcome_service.py:97  GtE -> Gt",
     "app/services/technical_score_service.py:106  10 -> 11",
     "app/services/technical_score_service.py:106  GtE -> Gt",
     "app/services/technical_score_service.py:107  50 -> 51",
