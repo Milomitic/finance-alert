@@ -41,37 +41,23 @@
       "mutanti": 93,
       "uccisi": 39
     },
-    "app/services/confluence_service.py": {
-      "mutanti": 38,
-      "uccisi": 17
-    },
     "app/services/verification_posture.py": {
       "mutanti": 6,
       "uccisi": 3
+    },
+    "app/services/confluence_service.py": {
+      "mutanti": 38,
+      "uccisi": 28
     }
   },
   "sopravvissuti": [
-    "app/services/confluence_service.py::compute_confluence#0  0 -> 1",
-    "app/services/confluence_service.py::compute_confluence#0  10 -> 11",
-    "app/services/confluence_service.py::compute_confluence#0  2 -> 3",
     "app/services/confluence_service.py::compute_confluence#0  7 -> 8",
-    "app/services/confluence_service.py::compute_confluence#0  GtE -> Gt",
-    "app/services/confluence_service.py::compute_confluence#0  Or -> And",
-    "app/services/confluence_service.py::compute_confluence#0  True -> False",
-    "app/services/confluence_service.py::compute_confluence#1  1 -> 2",
+    "app/services/confluence_service.py::compute_confluence#1  2 -> 3",
     "app/services/confluence_service.py::compute_confluence#1  And -> Or",
-    "app/services/confluence_service.py::compute_confluence#1  GtE -> Gt",
-    "app/services/confluence_service.py::compute_confluence#1  Lt -> LtE",
-    "app/services/confluence_service.py::compute_confluence#1  True -> False",
-    "app/services/confluence_service.py::compute_confluence#2  1 -> 2",
-    "app/services/confluence_service.py::compute_confluence#2  2 -> 3",
-    "app/services/confluence_service.py::compute_confluence#2  3 -> 4",
-    "app/services/confluence_service.py::compute_confluence#3  1 -> 2",
-    "app/services/confluence_service.py::compute_confluence#4  Eq -> NotEq",
+    "app/services/confluence_service.py::compute_confluence#4  1 -> 2",
     "app/services/confluence_service.py::compute_confluence#5  1 -> 2",
     "app/services/confluence_service.py::compute_confluence#6  1 -> 2",
     "app/services/confluence_service.py::compute_confluence#7  1 -> 2",
-    "app/services/confluence_service.py::compute_confluence#8  1 -> 2",
     "app/services/detector_performance_service.py::_cell#0  1 -> 2",
     "app/services/detector_performance_service.py::_cell#0  2 -> 3",
     "app/services/detector_performance_service.py::_cell#0  21 -> 22",
