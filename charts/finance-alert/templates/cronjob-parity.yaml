@@ -134,23 +134,56 @@ spec:
                   set -u
                   DESIDERATO=$(kubectl get statefulset "$STS" -n "$NAMESPACE" \
                     -o jsonpath='{.spec.template.spec.containers[0].image}')
-                  IN_ESECUZIONE=$(kubectl get pod -n "$NAMESPACE" \
-                    -l app.kubernetes.io/name=finance-alert \
-                    -o jsonpath='{.items[0].status.containerStatuses[0].image}')
-                  PRONTO=$(kubectl get pod -n "$NAMESPACE" \
-                    -l app.kubernetes.io/name=finance-alert \
-                    -o jsonpath='{.items[0].status.containerStatuses[0].ready}')
+                  # ⚠️ IL POD SI NOMINA, NON SI CERCA PER ETICHETTA.
+                  #
+                  # Questa sonda leggeva
+                  #   kubectl get pod -l app.kubernetes.io/name=finance-alert
+                  #     -o jsonpath='{.items[0]...}'
+                  # e quell'etichetta ce l'ha OGNI pod del chart — compresi i
+                  # Job che il chart stesso crea: il drill di ripristino e i pod
+                  # di QUESTA sonda. `.items[0]` prende il primo in ordine
+                  # alfabetico, quindi un pod chiamato `drill-...` (d < f) vince
+                  # su quello dell'applicazione.
+                  #
+                  # Successo davvero il 2026-09-13: un drill lanciato a mano ha
+                  # lasciato un pod `Completed`, la sonda ha letto la SUA
+                  # immagine (`alpine/k8s:1.31.3`) e ha concluso «il pod non
+                  # esegue l'immagine desiderata da 409 min» — l'eta' del pod
+                  # del drill, non dell'app — mandando un avviso Telegram ogni
+                  # quindici minuti mentre l'applicazione era sana. ArgoCD ha
+                  # riportato `Degraded` per tutto il tempo, il che MASCHERA un
+                  # degrado vero: un presidio che non puo' dire «tutto bene»
+                  # non sta sorvegliando niente.
+                  #
+                  # Il nome di un pod di StatefulSet e' `<sts>-<ordinale>` per
+                  # definizione: non e' una ricerca, e' un indirizzo, e nessun
+                  # Job puo' chiamarsi cosi'.
+                  POD="$STS-0"
+                  IN_ESECUZIONE=$(kubectl get pod "$POD" -n "$NAMESPACE" \
+                    -o jsonpath='{.status.containerStatuses[0].image}' 2>/dev/null || true)
+                  PRONTO=$(kubectl get pod "$POD" -n "$NAMESPACE" \
+                    -o jsonpath='{.status.containerStatuses[0].ready}' 2>/dev/null || true)
+                  echo "pod:           $POD"
                   echo "desiderato:    $DESIDERATO"
                   echo "in esecuzione: $IN_ESECUZIONE"
                   echo "pronto:        $PRONTO"
+
+                  # ⚠️ Una lettura VUOTA non e' «uguale a niente»: e' la sonda
+                  # che non sa rispondere. Senza questo, due stringhe vuote si
+                  # confrontano uguali e il presidio dichiara PARITA' OK mentre
+                  # il pod non esiste — di nuovo una risposta pulita e falsa.
+                  if [ -z "$DESIDERATO" ] || [ -z "$IN_ESECUZIONE" ]; then
+                    echo "LETTURA VUOTA: statefulset o pod $POD non leggibili."
+                    DESIDERATO="${DESIDERATO:-<assente>}"
+                    IN_ESECUZIONE="${IN_ESECUZIONE:-<assente-o-pod-mancante>}"
+                  fi
 
                   # ⚠️ La divergenza da sola NON e' un guasto: subito dopo un
                   # bump e' la finestra normale del GitOps, e allarmare li'
                   # insegnerebbe a ignorare l'allarme. Conta solo se DURA — si
                   # guarda da quanto il pod e' avviato.
-                  AVVIO=$(kubectl get pod -n "$NAMESPACE" \
-                    -l app.kubernetes.io/name=finance-alert \
-                    -o jsonpath='{.items[0].status.startTime}')
+                  AVVIO=$(kubectl get pod "$POD" -n "$NAMESPACE" \
+                    -o jsonpath='{.status.startTime}' 2>/dev/null || true)
                   # ⚠️ `date -d "<ISO>"` NON esiste in BusyBox: serve `-D` col
                   # formato d'ingresso. Verificato dentro l'immagine prima di
                   # scriverlo qui — la prima stesura usava la sintassi GNU e

@@ -222,6 +222,26 @@ EQUIVALENTI: dict[str, str] = {
         "ragionevole (3-14) e non il valore esatto, di proposito — il numero e' "
         "una taratura, non un contratto, e fissarlo renderebbe rosso ogni "
         "ripensamento legittimo. Otto giorni resta una soglia sensata.",
+    # ── confluence_service: tre equivalenti, il resto e' arrotondamento ──
+    "app/services/confluence_service.py::<modulo>#0  2 -> 3":
+        "`_HORIZON_ORDER = {short: 0, medium: 1, long: 2}` -> long = 3. "
+        "L'ordine e' PRESERVATO (0 < 1 < 3) e la funzione usa solo l'ordine, "
+        "mai i valori: identica. ⚠️ I due gemelli che invece creano un PARI "
+        "(short = medium, o medium = long) sono uccisi da "
+        "`test_i_tre_orizzonti_hanno_un_ordine_STRETTO`, che asserisce la "
+        "struttura e non i numeri — attraverso il comportamento sarebbero "
+        "intermittenti, perche' l'ingresso di `sorted` e' un set.",
+    "app/services/confluence_service.py::compute_confluence#2  1 -> 2":
+        "Il valore di ripiego di `_HORIZON_ORDER.get(h, 1)`. E' "
+        "IRRAGGIUNGIBILE: venti righe sopra `hz` viene normalizzato con "
+        "`hz if hz in ('short','medium','long') else 'medium'`, quindi la "
+        "chiave cercata esiste sempre e il default non viene mai usato.",
+    "app/services/confluence_service.py::compute_confluence#0  10 -> 11":
+        "`str(sdate)[:10]`, il taglio della data. ⚠️ Su `image_provenance` un "
+        "taglio identico ERA una lacuna vera (li' il valore portava l'orario). "
+        "Qui no: `Alert.signal_date` e' una colonna `Date`, quindi `str()` "
+        "rende gia' dieci caratteri esatti e `[:11]` e' lo stesso taglio. La "
+        "fetta resta come difesa, non come trasformazione.",
     # ── technical_score_service: solo le STRETTAMENTE equivalenti ───────
     #
     # ⚠️ Questo modulo chiude a 39 uccisi su 93 e il residuo NON e' un
