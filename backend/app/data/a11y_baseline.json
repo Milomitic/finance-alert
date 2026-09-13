@@ -1,24 +1,22 @@
 {
-  "_perche": "Arretrato MISURATO di accessibilita', non un obiettivo. Il gate impedisce che cresca; non pretende che sia zero, perche' un cancello che nasce rosso viene disattivato. Rigenerare con E2E_UPDATE_BASELINE=1 npm run e2e, e solo dopo aver CORRETTO qualcosa - mai per far passare la CI.",
+  "_perche": "Arretrato MISURATO di accessibilita', non un obiettivo. Il gate impedisce che cresca; non pretende che sia zero, perche' un cancello che nasce rosso viene disattivato. Rigenerare con E2E_UPDATE_BASELINE=1 npm run e2e, e solo dopo aver CORRETTO qualcosa - mai per far passare la CI.  ⚠️ NON stringere una voce su UNA sola osservazione: /calendar nested-interactive e' stato portato 3 -> 2 da una singola corsa verde e la successiva ha riletto 3, facendo arrossare la CI su codice che nessuno aveva toccato. Quella rotta rende per DATA, quindi il conteggio oscilla col giorno in cui gira il gate: si stringe al massimo osservato, non al minimo visto una volta.",
   "rotte": {
     "/": {
       "aria-hidden-focus": 1,
       "aria-valid-attr-value": 2
     },
     "/alerts": {
-      "button-name": 55,
+      "button-name": 48,
       "empty-table-header": 2,
       "nested-interactive": 12
     },
     "/setups": {},
     "/positions": {},
-    "/stocks": {
-      "button-name": 1
-    },
+    "/stocks": {},
     "/calendar": {
       "aria-prohibited-attr": 1,
       "color-contrast": 3,
-      "nested-interactive": 2
+      "nested-interactive": 3
     },
     "/sectors": {
       "definition-list": 1,
