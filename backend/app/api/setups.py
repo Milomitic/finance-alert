@@ -52,6 +52,15 @@ class SetupOut(BaseModel):
     #: deleted: an expired one is half of the conversion rate, and dropping
     #: them would leave only the successes on record.
     status: str = "active"
+    #: Perche' si e' chiuso senza convertire: "stale" (le condizioni si sono
+    #: sfaldate), "aged" (ha toccato il tetto d'attesa restando valido),
+    #: "decayed" (e' sceso sotto la soglia di attenzione).
+    #:
+    #: ⚠️ `decayed` NON entra nel denominatore del tasso di conversione: un
+    #: setup ritirato non ha mai avuto l'occasione di convertire. Prima della
+    #: migrazione FA-061 quelle righe venivano CANCELLATE, quindi il tasso gia'
+    #: non le contava — cio' che cambia e' che ora esistono.
+    closed_reason: str | None = None
     resolved_at: str | None = None
     #: Days between first sighting and the signal firing — the warning this
     #: setup actually gave. Only set on converted rows.
@@ -210,6 +219,7 @@ def list_setups(
                 last_seen_at=row.last_seen_at.isoformat() if row.last_seen_at else None,
                 annotations=ann, factors=fac,
                 status=row.status,
+                closed_reason=row.closed_reason,
                 resolved_at=row.resolved_at.isoformat() if row.resolved_at else None,
                 lead_days=row.lead_days,
                 converted_alert_id=row.converted_alert_id,

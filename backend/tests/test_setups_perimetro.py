@@ -50,6 +50,13 @@ def client(db):
 _N = 70
 
 
+def _titolo(db, ticker: str) -> Stock:
+    s = Stock(ticker=ticker, exchange="NASDAQ", name=ticker, country="US")
+    db.add(s)
+    db.flush()
+    return s
+
+
 def _semina(db, *, n: int = _N) -> None:
     """`n` setup attivi in shortlist, su `n` titoli distinti.
 
@@ -199,3 +206,27 @@ def test_the_stats_declare_which_population_they_describe(client, db) -> None:
     # Il numero che il perimetro descrive, cosi' che la UI possa affiancarlo al
     # totale della lista invece di lasciarli sembrare lo stesso.
     assert stats["total"] == _N, "le statistiche contano i soli shortlisted"
+
+
+def test_the_close_reason_reaches_the_payload(client, db) -> None:
+    """⚠️ Un campo che resta nel database e non raggiunge nessuno e' il difetto
+    di FA-055 in miniatura: esiste, e nessuno puo' vederlo.
+
+    `expire_stale_setups` calcolava gia' la distinzione fra «le condizioni si
+    sono sfaldate» e «ha toccato il tetto d'attesa» — le contava separatamente
+    nel log — e poi scriveva entrambe come `expired` senza conservare quale.
+    """
+    from app.models.stock_setup import REASON_AGED
+
+    s = _titolo(db, "CHIUSO")
+    ora = datetime.now(UTC)
+    db.add(StockSetup(
+        stock_id=s.id, detector="candle_reversal", tone="bull", proximity=0.8,
+        convenience=70.0, missing="x", status="expired", closed_reason=REASON_AGED,
+        resolved_at=ora, shortlisted=True, first_seen_at=ora, last_seen_at=ora,
+    ))
+    db.commit()
+
+    righe = client.get("/api/setups?status=closed").json()["setups"]
+    riga = next(r for r in righe if r["ticker"] == "CHIUSO")
+    assert riga["closed_reason"] == "aged"

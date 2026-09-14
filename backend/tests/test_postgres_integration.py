@@ -21,6 +21,7 @@ from __future__ import annotations
 import json
 import os
 from datetime import date
+from pathlib import Path
 
 import pytest
 from sqlalchemy import Float, cast, create_engine, inspect, select
@@ -151,3 +152,74 @@ def test_one_failed_stock_does_not_poison_the_rest_of_the_batch(pg, monkeypatch)
         select(OhlcvDaily.date).where(OhlcvDaily.stock_id == good.id)
     ).scalars().all()
     assert date(2026, 7, 21) in landed
+
+
+def test_le_migrazioni_girano_su_POSTGRES_andata_e_ritorno() -> None:
+    """⚠️ Le migrazioni non erano mai state eseguite su Postgres.
+
+    Il resto di questo modulo prova che i MODELLI mappano su DDL Postgres —
+    `create_all` nella fixture e' quell'asserzione. Ma la produzione ci arriva
+    per `alembic upgrade`, che e' un codice diverso: DDL scritta a mano, batch
+    mode, indici parziali con clausole per dialetto. Su SQLite girava a ogni
+    sviluppo; su Postgres, mai.
+
+    Scritto lavorando su FA-061, e la ragione e' che quella migrazione aveva un
+    difetto visibile SOLO qui: un `try/except` attorno a una `DROP CONSTRAINT`
+    che puo' legittimamente non esistere. Su SQLite funziona; su Postgres una
+    istruzione DDL fallita ABORTA la transazione, quindi l'eccezione veniva
+    ingoiata e ogni istruzione successiva moriva con «current transaction is
+    aborted». Sarebbe comparso al primo rilascio.
+
+    ⚠️ E si prova ANCHE il ritorno. Una migrazione che non si ripercorre
+    all'indietro va scoperta adesso, non durante un ripristino — il drill del
+    lunedi' esiste proprio perche' un backup che non si rilegge e' indistinguibile
+    da uno che funziona finche' non serve.
+
+    Gira su un database USA E GETTA: `alembic upgrade head` ricostruisce lo
+    schema da zero, quindi non puo' toccare quello della fixture.
+    """
+    import uuid
+
+    from alembic.config import Config
+    from sqlalchemy import text
+
+    from alembic import command
+
+    nome = f"fa_mig_{uuid.uuid4().hex[:12]}"
+    radice = create_engine(_PG_URL, future=True, isolation_level="AUTOCOMMIT")
+    with radice.connect() as c:
+        c.execute(text(f'CREATE DATABASE "{nome}"'))
+    radice.dispose()
+
+    url = _PG_URL.rsplit("/", 1)[0] + "/" + nome
+    cfg = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
+    cfg.set_main_option("script_location",
+                        str(Path(__file__).resolve().parents[1] / "alembic"))
+    cfg.set_main_option("sqlalchemy.url", url)
+    try:
+        command.upgrade(cfg, "head")
+        # Il giro di ritorno, una revisione per volta fino in fondo e poi su.
+        command.downgrade(cfg, "-1")
+        command.upgrade(cfg, "head")
+
+        # L'indice parziale esiste DAVVERO su Postgres, e con la sua clausola:
+        # senza il `WHERE`, sarebbe un vincolo su tutta la tabella e la storia
+        # degli episodi tornerebbe impossibile — in silenzio.
+        eng = create_engine(url, future=True)
+        with eng.connect() as c:
+            ddl = c.execute(text(
+                "SELECT indexdef FROM pg_indexes "
+                "WHERE tablename = 'stock_setups' "
+                "  AND indexname = 'uq_stock_setups_open_episode'"
+            )).scalar_one()
+        eng.dispose()
+        assert "UNIQUE" in ddl.upper()
+        assert "WHERE" in ddl.upper() and "active" in ddl
+    finally:
+        radice = create_engine(_PG_URL, future=True, isolation_level="AUTOCOMMIT")
+        with radice.connect() as c:
+            c.execute(text(
+                "SELECT pg_terminate_backend(pid) FROM pg_stat_activity "
+                "WHERE datname = :n AND pid <> pg_backend_pid()"), {"n": nome})
+            c.execute(text(f'DROP DATABASE IF EXISTS "{nome}"'))
+        radice.dispose()

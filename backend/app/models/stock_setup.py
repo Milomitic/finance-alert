@@ -30,8 +30,8 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
-    UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy import Index as SAIndex
 from sqlalchemy.orm import Mapped, mapped_column
@@ -42,12 +42,47 @@ STATUS_ACTIVE = "active"
 STATUS_CONVERTED = "converted"
 STATUS_EXPIRED = "expired"
 
+#: Perche' un episodio si e' chiuso senza convertire. ⚠️ `expire_stale_setups`
+#: distingueva gia' le prime due — le contava separatamente nel log, col
+#: commento che spiega perche' dicono cose diverse — e poi scriveva entrambe
+#: come `expired` senza conservare quale. La distinzione era calcolata e
+#: buttata via.
+#: Le condizioni si sono sfaldate: il mercato e' andato oltre.
+REASON_STALE = "stale"
+#: Ha toccato il tetto d'attesa restando valido: un cancello che descrive uno
+#: stato invece di dare un anticipo.
+REASON_AGED = "aged"
+#: E' sceso sotto la soglia di attenzione. ⚠️ Prima la riga veniva CANCELLATA,
+#: quindi la prova che quella condizione si fosse mai formata spariva. Ora si
+#: chiude — e resta FUORI dal denominatore del tasso di conversione, perche'
+#: un setup ritirato non ha mai avuto l'occasione di convertire e contarlo
+#: come fallimento misurerebbe il ricambio della shortlist.
+REASON_DECAYED = "decayed"
+
 
 class StockSetup(Base):
     __tablename__ = "stock_setups"
     __table_args__ = (
-        # One live row per (stock, detector). Re-detection updates it.
-        UniqueConstraint("stock_id", "detector", name="uq_stock_setups_stock_detector"),
+        # ⚠️ Un episodio APERTO per (stock, detector), non UNA RIGA per coppia.
+        #
+        # Il vincolo vecchio — `UniqueConstraint(stock_id, detector)` — rendeva
+        # impossibile conservare piu' di un'attesa, quindi `upsert_setup`
+        # riusava la riga azzerando `resolved_at`, `converted_alert_id` e
+        # `lead_days`: «il setup convertito a giugno» smetteva di esistere nel
+        # momento in cui la condizione si riformava. Misurato in produzione,
+        # 2.050 setup su 2.050 coppie — i due numeri coincidevano per
+        # costruzione (FA-061).
+        #
+        # L'indice PARZIALE dice la cosa che serviva davvero. Supportato da
+        # entrambi i backend di questo progetto (SQLite dalla 3.8, Postgres da
+        # sempre), quindi la clausola va data a tutti e due i dialetti: darla a
+        # uno solo produrrebbe un indice NON unico sull'altro, cioe' il vincolo
+        # sparirebbe in silenzio proprio dove conta.
+        SAIndex(
+            "uq_stock_setups_open_episode", "stock_id", "detector", unique=True,
+            sqlite_where=text("status = 'active'"),
+            postgresql_where=text("status = 'active'"),
+        ),
         # The list view is "active, best convenience first".
         SAIndex("ix_stock_setups_status_convenience", "status", "convenience"),
     )
@@ -78,6 +113,9 @@ class StockSetup(Base):
     annotations_json: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     status: Mapped[str] = mapped_column(String(16), nullable=False, default=STATUS_ACTIVE)
+    #: Perche' si e' chiuso, quando non ha convertito. `None` su un episodio
+    #: aperto e su uno convertito — li' lo status lo dice gia'.
+    closed_reason: Mapped[str | None] = mapped_column(String(16), nullable=True)
     # Whether this setup is currently in the surfaced shortlist (top N of its
     # detector). NOT a delete, deliberately: dropping the row would destroy
     # `first_seen_at`, and a setup oscillating around the cap boundary would

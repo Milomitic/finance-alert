@@ -186,17 +186,34 @@ def test_a_weak_setup_is_not_stored_at_all(db):
     assert db.query(StockSetup).count() == 0
 
 
-def test_a_setup_that_decays_below_the_bar_is_dropped_not_kept(db):
+def test_a_setup_that_decays_below_the_bar_leaves_the_LIST(db):
     """Otherwise the list only ever grows: things that stop deserving
-    attention would sit there forever."""
+    attention would sit there forever.
+
+    ⚠️ Cambiato 2026-09-14 (FA-061). Questo test asseriva `count() == 0`, cioe'
+    che la riga fosse CANCELLATA — e la cancellazione portava via anche la
+    prova che quella condizione si fosse mai formata. L'intento resta identico
+    e vale ancora: cio' che ha smesso di meritare attenzione deve USCIRE DALLA
+    LISTA. Cio' che cambia e' che il fatto resta scritto, con la sua ragione.
+
+    La lista attiva si accorcia lo stesso, perche' filtra su `status ==
+    active`; il tasso di conversione non si muove, perche' le chiusure per
+    decadimento restano fuori dal denominatore."""
+    from app.models.stock_setup import REASON_DECAYED, STATUS_ACTIVE, STATUS_EXPIRED
+
     s = _stock(db)
     setup_service.upsert_setup(db, stock_id=s.id, match=_match(proximity=0.85))
     db.flush()
-    assert db.query(StockSetup).count() == 1
+    assert db.query(StockSetup).filter(StockSetup.status == STATUS_ACTIVE).count() == 1
 
     setup_service.upsert_setup(db, stock_id=s.id, match=_match(proximity=0.30, rsi_extremity=0.1))
     db.flush()
-    assert db.query(StockSetup).count() == 0, "a decayed setup must leave the list"
+    attivi = db.query(StockSetup).filter(StockSetup.status == STATUS_ACTIVE).count()
+    assert attivi == 0, "a decayed setup must leave the list"
+    # ...ma non il database: la riga resta, e dice PERCHE'.
+    riga = db.query(StockSetup).one()
+    assert riga.status == STATUS_EXPIRED
+    assert riga.closed_reason == REASON_DECAYED
 
 
 def test_the_cap_keeps_the_strongest_and_preserves_detector_diversity(db):

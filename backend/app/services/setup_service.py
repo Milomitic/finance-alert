@@ -23,7 +23,14 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.models import Alert, ScanRun, SignalOutcome, StockSetup
-from app.models.stock_setup import STATUS_ACTIVE, STATUS_CONVERTED, STATUS_EXPIRED
+from app.models.stock_setup import (
+    REASON_AGED,
+    REASON_DECAYED,
+    REASON_STALE,
+    STATUS_ACTIVE,
+    STATUS_CONVERTED,
+    STATUS_EXPIRED,
+)
 from app.signals.setups.base import SetupMatch, convenience
 
 # A setup not re-observed for this many days is stale: the conditions decayed
@@ -101,9 +108,15 @@ def upsert_setup(
         technical_composite=technical_composite,
         quality_composite=quality_composite,
     )
+    # ⚠️ Solo l'episodio APERTO. Senza `status`, con piu' episodi per coppia
+    # questa `scalar_one_or_none` solleverebbe `MultipleResultsFound` — e la
+    # ricerca cercherebbe comunque la cosa sbagliata: un episodio chiuso non e'
+    # da aggiornare, e' da lasciare stare.
     row = db.execute(
         select(StockSetup).where(
-            StockSetup.stock_id == stock_id, StockSetup.detector == match.detector
+            StockSetup.stock_id == stock_id,
+            StockSetup.detector == match.detector,
+            StockSetup.status == STATUS_ACTIVE,
         )
     ).scalar_one_or_none()
 
@@ -113,8 +126,20 @@ def upsert_setup(
     # dropped, so a list that stops deserving attention actually shrinks
     # instead of accumulating forever.
     if score < settings.setup_min_convenience:
-        if row is not None and row.status == STATUS_ACTIVE:
-            db.delete(row)
+        if row is not None:
+            # ⚠️ Era `db.delete(row)`: l'episodio spariva, e con lui la prova
+            # che quella condizione si fosse mai formata. La lista attiva si
+            # accorcia lo stesso — filtra su `status == active` — ma il fatto
+            # resta scritto.
+            #
+            # Resta FUORI dal denominatore del tasso di conversione: un setup
+            # ritirato perche' ha smesso di meritare attenzione non ha mai
+            # avuto l'occasione di convertire, e contarlo come fallimento
+            # misurerebbe il ricambio della shortlist invece del valore del
+            # setup. Vedi `conversion_stats`.
+            row.status = STATUS_EXPIRED
+            row.closed_reason = REASON_DECAYED
+            row.resolved_at = now
         return None
 
     if row is None:
@@ -135,15 +160,12 @@ def upsert_setup(
         db.add(row)
         return row
 
-    # A resolved row that re-forms starts a NEW wait — otherwise a setup that
-    # converted in March and re-appears in July would report a 4-month lead.
-    if row.status != STATUS_ACTIVE:
-        row.status = STATUS_ACTIVE
-        row.first_seen_at = now
-        row.resolved_at = None
-        row.converted_alert_id = None
-        row.lead_days = None
-
+    # ⚠️ Qui stava la RIATTIVAZIONE, e non c'e' piu'. Una riga risolta che si
+    # riformava veniva riusata azzerando `resolved_at`, `converted_alert_id` e
+    # `lead_days`: l'attesa nuova era giusta, ma «il setup convertito a giugno»
+    # smetteva di esistere. Ora la ricerca sopra vede i soli episodi APERTI,
+    # quindi una condizione che si riforma cade nel ramo `row is None` e apre
+    # un episodio nuovo, lasciando intatto quello chiuso (FA-061).
     row.tone = match.tone
     row.proximity = match.proximity
     row.distance_atr = match.distance_atr
@@ -251,6 +273,11 @@ def expire_stale_setups(db: Session, *, today: date | None = None) -> int:
         if stale or aged:
             row.status = STATUS_EXPIRED
             row.resolved_at = datetime.now(UTC)
+            # ⚠️ La distinzione era gia' calcolata qui e buttata via: le due
+            # ragioni finivano contate separatamente nel log e scritte
+            # entrambe come `expired`, quindi a posteriori non si poteva piu'
+            # sapere quale. Ora si conserva.
+            row.closed_reason = REASON_STALE if stale else REASON_AGED
             if stale:
                 n_stale += 1
             else:
@@ -323,7 +350,22 @@ def conversion_stats(db: Session) -> dict:
     ).scalars().all()
     active = [r for r in rows if r.status == STATUS_ACTIVE]
     converted = [r for r in rows if r.status == STATUS_CONVERTED]
-    expired = [r for r in rows if r.status == STATUS_EXPIRED]
+    # ⚠️ Le chiusure per DECADIMENTO restano fuori dal denominatore, e la
+    # ragione e' una domanda diversa da quella che il tasso pone. «Quante
+    # attese si sono trasformate in un segnale» si misura sulle attese che
+    # l'occasione l'hanno avuta: un setup ritirato perche' ha smesso di
+    # meritare attenzione non ha mai potuto convertire, e contarlo come
+    # fallimento misurerebbe il ricambio della shortlist.
+    #
+    # Prima della migrazione FA-061 quelle righe venivano CANCELLATE, quindi il
+    # tasso gia' non le contava: escluderle tiene fermo il numero a schermo
+    # (9/18 = 50,0% in produzione) mentre la storia smette di andare persa. La
+    # domanda «un setup decaduto e' una mancata conversione?» diventa cosi'
+    # rispondibile, invece di essere decisa di nascosto da un DELETE.
+    decayed = [r for r in rows
+               if r.status == STATUS_EXPIRED and r.closed_reason == REASON_DECAYED]
+    expired = [r for r in rows
+               if r.status == STATUS_EXPIRED and r.closed_reason != REASON_DECAYED]
     resolved = len(converted) + len(expired)
     leads = sorted(r.lead_days for r in converted if r.lead_days is not None)
 
@@ -355,6 +397,10 @@ def conversion_stats(db: Session) -> dict:
         # prodotto non ha mai offerto.
         "scope": "shortlisted",
         "active": len(active),
+        #: Chiusi per decadimento: FUORI dal denominatore ma NON invisibili.
+        #: Escluderli senza mostrarli sarebbe indistinguibile dal cancellarli,
+        #: che e' cio' che si e' appena smesso di fare.
+        "decayed": len(decayed),
         "converted": len(converted),
         "expired": len(expired),
         # The two tabs, each with its own total, and the sum of everything the
