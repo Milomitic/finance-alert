@@ -28,6 +28,7 @@ from sqlalchemy import Float, cast, create_engine, inspect, select
 from sqlalchemy.orm import sessionmaker
 
 import app.models  # noqa: F401 — registers every mapper on Base.metadata
+from app.core.config import settings
 from app.core.db import Base
 from app.core.db_json import json_text
 from app.models import Alert, Stock
@@ -154,7 +155,7 @@ def test_one_failed_stock_does_not_poison_the_rest_of_the_batch(pg, monkeypatch)
     assert date(2026, 7, 21) in landed
 
 
-def test_le_migrazioni_girano_su_POSTGRES_andata_e_ritorno() -> None:
+def test_le_migrazioni_girano_su_POSTGRES_andata_e_ritorno(monkeypatch) -> None:
     """⚠️ Le migrazioni non erano mai state eseguite su Postgres.
 
     Il resto di questo modulo prova che i MODELLI mappano su DDL Postgres —
@@ -195,7 +196,17 @@ def test_le_migrazioni_girano_su_POSTGRES_andata_e_ritorno() -> None:
     cfg = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
     cfg.set_main_option("script_location",
                         str(Path(__file__).resolve().parents[1] / "alembic"))
-    cfg.set_main_option("sqlalchemy.url", url)
+    # ⚠️ `cfg.set_main_option("sqlalchemy.url", ...)` NON basta, e la prima
+    # versione di questo test ci e' cascata: `alembic/env.py` sovrascrive
+    # incondizionatamente quell'opzione con `settings.database_url`, perche'
+    # `alembic.ini` la lascia VUOTA di proposito — la configurazione del
+    # database ha un proprietario solo. Quindi la migrazione girava contro il
+    # database predefinito e questo Postgres non veniva toccato.
+    #
+    # Il test PASSAVA. E' stata l'asserzione sull'indice, l'unica che guardasse
+    # il RISULTATO invece dell'assenza di eccezioni, a smascherarlo: senza,
+    # sarebbe rimasto verde per sempre misurando niente.
+    monkeypatch.setattr(settings, "database_url", url)
     try:
         command.upgrade(cfg, "head")
         # Il giro di ritorno, una revisione per volta fino in fondo e poi su.

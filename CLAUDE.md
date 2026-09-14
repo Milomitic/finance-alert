@@ -1172,6 +1172,50 @@ worth planning for.
 
 ## Database migrations (alembic)
 
+### ⚠️ `env.py` IGNORA l'url che passi a `Config` (2026-09-14)
+
+`alembic/env.py` fa `config.set_main_option("sqlalchemy.url",
+settings.database_url)` **incondizionatamente**, e `alembic.ini` lascia
+`sqlalchemy.url` vuota di proposito: la configurazione del database ha un
+proprietario solo. E' deliberato e va lasciato com'e'.
+
+Ne segue la cosa che costa tempo: **per far girare una migrazione contro un
+ALTRO database non serve a niente passare l'url a `Config`.** Bisogna cambiare
+`settings.database_url` (in un test, `monkeypatch.setattr(settings,
+"database_url", url)`).
+
+⚠️ E il modo in cui e' venuto fuori vale piu' della regola. Il primo giro di
+migrazioni su Postgres di `test_postgres_integration.py` impostava l'url sul
+`Config`, quindi girava contro il database predefinito e **il Postgres non
+veniva toccato**. Il test PASSAVA. A smascherarlo e' stata l'unica asserzione
+che guardava il RISULTATO — l'indice parziale deve esistere, e con la sua
+clausola `WHERE` — invece della semplice assenza di eccezioni. Senza quella
+riga sarebbe rimasto verde per sempre misurando niente: la quinta istanza di
+«un test puo' essere vero di niente», e la prima trovata da un'asserzione che
+avevo aggiunto per un altro motivo.
+
+### ⚠️ Le migrazioni non giravano MAI su Postgres
+
+Il job M7 prova che i MODELLI mappano su DDL Postgres (`create_all`), che e'
+un'altra cosa: `alembic upgrade` e' DDL scritta a mano, batch mode, indici
+parziali con clausole per dialetto. Su SQLite girava a ogni sviluppo; su
+Postgres, mai.
+
+Il difetto che ha scoperto appena acceso: un `try/except` attorno a una
+`DROP CONSTRAINT` che puo' legittimamente non esistere. Su SQLite funziona; su
+Postgres **una DDL fallita ABORTA la transazione**, quindi l'eccezione viene
+ingoiata e ogni istruzione successiva muore con «current transaction is
+aborted». Si CONTROLLA l'esistenza con l'inspector, non si cattura.
+
+E si prova anche il RITORNO. Una migrazione che non si ripercorre all'indietro
+va scoperta adesso, non durante un ripristino — il drill del lunedi' esiste
+esattamente per questa ragione. Quando lo schema di destinazione non puo'
+contenere i dati (FA-061: piu' episodi per coppia), il `downgrade` o fallisce o
+perde righe, e non esiste una terza possibilita': **sceglie di perderle e lo
+DICHIARA con un conteggio.** Un ripristino che cancella in silenzio e' peggio
+di uno che rifiuta.
+
+
 - Migration files live in `backend/alembic/versions/`
 - Generate with: `./.venv/Scripts/alembic.exe revision -m "<name>"`
   (the file is empty — fill in `upgrade()` and `downgrade()` manually)
