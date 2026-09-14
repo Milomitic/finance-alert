@@ -284,17 +284,26 @@ def test_il_segmento_di_replay_ordina_per_conteggio_poi_per_NOME() -> None:
     Tre mutanti in una riga: il ripiego a zero quando manca il totale, e
     l'indice del secondo criterio — col mutante `kv[1]` la parita' verrebbe
     sciolta confrontando due DIZIONARI invece dei nomi, cioe' per un dettaglio
-    che l'utente non vede e che puo' cambiare da una rigenerazione all'altra."""
+    che l'utente non vede e che puo' cambiare da una rigenerazione all'altra.
+
+    ⚠️ `a_senza_totale` ha accanto `z_uno` a quota 1 DI PROPOSITO. La prima
+    versione metteva il detector senza totale accanto a vicini da 5 e 99, dove
+    finiva ultimo con il ripiego a 0 come con quello a 1: il test era vero, e
+    non di cio' che diceva. Con un vicino a 1 il ripiego decide — a zero
+    l'ordine e' per conteggio, a uno diventa un pari merito sciolto per nome, e
+    i due nomi sono scelti perche' l'ordine alfabetico li inverta.
+    """
     sommario = {
         "detectors": {
             "zeta": {"total": {"n": 5}},
             "alfa": {"total": {"n": 5}},      # pari merito con zeta
             "molti": {"total": {"n": 99}},
-            "senza_totale": {},               # niente `total`: vale zero
+            "z_uno": {"total": {"n": 1}},
+            "a_senza_totale": {},             # niente `total`: vale ZERO
         },
     }
     nomi = [d["detector"] for d in _replay_block(sommario, 30)["detectors"]]
-    assert nomi == ["molti", "alfa", "zeta", "senza_totale"]
+    assert nomi == ["molti", "alfa", "zeta", "z_uno", "a_senza_totale"]
 
 
 def test_un_sommario_senza_conteggio_segnali_legge_ZERO() -> None:

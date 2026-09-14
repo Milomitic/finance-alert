@@ -230,6 +230,28 @@ EQUIVALENTI: dict[str, str] = {
         "ragionevole (3-14) e non il valore esatto, di proposito — il numero e' "
         "una taratura, non un contratto, e fissarlo renderebbe rosso ogni "
         "ripensamento legittimo. Otto giorni resta una soglia sensata.",
+    # ── cubo prestazioni e setup: due irraggiungibili e due tarature ────
+    "app/services/detector_performance_service.py::_cell#0  21 -> 22":
+        "`max((r.horizon_days for r in rows), default=21)`. Il ripiego e' "
+        "IRRAGGIUNGIBILE: `_cell` calcola `n = len(rows)` e poi divide per n "
+        "due righe sopra, quindi con `rows` vuoto sarebbe gia' esplosa. Il "
+        "default non viene mai usato.",
+    "app/services/detector_performance_service.py::compute_equity_curve#0  Gt -> GtE":
+        "`if peak > 0`. Il picco parte da 1.0 ed e' aggiornato solo con "
+        "`max(peak, eq)`, quindi non scende MAI sotto 1: `> 0` e' sempre vero e "
+        "`>= 0` lo e' altrettanto. ⚠️ Il gemello numerico `peak > 1` invece NON "
+        "e' equivalente — una curva che perde dalla prima operazione tiene il "
+        "picco a 1.0 esatto e perderebbe il drawdown — ed e' ucciso da "
+        "`test_una_curva_SEMPRE_in_perdita_ha_comunque_un_drawdown`.",
+    "app/services/setup_service.py::<modulo>#0  10 -> 11":
+        "`_EXPIRE_AFTER_DAYS`: per quanti giorni un setup resta in lista senza "
+        "essere piu' visto. E' una TARATURA del prodotto — quanto a lungo "
+        "guardare una formazione — e fissarla con un test renderebbe rossa ogni "
+        "ritaratura legittima. Il COMPORTAMENTO del confine e' un'altra cosa e "
+        "resta misurato in linea di base.",
+    "app/services/setup_service.py::<modulo>#0  28 -> 29":
+        "`_MAX_AGE_DAYS`, stessa natura: il tetto d'eta' oltre il quale una "
+        "formazione non e' piu' interessante anche se ancora visibile.",
     # ── detectors/base: quindici superstiti, TUTTI equivalenti ──────────
     #
     # ⚠️ Lo scorer della Forza chiude a 43 su 58 e i quindici che restano non
