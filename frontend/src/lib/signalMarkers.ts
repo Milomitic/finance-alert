@@ -16,6 +16,39 @@ function barTimesOf(ohlcv: OhlcvBar[]): number[] {
   return ohlcv.map((b) => Math.floor(Date.parse(b.date) / 1000));
 }
 
+const SECONDI_IN_UN_GIORNO = 86_400;
+
+/** La barra a cui ancorare un segnale datato al giorno che inizia a `dayStart`.
+ *
+ * ⚠️ Una data di segnale e' GIORNALIERA: non contiene l'ora di emissione, e il
+ * codice non deve fingere che la contenga. La regola copre i tre casi con una
+ * sola frase — **prima la prima barra DENTRO quel giorno; se il giorno non ha
+ * barre, la barra che lo contiene**:
+ *
+ *   - intraday: le barre del 9 luglio cominciano alle 13:30 UTC, quindi si
+ *     aggancia all'apertura della seduta. Prima si cercava «l'ultima barra <=
+ *     mezzanotte UTC», che precede OGNI barra della seduta: il marker
+ *     scivolava sull'ultima barra del giorno PRECEDENTE (FA-063);
+ *   - giornaliera: la barra del giorno E' a mezzanotte UTC, quindi la prima
+ *     dentro il giorno e' sé stessa — invariata;
+ *   - settimanale/mensile: il giorno del segnale non ha una barra propria, si
+ *     ricade sulla barra che lo contiene. Un segnale di mercoledi' appartiene
+ *     alla barra di lunedi', ed e' giusto cosi'.
+ */
+function anchorBarTime(barTimes: number[], dayStart: number): number | null {
+  const dayEnd = dayStart + SECONDI_IN_UN_GIORNO;
+  // Prima barra con t >= dayStart (ricerca binaria sul limite inferiore).
+  let lo = 0;
+  let hi = barTimes.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (barTimes[mid] < dayStart) lo = mid + 1;
+    else hi = mid;
+  }
+  if (lo < barTimes.length && barTimes[lo] < dayEnd) return barTimes[lo];
+  return enclosingBarTime(barTimes, dayStart);
+}
+
 /** The last bar time ≤ t (the candle that CONTAINS day `t`), or null when t
  *  precedes the first bar. `barTimes` must be ascending. */
 function enclosingBarTime(barTimes: number[], t: number): number | null {
@@ -103,7 +136,7 @@ export function buildSignalOverlay(ohlcv: OhlcvBar[], alerts: Alert[]): SignalOv
     const t = Math.floor(Date.parse(day) / 1000);
     if (!Number.isFinite(t) || t < firstT) continue; // older than the window
 
-    const barT = enclosingBarTime(barTimes, t);
+    const barT = anchorBarTime(barTimes, t);
     if (barT == null) continue;
 
     const meta = getAlertMeta(a);
@@ -118,7 +151,19 @@ export function buildSignalOverlay(ohlcv: OhlcvBar[], alerts: Alert[]): SignalOv
     else byTime.set(barT, [item]);
   }
 
-  // One marker per bar; tone by bull/bear majority (ties → neutral/amber).
+  // Un marker per barra. ⚠️ Il verso NON si decide a maggioranza.
+  //
+  // Il colore veniva dal segno di (bull - bear), quindi due segnali CORRELATI
+  // — due detector della stessa famiglia sullo stesso titolo, che e' il caso
+  // ordinario — coprivano un ribassista, che spariva dal grafico. E' una
+  // logica diversa da quella che `confluence_service` applica altrove, dove N
+  // segnali della stessa famiglia contano ~1,3 e non N.
+  //
+  // Quando i due versi coesistono il contrasto e' un FATTO: su quella barra il
+  // motore ha detto due cose opposte, e il grafico deve dirlo invece di
+  // scegliere il gruppo piu' numeroso. Il glifo misto lo dice; i singoli
+  // segnali col loro tono stanno nel pannello di dettaglio, che e' dove una
+  // lista si legge.
   const markers: SeriesMarker<Time>[] = [];
   for (const [barT, items] of byTime) {
     let bull = 0;
@@ -127,9 +172,9 @@ export function buildSignalOverlay(ohlcv: OhlcvBar[], alerts: Alert[]): SignalOv
       if (it.tone === "bullish") bull++;
       else if (it.tone === "bearish") bear++;
     }
-    const net = bull - bear;
-    const isBull = net > 0;
-    const isBear = net < 0;
+    const conteso = bull > 0 && bear > 0;
+    const isBull = !conteso && bull > 0;
+    const isBear = !conteso && bear > 0;
     markers.push({
       time: barT as UTCTimestamp,
       position: isBull ? "belowBar" : isBear ? "aboveBar" : "inBar",
@@ -177,7 +222,7 @@ export function buildEarningsMarkers(
     // Only past earnings that fall inside the visible window get a flag —
     // a future `next_earnings_date` has no candle to anchor to.
     if (!Number.isFinite(t) || t < firstT || t > lastT) continue;
-    const barT = enclosingBarTime(barTimes, t);
+    const barT = anchorBarTime(barTimes, t);
     if (barT == null || seen.has(barT)) continue; // one flag per bar
     seen.add(barT);
     const s = e.surprise_pct;

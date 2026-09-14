@@ -67,7 +67,7 @@ describe("buildSignalOverlay", () => {
     expect(markers).toEqual([]);
   });
 
-  it("collapses several same-day signals into one arrow (majority tone), detail in byTime", () => {
+  it("collapses several same-day signals into ONE marker, detail in byTime", () => {
     const { markers, byTime } = buildSignalOverlay(OHLCV, [
       signal("2026-07-09", "bull"),
       signal("2026-07-09", "bull"),
@@ -81,7 +81,14 @@ describe("buildSignalOverlay", () => {
     // hover every arrow. The detector name is still kept off the chart; it is
     // the part that buried the candles.
     expect(markers[0].text).toBe("3");
-    expect(markers[0].shape).toBe("arrowUp"); // 2 bull vs 1 bear → bull majority
+    // ⚠️ Cambiato deliberatamente 2026-09-14 (FA-063). Questa riga asseriva
+    // `arrowUp` con la ragione «2 bull vs 1 bear → maggioranza rialzista»:
+    // codificava il difetto. Due segnali CORRELATI — due detector della stessa
+    // famiglia sullo stesso titolo, il caso ordinario — coprivano il
+    // ribassista, che spariva dal grafico. Il glifo misto dice che su quella
+    // barra il motore ha detto due cose opposte; i singoli toni stanno nel
+    // pannello di dettaglio, che e' dove una lista si legge.
+    expect(markers[0].shape).toBe("circle");
     const t = Math.floor(Date.parse("2026-07-09") / 1000);
     expect(byTime.get(t)).toHaveLength(3);
     expect(byTime.get(t)?.[0].forza).toBe(77);
@@ -185,5 +192,83 @@ describe("i marker sono leggibili senza classificare i segnali", () => {
     const forte = buildSignalOverlay(OHLCV, [signal("2026-07-09", "bull", strong)]).markers;
 
     expect(debole[0].size).toBe(forte[0].size);
+  });
+});
+
+/* ─── FA-063: dove cade il marker, e di che colore ────────────────────────── */
+
+/** Una seduta intraday: barre da 30 minuti dalle 13:30 UTC (09:30 a New York). */
+function intraday(giorno: string, ore: string[]): OhlcvBar[] {
+  return ore.map((h) => bar(`${giorno}T${h}:00Z`));
+}
+
+describe("buildSignalOverlay — collocamento su serie intraday", () => {
+  const SERIE = [
+    ...intraday("2026-07-08", ["13:30", "14:00", "14:30", "19:30"]),
+    ...intraday("2026-07-09", ["13:30", "14:00", "14:30", "19:30"]),
+  ];
+
+  it("⚠️ un segnale datato al giorno X cade su una barra del giorno X", () => {
+    /* Il difetto: `signal_date` e' una data GIORNALIERA, e `Date.parse` la
+     * rende mezzanotte UTC. Su una serie intraday quella mezzanotte precede
+     * ogni barra della seduta, quindi «l'ultima barra <= t» e' l'ultima barra
+     * del giorno PRECEDENTE — il marker scivolava di una seduta.
+     *
+     * Una data giornaliera non contiene l'ora di emissione, e il codice non
+     * deve fingere che la contenga: si aggancia all'APERTURA del giorno. */
+    const { markers } = buildSignalOverlay(SERIE, [signal("2026-07-09", "bull")]);
+    expect(markers).toHaveLength(1);
+    const t = markers[0].time as number;
+    const giorno = new Date(t * 1000).toISOString().slice(0, 10);
+    expect(giorno).toBe("2026-07-09");
+    // ⚠️ Il controllo negativo, che e' la meta' che conta: la forma vecchia
+    // rendeva ESATTAMENTE l'ultima barra dell'8, e senza questa riga il test
+    // passerebbe anche su una serie giornaliera dove i due comportamenti
+    // coincidono.
+    expect(t).not.toBe(Math.floor(Date.parse("2026-07-08T19:30:00Z") / 1000));
+    expect(t).toBe(Math.floor(Date.parse("2026-07-09T13:30:00Z") / 1000));
+  });
+
+  it("un giorno SENZA barre ricade sulla barra che lo contiene", () => {
+    /* Il ripiego resta, ed e' giusto: su una serie settimanale un segnale di
+     * mercoledi' appartiene alla barra di lunedi'. Toglierlo per aggiustare
+     * l'intraday romperebbe settimanale e mensile. */
+    const settimanali = [bar("2026-07-06"), bar("2026-07-13")];
+    const { markers } = buildSignalOverlay(settimanali, [signal("2026-07-08", "bull")]);
+    expect(markers).toHaveLength(1);
+    expect(markers[0].time).toBe(Math.floor(Date.parse("2026-07-06") / 1000));
+  });
+});
+
+describe("buildSignalOverlay — il verso non si decide a maggioranza", () => {
+  it("⚠️ due rialzisti e un ribassista danno un marker MISTO, non una freccia su", () => {
+    /* Il difetto: il colore veniva dalla maggioranza, quindi due segnali
+     * CORRELATI — due detector della stessa famiglia sullo stesso titolo —
+     * coprivano un ribassista, che spariva dal grafico.
+     *
+     * E' una logica diversa da quella che `confluence_service` applica
+     * altrove, dove N segnali della stessa famiglia contano ~1,3 e non N.
+     * Qui il contrasto e' un FATTO: su quella barra il motore ha detto due
+     * cose opposte, e il grafico deve dirlo. */
+    const { markers } = buildSignalOverlay(OHLCV, [
+      signal("2026-07-09", "bull"),
+      signal("2026-07-09", "bull"),
+      signal("2026-07-09", "bear"),
+    ]);
+    expect(markers).toHaveLength(1);
+    expect(markers[0].shape).toBe("circle");
+    expect(markers[0].shape).not.toBe("arrowUp");
+    expect(markers[0].position).toBe("inBar");
+  });
+
+  it("un verso solo resta una freccia — il misto non e' il default", () => {
+    /* ⚠️ Il pavimento: senza, un componente che rendesse SEMPRE un cerchio
+     * soddisferebbe il test sopra. */
+    const su = buildSignalOverlay(OHLCV, [
+      signal("2026-07-09", "bull"), signal("2026-07-09", "bull"),
+    ]);
+    expect(su.markers[0].shape).toBe("arrowUp");
+    const giu = buildSignalOverlay(OHLCV, [signal("2026-07-09", "bear")]);
+    expect(giu.markers[0].shape).toBe("arrowDown");
   });
 });
