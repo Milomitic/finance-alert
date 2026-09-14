@@ -255,20 +255,60 @@ mancanti, non stimati. Lo stesso vale per `lead_days` degli episodi persi.
 lunedì esiste; una migrazione che non si ripercorre all'indietro va scoperta
 prima, non durante un ripristino.
 
-### FA-062 — osservabilità di aggiornamenti e maturazione
+### FA-062 — osservabilità di aggiornamenti e maturazione — ✅ FATTA
 
-Oggi «evento originario» e «ultima osservazione» sono lo stesso campo, perché
-l'aggiornamento in cooldown sposta data, prezzo e snapshot. E «in maturazione»
-copre anche ciò che non sta aspettando: **7 alert senza esito oltre 120 giorni**.
+Commit `92df901` (stati + provenienza) e `b4d4c85` (perimetro).
 
-**Come**: stati di misura espliciti — *in attesa dell'orizzonte* / *bloccato per
-dati mancanti* / *non valutabile* / *maturato* — e un proprietario comune delle
-operazioni di fine scansione, che distingua perimetro locale (`api/alerts.py`,
-scan del singolo titolo) e globale.
+⚠️ **Questo piano prevedeva QUATTRO stati e la misura ne ha sostenuti DUE.**
+Vale la pena leggere perché, perché il piano era sbagliato in entrambe le
+direzioni e nessuno dei due errori si vedeva dal codice.
+
+Misurato in produzione il 2026-09-14, su 3.734 alert senza esito:
+
+| stato previsto dal piano | popolazione misurata | esito |
+|---|---|---|
+| maturato | 4.662 | esisteva già |
+| in attesa dell'orizzonte | 3.686 | **costruito** (prima confuso col prossimo) |
+| bloccato per dati mancanti | **48**, su 12 titoli | **costruito** |
+| avrebbe dovuto maturare | **0** | non costruito — popolazione vuota, come FA-067 |
+| non valutabile | **1** | non costruito — un'etichetta per una riga |
+
+**La misura che aveva motivato questa voce era sbagliata, e l'ho smentita io.**
+I «7 alert oltre 120 giorni» venivano da una soglia in giorni di CALENDARIO,
+mentre i detector a 63 sedute sono ~88 giorni di calendario: a 73 giorni quegli
+alert stavano legittimamente aspettando. La soglia giusta conta le BARRE dopo la
+barra del segnale, che è ciò da cui un esito nasce davvero.
+
+**E lo stato che è sopravvissuto è verificato, non assunto.** Il predicato
+`ohlcv_nodata_streak >= 3` seleziona *esattamente* i 12 titoli la cui ultima
+barra ha più di dieci giorni — zero falsi positivi, zero falsi negativi, cioè la
+stessa condizione misurata per due vie indipendenti. Poi la fonte è stata
+interrogata: nove non hanno più barre, e per WBS, EQR e AVB l'ultima barra
+disponibile è **al giorno** la stessa che abbiamo noi, con AAPL come controllo
+positivo nella stessa chiamata a provare che la rete del pod risponde.
+
+⚠️ **Il catalogo lo sapeva dal 2026-08-26.** Quella data chiuse il lato FETCH —
+smettere di scaricare i simboli morti, smettere di chiederne le quotazioni — e
+`not_quarantined_clause` nomina per esteso BK, CTRA, APLS, TERN, VSCO. Nessuno
+chiese cosa significasse per gli alert appesi a quei titoli. È la forma
+ricorrente di questo progetto: una conoscenza che esiste in un livello e non
+attraversa il confine.
+
+**Perimetro.** Il proprietario comune esisteva già (`run_post_scan_bookkeeping`,
+2026-09-02) e non prendeva scopo. Ora `universe` è obbligatorio e **senza
+default**: un default a True darebbe il comportamento pericoloso a chi si
+dimentica di dichiarare. Difetto latente — 37 scansioni parziali, tutte di
+maggio, zero negli ultimi dieci giorni — ma FA-061 ne ha alzato il prezzo: una
+chiusura sbagliata ora scrive `closed_reason` in modo permanente e finisce nel
+denominatore del tasso di conversione.
 
 ⚠️ **Una scansione parziale non può dichiarare scaduto nulla** di ciò che non ha
 valutato. È il difetto che il CronJob di parità ha già pagato in un'altra forma:
 uno strumento che risponde su un perimetro diverso da quello che crede.
+
+**Due cose trovate qui sono state REGISTRATE, non assorbite**: FA-071 (i dodici
+titoli morti hanno ancora punteggi, classifiche e nove setup aperti) e FA-072
+(«processa segnali» non invalida la lista globale).
 
 ### FA-067 — i diciotto esiti disallineati
 
