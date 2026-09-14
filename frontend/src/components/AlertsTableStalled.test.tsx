@@ -66,6 +66,8 @@ function monta(alerts: Alert[]) {
           onSelect={() => {}}
           onSelectAll={() => {}}
           onRowClick={() => {}}
+          q=""
+          onQueryChange={() => {}}
           onSort={() => {}}
         />
       </MemoryRouter>
