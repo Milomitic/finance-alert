@@ -1983,6 +1983,79 @@ su Windows puo togliere il ramo Linux dal lockfile. Tre righe di dichiarazione
 con un cast su `globalThis` fanno lo stesso lavoro — vedi
 `earningsProximity.test.ts`.
 
+### ⚠️ Una funzione SOSTITUITA ovunque non e' verificata da nessuno (2026-09-14)
+
+Il cancello del codice mai eseguito ha segnalato
+`live_quote_service::_is_premarket` come nuova funzione morta su un commit che
+toccava **solo il frontend**. E la riga sopra, nello stesso rapporto,
+dichiarava `_today_session_open_epoch` «ora coperta»: due funzioni dello stesso
+modulo che si scambiano lo stato di copertura fra due corse.
+
+**La causa, misurata sui test e non dedotta: OGNI riferimento esistente le
+sostituiva.** Otto fra `monkeypatch.setattr` e `patch(...)`, nessuna chiamata
+reale. La loro copertura veniva solo dall'esecuzione incidentale dentro
+qualche altro test — e quella dipende dall'ORA, perche'
+`allow_remote_today_fetch and _is_premarket(ticker)` corto-circuita e la
+condizione a valle legge l'orologio.
+
+⚠️ Stessa famiglia del `raising=False` che crea un attributo nuovo invece di
+sostituire quello vero: **il finto nasconde che l'originale non gira mai.** Un
+modulo puo' avere venti test che lo nominano e zero che lo eseguono, e il
+sintomo non e' un rosso — e' un cancello che sfarfalla.
+
+La forma della correzione conta: **il tempo si INIETTA dove la firma lo
+permette** (`_is_premarket(ticker, now_utc)`), e dove non lo permette si
+asserisce una proprieta' vera a QUALUNQUE ora — l'epoch reso, riconvertito nel
+fuso della borsa, e' l'apertura di oggi — invece di congelare l'orologio. Un
+test che gira solo col tempo fermo e' esattamente cio' che ha reso queste due
+funzioni invisibili.
+
+⚠️ E uno dei tredici test ha corretto CHI LO SCRIVEVA. Avevo asserito che un
+suffisso sconosciuto rendesse `None`; `_exchange_region` fa cadere ogni
+suffisso ignoto su `"US"` e il suo docstring dichiara che non e' cosmetico.
+Ne segue che il `return None` di `_today_session_open_epoch` e' un ramo
+difensivo irraggiungibile per quella via — una delle cinque famiglie. Si fissa
+il comportamento VERO, non quello che sembrava ragionevole.
+
+### ⚠️ axe tollera un `aria-controls` pendente solo con `aria-expanded` (2026-09-14)
+
+Costato due corse rosse del gate UI. Un controllo «Recenti / Storico» reso con
+Radix `Tabs`: `TabsTrigger` emette `aria-controls` verso il `TabsContent`
+corrispondente, che non veniva reso perche' il contenuto era un fratello piu' in
+basso. Riferimento a un id INESISTENTE -> `aria-valid-attr-value: 0 -> 1`.
+
+**La parte non ovvia: axe ne ha segnalato UNO, non sette.** Nella stessa scheda
+sei popover `InfoHint` portano lo stesso attributo pendente e sono VALIDI,
+perche' axe tollera un riferimento non risolto quando l'elemento ha
+`aria-expanded="false"` — un pannello non ancora montato e' legittimo. Radix
+Popover mette `aria-expanded`; `TabsTrigger` no, perche' un tab non ha uno stato
+aperto/chiuso.
+
+Due conseguenze operative:
+
+1. **Un gruppo di tab senza tabpanel non e' un gruppo di tab.** Due bottoni con
+   `aria-pressed` sono la forma corretta di un controllo segmentato e non
+   promettono un pannello. Un'ARIA che nomina un id che non c'e' e' peggio di
+   nessuna ARIA: gli assistivi annunciano una relazione inesistente e il
+   difetto e' invisibile a chi guarda lo schermo.
+2. **Il test che lo sorveglia va RISTRETTO al proprio controllo.** La prima
+   versione cercava ogni `aria-controls` pendente nella scheda e diventava rossa
+   sui sei popover corretti di qualcun altro — cioe' un cancello che nasce
+   rosso, che poi viene spento.
+
+### ⚠️ Il nome di una scheda e' la sua IDENTITA': non cambia con la vista
+
+Stessa correzione, secondo difetto. Avevo fatto variare il titolo della scheda
+con la scheda attiva («Segnali recenti» / «Storico completo») e il gate e2e, che
+la localizza per quel testo, non l'ha piu' trovata: *«la scheda dei segnali non
+e' stata resa»*.
+
+Il test aveva ragione a rompersi. E' la stessa regola della sezione sullo spazio
+che finisce — quando manca, cede la decorazione e non l'etichetta — applicata al
+tempo invece che allo spazio: **cio' che identifica il riquadro resta fermo, cio'
+che appartiene alla vista varia.** Il titolo e' tornato stabile e il CONTEGGIO
+segue la vista, perche' quello alla vista appartiene davvero.
+
 ### ⚠️ `git checkout --` NON e un ripristino: e un ritorno a HEAD
 
 Questo file dice gia «si toglie la correzione **su una copia**, si esegue, si
