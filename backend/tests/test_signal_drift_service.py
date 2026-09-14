@@ -150,61 +150,70 @@ def _patch_calibration(monkeypatch, base_rates: dict[str, float], horizon_days: 
 # --------------------------------------------------------------------------- #
 
 def test_detector_that_mostly_worked_is_improving(db: Session, monkeypatch):
-    """40 recent matured alerts, ~90% hit, base rate 50 → recent high, base
-    below the Wilson band → flagged, direction 'improving'."""
+    """10 matured alerts on SEPARATE weeks, 90% hit, base 50 → base below the
+    sized band → flagged, direction 'improving'.
+
+    ⚠️ The fires are 8 days apart on purpose. This fixture used to seed 40
+    alerts on ONE date, which is 40 stocks seeing one day of market — a single
+    independent window. It passed because the monitor sized on rows; under
+    window sizing it would (correctly) say it cannot tell."""
     hz = 5
     _patch_calibration(monkeypatch, {"volume_breakout": 50.0}, horizon_days=hz)
-    start = date.today() - timedelta(days=60)
-    n = 40
-    n_hits = 36  # 90%
+    base_start = date.today() - timedelta(days=85)
+    n = 10
+    n_hits = 9  # 90%
     for k in range(n):
         s = _mk_stock(db, f"WIN{k}")
         sig_d = _mk_bars(
-            db, s.id, start=start, n_bars=hz + 2, trigger_offset=0,
+            db, s.id, start=base_start + timedelta(days=8 * k),
+            n_bars=hz + 2, trigger_offset=0,
             horizon_days=hz, hit=(k < n_hits), tone="bull",
         )
         _mk_alert(db, s.id, "volume_breakout", "bull", sig_d)
     db.commit()
     sos.mature_outcomes(db)  # the real production pipeline: warehouse → drift
 
-    rows = drift.compute_signal_drift(db, window_days=90, min_n=30)
+    rows = drift.compute_signal_drift(db, window_days=90, min_n=5)
     assert len(rows) == 1
     r = rows[0]
     assert r["detector"] == "volume_breakout"
     assert r["n_matured"] == n
+    assert r["effective_n"] == n          # una finestra per scatto: nessuna sovrapposizione
     assert r["recent_hit_rate"] == pytest.approx(90.0, abs=0.1)
     assert r["base_rate"] == 50.0
     assert r["delta"] == pytest.approx(40.0, abs=0.1)
-    # 36/40 Wilson 95% lower bound ≈ 77% → base 50 is well below it.
+    # 9/10 sized Wilson lower bound ≈ 60% → base 50 sits below it.
     assert r["ci_low"] > 50.0
     assert r["drift_flag"] is True
     assert r["direction"] == "improving"
 
 
 def test_detector_that_mostly_failed_is_decaying(db: Session, monkeypatch):
-    """40 recent matured alerts, ~20% hit, base rate 55 → recent low, base
-    above the Wilson band → flagged, direction 'decaying'."""
+    """10 matured alerts on separate weeks, 20% hit, base 55 → base above the
+    sized band → flagged, direction 'decaying'. Same spreading as above."""
     hz = 5
     _patch_calibration(monkeypatch, {"oversold_reversal": 55.0}, horizon_days=hz)
-    start = date.today() - timedelta(days=60)
-    n = 40
-    n_hits = 8  # 20%
+    base_start = date.today() - timedelta(days=85)
+    n = 10
+    n_hits = 2  # 20%
     for k in range(n):
         s = _mk_stock(db, f"FAIL{k}")
         sig_d = _mk_bars(
-            db, s.id, start=start, n_bars=hz + 2, trigger_offset=0,
+            db, s.id, start=base_start + timedelta(days=8 * k),
+            n_bars=hz + 2, trigger_offset=0,
             horizon_days=hz, hit=(k < n_hits), tone="bull",
         )
         _mk_alert(db, s.id, "oversold_reversal", "bull", sig_d)
     db.commit()
     sos.mature_outcomes(db)  # the real production pipeline: warehouse → drift
 
-    rows = drift.compute_signal_drift(db, window_days=90, min_n=30)
+    rows = drift.compute_signal_drift(db, window_days=90, min_n=5)
     assert len(rows) == 1
     r = rows[0]
+    assert r["effective_n"] == n
     assert r["recent_hit_rate"] == pytest.approx(20.0, abs=0.1)
     assert r["base_rate"] == 55.0
-    # 8/40 Wilson 95% upper bound ≈ 35% → base 55 is above it.
+    # 2/10 sized Wilson upper bound ≈ 51% → base 55 sits above it.
     assert r["ci_high"] < 55.0
     assert r["drift_flag"] is True
     assert r["direction"] == "decaying"
@@ -212,8 +221,12 @@ def test_detector_that_mostly_failed_is_decaying(db: Session, monkeypatch):
 
 def test_small_sample_does_not_flag_despite_extreme_deviation(db: Session, monkeypatch):
     """Only 6 matured alerts, all MISSED (0% realised) vs base 55. The deviation
-    is huge but n < min_n (and the Wilson band at n=6 is very wide), so it must
-    NOT be flagged — the whole point of the band is to ignore thin evidence."""
+    is huge but the sample is thin, so it must NOT be flagged — the whole point
+    of the band is to ignore thin evidence.
+
+    ⚠️ It must also not read as STABLE, and that assertion is the defect this
+    test used to encode: six rows say nothing about a detector's stability, and
+    "stable" presented the absence of evidence as evidence."""
     hz = 5
     _patch_calibration(monkeypatch, {"gap_and_go": 55.0}, horizon_days=hz)
     start = date.today() - timedelta(days=30)
@@ -233,22 +246,24 @@ def test_small_sample_does_not_flag_despite_extreme_deviation(db: Session, monke
     r = rows[0]
     assert r["n_matured"] == 6
     assert r["recent_hit_rate"] == pytest.approx(0.0, abs=0.1)
-    assert r["drift_flag"] is False         # below min_n → never flag
-    assert r["direction"] == "stable"
+    assert r["drift_flag"] is False              # below min_n → never flag
+    assert r["direction"] == "insufficient"      # e NON "stable"
 
 
 def test_small_sample_below_min_n_even_if_wilson_would_exclude(db: Session, monkeypatch):
-    """Belt-and-suspenders: 20 matured alerts, all hit (100%) vs base 50. At
-    n=20 the Wilson lower bound (~83%) already excludes 50, but min_n=30 is the
-    hard floor → still NOT flagged."""
+    """Belt-and-suspenders: 10 matured alerts on separate weeks, all hit (100%)
+    vs base 50. The SIZED band already excludes 50, but min_n=30 is the hard
+    floor → still NOT flagged, and reported as not measurable rather than
+    stable."""
     hz = 5
     _patch_calibration(monkeypatch, {"rsi_divergence": 50.0}, horizon_days=hz)
-    start = date.today() - timedelta(days=30)
-    n = 20
+    base_start = date.today() - timedelta(days=85)
+    n = 10
     for k in range(n):
         s = _mk_stock(db, f"MID{k}")
         sig_d = _mk_bars(
-            db, s.id, start=start, n_bars=hz + 2, trigger_offset=0,
+            db, s.id, start=base_start + timedelta(days=8 * k),
+            n_bars=hz + 2, trigger_offset=0,
             horizon_days=hz, hit=True, tone="bull",
         )
         _mk_alert(db, s.id, "rsi_divergence", "bull", sig_d)
@@ -257,10 +272,11 @@ def test_small_sample_below_min_n_even_if_wilson_would_exclude(db: Session, monk
 
     rows = drift.compute_signal_drift(db, window_days=90, min_n=30)
     r = rows[0]
-    assert r["n_matured"] == 20
-    assert r["ci_low"] > 50.0               # Wilson alone WOULD exclude the base
-    assert r["drift_flag"] is False         # but min_n gate blocks the flag
-    assert r["direction"] == "stable"
+    assert r["n_matured"] == 10
+    assert r["effective_n"] == 10
+    assert r["ci_low"] > 50.0               # la banda da sola ESCLUDEREBBE la base
+    assert r["drift_flag"] is False         # ma la soglia min_n blocca
+    assert r["direction"] == "insufficient"
 
 
 def test_not_yet_matured_alerts_are_excluded(db: Session, monkeypatch):
@@ -449,16 +465,17 @@ def test_signal_drift_endpoint_shape_empty(client: TestClient):
 def test_signal_drift_endpoint_returns_rows(client: TestClient, db: Session, monkeypatch):
     hz = 5
     _patch_calibration(monkeypatch, {"volume_breakout": 50.0}, horizon_days=hz)
-    start = date.today() - timedelta(days=40)
-    for k in range(35):
+    base_start = date.today() - timedelta(days=85)
+    for k in range(10):
         s = _mk_stock(db, f"EP{k}")
-        sig_d = _mk_bars(db, s.id, start=start, n_bars=hz + 2, trigger_offset=0,
+        sig_d = _mk_bars(db, s.id, start=base_start + timedelta(days=8 * k),
+                         n_bars=hz + 2, trigger_offset=0,
                          horizon_days=hz, hit=True, tone="bull")
         _mk_alert(db, s.id, "volume_breakout", "bull", sig_d)
     db.commit()
     sos.mature_outcomes(db)
 
-    r = client.get("/api/platform/signal-drift?window_days=90&min_n=30")
+    r = client.get("/api/platform/signal-drift?window_days=90&min_n=5")
     assert r.status_code == 200
     body = r.json()
     assert body["summary"]["n_detectors"] == 1
@@ -468,8 +485,8 @@ def test_signal_drift_endpoint_returns_rows(client: TestClient, db: Session, mon
     assert row["drift_flag"] is True
     assert row["direction"] == "improving"
     assert set(row.keys()) == {
-        "detector", "n_matured", "recent_hit_rate", "base_rate", "delta",
-        "ci_low", "ci_high", "drift_flag", "direction", "horizon_days",
+        "detector", "n_matured", "effective_n", "recent_hit_rate", "base_rate",
+        "delta", "ci_low", "ci_high", "drift_flag", "direction", "horizon_days",
     }
 
 

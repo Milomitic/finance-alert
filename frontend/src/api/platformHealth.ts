@@ -232,12 +232,23 @@ export async function fetchHealth(signal?: AbortSignal): Promise<PlatformHealth>
 export type SignalDriftRow = {
   detector: string;
   n_matured: number;
+  /** Non-overlapping horizon-length windows those alerts span — the honest
+   *  denominator, and the one the band and the flag are sized on. Always
+   *  smaller than `n_matured`, usually by a lot: fires on one day across many
+   *  stocks are one day of market seen N times. Show THIS beside a rate, never
+   *  the row count. */
+  effective_n: number;
   recent_hit_rate: number;
   base_rate: number;
   delta: number;
   ci_low: number;
   ci_high: number;
   drift_flag: boolean;
+  /** "decaying" | "improving" | "stable" | "insufficient".
+   *  ⚠️ "insufficient" is not a fourth flavour of stable — it means the sample
+   *  cannot answer. */
+  direction: string;
+  horizon_days: number;
 };
 
 export async function fetchSignalDrift(signal?: AbortSignal): Promise<{ detectors: SignalDriftRow[] }> {

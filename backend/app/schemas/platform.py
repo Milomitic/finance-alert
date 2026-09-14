@@ -260,23 +260,37 @@ class InfraLogsOut(BaseModel):
 
 class SignalDriftRowOut(BaseModel):
     """One detector's drift verdict: realised recent hit-rate vs the calibrated
-    base rate, with the Wilson band that decides significance. All rates are
+    base rate, with the sized band that decides significance. All rates are
     percentages (0..100)."""
     detector: str
     n_matured: int                 # matured signal alerts in the recent window
+    #: Non-overlapping horizon-length windows those alerts span — the honest
+    #: denominator, and the one the band and the flag are sized on. Two fires
+    #: three days apart at a 21-day horizon share 18/21 of their outcome
+    #: window; fires on one day across many stocks are one day seen N times.
+    #: ⚠️ Read it beside `horizon_days`: without it, 12 windows for a 5-day
+    #: detector and 3 for a 21-day one over the same span looks arbitrary.
+    effective_n: int
     recent_hit_rate: float         # realised hit-rate over those matured alerts
     base_rate: float               # calibrated base rate (signal_calibration.json)
     delta: float                   # recent_hit_rate - base_rate (signed)
-    ci_low: float                  # Wilson lower bound on recent_hit_rate
-    ci_high: float                 # Wilson upper bound on recent_hit_rate
-    drift_flag: bool               # base_rate outside [ci_low, ci_high] AND n>=min_n
-    direction: str                 # "decaying" | "improving" | "stable"
+    ci_low: float                  # sized Wilson lower bound on recent_hit_rate
+    ci_high: float                 # sized Wilson upper bound on recent_hit_rate
+    drift_flag: bool               # base outside [ci_low, ci_high] AND effective_n>=min_n
+    #: "decaying" | "improving" | "stable" | "insufficient".
+    #: ⚠️ "insufficient" is not a fourth flavour of stable: it means the sample
+    #: cannot answer. Everything unflagged used to read "stable", which
+    #: presented the absence of evidence as evidence of stability.
+    direction: str
     horizon_days: int              # detector's forward horizon (trading days)
 
 
 class SignalDriftSummaryOut(BaseModel):
     n_detectors: int               # detectors with >=1 matured alert in window
     n_flagged: int
+    #: Detectors whose sample is too thin to answer. Without this count the
+    #: envelope reads "0 flagged of 11" and looks like eleven healthy detectors.
+    n_insufficient: int
     n_decaying: int
     n_improving: int
     window_days: int               # rolling window of matured alerts (calendar)

@@ -65,15 +65,28 @@ rest of the platform UI. Read-only: no writes, no migrations.
 """
 from __future__ import annotations
 
-import math
 from datetime import UTC, date, datetime, timedelta
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import SignalOutcome
 from app.signals.calibration_map import get_calibration
 from app.signals.horizon import _PRIOR
+from app.stats.sizing import (
+    DEFAULT_Z,
+    independent_blocks,
+    sized_interval,
+    wilson_interval,
+)
+
+# Ri-esportati: `detector_performance_service` importava `wilson_interval` da
+# qui, ed e' proprio quell'import a impedire la direzione opposta. Ora
+# entrambi leggono `app.stats.sizing`; i nomi restano per chi li cercava qui.
+__all__ = [
+    "compute_signal_drift", "drift_summary", "independent_blocks",
+    "sized_interval", "wilson_interval",
+]
 
 # Horizon (trading days) per prior bucket — mirrors signal_factor_outcomes
 # (H_SHORT/H_MED/H_LONG) and signal_detector_outcomes._detector_horizon. Used
@@ -92,8 +105,9 @@ _DEFAULT_WINDOW_DAYS = 90
 # signal_detector_outcomes (`if len(arr) < 30: continue`).
 _DEFAULT_MIN_N = 30
 
-# Confidence level for the Wilson interval. 95% → z ≈ 1.96.
-_DEFAULT_Z = 1.959963984540054  # norm.ppf(0.975); stdlib-only, no scipy.
+# Confidence level for the Wilson interval. 95% → z ≈ 1.96. Owned by
+# app.stats.sizing; aliased here so the signature below stays readable.
+_DEFAULT_Z = DEFAULT_Z
 
 
 def _horizon_days(detector: str) -> int:
@@ -104,24 +118,6 @@ def _horizon_days(detector: str) -> int:
     if h is not None and h > 0:
         return int(h)
     return _H_BY_HORIZON.get(_PRIOR.get(detector, "medium"), _DEFAULT_HORIZON_DAYS)
-
-
-def wilson_interval(hits: float, n: int, z: float = _DEFAULT_Z) -> tuple[float, float]:
-    """95%-default Wilson score interval for a binomial proportion, as a
-    (low, high) pair of PROPORTIONS in [0, 1].
-
-    Wilson (not the Wald/normal approximation) because it is bounded to [0,1],
-    well-calibrated at small n and at extreme p (0% / 100%), and naturally
-    widens as n shrinks. n == 0 → the fully-uninformative (0, 1).
-    """
-    if n <= 0:
-        return 0.0, 1.0
-    phat = hits / n
-    z2 = z * z
-    denom = 1.0 + z2 / n
-    center = (phat + z2 / (2 * n)) / denom
-    margin = (z / denom) * math.sqrt(phat * (1.0 - phat) / n + z2 / (4 * n * n))
-    return max(0.0, center - margin), min(1.0, center + margin)
 
 
 def compute_signal_drift(
@@ -154,30 +150,50 @@ def compute_signal_drift(
     # the user has filed an alert away says nothing about whether the detector
     # was right.
     cutoff = date.today() - timedelta(days=window_days)
-    grouped = db.execute(
-        select(
-            SignalOutcome.detector,
-            func.count(SignalOutcome.id),
-            func.sum(SignalOutcome.abs_hit),
-        )
+    # Le DATE, non solo i conteggi: senza di esse non si possono contare le
+    # finestre indipendenti, ed e' il motivo per cui questa query rendeva
+    # `count(*)` e il monitor dimensionava sulle righe.
+    righe = db.execute(
+        select(SignalOutcome.detector, SignalOutcome.signal_date,
+               SignalOutcome.abs_hit)
         .where(SignalOutcome.signal_date >= cutoff)
-        .group_by(SignalOutcome.detector)
     ).all()
+    per_detector: dict[str, list[tuple[date, int]]] = {}
+    for nome, giorno, colpo in righe:
+        per_detector.setdefault(nome, []).append((giorno, int(colpo or 0)))
 
     out: list[dict] = []
-    for name, n, hits in grouped:
+    for name, coppie in per_detector.items():
+        n = len(coppie)
         if not n:
             continue
-        hits = int(hits or 0)
+        hits = sum(c for _, c in coppie)
         recent = hits / n * 100.0
         base = cal.base_rate(name)  # percentage (0..100), default 50
-        lo_p, hi_p = wilson_interval(hits, n, z)
-        ci_low, ci_high = lo_p * 100.0, hi_p * 100.0
+        horizon = _horizon_days(name)
+        # ⚠️ Il conteggio EFFICACE, con lo stesso criterio del cubo. Due scatti
+        # a tre giorni di distanza etichettati a 21 sedute condividono 18/21
+        # della finestra; quelli dello stesso giorno su titoli diversi sono un
+        # giorno di mercato visto N volte. Contarli come estrazioni
+        # indipendenti e' cio' che teneva acceso un allarme su candle_reversal
+        # con 1372 righe che sono 12 finestre.
+        eff_n = independent_blocks([d for d, _ in coppie], horizon)
+        # La stima puntuale tiene ogni riga; solo la LARGHEZZA paga la
+        # sovrapposizione.
+        ci_low, ci_high = sized_interval(rate_pct=recent, effective_n=eff_n)
         base_p = base / 100.0
-        # Drift = the base rate is statistically inconsistent with the recent
-        # sample (outside its Wilson band) AND we have enough evidence.
-        drift = n >= min_n and (base_p < lo_p or base_p > hi_p)
-        if not drift:
+        misurabile = eff_n >= min_n
+        drift = misurabile and (base_p < ci_low / 100.0 or base_p > ci_high / 100.0)
+        # ⚠️ Tre stati, non due. Prima tutto cio' che non veniva segnalato
+        # leggeva "stable": l'assenza di prova si presentava come prova di
+        # stabilita'. E l'aritmetica va dichiarata, non aggirata — con una
+        # finestra di 90 giorni il tetto delle finestre indipendenti e' 12 a
+        # orizzonte 5 giorni e 3 a 21, quindi oggi NESSUN detector raggiunge
+        # min_n=30. La risposta onesta e' "non lo so", non una soglia abbassata
+        # finche' qualcosa passa.
+        if not misurabile:
+            direction = "insufficient"
+        elif not drift:
             direction = "stable"
         elif recent < base:
             direction = "decaying"
@@ -186,14 +202,15 @@ def compute_signal_drift(
         out.append({
             "detector": name,
             "n_matured": n,
+            "effective_n": eff_n,
             "recent_hit_rate": round(recent, 1),
             "base_rate": round(base, 1),
             "delta": round(recent - base, 1),
-            "ci_low": round(ci_low, 1),
-            "ci_high": round(ci_high, 1),
+            "ci_low": ci_low,
+            "ci_high": ci_high,
             "drift_flag": drift,
             "direction": direction,
-            "horizon_days": _horizon_days(name),
+            "horizon_days": horizon,
         })
 
     out.sort(key=lambda r: abs(r["delta"]), reverse=True)
@@ -210,9 +227,13 @@ def drift_summary(
     how many flagged, split by direction, plus the parameters used. Pure over
     `compute_signal_drift` output."""
     flagged = [r for r in rows if r["drift_flag"]]
+    # ⚠️ Senza questo conteggio l'involucro dice "0 segnalati su 11" e si legge
+    # come undici detector sani, mentre significa che nessuno e' misurabile.
+    insufficient = [r for r in rows if r["direction"] == "insufficient"]
     return {
         "n_detectors": len(rows),
         "n_flagged": len(flagged),
+        "n_insufficient": len(insufficient),
         "n_decaying": sum(1 for r in flagged if r["direction"] == "decaying"),
         "n_improving": sum(1 for r in flagged if r["direction"] == "improving"),
         "window_days": window_days,

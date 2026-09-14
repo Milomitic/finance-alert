@@ -204,12 +204,23 @@ export function SignalSnapshotView({
                   ? "text-rose-600 dark:text-rose-400"
                   : "text-emerald-800 dark:text-emerald-400",
               )}
-              title={`Hit-rate recente sui segnali maturati (${driftFlagged.n_matured}) vs base storico calibrato`}
+              title={
+                `Hit-rate recente sui segnali maturati vs base storico calibrato. ` +
+                `${driftFlagged.n_matured} esiti che coprono ${driftFlagged.effective_n} ` +
+                `finestre non sovrapposte da ${driftFlagged.horizon_days} sedute: ` +
+                `e' quest'ultimo il numero su cui l'intervallo e' dimensionato.`
+              }
             >
               {driftFlagged.delta < 0 ? "▼ in calo" : "▲ in salita"}:{" "}
               {Math.round(driftFlagged.recent_hit_rate)}% recenti vs{" "}
               {Math.round(driftFlagged.base_rate)}% storico
-              <span className="text-muted-foreground">(n {driftFlagged.n_matured})</span>
+              {/* ⚠️ La finestra indipendente, non il conteggio delle righe. Due
+                  scatti a tre giorni di distanza a orizzonte 21 condividono
+                  18/21 della finestra, e gli scatti dello stesso giorno su
+                  titoli diversi sono un giorno di mercato visto N volte:
+                  "n 1372" leggeva come prova schiacciante dove le osservazioni
+                  indipendenti erano dodici. */}
+              <span className="text-muted-foreground">(n {driftFlagged.effective_n})</span>
             </div>
           )}
 

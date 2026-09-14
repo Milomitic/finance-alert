@@ -55,18 +55,17 @@ block is None and `meta.replay_available` is False.
 from __future__ import annotations
 
 import json
-import math
 from collections import defaultdict
 from collections.abc import Callable, Sequence
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime
 from pathlib import Path
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import SignalOutcome
-from app.services.signal_drift_service import wilson_interval
 from app.signals.horizon import _PRIOR
+from app.stats.sizing import independent_blocks, sized_interval
 
 # Replay artifact written by `app.scripts.backfill_replay_outcomes`.
 # Module-level so tests can monkeypatch it to a tmp path.
@@ -97,49 +96,10 @@ def _strength_band(strength: int | None) -> str:
 
 # Signals are stamped with CALENDAR dates; horizons are counted in TRADING
 # bars. 21 trading days is 30 calendar days at the 7/5 weekday factor.
-_TRADING_TO_CALENDAR = 7.0 / 5.0
-
-
-def independent_blocks(dates: Sequence[date], horizon_trading_days: int) -> int:
-    """How many NON-OVERLAPPING horizon-length windows these fires span.
-
-    Greedy interval cover: walk the sorted dates, open a block at the first
-    fire, and absorb every later fire whose forward window still overlaps it.
-
-    This is the honest denominator for a detector's hit rate. Two fires three
-    days apart, each labeled 21 trading days forward, share 18/21 of their
-    outcome window and most of their market — counting them as two independent
-    draws is what lets a single good quarter read as overwhelming evidence.
-    Fires on the same day across many stocks collapse hardest of all: they are
-    one day of market seen N times.
-
-    Deliberately conservative. It ignores that different stocks are not
-    perfectly correlated, so it UNDERSTATES the true independent count. An
-    honest error in this direction costs a claim we cannot yet support; the
-    other direction manufactures one.
-    """
-    if not dates:
-        return 0
-    span = max(1, math.ceil(horizon_trading_days * _TRADING_TO_CALENDAR))
-    blocks = 0
-    open_until: date | None = None
-    for d in sorted(dates):
-        if open_until is None or d >= open_until:
-            blocks += 1
-            open_until = d + timedelta(days=span)
-    return blocks
-
-
-def sized_interval(*, rate_pct: float, effective_n: int) -> tuple[float, float]:
-    """Wilson 95% interval around `rate_pct`, sized by the INDEPENDENT count.
-
-    The point estimate keeps every row — it is the best guess available. Only
-    the WIDTH is charged the overlap, which is exactly where the overlap does
-    its damage: 81.8% on 99 clustered rows is still the best estimate, it is
-    simply indistinguishable from a coin flip.
-    """
-    lo, hi = wilson_interval(rate_pct / 100.0 * effective_n, effective_n)
-    return round(lo * 100.0, 1), round(hi * 100.0, 1)
+# `independent_blocks` e `sized_interval` vivevano qui e sono passate a
+# `app.stats.sizing` (FA-053): il monitor di drift ne aveva bisogno e non
+# poteva importarle da qui, perche' questo modulo importava `wilson_interval`
+# dal monitor. Restano importate sopra, quindi i chiamanti non cambiano.
 
 
 def _cell(key: str, rows: Sequence, min_n: int) -> dict:
