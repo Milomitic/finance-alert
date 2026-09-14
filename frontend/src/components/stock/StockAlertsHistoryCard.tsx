@@ -1,6 +1,6 @@
-import { History, TrendingDown, TrendingUp } from "lucide-react";
+import { ChevronLeft, ChevronRight, History, TrendingDown, TrendingUp } from "lucide-react";
 import { useMemo, useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { alerts as alertsApi } from "@/api/alerts";
 import { ApiError } from "@/api/client";
@@ -11,7 +11,11 @@ import { CardErrorOverlay } from "@/components/stock/CardErrorOverlay";
 import { CardRefreshButton } from "@/components/stock/CardRefreshButton";
 import { Card, CardContent } from "@/components/ui/card";
 import { SectionTitle } from "@/components/ui/section-title";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getAlertMeta } from "@/lib/alertMeta";
+
+/** Righe per pagina sullo storico completo. */
+const PER_PAGINA = 25;
 
 interface Props {
   alerts: Alert[];
@@ -66,6 +70,31 @@ function computeStats(alerts: Alert[]): AlertStats {
  */
 export function StockAlertsHistoryCard({ alerts, ticker }: Props) {
   const [open, setOpen] = useState<Alert | null>(null);
+  /* ─── Recenti / Storico completo ──────────────────────────────────────
+   *
+   * I RECENTI sono i non archiviati, che arrivano gia' col payload del
+   * dettaglio. E' una scelta di prodotto: la scheda non ha una colonna
+   * Archivio, e mescolare le due meta' senza distinguerle sarebbe peggio.
+   *
+   * ⚠️ Ma i recenti NON bastano, ed e' il difetto che questa scheda chiude
+   * (FA-054): in produzione 5.312 dei 5.313 esiti maturati stanno su alert
+   * ARCHIVIATI, perche' archiviazione e maturazione seguono entrambe l'ETA'.
+   * La colonna Esito di questa scheda mostrava quindi UN esito su 5.313.
+   *
+   * Lo storico completo non e' una rotta nuova: e' `/api/alerts`, che gia'
+   * pagina, gia' ordina e gia' porta gli esiti. */
+  const [scheda, setScheda] = useState<"recenti" | "completo">("recenti");
+  const [offset, setOffset] = useState(0);
+  const storico = useQuery({
+    queryKey: ["alert-storico", ticker, offset],
+    queryFn: ({ signal }) =>
+      alertsApi.list(
+        { ticker, include_archived: true, limit: PER_PAGINA, offset },
+        signal,
+      ),
+    enabled: scheda === "completo",
+    staleTime: 60_000,
+  });
   const qc = useQueryClient();
   // Per-stock signal scan: runs the engine over this ticker's stored OHLCV and
   // persists new signal alerts, then invalidates the detail query so the table
@@ -87,6 +116,11 @@ export function StockAlertsHistoryCard({ alerts, ticker }: Props) {
     [alerts],
   );
   const stats = useMemo(() => computeStats(sorted), [sorted]);
+  const completo = scheda === "completo";
+  const righe = completo ? (storico.data?.items ?? []) : sorted;
+  const totale = completo ? (storico.data?.total ?? 0) : stats.total;
+  const primaDellaPagina = offset + 1;
+  const ultimaDellaPagina = offset + righe.length;
 
   // No-op handlers for the bulk-action props — embedded mode hides
   // the checkbox column, so these are never invoked in practice.
@@ -105,11 +139,34 @@ export function StockAlertsHistoryCard({ alerts, ticker }: Props) {
           {/* Header strip: title + aggregate stats (bull/bear/last30d) */}
           <SectionTitle
             icon={History}
-            label={`Segnali storici per questo ticker (${stats.total})`}
+            label={
+              completo
+                ? `Storico completo (${totale})`
+                : `Segnali recenti (${stats.total})`
+            }
             className="mb-3 shrink-0"
             right={
               <div className="flex items-center gap-2 flex-wrap text-[0.7647rem]">
-                {stats.total > 0 && (
+                <Tabs
+                  value={scheda}
+                  onValueChange={(v) => {
+                    setScheda(v as "recenti" | "completo");
+                    // L'offset si azzera cambiando scheda. In render, non in
+                    // un effect: `react-hooks/set-state-in-effect` e' gated.
+                    setOffset(0);
+                  }}
+                >
+                  <TabsList className="h-6 p-0.5">
+                    <TabsTrigger value="recenti" className="h-5 text-[0.6765rem] px-1.5" title="I segnali non archiviati di questo titolo">Recenti</TabsTrigger>
+                    <TabsTrigger value="completo" className="h-5 text-[0.6765rem] px-1.5" title="Tutti i segnali, archiviati compresi — e' dove stanno gli esiti maturati">Storico</TabsTrigger>
+                  </TabsList>
+                </Tabs>
+                {/* ⚠️ La striscia NON compare sullo storico. E' calcolata sulle
+                    righe CARICATE: su una pagina da 25 accanto a un totale di
+                    400 direbbe "rialzisti 12" intendendo un'altra cosa. Stessa
+                    regola per cui un tasso sotto i 20 campioni mostra la
+                    frazione grezza invece di una percentuale. */}
+                {!completo && stats.total > 0 && (
                   <>
                   {stats.last30d > 0 && (
                     <span
@@ -157,7 +214,11 @@ export function StockAlertsHistoryCard({ alerts, ticker }: Props) {
                 retrying={scan.isPending}
               />
             </div>
-          ) : sorted.length === 0 ? (
+          ) : completo && storico.isPending ? (
+            <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
+              Carico lo storico…
+            </div>
+          ) : righe.length === 0 ? (
             <div className="flex-1 flex items-center justify-center text-center text-sm text-muted-foreground">
               <div>
                 Nessun segnale mai generato per questo ticker.
@@ -174,7 +235,7 @@ export function StockAlertsHistoryCard({ alerts, ticker }: Props) {
             <div className="flex-1 min-h-0 overflow-y-auto -mx-4 px-4">
               <AlertsTable
                 embedded
-                alerts={sorted}
+                alerts={righe}
                 selectedIds={new Set()}
                 onSelect={noopSelect}
                 onSelectAll={noopSelect}
@@ -182,6 +243,33 @@ export function StockAlertsHistoryCard({ alerts, ticker }: Props) {
                 q=""
                 onQueryChange={noopSelect}
               />
+            </div>
+          )}
+          {completo && totale > PER_PAGINA && (
+            <div className="shrink-0 flex flex-wrap items-center justify-between gap-2 pt-2 text-[0.7647rem] text-muted-foreground">
+              <span className="tabular-nums">
+                {primaDellaPagina}–{ultimaDellaPagina} di {totale}
+              </span>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-0.5 rounded px-2 py-1 hover:bg-muted disabled:opacity-40 disabled:hover:bg-transparent"
+                  onClick={() => setOffset((o) => Math.max(0, o - PER_PAGINA))}
+                  disabled={offset === 0 || storico.isFetching}
+                >
+                  <ChevronLeft className="h-3 w-3" aria-hidden />
+                  Precedenti
+                </button>
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-0.5 rounded px-2 py-1 hover:bg-muted disabled:opacity-40 disabled:hover:bg-transparent"
+                  onClick={() => setOffset((o) => o + PER_PAGINA)}
+                  disabled={!storico.data?.has_more || storico.isFetching}
+                >
+                  Successivi
+                  <ChevronRight className="h-3 w-3" aria-hidden />
+                </button>
+              </div>
             </div>
           )}
         </CardContent>

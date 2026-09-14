@@ -175,3 +175,33 @@ def test_a_matured_outcome_reaches_the_detail_page(client, db) -> None:
     riga = next(i for i in completo if i["id"] == vecchio.id)
     assert riga["outcome_hit"] is True
     assert riga["outcome_horizon_days"] == 5
+
+
+def test_include_archived_returns_BOTH_sides(client, db) -> None:
+    """⚠️ La rotta non sapeva esprimere «entrambi», e serve per lo storico.
+
+    `archived: bool | None = False` rende `False` quando il parametro e'
+    assente, quindi da una query string non c'e' modo di ottenere `None`; e la
+    UI offriva solo «attivi» o «solo archiviati». Uno storico che mostra una
+    meta' per volta non e' uno storico.
+
+    `include_archived=true` non filtra affatto su quel campo. Additivo: nessun
+    chiamante esistente cambia comportamento."""
+    s = _titolo_con_barre(db)
+    vivo = _alert(db, s, giorno=date(2026, 6, 20), archiviato=False)
+    archiviato = _alert(db, s, giorno=date(2026, 6, 10), archiviato=True)
+    db.commit()
+
+    solo_vivi = {i["id"] for i in
+                 client.get(f"/api/alerts?ticker={s.ticker}").json()["items"]}
+    solo_arch = {i["id"] for i in
+                 client.get(f"/api/alerts?ticker={s.ticker}&archived=true").json()["items"]}
+    entrambi = client.get(f"/api/alerts?ticker={s.ticker}&include_archived=true").json()
+
+    assert solo_vivi == {vivo.id}
+    assert solo_arch == {archiviato.id}
+    assert {i["id"] for i in entrambi["items"]} == {vivo.id, archiviato.id}
+    # ⚠️ E il totale deve contare ENTRAMBI: e' il numero su cui la paginazione
+    # dello storico si regge, e un totale che conta meta' delle righe porta a
+    # una pagina finale vuota senza che niente lo dica.
+    assert entrambi["total"] == 2

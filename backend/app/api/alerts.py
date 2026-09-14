@@ -357,6 +357,13 @@ def list_alerts(
     date_from: date | None = None,
     date_to: date | None = None,
     archived: bool | None = False,
+    #: Non filtrare AFFATTO su `archived`, cioe' rendere entrambe le
+    #: meta'. ⚠️ Serve perche' `archived: bool | None = False` rende
+    #: `False` quando il parametro e' assente: da una query string non
+    #: c'e' modo di ottenere `None`, quindi «entrambi» era inesprimibile
+    #: e lo storico del titolo poteva mostrare una meta' per volta.
+    #: Additivo: quando e' falso nessun chiamante cambia comportamento.
+    include_archived: bool = False,
     tone: str | None = None,
     confidence_min: float | None = None,
     strength_min: float | None = None,
@@ -403,7 +410,7 @@ def list_alerts(
         rule_kind=rule_kind,
         date_from=date_from,
         date_to=date_to,
-        archived=archived,
+        archived=None if include_archived else archived,
         tone=tone,
         confidence_min=confidence_min,
         strength_min=strength_min,
