@@ -1658,6 +1658,56 @@ Diciotto test in `test_seed_e2e_deterministico.py`, col controllo negativo che
 fissa l'INSTABILITA' della vecchia forma — senza, il test nuovo sembra una
 formalita' e qualcuno lo «semplifica» all'indietro.
 
+### 3. ⚠️ E la data del SEGNALE non era agganciata ai feriali (2026-09-14)
+
+**La stessa lezione, applicata a meta', e l'ho scoperto il giorno dopo averla
+scritta.** I due canali sopra erano chiusi — `_giorni_feriali` rende sempre N
+barre, `_ancora` e' mezzogiorno UTC — ma `signal_date` era rimasto
+`oggi - N giorni di CALENDARIO`, mentre le barre esistono SOLO nei feriali.
+
+Quindi quanti segnali cadono su un giorno che HA una barra dipendeva ancora dal
+giorno della settimana in cui gira il job. Misurato:
+
+    domenica 13/09:  29 segnali su 36 hanno una barra
+    lunedi'  14/09:  21 segnali su 36
+
+⚠️ **E' bastato che la CI attraversasse la mezzanotte.** Il gate a11y e'
+diventato rosso su `/alerts` (`button-name: 48 -> 49`) per un commit che non
+toccava ne' il seme ne' il frontend: la corsa delle 18:57 UTC passava, quella
+delle 00:24 no. Identico all'incidente precedente, che girava alle 00:18.
+
+La correzione: `signal_date` si PRENDE dal calendario dei feriali, lo stesso che
+genera le barre, quindi ogni segnale ne ha una per costruzione. E `triggered_at`
+si conta **dal segnale, non da oggi** — la pastiglia «in ritardo» misura giorni
+di CALENDARIO, quindi ancorandolo a `oggi` lo scarto cambiava con i fine
+settimana di mezzo e il conteggio restava legato all'orologio anche dopo aver
+sistemato le barre.
+
+Verificato su QUATTORDICI giorni consecutivi: una sola combinazione distinta
+(36 segnali su 36 con la loro barra, 7 con la pastiglia, 0 nel futuro), dove
+prima erano tre. Col controllo negativo che ricostruisce la forma vecchia e
+pretende che domenica e lunedi' divergano.
+
+**La regola generale, dopo tre canali:** in un seme, ogni grandezza che la UI
+legge va derivata dal CALENDARIO DEL SEME, non dall'orologio. «Oggi meno N
+giorni» sembra deterministico e non lo e' appena qualcos'altro nel seme vive su
+una griglia diversa — qui i feriali.
+
+### Stringere una linea di base vuole DUE osservazioni
+
+Col seme corretto `/alerts` e' scesa a 46, e il gate stesso suggerisce
+`E2E_UPDATE_BASELINE=1`. Due cautele, entrambe gia' pagate:
+
+1. **Non si rigenera in locale.** Questa linea di base e' quella di CI e il file
+   lo dice in `_ambiente`: in locale il calendario ha dati veri e rende un
+   elemento in meno, quindi si otterrebbe un file piu' STRETTO che fa arrossire
+   la CI su codice intatto.
+2. **Non si stringe su una corsa sola.** `/calendar` fu stretta da 3 a 2 su una
+   verde e la successiva lesse 3. Qui il 46 e' stato letto da DUE corse
+   indipendenti (un push e un `workflow_dispatch`) prima di scendere, e si e'
+   cambiato UN SOLO valore a mano invece di adottare una candidata non
+   leggibile — adottarla in blocco stringerebbe anche rotte viste una volta.
+
 ### Il corollario: un cancello deve NOMINARE il colpevole
 
 «button-name: 53 -> 54» su un arretrato di 53 non dice quale nodo, ne' se la
