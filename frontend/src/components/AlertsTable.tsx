@@ -1,4 +1,4 @@
-import { Archive, ArchiveRestore, ArrowDown, ArrowUp, ArrowUpDown, Check, Clock, X } from "lucide-react";
+import { Archive, ArchiveRestore, ArrowDown, ArrowUp, ArrowUpDown, Check, Clock, Unplug, X } from "lucide-react";
 import { type MouseEvent, useState } from "react";
 import { Link } from "react-router-dom";
 
@@ -375,7 +375,7 @@ export function AlertsTable({
           {showEsito && (
             <TableHead
               className="text-base"
-              hint="Esito realizzato del segnale all'orizzonte di riferimento: verde = direzione azzeccata, rosso = mancata, … = in maturazione"
+              hint="Esito realizzato del segnale all'orizzonte di riferimento: verde = direzione azzeccata, rosso = mancata, … = in attesa dell'orizzonte, «Fermo» = la serie prezzi del titolo non avanza più e l'orizzonte non potrà mai completarsi"
             >
               Esito
             </TableHead>
@@ -634,17 +634,35 @@ export function AlertsTable({
                     );
                   }
                   const pending = isSignalKind(a.rule_kind) && !!a.signal_date;
-                  if (pending) {
+                  if (!pending) return null;
+                  // ⚠️ La serie del titolo si è fermata: questo segnale non sta
+                  // aspettando l'orizzonte, non lo raggiungerà mai. Ambra e non
+                  // rosa: non è una direzione sbagliata, è un dato che manca —
+                  // la stessa separazione fra «rosa/smeraldo = verso» e «tutto
+                  // il resto» che questo progetto applica altrove.
+                  if (a.series_stalled) {
                     return (
                       <span
-                        className="text-muted-foreground"
-                        title="Esito in maturazione: l'orizzonte del segnale non è ancora trascorso"
+                        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-semibold bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60"
+                        title={
+                          "La serie prezzi del titolo si è fermata" +
+                          (a.series_last_bar ? " il " + a.series_last_bar : "") +
+                          ": l'orizzonte del segnale non può più completarsi."
+                        }
                       >
-                        …
+                        <Unplug className="h-3 w-3 shrink-0" />
+                        Fermo
                       </span>
                     );
                   }
-                  return null;
+                  return (
+                    <span
+                      className="text-muted-foreground"
+                      title="Esito in attesa dell'orizzonte: non è ancora trascorso"
+                    >
+                      …
+                    </span>
+                  );
                 })()}
               </TableCell>
             )}

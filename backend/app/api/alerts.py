@@ -337,10 +337,13 @@ def _validate_signal_filters(
         )
     # Realised-outcome + horizon filters (list endpoint only; defaults keep the
     # export call sites unchanged).
-    if outcome is not None and outcome not in ("hit", "miss", "pending"):
+    # "stalled" e' il quarto valore dal 2026-09-14: un segnale senza esito su
+    # un titolo la cui serie prezzi non avanza piu'. E' DISGIUNTO da "pending",
+    # che da allora esclude i bloccati — vedi `_series_stalled_clause`.
+    if outcome is not None and outcome not in ("hit", "miss", "pending", "stalled"):
         raise HTTPException(
             status_code=422,
-            detail="outcome must be one of 'hit', 'miss', 'pending'",
+            detail="outcome must be one of 'hit', 'miss', 'pending', 'stalled'",
         )
     if horizon is not None and horizon not in ("short", "medium", "long"):
         raise HTTPException(

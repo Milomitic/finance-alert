@@ -191,6 +191,20 @@ export interface Alert {
   /** Tone-signed market-neutral excess vs the universe mean over the same
    *  horizon. Null when no universe benchmark was available at maturation. */
   outcome_mkt_excess?: number | null;
+  /** La serie prezzi del titolo non avanza piu': il catalogo ha smesso di
+   *  ricevere barre per questo simbolo (`ohlcv_nodata_streak` oltre la soglia
+   *  di quarantena). Un alert senza esito su un titolo cosi' NON sta
+   *  aspettando l'orizzonte — non lo raggiungera' mai.
+   *
+   *  Misurato in produzione il 2026-09-14: 12 titoli su 1.010, che reggono 48
+   *  alert senza esito. Fino a quel giorno la UI li chiamava tutti «in
+   *  maturazione». */
+  series_stalled?: boolean;
+  /** L'ultima barra che il titolo ha prodotto (ISO YYYY-MM-DD), presente solo
+   *  quando `series_stalled`. ⚠️ Va MOSTRATA accanto allo stato: «non
+   *  maturera'» e' una conclusione, «ultima barra il 10 luglio» e' un fatto
+   *  che chi legge puo' controllare. */
+  series_last_bar?: string | null;
   /** Next earnings date (ISO YYYY-MM-DD) from the fundamentals cache —
    *  cache-only read on the backend, null when the cache is cold. Drives the
    *  amber "Earnings tra N gg" risk badge when it falls inside the signal's

@@ -63,11 +63,17 @@ const TONE_OPTIONS: { value: string; label: string }[] = [
 ];
 
 // Esito realizzato (warehouse signal_outcomes): direzione azzeccata / mancata /
-// ancora in maturazione. Stesse semantiche della colonna Esito della tabella.
+// in attesa dell'orizzonte / bloccato. Stesse semantiche della colonna Esito
+// della tabella.
+//
+// ⚠️ «In maturazione» e «Bloccato» sono DISGIUNTI e insieme fanno il vecchio
+// «In maturazione»: un segnale su un titolo la cui serie prezzi si e' fermata
+// non sta aspettando niente. In produzione, 48 alert su 3.734.
 const OUTCOME_OPTIONS: { value: string; label: string }[] = [
   { value: "hit", label: "Azzeccato" },
   { value: "miss", label: "Mancato" },
   { value: "pending", label: "In maturazione" },
+  { value: "stalled", label: "Bloccato" },
 ];
 
 // Orizzonte temporale del segnale (snapshot.horizon) — etichette allineate

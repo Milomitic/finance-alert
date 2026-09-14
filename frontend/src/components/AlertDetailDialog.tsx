@@ -10,6 +10,7 @@ import {
   DollarSign,
   Pencil,
   ShieldAlert,
+  Unplug,
   X,
 } from "lucide-react";
 import { useState } from "react";
@@ -176,9 +177,25 @@ export function AlertDetailDialog({ alert, onClose }: Props) {
   // an enrichment pass) carries `amended_at`. Surface it so the displayed
   // content — incl. confirmation steps appended later — is never mistaken for
   // analysis available at the original emission (`first_emitted_at`).
-  const prov = alert.snapshot as { amended_at?: string; first_emitted_at?: string };
+  const prov = alert.snapshot as {
+    amended_at?: string;
+    first_emitted_at?: string;
+    amend_count?: number;
+  };
   const amendedAt = typeof prov.amended_at === "string" ? prov.amended_at : null;
   const firstEmittedAt = typeof prov.first_emitted_at === "string" ? prov.first_emitted_at : null;
+  const amendCount = typeof prov.amend_count === "number" ? prov.amend_count : null;
+  // La data ORIGINARIA diverge da quella a schermo: l'aggiornamento in
+  // cooldown ha spostato signal_date su una barra successiva, quindi il
+  // riquadro «Data segnale» racconta l'ULTIMA osservazione e non la nascita
+  // del segnale. Misurato in produzione il 2026-09-14: 2.807 alert VISIBILI
+  // su 8.396 sono in questo stato, con punte di 371 revisioni — e l'unico
+  // posto in cui la data originaria compariva era un attributo title, che su
+  // un dispositivo tattile non si apre mai.
+  const originDiverges =
+    firstEmittedAt != null &&
+    alert.signal_date != null &&
+    firstEmittedAt.slice(0, 10) !== alert.signal_date;
   const inv =
     (alert.snapshot as { invalidation?: { level?: number; reason?: string } | null })
       .invalidation ?? null;
@@ -379,6 +396,20 @@ export function AlertDetailDialog({ alert, onClose }: Props) {
                 <div className="text-xs text-muted-foreground tabular-nums mt-0.5">
                   {alert.signal_date}
                 </div>
+                {originDiverges && firstEmittedAt && (
+                  <div className="mt-1.5 pt-1.5 border-t border-border/50 text-[0.7059rem] leading-snug text-amber-700 dark:text-amber-300">
+                    <span className="font-semibold">Ultima osservazione.</span>{" "}
+                    Emesso il{" "}
+                    <span className="tabular-nums">{firstEmittedAt.slice(0, 10)}</span>
+                    {amendCount != null && amendCount > 0 ? (
+                      <>
+                        , poi rivisto {amendCount}{" "}
+                        {amendCount === 1 ? "volta" : "volte"}
+                      </>
+                    ) : null}
+                    .
+                  </div>
+                )}
               </>
             ) : (
               <>
@@ -494,10 +525,36 @@ export function AlertDetailDialog({ alert, onClose }: Props) {
                 );
               })()
             ) : (
-              <div className="rounded-lg border border-dashed border-border/60 p-3 text-xs text-muted-foreground italic">
-                Esito in corso di maturazione: l'orizzonte del segnale non è ancora
-                trascorso nei dati di mercato.
-              </div>
+              alert.series_stalled ? (
+                /* ⚠️ Per questi alert la frase «l'orizzonte non è ancora
+                   trascorso» è FALSA: non trascorrerà. La serie prezzi del
+                   titolo si è fermata, quindi le barre che servono a misurare
+                   l'esito non arriveranno. Si dichiara il FATTO — la data
+                   dell'ultima barra — e non solo la conclusione. */
+                <div className="rounded-lg border border-amber-200 dark:border-amber-800/60 bg-amber-50/60 dark:bg-amber-950/20 p-3 text-xs text-amber-800 dark:text-amber-300 flex items-start gap-2">
+                  <Unplug className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                  <div className="leading-snug">
+                    <span className="font-semibold">Esito non raggiungibile.</span>{" "}
+                    La serie prezzi di {alert.ticker} si è fermata
+                    {alert.series_last_bar ? (
+                      <>
+                        {" "}il{" "}
+                        <span className="tabular-nums font-semibold">
+                          {alert.series_last_bar}
+                        </span>
+                      </>
+                    ) : null}
+                    : le barre che servono a misurare l'orizzonte non arrivano
+                    più. Finché il titolo non torna a quotare, questo segnale non
+                    maturerà.
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-lg border border-dashed border-border/60 p-3 text-xs text-muted-foreground italic">
+                  Esito in attesa dell'orizzonte: non è ancora trascorso nei dati
+                  di mercato.
+                </div>
+              )
             )}
           </div>
         )}

@@ -56,8 +56,11 @@ export interface AlertListParams {
   probability_min?: number;
   /** Signal nature: 'continuazione' | 'inversione'. */
   nature?: string;
-  /** Realised outcome filter: 'hit' | 'miss' | 'pending' (in maturazione).
-   *  Joined server-side against the signal_outcomes warehouse. */
+  /** Realised outcome filter: 'hit' | 'miss' | 'pending' | 'stalled'.
+   *  Joined server-side against the signal_outcomes warehouse.
+   *  ⚠️ 'pending' e 'stalled' sono DISGIUNTI dal 2026-09-14: il primo e' «sta
+   *  aspettando l'orizzonte», il secondo «la serie del titolo si e' fermata».
+   *  Prima 'pending' comprendeva entrambi. */
   outcome?: string;
   /** Signal horizon filter: 'short' | 'medium' | 'long' (snapshot.horizon). */
   horizon?: string;

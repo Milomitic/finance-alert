@@ -10,7 +10,32 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.db_json import json_text
-from app.models import Alert, Position, SignalOutcome, Stock, StockSetup
+from app.models import Alert, OhlcvDaily, Position, SignalOutcome, Stock, StockSetup
+from app.services.ohlcv_service import QUARANTINE_STREAK
+
+
+def _series_stalled_clause():
+    """La serie prezzi del titolo NON avanza piu'.
+
+    Un esito nasce solo quando esistono H barre dopo quella del segnale, e
+    quelle barre arrivano dalla serie del titolo. Se la serie si e' fermata,
+    l'alert non sta aspettando l'orizzonte: non lo raggiungera' mai.
+
+    Misurato in produzione il 2026-09-14: 12 titoli su 1.010 hanno lo streak
+    oltre la soglia, e sono ESATTAMENTE i 12 la cui ultima barra ha piu' di
+    dieci giorni — zero falsi positivi, zero falsi negativi. Interrogata, la
+    fonte conferma: nove non hanno piu' barre, e per gli altri tre (WBS, EQR,
+    AVB) l'ultima barra che serve e' al giorno la stessa che abbiamo noi.
+    Quei 12 titoli reggono 48 alert senza esito.
+
+    ⚠️ NON si riusa `ohlcv_service.not_quarantined_clause()`, che sembra la
+    stessa domanda e non lo e': quella porta anche il termine su REPROBE_DAYS
+    e risponde a «vale la pena ritentare il download adesso?». Un titolo in
+    attesa di ri-sondaggio ne uscirebbe come non-in-quarantena, quindi
+    l'alert oscillerebbe fra «bloccato» e «in maturazione» ogni sette giorni
+    senza che nulla sia cambiato nei dati.
+    """
+    return func.coalesce(Stock.ohlcv_nodata_streak, 0) >= QUARANTINE_STREAK
 
 # Columns that the caller may request sorting on.
 # confidence/tone live inside Alert.snapshot (JSON text column); extracted at
@@ -147,16 +172,51 @@ def _apply_filters(
     elif outcome == "miss":
         stmt = stmt.where(SignalOutcome.abs_hit == 0)
     elif outcome == "pending":
+        # ⚠️ Esclude i bloccati. Prima del 2026-09-14 «pending» li comprendeva,
+        # cioe' 3.734 alert dei quali 48 non stavano aspettando niente. I due
+        # insiemi sono ora DISGIUNTI e la loro somma e' il vecchio totale: se
+        # si sovrapponessero, i conteggi dei due stati non tornerebbero e
+        # nessuno se ne accorgerebbe leggendo una schermata sola.
         stmt = stmt.where(
             SignalOutcome.alert_id.is_(None),
             Alert.signal_name.is_not(None),
             Alert.signal_date.is_not(None),
+            sqlalchemy.not_(_series_stalled_clause()),
+        )
+    elif outcome == "stalled":
+        stmt = stmt.where(
+            SignalOutcome.alert_id.is_(None),
+            Alert.signal_name.is_not(None),
+            Alert.signal_date.is_not(None),
+            _series_stalled_clause(),
         )
     # Horizon filter: short | medium | long, from snapshot.horizon — same
     # json_extract shape as the tone filter above.
     if horizon is not None:
         stmt = stmt.where(json_text(Alert.snapshot, "horizon") == horizon)
     return stmt
+
+
+def _last_bar_dates(db: Session, stock_ids: set[int]) -> dict[int, date]:
+    """{stock_id: ultima barra} per i titoli chiesti, in UNA query raggruppata.
+
+    Serve solo ai titoli fermi, ed e' il motivo per cui il chiamante passa un
+    insieme ristretto invece dell'intera pagina: in produzione sono 12 su
+    1.010, quindi quasi sempre l'insieme e' vuoto e la query non parte.
+
+    ⚠️ La data va MOSTRATA, non solo usata. «Questo segnale non maturera'» e'
+    una conclusione; «l'ultima barra e' del 10 luglio» e' un fatto, e chi legge
+    puo' verificarlo. E' la stessa distinzione che questo progetto applica ai
+    tassi senza campione.
+    """
+    if not stock_ids:
+        return {}
+    rows = db.execute(
+        select(OhlcvDaily.stock_id, func.max(OhlcvDaily.date))
+        .where(OhlcvDaily.stock_id.in_(stock_ids))
+        .group_by(OhlcvDaily.stock_id)
+    ).all()
+    return {int(sid): d for sid, d in rows if d is not None}
 
 
 def _next_earnings_dates_cached(tickers: set[str]) -> dict[str, date]:
@@ -212,6 +272,13 @@ def list_alerts(
             Stock.ticker.label("ticker"),
             Stock.name.label("name"),
             Stock.currency.label("currency"),
+            # Il catalogo SA gia' quali titoli hanno smesso di dare barre — lo
+            # scopri' il 2026-08-26 e se ne servi' per smettere di scaricarli.
+            # Quella conoscenza non usciva pero' dall'ingestione, quindi il
+            # percorso di lettura degli alert continuava a dire «in
+            # maturazione» di segnali su titoli morti. Nessuna join in piu':
+            # Stock e' gia' unita per il ticker.
+            Stock.ohlcv_nodata_streak.label("nodata_streak"),
             SignalOutcome.abs_hit.label("outcome_abs_hit"),
             SignalOutcome.fwd_return.label("outcome_fwd_return"),
             SignalOutcome.horizon_days.label("outcome_horizon_days"),
@@ -253,14 +320,26 @@ def list_alerts(
     earnings_by_ticker = _next_earnings_dates_cached(
         {ticker_val for _, ticker_val, *_ in page if ticker_val}
     )
+    last_bars = _last_bar_dates(
+        db,
+        {
+            row[0].stock_id
+            for row in page
+            if (row[4] or 0) >= QUARANTINE_STREAK
+        },
+    )
     items = [
-        _row_to_item(row, earnings_by_ticker.get(row[1]))
+        _row_to_item(
+            row, earnings_by_ticker.get(row[1]), last_bars.get(row[0].stock_id)
+        )
         for row in page
     ]
     return items, total, has_more
 
 
-def _row_to_item(row: Any, next_earnings: date | None) -> dict[str, Any]:
+def _row_to_item(
+    row: Any, next_earnings: date | None, series_last_bar: date | None = None
+) -> dict[str, Any]:
     """Una riga della query joined -> il dict che l'API serializza.
 
     Estratto da `list_alerts` quando e nato `get_alert_detail`: due percorsi
@@ -268,7 +347,7 @@ def _row_to_item(row: Any, next_earnings: date | None) -> dict[str, Any]:
     sarebbe silenziosa — il frontend riceverebbe un alert con meno campi solo
     quando lo apre da una posizione invece che dalla lista.
     """
-    (alert, ticker_val, name_val, currency_val,
+    (alert, ticker_val, name_val, currency_val, nodata_streak,
      o_hit, o_fwd, o_horizon, o_mkt, o_entry) = row
     return {
         "id": alert.id,
@@ -303,6 +382,12 @@ def _row_to_item(row: Any, next_earnings: date | None) -> dict[str, Any]:
         # e il confronto sempre vero, e questo campo esiste per mostrare
         # una DIVERGENZA.
         "outcome_entry_close": float(o_entry) if o_entry is not None else None,
+        # La serie prezzi del titolo si e' fermata: l'alert senza esito non
+        # sta aspettando l'orizzonte, non lo raggiungera'. Vedi
+        # `_series_stalled_clause`. La DATA accompagna sempre la bandiera:
+        # senza, e' una conclusione che chi legge non puo' controllare.
+        "series_stalled": (nodata_streak or 0) >= QUARANTINE_STREAK,
+        "series_last_bar": series_last_bar,
         # Earnings-proximity risk flag (cache-only; null when the
         # fundamentals cache is cold for the ticker).
         "next_earnings_date": next_earnings,
@@ -328,6 +413,13 @@ def get_alert_detail(db: Session, alert_id: int) -> dict[str, Any] | None:
             Stock.ticker.label("ticker"),
             Stock.name.label("name"),
             Stock.currency.label("currency"),
+            # Il catalogo SA gia' quali titoli hanno smesso di dare barre — lo
+            # scopri' il 2026-08-26 e se ne servi' per smettere di scaricarli.
+            # Quella conoscenza non usciva pero' dall'ingestione, quindi il
+            # percorso di lettura degli alert continuava a dire «in
+            # maturazione» di segnali su titoli morti. Nessuna join in piu':
+            # Stock e' gia' unita per il ticker.
+            Stock.ohlcv_nodata_streak.label("nodata_streak"),
             SignalOutcome.abs_hit.label("outcome_abs_hit"),
             SignalOutcome.fwd_return.label("outcome_fwd_return"),
             SignalOutcome.horizon_days.label("outcome_horizon_days"),
@@ -345,7 +437,10 @@ def get_alert_detail(db: Session, alert_id: int) -> dict[str, Any] | None:
     if row is None:
         return None
     earnings = _next_earnings_dates_cached({row[1]} if row[1] else set())
-    return _row_to_item(row, earnings.get(row[1]))
+    last_bars = _last_bar_dates(
+        db, {row[0].stock_id} if (row[4] or 0) >= QUARANTINE_STREAK else set()
+    )
+    return _row_to_item(row, earnings.get(row[1]), last_bars.get(row[0].stock_id))
 
 
 def get_alert(db: Session, alert_id: int) -> Alert | None:
