@@ -68,6 +68,7 @@ _REVERSAL_SIGNALS = {
 def _apply_filters(
     stmt,
     *,
+    stock_id: int | None = None,
     ticker: str | None = None,
     q: str | None = None,
     rule_kind: str | None = None,
@@ -82,6 +83,12 @@ def _apply_filters(
     outcome: str | None = None,
     horizon: str | None = None,
 ):
+    # ⚠️ `stock_id` prima di `ticker`: il dettaglio titolo conosce l'ID, e due
+    # borse possono condividere un simbolo — filtrare per ticker prenderebbe
+    # anche gli alert dell'altra quotazione. Il catalogo e' deduplicato su
+    # (ticker, exchange), non su ticker.
+    if stock_id is not None:
+        stmt = stmt.where(Alert.stock_id == stock_id)
     if ticker:
         stmt = stmt.where(func.lower(Stock.ticker) == ticker.lower())
     # `q` is the new column-header search field — substring match on
@@ -174,6 +181,7 @@ def _next_earnings_dates_cached(tickers: set[str]) -> dict[str, date]:
 def list_alerts(
     db: Session,
     *,
+    stock_id: int | None = None,
     ticker: str | None = None,
     q: str | None = None,
     rule_kind: str | None = None,
@@ -214,6 +222,7 @@ def list_alerts(
     )
     base = _apply_filters(
         base,
+        stock_id=stock_id,
         ticker=ticker,
         q=q,
         rule_kind=rule_kind,

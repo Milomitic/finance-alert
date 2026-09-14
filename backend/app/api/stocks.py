@@ -451,26 +451,11 @@ def get_stock_detail(
             )
             for r in detail.effective_rules
         ],
-        alerts_history=[
-            AlertOut(
-                id=a.id, rule_kind=rule_kind,
-                stock_id=a.stock_id, ticker=detail.stock.ticker,
-                name=detail.stock.name,
-                triggered_at=a.triggered_at, signal_date=a.signal_date,
-                trigger_price=float(a.trigger_price),
-                snapshot=__import__("json").loads(a.snapshot or "{}"),
-                read_at=a.read_at, archived_at=a.archived_at,
-                same_day_others=(
-                    detail.signal_breadth[a.id].others
-                    if a.id in detail.signal_breadth else None
-                ),
-                same_day_sector=(
-                    detail.signal_breadth[a.id].same_sector
-                    if a.id in detail.signal_breadth else None
-                ),
-            )
-            for (a, rule_kind) in detail.alerts_history
-        ],
+        # Gia' canonici: `stock_detail_service` li prende da
+        # `alert_service.list_alerts`, quindi qui non si rimappa niente. La
+        # ricostruzione a mano che stava qui ometteva `currency` e l'intero
+        # blocco esito.
+        alerts_history=[AlertOut(**a) for a in detail.alerts_history],
     )
 
 

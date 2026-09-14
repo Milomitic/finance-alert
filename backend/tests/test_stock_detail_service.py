@@ -71,5 +71,8 @@ def test_alerts_history_uses_signal_kind(db):
     d = stock_detail_service.get_detail(db, s.ticker, range_key="1y")
     assert d is not None
     assert len(d.alerts_history) == 1
-    alert_obj, kind = d.alerts_history[0]
-    assert kind == "signal:rsi_oversold"
+    # ⚠️ `alerts_history` non e' piu' una coppia (Alert, kind) da rimappare: e'
+    # gia' la forma canonica di `alert_service`, che il chiamante passa a
+    # `AlertOut` senza toccarla. La ricostruzione a mano che stava nell'API
+    # ometteva sei campi (FA-054/055).
+    assert d.alerts_history[0]["rule_kind"] == "signal:rsi_oversold"

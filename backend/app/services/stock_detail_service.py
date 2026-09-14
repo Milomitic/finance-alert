@@ -15,9 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.core.visibility import visible_country_clause
 from app.models import Alert, OhlcvDaily, Stock
-from app.services import signal_breadth_service
-from app.services.alert_service import derive_rule_kind
-from app.services.signal_breadth_service import Breadth
+from app.services import alert_service, signal_breadth_service
 
 RANGE_DAYS: dict[str, int | None] = {
     "1m": 30, "3m": 90, "6m": 180, "1y": 365, "5y": 5 * 365, "all": None,
@@ -79,13 +77,13 @@ class StockDetail:
     # plain list[Alert] which forced the endpoint to hard-code
     # rule_kind=None — leaving the stock-detail "Alert storici" table
     # without its Regola/Tono chips populated.
-    alerts_history: list[tuple[Alert, str | None]]
+    #: Gia' nella forma canonica di `alert_service`, ampiezza inclusa: l'API
+    #: la passa a `AlertOut` senza rimappare. Era `list[tuple[Alert, str|None]]`
+    #: e costringeva il chiamante a ricostruire il payload a mano.
+    alerts_history: list[dict[str, Any]]
     # Per alert id: how many OTHER stocks fired the same detector that day, and
     # how many of those share this stock's sector. Context for reading the
     # alert — a trend_pullback that came with 43 others is a market condition,
-    # a gap_and_go that came alone is about the stock. Never a confirmation:
-    # see signal_breadth_service.
-    signal_breadth: dict[int, "Breadth"]
 
 
 @dataclass
@@ -280,15 +278,33 @@ def get_detail(db: Session, ticker: str, range_key: str = "1d") -> StockDetail |
     # Derive kind directly from signal_name — no Rule join needed.
     # Filter out archived alerts — the stock-detail card doesn't surface
     # an Archivio column, so mixing archived rows would be misleading.
-    alerts_history = [
-        (alert, derive_rule_kind(None, alert.signal_name))
-        for alert in db.execute(
-            select(Alert)
-            .where(Alert.stock_id == stock.id, Alert.archived_at.is_(None))
-            .order_by(Alert.triggered_at.desc())
-            .limit(50)
-        ).scalars().all()
-    ]
+    # ⚠️ UN SOLO proprietario della serializzazione. Questo percorso
+    # costruiva l'alert campo per campo e ne ometteva sei — `currency` e
+    # l'intero blocco esito — che e' esattamente cio' di cui il docstring di
+    # `_row_to_item` avvertiva: «due percorsi che costruiscono a mano la stessa
+    # forma divergono, e qui la divergenza sarebbe silenziosa». Questo era il
+    # terzo percorso.
+    #
+    # I RECENTI restano i non archiviati, ed e' una scelta di prodotto: la
+    # scheda non ha una colonna Archivio. Lo STORICO COMPLETO e' la lista
+    # esistente, `/api/alerts?ticker=…&archived=`, che gia' pagina e gia' porta
+    # gli esiti — 5.312 dei 5.313 esiti maturati stanno su alert archiviati.
+    alerts_history, _total_alerts, _has_more = alert_service.list_alerts(
+        db, stock_id=stock.id, archived=False, limit=50,
+    )
+    # L'ampiezza vuole gli oggetti ORM. Una query puntuale sugli id della
+    # pagina (<=50, indice primario) invece di ricostruire a mano la query
+    # joined: il costo e' trascurabile su una rotta di dettaglio, la
+    # duplicazione no.
+    _ids = [i["id"] for i in alerts_history]
+    _righe = db.execute(select(Alert).where(Alert.id.in_(_ids))).scalars().all() if _ids else []
+    _ampiezza = signal_breadth_service.breadth_for(
+        db, _righe, stock_id=stock.id, sector=stock.sector,
+    )
+    for _i in alerts_history:
+        _b = _ampiezza.get(_i["id"])
+        _i["same_day_others"] = _b.others if _b else None
+        _i["same_day_sector"] = _b.same_sector if _b else None
     return StockDetail(
         stock=stock,
         ohlcv=ohlcv_view,
@@ -306,10 +322,4 @@ def get_detail(db: Session, ticker: str, range_key: str = "1d") -> StockDetail |
         kpis=kpis,
         effective_rules=effective_rules,
         alerts_history=alerts_history,
-        signal_breadth=signal_breadth_service.breadth_for(
-            db,
-            [a for a, _ in alerts_history],
-            stock_id=stock.id,
-            sector=stock.sector,
-        ),
     )
