@@ -24,6 +24,24 @@ image tag back into `charts/finance-alert/values-oci.yaml` on the same branch
 its own after every deploy. `git fetch && git rebase origin/cloud` then push —
 never force.
 
+### ⚠️ Non citare uno SHA nello stesso push del commit che nomina (2026-09-14)
+
+Conseguenza diretta della riga sopra, e costata due correzioni in un'ora. Le
+voci di `PROJECT-BACKLOG.md` citano il commit che le chiude — «Commit `2938707`»
+— ma **il rebase riscrive ogni commit locale DOPO che il riferimento e' gia'
+stato scritto dentro uno di essi**. Scritto `9be0c3b`, spinto `0c8ab3c`: la
+voce punta a un commit che sul ramo non esiste, e `git merge-base
+--is-ancestor` lo conferma in un secondo.
+
+Uno SHA e' stabile solo DOPO il push. Quindi la voce di backlog che cita il
+commit va scritta in un push **successivo** a quello del codice — mai nello
+stesso. La variante peggiore e' indovinarlo prima che il commit esista, che e'
+il modo in cui questo e' cominciato.
+
+⚠️ E' la stessa famiglia del `_RANGE_PERIODS` morto: un riferimento sbagliato e'
+credibile, verificabile solo da chi lo controlla, e corrobora la convinzione che
+qualcuno abbia gia' guardato.
+
 Guidelines:
 - Commit at natural completion points (work builds + tests pass), not mid-edit.
 - Group related changes into one logical commit with a descriptive message;
