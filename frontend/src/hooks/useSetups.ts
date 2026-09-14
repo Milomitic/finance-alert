@@ -46,6 +46,15 @@ export interface Setup {
    *  them would leave only the successes on record. */
   status?: SetupStatus;
   resolved_at?: string | null;
+  /** Perché l'episodio si è chiuso senza convertire: "stale" (le condizioni
+   *  si sono sfaldate) | "aged" (tetto d'attesa) | "decayed" (sceso sotto la
+   *  soglia di attenzione).
+   *
+   *  ⚠️ NULL su ogni episodio chiuso prima che la colonna esistesse, ed è il
+   *  caso dominante: misurati in produzione il 2026-09-14, 322 scaduti senza
+   *  ragione contro UNO con la ragione. Va reso come «non registrata», mai
+   *  riempito con un'ipotesi. */
+  closed_reason?: string | null;
   /** Days between first sighting and the signal firing — the warning this
    *  setup actually gave. Only set on converted rows. */
   lead_days?: number | null;

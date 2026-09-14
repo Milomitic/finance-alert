@@ -1,10 +1,17 @@
-import { Bell, CheckCircle2, CircleSlash } from "lucide-react";
+import { Bell, CheckCircle2, CircleSlash, MinusCircle } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { StockLogo } from "@/components/dashboard/StockLogo";
 import { Card, CardContent } from "@/components/ui/card";
 import type { Setup } from "@/hooks/useSetups";
 import { resolvedAfterDays } from "@/hooks/useSetups";
+import {
+  CLOSURE_BADGE,
+  CLOSURE_DETAIL,
+  COUNTS_AS_FAILURE,
+  DECAYED_WHY,
+  setupClosure,
+} from "@/lib/setupClosure";
 import { detectorLabel } from "@/lib/setupGrouping";
 import { cn } from "@/lib/utils";
 
@@ -51,12 +58,20 @@ function OutcomeRow({
 }) {
   const converted = setup.status === "converted";
   const waited = resolvedAfterDays(setup);
+  // ⚠️ «Ritirato» è separato da «Scaduto» perché i due CONTANO diversamente:
+  // un setup sceso sotto la soglia di attenzione non ha mai avuto l'occasione
+  // di convertire, quindi il backend lo tiene fuori dal denominatore del tasso
+  // di conversione. Senza la distinzione a schermo, chi conta le righe a
+  // occhio ottiene un rapporto diverso da quello che l'app riporta — e non ha
+  // modo di sapere perché.
+  const closure = setupClosure(setup.closed_reason);
+  const ritirato = !converted && !COUNTS_AS_FAILURE[closure];
   // Literal tone classes, never composed — the Tailwind purger only sees
   // string literals and would strip a template-built class (CLAUDE.md).
   const badge = converted
     ? "border-emerald-300/60 bg-emerald-50 text-emerald-800 dark:border-emerald-700/50 dark:bg-emerald-950/40 dark:text-emerald-300"
     : "border-border bg-muted/50 text-muted-foreground";
-  const Icon = converted ? CheckCircle2 : CircleSlash;
+  const Icon = converted ? CheckCircle2 : ritirato ? MinusCircle : CircleSlash;
 
   const alertId = converted ? setup.converted_alert_id : null;
 
@@ -73,7 +88,7 @@ function OutcomeRow({
           )}
         >
           <Icon className="h-3 w-3" aria-hidden />
-          {converted ? "Convertito" : "Scaduto"}
+          {converted ? "Convertito" : CLOSURE_BADGE[closure]}
         </span>
 
         <StockLogo ticker={setup.ticker} size="xs" />
@@ -90,8 +105,22 @@ function OutcomeRow({
               : waited !== null
                 ? ` · atteso ${waited}g senza scattare`
                 : ""}
+            {/* ⚠️ Il FATTO, non la conclusione — e per i 322 episodi chiusi
+                prima che la colonna esistesse dice «ragione non registrata»
+                invece di tacere: un'etichetta muta li farebbe sembrare tutti
+                dello stesso tipo, che è precisamente ciò che non si sa. */}
+            {!converted ? ` · ${CLOSURE_DETAIL[closure]}` : ""}
           </span>
         </span>
+
+        {ritirato && (
+          <span
+            className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[0.6765rem] text-muted-foreground"
+            title={DECAYED_WHY}
+          >
+            fuori dal tasso
+          </span>
+        )}
 
         <span className="shrink-0 text-[0.7059rem] text-muted-foreground tabular-nums">
           {fmtDate(setup.resolved_at)}

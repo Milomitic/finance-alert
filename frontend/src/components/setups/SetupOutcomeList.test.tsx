@@ -113,3 +113,57 @@ describe("la struttura della riga", () => {
     );
   });
 });
+
+/* ─── Perché un episodio si è chiuso, e i 322 che non lo dicono ────────────
+ *
+ * FA-061. La distinzione era già calcolata dentro `expire_stale_setups` — le
+ * due ragioni finivano contate separatamente nel log — e poi scritte entrambe
+ * come `expired`, quindi a posteriori non si poteva più sapere quale.
+ *
+ * ⚠️ Il caso DOMINANTE è «non lo so». Misurato in produzione il 2026-09-14:
+ * 322 setup scaduti senza ragione registrata contro UNO con la ragione, perché
+ * la colonna è nata quel giorno. Il progetto parte da lì.
+ */
+describe("la ragione della chiusura", () => {
+  it("⚠️ un episodio chiuso prima che la colonna esistesse DICE di non saperlo", () => {
+    // Tacere li farebbe sembrare tutti dello stesso tipo, che è precisamente
+    // ciò che non si sa. È la stessa distinzione fra «—» e «0» che questo
+    // progetto applica ai numeri.
+    renderList([setup({ status: "expired", closed_reason: null, converted_alert_id: null })]);
+    expect(document.body.textContent).toContain("ragione non registrata");
+  });
+
+  it("nomina le due scadenze, che dicono cose diverse sul detector", () => {
+    renderList([
+      setup({ id: 1, status: "expired", closed_reason: "stale", converted_alert_id: null }),
+      setup({ id: 2, ticker: "NVDA", status: "expired", closed_reason: "aged", converted_alert_id: null }),
+    ]);
+    const t = document.body.textContent ?? "";
+    // Decadimento: il mercato è andato oltre.
+    expect(t).toContain("le condizioni si sono sfaldate");
+    // Tetto d'attesa: un cancello che descrive uno stato invece di dare un
+    // anticipo — dice qualcosa sul DETECTOR, non sul mercato.
+    expect(t).toContain("tetto d'attesa");
+  });
+
+  it("⚠️ un ritirato è marcato FUORI dal tasso, perché il backend lo esclude", () => {
+    // Senza questa marca chi conta le righe a occhio ottiene un rapporto
+    // diverso da quello che l'app riporta, e non ha modo di sapere perché.
+    renderList([setup({ status: "expired", closed_reason: "decayed", converted_alert_id: null })]);
+    const t = document.body.textContent ?? "";
+    expect(t).toContain("Ritirato");
+    expect(t).toContain("fuori dal tasso");
+    expect(t).not.toContain("Scaduto");
+  });
+
+  it("un convertito non porta nessuna ragione di chiusura", () => {
+    // Controllo negativo: `closed_reason` è nullo per costruzione sulle
+    // convertite, e senza questo l'asserzione sopra sarebbe vera anche di un
+    // componente che stampa la ragione ovunque.
+    renderList([setup()]);
+    const t = document.body.textContent ?? "";
+    expect(t).toContain("Convertito");
+    expect(t).not.toContain("ragione non registrata");
+    expect(t).not.toContain("fuori dal tasso");
+  });
+});
