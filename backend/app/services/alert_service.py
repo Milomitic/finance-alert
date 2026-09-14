@@ -1,4 +1,5 @@
 """Alert query and mutation service."""
+from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
@@ -9,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.db_json import json_text
-from app.models import Alert, SignalOutcome, Stock
+from app.models import Alert, Position, SignalOutcome, Stock, StockSetup
 
 # Columns that the caller may request sorting on.
 # confidence/tone live inside Alert.snapshot (JSON text column); extracted at
@@ -394,3 +395,105 @@ def bulk_action(db: Session, ids: list[int], action: str) -> int:
     res = db.execute(stmt)
     db.commit()
     return res.rowcount or 0
+
+
+# ---------------------------------------------------------------------------
+# Duplicate-alert reconciliation (FA-052)
+# ---------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class DuplicateGroup:
+    """One event that the warehouse holds several times.
+
+    `original_id` is the EARLIEST row by triggered_at — the one that recorded
+    the event when it happened. `blockers` is why this group must not be
+    reconciled without a person looking: a non-empty list is data, not a
+    failure.
+    """
+
+    stock_id: int
+    ticker: str
+    detector: str
+    signal_date: date
+    tone: str | None
+    original_id: int
+    excess_ids: list[int]
+    blockers: list[str]
+
+
+def find_duplicate_alert_groups(db: Session) -> list[DuplicateGroup]:
+    """Rows that are re-readings of one event: same stock, detector, bar, tone.
+
+    Until 2026-09-14 `evaluate_signals` minted a row on every scan pass once
+    the event's outcome had matured — the freeze guard dropped out of the whole
+    dedup block, so "don't amend" became "insert". FA-051 closed that; this
+    finds the residue.
+
+    ⚠️ A different BAR is a different event and is never grouped here. In
+    production 82 pairs of distinct dates sit inside the cooldown against 668
+    same-bar rows, and collapsing them would destroy real signals.
+
+    Grouping happens in Python rather than SQL: this is a repair path over a
+    table in the thousands, and the key includes a JSON field, so the portable
+    version costs far more legibility than the one query saves.
+    """
+    rows = db.execute(
+        select(Alert.id, Alert.stock_id, Alert.signal_name, Alert.signal_date,
+               json_text(Alert.snapshot, "tone"), Alert.triggered_at, Stock.ticker)
+        .join(Stock, Stock.id == Alert.stock_id)
+        .where(Alert.signal_date.is_not(None))
+        .order_by(Alert.triggered_at.asc(), Alert.id.asc())
+    ).all()
+
+    by_key: dict[tuple, list[tuple]] = {}
+    for r in rows:
+        by_key.setdefault((r.stock_id, r.signal_name, r.signal_date, r[4]), []).append(r)
+    dupes = {k: v for k, v in by_key.items() if len(v) > 1}
+    if not dupes:
+        return []
+
+    # Rows already ordered by triggered_at, so [0] is the original.
+    originals = {v[0].id for v in dupes.values()}
+    excess = {r.id for v in dupes.values() for r in v[1:]}
+
+    # The two SET NULL references. They are the dangerous ones precisely
+    # because a blind delete would raise nothing: a position would lose its
+    # provenance and a setup its conversion, `lead_days` included.
+    with_position = set(db.execute(
+        select(Position.alert_id).where(Position.alert_id.in_(excess))
+    ).scalars().all())
+    with_setup = set(db.execute(
+        select(StockSetup.converted_alert_id)
+        .where(StockSetup.converted_alert_id.in_(excess))
+    ).scalars().all())
+
+    # ⚠️ An original whose outcome describes a bar the alert no longer shows.
+    # Before the freeze guard, a cooldown refresh could move signal_date
+    # forward AFTER maturation; 18 such rows exist, all from June/July. In
+    # those groups the original carries the stale measurement and an excess row
+    # carries the one matching the bar on screen, so "keep the first" would
+    # keep the wrong number. Refuse and report instead of picking.
+    misaligned = set(db.execute(
+        select(SignalOutcome.alert_id)
+        .join(Alert, Alert.id == SignalOutcome.alert_id)
+        .where(SignalOutcome.alert_id.in_(originals),
+               SignalOutcome.signal_date != Alert.signal_date)
+    ).scalars().all())
+
+    out: list[DuplicateGroup] = []
+    for (stock_id, detector, signal_date, tone), group in dupes.items():
+        excess_ids = [r.id for r in group[1:]]
+        blockers: list[str] = []
+        if any(i in with_position for i in excess_ids):
+            blockers.append("posizione")
+        if any(i in with_setup for i in excess_ids):
+            blockers.append("setup")
+        if group[0].id in misaligned:
+            blockers.append("esito-disallineato")
+        out.append(DuplicateGroup(
+            stock_id=stock_id, ticker=group[0].ticker, detector=detector,
+            signal_date=signal_date, tone=tone,
+            original_id=group[0].id, excess_ids=excess_ids, blockers=blockers,
+        ))
+    out.sort(key=lambda g: (-len(g.excess_ids), g.ticker, g.signal_date))
+    return out
