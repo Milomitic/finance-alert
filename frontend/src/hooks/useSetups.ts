@@ -97,8 +97,13 @@ export interface SetupStats {
    *  has ever tracked: active + closed. */
   closed: number;
   total: number;
+  /** ⚠️ Le tre voci SOMMANO ad `active`. Finché i toni erano due la terza
+   *  non esisteva e la somma tornava per caso; da quando `squeeze_expansion`
+   *  dichiara di non conoscere il verso, mostrare solo rialzisti e ribassisti
+   *  lascerebbe un resto senza nome sotto un totale che non torna. */
   active_bull: number;
   active_bear: number;
+  active_undetermined?: number;
 
   /** Did a converted setup go on to be RIGHT? Followed through the alert it
    *  became into the outcome warehouse, and labeled MARKET-NEUTRAL — beating

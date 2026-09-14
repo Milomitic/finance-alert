@@ -1,4 +1,4 @@
-import { Clock, Crosshair, Target, TrendingDown, TrendingUp } from "lucide-react";
+import { ArrowUpDown, Clock, Crosshair, Target, TrendingDown, TrendingUp } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { StockLogo } from "@/components/dashboard/StockLogo";
@@ -12,6 +12,13 @@ import {
 } from "@/components/ui/dialog";
 import { waitingDays, type Setup } from "@/hooks/useSetups";
 import { detectorLabel } from "@/lib/setupGrouping";
+import {
+  SETUP_TONE_BORDER,
+  SETUP_TONE_CHIP,
+  SETUP_TONE_LABEL,
+  SETUP_TONE_UNDETERMINED_WHY,
+  setupTone,
+} from "@/lib/setupTone";
 import { cn } from "@/lib/utils";
 
 /* ─── SetupDetailDialog — the same affordance signals have ───────────────── *
@@ -75,7 +82,10 @@ export function SetupDetailDialog({ setup, onClose }: Props) {
   // app once already. There are none, and the guard below stays a plain
   // conditional render rather than an early `return null`.
   const open = setup !== null;
-  const bull = setup?.tone === "bull";
+  // Stesso booleano, stessa trappola: vedi SetupConditionGroup.
+  const tono = setupTone(setup?.tone);
+  const ToneIcon =
+    tono === "bull" ? TrendingUp : tono === "bear" ? TrendingDown : ArrowUpDown;
   const days = setup ? waitingDays(setup) : null;
   const level = setup?.annotations?.levels?.[0];
   const dist = distanceReading(setup?.distance_atr);
@@ -89,21 +99,32 @@ export function SetupDetailDialog({ setup, onClose }: Props) {
             <DialogHeader
               className={cn(
                 "p-5 pb-4 space-y-2 border-l-4",
-                bull ? "border-l-emerald-500" : "border-l-rose-500",
+                SETUP_TONE_BORDER[tono],
               )}
             >
               <div className="flex items-center gap-2 flex-wrap">
                 <span
                   className={cn(
                     "inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs font-semibold",
-                    bull
-                      ? "bg-emerald-500/15 text-emerald-800 dark:text-emerald-300"
-                      : "bg-rose-500/15 text-rose-700 dark:text-rose-300",
+                    SETUP_TONE_CHIP[tono],
                   )}
                 >
-                  {bull ? <TrendingUp className="h-3.5 w-3.5" /> : <TrendingDown className="h-3.5 w-3.5" />}
+                  <ToneIcon className="h-3.5 w-3.5" />
                   {detectorLabel(setup.detector)}
                 </span>
+                {/* ⚠️ L'assenza di direzione va DETTA, non solo non-colorata:
+                    un badge grigio senza etichetta si legge come uno stile,
+                    non come un'affermazione. E la ragione sta accanto, perché
+                    «direzione aperta» è una conclusione e «l'evento atteso non
+                    ha un verso» è il fatto. */}
+                {tono === "undetermined" && (
+                  <span
+                    className="inline-flex items-center gap-1 rounded bg-muted px-2 py-0.5 text-xs text-muted-foreground"
+                    title={SETUP_TONE_UNDETERMINED_WHY}
+                  >
+                    {SETUP_TONE_LABEL.undetermined}
+                  </span>
+                )}
                 <span className="inline-flex items-center gap-1 rounded bg-muted px-2 py-0.5 text-xs text-muted-foreground">
                   <Clock className="h-3 w-3" aria-hidden />
                   in attesa da {days === null ? "—" : days === 0 ? "oggi" : `${days} giorni`}

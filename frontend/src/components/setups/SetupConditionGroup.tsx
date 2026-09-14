@@ -1,10 +1,15 @@
-import { CalendarClock, Clock, TrendingDown, TrendingUp } from "lucide-react";
+import { ArrowUpDown, CalendarClock, Clock, TrendingDown, TrendingUp } from "lucide-react";
 
 import { StockLogo } from "@/components/dashboard/StockLogo";
 import { Card, CardContent } from "@/components/ui/card";
 import { waitingDays, type Setup } from "@/hooks/useSetups";
 import { daysUntil, earningsProximityDays } from "@/lib/earningsProximity";
 import type { ConditionGroup } from "@/lib/setupGrouping";
+import {
+  SETUP_TONE_TEXT,
+  SETUP_TONE_UNDETERMINED_WHY,
+  setupTone,
+} from "@/lib/setupTone";
 import { cn } from "@/lib/utils";
 import { columnsFor } from "@/lib/setupColumns";
 
@@ -223,7 +228,13 @@ export function SetupConditionGroup({
   group: ConditionGroup;
   onOpen: (s: Setup) => void;
 }) {
-  const bull = group.tone === "bull";
+  // ⚠️ Era `const bull = group.tone === "bull"`, cioè un booleano: con un
+  // terzo tono avrebbe reso le compressioni RIBASSISTE — la direzione
+  // sbagliata, con la stessa sicurezza di prima. Il tipo di `setupTone`
+  // rende il terzo caso obbligatorio.
+  const tono = setupTone(group.tone);
+  const ToneIcon =
+    tono === "bull" ? TrendingUp : tono === "bear" ? TrendingDown : ArrowUpDown;
   // Calcolato sul gruppo, non sulla singola riga: una colonna sparisce solo
   // se NESSUN setup del gruppo la riempie.
   const columns = columnsFor(group.setups);
@@ -234,14 +245,11 @@ export function SetupConditionGroup({
           <span
             className={cn(
               "inline-flex items-center gap-1.5 font-semibold text-sm",
-              bull ? "text-emerald-800 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400",
+              SETUP_TONE_TEXT[tono],
             )}
+            title={tono === "undetermined" ? SETUP_TONE_UNDETERMINED_WHY : undefined}
           >
-            {bull ? (
-              <TrendingUp className="h-4 w-4 shrink-0" aria-hidden />
-            ) : (
-              <TrendingDown className="h-4 w-4 shrink-0" aria-hidden />
-            )}
+            <ToneIcon className="h-4 w-4 shrink-0" aria-hidden />
             {group.title}
           </span>
           <span className="text-xs text-muted-foreground">{group.hint}</span>

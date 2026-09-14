@@ -31,7 +31,7 @@ from app.models.stock_setup import (
     STATUS_CONVERTED,
     STATUS_EXPIRED,
 )
-from app.signals.setups.base import SetupMatch, convenience
+from app.signals.setups.base import TONE_BEAR, TONE_BULL, TONE_UNDETERMINED, SetupMatch, convenience
 
 # A setup not re-observed for this many days is stale: the conditions decayed
 # without firing. Short on purpose — a setup is a "watch this now" object, and
@@ -435,8 +435,15 @@ def conversion_stats(db: Session) -> dict:
         # feature has ever tracked.
         "closed": resolved,
         "total": len(rows),
-        "active_bull": sum(1 for r in active if r.tone == "bull"),
-        "active_bear": sum(1 for r in active if r.tone == "bear"),
+        # ⚠️ Le tre voci devono SOMMARE ad `active`. Finche' i toni erano due
+        # la terza non esisteva e la somma tornava per caso; da quando
+        # `squeeze_expansion` dichiara di non conoscere il verso, mostrare
+        # solo rialzisti e ribassisti lascerebbe un resto senza nome sotto un
+        # totale che non torna — e chi legge non avrebbe modo di sapere
+        # dov'e' finito.
+        "active_bull": sum(1 for r in active if r.tone == TONE_BULL),
+        "active_bear": sum(1 for r in active if r.tone == TONE_BEAR),
+        "active_undetermined": sum(1 for r in active if r.tone == TONE_UNDETERMINED),
         # None (not 0.0) while nothing has resolved yet: a rate computed over
         # an empty denominator is not "0%", it is "unknown", and showing 0%
         # would read as "setups never work".

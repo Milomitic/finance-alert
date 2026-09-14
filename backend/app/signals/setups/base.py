@@ -43,6 +43,27 @@ from app.signals.context import SignalContext
 from app.signals.detectors.base import clamp01
 from app.signals.events import Event
 
+#: La direzione che un setup dichiara. ⚠️ NON sono due: un setup che aspetta
+#: un evento SENZA verso — una compressione di volatilita' che deve solo
+#: riaprirsi — non ha una direzione da dichiarare, e sceglierne una e'
+#: inventare una previsione.
+#:
+#: Misurato in produzione il 2026-09-14: `squeeze_expansion` e' l'UNICO
+#: detector i cui setup convertono in un alert di tono diverso — 63 su 230
+#: collegamenti, il 27% — e i suoi setup dichiaravano `bull` 487 volte contro
+#: `bear` 180. La tabella delle intestazioni della UI lo corroborava gia' da
+#: sola: le voci `squeeze_expansion:bull` e `squeeze_expansion:bear` erano
+#: byte-identiche, cioe' l'app non sapeva dire niente di diverso sulle due.
+#:
+#: ⚠️ Vivono QUI, accanto a `SetupMatch.tone` che dichiarano, e non sul
+#: modello: `app/models/stock_setup.py` porta SQLAlchemy, e un detector di
+#: puro calcolo che dovesse importarlo per leggere una stringa si tirerebbe
+#: dietro meta' stack. E' la lezione di `app/indicators/periods.py`, dove una
+#: fonte unica non importabile aveva prodotto quattordici copie a mano.
+TONE_BULL = "bull"
+TONE_BEAR = "bear"
+TONE_UNDETERMINED = "undetermined"
+
 
 @dataclass
 class SetupMatch:

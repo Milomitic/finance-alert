@@ -10,7 +10,7 @@ from app.signals.calibration_map import get_calibration
 from app.signals.context import SignalContext
 from app.signals.detectors.base import SignalMatch, concave, find_after, score_v2
 from app.signals.events import Event
-from app.signals.setups.base import SetupMatch
+from app.signals.setups.base import TONE_UNDETERMINED, SetupMatch
 
 _EXPAND_WINDOW_DAYS = 15
 # Forza anchors in raw event-magnitude units.
@@ -67,11 +67,22 @@ class SqueezeExpansion:
     # no direction yet — and it can hold for days. The expansion is the
     # trigger, and by the time bands re-open the move is under way.
     #
-    # Note this setup carries NO tone: an unresolved squeeze genuinely does
-    # not know which way it breaks. Saying "bull" here would be inventing a
-    # forecast, which is exactly what setups must not do. The tone follows
-    # the prevailing trend only as the more likely resolution, and the
-    # `missing` text states plainly that direction is still open.
+    # ⚠️ Questo setup NON porta una direzione, e fino al 2026-09-14 il
+    # commento lo diceva mentre la riga sotto scriveva
+    # `tone="bull" if ctx.trend_sign >= 0 else "bear"`. Un commento che
+    # enuncia la regola giusta sopra il codice che la viola e' la forma che
+    # CLAUDE.md registra come la piu' costosa: e' credibile, e chi controlla
+    # si ferma al commento.
+    #
+    # Quanto e' costata, misurata in produzione: `squeeze_expansion` e'
+    # l'UNICO detector i cui setup convertono in un alert di tono diverso —
+    # 63 su 230 collegamenti, il 27% — e i suoi setup dichiaravano `bull` 487
+    # volte contro `bear` 180. Cioe' la schermata mostrava una freccia con un
+    # colore direzionale su un'attesa che per costruzione non ha verso.
+    #
+    # Il ripiego sul trend prevalente NON e' un compromesso accettabile:
+    # `missing` dice gia' «la direzione non e' ancora decisa», quindi la riga
+    # portava due affermazioni opposte contemporaneamente.
     def proximity(
         self, events: list[Event], ohlcv: pd.DataFrame, ctx: SignalContext
     ) -> SetupMatch | None:
@@ -100,7 +111,7 @@ class SqueezeExpansion:
         prox = round(0.45 + 0.30 * tightness, 3)
         return SetupMatch(
             detector=self.name,
-            tone="bull" if ctx.trend_sign >= 0 else "bear",
+            tone=TONE_UNDETERMINED,
             proximity=prox,
             missing=(
                 "le bande devono riaprirsi (espansione): la compressione e' carica "

@@ -52,6 +52,12 @@ const HEADINGS: Record<string, { title: string; hint: string }> = {
     title: "Il prezzo deve tornare sotto la media mobile",
     hint: "rimbalzo in corso su trend ribassista",
   },
+  // ⚠️ Queste tre voci hanno lo STESSO titolo di proposito, ed è la prova
+  // che il tono qui non porta informazione: le prime due erano già
+  // byte-identiche prima che `undetermined` esistesse. Restano perché gli
+  // episodi CHIUSI conservano il tono con cui furono registrati — la storia
+  // non si riscrive — mentre quelli attivi passano a `undetermined` alla
+  // prossima scansione.
   "squeeze_expansion:bull": {
     title: "Le bande devono riaprirsi",
     hint: "la compressione è carica, manca l'espansione",
@@ -59,6 +65,10 @@ const HEADINGS: Record<string, { title: string; hint: string }> = {
   "squeeze_expansion:bear": {
     title: "Le bande devono riaprirsi",
     hint: "la compressione è carica, manca l'espansione",
+  },
+  "squeeze_expansion:undetermined": {
+    title: "Le bande devono riaprirsi",
+    hint: "la compressione è carica, la direzione si decide dopo",
   },
 };
 

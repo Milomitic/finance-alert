@@ -60,7 +60,14 @@ function StatsStrip({ stats }: { stats: SetupStats }) {
     {
       label: "In formazione",
       value: String(stats.active),
-      hint: `${stats.active_bull} rialzisti · ${stats.active_bear} ribassisti`,
+      // ⚠️ Il terzo termine compare solo se c'è: su un catalogo di soli
+      // setup direzionali una coda «· 0 senza direzione» sarebbe rumore, ma
+      // ometterlo quando ESISTE lascerebbe un totale che non torna.
+      hint:
+        `${stats.active_bull} rialzisti · ${stats.active_bear} ribassisti` +
+        (stats.active_undetermined
+          ? ` · ${stats.active_undetermined} senza direzione`
+          : ""),
     },
     {
       label: "Esiti",
