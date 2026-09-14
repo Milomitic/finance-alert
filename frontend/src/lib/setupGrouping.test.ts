@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { Setup } from "@/hooks/useSetups";
 
-import { conditionKey, detectorCounts, detectorLabel, groupByCondition } from "./setupGrouping";
+import { conditionKey, detectorLabel, groupByCondition } from "./setupGrouping";
 
 function st(over: Partial<Setup> = {}): Setup {
   return {
@@ -131,19 +131,6 @@ describe("groupByCondition", () => {
   });
 });
 
-describe("detectorCounts", () => {
-  it("counts descending, which is what the filter chips show", () => {
-    const rows = [
-      st({ detector: "trend_pullback" }),
-      st({ detector: "trend_pullback" }),
-      st({ detector: "squeeze_expansion" }),
-    ];
-    expect(detectorCounts(rows)).toEqual([
-      { detector: "trend_pullback", count: 2 },
-      { detector: "squeeze_expansion", count: 1 },
-    ]);
-  });
-});
 
 describe("detectorLabel", () => {
   it("resolves the friendly Italian label a setup's bare detector could not", () => {

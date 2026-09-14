@@ -185,11 +185,3 @@ export function detectorLabel(detector: string): string {
   return getAlertKindMeta(`signal:${detector}`).label;
 }
 
-/** Detector counts for the filter chips, in descending order. */
-export function detectorCounts(setups: Setup[]): { detector: string; count: number }[] {
-  const m = new Map<string, number>();
-  for (const s of setups) m.set(s.detector, (m.get(s.detector) ?? 0) + 1);
-  return [...m.entries()]
-    .map(([detector, count]) => ({ detector, count }))
-    .sort((a, b) => b.count - a.count || a.detector.localeCompare(b.detector));
-}

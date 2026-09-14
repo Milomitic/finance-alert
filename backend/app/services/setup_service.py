@@ -346,6 +346,14 @@ def conversion_stats(db: Session) -> dict:
     by_detector = _per_detector(converted, expired, outcomes)
 
     return {
+        # ⚠️ Il perimetro che questi numeri descrivono, ed e' DIVERSO da quello
+        # della lista. Il filtro `shortlisted` sopra non e' un difetto e non va
+        # tolto — un setup che l'utente non ha mai visto non gli ha fatto
+        # nessuna promessa — ma la pagina mostrava una popolazione e ne
+        # descriveva un'altra senza dirlo. Si dichiara, non si uniforma:
+        # uniformare significherebbe misurare l'efficacia su setup che il
+        # prodotto non ha mai offerto.
+        "scope": "shortlisted",
         "active": len(active),
         "converted": len(converted),
         "expired": len(expired),

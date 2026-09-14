@@ -10,7 +10,7 @@ import json
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
@@ -75,6 +75,17 @@ class SetupOut(BaseModel):
 
 class SetupListOut(BaseModel):
     setups: list[SetupOut]
+    #: Righe che soddisfano i filtri, NON quelle rese. Senza, una lista
+    #: troncata e' indistinguibile da una completa: in produzione erano 1.415
+    #: setup attivi dietro una risposta da 50, e niente lo diceva.
+    total: int = 0
+    has_more: bool = False
+    #: Quanti setup per detector nella POPOLAZIONE filtrata, e deliberatamente
+    #: IGNORANDO il filtro `detector`. I chip contavano le righe ricevute —
+    #: un conteggio che cambia con la dimensione della pagina non e' un
+    #: conteggio — e devono restare tutti visibili dopo che se ne preme uno:
+    #: un chip che sparisce appena lo selezioni e' una trappola.
+    counts_by_detector: dict[str, int] = {}
     #: The feature's own report card: does it convert, and with how much
     #: warning. `conversion_rate`/`avg_lead_days` are null until something
     #: resolves — null means "not known yet", not "zero".
@@ -86,8 +97,17 @@ def list_setups(
     db: Session = Depends(get_db),
     _user: User = Depends(get_current_user),
     limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
     tone: str | None = None,
     ticker: str | None = None,
+    detector: str | None = None,
+    #: `None` = l'ordine naturale della vista (convenienza sugli attivi, data
+    #: di risoluzione sui chiusi). Additivo: chi non lo passa non cambia
+    #: comportamento.
+    sort: str | None = Query(
+        None, pattern="^(convenience|ticker|waiting|distance)$",
+        description="convenience | ticker | waiting | distance",
+    ),
     status: str = Query(
         STATUS_ACTIVE,
         pattern="^(active|converted|expired|closed|all)$",
@@ -121,12 +141,45 @@ def list_setups(
         # what deserves attention now.
         q = q.where(StockSetup.shortlisted.is_(True))
 
-    if status == STATUS_ACTIVE:
-        q = q.order_by(StockSetup.convenience.desc())
+    # ⚠️ I conteggi per detector si prendono PRIMA di applicare il filtro
+    # `detector`: descrivono la popolazione fra cui si sceglie, non quella
+    # scelta. Applicarlo qui farebbe collassare i chip a uno solo appena se ne
+    # preme uno.
+    _sub = q.subquery()
+    conteggi = dict(db.execute(
+        select(_sub.c.detector, func.count()).group_by(_sub.c.detector)
+    ).all())
+
+    if detector:
+        q = q.where(StockSetup.detector == detector)
+
+    totale = int(db.execute(
+        select(func.count()).select_from(q.subquery())
+    ).scalar_one())
+
+    # L'ordinamento vive nella QUERY, non nella pagina: ordinare lato client
+    # riordina le righe ricevute, quindi «il primo per ticker» era il minimo
+    # dei cinquanta e non dei millequattrocento. Il pareggio si rompe sempre
+    # sul ticker, cosi' l'ordine e' stabile fra due richieste.
+    if sort == "ticker":
+        q = q.order_by(Stock.ticker.asc())
+    elif sort == "waiting":
+        # Attesa piu' lunga = vista per prima. Nulla in fondo.
+        q = q.order_by(StockSetup.first_seen_at.asc().nullslast(), Stock.ticker.asc())
+    elif sort == "distance":
+        # Distanza dal grilletto in unita' di ATR: piu' VICINO prima, ed e'
+        # l'unica chiave dove «meno e' meglio». Chi non ha una distanza
+        # misurabile (lo squeeze aspetta la volatilita', non un prezzo) va in
+        # fondo invece di ordinarsi a caso.
+        q = q.order_by(StockSetup.distance_atr.asc().nullslast(), Stock.ticker.asc())
+    elif sort == "convenience" or status == STATUS_ACTIVE:
+        # La convenienza e' sia una scelta esplicita sia l'ordine naturale
+        # degli attivi: lo stesso ramo serve entrambe.
+        q = q.order_by(StockSetup.convenience.desc(), Stock.ticker.asc())
     else:
         # Most recently resolved first: the outcome view is a history.
-        q = q.order_by(StockSetup.resolved_at.desc().nullslast())
-    q = q.limit(limit)
+        q = q.order_by(StockSetup.resolved_at.desc().nullslast(), Stock.ticker.asc())
+    q = q.limit(limit).offset(offset)
 
     rows = db.execute(q).all()
     # Un solo passaggio cache-only sui ticker DISTINTI della pagina: nessuna
@@ -172,4 +225,10 @@ def list_setups(
                 ),
             )
         )
-    return SetupListOut(setups=out, stats=setup_service.conversion_stats(db))
+    return SetupListOut(
+        setups=out,
+        total=totale,
+        has_more=offset + len(out) < totale,
+        counts_by_detector=conteggi,
+        stats=setup_service.conversion_stats(db),
+    )

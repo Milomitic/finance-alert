@@ -11,8 +11,8 @@ import { SectionTitle } from "@/components/ui/section-title";
 import SetupDetectorStats from "@/components/setups/SetupDetectorStats";
 import { SetupOutcomeList } from "@/components/setups/SetupOutcomeList";
 import { useAlert } from "@/hooks/useAlerts";
-import { useSetups, type Setup, type SetupStats } from "@/hooks/useSetups";
-import { detectorCounts, detectorLabel, groupByCondition, type SetupSortKey } from "@/lib/setupGrouping";
+import { SETUP_PER_PAGINA, useSetups, type Setup, type SetupStats } from "@/hooks/useSetups";
+import { detectorLabel, groupByCondition, type SetupSortKey } from "@/lib/setupGrouping";
 import { cn } from "@/lib/utils";
 import { InfoHint } from "@/components/ui/info-hint";
 
@@ -231,14 +231,33 @@ export default function SetupsPage() {
   // pagina che si stia guardando.
   const [signalId, setSignalId] = useState<number | null>(null);
   const signal = useAlert(signalId);
-  const q = useSetups(tone, undefined, view);
+  // ⚠️ La pagina corrente. Ogni controllo che cambia il PERIMETRO la riporta a
+  // zero (vedi `cambia`): restare alla pagina 4 dopo aver cambiato filtro
+  // mostrerebbe una fetta di mezzo di una popolazione diversa, senza che niente
+  // lo dica.
+  const [offset, setOffset] = useState(0);
+  const q = useSetups(tone, undefined, view, { detector, sort, offset });
 
   const all = useMemo(() => q.data?.setups ?? [], [q.data?.setups]);
-  const detectors = useMemo(() => detectorCounts(all), [all]);
-  const groups = useMemo(
-    () => groupByCondition(detector ? all.filter((s) => s.detector === detector) : all, sort),
-    [all, detector, sort],
-  );
+  // ⚠️ I conteggi vengono dal SERVER e descrivono la popolazione. Prima erano
+  // `detectorCounts(all)`, cioe' un conteggio delle righe RICEVUTE: un numero
+  // che cambia con la dimensione della pagina non e' un conteggio, e un
+  // detector i cui setup cadevano tutti oltre la cinquantesima riga non aveva
+  // nemmeno un chip da premere.
+  const detectors = useMemo(() => {
+    const c = q.data?.counts_by_detector ?? {};
+    return Object.entries(c)
+      .map(([d, count]) => ({ detector: d, count }))
+      .sort((a, b) => b.count - a.count || a.detector.localeCompare(b.detector));
+  }, [q.data?.counts_by_detector]);
+  // Il filtro detector e l'ordinamento sono gia' stati applicati dal server:
+  // qui resta solo il RAGGRUPPAMENTO per condizione, che e' una scelta di
+  // presentazione e non un perimetro.
+  const groups = useMemo(() => groupByCondition(all, sort), [all, sort]);
+  const totale = q.data?.total ?? all.length;
+  /** Cambia un controllo che ridefinisce il perimetro, e torna alla prima
+   *  pagina. In render, non in un effect: `set-state-in-effect` e' gated. */
+  const cambia = <T,>(set: (v: T) => void) => (v: T) => { set(v); setOffset(0); };
 
   return (
     <div className="space-y-4 max-w-5xl">
@@ -261,7 +280,27 @@ export default function SetupsPage() {
           question a person carries into either list. It is the same data on
           both, because a family's record does not change depending on which
           tab you are reading. */}
-      {q.data && <SetupDetectorStats rows={q.data.stats.by_detector} />}
+      {q.data && (
+        <>
+          {/* ⚠️ Le statistiche descrivono una popolazione DIVERSA dalla lista:
+              i soli setup che il prodotto ha davvero mostrato. Non e' un
+              difetto da uniformare — un setup che l'utente non ha mai visto non
+              gli ha fatto nessuna promessa, quindi misurarci sopra l'efficacia
+              giudicherebbe il prodotto su cio' che non ha offerto — ma la
+              pagina mostrava un insieme e ne descriveva un altro senza dirlo.
+              In produzione: 1.415 setup attivi, 59 in shortlist, 18 chiusi
+              dentro il perimetro statistico. */}
+          {q.data.stats.scope === "shortlisted" && (
+            <p className="text-xs text-muted-foreground">
+              Le misure qui sotto contano i soli setup{" "}
+              <strong>mostrati in shortlist</strong> ({q.data.stats.total}), non
+              tutti quelli tracciati: un setup mai mostrato non ha fatto nessuna
+              promessa da verificare. La lista sotto ha un perimetro suo.
+            </p>
+          )}
+          <SetupDetectorStats rows={q.data.stats.by_detector} />
+        </>
+      )}
 
       {/* Three controls became eight. The page had exactly one axis — tone —
           which meant no way to ask "show me only the squeezes" or "who has
@@ -271,7 +310,7 @@ export default function SetupsPage() {
           <button
             key={t ?? "all"}
             type="button"
-            onClick={() => setTone(t)}
+            onClick={() => cambia(setTone)(t)}
             className={cn(
               "min-h-[36px] px-3 rounded-md border text-xs font-semibold transition-colors",
               tone === t ? "bg-primary text-primary-foreground" : "hover:bg-accent",
@@ -286,7 +325,7 @@ export default function SetupsPage() {
             <span className="h-5 w-px bg-border mx-1" aria-hidden />
             <button
               type="button"
-              onClick={() => setDetector(null)}
+              onClick={() => cambia(setDetector)(null)}
               className={cn(
                 "min-h-[36px] px-3 rounded-md border text-xs font-semibold transition-colors",
                 detector === null ? "bg-primary text-primary-foreground" : "hover:bg-accent",
@@ -298,7 +337,7 @@ export default function SetupsPage() {
               <button
                 key={d}
                 type="button"
-                onClick={() => setDetector(d)}
+                onClick={() => cambia(setDetector)(d)}
                 className={cn(
                   "min-h-[36px] px-3 rounded-md border text-xs font-semibold transition-colors",
                   detector === d ? "bg-primary text-primary-foreground" : "hover:bg-accent",
@@ -316,7 +355,7 @@ export default function SetupsPage() {
           Ordina
           <select
             value={sort}
-            onChange={(e) => setSort(e.target.value as SetupSortKey)}
+            onChange={(e) => cambia(setSort)(e.target.value as SetupSortKey)}
             className="min-h-[36px] rounded-md border bg-background px-2 text-xs font-semibold"
           >
             <option value="convenience">Priorità</option>
@@ -344,7 +383,7 @@ export default function SetupsPage() {
               <button
                 key={v}
                 type="button"
-                onClick={() => setView(v)}
+                onClick={() => cambia(setView)(v)}
                 aria-pressed={view === v}
                 className={cn(
                   "px-3 py-1.5 transition-colors",
@@ -383,6 +422,35 @@ export default function SetupsPage() {
             {groups.map((g) => (
               <SetupConditionGroup key={g.key} group={g} onOpen={setOpenSetup} />
             ))}
+          </div>
+        )}
+        {!q.isLoading && !q.isError && totale > SETUP_PER_PAGINA && (
+          /* ⚠️ Senza questa riga una lista troncata e' indistinguibile da una
+             completa: in produzione 1.415 setup attivi dietro una risposta da
+             50, e niente che lo dicesse. Il totale e' quello FILTRATO, cioe'
+             la popolazione fra cui si sta guardando. */
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-3 text-xs text-muted-foreground">
+            <span className="tabular-nums">
+              {offset + 1}–{offset + all.length} di {totale}
+            </span>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                className="min-h-[36px] rounded-md border px-3 font-semibold hover:bg-accent disabled:opacity-40 disabled:hover:bg-transparent"
+                onClick={() => setOffset((o) => Math.max(0, o - SETUP_PER_PAGINA))}
+                disabled={offset === 0 || q.isFetching}
+              >
+                Precedenti
+              </button>
+              <button
+                type="button"
+                className="min-h-[36px] rounded-md border px-3 font-semibold hover:bg-accent disabled:opacity-40 disabled:hover:bg-transparent"
+                onClick={() => setOffset((o) => o + SETUP_PER_PAGINA)}
+                disabled={!q.data?.has_more || q.isFetching}
+              >
+                Successivi
+              </button>
+            </div>
           </div>
         )}
       </div>

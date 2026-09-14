@@ -1,7 +1,8 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import SetupsPage from "./SetupsPage";
 import type { SetupStats, SetupsResponse } from "@/hooks/useSetups";
@@ -14,7 +15,20 @@ import type { SetupStats, SetupsResponse } from "@/hooks/useSetups";
 const mockGet = vi.fn();
 vi.mock("@/api/client", () => ({ api: (...args: unknown[]) => mockGet(...args) }));
 
-function renderWith(data: SetupsResponse) {
+/** ⚠️ `total`, `has_more` e `counts_by_detector` sono riempiti da qui quando il
+ *  caso non li nomina, cosi' i casi che NON riguardano il perimetro restano
+ *  leggibili. I test che lo riguardano li passano espliciti. */
+type RispostaParziale = Pick<SetupsResponse, "setups" | "stats"> &
+  Partial<SetupsResponse>;
+
+function renderWith(parziale: RispostaParziale) {
+  const data: SetupsResponse = {
+    total: parziale.setups.length,
+    has_more: false,
+    counts_by_detector: parziale.setups.reduce<Record<string, number>>(
+      (acc, s) => ({ ...acc, [s.detector]: (acc[s.detector] ?? 0) + 1 }), {}),
+    ...parziale,
+  };
   mockGet.mockResolvedValue(data);
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
@@ -70,6 +84,89 @@ const stats: SetupStats = {
   mean_return_pct: null,
   by_detector: [],
 };
+
+beforeEach(() => {
+  mockGet.mockReset();
+});
+
+/* ─── FA-056: il perimetro della lista ─────────────────────────────────────
+ *
+ * Misurato in produzione: 1.415 setup attivi, 59 in shortlist, e la lista ne
+ * rendeva 50. Filtro per detector e ordinamento lavoravano sul sottoinsieme
+ * GIA' RICEVUTO, quindi un detector i cui setup cadevano oltre la
+ * cinquantesima riga era irraggiungibile e i chip contavano la pagina.
+ */
+describe("SetupsPage — perimetro", () => {
+  /** L'ultima query string che la pagina ha chiesto. */
+  const ultimaUrl = () => String(mockGet.mock.calls.at(-1)?.[0] ?? "");
+
+  it("i conteggi dei chip vengono dal SERVER, non dalle righe ricevute", async () => {
+    renderWith({
+      setups: [setup],                       // UNA riga in pagina...
+      stats,
+      total: 70,
+      has_more: true,
+      counts_by_detector: { [setup.detector]: 67, squeeze_expansion: 3 },
+    });
+    // ...ma il chip dice 67, perche' descrive la popolazione.
+    expect(await screen.findByText("67")).toBeInTheDocument();
+    // ⚠️ E il detector raro ha il suo chip anche se NESSUNA sua riga e' in
+    // pagina: col conteggio lato client non sarebbe esistito, quindi non si
+    // sarebbe potuto selezionare.
+    expect(screen.getByText("3")).toBeInTheDocument();
+  });
+
+  it("selezionare un detector lo chiede al server e torna alla prima pagina", async () => {
+    renderWith({
+      setups: [setup], stats, total: 70, has_more: true,
+      counts_by_detector: { [setup.detector]: 67, squeeze_expansion: 3 },
+    });
+    await screen.findByText("67");
+
+    await userEvent.click(screen.getByRole("button", { name: /Successivi/ }));
+    await waitFor(() => expect(ultimaUrl()).toContain("offset=50"));
+
+    await userEvent.click(screen.getByText("3").closest("button")!);
+    await waitFor(() => expect(ultimaUrl()).toContain("detector=squeeze_expansion"));
+    // ⚠️ L'offset e' tornato a zero: restare alla pagina 2 dopo aver cambiato
+    // filtro mostrerebbe una fetta di mezzo di una popolazione DIVERSA, e la
+    // pagina non direbbe niente.
+    expect(ultimaUrl()).not.toContain("offset=");
+  });
+
+  it("l'ordinamento va al server", async () => {
+    renderWith({ setups: [setup], stats, total: 70, has_more: true });
+    await screen.findByText(/supporto 180\.00/i);
+    await userEvent.selectOptions(screen.getByRole("combobox"), "waiting");
+    await waitFor(() => expect(ultimaUrl()).toContain("sort=waiting"));
+  });
+
+  it("la paginazione compare solo quando c'e' altro da vedere", async () => {
+    renderWith({ setups: [setup], stats, total: 1, has_more: false });
+    await screen.findByText(/supporto 180\.00/i);
+    // ⚠️ Il pavimento: senza, l'asserzione sulla comparsa sarebbe soddisfatta
+    // anche da controlli sempre presenti.
+    expect(screen.queryByRole("button", { name: /Successivi/ })).not.toBeInTheDocument();
+  });
+
+  it("dichiara che le statistiche descrivono un'altra popolazione", async () => {
+    /* ⚠️ Il filtro `shortlisted` delle statistiche NON e' un difetto e non va
+     * tolto: un setup che l'utente non ha mai visto non gli ha fatto nessuna
+     * promessa, quindi misurarci sopra l'efficacia giudicherebbe il prodotto su
+     * cio' che non ha offerto. Il difetto era che la pagina mostrava una
+     * popolazione e ne descriveva un'altra SENZA DIRLO. */
+    renderWith({
+      setups: [setup],
+      stats: { ...stats, scope: "shortlisted", total: 59 },
+      total: 1415,
+    });
+    const nota = await screen.findByText(/mostrati in shortlist/i);
+    // ⚠️ Il NUMERO accanto alla frase, non la frase da sola: senza, una nota
+    // che dichiara il perimetro e non dice quanto grande sia passerebbe — e il
+    // punto di dichiararlo e' poterlo confrontare col totale della lista.
+    expect(nota.closest("p")?.textContent).toMatch(/59/);
+  });
+});
 
 describe("SetupsPage", () => {
   it("leads with what still has to happen — the actionable part", async () => {

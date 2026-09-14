@@ -77,6 +77,15 @@ export type SetupStatus = "active" | "converted" | "expired";
 export type SetupStatusFilter = SetupStatus | "closed";
 
 export interface SetupStats {
+  /** Quale popolazione descrivono questi numeri, ed e' DIVERSA da quella della
+   *  lista: "shortlisted" = i soli setup che il prodotto ha davvero mostrato.
+   *
+   *  ⚠️ Non e' un difetto da uniformare. Un setup che l'utente non ha mai visto
+   *  non gli ha fatto nessuna promessa, quindi misurarci sopra l'efficacia
+   *  significherebbe giudicare il prodotto su cio' che non ha offerto. Il
+   *  difetto era che la pagina mostrava una popolazione e ne descriveva
+   *  un'altra SENZA DIRLO. */
+  scope?: string;
   active: number;
   converted: number;
   expired: number;
@@ -164,16 +173,29 @@ export interface SetupDetectorStat {
 
 export interface SetupsResponse {
   setups: Setup[];
+  /** Righe che soddisfano i filtri, NON quelle rese. */
+  total: number;
+  has_more: boolean;
+  /** Setup per detector nella POPOLAZIONE, ignorando il filtro detector: i
+   *  chip devono restare tutti visibili dopo che se ne preme uno. */
+  counts_by_detector: Record<string, number>;
   stats: SetupStats;
 }
+
+/** Righe per pagina. In produzione i setup attivi sono 1.415 dietro una
+ *  risposta da 50: senza paginazione la lista non e' corta, e' TRONCATA. */
+export const SETUP_PER_PAGINA = 50;
 
 export function useSetups(
   tone?: "bull" | "bear",
   ticker?: string,
   status: SetupStatusFilter = "active",
+  opts: { detector?: string | null; sort?: string; offset?: number } = {},
 ) {
+  const { detector = null, sort, offset = 0 } = opts;
   return useQuery({
-    queryKey: ["setups", tone ?? "all", ticker ?? "*", status],
+    queryKey: ["setups", tone ?? "all", ticker ?? "*", status,
+               detector ?? "*", sort ?? "-", offset],
     queryFn: ({ signal }) => {
       const p = new URLSearchParams();
       if (tone) p.set("tone", tone);
@@ -181,6 +203,14 @@ export function useSetups(
       // Per-ticker asks the backend for THIS stock's setups, shortlisted or
       // not — see the API note. The global list stays capped.
       if (ticker) p.set("ticker", ticker);
+      // ⚠️ Detector e ordinamento vanno al SERVER, non applicati alla pagina
+      // ricevuta: filtrare lato client rende irraggiungibile un detector i cui
+      // setup cadono tutti oltre la cinquantesima riga, e ordinare lato client
+      // riordina cinquanta righe su millequattrocento.
+      if (detector) p.set("detector", detector);
+      if (sort) p.set("sort", sort);
+      if (offset) p.set("offset", String(offset));
+      p.set("limit", String(SETUP_PER_PAGINA));
       const qs = p.toString();
       return api<SetupsResponse>(`/api/setups${qs ? `?${qs}` : ""}`, { signal });
     },
