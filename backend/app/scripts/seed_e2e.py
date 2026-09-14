@@ -153,11 +153,15 @@ def main() -> None:
         db.flush()
 
         oggi = date.today()
+        # ⚠️ Il calendario dei feriali si calcola UNA volta e lo usano sia le
+        # barre sia i segnali. Vedi il commento su `signal_date` piu' sotto: e'
+        # la meta' della ripetibilita' che la correzione precedente non copriva.
+        feriali = _giorni_feriali(oggi, BARRE)
         for s in stocks:
             if db.query(OhlcvDaily).filter(OhlcvDaily.stock_id == s.id).count() >= BARRE:
                 continue
             prezzo = rng.uniform(20, 600)
-            for giorno in _giorni_feriali(oggi, BARRE):
+            for giorno in feriali:
                 prezzo *= 1 + rng.uniform(-0.025, 0.027)
                 alto = prezzo * (1 + rng.uniform(0, 0.02))
                 basso = prezzo * (1 - rng.uniform(0, 0.02))
@@ -172,10 +176,32 @@ def main() -> None:
         if db.query(Alert).count() < len(stocks) * 2:
             for i, s in enumerate(stocks):
                 for j, (nome, tono, catena) in enumerate(SEGNALI[: 2 + (i % 3)]):
+                    # ⚠️ La data del segnale e' un GIORNO FERIALE preso dal
+                    # calendario delle barre, non `oggi - N giorni`.
+                    #
+                    # Con lo scarto di calendario, quanti segnali cadevano su un
+                    # giorno che HA una barra dipendeva dal giorno della
+                    # settimana in cui girava il job: misurato, 29 su 36 di
+                    # domenica e 21 su 36 di lunedi'. E' la stessa lezione della
+                    # correzione precedente applicata a meta' — si era reso
+                    # stabile il numero di BARRE e non quello dei SEGNALI — ed
+                    # e' bastato che la CI passasse la mezzanotte per far
+                    # arrossare il gate su un commit che non toccava ne' il seme
+                    # ne' il frontend.
+                    k = (i + j) % 5
+                    giorno_segnale = feriali[-(1 + k)]
+                    # ⚠️ E `triggered_at` si conta dal SEGNALE, non da oggi. La
+                    # UI fa una pastiglia «in ritardo» sullo scarto in giorni di
+                    # CALENDARIO (soglia 4): ancorandolo a `oggi` lo scarto
+                    # cambiava con i fine settimana di mezzo. Cosi' lo scarto e'
+                    # il numero scritto qui, e quanti segnali indossano la
+                    # pastiglia non dipende da quando gira il job. Solo i piu'
+                    # vecchi la indossano, per esercitare entrambi i rami.
+                    ritardo = 5 if k == 4 else 1
                     db.add(Alert(
                         stock_id=s.id,
-                        triggered_at=_ancora(oggi) - timedelta(hours=6 * (i + j)),
-                        signal_date=oggi - timedelta(days=1 + (i + j) % 5),
+                        triggered_at=_ancora(giorno_segnale) + timedelta(days=ritardo),
+                        signal_date=giorno_segnale,
                         signal_name=nome,
                         trigger_price=round(rng.uniform(20, 600), 4),
                         snapshot=json.dumps({

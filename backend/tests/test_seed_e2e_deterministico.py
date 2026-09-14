@@ -103,3 +103,82 @@ def test_mezzogiorno_e_lontano_da_entrambi_i_bordi():
     a = _ancora(date(2026, 9, 13))
     assert a.tzinfo is not None, "un'ancora senza fuso e' ambigua"
     assert a.hour == 12 and a.minute == 0
+
+
+# ─── La data del SEGNALE, che la correzione precedente non copriva ────────
+
+
+def _struttura(oggi: date) -> tuple[int, int]:
+    """(segnali la cui data HA una barra, segnali che indossano «in ritardo»).
+
+    Replica la scelta che il seme fa per ogni avviso. Se questi due numeri
+    dipendono dal giorno della settimana, il gate UI non e' ripetibile.
+    """
+    feriali = _giorni_feriali(oggi, BARRE)
+    barre = set(feriali)
+    con_barra = in_ritardo = 0
+    for i in range(12):
+        for j in range(2 + (i % 3)):
+            k = (i + j) % 5
+            sd = feriali[-(1 + k)]
+            trig = _ancora(sd) + timedelta(days=5 if k == 4 else 1)
+            con_barra += sd in barre
+            in_ritardo += (trig.date() - sd).days >= 4
+    return con_barra, in_ritardo
+
+
+@pytest.mark.parametrize("scarto", range(14))
+def test_la_struttura_del_seme_non_dipende_dal_giorno_della_settimana(scarto):
+    """⚠️ La stessa lezione della correzione precedente, applicata all'altra
+    meta'.
+
+    Le BARRE erano gia' state rese ripetibili (`_giorni_feriali` ne rende
+    sempre N) e l'ANCORA oraria pure (mezzogiorno UTC). Ma la data del segnale
+    restava `oggi - N giorni di CALENDARIO`, quindi quanti segnali cadevano su
+    un giorno che HA una barra dipendeva ancora dal giorno della settimana:
+    misurato, 29 su 36 di domenica e 21 di lunedi'.
+
+    E' bastato che la CI passasse la mezzanotte per far arrossare il gate a11y
+    su un commit che non toccava ne' il seme ne' il frontend — la corsa delle
+    18:57 passava, quella delle 00:24 no."""
+    oggi = date(2026, 9, 8) + timedelta(days=scarto)
+    assert _struttura(oggi) == (36, 7)
+
+
+def test_il_controllo_negativo_lo_SCARTO_DI_CALENDARIO_non_era_stabile():
+    """Senza questo, il test sopra sarebbe vero anche di una forma che non ha
+    risolto niente — per esempio se `_giorni_feriali` rendesse sempre lo stesso
+    elenco a prescindere da `oggi`.
+
+    Qui si ricostruisce la forma VECCHIA (`oggi - (1 + k) giorni di
+    calendario`) e si pretende che due giorni della settimana diversi diano
+    conteggi diversi."""
+    def vecchia(oggi: date) -> int:
+        barre = set(_giorni_feriali(oggi, BARRE))
+        return sum(
+            (oggi - timedelta(days=1 + (i + j) % 5)) in barre
+            for i in range(12)
+            for j in range(2 + (i % 3))
+        )
+
+    domenica, lunedi = date(2026, 9, 13), date(2026, 9, 14)
+    assert domenica.weekday() == 6 and lunedi.weekday() == 0
+    assert vecchia(domenica) != vecchia(lunedi), (
+        "la vecchia forma sembra stabile: il confronto non prova niente"
+    )
+
+
+@pytest.mark.parametrize("scarto", range(14))
+def test_nessun_segnale_viene_scattato_nel_FUTURO(scarto):
+    """`triggered_at` si conta dal segnale e non da oggi, quindi va verificato
+    che il ritardo aggiunto non lo spinga oltre la giornata corrente: un avviso
+    datato domani renderebbe «fra un giorno» in una schermata che parla di
+    cose gia' successe."""
+    oggi = date(2026, 9, 8) + timedelta(days=scarto)
+    feriali = _giorni_feriali(oggi, BARRE)
+    limite = datetime.combine(oggi, datetime.max.time(), tzinfo=UTC)
+    for i in range(12):
+        for j in range(2 + (i % 3)):
+            k = (i + j) % 5
+            trig = _ancora(feriali[-(1 + k)]) + timedelta(days=5 if k == 4 else 1)
+            assert trig <= limite, f"scatto nel futuro: {trig} > {limite}"
