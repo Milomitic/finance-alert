@@ -155,36 +155,38 @@ def test_one_failed_stock_does_not_poison_the_rest_of_the_batch(pg, monkeypatch)
     assert date(2026, 7, 21) in landed
 
 
-def test_le_migrazioni_girano_su_POSTGRES_andata_e_ritorno(monkeypatch) -> None:
-    """⚠️ Le migrazioni non erano mai state eseguite su Postgres.
+def test_la_migrazione_FA_061_gira_su_POSTGRES_andata_e_ritorno(monkeypatch) -> None:
+    """La migrazione degli episodi di setup, eseguita su Postgres vero.
 
-    Il resto di questo modulo prova che i MODELLI mappano su DDL Postgres —
-    `create_all` nella fixture e' quell'asserzione. Ma la produzione ci arriva
-    per `alembic upgrade`, che e' un codice diverso: DDL scritta a mano, batch
-    mode, indici parziali con clausole per dialetto. Su SQLite girava a ogni
-    sviluppo; su Postgres, mai.
+    ⚠️ PERCHE' UNA SOLA MIGRAZIONE E NON LA CATENA INTERA.
 
-    Scritto lavorando su FA-061, e la ragione e' che quella migrazione aveva un
-    difetto visibile SOLO qui: un `try/except` attorno a una `DROP CONSTRAINT`
-    che puo' legittimamente non esistere. Su SQLite funziona; su Postgres una
-    istruzione DDL fallita ABORTA la transazione, quindi l'eccezione veniva
-    ingoiata e ogni istruzione successiva moriva con «current transaction is
-    aborted». Sarebbe comparso al primo rilascio.
+    La prima versione di questo test faceva `upgrade head` da un database
+    vuoto, ed e' cosi' che si e' scoperto che **la catena storica non e'
+    eseguibile da zero su Postgres**: `0601129beb3a (add price alerts)` da
+    `column "enabled" is of type boolean but default expression is of type
+    integer`, perche' un default intero su una colonna booleana passa su SQLite
+    e non qui. E' un difetto vero e piu' grosso di questa voce — ha un ID suo
+    (FA-070) — ma tenere OSTAGGIO la verifica di una migrazione nuova a una
+    catena di mesi che nessuno ha mai eseguito significherebbe non verificarne
+    nessuna.
 
-    ⚠️ E si prova ANCHE il ritorno. Una migrazione che non si ripercorre
-    all'indietro va scoperta adesso, non durante un ripristino — il drill del
-    lunedi' esiste proprio perche' un backup che non si rilegge e' indistinguibile
-    da uno che funziona finche' non serve.
+    Quindi si costruisce la forma che la migrazione SI ASPETTA DI TROVARE, si
+    marca la revisione precedente, e si sale di un passo. La DDL qui sotto e'
+    esplicita di proposito: e' il contratto d'ingresso della migrazione, e
+    scriverlo rende visibile cosa succede se qualcuno lo cambia.
 
-    Gira su un database USA E GETTA: `alembic upgrade head` ricostruisce lo
-    schema da zero, quindi non puo' toccare quello della fixture.
+    ⚠️ E si prova anche il RITORNO. Una migrazione che non si ripercorre
+    all'indietro va scoperta adesso, non durante un ripristino.
     """
     import uuid
 
     from alembic.config import Config
     from sqlalchemy import text
+    from sqlalchemy.exc import IntegrityError
 
     from alembic import command
+
+    _PRIMA = "3d8693a96ce6"   # la revisione su cui FA-061 si innesta
 
     nome = f"fa_mig_{uuid.uuid4().hex[:12]}"
     radice = create_engine(_PG_URL, future=True, isolation_level="AUTOCOMMIT")
@@ -196,37 +198,83 @@ def test_le_migrazioni_girano_su_POSTGRES_andata_e_ritorno(monkeypatch) -> None:
     cfg = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
     cfg.set_main_option("script_location",
                         str(Path(__file__).resolve().parents[1] / "alembic"))
-    # ⚠️ `cfg.set_main_option("sqlalchemy.url", ...)` NON basta, e la prima
-    # versione di questo test ci e' cascata: `alembic/env.py` sovrascrive
-    # incondizionatamente quell'opzione con `settings.database_url`, perche'
+    # ⚠️ `cfg.set_main_option("sqlalchemy.url", ...)` NON basta: `alembic/env.py`
+    # sovrascrive quell'opzione con `settings.database_url`, perche'
     # `alembic.ini` la lascia VUOTA di proposito — la configurazione del
-    # database ha un proprietario solo. Quindi la migrazione girava contro il
-    # database predefinito e questo Postgres non veniva toccato.
-    #
-    # Il test PASSAVA. E' stata l'asserzione sull'indice, l'unica che guardasse
-    # il RISULTATO invece dell'assenza di eccezioni, a smascherarlo: senza,
-    # sarebbe rimasto verde per sempre misurando niente.
+    # database ha un proprietario solo. La prima versione di questo test ci e'
+    # cascata e PASSAVA girando contro il database predefinito.
     monkeypatch.setattr(settings, "database_url", url)
-    try:
-        command.upgrade(cfg, "head")
-        # Il giro di ritorno, una revisione per volta fino in fondo e poi su.
-        command.downgrade(cfg, "-1")
-        command.upgrade(cfg, "head")
 
-        # L'indice parziale esiste DAVVERO su Postgres, e con la sua clausola:
-        # senza il `WHERE`, sarebbe un vincolo su tutta la tabella e la storia
-        # degli episodi tornerebbe impossibile — in silenzio.
-        eng = create_engine(url, future=True)
+    eng = create_engine(url, future=True)
+    try:
+        with eng.begin() as c:
+            # La forma PRE-migrazione: il vincolo unico sulla coppia, nessuna
+            # colonna `closed_reason`. Solo le colonne che la migrazione tocca.
+            c.execute(text("""
+                CREATE TABLE stock_setups (
+                    id SERIAL PRIMARY KEY,
+                    stock_id INTEGER NOT NULL,
+                    detector VARCHAR(64) NOT NULL,
+                    status VARCHAR(16) NOT NULL DEFAULT 'active',
+                    CONSTRAINT uq_stock_setups_stock_detector
+                        UNIQUE (stock_id, detector)
+                )
+            """))
+        command.stamp(cfg, _PRIMA)
+
+        command.upgrade(cfg, "head")
         with eng.connect() as c:
             ddl = c.execute(text(
                 "SELECT indexdef FROM pg_indexes "
                 "WHERE tablename = 'stock_setups' "
                 "  AND indexname = 'uq_stock_setups_open_episode'"
             )).scalar_one()
-        eng.dispose()
+            colonne = {r[0] for r in c.execute(text(
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_name = 'stock_setups'"))}
+        # ⚠️ L'indice deve portare la sua clausola: senza il WHERE sarebbe un
+        # vincolo su TUTTA la tabella, la storia degli episodi tornerebbe
+        # impossibile, e nulla lo direbbe.
         assert "UNIQUE" in ddl.upper()
         assert "WHERE" in ddl.upper() and "active" in ddl
+        assert "closed_reason" in colonne
+        # Il vincolo vecchio se n'e' andato: se restasse, due episodi chiusi
+        # sulla stessa coppia sarebbero ancora vietati.
+        with eng.connect() as c:
+            vincoli = {r[0] for r in c.execute(text(
+                "SELECT conname FROM pg_constraint WHERE conrelid = "
+                "'stock_setups'::regclass"))}
+        assert "uq_stock_setups_stock_detector" not in vincoli
+
+        # Due episodi CHIUSI convivono, uno solo puo' essere APERTO.
+        with eng.begin() as c:
+            c.execute(text("INSERT INTO stock_setups (stock_id, detector, status) "
+                           "VALUES (1, 'x', 'expired'), (1, 'x', 'expired')"))
+            c.execute(text("INSERT INTO stock_setups (stock_id, detector, status) "
+                           "VALUES (1, 'x', 'active')"))
+        # ⚠️ `IntegrityError` e non `Exception`: un'eccezione qualunque
+        # passerebbe anche su un refuso nella SQL qui sopra, cioe' il test
+        # sarebbe verde per la ragione sbagliata.
+        with pytest.raises(IntegrityError), eng.begin() as c:
+            c.execute(text("INSERT INTO stock_setups (stock_id, detector, status) "
+                           "VALUES (1, 'x', 'active')"))
+
+        # Il ritorno. Dichiara la perdita e la esegue: lo schema di
+        # destinazione non ha dove mettere il secondo episodio.
+        command.downgrade(cfg, _PRIMA)
+        with eng.connect() as c:
+            rimaste = c.execute(text("SELECT count(*) FROM stock_setups")).scalar_one()
+            colonne = {r[0] for r in c.execute(text(
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_name = 'stock_setups'"))}
+        assert rimaste == 1, "il downgrade deve lasciare UNA riga per coppia"
+        assert "closed_reason" not in colonne
+
+        # E si risale, perche' un ripristino seguito da un aggiornamento e' il
+        # caso reale, non l'andata da sola.
+        command.upgrade(cfg, "head")
     finally:
+        eng.dispose()
         radice = create_engine(_PG_URL, future=True, isolation_level="AUTOCOMMIT")
         with radice.connect() as c:
             c.execute(text(
