@@ -25,6 +25,7 @@ import json
 from datetime import UTC, date, datetime, timedelta
 
 from app.models import Alert, Position, SignalOutcome, Stock, StockSetup
+from app.scripts import repair_duplicate_alerts as repair
 from app.services.alert_service import find_duplicate_alert_groups
 
 
@@ -196,3 +197,70 @@ def test_an_aligned_original_outcome_does_not_block(db) -> None:
 
     (g,) = find_duplicate_alert_groups(db)
     assert g.blockers == []
+
+
+# ─── 3. Lo script, ESEGUITO ──────────────────────────────────────────────
+
+
+def test_the_read_only_pass_deletes_nothing(db) -> None:
+    """The default. Every repair script in this repo reads before it writes,
+    and this one deletes rows that carry matured measurements."""
+    s = _stock(db, "DUP_DRY")
+    _alert(db, s, signal_date=date(2026, 7, 9), minutes=0)
+    _alert(db, s, signal_date=date(2026, 7, 9), minutes=30)
+    db.commit()
+
+    repair.main(argv=[], db=db)
+
+    assert db.query(Alert).count() == 2
+
+
+def test_apply_removes_the_excess_and_its_outcome(db) -> None:
+    """⚠️ This test exists because the dead-code gate caught `main` as a
+    function no test had ever executed — and it is the function that deletes
+    production rows. A repair path nobody has run is not a repair path.
+
+    It also pins the CASCADE: the excess row's outcome must go with it, or the
+    warehouse would hold a measurement of an alert that no longer exists."""
+    s = _stock(db, "DUP_APPLY")
+    first = _alert(db, s, signal_date=date(2026, 7, 9), minutes=0)
+    second = _alert(db, s, signal_date=date(2026, 7, 9), minutes=30)
+    _outcome(db, first)
+    _outcome(db, second)
+    db.commit()
+
+    repair.main(argv=["--apply"], db=db)
+
+    superstiti = db.query(Alert).all()
+    assert [a.id for a in superstiti] == [first.id]
+    assert db.query(SignalOutcome).count() == 1          # il CASCADE ha agito
+    assert db.query(SignalOutcome).one().alert_id == first.id
+
+
+def test_apply_refuses_a_blocked_group(db) -> None:
+    """The blockers are not advisory. A group carrying a position keeps every
+    row, `--apply` or not, because `positions.alert_id` is SET NULL and the
+    delete would strip the provenance without raising anything."""
+    s = _stock(db, "DUP_BLOCKED")
+    first = _alert(db, s, signal_date=date(2026, 7, 9), minutes=0)
+    second = _alert(db, s, signal_date=date(2026, 7, 9), minutes=30)
+    db.add(Position(stock_id=s.id, alert_id=second.id, side="long",
+                    entry_price=50.0))
+    db.commit()
+
+    repair.main(argv=["--apply"], db=db)
+
+    assert {a.id for a in db.query(Alert).all()} == {first.id, second.id}
+    assert db.query(Position).one().alert_id == second.id
+
+
+def test_a_clean_warehouse_makes_the_script_say_so(db) -> None:
+    """The floor on the script itself: with nothing to do it must take the
+    early return rather than fall through the reporting path on empty lists."""
+    s = _stock(db, "DUP_NOOP")
+    _alert(db, s, signal_date=date(2026, 7, 9))
+    db.commit()
+
+    repair.main(argv=["--apply"], db=db)
+
+    assert db.query(Alert).count() == 1

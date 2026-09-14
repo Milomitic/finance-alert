@@ -47,21 +47,31 @@ import argparse
 
 from loguru import logger
 from sqlalchemy import delete, select
+from sqlalchemy.orm import Session
 
 from app.core.db import SessionLocal
 from app.models import Alert
 from app.services.alert_service import find_duplicate_alert_groups
 
 
-def main() -> None:
+def main(argv: list[str] | None = None, db: Session | None = None) -> None:
+    """`argv` and `db` are injectable so a test can actually RUN this.
+
+    ⚠️ Not a convenience. The dead-code gate caught this script's `main` as a
+    function no test ever executed, which is the exact "codice corretto contro
+    codice che ha girato" gap this repo built eight presidi to close — and it
+    matters more here than usual, because `--apply` deletes production rows.
+    A repair path nobody has run is not a repair path.
+    """
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--apply", action="store_true",
                     help="delete the excess rows (outcomes follow by CASCADE)")
     ap.add_argument("--limit-print", type=int, default=15,
                     help="how many groups to list (default 15)")
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
 
-    db = SessionLocal()
+    nostra = db is None
+    db = SessionLocal() if nostra else db
     try:
         groups = find_duplicate_alert_groups(db)
         if not groups:
@@ -109,7 +119,8 @@ def main() -> None:
         logger.info(f"[dedup] cancellate {res.rowcount} righe eccedenti")
         print(f"\nCancellate {res.rowcount} righe eccedenti su {len(liberi)} gruppi.")
     finally:
-        db.close()
+        if nostra:
+            db.close()
 
 
 if __name__ == "__main__":

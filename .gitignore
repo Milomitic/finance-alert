@@ -91,3 +91,7 @@ frontend/playwright-report/
 frontend/blob-report/
 backend/data/e2e.db
 backend/.coverage.json
+# Il database binario di coverage: rigenerato a ogni corsa, letto solo in
+# locale (il cancello legge il .json). Era TRACCIATO dal 694d7c4, quindi
+# risultava modificato a ogni run e un git add -A lo ricommittava.
+backend/.coverage
