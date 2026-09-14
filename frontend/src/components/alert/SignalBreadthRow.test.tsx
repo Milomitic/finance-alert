@@ -44,9 +44,24 @@ describe("what it reports", () => {
     expect(document.body.textContent).not.toMatch(/\b0 altri\b/);
   });
 
-  it("calls a lone signal a move of the stock, which is the useful reading", () => {
+  it("reports what was OBSERVED, not a cause it cannot know", () => {
+    /* ⚠️ Questo test asseriva «movimento del titolo, non una condizione di
+     * mercato», e il suo nome la chiamava «the useful reading». Era
+     * un'affermazione di CAUSA dedotta dall'assenza di altri match (FA-059).
+     *
+     * Due cose che non reggono. L'assenza di altri match significa nessun
+     * altro match, non che il movimento appartenga al titolo: la causa puo'
+     * essere una notizia, un flusso, un errore di dato. E il perimetro non e'
+     * il mercato — e' il catalogo effettivamente scansionato quel giorno,
+     * quindi «nessuna condizione di mercato» afferma qualcosa su titoli che
+     * nessuno ha guardato.
+     *
+     * Il controllo negativo e' la meta' che conta: senza, riscrivere la frase
+     * all'indietro passerebbe. */
     render(<SignalBreadthRow others={0} sameSector={0} />);
-    expect(screen.getByText(/movimento del titolo/i)).toBeInTheDocument();
+    expect(screen.getByText(/catalogo scansionato/i)).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/movimento del titolo/i);
+    expect(document.body.textContent).not.toMatch(/non una condizione di mercato/i);
   });
 
   it("uses the singular for exactly one other stock", () => {

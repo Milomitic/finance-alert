@@ -1,4 +1,4 @@
-import { Gauge, Layers, Network, Swords, TrendingDown, TrendingUp } from "lucide-react";
+import { Layers, Network, Swords, TrendingDown, TrendingUp } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import type { Confluence } from "@/api/alerts";
@@ -166,19 +166,17 @@ function TopRow({
             `contents` dissolves this wrapper so the original
             seven-column row is preserved exactly. */}
         <div className="flex w-full flex-wrap items-center gap-x-1.5 gap-y-1 pl-3 sm:flex-nowrap sm:gap-2 sm:pl-0 sm:w-auto sm:contents">
-        {/* Tono (+ contested flag + bull multi-horizon conviction) */}
+        {/* Tono (+ conteso). ⚠️ L'icona «Convinzione: multi-orizzonte
+            rialzista» stava qui, con lo studio del 2026-06-09 a giustificarla.
+            Non era senza fondamento: l'argomento contro e' INTERNO — il trade
+            playbook ha cancellato la parola `conviction` il 2026-09-02 per
+            questa identica ragione, «il piano descrive una geometria, non
+            impartisce un'istruzione», e qui era sopravvissuta. Gli orizzonti
+            restano descrittivi nei chip accanto; e' la parola e il premio
+            visivo a sparire (FA-057). */}
         <div className="w-[4.25rem] shrink-0 flex items-center gap-1">
           <DirPill direction={c.direction} />
           {c.contested && <Swords className="h-3 w-3 shrink-0 text-amber-500" aria-label="Conteso" />}
-          {c.direction === "bull" && c.multi_horizon && (
-            <TrendingUp
-              className="h-3 w-3 shrink-0 text-emerald-700"
-              aria-label="Convinzione: multi-orizzonte rialzista"
-              // Data note: mh-bull has a positive directional DRIFT edge
-              // (study 2026-06-09) — a conviction/selection signal, NOT a
-              // wider target (reach is not improved). Informational only.
-            />
-          )}
         </div>
         {/* Orizzonte span */}
         <div className="w-12 shrink-0"><HorizonChips horizons={c.horizons} /></div>
@@ -196,60 +194,6 @@ function TopRow({
         </div>
       </div>
     </li>
-  );
-}
-
-/* Directional extreme — the strongest cluster on one side. Compact bordered
-   cell for the top strip. Same drill-down semantics as TopRow: cell click
-   filters the table, ticker text navigates to the stock detail. */
-function ExtremeCell({
-  label,
-  c,
-  onSelect,
-}: {
-  label: string;
-  c: Confluence | undefined;
-  onSelect?: (ticker: string) => void;
-}) {
-  if (!c) {
-    return (
-      <div className="flex items-center gap-2 rounded-lg border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-        <span className="uppercase tracking-wider text-[0.7059rem]">{label}</span>
-        <span className="ml-auto">—</span>
-      </div>
-    );
-  }
-  const bull = c.direction === "bull";
-  return (
-    <div
-      role="button"
-      tabIndex={0}
-      onClick={() => onSelect?.(c.ticker)}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          onSelect?.(c.ticker);
-        }
-      }}
-      className="flex items-center gap-2 rounded-lg border bg-muted/30 px-3 py-2 hover:bg-accent/40 transition-colors min-w-0 cursor-pointer"
-      title={`${c.ticker} · forza ${Math.round(c.strength)} · ${c.n_signals} segnali — clic per filtrare la tabella`}
-    >
-      <span className="uppercase tracking-wider text-[0.7059rem] text-muted-foreground shrink-0">{label}</span>
-      <StockLogo ticker={c.ticker} size="xs" />
-      <Link
-        to={`/stocks/${encodeURIComponent(c.ticker)}`}
-        onClick={(e) => e.stopPropagation()}
-        className="font-bold text-sm shrink-0 hover:underline"
-        title={`Vai al dettaglio di ${c.ticker}`}
-      >
-        {c.ticker}
-      </Link>
-      {c.name && <span className="text-[0.7059rem] text-muted-foreground truncate min-w-0">{c.name}</span>}
-      <DirPill direction={c.direction} className="ml-auto" />
-      <span className={cn("font-bold tabular-nums shrink-0", bull ? "text-emerald-800 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400")}>
-        {Math.round(c.strength)}
-      </span>
-    </div>
   );
 }
 
@@ -354,9 +298,6 @@ export function AlertsInsightCard({
   const bullPct = nTot ? Math.round((nBull / nTot) * 100) : 0;
   const multiH = clusters.filter((c) => c.multi_horizon).length;
   const contested = clusters.filter((c) => c.contested).length;
-  const avgStrength = clusters.length
-    ? Math.round(clusters.reduce((s, c) => s + c.strength, 0) / clusters.length)
-    : 0;
 
   return (
     <Card>
@@ -370,12 +311,10 @@ export function AlertsInsightCard({
           </div>
         ) : (
           <>
-            {/* Directional extremes — both on one row, top-left. */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-w-3xl mb-4">
-              <ExtremeCell label="Top long" c={bull[0]} onSelect={onTickerSelect} />
-              <ExtremeCell label="Top short" c={bear[0]} onSelect={onTickerSelect} />
-            </div>
-
+            {/* ⚠️ «Top long» e «Top short» stavano qui, SOPRA una graduatoria
+                che li contiene gia': due elementi ripetuti che occupavano la
+                prima fascia. La Top 10 sotto e' filtrabile per direzione e dice
+                la stessa cosa una volta sola (FA-058). */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-7 gap-y-5 items-stretch">
               {/* Col 1 — Top 10 by strength (logo + ticker + name) */}
               <div className="min-w-0">
@@ -418,10 +357,14 @@ export function AlertsInsightCard({
                   </div>
                 </div>
 
-                <div className="grid grid-cols-3 gap-2">
+                {/* ⚠️ «Forza media» stava qui ed e' sparita: una media su
+                    confluenze di composizione eterogenea — detector diversi,
+                    conteggi diversi, orizzonti diversi — e' un numero che non
+                    risponde a nessuna domanda che qualcuno si ponga, e nessun
+                    consumatore dichiarava di usarlo (FA-058). */}
+                <div className="grid grid-cols-2 gap-2">
                   <StatCell icon={Layers} label={isPhone ? "Multi-orizz." : "Multi-orizzonte"} value={String(multiH)} tone={multiH > 0 ? "text-indigo-600 dark:text-indigo-400" : undefined} />
                   <StatCell icon={Swords} label="Contese" value={String(contested)} tone={contested > 0 ? "text-amber-600 dark:text-amber-400" : undefined} />
-                  <StatCell icon={Gauge} label={isPhone ? "Forza med." : "Forza media"} value={String(avgStrength)} />
                 </div>
 
                 {/* Horizon mix + detector mix — two columns on the same row. */}

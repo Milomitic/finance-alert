@@ -215,11 +215,29 @@ def compute_confluence(db: Session, *, days: int | None = None) -> list[Confluen
             components=comps,
         ))
 
-    # Strength saturates at 100, so rank ties by: (1) bull multi-horizon
-    # clusters first -- backtest-validated to drift ~+0.8%/30d more than mono
-    # (the edge is bull-only; bears get no priority); then (2) signal count.
-    clusters.sort(
-        key=lambda c: (c.strength, c.multi_horizon and c.direction == "bull", c.n_signals),
-        reverse=True,
-    )
+    clusters.sort(key=_chiave_ordinamento, reverse=True)
     return clusters
+
+
+def _chiave_ordinamento(c: ConfluenceCluster) -> tuple:
+    """Forza, poi numero di segnali. Nient'altro, e in particolare NON la
+    direzione.
+
+    ⚠️ Fino al 2026-09-14 la chiave portava `multi_horizon and direction ==
+    "bull"`, con lo studio del 2026-06-09 a giustificarlo (deriva direzionale
+    ~+0,8%/30g, solo rialzista). Non era senza fondamento: l'argomento contro
+    e' INTERNO. Il trade playbook ha cancellato la parola `conviction` il
+    2026-09-02 per questa identica ragione — «il piano descrive una geometria,
+    non impartisce un'istruzione» — e qui era sopravvissuta, insieme a
+    un'icona che diceva «Convinzione: multi-orizzonte rialzista».
+
+    E l'asimmetria e' la parte che non reggeva: due gruppi identici per Forza,
+    composizione e numero di segnali finivano in ordine diverso a seconda del
+    VERSO in cui puntavano, e chi legge una graduatoria non ha modo di sapere
+    che il criterio di spareggio cambia col segno.
+
+    Gli orizzonti restano DESCRITTIVI: `multi_horizon` e `horizons` viaggiano
+    ancora nel payload e la UI li rende come chip. Rimettere una preferenza
+    predittiva qui richiede risultati fuori campione nuovi, non questo studio.
+    """
+    return (c.strength, c.n_signals)

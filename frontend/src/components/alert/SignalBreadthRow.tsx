@@ -62,8 +62,14 @@ export function SignalBreadthRow({
           )}
         </div>
         <div className="text-xs text-muted-foreground italic mt-0.5">
+          {/* ⚠️ Diceva «Movimento del titolo, non una condizione di mercato»:
+              affermava una CAUSA dall'assenza di altri match. Il perimetro non
+              e' il mercato — e' il catalogo scansionato quel giorno — e nessun
+              altro match significa nessun altro match, non che il movimento sia
+              del titolo (FA-059). La riga non-solitaria accanto era gia'
+              scritta bene e non e' stata toccata. */}
           {alone
-            ? "Movimento del titolo, non una condizione di mercato."
+            ? "Nessun altro titolo del catalogo scansionato ha mostrato questa condizione quel giorno."
             : "Non è una conferma — la coincidenza di segnali non ha mostrato vantaggio. Serve a distinguere un fatto del titolo da una condizione di mercato."}
         </div>
       </div>
