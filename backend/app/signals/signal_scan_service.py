@@ -215,16 +215,36 @@ def evaluate_signals(
             .order_by(Alert.signal_date.desc().nullslast(), Alert.triggered_at.desc())
             .limit(1)
         ).scalars().first()
-        if prior is not None and _snapshot_tone(prior.snapshot) == m.tone \
-                and _within_cooldown(prior.signal_date, sig_date) \
-                and not _outcome_matured(db, prior.id):
-            # NOTE the freeze-post-esito guard above: once the prior alert has a
-            # matured SignalOutcome row, its Esito describes the FROZEN
-            # signal_date/price — amending it would make the outcome column lie
-            # about a bar the row no longer shows. A matured prior is therefore
-            # immutable history: we fall through and insert a NEW alert row for
-            # the re-detection instead (single indexed lookup on the unique
-            # ix_signal_outcomes_alert, so the cost is one point query).
+        # Same ongoing setup? Evaluated once and read twice: "re-reading a
+        # frozen event" and "refreshing a live one" are two arms of one fact,
+        # and _outcome_matured is a point query we don't want to pay twice on
+        # the common path.
+        same_thread = (
+            prior is not None
+            and _snapshot_tone(prior.snapshot) == m.tone
+            and _within_cooldown(prior.signal_date, sig_date)
+        )
+        already_measured = same_thread and _outcome_matured(db, prior.id)
+        # Freeze post-esito, and note what freezing MEANS. Once the prior alert
+        # has a matured SignalOutcome row, its Esito describes the FROZEN
+        # signal_date/price — amending it would make the outcome column lie
+        # about a bar the row no longer shows.
+        #
+        # ⚠️ But freezing means DO NOTHING, not "insert instead of amend".
+        # Until 2026-09-14 this arm fell through to the insert below and minted
+        # a row on every scan pass: 668 excess rows across 9,034 alerts, 596
+        # identical to the cent, and on exactly two detectors —
+        # candle_reversal and gap_and_go, the only two at a 5-day horizon, i.e.
+        # the only two that mature INSIDE their own recency window. The rate
+        # tracked how often the scan ran, not the market (CPRX: 8 rows in one
+        # day). It also fed the drift monitor: candle_reversal read 37.2% with
+        # the duplicates and 46.1% without, which is the whole of its "decaying"
+        # alarm.
+        if already_measured and prior.signal_date == sig_date:
+            continue
+        # A matured prior on a DIFFERENT bar is genuinely a later occurrence
+        # and earns its own row: fall through to the insert.
+        if same_thread and not already_measured:
             try:
                 _prior_snap = json.loads(prior.snapshot) if prior.snapshot else {}
             except (ValueError, TypeError):

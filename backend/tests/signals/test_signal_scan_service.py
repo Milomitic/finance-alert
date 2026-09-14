@@ -209,6 +209,52 @@ def test_matured_prior_is_frozen_and_new_row_inserted(db, monkeypatch):
     assert "amended_at" not in json.loads(fresh.snapshot)
 
 
+def test_same_bar_redetected_after_maturation_creates_nothing(db, monkeypatch):
+    """Re-reading the SAME event after its outcome matured is not a new event.
+
+    The defect this closes (FA-051) was 668 excess rows across 9,034 alerts —
+    7.4% of the warehouse, 596 of them identical to the cent. The freeze guard
+    dropped out of the WHOLE dedup block once the outcome existed, so the
+    detection fell through to the insert arm and minted a row on every SCAN
+    pass — not every day: CPRX collected 8 in a single day, all at 31.49.
+
+    The freeze itself stays and is right: the Esito describes the frozen bar
+    and price, and amending them would make the outcome column lie. What was
+    wrong is that freezing meant "insert instead of amend" rather than "do
+    nothing"."""
+    _relax(monkeypatch)
+    s = Stock(ticker="CD_SAMEDAY", exchange="NASDAQ", name="Cd", country="US")
+    db.add(s); db.flush()
+    # Same bar the volume_breakout in _confirmed_df() stamps.
+    prior = _seed_prior(db, s, signal_date=date(2026, 5, 1), price=50.0)
+    _seed_outcome(db, prior)
+    db.commit()
+    evaluate_signals(db, s, _confirmed_df())
+    db.commit()
+    rows = _vb_rows(db, s)
+    assert len(rows) == 1                        # no new row
+    assert rows[0].id == prior.id
+    assert rows[0].signal_date == date(2026, 5, 1)
+    assert float(rows[0].trigger_price) == 50.0  # frozen, not refreshed
+    assert "amended_at" not in json.loads(rows[0].snapshot)
+
+
+def test_rescanning_the_same_matured_event_is_idempotent(db, monkeypatch):
+    """FA-051's closure criterion, in the shape the defect actually took: the
+    scan runs several times a day and each pass added a row. Three passes must
+    leave exactly one."""
+    _relax(monkeypatch)
+    s = Stock(ticker="CD_IDEMP", exchange="NASDAQ", name="Cd", country="US")
+    db.add(s); db.flush()
+    prior = _seed_prior(db, s, signal_date=date(2026, 5, 1), price=50.0)
+    _seed_outcome(db, prior)
+    db.commit()
+    for _ in range(3):
+        evaluate_signals(db, s, _confirmed_df())
+        db.commit()
+    assert len(_vb_rows(db, s)) == 1
+
+
 def test_unmatured_prior_still_amended(db, monkeypatch):
     """No outcome row yet → the living-setup refresh amends in place as before
     (the other side of the freeze boundary)."""
