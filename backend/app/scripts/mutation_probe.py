@@ -137,6 +137,10 @@ BERSAGLI: dict[str, list[str]] = {
         "tests/test_detector_performance.py",
         "tests/test_effective_sample.py",
         "tests/test_equity_curve_direction.py",
+        # Scritto DOPO la passata che qui uccideva 19 su 50: il verdetto sul
+        # bordo esatto del lancio di moneta, i filtri della curva di equity e
+        # la pastiglia «campione scarso».
+        "tests/test_detector_performance_mutanti.py",
     ],
     # ⚠️ Le sessioni. Un mutante che sopravvive qui e' un test che non
     # distingue un token valido da uno scaduto o manomesso.
