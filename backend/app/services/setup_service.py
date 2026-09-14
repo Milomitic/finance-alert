@@ -345,12 +345,6 @@ def conversion_stats(db: Session) -> dict:
     returns = _return_summary(outcomes)
     by_detector = _per_detector(converted, expired, outcomes)
 
-    def _median(xs: list[int]) -> float | None:
-        if not xs:
-            return None
-        mid = len(xs) // 2
-        return float(xs[mid] if len(xs) % 2 else (xs[mid - 1] + xs[mid]) / 2)
-
     return {
         "active": len(active),
         "converted": len(converted),
@@ -378,7 +372,7 @@ def conversion_stats(db: Session) -> dict:
         # The median and the range beside the mean: one number cannot say
         # whether the warning was reliably a week or anywhere from a day to a
         # month, and the wait is the whole product.
-        "median_lead_days": _median(leads),
+        "median_lead_days": _median_of(leads),
         "lead_days_min": leads[0] if leads else None,
         "lead_days_max": leads[-1] if leads else None,
     }
@@ -438,11 +432,22 @@ def _pct(x: float | None) -> float | None:
 
 
 def _median_of(xs: list[float]) -> float | None:
+    """La mediana, ORDINANDO da sola. Proprietario unico.
+
+    ⚠️ Ne esisteva una seconda copia annidata dentro `conversion_stats`, e non
+    era un duplicato: NON ordinava. Funzionava perche' il chiamante passava
+    `leads` gia' ordinata venti righe sopra — cioe' la sua correttezza
+    dipendeva da cosa faceva qualcun altro, e niente lo diceva. Su un elenco
+    non ordinato le due rispondevano 30 contro 7.
+
+    ⚠️ E `float(...)`: l'annotazione diceva `float | None` mentre nel caso
+    DISPARI restituiva l'int ricevuto. Un'annotazione vera meta' delle volte e'
+    peggio di nessuna annotazione, perche' chi legge smette di controllare."""
     if not xs:
         return None
     ys = sorted(xs)
     mid = len(ys) // 2
-    return ys[mid] if len(ys) % 2 else (ys[mid - 1] + ys[mid]) / 2.0
+    return float(ys[mid] if len(ys) % 2 else (ys[mid - 1] + ys[mid]) / 2.0)
 
 
 def _return_summary(outcomes: list[SignalOutcome]) -> dict:

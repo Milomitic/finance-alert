@@ -98,6 +98,10 @@ BERSAGLI: dict[str, list[str]] = {
         "tests/test_setup_earnings_window.py",
         "tests/test_setup_expiry_ceiling.py",
         "tests/test_setup_return_stats.py",
+        # Scritto DOPO la passata che qui uccideva 49 su 90: la mediana
+        # (che era duplicata e in una copia NON ordinava) e i confini del
+        # sommario dei rendimenti.
+        "tests/test_setup_service_mutanti.py",
     ],
     # ─── Ampliamento 2026-09-13: da 4 a 12 moduli ─────────────────────────
     #

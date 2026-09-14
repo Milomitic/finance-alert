@@ -29,6 +29,7 @@ import pytest
 
 from app.models import Alert, SignalOutcome, Stock
 from app.services import detector_performance_service as perf
+from app.services.detector_performance_service import _replay_block, _replay_cell
 
 
 def _riga(giorno: date, *, colpo_mkt: int | None, orizzonte: int = 1):
@@ -256,3 +257,65 @@ def test_una_finestra_dura_ALMENO_un_giorno() -> None:
     d0 = date(2026, 1, 1)
     due = [d0, d0 + timedelta(days=1)]
     assert perf.independent_blocks(due, horizon_trading_days=0) == 2
+
+
+# ─── 5. Il segmento di replay ─────────────────────────────────────────────
+
+
+def test_una_cella_di_replay_SENZA_conteggio_e_a_bassa_fiducia() -> None:
+    """`int(cell.get("n", 0)) < min_n`: il valore di ripiego e' ZERO.
+
+    ⚠️ Col mutante `1` una cella a cui manca il conteggio verrebbe trattata
+    come se ne avesse uno — e se `min_n` fosse 1, come se il campione bastasse.
+    Un dato assente non e' un dato piccolo."""
+    assert _replay_cell({"key": "totale"}, 1)["low_confidence"] is True
+
+
+def test_una_cella_di_replay_ESATTAMENTE_al_minimo_e_affidabile() -> None:
+    """Il bordo escluso, come ovunque nel cubo: con `n == min_n` il campione
+    NON e' scarso."""
+    assert _replay_cell({"n": 30}, 30)["low_confidence"] is False
+    assert _replay_cell({"n": 29}, 30)["low_confidence"] is True
+
+
+def test_il_segmento_di_replay_ordina_per_conteggio_poi_per_NOME() -> None:
+    """`key=lambda kv: (-int(kv[1].get("total", {}).get("n", 0)), kv[0])`.
+
+    Tre mutanti in una riga: il ripiego a zero quando manca il totale, e
+    l'indice del secondo criterio — col mutante `kv[1]` la parita' verrebbe
+    sciolta confrontando due DIZIONARI invece dei nomi, cioe' per un dettaglio
+    che l'utente non vede e che puo' cambiare da una rigenerazione all'altra."""
+    sommario = {
+        "detectors": {
+            "zeta": {"total": {"n": 5}},
+            "alfa": {"total": {"n": 5}},      # pari merito con zeta
+            "molti": {"total": {"n": 99}},
+            "senza_totale": {},               # niente `total`: vale zero
+        },
+    }
+    nomi = [d["detector"] for d in _replay_block(sommario, 30)["detectors"]]
+    assert nomi == ["molti", "alfa", "zeta", "senza_totale"]
+
+
+def test_un_sommario_senza_conteggio_segnali_legge_ZERO() -> None:
+    """`int(summary.get("n_signals", 0))`: il ripiego e' zero, non uno. Col
+    mutante un artefatto privo del campo dichiarerebbe un segnale che non
+    esiste."""
+    assert _replay_block({"detectors": {}}, 30)["n_signals"] == 0
+
+
+def test_i_detector_a_PARI_MERITO_si_ordinano_per_nome(db, titolo) -> None:
+    """`sorted(by_detector.items(), key=lambda kv: (-len(kv[1]), kv[0]))` nella
+    lista VIVA. Stessa forma del replay: col mutante la parita' si scioglie
+    confrontando le liste di righe invece dei nomi — e in Python due liste di
+    oggetti ORM non sono nemmeno confrontabili, quindi si passa da un ordine
+    stabile a un `TypeError` durante il rendering della pagina."""
+    d0 = date(2026, 1, 1)
+    for nome in ("zulu", "alfa"):
+        _esito(db, titolo.id, detector=nome, tono="bull", giorno=d0, rendimento=0.05)
+    db.commit()
+
+    cubo = perf.compute_detector_performance(db)
+    nomi = [d["detector"] for d in cubo["detectors"]]
+    assert nomi == sorted(nomi), nomi
+    assert nomi[0] == "alfa"
