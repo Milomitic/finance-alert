@@ -6,7 +6,7 @@ from typing import Any
 
 import pandas as pd
 from loguru import logger
-from sqlalchemy import or_, text
+from sqlalchemy import func, or_, text
 from sqlalchemy.orm import Session
 
 from app.models import OhlcvDaily, Stock
@@ -751,6 +751,36 @@ def not_quarantined_clause(today: date | None = None):
         Stock.ohlcv_last_nodata_at.is_(None),
         Stock.ohlcv_last_nodata_at <= cutoff,
     )
+
+
+def series_is_stalled(nodata_streak: int | None) -> bool:
+    """La serie prezzi di questo titolo NON avanza piu'.
+
+    ⚠️ NON e' la stessa domanda di `split_quarantined` / `not_quarantined_clause`,
+    e confonderle costa. Quelle rispondono a «vale la pena ritentare il download
+    adesso?», quindi portano anche il termine su REPROBE_DAYS: un titolo in
+    attesa di ri-sondaggio ne esce come NON-in-quarantena pur essendo morto.
+    Chi deve sapere se la serie avanza — il percorso di lettura degli alert, la
+    scansione — otterrebbe una risposta che si inverte ogni sette giorni a dati
+    fermi.
+
+    Qui conta solo lo streak, cioe' quante volte di fila la fonte non ha dato
+    barre nuove. Misurato in produzione il 2026-09-14: il predicato seleziona
+    ESATTAMENTE i 12 titoli su 1.010 la cui ultima barra ha piu' di dieci
+    giorni — zero falsi positivi, zero falsi negativi.
+    """
+    return (nodata_streak or 0) >= QUARANTINE_STREAK
+
+
+def series_stalled_clause():
+    """La forma SQL di `series_is_stalled`, per chi seleziona nel database.
+
+    Tenuta accanto al suo gemello in Python e coperta da un test che pretende
+    che i due concordino sulle stesse righe: due copie della stessa regola in
+    due linguaggi sono esattamente la forma che diverge — la nota che
+    `not_quarantined_clause` porta gia', per lo stesso motivo.
+    """
+    return func.coalesce(Stock.ohlcv_nodata_streak, 0) >= QUARANTINE_STREAK
 
 
 def latest_ohlcv_date(db: Session, stock_id: int) -> Any | None:

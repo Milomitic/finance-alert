@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.core.visibility import visible_country_clause
 from app.models import OhlcvDaily, Stock
-from app.services import technical_score_service
+from app.services import ohlcv_service, technical_score_service
 from app.signals.signal_scan_service import (
     effective_max_age_days,
     evaluate_signals,
@@ -83,6 +83,9 @@ def scan_universe(
     """
     result = ScanResult()
     tech_partials: dict[int, dict] = {}
+    #: I titoli la cui serie si e' fermata, raccolti per togliere loro il
+    #: punteggio Tecnico dopo il giro. Vedi `technical_score_service.forget`.
+    fermi: list[int] = []
     # Skip catalog-only countries (CN/JP/KR) from alert generation —
     # they live in DB only to feed dashboard breadth + Asia mood.
     # Single source of truth: `app.core.visibility`.
@@ -112,6 +115,27 @@ def scan_universe(
                 )
                 raise ScanCancelled("Cancellato dall'utente")
 
+        # ⚠️ La serie di questo titolo non avanza piu'. Valutarla di nuovo
+        # significa rivalutare la STESSA ultima barra congelata a ogni
+        # scansione, e il ramo di aggiornamento in cooldown scatta ogni volta:
+        # `amend_count` cresce, `triggered_at` viene spinto a oggi, e la lista
+        # alert ordina per `triggered_at` decrescente. Misurato in produzione
+        # il 2026-09-14, gli OTTO alert piu' revisionati dell'intero catalogo
+        # erano tutti su titoli morti — `APLS adx_confirmation` a 372
+        # revisioni, data segnale congelata al 15 maggio — quindi occupavano
+        # stabilmente la cima della posta in arrivo, ogni giorno.
+        #
+        # ⚠️ Terza volta che la quarantena si ferma all'ingestione: il difetto
+        # e' lo stesso che `not_quarantined_clause` documenta per la sweep
+        # delle quotazioni, e nasce dallo stesso gesto — selezionare su
+        # `visible_country_clause()` da solo.
+        if ohlcv_service.series_is_stalled(stock.ohlcv_nodata_streak):
+            result.stocks_skipped += 1
+            fermi.append(stock.id)
+            if on_progress and (idx % progress_every == 0 or idx == total):
+                on_progress(idx, total, result, stock.ticker)
+            continue
+
         ohlcv = _load_ohlcv(db, stock.id)
         if ohlcv is None or len(ohlcv) < 2:
             result.stocks_skipped += 1
@@ -140,6 +164,11 @@ def scan_universe(
     # Cross-sectional finalize: relative-strength percentile + composite, upsert.
     try:
         technical_score_service.finalize(db, tech_partials)
+        # ⚠️ Dopo il finalize, non prima: `forget` cancella e il finalize fa
+        # upsert, quindi l'ordine inverso riscriverebbe cio' che e' appena
+        # stato tolto. Ed e' una lista ESPLICITA, mai «tutti quelli fuori da
+        # partials»: il giro salta titoli anche per storia troppo corta.
+        technical_score_service.forget(db, fermi)
     except Exception as e:  # noqa: BLE001
         logger.warning(f"[scan] technical score finalize failed: {e}")
 

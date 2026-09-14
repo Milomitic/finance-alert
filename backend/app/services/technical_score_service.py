@@ -12,7 +12,7 @@ from datetime import UTC, datetime, timedelta
 
 import pandas as pd
 from loguru import logger
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.indicators.adx import adx
@@ -266,6 +266,45 @@ def _recent_signal_facets(db: Session, stock_ids: list[int]) -> dict[int, dict]:
         if cur is None or conf > cur[0]:
             best[sid] = (float(conf), d.get("tone"))
     return {sid: {"strength": c, "tone": t} for sid, (c, t) in best.items()}
+
+
+def forget(db: Session, stock_ids: list[int]) -> int:
+    """Cancella il punteggio Tecnico dei titoli indicati. Rende quanti.
+
+    ⚠️ Serve perche' `finalize` fa UPSERT e non cancella mai: smettere di
+    valutare un titolo lascerebbe in piedi l'ultima riga calcolata, e per un
+    titolo la cui serie si e' fermata quella riga e' il difetto peggiore che
+    ci sia. Misurato in produzione il 2026-09-14, i dodici titoli morti
+    stavano cosi':
+
+        BK    composito 81,9  postura Forte  calcolato OGGI  ultima barra 10 lug
+        CPRX  composito 81,2  postura Forte  calcolato OGGI  ultima barra 21 lug
+        TERN  composito 81,0  postura Forte  calcolato OGGI  ultima barra 15 mag
+
+    cioe' al **98esimo percentile** della classifica. Non e' un caso: una serie
+    ferma ha volatilita' nulla e trend stabile, quindi produce un punteggio
+    LUSINGHIERO. Un titolo morto non finisce in fondo alla classifica, finisce
+    in cima — la stessa forma con cui TIT.MI, dopo un raggruppamento non
+    riparato, divento' la forza relativa piu' alta dell'universo.
+
+    ⚠️ Si CANCELLA invece di marcare: il punteggio Tecnico e' un'affermazione
+    al PRESENTE («questo titolo e' Forte»), non uno storico — quello vive in
+    `score_history` e resta intatto. Per un'affermazione al presente che non si
+    puo' piu' sostenere, il valore onesto e' l'assenza.
+
+    Riceve una lista ESPLICITA di id, mai «tutti quelli non in partials»: la
+    scansione salta titoli anche per storia troppo corta, e una scansione
+    parziale non ne guarda la maggior parte. Cancellare per esclusione
+    svuoterebbe la classifica al primo scan ristretto.
+    """
+    if not stock_ids:
+        return 0
+    n = db.execute(
+        delete(TechnicalScore).where(TechnicalScore.stock_id.in_(stock_ids))
+    ).rowcount or 0
+    if n:
+        logger.info(f"[tecnico] {n} punteggi rimossi: la serie di quei titoli non avanza piu'")
+    return n
 
 
 def finalize(db: Session, partials: dict[int, dict]) -> int:

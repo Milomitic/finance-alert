@@ -364,6 +364,8 @@ class TestPostScanBookkeeping:
     def test_it_expires_then_prunes_in_that_order(self, monkeypatch):
         from app.services import setup_service
         calls = []
+        monkeypatch.setattr(setup_service, "close_setups_without_data",
+                            lambda db: calls.append("no_data"))
         monkeypatch.setattr(setup_service, "expire_stale_setups",
                             lambda db: calls.append("expire"))
         monkeypatch.setattr(setup_service, "prune_to_top_per_detector",
@@ -374,10 +376,17 @@ class TestPostScanBookkeeping:
             def rollback(self): calls.append("rollback")
 
         setup_service.run_post_scan_bookkeeping(_Db(), universe=True)
-        # Order is load-bearing: the per-detector ranking is only knowable once
-        # the universe has been evaluated, and capping before expiring would
-        # rank decayed setups against live ones.
-        assert calls == ["expire", "prune", "commit"]
+        # Order is load-bearing, TWICE.
+        #
+        # ⚠️ `no_data` viene per primo perche' rivendica i setup appesi a una
+        # serie ferma PRIMA che `expire_stale_setups` li scriva come `stale`,
+        # che direbbe «le condizioni si sono sfaldate» — falso: non sono
+        # decadute, e' il titolo che ha smesso di quotare.
+        #
+        # E il cap viene per ultimo perche' la classifica per detector e'
+        # conoscibile solo a universo valutato: tagliare prima di scadere
+        # metterebbe in classifica setup gia' morti.
+        assert calls == ["no_data", "expire", "prune", "commit"]
 
     def test_a_failure_does_not_propagate_into_the_scan(self, monkeypatch):
         """The caller has already committed real alerts by this point. A

@@ -12,10 +12,12 @@
  * chiude: una spiegazione credibile che nessuno può controllare.
  */
 
-export type SetupClosure = "stale" | "aged" | "decayed" | "unknown";
+export type SetupClosure = "stale" | "aged" | "decayed" | "no_data" | "unknown";
 
 export function setupClosure(raw: string | null | undefined): SetupClosure {
-  return raw === "stale" || raw === "aged" || raw === "decayed" ? raw : "unknown";
+  return raw === "stale" || raw === "aged" || raw === "decayed" || raw === "no_data"
+    ? raw
+    : "unknown";
 }
 
 /** L'etichetta della pastiglia di stato. ⚠️ «Ritirato» è separato da
@@ -24,6 +26,11 @@ export const CLOSURE_BADGE: Record<SetupClosure, string> = {
   stale: "Scaduto",
   aged: "Scaduto",
   decayed: "Ritirato",
+  // ⚠️ «Scaduto» e non una pastiglia propria: conta come gli altri due nel
+  // denominatore del tasso: l'occasione di convertire c'era davvero,
+  // gliel'ha tolta il titolo smettendo di quotare. La differenza sta nel
+  // PERCHÉ, che va nella riga sotto, non nello stato.
+  no_data: "Scaduto",
   unknown: "Scaduto",
 };
 
@@ -32,6 +39,9 @@ export const CLOSURE_DETAIL: Record<SetupClosure, string> = {
   stale: "le condizioni si sono sfaldate",
   aged: "ha toccato il tetto d'attesa restando valido",
   decayed: "sceso sotto la soglia di attenzione",
+  // Il FATTO, non la conclusione: il titolo ha smesso di produrre barre,
+  // quindi nessuna poteva più farlo scattare né decadere.
+  no_data: "la serie prezzi del titolo si è fermata",
   // ⚠️ Non «scaduto e basta»: l'assenza va DETTA. Un'etichetta muta sui 322
   // episodi chiusi prima che la colonna esistesse li farebbe sembrare tutti
   // dello stesso tipo, che è precisamente ciò che non si sa.
@@ -52,6 +62,7 @@ export const COUNTS_AS_FAILURE: Record<SetupClosure, boolean> = {
   stale: true,
   aged: true,
   decayed: false,
+  no_data: true,
   unknown: true,
 };
 

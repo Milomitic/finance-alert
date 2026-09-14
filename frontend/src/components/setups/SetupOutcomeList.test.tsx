@@ -167,3 +167,32 @@ describe("la ragione della chiusura", () => {
     expect(t).not.toContain("fuori dal tasso");
   });
 });
+
+/* ─── La quarta ragione: la serie del titolo si è fermata ──────────────────
+ *
+ * FA-071, e chiude il buco che FA-061 aveva lasciato dichiarato: quella voce
+ * elencava QUATTRO ragioni di chiusura e ne furono costruite tre, perché
+ * «dati insufficienti» non aveva popolazione. La popolazione è comparsa
+ * misurando i titoli morti: 9 setup aperti su 12 titoli, 4 in shortlist.
+ */
+describe("un setup appeso a una serie ferma", () => {
+  it("dice che la serie si è fermata, non che le condizioni sono decadute", () => {
+    // ⚠️ La differenza non è cosmetica: «le condizioni si sono sfaldate»
+    // sarebbe un'affermazione FALSA sul mercato, mentre il fatto è che il
+    // titolo ha smesso di quotare.
+    renderList([setup({ status: "expired", closed_reason: "no_data", converted_alert_id: null })]);
+    const t = document.body.textContent ?? "";
+    expect(t).toContain("la serie prezzi del titolo si è fermata");
+    expect(t).not.toContain("le condizioni si sono sfaldate");
+  });
+
+  it("⚠️ conta nel tasso di conversione, a differenza di un ritirato", () => {
+    // L'occasione di convertire c'era davvero: gliel'ha tolta il titolo. Un
+    // ritirato invece non l'ha mai avuta, ed è per questo che il backend lo
+    // esclude dal denominatore.
+    renderList([setup({ status: "expired", closed_reason: "no_data", converted_alert_id: null })]);
+    const t = document.body.textContent ?? "";
+    expect(t).toContain("Scaduto");
+    expect(t).not.toContain("fuori dal tasso");
+  });
+});

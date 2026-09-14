@@ -58,6 +58,18 @@ REASON_AGED = "aged"
 #: un setup ritirato non ha mai avuto l'occasione di convertire e contarlo
 #: come fallimento misurerebbe il ricambio della shortlist.
 REASON_DECAYED = "decayed"
+#: La serie prezzi del titolo si e' fermata: non arrivera' nessuna barra che
+#: possa far scattare o decadere questa condizione. ⚠️ E' la quarta ragione che
+#: FA-061 aveva nominato — «dati insufficienti» — e che non fu costruita per
+#: mancanza di popolazione. La popolazione e' comparsa misurando FA-071: nove
+#: setup aperti su titoli morti, quattro dei quali IN SHORTLIST.
+#:
+#: ⚠️ Senza una ragione propria questi finirebbero in `stale`, che dice «le
+#: condizioni si sono sfaldate»: falso, e falso nel modo peggiore — non sono
+#: decadute, abbiamo smesso di poterle osservare. Conta come gli altri due nel
+#: denominatore del tasso di conversione: l'occasione c'era, l'ha tolta il
+#: titolo smettendo di quotare.
+REASON_NO_DATA = "no_data"
 
 
 class StockSetup(Base):

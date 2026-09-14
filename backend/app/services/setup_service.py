@@ -22,15 +22,17 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.models import Alert, ScanRun, SignalOutcome, StockSetup
+from app.models import Alert, ScanRun, SignalOutcome, Stock, StockSetup
 from app.models.stock_setup import (
     REASON_AGED,
     REASON_DECAYED,
+    REASON_NO_DATA,
     REASON_STALE,
     STATUS_ACTIVE,
     STATUS_CONVERTED,
     STATUS_EXPIRED,
 )
+from app.services import ohlcv_service
 from app.signals.setups.base import TONE_BEAR, TONE_BULL, TONE_UNDETERMINED, SetupMatch, convenience
 
 # A setup not re-observed for this many days is stale: the conditions decayed
@@ -290,6 +292,42 @@ def expire_stale_setups(db: Session, *, today: date | None = None) -> int:
     return n_stale + n_aged
 
 
+def close_setups_without_data(db: Session) -> int:
+    """Chiude i setup aperti su titoli la cui serie prezzi si e' fermata.
+
+    ⚠️ Senza questo passo finirebbero in `expire_stale_setups`, che scriverebbe
+    `stale` — «le condizioni si sono sfaldate» — e sarebbe falso nel modo
+    peggiore: non sono decadute, e' il titolo che ha smesso di quotare. E
+    prima ancora non ci arriverebbero nemmeno subito, perche' finche' la
+    scansione li rivaluta sulla barra congelata `last_seen_at` avanza ogni
+    giorno e la soglia di decadimento non scatta mai. Li chiude il tetto dei 28
+    giorni, come `aged` — un'altra ragione sbagliata — e poi RIAPRONO.
+
+    Misurato in produzione il 2026-09-14: nove setup aperti su dodici titoli
+    morti, QUATTRO dei quali in shortlist con convenienza fra 78 e 84, cioe'
+    mostrati fra le cose da sorvegliare.
+
+    Conta nel denominatore del tasso di conversione come `stale` e `aged`, non
+    come `decayed`: l'occasione di convertire c'era davvero, gliel'ha tolta il
+    titolo.
+    """
+    righe = db.execute(
+        select(StockSetup)
+        .join(Stock, Stock.id == StockSetup.stock_id)
+        .where(StockSetup.status == STATUS_ACTIVE, ohlcv_service.series_stalled_clause())
+    ).scalars().all()
+    for row in righe:
+        row.status = STATUS_EXPIRED
+        row.resolved_at = datetime.now(UTC)
+        row.closed_reason = REASON_NO_DATA
+    if righe:
+        logger.info(
+            f"[setups] {len(righe)} chiusi per dati mancanti: la serie di quei "
+            "titoli non avanza piu', quindi nessuna barra potra' farli scattare"
+        )
+    return len(righe)
+
+
 def run_post_scan_bookkeeping(db: Session, *, universe: bool) -> None:
     """Retire decayed setups, then cap each detector. Call once at the end of
     EVERY scan, whatever started it — DICHIARANDO il perimetro.
@@ -342,6 +380,10 @@ def run_post_scan_bookkeeping(db: Session, *, universe: bool) -> None:
         )
         return
     try:
+        # ⚠️ PRIMA della scadenza, e l'ordine e' la meta' del punto: chi aspetta
+        # barre che non arriveranno si prende la propria ragione invece di
+        # finire in `stale`, che direbbe una cosa falsa.
+        close_setups_without_data(db)
         expire_stale_setups(db)
         prune_to_top_per_detector(db)
         db.commit()

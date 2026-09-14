@@ -11,31 +11,19 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.db_json import json_text
 from app.models import Alert, OhlcvDaily, Position, SignalOutcome, Stock, StockSetup
-from app.services.ohlcv_service import QUARANTINE_STREAK
 
-
-def _series_stalled_clause():
-    """La serie prezzi del titolo NON avanza piu'.
-
-    Un esito nasce solo quando esistono H barre dopo quella del segnale, e
-    quelle barre arrivano dalla serie del titolo. Se la serie si e' fermata,
-    l'alert non sta aspettando l'orizzonte: non lo raggiungera' mai.
-
-    Misurato in produzione il 2026-09-14: 12 titoli su 1.010 hanno lo streak
-    oltre la soglia, e sono ESATTAMENTE i 12 la cui ultima barra ha piu' di
-    dieci giorni — zero falsi positivi, zero falsi negativi. Interrogata, la
-    fonte conferma: nove non hanno piu' barre, e per gli altri tre (WBS, EQR,
-    AVB) l'ultima barra che serve e' al giorno la stessa che abbiamo noi.
-    Quei 12 titoli reggono 48 alert senza esito.
-
-    ⚠️ NON si riusa `ohlcv_service.not_quarantined_clause()`, che sembra la
-    stessa domanda e non lo e': quella porta anche il termine su REPROBE_DAYS
-    e risponde a «vale la pena ritentare il download adesso?». Un titolo in
-    attesa di ri-sondaggio ne uscirebbe come non-in-quarantena, quindi
-    l'alert oscillerebbe fra «bloccato» e «in maturazione» ogni sette giorni
-    senza che nulla sia cambiato nei dati.
-    """
-    return func.coalesce(Stock.ohlcv_nodata_streak, 0) >= QUARANTINE_STREAK
+# ⚠️ Il predicato ha un proprietario unico in `ohlcv_service`, accanto a
+# `not_quarantined_clause` da cui va tenuto distinto: quella porta anche il
+# termine su REPROBE_DAYS e risponde a «vale la pena ritentare il download
+# adesso?», quindi un alert oscillerebbe fra «bloccato» e «in maturazione»
+# ogni sette giorni a dati fermi.
+from app.services.ohlcv_service import (
+    QUARANTINE_STREAK,
+    series_is_stalled,
+)
+from app.services.ohlcv_service import (
+    series_stalled_clause as _series_stalled_clause,
+)
 
 # Columns that the caller may request sorting on.
 # confidence/tone live inside Alert.snapshot (JSON text column); extracted at
@@ -386,7 +374,7 @@ def _row_to_item(
         # sta aspettando l'orizzonte, non lo raggiungera'. Vedi
         # `_series_stalled_clause`. La DATA accompagna sempre la bandiera:
         # senza, e' una conclusione che chi legge non puo' controllare.
-        "series_stalled": (nodata_streak or 0) >= QUARANTINE_STREAK,
+        "series_stalled": series_is_stalled(nodata_streak),
         "series_last_bar": series_last_bar,
         # Earnings-proximity risk flag (cache-only; null when the
         # fundamentals cache is cold for the ticker).
