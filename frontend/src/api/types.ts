@@ -177,6 +177,13 @@ export interface Alert {
    *  elapsed yet — the UI shows "in maturazione" for a signal alert that has
    *  a signal_date but no outcome — and for legacy/price alerts. */
   outcome_hit?: boolean | null;
+  /** La chiusura su cui la misura e' stata FATTA, che non sempre e'
+   *  `trigger_price`: in produzione 2.246 esiti su 4.648 hanno prezzi diversi.
+   *  Quasi sempre e' l'aggiornamento in cooldown che sposta il prezzo
+   *  dell'alert mentre la misura resta ancorata alla barra del segnale — due
+   *  fatti diversi, entrambi giusti. Nella coda sono i titoli riparati per
+   *  rottura di base prezzo (FA-069). */
+  outcome_entry_close?: number | null;
   /** Forward return over `outcome_horizon_days` trading days, as a FRACTION
    *  (0.0235 = +2.35%). Rounded to 4 decimals by the backend. */
   outcome_fwd_return?: number | null;

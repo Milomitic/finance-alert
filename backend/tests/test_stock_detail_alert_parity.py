@@ -52,7 +52,7 @@ _CANONICI = {
     "triggered_at", "signal_date", "trigger_price", "snapshot",
     "read_at", "archived_at", "same_day_others", "same_day_sector",
     "outcome_hit", "outcome_fwd_return", "outcome_horizon_days",
-    "outcome_mkt_excess", "next_earnings_date",
+    "outcome_mkt_excess", "outcome_entry_close", "next_earnings_date",
 }
 
 
@@ -205,3 +205,49 @@ def test_include_archived_returns_BOTH_sides(client, db) -> None:
     # dello storico si regge, e un totale che conta meta' delle righe porta a
     # una pagina finale vuota senza che niente lo dica.
     assert entrambi["total"] == 2
+
+
+def test_the_payload_carries_the_price_the_measure_USED(client, db) -> None:
+    """FA-060, terza divergenza: il prezzo a schermo non e' quello misurato.
+
+    Misurato in produzione: **2.246 esiti su 4.648 (48%)** hanno un prezzo
+    d'ingresso diverso da quello dell'alert, con scarto medio del 5,96%. Nella
+    stragrande maggioranza e' l'aggiornamento in cooldown che sposta
+    `trigger_price` in avanti mentre la misura resta ancorata alla barra del
+    segnale — due fatti diversi, entrambi giusti.
+
+    ⚠️ Ma la coda no: dodici righe hanno un rapporto vicino a 10 o a 0,1, e
+    sono i titoli che questo repo documenta come riparati per rottura di base
+    prezzo (KLAC, SOXS, TIT.MI, TZA). La riparazione rimette in sesto la SERIE
+    e lascia `trigger_price` congelato sulla base vecchia — vedi FA-069.
+
+    In entrambi i casi la correzione e' la stessa: il prezzo su cui la misura
+    e' stata fatta deve viaggiare accanto a quello della rilevazione, cosi' che
+    un lettore possa vedere che sono due, invece di crederli uno.
+    """
+    s = _titolo_con_barre(db)
+    a = _alert(db, s, giorno=date(2026, 6, 20), archiviato=False)
+    db.add(SignalOutcome(
+        alert_id=a.id, stock_id=s.id, detector="candle_reversal",
+        signal_date=a.signal_date, tone="bull", horizon_days=5,
+        entry_close=42.0,            # DIVERSO dal trigger_price (100.0)
+        forward_close=44.1, fwd_return=0.05, abs_hit=1,
+    ))
+    db.commit()
+
+    riga = client.get(f"/api/stocks/{s.ticker}/detail").json()["alerts_history"][0]
+    assert riga["trigger_price"] == 100.0          # cio' che l'alert mostra
+    assert riga["outcome_entry_close"] == 42.0     # cio' su cui la misura e' fatta
+
+
+def test_an_alert_without_an_outcome_has_no_measured_price(client, db) -> None:
+    """⚠️ `None`, non il prezzo dell'alert. Riempirlo col `trigger_price`
+    renderebbe i due campi sempre uguali e il confronto sempre vero: il campo
+    esiste per mostrare una DIVERGENZA, e uno che non puo' divergere non serve
+    a niente."""
+    s = _titolo_con_barre(db)
+    _alert(db, s, giorno=date(2026, 6, 20), archiviato=False)
+    db.commit()
+
+    riga = client.get(f"/api/stocks/{s.ticker}/detail").json()["alerts_history"][0]
+    assert riga["outcome_entry_close"] is None

@@ -67,9 +67,18 @@ export function PlaybookView({
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
         <div className="rounded-md border border-border/60 px-2.5 py-1.5">
-          <span className="text-muted-foreground">Orizzonte </span>
+          {/* ⚠️ «Tenuta attesa», non «Orizzonte». Questo viene da
+              `snapshot.horizon`, che e' la CAMPATA DELLA CATENA — quanto tempo
+              la struttura ha impiegato a formarsi — mentre l'Esito accanto e'
+              misurato sulla finestra del DETECTOR. Sono due cose, e chiamarle
+              entrambe «orizzonte» le faceva leggere come una: misurato in
+              produzione, dieci detector su sedici portano piu' di
+              un'etichetta per la STESSA finestra misurata — `sr_flip` ne ha
+              tre (short/medium/long) su 807 righe tutte misurate a 21 sedute,
+              e `analyst_momentum` legge «short» mentre viene misurato a 63. */}
+          <span className="text-muted-foreground">Tenuta attesa </span>
           <span className="font-medium">{p.horizon}</span>
-          <span className="text-muted-foreground"> - tenuta {p.duration}</span>
+          <span className="text-muted-foreground"> - {p.duration}</span>
         </div>
         <div className="rounded-md border border-border/60 px-2.5 py-1.5">
           <span className="text-muted-foreground">Rischio: </span>

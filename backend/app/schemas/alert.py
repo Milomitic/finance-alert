@@ -65,6 +65,18 @@ class AlertOut(BaseModel):
     # Tone-signed market-neutral excess vs the universe mean over the same
     # horizon. None when no universe benchmark was available at maturation.
     outcome_mkt_excess: float | None = None
+    #: La chiusura su cui la misura e' stata FATTA, che non sempre e'
+    #: `trigger_price`. Misurato in produzione: 2.246 esiti su 4.648 (48%)
+    #: hanno prezzi diversi, scarto medio 5,96%.
+    #:
+    #: Nella stragrande maggioranza e' l'aggiornamento in cooldown che sposta
+    #: il prezzo dell'alert in avanti mentre la misura resta ancorata alla
+    #: barra del segnale — due fatti diversi, entrambi giusti, che vanno
+    #: mostrati come due. ⚠️ Ma la coda no: dodici righe hanno un rapporto
+    #: vicino a 10 o 0,1 e sono i titoli riparati per rottura di base prezzo
+    #: (KLAC, SOXS, TIT.MI, TZA) — la riparazione rimette in sesto la SERIE e
+    #: lascia `trigger_price` sulla base vecchia. Vedi FA-069.
+    outcome_entry_close: float | None = None
     # Next earnings date from the fundamentals L2/L1 cache (cache-only read —
     # never a network call on the list path). None when the cache is cold.
     # The UI shows an amber "Earnings tra N gg" risk badge when this falls

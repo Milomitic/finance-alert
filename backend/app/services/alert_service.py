@@ -216,6 +216,7 @@ def list_alerts(
             SignalOutcome.fwd_return.label("outcome_fwd_return"),
             SignalOutcome.horizon_days.label("outcome_horizon_days"),
             SignalOutcome.mkt_neutral_excess.label("outcome_mkt_excess"),
+            SignalOutcome.entry_close.label("outcome_entry_close"),
         )
         .join(Stock, Stock.id == Alert.stock_id)
         .outerjoin(SignalOutcome, SignalOutcome.alert_id == Alert.id)
@@ -267,7 +268,8 @@ def _row_to_item(row: Any, next_earnings: date | None) -> dict[str, Any]:
     sarebbe silenziosa — il frontend riceverebbe un alert con meno campi solo
     quando lo apre da una posizione invece che dalla lista.
     """
-    alert, ticker_val, name_val, currency_val, o_hit, o_fwd, o_horizon, o_mkt = row
+    (alert, ticker_val, name_val, currency_val,
+     o_hit, o_fwd, o_horizon, o_mkt, o_entry) = row
     return {
         "id": alert.id,
         "rule_kind": derive_rule_kind(None, alert.signal_name),
@@ -296,6 +298,11 @@ def _row_to_item(row: Any, next_earnings: date | None) -> dict[str, Any]:
         "outcome_fwd_return": round(float(o_fwd), 4) if o_fwd is not None else None,
         "outcome_horizon_days": int(o_horizon) if o_horizon is not None else None,
         "outcome_mkt_excess": round(float(o_mkt), 4) if o_mkt is not None else None,
+        # ⚠️ None quando l'esito non c'e', mai il prezzo dell'alert:
+        # riempirlo col trigger_price renderebbe i due campi sempre uguali
+        # e il confronto sempre vero, e questo campo esiste per mostrare
+        # una DIVERGENZA.
+        "outcome_entry_close": float(o_entry) if o_entry is not None else None,
         # Earnings-proximity risk flag (cache-only; null when the
         # fundamentals cache is cold for the ticker).
         "next_earnings_date": next_earnings,
@@ -325,6 +332,11 @@ def get_alert_detail(db: Session, alert_id: int) -> dict[str, Any] | None:
             SignalOutcome.fwd_return.label("outcome_fwd_return"),
             SignalOutcome.horizon_days.label("outcome_horizon_days"),
             SignalOutcome.mkt_neutral_excess.label("outcome_mkt_excess"),
+            # ⚠️ La stessa colonna della lista. `_row_to_item` ha DUE
+            # chiamanti, ed e' il motivo per cui esiste: aggiungerla a uno
+            # solo qui non diverge in silenzio, esplode — che e' cio' che
+            # un serializzatore unico compra.
+            SignalOutcome.entry_close.label("outcome_entry_close"),
         )
         .join(Stock, Stock.id == Alert.stock_id)
         .outerjoin(SignalOutcome, SignalOutcome.alert_id == Alert.id)

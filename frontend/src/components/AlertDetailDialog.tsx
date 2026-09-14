@@ -434,7 +434,7 @@ export function AlertDetailDialog({ alert, onClose }: Props) {
                     </span>
                     <div>
                       <div className="text-[0.6765rem] uppercase tracking-wider text-muted-foreground font-semibold">
-                        Ritorno a {hz ?? "?"} gg
+                        Ritorno su {hz ?? "?"} sedute
                       </div>
                       <div
                         className={cn(
@@ -447,8 +447,34 @@ export function AlertDetailDialog({ alert, onClose }: Props) {
                         {fwd != null ? fmtPct(fwd) : "n/d"}
                       </div>
                     </div>
+                    {(() => {
+                      /* ⚠️ Il prezzo su cui la misura e' stata FATTA, mostrato
+                         solo quando NON coincide con quello dell'alert — e in
+                         produzione non coincide nel 48% dei casi. Quasi sempre
+                         e' l'aggiornamento in cooldown che sposta il prezzo
+                         dell'alert mentre la misura resta ancorata alla barra
+                         del segnale: due fatti diversi, entrambi giusti, che
+                         vanno mostrati come DUE invece di lasciarne vedere uno.
+                         Nella coda sono i titoli riparati per rottura di base
+                         prezzo, dove il rapporto vale 10 o 0,1 (FA-069). */
+                      const entry = alert.outcome_entry_close;
+                      const tp = alert.trigger_price;
+                      if (entry == null || tp == null) return null;
+                      const scarto = Math.abs(entry - tp) / (tp || 1);
+                      if (scarto <= 0.005) return null;
+                      return (
+                        <div title="La chiusura della barra del segnale, su cui il rendimento e' stato calcolato. Il prezzo in cima e' quello dell'ultima rilevazione, che l'aggiornamento in cooldown puo' aver spostato.">
+                          <div className="text-[0.6765rem] uppercase tracking-wider text-muted-foreground font-semibold">
+                            Ingresso misurato
+                          </div>
+                          <div className="font-bold tabular-nums">
+                            {formatMoney(entry, alert.currency)}
+                          </div>
+                        </div>
+                      );
+                    })()}
                     {mkt != null && (
-                      <div title="Excess market-neutral: quanto il segnale ha battuto la media dell'universo nella sua direzione, sullo stesso orizzonte.">
+                      <div title="Excess market-neutral: quanto il segnale ha battuto la MEDIANA dell'universo nella sua direzione, sulla stessa finestra di misura. La mediana e non la media: i rendimenti trasversali sono asimmetrici a destra, quindi la media sta sopra il titolo tipico e addebiterebbe ~1,6pp a ogni segnale rialzista.">
                         <div className="text-[0.6765rem] uppercase tracking-wider text-muted-foreground font-semibold">
                           Excess vs mercato
                         </div>

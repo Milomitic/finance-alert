@@ -94,3 +94,28 @@ describe("nessuna superficie dei segnali caccia il dollaro nel template", () => 
     expect(src).not.toMatch(DOLLARO_IN_JSX);
   });
 });
+
+/* ─── FA-060: due cose diverse non condividono una parola ─────────────────── */
+
+describe("PlaybookView — la tenuta attesa non e' la finestra di misura", () => {
+  it("non chiama «orizzonte» la campata della catena", () => {
+    /* ⚠️ `p.horizon` viene da `snapshot.horizon`, che e' la CAMPATA DELLA
+     * CATENA — quanto tempo la struttura ha impiegato a formarsi — mentre
+     * l'Esito accanto e' misurato sulla finestra del DETECTOR. Chiamarle
+     * entrambe «orizzonte» le faceva leggere come una cosa sola.
+     *
+     * Misurato in produzione: DIECI detector su sedici portano piu' di
+     * un'etichetta per la STESSA finestra misurata. `sr_flip` ne ha tre —
+     * short 407, long 252, medium 148 — tutte misurate a 21 sedute; e
+     * `analyst_momentum` legge «short» mentre viene misurato a 63 giorni.
+     *
+     * Il controllo negativo e' la meta' che conta: senza, reintrodurre la
+     * parola passerebbe. */
+    render(<PlaybookView playbook={playbook()} currency="EUR" />);
+    const t = document.body.textContent ?? "";
+    expect(t).toContain("Tenuta attesa");
+    expect(t).not.toMatch(/orizzonte/i);
+    // E la durata resta a schermo: si cambia il NOME, non l'informazione.
+    expect(t).toContain("2-4 settimane");
+  });
+});
