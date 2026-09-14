@@ -493,7 +493,17 @@ export default function InstitutionalsPage() {
                 scatola da 420px mentre acquisti e vendite si allungavano per
                 mezza pagina: la card corta accanto a due lunghissime leggeva
                 come uno scroll rotto, non come una scelta. */}
-            <div className="overflow-x-auto overflow-y-auto max-h-[30rem]">
+            {/* ⚠️ role+tabIndex+aria-label: un contenitore che scorre e non
+                puo' ricevere il fuoco non e' raggiungibile da tastiera, e il
+                contenuto oltre i 30rem non esiste per chi non usa il mouse.
+                Il gate UI l'ha trovato su due di queste tre card; la terza e'
+                identica e lo diventa appena i suoi dati crescono. */}
+            <div
+              role="region"
+              aria-label="Titoli piu' posseduti dai superinvestor"
+              tabIndex={0}
+              className="overflow-x-auto overflow-y-auto max-h-[30rem]"
+            >
               {/* Body bumped from text-sm → text-base per user request,
                   but the ticker cell explicitly resets to text-sm
                   inside TickerNameCell so the ticker font keeps its
@@ -542,7 +552,17 @@ export default function InstitutionalsPage() {
             <p className="text-xs text-muted-foreground mb-2">
               Azioni rialziste: <span className="font-semibold">nuove posizioni</span> (new) + <span className="font-semibold">aumenti</span> (add)
             </p>
-            <div className="overflow-x-auto overflow-y-auto max-h-[30rem]">
+            {/* ⚠️ role+tabIndex+aria-label: un contenitore che scorre e non
+                puo' ricevere il fuoco non e' raggiungibile da tastiera, e il
+                contenuto oltre i 30rem non esiste per chi non usa il mouse.
+                Il gate UI l'ha trovato su due di queste tre card; la terza e'
+                identica e lo diventa appena i suoi dati crescono. */}
+            <div
+              role="region"
+              aria-label="Acquisti recenti dei superinvestor"
+              tabIndex={0}
+              className="overflow-x-auto overflow-y-auto max-h-[30rem]"
+            >
               <table className="w-full text-base">
                 <thead className="text-[0.7647rem] uppercase tracking-wide text-muted-foreground">
                   <tr>
@@ -580,7 +600,17 @@ export default function InstitutionalsPage() {
             <p className="text-xs text-muted-foreground mb-2">
               Azioni ribassiste: <span className="font-semibold">riduzioni</span> (reduce) + <span className="font-semibold">uscite complete</span> (sold out)
             </p>
-            <div className="overflow-x-auto overflow-y-auto max-h-[30rem]">
+            {/* ⚠️ role+tabIndex+aria-label: un contenitore che scorre e non
+                puo' ricevere il fuoco non e' raggiungibile da tastiera, e il
+                contenuto oltre i 30rem non esiste per chi non usa il mouse.
+                Il gate UI l'ha trovato su due di queste tre card; la terza e'
+                identica e lo diventa appena i suoi dati crescono. */}
+            <div
+              role="region"
+              aria-label="Vendite recenti dei superinvestor"
+              tabIndex={0}
+              className="overflow-x-auto overflow-y-auto max-h-[30rem]"
+            >
               <table className="w-full text-base">
                 <thead className="text-[0.7647rem] uppercase tracking-wide text-muted-foreground">
                   <tr>
