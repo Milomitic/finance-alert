@@ -190,7 +190,7 @@ export default function DataHealthCard({
             className={cn(
               "h-3.5 w-3.5 shrink-0",
               deploy?.apt_stale === true
-                ? "text-amber-600 dark:text-amber-400"
+                ? "text-amber-700 dark:text-amber-400"
                 : "text-muted-foreground",
             )}
             aria-hidden

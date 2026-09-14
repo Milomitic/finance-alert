@@ -211,7 +211,7 @@ export function BreadthMatrixTable({ data }: Props) {
                   </td>
                   <td className={cn("text-right px-3 py-2", cellTone(r.pct_above_ema200, "pct"))}>{fmtPct(r.pct_above_ema200)}</td>
                   <td className={cn("text-right px-3 py-2", cellTone(r.pct_above_ema50, "pct"))}>{fmtPct(r.pct_above_ema50)}</td>
-                  <td className={cn("text-right px-3 py-2", r.rsi_oversold_count > 0 ? "text-amber-600" : "")}>{r.rsi_oversold_count}</td>
+                  <td className={cn("text-right px-3 py-2", r.rsi_oversold_count > 0 ? "text-amber-700" : "")}>{r.rsi_oversold_count}</td>
                   <td className={cn("text-right px-3 py-2", r.rsi_overbought_count > 0 ? "text-rose-600" : "")}>{r.rsi_overbought_count}</td>
                   <td className={cn("text-right px-3 py-2", cellTone(r.avg_change_pct, "change"))}>{fmtChange(r.avg_change_pct)}</td>
                   <td className="text-right px-3 py-2">{fmtNum(r.advancers)}/{fmtNum(r.decliners)}</td>

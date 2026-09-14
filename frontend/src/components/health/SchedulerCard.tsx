@@ -7,7 +7,7 @@ type Props = { jobs: SchedulerJobStat[] };
 const RESULT_BADGE: Record<string, { Icon: React.ComponentType<{ className?: string }>; classes: string }> = {
   ok: { Icon: CheckCircle2, classes: "text-emerald-800" },
   error: { Icon: XCircle, classes: "text-rose-600" },
-  missed: { Icon: AlertTriangle, classes: "text-amber-600" },
+  missed: { Icon: AlertTriangle, classes: "text-amber-700" },
 };
 
 // Known job → human-readable description (so the card isn't all snake_case).

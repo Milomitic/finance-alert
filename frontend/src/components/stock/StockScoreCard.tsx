@@ -674,7 +674,7 @@ function QualityExtrasRow({ extras }: { extras?: StockScore["quality_extras"] })
         .filter(([, v]) => v != null)
     : [];
   if (!govItems.length && !an) return null;
-  const govTone = (v: number) => (v <= 3 ? "text-emerald-800 dark:text-emerald-400" : v >= 7 ? "text-rose-600 dark:text-rose-400" : "text-amber-600 dark:text-amber-400");
+  const govTone = (v: number) => (v <= 3 ? "text-emerald-800 dark:text-emerald-400" : v >= 7 ? "text-rose-600 dark:text-rose-400" : "text-amber-700 dark:text-amber-400");
   return (
     <div className="mt-2 border-t border-border/40 pt-2 space-y-1 text-[0.7059rem]"
       title="Dati informativi (governance + analisti): mostrati come contesto, NON entrano nel punteggio Qualità qui sopra.">

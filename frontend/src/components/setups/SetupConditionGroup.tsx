@@ -141,7 +141,7 @@ function EarningsMarker({ setup }: { setup: Setup }) {
       data-testid="setup-earnings-marker"
       role="img"
       aria-label={label}
-      className="h-3 w-3 shrink-0 text-amber-600 dark:text-amber-400"
+      className="h-3 w-3 shrink-0 text-amber-700 dark:text-amber-400"
     />
   );
 }

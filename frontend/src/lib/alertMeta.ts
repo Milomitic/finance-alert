@@ -138,7 +138,7 @@ export const TONE_BORDER_LEFT: Record<AlertTone, string> = {
 export const TONE_TEXT: Record<AlertTone, string> = {
   bullish: "text-emerald-800 dark:text-emerald-400",
   bearish: "text-rose-600 dark:text-rose-400",
-  warning: "text-amber-600 dark:text-amber-400",
+  warning: "text-amber-700 dark:text-amber-400",
   neutral: "text-slate-600 dark:text-slate-400",
 };
 

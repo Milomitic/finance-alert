@@ -308,7 +308,7 @@ export function SignalSnapshotView({
 
       {showInvalidation && inv && (inv.level != null || inv.reason) && (
         <div className="flex items-start gap-2 rounded-lg border border-amber-300/60 bg-amber-50/50 dark:bg-amber-950/20 p-2.5">
-          <ShieldAlert className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+          <ShieldAlert className="h-4 w-4 text-amber-700 dark:text-amber-400 shrink-0 mt-0.5" />
           <div className="text-xs">
             <span className="font-semibold text-amber-800 dark:text-amber-300">Invalidazione</span>
             {inv.level != null && (

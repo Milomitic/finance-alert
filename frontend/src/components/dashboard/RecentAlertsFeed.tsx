@@ -71,7 +71,7 @@ export function RecentAlertsFeed({ alerts }: Props) {
                 : forza >= 70
                   ? "text-emerald-800 dark:text-emerald-400"
                   : forza >= 50
-                    ? "text-amber-600 dark:text-amber-400"
+                    ? "text-amber-700 dark:text-amber-400"
                     : "text-rose-600 dark:text-rose-400";
             const prob = snapshotProbabilita(snap);
             return (
@@ -150,7 +150,7 @@ export function RecentAlertsFeed({ alerts }: Props) {
                     }
                   >
                     {delayed && (
-                      <Clock className="h-3 w-3 text-amber-600 dark:text-amber-400" />
+                      <Clock className="h-3 w-3 text-amber-700 dark:text-amber-400" />
                     )}
                     {a.signal_date
                       ? new Date(a.signal_date).toLocaleDateString("it-IT", {

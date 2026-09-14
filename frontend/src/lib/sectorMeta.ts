@@ -64,7 +64,7 @@ export function getSectorIcon(sector: string | null | undefined): LucideIcon {
 const ICON_COLOR: Record<string, string> = {
   "Information Technology": "text-sky-600 dark:text-sky-400",
   "Technology": "text-sky-600 dark:text-sky-400",
-  "Energy": "text-amber-600 dark:text-amber-400",
+  "Energy": "text-amber-700 dark:text-amber-400",
   "Financial Services": "text-violet-600 dark:text-violet-400",
   "Financials": "text-violet-600 dark:text-violet-400",
   "Healthcare": "text-emerald-800 dark:text-emerald-400",

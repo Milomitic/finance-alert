@@ -440,7 +440,7 @@ export function AlertsTable({
                       }
                     >
                       {delayed && (
-                        <Clock className="h-3 w-3 text-amber-600 dark:text-amber-400 shrink-0" />
+                        <Clock className="h-3 w-3 text-amber-700 dark:text-amber-400 shrink-0" />
                       )}
                       {formatShortDate(a.triggered_at)}
                     </span>
@@ -544,7 +544,7 @@ export function AlertsTable({
                     pct >= 70
                       ? "text-emerald-800 dark:text-emerald-400"
                       : pct >= 50
-                        ? "text-amber-600 dark:text-amber-400"
+                        ? "text-amber-700 dark:text-amber-400"
                         : "text-rose-600 dark:text-rose-400";
                   return (
                     <div className="flex items-center justify-end gap-2" title={`Forza ${pct}%`}>

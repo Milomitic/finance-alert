@@ -147,7 +147,7 @@ const CATEGORIES: {
     Icon: CalendarClock, tint: "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/60",
     ops: ["earnings"] },
   { key: "macro", label: "Macro", desc: "Serie FRED · consensus calendario",
-    Icon: Globe, tint: "bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-300 border-amber-200 dark:border-amber-800/60",
+    Icon: Globe, tint: "bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800/60",
     ops: ["macro", "consensus"] },
   { key: "institutional", label: "Istituzionali", desc: "Filing 13F · portafogli superinvestor",
     Icon: Building2, tint: "bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-300 border-rose-200 dark:border-rose-800/60",
@@ -332,7 +332,7 @@ function ClusterCard({
             <span className="text-sm font-semibold tracking-tight truncate">{cat.label}</span>
             {single && (
               <span
-                className="text-amber-600 shrink-0"
+                className="text-amber-700 shrink-0"
                 title="Singola fonte: nessun fallback se cade"
               >
                 <ShieldAlert className="h-3 w-3" />

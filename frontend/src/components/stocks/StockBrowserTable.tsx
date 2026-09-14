@@ -178,7 +178,7 @@ function PriceAlertBell({ show }: { show: boolean }) {
       title="Price alert attivo su questo titolo"
       aria-label="Price alert attivo"
     >
-      <Bell className="h-3 w-3 text-amber-600 dark:text-amber-400" />
+      <Bell className="h-3 w-3 text-amber-700 dark:text-amber-400" />
     </span>
   );
 }
@@ -811,7 +811,7 @@ export function StockBrowserTable({
                         "px-3 py-1.5 text-right tabular-nums",
                         rsi == null ? "text-muted-foreground"
                           : rsi >= 70 ? "text-rose-600 dark:text-rose-400"
-                          : rsi <= 30 ? "text-amber-600 dark:text-amber-400"
+                          : rsi <= 30 ? "text-amber-700 dark:text-amber-400"
                           : "",
                       )}>
                         {rsi == null ? "—" : rsi.toFixed(0)}
@@ -820,7 +820,7 @@ export function StockBrowserTable({
                     {isVisible("vol_ratio") && (
                       <td className={cn(
                         "px-3 py-1.5 text-right tabular-nums",
-                        volRatio != null && volRatio > 2 ? "text-amber-600 dark:text-amber-400 font-semibold" : "text-muted-foreground",
+                        volRatio != null && volRatio > 2 ? "text-amber-700 dark:text-amber-400 font-semibold" : "text-muted-foreground",
                       )}>
                         {volRatio == null ? "—" : `${volRatio.toFixed(1)}×`}
                       </td>

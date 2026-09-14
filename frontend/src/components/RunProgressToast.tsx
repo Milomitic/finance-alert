@@ -291,7 +291,7 @@ export function RunProgressToast({ status, labels, onStop, isStopping }: Props) 
 
   const iconClass: Record<typeof variant, string> = {
     running: "text-primary",
-    stale: "text-amber-600 dark:text-amber-400",
+    stale: "text-amber-700 dark:text-amber-400",
     success: "text-emerald-800 dark:text-emerald-400",
     failed: "text-rose-600 dark:text-rose-400",
   };
@@ -554,7 +554,7 @@ export function RunProgressToast({ status, labels, onStop, isStopping }: Props) 
               className={cn(
                 "text-sm",
                 isStale &&
-                  "bg-amber-600 hover:bg-amber-700 text-white border-amber-600",
+                  "bg-amber-700 hover:bg-amber-800 text-white border-amber-700",
               )}
             >
               <StopCircle className="h-4 w-4 mr-1.5" />

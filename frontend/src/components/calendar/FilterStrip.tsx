@@ -66,7 +66,7 @@ const KIND_ACTIVE: Record<"primary" | "sector" | "macro", string> = {
   sector:
     "bg-sky-100/60 dark:bg-sky-950/40 text-sky-900 dark:text-sky-100 border-sky-300/70 dark:border-sky-800/60 ring-sky-300/50 [&_svg]:text-sky-600 dark:[&_svg]:text-sky-400",
   macro:
-    "bg-amber-100/60 dark:bg-amber-950/40 text-amber-900 dark:text-amber-100 border-amber-300/70 dark:border-amber-800/60 ring-amber-300/50 [&_svg]:text-amber-600 dark:[&_svg]:text-amber-400",
+    "bg-amber-100/60 dark:bg-amber-950/40 text-amber-900 dark:text-amber-100 border-amber-300/70 dark:border-amber-800/60 ring-amber-300/50 [&_svg]:text-amber-700 dark:[&_svg]:text-amber-400",
 };
 
 const KIND_ACTIVE_DOT: Record<"primary" | "sector" | "macro", string> = {

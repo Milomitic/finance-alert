@@ -570,7 +570,7 @@ export default function StockDetailPage() {
                 chart silently shows days-old candles. >3 calendar days
                 tolerates a normal weekend gap (~2.7d Fri close → Mon open). */}
             {staleIntradayDate && (
-              <div className="mb-2 flex items-center gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-600 dark:text-amber-400">
+              <div className="mb-2 flex items-center gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-700 dark:text-amber-400">
                 <span>
                   Dati intraday non disponibili dopo il {staleIntradayDate} (fonte dati).
                 </span>

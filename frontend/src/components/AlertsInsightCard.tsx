@@ -364,7 +364,7 @@ export function AlertsInsightCard({
                     consumatore dichiarava di usarlo (FA-058). */}
                 <div className="grid grid-cols-2 gap-2">
                   <StatCell icon={Layers} label={isPhone ? "Multi-orizz." : "Multi-orizzonte"} value={String(multiH)} tone={multiH > 0 ? "text-indigo-600 dark:text-indigo-400" : undefined} />
-                  <StatCell icon={Swords} label="Contese" value={String(contested)} tone={contested > 0 ? "text-amber-600 dark:text-amber-400" : undefined} />
+                  <StatCell icon={Swords} label="Contese" value={String(contested)} tone={contested > 0 ? "text-amber-700 dark:text-amber-400" : undefined} />
                 </div>
 
                 {/* Horizon mix + detector mix — two columns on the same row. */}

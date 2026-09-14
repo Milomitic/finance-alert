@@ -140,7 +140,7 @@ function MetricsAsOf({ iso }: { iso: string | null | undefined }) {
   return (
     <span
       className={stale
-        ? "text-xs text-amber-600 dark:text-amber-400"
+        ? "text-xs text-amber-700 dark:text-amber-400"
         : "text-xs text-muted-foreground"}
       title="Ultimo aggiornamento delle metriche EOD (persistite a fine scan)"
     >

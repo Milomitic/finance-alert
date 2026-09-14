@@ -76,7 +76,7 @@ export function IndexPanoramaCard({ data, filters, onTileFilter }: Props) {
   const TONE_FG: Record<string, string> = {
     default: "",
     good: "text-emerald-800 dark:text-emerald-400",
-    warn: "text-amber-600 dark:text-amber-400",
+    warn: "text-amber-700 dark:text-amber-400",
     bad: "text-rose-600 dark:text-rose-400",
   };
 
