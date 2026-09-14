@@ -290,9 +290,31 @@ def expire_stale_setups(db: Session, *, today: date | None = None) -> int:
     return n_stale + n_aged
 
 
-def run_post_scan_bookkeeping(db: Session) -> None:
+def run_post_scan_bookkeeping(db: Session, *, universe: bool) -> None:
     """Retire decayed setups, then cap each detector. Call once at the end of
-    EVERY scan, whatever started it.
+    EVERY scan, whatever started it — DICHIARANDO il perimetro.
+
+    ⚠️ `universe` non ha un valore di default, ed e' deliberato: una
+    scansione che non dice cosa ha guardato non puo' ottenere il permesso di
+    dichiarare scaduto qualcosa per errore di omissione. Un default a True
+    darebbe il comportamento pericoloso a chi si dimentica.
+
+    ENTRAMBE le operazioni qui dentro chiedono di aver visto TUTTO:
+
+    - `expire_stale_setups` scrive `closed_reason` = «le condizioni sono
+      decadute». Detto di un titolo che la scansione non ha riosservato, e'
+      un'affermazione falsa — e dal 2026-09-14 (FA-061) e' PERSISTENTE e
+      finisce nel denominatore del tasso di conversione, quindi degrada un
+      numero a schermo restando plausibile.
+    - `prune_to_top_per_detector` classifica i setup fra loro: una classifica
+      trasversale non e' conoscibile finche' l'universo non e' stato valutato,
+      come questa stessa funzione dice gia' sull'ordine delle due chiamate.
+
+    E' la forma che il CronJob di parita' ha gia' pagato in un'altra veste:
+    uno strumento che risponde su un perimetro diverso da quello che crede.
+    Una scansione parziale non perde nulla ad astenersi — la prossima
+    completa fa il lavoro, che e' esattamente cio' che il paragrafo qui sotto
+    descrive come «bounded».
 
     This exists because it used to be an inline block in the cron job only, and
     the manual-scan entry point in api/alerts.py ended at `run_tracked_scan`
@@ -313,6 +335,12 @@ def run_post_scan_bookkeeping(db: Session) -> None:
     Never raises. Bookkeeping must not fail a scan that has already done its
     real work — the caller has committed alerts by this point.
     """
+    if not universe:
+        logger.info(
+            "[setups] scansione parziale — nessuna scadenza e nessun taglio: "
+            "non si dichiara decaduto cio' che non si e' guardato"
+        )
+        return
     try:
         expire_stale_setups(db)
         prune_to_top_per_detector(db)

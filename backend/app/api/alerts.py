@@ -298,8 +298,13 @@ def _run_scan_in_background_locked(stock_ids: list[int] | None) -> None:
         # path ended at `run_tracked_scan` until 2026-09-02, so a manual scan
         # left decayed setups reading as live and over-subscribed the
         # per-detector cap until the next cron run swept them.
+        #
+        # ⚠️ E' l'UNICO chiamante che puo' avere un perimetro ristretto:
+        # `/scan` accetta `stock_ids`. Con un sottoinsieme il lavoro vero
+        # (fetch + segnali) e' giusto, ma la contabilita' di fine scansione
+        # parlerebbe di titoli che non ha guardato.
         from app.services import setup_service
-        setup_service.run_post_scan_bookkeeping(db)
+        setup_service.run_post_scan_bookkeeping(db, universe=stock_ids is None)
     finally:
         db.close()
 

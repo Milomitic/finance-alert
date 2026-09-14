@@ -353,7 +353,13 @@ class TestPostScanBookkeeping:
     setups` sweeps the whole table rather than just the current scan's rows, so
     the next cron run cleaned up after a manual scan. Bounded is still wrong:
     in between, a decayed setup reads as live and the per-detector cap is
-    over-subscribed."""
+    over-subscribed.
+
+    ⚠️ Dal 2026-09-14 il perimetro e' un argomento OBBLIGATORIO: entrambe le
+    operazioni qui dentro dichiarano qualcosa sull'intero universo, quindi una
+    scansione parziale deve astenersi. Questi due test passano `universe=True`
+    perche' misurano l'ORDINE e la tenuta agli errori, non il perimetro — che
+    ha il suo file, `test_post_scan_perimetro.py`."""
 
     def test_it_expires_then_prunes_in_that_order(self, monkeypatch):
         from app.services import setup_service
@@ -367,7 +373,7 @@ class TestPostScanBookkeeping:
             def commit(self): calls.append("commit")
             def rollback(self): calls.append("rollback")
 
-        setup_service.run_post_scan_bookkeeping(_Db())
+        setup_service.run_post_scan_bookkeeping(_Db(), universe=True)
         # Order is load-bearing: the per-detector ranking is only knowable once
         # the universe has been evaluated, and capping before expiring would
         # rank decayed setups against live ones.
@@ -385,5 +391,5 @@ class TestPostScanBookkeeping:
             def commit(self): raise AssertionError("must not commit after a failure")
             def rollback(self): rolled.append(True)
 
-        setup_service.run_post_scan_bookkeeping(_Db())   # must not raise
+        setup_service.run_post_scan_bookkeeping(_Db(), universe=True)  # must not raise
         assert rolled == [True]

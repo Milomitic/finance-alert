@@ -146,7 +146,9 @@ def _run_scan_alerts_locked(trigger: str) -> None:
         # Shared with the manual-scan entry point, which used to end at
         # `run_tracked_scan` without any of this. See the helper's docstring.
         from app.services import setup_service
-        setup_service.run_post_scan_bookkeeping(db)
+        # Il cron guarda sempre l'universo: e' l'unico perimetro che autorizza
+        # una dichiarazione di scadenza.
+        setup_service.run_post_scan_bookkeeping(db, universe=True)
     finally:
         db.close()
     logger.info("[scan_alerts] job: done")
