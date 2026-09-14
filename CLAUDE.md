@@ -2147,6 +2147,60 @@ d = json.load(urllib.request.urlopen(req, timeout=60))
   `main.py` valida l'host su ogni path tranne `/api/health` e `/metrics`, e
   `127.0.0.1:8000` non e fra gli host ammessi. Il 400 non dice perche.
 
+## ⚠️ Tre strumenti che rispondono in modo pulito e FALSO (2026-09-14)
+
+Tutti e tre pagati in una sessione, e tutti e tre della famiglia che questo
+file ripete piu' di ogni altra. Il costo non e' l'errore: e' che la risposta
+sembra un risultato.
+
+### 1. `vitest` TRASPILA senza fare typecheck
+
+**642 test verdi in locale, due job rossi in CI, una sola causa**: un file di
+test che non compilava. Vitest passa i `.tsx` per esbuild, che cancella i tipi
+senza controllarli — quindi un errore di tipo in un TEST e' invisibile a
+`npm run test:run`, per sempre.
+
+Il cancello vero e' **`npm run build`** (`tsc -b && vite build`), ed e' quello
+che gira in CI in DUE job (`frontend` e `gate UI`, che costruisce il bundle per
+Playwright). Un `npx tsc -b` eseguito PRIMA di aggiungere un file non vale:
+`tsc -b` e' incrementale e non puo' controllare cio' che ancora non esiste.
+
+⚠️ E l'errore vero era sepolto: lo stesso log portava decine di righe
+`ReferenceError: EventSource is not defined` da jsdom, catturate
+dall'ErrorBoundary per progetto, con i 642 test verdi due righe sotto. Cercare
+li' e' tempo perso — **si grep il log per `TS[0-9]{4}` e `##[error]`**, non per
+«error».
+
+**La regola: dopo aver aggiunto o modificato un file di test TSX, `npm run
+build`.** Non `tsc -b`, non `test:run`.
+
+### 2. Il repo ha file CRLF e file LF, mescolati
+
+`useSetups.ts`, `SetupsPage.tsx`, `setupGrouping.ts`, `SetupDetailDialog.tsx`
+sono CRLF; i loro vicini nella stessa cartella sono LF. Una sostituzione con un
+pattern multi-riga che usa `
+` **non trova niente** in un file CRLF, e senza
+contare le occorrenze il fallimento e' muto.
+
+Qualunque script di modifica multi-riga deve (a) contare le occorrenze e
+fermarsi se non sono esattamente quelle attese, e (b) **preservare** i fine riga
+del file — normalizzarli produce un diff che riscrive l'intero file e seppellisce
+la modifica vera. Git li normalizza al commit da solo, quindi la copia di lavoro
+CRLF non e' un problema: lo diventa solo se lo script la riscrive.
+
+### 3. Un test puo' essere FALSO DI TUTTO, non solo vero di niente
+
+Variante nuova di una famiglia gia' registrata tre volte. Un test che asserisce
+«questo modulo non tira dentro SQLAlchemy» svuotando `sys.modules` dei soli
+`app.*` **fallisce sempre**: dentro pytest `sqlalchemy` e' gia' caricato dal
+conftest, e nessuna cancellazione parziale lo toglie.
+
+Una proprieta' sull'IMPORT si misura in un processo nuovo
+(`subprocess.run([sys.executable, "-c", ...])`), oppure sulla SORGENTE come fa
+`test_periodi_indicatori.py`. Un controllo sull'import sporcato da cio' che gia'
+gira non misura l'import. ⚠️ E vale la verifica inversa, che qui ha funzionato:
+rimettere la dipendenza su una copia e pretendere il rosso.
+
 ## Test commands
 
 - **Backend lint (GATED, and the one that's easy to forget)**:
