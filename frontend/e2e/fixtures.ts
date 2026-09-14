@@ -62,7 +62,11 @@ export const ROTTE: { path: string; nome: string; minChars: number }[] = [
   { path: "/stocks",           nome: "Screener",      minChars: 600 },
   { path: "/calendar",         nome: "Calendario",    minChars: 200 },
   { path: "/sectors",          nome: "Esplora",       minChars: 300 },
-  { path: "/institutionals",   nome: "Superinvestor", minChars: 150 },
+  /* ⚠️ Era 150, cioe' la pagina VUOTA: `seed_e2e` non seminava fondi, e il
+   * pavimento misurava l'intestazione. Col seme (FA-068) rende 10.226
+   * caratteri su tutti e tre i viewport; 8.000 lascia margine e resta fuori
+   * portata di una pagina senza dati. */
+  { path: "/institutionals",   nome: "Superinvestor", minChars: 8000 },
   { path: "/diagnostics",      nome: "Diagnostica",   minChars: 400 },
   { path: "/stocks/AAPL",      nome: "Dettaglio titolo", minChars: 400 },
 ];

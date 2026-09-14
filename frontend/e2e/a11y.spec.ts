@@ -145,6 +145,35 @@ for (const rotta of ROTTE) {
   });
 }
 
+test("le tre regioni scorrevoli di /institutionals SCORRONO davvero", async ({ page }, info) => {
+  test.skip(info.project.name !== "desktop", "la misura dipende dall'altezza, una basta");
+  /* ⚠️ FA-068. Il pavimento di caratteri non basta per questa rotta, e la
+   * ragione e' il difetto stesso che il gate aveva trovato: tre regioni
+   * `max-h-[30rem]` con `role`/`tabIndex` per essere raggiungibili da tastiera.
+   * `scrollable-region-focusable` le guarda SOLO se scorrono. Con il database
+   * vuoto non scorrevano, e la regola era verde per assenza di contenuto —
+   * mentre `seed_e2e` non seminava un solo fondo e all'avvio l'app lanciava gli
+   * scraper veri, che a volte finivano prima del gate e a volte no: 0 -> 2
+   * violazioni fra due corse a sei minuti di distanza.
+   *
+   * Qui si pretende che il seme abbia riempito abbastanza righe da far
+   * scorrere tutte e tre. Se smettesse, questo diventa rosso invece di lasciare
+   * la regola verde su niente. */
+  await page.goto("/institutionals", { waitUntil: "networkidle" });
+  await page.waitForTimeout(1000);
+  const regioni = await page.$$eval("main [role=region][tabindex]", (els) =>
+    els.map((e) => ({
+      nome: e.getAttribute("aria-label") ?? "",
+      scorre: e.scrollHeight > e.clientHeight + 1,
+    })),
+  );
+  expect(regioni.length, "le tre regioni scorrevoli non sono state rese").toBeGreaterThanOrEqual(3);
+  expect(
+    regioni.filter((r) => !r.scorre).map((r) => r.nome),
+    "regioni che NON scorrono: il loro controllo di accessibilita' sarebbe vero di niente",
+  ).toEqual([]);
+});
+
 test("la linea di base non e' vuota", async ({}, info) => {
   test.skip(info.project.name !== "desktop");
   /* ⚠️ Senza questo, svuotare il file renderebbe ogni asserzione sopra vera di
