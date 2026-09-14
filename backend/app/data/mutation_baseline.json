@@ -13,17 +13,9 @@
       "mutanti": 27,
       "uccisi": 22
     },
-    "app/services/setup_service.py": {
-      "mutanti": 90,
-      "uccisi": 49
-    },
     "app/signals/calibration_map.py": {
       "mutanti": 10,
       "uccisi": 5
-    },
-    "app/services/detector_performance_service.py": {
-      "mutanti": 50,
-      "uccisi": 19
     },
     "app/core/security.py": {
       "mutanti": 9,
@@ -48,6 +40,14 @@
     "app/signals/detectors/base.py": {
       "mutanti": 58,
       "uccisi": 43
+    },
+    "app/services/detector_performance_service.py": {
+      "mutanti": 50,
+      "uccisi": 36
+    },
+    "app/services/setup_service.py": {
+      "mutanti": 86,
+      "uccisi": 53
     }
   },
   "sopravvissuti": [
@@ -60,45 +60,21 @@
     "app/services/confluence_service.py::compute_confluence#7  1 -> 2",
     "app/services/detector_performance_service.py::_cell#0  1 -> 2",
     "app/services/detector_performance_service.py::_cell#0  2 -> 3",
-    "app/services/detector_performance_service.py::_cell#0  21 -> 22",
-    "app/services/detector_performance_service.py::_cell#0  Gt -> GtE",
-    "app/services/detector_performance_service.py::_cell#0  Lt -> LtE",
     "app/services/detector_performance_service.py::_cell#1  1 -> 2",
-    "app/services/detector_performance_service.py::_cell#1  Lt -> LtE",
-    "app/services/detector_performance_service.py::_load_replay_summary#0  Or -> And",
-    "app/services/detector_performance_service.py::_replay_block#0  0 -> 1",
-    "app/services/detector_performance_service.py::_replay_block#1  0 -> 1",
     "app/services/detector_performance_service.py::_replay_block#2  0 -> 1",
-    "app/services/detector_performance_service.py::_replay_block#3  0 -> 1",
-    "app/services/detector_performance_service.py::_replay_cell#0  0 -> 1",
-    "app/services/detector_performance_service.py::_replay_cell#0  Lt -> LtE",
     "app/services/detector_performance_service.py::compute_detector_performance#0  0 -> 1",
     "app/services/detector_performance_service.py::compute_equity_curve#0  1 -> 2",
     "app/services/detector_performance_service.py::compute_equity_curve#0  2 -> 3",
     "app/services/detector_performance_service.py::compute_equity_curve#0  4 -> 5",
-    "app/services/detector_performance_service.py::compute_equity_curve#0  Gt -> GtE",
-    "app/services/detector_performance_service.py::compute_equity_curve#0  GtE -> Gt",
-    "app/services/detector_performance_service.py::compute_equity_curve#1  0 -> 1",
     "app/services/detector_performance_service.py::compute_equity_curve#1  2 -> 3",
     "app/services/detector_performance_service.py::compute_equity_curve#1  4 -> 5",
-    "app/services/detector_performance_service.py::compute_equity_curve#1  Eq -> NotEq",
     "app/services/detector_performance_service.py::compute_equity_curve#2  2 -> 3",
-    "app/services/detector_performance_service.py::compute_equity_curve#2  Eq -> NotEq",
     "app/services/detector_performance_service.py::compute_equity_curve#3  2 -> 3",
-    "app/services/detector_performance_service.py::compute_equity_curve#3  Eq -> NotEq",
-    "app/services/detector_performance_service.py::independent_blocks#0  1 -> 2",
-    "app/services/detector_performance_service.py::sized_interval#0  1 -> 2",
-    "app/services/detector_performance_service.py::sized_interval#1  1 -> 2",
     "app/services/fx_service.py::<modulo>#0  6 -> 7",
     "app/services/fx_service.py::<modulo>#0  60 -> 61",
     "app/services/fx_service.py::<modulo>#1  60 -> 61",
     "app/services/fx_service.py::_fetch_live_rate#0  0 -> 1",
     "app/services/fx_service.py::_fetch_live_rate#0  Or -> And",
-    "app/services/setup_service.py::<modulo>#0  10 -> 11",
-    "app/services/setup_service.py::<modulo>#0  28 -> 29",
-    "app/services/setup_service.py::_median_of#0  1 -> 2",
-    "app/services/setup_service.py::_median_of#0  2 -> 3",
-    "app/services/setup_service.py::_median_of#1  2 -> 3",
     "app/services/setup_service.py::_pct#0  2 -> 3",
     "app/services/setup_service.py::_per_detector#0  0 -> 1",
     "app/services/setup_service.py::_per_detector#0  Lt -> LtE",
@@ -109,9 +85,7 @@
     "app/services/setup_service.py::_per_detector#2  And -> Or",
     "app/services/setup_service.py::_per_detector#2  Eq -> NotEq",
     "app/services/setup_service.py::_per_detector#3  1 -> 2",
-    "app/services/setup_service.py::_return_summary#0  0 -> 1",
     "app/services/setup_service.py::_return_summary#0  And -> Or",
-    "app/services/setup_service.py::_return_summary#0  Lt -> LtE",
     "app/services/setup_service.py::_return_summary#1  And -> Or",
     "app/services/setup_service.py::conversion_stats#0  3 -> 4",
     "app/services/setup_service.py::conversion_stats#3  1 -> 2",
@@ -119,9 +93,6 @@
     "app/services/setup_service.py::conversion_stats#5  1 -> 2",
     "app/services/setup_service.py::conversion_stats#5  Eq -> NotEq",
     "app/services/setup_service.py::conversion_stats#6  Eq -> NotEq",
-    "app/services/setup_service.py::conversion_stats._median#0  1 -> 2",
-    "app/services/setup_service.py::conversion_stats._median#0  2 -> 3",
-    "app/services/setup_service.py::conversion_stats._median#2  2 -> 3",
     "app/services/setup_service.py::convert_setups_for_alert#0  0 -> 1",
     "app/services/setup_service.py::convert_setups_for_alert#0  And -> Or",
     "app/services/setup_service.py::convert_setups_for_alert#0  Or -> And",

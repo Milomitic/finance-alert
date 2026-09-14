@@ -725,6 +725,81 @@ I moduli dove un difetto silenzioso produce un numero plausibile invece di un
 errore sono stati lavorati per primi. Il prossimo candidato e'
 `confluence_service` (38 mutanti).
 
+### La sonda non trova bug: trova ACCOPPIAMENTI NON DICHIARATI (2026-09-14)
+
+E' il filo di tutti i rilievi usciti dall'estensione della mutazione, e cambia
+cosa aspettarsi da questo strumento. In NESSUNO di questi casi il codice era
+sbagliato quel giorno; in tutti era sbagliato il CONTRATTO, e il mutante e'
+semplicemente il primo lettore che lo mette alla prova.
+
+| Rilievo | Il contratto non detto |
+|---|---|
+| 14 periodi cablati | la fonte unica stava dove chi ne aveva bisogno non poteva importarla |
+| postura duplicata | due copie identiche finche' qualcuno ne tocca una — ed era gia' successo, con un 500 |
+| `_median` senza `sorted` | la correttezza dipendeva dal chiamante, e niente lo diceva |
+| parita' immagine su `.items[0]` | «il primo pod con questa etichetta» vale finche' nessuno crea un Job |
+
+⚠️ Il corollario operativo: quando un mutante sopravvive, la domanda utile non
+e' «quale test manca» ma **«quale invariante sto dando per scontata»**. Le
+quattro volte in cui ho risposto alla prima domanda ho scritto un test; le
+quattro in cui ho risposto alla seconda ho tolto la condizione che lo rendeva
+necessario.
+
+### ⚠️ Due mutanti sulla STESSA RIGA vanno decisi separatamente
+
+Successo quattro volte in una notte, ed e' la ragione per cui la chiave di
+linea di base porta l'ordinale `#N`.
+
+- `if x <= 0 or ref <= 0` in `soft01`: il termine su `x` e' equivalente (zero
+  rende zero comunque), quello su `ref` rende **1.0** — il fattore piu' forte
+  possibile, restituito proprio quando la scala non esiste.
+- `if peak > 0` nella curva di equity: `>= 0` e' equivalente (il picco parte da
+  1.0 ed e' un massimo), `> 1` no — una curva che perde dalla prima operazione
+  terrebbe il picco a 1.0 e perderebbe il drawdown.
+- `if x <= a75 and a75 > a45` in `concave`: il primo termine e' un bordo di
+  continuita', il secondo una guardia IRRAGGIUNGIBILE — e capirlo richiede di
+  leggere il ramo PRECEDENTE, non quello in esame.
+
+Con la vecchia chiave `file:riga` questi collassavano in una voce sola: si
+sarebbe letto «un sopravvissuto sulla riga 93», e dichiararlo equivalente
+avrebbe SEPOLTO il difetto vero sotto la ragione giusta per l'altro.
+
+### ⚠️ Le cinque famiglie di sopravvissuto che non sono lacune
+
+Riconoscerle a vista risparmia il triage, e ricompaiono in ogni modulo di
+calcolo. `detectors/base` chiude a 43 su 58 e i quindici superstiti sono TUTTI
+di queste forme:
+
+1. **Il termine `x <= 0`** di una guardia dove la formula rende comunque 0 in
+   x = 0.
+2. **I bordi di una curva CONTINUA.** `concave` e' definita a tratti e il suo
+   docstring lo dichiara: al nodo esatto il tratto successivo calcola lo stesso
+   numero. Non sono lacune — sono la PROVA che la curva non ha salti. La mossa
+   giusta non e' ucciderli ma asserire la continuita', che e' la proprieta' che
+   li rende equivalenti.
+3. **Guardie irraggiungibili** perche' un ramo precedente ha gia' restituito.
+4. **Un `return` difensivo** che nessun cammino raggiunge.
+5. **`frozen=True`** senza un consumatore che eserciti l'immutabilita'.
+
+### ⚠️ Tre modi in cui un test di mutazione e' «vero di niente»
+
+Tutti e tre trovati scrivendoli, quella notte:
+
+- `monkeypatch.setattr(mod, "NOME_SBAGLIATO", x, raising=False)` **crea** un
+  attributo nuovo invece di sostituire quello vero. `raising=False` spegne
+  l'unico controllo che verifica di aver scritto il nome giusto.
+- Un caso di prova che non DISTINGUE: il detector senza totale, messo accanto a
+  vicini da 5 e 99, finiva ultimo sia col ripiego a 0 sia con quello a 1.
+  Serve un vicino al valore che il ripiego assume.
+- Un inserimento in `BERSAGLI` ancorato su una riga che compare in DUE elenchi
+  (`test_equity_curve_direction.py` sta di proposito in entrambi): il test
+  sarebbe girato contro i mutanti del modulo sbagliato, lasciando quello giusto
+  scoperto **col numero che migliora altrove**. Si ancora sul nome del MODULO.
+
+⚠️ E l'output di uno strumento letto mentre un altro riscrive i sorgenti non e'
+un risultato: ruff ha segnalato quattro errori di formattazione su un file che
+la sonda stava tenendo in forma `ast.unparse`.
+
 ### ⚠️ Un residuo alto non vuol dire la stessa cosa in due moduli diversi
 
 `signal_outcome_service` chiude a **47 su 57** e `technical_score_service` a
