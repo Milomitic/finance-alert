@@ -76,11 +76,41 @@ beforeEach(() => {
 describe("StockAlertsHistoryCard", () => {
   it("parte dai recenti e non interroga lo storico", () => {
     monta([_alert(1), _alert(2)]);
-    expect(screen.getByText(/Segnali recenti \(2\)/)).toBeInTheDocument();
+    expect(screen.getByText(/Segnali storici per questo ticker \(2\)/)).toBeInTheDocument();
     // ⚠️ Il pavimento: la query dello storico e' `enabled` solo sulla sua
     // scheda. Senza questa asserzione ogni apertura del dettaglio titolo
     // pagherebbe una richiesta che nessuno guarda.
     expect(listMock).not.toHaveBeenCalled();
+  });
+
+  it("il selettore non promette un pannello che non esiste", () => {
+    /* ⚠️ La prima versione usava Radix `Tabs`, che emette `aria-controls`
+     * verso il `TabsContent` corrispondente. Qui il contenuto e' un fratello
+     * piu' in basso e nessun `TabsContent` veniva reso, quindi il riferimento
+     * puntava a un id INESISTENTE — il gate UI l'ha letto come
+     * `aria-valid-attr-value: 0 -> 1` su /stocks/AAPL.
+     *
+     * Un'ARIA che nomina un id che non c'e' e' peggio di nessuna ARIA: gli
+     * assistivi annunciano una relazione inesistente e il difetto e' invisibile
+     * a chi guarda lo schermo. Due bottoni con `aria-pressed` non promettono
+     * niente che non si possa mantenere.
+     *
+     * ⚠️ E axe ne ha segnalato UNO, non sette: i sei popover «Spiegazione: …»
+     * delle intestazioni portano lo stesso `aria-controls` pendente e sono
+     * VALIDI, perche' axe tollera un riferimento non risolto quando l'elemento
+     * ha `aria-expanded="false"` — un pannello non ancora montato e' legittimo.
+     * Radix Popover mette `aria-expanded`; `TabsTrigger` no, perche' un tab non
+     * ha uno stato aperto/chiuso. Per questo l'asserzione e' ristretta ai DUE
+     * bottoni di questo controllo: allargarla renderebbe rosso il codice
+     * corretto di qualcun altro, e un cancello che nasce rosso viene spento. */
+    monta([_alert(1)]);
+    const recenti = screen.getByRole("button", { name: /^Recenti$/ });
+    const storico = screen.getByRole("button", { name: /^Storico$/ });
+    expect(recenti).toHaveAttribute("aria-pressed", "true");
+    expect(storico).toHaveAttribute("aria-pressed", "false");
+    for (const b of [recenti, storico]) {
+      expect(b).not.toHaveAttribute("aria-controls");
+    }
   });
 
   it("lo storico chiede ENTRAMBE le meta', archiviati compresi", async () => {
@@ -91,7 +121,7 @@ describe("StockAlertsHistoryCard", () => {
     });
     monta([_alert(1)]);
 
-    await userEvent.click(screen.getByRole("tab", { name: /Storico/ }));
+    await userEvent.click(screen.getByRole("button", { name: /^Storico$/ }));
 
     await waitFor(() => expect(listMock).toHaveBeenCalled());
     // ⚠️ `include_archived`, non `archived: true`: quest'ultimo renderebbe i
@@ -114,21 +144,25 @@ describe("StockAlertsHistoryCard", () => {
     monta([_alert(1), _alert(2)]);
     expect(screen.getByTitle(/tono bullish/)).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole("tab", { name: /Storico/ }));
+    await userEvent.click(screen.getByRole("button", { name: /^Storico$/ }));
 
     // ⚠️ Calcolata sulle righe CARICATE, accanto a un totale di 40, direbbe
     // «rialzisti 1» intendendo un'altra cosa. Si mostra il totale, non un
     // aggregato di pagina travestito da aggregato globale.
+    //
+    // ⚠️ E il TITOLO non cambia con la vista: e' l'identita' della scheda, e
+    // farlo variare l'ha resa irriconoscibile al gate e2e, che la localizza
+    // per quel testo. Cambia il conteggio, che appartiene alla vista.
     await waitFor(() =>
       expect(screen.queryByTitle(/tono bullish/)).not.toBeInTheDocument(),
     );
-    expect(screen.getByText(/Storico completo \(40\)/)).toBeInTheDocument();
+    expect(screen.getByText(/Segnali storici per questo ticker \(40\)/)).toBeInTheDocument();
   });
 
   it("la paginazione avanza e l'offset torna a zero cambiando scheda", async () => {
     listMock.mockReturnValue({ items: [_alert(3)], total: 40, has_more: true });
     monta([_alert(1)]);
-    await userEvent.click(screen.getByRole("tab", { name: /Storico/ }));
+    await userEvent.click(screen.getByRole("button", { name: /^Storico$/ }));
     await waitFor(() => expect(listMock).toHaveBeenCalled());
 
     expect(screen.getByText(/1–1 di 40/)).toBeInTheDocument();
@@ -148,8 +182,8 @@ describe("StockAlertsHistoryCard", () => {
     // nuova chiamata parte — e un'asserzione sul numero di chiamate legherebbe
     // il test alla politica di caching, cioe' diventerebbe rossa cambiando
     // `staleTime` senza che nulla si rompa per chi guarda.
-    await userEvent.click(screen.getByRole("tab", { name: /Recenti/ }));
-    await userEvent.click(screen.getByRole("tab", { name: /Storico/ }));
+    await userEvent.click(screen.getByRole("button", { name: /^Recenti$/ }));
+    await userEvent.click(screen.getByRole("button", { name: /^Storico$/ }));
     await waitFor(() => expect(screen.getByText(/1–1 di 40/)).toBeInTheDocument());
   });
 });

@@ -11,8 +11,8 @@ import { CardErrorOverlay } from "@/components/stock/CardErrorOverlay";
 import { CardRefreshButton } from "@/components/stock/CardRefreshButton";
 import { Card, CardContent } from "@/components/ui/card";
 import { SectionTitle } from "@/components/ui/section-title";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getAlertMeta } from "@/lib/alertMeta";
+import { cn } from "@/lib/utils";
 
 /** Righe per pagina sullo storico completo. */
 const PER_PAGINA = 25;
@@ -137,30 +137,59 @@ export function StockAlertsHistoryCard({ alerts, ticker }: Props) {
       <Card className="h-full overflow-hidden flex flex-col">
         <CardContent className="p-4 flex-1 min-h-0 flex flex-col">
           {/* Header strip: title + aggregate stats (bull/bear/last30d) */}
+          {/* ⚠️ Il nome della scheda e' la sua IDENTITA' e non cambia con la
+              vista: farlo variare rende irriconoscibile il riquadro — la stessa
+              regola per cui, quando lo spazio manca, e' la decorazione a cedere
+              e non l'etichetta. Il CONTEGGIO invece appartiene alla vista,
+              quindi quello segue. (Il gate e2e localizza la scheda per questo
+              testo, e aveva ragione a rompersi.) */}
           <SectionTitle
             icon={History}
-            label={
-              completo
-                ? `Storico completo (${totale})`
-                : `Segnali recenti (${stats.total})`
-            }
+            label={`Segnali storici per questo ticker (${totale})`}
             className="mb-3 shrink-0"
             right={
               <div className="flex items-center gap-2 flex-wrap text-[0.7647rem]">
-                <Tabs
-                  value={scheda}
-                  onValueChange={(v) => {
-                    setScheda(v as "recenti" | "completo");
-                    // L'offset si azzera cambiando scheda. In render, non in
-                    // un effect: `react-hooks/set-state-in-effect` e' gated.
-                    setOffset(0);
-                  }}
+                {/* ⚠️ NON e' un gruppo di tab, ed e' stato un errore renderlo
+                    tale. `TabsTrigger` di Radix emette `aria-controls` verso il
+                    `TabsContent` corrispondente; qui il contenuto e' un fratello
+                    piu' in basso, quindi il riferimento puntava al NULLA e il
+                    gate UI l'ha letto come `aria-valid-attr-value: 0 -> 1`.
+                    Un'ARIA che nomina un id inesistente e' peggio di nessuna
+                    ARIA: gli assistivi annunciano una relazione che non c'e'.
+
+                    Due bottoni con `aria-pressed` sono la forma corretta di un
+                    controllo segmentato, e non promettono un pannello. */}
+                <div
+                  role="group"
+                  aria-label="Vista dei segnali"
+                  className="inline-flex h-6 items-center rounded-lg bg-muted p-0.5"
                 >
-                  <TabsList className="h-6 p-0.5">
-                    <TabsTrigger value="recenti" className="h-5 text-[0.6765rem] px-1.5" title="I segnali non archiviati di questo titolo">Recenti</TabsTrigger>
-                    <TabsTrigger value="completo" className="h-5 text-[0.6765rem] px-1.5" title="Tutti i segnali, archiviati compresi — e' dove stanno gli esiti maturati">Storico</TabsTrigger>
-                  </TabsList>
-                </Tabs>
+                  {([
+                    ["recenti", "Recenti", "I segnali non archiviati di questo titolo"],
+                    ["completo", "Storico", "Tutti i segnali, archiviati compresi — e' dove stanno gli esiti maturati"],
+                  ] as const).map(([valore, etichetta, spiegazione]) => (
+                    <button
+                      key={valore}
+                      type="button"
+                      aria-pressed={scheda === valore}
+                      title={spiegazione}
+                      onClick={() => {
+                        setScheda(valore);
+                        // L'offset si azzera cambiando vista. In render, non in
+                        // un effect: `react-hooks/set-state-in-effect` e' gated.
+                        setOffset(0);
+                      }}
+                      className={cn(
+                        "h-5 rounded px-1.5 text-[0.6765rem] transition-colors",
+                        scheda === valore
+                          ? "bg-background text-foreground shadow-sm"
+                          : "text-muted-foreground hover:text-foreground",
+                      )}
+                    >
+                      {etichetta}
+                    </button>
+                  ))}
+                </div>
                 {/* ⚠️ La striscia NON compare sullo storico. E' calcolata sulle
                     righe CARICATE: su una pagina da 25 accanto a un totale di
                     400 direbbe "rialzisti 12" intendendo un'altra cosa. Stessa
