@@ -18,8 +18,14 @@ ROMA = ZoneInfo("Europe/Rome")
 
 @pytest.fixture
 def scheduler(monkeypatch):
+    import apscheduler.triggers.cron as cron_module
+
     import app.scheduler as scheduler_module
 
+    # ⚠️ Una macchina UTC, come il pod e la CI. La prima versione di questi test
+    # era verde su Windows a Roma e rossa in CI: un trigger senza fuso prende
+    # quello della macchina (vedi `test_scheduler_fuso_orario.py`).
+    monkeypatch.setattr(cron_module, "get_localzone", lambda: ZoneInfo("UTC"))
     monkeypatch.setattr(scheduler_module, "_scheduler", None)
     return scheduler_module.get_scheduler()
 

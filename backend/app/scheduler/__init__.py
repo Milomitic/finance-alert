@@ -31,15 +31,34 @@ from app.services.scheduler_metrics import install_listener as _install_schedule
 
 _scheduler: BackgroundScheduler | None = None
 
+#: Il fuso di OGNI orario scritto in questo file.
+_TZ = "Europe/Rome"
+
+
+def _cron(**campi) -> CronTrigger:
+    """Un `CronTrigger` nel fuso di Roma, dichiarato esplicitamente.
+
+    ⚠️ `BackgroundScheduler(timezone=...)` NON basta, ed e' stato creduto per
+    mesi. Quel fuso vale solo per i job aggiunti con la stringa `"cron"`; un
+    `CronTrigger` costruito a mano prende `tzlocal.get_localzone()`, cioe' il
+    fuso della MACCHINA. Sul desktop di sviluppo era Roma e tutto tornava; nel
+    pod e' `Etc/UTC`, quindi dal passaggio al cloud ogni job girava due ore dopo
+    l'orario scritto qui accanto — le scansioni alle 18:30 e 23:30 UTC (#617,
+    #622), il digest alle 10:00 di Roma. Scoperto il 2026-09-15 perche' un test
+    sulle finestre di FRED era verde su Windows e rosso in CI.
+    `tests/test_scheduler_fuso_orario.py` lo fissa simulando una macchina UTC.
+    """
+    return CronTrigger(timezone=_TZ, **campi)
+
 
 def get_scheduler() -> BackgroundScheduler:
     global _scheduler
     if _scheduler is None:
-        _scheduler = BackgroundScheduler(timezone="Europe/Rome")
+        _scheduler = BackgroundScheduler(timezone=_TZ)
         _install_scheduler_listener(_scheduler)
         _scheduler.add_job(
             run_refresh_all,
-            trigger=CronTrigger(day_of_week="sat", hour=3, minute=0),
+            trigger=_cron(day_of_week="sat", hour=3, minute=0),
             id="refresh_catalog",
             replace_existing=True,
             max_instances=1,
@@ -47,7 +66,7 @@ def get_scheduler() -> BackgroundScheduler:
         )
         _scheduler.add_job(
             run_dedupe_stocks,
-            trigger=CronTrigger(day_of_week="sat", hour=3, minute=30),
+            trigger=_cron(day_of_week="sat", hour=3, minute=30),
             id="dedupe_stocks",
             replace_existing=True,
             max_instances=1,
@@ -66,7 +85,7 @@ def get_scheduler() -> BackgroundScheduler:
         if db_module.engine.dialect.name == "sqlite":
             _scheduler.add_job(
                 run_db_backup,
-                trigger=CronTrigger(day_of_week="*", hour=3, minute=30),
+                trigger=_cron(day_of_week="*", hour=3, minute=30),
                 id="db_backup",
                 replace_existing=True,
                 max_instances=1,
@@ -78,7 +97,7 @@ def get_scheduler() -> BackgroundScheduler:
         # skips with a WARNING if a scan is running.
         _scheduler.add_job(
             run_retention,
-            trigger=CronTrigger(day_of_week="sun", hour=4, minute=0),
+            trigger=_cron(day_of_week="sun", hour=4, minute=0),
             id="retention",
             replace_existing=True,
             max_instances=1,
@@ -93,7 +112,7 @@ def get_scheduler() -> BackgroundScheduler:
         # `tests/test_scansione_feriale_e_allarme.py` tiene le due cose insieme.
         _scheduler.add_job(
             run_scan_alerts,
-            trigger=CronTrigger(
+            trigger=_cron(
                 day_of_week="mon-fri", hour=settings.scan_hour, minute=settings.scan_minute
             ),
             id="scan_alerts",
@@ -112,7 +131,7 @@ def get_scheduler() -> BackgroundScheduler:
         # Tecnico si calcola comunque, dentro la valutazione dei segnali.
         _scheduler.add_job(
             run_scan_alerts,
-            trigger=CronTrigger(
+            trigger=_cron(
                 day_of_week="mon-fri",
                 hour=settings.scan_hour_2, minute=settings.scan_minute_2,
             ),
@@ -144,7 +163,7 @@ def get_scheduler() -> BackgroundScheduler:
         # a week of bars in July 2026 without a single failed scan.
         _scheduler.add_job(
             run_repair_ohlcv_gaps,
-            trigger=CronTrigger(hour="*/6", minute=20),
+            trigger=_cron(hour="*/6", minute=20),
             id="repair_ohlcv_gaps",
             replace_existing=True,
             max_instances=1,
@@ -152,7 +171,7 @@ def get_scheduler() -> BackgroundScheduler:
         )
         _scheduler.add_job(
             run_send_digest,
-            trigger=CronTrigger(
+            trigger=_cron(
                 day_of_week="*", hour=settings.digest_hour, minute=settings.digest_minute
             ),
             id="send_digest",
@@ -162,7 +181,7 @@ def get_scheduler() -> BackgroundScheduler:
         )
         _scheduler.add_job(
             run_kpi_rollup,
-            trigger=CronTrigger(day_of_week="*", hour=23, minute=0),
+            trigger=_cron(day_of_week="*", hour=23, minute=0),
             id="kpi_rollup",
             replace_existing=True,
             max_instances=1,
@@ -170,7 +189,7 @@ def get_scheduler() -> BackgroundScheduler:
         )
         _scheduler.add_job(
             run_refresh_institutionals,
-            trigger=CronTrigger(day_of_week="sat", hour=4, minute=0),
+            trigger=_cron(day_of_week="sat", hour=4, minute=0),
             id="refresh_institutionals",
             replace_existing=True,
             max_instances=1,
@@ -185,7 +204,7 @@ def get_scheduler() -> BackgroundScheduler:
             run_refresh_premarket,
             # Every 5 min; the job self-gates to the US pre-market
             # window (~03:55-09:35 ET) and no-ops cheaply otherwise.
-            trigger=CronTrigger(day_of_week="mon-fri", minute="*/5"),
+            trigger=_cron(day_of_week="mon-fri", minute="*/5"),
             id="refresh_premarket",
             replace_existing=True,
             max_instances=1,
@@ -193,7 +212,7 @@ def get_scheduler() -> BackgroundScheduler:
         )
         _scheduler.add_job(
             run_refresh_sec_13f,
-            trigger=CronTrigger(day_of_week="sat", hour=4, minute=30),
+            trigger=_cron(day_of_week="sat", hour=4, minute=30),
             id="refresh_sec_13f",
             replace_existing=True,
             max_instances=1,
@@ -217,7 +236,7 @@ def get_scheduler() -> BackgroundScheduler:
         # `tests/test_cadenze_batch.py` verifica le finestre su una settimana vera.
         _scheduler.add_job(
             run_refresh_fred,
-            trigger=CronTrigger(day_of_week="mon-fri", hour="7,15,16,17,23", minute=15),
+            trigger=_cron(day_of_week="mon-fri", hour="7,15,16,17,23", minute=15),
             id="refresh_fred",
             replace_existing=True,
             max_instances=1,
@@ -230,7 +249,7 @@ def get_scheduler() -> BackgroundScheduler:
         # cuts the lag from 1-3h (yfinance scrape) to ~30 min.
         _scheduler.add_job(
             run_refresh_imminent_earnings,
-            trigger=CronTrigger(minute=45),
+            trigger=_cron(minute=45),
             id="refresh_imminent_earnings",
             replace_existing=True,
             max_instances=1,
@@ -242,7 +261,7 @@ def get_scheduler() -> BackgroundScheduler:
         # all'infinito (la UI mostra una progress bar fantasma).
         _scheduler.add_job(
             run_cleanup_orphan_scans,
-            trigger=CronTrigger(minute="*"),
+            trigger=_cron(minute="*"),
             id="cleanup_orphan_scans",
             replace_existing=True,
             max_instances=1,
@@ -260,7 +279,7 @@ def get_scheduler() -> BackgroundScheduler:
         now = datetime.now()
         _scheduler.add_job(
             run_health_probes_fast,
-            trigger=CronTrigger(minute="*/15"),
+            trigger=_cron(minute="*/15"),
             id="health_probes_fast",
             replace_existing=True,
             max_instances=1,
@@ -269,7 +288,7 @@ def get_scheduler() -> BackgroundScheduler:
         )
         _scheduler.add_job(
             run_health_probes_slow,
-            trigger=CronTrigger(minute="*/30"),
+            trigger=_cron(minute="*/30"),
             id="health_probes_slow",
             replace_existing=True,
             max_instances=1,
