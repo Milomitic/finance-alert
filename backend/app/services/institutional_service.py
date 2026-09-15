@@ -84,25 +84,82 @@ def _freshness_cutoff(months: int = MAX_FILING_AGE_MONTHS) -> date:
     return date.today() - timedelta(days=int(30.4 * months))
 
 
+#: Il marcatore del refresh RIUSCITO, una riga per fonte in `fetch_cache`
+#: (`kind = "refresh:<fonte>"`). ⚠️ Nel database e non in un file JSON: un file
+#: sul disco di sviluppo renderebbe «freschi» i test di chi ha fatto girare un
+#: refresh in locale, mentre la tabella di test nasce vuota a ogni corsa.
+REFRESH_MARKER_TICKER = "__institutional__"
+#: Le fonti che il recupero all'avvio lancia. Il refresh e' fresco solo se lo
+#: sono TUTTE: il recupero le rilancia insieme, quindi una fallita va rifatta.
+REFRESH_SOURCES = ("dataroma", "sec_13f")
+
+
+def record_refresh_success(db: Session, source: str) -> None:
+    """Segna che il refresh di `source` e' finito bene, ANCHE senza filing nuovi.
+
+    ⚠️ Il caso a zero filing e' la ragione per cui esiste: i 13F escono una
+    volta a trimestre, quindi tre refresh su quattro non creano righe e
+    `MAX(created_at)` da solo non si muove.
+    """
+    from app.models.fetch_cache import FetchCache
+
+    kind = f"refresh:{source}"
+    row = db.execute(
+        select(FetchCache).where(
+            FetchCache.ticker == REFRESH_MARKER_TICKER, FetchCache.kind == kind
+        )
+    ).scalar_one_or_none()
+    adesso = datetime.now(UTC)
+    if row is None:
+        db.add(FetchCache(ticker=REFRESH_MARKER_TICKER, kind=kind, payload="{}", fetched_at=adesso))
+    else:
+        row.fetched_at = adesso
+    db.commit()
+
+
 def filings_refresh_is_stale(db: Session, *, max_age_days: int = 8) -> bool:
-    """True when the newest `institutional_filings` row is older than
-    `max_age_days` (or no filings exist at all).
+    """True when neither a NEW filing nor a SUCCESSFUL refresh of every source
+    happened in the last `max_age_days` (or nothing exists at all).
 
     Used by the boot catch-up in `app.main`: the weekly refresh crons
     (sat 04:00/04:30) only fire while the backend is running, so on a
     desktop that's off on Saturday mornings the 13F snapshot silently
     ages. 8 days = one weekly cadence + 1 day of slack, so a healthy
     Saturday run never re-triggers on Monday's boot.
+
+    ⚠️ Fino al 2026-09-15 guardava SOLO `MAX(created_at)` dei filing, cioe'
+    quando e' arrivato l'ultimo filing NUOVO — e i 13F escono una volta a
+    trimestre. Misurato in produzione: 87 avvii del pod in 7 giorni, 87 recuperi
+    lanciati, zero «fresh»; ultimo filing nuovo il 22 agosto. Ogni rilascio
+    rilanciava Dataroma e SEC 13F (~3 minuti di scraping esterno) anche con il
+    refresh del sabato riuscito.
     """
+    from app.models.fetch_cache import FetchCache
+
+    adesso = datetime.now(UTC)
+    soglia = timedelta(days=max_age_days)
+
+    def _recente(t: datetime | None) -> bool:
+        if t is None:
+            return False
+        # SQLite server_default=now() stores naive datetimes — normalize.
+        if t.tzinfo is None:
+            t = t.replace(tzinfo=UTC)
+        return (adesso - t) <= soglia
+
     last = db.execute(
         select(func.max(InstitutionalFiling.created_at))
     ).scalar_one()
-    if last is None:
-        return True
-    # SQLite server_default=now() stores naive datetimes — normalize.
-    if last.tzinfo is None:
-        last = last.replace(tzinfo=UTC)
-    return (datetime.now(UTC) - last) > timedelta(days=max_age_days)
+    if _recente(last):
+        return False
+
+    marcatori = dict(db.execute(
+        select(FetchCache.kind, FetchCache.fetched_at).where(
+            FetchCache.ticker == REFRESH_MARKER_TICKER,
+            FetchCache.kind.in_([f"refresh:{s}" for s in REFRESH_SOURCES]),
+        )
+    ).all())
+    return not all(_recente(marcatori.get(f"refresh:{s}")) for s in REFRESH_SOURCES)
 
 
 # ---------------------------------------------------------------------------

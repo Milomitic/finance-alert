@@ -77,6 +77,9 @@ def run_refresh_sec_13f() -> None:
             f"filings_skipped_no_period={summary.filings_skipped_no_period} "
             f"holdings={summary.holdings_inserted}"
         )
+        # Vedi `refresh_institutionals`: il refresh riuscito si segna anche
+        # senza filing nuovi, altrimenti ogni avvio lo rilancia.
+        institutional_service.record_refresh_success(db, "sec_13f")
     except Exception as exc:  # noqa: BLE001
         logger.exception(f"[refresh_sec_13f] persist failed: {exc}")
         db.rollback()

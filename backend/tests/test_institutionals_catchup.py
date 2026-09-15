@@ -16,6 +16,7 @@ solves. These tests cover:
 import threading
 from datetime import date, datetime, timedelta
 
+import pytest
 from sqlalchemy.orm import Session
 
 import app.main as main_module
@@ -118,6 +119,157 @@ def test_catchup_runs_both_jobs_and_survives_a_failure(monkeypatch) -> None:
     )
     main_module._run_institutionals_catchup()
     assert order == ["dataroma", "sec_13f"]
+
+
+# ---------------------------------------------------------------------------
+# Il refresh RIUSCITO conta, non solo il filing NUOVO (2026-09-15)
+# ---------------------------------------------------------------------------
+#
+# ⚠️ Il difetto misurato in produzione: 87 avvii del pod in 7 giorni, 87
+# «institutional filings stale/absent», zero «fresh». I 13F escono una volta a
+# TRIMESTRE; un refresh settimanale che non trova filing nuovi non crea righe,
+# quindi `MAX(created_at)` resta fermo (ultimo: 22 agosto) e dopo 8 giorni ogni
+# avvio rilanciava Dataroma e SEC 13F, ~3 minuti di scraping esterno a rilascio.
+# La domanda giusta non e' «quando e' arrivato l'ultimo filing» ma «quando e'
+# riuscito l'ultimo refresh».
+
+def _marcatore(db: Session, fonte: str, *, giorni_fa: float) -> None:
+    from app.models import FetchCache
+
+    db.add(FetchCache(
+        ticker=institutional_service.REFRESH_MARKER_TICKER,
+        kind=f"refresh:{fonte}",
+        payload="{}",
+        fetched_at=datetime.utcnow() - timedelta(days=giorni_fa),
+    ))
+    db.commit()
+
+
+def test_fresh_when_filings_are_old_but_both_sources_refreshed_recently(db: Session) -> None:
+    """Il caso di produzione: filing vecchio di tre settimane, refresh riusciti ieri."""
+    _seed_filing(db, created_at=datetime.utcnow() - timedelta(days=24))
+    _marcatore(db, "dataroma", giorni_fa=1)
+    _marcatore(db, "sec_13f", giorni_fa=1)
+    assert institutional_service.filings_refresh_is_stale(db) is False
+
+
+def test_stale_when_only_one_source_refreshed_recently(db: Session) -> None:
+    """Il recupero lancia ENTRAMBE le fonti: se una non e' riuscita, va rifatto."""
+    _seed_filing(db, created_at=datetime.utcnow() - timedelta(days=24))
+    _marcatore(db, "dataroma", giorni_fa=1)
+    assert institutional_service.filings_refresh_is_stale(db) is True
+
+
+def test_stale_when_the_refresh_markers_are_old_too(db: Session) -> None:
+    _seed_filing(db, created_at=datetime.utcnow() - timedelta(days=24))
+    _marcatore(db, "dataroma", giorni_fa=9)
+    _marcatore(db, "sec_13f", giorni_fa=9)
+    assert institutional_service.filings_refresh_is_stale(db) is True
+
+
+def _marcatori(db: Session) -> set[str]:
+    from sqlalchemy import select
+
+    from app.models import FetchCache
+
+    return set(db.execute(
+        select(FetchCache.kind).where(
+            FetchCache.ticker == institutional_service.REFRESH_MARKER_TICKER
+        )
+    ).scalars())
+
+
+@pytest.fixture
+def job_db(db: Session, monkeypatch) -> Session:
+    """Lega il `SessionLocal` dei due job alla sessione del test.
+
+    ⚠️ Non e' ridondante col `conftest`. Quello sostituisce
+    `app.core.db.SessionLocal`, ma i job fanno `from app.core.db import
+    SessionLocal` al caricamento del modulo e restano legati all'ORIGINALE:
+    senza questa fixture scrivono nel database configurato — in locale
+    `backend/data/app.db`, il database di sviluppo. La prima versione di questi
+    test lo ha fatto: i test «il marcatore c'e'» erano rossi leggendo il database
+    di test vuoto, e peggio, quelli «non scrive niente» erano VERDI per la
+    ragione sbagliata.
+    """
+    import app.core.db as db_module
+    from app.scheduler.jobs import refresh_institutionals, refresh_sec_13f
+
+    monkeypatch.setattr(refresh_institutionals, "SessionLocal", db_module.SessionLocal)
+    monkeypatch.setattr(refresh_sec_13f, "SessionLocal", db_module.SessionLocal)
+    return db
+
+
+def test_dataroma_job_records_its_refresh_even_without_new_filings(job_db: Session, monkeypatch) -> None:
+    db = job_db
+    """⚠️ Il marcatore si scrive ANCHE a zero filing nuovi: e' esattamente il
+    caso normale di tre settimane su quattro, ed e' il caso che il vecchio
+    controllo non vedeva."""
+    from app.scheduler.jobs import refresh_institutionals
+    from app.services import institutional_scraper
+
+    monkeypatch.setattr(institutional_scraper, "scrape_managers_index", lambda: ["un-gestore"])
+    monkeypatch.setattr(institutional_scraper, "scrape_all_portfolios", lambda managers: [])
+    monkeypatch.setattr(
+        institutional_service, "persist_scrape_results",
+        lambda db2, results, **kw: institutional_service.UpsertResult(0, 0, 0, 0, 0),
+    )
+    refresh_institutionals.run_refresh_institutionals()
+    db.expire_all()
+    assert _marcatori(db) == {"refresh:dataroma"}
+
+
+def test_dataroma_job_that_aborts_records_nothing(job_db: Session, monkeypatch) -> None:
+    db = job_db
+    """Un refresh che non e' avvenuto non puo' dichiararsi riuscito: al
+    prossimo avvio si deve riprovare."""
+    from app.scheduler.jobs import refresh_institutionals
+    from app.services import institutional_scraper
+
+    monkeypatch.setattr(institutional_scraper, "scrape_managers_index", lambda: [])
+    refresh_institutionals.run_refresh_institutionals()
+    db.expire_all()
+    assert _marcatori(db) == set()
+
+
+def test_dataroma_job_whose_persist_fails_records_nothing(job_db: Session, monkeypatch) -> None:
+    db = job_db
+    from app.scheduler.jobs import refresh_institutionals
+    from app.services import institutional_scraper
+
+    def _boom(db2, results, **kw):
+        raise RuntimeError("persist fallito")
+
+    monkeypatch.setattr(institutional_scraper, "scrape_managers_index", lambda: ["un-gestore"])
+    monkeypatch.setattr(institutional_scraper, "scrape_all_portfolios", lambda managers: [])
+    monkeypatch.setattr(institutional_service, "persist_scrape_results", _boom)
+    refresh_institutionals.run_refresh_institutionals()
+    db.expire_all()
+    assert _marcatori(db) == set()
+
+
+def test_sec_13f_job_records_its_refresh(job_db: Session, monkeypatch) -> None:
+    db = job_db
+    from types import SimpleNamespace
+
+    from app.scheduler.jobs import refresh_sec_13f
+    from app.services import sec_13f_scraper
+
+    monkeypatch.setattr(
+        sec_13f_scraper, "list_curated_funds",
+        lambda: [SimpleNamespace(slug="fondo", type_="institutional")],
+    )
+    monkeypatch.setattr(sec_13f_scraper, "fetch_all_curated", lambda: [])
+    monkeypatch.setattr(sec_13f_scraper, "build_name_to_ticker_map", lambda stocks: {})
+    monkeypatch.setattr(sec_13f_scraper, "load_cusip_ticker_map", lambda db2: {})
+    monkeypatch.setattr(sec_13f_scraper, "fetch_sec_company_tickers", lambda: {})
+    monkeypatch.setattr(
+        institutional_service, "persist_scrape_results",
+        lambda db2, results, **kw: institutional_service.UpsertResult(0, 0, 0, 0, 0),
+    )
+    refresh_sec_13f.run_refresh_sec_13f()
+    db.expire_all()
+    assert _marcatori(db) == {"refresh:sec_13f"}
 
 
 # ---------------------------------------------------------------------------

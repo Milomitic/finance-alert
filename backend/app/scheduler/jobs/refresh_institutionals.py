@@ -38,6 +38,10 @@ def run_refresh_institutionals() -> None:
             f"filings_skipped_no_period={summary.filings_skipped_no_period} "
             f"holdings={summary.holdings_inserted}"
         )
+        # Dopo il salvataggio, e anche a zero filing nuovi: e' cio' che dice al
+        # recupero all'avvio che il refresh c'e' stato (vedi
+        # `filings_refresh_is_stale`). Un job che aborta o fallisce non arriva qui.
+        institutional_service.record_refresh_success(db, "dataroma")
     except Exception as exc:  # noqa: BLE001
         logger.exception(f"[refresh_institutionals] persist failed: {exc}")
         db.rollback()
