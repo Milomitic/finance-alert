@@ -97,12 +97,18 @@ def get_scheduler() -> BackgroundScheduler:
         # completed at today's close is detected this evening (while the app
         # is open) instead of waiting for the 23:30 tick. Cheap: scan_universe
         # uses STORED OHLCV and the fetch step is smart-incremental.
+        #
+        # ⚠️ Senza ricalcolo degli score (FA-079 #2): la lente Qualita' dipende
+        # dai fondamentali (TTL 7 giorni) e la rifa' la scansione delle 23:30,
+        # che segue sempre questa. Risparmia ~6 minuti per feriale. La lente
+        # Tecnico si calcola comunque, dentro la valutazione dei segnali.
         _scheduler.add_job(
             run_scan_alerts,
             trigger=CronTrigger(
                 day_of_week="mon-fri",
                 hour=settings.scan_hour_2, minute=settings.scan_minute_2,
             ),
+            kwargs={"recompute_scores": False},
             id="scan_alerts_eu_close",
             replace_existing=True,
             max_instances=1,

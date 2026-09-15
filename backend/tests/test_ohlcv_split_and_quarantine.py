@@ -231,7 +231,7 @@ def test_cron_fetch_plan_skips_quarantined_empty_stock(db, monkeypatch):
     )
     monkeypatch.setattr(
         job, "run_tracked_scan",
-        lambda session, trigger, existing_run=None: None,
+        lambda session, trigger, existing_run=None, **kw: None,
     )
     job.run_scan_alerts(trigger="cron")
 

@@ -39,7 +39,7 @@ def _run(monkeypatch, db):
     tracked: list[str] = []
     monkeypatch.setattr(
         job, "run_tracked_scan",
-        lambda session, trigger, existing_run=None: tracked.append(trigger),
+        lambda session, trigger, existing_run=None, **kw: tracked.append(trigger),
     )
     job.run_scan_alerts(trigger="cron")
     return calls, tracked
@@ -99,7 +99,7 @@ def test_fetch_loop_honors_cancel(db, monkeypatch):
     tracked: list = []
     monkeypatch.setattr(
         job, "run_tracked_scan",
-        lambda session, trigger, existing_run=None: tracked.append(trigger),
+        lambda session, trigger, existing_run=None, **kw: tracked.append(trigger),
     )
 
     job.run_scan_alerts(trigger="cron")

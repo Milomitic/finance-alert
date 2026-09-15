@@ -17,7 +17,7 @@ from app.services.ohlcv_service import fetch_and_upsert
 from app.services.scan_runner import bump_heartbeat, create_scan_run, run_tracked_scan
 
 
-def run_scan_alerts(trigger: str = "cron") -> None:
+def run_scan_alerts(trigger: str = "cron", recompute_scores: bool = True) -> None:
     # Single-scan guard: a scan is a multi-minute single-writer (chunked
     # fetch_and_upsert + recompute) and SQLite can't take two at once — a manual
     # scan overlapping the boot catch-up surfaced 'database is locked'. Skip if a
@@ -28,10 +28,10 @@ def run_scan_alerts(trigger: str = "cron") -> None:
                 f"[scan_alerts] another scan already running — skipping (trigger={trigger})"
             )
             return
-        _run_scan_alerts_locked(trigger)
+        _run_scan_alerts_locked(trigger, recompute_scores)
 
 
-def _run_scan_alerts_locked(trigger: str) -> None:
+def _run_scan_alerts_locked(trigger: str, recompute_scores: bool = True) -> None:
     logger.info(f"[scan_alerts] job: starting (trigger={trigger})")
     db = SessionLocal()
     try:
@@ -136,7 +136,9 @@ def _run_scan_alerts_locked(trigger: str) -> None:
             )
 
         # Step 2: evaluate rules + fire alerts (reuses the same ScanRun row)
-        run_tracked_scan(db, trigger=trigger, existing_run=run)
+        run_tracked_scan(
+            db, trigger=trigger, existing_run=run, recompute_scores=recompute_scores
+        )
 
         # Step 3: retire setups whose conditions decayed without firing. They
         # are the "expired" half of the conversion rate, so this is what keeps

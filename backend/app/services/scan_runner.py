@@ -170,8 +170,22 @@ def run_tracked_scan(
     *,
     trigger: str = "manual",
     existing_run: ScanRun | None = None,
+    recompute_scores: bool = True,
 ) -> ScanRun:
     """Run scan_universe with progress callback, finalize the ScanRun row.
+
+    `recompute_scores=False` salta il ricalcolo della lente Qualita' e la
+    cattura giornaliera di `score_history` (FA-079 #2). Lo usa solo la
+    scansione feriale delle 18:30: la Qualita' dipende dai fondamentali, che
+    hanno TTL 7 giorni, e ricalcolarla due volte al giorno costava ~6 minuti
+    per un risultato identico. La lente Tecnico NON e' toccata: si calcola
+    dentro `scan_universe`, quindi alle 18:30 vede comunque i prezzi della
+    chiusura UE.
+
+    ⚠️ La cattura dello storico si salta INSIEME al ricalcolo, non per
+    comodita': `score_history_service.capture` scrive una volta al giorno e
+    vince la PRIMA. Lasciata alle 18:30 fisserebbe per quel giorno la Qualita'
+    della sera prima, e quella fresca delle 23:30 verrebbe scartata.
 
     If `existing_run` is provided, reuses it (typical when a fetch phase already
     created the row). Otherwise creates a fresh row.
@@ -320,72 +334,80 @@ def run_tracked_scan(
         # (settori then stocks); we relay those values to the ScanRun row
         # so the toast bar advances with each phase's own atomic unit
         # instead of staying pinned at the scan_universe N/N.
-        run.phase = "evaluating:sector_stats"
-        run.current_target = "Pre-calcolo statistiche settoriali…"
-        run.progress_done = 0
-        run.progress_total = 1  # placeholder — score_service overrides on first tick
-        db.commit()
-        try:
-            from app.services import score_service
-            from app.services.score_service import RecomputeCancelled
-
-            # Relay score_service's per-loop (done, total) onto the ScanRun
-            # row so the toast bar tracks each sub-phase's atomic unit.
-            # Commits on every tick: SQLite handles 5-10 UPDATE/sec just
-            # fine, and the polling API uses a separate Session so visibility
-            # requires real commits (piggybacking on score_service's own
-            # commits would lag the bar by up to BATCH_COMMIT_EVERY=50 stocks).
-            def _persisting_heartbeat(done: int, total: int) -> None:
-                run.progress_done = done
-                run.progress_total = total
-                run.last_progress_at = datetime.now(UTC)
-                try:
-                    db.commit()
-                except Exception:  # noqa: BLE001
-                    db.rollback()
-
-            # Sub-phase signal arrives explicitly from recompute_all (post
-            # the May 2026 refactor): "sector_stats" then "scoring".
-            # Translated 1:1 to the sub-phase labels the toast shows; the
-            # progress_done reset is critical so each sub-phase's bar
-            # animates from 0 (without it the bar would snap from 12/12
-            # straight to 1100/1100 with no intermediate motion).
-            def _persisting_phase_change(phase: str) -> None:
-                if phase == "sector_stats":
-                    run.phase = "evaluating:sector_stats"
-                    run.current_target = "Pre-calcolo statistiche settoriali…"
-                else:  # phase == "scoring"
-                    run.phase = "evaluating:scoring_recompute"
-                    run.current_target = "Ricalcolo score composito per stock…"
-                run.progress_done = 0
-                db.commit()
-
+        # Vedi `recompute_scores` nel docstring: la scansione delle 18:30 salta
+        # questa fase (FA-079 #2).
+        if recompute_scores:
+            run.phase = "evaluating:sector_stats"
+            run.current_target = "Pre-calcolo statistiche settoriali…"
+            run.progress_done = 0
+            run.progress_total = 1  # placeholder — score_service overrides on first tick
+            db.commit()
             try:
-                # Defense-in-depth pulse: score_service already heartbeats
-                # via `_persisting_heartbeat` from inside its loops, BUT
-                # individual yfinance retries on delisted tickers can
-                # stall for 30s+ between heartbeats. The pulse closes
-                # those gaps without changing the service's contract.
-                with heartbeat_pulse(run.id):
-                    n_ok, n_failed = score_service.recompute_all(
-                        db,
-                        on_progress=_persisting_heartbeat,
-                        on_phase_change=_persisting_phase_change,
-                        cancel_check=cancel_check,
+                from app.services import score_service
+                from app.services.score_service import RecomputeCancelled
+
+                # Relay score_service's per-loop (done, total) onto the ScanRun
+                # row so the toast bar tracks each sub-phase's atomic unit.
+                # Commits on every tick: SQLite handles 5-10 UPDATE/sec just
+                # fine, and the polling API uses a separate Session so visibility
+                # requires real commits (piggybacking on score_service's own
+                # commits would lag the bar by up to BATCH_COMMIT_EVERY=50 stocks).
+                def _persisting_heartbeat(done: int, total: int) -> None:
+                    run.progress_done = done
+                    run.progress_total = total
+                    run.last_progress_at = datetime.now(UTC)
+                    try:
+                        db.commit()
+                    except Exception:  # noqa: BLE001
+                        db.rollback()
+
+                # Sub-phase signal arrives explicitly from recompute_all (post
+                # the May 2026 refactor): "sector_stats" then "scoring".
+                # Translated 1:1 to the sub-phase labels the toast shows; the
+                # progress_done reset is critical so each sub-phase's bar
+                # animates from 0 (without it the bar would snap from 12/12
+                # straight to 1100/1100 with no intermediate motion).
+                def _persisting_phase_change(phase: str) -> None:
+                    if phase == "sector_stats":
+                        run.phase = "evaluating:sector_stats"
+                        run.current_target = "Pre-calcolo statistiche settoriali…"
+                    else:  # phase == "scoring"
+                        run.phase = "evaluating:scoring_recompute"
+                        run.current_target = "Ricalcolo score composito per stock…"
+                    run.progress_done = 0
+                    db.commit()
+
+                try:
+                    # Defense-in-depth pulse: score_service already heartbeats
+                    # via `_persisting_heartbeat` from inside its loops, BUT
+                    # individual yfinance retries on delisted tickers can
+                    # stall for 30s+ between heartbeats. The pulse closes
+                    # those gaps without changing the service's contract.
+                    with heartbeat_pulse(run.id):
+                        n_ok, n_failed = score_service.recompute_all(
+                            db,
+                            on_progress=_persisting_heartbeat,
+                            on_phase_change=_persisting_phase_change,
+                            cancel_check=cancel_check,
+                        )
+                    logger.info(
+                        f"[scan_runner] {n_ok} stock score(s) recomputed "
+                        f"({n_failed} failed) for ScanRun {run.id}"
                     )
-                logger.info(
-                    f"[scan_runner] {n_ok} stock score(s) recomputed "
-                    f"({n_failed} failed) for ScanRun {run.id}"
-                )
-            except RecomputeCancelled:
-                # Propagate as the scan-level cancel so the outer handler can
-                # finalize the row cleanly. The user clicked Stop — same
-                # outcome whether it landed inside or outside the score loop.
-                raise ScanCancelled("Cancellato dall'utente") from None
-        except ScanCancelled:
-            raise
-        except Exception as score_exc:  # noqa: BLE001
-            logger.warning(f"[scan_runner] score recompute failed (non-fatal): {score_exc}")
+                except RecomputeCancelled:
+                    # Propagate as the scan-level cancel so the outer handler can
+                    # finalize the row cleanly. The user clicked Stop — same
+                    # outcome whether it landed inside or outside the score loop.
+                    raise ScanCancelled("Cancellato dall'utente") from None
+            except ScanCancelled:
+                raise
+            except Exception as score_exc:  # noqa: BLE001
+                logger.warning(f"[scan_runner] score recompute failed (non-fatal): {score_exc}")
+        else:
+            logger.info(
+                f"[scan_runner] score recompute skipped for ScanRun {run.id} "
+                "(recompute_scores=False: fondamentali invariati, lo rifa' la notturna)"
+            )
 
         if cancel_check():
             raise ScanCancelled("Cancellato dall'utente")
@@ -500,11 +522,13 @@ def run_tracked_scan(
             logger.warning(f"[scan_runner] concluded auto-archive failed (non-fatal): {arch_exc}")
         # Snapshot the day's composites into score_history (best-effort; the
         # substrate for the score-IC backtest). Idempotent per day.
-        try:
-            from app.services import score_history_service
-            score_history_service.capture(db)
-        except Exception as sh_exc:  # noqa: BLE001
-            logger.warning(f"[scan_runner] score-history capture failed (non-fatal): {sh_exc}")
+        # Solo se gli score sono stati appena ricalcolati: vedi il docstring.
+        if recompute_scores:
+            try:
+                from app.services import score_history_service
+                score_history_service.capture(db)
+            except Exception as sh_exc:  # noqa: BLE001
+                logger.warning(f"[scan_runner] score-history capture failed (non-fatal): {sh_exc}")
         logger.info(
             f"[scan_runner] ScanRun {run.id} success: "
             f"scanned={result.stocks_scanned} alerts={result.alerts_fired}"
