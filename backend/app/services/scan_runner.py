@@ -512,12 +512,14 @@ def run_tracked_scan(
     except ScanCancelled as exc:
         # User requested cancel — distinct from a crash. Mark as 'failed' (so
         # the UI knows it didn't complete) but with a clear, friendly message.
-        logger.info(f"[scan_runner] ScanRun {run.id} cancelled by user")
+        # ⚠️ `run_id_for_cancel`, non `run.id`: vedi il ramo del crollo qui
+        # sotto — lo stop puo' arrivare con la sessione ancora abortita.
+        run_id = run_id_for_cancel
+        logger.info(f"[scan_runner] ScanRun {run_id} cancelled by user")
         try:
             db.rollback()
         except Exception:  # noqa: BLE001
             pass
-        run_id = run.id
         db.close()
         from app.core.db import SessionLocal
 
@@ -534,13 +536,21 @@ def run_tracked_scan(
         scan_cancel.clear(run_id_for_cancel)
         return run
     except Exception as exc:  # noqa: BLE001
-        logger.exception(f"[scan_runner] ScanRun {run.id} crashed: {exc}")
+        # ⚠️ Nessuna lettura di `run` qui dentro. Un crollo del database lascia
+        # la sessione ABORTITA, e `run.id` e' scaduto dall'ultimo commit:
+        # rileggerlo e' una query, che su una sessione abortita solleva
+        # PendingRollbackError. Scritto `logger.exception(f"... {run.id} ...")`
+        # prima del rollback, il gestore crollava a sua volta: la riga restava
+        # 'running', la pulizia la chiudeva con «heartbeat fermo», e per undici
+        # scansioni (2026-09-14/15) la causa vera stava solo nei log del pod.
+        # L'id si prende da `run_id_for_cancel`, catturato a sessione sana.
+        run_id = run_id_for_cancel
+        logger.exception(f"[scan_runner] ScanRun {run_id} crashed: {exc}")
         try:
             db.rollback()
         except Exception:  # noqa: BLE001
             pass
         # Re-fetch the row in a fresh transaction to mark it failed
-        run_id = run.id
         db.close()
         from app.core.db import SessionLocal
 
