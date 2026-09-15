@@ -342,6 +342,9 @@ def _hydrate_run_metrics() -> None:
     try:
         with SessionLocal() as db:
             app_metrics.hydrate_from_db(db)
+            # Dopo `_cleanup_orphan_scans`, che gira prima nel lifespan: le
+            # righe chiuse all'avvio sono gia' nel conto (FA-079 #7).
+            app_metrics.refresh_failure_streak_gauge(db)
             app_metrics.refresh_stale_ohlcv_gauge(db)
             app_metrics.refresh_data_health_gauges(db)
     except Exception as exc:  # noqa: BLE001 — boot-time best effort

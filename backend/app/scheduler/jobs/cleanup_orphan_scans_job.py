@@ -53,6 +53,12 @@ def run_cleanup_orphan_scans() -> int:
             r.completed_at = now
             closed += 1
         db.commit()
+        # ⚠️ E' QUI che finisce una scansione morta a meta' — le undici del
+        # 2026-09-14/15 sono state chiuse da questa funzione, non dal runner —
+        # quindi e' qui che la serie di fallimenti va ricontata (FA-079 #7).
+        from app.core import app_metrics  # noqa: PLC0415
+
+        app_metrics.refresh_failure_streak_gauge(db)
         logger.warning(
             f"[orphan_cleanup] closed {closed} stale ScanRun(s) "
             f"(ids={[r.id for r in stale]})"

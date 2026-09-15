@@ -34,7 +34,7 @@ from prometheus_client import Counter, Gauge
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.models.scan_run import ScanRun
+from app.models.scan_run import KIND_ALERTS_SCAN, ScanRun
 
 # Labelled by `kind` so the alert scan and the score recompute are covered by
 # one metric and one rule instead of two of each. Values are the KIND_*
@@ -49,6 +49,63 @@ LAST_SUCCESSFUL_RUN = Gauge(
     "Unix timestamp of the last tracked background run that completed successfully.",
     ["kind"],
 )
+
+# ⚠️ A SERIES of failed runs (FA-079 #7, 2026-09-15). The gauge above can only
+# say how long ago the last success was, so `FinanceAlertNotScanning` needs 26
+# hours to notice anything: on 2026-09-14/15 eleven scans failed IN A ROW and no
+# alert fired. This counts the failures since the last success and is
+# recomputed FROM THE DATABASE wherever a run can end — success path, crash
+# path, periodic orphan cleanup, boot — because a scan killed mid-flight is
+# closed by the cleanup, not by the runner, and that is exactly how those
+# eleven were recorded.
+RUN_FAILURE_STREAK = Gauge(
+    "finance_alert_run_failure_streak",
+    "Consecutive failed runs of this kind since the last success (user cancels and restarts excluded).",
+    ["kind"],
+)
+
+#: Closing messages that are NOT a pipeline failure. A user cancel is a click;
+#: a restart-killed scan is a deploy, and FA-079 #6 re-runs it on its own.
+#: Counting them would page someone for pressing Stop or shipping a commit.
+NOT_A_PIPELINE_FAILURE = ("Cancellato", "Backend riavviato", "Interrotta da un riavvio")
+
+# How far back to look. Far more than any streak worth alerting on, and it
+# bounds the query on a table that keeps 500 rows by retention.
+_STREAK_LOOKBACK = 50
+
+
+def failure_streak(db: Session, kind: str = KIND_ALERTS_SCAN) -> int:
+    """Failed runs of `kind` since the last success, newest first.
+
+    Ordered by `started_at`, which is NOT NULL — not by `completed_at`, whose
+    NULLs sort first on Postgres (see `last_successful_completed_at`).
+    """
+    rows = db.execute(
+        select(ScanRun.status, ScanRun.error_message)
+        .where(ScanRun.kind == kind, ScanRun.status.in_(("success", "failed")))
+        .order_by(ScanRun.started_at.desc(), ScanRun.id.desc())
+        .limit(_STREAK_LOOKBACK)
+    ).all()
+    n = 0
+    for status, message in rows:
+        if status == "success":
+            break
+        if (message or "").startswith(NOT_A_PIPELINE_FAILURE):
+            continue
+        n += 1
+    return n
+
+
+def refresh_failure_streak_gauge(db: Session, kind: str = KIND_ALERTS_SCAN) -> int | None:
+    """Recompute and publish the streak for `kind`. Never raises: a metrics
+    problem must not turn a finished run, or a cleanup, into a crash."""
+    try:
+        n = failure_streak(db, kind)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(f"[metrics] failure-streak recount failed: {exc}")
+        return None
+    RUN_FAILURE_STREAK.labels(kind=kind).set(float(n))
+    return n
 
 
 # How many stocks carry OHLCV older than this. The alert on it is the answer

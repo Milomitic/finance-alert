@@ -472,6 +472,8 @@ def run_tracked_scan(
         # liveness rules cannot see this: a pod that stays up while every scan
         # fails looks perfectly healthy from the outside.
         app_metrics.record_successful_run(KIND_ALERTS_SCAN, run.completed_at)
+        # Una riuscita chiude la serie di fallimenti (FA-079 #7).
+        app_metrics.refresh_failure_streak_gauge(db)
         # Recount stale price data here, where it just changed. A scan that
         # completes says nothing about whether the data advanced — four
         # symbols were frozen for weeks while every scan reported success.
@@ -587,6 +589,9 @@ def run_tracked_scan(
                 failed_run.error_message = str(exc)[:1000]
                 failed_run.completed_at = datetime.now(UTC)
                 db2.commit()
+            # La riga e' appena diventata 'failed': la serie va ricontata
+            # adesso, non alla prossima pulizia (FA-079 #7).
+            app_metrics.refresh_failure_streak_gauge(db2)
         # Telegram push on the CRASH path only (best-effort: a Telegram
         # problem must never mask the original scan error). The user-cancel
         # path above deliberately does NOT notify — being told about your

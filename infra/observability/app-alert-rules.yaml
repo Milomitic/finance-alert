@@ -164,6 +164,30 @@ spec:
               di 26 ore fa. Il pod risponde — questo non è un crash: o il job
               non parte, o fallisce ogni volta. Guarda i log dello scheduler.
 
+        # --- A SERIES of failed scans (FA-079 #7, 2026-09-15) ---------------
+        # The rule above reads how long ago the LAST SUCCESS was, so it needs
+        # 26 hours to say anything. On 2026-09-14/15 eleven scans failed in a
+        # row — a column too short for a new value — and nothing fired for
+        # 19 hours. The streak gauge is recomputed from `scan_runs` wherever a
+        # run ends (success, crash, orphan cleanup, boot), and excludes user
+        # cancels and restart-killed runs (a click and a deploy are not a
+        # broken pipeline). Two in a row is already two different ticks — the
+        # 18:30 and the 23:30, or a scan and its boot re-run — so it is not
+        # noise, and it pages the same evening instead of the next one.
+        - alert: FinanceAlertScansFailing
+          expr: |
+            finance_alert_run_failure_streak{kind="alerts_scan"} >= 2
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "le scansioni falliscono di fila ({{ $value | printf \"%.0f\" }})"
+            description: >-
+              {{ $value | printf "%.0f" }} scansioni consecutive sono finite in
+              errore dall'ultima riuscita. Il pod e' vivo e il job parte: e' la
+              pipeline che crolla. La causa e' in scan_runs.error_message e nei
+              log del pod ("[scan_runner] ScanRun ... crashed").
+
         # The gauge missing ENTIRELY is a different failure from a stale one:
         # a series that never appears cannot be compared against time(), so the
         # rule above would stay silent forever. Split out because it usually
