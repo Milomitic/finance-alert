@@ -27,7 +27,10 @@ def upgrade() -> None:
         sa.Column("stock_id", sa.Integer(), nullable=False),
         sa.Column("target_price", sa.Numeric(precision=12, scale=4), nullable=False),
         sa.Column("direction", sa.String(length=8), nullable=False),
-        sa.Column("enabled", sa.Boolean(), nullable=False, server_default=sa.text("1")),
+        # FA-070: `sa.true()` e non `sa.text("1")`. Su SQLite compila a `1` come
+        # prima; su Postgres un default INTERO su una colonna BOOLEANA e' un
+        # errore, e questa riga fermava la catena eseguita da vuoto.
+        sa.Column("enabled", sa.Boolean(), nullable=False, server_default=sa.true()),
         sa.Column("note", sa.String(length=255), nullable=True),
         sa.Column("triggered_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column(

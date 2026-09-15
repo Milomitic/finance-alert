@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import json
 import os
+from contextlib import contextmanager
 from datetime import date
 from pathlib import Path
 
@@ -155,38 +156,19 @@ def test_one_failed_stock_does_not_poison_the_rest_of_the_batch(pg, monkeypatch)
     assert date(2026, 7, 21) in landed
 
 
-def test_la_migrazione_FA_061_gira_su_POSTGRES_andata_e_ritorno(monkeypatch) -> None:
-    """La migrazione degli episodi di setup, eseguita su Postgres vero.
+@contextmanager
+def _database_vuoto(monkeypatch):
+    """Un database Postgres NUOVO e vuoto, con Alembic puntato su di lui.
 
-    ⚠️ PERCHE' UNA SOLA MIGRAZIONE E NON LA CATENA INTERA.
-
-    La prima versione di questo test faceva `upgrade head` da un database
-    vuoto, ed e' cosi' che si e' scoperto che **la catena storica non e'
-    eseguibile da zero su Postgres**: `0601129beb3a (add price alerts)` da
-    `column "enabled" is of type boolean but default expression is of type
-    integer`, perche' un default intero su una colonna booleana passa su SQLite
-    e non qui. E' un difetto vero e piu' grosso di questa voce — ha un ID suo
-    (FA-070) — ma tenere OSTAGGIO la verifica di una migrazione nuova a una
-    catena di mesi che nessuno ha mai eseguito significherebbe non verificarne
-    nessuna.
-
-    Quindi si costruisce la forma che la migrazione SI ASPETTA DI TROVARE, si
-    marca la revisione precedente, e si sale di un passo. La DDL qui sotto e'
-    esplicita di proposito: e' il contratto d'ingresso della migrazione, e
-    scriverlo rende visibile cosa succede se qualcuno lo cambia.
-
-    ⚠️ E si prova anche il RITORNO. Una migrazione che non si ripercorre
-    all'indietro va scoperta adesso, non durante un ripristino.
+    ⚠️ `cfg.set_main_option("sqlalchemy.url", ...)` NON basta: `alembic/env.py`
+    sovrascrive quell'opzione con `settings.database_url`, perche' `alembic.ini`
+    la lascia VUOTA di proposito. Il primo giro di questi test ci era cascato e
+    PASSAVA girando contro il database predefinito.
     """
     import uuid
 
     from alembic.config import Config
     from sqlalchemy import text
-    from sqlalchemy.exc import IntegrityError
-
-    from alembic import command
-
-    _PRIMA = "3d8693a96ce6"   # la revisione su cui FA-061 si innesta
 
     nome = f"fa_mig_{uuid.uuid4().hex[:12]}"
     radice = create_engine(_PG_URL, future=True, isolation_level="AUTOCOMMIT")
@@ -196,31 +178,121 @@ def test_la_migrazione_FA_061_gira_su_POSTGRES_andata_e_ritorno(monkeypatch) -> 
 
     url = _PG_URL.rsplit("/", 1)[0] + "/" + nome
     cfg = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
-    cfg.set_main_option("script_location",
-                        str(Path(__file__).resolve().parents[1] / "alembic"))
-    # ⚠️ `cfg.set_main_option("sqlalchemy.url", ...)` NON basta: `alembic/env.py`
-    # sovrascrive quell'opzione con `settings.database_url`, perche'
-    # `alembic.ini` la lascia VUOTA di proposito — la configurazione del
-    # database ha un proprietario solo. La prima versione di questo test ci e'
-    # cascata e PASSAVA girando contro il database predefinito.
+    cfg.set_main_option("script_location", str(Path(__file__).resolve().parents[1] / "alembic"))
     monkeypatch.setattr(settings, "database_url", url)
-
     eng = create_engine(url, future=True)
     try:
-        with eng.begin() as c:
-            # La forma PRE-migrazione: il vincolo unico sulla coppia, nessuna
-            # colonna `closed_reason`. Solo le colonne che la migrazione tocca.
-            c.execute(text("""
-                CREATE TABLE stock_setups (
-                    id SERIAL PRIMARY KEY,
-                    stock_id INTEGER NOT NULL,
-                    detector VARCHAR(64) NOT NULL,
-                    status VARCHAR(16) NOT NULL DEFAULT 'active',
-                    CONSTRAINT uq_stock_setups_stock_detector
-                        UNIQUE (stock_id, detector)
-                )
-            """))
-        command.stamp(cfg, _PRIMA)
+        yield cfg, eng
+    finally:
+        eng.dispose()
+        radice = create_engine(_PG_URL, future=True, isolation_level="AUTOCOMMIT")
+        with radice.connect() as c:
+            c.execute(text(
+                "SELECT pg_terminate_backend(pid) FROM pg_stat_activity "
+                "WHERE datname = :n AND pid <> pg_backend_pid()"), {"n": nome})
+            c.execute(text(f'DROP DATABASE IF EXISTS "{nome}"'))
+        radice.dispose()
+
+
+def test_la_catena_INTERA_arriva_in_fondo_da_vuoto_su_POSTGRES(monkeypatch) -> None:
+    """FA-070. `alembic upgrade head` da un database vuoto, su Postgres vero.
+
+    ⚠️ Lo schema di produzione NON e' nato da questa catena: e' nato da
+    `create_all` piu' uno `stamp`, e il drill del lunedi' lo verifica ogni
+    settimana. Quindi nessuno aveva mai eseguito queste migrazioni su Postgres,
+    e la prima volta che e' successo — lavorando a FA-061 — la catena si e'
+    fermata su un default intero dato a una colonna booleana, che SQLite accetta.
+    Ricostruire il database da zero con le migrazioni e' una cosa che si scopre
+    rotta nel momento peggiore.
+
+    Due asserzioni oltre al «non solleva»: la revisione registrata e' la testa,
+    e ogni tabella dei modelli esiste. La seconda e' quella che distingue una
+    catena che arriva in fondo da una che ci arriva avendo saltato qualcosa.
+    """
+    from alembic.script import ScriptDirectory
+    from sqlalchemy import text
+
+    from alembic import command
+
+    with _database_vuoto(monkeypatch) as (cfg, eng):
+        command.upgrade(cfg, "head")
+
+        with eng.connect() as c:
+            registrata = c.execute(text("SELECT version_num FROM alembic_version")).scalars().all()
+        assert registrata == ScriptDirectory.from_config(cfg).get_heads()
+
+        tabelle = set(inspect(eng).get_table_names())
+        mancanti = sorted(set(Base.metadata.tables) - tabelle)
+        assert mancanti == [], f"tabelle dei modelli che la catena non crea: {mancanti}"
+
+
+def _inserisci(c, tabella: str, **valori) -> None:
+    """INSERT che riempie da solo le colonne NOT NULL senza default.
+
+    Il test di FA-061 parte ora dallo schema che la catena produce DAVVERO, non
+    da una tabella a tre colonne scritta a mano — e quello schema ha colonne
+    obbligatorie che il test non ha motivo di conoscere. Leggerle dal catalogo
+    tiene il test legato a cio' che la migrazione trova, invece che a una copia
+    del modello che invecchierebbe alla prossima colonna.
+    """
+    from sqlalchemy import text
+
+    obbligatorie = c.execute(text(
+        "SELECT column_name, data_type FROM information_schema.columns "
+        "WHERE table_name = :t AND is_nullable = 'NO' AND column_default IS NULL"
+    ), {"t": tabella}).all()
+    riempitivo = {
+        "integer": 0, "bigint": 0, "smallint": 0,
+        "double precision": 0.0, "real": 0.0, "numeric": 0,
+        "boolean": False, "date": date(2026, 1, 2),
+    }
+    for nome, tipo in obbligatorie:
+        if nome in valori:
+            continue
+        if tipo.startswith("timestamp"):
+            valori[nome] = "2026-01-02T00:00:00+00:00"
+        else:
+            valori[nome] = riempitivo.get(tipo, "x")
+    colonne = ", ".join(valori)
+    segnaposto = ", ".join(f":{k}" for k in valori)
+    c.execute(text(f"INSERT INTO {tabella} ({colonne}) VALUES ({segnaposto})"), valori)
+
+
+def test_la_migrazione_FA_061_gira_su_POSTGRES_andata_e_ritorno(monkeypatch) -> None:
+    """La migrazione degli episodi di setup, eseguita su Postgres vero.
+
+    ⚠️ Questo test partiva da una tabella a tre colonne scritta a mano, piu' uno
+    `stamp`, e il docstring ne spiegava la ragione: `upgrade head` da vuoto si
+    fermava su `0601129beb3a` (un default intero dato a una colonna booleana), e
+    tenere ostaggio la verifica di una migrazione nuova a una catena che nessuno
+    aveva mai eseguito avrebbe significato non verificarne nessuna.
+
+    FA-070 ha reso la catena eseguibile, quindi la scorciatoia non serve piu' e
+    anzi costava qualcosa: la tabella scritta a mano era il contratto che il
+    test IMMAGINAVA, non lo schema che la migrazione trova davvero. Ora si sale
+    con la catena fino alla revisione precedente e poi di un passo.
+
+    ⚠️ E si prova anche il RITORNO. Una migrazione che non si ripercorre
+    all'indietro va scoperta adesso, non durante un ripristino.
+    """
+    from sqlalchemy import text
+    from sqlalchemy.exc import IntegrityError
+
+    from alembic import command
+
+    _PRIMA = "3d8693a96ce6"   # la revisione su cui FA-061 si innesta
+
+    with _database_vuoto(monkeypatch) as (cfg, eng):
+        # La forma PRE-migrazione, prodotta dalla catena e non descritta a mano.
+        command.upgrade(cfg, _PRIMA)
+        with eng.connect() as c:
+            vincoli = {r[0] for r in c.execute(text(
+                "SELECT conname FROM pg_constraint WHERE conrelid = "
+                "'stock_setups'::regclass"))}
+        # Il punto di partenza e' quello che la migrazione si aspetta: se la
+        # catena non avesse il vincolo unico sulla coppia, il resto del test
+        # proverebbe una trasformazione che non avviene.
+        assert "uq_stock_setups_stock_detector" in vincoli
 
         command.upgrade(cfg, "head")
         with eng.connect() as c:
@@ -232,6 +304,9 @@ def test_la_migrazione_FA_061_gira_su_POSTGRES_andata_e_ritorno(monkeypatch) -> 
             colonne = {r[0] for r in c.execute(text(
                 "SELECT column_name FROM information_schema.columns "
                 "WHERE table_name = 'stock_setups'"))}
+            vincoli = {r[0] for r in c.execute(text(
+                "SELECT conname FROM pg_constraint WHERE conrelid = "
+                "'stock_setups'::regclass"))}
         # ⚠️ L'indice deve portare la sua clausola: senza il WHERE sarebbe un
         # vincolo su TUTTA la tabella, la storia degli episodi tornerebbe
         # impossibile, e nulla lo direbbe.
@@ -240,24 +315,20 @@ def test_la_migrazione_FA_061_gira_su_POSTGRES_andata_e_ritorno(monkeypatch) -> 
         assert "closed_reason" in colonne
         # Il vincolo vecchio se n'e' andato: se restasse, due episodi chiusi
         # sulla stessa coppia sarebbero ancora vietati.
-        with eng.connect() as c:
-            vincoli = {r[0] for r in c.execute(text(
-                "SELECT conname FROM pg_constraint WHERE conrelid = "
-                "'stock_setups'::regclass"))}
         assert "uq_stock_setups_stock_detector" not in vincoli
 
-        # Due episodi CHIUSI convivono, uno solo puo' essere APERTO.
+        # Due episodi CHIUSI convivono, uno solo puo' essere APERTO. Il titolo
+        # esiste davvero: lo schema vero ha la chiave esterna.
         with eng.begin() as c:
-            c.execute(text("INSERT INTO stock_setups (stock_id, detector, status) "
-                           "VALUES (1, 'x', 'expired'), (1, 'x', 'expired')"))
-            c.execute(text("INSERT INTO stock_setups (stock_id, detector, status) "
-                           "VALUES (1, 'x', 'active')"))
+            _inserisci(c, "stocks", id=1, ticker="AAA", exchange="NYSE", name="Aaa")
+            _inserisci(c, "stock_setups", stock_id=1, detector="x", status="expired")
+            _inserisci(c, "stock_setups", stock_id=1, detector="x", status="expired")
+            _inserisci(c, "stock_setups", stock_id=1, detector="x", status="active")
         # ⚠️ `IntegrityError` e non `Exception`: un'eccezione qualunque
         # passerebbe anche su un refuso nella SQL qui sopra, cioe' il test
         # sarebbe verde per la ragione sbagliata.
         with pytest.raises(IntegrityError), eng.begin() as c:
-            c.execute(text("INSERT INTO stock_setups (stock_id, detector, status) "
-                           "VALUES (1, 'x', 'active')"))
+            _inserisci(c, "stock_setups", stock_id=1, detector="x", status="active")
 
         # Il ritorno. Dichiara la perdita e la esegue: lo schema di
         # destinazione non ha dove mettere il secondo episodio.
@@ -273,12 +344,3 @@ def test_la_migrazione_FA_061_gira_su_POSTGRES_andata_e_ritorno(monkeypatch) -> 
         # E si risale, perche' un ripristino seguito da un aggiornamento e' il
         # caso reale, non l'andata da sola.
         command.upgrade(cfg, "head")
-    finally:
-        eng.dispose()
-        radice = create_engine(_PG_URL, future=True, isolation_level="AUTOCOMMIT")
-        with radice.connect() as c:
-            c.execute(text(
-                "SELECT pg_terminate_backend(pid) FROM pg_stat_activity "
-                "WHERE datname = :n AND pid <> pg_backend_pid()"), {"n": nome})
-            c.execute(text(f'DROP DATABASE IF EXISTS "{nome}"'))
-        radice.dispose()

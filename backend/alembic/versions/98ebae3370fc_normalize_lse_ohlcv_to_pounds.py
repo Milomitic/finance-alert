@@ -53,28 +53,34 @@ def upgrade() -> None:
         batch_op.add_column(
             sa.Column(
                 "ohlcv_in_pounds", sa.Boolean(),
-                nullable=False, server_default=sa.text("0"),
+                nullable=False, server_default=sa.false(),  # FA-070: vedi sotto
             )
         )
 
     conn = op.get_bind()
+    # ⚠️ FA-070. Il flag e' BOOLEANO, e i confronti con `= 0` / `= 1` passano
+    # su SQLite (dove un booleano e' un intero) e falliscono su Postgres con
+    # `operator does not exist: boolean = integer`. Si passano come parametri:
+    # SQLAlchemy li lega come 1/0 su SQLite e true/false su Postgres, quindi il
+    # comportamento sui database gia' migrati e' identico.
+    booleani = {"vero": True, "falso": False}
 
     # 2) Mark the 3 already-in-pounds outliers as flag=1 without scaling.
     if ALREADY_IN_POUNDS_LSE:
         placeholders = ",".join(f":t{i}" for i in range(len(ALREADY_IN_POUNDS_LSE)))
         params = {f"t{i}": v for i, v in enumerate(ALREADY_IN_POUNDS_LSE)}
         conn.execute(sa.text(
-            f"UPDATE stocks SET ohlcv_in_pounds = 1 "
-            f"WHERE ticker IN ({placeholders}) AND ohlcv_in_pounds = 0"
-        ), params)
+            f"UPDATE stocks SET ohlcv_in_pounds = :vero "
+            f"WHERE ticker IN ({placeholders}) AND ohlcv_in_pounds = :falso"
+        ), {**params, **booleani})
 
     # 3) Backfill: every other .L stock with flag=0 gets O/H/L/C divided by 100.
     affected = conn.execute(sa.text(f"""
         SELECT id FROM stocks
         WHERE ticker LIKE '%.L'
-          AND ohlcv_in_pounds = 0
+          AND ohlcv_in_pounds = :falso
           AND ticker NOT IN ({",".join(repr(t) for t in ALREADY_IN_POUNDS_LSE)})
-    """)).fetchall()
+    """), booleani).fetchall()
     affected_ids = [row[0] for row in affected]
 
     for stock_id in affected_ids:
@@ -87,8 +93,8 @@ def upgrade() -> None:
             WHERE stock_id = :sid
         """), {"sid": stock_id})
         conn.execute(sa.text(
-            "UPDATE stocks SET ohlcv_in_pounds = 1 WHERE id = :sid"
-        ), {"sid": stock_id})
+            "UPDATE stocks SET ohlcv_in_pounds = :vero WHERE id = :sid"
+        ), {"sid": stock_id, **booleani})
 
     # 4) Clear stale stock_scores for the SCALED stocks only. The 3 outliers'
     #    scores were already correct and stay.
@@ -113,9 +119,9 @@ def downgrade() -> None:
     rows = conn.execute(sa.text(f"""
         SELECT id FROM stocks
         WHERE ticker LIKE '%.L'
-          AND ohlcv_in_pounds = 1
+          AND ohlcv_in_pounds = :vero
           AND ticker NOT IN ({",".join(repr(t) for t in ALREADY_IN_POUNDS_LSE)})
-    """)).fetchall()
+    """), {"vero": True}).fetchall()
     for (stock_id,) in rows:
         conn.execute(sa.text("""
             UPDATE ohlcv_daily
