@@ -218,11 +218,14 @@ jobs:
           SECRET_KEY: ${{ steps.chiave.outputs.valore }}
           HTTPS_PROXY: http://127.0.0.1:9
           HTTP_PROXY: http://127.0.0.1:9
-          https_proxy: http://127.0.0.1:9
-          http_proxy: http://127.0.0.1:9
           NO_PROXY: 127.0.0.1,localhost
-          no_proxy: 127.0.0.1,localhost
         run: |
+          # ⚠️ Le minuscole si esportano QUI e non nella mappa `env`: GitHub
+          # tratta i nomi delle variabili senza distinzione di maiuscole e
+          # rifiuta `HTTPS_PROXY` e `https_proxy` insieme come un duplicato — il
+          # workflow non parte affatto, con zero job. Ma libcurl (yfinance) legge
+          # SOLO `http_proxy` minuscolo, quindi servono entrambe le forme.
+          export https_proxy="$HTTPS_PROXY" http_proxy="$HTTP_PROXY" no_proxy="$NO_PROXY"
           mkdir -p data
           uv run --no-sync python -c "from app.core.db import engine, Base; import app.models; Base.metadata.create_all(engine)"
           uv run --no-sync python -m app.scripts.seed_e2e
@@ -250,11 +253,9 @@ jobs:
           SCAN_STARTUP_STALE_HOURS: "0"
           HTTPS_PROXY: http://127.0.0.1:9
           HTTP_PROXY: http://127.0.0.1:9
-          https_proxy: http://127.0.0.1:9
-          http_proxy: http://127.0.0.1:9
           NO_PROXY: 127.0.0.1,localhost
-          no_proxy: 127.0.0.1,localhost
         run: |
+          export https_proxy="$HTTPS_PROXY" http_proxy="$HTTP_PROXY" no_proxy="$NO_PROXY"
           nohup uv run --no-sync uvicorn app.main:app --host 127.0.0.1 --port 8000 > /tmp/uvicorn.log 2>&1 &
           for i in $(seq 1 60); do
             curl -sf http://127.0.0.1:8000/api/health >/dev/null && exit 0
