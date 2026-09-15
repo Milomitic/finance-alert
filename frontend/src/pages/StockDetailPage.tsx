@@ -355,7 +355,7 @@ export default function StockDetailPage() {
           below, so the right rail (score+tech above, Segnali below) lines up
           by column — the two score cards together span exactly the Segnali
           card's width. */}
-      <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-3 items-stretch [&>*]:min-w-0">
+      <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] over-fhd:grid-cols-[1.8fr_1fr] gap-3 items-stretch [&>*]:min-w-0">
         <StockHeader
           stock={d.stock}
           kpis={d.kpis}
@@ -382,10 +382,10 @@ export default function StockDetailPage() {
             Sotto `lg` la colonna e' invece a tutta pagina, quindi li' due
             schede affiancate ci stanno e `sm:grid-cols-2` resta giusto. */}
         <div className="flex flex-col gap-3 min-w-0">
-          {/* `over-fhd:grid-cols-2` chiude la finestra descritta sopra: oltre
+          {/* Le due colonne `over-fhd` chiudono la finestra descritta sopra: oltre
               i 1920px la colonna vale ~830px, cioe' ~410px per scheda, sopra
               i ~170px che il commento definiva insufficienti. */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 over-fhd:grid-cols-2 gap-3 items-stretch [&>*]:min-w-0">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 over-fhd:grid-cols-[1.1fr_1fr] gap-3 items-stretch [&>*]:min-w-0">
             <StockScoreCard ticker={ticker} />
             <StockTechnicalCard ticker={ticker} />
           </div>

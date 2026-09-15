@@ -294,12 +294,13 @@ function ScoreSparkline({ ticker }: { ticker: string }) {
   const lastIdx = points.length - 1;
   return (
     <span
-      className="mt-0.5 inline-flex items-center gap-1.5 text-muted-foreground"
+      className="mt-0.5 inline-flex max-w-full items-center gap-1.5 text-muted-foreground"
       title={tooltip}
     >
       <svg
         width={w}
         height={h}
+        className="min-w-0"
         viewBox={`0 0 ${w} ${h}`}
         role="img"
         aria-label={tooltip}
@@ -321,7 +322,7 @@ function ScoreSparkline({ ticker }: { ticker: string }) {
         />
       </svg>
       {/* Identity label + first-to-last Δ — what the floating line lacked. */}
-      <span className="flex flex-col leading-tight text-[0.6471rem]">
+      <span className="flex shrink-0 flex-col whitespace-nowrap leading-tight text-[0.6471rem]">
         <span>score {points.length}g</span>
         <span
           className={
@@ -620,7 +621,7 @@ function CardShell({
   isFetching?: boolean;
   updatedAt?: number | string | null;
   /** Extra node rendered in the header's right cluster, before the
-   *  "aggiornato …" label + refresh button (e.g. the Confidence chip). */
+   *  data age + refresh button (e.g. the confidence chip). */
   headerRight?: React.ReactNode;
 }) {
   return (
@@ -629,10 +630,10 @@ function CardShell({
         <SectionTitle
           icon={Sparkles}
           label="Stock score"
-          className="mb-2"
+          className="mb-2 flex-nowrap gap-x-2 [&>div:first-child]:shrink-0 [&>div:first-child]:gap-1.5 [&>div:first-child]:tracking-[0.1em] [&>div:last-child]:min-w-0 [&>div:last-child]:shrink"
           right={
             onRefresh ? (
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5">
                 {headerRight}
                 <CardUpdatedAt updatedAt={updatedAt} />
                 <button
@@ -777,7 +778,7 @@ export function StockScoreCard({ ticker }: Props) {
   const compTone = scoreColor(composite);
 
   // QW5 confidence/coverage chip — moved to the header row (next to the
-  // "aggiornato …" label). The composite is renormalised over whatever factors
+  // data age). The composite is renormalised over whatever factors
   // had data, so two scores aren't strictly comparable; this surfaces how much
   // real data it rests on. Read defensively (older cached rows lack it).
   const mg = (data.breakdown as Record<string, unknown> | undefined)
@@ -790,7 +791,7 @@ export function StockScoreCard({ ticker }: Props) {
         className="text-[0.6765rem] tabular-nums text-muted-foreground"
         title={`Confidence: lo score poggia sul ${Math.round(mg.coverage * 100)}% del peso fattoriale nominale (${mg.pillars_present ?? "?"}/${mg.pillars_total ?? 6} pilastri con dati). Più basso = score basato su pochi input, da interpretare con cautela.`}
       >
-        Confidence {Math.round(mg.coverage * 100)}%
+        Confidenza {Math.round(mg.coverage * 100)}%
       </span>
     ) : null;
 
@@ -801,43 +802,24 @@ export function StockScoreCard({ ticker }: Props) {
       updatedAt={data?.computed_at}
       headerRight={confidenceChip}
     >
-      {/* Gauge + composite number — gauge shrunk 180->130 to give the
-          card a much shorter footprint per user feedback. The label
-          ("Buono"/"Ottimo"/...) was moved next to the risk chip
-          horizontally so the gauge area stays vertically tight. */}
-      <div className="flex items-center justify-center gap-3">
-        <div className="relative shrink-0">
-          <ScoreGauge score={composite} size={96} sectorAvg={data.sector_avg} />
-          <div className="absolute inset-0 flex flex-col items-center justify-end pb-0.5">
-            <span
-              className={cn(
-                "text-2xl font-bold tabular-nums leading-none",
-                compTone,
-              )}
-            >
-              {composite.toFixed(1)}
-            </span>
-          </div>
-        </div>
-        {/* min-w-0: without it this column cannot shrink at all, so next to
-            the 96px gauge its content (the risk badge, "media settore",
-            "Top N% del settore") overflowed instead of truncating whenever
-            the card was narrow. */}
-        <div className="flex flex-col items-start gap-1 min-w-0">
+      {/* The left column groups the score and its sector comparison; the
+          right column keeps the risk tier and historical context together. */}
+      <div className="grid grid-cols-2 items-center gap-3">
+        <div className="flex min-w-0 flex-col items-center gap-1 text-center">
           <span className="text-[0.7059rem] uppercase tracking-wider text-muted-foreground">
             {scoreLabel(composite)}
           </span>
-          <span
-            className={cn(
-              "px-2 py-0.5 rounded border text-[0.7059rem] uppercase tracking-wider font-semibold",
-              RISK_TONE[data.risk_tier],
-            )}
-          >
-            {RISK_LABEL[data.risk_tier]}
-          </span>
+          <div className="relative shrink-0">
+            <ScoreGauge score={composite} size={96} sectorAvg={data.sector_avg} />
+            <div className="absolute inset-0 flex flex-col items-center justify-end pb-0.5">
+              <span className={cn("text-2xl font-bold tabular-nums leading-none", compTone)}>
+                {composite.toFixed(1)}
+              </span>
+            </div>
+          </div>
           {data.sector_avg != null && (
             <span
-              className="mt-0.5 inline-flex items-center gap-1 text-[0.6765rem] text-muted-foreground"
+              className="inline-flex items-center gap-1 text-[0.6765rem] text-muted-foreground"
               title={`Media composito del settore (${data.sector_avg.toFixed(1)}) — la tacca sul gauge`}
             >
               <span className="h-2 w-0.5 rounded-sm bg-foreground/70" />
@@ -849,7 +831,7 @@ export function StockScoreCard({ ticker }: Props) {
           )}
           {data.sector_percentile != null && (
             <span
-              className="mt-0.5 text-[0.6765rem] text-muted-foreground"
+              className="text-[0.6765rem] text-muted-foreground"
               title={
                 `Percentile nel settore: ${data.sector_percentile}° (più alto = migliore)` +
                 (data.universe_percentile != null ? ` · ${data.universe_percentile}° nell'universo` : "") +
@@ -866,6 +848,16 @@ export function StockScoreCard({ ticker }: Props) {
               )}
             </span>
           )}
+        </div>
+        <div className="flex min-w-0 flex-col items-start gap-2">
+          <span
+            className={cn(
+              "px-2 py-0.5 rounded border text-[0.7059rem] uppercase tracking-wider font-semibold",
+              RISK_TONE[data.risk_tier],
+            )}
+          >
+            {RISK_LABEL[data.risk_tier]}
+          </span>
           <ScoreSparkline ticker={ticker} />
         </div>
       </div>

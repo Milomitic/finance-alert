@@ -220,7 +220,7 @@ export function StockHeader({ stock, kpis, ohlcv, sotto }: Props) {
                       size="md"
                       title={
                         liveAge != null
-                          ? `Mercato aperto · prezzo aggiornato ${Math.round(liveAge)}s fa (cache 10s + polling 15s)`
+                          ? `Mercato aperto · prezzo ${Math.round(liveAge)}s fa (cache 10s + polling 15s)`
                           : "Prezzo live"
                       }
                     />
@@ -230,7 +230,7 @@ export function StockHeader({ stock, kpis, ohlcv, sotto }: Props) {
                       size="md"
                       title={
                         liveAge != null
-                          ? `Pre-market USA · la variazione è il movimento pre-apertura vs chiusura di ieri · aggiornato ${Math.round(liveAge)}s fa`
+                          ? `Pre-market USA · la variazione è il movimento pre-apertura vs chiusura di ieri · ${Math.round(liveAge)}s fa`
                           : "Pre-market USA — la variazione mostrata è il movimento pre-apertura rispetto alla chiusura di ieri"
                       }
                     />

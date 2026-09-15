@@ -14,6 +14,7 @@ import { TopPicksCard } from "@/components/dashboard/TopPicksCard";
 import { SectorsHeatmapCard } from "@/components/dashboard/SectorsHeatmapCard";
 import { SuperinvestorPicksCard } from "@/components/dashboard/SuperinvestorPicksCard";
 import { Card, CardContent } from "@/components/ui/card";
+import { CardUpdatedAt } from "@/components/stock/CardUpdatedAt";
 import { CardSkeleton } from "@/components/ui/card-skeleton";
 
 // The RSI histogram is the ONLY dashboard consumer of recharts (a ~331KB
@@ -226,9 +227,10 @@ function HomePageContent() {
           <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
             <Clock className="h-3 w-3" />
             {m?.computed_at && (
-              <span className={m.is_stale ? "text-amber-700 dark:text-amber-400" : ""}>
-                Aggiornato {new Date(m.computed_at).toLocaleString("it-IT", { dateStyle: "short", timeStyle: "short" })}
-              </span>
+              <CardUpdatedAt
+                updatedAt={m.computed_at}
+                className={m.is_stale ? "text-xs text-amber-700 dark:text-amber-400" : "text-xs"}
+              />
             )}
             {nextScanAt && (
               <>
@@ -479,4 +481,3 @@ export default function HomePage() {
     </FirstPaintGate>
   );
 }
-
