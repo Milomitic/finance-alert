@@ -147,7 +147,9 @@ def evaluate_signals(
     _atr = float(_ctx.atr) if (_ctx.atr is not None and _ctx.atr == _ctx.atr) else None
     idx_by_date = {str(d)[:10]: i for i, d in enumerate(ohlcv["date"])}
     added = 0
-    matches, setups = detect_signals_and_setups(ohlcv, db=db, stock=stock)
+    # UN contesto per titolo (FA-065): il runner riceve quello gia' costruito
+    # qui sopra invece di rifarlo dallo stesso DataFrame.
+    matches, setups = detect_signals_and_setups(ohlcv, db=db, stock=stock, ctx=_ctx)
     # Setups are the PRE-trigger state of these same detectors: persisted here
     # so the wait starts being counted from the first bar the conditions held.
     # Best-effort — a setup problem must never cost a signal.

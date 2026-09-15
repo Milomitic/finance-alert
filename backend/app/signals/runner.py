@@ -8,7 +8,7 @@ from loguru import logger
 
 from app.signals.calibration_map import get_calibration
 from app.signals.chain_enrichment import enrich_chain
-from app.signals.context import build_context
+from app.signals.context import SignalContext, build_context
 from app.signals.detectors.base import SignalMatch
 from app.signals.detectors.registry import DETECTORS
 from app.signals.events_fundamental import gather_events
@@ -21,7 +21,7 @@ def detect_signals(ohlcv: pd.DataFrame, *, db=None, stock=None) -> list[SignalMa
 
 
 def detect_signals_and_setups(
-    ohlcv: pd.DataFrame, *, db=None, stock=None
+    ohlcv: pd.DataFrame, *, db=None, stock=None, ctx: SignalContext | None = None,
 ) -> tuple[list[SignalMatch], list[SetupMatch]]:
     """Signals AND pre-trigger setups from ONE feature build.
 
@@ -33,12 +33,22 @@ def detect_signals_and_setups(
     A detector opts into setups by implementing `proximity()`; those that
     don't simply contribute none. Nothing here can change what `detect()`
     returns, so the signal path and the outcome warehouse are untouched.
+
+    ⚠️ FA-065 — `ctx` lets the caller hand over the context it already built.
+    `evaluate_signals` builds one for its own gates (trend sign, ATR) and then
+    called this, which built a SECOND one from the same DataFrame: the docstring
+    above said sharing the build was the point, and the scan path did not share
+    it. Two owners of one computation diverge — the duplicated Tecnico row
+    between `finalize` and `recompute_one` already produced a 500 in production
+    that way. Passing it is optional so every other caller keeps its contract;
+    `test_un_contesto_per_titolo` pins that the result is byte-identical.
     """
     if ohlcv is None or len(ohlcv) < 2:
         return [], []
     try:
         events = gather_events(ohlcv, db=db, stock=stock)
-        ctx = build_context(ohlcv)
+        if ctx is None:
+            ctx = build_context(ohlcv)
     except Exception as e:  # noqa: BLE001
         logger.warning(f"[signals] feature build failed: {e}")
         return [], []
