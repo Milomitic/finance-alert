@@ -163,6 +163,104 @@ def _warm_premarket_on_boot() -> None:
         logger.warning(f"[startup] premarket warm skipped: {exc}")
 
 
+#: Quanto aspettare prima di dichiarare morta una scansione rimasta 'running'
+#: all'avvio. Una scansione viva batte l'heartbeat almeno ogni 5 secondi
+#: (`heartbeat_pulse`), quindi 150 secondi fermi non sono una pausa; ed e' meno
+#: dei 5 minuti dopo cui la pulizia periodica la chiuderebbe da sola.
+_RECOVERY_WAIT_SECONDS = 150.0
+
+#: Il prefisso con cui `_cleanup_orphan_scans` chiude all'avvio una scansione
+#: il cui heartbeat era gia' fermo da oltre 5 minuti.
+_CLOSED_BY_RESTART = "Backend riavviato"
+
+#: Il messaggio con cui il recupero chiude una scansione uccisa dal riavvio.
+#: ⚠️ Il prefisso e' in `app_metrics.NOT_A_PIPELINE_FAILURE`: un rilascio non
+#: deve contare come guasto nella serie di fallimenti (FA-079 #7).
+_INTERRUPTED_BY_RESTART = "Interrotta da un riavvio del backend; rilanciata automaticamente."
+
+
+def _running_alert_scans(db) -> dict:
+    """{id: last_progress_at} delle scansioni di segnali ancora 'running'."""
+    from sqlalchemy import select
+
+    from app.models.scan_run import KIND_ALERTS_SCAN, ScanRun
+
+    return dict(db.execute(
+        select(ScanRun.id, ScanRun.last_progress_at).where(
+            ScanRun.kind == KIND_ALERTS_SCAN, ScanRun.status == "running"
+        )
+    ).all())
+
+
+def _last_scan_was_closed_by_restart(db) -> bool:
+    """L'ULTIMA scansione di segnali e' stata chiusa da `_cleanup_orphan_scans`
+    in questo avvio, cioe' e' morta con il processo precedente."""
+    from sqlalchemy import select
+
+    from app.models.scan_run import KIND_ALERTS_SCAN, ScanRun
+
+    ultima = db.execute(
+        select(ScanRun.status, ScanRun.error_message)
+        .where(ScanRun.kind == KIND_ALERTS_SCAN)
+        .order_by(ScanRun.started_at.desc(), ScanRun.id.desc())
+        .limit(1)
+    ).first()
+    return bool(
+        ultima and ultima[0] == "failed" and (ultima[1] or "").startswith(_CLOSED_BY_RESTART)
+    )
+
+
+def _recover_interrupted_scans(snapshot: dict) -> None:
+    """Thread del recupero: dopo l'attesa, rilancia se le scansioni 'running'
+    trovate all'avvio non hanno piu' battuto l'heartbeat.
+
+    ⚠️ L'attesa distingue due casi che all'avvio sono identici: una scansione
+    uccisa dal riavvio e una viva in un ALTRO processo (in sviluppo, uno script
+    lanciato fuori da uvicorn — il motivo per cui `_cleanup_orphan_scans` non
+    chiude le righe con heartbeat recente). Rilanciare la seconda vorrebbe dire
+    due scansioni in parallelo.
+    """
+    import time
+    from datetime import UTC, datetime
+
+    from app.core import app_metrics
+    from app.core.db import SessionLocal
+    from app.models.scan_run import ScanRun
+
+    time.sleep(_RECOVERY_WAIT_SECONDS)
+    try:
+        with SessionLocal() as db:
+            morte = []
+            for run_id, battito in snapshot.items():
+                r = db.get(ScanRun, run_id)
+                if r is None or r.status != "running":
+                    continue          # finita da sola: era viva altrove
+                if r.last_progress_at != battito:
+                    continue          # l'heartbeat si e' mosso: e' viva altrove
+                morte.append(r)
+            if not morte:
+                logger.info("[startup] le scansioni 'running' erano vive — nessun recupero")
+                return
+            adesso = datetime.now(UTC)
+            for r in morte:
+                r.status = "failed"
+                r.phase = None
+                r.current_target = None
+                r.error_message = _INTERRUPTED_BY_RESTART
+                r.completed_at = adesso
+            db.commit()
+            app_metrics.refresh_failure_streak_gauge(db)
+            ids = [r.id for r in morte]
+    except Exception as exc:  # noqa: BLE001 — never crash a daemon thread silently
+        logger.warning(f"[startup] recupero della scansione interrotta saltato: {exc}")
+        return
+
+    from app.scheduler.jobs.scan_alerts import run_scan_alerts
+
+    logger.warning(f"[startup] scansione/i {ids} uccise dal riavvio — la rilancio")
+    run_scan_alerts()
+
+
 def _catch_up_scan_on_boot() -> None:
     """Local-first timeliness fix. The in-process scan cron only fires while
     the backend is running, so on a desktop machine that's off overnight the
@@ -185,6 +283,40 @@ def _catch_up_scan_on_boot() -> None:
     try:
         from app.core.db import SessionLocal
         from app.models.scan_run import last_successful_completed_at
+
+        # ⚠️ PRIMA della freschezza: una scansione uccisa da un riavvio
+        # (FA-079 #6). Con la freschezza sola, un rilascio che ammazza la
+        # scansione delle 23:30 lascerebbe come «ultima riuscita» quella delle
+        # 18:30, meno di 16 ore prima, e la notte andrebbe persa fino al
+        # giorno dopo. Far aspettare lo spegnimento del pod non e' l'alternativa:
+        # con una replica sola l'app resterebbe irraggiungibile per tutta la
+        # scansione, a ogni rilascio.
+        with SessionLocal() as db:
+            interrotte = _running_alert_scans(db)
+            chiusa_all_avvio = _last_scan_was_closed_by_restart(db)
+        if interrotte:
+            logger.info(
+                f"[startup] {len(interrotte)} scansione/i ancora 'running' "
+                f"(ids={sorted(interrotte)}): fra {int(_RECOVERY_WAIT_SECONDS)}s "
+                "verifico se sono morte col riavvio"
+            )
+            threading.Thread(
+                target=_recover_interrupted_scans,
+                args=(interrotte,),
+                name="scan-boot-recovery",
+                daemon=True,
+            ).start()
+            return
+        if chiusa_all_avvio:
+            from app.scheduler.jobs.scan_alerts import run_scan_alerts
+
+            logger.warning(
+                "[startup] l'ultima scansione e' stata chiusa da questo riavvio — la rilancio"
+            )
+            threading.Thread(
+                target=run_scan_alerts, name="scan-boot-recovery", daemon=True
+            ).start()
+            return
 
         # ⚠️ Non un ORDER BY completed_at DESC: su Postgres i NULL vengono
         # primi e ogni ricreazione del pod lanciava una scansione completa.
