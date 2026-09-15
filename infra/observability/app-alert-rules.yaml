@@ -376,23 +376,24 @@ spec:
             description: >-
               Da 5 minuti /metrics non risponde: l'app è giù, oppure il
               PodMonitor non la trova più.
-        # Storage guardrails: Loki has a 30d time limit, but filesystem-backed
-        # retention also needs a hard capacity signal before the 2Gi PVC or node
-        # root volume becomes the outage.
-        - alert: FinanceAlertLokiPVCFilling
-          expr: |
-            kubelet_volume_stats_used_bytes{namespace="monitoring",persistentvolumeclaim=~"loki.*"}
-              / kubelet_volume_stats_capacity_bytes{namespace="monitoring",persistentvolumeclaim=~"loki.*"}
-              > 0.80
-          for: 30m
-          labels:
-            severity: warning
-          annotations:
-            summary: "PVC Loki oltre l'80%"
-            description: >-
-              Il PVC filesystem di Loki sta raggiungendo il limite fisico; riduci
-              retention o aumenta lo storage prima che la scrittura dei log fallisca.
-
+        # Storage guardrail. ⚠️ FA-015: qui c'era `FinanceAlertLokiPVCFilling`,
+        # e non ha mai potuto scattare. Il selettore era
+        # `persistentvolumeclaim=~"loki.*"` e le regex PromQL sono ANCORATE,
+        # mentre il PVC si chiama `storage-loki-0`: la regola era caricata, sana
+        # e `inactive` per sempre. Il backlog lo attribuiva a un kubelet che
+        # «non espone volume_stats»; misurato il 2026-09-15, le espone.
+        #
+        # Correggere la regex sarebbe stato peggio. Su `local-path` un PVC e' una
+        # DIRECTORY sul disco del nodo e i volume_stats del kubelet descrivono
+        # quel filesystem: ogni PVC del cluster riporta gli stessi 26,83 GB
+        # usati su 31,6 GB, identici a `df /`, mentre Loki occupa 122 MB. La
+        # regola «corretta» avrebbe gridato «PVC Loki oltre l'80%» e suggerito di
+        # tagliare la retention di un archivio quasi vuoto, doppiando l'allarme
+        # qui sotto con un nome e un rimedio sbagliati.
+        #
+        # La capienza che conta e' quella del nodo, ed e' sorvegliata qui sotto.
+        # Loki e' limitato nel TEMPO (retention_period 720h). Un test nel
+        # backend impedisce che una regola torni a leggere i volumi del kubelet.
         - alert: FinanceAlertNodeRootFilling
           expr: |
             (node_filesystem_avail_bytes{mountpoint="/",fstype!~"tmpfs|overlay"}
