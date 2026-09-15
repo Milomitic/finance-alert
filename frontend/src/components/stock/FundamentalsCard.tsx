@@ -257,7 +257,7 @@ function AnnualTabBody({
                     : "—";
                 return (
                   <tr className="border-t border-border/40 bg-muted/20 text-muted-foreground italic">
-                    <td className="px-1.5 py-1 font-mono not-italic">
+                    <td className="px-1.5 py-1 font-mono not-italic whitespace-nowrap">
                       <span className="inline-flex items-center gap-1">
                         FY{String(currFy).slice(2, 4)}
                         <span className="not-italic px-1 py-px rounded border border-blue-400/40 text-blue-500 dark:text-blue-400 text-[0.6471rem] uppercase tracking-wider font-semibold">
@@ -297,7 +297,7 @@ function AnnualTabBody({
               const epsAdjTone = beatTone(epsAdj, agg?.eps_est);
               return (
                 <tr key={a.fiscal_year_end} className="border-t border-border/40 hover:bg-muted/30">
-                  <td className="px-1.5 py-1 font-mono">{shortYear(a.fiscal_year_end)}</td>
+                  <td className="px-1.5 py-1 font-mono whitespace-nowrap">{shortYear(a.fiscal_year_end)}</td>
                   <td className="px-1.5 py-1 text-right">{fmtBig(a.revenue)}</td>
                   <td className="px-1.5 py-1 text-right text-muted-foreground">
                     {prevYear ? yoy(a.revenue, prevYear.revenue) : "—"}
@@ -454,8 +454,14 @@ function QuarterlyTabBody({
                 the only populated cells (no actuals yet — that's the point).
                 Subtle blue tint + italic to set it apart from confirmed rows. */}
             {hasNextRow && (
-              <tr className="border-t border-border/40 bg-blue-50/60 dark:bg-blue-950/20">
-                <td className="px-1.5 py-1">
+              <tr
+                className="border-t border-border/40 bg-blue-50/60 dark:bg-blue-950/20"
+                title="Prossima trimestrale: solo le stime, i risultati non ci sono ancora"
+              >
+                {/* `whitespace-nowrap` su OGNI prima cella delle due tabelle: la
+                    colonna e' l'identita' della riga, e a capo si leggeva come
+                    due righe diverse. */}
+                <td className="px-1.5 py-1 whitespace-nowrap">
                   <span className="inline-flex items-center gap-1 font-mono text-blue-700 dark:text-blue-300">
                     {shortDate(nextEarningsDate!)}
                   </span>
@@ -479,9 +485,9 @@ function QuarterlyTabBody({
                       ☾
                     </span>
                   )}
-                  <span className="ml-1 text-[0.6765rem] uppercase tracking-wider text-blue-700/80 dark:text-blue-300/80 font-semibold">
-                    prossima
-                  </span>
+                  {/* Niente etichetta «prossima», su richiesta: mandava la
+                      cella a capo. La riga resta riconoscibile dal fondo blu
+                      e dalla data futura, e il nome sta nel `title` della riga. */}
                 </td>
                 <td className="px-1.5 py-1 text-right text-muted-foreground italic">—</td>
                 <td className="px-1.5 py-1 text-right text-blue-700 dark:text-blue-300 font-semibold">
@@ -505,7 +511,7 @@ function QuarterlyTabBody({
               const epsTone = beatTone(e.eps_reported, e.eps_estimate);
               return (
                 <tr key={e.date} className="border-t border-border/40 hover:bg-muted/30">
-                  <td className="px-1.5 py-1">
+                  <td className="px-1.5 py-1 whitespace-nowrap">
                     <span className="font-mono">{shortQuarter(`${fq.slice(0, 4)}-${(parseInt(fq.slice(6), 10) * 3).toString().padStart(2, "0")}-01`)}</span>
                     <span className="text-muted-foreground ml-1">({shortDate(e.date)})</span>
                   </td>

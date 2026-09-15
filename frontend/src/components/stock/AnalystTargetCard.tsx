@@ -52,41 +52,38 @@ function PriceTargetBar({ pt, currency }: { pt: AnalystPriceTarget; currency: st
 
   return (
     <div className="rounded-md bg-muted/40 p-3">
-      <SectionTitle
-        icon={Target}
-        label="Price target consensus"
-
-        className="mb-2"
-        right={
-          upside != null ? (
-            <span
-              className={cn(
-                "font-bold tabular-nums text-[0.7647rem]",
-                upside > 0
-                  ? "text-emerald-800 dark:text-emerald-300"
-                  : "text-rose-700 dark:text-rose-300",
-              )}
-              title={
-                `Upside implicito: ${upside.toFixed(1)}% sul prezzo ${formatMoney(current, currency)} ` +
-                "riportato dalla stessa fonte dei target. NON e il prezzo live " +
-                "dell'intestazione, che si aggiorna ogni 15 secondi: le due " +
-                "percentuali verso lo stesso target possono quindi differire."
-              }
-            >
-              {upside >= 0 ? "+" : ""}
-              {upside.toFixed(1)}%
-              <span className="ml-1 font-normal text-muted-foreground text-[0.6765rem]">
-                su {formatMoney(current, currency)}
-              </span>
+      {/* Niente sottotitolo «Price target consensus», su richiesta: la riga
+          costava altezza a una card che deve mostrare piu' azioni possibili.
+          L'upside sale sulla riga del target medio, a destra — la lettura
+          resta «target, e quanto dista dal prezzo». `flex-wrap` perche' su una
+          card stretta l'upside vada sotto invece di schiacciare il target. */}
+      <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5 mb-3 tabular-nums">
+        <div className="flex items-baseline gap-2 min-w-0">
+          <span className="text-2xl font-bold">{formatMoney(mean, currency)}</span>
+          <span className="text-[0.7647rem] text-muted-foreground">target medio</span>
+        </div>
+        {upside != null && (
+          <span
+            className={cn(
+              "font-bold text-[0.7647rem] whitespace-nowrap",
+              upside > 0
+                ? "text-emerald-800 dark:text-emerald-300"
+                : "text-rose-700 dark:text-rose-300",
+            )}
+            title={
+              `Upside implicito: ${upside.toFixed(1)}% sul prezzo ${formatMoney(current, currency)} ` +
+              "riportato dalla stessa fonte dei target. NON e il prezzo live " +
+              "dell'intestazione, che si aggiorna ogni 15 secondi: le due " +
+              "percentuali verso lo stesso target possono quindi differire."
+            }
+          >
+            {upside >= 0 ? "+" : ""}
+            {upside.toFixed(1)}%
+            <span className="ml-1 font-normal text-muted-foreground text-[0.6765rem]">
+              su {formatMoney(current, currency)}
             </span>
-          ) : undefined
-        }
-      />
-
-      {/* Mean target as the headline number */}
-      <div className="flex items-baseline gap-2 mb-3 tabular-nums">
-        <span className="text-2xl font-bold">{formatMoney(mean, currency)}</span>
-        <span className="text-[0.7647rem] text-muted-foreground">target medio</span>
+          </span>
+        )}
       </div>
 
       {/* The bar itself: low → high gradient with markers stacked above. */}
@@ -417,7 +414,7 @@ function ActionsList({ actions, currency }: { actions: AnalystAction[]; currency
         return (
           <li
             key={`${a.date}-${a.firm}-${i}`}
-            className="flex items-center gap-1.5 text-[0.7647rem] py-1 border-b border-border/40 last:border-b-0"
+            className="flex items-center gap-1.5 text-[0.7647rem] py-0.5 border-b border-border/40 last:border-b-0"
             title={newsTitle}
           >
             {actionIcon(a.action)}
@@ -454,7 +451,7 @@ function ActionsList({ actions, currency }: { actions: AnalystAction[]; currency
             <span className="shrink-0 w-[4.75rem] flex justify-start">
               <span
                 className={cn(
-                  "px-1.5 py-0.5 rounded font-semibold truncate max-w-full",
+                  "px-1.5 py-px rounded font-semibold truncate max-w-full",
                   TONE_CLASSES[tone],
                 )}
                 title={a.to_grade || undefined}
@@ -590,7 +587,13 @@ export function AnalystTargetCard({ ticker, currency = null }: Props) {
             from 2 lines to 1 with the price target moved inline. Fixed
             cap (vs flex-1) keeps the card compact regardless of action
             count and gives the user a consistent visible window. */}
-        <div className="flex flex-col min-h-0">
+        {/* ⚠️ Righe piu' basse NON bastano a mostrarne di piu': la lista aveva
+            un tetto fisso di 180px, e lo spazio guadagnato sopra sarebbe
+            rimasto vuoto sotto. Da `lg` la riga della pagina ha altezza fissa,
+            quindi li' la lista prende tutto cio' che resta nella card; sotto
+            `lg` la card cresce col contenuto e il tetto resta, altrimenti su un
+            telefono la lista si allungherebbe senza fine. */}
+        <div className="flex flex-col min-h-0 lg:flex-1">
           <SectionTitle
             icon={ArrowRight}
             label="Azioni recenti"
@@ -604,7 +607,7 @@ export function AnalystTargetCard({ ticker, currency = null }: Props) {
               ) : undefined
             }
           />
-          <div className="overflow-y-auto pr-1 max-h-[180px]">
+          <div className="overflow-y-auto pr-1 max-h-[180px] lg:max-h-none lg:flex-1 lg:min-h-0">
             <ActionsList actions={actions} currency={currency} />
           </div>
         </div>
