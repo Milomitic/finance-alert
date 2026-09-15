@@ -54,6 +54,7 @@ _CANONICI = {
     "same_day_opposite_tone",
     "outcome_hit", "outcome_fwd_return", "outcome_horizon_days",
     "outcome_mkt_excess", "outcome_entry_close", "next_earnings_date",
+    "setup_origin",
 }
 
 

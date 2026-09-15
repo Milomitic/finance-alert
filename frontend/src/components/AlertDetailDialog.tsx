@@ -20,6 +20,8 @@ import type { Alert, SignalChainStep, SignalSnapshot } from "@/api/types";
 import { AlertKindChip, AlertToneChip } from "@/components/AlertChips";
 import { HolderCountBadge } from "@/components/stocks/HolderCountBadge";
 import { SignalChartSvg } from "@/components/SignalChartSvg";
+import { AlertChartButton, type AlertChartLink } from "@/components/alert/AlertChartButton";
+import { AlertSetupOrigin } from "@/components/alert/AlertSetupOrigin";
 import { SignalBreadthRow } from "@/components/alert/SignalBreadthRow";
 import { SignalSnapshotView } from "@/components/SignalSnapshotView";
 import { PlaybookView } from "@/components/PlaybookView";
@@ -53,9 +55,12 @@ import {
 import { cn } from "@/lib/utils";
 import { buildPlaybook } from "@/lib/tradePlaybook";
 
+export type { AlertChartLink };
+
 interface Props {
   alert: Alert | null;
   onClose: () => void;
+  chart?: AlertChartLink;
 }
 
 /* Format helpers */
@@ -149,7 +154,7 @@ function SnapshotRow({
   );
 }
 
-export function AlertDetailDialog({ alert, onClose }: Props) {
+export function AlertDetailDialog({ alert, onClose, chart }: Props) {
   // Hooks run unconditionally, above the early-return guard. The OHLCV fetch is
   // gated on isSig so it fires only for signal alerts.
   const [showRaw, setShowRaw] = useState(false);
@@ -588,6 +593,15 @@ export function AlertDetailDialog({ alert, onClose }: Props) {
               oppositeTone={alert.same_day_opposite_tone}
             />
           </div>
+          {/* FA-066: da dove viene il segnale e dove sta sul grafico. Accanto
+              all'ampiezza, perche' rispondono alla stessa domanda — come
+              leggere questo evento nella storia del titolo — prima dei numeri. */}
+          {(alert.setup_origin || chart) && (
+            <div className="mb-3 space-y-2">
+              <AlertSetupOrigin alert={alert} onNavigate={onClose} />
+              <AlertChartButton alert={alert} chart={chart} onClose={onClose} />
+            </div>
+          )}
           {isSignalKind(alert.rule_kind) ? (
             <SignalSnapshotView
               snapshot={alert.snapshot ?? {}}

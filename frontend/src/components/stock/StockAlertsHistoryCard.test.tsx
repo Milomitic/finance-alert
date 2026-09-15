@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Alert } from "@/api/types";
@@ -64,7 +65,9 @@ function monta(recenti: Alert[]) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <StockAlertsHistoryCard alerts={recenti} ticker="ACME" />
+      <MemoryRouter>
+        <StockAlertsHistoryCard alerts={recenti} ticker="ACME" />
+      </MemoryRouter>
     </QueryClientProvider>,
   );
 }
@@ -111,6 +114,17 @@ describe("StockAlertsHistoryCard", () => {
     for (const b of [recenti, storico]) {
       expect(b).not.toHaveAttribute("aria-controls");
     }
+  });
+
+  it("porta ai setup di QUESTO titolo, senza una seconda lista qui (FA-066)", () => {
+    monta([_alert(1)]);
+    expect(screen.getByRole("link", { name: /setup del titolo/i })).toHaveAttribute(
+      "href",
+      "/setups?ticker=ACME",
+    );
+    // ⚠️ La scheda «In formazione su questo titolo» e' stata rimossa, e il
+    // gate e2e pretende che non torni.
+    expect(screen.queryByText(/in formazione su questo titolo/i)).not.toBeInTheDocument();
   });
 
   it("lo storico chiede ENTRAMBE le meta', archiviati compresi", async () => {

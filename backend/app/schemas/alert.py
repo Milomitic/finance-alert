@@ -24,6 +24,23 @@ def _ensure_utc(v: datetime | None) -> datetime | None:
     return v
 
 
+class AlertSetupOriginOut(BaseModel):
+    """Il setup che si e' convertito in un alert (FA-066).
+
+    E' un FATTO sulla storia del titolo — le condizioni si stavano formando
+    prima che il segnale scattasse — non un merito del segnale: i setup non
+    fanno previsioni, e un segnale preceduto da uno non e' per questo migliore.
+    """
+
+    setup_id: int
+    detector: str
+    first_seen_at: datetime
+    #: Giorni fra il primo avvistamento e il segnale: il preavviso che il setup
+    #: ha davvero dato. None sugli episodi convertiti prima che la colonna
+    #: esistesse.
+    lead_days: int | None = None
+
+
 class AlertOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -89,6 +106,8 @@ class AlertOut(BaseModel):
     # The UI shows an amber "Earnings tra N gg" risk badge when this falls
     # inside the signal's horizon.
     next_earnings_date: date | None = None
+    #: Il setup da cui l'alert e' nato, se ce n'e' uno. Vedi AlertSetupOriginOut.
+    setup_origin: AlertSetupOriginOut | None = None
 
     @field_validator("snapshot", mode="before")
     @classmethod

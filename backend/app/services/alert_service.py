@@ -316,17 +316,53 @@ def list_alerts(
             if (row[4] or 0) >= QUARANTINE_STREAK
         },
     )
+    origins = _setup_origins(db, [row[0].id for row in page])
     items = [
         _row_to_item(
-            row, earnings_by_ticker.get(row[1]), last_bars.get(row[0].stock_id)
+            row, earnings_by_ticker.get(row[1]), last_bars.get(row[0].stock_id),
+            origins.get(row[0].id),
         )
         for row in page
     ]
     return items, total, has_more
 
 
+def _setup_origins(db: Session, alert_ids: list[int]) -> dict[int, dict[str, Any]]:
+    """Il setup da cui ogni alert e' nato, se ce n'e' uno (FA-066).
+
+    Una query per pagina, non una per riga. Il collegamento esiste da FA-061 —
+    `StockSetup.converted_alert_id` — ma usciva solo dalla lista dei setup, che
+    e' PAGINATA: cercarlo li' dal dialogo di un alert avrebbe mancato in
+    silenzio ogni setup oltre la cinquantesima riga.
+
+    Se due episodi sono confluiti nello stesso alert si tiene quello visto per
+    PRIMO: e' il preavviso piu' lungo, cioe' la risposta alla domanda che il
+    collegamento pone — «me l'aveva annunciato, e con quanto anticipo?».
+    """
+    if not alert_ids:
+        return {}
+    rows = db.execute(
+        select(
+            StockSetup.converted_alert_id, StockSetup.id, StockSetup.detector,
+            StockSetup.first_seen_at, StockSetup.lead_days,
+        )
+        .where(StockSetup.converted_alert_id.in_(alert_ids))
+        .order_by(StockSetup.first_seen_at.asc(), StockSetup.id.asc())
+    ).all()
+    out: dict[int, dict[str, Any]] = {}
+    for alert_id, setup_id, detector, first_seen, lead in rows:
+        out.setdefault(alert_id, {
+            "setup_id": setup_id, "detector": detector,
+            "first_seen_at": first_seen, "lead_days": lead,
+        })
+    return out
+
+
 def _row_to_item(
-    row: Any, next_earnings: date | None, series_last_bar: date | None = None
+    row: Any,
+    next_earnings: date | None,
+    series_last_bar: date | None = None,
+    setup_origin: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Una riga della query joined -> il dict che l'API serializza.
 
@@ -379,6 +415,10 @@ def _row_to_item(
         # Earnings-proximity risk flag (cache-only; null when the
         # fundamentals cache is cold for the ticker).
         "next_earnings_date": next_earnings,
+        # Il setup che si e' convertito in questo segnale (FA-066). None e' il
+        # caso comune e non un dato mancante: la maggior parte dei segnali
+        # scatta senza essere stata preceduta da un setup.
+        "setup_origin": setup_origin,
     }
 
 
@@ -428,7 +468,10 @@ def get_alert_detail(db: Session, alert_id: int) -> dict[str, Any] | None:
     last_bars = _last_bar_dates(
         db, {row[0].stock_id} if (row[4] or 0) >= QUARANTINE_STREAK else set()
     )
-    return _row_to_item(row, earnings.get(row[1]), last_bars.get(row[0].stock_id))
+    return _row_to_item(
+        row, earnings.get(row[1]), last_bars.get(row[0].stock_id),
+        _setup_origins(db, [row[0].id]).get(row[0].id),
+    )
 
 
 def get_alert(db: Session, alert_id: int) -> Alert | None:

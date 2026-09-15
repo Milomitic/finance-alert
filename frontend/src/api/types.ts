@@ -222,6 +222,16 @@ export interface Alert {
    *  maturera'» e' una conclusione, «ultima barra il 10 luglio» e' un fatto
    *  che chi legge puo' controllare. */
   series_last_bar?: string | null;
+  /** Il setup che si e' convertito in questo segnale, se ce n'e' uno (FA-066).
+   *  Null e' il caso comune, non un dato mancante: la maggior parte dei segnali
+   *  scatta senza essere stata preceduta da un setup. */
+  setup_origin?: {
+    setup_id: number;
+    detector: string;
+    first_seen_at: string;
+    /** Giorni fra primo avvistamento e segnale; null sugli episodi vecchi. */
+    lead_days: number | null;
+  } | null;
   /** Next earnings date (ISO YYYY-MM-DD) from the fundamentals cache —
    *  cache-only read on the backend, null when the cache is cold. Drives the
    *  amber "Earnings tra N gg" risk badge when it falls inside the signal's

@@ -67,6 +67,24 @@ function enclosingBarTime(barTimes: number[], t: number): number | null {
   return idx < 0 ? null : barTimes[idx];
 }
 
+/** L'indice della barra su cui il grafico ancora questo alert, o null se quella
+ *  barra non e' nella serie caricata (FA-066, «Mostra sul grafico»).
+ *
+ *  ⚠️ La STESSA regola dei marker, non una seconda: centrare il grafico su una
+ *  barra diversa da quella che porta la freccia sarebbe peggio che non farlo.
+ *  Per questo passa da `anchorBarTime` e scarta, come `buildSignalOverlay`, un
+ *  alert piu' vecchio della prima barra. */
+export function alertBarIndex(ohlcv: OhlcvBar[], alert: Alert): number | null {
+  if (ohlcv.length === 0) return null;
+  const day = alertDayISO(alert);
+  if (!day) return null;
+  const t = Math.floor(Date.parse(day) / 1000);
+  const barTimes = barTimesOf(ohlcv);
+  if (!Number.isFinite(t) || t < barTimes[0]) return null;
+  const barT = anchorBarTime(barTimes, t);
+  return barT == null ? null : barTimes.indexOf(barT);
+}
+
 /** One signal line rendered in the chart's hover panel. */
 export interface SignalHoverItem {
   label: string;

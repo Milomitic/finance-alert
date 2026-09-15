@@ -3,13 +3,13 @@ import { AlertCircle, ArrowLeft, ChevronDown, Loader2, SlidersHorizontal } from 
 import { useCallback, useMemo, useRef, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 
-import type { PriceAlert } from "@/api/types";
+import type { Alert, PriceAlert } from "@/api/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { CardSkeleton } from "@/components/ui/card-skeleton";
 import { useChartSync } from "@/hooks/useChartSync";
 import { liveExtendIndicators } from "@/lib/liveIndicators";
 import { mergeLiveQuoteIntoOhlcv } from "@/lib/liveOhlcvMerge";
-import { buildEarningsMarkers, buildSignalOverlay } from "@/lib/signalMarkers";
+import { alertBarIndex, buildEarningsMarkers, buildSignalOverlay } from "@/lib/signalMarkers";
 import { rebaseBenchmark } from "@/lib/benchmarkOverlay";
 import { defaultVisibleRange } from "@/lib/chartClamp";
 import { DEFAULT_RANGE, resolveRange, writeRange } from "@/lib/chartPrefs";
@@ -181,6 +181,26 @@ export default function StockDetailPage() {
     if (rest) ts.setVisibleLogicalRange(rest as never);
     else ts.fitContent();
   }, [mergedOhlcv.length, range]);
+  /* FA-066 — «Mostra sul grafico» dal dialogo di un segnale. La barra viene da
+   * `alertBarIndex`, cioe' la stessa regola che posa la freccia; la finestra e'
+   * larga quanto quella d'apertura del timeframe, cosi' il segnale si legge
+   * nel suo contesto e non in un primo piano che nessun altro zoom produce. */
+  const grafico = useMemo(
+    () => ({
+      has: (a: Alert) => alertBarIndex(mergedOhlcv, a) !== null,
+      show: (a: Alert) => {
+        const chart = chartApiRef.current;
+        const i = alertBarIndex(mergedOhlcv, a);
+        if (!chart || i === null) return;
+        const meta = Math.round((defaultVisibleBars(range) ?? mergedOhlcv.length) / 2);
+        chart.timeScale().setVisibleLogicalRange({ from: i - meta, to: i + meta } as never);
+        // Su un telefono il grafico sta sopra la scheda: senza, il bottone
+        // sposterebbe una vista che nessuno sta guardando.
+        chart.chartElement().scrollIntoView({ block: "nearest", behavior: "smooth" });
+      },
+    }),
+    [mergedOhlcv, range],
+  );
   const benchmarkDetail = useMarketDetail(benchmark, range);
   const benchmarkLine = useMemo(
     () => (benchmark ? rebaseBenchmark(mergedOhlcv, benchmarkDetail.data?.bars ?? []) : []),
@@ -375,7 +395,7 @@ export default function StockDetailPage() {
               resterebbe con la meta' sinistra vuota. */}
           {oltreFhd && (
             <div className="flex-1 min-h-[220px]">
-              <StockAlertsHistoryCard alerts={d.alerts_history} ticker={ticker} />
+              <StockAlertsHistoryCard alerts={d.alerts_history} ticker={ticker} chart={grafico} />
             </div>
           )}
         </div>
@@ -421,7 +441,7 @@ export default function StockDetailPage() {
             can never collapse to zero. */}
         <div className="flex flex-col gap-3 lg:h-full lg:min-h-0">
           <div className="lg:h-auto lg:flex-1 lg:min-h-[220px]">
-            <StockAlertsHistoryCard alerts={d.alerts_history} ticker={ticker} />
+            <StockAlertsHistoryCard alerts={d.alerts_history} ticker={ticker} chart={grafico} />
           </div>
         </div>
       </div>

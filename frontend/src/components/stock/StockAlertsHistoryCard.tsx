@@ -1,10 +1,11 @@
 import { ChevronLeft, ChevronRight, History, TrendingDown, TrendingUp } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
 
 import { alerts as alertsApi } from "@/api/alerts";
 import type { Alert } from "@/api/types";
-import { AlertDetailDialog } from "@/components/AlertDetailDialog";
+import { AlertDetailDialog, type AlertChartLink } from "@/components/AlertDetailDialog";
 import { AlertsTable } from "@/components/AlertsTable";
 import { CardErrorOverlay } from "@/components/stock/CardErrorOverlay";
 import { CardRefreshButton } from "@/components/stock/CardRefreshButton";
@@ -22,6 +23,10 @@ interface Props {
   /** Ticker — needed to run the per-stock signal scan + invalidate the detail
    *  query so the freshly-generated signals appear. */
   ticker: string;
+  /** Il grafico della pagina, quando c'e' (FA-066). Il dialogo del segnale lo
+   *  riceve per offrire «Mostra sul grafico»: sulle pagine senza grafico il
+   *  bottone non esiste, invece di esistere e non fare niente. */
+  chart?: AlertChartLink;
 }
 
 /* ─── Aggregate stats (header strip) ────────────────────────────────────── */
@@ -68,7 +73,7 @@ function computeStats(alerts: Alert[]): AlertStats {
  * The aggregate stats strip (bull/bear/30d counts) stays at the top
  * since it's distinct context that the alerts page doesn't show.
  */
-export function StockAlertsHistoryCard({ alerts, ticker }: Props) {
+export function StockAlertsHistoryCard({ alerts, ticker, chart }: Props) {
   const [open, setOpen] = useState<Alert | null>(null);
   /* ─── Recenti / Storico completo ──────────────────────────────────────
    *
@@ -221,6 +226,15 @@ export function StockAlertsHistoryCard({ alerts, ticker }: Props) {
                   )}
                   </>
                 )}
+                {/* FA-066: i setup di questo titolo stanno su /setups, filtrati.
+                    Un collegamento e non una seconda lista: la scheda setup
+                    rimossa dal dettaglio titolo non torna. */}
+                <Link
+                  to={`/setups?ticker=${encodeURIComponent(ticker)}`}
+                  className="text-muted-foreground hover:text-foreground hover:underline underline-offset-2"
+                >
+                  Setup del titolo
+                </Link>
                 <CardRefreshButton
                   onClick={() => scan.mutate()}
                   busy={scan.isPending}
@@ -298,7 +312,7 @@ export function StockAlertsHistoryCard({ alerts, ticker }: Props) {
           )}
         </CardContent>
       </Card>
-      <AlertDetailDialog alert={open} onClose={() => setOpen(null)} />
+      <AlertDetailDialog alert={open} onClose={() => setOpen(null)} chart={chart} />
     </>
   );
 }
