@@ -120,6 +120,56 @@ describe("i decimali seguono la grandezza", () => {
   });
 });
 
+/* ─── La precisione concessa dalla grandezza si RITIRA quando non dice niente
+ *
+ * Un EPS trimestrale di 0.44 dollari cadeva nel ramo «sotto l'unita» e
+ * rendeva `$0.4400`. Le due cifre in fondo non sono una misura piu' fine:
+ * sono zeri, e in una colonna di EPS accanto a `$14.46B` di ricavi allungano
+ * il numero suggerendo una precisione al decimillesimo che il dato non ha.
+ *
+ * ⚠️ La correzione che viene in mente per prima — due decimali e basta — e'
+ * sbagliata, e il docstring di `decimalsFor` lo dichiarava gia': `0.0234`
+ * collasserebbe in `0.02` e sparirebbe la parte che si muove. Quindi si
+ * TRONCANO GLI ZERI, non la precisione: cio' che sparisce e' solo cio' che
+ * non porta informazione.
+ */
+describe("gli zeri in coda spariscono, le cifre che misurano no", () => {
+  it("un EPS di 0.44 non indossa due zeri di troppo", () => {
+    expect(formatMoney(0.44, "USD")).toBe("$0.44");
+    expect(formatMoney(0.79, "USD")).toBe("$0.79");
+  });
+
+  it("⚠️ ma la quarta cifra resta dove MISURA qualcosa", () => {
+    // Il controllo negativo del taglio: senza, «togli gli zeri» si
+    // semplificherebbe in «due decimali» e il penny stock tornerebbe a 0.02.
+    expect(formatMoney(0.0234, "USD")).toBe("$0.0234");
+    expect(formatMoney(0.023, "USD")).toBe("$0.023");
+  });
+
+  it("il pavimento e' due: i centesimi sono la colonna che si legge", () => {
+    // `$0.5` si legge come un numero nudo, `$0.50` come denaro. Lo zero dei
+    // centesimi non e' in coda: e' parte della forma.
+    expect(formatMoney(0.5, "USD")).toBe("$0.50");
+    expect(formatMoney(0, "USD")).toBe("$0.00");
+  });
+
+  it("sopra l'unita non cambia NIENTE", () => {
+    // Il ramo a due decimali non ha cifre oltre il pavimento, quindi il
+    // taglio non puo' toccarlo: `$35.00` non diventa `$35`.
+    expect(formatMoney(35, "USD")).toBe("$35.00");
+    expect(formatMoney(1, "USD")).toBe("$1.00");
+    expect(formatMoneySigned(-12.5, "EUR")).toBe("-€12.50");
+  });
+
+  it("⚠️ un numero di decimali CHIESTO dal chiamante si rispetta com'e'", () => {
+    // La precisione automatica e' una scelta di questo modulo e questo modulo
+    // puo' ritirarla; quella esplicita e' una decisione di chi chiama, e
+    // limarla sarebbe ignorare cio' che ha chiesto.
+    expect(formatMoney(0.44, "USD", { decimals: 4 })).toBe("$0.4400");
+    expect(formatMoney(35, "USD", { decimals: 0 })).toBe("$35");
+  });
+});
+
 describe("il segno precede il simbolo", () => {
   it("un guadagno porta il piu", () => {
     expect(formatMoneySigned(12.5, "EUR")).toBe("+€12.50");

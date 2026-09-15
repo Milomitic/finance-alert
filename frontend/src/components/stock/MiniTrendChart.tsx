@@ -1,6 +1,6 @@
 import { currencySymbol } from "@/lib/money";
 import {
-  Bar, CartesianGrid, ComposedChart, Legend, Line, ReferenceLine,
+  Bar, CartesianGrid, ComposedChart, Line, ReferenceLine,
   ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
 
@@ -21,6 +21,49 @@ export interface ChartPoint {
   revenue_est?: number | null;
   eps?: number | null;
   eps_est?: number | null;
+}
+
+/* ─── I colori delle serie, in un posto solo ───────────────────────────────
+ *
+ * ⚠️ La legenda non e' piu' quella di Recharts (vedi sotto), quindi il colore
+ * di ogni serie viene letto DUE volte: dalla barra o dalla linea che lo
+ * disegna, e dal segno che la nomina. Due copie della stessa costante sono la
+ * forma che diverge appena qualcuno ne tocca una — in questo progetto e' gia'
+ * costata un 500 in produzione, quando `finalize` e `recompute_one`
+ * costruivano la stessa riga in due copie e solo una fu aggiornata.
+ *
+ * EPS in indaco per restare distinto dal blu dei ricavi e leggersi su fondo
+ * chiaro e scuro; le stime sono la stessa tinta smorzata. */
+const C_EPS = "#6366f1";       // indigo-500
+const C_EPS_EST = "#a5b4fc";   // indigo-300
+const C_REV = "#3b82f6";       // blue-500
+const C_REV_EST = "#94a3b8";   // slate-400
+
+type Voce = { nome: string; colore: string; forma: "linea" | "tratteggio" | "barra" };
+
+/** Il segno accanto al nome. Un quadrato per una barra, un tratto per una
+ *  linea: la legenda deve dire anche COME la serie e' disegnata, altrimenti
+ *  su quattro voci in due assi diversi non si sa a cosa guardare. */
+function Segno({ voce }: { voce: Voce }) {
+  if (voce.forma === "barra") {
+    return (
+      <span
+        className="inline-block h-2 w-2 shrink-0 rounded-[1px]"
+        style={{ backgroundColor: voce.colore }}
+        aria-hidden
+      />
+    );
+  }
+  return (
+    <svg width="12" height="8" viewBox="0 0 12 8" aria-hidden className="shrink-0">
+      <line
+        x1="0" y1="4" x2="12" y2="4"
+        stroke={voce.colore}
+        strokeWidth={voce.forma === "tratteggio" ? 1.5 : 2.5}
+        strokeDasharray={voce.forma === "tratteggio" ? "4 3" : undefined}
+      />
+    </svg>
+  );
 }
 
 export default function MiniTrendChart({
@@ -45,14 +88,46 @@ export default function MiniTrendChart({
   const hasNegativeEps = epsValues.some((v) => v < 0);
   const hasPositiveEps = epsValues.some((v) => v > 0);
   const showZeroLine = hasNegativeEps && hasPositiveEps;
-  // EPS line: indigo so it's distinct from Revenue blue and reads well over
-  // both light and dark backgrounds. The estimate line is the same hue but
-  // muted + dashed.
-  const EPS_COLOR = "#6366f1";       // indigo-500
-  const EPS_EST_COLOR = "#a5b4fc";   // indigo-300
+
+  /* ⚠️ Le voci si costruiscono dalle STESSE costanti che disegnano le serie,
+   * e le due stime compaiono solo quando esistono: una legenda che nomina una
+   * serie assente dal grafico manda a cercare qualcosa che non c'e'. */
+  const voci: Voce[] = [
+    { nome: "EPS", colore: C_EPS, forma: "linea" },
+    ...(hasEstimate
+      ? [{ nome: "EPS est", colore: C_EPS_EST, forma: "tratteggio" } as Voce]
+      : []),
+    { nome: "Revenue", colore: C_REV, forma: "barra" },
+    ...(hasEstimate
+      ? [{ nome: "Revenue est", colore: C_REV_EST, forma: "barra" } as Voce]
+      : []),
+  ];
 
   return (
-    <ResponsiveContainer width="100%" height="100%">
+    /* ⚠️ La legenda NON e' piu' `<Legend>` di Recharts, ed e' una scelta di
+     * layout, non di stile: Recharts RISERVA al grafico un'altezza pari al
+     * riquadro misurato della legenda, quindi finche' sta li' dentro non puo'
+     * sovrapporsi — toglie spazio al tracciato per definizione. Sfilata dal
+     * grafico, la legenda si posa sopra la parte bassa dell'area e quei ~20px
+     * tornano al disegno.
+     *
+     * `pointer-events-none` e' indispensabile: sovrapposta al tracciato,
+     * intercetterebbe il passaggio del mouse e spegnerebbe il tooltip proprio
+     * sulle barre piu' basse. */
+    <div className="relative h-full w-full">
+      <div className="pointer-events-none absolute inset-x-0 bottom-[22px] z-10 flex flex-wrap items-center justify-center gap-x-3 gap-y-0.5 px-2">
+        {voci.map((v) => (
+          <span
+            key={v.nome}
+            className="inline-flex items-center gap-1 rounded bg-card/75 px-1 text-[0.625rem] leading-tight text-muted-foreground"
+          >
+            <Segno voce={v} />
+            {v.nome}
+          </span>
+        ))}
+      </div>
+
+      <ResponsiveContainer width="100%" height="100%">
       <ComposedChart
         data={scaled}
         margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
@@ -79,27 +154,27 @@ export default function MiniTrendChart({
             return [String(value), nm];
           }}
         />
-        <Legend wrapperStyle={{ fontSize: 10, paddingTop: 4 }} iconSize={8} />
         {showZeroLine && (
           <ReferenceLine yAxisId="eps" y={0} stroke="#64748b" strokeOpacity={0.6}
             strokeDasharray="2 2" />
         )}
         {hasEstimate && (
           <Bar yAxisId="rev" dataKey="revenue_est" name="Revenue est"
-            fill="#94a3b8" fillOpacity={0.45} radius={[2, 2, 0, 0]} maxBarSize={32} />
+            fill={C_REV_EST} fillOpacity={0.45} radius={[2, 2, 0, 0]} maxBarSize={32} />
         )}
         <Bar yAxisId="rev" dataKey="revenue" name="Revenue"
-          fill="#3b82f6" radius={[2, 2, 0, 0]} maxBarSize={32} />
+          fill={C_REV} radius={[2, 2, 0, 0]} maxBarSize={32} />
         {hasEstimate && (
           <Line yAxisId="eps" type="monotone" dataKey="eps_est" name="EPS est"
-            stroke={EPS_EST_COLOR} strokeDasharray="4 3" strokeWidth={1.5}
-            dot={{ r: 2, fill: EPS_EST_COLOR, stroke: EPS_EST_COLOR }} />
+            stroke={C_EPS_EST} strokeDasharray="4 3" strokeWidth={1.5}
+            dot={{ r: 2, fill: C_EPS_EST, stroke: C_EPS_EST }} />
         )}
         <Line yAxisId="eps" type="monotone" dataKey="eps" name="EPS"
-          stroke={EPS_COLOR} strokeWidth={2.5}
-          dot={{ r: 3, fill: EPS_COLOR, stroke: EPS_COLOR }}
-          activeDot={{ r: 5, fill: EPS_COLOR, stroke: "#fff", strokeWidth: 2 }} />
+          stroke={C_EPS} strokeWidth={2.5}
+          dot={{ r: 3, fill: C_EPS, stroke: C_EPS }}
+          activeDot={{ r: 5, fill: C_EPS, stroke: "#fff", strokeWidth: 2 }} />
       </ComposedChart>
-    </ResponsiveContainer>
+      </ResponsiveContainer>
+    </div>
   );
 }

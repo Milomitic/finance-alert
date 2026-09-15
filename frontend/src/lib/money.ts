@@ -84,6 +84,34 @@ function decimalsFor(value: number): number {
   return value !== 0 && Math.abs(value) < 1 ? 4 : 2;
 }
 
+/** Il pavimento: i centesimi sono la colonna che si legge in una tabella di
+ *  denaro. `$0.5` si legge come un numero nudo, `$0.50` come un prezzo. */
+const MIN_DECIMALS = 2;
+
+/** Toglie gli zeri in coda OLTRE il pavimento.
+ *
+ *  ⚠️ La precisione che `decimalsFor` concede per grandezza si RITIRA quando
+ *  non misura niente: un EPS di 0.44 cadeva nel ramo «sotto l'unita» e
+ *  rendeva `$0.4400`, dove le ultime due cifre non sono una misura piu' fine
+ *  — sono zeri, e suggeriscono una precisione al decimillesimo che il dato
+ *  non ha.
+ *
+ *  Il taglio guarda le CIFRE, non la grandezza, ed e' questa la differenza
+ *  che conta: `0.0234` esce intatto, perche' li' la quarta cifra misura
+ *  davvero. La correzione che viene in mente per prima — abbassare tutti a
+ *  due decimali — riaprirebbe esattamente il difetto che `decimalsFor`
+ *  dichiara nel proprio docstring.
+ *
+ *  Sopra l'unita non puo' toccare niente: a due decimali non c'e' una sola
+ *  cifra oltre il pavimento, quindi `$35.00` resta `$35.00`. */
+function trimTrailingZeros(text: string, floor: number): string {
+  const dot = text.indexOf(".");
+  if (dot < 0) return text;
+  let end = text.length;
+  while (end - dot - 1 > floor && text[end - 1] === "0") end -= 1;
+  return text.slice(0, end);
+}
+
 /** Format a value as money in its own currency: `$35.04`, `£13.44`,
  *  `HK$120.00`, `KRW 71300.00`.
  *
@@ -97,8 +125,13 @@ export function formatMoney(
   opts: { decimals?: number } = {},
 ): string {
   if (value == null || !Number.isFinite(value)) return "—";
-  const digits = opts.decimals ?? decimalsFor(value);
-  return `${currencySymbol(currency) ?? ""}${value.toFixed(digits)}`;
+  // ⚠️ Un numero di decimali CHIESTO si rispetta com'e'. La precisione
+  // automatica e' una scelta di questo modulo, che puo' ritirarla; quella
+  // esplicita e' una decisione del chiamante, e limarla sarebbe ignorarla.
+  const asked = opts.decimals;
+  const text = value.toFixed(asked ?? decimalsFor(value));
+  const shown = asked == null ? trimTrailingZeros(text, MIN_DECIMALS) : text;
+  return `${currencySymbol(currency) ?? ""}${shown}`;
 }
 
 /** Signed variant, for a change or a P&L where the direction is the point.
