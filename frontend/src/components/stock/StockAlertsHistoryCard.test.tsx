@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -79,7 +79,7 @@ beforeEach(() => {
 describe("StockAlertsHistoryCard", () => {
   it("parte dai recenti e non interroga lo storico", () => {
     monta([_alert(1), _alert(2)]);
-    expect(screen.getByText(/Segnali storici per questo ticker \(2\)/)).toBeInTheDocument();
+    expect(screen.getByText(/^Segnali \(2\)$/)).toBeInTheDocument();
     // ⚠️ Il pavimento: la query dello storico e' `enabled` solo sulla sua
     // scheda. Senza questa asserzione ogni apertura del dettaglio titolo
     // pagherebbe una richiesta che nessuno guarda.
@@ -170,7 +170,33 @@ describe("StockAlertsHistoryCard", () => {
     await waitFor(() =>
       expect(screen.queryByTitle(/tono bullish/)).not.toBeInTheDocument(),
     );
-    expect(screen.getByText(/Segnali storici per questo ticker \(40\)/)).toBeInTheDocument();
+    expect(screen.getByText(/^Segnali \(40\)$/)).toBeInTheDocument();
+  });
+
+  it("i recenti si fermano a dieci righe e dicono quante ne restano fuori", async () => {
+    /* Il tetto di dieci e' su richiesta; il conteggio accanto e' la parte che
+     * non si puo' togliere. Il titolo conta TUTTI i recenti, quindi senza la
+     * riga «Ultimi 10 di 12» un «Segnali (12)» sopra dieci righe si legge come
+     * un numero sbagliato. */
+    listMock.mockReturnValue({ items: [_alert(20)], total: 1, has_more: false });
+    monta(Array.from({ length: 12 }, (_, i) => _alert(i + 1)));
+
+    // Pavimento prima del tetto: con zero righe «al massimo dieci» sarebbe
+    // vero di niente. Si contano le righe del CORPO, non l'intestazione.
+    const corpo = screen.getAllByRole("rowgroup")[1];
+    expect(within(corpo).getAllByRole("row")).toHaveLength(10);
+    expect(screen.getByText(/^Segnali \(12\)$/)).toBeInTheDocument();
+    expect(screen.getByText(/Ultimi 10 di 12/)).toBeInTheDocument();
+
+    // La riga porta dove stanno gli altri.
+    await userEvent.click(screen.getByRole("button", { name: /Apri lo storico/ }));
+    expect(screen.getByRole("button", { name: /^Storico$/ })).toHaveAttribute("aria-pressed", "true");
+    await waitFor(() => expect(listMock).toHaveBeenCalled());
+  });
+
+  it("con dieci recenti o meno la riga del conteggio non c'e'", () => {
+    monta(Array.from({ length: 10 }, (_, i) => _alert(i + 1)));
+    expect(screen.queryByText(/Ultimi \d+ di/)).not.toBeInTheDocument();
   });
 
   it("la paginazione avanza e l'offset torna a zero cambiando scheda", async () => {
@@ -183,9 +209,9 @@ describe("StockAlertsHistoryCard", () => {
 
     await userEvent.click(screen.getByRole("button", { name: /Successivi/ }));
     await waitFor(() =>
-      expect(listMock.mock.calls.at(-1)?.[0]).toMatchObject({ offset: 25 }),
+      expect(listMock.mock.calls.at(-1)?.[0]).toMatchObject({ offset: 10 }),
     );
-    await waitFor(() => expect(screen.getByText(/26–26 di 40/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/11–11 di 40/)).toBeInTheDocument());
 
     // Tornando ai recenti e rientrando si riparte dalla prima pagina: un
     // offset che sopravvive al cambio di scheda mostrerebbe una pagina di

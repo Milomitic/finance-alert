@@ -22,7 +22,6 @@ import {
   scoreBgColor,
   scoreColor,
   scoreHex,
-  scoreLabel,
 } from "@/lib/scoreMeta";
 import { cn } from "@/lib/utils";
 
@@ -443,7 +442,9 @@ function SubScoreRow({ pillar, score, components }: SubScoreRowProps) {
   }
 
   const trigger = (
-    <div className="grid grid-cols-[80px_1fr_38px] items-center gap-2 py-1 cursor-help">
+    // Interlinea stretta di proposito (niente `py`, `leading-5` sul valore):
+    // cinque righe di pilastro erano la parte piu' alta della scheda.
+    <div className="grid grid-cols-[80px_1fr_38px] items-center gap-2 cursor-help">
       <span className="text-xs font-medium text-muted-foreground truncate">
         {label}
       </span>
@@ -455,7 +456,7 @@ function SubScoreRow({ pillar, score, components }: SubScoreRowProps) {
       </div>
       <span
         className={cn(
-          "text-sm font-bold tabular-nums text-right",
+          "text-sm leading-5 font-bold tabular-nums text-right",
           valueCls,
         )}
       >
@@ -687,25 +688,19 @@ function QualityExtrasRow({ extras }: { extras?: StockScore["quality_extras"] })
           )}
           {an.n_analysts != null && <span className="text-muted-foreground">· {an.n_analysts} analisti</span>}
           {an.target_upside_pct != null && (
-            <>
-              <span className={cn("font-semibold tabular-nums", an.target_upside_pct >= 0 ? "text-emerald-800 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400")}
-                title={
-                  an.upside_base_price != null
-                    ? `Target medio ${an.price_target?.toFixed(2)} sulla chiusura ${an.upside_base_price.toFixed(2)}${an.upside_base_as_of ? ` del ${an.upside_base_as_of}` : ""}`
-                    : `Target medio ${an.price_target?.toFixed(2)}`
-                }>
-                {an.target_upside_pct >= 0 ? "+" : ""}{an.target_upside_pct}% al target
-              </span>
-              {/* La base, a schermo e non solo nel tooltip: e' l'unica cosa
-                  che rende leggibile perche' questa percentuale e quella del
-                  pannello analisti possono differire sullo stesso target. */}
-              {an.upside_base_price != null && (
-                <span className="text-[0.6765rem] tabular-nums">
-                  su {an.upside_base_price.toFixed(2)}
-                  {an.upside_base_as_of ? ` del ${an.upside_base_as_of.slice(5).split("-").reverse().join("/")}` : ""}
-                </span>
-              )}
-            </>
+            // La base («su 55.41 del 14/09») stava a schermo accanto alla
+            // percentuale e mandava la riga a capo: tolta su richiesta per
+            // risparmiare altezza. Resta nel tooltip, che e' il posto dove
+            // cercarla quando questa percentuale e quella del pannello
+            // analisti differiscono sullo stesso target.
+            <span className={cn("font-semibold tabular-nums", an.target_upside_pct >= 0 ? "text-emerald-800 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400")}
+              title={
+                an.upside_base_price != null
+                  ? `Target medio ${an.price_target?.toFixed(2)} sulla chiusura ${an.upside_base_price.toFixed(2)}${an.upside_base_as_of ? ` del ${an.upside_base_as_of}` : ""}`
+                  : `Target medio ${an.price_target?.toFixed(2)}`
+              }>
+              {an.target_upside_pct >= 0 ? "+" : ""}{an.target_upside_pct}% al target
+            </span>
           )}
         </div>
       )}
@@ -805,10 +800,10 @@ export function StockScoreCard({ ticker }: Props) {
       {/* The left column groups the score and its sector comparison; the
           right column keeps the risk tier and historical context together. */}
       <div className="grid grid-cols-2 items-center gap-3">
+        {/* Niente etichetta di fascia («MEDIOCRE») sopra il gauge, su
+            richiesta: il colore del numero dice gia' la fascia, e la riga
+            costava altezza a una scheda che deve starne il meno possibile. */}
         <div className="flex min-w-0 flex-col items-center gap-1 text-center">
-          <span className="text-[0.7059rem] uppercase tracking-wider text-muted-foreground">
-            {scoreLabel(composite)}
-          </span>
           <div className="relative shrink-0">
             <ScoreGauge score={composite} size={96} sectorAvg={data.sector_avg} />
             <div className="absolute inset-0 flex flex-col items-center justify-end pb-0.5">

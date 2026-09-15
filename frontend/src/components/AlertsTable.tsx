@@ -233,7 +233,7 @@ export function AlertsTable({
           anchor={menuAnchor}
         />
       )}
-      <Table className={embedded ? "text-[13.5px] [&_td]:py-1 [&_td]:px-2 [&_th]:h-8 [&_th]:px-2 [&_th]:text-[13.5px]" : "text-sm"}>
+      <Table className={embedded ? "text-[13.5px] [&_td]:py-0.5 [&_td]:px-2 [&_th]:h-7 [&_th]:px-2 [&_th]:text-[13.5px]" : "text-sm"}>
       <TableHeader>
         {/* Right-click anywhere on the header row opens the column-visibility
             menu (non-embedded only). The menu positions itself at the cursor. */}
@@ -480,7 +480,13 @@ export function AlertsTable({
             )}
             {showRegola && (
               <TableCell>
-                <AlertKindChip alert={a} />
+                {/* Embedded: chip piu' piccolo e piu' basso. E' la cella piu'
+                    alta della riga, quindi e' lei a decidere l'altezza delle
+                    righe della scheda segnali. Classi letterali: il purger. */}
+                <AlertKindChip
+                  alert={a}
+                  className={embedded ? "px-1.5 py-0.5 text-[0.7647rem]" : undefined}
+                />
               </TableCell>
             )}
             {showCatena && (
@@ -548,7 +554,7 @@ export function AlertsTable({
                         : "text-rose-600 dark:text-rose-400";
                   return (
                     <div className="flex items-center justify-end gap-2" title={`Forza ${pct}%`}>
-                      <span className={cn("text-sm font-semibold tabular-nums w-10 text-right", txt)}>
+                      <span className={cn(embedded ? "text-[0.7647rem]" : "text-sm", "font-semibold tabular-nums w-10 text-right", txt)}>
                         {pct}%
                       </span>
                       {!embedded && (
@@ -591,7 +597,7 @@ export function AlertsTable({
                           title="Edge storico NEGATIVO al netto del mercato: segnale anti-predittivo"
                         />
                       )}
-                      <span className="text-sm font-semibold tabular-nums w-10 text-right text-slate-700 dark:text-slate-300">
+                      <span className={cn(embedded ? "text-[0.7647rem]" : "text-sm", "font-semibold tabular-nums w-10 text-right text-slate-700 dark:text-slate-300")}>
                         {pct}%
                       </span>
                       {!embedded && (

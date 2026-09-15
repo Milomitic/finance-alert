@@ -63,7 +63,9 @@ async function disposizione(page: import("@playwright/test").Page): Promise<Misu
       intestazioneTrovata: !!intestazione,
       score: riquadro(scheda(conTesto("Stock score"))),
       tecnico: riquadro(scheda(conTesto("Valutazione tecnica"))),
-      segnali: riquadro(scheda(conTesto("Segnali storici per questo ticker"))),
+      // «Segnali (» con la parentesi: «Segnali» da solo e' l'inizio di troppi
+      // testi per essere un indirizzo.
+      segnali: riquadro(scheda(conTesto("Segnali ("))),
       setupsPresente: !!conTesto("In formazione su questo titolo"),
     };
   });

@@ -1,5 +1,5 @@
 import { ChevronLeft, ChevronRight, History, TrendingDown, TrendingUp } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 
@@ -15,8 +15,11 @@ import { useScanStock } from "@/hooks/useAlertMutations";
 import { getAlertMeta } from "@/lib/alertMeta";
 import { cn } from "@/lib/utils";
 
-/** Righe per pagina sullo storico completo. */
-const PER_PAGINA = 25;
+/** Righe al massimo nella lista: i recenti si fermano qui, lo storico pagina
+ *  di tanti. Una scheda compatta, su richiesta — il resto e' nello storico. */
+const PER_PAGINA = 10;
+/** Righe visibili senza scorrere. Le altre fino a PER_PAGINA si scorrono. */
+const RIGHE_VISIBILI = 5;
 
 interface Props {
   alerts: Alert[];
@@ -116,8 +119,44 @@ export function StockAlertsHistoryCard({ alerts, ticker, chart }: Props) {
     [alerts],
   );
   const stats = useMemo(() => computeStats(sorted), [sorted]);
+  const recenti = useMemo(() => sorted.slice(0, PER_PAGINA), [sorted]);
   const completo = scheda === "completo";
-  const righe = completo ? (storico.data?.items ?? []) : sorted;
+  const righe = completo ? (storico.data?.items ?? []) : recenti;
+  // ⚠️ Il titolo e la striscia contano TUTTI i recenti, la lista ne mostra
+  // al massimo dieci: senza questa riga «Segnali (14)» sopra dieci righe
+  // sembrerebbe un conteggio sbagliato.
+  const nascosti = completo ? 0 : sorted.length - recenti.length;
+
+  /* ─── Cinque righe a vista, le altre si scorrono ────────────────────────
+   *
+   * L'altezza si MISURA sulla quinta riga invece di scriverla in rem: la
+   * radice qui e' 17px, le righe prendono l'altezza del chip piu' alto e i
+   * bordi collassano, quindi un numero scritto a mano sbaglierebbe di qualche
+   * pixel e mostrerebbe mezza sesta riga.
+   *
+   * Scrive lo stile sul nodo, senza stato: niente render in piu' e niente
+   * `set-state-in-effect`, che e' nel cancello. Senza array di dipendenze di
+   * proposito — il corpo si smonta durante il caricamento e su un errore di
+   * scan, e rimontato con le STESSE righe un effetto legato a `righe` non
+   * ripartirebbe, lasciando la lista senza tetto.
+   *
+   * Dove non c'e' layout (jsdom) le misure valgono zero, e allora il tetto non
+   * si mette: un `maxHeight: 0px` renderebbe la lista invisibile. */
+  const corpo = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const el = corpo.current;
+    if (!el) return;
+    const tr = el.querySelectorAll("tbody tr");
+    if (tr.length <= RIGHE_VISIBILI) {
+      el.style.maxHeight = "";
+      return;
+    }
+    const alto =
+      tr[RIGHE_VISIBILI - 1].getBoundingClientRect().bottom -
+      el.getBoundingClientRect().top +
+      el.scrollTop;
+    el.style.maxHeight = alto > 0 ? `${Math.ceil(alto)}px` : "";
+  });
   const totale = completo ? (storico.data?.total ?? 0) : stats.total;
   const primaDellaPagina = offset + 1;
   const ultimaDellaPagina = offset + righe.length;
@@ -142,10 +181,14 @@ export function StockAlertsHistoryCard({ alerts, ticker, chart }: Props) {
               regola per cui, quando lo spazio manca, e' la decorazione a cedere
               e non l'etichetta. Il CONTEGGIO invece appartiene alla vista,
               quindi quello segue. (Il gate e2e localizza la scheda per questo
-              testo, e aveva ragione a rompersi.) */}
+              testo, e aveva ragione a rompersi.)
+              «Segnali» e non piu' «Segnali storici per questo ticker», su
+              richiesta: il nome corto lascia ai controlli la STESSA riga del
+              titolo invece di mandarli a capo. Il `flex-wrap` di SectionTitle
+              resta come ripiego dove la scheda e' stretta. */}
           <SectionTitle
             icon={History}
-            label={`Segnali storici per questo ticker (${totale})`}
+            label={`Segnali (${totale})`}
             className="mb-3 shrink-0"
             right={
               <div className="flex items-center gap-2 flex-wrap text-[0.7647rem]">
@@ -270,7 +313,7 @@ export function StockAlertsHistoryCard({ alerts, ticker, chart }: Props) {
             // Body grows to fill the row height set by the company-
             // profile sibling and scrolls internally when the row
             // count exceeds it. No more hardcoded max-h.
-            <div className="flex-1 min-h-0 overflow-y-auto -mx-4 px-4">
+            <div ref={corpo} className="flex-1 min-h-0 overflow-y-auto -mx-4 px-4">
               <AlertsTable
                 embedded
                 alerts={righe}
@@ -281,6 +324,23 @@ export function StockAlertsHistoryCard({ alerts, ticker, chart }: Props) {
                 q=""
                 onQueryChange={noopSelect}
               />
+            </div>
+          )}
+          {nascosti > 0 && !scan.error && (
+            <div className="shrink-0 flex flex-wrap items-center justify-between gap-2 pt-2 text-[0.7647rem] text-muted-foreground">
+              <span className="tabular-nums">
+                Ultimi {recenti.length} di {sorted.length}
+              </span>
+              <button
+                type="button"
+                className="rounded px-2 py-1 hover:bg-muted hover:text-foreground"
+                onClick={() => {
+                  setScheda("completo");
+                  setOffset(0);
+                }}
+              >
+                Apri lo storico
+              </button>
             </div>
           )}
           {completo && totale > PER_PAGINA && (
