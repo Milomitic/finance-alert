@@ -301,6 +301,39 @@ def _ancora(oggi: date) -> datetime:
     return datetime.combine(oggi, time(12, 0), tzinfo=UTC)
 
 
+def valuta_senza_rete(db) -> None:
+    """La valutazione dello scan sulle barre SEMINATE, prima che l'app parta.
+
+    ⚠️ FA-074. Il gate misurava anche cio' che la RETE restituiva quel giorno.
+    All'avvio il backend trova un database senza scansioni e lancia lo scan di
+    recupero, che SCARICA barre vere da yfinance per i ticker del seme — ticker
+    reali — e le incolla sopra la storia sintetica. Ne sono uscite due cose
+    misurate, entrambe su commit che non toccavano ne' il seme ne' la pagina:
+
+    - su /stocks l'RSI di 0016.HK a 18,8, perche' la chiusura vera stava sopra
+      barre inventate (-22,9% in un giorno), e una violazione di contrasto che
+      compariva solo quando la rete rispondeva;
+    - su /alerts `button-name: 46 -> 49` nella corsa delle 00:01 UTC, verde
+      tredici minuti prima: tre alert in piu' da un giorno di barre nuovo.
+
+    Lo scan pero' produce cio' che mezza app legge — metriche, punteggi, setup,
+    segnali — quindi spegnerlo e basta lascerebbe il gate a misurare pagine piu'
+    vuote. Si esegue la sua meta' che non scarica: `run_tracked_scan` valuta le
+    barre gia' memorizzate, e la contabilita' dei setup chiude il giro come fa
+    il cron. Il `ScanRun` riuscito che ne resta tiene spento anche il recupero
+    all'avvio; il job lo spegne comunque in modo esplicito e toglie la rete al
+    processo, perche' `recompute_all` puo' ancora chiedere a yfinance i
+    fondamentali di una cache fredda.
+    """
+    from app.services import setup_service
+    from app.services.scan_runner import run_tracked_scan
+
+    run_tracked_scan(db, trigger="e2e-seed")
+    # Come il cron: l'universo intero e' l'unico perimetro che autorizza una
+    # dichiarazione di scadenza (FA-062).
+    setup_service.run_post_scan_bookkeeping(db, universe=True)
+
+
 def main() -> None:
     rng = random.Random(20260912)  # deterministico: un gate che cambia esito da solo non e' un gate
     db = SessionLocal()
@@ -409,9 +442,14 @@ def main() -> None:
         # ⚠️ Per ULTIMA, e senza toccare `rng`: vedi la sezione FA-068 in cima.
         fondi = semina_istituzionali(db, oggi)
         db.commit()
+        seminati = db.query(Alert).count()
+        # ⚠️ DOPO il commit: la valutazione apre le proprie transazioni e deve
+        # vedere il seme intero. Vedi `valuta_senza_rete` sul perche' esiste.
+        valuta_senza_rete(db)
+        db.commit()
         print(f"seme e2e: {db.query(User).count()} utenti, {len(stocks)} titoli, "
-              f"{db.query(Alert).count()} segnali, {db.query(OhlcvDaily).count()} barre, "
-              f"{fondi} fondi")
+              f"{seminati} segnali seminati + {db.query(Alert).count() - seminati} "
+              f"dalla valutazione, {db.query(OhlcvDaily).count()} barre, {fondi} fondi")
     finally:
         db.close()
 
