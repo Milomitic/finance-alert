@@ -27,7 +27,7 @@ meant to report on.
 """
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 from loguru import logger
 from prometheus_client import Counter, Gauge
@@ -163,17 +163,32 @@ def refresh_data_health_gauges(db: Session) -> None:
         except Exception as exc:  # noqa: BLE001
             logger.warning(f"[metrics] {label} refresh failed: {exc}")
 
-    def _age(dataset: str, sql: str) -> None:
-        d = db.execute(text(sql)).scalar()
-        if d is not None:
-            DATA_AGE_DAYS.labels(dataset=dataset).set(float(d))
+    from app.models import Alert, OhlcvDaily
+    from app.models.macro import MacroObservation
 
-    _try("ohlcv age", lambda: _age(
-        "ohlcv_daily", "SELECT CURRENT_DATE - MAX(date) FROM ohlcv_daily"))
-    _try("macro age", lambda: _age(
-        "macro_observations", "SELECT CURRENT_DATE - MAX(date) FROM macro_observations"))
-    _try("alert age", lambda: _age(
-        "alerts", "SELECT CURRENT_DATE - MAX(triggered_at)::date FROM alerts"))
+    def _age(dataset: str, column) -> None:
+        """L'aritmetica sulle date si fa QUI, non in SQL.
+
+        ⚠️ Era `SELECT CURRENT_DATE - MAX(date)` e `MAX(triggered_at)::date`,
+        cioe' Postgres. Su SQLite — sviluppo e gate CI — il cast `::` falliva
+        («unrecognized token») e la sottrazione fra due stringhe-data dava
+        ZERO, perche' SQLite sottrae i numeri iniziali: 2026 - 2026. Un'eta' di
+        zero giorni e' plausibile e falsa, la forma peggiore."""
+        d = db.execute(select(func.max(column))).scalar()
+        if d is None:
+            return
+        if isinstance(d, datetime):
+            giorno = (d.astimezone(UTC) if d.tzinfo else d).date()
+        elif isinstance(d, date):
+            giorno = d
+        else:
+            giorno = date.fromisoformat(str(d)[:10])
+        oggi = datetime.now(UTC).date()
+        DATA_AGE_DAYS.labels(dataset=dataset).set(float((oggi - giorno).days))
+
+    _try("ohlcv age", lambda: _age("ohlcv_daily", OhlcvDaily.date))
+    _try("macro age", lambda: _age("macro_observations", MacroObservation.date))
+    _try("alert age", lambda: _age("alerts", Alert.triggered_at))
 
     def _setups() -> None:
         rows = db.execute(text(
