@@ -76,10 +76,17 @@ def get_scheduler() -> BackgroundScheduler:
             max_instances=1,
             coalesce=True,
         )
+        # Solo lun-ven (FA-079, 2026-09-15). Sabato e domenica non arriva
+        # nessuna barra nuova: la scansione di venerdi' 23:30 ha gia' visto la
+        # chiusura USA, e le due del weekend rifacevano ~12 minuti di lavoro
+        # identico ciascuna. ⚠️ Accoppiato a `FinanceAlertNotScanning` in
+        # `infra/observability/app-alert-rules.yaml`, che ora tace nel weekend:
+        # senza quella guardia la soglia di 26 h scatterebbe ogni sabato sera.
+        # `tests/test_scansione_feriale_e_allarme.py` tiene le due cose insieme.
         _scheduler.add_job(
             run_scan_alerts,
             trigger=CronTrigger(
-                day_of_week="*", hour=settings.scan_hour, minute=settings.scan_minute
+                day_of_week="mon-fri", hour=settings.scan_hour, minute=settings.scan_minute
             ),
             id="scan_alerts",
             replace_existing=True,

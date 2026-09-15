@@ -133,6 +133,16 @@ spec:
         # Left unscoped, `max by (kind)` would have made this alert fire
         # permanently from the moment it was applied. Do not broaden it back
         # without giving score_recompute a schedule of its own.
+        #
+        # ⚠️ WEEKEND (FA-079, 2026-09-15). The 23:30 scan now runs mon-fri only,
+        # so the last success before a weekend is Friday ~21:45 UTC and the
+        # next is Monday's 18:30 Rome tick (16:30 UTC in summer, 17:30 UTC in
+        # winter, ~15 min long): a ~67h gap by design. The rule stays at 26h
+        # and is SILENCED from Saturday 00:00 UTC to Monday 20:00 UTC, after
+        # Monday's scan has had time to finish in both seasons. If that scan
+        # fails, the alert fires Monday evening, as on any weekday.
+        # `day_of_week()` and `hour()` are UTC. The coupling with the scheduler
+        # is pinned by backend/tests/test_scansione_feriale_e_allarme.py.
         - alert: FinanceAlertNotScanning
           expr: |
             (
@@ -140,6 +150,10 @@ spec:
                 finance_alert_last_successful_run_timestamp_seconds{kind="alerts_scan"}
               )
             ) > 26 * 3600
+            unless on() (
+              day_of_week() == 6 or day_of_week() == 0
+              or (day_of_week() == 1 and hour() < 20)
+            )
           for: 30m
           labels:
             severity: critical
