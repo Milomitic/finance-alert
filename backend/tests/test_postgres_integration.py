@@ -156,6 +156,46 @@ def test_one_failed_stock_does_not_poison_the_rest_of_the_batch(pg, monkeypatch)
     assert date(2026, 7, 21) in landed
 
 
+def test_l_ampiezza_per_direzione_gira_su_POSTGRES(pg) -> None:
+    """FA-064 su Postgres vero.
+
+    La query raggruppa su un'espressione estratta dallo snapshot JSON e filtra
+    su una tupla `(detector, giorno) IN (...)`. Entrambe le forme hanno un
+    precedente di divergenza fra dialetti in questo progetto — la famiglia
+    `json_text` e' esattamente cio' per cui questa corsia blocca il rilascio —
+    e la suite SQLite non puo' dire se Postgres accetta il GROUP BY
+    sull'espressione.
+    """
+    from datetime import datetime as _dt
+
+    from app.services.signal_breadth_service import breadth_for, peers_for
+
+    giorno = date(2026, 9, 8)
+    titoli = {}
+    for t, settore in (("NVDA", "IT"), ("AMD", "IT"), ("MU", "IT"), ("XOM", "Energy")):
+        s = Stock(ticker=t, exchange="NASDAQ", name=t, sector=settore)
+        pg.add(s)
+        titoli[t] = s
+    pg.flush()
+
+    def _a(t, tono):
+        a = Alert(stock_id=titoli[t].id, signal_name="trend_pullback", signal_date=giorno,
+                  triggered_at=_dt(2026, 9, 8, 10), trigger_price=1.0,
+                  snapshot=json.dumps({"tone": tono}))
+        pg.add(a)
+        return a
+
+    mio = _a("NVDA", "bull")
+    _a("AMD", "bull")
+    _a("MU", "bear")
+    _a("XOM", "bull")
+    pg.flush()
+
+    got = breadth_for(pg, [mio], stock_id=titoli["NVDA"].id, sector="IT")[mio.id]
+    assert (got.same_tone, got.same_tone_sector, got.opposite_tone) == (2, 1, 1)
+    assert [p.ticker for p in peers_for(pg, mio)] == ["AMD", "XOM"]
+
+
 @contextmanager
 def _database_vuoto(monkeypatch):
     """Un database Postgres NUOVO e vuoto, con Alembic puntato su di lui.

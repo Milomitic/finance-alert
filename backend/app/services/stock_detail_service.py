@@ -303,8 +303,9 @@ def get_detail(db: Session, ticker: str, range_key: str = "1d") -> StockDetail |
     )
     for _i in alerts_history:
         _b = _ampiezza.get(_i["id"])
-        _i["same_day_others"] = _b.others if _b else None
-        _i["same_day_sector"] = _b.same_sector if _b else None
+        _i["same_day_same_tone"] = _b.same_tone if _b else None
+        _i["same_day_same_tone_sector"] = _b.same_tone_sector if _b else None
+        _i["same_day_opposite_tone"] = _b.opposite_tone if _b else None
     return StockDetail(
         stock=stock,
         ohlcv=ohlcv_view,

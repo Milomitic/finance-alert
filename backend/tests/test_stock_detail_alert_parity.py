@@ -50,7 +50,8 @@ def client(db):
 _CANONICI = {
     "id", "rule_kind", "stock_id", "ticker", "name", "currency",
     "triggered_at", "signal_date", "trigger_price", "snapshot",
-    "read_at", "archived_at", "same_day_others", "same_day_sector",
+    "read_at", "archived_at", "same_day_same_tone", "same_day_same_tone_sector",
+    "same_day_opposite_tone",
     "outcome_hit", "outcome_fwd_return", "outcome_horizon_days",
     "outcome_mkt_excess", "outcome_entry_close", "next_earnings_date",
 }
@@ -143,7 +144,9 @@ def test_the_two_pages_agree_on_the_same_alert(client, db) -> None:
         i for i in client.get(f"/api/alerts?ticker={s.ticker}").json()["items"]
         if i["id"] == a.id
     )
-    for campo in sorted(_CANONICI - {"same_day_others", "same_day_sector"}):
+    for campo in sorted(_CANONICI - {
+        "same_day_same_tone", "same_day_same_tone_sector", "same_day_opposite_tone",
+    }):
         assert dal_dettaglio[campo] == dalla_lista[campo], f"divergono su {campo}"
     # ⚠️ E la valuta NON e' dollari: un terzo dell'universo non e' quotato in
     # USD, ed e' il campo la cui assenza faceva rendere ogni prezzo con `$`.

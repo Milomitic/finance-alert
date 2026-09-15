@@ -26,6 +26,21 @@ export function useAlert(id: number | null) {
   });
 }
 
+/** I titoli contati nell'ampiezza, caricati SOLO quando chi legge li chiede.
+ *
+ *  Il conteggio arriva gia' col dettaglio; la lista puo' valere cento righe e
+ *  serve a una domanda che si fa raramente, quindi `enabled` resta spento
+ *  finche' il pannello non si apre. `staleTime` lungo: la compagnia di un
+ *  segnale in un giorno passato non cambia. */
+export function useAlertPeers(id: number, enabled: boolean) {
+  return useQuery({
+    queryKey: ["alert-peers", id],
+    queryFn: ({ signal }) => alerts.peers(id, signal),
+    enabled,
+    staleTime: 10 * 60_000,
+  });
+}
+
 /** Confluence clusters (active signals grouped by ticker+direction). */
 export function useConfluence(days = 7, enabled = true) {
   return useQuery({

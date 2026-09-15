@@ -145,6 +145,15 @@ export interface CatalogStatus {
  *  phantom. Removed 2026-09-07. */
 export type SignalKind = `signal:${string}`;
 
+/** Un titolo contato in `same_day_same_tone`. Una riga per titolo. */
+export interface AlertPeer {
+  alert_id: number;
+  stock_id: number;
+  ticker: string;
+  name: string | null;
+  sector: string | null;
+}
+
 export interface Alert {
   id: number;
   /** ISO date (YYYY-MM-DD) of the market-data bar where the rule's
@@ -167,11 +176,19 @@ export interface Alert {
   read_at: string | null;
   archived_at: string | null;
   /** Quanti ALTRI titoli hanno fatto scattare lo stesso detector lo stesso
-   *  giorno, e quanti di quelli condividono il settore. Contesto, MAI
-   *  conferma: la coincidenza di segnali e' risultata nulla in due studi
-   *  indipendenti. Null per gli alert legacy senza `signal_date`. */
-  same_day_others?: number | null;
-  same_day_sector?: number | null;
+   *  giorno NELLA STESSA DIREZIONE, quanti di quelli condividono il settore, e
+   *  quanti lo hanno fatto nella direzione opposta. Contesto, MAI conferma: la
+   *  coincidenza di segnali e' risultata nulla in due studi indipendenti. Null
+   *  per gli alert senza `signal_date` o senza tono.
+   *
+   *  ⚠️ FA-064. Erano `same_day_others`/`same_day_sector` e sommavano i due
+   *  versi: in produzione il conteggio di 7.088 alert su 8.397 includeva titoli
+   *  scattati al contrario. I nomi sono cambiati col significato, cosi' un
+   *  bundle vecchio in cache legge `undefined` e non mostra niente invece di
+   *  un numero che ora vuol dire altro. */
+  same_day_same_tone?: number | null;
+  same_day_same_tone_sector?: number | null;
+  same_day_opposite_tone?: number | null;
   /** Realized outcome from the signal_outcomes warehouse (LEFT JOIN on
    *  alert_id). All four are null while the signal's forward horizon hasn't
    *  elapsed yet — the UI shows "in maturazione" for a signal alert that has

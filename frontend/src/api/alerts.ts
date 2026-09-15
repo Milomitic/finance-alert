@@ -1,5 +1,5 @@
 import { api } from "./client";
-import type { Alert, AlertList, DigestResult, ScanStatusInfo, ScanStopResultInfo } from "./types";
+import type { Alert, AlertList, AlertPeer, DigestResult, ScanStatusInfo, ScanStopResultInfo } from "./types";
 
 export interface ConfluenceComponent {
   alert_id: number;
@@ -141,6 +141,12 @@ export const alerts = {
    *  non portava da nessuna parte, perche la lista e paginata e il segnale che
    *  ha aperto una posizione di due mesi fa non e nella pagina corrente. */
   byId: (id: number, signal?: AbortSignal) => api<Alert>(`/api/alerts/${id}`, { signal }),
+  /** I titoli contati nell'ampiezza di un segnale: stesso detector, stesso
+   *  giorno, stessa direzione, archiviati compresi (FA-064). ⚠️ Non un link a
+   *  `/alerts` filtrato: quel filtro sulle date legge `triggered_at`, l'ampiezza
+   *  `signal_date`, e il numero e la lista descriverebbero due popolazioni. */
+  peers: (id: number, signal?: AbortSignal) =>
+    api<AlertPeer[]>(`/api/alerts/${id}/peers`, { signal }),
   patch: (id: number, body: { archived?: boolean }) =>
     api<Alert>(`/api/alerts/${id}`, {
       method: "PATCH",

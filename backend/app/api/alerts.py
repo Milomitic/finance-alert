@@ -18,6 +18,7 @@ from app.schemas.alert import (
     AlertListOut,
     AlertOut,
     AlertPatch,
+    AlertPeerOut,
     BulkAction,
     BulkResult,
     DigestResultOut,
@@ -823,6 +824,28 @@ def get_one(
     if item is None:
         raise HTTPException(status_code=404, detail="Alert not found")
     return AlertOut(**item)
+
+
+@router.get("/{alert_id}/peers", response_model=list[AlertPeerOut])
+def peers(
+    alert_id: int,
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+) -> list[AlertPeerOut]:
+    """I titoli contati nell'ampiezza di un segnale (FA-064).
+
+    Stesso detector, stesso giorno, stessa direzione, archiviati compresi —
+    cioe' esattamente la popolazione di `same_day_same_tone`. ⚠️ NON e' un link
+    a `/alerts` filtrato: quel filtro sulle date legge `triggered_at`,
+    l'ampiezza legge `signal_date`, e i due differiscono su migliaia di alert.
+    Il numero e la lista devono descrivere la stessa popolazione.
+    """
+    from app.services.signal_breadth_service import peers_for
+
+    alert = alert_service.get_alert(db, alert_id)
+    if alert is None:
+        raise HTTPException(status_code=404, detail="Alert not found")
+    return [AlertPeerOut(**vars(p)) for p in peers_for(db, alert)]
 
 
 @router.patch("/{alert_id}", response_model=AlertOut, dependencies=[Depends(require_json)])

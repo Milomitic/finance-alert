@@ -582,8 +582,10 @@ export function AlertDetailDialog({ alert, onClose }: Props) {
               come un fatto del titolo o come una condizione di mercato. */}
           <div className="mb-3">
             <SignalBreadthRow
-              others={alert.same_day_others}
-              sameSector={alert.same_day_sector}
+              alertId={alert.id}
+              sameTone={alert.same_day_same_tone}
+              sameToneSector={alert.same_day_same_tone_sector}
+              oppositeTone={alert.same_day_opposite_tone}
             />
           </div>
           {isSignalKind(alert.rule_kind) ? (
