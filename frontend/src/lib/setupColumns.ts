@@ -6,10 +6,11 @@ import type { GroupColumns } from "@/components/setups/SetupConditionGroup";
 const BASE = "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3";
 
 const COLS = {
-  levelAndDistance: `${BASE} sm:grid-cols-[minmax(0,1fr)_132px_88px_92px_64px]`,
-  levelOnly: `${BASE} sm:grid-cols-[minmax(0,1fr)_132px_88px_64px]`,
-  distanceOnly: `${BASE} sm:grid-cols-[minmax(0,1fr)_88px_92px_64px]`,
-  neither: `${BASE} sm:grid-cols-[minmax(0,1fr)_88px_64px]`,
+  // L'attesa e' 84px e non piu' 64: porta anche «visto 12g fa» (FA-066).
+  levelAndDistance: `${BASE} sm:grid-cols-[minmax(0,1fr)_132px_88px_92px_84px]`,
+  levelOnly: `${BASE} sm:grid-cols-[minmax(0,1fr)_132px_88px_84px]`,
+  distanceOnly: `${BASE} sm:grid-cols-[minmax(0,1fr)_88px_92px_84px]`,
+  neither: `${BASE} sm:grid-cols-[minmax(0,1fr)_88px_84px]`,
 } as const;
 
 export function columnsFor(setups: Setup[]): GroupColumns {

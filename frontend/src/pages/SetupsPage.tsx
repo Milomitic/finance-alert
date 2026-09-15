@@ -1,5 +1,6 @@
-import { Hourglass, Target } from "lucide-react";
+import { Hourglass, Target, X } from "lucide-react";
 import { useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 
 import { SetupConditionGroup } from "@/components/setups/SetupConditionGroup";
 import { AlertDetailDialog } from "@/components/AlertDetailDialog";
@@ -37,6 +38,30 @@ import { InfoHint } from "@/components/ui/info-hint";
 /** Below this many RESOLVED setups the conversion rate is shown as a raw
  *  fraction rather than a percentage — see the tile comment. */
 const MIN_RATE_N = 20;
+
+/* ─── Tre viste, nell'URL (FA-066) ────────────────────────────────────────
+ *
+ * Le otto statistiche e la tabella per detector stavano SOPRA la lista, su
+ * entrambe le viste: fra chi apre la pagina per sapere cosa sta aspettando e
+ * la risposta c'erano otto tessere e una tabella che rispondono a un'altra
+ * domanda — «la funzione funziona?» — che si fa con calma e non a ogni
+ * visita. Ora vivono in «Misurazione», con i denominatori come prima.
+ *
+ * Nell'URL, come Diagnostica: il dettaglio titolo deve poter mandare qui una
+ * lista gia' filtrata (`?ticker=`), e un link a una vista resta condivisibile. */
+const VISTE = [
+  { id: "formazione", label: "In formazione" },
+  { id: "esiti", label: "Esiti" },
+  { id: "misurazione", label: "Misurazione" },
+] as const;
+
+type VistaId = (typeof VISTE)[number]["id"];
+
+/** La vista chiesta dall'URL. Un valore sconosciuto — un segnalibro vecchio,
+ *  un refuso — apre la lista invece di una pagina vuota. */
+function vistaDa(raw: string | null): VistaId {
+  return VISTE.some((v) => v.id === raw) ? (raw as VistaId) : "formazione";
+}
 
 function StatsStrip({ stats }: { stats: SetupStats }) {
   // Derived, not read from `stats.closed`: the same number arriving twice
@@ -232,7 +257,10 @@ export default function SetupsPage() {
   // "In formazione" vs "Esiti". The closed rows are the only record of
   // whether the feature works — conversion rate and lead time both come from
   // them — and until now the page could not show a single one.
-  const [view, setView] = useState<"active" | "closed">("active");
+  const [params, setParams] = useSearchParams();
+  const vista = vistaDa(params.get("vista"));
+  const ticker = params.get("ticker")?.trim().toUpperCase() || undefined;
+  const view: "active" | "closed" = vista === "esiti" ? "closed" : "active";
   // Il segnale in cui un setup e scattato. Per id, non per ricerca nella lista
   // alert: quella e paginata, e un setto convertito ad agosto non e in nessuna
   // pagina che si stia guardando.
@@ -243,7 +271,7 @@ export default function SetupsPage() {
   // mostrerebbe una fetta di mezzo di una popolazione diversa, senza che niente
   // lo dica.
   const [offset, setOffset] = useState(0);
-  const q = useSetups(tone, undefined, view, { detector, sort, offset });
+  const q = useSetups(tone, ticker, view, { detector, sort, offset });
 
   const all = useMemo(() => q.data?.setups ?? [], [q.data?.setups]);
   // ⚠️ I conteggi vengono dal SERVER e descrivono la popolazione. Prima erano
@@ -265,6 +293,15 @@ export default function SetupsPage() {
   /** Cambia un controllo che ridefinisce il perimetro, e torna alla prima
    *  pagina. In render, non in un effect: `set-state-in-effect` e' gated. */
   const cambia = <T,>(set: (v: T) => void) => (v: T) => { set(v); setOffset(0); };
+  /** Lo stesso, per cio' che vive nell'URL. `replace`: cambiare vista non e'
+   *  navigare, e «indietro» deve uscire dalla pagina. */
+  const cambiaUrl = (chiave: "vista" | "ticker", valore: string | null) => {
+    const p = new URLSearchParams(params);
+    if (valore === null || (chiave === "vista" && valore === "formazione")) p.delete(chiave);
+    else p.set(chiave, valore);
+    setParams(p, { replace: true });
+    setOffset(0);
+  };
 
   return (
     <div className="space-y-4 max-w-5xl">
@@ -280,35 +317,85 @@ export default function SetupsPage() {
         </p>
       </div>
 
-      {q.data && <StatsStrip stats={q.data.stats} />}
+      {/* Bottoni con `aria-pressed`, non tab: non c'e' un tabpanel da
+          promettere (CLAUDE.md, «Recenti / Storico»). */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div
+          role="group"
+          aria-label="Vista"
+          className="inline-flex rounded-md border overflow-hidden text-xs font-semibold"
+        >
+          {VISTE.map((v) => (
+            <button
+              key={v.id}
+              type="button"
+              aria-pressed={vista === v.id}
+              onClick={() => cambiaUrl("vista", v.id)}
+              className={cn(
+                "min-h-[36px] px-3 transition-colors",
+                vista === v.id
+                  ? "bg-accent text-foreground"
+                  : "text-muted-foreground hover:bg-accent/40",
+              )}
+            >
+              {v.label}
+            </button>
+          ))}
+        </div>
+        {ticker && vista !== "misurazione" && (
+          <button
+            type="button"
+            onClick={() => cambiaUrl("ticker", null)}
+            aria-label={`Solo ${ticker}, togli il filtro`}
+            className="inline-flex min-h-[36px] items-center gap-1 rounded-md border px-3 text-xs font-semibold hover:bg-accent"
+          >
+            Solo {ticker}
+            <X className="h-3 w-3" aria-hidden />
+          </button>
+        )}
+      </div>
 
-      {/* Above the tables on BOTH tabs, deliberately. The strip says whether
-          the feature works; this says which setup families do, and that is the
-          question a person carries into either list. It is the same data on
-          both, because a family's record does not change depending on which
-          tab you are reading. */}
-      {q.data && (
+      {vista === "misurazione" ? (
+        q.isLoading ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <CardSkeleton key={i} rows={2} className="h-[88px]" />
+            ))}
+          </div>
+        ) : q.isError ? (
+          <QueryError message="delle misure" onRetry={q.refetch} isRetrying={q.isFetching} />
+        ) : q.data ? (
+          <>
+            {/* `conversion_stats` non guarda i filtri: le misure sono della
+                funzione intera. Dirlo, invece di lasciare un filtro per titolo
+                accanto a numeri che non sono di quel titolo. */}
+            {ticker && (
+              <p className="text-xs text-muted-foreground">
+                Le misure riguardano tutti i titoli, non solo <strong>{ticker}</strong>.
+              </p>
+            )}
+            <StatsStrip stats={q.data.stats} />
+            {/* ⚠️ Le statistiche descrivono una popolazione DIVERSA dalla lista:
+                i soli setup che il prodotto ha davvero mostrato. Non e' un
+                difetto da uniformare — un setup che l'utente non ha mai visto
+                non gli ha fatto nessuna promessa, quindi misurarci sopra
+                l'efficacia giudicherebbe il prodotto su cio' che non ha offerto
+                — ma la pagina mostrava un insieme e ne descriveva un altro senza
+                dirlo. In produzione: 1.415 setup attivi, 59 in shortlist, 18
+                chiusi dentro il perimetro statistico. */}
+            {q.data.stats.scope === "shortlisted" && (
+              <p className="text-xs text-muted-foreground">
+                Le misure qui sopra contano i soli setup{" "}
+                <strong>mostrati in shortlist</strong> ({q.data.stats.total}), non
+                tutti quelli tracciati: un setup mai mostrato non ha fatto nessuna
+                promessa da verificare. La lista ha un perimetro suo.
+              </p>
+            )}
+            <SetupDetectorStats rows={q.data.stats.by_detector} />
+          </>
+        ) : null
+      ) : (
         <>
-          {/* ⚠️ Le statistiche descrivono una popolazione DIVERSA dalla lista:
-              i soli setup che il prodotto ha davvero mostrato. Non e' un
-              difetto da uniformare — un setup che l'utente non ha mai visto non
-              gli ha fatto nessuna promessa, quindi misurarci sopra l'efficacia
-              giudicherebbe il prodotto su cio' che non ha offerto — ma la
-              pagina mostrava un insieme e ne descriveva un altro senza dirlo.
-              In produzione: 1.415 setup attivi, 59 in shortlist, 18 chiusi
-              dentro il perimetro statistico. */}
-          {q.data.stats.scope === "shortlisted" && (
-            <p className="text-xs text-muted-foreground">
-              Le misure qui sotto contano i soli setup{" "}
-              <strong>mostrati in shortlist</strong> ({q.data.stats.total}), non
-              tutti quelli tracciati: un setup mai mostrato non ha fatto nessuna
-              promessa da verificare. La lista sotto ha un perimetro suo.
-            </p>
-          )}
-          <SetupDetectorStats rows={q.data.stats.by_detector} />
-        </>
-      )}
-
       {/* Three controls became eight. The page had exactly one axis — tone —
           which meant no way to ask "show me only the squeezes" or "who has
           been waiting longest", on the longest page in the app. */}
@@ -385,22 +472,6 @@ export default function SetupsPage() {
                   : "Setup attivi"
             }
           />
-          <div className="inline-flex rounded-md border overflow-hidden text-xs font-semibold">
-            {(["active", "closed"] as const).map((v) => (
-              <button
-                key={v}
-                type="button"
-                onClick={() => cambia(setView)(v)}
-                aria-pressed={view === v}
-                className={cn(
-                  "px-3 py-1.5 transition-colors",
-                  view === v ? "bg-accent text-foreground" : "text-muted-foreground hover:bg-accent/40",
-                )}
-              >
-                {v === "active" ? "In formazione" : "Esiti"}
-              </button>
-            ))}
-          </div>
         </div>
         {q.isLoading ? (
           <div className="space-y-2">
@@ -461,6 +532,8 @@ export default function SetupsPage() {
           </div>
         )}
       </div>
+        </>
+      )}
       <SetupDetailDialog setup={openSetup} onClose={() => setOpenSetup(null)} />
       {/* Il terzo anello: setup → segnale → posizione. Lo stesso dialogo che
           la pagina Segnali e la pagina Posizioni aprono, e che contiene

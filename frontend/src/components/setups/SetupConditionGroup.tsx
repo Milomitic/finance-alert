@@ -2,7 +2,12 @@ import { ArrowUpDown, CalendarClock, Clock, TrendingDown, TrendingUp } from "luc
 
 import { StockLogo } from "@/components/dashboard/StockLogo";
 import { Card, CardContent } from "@/components/ui/card";
-import { waitingDays, type Setup } from "@/hooks/useSetups";
+import {
+  LAST_SEEN_STALE_DAYS,
+  lastSeenDaysAgo,
+  waitingDays,
+  type Setup,
+} from "@/hooks/useSetups";
 import { daysUntil, earningsProximityDays } from "@/lib/earningsProximity";
 import type { ConditionGroup } from "@/lib/setupGrouping";
 import {
@@ -183,6 +188,7 @@ function SetupLine({
   columns: GroupColumns;
 }) {
   const days = waitingDays(setup);
+  const seen = lastSeenDaysAgo(setup);
   const level = setup.annotations?.levels?.[0];
   return (
     <li>
@@ -211,10 +217,19 @@ function SetupLine({
 
         {columns.distance && <DistanceCell value={setup.distance_atr} />}
 
-        <span className="hidden sm:flex items-center gap-1 justify-self-end text-xs text-muted-foreground whitespace-nowrap">
-          <EarningsMarker setup={setup} />
-          <Clock className="h-3 w-3" aria-hidden />
-          {days === null ? "—" : days === 0 ? "oggi" : `${days}g`}
+        <span className="hidden sm:flex flex-col items-end justify-self-end text-xs text-muted-foreground whitespace-nowrap">
+          <span className="flex items-center gap-1">
+            <EarningsMarker setup={setup} />
+            <Clock className="h-3 w-3" aria-hidden />
+            {days === null ? "—" : days === 0 ? "oggi" : `${days}g`}
+          </span>
+          {/* FA-066: l'ultima osservazione, solo quando e' una notizia. Un
+              setup attivo viene rivisto a ogni scansione, quindi «visto oggi»
+              su cinquanta righe sarebbe rumore che nasconde l'unica che conta:
+              quella che nessuno guarda da giorni. */}
+          {seen !== null && seen >= LAST_SEEN_STALE_DAYS && (
+            <span className="text-[0.6765rem]">visto {seen}g fa</span>
+          )}
         </span>
       </button>
     </li>

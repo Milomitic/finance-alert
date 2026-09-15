@@ -104,6 +104,6 @@ describe("il template della griglia e sempre una stringa letterale", () => {
     expect(c.cols).not.toContain("92px");
     // La priorita e l'attesa non sono opzionali: ci sono sempre.
     expect(c.cols).toContain("88px");
-    expect(c.cols).toContain("64px");
+    expect(c.cols).toContain("84px");
   });
 });

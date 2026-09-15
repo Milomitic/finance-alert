@@ -249,3 +249,22 @@ export function waitingDays(setup: Setup): number | null {
   if (Number.isNaN(started)) return null;
   return Math.max(0, Math.floor((Date.now() - started) / 86_400_000));
 }
+
+/** Days since a scan last saw this setup's conditions hold (FA-066: «ultima
+ *  osservazione» in front of the list).
+ *
+ *  ⚠️ Different from `waitingDays`, and the difference is the point: the wait
+ *  says how much warning the setup is offering, this says whether anyone has
+ *  LOOKED since. A setup not re-observed for a week is a claim about the past
+ *  that the list presents as a fact about today. */
+export function lastSeenDaysAgo(setup: Setup): number | null {
+  if (!setup.last_seen_at) return null;
+  const seen = new Date(setup.last_seen_at).getTime();
+  if (Number.isNaN(seen)) return null;
+  return Math.max(0, Math.floor((Date.now() - seen) / 86_400_000));
+}
+
+/** From here «visto Ng fa» is news rather than the scan's cadence. Four, as the
+ *  «in ritardo» chip on alerts, and for the same measured reason: at one, a
+ *  nightly scan across a weekend lit every row on Monday morning. */
+export const LAST_SEEN_STALE_DAYS = 4;

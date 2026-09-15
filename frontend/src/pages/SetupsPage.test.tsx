@@ -1,11 +1,16 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, useLocation } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import SetupsPage from "./SetupsPage";
-import type { SetupStats, SetupsResponse } from "@/hooks/useSetups";
+import {
+  LAST_SEEN_STALE_DAYS,
+  type SetupDetectorStat,
+  type SetupStats,
+  type SetupsResponse,
+} from "@/hooks/useSetups";
 
 /* The backend went to some length to keep setups from masquerading as
  * predictions — no probability, a conversion rate that is null rather than 0
@@ -21,7 +26,12 @@ vi.mock("@/api/client", () => ({ api: (...args: unknown[]) => mockGet(...args) }
 type RispostaParziale = Pick<SetupsResponse, "setups" | "stats"> &
   Partial<SetupsResponse>;
 
-function renderWith(parziale: RispostaParziale) {
+/** La query string corrente, a schermo: la vista e il filtro vivono nell'URL. */
+function Posizione() {
+  return <output data-testid="url">{useLocation().search}</output>;
+}
+
+function renderWith(parziale: RispostaParziale, url = "/setups") {
   const data: SetupsResponse = {
     total: parziale.setups.length,
     has_more: false,
@@ -33,12 +43,16 @@ function renderWith(parziale: RispostaParziale) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <MemoryRouter>
+      <MemoryRouter initialEntries={[url]}>
         <SetupsPage />
+        <Posizione />
       </MemoryRouter>
     </QueryClientProvider>,
   );
 }
+
+/** Le misure stanno in una vista loro (FA-066). */
+const MISURAZIONE = "/setups?vista=misurazione";
 
 const setup = {
   id: 1,
@@ -159,7 +173,7 @@ describe("SetupsPage — perimetro", () => {
       setups: [setup],
       stats: { ...stats, scope: "shortlisted", total: 59 },
       total: 1415,
-    });
+    }, MISURAZIONE);
     const nota = await screen.findByText(/mostrati in shortlist/i);
     // ⚠️ Il NUMERO accanto alla frase, non la frase da sola: senza, una nota
     // che dichiara il perimetro e non dice quanto grande sia passerebbe — e il
@@ -235,7 +249,7 @@ describe("SetupsPage", () => {
   });
 
   it("shows an unresolved conversion rate as unknown, not as 0%", async () => {
-    renderWith({ setups: [setup], stats });
+    renderWith({ setups: [setup], stats }, MISURAZIONE);
     expect(await screen.findByText(/nessuno ancora risolto/i)).toBeInTheDocument();
     // "0%" would read as "setups never work" — a claim the data does not make.
     expect(screen.queryByText("0%")).not.toBeInTheDocument();
@@ -253,7 +267,7 @@ describe("SetupsPage", () => {
         conversion_rate: 0.75, avg_lead_days: 2.5,
         median_lead_days: 2, lead_days_min: 1, lead_days_max: 6,
       },
-    });
+    }, MISURAZIONE);
     expect(await screen.findByText("3/4")).toBeInTheDocument();
     expect(screen.queryByText("75%")).not.toBeInTheDocument();
     expect(screen.getByText(/troppo pochi per un tasso/i)).toBeInTheDocument();
@@ -269,7 +283,7 @@ describe("SetupsPage", () => {
     renderWith({
       setups: [setup],
       stats: { ...stats, active: 4, converted: 6, expired: 0, closed: 6, conversion_rate: 1, avg_lead_days: 3 },
-    });
+    }, MISURAZIONE);
     expect(await screen.findByText("6/6")).toBeInTheDocument();
     expect(screen.queryByText("100%")).not.toBeInTheDocument();
   });
@@ -278,7 +292,7 @@ describe("SetupsPage", () => {
     renderWith({
       setups: [setup],
       stats: { ...stats, active: 1, converted: 18, expired: 6, closed: 24, conversion_rate: 0.75, avg_lead_days: 2.5 },
-    });
+    }, MISURAZIONE);
     expect(await screen.findByText("75%")).toBeInTheDocument();
     expect(screen.getByText(/18 su 24/)).toBeInTheDocument();
     expect(screen.queryByText(/troppo pochi/i)).not.toBeInTheDocument();
@@ -287,5 +301,99 @@ describe("SetupsPage", () => {
   it("explains the empty state instead of looking broken", async () => {
     renderWith({ setups: [], stats: { ...stats, active: 0 } });
     expect(await screen.findByText(/nessun setup in formazione/i)).toBeInTheDocument();
+  });
+});
+
+/* ─── FA-066: la lista davanti, le misure in una vista loro ─────────────── */
+
+const rigaDetector: SetupDetectorStat = {
+  detector: "oversold_reversal", converted: 3, expired: 1, resolved: 4,
+  conversion_rate: 75, judged: 2, positive: 1, negative: 1, hit_rate: 50,
+  effective_n: 2, horizon_days: 21, ci_low: 10, ci_high: 90,
+  low_confidence: true, median_excess_pct: 0.5,
+};
+
+describe("SetupsPage — le viste (FA-066)", () => {
+  const ultimaUrl = () => String(mockGet.mock.calls.at(-1)?.[0] ?? "");
+
+  it("la lista non ha piu' le misure davanti", async () => {
+    renderWith({ setups: [setup], stats: { ...stats, by_detector: [rigaDetector] } });
+    // Il pavimento: la lista e' resa, quindi l'assenza sotto non e' una pagina vuota.
+    expect(
+      await screen.findByText(/la barra deve chiudere sopra la sua apertura/i),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/tasso conversione/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/per tipo di setup/i)).not.toBeInTheDocument();
+  });
+
+  it("«Misurazione» mostra le misure e non la lista", async () => {
+    renderWith({ setups: [setup], stats: { ...stats, by_detector: [rigaDetector] } }, MISURAZIONE);
+    expect(await screen.findByText(/tasso conversione/i)).toBeInTheDocument();
+    expect(screen.getByText(/per tipo di setup/i)).toBeInTheDocument();
+    expect(screen.queryByText(/la barra deve chiudere sopra la sua apertura/i)).not.toBeInTheDocument();
+    // Nemmeno i controlli della lista: non filtrerebbero niente di cio' che si vede.
+    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+  });
+
+  it("la vista vive nell'URL, e il default non si scrive", async () => {
+    renderWith({ setups: [setup], stats });
+    await screen.findByText(/la barra deve chiudere sopra la sua apertura/i);
+
+    await userEvent.click(screen.getByRole("button", { name: "Misurazione" }));
+    expect(await screen.findByText(/tasso conversione/i)).toBeInTheDocument();
+    expect(screen.getByTestId("url")).toHaveTextContent("vista=misurazione");
+    expect(screen.getByRole("button", { name: "Misurazione" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "In formazione" })).toHaveAttribute("aria-pressed", "false");
+
+    await userEvent.click(screen.getByRole("button", { name: "In formazione" }));
+    expect(await screen.findByText(/la barra deve chiudere sopra la sua apertura/i)).toBeInTheDocument();
+    expect(screen.getByTestId("url")).not.toHaveTextContent("vista");
+  });
+
+  it("«Esiti» chiede al server i setup chiusi", async () => {
+    renderWith({ setups: [], stats }, "/setups?vista=esiti");
+    await waitFor(() => expect(ultimaUrl()).toContain("status=closed"));
+  });
+
+  it("una vista sconosciuta apre la lista invece di una pagina vuota", async () => {
+    renderWith({ setups: [setup], stats }, "/setups?vista=qualcosaltro");
+    expect(
+      await screen.findByText(/la barra deve chiudere sopra la sua apertura/i),
+    ).toBeInTheDocument();
+  });
+
+  it("?ticker= filtra sul server, si vede, e si toglie", async () => {
+    renderWith({ setups: [setup], stats }, "/setups?ticker=aapl");
+    await waitFor(() => expect(ultimaUrl()).toContain("ticker=AAPL"));
+
+    await userEvent.click(await screen.findByRole("button", { name: /solo AAPL/i }));
+
+    await waitFor(() => expect(ultimaUrl()).not.toContain("ticker="));
+    expect(screen.getByTestId("url")).not.toHaveTextContent("ticker");
+  });
+
+  it("in «Misurazione» dice che le misure non sono del titolo filtrato", async () => {
+    /* `conversion_stats` non guarda i filtri. Lasciare «Solo AAPL» accanto a
+     * numeri dell'intera funzione mostrerebbe una popolazione e ne
+     * descriverebbe un'altra — la forma che FA-056 ha chiuso. */
+    renderWith({ setups: [setup], stats }, "/setups?vista=misurazione&ticker=AAPL");
+    expect(await screen.findByText(/non solo/i)).toHaveTextContent("AAPL");
+    expect(screen.queryByRole("button", { name: /solo AAPL/i })).not.toBeInTheDocument();
+  });
+
+  it("dice quando un setup non viene rivisto da giorni, e solo allora", async () => {
+    const giorniFa = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString();
+    renderWith({
+      setups: [
+        { ...setup, id: 1, ticker: "AAPL" },
+        { ...setup, id: 2, ticker: "MSFT", last_seen_at: giorniFa(LAST_SEEN_STALE_DAYS - 1) },
+        { ...setup, id: 3, ticker: "NVDA", last_seen_at: giorniFa(LAST_SEEN_STALE_DAYS) },
+      ],
+      stats: { ...stats, active: 3 },
+    });
+    expect(await screen.findByText(`visto ${LAST_SEEN_STALE_DAYS}g fa`)).toBeInTheDocument();
+    // Una riga sola: sotto la soglia e' la cadenza della scansione, e «visto
+    // oggi» su ogni riga sarebbe rumore che nasconde quella che conta.
+    expect(screen.getAllByText(/^visto /)).toHaveLength(1);
   });
 });
