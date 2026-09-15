@@ -1179,6 +1179,35 @@ snapshot of that cycle, not a leak. Disk over the same morning: 82% -> 89%
 during a restore drill -> 79% after. The drill's ~2 GB is the only transient
 worth planning for.
 
+### ⚠️ 2026-09-15: 86%, and the critical alert has been firing for days (FA-076)
+
+The section above was true on 09-09 and is not any more. Measured: 26.9 GB of
+31.6 GB, `FinanceAlertNodeRootFilling` **399 samples firing in 7 days**, 63
+notifications delivered. The breakdown that the 09-09 note missed is a **4 GB
+`/.swapfile`** (323 MB used) — `du /*` skips dotfiles, so it is invisible to
+the obvious command. The growth since then is containerd (7.4 -> 8.66 GB).
+Prometheus is at its 2.5 GB cap and cannot grow. The fix is a decision, not a
+prune: shrink swap, grow the boot volume, or cut Prometheus retention.
+
+### ⚠️ On `local-path`, `kubelet_volume_stats_*` is the NODE disk, not the volume
+
+Every PVC in this cluster reports the same `used_bytes` / `capacity_bytes` —
+26.83 GB / 31.6 GB, identical to `df /` — because a local-path PVC is a
+directory on the root filesystem and the kubelet reports that filesystem.
+Loki's PVC really holds 122 MB. So a per-PVC "filling up" rule measures the node
+under a volume's name and prescribes the wrong remedy.
+
+The Loki rule that existed (FA-015) never fired anyway, and the backlog blamed
+the kubelet for it: the selector was `persistentvolumeclaim=~"loki.*"`, and
+**PromQL regexes are fully anchored**, so it never matched `storage-loki-0`.
+A rule that is loaded, healthy and permanently `inactive` looks exactly like a
+rule with nothing to report — check that its selector returns a series before
+believing either. Removed in `05de476`; `tests/test_regole_allarme_local_path.py`
+keeps `kubelet_volume_stats` out of `infra/observability/`. Rules there are
+applied BY HAND (`ssh ... 'kubectl apply -f -' < <absolute path>`), not by
+GitOps — and a relative path from the wrong working directory applies nothing
+while the shell reports only a missing file.
+
 ## Database migrations (alembic)
 
 ### ⚠️ `env.py` IGNORA l'url che passi a `Config` (2026-09-14)
