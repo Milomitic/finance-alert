@@ -44,6 +44,28 @@ The detector reports CANDIDATES, not certainties: it is calibrated to catch
 data glitches rather than splits — INDV falls 6x and recovers 7x five days
 later, which is not a corporate action. Read the table before passing
 --apply, and use --ticker when in doubt.
+
+THE ALERTS (FA-069)
+-------------------
+Both repairs rewrite the SERIES and leave `alerts.trigger_price` where it was,
+so after a rebase an alert prices its entry on a basis its own chart no longer
+uses — KLAC at 10x, APH at 2x. Every run prints them FIRST, whether or not the
+series scan finds anything: the residue belongs to a repair that already
+happened, here or in the automatic rebase inside the fetch, so a catalogue with
+no break left is exactly where it shows up. Window and band are documented on
+`ohlcv_service.find_alerts_off_basis`.
+
+Reported, not corrected, for three reasons that are each sufficient:
+
+  - the snapshot carries prices of its own on the same old basis
+    (`invalidation.level`, annotation levels, ATR), and the trade playbook reads
+    them together with `trigger_price`. Rescaling the price alone makes the
+    dialog contradict itself; rescaling the snapshot means rewriting every
+    detector's JSON field by field;
+  - the factor would be OURS — the SOXS lesson in `_truncate`. For AVB Yahoo
+    declares 2.793; for SOXS it declares nothing that matches;
+  - the outcomes are already right: `entry_close` and `forward_close` both come
+    from the repaired series, so `fwd_return` never saw the old basis.
 """
 from __future__ import annotations
 
@@ -51,13 +73,14 @@ import argparse
 from datetime import timedelta
 
 from loguru import logger
-from sqlalchemy import text
+from sqlalchemy import select, text
 
 from app.core.db import SessionLocal
 from app.models import OhlcvDaily, Stock
 from app.services.ohlcv_service import (
     _rebase_full_history,
     as_date,
+    find_alerts_off_basis,
     find_basis_breaks,
 )
 
@@ -162,6 +185,30 @@ def _source_verdict(ticker: str, when: object) -> str:
     return f"{tail} -> volume ordinario su un salto grande: dati sbagliati, indaga"
 
 
+def _report_alerts_off_basis(db, stock_ids: list[int] | None) -> None:
+    """Print the alerts a repair of the series left on the old basis."""
+    check = find_alerts_off_basis(db, stock_ids)
+    visibili = sum(1 for o in check.off if o.visible)
+    print(
+        f"alert sulla base prezzo vecchia: {len(check.off)} su {check.compared} "
+        f"confrontabili ({visibili} visibili); senza barre nella finestra: "
+        f"{check.not_comparable}"
+    )
+    if not check.off:
+        return
+    print(
+        f"{'ticker':<10}{'alert':>7}  {'segnale':<12}{'trigger':>11}"
+        f"{'chiusura':>11}{'rapporto':>10}  visibile"
+    )
+    for o in check.off:
+        print(
+            f"{o.ticker:<10}{o.alert_id:>7}  {str(o.signal_date):<12}"
+            f"{o.trigger_price:>11.3f}{o.nearest_close:>11.3f}"
+            f"{'x' + format(o.ratio, '.3f'):>10}  {'si' if o.visible else 'no'}"
+        )
+    print("Nessuna correzione automatica: vedi THE ALERTS nel docstring dello script.")
+
+
 def scan(db, only: set[str] | None = None) -> list[tuple[Stock, list]]:
     q = "SELECT id, ticker FROM stocks ORDER BY ticker"
     out: list[tuple[Stock, list]] = []
@@ -256,6 +303,12 @@ def main() -> None:
     only = set(args.ticker) if args.ticker else None
     db = SessionLocal()
     try:
+        stock_ids = (
+            list(db.scalars(select(Stock.id).where(Stock.ticker.in_(only))))
+            if only else None
+        )
+        _report_alerts_off_basis(db, stock_ids)
+        print()
         found = scan(db, only)
         if not found:
             print("nessuna discontinuita' di base trovata.")

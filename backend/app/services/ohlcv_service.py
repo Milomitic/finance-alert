@@ -1,15 +1,17 @@
 """Fetch OHLCV from yfinance and upsert into ohlcv_daily."""
 import math
+from collections import defaultdict
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from typing import Any
 
 import pandas as pd
 from loguru import logger
-from sqlalchemy import func, or_, text
+from sqlalchemy import func, or_, select, text
 from sqlalchemy.orm import Session
 
-from app.models import OhlcvDaily, Stock
+from app.models import Alert, OhlcvDaily, Stock
 from app.services import currency_units
 
 
@@ -166,6 +168,113 @@ def as_date(value: object) -> date:
     if isinstance(value, date):
         return value
     return date.fromisoformat(str(value)[:10])
+
+
+@dataclass(frozen=True)
+class AlertOffBasis:
+    """An alert whose `trigger_price` no longer matches its own stored bars."""
+
+    alert_id: int
+    ticker: str
+    signal_date: date
+    trigger_price: float
+    #: The stored close in the alert's window nearest to its trigger, in log
+    #: terms — so the ratio shown is the factor, not an arbitrary bar's move.
+    nearest_close: float
+    #: Not archived. Reported beside the finding, never used to filter it.
+    visible: bool
+
+    @property
+    def ratio(self) -> float:
+        return self.trigger_price / self.nearest_close
+
+
+@dataclass(frozen=True)
+class AlertBasisCheck:
+    compared: int
+    #: Alerts with a signal_date and no stored bar in their window — truncated
+    #: away or never fetched. Counted, not guessed about.
+    not_comparable: int
+    off: list[AlertOffBasis]
+
+
+def find_alerts_off_basis(
+    db: Session, stock_ids: Iterable[int] | None = None,
+) -> AlertBasisCheck:
+    """Alerts left on a price basis their stock's series no longer uses (FA-069).
+
+    Both repairs rewrite the SERIES and neither touches `alerts.trigger_price`:
+    the automatic rebase in `fetch_and_upsert` and `repair_price_basis --apply`.
+    Measured on production 2026-09-15: 39 alerts on 8 tickers, 11 visible — 20
+    from the automatic path (APH and MNST at exactly x2.000, AVB at the 2.793
+    Yahoo declares on 2026-08-17), 19 from the manual one (KLAC, TIT.MI, SOXS,
+    CRWD, TZA). `find_basis_breaks` cannot see any of it, by construction: the
+    repaired series is clean. Two independent records of the same bar disagree,
+    and only comparing them shows it.
+
+    THE WINDOW, NOT THE SIGNAL BAR. `evaluate_signals` stores the last close the
+    scan held, i.e. a bar from `signal_date` up to the day the row was written
+    (an amendment rewrites both). Against the signal bar alone a late detection
+    after a real move reads as a split: MRNA shows x2.29 there and matches a
+    later close to the cent. One day of slack past `triggered_at`'s UTC date,
+    because an Asian bar is dated ahead of UTC.
+
+    THE BAND IS THE INGEST'S. An alert is off basis when no close in its window
+    sits inside `_BASIS_RATIO_LOW.._BASIS_RATIO_HIGH`, the band
+    `_check_price_basis` uses to declare a basis change — a test pins the two
+    to agree at the edges. Measured, the populations do not touch: p99 of the
+    nearest-close gap is 0.34%, and every alert above 25% is also above 50%.
+    Between 1% and 22% sit Hong Kong closes that settled differently from the
+    in-flight one and spin-off adjustments (FDX x1.22), which no rebase produces.
+
+    ARCHIVED ALERTS ARE CHECKED. Archival is written by the user and tracks age
+    (CLAUDE.md, the warehouse that showed 19 of its 4,880 rows).
+    """
+    ids = None if stock_ids is None else list(stock_ids)
+    q = (
+        select(
+            Alert.id, Alert.stock_id, Stock.ticker, Alert.signal_date,
+            Alert.triggered_at, Alert.trigger_price, Alert.archived_at,
+        )
+        .join(Stock, Stock.id == Alert.stock_id)
+        .where(Alert.signal_date.is_not(None), Alert.trigger_price > 0)
+    )
+    if ids is not None:
+        q = q.where(Alert.stock_id.in_(ids))
+    alerts = db.execute(q).all()
+    if not alerts:
+        return AlertBasisCheck(compared=0, not_comparable=0, off=[])
+
+    start = min(as_date(a.signal_date) for a in alerts)
+    bq = select(OhlcvDaily.stock_id, OhlcvDaily.date, OhlcvDaily.close).where(
+        OhlcvDaily.date >= start, OhlcvDaily.close > 0,
+    )
+    if ids is not None:
+        bq = bq.where(OhlcvDaily.stock_id.in_(ids))
+    bars: dict[int, list[tuple[date, float]]] = defaultdict(list)
+    for sid, day, close in db.execute(bq).all():
+        bars[sid].append((as_date(day), float(close)))
+
+    compared = not_comparable = 0
+    off: list[AlertOffBasis] = []
+    for a in alerts:
+        first = as_date(a.signal_date)
+        last = (as_date(a.triggered_at) if a.triggered_at else first) + timedelta(days=1)
+        trigger = float(a.trigger_price)
+        window = [c for d, c in bars.get(a.stock_id, ()) if first <= d <= last]
+        if not window:
+            not_comparable += 1
+            continue
+        compared += 1
+        if any(_BASIS_RATIO_LOW <= trigger / c <= _BASIS_RATIO_HIGH for c in window):
+            continue
+        off.append(AlertOffBasis(
+            alert_id=a.id, ticker=a.ticker, signal_date=first, trigger_price=trigger,
+            nearest_close=min(window, key=lambda c: abs(math.log(trigger / c))),
+            visible=a.archived_at is None,
+        ))
+    off.sort(key=lambda o: (o.ticker, o.signal_date, o.alert_id))
+    return AlertBasisCheck(compared=compared, not_comparable=not_comparable, off=off)
 
 
 @dataclass(frozen=True)
@@ -691,6 +800,18 @@ def _rebase_full_history(db: Session, stock: Stock) -> int:
         f"[ohlcv] rebased {stock.ticker}: full history re-downloaded "
         f"({inserted} bars on the new price basis)"
     )
+    # FA-069: the series is on the new basis and this stock's alerts still carry
+    # trigger prices from the old one. Nothing corrects them (repair_price_basis,
+    # THE ALERTS); saying how many is what stops the next rebase leaving the same
+    # residue in silence — APH and MNST were rebased here, and nobody knew their
+    # alerts read twice their price.
+    residue = find_alerts_off_basis(db, [stock.id]).off
+    if residue:
+        logger.warning(
+            f"[ohlcv] rebased {stock.ticker}: {len(residue)} alert restano sul prezzo "
+            f"della base vecchia (FA-069) — li elenca "
+            f"`python -m app.scripts.repair_price_basis --ticker {stock.ticker}`"
+        )
     return inserted
 
 
