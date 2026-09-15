@@ -1232,6 +1232,65 @@ riga sarebbe rimasto verde per sempre misurando niente: la quinta istanza di
 «un test puo' essere vero di niente», e la prima trovata da un'asserzione che
 avevo aggiunto per un altro motivo.
 
+### ⚠️ SQLite ignora `VARCHAR(n)` e ordina i NULL in fondo: due guasti di produzione (2026-09-15)
+
+La suite gira su SQLite, la produzione su Postgres, e su due punti i dialetti
+danno risposte diverse **senza nessun errore dalla parte di SQLite**. Lo stesso
+giorno hanno prodotto due guasti, e il primo ha fermato ogni scansione per ~19
+ore.
+
+**1. La lunghezza di un `VARCHAR` su SQLite e' decorativa.** FA-061 (`8e6b035`)
+ha aggiunto il tono `undetermined` (12 caratteri) in `stock_setups.tone`,
+dichiarata `String(8)`. Rilascio alle 19:51 UTC, prima scansione fallita alle
+19:53, poi undici di fila compresa la notturna: Postgres rifiuta il valore con
+`StringDataRightTruncation`, la sessione resta abortita e il ciclo non avanza
+piu'. In produzione non esisteva UNA riga con quel tono. 2.456 test verdi.
+Correzione `33ad6a7` (colonna a 16, migrazione `5e2f0b7c9d41`).
+
+⚠️ **La regola: una costante nuova scritta in una colonna di lunghezza fissa va
+confrontata con quella lunghezza.** `tests/test_setup_tone_entra_nella_colonna.py`
+e' la forma: importa le COSTANTI (non copie) e le confronta con
+`Model.__table__.c[col].type.length`, quindi gira su SQLite e fallisce lo stesso.
+Colonne a 8 caratteri gia' in schema, da tenere d'occhio: `positions.side`,
+`price_alerts.direction`, `signal_outcomes.{tone,source,regime_at_signal}`,
+`stocks.{country,currency}`, `indices.country`, `macro_series.region`.
+
+**2. In un ordinamento decrescente Postgres mette i NULL PER PRIMI.** Due punti
+chiedevano `ORDER BY completed_at DESC LIMIT 1` per «l'ultima scansione
+riuscita», e in produzione ci sono 18 esecuzioni `success` di maggio senza
+`completed_at`. Restituivano la #19 del 5 maggio con data nulla:
+
+- il recupero all'avvio lanciava una scansione completa (~10 minuti) a OGNI
+  ricreazione del pod — **83 ricreazioni in 7 giorni, da 5 a 22 scansioni al
+  giorno invece di 1-2**, e parte delle «fallite» erano scansioni interrotte
+  dal rilascio successivo;
+- `effective_max_age_days` non allargava mai la finestra di recenza.
+
+Correzione `9301f5d`: `last_successful_completed_at` in `app/models/scan_run.py`,
+con `MAX(...)` e `IS NOT NULL` — la forma che `app_metrics.hydrate_from_db` usava
+gia', ed e' per questo che l'allarme sulle scansioni ferme leggeva giusto
+mentre il recupero all'avvio sbagliava sulla stessa tabella.
+
+⚠️ **Per «il piu' recente» su una colonna nullable si usa `MAX`, non
+`ORDER BY ... DESC LIMIT 1`.** Se serve la riga intera, `nulls_last()` o un
+filtro `IS NOT NULL` esplicito. Un test di comportamento su SQLite NON puo'
+vedere la differenza: il test vero sta nella corsia Postgres ed esegue la forma
+sbagliata pretendendo che sbagli.
+
+**3. E il gestore d'errore crollava sopra il guasto.** Il ramo `except` di
+`run_tracked_scan` leggeva `run.id` prima del rollback; su una sessione abortita
+quella lettura solleva `PendingRollbackError`, la riga restava `running` e la
+pulizia la chiudeva con «heartbeat fermo da ~5min». Undici scansioni fallite
+portavano quel messaggio e la causa vera stava solo nei log del pod. Correzione
+`8a0b25f`. ⚠️ **In un `except` che segue un errore del database, niente letture
+dell'ORM prima del rollback** — gli id si catturano a sessione sana.
+
+⚠️ Nota di metodo, ed e' la ragione per cui questo e' stato trovato: cercavo i
+job batch da ottimizzare, non un guasto. `scan_runs` raggruppato per giorno ha
+detto due cose che nessun allarme diceva — undici fallite di fila, e un numero
+di scansioni al giorno dieci volte il calendario. **Contare le esecuzioni di un
+job contro il suo calendario e' un controllo di cinque secondi.**
+
 ### ⚠️ Le migrazioni non giravano MAI su Postgres
 
 Il job M7 prova che i MODELLI mappano su DDL Postgres (`create_all`), che e'
