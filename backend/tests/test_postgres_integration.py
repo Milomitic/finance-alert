@@ -79,6 +79,42 @@ def test_full_schema_creates_on_postgres(pg_engine):
     assert {"alerts", "stocks"} <= tables
 
 
+def test_l_ultima_scansione_riuscita_ignora_le_righe_senza_data_su_POSTGRES(pg) -> None:
+    """La trappola dei NULL in testa, riprodotta dove esiste.
+
+    In un ordinamento decrescente Postgres mette i NULL PER PRIMI. Con 18
+    esecuzioni `success` senza `completed_at` in produzione, la forma
+    `ORDER BY completed_at DESC LIMIT 1` restituiva quella senza data: il
+    recupero all'avvio lanciava una scansione completa a ogni ricreazione del
+    pod, e la finestra di recenza dei segnali non si allargava mai.
+
+    ⚠️ Il test esegue PRIMA la forma vecchia e pretende che sbagli. Senza,
+    sarebbe verde anche su un server che ordinasse i NULL in fondo, cioe' non
+    proverebbe che la funzione nuova serve.
+    """
+    from datetime import UTC, datetime, timedelta
+
+    from sqlalchemy import desc
+
+    from app.models import ScanRun
+    from app.models.scan_run import last_successful_completed_at
+
+    fresca = datetime.now(UTC) - timedelta(hours=2)
+    pg.add(ScanRun(trigger="manual", status="success", completed_at=None))
+    pg.add(ScanRun(trigger="cron", status="success", completed_at=fresca))
+    pg.flush()
+
+    vecchia_forma = pg.execute(
+        select(ScanRun.completed_at)
+        .where(ScanRun.status == "success")
+        .order_by(desc(ScanRun.completed_at))
+        .limit(1)
+    ).scalar()
+    assert vecchia_forma is None, "su questo server i NULL non vengono primi: il test non prova niente"
+
+    assert last_successful_completed_at(pg) == fresca
+
+
 def test_json_text_extracts_scalar_on_postgres(pg):
     """The migrated query idiom (filter/cast on snapshot fields) returns correct
     rows against real Postgres jsonb ->>, not just SQLite json_extract."""

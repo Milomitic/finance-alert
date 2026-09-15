@@ -2,9 +2,9 @@
 import json
 from datetime import UTC, datetime
 
-from sqlalchemy import DateTime, Integer, String, Text, event, func
+from sqlalchemy import DateTime, Integer, String, Text, event, func, select
 from sqlalchemy import Index as SAIndex
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, Session, mapped_column
 
 from app.core.db import Base
 
@@ -78,6 +78,43 @@ class ScanRun(Base):
     phase_history: Mapped[str] = mapped_column(
         Text, nullable=False, default="[]", server_default="[]"
     )
+
+
+def last_successful_completed_at(db: Session, kind: str = KIND_ALERTS_SCAN) -> datetime | None:
+    """Quando si e' chiusa l'ultima esecuzione RIUSCITA di questo tipo, o None.
+
+    ⚠️ `MAX(completed_at)` e non `ORDER BY completed_at DESC LIMIT 1`, ed e'
+    la differenza fra corretto e sbagliato su Postgres. In un ordinamento
+    decrescente Postgres mette i NULL PER PRIMI, SQLite per ultimi. In
+    produzione esistono 18 esecuzioni `success` di maggio 2026 senza
+    `completed_at`, quindi la forma con l'ORDER BY restituiva la #19 del 5
+    maggio con data nulla:
+
+    - il recupero all'avvio la leggeva come «ultima scansione vecchia» e
+      lanciava una scansione completa (~10 minuti) a OGNI ricreazione del pod —
+      83 in 7 giorni, da 5 a 22 scansioni al giorno invece di 1-2;
+    - `effective_max_age_days` cadeva su «nessuna scansione» e non allargava
+      mai la finestra di recenza dopo un'interruzione di piu' giorni.
+
+    Su SQLite i due modi danno lo stesso risultato, quindi la suite non poteva
+    vederlo. `MAX` ignora i NULL su entrambi i dialetti: e' la stessa forma che
+    `app_metrics.hydrate_from_db` usava gia', ed e' per questo che l'allarme
+    sulle scansioni ferme leggeva giusto.
+
+    Filtrato per `kind` perche' un ricalcolo manuale degli score non dice
+    niente su quando sono stati cercati i segnali.
+
+    Vive qui, accanto al modello, e non in `scan_runner`: entrambi i chiamanti
+    importano gia' `ScanRun`, e `signal_scan_service` sta nella catena che
+    `scan_runner` importa — da li' sarebbe un import circolare.
+    """
+    return db.execute(
+        select(func.max(ScanRun.completed_at)).where(
+            ScanRun.status == "success",
+            ScanRun.kind == kind,
+            ScanRun.completed_at.is_not(None),
+        )
+    ).scalar()
 
 
 @event.listens_for(ScanRun.phase, "set", propagate=True)

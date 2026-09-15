@@ -183,21 +183,16 @@ def _catch_up_scan_on_boot() -> None:
     if stale_hours <= 0:
         return
     try:
-        from sqlalchemy import desc, select
-
         from app.core.db import SessionLocal
-        from app.models import ScanRun
+        from app.models.scan_run import last_successful_completed_at
 
+        # ⚠️ Non un ORDER BY completed_at DESC: su Postgres i NULL vengono
+        # primi e ogni ricreazione del pod lanciava una scansione completa.
+        # Vedi il docstring di `last_successful_completed_at`.
         with SessionLocal() as db:
-            last = db.execute(
-                select(ScanRun)
-                .where(ScanRun.status == "success")
-                .order_by(desc(ScanRun.completed_at))
-                .limit(1)
-            ).scalars().first()
+            done = last_successful_completed_at(db)
         fresh = False
-        if last is not None and last.completed_at is not None:
-            done = last.completed_at
+        if done is not None:
             if done.tzinfo is None:
                 done = done.replace(tzinfo=UTC)
             fresh = (datetime.now(UTC) - done) < timedelta(hours=stale_hours)

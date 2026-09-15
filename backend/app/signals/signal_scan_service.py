@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.models import Alert, ScanRun, SignalOutcome, Stock
+from app.models import Alert, SignalOutcome, Stock
 from app.signals.context import build_context
 from app.signals.detectors.registry import DETECTORS
 from app.signals.horizon import classify_horizon
@@ -80,15 +80,12 @@ def effective_max_age_days(db: Session) -> int:
     previous successful scan (+2 days margin), capped so we still don't flood
     with month-old setups. On a normal daily cadence the gap is ~1 day → no
     change from the base 7."""
-    from sqlalchemy import desc
+    from app.models.scan_run import last_successful_completed_at
 
     base = settings.signal_max_age_days
-    last = db.execute(
-        select(ScanRun.completed_at)
-        .where(ScanRun.status == "success")
-        .order_by(desc(ScanRun.completed_at))
-        .limit(1)
-    ).scalar()
+    # ⚠️ Non un ORDER BY completed_at DESC: su Postgres i NULL vengono primi,
+    # `last` tornava None e la finestra non si allargava MAI in produzione.
+    last = last_successful_completed_at(db)
     if last is None:
         return base
     last_d = last.date() if hasattr(last, "date") else None
