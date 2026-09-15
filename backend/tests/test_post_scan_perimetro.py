@@ -128,10 +128,17 @@ def test_ogni_chiamante_dichiara_il_proprio_perimetro():
             if "run_post_scan_bookkeeping(" in riga and "def " not in riga:
                 chiamate.append((f.name, riga.strip()))
 
-    assert len(chiamate) == 2, f"chiamanti inattesi: {chiamate}"
+    assert len(chiamate) == 3, f"chiamanti inattesi: {chiamate}"
     per_file = dict(chiamate)
     # Il cron guarda sempre tutto.
     assert re.search(r"universe=True", per_file["scan_alerts.py"])
+    # ⚠️ Il seme del gate e2e (FA-074) e' il terzo, ed e' la forma che questo
+    # censimento esiste per fermare — `universe=True` scritto a mano — quindi
+    # va detto perche' qui e' vero e non comodo: `valuta_senza_rete` chiama
+    # `run_tracked_scan`, cioe' `scan_universe` sull'INTERO catalogo seminato,
+    # la stessa fase di valutazione del cron senza lo scaricamento. Se un giorno
+    # valutasse un sottoinsieme, questa riga andrebbe cambiata insieme a quella.
+    assert re.search(r"universe=True", per_file["seed_e2e.py"])
     # Il percorso manuale e' l'unico che puo' avere un sottoinsieme, e il suo
     # perimetro va DERIVATO da quello che ha davvero ricevuto.
     assert re.search(r"universe=stock_ids is None", per_file["alerts.py"])
