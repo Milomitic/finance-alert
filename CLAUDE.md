@@ -461,6 +461,15 @@ If a push somehow fails to trigger CI (observed once, cause not established —
 the ref had moved and no run was ever created), dispatching will not fix it.
 Only another push event will build and deploy.
 
+### ⚠️ Due chiavi `env` uguali a meno delle maiuscole: il workflow NON PARTE (2026-09-15)
+
+`HTTPS_PROXY` e `https_proxy` nella stessa mappa `env` di un passo. GitHub
+confronta i nomi senza maiuscole, rifiuta il file e non crea nessun job: la run
+compare col PERCORSO del file al posto del nome del workflow, zero job,
+`conclusion: failure`. Un parser YAML lo dichiara valido, perche' per YAML sono
+due chiavi diverse. Se servono entrambe le forme, una sola sta nella mappa e
+l'altra si esporta nello script: `export https_proxy="$HTTPS_PROXY"`.
+
 ## ⚠️ Un passo periodico NON puo' essere un livello Docker senza un ingresso che cambi (2026-09-12)
 
 Il livello che scarica le patch di sicurezza Debian **non e' stato eseguito per
@@ -1216,6 +1225,16 @@ DICHIARA con un conteggio.** Un ripristino che cancella in silenzio e' peggio
 di uno che rifiuta.
 
 
+### Iterare su Postgres quando Docker Desktop non parte (2026-09-15)
+
+Docker Desktop su questa macchina non si avvia in modo non interattivo, e
+`test_la_catena_INTERA_arriva_in_fondo_da_vuoto_su_POSTGRES` vuole un Postgres
+vero. Un ramo di prova con un workflow ridotto — il solo servizio `postgres:16`
+e quel file di test, `on: push` sul ramo — gira in circa un minuto e ha chiuso
+FA-070 in due giri. Cancellare il ramo alla fine. ⚠️ Una catena rossa si ferma
+al PRIMO difetto: i controlli negativi vanno fatti per ogni correzione
+separatamente, altrimenti la seconda non e' mai stata vista fallire.
+
 - Migration files live in `backend/alembic/versions/`
 - Generate with: `./.venv/Scripts/alembic.exe revision -m "<name>"`
   (the file is empty — fill in `upgrade()` and `downgrade()` manually)
@@ -1453,6 +1472,31 @@ it, each from a wrong first version:
 INDV is unchanged by this and its verdict stands: two opposite breaks three
 sessions apart, x0.0 turnover on the first. Not a split, not a price move —
 corrupt bars, wanting a bar-level repair that does not exist.
+
+### ⚠️ Ogni rebase lascia gli ALERT sulla base vecchia (FA-069, 2026-09-15)
+
+Tutto sopra ripara la SERIE. `alerts.trigger_price` resta dov'era, quindi dopo
+un rebase l'alert prezza l'ingresso su una base che il suo stesso grafico non
+usa piu'. Misurato: **39 alert su 8 titoli, 11 visibili — e 20 li ha lasciati il
+rebase AUTOMATICO del fetch**, non questo script: APH e MNST a x2.000 (i 2:1 che
+`find_basis_breaks` per scelta non vede), AVB a 2.793.
+
+`ohlcv_service.find_alerts_off_basis` li trova, `repair_price_basis` li stampa a
+OGNI corsa — anche con «nessuna discontinuita'», che e' esattamente il caso dopo
+una riparazione — e `_rebase_full_history` avverte nel log quanti ne lascia.
+Due scelte che sembrano dettagli:
+
+- **La finestra, non la barra del segnale.** Il trigger e' l'ultima chiusura che
+  lo scan aveva: una rilevazione tardiva dopo un movimento vero (MRNA, x2.29
+  sulla barra del segnale) combacia al centesimo con una chiusura successiva.
+- **La banda e' quella dell'ingest** (`_BASIS_RATIO_*`), non un numero nuovo.
+  Sopra il 25% di scarto ogni alert e' anche sopra il 50%; fra l'1 e il 22%
+  stanno chiusure di Hong Kong assestate e scorpori (FDX x1.22).
+
+**Non si correggono.** Lo snapshot porta livelli propri sulla stessa base
+vecchia, che il playbook legge insieme al trigger; il fattore sarebbe NOSTRO
+(la lezione SOXS); e gli esiti sono gia' giusti, perche' entrambe le chiusure
+vengono dalla serie riparata.
 
 ## Catalog ticker rows — duplicates RESOLVED (2026-05)
 
@@ -1754,6 +1798,32 @@ pretende che domenica e lunedi' divergano.
 legge va derivata dal CALENDARIO DEL SEME, non dall'orologio. «Oggi meno N
 giorni» sembra deterministico e non lo e' appena qualcos'altro nel seme vive su
 una griglia diversa — qui i feriali.
+
+### 4. ⚠️ Il backend del gate aveva la RETE, e l'avvio la usava (2026-09-15)
+
+Il quarto canale e il piu' largo: non l'orologio del seme, ma cosa Yahoo e
+Dataroma rispondevano quel giorno. Due percorsi d'avvio:
+
+- `_catch_up_scan_on_boot` (soglia `SCAN_STARTUP_STALE_HOURS`) scaricava barre
+  VERE per i ticker del seme e le incollava sopra la storia sintetica. Su
+  /stocks la chiusura vera di 0016.HK sopra una serie da 146 dava RSI 18,8, e il
+  gate a11y e' diventato rosso (`button-name: 46 -> 49`) su un commit di sole
+  migrazioni.
+- `_catch_up_institutionals_on_boot` lancia gli scraper 13F quando
+  `filings_refresh_is_stale`, che risponde vero anche quando NON ESISTE nessun
+  filing — cioe' sempre, su un database nato vuoto.
+
+La chiusura ha tre pezzi e nessuno basta da solo: il seme semina i filing ed
+esegue la meta' dello scan che non scarica (`run_tracked_scan` + contabilita');
+il job da' al backend un proxy su una porta chiusa; e
+`SCAN_STARTUP_STALE_HOURS=0` e' esplicito. ⚠️ `app/core/public_http.py` usa
+`urllib3` diretto, che le variabili di proxy NON le legge: residuo dichiarato,
+innocuo finche' il seme non ha notizie.
+
+⚠️ Per riprodurre il gate senza rete su Windows il proxy va su
+`http://0.0.0.0:9`: una connessione a una porta chiusa di `127.0.0.1` impiega
+~2s a essere rifiutata (su Linux e' istantanea), e tre test scadono per il
+tempo, non per un difetto.
 
 ### Stringere una linea di base vuole DUE osservazioni
 
