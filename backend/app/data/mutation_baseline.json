@@ -53,7 +53,6 @@
   "sopravvissuti": [
     "app/services/confluence_service.py::compute_confluence#0  7 -> 8",
     "app/services/confluence_service.py::compute_confluence#1  2 -> 3",
-    "app/services/confluence_service.py::compute_confluence#1  And -> Or",
     "app/services/confluence_service.py::compute_confluence#4  1 -> 2",
     "app/services/confluence_service.py::compute_confluence#5  1 -> 2",
     "app/services/confluence_service.py::compute_confluence#6  1 -> 2",
@@ -91,8 +90,6 @@
     "app/services/setup_service.py::conversion_stats#3  1 -> 2",
     "app/services/setup_service.py::conversion_stats#4  1 -> 2",
     "app/services/setup_service.py::conversion_stats#5  1 -> 2",
-    "app/services/setup_service.py::conversion_stats#5  Eq -> NotEq",
-    "app/services/setup_service.py::conversion_stats#6  Eq -> NotEq",
     "app/services/setup_service.py::convert_setups_for_alert#0  0 -> 1",
     "app/services/setup_service.py::convert_setups_for_alert#0  And -> Or",
     "app/services/setup_service.py::convert_setups_for_alert#0  Or -> And",
