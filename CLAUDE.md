@@ -1179,6 +1179,32 @@ snapshot of that cycle, not a leak. Disk over the same morning: 82% -> 89%
 during a restore drill -> 79% after. The drill's ~2 GB is the only transient
 worth planning for.
 
+### ✅ 2026-09-15, later: boot volume grown 50 -> 100 GB, root 86% -> 31% (FA-076)
+
+**The paragraph below is history.** Option 2 was applied: `boot_volume_gbs`
+default 100 in `infra/terraform/variables.tf`, `terraform apply
+-target=oci_core_instance.k3s` (update in-place, 26 s, no reboot — node uptime
+unchanged), then `/usr/libexec/oci-growfs -y` on the node, which grew
+partition sda3, the PV, the root LV and XFS in one go: `/` 30 G -> 83 G, 58 G
+free. Terraform then reports "No changes".
+
+How to repeat it, because every step has a trap:
+
+- **Terraform runs in a container** (`hashicorp/terraform:1.9`, see
+  `infra/oci/a1-retry.sh`): mount the tf dir on `/wd` and `~/.oci` read-only on
+  `/root/.oci`, with `MSYS_NO_PATHCONV=1` on Git-Bash. There is no local binary
+  and no local `oci` CLI. Back up `terraform.tfstate` first; plan with
+  `-target` and apply only if it says update in-place with 0 to destroy.
+- **The disk was 50 GB all along**, not 30: Oracle Linux splits the LVM PV into
+  `root` (29.5 G) and `/var/oled` (15 G, ~300 MB used). XFS cannot shrink, so
+  that 15 G stays where it is; growing the volume is the only way to give `/`
+  more room.
+- **OCI grows a boot volume online but never shrinks it.** Lowering
+  `boot_volume_gbs` below the real size makes the plan fail, it does not shrink.
+- The kernel only sees the new size after a rescan
+  (`echo 1 > /sys/class/block/sda/device/rescan`); `oci-growfs` refuses nothing
+  and grows whatever the LV of `/` is, so check `lsblk` first.
+
 ### ⚠️ 2026-09-15: 86%, and the critical alert has been firing for days (FA-076)
 
 The section above was true on 09-09 and is not any more. Measured: 26.9 GB of

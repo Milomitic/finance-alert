@@ -72,7 +72,13 @@ variable "node_memory_gbs" {
 variable "boot_volume_gbs" {
   description = "Boot volume size (GB). Always-Free block storage is 200 GB total."
   type        = number
-  default     = 50
+  # 100 dal 2026-09-15 (FA-076): con 50 la radice LVM restava a 29,5 GB, piena
+  # all'86% con l'allarme critico acceso da giorni. OCI allarga un boot volume a
+  # caldo ma NON lo restringe: riportare questo valore sotto la dimensione reale
+  # farebbe fallire il piano, non ridurrebbe il disco. Dopo l'allargamento il
+  # nodo va esteso a mano (`/usr/libexec/oci-growfs -y`): partizione, PV, LV
+  # della radice e XFS. /var/oled resta a 15 GB — XFS non si restringe.
+  default = 100
 }
 
 # ── Storage ──────────────────────────────────────────────────────────────────
