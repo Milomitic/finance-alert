@@ -105,7 +105,13 @@ class StockSetup(Base):
     )
     # Which detector this anticipates. Not a FK — detectors are code, not rows.
     detector: Mapped[str] = mapped_column(String(64), nullable=False)
-    tone: Mapped[str] = mapped_column(String(8), nullable=False)
+    # ⚠️ 16, non 8. `TONE_UNDETERMINED` ("undetermined") ha 12 caratteri, e con
+    # `String(8)` ogni scansione in produzione e' crollata dalle 19:53 UTC del
+    # 2026-09-14 per ~19 ore: Postgres rifiuta il valore, la sessione resta
+    # abortita e il ciclo della scansione non avanza piu'. SQLite la lunghezza
+    # di un VARCHAR NON la fa rispettare, quindi 2.456 test erano verdi.
+    # `tests/test_setup_tone_entra_nella_colonna.py` lega i toni a questo numero.
+    tone: Mapped[str] = mapped_column(String(16), nullable=False)
 
     # 0..1, how much of the gate chain holds. Never 1.0 — at 1.0 it is a signal.
     proximity: Mapped[float] = mapped_column(Float, nullable=False)

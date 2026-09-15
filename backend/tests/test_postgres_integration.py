@@ -384,3 +384,58 @@ def test_la_migrazione_FA_061_gira_su_POSTGRES_andata_e_ritorno(monkeypatch) -> 
         # E si risale, perche' un ripristino seguito da un aggiornamento e' il
         # caso reale, non l'andata da sola.
         command.upgrade(cfg, "head")
+
+
+def test_il_tono_senza_direzione_entra_nella_colonna_su_POSTGRES(monkeypatch) -> None:
+    """Il difetto che ha fermato ogni scansione in produzione, riprodotto dove esiste.
+
+    FA-061 ha introdotto il tono `undetermined` (12 caratteri) in
+    `stock_setups.tone`, una colonna `String(8)`. Postgres lo rifiuta con
+    `StringDataRightTruncation`, e dalle 19:53 UTC del 2026-09-14 tutte le
+    scansioni sono crollate al primo setup di `squeeze_expansion`. SQLite non
+    fa rispettare la lunghezza, quindi solo questa corsia puo' vederlo.
+
+    ⚠️ Il test prova PRIMA il rifiuto sullo schema di prima. Senza, sarebbe
+    verde anche se la colonna fosse sempre stata larga abbastanza — cioe' non
+    direbbe niente sulla migrazione.
+    """
+    from sqlalchemy import text
+    from sqlalchemy.exc import DataError
+
+    from alembic import command
+    from app.signals.setups.base import TONE_UNDETERMINED
+
+    _PRIMA = "78d64d497ae0"   # la revisione su cui l'allargamento si innesta
+
+    with _database_vuoto(monkeypatch) as (cfg, eng):
+        command.upgrade(cfg, _PRIMA)
+        with eng.begin() as c:
+            _inserisci(c, "stocks", id=1, ticker="AAA", exchange="NYSE", name="Aaa")
+
+        # Il controllo negativo: e' l'errore esatto dei log di produzione.
+        # `DataError` e non `Exception`, per la stessa ragione dell'IntegrityError
+        # del test sopra.
+        with pytest.raises(DataError, match="value too long"), eng.begin() as c:
+            _inserisci(c, "stock_setups", stock_id=1, detector="squeeze_expansion",
+                       status="active", tone=TONE_UNDETERMINED)
+
+        command.upgrade(cfg, "head")
+        with eng.begin() as c:
+            _inserisci(c, "stock_setups", stock_id=1, detector="squeeze_expansion",
+                       status="active", tone=TONE_UNDETERMINED)
+
+        # Il ritorno RIFIUTA finche' c'e' un tono che lo schema vecchio non
+        # contiene, e non tocca niente: la revisione resta la testa.
+        with pytest.raises(RuntimeError, match="stock_setups"):
+            command.downgrade(cfg, _PRIMA)
+        with eng.connect() as c:
+            testa = c.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
+            toni = c.execute(text("SELECT tone FROM stock_setups")).scalars().all()
+        assert testa != _PRIMA, "il downgrade rifiutato ha comunque spostato la revisione"
+        assert toni == [TONE_UNDETERMINED], "il downgrade rifiutato ha toccato i dati"
+
+        # Senza righe incompatibili il ritorno passa, e si risale.
+        with eng.begin() as c:
+            c.execute(text("DELETE FROM stock_setups"))
+        command.downgrade(cfg, _PRIMA)
+        command.upgrade(cfg, "head")
