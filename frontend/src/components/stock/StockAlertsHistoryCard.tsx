@@ -1,9 +1,8 @@
 import { ChevronLeft, ChevronRight, History, TrendingDown, TrendingUp } from "lucide-react";
 import { useMemo, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 
 import { alerts as alertsApi } from "@/api/alerts";
-import { ApiError } from "@/api/client";
 import type { Alert } from "@/api/types";
 import { AlertDetailDialog } from "@/components/AlertDetailDialog";
 import { AlertsTable } from "@/components/AlertsTable";
@@ -11,6 +10,7 @@ import { CardErrorOverlay } from "@/components/stock/CardErrorOverlay";
 import { CardRefreshButton } from "@/components/stock/CardRefreshButton";
 import { Card, CardContent } from "@/components/ui/card";
 import { SectionTitle } from "@/components/ui/section-title";
+import { useScanStock } from "@/hooks/useAlertMutations";
 import { getAlertMeta } from "@/lib/alertMeta";
 import { cn } from "@/lib/utils";
 
@@ -95,16 +95,11 @@ export function StockAlertsHistoryCard({ alerts, ticker }: Props) {
     enabled: scheda === "completo",
     staleTime: 60_000,
   });
-  const qc = useQueryClient();
   // Per-stock signal scan: runs the engine over this ticker's stored OHLCV and
-  // persists new signal alerts, then invalidates the detail query so the table
-  // below reflects them. Mirrors the other per-card refresh buttons.
-  const scan = useMutation<{ added: number; total: number }, ApiError, void>({
-    mutationFn: () => alertsApi.scanStock(ticker),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["stock-detail", ticker] });
-    },
-  });
+  // persists new signal alerts. Quali query invalida lo dice `useScanStock`:
+  // prima invalidava solo il dettaglio, e lo storico completo di questa stessa
+  // card restava vecchio (FA-072).
+  const scan = useScanStock(ticker);
 
   // Sort by triggered_at desc — backend should already order, but defensive.
   const sorted = useMemo(

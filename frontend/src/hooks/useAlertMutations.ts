@@ -41,6 +41,49 @@ export function useBulkAlerts() {
   });
 }
 
+/** Le query che una scansione di UN titolo rende vecchie (FA-072).
+ *
+ *  `POST /scan-stock/{ticker}` crea alert e persiste i setup di quel titolo,
+ *  in modo sincrono. Invalidava soltanto il dettaglio titolo, quindi la lista
+ *  Segnali — e perfino la scheda «Storico completo» della STESSA card —
+ *  restava quella di prima finche' non passava lo scan dell'universo.
+ *
+ *  ⚠️ NON si risolve fingendo una scansione dell'universo. Quella transizione
+ *  (running -> success in `useScanStatus`) porta con se' il toast «Scan
+ *  completato» e la contabilita' di fine giro, che per perimetro uno scan
+ *  locale non deve fare (FA-062): dichiarare scaduto un setup guardando un
+ *  titolo solo sarebbe falso. Qui si invalida e basta.
+ *
+ *  Invalidare una query che nessuno sta guardando la marca soltanto come
+ *  vecchia — si ricarica al prossimo montaggio — quindi l'elenco puo' essere
+ *  completo senza costare richieste. */
+export const CHIAVI_DOPO_SCAN_LOCALE = (ticker: string) =>
+  [
+    ["stock-detail", ticker],
+    ["alerts"],
+    ["alert-storico", ticker],
+    // Un alert gia' esistente puo' essere AGGIORNATO in cooldown (snapshot,
+    // data): il dialogo aperto per id da una posizione mostrerebbe il vecchio.
+    ["alert"],
+    // Nuovi alert cambiano i compagni contati nell'ampiezza (FA-064).
+    ["alert-peers"],
+    ["setups"],
+    ["confluence"],
+    ["dashboard", "summary"],
+  ] as const;
+
+export function useScanStock(ticker: string) {
+  const qc = useQueryClient();
+  return useMutation<{ added: number; total: number }, ApiError, void>({
+    mutationFn: () => alerts.scanStock(ticker),
+    onSuccess: () => {
+      for (const queryKey of CHIAVI_DOPO_SCAN_LOCALE(ticker)) {
+        qc.invalidateQueries({ queryKey: [...queryKey] });
+      }
+    },
+  });
+}
+
 export function useTriggerScan() {
   const qc = useQueryClient();
   return useMutation({
