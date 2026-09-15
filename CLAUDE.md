@@ -1291,6 +1291,32 @@ detto due cose che nessun allarme diceva — undici fallite di fila, e un numero
 di scansioni al giorno dieci volte il calendario. **Contare le esecuzioni di un
 job contro il suo calendario e' un controllo di cinque secondi.**
 
+### ⚠️ `BackgroundScheduler(timezone=...)` NON vale per un `CronTrigger` costruito a mano (2026-09-15)
+
+`app/scheduler/__init__.py` diceva `BackgroundScheduler(timezone="Europe/Rome")`
+e scriveva ogni orario in ora di Roma. Ma quel fuso vale solo per i job aggiunti
+con la stringa `"cron"`: i 17 `CronTrigger(...)` costruiti a mano prendevano
+`tzlocal.get_localzone()`, il fuso della MACCHINA. Sul desktop era Roma e tutto
+tornava; nel pod e' `Etc/UTC`. **Da quando l'app e' sul cloud ogni job girava
+due ore dopo l'orario scritto** — scansioni alle 18:30 e 23:30 UTC, digest alle
+10:00 di Roma — e nessuno se n'e' accorto perche' due ore non rompono niente di
+visibile.
+
+Scoperto perche' un test sulle finestre di FRED era verde su Windows e rosso in
+CI. Corretto con `_cron()`, che passa il fuso esplicitamente.
+
+⚠️ **Un test sul fuso deve SIMULARE una macchina UTC** (monkeypatch di
+`apscheduler.triggers.cron.get_localzone`). Su una macchina a Roma leggere il
+fuso del trigger da' «Europe/Rome» anche col difetto dentro — che e' come il
+difetto e' sopravvissuto: verde in locale, rosso solo dove gira. E' la stessa
+famiglia di «SQLite ignora `VARCHAR(n)`» qui sopra: **la macchina di sviluppo
+nasconde proprio le proprieta' che la produzione ha di diverso** (dialetto,
+fuso). Quando un test tocca una di queste, va eseguito nelle condizioni della
+produzione, non in quelle del portatile.
+
+Verificare in produzione: `kubectl exec ... -- date` dice `UTC`, e i
+`started_at` di `scan_runs` sono l'orario reale a cui un job e' partito.
+
 ### ⚠️ Le migrazioni non giravano MAI su Postgres
 
 Il job M7 prova che i MODELLI mappano su DDL Postgres (`create_all`), che e'
