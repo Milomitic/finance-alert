@@ -6,6 +6,7 @@ from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 from loguru import logger
 
+from app.core import db as db_module
 from app.core.config import settings
 from app.scheduler.jobs.cleanup_orphan_scans_job import run_cleanup_orphan_scans
 from app.scheduler.jobs.db_backup import run_db_backup
@@ -56,14 +57,21 @@ def get_scheduler() -> BackgroundScheduler:
         # the weekend 03:00 catalog refresh have finished. VACUUM INTO takes a
         # consistent read-snapshot under WAL (writers not blocked); the job
         # itself skips with a WARNING if a scan is running.
-        _scheduler.add_job(
-            run_db_backup,
-            trigger=CronTrigger(day_of_week="*", hour=3, minute=30),
-            id="db_backup",
-            replace_existing=True,
-            max_instances=1,
-            coalesce=True,
-        )
+        #
+        # ⚠️ Solo su SQLite (FA-079 #5). Su Postgres `run_db_backup` esce subito
+        # — i backup sono il WAL archiviato del cluster CNPG — quindi registrarlo
+        # significava una riga «ok» ogni notte sulla pagina Salute per un job che
+        # non fa niente. Letto da `db_module.engine` a costruzione, cosi' un test
+        # puo' sostituire il motore.
+        if db_module.engine.dialect.name == "sqlite":
+            _scheduler.add_job(
+                run_db_backup,
+                trigger=CronTrigger(day_of_week="*", hour=3, minute=30),
+                id="db_backup",
+                replace_existing=True,
+                max_instances=1,
+                coalesce=True,
+            )
         # Weekly retention prune of scan_runs (audit B4-11) — Sunday 04:00,
         # after the nightly 03:30 backup window and far from the scan hours.
         # Deletes rows older than 180 days keeping the newest 500 regardless;
@@ -193,14 +201,23 @@ def get_scheduler() -> BackgroundScheduler:
             # Stessa tolleranza misfire del refresh Dataroma qui sopra.
             misfire_grace_time=60 * 60 * 12,
         )
-        # FRED macro refresh — every 2 hours at :15 (offset to avoid the
-        # top-of-hour spike that everyone runs cron jobs on). FRED's free
-        # rate limit is 120 req/min; we're well below that with ~25
-        # curated series. The script is idempotent (UPSERT) so a missed
-        # tick from a transient FRED outage gets caught the next cycle.
+        # FRED macro refresh — 5 passate nei feriali, agganciate ai rilasci
+        # (FA-079 #3, 2026-09-15; prima ogni 2 ore, tutti i giorni: 84 passate
+        # a settimana contro 25). Orari di Roma:
+        #   07:15  serie giornaliere pubblicate nella sera USA e tassi BCE/BoE/BoJ
+        #   15:15  / 16:15 / 17:15  i dati USA delle 08:30 ET (CPI, PPI, NFP,
+        #          disoccupazione, PIL, vendite al dettaglio), che cadono alle
+        #          14:30 di Roma — 13:30 nelle settimane in cui l'ora legale USA
+        #          ed europea non coincidono — e l'HICP flash dell'Eurozona
+        #   23:15  rendimenti H.15 (~16:15 ET) e decisioni FOMC (14:00 ET)
+        # Ogni rilascio USA ha una passata entro 2 ore, il ritardo gia' accettato
+        # col vecchio intervallo. Nel weekend FRED non pubblica niente di nostro.
+        # La salute della fonte non ne risente: la sonda FRED gira nel gruppo
+        # veloce e la conferma fra una passata e l'altra.
+        # `tests/test_cadenze_batch.py` verifica le finestre su una settimana vera.
         _scheduler.add_job(
             run_refresh_fred,
-            trigger=CronTrigger(hour="*/2", minute=15),
+            trigger=CronTrigger(day_of_week="mon-fri", hour="7,15,16,17,23", minute=15),
             id="refresh_fred",
             replace_existing=True,
             max_instances=1,
@@ -232,14 +249,18 @@ def get_scheduler() -> BackgroundScheduler:
             coalesce=True,
         )
         # Health probes — keep platform-health UI populated even when no
-        # user traffic is exercising a given source. Fast set every 5 min
-        # (light calls), slow set every 30 min (heavier or rate-limited
+        # user traffic is exercising a given source. Fast set every 15 min
+        # (light calls; was 5 until FA-079 #4 — ~1.440 external calls a day
+        # down to ~480), slow set every 30 min (heavier or rate-limited
         # like Marketaux 100/day). First run scheduled 15s after boot so
-        # the UI exits "Idle" immediately instead of waiting up to 5 min.
+        # the UI exits "Idle" immediately instead of waiting up to 15 min.
+        # Safe for staleness: the tightest catalog threshold is FRED's
+        # 2h x 1.5 = 3h, and `tests/test_cadenze_batch.py` pins that every
+        # threshold outlasts at least two probe intervals.
         now = datetime.now()
         _scheduler.add_job(
             run_health_probes_fast,
-            trigger=CronTrigger(minute="*/5"),
+            trigger=CronTrigger(minute="*/15"),
             id="health_probes_fast",
             replace_existing=True,
             max_instances=1,

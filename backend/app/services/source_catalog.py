@@ -44,7 +44,7 @@ _STALE_GRACE = 1.5
 # Cadence shorthands for the catalog below.
 _H6 = 6 * 3600.0        # primary yfinance ops: probes every 5-30 min + organic
                         # traffic — 6h without ANY success means something died
-_H2 = 2 * 3600.0        # FRED: refresh cron every 2h (+5-min probe)
+_H2 = 2 * 3600.0        # FRED: 5 weekday refreshes after the releases; the 15-min probe confirms it in between
 _WEEK = 7 * 86400.0     # SEC 13F / Dataroma: weekly crons
 
 
@@ -133,7 +133,7 @@ KNOWN_SOURCES: list[SourceSpec] = [
     # ── Scheduled / macro ──
     SourceSpec("fred", "macro", "FRED — Macro series", "scheduled",
                per_minute=120, per_day=None,
-               notes="FRED. Job ogni 2h + probe ogni 5 min.",
+               notes="FRED. Job 5 volte nei feriali, dopo i rilasci + probe ogni 15 min.",
                expected_cadence_s=_H2),
     SourceSpec("forexfactory", "consensus", "ForexFactory — Macro consensus", "scheduled",
                per_minute=None, per_day=None,

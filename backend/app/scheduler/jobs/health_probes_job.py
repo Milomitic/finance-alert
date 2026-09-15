@@ -1,7 +1,7 @@
 """APScheduler jobs running health probes against data sources.
 
 Two cadences:
-- `run_health_probes_fast` every 5 min — light probes only
+- `run_health_probes_fast` every 15 min — light probes only
 - `run_health_probes_slow` every 30 min — heavier or rate-limited probes
   (notably Marketaux, free tier 100/day).
 

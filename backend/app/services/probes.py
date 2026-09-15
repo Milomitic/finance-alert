@@ -658,7 +658,7 @@ def run_all_probes() -> None:
 
 
 def run_fast_probes() -> None:
-    """Light probes that are cheap enough for 5-minute cadence."""
+    """Light probes that are cheap enough for a 15-minute cadence."""
     from app.services import yfinance_health
     _run_set(FAST_PROBES, skip_yfinance=yfinance_health.is_open())
 
