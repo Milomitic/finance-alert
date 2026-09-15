@@ -1,14 +1,14 @@
 {
-  "_perche": "Arretrato MISURATO di accessibilita', non un obiettivo. Il gate impedisce che cresca; non pretende che sia zero, perche' un cancello che nasce rosso viene disattivato. Rigenerare con E2E_UPDATE_BASELINE=1 npm run e2e, e solo dopo aver CORRETTO qualcosa - mai per far passare la CI.  ⚠️ NON stringere una voce su UNA sola osservazione: /calendar nested-interactive e' stato portato 3 -> 2 da una singola corsa verde e la successiva ha riletto 3, facendo arrossare la CI su codice che nessuno aveva toccato. Quella rotta rende per DATA, quindi il conteggio oscilla col giorno in cui gira il gate: si stringe al massimo osservato, non al minimo visto una volta.",
+  "_perche": "Arretrato MISURATO di accessibilita', non un obiettivo. Il gate impedisce che cresca; non pretende che sia zero, perche' un cancello che nasce rosso viene disattivato. Rigenerare con E2E_UPDATE_BASELINE=1 npm run e2e, e solo dopo aver CORRETTO qualcosa - mai per far passare la CI.  ⚠️ NON stringere una voce su UNA sola osservazione: /calendar nested-interactive e' stato portato 3 -> 2 da una singola corsa verde e la successiva ha riletto 3, facendo arrossare la CI su codice che nessuno aveva toccato. Quella rotta rende per DATA, quindi il conteggio oscilla col giorno in cui gira il gate: si stringe al massimo osservato, non al minimo visto una volta.  2026-09-15: /alerts (button-name 46 -> 39, nested-interactive 12 -> 10) e /stocks/AAPL (scrollable-region-focusable 3 -> 1) stretti dopo QUATTRO corse identiche del gate senza rete (FA-074), alle 00:49, 08:18, 08:33 e 08:45 UTC. /calendar NO, benche' abbia letto nested-interactive 3 -> 1 le stesse quattro volte: erano tutte nello stesso giorno, e quella rotta rende per data.",
   "rotte": {
     "/": {
       "aria-hidden-focus": 1,
       "aria-valid-attr-value": 2
     },
     "/alerts": {
-      "button-name": 46,
+      "button-name": 39,
       "empty-table-header": 2,
-      "nested-interactive": 12
+      "nested-interactive": 10
     },
     "/setups": {},
     "/positions": {},
@@ -28,7 +28,7 @@
       "scrollable-region-focusable": 1
     },
     "/stocks/AAPL": {
-      "scrollable-region-focusable": 3
+      "scrollable-region-focusable": 1
     }
   },
   "_ambiente": "ATTENZIONE: questi conteggi dipendono dall'AMBIENTE e questa linea di base e' quella di CI. In locale il calendario ha dati veri e rende un elemento interattivo in meno; rigenerando qui si otterrebbe un file piu' STRETTO che fa arrossare la CI su codice che nessuno ha toccato. Stessa lezione della linea di base del codice morto: una baseline derivata da una misura va generata DOVE viene applicata."
