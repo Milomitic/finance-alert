@@ -372,6 +372,43 @@ describe("SetupsPage", () => {
     expect(container.querySelectorAll("[data-metrica] .text-emerald-800").length).toBe(2);
   });
 
+  it("filtri, ordinamento e pagina si leggono dall'URL: il ritorno li ritrova", async () => {
+    // Collaudo in browser, 2026-09-16: filtrati i ribassisti di una condizione,
+    // aperto un titolo e tornati indietro, la lista ripartiva da «Tutti».
+    renderWith(
+      { setups: [setup], stats, total: 120, has_more: true },
+      "/setups?tono=ribassisti&condizione=oversold_reversal&ordina=waiting&pagina=2",
+    );
+    await screen.findByText(/51–51 di 120/);
+    const chiesta = String(mockGet.mock.calls.at(-1)?.[0] ?? "");
+    expect(chiesta).toContain("tone=bear");
+    expect(chiesta).toContain("detector=oversold_reversal");
+    expect(chiesta).toContain("sort=waiting");
+    expect(chiesta).toContain("offset=50");
+    expect(screen.getByRole("button", { name: "Ribassisti" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("combobox")).toHaveValue("waiting");
+  });
+
+  it("un filtro scrive l'URL e riporta alla prima pagina", async () => {
+    renderWith({ setups: [setup], stats, total: 120, has_more: true }, "/setups?pagina=3");
+    await screen.findByText(/101–101 di 120/);
+    await userEvent.click(screen.getByRole("button", { name: "Rialzisti" }));
+    await waitFor(() =>
+      expect(screen.getByTestId("url").textContent).toBe("?tono=rialzisti"),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Tutti" }));
+    await waitFor(() => expect(screen.getByTestId("url").textContent).toBe(""));
+  });
+
+  it("un valore sconosciuto nell'URL vale il default, non una lista vuota", async () => {
+    renderWith({ setups: [setup], stats }, "/setups?tono=qualcosa&ordina=boh&pagina=-4");
+    await screen.findByText(/nessun setup in formazione|Setup attivi/i);
+    const chiesta = String(mockGet.mock.calls.at(-1)?.[0] ?? "");
+    expect(chiesta).not.toContain("tone=");
+    expect(chiesta).not.toContain("offset=");
+    expect(chiesta).toContain("sort=convenience");
+  });
+
   it("explains the empty state instead of looking broken", async () => {
     renderWith({ setups: [], stats: { ...stats, active: 0 } });
     expect(await screen.findByText(/nessun setup in formazione/i)).toBeInTheDocument();

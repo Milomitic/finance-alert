@@ -32,8 +32,13 @@ export function MetricTile({ label, value, hint, note, tone, primary = false }: 
       className={cn(primary && "border-primary/40 bg-primary/[0.04] shadow-sm")}
     >
       <CardContent className={primary ? "p-3.5" : "px-3 py-2"}>
-        <div className="flex items-center gap-1 text-[0.6765rem] uppercase tracking-wider text-muted-foreground font-mono">
-          <span className="truncate">{label}</span>
+        {/* ⚠️ A capo, non troncata. Su un telefono due tessere affiancate
+            riducevano «Efficacia dei convertiti» a «EFFICACIA DEI …»: il nome
+            e' l'identita' della metrica, e quando lo spazio manca cede la
+            decorazione, non l'etichetta (CLAUDE.md). Trovato nel collaudo in
+            browser del 2026-09-16. */}
+        <div className="flex items-start gap-1 text-[0.6765rem] uppercase tracking-wider text-muted-foreground font-mono">
+          <span className="min-w-0 break-words leading-snug">{label}</span>
           {note && <InfoHint label={label} text={note} />}
         </div>
         <div

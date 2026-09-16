@@ -180,7 +180,7 @@ function StatsStrip({ stats }: { stats: SetupStats }) {
           : `${stats.converted_positive} positivi · ${stats.converted_negative} negativi · ` +
             `IC ${stats.converted_ci_low?.toFixed(0)}–${stats.converted_ci_high?.toFixed(0)}% su ${
               stats.converted_effective_n
-            } finestre indipendenti` +
+            } ${stats.converted_effective_n === 1 ? "finestra indipendente" : "finestre indipendenti"}` +
             (stats.converted_low_confidence ? " · non concludente" : "") +
             (stats.converted_pending > 0 ? ` · ${stats.converted_pending} in attesa` : "") +
             (nonMisurabili > 0 ? ` · ${nonMisurabili} non misurabili` : ""),
@@ -276,10 +276,32 @@ function DettaglioPerTipo({ rows }: { rows: SetupStats["by_detector"] }) {
   );
 }
 
+/* ⚠️ Filtri, ordinamento e pagina vivono nell'URL, come vista e titolo.
+ *
+ * Erano stato del componente, e il collaudo in browser del 2026-09-16 l'ha
+ * mostrato nel modo in cui lo vive chi usa la pagina: filtrati i ribassisti di
+ * una condizione, aperto un titolo e tornati indietro, la lista ripartiva da
+ * «Tutti · Ogni condizione». Nell'URL sopravvivono al ritorno, a un
+ * ricaricamento e a un link condiviso. Un valore sconosciuto vale il default,
+ * come per `vistaDa`: un segnalibro vecchio apre la lista, non una pagina vuota.
+ */
+const TONO_DA_URL = { rialzisti: "bull", ribassisti: "bear" } as const;
+const ORDINAMENTI: readonly SetupSortKey[] = ["convenience", "ticker", "waiting", "distance"];
+
+function tonoDa(raw: string | null): "bull" | "bear" | undefined {
+  return raw && raw in TONO_DA_URL ? TONO_DA_URL[raw as keyof typeof TONO_DA_URL] : undefined;
+}
+
+function ordinamentoDa(raw: string | null): SetupSortKey {
+  return ORDINAMENTI.includes(raw as SetupSortKey) ? (raw as SetupSortKey) : "convenience";
+}
+
+function offsetDa(raw: string | null): number {
+  const pagina = Number(raw);
+  return Number.isInteger(pagina) && pagina > 1 ? (pagina - 1) * SETUP_PER_PAGINA : 0;
+}
+
 export default function SetupsPage() {
-  const [tone, setTone] = useState<"bull" | "bear" | undefined>(undefined);
-  const [detector, setDetector] = useState<string | null>(null);
-  const [sort, setSort] = useState<SetupSortKey>("convenience");
   // The setup whose detail panel is open. Named `openSetup`, not `open`:
   // a bare `open` resolves to `window.open` when the declaration is missing,
   // and TypeScript then reports a type error somewhere else entirely.
@@ -288,6 +310,9 @@ export default function SetupsPage() {
   // whether the feature works — conversion rate and lead time both come from
   // them — and until now the page could not show a single one.
   const [params, setParams] = useSearchParams();
+  const tone = tonoDa(params.get("tono"));
+  const detector = params.get("condizione") || null;
+  const sort = ordinamentoDa(params.get("ordina"));
   const vista = vistaDa(params.get("vista"));
   const ticker = params.get("ticker")?.trim().toUpperCase() || undefined;
   const view: "active" | "closed" = vista === "esiti" ? "closed" : "active";
@@ -300,7 +325,7 @@ export default function SetupsPage() {
   // zero (vedi `cambia`): restare alla pagina 4 dopo aver cambiato filtro
   // mostrerebbe una fetta di mezzo di una popolazione diversa, senza che niente
   // lo dica.
-  const [offset, setOffset] = useState(0);
+  const offset = offsetDa(params.get("pagina"));
   const q = useSetups(tone, ticker, view, { detector, sort, offset });
 
   const all = useMemo(() => q.data?.setups ?? [], [q.data?.setups]);
@@ -322,17 +347,27 @@ export default function SetupsPage() {
   const totale = q.data?.total ?? all.length;
   const perCondizione = q.data?.counts_by_condition;
   const nCondizioni = perCondizione ? Object.keys(perCondizione).length : groups.length;
-  /** Cambia un controllo che ridefinisce il perimetro, e torna alla prima
-   *  pagina. In render, non in un effect: `set-state-in-effect` e' gated. */
-  const cambia = <T,>(set: (v: T) => void) => (v: T) => { set(v); setOffset(0); };
-  /** Lo stesso, per cio' che vive nell'URL. `replace`: cambiare vista non e'
-   *  navigare, e «indietro» deve uscire dalla pagina. */
-  const cambiaUrl = (chiave: "vista" | "ticker", valore: string | null) => {
+  /** Scrive nell'URL. `replace`: cambiare filtro non e' navigare, e
+   *  «indietro» deve uscire dalla pagina, non ripercorrere ogni clic. `null`
+   *  toglie la chiave, cosi' i default non sporcano il link. */
+  const scriviUrl = (cambi: Record<string, string | null>) => {
     const p = new URLSearchParams(params);
-    if (valore === null || (chiave === "vista" && valore === "formazione")) p.delete(chiave);
-    else p.set(chiave, valore);
+    for (const [chiave, valore] of Object.entries(cambi)) {
+      if (valore === null) p.delete(chiave);
+      else p.set(chiave, valore);
+    }
     setParams(p, { replace: true });
-    setOffset(0);
+  };
+  /** Un controllo che ridefinisce il PERIMETRO torna alla prima pagina. */
+  const cambiaPerimetro = (cambi: Record<string, string | null>) =>
+    scriviUrl({ ...cambi, pagina: null });
+  const cambiaUrl = (chiave: "vista" | "ticker", valore: string | null) =>
+    cambiaPerimetro({
+      [chiave]: valore === null || (chiave === "vista" && valore === "formazione") ? null : valore,
+    });
+  const vaiA = (nuovoOffset: number) => {
+    const pagina = Math.floor(Math.max(0, nuovoOffset) / SETUP_PER_PAGINA) + 1;
+    scriviUrl({ pagina: pagina > 1 ? String(pagina) : null });
   };
 
   return (
@@ -419,7 +454,10 @@ export default function SetupsPage() {
           <button
             key={t ?? "all"}
             type="button"
-            onClick={() => cambia(setTone)(t)}
+            aria-pressed={tone === t}
+            onClick={() =>
+              cambiaPerimetro({ tono: t === "bull" ? "rialzisti" : t === "bear" ? "ribassisti" : null })
+            }
             className={cn(
               "min-h-[36px] px-3 rounded-md border text-xs font-semibold transition-colors",
               tone === t ? "bg-primary text-primary-foreground" : "hover:bg-accent",
@@ -434,7 +472,8 @@ export default function SetupsPage() {
             <span className="h-5 w-px bg-border mx-1" aria-hidden />
             <button
               type="button"
-              onClick={() => cambia(setDetector)(null)}
+              aria-pressed={detector === null}
+              onClick={() => cambiaPerimetro({ condizione: null })}
               className={cn(
                 "min-h-[36px] px-3 rounded-md border text-xs font-semibold transition-colors",
                 detector === null ? "bg-primary text-primary-foreground" : "hover:bg-accent",
@@ -446,7 +485,8 @@ export default function SetupsPage() {
               <button
                 key={d}
                 type="button"
-                onClick={() => cambia(setDetector)(d)}
+                aria-pressed={detector === d}
+                onClick={() => cambiaPerimetro({ condizione: d })}
                 className={cn(
                   "min-h-[36px] px-3 rounded-md border text-xs font-semibold transition-colors",
                   detector === d ? "bg-primary text-primary-foreground" : "hover:bg-accent",
@@ -464,7 +504,9 @@ export default function SetupsPage() {
           Ordina
           <select
             value={sort}
-            onChange={(e) => cambia(setSort)(e.target.value as SetupSortKey)}
+            onChange={(e) =>
+              cambiaPerimetro({ ordina: e.target.value === "convenience" ? null : e.target.value })
+            }
             className="min-h-[36px] rounded-md border bg-background px-2 text-xs font-semibold"
           >
             <option value="convenience">Priorità</option>
@@ -538,7 +580,7 @@ export default function SetupsPage() {
               <button
                 type="button"
                 className="min-h-[36px] rounded-md border px-3 font-semibold hover:bg-accent disabled:opacity-40 disabled:hover:bg-transparent"
-                onClick={() => setOffset((o) => Math.max(0, o - SETUP_PER_PAGINA))}
+                onClick={() => vaiA(offset - SETUP_PER_PAGINA)}
                 disabled={offset === 0 || q.isFetching}
               >
                 Precedenti
@@ -546,7 +588,7 @@ export default function SetupsPage() {
               <button
                 type="button"
                 className="min-h-[36px] rounded-md border px-3 font-semibold hover:bg-accent disabled:opacity-40 disabled:hover:bg-transparent"
-                onClick={() => setOffset((o) => o + SETUP_PER_PAGINA)}
+                onClick={() => vaiA(offset + SETUP_PER_PAGINA)}
                 disabled={!q.data?.has_more || q.isFetching}
               >
                 Successivi

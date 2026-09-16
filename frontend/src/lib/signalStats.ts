@@ -34,7 +34,7 @@ export function signalStatTiles(d: DetectorPerformance): MetricTileProps[] {
       hint:
         o?.skill_ci_low == null || o.skill_ci_high == null
           ? "nessun esito con benchmark"
-          : `${o.n.toLocaleString("it-IT")} esiti in ${o.effective_n ?? "—"} finestre indipendenti · IC 95% ${pct(o.skill_ci_low)}–${pct(o.skill_ci_high)} · ${VERDETTO[o.skill_verdict ?? ""] ?? "—"}`,
+          : `${o.n.toLocaleString("it-IT")} esiti in ${o.effective_n ?? "—"} ${o.effective_n === 1 ? "finestra indipendente" : "finestre indipendenti"} · IC 95% ${pct(o.skill_ci_low)}–${pct(o.skill_ci_high)} · ${VERDETTO[o.skill_verdict ?? ""] ?? "—"}`,
       // Il colore segue il VERDETTO, non il numero: 54% su un intervallo che
       // contiene il 50% non e' un risultato.
       tone: o?.skill_verdict === "above" ? "ok" : o?.skill_verdict === "below" ? "bad" : null,

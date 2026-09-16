@@ -22,7 +22,7 @@ describe("conversionStep", () => {
     });
     expect(p).toEqual({
       evento: "evento 15 set (4g dopo l'apertura)",
-      esito: "sopra il mercato a 21g (+1,2%)",
+      esito: "sopra il mercato a 21g (+1.2%)",
       tono: "ok",
     });
   });
@@ -33,7 +33,7 @@ describe("conversionStep", () => {
       outcome_signal_date: "2026-09-15", outcome_horizon_days: 5,
       outcome_mkt_neutral_hit: 0, outcome_mkt_neutral_excess_pct: -0.8,
     });
-    expect(p?.esito).toBe("sotto il mercato a 5g (-0,8%)");
+    expect(p?.esito).toBe("sotto il mercato a 5g (-0.8%)");
     expect(p?.tono).toBe("bad");
   });
 

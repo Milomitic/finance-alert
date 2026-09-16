@@ -87,22 +87,29 @@ function OutcomeRow({
       >
         <span
           className={cn(
-            "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[0.7059rem] font-semibold shrink-0",
+            "inline-flex items-center gap-1 rounded-full border px-1.5 sm:px-2 py-0.5 text-[0.7059rem] font-semibold shrink-0",
             badge,
           )}
         >
           <Icon className="h-3 w-3" aria-hidden />
-          {converted ? "Convertito" : CLOSURE_BADGE[closure]}
+          {/* ⚠️ Sul telefono solo l'icona. Collaudo in browser, 375px: badge,
+              logo, data e campanella lasciavano al TICKER una lettera («M.»,
+              «A…») e alla riga dell'esito sei caratteri. L'identita' della
+              riga e' il titolo; lo stato resta nell'icona, nel colore e per
+              gli assistivi nel testo. */}
+          <span className="sr-only sm:not-sr-only">
+            {converted ? "Convertito" : CLOSURE_BADGE[closure]}
+          </span>
         </span>
 
         <StockLogo ticker={setup.ticker} size="xs" />
 
         <span className="min-w-0 flex-1">
           <span className="flex items-baseline gap-1.5">
-            <span className="text-sm font-medium truncate">{setup.ticker}</span>
+            <span className="text-sm font-medium shrink-0">{setup.ticker}</span>
             <span className="text-[0.7059rem] text-muted-foreground truncate">{setup.name}</span>
           </span>
-          <span className="block text-[0.7059rem] text-muted-foreground truncate">
+          <span className="block text-[0.7059rem] text-muted-foreground break-words sm:truncate">
             {detectorLabel(setup.detector)}
             {converted && setup.lead_days !== null && setup.lead_days !== undefined
               ? ` · ${setup.lead_days}g di preavviso`
@@ -116,7 +123,7 @@ function OutcomeRow({
             {!converted ? ` · ${CLOSURE_DETAIL[closure]}` : ""}
           </span>
           {passo && (
-            <span className="block text-[0.7059rem] text-muted-foreground truncate">
+            <span className="block text-[0.7059rem] text-muted-foreground break-words sm:truncate">
               {passo.evento} ·{" "}
               <span
                 className={cn(
@@ -149,11 +156,20 @@ function OutcomeRow({
       {alertId != null && onOpenSignal && (
         <button
           type="button"
-          onClick={() => onOpenSignal(alertId)}
-          disabled={pending}
-          aria-label={`Segnale in cui e scattato il setup su ${setup.ticker}`}
-          title="Apri il segnale in cui questo setup e scattato"
-          className="mr-2 inline-flex shrink-0 items-center rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50"
+          // ⚠️ `aria-disabled`, NON `disabled`. Trovato nel collaudo in browser
+          // (2026-09-16): durante il caricamento del segnale il pulsante era
+          // `disabled` proprio quando il dialogo si apre, e un elemento
+          // disabilitato non puo' ricevere il focus di ritorno — alla chiusura
+          // il focus finiva sul BODY e chi naviga da tastiera ripartiva
+          // dall'inizio della pagina. Col segnale gia' in cache non succedeva,
+          // che e' perche' nessun test lo vedeva.
+          onClick={() => {
+            if (!pending) onOpenSignal(alertId);
+          }}
+          aria-disabled={pending || undefined}
+          aria-label={`Segnale in cui è scattato il setup su ${setup.ticker}`}
+          title="Apri il segnale in cui questo setup è scattato"
+          className="mr-2 inline-flex shrink-0 items-center rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground aria-disabled:opacity-50"
         >
           <Bell className={cn("h-3.5 w-3.5", pending && "animate-pulse")} />
         </button>

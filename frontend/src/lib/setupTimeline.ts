@@ -34,7 +34,9 @@ function giorno(iso: string | null | undefined): string | null {
 }
 
 function segno(pct: number): string {
-  return `${pct > 0 ? "+" : ""}${pct.toFixed(1).replace(".", ",")}%`;
+  // Stessa forma delle tessere sopra la lista (`toFixed`): due separatori
+  // decimali sulla stessa pagina si leggono come due unita' diverse.
+  return `${pct > 0 ? "+" : ""}${pct.toFixed(1)}%`;
 }
 
 /** Evento ed esito di un setup CONVERTITO; null per ogni altro stato. */

@@ -7,7 +7,7 @@ import type { Setup } from "@/hooks/useSetups";
 
 import { SetupOutcomeList } from "./SetupOutcomeList";
 
-/* Un setup convertito porta al segnale in cui e scattato.
+/* Un setup convertito porta al segnale in cui è scattato.
  *
  * `converted_alert_id` viene scritto quando l'alert nasce — un fatto
  * registrato, non un'inferenza — e arrivava fino al tipo del frontend senza
@@ -52,7 +52,7 @@ describe("il segnale in cui il setup e scattato", () => {
     renderList([setup()]);
 
     expect(
-      screen.getByRole("button", { name: /segnale in cui e scattato il setup su AMD/i }),
+      screen.getByRole("button", { name: /segnale in cui è scattato il setup su AMD/i }),
     ).toBeInTheDocument();
   });
 
@@ -60,7 +60,7 @@ describe("il segnale in cui il setup e scattato", () => {
     const onOpenSignal = renderList([setup({ converted_alert_id: 4211 })]);
 
     return userEvent
-      .click(screen.getByRole("button", { name: /segnale in cui e scattato/i }))
+      .click(screen.getByRole("button", { name: /segnale in cui è scattato/i }))
       .then(() => {
         expect(onOpenSignal).toHaveBeenCalledWith(4211);
       });
@@ -74,7 +74,7 @@ describe("il segnale in cui il setup e scattato", () => {
 
     expect(screen.getByText("Scaduto")).toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: /segnale in cui e scattato/i }),
+      screen.queryByRole("button", { name: /segnale in cui è scattato/i }),
     ).not.toBeInTheDocument();
   });
 
@@ -86,8 +86,33 @@ describe("il segnale in cui il setup e scattato", () => {
 
     expect(screen.getByText("Convertito")).toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: /segnale in cui e scattato/i }),
+      screen.queryByRole("button", { name: /segnale in cui è scattato/i }),
     ).not.toBeInTheDocument();
+  });
+});
+
+describe("il focus durante il caricamento del segnale", () => {
+  it("il pulsante resta focalizzabile e non riapre mentre carica", async () => {
+    // Col segnale in caricamento il pulsante era `disabled`: il dialogo si apre
+    // in quel momento, e alla chiusura il focus non puo' tornare su un elemento
+    // disabilitato — finiva sul BODY. Trovato nel collaudo in browser.
+    const onOpenSignal = vi.fn();
+    render(
+      <MemoryRouter>
+        <SetupOutcomeList
+          setups={[setup({ converted_alert_id: 4211 })]}
+          onOpenSignal={onOpenSignal}
+          pendingAlertId={4211}
+        />
+      </MemoryRouter>,
+    );
+    const b = screen.getByRole("button", { name: /segnale in cui è scattato/i });
+    expect(b).not.toBeDisabled();
+    expect(b).toHaveAttribute("aria-disabled", "true");
+    b.focus();
+    expect(b).toHaveFocus();
+    await userEvent.click(b);
+    expect(onOpenSignal).not.toHaveBeenCalled();
   });
 });
 
