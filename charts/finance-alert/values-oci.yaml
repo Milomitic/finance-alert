@@ -7,7 +7,7 @@ image:
   # GHCR, public package → the node pulls anonymously (OCIR is 403 on a pure
   # Always-Free tenancy). The tag below is stamped by CI (full commit sha).
   repository: ghcr.io/milomitic/finance-alert
-  tag: "48e6d46a6a3e2009b44f1889f88faf4af85421da"
+  tag: "0475eb3a33393fece5449517039c28af4d425d90"
   pullPolicy: IfNotPresent
 
 persistence:
