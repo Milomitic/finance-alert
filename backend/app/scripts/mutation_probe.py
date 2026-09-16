@@ -115,6 +115,14 @@ BERSAGLI: dict[str, list[str]] = {
         "tests/test_setup_episodi.py",
         "tests/test_setups_perimetro.py",
         "tests/test_serie_ferma_esce_dal_presente.py",
+        # ⚠️ Seconda volta nello stesso giorno. Il tasso di base (2026-09-16)
+        # aggiungeva codice a `conversion_stats` e `_per_detector` e i suoi
+        # test non erano qui: dieci sopravvissuti «nuovi», fra cui
+        # `base_windows` gia' asserito e due arrotondamenti del rapporto gia'
+        # fissati. Quelli veri — base zero (divisione per zero), base sotto
+        # l'1%, arrotondamento, toni misti — sono stati chiusi DOPO averlo
+        # aggiunto, non prima.
+        "tests/test_setup_base_rate.py",
     ],
     # ─── Ampliamento 2026-09-13: da 4 a 12 moduli ─────────────────────────
     #

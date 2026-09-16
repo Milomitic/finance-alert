@@ -15,6 +15,7 @@ is what lets this ship before any study exists.
 from __future__ import annotations
 
 import json
+from collections import Counter
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 
@@ -628,7 +629,10 @@ def conversion_stats(db: Session) -> dict:
         "base_rate_pct": base_pct,
         "base_lift": base_lift,
         "base_windows": base.windows if base else 0,
-        "base_window_days": 28,
+        # ⚠️ Il proprietario, non `28`: `setup_base_rate` dichiara di leggere il
+        # tetto d'attesa invece di copiarlo, e il numero che descrive la sua
+        # finestra non puo' essere l'unica copia rimasta.
+        "base_window_days": _MAX_AGE_DAYS,
         "median_bar_lead_days": _median_of(bar_leads),
         "bar_lead_days_n": len(bar_leads),
         #: Quante conversioni per versione delle regole. `null` = storico, la
@@ -892,9 +896,11 @@ def _per_detector(
         ]
 
         conversion_rate = round(len(conv) / resolved * 100.0, 1) if resolved else None
-        toni: dict[str, int] = {}
-        for r in conv + exp:
-            toni[r.tone] = toni.get(r.tone, 0) + 1
+        # `Counter` e non un conteggio a mano: `toni.get(t, 0) + 1` portava due
+        # letterali che la sonda di mutazione rovesciava, uno equivalente (+2
+        # scala ogni conto allo stesso modo e `for_tone_mix` normalizza) e uno
+        # no. Senza letterali non c'e' niente da dichiarare.
+        toni = Counter(r.tone for r in conv + exp)
         base_frac = base.for_tone_mix(name, toni) if base is not None else None
         base_pct = round(base_frac * 100.0, 1) if base_frac is not None else None
 
