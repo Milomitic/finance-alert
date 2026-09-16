@@ -217,6 +217,25 @@ def _trigger_index(dates: np.ndarray, signal_date: date) -> int | None:
     return None
 
 
+def _benchmark_medians(
+    db: Session, first_trigger: date, horizons: set[int]
+) -> dict[int, dict[date, float]]:
+    """Il riferimento di mercato per ogni orizzonte: {orizzonte: {data: mediana}}.
+
+    Proprietario unico del perimetro del riferimento — solo societa' (ETF
+    esclusi, vedi `_load_universe_closes`) e solo la finestra che i trigger in
+    attesa raggiungono. Alert ed eventi di conversione dei setup lo leggono da
+    qui: una seconda copia potrebbe smettere di escludere gli ETF e i due
+    esiti dello stesso segnale non sarebbero piu' confrontabili.
+
+    This is the load that used to scan the entire 2.4M-row table at every
+    scan end."""
+    uni_closes = _load_universe_closes(
+        db, since=first_trigger - timedelta(days=10), exclude_etf=True
+    )
+    return {h: _universe_fwd_medians(uni_closes, h) for h in horizons}
+
+
 @dataclass(frozen=True)
 class Label:
     trigger_index: int
@@ -296,14 +315,11 @@ def mature_outcomes(db: Session, *, commit: bool = True) -> int:
     # _load_universe_closes), and only the date window the pending triggers
     # reach (exact — see _load_universe_closes). This is the load that used
     # to scan the entire 2.4M-row table at every scan end.
-    min_td = min(a.signal_date for a in pending)
-    uni_closes = _load_universe_closes(
-        db, since=min_td - timedelta(days=10), exclude_etf=True
+    medians_by_h = _benchmark_medians(
+        db,
+        min(a.signal_date for a in pending),
+        {_horizon_days(a.signal_name) for a in pending},
     )
-    horizons = {_horizon_days(a.signal_name) for a in pending}
-    medians_by_h: dict[int, dict[date, float]] = {
-        h: _universe_fwd_medians(uni_closes, h) for h in horizons
-    }
     ema_cache: dict[int, np.ndarray] = {}
 
     added = 0
@@ -376,10 +392,11 @@ def mature_setup_outcomes(db: Session, *, commit: bool = True) -> int:
     ).scalars())
     if dated:
         closes = _load_stock_closes(db, {r.stock_id for r in dated})
-        min_td = min(r.converted_signal_date for r in dated)
-        uni = _load_universe_closes(db, since=min_td - timedelta(days=10), exclude_etf=True)
-        horizons = {_horizon_days(r.detector) for r in dated}
-        medians_by_h = {h: _universe_fwd_medians(uni, h) for h in horizons}
+        medians_by_h = _benchmark_medians(
+            db,
+            min(r.converted_signal_date for r in dated),
+            {_horizon_days(r.detector) for r in dated},
+        )
         for r in dated:
             H = _horizon_days(r.detector)
             lab = _label(

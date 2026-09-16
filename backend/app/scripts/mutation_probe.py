@@ -449,7 +449,7 @@ EQUIVALENTI: dict[str, str] = {
         "disallineamento TRONCAVA in silenzio e il riferimento di mercato usciva "
         "da meno osservazioni di quante ce ne fossero; con `True` diventa un "
         "errore. Il mutante resta invisibile ai test, il difetto no.",
-    "app/services/signal_outcome_service.py::mature_outcomes#0  10 -> 11":
+    "app/services/signal_outcome_service.py::_benchmark_medians#0  10 -> 11":
         "I dieci giorni di margine con cui la finestra dell'universo parte "
         "prima del primo trigger. E' un cuscinetto: allargarlo di un giorno "
         "carica una barra in piu' e non cambia nessun numero calcolato.",
@@ -483,6 +483,9 @@ EQUIVALENTI: dict[str, str] = {
         "`if judged and horizon`: `horizon` e' il massimo di "
         "`outcome_horizon_days` degli esiti giudicati, colonna scritta insieme "
         "all'esito, quindi e' None esattamente quando `judged` e' vuoto.",
+    "app/services/signal_outcome_service.py::<modulo>#0  True -> False":
+        "`@dataclass(frozen=True)` su `Label`: nessun consumatore prova a "
+        "scriverci, quindi l'immutabilita' non e' esercitata (famiglia 5).",
     "app/core/security.py::hash_password#0  12 -> 13":
         "Il fattore di costo di bcrypt e' una TARATURA, non un contratto: 13 e' "
         "piu' forte di 12, e qualunque asserzione onesta e' un pavimento "

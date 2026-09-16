@@ -380,3 +380,31 @@ def test_un_alert_fermo_sul_giorno_della_conversione_resta_misurabile(db) -> Non
     st = setup_service.conversion_stats(db)
     assert st["converted_outcome_unavailable"] == 0
     assert st["converted_pending"] == 1
+
+
+def test_l_esito_del_magazzino_sul_giorno_della_conversione_e_accettato(db) -> None:
+    # Confine esatto: la barra misurata e' quella del giorno della conversione,
+    # cioe' un momento che la conversione poteva conoscere.
+    conv = datetime(2026, 9, 1, 20, tzinfo=UTC)
+    s = _stock(db)
+    a = _alert(db, s, detector="g", giorno=date(2026, 9, 1))
+    _esito_magazzino(db, a, date(2026, 9, 1), 0)
+    row = _setup(db, s, detector="g", status=STATUS_CONVERTED, resolved_at=conv,
+                 conversion_source=CONVERSION_LEGACY, converted_alert_id=a.id)
+    db.commit()
+    assert signal_outcome_service.mature_setup_outcomes(db) == 1
+    assert row.outcome_mkt_neutral_hit == 0
+
+
+def test_senza_commit_la_maturazione_resta_nella_transazione(db) -> None:
+    conv = datetime(2026, 9, 1, 20, tzinfo=UTC)
+    s = _stock(db)
+    a = _alert(db, s, detector="t", giorno=date(2026, 8, 30))
+    _esito_magazzino(db, a, date(2026, 8, 30), 1)
+    row = _setup(db, s, detector="t", status=STATUS_CONVERTED, resolved_at=conv,
+                 conversion_source=CONVERSION_LEGACY, converted_alert_id=a.id)
+    db.commit()
+    assert signal_outcome_service.mature_setup_outcomes(db, commit=False) == 1
+    db.rollback()
+    db.refresh(row)
+    assert row.outcome_matured_at is None
