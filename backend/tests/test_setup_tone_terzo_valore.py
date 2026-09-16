@@ -112,15 +112,21 @@ def test_i_decaduti_si_contano_e_restano_fuori_dal_denominatore(db):
     """`decayed` e' a schermo proprio perche' esce dal tasso: escluderli senza
     mostrarli sarebbe indistinguibile dal cancellarli. Nessun test contava la
     voce, e `status == STATUS_EXPIRED` -> `!=` sopravviveva."""
+    # ⚠️ DUE scaduti per ragione `stale`, non uno. Con 1 decaduto e 1 scaduto
+    # il mutante `closed_reason != REASON_DECAYED` contava lo scaduto al posto
+    # del decaduto e rendeva lo stesso 1: la notturna rimisurata lo ha
+    # lasciato vivo dopo che la controprova a mano aveva mutato solo l'altro
+    # `==` della stessa riga.
     _attivo(db, TONE_BULL, status=STATUS_EXPIRED, closed_reason=REASON_DECAYED)
-    _attivo(db, TONE_BULL, status=STATUS_EXPIRED, closed_reason=REASON_STALE)
+    for _ in range(2):
+        _attivo(db, TONE_BULL, status=STATUS_EXPIRED, closed_reason=REASON_STALE)
     _attivo(db, TONE_BULL, status=STATUS_CONVERTED, lead_days=5)
 
     s = conversion_stats(db)
     assert s["decayed"] == 1
-    assert s["expired"] == 1
-    # 1 convertito su (1 convertito + 1 scaduto): il decaduto non entra.
-    assert s["conversion_rate"] == 0.5
+    assert s["expired"] == 2
+    # 1 convertito su (1 convertito + 2 scaduti): il decaduto non entra.
+    assert s["conversion_rate"] == 0.333
 
 
 def test_l_anticipo_medio_tiene_UNA_cifra_decimale(db):
