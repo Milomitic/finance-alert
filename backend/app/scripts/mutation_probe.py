@@ -175,6 +175,8 @@ BERSAGLI: dict[str, list[str]] = {
     # Il magazzino degli esiti: l'unica fonte di verita' su se un segnale ha
     # funzionato. Ha gia' avuto un difetto che ne misurava 19 righe su 4.880.
     "app/services/signal_outcome_service.py": [
+        # Prefiltro dei maturabili: equivalenza e confine (2026-09-16).
+        "tests/test_maturazione_prefiltro.py",
         # Conversione per evento e suo esito (2026-09-16).
         "tests/test_setup_conversione_evento.py",
         "tests/test_signal_outcome_service.py",

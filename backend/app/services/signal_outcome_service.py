@@ -22,7 +22,7 @@ from datetime import UTC, date, datetime, timedelta
 
 import numpy as np
 from loguru import logger
-from sqlalchemy import exists, select
+from sqlalchemy import and_, exists, func, select
 from sqlalchemy.orm import Session
 
 from app.indicators.periods import FIXED_EMA_SLOW
@@ -287,6 +287,33 @@ def _label(
     return Label(ti, entry, fwd_close, fwd_ret, abs_hit, uni_median, mkt_excess, mkt_hit)
 
 
+def _maturable_alert_ids(db: Session, conditions: tuple) -> set[int]:
+    """Gli alert in attesa il cui orizzonte e' GIA' trascorso nelle barre salvate.
+
+    ⚠️ E' la stessa condizione che `_label` verifica, detta in SQL: la barra
+    del trigger e' la prima con `date >= signal_date`, e l'esito esiste se da
+    li' in poi ci sono almeno H+1 barre (`ti + H < len`). Quindi filtrare qui
+    non cambia nessun esito — cambia soltanto quante serie si caricano. Un
+    alert senza barre dopo la sua data conta zero e resta fuori, che e'
+    esattamente il caso delle serie ferme.
+
+    Una query aggregata sulla chiave primaria `(stock_id, date)`, non una per
+    alert. L'orizzonte dipende dal detector, quindi il confronto si fa qui."""
+    righe = db.execute(
+        select(Alert.id, Alert.signal_name, func.count(OhlcvDaily.date))
+        .join(
+            OhlcvDaily,
+            and_(
+                OhlcvDaily.stock_id == Alert.stock_id,
+                OhlcvDaily.date >= Alert.signal_date,
+            ),
+        )
+        .where(*conditions)
+        .group_by(Alert.id, Alert.signal_name)
+    ).all()
+    return {aid for aid, name, n in righe if n >= _horizon_days(name) + 1}
+
+
 def mature_outcomes(db: Session, *, commit: bool = True) -> int:
     """Write outcome rows for newly-matured signal alerts. Returns rows added."""
     # Anti-join in SQL: only alerts WITHOUT an outcome row come back. The old
@@ -294,14 +321,22 @@ def mature_outcomes(db: Session, *, commit: bool = True) -> int:
     # set-differenced them — O(all history) per scan. NOT EXISTS resolves as a
     # point probe per alert on the unique ix_signal_outcomes_alert index, and
     # already-matured alerts never leave the database.
-    pending = list(db.execute(
-        select(Alert).where(
-            Alert.signal_name.is_not(None),
-            Alert.signal_date.is_not(None),
-            ~exists(select(SignalOutcome.id).where(SignalOutcome.alert_id == Alert.id)),
-        )
-    ).scalars())
+    in_attesa = (
+        Alert.signal_name.is_not(None),
+        Alert.signal_date.is_not(None),
+        ~exists(select(SignalOutcome.id).where(SignalOutcome.alert_id == Alert.id)),
+    )
+    pending = list(db.execute(select(Alert).where(*in_attesa)).scalars())
+    n_pending = len(pending)
+    # ⚠️ Solo quelli che POSSONO maturare. Misurato il 2026-09-16: 3.724 alert
+    # in attesa su 932 titoli, e oltre 900 titoli `_load_stock_closes` legge
+    # l'INTERA tabella (2,48M righe) a ogni fine scansione — per scoprire, un
+    # alert alla volta, che l'orizzonte non e' trascorso. 48 di quei titoli
+    # hanno la serie ferma e non matureranno mai.
+    maturabili = _maturable_alert_ids(db, in_attesa)
+    pending = [a for a in pending if a.id in maturabili]
     if not pending:
+        logger.info(f"[signal-outcomes] matured 0 new alerts ({n_pending} pending, 0 maturable)")
         return 0
 
     # Per-alert exact series (entry/forward/trigger + regime EMA200) for ONLY
@@ -354,7 +389,10 @@ def mature_outcomes(db: Session, *, commit: bool = True) -> int:
 
     if commit and added:
         db.commit()
-    logger.info(f"[signal-outcomes] matured {added} new alerts ({len(pending)} pending)")
+    logger.info(
+        f"[signal-outcomes] matured {added} new alerts "
+        f"({n_pending} pending, {len(pending)} maturable)"
+    )
     return added
 
 
