@@ -1087,19 +1087,37 @@ def flush_l2() -> int:
 # that genuinely want every quote (the sweep) pass deadline_seconds=None.
 _BATCH_DEADLINE_SECONDS = 6.0
 
-# One shared, bounded pool instead of a fresh executor per call. A timed-out
-# future is NOT cancelled: it keeps running here and populates _CACHE, so the
-# work still lands and the NEXT poll gets it for free.
-_POOL_WORKERS = 8
+# Bounded pools instead of a fresh executor per call. A timed-out future is
+# NOT cancelled: it keeps running here and populates _CACHE, so the work still
+# lands and the NEXT poll gets it for free.
+#
+# ⚠️ DUE pool, non uno (FA-006, 2026-09-16). Con un pool solo da 8 lo sweep dei
+# movers — 200 titoli ogni 75 s, senza scadenza — riempiva la coda FIFO
+# dell'executor, e ogni batch della pagina inviato nel frattempo aspettava
+# dietro centinaia di future altrui: 102 richieste su 121 in 24 ore oltre la
+# scadenza di 6 s, fino a 0 quotazioni vive su 50. La scadenza proteggeva il
+# pod, ma non poteva far arrivare niente. Il totale verso Yahoo resta 8: la
+# separazione divide i thread, non ne aggiunge (lo sweep a 3 thread chiude
+# comunque 200 titoli ben dentro il suo intervallo).
+_POOL_WORKERS = 5
+_BACKGROUND_POOL_WORKERS = 3
 _POOL: Any = None
+_BACKGROUND_POOL: Any = None
 _POOL_LOCK = Lock()
 
 
-def _pool() -> Any:
-    global _POOL
+def _pool(*, background: bool = False) -> Any:
+    global _POOL, _BACKGROUND_POOL
+    from concurrent.futures import ThreadPoolExecutor
     with _POOL_LOCK:
+        if background:
+            if _BACKGROUND_POOL is None:
+                _BACKGROUND_POOL = ThreadPoolExecutor(
+                    max_workers=_BACKGROUND_POOL_WORKERS,
+                    thread_name_prefix="livequote-bg",
+                )
+            return _BACKGROUND_POOL
         if _POOL is None:
-            from concurrent.futures import ThreadPoolExecutor
             _POOL = ThreadPoolExecutor(
                 max_workers=_POOL_WORKERS, thread_name_prefix="livequote"
             )
@@ -1107,7 +1125,8 @@ def _pool() -> Any:
 
 
 def get_quotes_batch(
-    tickers: list[str], *, deadline_seconds: float | None = _BATCH_DEADLINE_SECONDS
+    tickers: list[str], *, deadline_seconds: float | None = _BATCH_DEADLINE_SECONDS,
+    background: bool = False,
 ) -> dict[str, LiveQuote]:
     """Fetch multiple quotes CONCURRENTLY. Cache hits return instantly;
     only cache-miss tickers hit yfinance. Returns {ticker: LiveQuote}.
@@ -1134,6 +1153,8 @@ def get_quotes_batch(
        (`_warm_or_eod`) and left running in the background, so the work still
        lands for the next poll. `deadline_seconds=None` waits for everything
        — for background callers like the sweep, where nobody is watching.
+       Those also pass `background=True`, so their work runs on its own pool
+       and never queues ahead of a request someone IS waiting on.
     3. Nothing ever returns bare `error` when a usable price exists: the
        fallback ladder is cache → last-good → L2 snapshot → EOD close.
     """
@@ -1169,7 +1190,7 @@ def get_quotes_batch(
     # own deadline — see the note in get_quote. Passing it here is what keeps
     # the two bounds from inverting when either constant is retuned.
     futures = {
-        _pool().submit(
+        _pool(background=background).submit(
             get_quote, t, allow_remote_today_fetch=False,
             wait_budget=deadline_seconds,
         ): t
