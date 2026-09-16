@@ -98,7 +98,7 @@ def effective_max_age_days(db: Session) -> int:
     return min(max(base, gap_days + 2), _MAX_AGE_RELAX_CAP)
 
 
-def _persist_setups(db, stock, setups) -> None:
+def _persist_setups(db, stock, setups, bar_date: date | None = None) -> None:
     """Persist the pre-trigger setups for one stock.
 
     The two lens scores are looked up so `convenience` can express the
@@ -120,6 +120,7 @@ def _persist_setups(db, stock, setups) -> None:
             db, stock_id=stock.id, match=sm,
             technical_composite=float(tech) if tech is not None else None,
             quality_composite=float(qual) if qual is not None else None,
+            bar_date=bar_date,
         )
 
 
@@ -152,7 +153,7 @@ def evaluate_signals(
     # Best-effort — a setup problem must never cost a signal.
     if setups and stock is not None and getattr(stock, "id", None):
         try:
-            _persist_setups(db, stock, setups)
+            _persist_setups(db, stock, setups, bar_date=last_bar_date)
         except Exception as e:  # noqa: BLE001
             logger.warning(f"[setups] persist failed for {stock.ticker}: {e}")
     for m in matches:
@@ -240,6 +241,7 @@ def evaluate_signals(
         # the duplicates and 46.1% without, which is the whole of its "decaying"
         # alarm.
         if already_measured and prior.signal_date == sig_date:
+            _convert_setup(db, prior, m.tone, sig_date, last_close)
             continue
         # A matured prior on a DIFFERENT bar is genuinely a later occurrence
         # and earns its own row: fall through to the insert.
@@ -259,6 +261,9 @@ def evaluate_signals(
             first_emitted_d = _iso_to_date(_prior_snap.get("first_emitted_at"))
             if first_emitted_d is not None and sig_date is not None \
                     and (sig_date - first_emitted_d).days > settings.signal_chain_max_age_days:
+                # La catena muore, la RILEVAZIONE resta vera: un setup che la
+                # attendeva converte lo stesso.
+                _convert_setup(db, prior, m.tone, sig_date, last_close)
                 continue
             if prior.archived_at is None:
                 # Same ongoing setup -> refresh the live alert IN PLACE with the
@@ -280,6 +285,14 @@ def evaluate_signals(
                 prior.triggered_at = datetime.now(UTC)
             # Archived within the window: respect the user's archive, don't
             # resurrect it. Either way, no new row.
+            #
+            # ⚠️ E in entrambi i casi il setup converte. Fino al 2026-09-16 la
+            # conversione stava solo sul ramo dell'inserimento, quindi una
+            # condizione che scattava mentre un alert dello stesso detector era
+            # ancora vivo lasciava il setup attivo per sempre: 95 in produzione.
+            # La conversione dipende dalla rilevazione, non da che cosa succede
+            # alla riga dell'alert.
+            _convert_setup(db, prior, m.tone, sig_date, last_close)
             continue
         # New alert: pin the original emission timestamp (never overwritten by
         # later refreshes), no amendment yet.
@@ -290,17 +303,28 @@ def evaluate_signals(
             snapshot=json.dumps(snapshot),
         )
         db.add(alert)
-        # Close the loop on any setup that was waiting for exactly this
-        # detector: records the lead time it actually bought. Needs the id, so
-        # flush first. Best-effort — bookkeeping must never cost the alert.
-        try:
-            db.flush()
-            from app.services import setup_service
-            setup_service.convert_setups_for_alert(db, alert)
-        except Exception as e:  # noqa: BLE001
-            logger.warning(f"[setups] conversion bookkeeping failed: {e}")
+        _convert_setup(db, alert, m.tone, sig_date, last_close)
         added += 1
     return added
+
+
+def _convert_setup(
+    db: Session, alert: Alert, tone: str, sig_date: date | None, price: float,
+) -> None:
+    """Chiude l'attesa di un setup su QUESTA rilevazione, qualunque ramo abbia
+    preso la riga dell'alert. Le regole (verso, barra successiva all'apertura)
+    stanno in `setup_service.convert_setups_for_event`.
+
+    Best-effort: la contabilita' dei setup non deve mai costare un segnale. Il
+    flush serve all'alert appena creato, che senza non ha ancora un id."""
+    try:
+        db.flush()
+        from app.services import setup_service
+        setup_service.convert_setups_for_event(
+            db, alert, signal_date=sig_date, tone=tone, price=price,
+        )
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"[setups] conversion bookkeeping failed: {e}")
 
 
 def _iso_to_date(v: object) -> date | None:

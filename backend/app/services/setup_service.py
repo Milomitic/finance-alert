@@ -15,6 +15,7 @@ is what lets this ship before any study exists.
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 
 from loguru import logger
@@ -22,10 +23,13 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.models import Alert, ScanRun, SignalOutcome, Stock, StockSetup
+from app.models import Alert, ScanRun, Stock, StockSetup
 from app.models.stock_setup import (
+    CONVERSION_LIVE,
+    CONVERSION_RECONCILED,
     REASON_AGED,
     REASON_DECAYED,
+    REASON_MISLINKED,
     REASON_NO_DATA,
     REASON_STALE,
     STATUS_ACTIVE,
@@ -96,6 +100,7 @@ def upsert_setup(
     match: SetupMatch,
     technical_composite: float | None = None,
     quality_composite: float | None = None,
+    bar_date: date | None = None,
 ) -> StockSetup | None:
     """Create or refresh the live setup for (stock, detector).
 
@@ -103,6 +108,10 @@ def upsert_setup(
     keep pointing at the start of the wait, because that is what `lead_days`
     is measured from. Re-inserting would silently reset the very number this
     feature exists to report.
+
+    `bar_date` is the last bar the scan read. It is stamped once, when the
+    episode opens, as `first_seen_bar`: conversion requires the event to land on
+    a LATER bar, and the scan clock (`first_seen_at`) can read yesterday's bar.
     """
     now = datetime.now(UTC)
     score = convenience(
@@ -158,6 +167,7 @@ def upsert_setup(
             status=STATUS_ACTIVE,
             first_seen_at=now,
             last_seen_at=now,
+            first_seen_bar=bar_date,
         )
         db.add(row)
         return row
@@ -179,14 +189,65 @@ def upsert_setup(
     return row
 
 
-def convert_setups_for_alert(db: Session, alert: Alert) -> StockSetup | None:
-    """Mark the matching live setup as converted when its detector fires.
+def tone_compatible(setup_tone: str | None, event_tone: str | None) -> bool:
+    """Un evento puo' convertire un setup solo nel verso che il setup attendeva.
 
-    Called with each freshly-created alert. `lead_days` is measured from
-    `first_seen_at` — the realised warning this setup gave.
+    ⚠️ La conversione non lo controllava, e in produzione 68 conversioni su 334
+    erano un setup rialzista chiuso da un segnale ribassista (o viceversa):
+    stesso detector, evento opposto. Un setup senza direzione accetta entrambi
+    i versi, perche' e' esattamente cio' che dichiara. Un evento senza tono non
+    converte niente: non si puo' dire che sia quello atteso.
+    """
+    if event_tone not in (TONE_BULL, TONE_BEAR):
+        return False
+    return setup_tone in (TONE_UNDETERMINED, event_tone)
+
+
+def opening_bar(row: StockSetup) -> date | None:
+    """La barra su cui l'episodio si e' aperto.
+
+    `first_seen_bar` dove c'e'; sugli episodi aperti prima che esistesse, la
+    data di `first_seen_at`. Il ripiego puo' essere un giorno AVANTI rispetto
+    alla barra letta davvero (una scansione del mattino legge la barra di
+    ieri), quindi con la regola stretta sotto puo' solo mancare una conversione
+    sulla barra successiva, mai inventarne una su una barra precedente.
+    """
+    if row.first_seen_bar is not None:
+        return row.first_seen_bar
+    return row.first_seen_at.date() if row.first_seen_at is not None else None
+
+
+def convert_setups_for_event(
+    db: Session,
+    alert: Alert,
+    *,
+    signal_date: date | None,
+    tone: str | None,
+    price: float | None,
+) -> StockSetup | None:
+    """Converte l'episodio aperto quando il SUO evento accade.
+
+    Chiamata per ogni rilevazione che supera i cancelli della scansione, sia
+    che crei un alert sia che ne aggiorni uno esistente. ⚠️ Prima era chiamata
+    solo sull'inserimento, e il ramo che aggiorna l'alert terminava senza
+    convertire: in produzione 95 setup restavano attivi con la condizione gia'
+    scattata, tutti e 95 passati da quel ramo.
+
+    Tre condizioni, e servono tutte:
+
+    - il detector coincide (la ricerca);
+    - il verso e' compatibile (`tone_compatible`);
+    - la barra dell'evento e' STRETTAMENTE successiva alla barra d'apertura.
+      E' questo che impedisce di collegare un episodio nuovo a una rilevazione
+      vecchia solo perche' condividono titolo e detector: un evento sulla barra
+      in cui il setup diceva «non ancora» non e' l'evento atteso.
+
+    L'evento (data, prezzo, tono) si scrive sul setup e non cambia piu': l'alert
+    puntato da `converted_alert_id` e' un'entita' viva che la scansione continua
+    ad aggiornare, e l'esito va misurato dal momento che ha chiuso l'attesa.
     """
     detector = alert.signal_name
-    if detector is None or alert.stock_id is None:
+    if detector is None or alert.stock_id is None or signal_date is None:
         return None
     row = db.execute(
         select(StockSetup).where(
@@ -195,7 +256,10 @@ def convert_setups_for_alert(db: Session, alert: Alert) -> StockSetup | None:
             StockSetup.status == STATUS_ACTIVE,
         )
     ).scalar_one_or_none()
-    if row is None:
+    if row is None or not tone_compatible(row.tone, tone):
+        return None
+    aperta = opening_bar(row)
+    if aperta is None or signal_date <= aperta:
         return None
 
     now = datetime.now(UTC)
@@ -205,12 +269,33 @@ def convert_setups_for_alert(db: Session, alert: Alert) -> StockSetup | None:
     row.status = STATUS_CONVERTED
     row.resolved_at = now
     row.converted_alert_id = alert.id
+    # L'attesa fino alla RILEVAZIONE: orologio della scansione.
     row.lead_days = max(0, (now - first).days) if first else None
+    row.converted_signal_date = signal_date
+    row.converted_price = price
+    row.converted_tone = tone
+    row.conversion_source = CONVERSION_LIVE
+    # L'anticipo rispetto al MERCATO: barra d'apertura -> barra dell'evento.
+    row.bar_lead_days = (signal_date - aperta).days
     logger.info(
-        f"[setups] {detector} on stock {alert.stock_id} converted "
-        f"after {row.lead_days}d of warning"
+        f"[setups] {detector} on stock {alert.stock_id} converted on bar "
+        f"{signal_date} after {row.lead_days}d of warning"
     )
     return row
+
+
+def convert_setups_for_alert(db: Session, alert: Alert) -> StockSetup | None:
+    """Converte leggendo l'evento dall'alert stesso. Valido solo quando l'alert
+    e' appena nato, cioe' quando i suoi campi SONO l'evento; la scansione usa
+    `convert_setups_for_event` con i valori della rilevazione."""
+    try:
+        tone = (json.loads(alert.snapshot) if alert.snapshot else {}).get("tone")
+    except (ValueError, TypeError, AttributeError):
+        tone = None
+    return convert_setups_for_event(
+        db, alert, signal_date=alert.signal_date, tone=tone,
+        price=float(alert.trigger_price) if alert.trigger_price is not None else None,
+    )
 
 
 def expire_stale_setups(db: Session, *, today: date | None = None) -> int:
@@ -438,27 +523,27 @@ def conversion_stats(db: Session) -> dict:
     # rispondibile, invece di essere decisa di nascosto da un DELETE.
     decayed = [r for r in rows
                if r.status == STATUS_EXPIRED and r.closed_reason == REASON_DECAYED]
+    # ⚠️ Chiusi da una conversione di verso opposto: fuori dal tasso come i
+    # ritirati, per la stessa ragione — l'occasione di convertire gliel'ha tolta
+    # un errore nostro, non il mercato.
+    mislinked = [r for r in rows
+                 if r.status == STATUS_EXPIRED and r.closed_reason == REASON_MISLINKED]
     expired = [r for r in rows
-               if r.status == STATUS_EXPIRED and r.closed_reason != REASON_DECAYED]
+               if r.status == STATUS_EXPIRED
+               and r.closed_reason not in (REASON_DECAYED, REASON_MISLINKED)]
     resolved = len(converted) + len(expired)
     leads = sorted(r.lead_days for r in converted if r.lead_days is not None)
+    bar_leads = sorted(r.bar_lead_days for r in converted if r.bar_lead_days is not None)
 
-    # Market-neutral label per converted alert, for the ones that have matured.
-    alert_ids = [r.converted_alert_id for r in converted if r.converted_alert_id]
-    labels: dict[int, int | None] = {}
-    if alert_ids:
-        labels = {
-            aid: hit
-            for aid, hit in db.execute(
-                select(SignalOutcome.alert_id, SignalOutcome.mkt_neutral_hit)
-                .where(SignalOutcome.alert_id.in_(alert_ids))
-            ).all()
-        }
-    positive = sum(1 for aid in alert_ids if labels.get(aid) == 1)
-    negative = sum(1 for aid in alert_ids if labels.get(aid) == 0)
+    # ⚠️ L'esito si legge dal SETUP, cioe' dall'evento che l'ha convertito, non
+    # dall'alert puntato: l'alert puo' aver spostato la sua data dopo la
+    # conversione, e il suo esito misurerebbe un altro momento.
+    outcomes = _event_outcomes(converted)
+    positive = sum(1 for o in outcomes.values() if o.mkt_neutral_hit == 1)
+    negative = sum(1 for o in outcomes.values() if o.mkt_neutral_hit == 0)
+    unavailable = _outcome_unavailable(db, converted, outcomes)
 
-    outcomes = _converted_outcomes(db, alert_ids)
-    returns = _return_summary(outcomes)
+    returns = _return_summary(list(outcomes.values()))
     by_detector = _per_detector(converted, expired, outcomes)
 
     return {
@@ -472,8 +557,17 @@ def conversion_stats(db: Session) -> dict:
         #: Escluderli senza mostrarli sarebbe indistinguibile dal cancellarli,
         #: che e' cio' che si e' appena smesso di fare.
         "decayed": len(decayed),
+        "mislinked": len(mislinked),
         "converted": len(converted),
         "expired": len(expired),
+        #: TUTTI gli episodi chiusi, qualunque la ragione: e' il totale della
+        #: vista Esiti. `closed` qui sotto e' un'altra cosa — il denominatore
+        #: del tasso — e a schermo i due numeri vanno nominati diversamente.
+        "closed_total": resolved + len(decayed) + len(mislinked),
+        "excluded_from_rate": len(decayed) + len(mislinked),
+        #: Chiusi prima che la ragione fosse registrata (FA-061). Restano nel
+        #: tasso — erano scadenze vere — ma la lacuna resta a schermo.
+        "closed_without_reason": sum(1 for r in expired if r.closed_reason is None),
         # The two tabs, each with its own total, and the sum of everything the
         # feature has ever tracked.
         "closed": resolved,
@@ -495,7 +589,14 @@ def conversion_stats(db: Session) -> dict:
         # elapsed, or no universe benchmark on the day. Absent, not failed.
         "converted_positive": positive,
         "converted_negative": negative,
-        "converted_pending": len(converted) - positive - negative,
+        # Judgeable but not judged yet: horizon still running, or a day
+        # without universe benchmark. Never folded into "negativo".
+        "converted_pending": len(converted) - positive - negative - unavailable,
+        #: Convertiti il cui esito NON potra' mai essere misurato: riconciliati
+        #: (la prima rilevazione non fu registrata) o storici il cui alert ha
+        #: spostato la data oltre la conversione. Contati a parte, mai confusi
+        #: con quelli in attesa.
+        "converted_outcome_unavailable": unavailable,
         # Efficacy as a RATE, with everything needed to disbelieve it. The
         # counts above already say 7 and 3; a bare "70%" would not.
         **returns,
@@ -507,6 +608,11 @@ def conversion_stats(db: Session) -> dict:
         "median_lead_days": _median_of(leads),
         "lead_days_min": leads[0] if leads else None,
         "lead_days_max": leads[-1] if leads else None,
+        #: L'anticipo rispetto al MERCATO (barra d'apertura -> barra
+        #: dell'evento), solo dove l'evento e' registrato. `median_lead_days`
+        #: sopra e' l'attesa fino alla RILEVAZIONE.
+        "median_bar_lead_days": _median_of(bar_leads),
+        "bar_lead_days_n": len(bar_leads),
     }
 
 
@@ -548,15 +654,62 @@ def prune_to_top_per_detector(db: Session) -> int:
     return dropped
 
 
-def _converted_outcomes(db: Session, alert_ids: list[int]) -> list[SignalOutcome]:
-    """Matured warehouse rows for the alerts these setups converted into."""
-    if not alert_ids:
-        return []
-    return list(
-        db.execute(
-            select(SignalOutcome).where(SignalOutcome.alert_id.in_(alert_ids))
-        ).scalars().all()
-    )
+@dataclass(frozen=True)
+class EventOutcome:
+    """L'esito dell'evento di conversione, nella forma che `_return_summary`
+    legge. Costruito dalle colonne del setup, non da `signal_outcomes`."""
+    mkt_neutral_hit: int | None
+    mkt_neutral_excess: float | None
+    fwd_return: float | None
+    horizon_days: int | None
+    signal_date: date
+
+
+def _event_outcomes(converted: list[StockSetup]) -> dict[int, EventOutcome]:
+    """{setup_id: esito} per i convertiti il cui evento e' maturato."""
+    return {
+        r.id: EventOutcome(
+            mkt_neutral_hit=r.outcome_mkt_neutral_hit,
+            mkt_neutral_excess=r.outcome_mkt_neutral_excess,
+            fwd_return=r.outcome_fwd_return,
+            horizon_days=r.outcome_horizon_days,
+            signal_date=r.outcome_signal_date,
+        )
+        for r in converted
+        if r.outcome_matured_at is not None and r.outcome_signal_date is not None
+    }
+
+
+def _outcome_unavailable(
+    db: Session, converted: list[StockSetup], outcomes: dict[int, EventOutcome]
+) -> int:
+    """Quanti convertiti non avranno MAI un esito misurabile.
+
+    Riconciliati: la data dell'evento non esiste. Storici senza data d'evento:
+    solo se l'alert ha GIA' spostato la sua data oltre il giorno della
+    conversione, perche' l'esito del magazzino misurerebbe un momento
+    successivo e `signal_outcome_service.mature_setup_outcomes` non lo accetta.
+    """
+    n = sum(1 for r in converted if r.conversion_source == CONVERSION_RECONCILED)
+    undated = [
+        r for r in converted
+        if r.id not in outcomes
+        and r.conversion_source != CONVERSION_RECONCILED
+        and r.converted_signal_date is None
+        and r.converted_alert_id is not None
+        and r.resolved_at is not None
+    ]
+    if not undated:
+        return n
+    dates = dict(db.execute(
+        select(Alert.id, Alert.signal_date)
+        .where(Alert.id.in_([r.converted_alert_id for r in undated]))
+    ).all())
+    for r in undated:
+        sd = dates.get(r.converted_alert_id)
+        if sd is None or sd > r.resolved_at.date():
+            n += 1
+    return n
 
 
 def _pct(x: float | None) -> float | None:
@@ -582,7 +735,7 @@ def _median_of(xs: list[float]) -> float | None:
     return float(ys[mid] if len(ys) % 2 else (ys[mid - 1] + ys[mid]) / 2.0)
 
 
-def _return_summary(outcomes: list[SignalOutcome]) -> dict:
+def _return_summary(outcomes: list[EventOutcome]) -> dict:
     """What a converted setup was WORTH, not just whether it was right.
 
     Two return series side by side, deliberately. `mkt_neutral_excess` is the
@@ -649,7 +802,7 @@ def _return_summary(outcomes: list[SignalOutcome]) -> dict:
 def _per_detector(
     converted: list[StockSetup],
     expired: list[StockSetup],
-    outcomes: list[SignalOutcome],
+    outcomes: dict[int, EventOutcome],
 ) -> list[dict]:
     """One row per setup detector: does THIS setup convert, and is it worth it.
 
@@ -667,7 +820,6 @@ def _per_detector(
         sized_interval,
     )
 
-    by_alert = {o.alert_id: o for o in outcomes}
     names = sorted({r.detector for r in converted} | {r.detector for r in expired})
 
     rows: list[dict] = []
@@ -676,11 +828,7 @@ def _per_detector(
         exp = [r for r in expired if r.detector == name]
         resolved = len(conv) + len(exp)
 
-        mine = [
-            by_alert[r.converted_alert_id]
-            for r in conv
-            if r.converted_alert_id and r.converted_alert_id in by_alert
-        ]
+        mine = [outcomes[r.id] for r in conv if r.id in outcomes]
         judged = [o for o in mine if o.mkt_neutral_hit is not None]
         hits = sum(1 for o in judged if o.mkt_neutral_hit == 1)
         rate = round(hits / len(judged) * 100.0, 1) if judged else None

@@ -39,6 +39,11 @@ class AlertSetupOriginOut(BaseModel):
     #: ha davvero dato. None sugli episodi convertiti prima che la colonna
     #: esistesse.
     lead_days: int | None = None
+    #: La barra dell'evento che ha chiuso l'attesa, fissata alla conversione.
+    #: Puo' precedere la data che l'alert mostra oggi, perche' la scansione
+    #: aggiorna l'alert finche' la condizione tiene. None sulle conversioni
+    #: storiche e riconciliate, dove quella barra non fu registrata.
+    converted_signal_date: date | None = None
 
 
 class AlertOut(BaseModel):

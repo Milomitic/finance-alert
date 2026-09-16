@@ -78,6 +78,23 @@ class SetupOut(BaseModel):
     #: setup actually gave. Only set on converted rows.
     lead_days: int | None = None
     converted_alert_id: int | None = None
+    #: L'EVENTO che ha convertito il setup, fissato al momento della conversione:
+    #: l'alert puntato sopra puo' aver cambiato data e prezzo dopo. Null sulle
+    #: conversioni storiche dove non e' ricostruibile, e sulle riconciliate.
+    converted_signal_date: str | None = None
+    converted_price: float | None = None
+    #: "live" | "legacy" | "reconciled" — da dove viene il riferimento.
+    conversion_source: str | None = None
+    #: Giorni fra la barra d'apertura e la barra dell'evento: l'anticipo sul
+    #: MERCATO. `lead_days` e' l'attesa fino alla RILEVAZIONE.
+    bar_lead_days: int | None = None
+    #: L'esito dell'evento, maturato dalla sua barra. `outcome_mkt_neutral_hit`
+    #: None con `outcome_signal_date` valorizzata = mancava il riferimento
+    #: dell'universo quel giorno, non un insuccesso.
+    outcome_signal_date: str | None = None
+    outcome_horizon_days: int | None = None
+    outcome_mkt_neutral_hit: int | None = None
+    outcome_mkt_neutral_excess_pct: float | None = None
     #: L'ultimo giorno in cui il setup puo ancora essere pendente — il TETTO da
     #: `first_seen_at`, non la scadenza scorrevole da `last_seen_at`, che si
     #: sposta a ogni scansione e non direbbe quando il setup si risolve. Il
@@ -245,6 +262,21 @@ def list_setups(
                 resolved_at=row.resolved_at.isoformat() if row.resolved_at else None,
                 lead_days=row.lead_days,
                 converted_alert_id=row.converted_alert_id,
+                converted_signal_date=(
+                    row.converted_signal_date.isoformat() if row.converted_signal_date else None
+                ),
+                converted_price=row.converted_price,
+                conversion_source=row.conversion_source,
+                bar_lead_days=row.bar_lead_days,
+                outcome_signal_date=(
+                    row.outcome_signal_date.isoformat() if row.outcome_signal_date else None
+                ),
+                outcome_horizon_days=row.outcome_horizon_days,
+                outcome_mkt_neutral_hit=row.outcome_mkt_neutral_hit,
+                outcome_mkt_neutral_excess_pct=(
+                    round(row.outcome_mkt_neutral_excess * 100.0, 2)
+                    if row.outcome_mkt_neutral_excess is not None else None
+                ),
                 pending_until=(
                     d.isoformat()
                     if (d := setup_service.pending_until(row.first_seen_at))

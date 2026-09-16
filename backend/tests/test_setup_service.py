@@ -72,7 +72,7 @@ def test_conversion_records_the_lead_time(db):
     db.flush()
 
     alert = Alert(stock_id=s.id, trigger_price=10.0, signal_date=date.today(),
-                  signal_name="oversold_reversal", snapshot="{}")
+                  signal_name="oversold_reversal", snapshot='{"tone": "bull"}')
     db.add(alert)
     db.flush()
 

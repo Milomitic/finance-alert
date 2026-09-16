@@ -17,7 +17,8 @@ from __future__ import annotations
 
 import json
 from collections import defaultdict
-from datetime import date, timedelta
+from dataclasses import dataclass
+from datetime import UTC, date, datetime, timedelta
 
 import numpy as np
 from loguru import logger
@@ -25,7 +26,7 @@ from sqlalchemy import exists, select
 from sqlalchemy.orm import Session
 
 from app.indicators.periods import FIXED_EMA_SLOW
-from app.models import Alert, OhlcvDaily, SignalOutcome, Stock
+from app.models import Alert, OhlcvDaily, SignalOutcome, Stock, StockSetup
 from app.services.signal_drift_service import _horizon_days
 
 # EMA span for the causal regime label at the trigger bar.
@@ -216,6 +217,57 @@ def _trigger_index(dates: np.ndarray, signal_date: date) -> int | None:
     return None
 
 
+@dataclass(frozen=True)
+class Label:
+    trigger_index: int
+    entry: float
+    forward_close: float
+    fwd_return: float
+    abs_hit: int
+    universe_median: float | None
+    mkt_excess: float | None
+    mkt_hit: int | None
+
+
+def _label(
+    series: tuple[np.ndarray, np.ndarray] | None,
+    signal_date: date,
+    tone: str,
+    horizon: int,
+    medians_by_h: dict[int, dict[date, float]],
+) -> Label | None:
+    """L'etichetta d'esito di UN evento (titolo, barra, verso, orizzonte).
+
+    Proprietario unico: la usano sia gli alert (`mature_outcomes`) sia gli
+    eventi di conversione dei setup (`mature_setup_outcomes`). Due copie della
+    stessa aritmetica divergono al primo ritocco, e qui la divergenza farebbe
+    dire cose diverse alle due pagine sullo stesso segnale.
+
+    None quando l'orizzonte non e' ancora trascorso o la barra manca."""
+    if series is None:
+        return None
+    dates, cs = series
+    ti = _trigger_index(dates, signal_date)
+    if ti is None:
+        return None
+    fi = ti + horizon
+    if fi >= len(cs):
+        return None  # horizon not yet elapsed → not matured
+    entry = float(cs[ti])
+    if entry <= 0:
+        return None
+    fwd_close = float(cs[fi])
+    fwd_ret = fwd_close / entry - 1.0
+    abs_hit = 1 if ((tone == "bull" and fwd_ret > 0) or (tone == "bear" and fwd_ret < 0)) else 0
+    uni_median = medians_by_h.get(horizon, {}).get(dates[ti])
+    mkt_excess = mkt_hit = None
+    if uni_median is not None:
+        excess = fwd_ret - uni_median
+        mkt_excess = excess if tone == "bull" else -excess
+        mkt_hit = 1 if mkt_excess > 0 else 0
+    return Label(ti, entry, fwd_close, fwd_ret, abs_hit, uni_median, mkt_excess, mkt_hit)
+
+
 def mature_outcomes(db: Session, *, commit: bool = True) -> int:
     """Write outcome rows for newly-matured signal alerts. Returns rows added."""
     # Anti-join in SQL: only alerts WITHOUT an outcome row come back. The old
@@ -256,34 +308,14 @@ def mature_outcomes(db: Session, *, commit: bool = True) -> int:
 
     added = 0
     for a in pending:
-        sd = a.signal_date
-        sb = closes.get(a.stock_id)
-        if sb is None:
-            continue
-        dates, cs = sb
-        ti = _trigger_index(dates, sd)
-        if ti is None:
-            continue
-        H = _horizon_days(a.signal_name)
-        fi = ti + H
-        if fi >= len(cs):
-            continue  # horizon not yet elapsed → not matured
-        entry = float(cs[ti])
-        if entry <= 0:
-            continue
-        fwd_close = float(cs[fi])
-        fwd_ret = fwd_close / entry - 1.0
         tone, strength, probability = _snapshot_fields(a.snapshot)
         if tone is None:
             continue
-        abs_hit = 1 if ((tone == "bull" and fwd_ret > 0) or (tone == "bear" and fwd_ret < 0)) else 0
-
-        uni_median = medians_by_h.get(H, {}).get(dates[ti])
-        mkt_excess = mkt_hit = None
-        if uni_median is not None:
-            excess = fwd_ret - uni_median
-            mkt_excess = excess if tone == "bull" else -excess
-            mkt_hit = 1 if mkt_excess > 0 else 0
+        H = _horizon_days(a.signal_name)
+        lab = _label(closes.get(a.stock_id), a.signal_date, tone, H, medians_by_h)
+        if lab is None:
+            continue
+        ti, cs = lab.trigger_index, closes[a.stock_id][1]
 
         # Causal regime: close vs EMA200 at the trigger bar.
         regime = None
@@ -295,10 +327,11 @@ def mature_outcomes(db: Session, *, commit: bool = True) -> int:
 
         db.add(SignalOutcome(
             alert_id=a.id, stock_id=a.stock_id, detector=a.signal_name,
-            signal_date=sd, tone=tone, horizon_days=H,
-            entry_close=entry, forward_close=fwd_close, fwd_return=fwd_ret,
-            universe_mean_fwd=uni_median, mkt_neutral_excess=mkt_excess,
-            abs_hit=abs_hit, mkt_neutral_hit=mkt_hit, regime_at_signal=regime,
+            signal_date=a.signal_date, tone=tone, horizon_days=H,
+            entry_close=lab.entry, forward_close=lab.forward_close,
+            fwd_return=lab.fwd_return,
+            universe_mean_fwd=lab.universe_median, mkt_neutral_excess=lab.mkt_excess,
+            abs_hit=lab.abs_hit, mkt_neutral_hit=lab.mkt_hit, regime_at_signal=regime,
             strength=strength, probability=probability,
         ))
         added += 1
@@ -306,4 +339,87 @@ def mature_outcomes(db: Session, *, commit: bool = True) -> int:
     if commit and added:
         db.commit()
     logger.info(f"[signal-outcomes] matured {added} new alerts ({len(pending)} pending)")
+    return added
+
+
+def mature_setup_outcomes(db: Session, *, commit: bool = True) -> int:
+    """Matura l'esito dell'EVENTO che ha convertito ogni setup.
+
+    ⚠️ Non l'esito dell'alert puntato. L'alert e' un'entita' viva: la scansione
+    ne aggiorna data e prezzo finche' la condizione tiene, e in produzione 71
+    conversioni su 334 puntavano a un alert la cui data era scivolata fino a 28
+    giorni oltre la conversione. Il suo esito misurerebbe un altro momento.
+
+    Due popolazioni:
+
+    - con `converted_signal_date` (conversioni registrate, e le storiche il cui
+      alert non fu mai rivisto): etichettate da QUELLA barra, con `_label`, la
+      stessa aritmetica del magazzino;
+    - storiche SENZA data d'evento: si accetta l'esito gia' nel magazzino solo
+      se misura una barra non successiva al giorno della conversione, cioe' un
+      momento che la conversione poteva conoscere. Altrimenti restano senza
+      esito, e `conversion_stats` le conta come non misurabili.
+
+    Le riconciliate non hanno data e non vengono toccate. Idempotente: una riga
+    con `outcome_matured_at` non si ricalcola.
+    """
+    now = datetime.now(UTC)
+    added = 0
+
+    dated = list(db.execute(
+        select(StockSetup).where(
+            StockSetup.status == "converted",
+            StockSetup.outcome_matured_at.is_(None),
+            StockSetup.converted_signal_date.is_not(None),
+            StockSetup.converted_tone.in_(("bull", "bear")),
+        )
+    ).scalars())
+    if dated:
+        closes = _load_stock_closes(db, {r.stock_id for r in dated})
+        min_td = min(r.converted_signal_date for r in dated)
+        uni = _load_universe_closes(db, since=min_td - timedelta(days=10), exclude_etf=True)
+        horizons = {_horizon_days(r.detector) for r in dated}
+        medians_by_h = {h: _universe_fwd_medians(uni, h) for h in horizons}
+        for r in dated:
+            H = _horizon_days(r.detector)
+            lab = _label(
+                closes.get(r.stock_id), r.converted_signal_date, r.converted_tone,
+                H, medians_by_h,
+            )
+            if lab is None:
+                continue
+            r.outcome_signal_date = r.converted_signal_date
+            r.outcome_horizon_days = H
+            r.outcome_fwd_return = lab.fwd_return
+            r.outcome_mkt_neutral_excess = lab.mkt_excess
+            r.outcome_mkt_neutral_hit = lab.mkt_hit
+            r.outcome_matured_at = now
+            added += 1
+
+    undated = db.execute(
+        select(StockSetup, SignalOutcome)
+        .join(SignalOutcome, SignalOutcome.alert_id == StockSetup.converted_alert_id)
+        .where(
+            StockSetup.status == "converted",
+            StockSetup.outcome_matured_at.is_(None),
+            StockSetup.converted_signal_date.is_(None),
+            StockSetup.conversion_source == "legacy",
+            StockSetup.resolved_at.is_not(None),
+        )
+    ).all()
+    for r, o in undated:
+        resolved = r.resolved_at
+        if o.signal_date > resolved.date():
+            continue  # misura un momento successivo alla conversione
+        r.outcome_signal_date = o.signal_date
+        r.outcome_horizon_days = o.horizon_days
+        r.outcome_fwd_return = o.fwd_return
+        r.outcome_mkt_neutral_excess = o.mkt_neutral_excess
+        r.outcome_mkt_neutral_hit = o.mkt_neutral_hit
+        r.outcome_matured_at = now
+        added += 1
+
+    if commit and added:
+        db.commit()
+    logger.info(f"[setup-outcomes] matured {added} conversion events")
     return added

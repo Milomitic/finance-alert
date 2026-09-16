@@ -20,10 +20,11 @@ before any study exists to justify it.
 One row per (stock, detector): a setup that keeps holding is UPDATED, not
 duplicated, so `first_seen_at` stays the honest start of the wait.
 """
-from datetime import datetime
+from datetime import date, datetime
 
 from sqlalchemy import (
     Boolean,
+    Date,
     DateTime,
     Float,
     ForeignKey,
@@ -70,6 +71,26 @@ REASON_DECAYED = "decayed"
 #: denominatore del tasso di conversione: l'occasione c'era, l'ha tolta il
 #: titolo smettendo di quotare.
 REASON_NO_DATA = "no_data"
+#: Chiuso da una conversione SBAGLIATA: il segnale che l'aveva «convertito» era
+#: di verso OPPOSTO al setup. Fino al 2026-09-16 la conversione non guardava il
+#: tono, e in produzione 68 conversioni su 334 erano un setup rialzista chiuso da
+#: un segnale ribassista o viceversa — cioe' un evento diverso da quello atteso.
+#: Resta FUORI dal denominatore come `decayed`: non sappiamo che cosa il setup
+#: avrebbe fatto, perche' la conversione falsa gli ha tolto l'occasione.
+REASON_MISLINKED = "mislinked"
+
+#: Da dove viene il riferimento all'evento di conversione.
+#: Registrato al momento della conversione: data, prezzo e tono sono certi.
+CONVERSION_LIVE = "live"
+#: Convertito prima del 2026-09-16: l'evento fu registrato solo come puntatore
+#: all'alert, che poi ha potuto cambiare data, prezzo e snapshot. La data
+#: dell'evento e' scritta solo dove e' certa (alert mai rivisto).
+CONVERSION_LEGACY = "legacy"
+#: Rimasto attivo per il difetto del ramo di aggiornamento e riconciliato dalla
+#: migrazione: la condizione e' scattata su una barra successiva all'apertura,
+#: ma la PRIMA rilevazione non fu registrata. Convertito, senza data d'evento,
+#: senza anticipo e senza esito: non si inventano.
+CONVERSION_RECONCILED = "reconciled"
 
 
 class StockSetup(Base):
@@ -154,3 +175,44 @@ class StockSetup(Base):
         Integer, ForeignKey("alerts.id", ondelete="SET NULL"), nullable=True
     )
     lead_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    # ⚠️ L'EVENTO che ha convertito il setup, immutabile (2026-09-16).
+    #
+    # `converted_alert_id` da solo non bastava: l'alert e' un'entita' VIVA, che
+    # la scansione aggiorna finche' la condizione tiene — data, prezzo,
+    # snapshot. Misurato: 71 conversioni su 334 puntavano a un alert la cui
+    # `signal_date` era poi scivolata fino a 28 giorni oltre la conversione,
+    # quindi l'esito futuro avrebbe misurato un momento diverso da quello che ha
+    # chiuso l'attesa. Qui si scrive una volta e non si tocca piu'.
+    #
+    #: La barra letta quando l'episodio si e' aperto. `first_seen_at` e' l'ora
+    #: della scansione, che puo' leggere la barra del giorno prima: la regola
+    #: «evento su una barra SUCCESSIVA all'apertura» ha bisogno della barra.
+    first_seen_bar: Mapped[date | None] = mapped_column(Date, nullable=True)
+    converted_signal_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    converted_price: Mapped[float | None] = mapped_column(Float, nullable=True)
+    converted_tone: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    #: `live` | `legacy` | `reconciled` — vedi le costanti sopra.
+    conversion_source: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    #: Giorni di calendario fra la barra d'apertura e la barra dell'evento:
+    #: l'anticipo rispetto al MERCATO. `lead_days` resta l'attesa fino alla
+    #: RILEVAZIONE (orologio della scansione), che e' un'altra domanda.
+    bar_lead_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    # L'esito dell'EVENTO, maturato dalla sua data — non quello dell'alert, che
+    # puo' misurare una barra successiva. Stessa etichetta del magazzino
+    # (`signal_outcome_service`): market-neutral sulla mediana dell'universo.
+    #: La barra da cui l'esito e' misurato. Sulle conversioni `live` coincide con
+    #: `converted_signal_date`; su quelle `legacy` senza data d'evento e' la
+    #: barra dell'esito del magazzino, accettata solo se non successiva alla
+    #: conversione.
+    outcome_signal_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    outcome_horizon_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    outcome_fwd_return: Mapped[float | None] = mapped_column(Float, nullable=True)
+    outcome_mkt_neutral_excess: Mapped[float | None] = mapped_column(Float, nullable=True)
+    #: None anche a esito maturato, se quel giorno mancava il riferimento
+    #: dell'universo: ASSENTE, mai un insuccesso.
+    outcome_mkt_neutral_hit: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    outcome_matured_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )

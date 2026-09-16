@@ -513,6 +513,15 @@ def run_tracked_scan(
             signal_outcome_service.mature_outcomes(db)
         except Exception as out_exc:  # noqa: BLE001
             logger.warning(f"[scan_runner] outcome maturation failed (non-fatal): {out_exc}")
+        # L'esito dell'EVENTO che ha convertito ogni setup, dalla sua data
+        # (non da quella dell'alert, che puo' essersi spostata). Separato: un
+        # suo guasto non deve costare la maturazione del magazzino.
+        try:
+            from app.services import signal_outcome_service
+            signal_outcome_service.mature_setup_outcomes(db)
+        except Exception as set_exc:  # noqa: BLE001
+            db.rollback()
+            logger.warning(f"[scan_runner] setup outcome maturation failed (non-fatal): {set_exc}")
         # Auto-archive concluded alerts (outcome matured + signal_date past the
         # confluence window). Runs AFTER mature_outcomes so this scan's freshly
         # matured rows are eligible immediately. Best-effort + gated by

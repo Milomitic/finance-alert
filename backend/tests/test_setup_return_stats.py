@@ -67,8 +67,20 @@ def _converted(
         status=STATUS_CONVERTED, shortlisted=True,
         first_seen_at=NOW - timedelta(days=10), last_seen_at=NOW,
         resolved_at=NOW, lead_days=5, converted_alert_id=alert.id,
+        # L'esito vive sul setup (l'evento di conversione), non solo sull'alert:
+        # `conversion_stats` legge queste colonne, che la maturazione riempie.
+        converted_signal_date=signal_day, conversion_source="live",
+        **(_esito_evento(signal_day, mkt_hit, excess, fwd) if matured else {}),
     ))
     db.commit()
+
+
+def _esito_evento(day: date, hit: int | None, excess: float | None, fwd: float) -> dict:
+    return {
+        "outcome_signal_date": day, "outcome_horizon_days": 21,
+        "outcome_fwd_return": fwd, "outcome_mkt_neutral_excess": excess,
+        "outcome_mkt_neutral_hit": hit, "outcome_matured_at": NOW,
+    }
 
 
 def _expired(db: Session, *, detector: str = "trend_pullback") -> None:

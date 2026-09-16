@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.db_json import json_text
 from app.models import Alert, OhlcvDaily, Position, SignalOutcome, Stock, StockSetup
+from app.models.stock_setup import STATUS_CONVERTED
 
 # ⚠️ Il predicato ha un proprietario unico in `ohlcv_service`, accanto a
 # `not_quarantined_clause` da cui va tenuto distinto: quella porta anche il
@@ -345,15 +346,24 @@ def _setup_origins(db: Session, alert_ids: list[int]) -> dict[int, dict[str, Any
         select(
             StockSetup.converted_alert_id, StockSetup.id, StockSetup.detector,
             StockSetup.first_seen_at, StockSetup.lead_days,
+            StockSetup.converted_signal_date,
         )
-        .where(StockSetup.converted_alert_id.in_(alert_ids))
+        # ⚠️ Solo le conversioni VALIDE: un episodio chiuso come `mislinked`
+        # conserva il puntatore per verifica, ma quell'alert non ne e' nato.
+        .where(
+            StockSetup.converted_alert_id.in_(alert_ids),
+            StockSetup.status == STATUS_CONVERTED,
+        )
         .order_by(StockSetup.first_seen_at.asc(), StockSetup.id.asc())
     ).all()
     out: dict[int, dict[str, Any]] = {}
-    for alert_id, setup_id, detector, first_seen, lead in rows:
+    for alert_id, setup_id, detector, first_seen, lead, event_date in rows:
         out.setdefault(alert_id, {
             "setup_id": setup_id, "detector": detector,
             "first_seen_at": first_seen, "lead_days": lead,
+            # La barra dell'evento che ha convertito il setup: puo' essere
+            # precedente alla data che l'alert mostra oggi.
+            "converted_signal_date": event_date,
         })
     return out
 

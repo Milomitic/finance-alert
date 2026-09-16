@@ -93,6 +93,8 @@ BERSAGLI: dict[str, list[str]] = {
     # Il tetto di 28 giorni sull'attesa di un setup: la scelta fra finestra
     # scorrevole e tetto e' stata misurata, e un fuori-di-uno la disfa.
     "app/services/setup_service.py": [
+        # Conversione per evento e suo esito (2026-09-16).
+        "tests/test_setup_conversione_evento.py",
         "tests/test_setup_service.py",
         "tests/test_setup_conversion_outcomes.py",
         "tests/test_setup_earnings_window.py",
@@ -173,6 +175,8 @@ BERSAGLI: dict[str, list[str]] = {
     # Il magazzino degli esiti: l'unica fonte di verita' su se un segnale ha
     # funzionato. Ha gia' avuto un difetto che ne misurava 19 righe su 4.880.
     "app/services/signal_outcome_service.py": [
+        # Conversione per evento e suo esito (2026-09-16).
+        "tests/test_setup_conversione_evento.py",
         "tests/test_signal_outcome_service.py",
         "tests/test_signal_drift_service.py",
         # Esercita `mature_outcomes` per verificare che gli ETF restino fuori
@@ -449,16 +453,16 @@ EQUIVALENTI: dict[str, str] = {
         "I dieci giorni di margine con cui la finestra dell'universo parte "
         "prima del primo trigger. E' un cuscinetto: allargarlo di un giorno "
         "carica una barra in piu' e non cambia nessun numero calcolato.",
-    "app/services/signal_outcome_service.py::mature_outcomes#1  Lt -> LtE":
+    "app/services/signal_outcome_service.py::mature_outcomes#0  Lt -> LtE":
         "La guardia `ti < len(ema_arr)` e' IRRAGGIUNGIBILE nel ramo mutato: "
         "`ema_arr` ha la lunghezza di `cs` e `ti` viene da `_trigger_index`, "
         "che rende solo indici validi di `cs`. `ti == len` non accade.",
-    "app/services/signal_outcome_service.py::mature_outcomes#2  Gt -> GtE":
+    "app/services/signal_outcome_service.py::mature_outcomes#0  Gt -> GtE":
         "`ema_arr[ti] >= 0`. La EMA all'indice `ti` include `cs[ti]` col peso "
-        "alpha, e `entry > 0` e' gia' stato verificato venti righe sopra: "
+        "alpha, e `entry > 0` e' gia' stato verificato in `_label`: "
         "quindi `ema_arr[ti] >= alpha * cs[ti] > 0` sempre. Il bordo zero non "
         "esiste.",
-    "app/services/signal_outcome_service.py::mature_outcomes#2  And -> Or":
+    "app/services/signal_outcome_service.py::mature_outcomes#0  And -> Or":
         "Col primo termine sempre vero (vedi sopra), `and` e `or` "
         "corto-circuitano allo stesso risultato. Il caso in cui divergono — "
         "`ema_arr` vuoto — richiede zero barre, che `_trigger_index` ha gia' "

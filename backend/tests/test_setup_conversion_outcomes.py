@@ -62,6 +62,13 @@ def _converted(db: Session, *, mkt_hit: int | None, matured: bool = True, lead: 
         status=STATUS_CONVERTED, shortlisted=True,
         first_seen_at=NOW - timedelta(days=10), last_seen_at=NOW,
         resolved_at=NOW, lead_days=lead, converted_alert_id=alert.id,
+        converted_signal_date=date(2026, 6, 1), conversion_source="live",
+        **({
+            "outcome_signal_date": date(2026, 6, 1), "outcome_horizon_days": 21,
+            "outcome_fwd_return": 0.05,
+            "outcome_mkt_neutral_excess": 0.05 if mkt_hit is not None else None,
+            "outcome_mkt_neutral_hit": mkt_hit, "outcome_matured_at": NOW,
+        } if matured else {}),
     ))
     db.commit()
 
