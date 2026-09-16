@@ -29,10 +29,6 @@
       "mutanti": 38,
       "uccisi": 28
     },
-    "app/services/signal_outcome_service.py": {
-      "mutanti": 56,
-      "uccisi": 47
-    },
     "app/services/technical_score_service.py": {
       "mutanti": 92,
       "uccisi": 39
@@ -48,6 +44,10 @@
     "app/services/setup_service.py": {
       "mutanti": 108,
       "uccisi": 81
+    },
+    "app/services/signal_outcome_service.py": {
+      "mutanti": 68,
+      "uccisi": 58
     }
   },
   "sopravvissuti": [
