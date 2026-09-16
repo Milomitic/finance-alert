@@ -123,6 +123,10 @@ BERSAGLI: dict[str, list[str]] = {
         # l'1%, arrotondamento, toni misti — sono stati chiusi DOPO averlo
         # aggiunto, non prima.
         "tests/test_setup_base_rate.py",
+        # ⚠️ E la TERZA: `run_post_scan_bookkeeping` (FA-062) vive qui e il suo
+        # test non c'era. Trovato alla prima esecuzione di
+        # `test_mutation_probe_bersagli_completi.py`, che da allora lo impedisce.
+        "tests/test_post_scan_perimetro.py",
     ],
     # ─── Ampliamento 2026-09-13: da 4 a 12 moduli ─────────────────────────
     #
@@ -179,10 +183,11 @@ BERSAGLI: dict[str, list[str]] = {
         # copre i rami di RIFIUTO (hash malformato, username vuoto/lungo/non
         # stringa) che nessun test percorreva.
         "tests/test_security_mutanti.py",
-        # ⚠️ `test_login_throttle.py` e' escluso di proposito: da solo porta la
-        # sotto-suite da ~3 s a 13 s (contiene attese reali) e verifica la
-        # limitazione dei tentativi, non la firma dei token. Un elenco completo
-        # non vuol dire un elenco indiscriminato.
+        # Chiama `read_session_token` su token firmati di forma sbagliata: il
+        # ramo di RIFIUTO del controllo sullo username. ~2,5 s in piu' per
+        # mutante, misurato (2026-09-16).
+        "tests/test_security_performance_regressions.py",
+        # `test_login_throttle.py` resta fuori: vedi `ESCLUSI_DAI_BERSAGLI`.
     ],
     # Il magazzino degli esiti: l'unica fonte di verita' su se un segnale ha
     # funzionato. Ha gia' avuto un difetto che ne misurava 19 righe su 4.880.
@@ -235,6 +240,9 @@ BERSAGLI: dict[str, list[str]] = {
         # coperto), l'ordine dei gruppi e dei componenti, il filtro di
         # validita' e i bordi delle soglie.
         "tests/test_confluence_mutanti.py",
+        # Chiama `compute_confluence` e la chiave d'ordinamento: a parita' di
+        # Forza, nessuno spareggio per verso (FA-057). Mancava (2026-09-16).
+        "tests/test_confluence_no_directional_tiebreak.py",
     ],
     # Gli arretrati a schermo. Ci e' appena stato trovato un denominatore
     # perso da una rinomina: esattamente la classe di errore che non solleva
@@ -242,6 +250,59 @@ BERSAGLI: dict[str, list[str]] = {
     "app/services/verification_posture.py": [
         "tests/test_verification_posture.py",
     ],
+}
+
+
+#: Test che IMPORTANO un modulo di `BERSAGLI` e deliberatamente NON girano
+#: contro i suoi mutanti, ciascuno con la ragione.
+#:
+#: ⚠️ Esiste perche' l'elenco sopra e' stato troppo corto TRE volte in un giorno
+#: per lo stesso modulo (FA-061/FA-071, poi il tasso di base, poi
+#: `test_post_scan_perimetro.py`), e ogni volta la sonda ha riportato
+#: sopravvissuti «nuovi» che erano falsi — facendo arrossire la notturna.
+#: `tests/test_mutation_probe_bersagli_completi.py` pretende che ogni test che
+#: importa un modulo sondato stia nel suo elenco OPPURE qui.
+#:
+#: Una voce qui e' una DECISIONE, non un modo di far tacere il controllo: un
+#: test sta fuori solo se non puo' uccidere un mutante del modulo — lo importa
+#: per una costante, per un tipo usato come contenitore, come bersaglio di una
+#: sostituzione, o per un nome solo ri-esportato. Nel dubbio si aggiunge
+#: all'elenco: il prezzo e' qualche secondo di sonda, quello opposto una
+#: notturna rossa su codice che nessuno ha toccato.
+ESCLUSI_DAI_BERSAGLI: dict[str, dict[str, str]] = {
+    "app/services/setup_service.py": {
+        "tests/test_seed_e2e_valutazione.py":
+            "Importa `setup_service` SOLO come bersaglio di `monkeypatch.setattr`: "
+            "sostituisce `run_post_scan_bookkeeping` per contarne le chiamate, "
+            "quindi non esegue una riga del modulo.",
+    },
+    "app/signals/detectors/base.py": {
+        "tests/test_backfill_replay_outcomes.py":
+            "Importa `SignalMatch` come contenitore per costruire gli ingressi; "
+            "non chiama lo scorer della Forza, dove stanno i mutanti.",
+        "tests/test_chain_enrichment.py":
+            "Importa `SignalMatch` come contenitore per costruire gli ingressi. "
+            "L'arricchimento della catena e' solo di visualizzazione e non "
+            "muove la Forza (CLAUDE.md), quindi non esercita lo scorer.",
+    },
+    "app/services/detector_performance_service.py": {
+        "tests/test_setup_service_mutanti.py":
+            "Importa la soglia `_DEFAULT_MIN_N` per formulare l'attesa; il file "
+            "verifica `setup_service`, che sta nel suo elenco.",
+        "tests/test_signal_drift_sizing.py":
+            "Importa `independent_blocks`, che e' DEFINITA in "
+            "`app/stats/sizing.py` e qui solo ri-esportata, e la usa come oracolo "
+            "del conteggio di `signal_drift_service`. Nessuna riga di questo "
+            "modulo viene eseguita.",
+    },
+    "app/core/security.py": {
+        "tests/test_login_throttle.py":
+            "Importa `hash_password` solo per creare l'utente del client; la "
+            "limitazione dei tentativi vive in `app/services/login_throttle.py`, "
+            "non qui. E costa: "
+            "8,3 s da solo (attese reali) contro 6,1 s dell'intera sotto-suite "
+            "del modulo, misurato il 2026-09-16.",
+    },
 }
 
 

@@ -136,12 +136,16 @@ def test_senza_paragone_i_campi_restano_vuoti(db) -> None:
 
 # ─── I confini che la sonda di mutazione ha trovato scoperti ─────────────────
 #
-# ⚠️ La prima passata su questo codice riportava dieci sopravvissuti, e la
-# maggior parte era FALSA: questo file non stava nell'elenco dei test di
+# ⚠️ La prima passata su questo codice riportava dieci sopravvissuti «nuovi».
+# TRE erano falsi: questo file non stava nell'elenco dei test di
 # `setup_service` in `mutation_probe.BERSAGLI`, quindi i mutanti di
 # `conversion_stats` e `_aggregate_base` giravano contro una suite che non
-# conteneva i loro test. Quelli sotto sono i buchi VERI rimasti dopo averlo
-# aggiunto.
+# conteneva i loro test. Altri due non erano lacune nuove (un equivalente, e un
+# vecchio mutante che aveva cambiato ordinale). I CINQUE veri: base zero, base
+# sotto l'1% e i due arrotondamenti del paragone, chiusi dai test qui sotto, e
+# il `28` copiato a mano nel risultato, tolto dal codice. Il test sui toni misti
+# chiude un sesto buco che il rapporto non poteva mostrare, perche' il suo
+# mutante aveva preso la chiave di un altro.
 
 
 def _base_finta(monkeypatch, rates: dict[tuple[str, str], float]) -> None:
