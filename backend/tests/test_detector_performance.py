@@ -436,7 +436,8 @@ def test_detector_performance_endpoint_shape_empty(client: TestClient):
     r = client.get("/api/platform/detector-performance")
     assert r.status_code == 200
     body = r.json()
-    assert set(body.keys()) == {"meta", "detectors", "replay"}
+    assert set(body.keys()) == {"meta", "overall", "detectors", "replay"}
+    assert body["overall"] is None
     assert body["detectors"] == []
     assert body["meta"]["total_rows"] == 0
     assert body["meta"]["n_detectors_universe"] == 17
@@ -599,3 +600,21 @@ def test_unlabeled_rows_get_no_verdict_rather_than_a_zero(db: Session):
     assert cell["skill_ci_low"] is None
     assert cell["skill_ci_high"] is None
 
+
+
+def test_l_aggregato_complessivo_conta_tutti_gli_esiti(db: Session):
+    """Le metriche in evidenza sopra la tabella dei segnali leggono `overall`:
+    deve contare OGNI esito, di ogni detector, non uno solo."""
+    _mk_outcome(db, abs_hit=1, mkt_hit=1)
+    _mk_outcome(db, abs_hit=0, mkt_hit=0, detector="macd_divergence")
+    _mk_outcome(db, abs_hit=1, mkt_hit=1, detector="macd_divergence")
+    db.commit()
+
+    out = perf.compute_detector_performance(db)
+    assert out["overall"]["n"] == 3
+    assert out["overall"]["mkt_neutral_hit_rate"] == pytest.approx(66.7, abs=0.1)
+    assert out["overall"]["n"] == sum(d["total"]["n"] for d in out["detectors"])
+
+
+def test_senza_esiti_non_c_e_un_aggregato(db: Session):
+    assert perf.compute_detector_performance(db)["overall"] is None

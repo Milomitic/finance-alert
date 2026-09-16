@@ -1,23 +1,10 @@
 import { Settings as SettingsIcon } from "lucide-react";
-import { Suspense, lazy } from "react";
+import { Link } from "react-router-dom";
 
 import { EngineHealthPanel } from "@/components/EngineHealthPanel";
-import { CalibrationPanel } from "@/components/settings/CalibrationPanel";
 import { CatalogRefreshPanel } from "@/components/settings/CatalogRefreshPanel";
-import { DetectorPerformancePanel } from "@/components/settings/DetectorPerformancePanel";
-
 import { ScanLogPanel } from "@/components/settings/ScanLogPanel";
-
-/* Pigro: unico consumatore di Recharts della pagina, ~358 kB grezzi. La
-   pagina e' un muro di otto pannelli e questo sta in fondo, quindi il grafico
-   arriva mentre si scorre invece che prima di poter leggere il primo. */
-const EquityCurvePanel = lazy(() =>
-  import("@/components/settings/EquityCurvePanel").then((m) => ({
-    default: m.EquityCurvePanel,
-  })),
-);
 import { ScoreIcPanel } from "@/components/settings/ScoreIcPanel";
-import { SignalEffectivenessPanel } from "@/components/settings/SignalEffectiveness";
 
 /* ─── SettingsPage — /settings route ────────────────────────────────────── *
  *
@@ -52,19 +39,25 @@ export default function SettingsPage({ embedded = false }: { embedded?: boolean 
             Motore
           </h1>
           <p className="text-sm text-muted-foreground max-w-2xl">
-            Statistiche di efficacia dei segnali e stato dei refresh
-            catalogo per indice.
+            Salute del motore, scansioni e stato dei refresh catalogo per indice.
           </p>
         </header>
       )}
 
       <EngineHealthPanel />
-      <SignalEffectivenessPanel />
-      <CalibrationPanel />
-      <DetectorPerformancePanel />
-      <Suspense fallback={<div className="h-48 animate-pulse rounded-lg bg-muted/30" />}>
-        <EquityCurvePanel />
-      </Suspense>
+      {/* Efficacia, calibrazione, per detector ed equity vivono ora sopra la
+          tabella dei segnali (2026-09-16): stanno dove si leggono i segnali. */}
+      <p className="text-xs text-muted-foreground">
+        Le statistiche di efficacia dei segnali sono nella pagina{" "}
+        <Link to="/alerts" className="font-semibold underline underline-offset-2">
+          Segnali
+        </Link>
+        , sopra la tabella; quelle dei setup nella pagina{" "}
+        <Link to="/setups" className="font-semibold underline underline-offset-2">
+          In formazione
+        </Link>
+        .
+      </p>
       <ScoreIcPanel />
       <ScanLogPanel />
       <CatalogRefreshPanel />

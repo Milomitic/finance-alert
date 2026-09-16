@@ -53,7 +53,8 @@ function renderWith(parziale: RispostaParziale, url = "/setups") {
 }
 
 /** Le misure stanno in una vista loro (FA-066). */
-const MISURAZIONE = "/setups?vista=misurazione";
+/** Dal 2026-09-16 le misure stanno sopra la lista: nessuna vista dedicata. */
+const MISURAZIONE = "/setups";
 
 const setup = {
   id: 1,
@@ -335,33 +336,38 @@ const rigaDetector: SetupDetectorStat = {
 describe("SetupsPage — le viste (FA-066)", () => {
   const ultimaUrl = () => String(mockGet.mock.calls.at(-1)?.[0] ?? "");
 
-  it("la lista non ha piu' le misure davanti", async () => {
-    renderWith({ setups: [setup], stats: { ...stats, by_detector: [rigaDetector] } });
-    // Il pavimento: la lista e' resa, quindi l'assenza sotto non e' una pagina vuota.
-    expect(
-      await screen.findByText(/la barra deve chiudere sopra la sua apertura/i),
-    ).toBeInTheDocument();
-    expect(screen.queryByText(/tasso conversione/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/per tipo di setup/i)).not.toBeInTheDocument();
+  it("le misure stanno SOPRA la lista, con le principali in evidenza", async () => {
+    /* Richiesta dell'utente, 2026-09-16: niente vista «Misurazione». */
+    const { container } = renderWith({ setups: [setup], stats: { ...stats, by_detector: [rigaDetector] } });
+    const lista = await screen.findByText(/la barra deve chiudere sopra la sua apertura/i);
+    const misure = screen.getByRole("region", { name: "Misure dei setup" });
+    // Sopra: nell'ordine del documento le misure precedono la lista.
+    expect(misure.compareDocumentPosition(lista) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const principali = [...container.querySelectorAll('[data-metrica="principale"]')]
+      .map((el) => el.textContent ?? "");
+    expect(principali).toHaveLength(4);
+    expect(principali.some((x) => /tasso conversione/i.test(x))).toBe(true);
+    expect(principali.some((x) => /anticipo mediano/i.test(x))).toBe(true);
+    expect(screen.queryByRole("button", { name: "Misurazione" })).not.toBeInTheDocument();
   });
 
-  it("«Misurazione» mostra le misure e non la lista", async () => {
-    renderWith({ setups: [setup], stats: { ...stats, by_detector: [rigaDetector] } }, MISURAZIONE);
-    expect(await screen.findByText(/tasso conversione/i)).toBeInTheDocument();
-    expect(screen.getByText(/per tipo di setup/i)).toBeInTheDocument();
-    expect(screen.queryByText(/la barra deve chiudere sopra la sua apertura/i)).not.toBeInTheDocument();
-    // Nemmeno i controlli della lista: non filtrerebbero niente di cio' che si vede.
-    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+  it("la tabella per tipo di setup si apre a richiesta", async () => {
+    renderWith({ setups: [setup], stats: { ...stats, by_detector: [rigaDetector] } });
+    const bottone = await screen.findByRole("button", { name: /le misure per tipo di setup/i });
+    expect(bottone).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByRole("heading", { name: /per tipo di setup/i })).not.toBeInTheDocument();
+    await userEvent.click(bottone);
+    expect(bottone).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("heading", { name: /per tipo di setup/i })).toBeInTheDocument();
   });
 
   it("la vista vive nell'URL, e il default non si scrive", async () => {
     renderWith({ setups: [setup], stats });
     await screen.findByText(/la barra deve chiudere sopra la sua apertura/i);
 
-    await userEvent.click(screen.getByRole("button", { name: "Misurazione" }));
-    expect(await screen.findByText(/tasso conversione/i)).toBeInTheDocument();
-    expect(screen.getByTestId("url")).toHaveTextContent("vista=misurazione");
-    expect(screen.getByRole("button", { name: "Misurazione" })).toHaveAttribute("aria-pressed", "true");
+    await userEvent.click(screen.getByRole("button", { name: "Esiti" }));
+    await waitFor(() => expect(screen.getByTestId("url")).toHaveTextContent("vista=esiti"));
+    expect(screen.getByRole("button", { name: "Esiti" })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByRole("button", { name: "In formazione" })).toHaveAttribute("aria-pressed", "false");
 
     await userEvent.click(screen.getByRole("button", { name: "In formazione" }));
@@ -391,13 +397,12 @@ describe("SetupsPage — le viste (FA-066)", () => {
     expect(screen.getByTestId("url")).not.toHaveTextContent("ticker");
   });
 
-  it("in «Misurazione» dice che le misure non sono del titolo filtrato", async () => {
-    /* `conversion_stats` non guarda i filtri. Lasciare «Solo AAPL» accanto a
-     * numeri dell'intera funzione mostrerebbe una popolazione e ne
-     * descriverebbe un'altra — la forma che FA-056 ha chiuso. */
-    renderWith({ setups: [setup], stats }, "/setups?vista=misurazione&ticker=AAPL");
-    expect(await screen.findByText(/non solo/i)).toHaveTextContent("AAPL");
-    expect(screen.queryByRole("button", { name: /solo AAPL/i })).not.toBeInTheDocument();
+  it("con un titolo filtrato le misure dicono che non sono solo di quel titolo", async () => {
+    /* `conversion_stats` non guarda i filtri: accanto a «Solo AAPL» la nota
+     * deve dire che i numeri sono di tutti i titoli. */
+    renderWith({ setups: [setup], stats }, "/setups?ticker=AAPL");
+    const nota = await screen.findByText(/tutti i setup registrati nel database/i);
+    expect(nota.closest("p")?.textContent).toMatch(/non solo AAPL/);
   });
 
   it("dice quando un setup non viene rivisto da giorni, e solo allora", async () => {

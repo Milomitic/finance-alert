@@ -5,6 +5,7 @@ import { useSearchParams } from "react-router-dom";
 import { alerts as alertsApi, type AlertListParams } from "@/api/alerts";
 import type { Alert } from "@/api/types";
 import { AlertDetailDialog } from "@/components/AlertDetailDialog";
+import { SignalStatsSection } from "@/components/alert/SignalStatsSection";
 import { AlertFilters } from "@/components/AlertFilters";
 import { AlertsInsightCard } from "@/components/AlertsInsightCard";
 import { AlertsTable } from "@/components/AlertsTable";
@@ -170,6 +171,10 @@ export default function AlertsPage() {
           <Download className="h-4 w-4 mr-1.5" /> Esporta CSV
         </Button>
       </div>
+
+      {/* Le statistiche di efficacia, spostate qui da Diagnostica (2026-09-16):
+          tutti gli esiti maturati, non la pagina ne' i filtri della tabella. */}
+      <SignalStatsSection />
 
       {/* Confluence digest — always visible above the table (replaced the old
           list/confluence view toggle). Cluster rows drill down into the table. */}

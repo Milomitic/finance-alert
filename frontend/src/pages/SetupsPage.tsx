@@ -1,4 +1,4 @@
-import { Hourglass, Target, X } from "lucide-react";
+import { ChevronDown, Hourglass, Target, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
@@ -15,7 +15,7 @@ import { useAlert } from "@/hooks/useAlerts";
 import { SETUP_PER_PAGINA, useSetups, type Setup, type SetupStats } from "@/hooks/useSetups";
 import { detectorLabel, groupByCondition, type SetupSortKey } from "@/lib/setupGrouping";
 import { cn } from "@/lib/utils";
-import { InfoHint } from "@/components/ui/info-hint";
+import { MetricStrip, type MetricTileProps } from "@/components/ui/metric-tile";
 
 /* ─── Setups — cosa si sta formando, PRIMA del segnale ─────────────────────
  *
@@ -39,20 +39,20 @@ import { InfoHint } from "@/components/ui/info-hint";
  *  fraction rather than a percentage — see the tile comment. */
 const MIN_RATE_N = 20;
 
-/* ─── Tre viste, nell'URL (FA-066) ────────────────────────────────────────
+/* ─── Due viste, nell'URL ──────────────────────────────────────────────────
  *
- * Le otto statistiche e la tabella per detector stavano SOPRA la lista, su
- * entrambe le viste: fra chi apre la pagina per sapere cosa sta aspettando e
- * la risposta c'erano otto tessere e una tabella che rispondono a un'altra
- * domanda — «la funzione funziona?» — che si fa con calma e non a ogni
- * visita. Ora vivono in «Misurazione», con i denominatori come prima.
+ * FA-066 aveva spostato le misure in una terza vista, «Misurazione». Il
+ * 2026-09-16 l'utente le ha volute di nuovo SOPRA la lista, con le metriche
+ * che contano in evidenza: quattro tessere principali (tasso, efficacia,
+ * rendimento, anticipo), le altre compatte, e la tabella per tipo di setup
+ * chiusa di default. Un vecchio link a ?vista=misurazione apre la lista, che
+ * ora le contiene.
  *
  * Nell'URL, come Diagnostica: il dettaglio titolo deve poter mandare qui una
  * lista gia' filtrata (`?ticker=`), e un link a una vista resta condivisibile. */
 const VISTE = [
   { id: "formazione", label: "In formazione" },
   { id: "esiti", label: "Esiti" },
-  { id: "misurazione", label: "Misurazione" },
 ] as const;
 
 type VistaId = (typeof VISTE)[number]["id"];
@@ -81,6 +81,8 @@ function StatsStrip({ stats }: { stats: SetupStats }) {
      *  telefono costava due righe per piastrella. Va nel popup. */
     note?: string;
     tone?: "ok" | "bad" | null;
+    /** In evidenza: le metriche che rispondono a «la funzione funziona?». */
+    primary?: boolean;
   }[] = [
     {
       label: "In formazione",
@@ -105,6 +107,7 @@ function StatsStrip({ stats }: { stats: SetupStats }) {
     },
     {
       label: "Tasso conversione",
+      primary: true,
       // Three states, not two.
       //
       // null means "nothing has resolved yet" — rendering it as 0% would read
@@ -155,6 +158,7 @@ function StatsStrip({ stats }: { stats: SetupStats }) {
       // days apart share most of their forward window and a row-count band
       // would look far narrower than the evidence allows.
       label: "Efficacia",
+      primary: true,
       value:
         stats.converted_hit_rate === null
           ? "—"
@@ -184,6 +188,7 @@ function StatsStrip({ stats }: { stats: SetupStats }) {
       // in the hint beside it on purpose — when the two diverge, the gap IS
       // the market drift the setup collected for free.
       label: "Rendimento mediano",
+      primary: true,
       value:
         stats.median_excess_pct === null
           ? "—"
@@ -207,6 +212,7 @@ function StatsStrip({ stats }: { stats: SetupStats }) {
     },
     {
       label: "Anticipo mediano",
+      primary: true,
       value: stats.median_lead_days === null ? "—" : `${stats.median_lead_days}g`,
       hint:
         stats.lead_days_min === null
@@ -224,28 +230,31 @@ function StatsStrip({ stats }: { stats: SetupStats }) {
     },
   ];
 
+  // Le principali prima, nell'ordine in cui compaiono; le altre compatte sotto.
+  const ordinate: MetricTileProps[] = [
+    ...tiles.filter((x) => x.primary),
+    ...tiles.filter((x) => !x.primary),
+  ];
+  return <MetricStrip tiles={ordinate} />;
+}
+
+/** La tabella per tipo di setup, chiusa di default: e' il dettaglio, e aperta
+ *  spingerebbe la lista sotto la piega. Montata solo quando aperta. */
+function DettaglioPerTipo({ rows }: { rows: SetupStats["by_detector"] }) {
+  const [aperto, setAperto] = useState(false);
+  if (!rows || rows.length === 0) return null;
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 [&>*]:min-w-0">
-      {tiles.map((t) => (
-        <Card key={t.label}>
-          <CardContent className="p-3">
-            <div className="flex items-center gap-1 text-[0.6765rem] uppercase tracking-wider text-muted-foreground font-mono">
-              <span className="truncate">{t.label}</span>
-              {t.note && <InfoHint label={t.label} text={t.note} />}
-            </div>
-            <div
-              className={cn(
-                "text-2xl font-bold tabular-nums leading-tight mt-0.5",
-                t.tone === "ok" && "text-emerald-800 dark:text-emerald-400",
-                t.tone === "bad" && "text-rose-700 dark:text-rose-400",
-              )}
-            >
-              {t.value}
-            </div>
-            {t.hint && <div className="text-xs text-muted-foreground mt-0.5">{t.hint}</div>}
-          </CardContent>
-        </Card>
-      ))}
+    <div>
+      <button
+        type="button"
+        aria-expanded={aperto}
+        onClick={() => setAperto((a) => !a)}
+        className="inline-flex min-h-[36px] items-center gap-1 text-xs font-semibold text-muted-foreground hover:text-foreground"
+      >
+        <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", aperto && "rotate-180")} aria-hidden />
+        {aperto ? "Nascondi" : "Mostra"} le misure per tipo di setup
+      </button>
+      {aperto && <SetupDetectorStats rows={rows} />}
     </div>
   );
 }
@@ -348,7 +357,7 @@ export default function SetupsPage() {
             </button>
           ))}
         </div>
-        {ticker && vista !== "misurazione" && (
+        {ticker && (
           <button
             type="button"
             onClick={() => cambiaUrl("ticker", null)}
@@ -361,44 +370,30 @@ export default function SetupsPage() {
         )}
       </div>
 
-      {vista === "misurazione" ? (
-        q.isLoading ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-            {Array.from({ length: 8 }).map((_, i) => (
-              <CardSkeleton key={i} rows={2} className="h-[88px]" />
-            ))}
-          </div>
-        ) : q.isError ? (
-          <QueryError message="delle misure" onRetry={q.refetch} isRetrying={q.isFetching} />
-        ) : q.data ? (
-          <>
-            {/* `conversion_stats` non guarda i filtri: le misure sono della
-                funzione intera. Dirlo, invece di lasciare un filtro per titolo
-                accanto a numeri che non sono di quel titolo. */}
-            {ticker && (
-              <p className="text-xs text-muted-foreground">
-                Le misure riguardano tutti i titoli, non solo <strong>{ticker}</strong>.
-              </p>
-            )}
-            <StatsStrip stats={q.data.stats} />
-            {/* ⚠️ Le statistiche descrivono una popolazione DIVERSA dalla lista:
-                i soli setup che il prodotto ha davvero mostrato. Non e' un
-                difetto da uniformare — un setup che l'utente non ha mai visto
-                non gli ha fatto nessuna promessa, quindi misurarci sopra
-                l'efficacia giudicherebbe il prodotto su cio' che non ha offerto
-                — ma la pagina mostrava un insieme e ne descriveva un altro senza
-                dirlo. In produzione: 1.415 setup attivi, 59 in shortlist, 18
-                chiusi dentro il perimetro statistico. */}
-            <p className="text-xs text-muted-foreground">
-              Le misure contano <strong>tutti i setup registrati nel database</strong>{" "}
-              ({q.data.stats.total.toLocaleString("it-IT")}), attivi e chiusi, compresi
-              quelli fuori dalla lista e dalla pagina corrente.
-            </p>
-            <SetupDetectorStats rows={q.data.stats.by_detector} />
-          </>
-        ) : null
-      ) : (
-        <>
+      {/* Le misure SOPRA la lista (richiesta dell'utente, 2026-09-16), con le
+          metriche principali in evidenza. `conversion_stats` non guarda i
+          filtri della lista: le misure sono di tutti i setup del database, e
+          la pagina lo dice. In errore non si ripete il messaggio: la lista
+          sotto mostra gia' il suo. */}
+      {q.isLoading ? (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <CardSkeleton key={i} rows={2} className="h-[96px]" />
+          ))}
+        </div>
+      ) : q.data ? (
+        <section aria-label="Misure dei setup" className="space-y-2">
+          <StatsStrip stats={q.data.stats} />
+          <p className="text-xs text-muted-foreground">
+            Le misure contano <strong>tutti i setup registrati nel database</strong>{" "}
+            ({q.data.stats.total.toLocaleString("it-IT")}), attivi e chiusi, compresi
+            quelli fuori dalla lista e dalla pagina corrente
+            {ticker ? <>, non solo <strong>{ticker}</strong></> : null}.
+          </p>
+          <DettaglioPerTipo rows={q.data.stats.by_detector} />
+        </section>
+      ) : null}
+
       {/* Three controls became eight. The page had exactly one axis — tone —
           which meant no way to ask "show me only the squeezes" or "who has
           been waiting longest", on the longest page in the app. */}
@@ -543,8 +538,6 @@ export default function SetupsPage() {
           </div>
         )}
       </div>
-        </>
-      )}
       <SetupDetailDialog setup={openSetup} onClose={() => setOpenSetup(null)} />
       {/* Il terzo anello: setup → segnale → posizione. Lo stesso dialogo che
           la pagina Segnali e la pagina Posizioni aprono, e che contiene

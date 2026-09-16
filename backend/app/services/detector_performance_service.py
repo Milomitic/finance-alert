@@ -291,6 +291,12 @@ def compute_detector_performance(db: Session, *, min_n: int = _DEFAULT_MIN_N) ->
     }
     return {
         "meta": meta,
+        # L'aggregato di TUTTI gli esiti, per le metriche in evidenza sopra la
+        # tabella dei segnali. Le finestre indipendenti si contano sull'orizzonte
+        # piu' lungo presente, quindi l'intervallo e' prudente per costruzione.
+        # ⚠️ Mescola i toni: il beta dei rialzisti e quello dei ribassisti si
+        # compensano solo nell'hit ASSOLUTO; la skill e' gia' market-neutral.
+        "overall": _cell("totale", rows, min_n) if rows else None,
         "detectors": detectors,
         "replay": _replay_block(replay_summary, min_n) if replay_summary else None,
     }

@@ -379,6 +379,8 @@ class DetectorReplayOut(BaseModel):
 
 class DetectorPerformanceOut(BaseModel):
     meta: DetectorPerfMetaOut
+    # Tutti gli esiti insieme; None col magazzino vuoto.
+    overall: DetectorPerfCellOut | None = None
     detectors: list[DetectorPerfRowOut]   # sorted by descending total n
     # Present only when the replay artifact exists (meta.replay_available).
     replay: DetectorReplayOut | None = None

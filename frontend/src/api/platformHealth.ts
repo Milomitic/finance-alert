@@ -312,6 +312,9 @@ export type DetectorPerfMeta = {
 
 export type DetectorPerformance = {
   meta: DetectorPerfMeta;
+  /** Tutti gli esiti del magazzino insieme; null col magazzino vuoto. Legge
+   *  le metriche in evidenza sopra la tabella dei segnali. */
+  overall?: DetectorPerfCell | null;
   detectors: DetectorPerfRow[]; // sorted by descending total n
 };
 
