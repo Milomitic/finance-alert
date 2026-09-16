@@ -194,8 +194,11 @@ export default function StockDetailPage() {
         if (!chart || i === null) return;
         const meta = Math.round((defaultVisibleBars(range) ?? mergedOhlcv.length) / 2);
         chart.timeScale().setVisibleLogicalRange({ from: i - meta, to: i + meta } as never);
-        // Su un telefono il grafico sta sopra la scheda: senza, il bottone
-        // sposterebbe una vista che nessuno sta guardando.
+        // Il grafico e la scheda dei segnali non stanno nella stessa
+        // schermata: misurato nel collaudo in browser (2026-09-16), a 375px il
+        // grafico e' ~3.900px SOTTO la riga cliccata. Senza, il bottone
+        // sposterebbe una vista che nessuno sta guardando. `nearest` funziona
+        // in entrambi i versi.
         chart.chartElement().scrollIntoView({ block: "nearest", behavior: "smooth" });
       },
     }),

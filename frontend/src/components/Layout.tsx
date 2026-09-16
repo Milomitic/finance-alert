@@ -17,6 +17,7 @@ import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { useLogout, useMe } from "@/hooks/useAuth";
+import { useScrollRestoration } from "@/hooks/useScrollRestoration";
 import { useTheme, type Theme } from "@/hooks/useTheme";
 import { NAV, NAV_GROUPS } from "@/lib/nav";
 import { cn } from "@/lib/utils";
@@ -196,6 +197,10 @@ export default function Layout() {
   const mobileMenuTriggerRef = useRef<HTMLButtonElement>(null);
   const mobileCloseRef = useRef<HTMLButtonElement>(null);
   const previouslyFocusedRef = useRef<HTMLElement | null>(null);
+  // Lo scorrimento dell'app sta in <main>, non nella finestra: la sua posizione
+  // segue la cronologia (vedi l'hook).
+  const mainRef = useRef<HTMLElement>(null);
+  useScrollRestoration(mainRef);
   // Desktop sidebar collapse (icon-rail). Persisted so the choice
   // survives reloads. Lazy init reads localStorage once; the effect
   // mirrors every change back. Defaults to expanded.
@@ -452,7 +457,7 @@ export default function Layout() {
             <span className="sr-only sm:not-sr-only">Esci</span>
           </Button>
         </header>
-        <main id="contenuto" className="flex-1 min-w-0 overflow-y-auto p-3 sm:p-6">
+        <main ref={mainRef} id="contenuto" className="flex-1 min-w-0 overflow-y-auto p-3 sm:p-6">
           {/* Keyed by pathname so the boundary is a fresh instance per route:
               boundaries never clear their own error state, so without this a
               single crash would leave every subsequent page blank until a full
