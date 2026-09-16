@@ -231,6 +231,10 @@ def _replay_block(summary: dict, min_n: int) -> dict:
     }
 
 
+#: L'orizzonte dell'aggregato `overall` (vedi `compute_detector_performance`).
+OVERALL_HORIZON_DAYS = 21
+
+
 def compute_detector_performance(db: Session, *, min_n: int = _DEFAULT_MIN_N) -> dict:
     """The full detector × regime × tone × strength-band performance cube.
 
@@ -291,12 +295,15 @@ def compute_detector_performance(db: Session, *, min_n: int = _DEFAULT_MIN_N) ->
     }
     return {
         "meta": meta,
-        # L'aggregato di TUTTI gli esiti, per le metriche in evidenza sopra la
-        # tabella dei segnali. Le finestre indipendenti si contano sull'orizzonte
-        # piu' lungo presente, quindi l'intervallo e' prudente per costruzione.
-        # ⚠️ Mescola i toni: il beta dei rialzisti e quello dei ribassisti si
-        # compensano solo nell'hit ASSOLUTO; la skill e' gia' market-neutral.
-        "overall": _cell("totale", rows, min_n) if rows else None,
+        # L'aggregato per le metriche in evidenza sopra la tabella dei segnali,
+        # su UN orizzonte. ⚠️ Mescolarli e' stato provato in produzione e non
+        # regge: `_cell` conta le finestre indipendenti sull'orizzonte piu'
+        # lungo presente (63 giorni), quindi 4.830 esiti diventavano 2
+        # finestre e l'intervallo 9-90% — vero e inutile. 21 giorni e'
+        # l'orizzonte con piu' esiti.
+        "overall": _cell("totale", orizzonte, min_n) if (
+            orizzonte := [r for r in rows if r.horizon_days == OVERALL_HORIZON_DAYS]
+        ) else None,
         "detectors": detectors,
         "replay": _replay_block(replay_summary, min_n) if replay_summary else None,
     }

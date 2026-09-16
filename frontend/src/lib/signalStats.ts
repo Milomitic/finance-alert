@@ -28,18 +28,18 @@ export function signalStatTiles(d: DetectorPerformance): MetricTileProps[] {
 
   return [
     {
-      label: "Skill vs mercato",
+      label: "Skill vs mercato · 21g",
       primary: true,
       value: pct(o?.mkt_neutral_hit_rate),
       hint:
         o?.skill_ci_low == null || o.skill_ci_high == null
           ? "nessun esito con benchmark"
-          : `IC 95% ${pct(o.skill_ci_low)}–${pct(o.skill_ci_high)} · ${VERDETTO[o.skill_verdict ?? ""] ?? "—"}`,
+          : `${o.n.toLocaleString("it-IT")} esiti in ${o.effective_n ?? "—"} finestre indipendenti · IC 95% ${pct(o.skill_ci_low)}–${pct(o.skill_ci_high)} · ${VERDETTO[o.skill_verdict ?? ""] ?? "—"}`,
       // Il colore segue il VERDETTO, non il numero: 54% su un intervallo che
       // contiene il 50% non e' un risultato.
       tone: o?.skill_verdict === "above" ? "ok" : o?.skill_verdict === "below" ? "bad" : null,
       note:
-        "Quota di segnali che hanno battuto la mediana dell'universo nella propria direzione, su tutti gli esiti maturati. 50% = moneta. L'intervallo e' dimensionato sulle finestre indipendenti, non sulle righe.",
+        "Quota di segnali che hanno battuto la mediana dell'universo nella propria direzione, su tutti gli esiti maturati a 21 giorni (l'orizzonte con piu' esiti: mescolarli farebbe contare le finestre indipendenti su 63 giorni). 50% = moneta. L'intervallo e' dimensionato sulle finestre indipendenti, non sulle righe.",
     },
     {
       label: "Detector sopra il mercato",
@@ -54,17 +54,14 @@ export function signalStatTiles(d: DetectorPerformance): MetricTileProps[] {
       label: "Esiti maturati",
       primary: true,
       value: d.meta.total_rows.toLocaleString("it-IT"),
-      hint:
-        o?.effective_n == null
-          ? undefined
-          : `${o.effective_n} finestre indipendenti · dal ${giorno(d.meta.date_min)} al ${giorno(d.meta.date_max)}`,
+      hint: `tutti gli orizzonti · dal ${giorno(d.meta.date_min)} al ${giorno(d.meta.date_max)}`,
       note:
         "Tutti gli esiti nel database, archiviati compresi. Le finestre indipendenti decidono quanto le percentuali siano affidabili: segnali vicini condividono la stessa finestra futura.",
     },
     {
       label: "Hit assoluto",
       value: pct(o?.abs_hit_rate),
-      hint: "include il beta del mercato",
+      hint: "a 21 giorni · include il beta del mercato",
     },
     {
       label: "Detector con esiti",

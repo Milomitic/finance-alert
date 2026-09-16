@@ -56,6 +56,7 @@ def _mk_outcome(
     fwd_return: float = 0.05,
     signal_date: date = date(2026, 6, 1),
     archived: bool = False,
+    horizon_days: int = 21,
 ) -> SignalOutcome:
     """One warehouse row + its backing Alert/Stock (FK + archived-join)."""
     _SEQ["n"] += 1
@@ -80,7 +81,7 @@ def _mk_outcome(
         detector=detector,
         signal_date=signal_date,
         tone=tone,
-        horizon_days=21,
+        horizon_days=horizon_days,
         entry_close=100.0,
         forward_close=100.0 * (1 + fwd_return),
         fwd_return=fwd_return,
@@ -602,18 +603,20 @@ def test_unlabeled_rows_get_no_verdict_rather_than_a_zero(db: Session):
 
 
 
-def test_l_aggregato_complessivo_conta_tutti_gli_esiti(db: Session):
-    """Le metriche in evidenza sopra la tabella dei segnali leggono `overall`:
-    deve contare OGNI esito, di ogni detector, non uno solo."""
-    _mk_outcome(db, abs_hit=1, mkt_hit=1)
-    _mk_outcome(db, abs_hit=0, mkt_hit=0, detector="macd_divergence")
-    _mk_outcome(db, abs_hit=1, mkt_hit=1, detector="macd_divergence")
+def test_l_aggregato_conta_ogni_detector_su_un_solo_orizzonte(db: Session):
+    """Le metriche in evidenza leggono `overall`: tutti i detector, ma a 21
+    giorni soltanto. Mescolare gli orizzonti faceva contare le finestre
+    indipendenti su 63 giorni: in produzione 4.830 esiti = 2 finestre."""
+    _mk_outcome(db, abs_hit=1, mkt_hit=1, horizon_days=21)
+    _mk_outcome(db, abs_hit=0, mkt_hit=0, detector="macd_divergence", horizon_days=21)
+    _mk_outcome(db, abs_hit=1, mkt_hit=1, detector="macd_divergence", horizon_days=21)
+    _mk_outcome(db, abs_hit=0, mkt_hit=0, detector="macd_divergence", horizon_days=63)
     db.commit()
 
     out = perf.compute_detector_performance(db)
     assert out["overall"]["n"] == 3
+    assert out["overall"]["horizon_days"] == 21
     assert out["overall"]["mkt_neutral_hit_rate"] == pytest.approx(66.7, abs=0.1)
-    assert out["overall"]["n"] == sum(d["total"]["n"] for d in out["detectors"])
 
 
 def test_senza_esiti_non_c_e_un_aggregato(db: Session):

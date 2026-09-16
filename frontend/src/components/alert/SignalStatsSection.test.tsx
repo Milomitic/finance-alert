@@ -50,10 +50,11 @@ describe("signalStatTiles", () => {
     const t = signalStatTiles(dati);
     const per = Object.fromEntries(t.map((x) => [x.label, x]));
     expect(per["Esiti maturati"].value).toMatch(/4\.?830/);
-    expect(per["Esiti maturati"].hint).toMatch(/12 finestre indipendenti · dal 15\/05 al 08\/09/);
+    expect(per["Esiti maturati"].hint).toMatch(/tutti gli orizzonti · dal 15\/05 al 08\/09/);
+    expect(per["Skill vs mercato · 21g"].hint).toMatch(/100 esiti in 12 finestre indipendenti · IC 95% 30,0%–75,0% · non concludente/);
     expect(per["Detector sopra il mercato"].value).toBe("1 su 3");
     expect(per["Detector sopra il mercato"].hint).toBe("0 sotto · 2 non concludenti");
-    expect(per["Skill vs mercato"].value).toBe("54,2%");
+    expect(per["Skill vs mercato · 21g"].value).toBe("54,2%");
     expect(t.filter((x) => x.primary)).toHaveLength(3);
   });
 
