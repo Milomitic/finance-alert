@@ -63,11 +63,29 @@ function vistaDa(raw: string | null): VistaId {
   return VISTE.some((v) => v.id === raw) ? (raw as VistaId) : "formazione";
 }
 
+/** Il colore di un'efficacia: solo quando l'intervallo esclude il 50, cioe'
+ *  quando il campione dice qualcosa. Una banda che contiene il 50 non ha
+ *  detto niente, e non riceve colore. */
+function evidenceTone(stats: SetupStats): "ok" | "bad" | null {
+  const { converted_hit_rate: rate, converted_ci_low: lo, converted_ci_high: hi } = stats;
+  if (rate === null || lo === null || hi === null) return null;
+  if (lo > 50) return "ok";
+  if (hi < 50) return "bad";
+  return null;
+}
+
 function StatsStrip({ stats }: { stats: SetupStats }) {
   // Derived, not read from `stats.closed`: the same number arriving twice
   // can disagree, and the rate below is judged against it.
   const resolved = stats.converted + stats.expired;
   const judged = stats.converted_positive + stats.converted_negative;
+  // ⚠️ Due numeri diversi con due nomi diversi. `resolved` e' il DENOMINATORE
+  // del tasso; i chiusi sono tutti gli episodi terminati, compresi quelli che
+  // il tasso esclude. La tessera «Esiti» mostrava il primo sotto il nome del
+  // secondo: 695 a schermo contro 797 chiusi davvero.
+  const esclusi = stats.excluded_from_rate ?? stats.decayed ?? 0;
+  const chiusi = stats.closed_total ?? resolved + esclusi;
+  const nonMisurabili = stats.converted_outcome_unavailable ?? 0;
 
   const tiles: {
     label: string;
@@ -98,12 +116,23 @@ function StatsStrip({ stats }: { stats: SetupStats }) {
     },
     {
       label: "Esiti",
-      value: String(resolved),
-      // I ritirati completano il conto: convertiti + scaduti + ritirati sono
-      // tutti i setup chiusi, cioe' il totale della vista Esiti.
+      value: String(chiusi),
+      // Convertiti + scaduti + esclusi = tutti i chiusi, cioe' il totale della
+      // vista Esiti. La lacuna delle chiusure senza ragione resta A SCHERMO: e'
+      // un dato sul dato, non una spiegazione.
       hint:
         `${stats.converted} convertiti · ${stats.expired} scaduti` +
-        (stats.decayed ? ` · ${stats.decayed} ritirati (fuori dal tasso)` : ""),
+        (esclusi ? ` · ${esclusi} fuori dal tasso` : "") +
+        (stats.closed_without_reason
+          ? ` · ${stats.closed_without_reason} senza ragione registrata`
+          : ""),
+      note:
+        "Fuori dal tasso: i setup ritirati perché scesi sotto la soglia di attenzione" +
+        (stats.mislinked
+          ? ` e ${stats.mislinked} chiusi da un segnale di verso opposto, cioè da un evento diverso da quello atteso`
+          : "") +
+        ". Non hanno avuto l'occasione di convertire, quindi non contano come mancate conversioni. " +
+        "Le chiusure senza ragione sono storiche, precedenti alla registrazione del motivo: restano nel tasso.",
     },
     {
       label: "Tasso conversione",
@@ -128,58 +157,38 @@ function StatsStrip({ stats }: { stats: SetupStats }) {
           ? "nessuno ancora risolto"
           : resolved < MIN_RATE_N
             ? `troppo pochi per un tasso (servono ${MIN_RATE_N})`
-            : `${stats.converted} su ${resolved}`,
+            : `${stats.converted} su ${resolved} inclusi nel tasso`,
     },
     {
-      // The question the page could not answer: a setup converted — and then?
-      // Counts, never a percentage. The sample is small, the windows overlap,
-      // and a rate here would claim more than the measurement supports.
-      label: "Convertiti: esito",
-      value: judged === 0 ? "—" : `${stats.converted_positive} / ${stats.converted_negative}`,
-      hint:
-        judged === 0
-          ? "nessun esito ancora maturato"
-          : `positivi / negativi rispetto alla mediana dell'universo${
-              stats.converted_pending > 0 ? ` · ${stats.converted_pending} in attesa` : ""
-            }`,
-      tone:
-        judged === 0
-          ? null
-          : stats.converted_positive > stats.converted_negative
-            ? "ok"
-            : stats.converted_negative > stats.converted_positive
-              ? "bad"
-              : null,
-    },
-    {
-      // The rate the counts above imply, put where a person compares it: 50 is
-      // what a setup with no skill scores. The interval comes with it, sized
-      // on non-overlapping windows rather than rows, because setups firing
-      // days apart share most of their forward window and a row-count band
-      // would look far narrower than the evidence allows.
-      label: "Efficacia",
+      // Una tessera sola per «e poi?». Erano due: «Convertiti: esito» contava
+      // positivi e negativi e diventava VERDE appena i primi superavano i
+      // secondi (45 contro 38, una finestra indipendente), mentre «Efficacia»,
+      // accanto, applicava la cautela giusta sullo stesso campione. Due colori
+      // per lo stesso fatto. Ora conteggi, intervallo e stato dell'evidenza
+      // stanno insieme, e il colore c'e' solo se l'intervallo esclude il 50.
+      label: "Efficacia dei convertiti",
       primary: true,
       value:
         stats.converted_hit_rate === null
           ? "—"
           : `${Math.round(stats.converted_hit_rate)}%`,
       hint:
-        stats.converted_hit_rate === null
-          ? "serve almeno un esito maturo"
-          : `${stats.converted_ci_low?.toFixed(0)}–${stats.converted_ci_high?.toFixed(0)}% su ${
+        judged === 0
+          ? `nessun esito ancora maturato${
+              stats.converted_pending > 0 ? ` · ${stats.converted_pending} in attesa` : ""
+            }`
+          : `${stats.converted_positive} positivi · ${stats.converted_negative} negativi · ` +
+            `IC ${stats.converted_ci_low?.toFixed(0)}–${stats.converted_ci_high?.toFixed(0)}% su ${
               stats.converted_effective_n
-            } finestre indipendenti${stats.converted_low_confidence ? " · non concludente" : ""}`,
-      tone:
-        stats.converted_hit_rate === null ||
-        (stats.converted_ci_low !== null &&
-          stats.converted_ci_high !== null &&
-          stats.converted_ci_low <= 50 &&
-          stats.converted_ci_high >= 50)
-          ? // A band straddling 50 has said nothing, so it gets no colour.
-            null
-          : stats.converted_hit_rate > 50
-            ? "ok"
-            : "bad",
+            } finestre indipendenti` +
+            (stats.converted_low_confidence ? " · non concludente" : "") +
+            (stats.converted_pending > 0 ? ` · ${stats.converted_pending} in attesa` : "") +
+            (nonMisurabili > 0 ? ` · ${nonMisurabili} non misurabili` : ""),
+      note:
+        "Quota dei setup convertiti il cui evento ha battuto la mediana dell'universo nel proprio verso: 50% è ciò che fa un setup senza capacità. " +
+        "L'esito si misura dalla barra dell'evento che ha convertito il setup, non dalla data che il segnale mostra oggi. " +
+        "Non misurabili: conversioni storiche di cui quella barra non fu registrata.",
+      tone: evidenceTone(stats),
     },
     {
       // What the setup was WORTH, not just whether it was right. Median, not
@@ -201,8 +210,10 @@ function StatsStrip({ stats }: { stats: SetupStats }) {
                 ? "n/d"
                 : `${stats.median_return_pct > 0 ? "+" : ""}${stats.median_return_pct.toFixed(1)}%`
             }`,
+      // ⚠️ Stesso campione dell'efficacia, stessa cautela: il segno di una
+      // mediana su un campione non concludente non e' un risultato.
       tone:
-        stats.median_excess_pct === null
+        stats.median_excess_pct === null || evidenceTone(stats) === null
           ? null
           : stats.median_excess_pct > 0
             ? "ok"
@@ -217,7 +228,13 @@ function StatsStrip({ stats }: { stats: SetupStats }) {
       hint:
         stats.lead_days_min === null
           ? "giorni di preavviso reali"
-          : `da ${stats.lead_days_min}g a ${stats.lead_days_max}g · media ${stats.avg_lead_days}g`,
+          : `da ${stats.lead_days_min}g a ${stats.lead_days_max}g · media ${stats.avg_lead_days}g` +
+            (stats.median_bar_lead_days != null
+              ? ` · sul mercato ${stats.median_bar_lead_days}g (${stats.bar_lead_days_n} eventi)`
+              : ""),
+      note:
+        "Giorni fra la prima osservazione del setup e la rilevazione del segnale. " +
+        "«Sul mercato» conta invece dalla barra d'apertura alla barra dell'evento, dove l'evento è registrato.",
     },
     {
       label: "Setup registrati",

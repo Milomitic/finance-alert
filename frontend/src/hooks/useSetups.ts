@@ -96,6 +96,25 @@ export interface SetupStats {
   active_shortlisted?: number;
   /** Chiusi per decadimento: fuori dal tasso di conversione, ma esiti. */
   decayed?: number;
+  /** Chiusi da una conversione di verso OPPOSTO (setup rialzista chiuso da un
+   *  segnale ribassista): fuori dal tasso, come i ritirati. */
+  mislinked?: number;
+  /** TUTTI gli episodi chiusi, qualunque la ragione: il totale della vista
+   *  Esiti. ⚠️ Diverso da `closed`, che e' il denominatore del tasso. */
+  closed_total?: number;
+  /** Ritirati + collegamenti errati: chiusi, ma fuori dal tasso. */
+  excluded_from_rate?: number;
+  /** Chiusure storiche senza ragione registrata: nel tasso, lacuna visibile. */
+  closed_without_reason?: number;
+  /** Convertiti il cui esito non potra' MAI essere misurato (riconciliati, o
+   *  storici il cui alert ha spostato la data oltre la conversione). Distinti
+   *  da `converted_pending`, che un esito lo avranno. */
+  converted_outcome_unavailable?: number;
+  /** Anticipo sul MERCATO: barra d'apertura -> barra dell'evento, solo dove
+   *  l'evento e' registrato. `median_lead_days` e' l'attesa fino alla
+   *  RILEVAZIONE, cioe' l'orologio della scansione. */
+  median_bar_lead_days?: number | null;
+  bar_lead_days_n?: number;
   converted: number;
   expired: number;
   /** null = nothing has resolved yet. NOT the same as 0 — do not render it as 0%. */

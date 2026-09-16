@@ -318,6 +318,60 @@ describe("SetupsPage", () => {
     expect(screen.queryByText(/troppo pochi/i)).not.toBeInTheDocument();
   });
 
+  it("«Esiti» conta TUTTI i chiusi e nomina a parte il denominatore del tasso", async () => {
+    // I numeri di produzione del 2026-09-16: la tessera mostrava 695 (il
+    // denominatore) sotto il nome di 797 (i chiusi).
+    renderWith({
+      setups: [setup],
+      stats: {
+        ...stats, converted: 334, expired: 361, closed: 695, decayed: 102,
+        excluded_from_rate: 102, closed_total: 797, closed_without_reason: 322,
+        conversion_rate: 0.481,
+      },
+    }, MISURAZIONE);
+    expect(await screen.findByText("797")).toBeInTheDocument();
+    expect(screen.queryByText("695")).not.toBeInTheDocument();
+    expect(screen.getByText(/102 fuori dal tasso · 322 senza ragione registrata/)).toBeInTheDocument();
+    expect(screen.getByText(/334 su 695 inclusi nel tasso/)).toBeInTheDocument();
+  });
+
+  it("una maggioranza di positivi su un campione non concludente non prende colore", async () => {
+    const { container } = renderWith({
+      setups: [setup],
+      stats: {
+        ...stats, converted: 334, expired: 361, closed: 695, conversion_rate: 0.481,
+        converted_positive: 45, converted_negative: 38, converted_judged: 83,
+        converted_hit_rate: 54.2, converted_ci_low: 6.4, converted_ci_high: 95.4,
+        converted_effective_n: 1, converted_low_confidence: true,
+        median_excess_pct: 0.82, median_return_pct: 1.5,
+        converted_pending: 120, converted_outcome_unavailable: 156,
+      },
+    }, MISURAZIONE);
+    expect(await screen.findByText("54%")).toBeInTheDocument();
+    // Una tessera sola: la vecchia «Convertiti: esito» non c'e' piu'.
+    expect(screen.queryByText(/Convertiti: esito/)).not.toBeInTheDocument();
+    expect(screen.getByText(/45 positivi · 38 negativi/)).toBeInTheDocument();
+    expect(screen.getByText(/non concludente · 120 in attesa · 156 non misurabili/)).toBeInTheDocument();
+    // Ne' l'efficacia ne' il rendimento si colorano: l'intervallo contiene 50.
+    expect(container.querySelector("[data-metrica] .text-emerald-800")).toBeNull();
+    expect(container.querySelector("[data-metrica] .text-rose-700")).toBeNull();
+  });
+
+  it("il colore arriva quando l'intervallo esclude il 50", async () => {
+    const { container } = renderWith({
+      setups: [setup],
+      stats: {
+        ...stats, converted: 30, expired: 10, closed: 40, conversion_rate: 0.75,
+        converted_positive: 400, converted_negative: 200, converted_judged: 600,
+        converted_hit_rate: 66.7, converted_ci_low: 58, converted_ci_high: 74,
+        converted_effective_n: 60, converted_low_confidence: false,
+        median_excess_pct: 1.2, median_return_pct: 2,
+      },
+    }, MISURAZIONE);
+    expect(await screen.findByText("67%")).toBeInTheDocument();
+    expect(container.querySelectorAll("[data-metrica] .text-emerald-800").length).toBe(2);
+  });
+
   it("explains the empty state instead of looking broken", async () => {
     renderWith({ setups: [], stats: { ...stats, active: 0 } });
     expect(await screen.findByText(/nessun setup in formazione/i)).toBeInTheDocument();
