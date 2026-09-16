@@ -1100,6 +1100,41 @@ Two readings that are correct and look alarming: the SSE handlers average 432 s
 because that is a connection's LIFETIME, not a wait; and `/api/health` is 18k
 of the ~20k daily requests because it is the liveness probe.
 
+### ⚠️ `increase()` perde la prima raffica di ogni vita del pod (2026-09-16)
+
+La sesta istanza di «uno strumento risponde pulito e falso», trovata rimisurando
+FA-006. `increase(http_request_duration_seconds_count{handler="/api/stocks/quotes"}[8h])`
+rispondeva **~0 richieste**; erano 7. La base del giorno prima ne dava **121**;
+erano **175**.
+
+**Perche'.** L'instrumentator crea la serie di una rotta alla PRIMA richiesta che
+il processo riceve, quindi il primo campione raccolto vale gia' N; `increase()`
+misura differenze e non ha uno zero da cui partire, quindi quelle N non esistono.
+Qui fa danno piu' che altrove per due ragioni che si sommano: **ogni rilascio
+riavvia il pod** (dieci il 16 settembre), e una pagina fa le sue richieste
+tutte insieme all'apertura, quindi la prima raffica e' spesso TUTTO il traffico
+di una vita. Vale per `rate()`, per ogni pannello e per ogni allarme costruiti
+cosi' su una rotta poco usata.
+
+⚠️ **E l'errore non e' neutro:** le richieste perse sono quelle subito dopo un
+avvio, cioe' a cache FREDDE e LENTE. La base di FA-006 sembrava migliore del
+vero (mediana 5,5 s dichiarata; sui grezzi il 61% oltre 5 s). Le medie della
+tabella qui sopra sono state lette nello stesso modo e vanno considerate
+ottimiste.
+
+**Il metodo:** `backend/scripts/latenza_per_vita.py`. Legge i campioni grezzi,
+conta ogni vita del processo (`process_start_time_seconds`) da zero, somma sulle
+serie di stato, e riporta le **raffiche** accanto alle richieste — sette
+richieste nello stesso minuto sono UNA pagina aperta, cioe' un'osservazione.
+Si passa da stdin al pod, perche' Prometheus e Loki si raggiungono solo nel
+cluster; l'uso e' nel docstring.
+
+⚠️ Scrivendolo ho sbagliato due volte nello stesso modo, e vale la pena
+saperlo: sovrascrivere invece di SOMMARE le serie di stato, e contare una vita
+cominciata prima della finestra dal suo primo campione anche quando la serie e'
+nata DENTRO la finestra — che e' di nuovo l'errore di `increase()`. La seconda
+bozza diceva 161; il numero giusto e' 175.
+
 ## Ingress rate limit: 50/s, burst 100 — and how to test one (2026-09-09)
 
 Until this date `kubectl get middleware -A` returned **No resources found**:
