@@ -52,6 +52,7 @@ from app.services import (
     fetch_cache_store,
     live_quote_service,
     news_analyst_extractor,
+    price_base,
     stock_detail_service,
     stock_fundamentals_service,
     stock_news_service,
@@ -584,10 +585,29 @@ def get_stock_fundamentals(
         insiders=[InsiderTransactionOut(**i.__dict__) for i in f.insiders],
         analyst_ratings=[AnalystRatingOut(**r.__dict__) for r in f.analyst_ratings],
         analyst_actions=[AnalystActionOut(**a.__dict__) for a in merged_actions],
-        price_target=AnalystPriceTargetOut(**f.price_target.__dict__),
+        price_target=_price_target_on_stored_close(db, stock, f.price_target),
         fetched_at=f.fetched_at or None,
         error=f.error,
     )
+
+
+def _price_target_on_stored_close(
+    db: Session, stock: Stock, pt: object,
+) -> AnalystPriceTargetOut:
+    """Target analisti con `current` sull'ultima chiusura memorizzata.
+
+    yfinance allega ai target un prezzo vecchio quanto la cache dei
+    fondamentali (fino a 7 giorni), e la scheda Analyst ne ricavava un upside
+    diverso da quello della scheda Stock Score sullo stesso target. La base e'
+    ora la stessa (`price_base.last_close`); quella di yfinance resta solo per
+    un titolo senza barre, e senza data perche' non e' una chiusura nostra.
+    """
+    out = AnalystPriceTargetOut(**pt.__dict__)
+    base = price_base.last_close(db, stock.id)
+    if base is not None:
+        out.current = round(base[0], 6)
+        out.current_as_of = base[1].isoformat()
+    return out
 
 
 def _merge_news_analyst_actions(

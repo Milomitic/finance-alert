@@ -874,7 +874,11 @@ export interface AnalystRating {
 }
 
 export interface AnalystPriceTarget {
+  /** Base dell'upside: ultima chiusura memorizzata (come la card Stock Score),
+   *  o il prezzo di yfinance per un titolo senza barre. */
   current: number | null;
+  /** Data ISO di quella chiusura; null quando la base e' quella di yfinance. */
+  current_as_of?: string | null;
   low: number | null;
   mean: number | null;
   median: number | null;

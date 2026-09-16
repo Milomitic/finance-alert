@@ -217,7 +217,12 @@ class AnalystRatingOut(BaseModel):
 
 
 class AnalystPriceTargetOut(BaseModel):
+    # `current` e' la base dell'upside: l'ultima chiusura memorizzata quando
+    # esiste (la stessa della scheda Stock Score), altrimenti il prezzo che
+    # yfinance allegava ai target. `current_as_of` e' la data di quella
+    # chiusura, e resta None quando la base e' quella di yfinance.
     current: float | None
+    current_as_of: str | None = None
     low: float | None
     mean: float | None
     median: float | None

@@ -34,7 +34,10 @@ interface Props {
  * current near high + tight range = limited upside.
  */
 function PriceTargetBar({ pt, currency }: { pt: AnalystPriceTarget; currency: string | null }) {
-  const { low, high, mean, median, current } = pt;
+  const { low, high, mean, median, current, current_as_of } = pt;
+  // «14/09» dalla data ISO della chiusura; null quando la base e' ancora il
+  // prezzo di yfinance (titolo senza barre), che non ha una data nostra.
+  const baseDay = current_as_of ? `${current_as_of.slice(8, 10)}/${current_as_of.slice(5, 7)}` : null;
   if (low == null || high == null || mean == null || high <= low) return null;
 
   const span = high - low;
@@ -71,10 +74,12 @@ function PriceTargetBar({ pt, currency }: { pt: AnalystPriceTarget; currency: st
                 : "text-rose-700 dark:text-rose-300",
             )}
             title={
-              `Upside implicito: ${upside.toFixed(1)}% sul prezzo ${formatMoney(current, currency)} ` +
-              "riportato dalla stessa fonte dei target. NON e il prezzo live " +
-              "dell'intestazione, che si aggiorna ogni 15 secondi: le due " +
-              "percentuali verso lo stesso target possono quindi differire."
+              baseDay
+                ? `Upside implicito: ${upside.toFixed(1)}% sulla chiusura ${formatMoney(current, currency)} ` +
+                  `del ${baseDay}, la stessa base della card Stock Score. NON e il prezzo live ` +
+                  "dell'intestazione, che si aggiorna ogni 15 secondi."
+                : `Upside implicito: ${upside.toFixed(1)}% sul prezzo ${formatMoney(current, currency)} ` +
+                  "riportato dalla fonte dei target: il titolo non ha ancora chiusure memorizzate."
             }
           >
             {upside >= 0 ? "+" : ""}
@@ -96,9 +101,10 @@ function PriceTargetBar({ pt, currency }: { pt: AnalystPriceTarget; currency: st
               style={{ left: `${currentPos}%` }}
             >
               <span className="font-semibold text-foreground/80">
-                ${current!.toFixed(2)}
+                {formatMoney(current!, currency)}
               </span>
-              <span className="text-muted-foreground">ora</span>
+              {/* Non «ora»: e' l'ultima chiusura, non il prezzo live. */}
+              <span className="text-muted-foreground">{baseDay ?? "prezzo"}</span>
             </div>
           )}
         </div>
@@ -128,7 +134,7 @@ function PriceTargetBar({ pt, currency }: { pt: AnalystPriceTarget; currency: st
             <div
               className="absolute -top-1 -translate-x-1/2 h-4 w-4 rotate-45 bg-foreground border-2 border-background"
               style={{ left: `${currentPos}%` }}
-              title={`Prezzo corrente: ${formatMoney(current!, currency)}`}
+              title={baseDay ? `Chiusura del ${baseDay}: ${formatMoney(current!, currency)}` : `Prezzo: ${formatMoney(current!, currency)}`}
             />
           )}
         </div>

@@ -44,6 +44,7 @@ from app.schemas.score import (
     TopPicksOut,
 )
 from app.services import (
+    price_base,
     score_service,
     stock_fundamentals_service,
     technical_score_service,
@@ -80,19 +81,12 @@ def _quality_extras(db: Session, stock: Stock) -> dict | None:
         return None
     if f is None:
         return None
-    # La DATA viaggia col prezzo: un upside calcolato su una chiusura di
-    # quattro giorni fa e' un numero diverso da uno calcolato su quella di
-    # ieri, e senza la data i due sono indistinguibili.
-    last_bar = db.execute(
-        select(OhlcvDaily.close, OhlcvDaily.date)
-        .where(OhlcvDaily.stock_id == stock.id)
-        .order_by(OhlcvDaily.date.desc())
-        .limit(1)
-    ).first()
+    # La base e' la stessa della scheda Analyst: un solo proprietario.
+    base = price_base.last_close(db, stock.id)
     return score_service.quality_extras(
         f,
-        float(last_bar[0]) if last_bar is not None else None,
-        last_bar[1].isoformat() if last_bar is not None else None,
+        base[0] if base is not None else None,
+        base[1].isoformat() if base is not None else None,
     )
 
 
