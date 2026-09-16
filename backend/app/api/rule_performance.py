@@ -83,8 +83,13 @@ class CalibrationBucketOut(BaseModel):
 
 
 class CalibrationOut(BaseModel):
-    days: int
+    #: None = tutto il magazzino.
+    days: int | None
+    #: L'orizzonte EFFETTIVO, agganciato a uno di quelli del magazzino (5/21/63).
     window: int
+    #: Tutti gli esiti maturati a quell'orizzonte: il numero da mostrare come
+    #: popolazione. I bucket possono sommare a meno.
+    total: int
     by_confidence: list[CalibrationBucketOut]
     by_nature: list[CalibrationBucketOut]
     by_horizon: list[CalibrationBucketOut]
@@ -93,17 +98,19 @@ class CalibrationOut(BaseModel):
 
 @router.get("/calibration", response_model=CalibrationOut)
 def get_calibration(
-    days: Annotated[int, Query(ge=7, le=730)] = 365,
-    window: Annotated[int, Query(ge=1, le=60)] = 20,
+    days: Annotated[int | None, Query(ge=7, le=730)] = None,
+    window: Annotated[int, Query(ge=1, le=63)] = 21,
     db: Session = Depends(get_db),
     _user: User = Depends(get_current_user),
 ) -> CalibrationOut:
-    """Calibration: realized directional hit-rate + forward return by confidence
-    bucket and by nature, over `days`, at a `window`-day horizon."""
+    """Calibrazione dal magazzino degli esiti: hit market-neutral e rendimento
+    per fascia di Forza, natura e orizzonte dichiarato. Senza `days` legge
+    tutta la popolazione; `window` si aggancia a 5, 21 o 63 giorni."""
     c = compute_calibration(db, days=days, window=window)
     return CalibrationOut(
         days=c.days,
         window=c.window,
+        total=c.total,
         by_confidence=[CalibrationBucketOut(**vars(b)) for b in c.by_confidence],
         by_nature=[CalibrationBucketOut(**vars(b)) for b in c.by_nature],
         by_horizon=[CalibrationBucketOut(**vars(b)) for b in c.by_horizon],

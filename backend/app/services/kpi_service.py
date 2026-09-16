@@ -101,7 +101,7 @@ def record_scan_kpis(db: Session, run) -> None:
     db.commit()
 
 
-def record_daily_rollup(db: Session, *, days: int = 365, window: int = 20) -> None:
+def record_daily_rollup(db: Session, *, days: int | None = None, window: int = 21) -> None:
     """One `kind='daily_rollup'` row: outcome calibration + confluence + data
     quality -- the accumulating history for trend/drift analysis."""
     from app.services import confluence_service
@@ -119,6 +119,7 @@ def record_daily_rollup(db: Session, *, days: int = 365, window: int = 20) -> No
     metrics = {
         "calibration": {
             "window": cal.window,
+            "total": cal.total,
             "by_confidence": [buck(b) for b in cal.by_confidence],
             "by_horizon": [buck(b) for b in cal.by_horizon],
             "by_nature": [buck(b) for b in cal.by_nature],

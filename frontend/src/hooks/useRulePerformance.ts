@@ -32,8 +32,13 @@ export interface CalibrationSeed {
   by_nature: Record<string, CalibrationSeedCell>;
 }
 export interface Calibration {
-  days: number;
+  /** null = tutto il magazzino degli esiti. */
+  days: number | null;
+  /** Orizzonte effettivo: uno di quelli del magazzino (5, 21, 63). */
   window: number;
+  /** Tutti gli esiti maturati a quell'orizzonte: la popolazione. I bucket
+   *  possono sommare a meno (un esito senza Forza resta un esito). */
+  total: number;
   by_confidence: CalibrationBucket[];
   by_nature: CalibrationBucket[];
   by_horizon: CalibrationBucket[];
@@ -50,13 +55,13 @@ export interface CalibrationCurve {
   by_nature?: Record<string, CalibrationSeedCell>;
 }
 
-/** Realized directional hit-rate + forward return bucketed by confidence and
- *  by nature, at a fixed horizon. Matures over forward time. */
-export function useCalibration(days = 365, horizon = 20) {
+/** Hit market-neutral + rendimento per fascia di Forza, natura e orizzonte,
+ *  letti da TUTTO il magazzino degli esiti (nessun filtro sugli archiviati). */
+export function useCalibration(horizon = 21) {
   return useQuery({
-    queryKey: ["calibration", days, horizon],
+    queryKey: ["calibration", horizon],
     queryFn: ({ signal }) =>
-      api<Calibration>(`/api/rule-performance/calibration?days=${days}&window=${horizon}`, { signal }),
+      api<Calibration>(`/api/rule-performance/calibration?window=${horizon}`, { signal }),
     staleTime: 5 * 60 * 1000,
   });
 }

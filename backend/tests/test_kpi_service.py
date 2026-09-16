@@ -30,7 +30,7 @@ def test_active_population_buckets(db):
 
 def test_daily_rollup_writes_and_reads_back(db):
     _seed(db, "CCC", "trend_pullback", 90, "bull", "long")
-    kpi_service.record_daily_rollup(db, days=365, window=20)
+    kpi_service.record_daily_rollup(db, days=365, window=21)
     rows = kpi_service.recent(db, kind="daily_rollup", days=1)
     assert len(rows) == 1
     m = rows[0]["metrics"]

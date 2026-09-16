@@ -9,10 +9,13 @@ import { useCalibration } from "@/hooks/useRulePerformance";
 /* ─── Calibration panel ─────────────────────────────────────────────────── */
 
 export function CalibrationPanel() {
-  const [horizon, setHorizon] = useState(20);
-  const q = useCalibration(365, horizon);
+  const [horizon, setHorizon] = useState(21);
+  const q = useCalibration(horizon);
   const c = q.data;
-  const matured = c ? c.by_confidence.reduce((a, b) => a + b.count, 0) : 0;
+  // La popolazione viene dal server (`total`), non dalla somma dei bucket:
+  // il pannello diceva "esiti maturati: 3" mentre il magazzino ne aveva 4.830,
+  // perche' il calcolo leggeva i soli alert non archiviati.
+  const matured = c?.total ?? 0;
   const pct = (v: number | null) => (v == null ? "-" : `${(v * 100).toFixed(0)}%`);
   const ret = (v: number | null) => (v == null ? "-" : `${v >= 0 ? "+" : ""}${v.toFixed(2)}%`);
 
@@ -21,7 +24,7 @@ export function CalibrationPanel() {
       <CardContent className="p-4">
         <SectionTitle
           icon={Target}
-          label="Calibrazione - confidenza vs esito reale"
+          label="Calibrazione - Forza vs esito reale"
           right={
             <div className="flex items-center gap-2 text-xs">
               <span className="text-muted-foreground">Orizzonte:</span>
@@ -30,9 +33,10 @@ export function CalibrationPanel() {
                 onChange={(e) => setHorizon(Number(e.target.value))}
                 className="bg-background border rounded px-2 py-0.5 text-xs"
               >
+                {/* Gli orizzonti che il magazzino etichetta davvero. */}
                 <option value={5}>5 giorni</option>
-                <option value={10}>10 giorni</option>
-                <option value={20}>20 giorni</option>
+                <option value={21}>21 giorni</option>
+                <option value={63}>63 giorni</option>
               </select>
             </div>
           }
@@ -48,7 +52,7 @@ export function CalibrationPanel() {
             {matured > 0 ? (
               <div>
                 <div className="text-[0.7059rem] uppercase tracking-wider text-muted-foreground font-semibold mb-1">
-                  Live - esiti maturati: {matured} (orizzonte {horizon}g)
+                  Tutti gli esiti maturati nel database: {matured.toLocaleString("it-IT")} (orizzonte {c?.window ?? horizon}g) · colpo = batte la mediana dell'universo
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <CalTable title="Per confidenza" rows={c!.by_confidence} pct={pct} ret={ret} />
@@ -58,8 +62,8 @@ export function CalibrationPanel() {
               </div>
             ) : (
               <div className="text-xs text-muted-foreground">
-                Esiti live non ancora maturi (~{horizon}g di borsa dopo ogni segnale);
-                si popolano col tempo. Sotto, il riferimento da backtest.
+                Nessun esito maturato a {horizon} giorni nel database: un esito nasce
+                quando la sua finestra si chiude. Sotto, il riferimento da backtest.
               </div>
             )}
             {c?.backtest_seed && (
