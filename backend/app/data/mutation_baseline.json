@@ -41,13 +41,13 @@
       "mutanti": 50,
       "uccisi": 36
     },
-    "app/services/setup_service.py": {
-      "mutanti": 108,
-      "uccisi": 81
-    },
     "app/services/signal_outcome_service.py": {
       "mutanti": 72,
       "uccisi": 62
+    },
+    "app/services/setup_service.py": {
+      "mutanti": 111,
+      "uccisi": 84
     }
   },
   "sopravvissuti": [
