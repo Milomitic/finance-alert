@@ -59,6 +59,21 @@ export interface Setup {
    *  setup actually gave. Only set on converted rows. */
   lead_days?: number | null;
   converted_alert_id?: number | null;
+  /** L'EVENTO che ha convertito il setup, fissato alla conversione: il
+   *  segnale puntato sopra puo' aver cambiato data dopo. Null sugli storici
+   *  dove non fu registrato e sui riconciliati. */
+  converted_signal_date?: string | null;
+  converted_price?: number | null;
+  /** "live" | "legacy" | "reconciled". */
+  conversion_source?: string | null;
+  /** Giorni fra la barra d'apertura e la barra dell'evento. */
+  bar_lead_days?: number | null;
+  /** Esito dell'evento, dalla sua barra. `hit` null con la data valorizzata =
+   *  nessun riferimento dell'universo quel giorno, non un insuccesso. */
+  outcome_signal_date?: string | null;
+  outcome_horizon_days?: number | null;
+  outcome_mkt_neutral_hit?: number | null;
+  outcome_mkt_neutral_excess_pct?: number | null;
   /** L'ultimo giorno in cui il setup puo ancora essere pendente.
    *
    *  ⚠️ E il TETTO da `first_seen_at`, non la scadenza scorrevole da

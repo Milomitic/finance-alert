@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 
 import type { Alert } from "@/api/types";
 import { detectorLabel } from "@/lib/setupGrouping";
+import { conversionBarNote } from "@/lib/setupTimeline";
 
 /* Da quale setup e' nato questo segnale (FA-066).
  *
@@ -52,6 +53,13 @@ export function AlertSetupOrigin({
           )}
           .
         </div>
+        {/* ⚠️ Solo quando le due barre DIFFERISCONO: la scansione aggiorna il
+            segnale finche' la condizione tiene, e chi legge la data del
+            segnale deve sapere che la conversione e' avvenuta prima. */}
+        {(() => {
+          const nota = conversionBarNote(o.converted_signal_date, alert.signal_date);
+          return nota ? <p className="text-xs text-muted-foreground mt-0.5">{nota}</p> : null;
+        })()}
         {alert.ticker && (
           <Link
             to={`/setups?vista=esiti&ticker=${encodeURIComponent(alert.ticker)}`}

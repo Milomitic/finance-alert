@@ -231,6 +231,9 @@ export interface Alert {
     first_seen_at: string;
     /** Giorni fra primo avvistamento e segnale; null sugli episodi vecchi. */
     lead_days: number | null;
+    /** La barra dell'evento che ha convertito il setup; puo' precedere la
+     *  data che il segnale mostra oggi. Null dove non fu registrata. */
+    converted_signal_date?: string | null;
   } | null;
   /** Next earnings date (ISO YYYY-MM-DD) from the fundamentals cache —
    *  cache-only read on the backend, null when the cache is cold. Drives the

@@ -13,6 +13,7 @@ import {
   setupClosure,
 } from "@/lib/setupClosure";
 import { detectorLabel } from "@/lib/setupGrouping";
+import { conversionStep } from "@/lib/setupTimeline";
 import { cn } from "@/lib/utils";
 
 /* ─── What happened to the setups that closed ───────────────────────────── *
@@ -74,6 +75,9 @@ function OutcomeRow({
   const Icon = converted ? CheckCircle2 : ritirato ? MinusCircle : CircleSlash;
 
   const alertId = converted ? setup.converted_alert_id : null;
+  // Evento ed esito della conversione: la seconda meta' della storia, che la
+  // riga prima fermava a «Ng di preavviso».
+  const passo = conversionStep(setup);
 
   return (
     <li className="flex items-center transition-colors hover:bg-accent/40">
@@ -111,6 +115,19 @@ function OutcomeRow({
                 dello stesso tipo, che è precisamente ciò che non si sa. */}
             {!converted ? ` · ${CLOSURE_DETAIL[closure]}` : ""}
           </span>
+          {passo && (
+            <span className="block text-[0.7059rem] text-muted-foreground truncate">
+              {passo.evento} ·{" "}
+              <span
+                className={cn(
+                  passo.tono === "ok" && "text-emerald-800 dark:text-emerald-400",
+                  passo.tono === "bad" && "text-rose-700 dark:text-rose-400",
+                )}
+              >
+                {passo.esito}
+              </span>
+            </span>
+          )}
         </span>
 
         {ritirato && (
