@@ -20,7 +20,8 @@ from app.indicators.ema import ema
 from app.indicators.macd import macd
 from app.indicators.periods import FIXED_RSI_PERIOD
 from app.indicators.rsi import rsi
-from app.models import Alert, OhlcvDaily, TechnicalScore
+from app.models import Alert, OhlcvDaily, Stock, TechnicalScore
+from app.services import ohlcv_service
 
 # Composite weights for the five price dimensions (must sum to 1.0).
 _WEIGHTS = {
@@ -344,8 +345,20 @@ def finalize(db: Session, partials: dict[int, dict]) -> int:
     return count
 
 
+class SerieFerma(Exception):
+    """Il titolo ha smesso di quotare: uno score tecnico sarebbe un'affermazione al
+    presente su prezzi fermi (FA-071, FA-087). Distinta da «storico
+    insufficiente», che per un titolo con anni di barre sarebbe una ragione falsa."""
+
+
 def recompute_one(db: Session, stock_id: int) -> TechnicalScore | None:
     """Recompute ONE stock's technical score from stored OHLCV and upsert it.
+
+    ⚠️ Rifiuta una serie FERMA sollevando `SerieFerma` (FA-087). La guardia di
+    FA-071 sta nella scansione, e questo percorso non ci passa: il pulsante
+    «aggiorna» della scheda Tecnico rimetteva in classifica un titolo morto,
+    con la postura lusinghiera che una serie piatta produce, fino alla scansione
+    seguente. Verificato con un test che senza la guardia rispondeva 200.
 
     Used by the per-card "refresh" button on the stock detail page when the
     scan-time score is missing or stale. Returns the persisted row, or None
@@ -357,6 +370,15 @@ def recompute_one(db: Session, stock_id: int) -> TechnicalScore | None:
     neutral 50th percentile. Everything else (the four price dims, the signals
     facet, composite + posture) is recomputed exactly as `finalize` does.
     """
+    # Il predicato ha un proprietario solo (`ohlcv_service`): nessuna soglia qui.
+    streak = db.execute(
+        select(Stock.ohlcv_nodata_streak).where(Stock.id == stock_id)
+    ).scalar_one_or_none()
+    if ohlcv_service.series_is_stalled(streak):
+        raise SerieFerma(
+            "Serie prezzi ferma: il titolo non quota piu', quindi lo score tecnico "
+            "non si ricalcola su prezzi vecchi."
+        )
     rows = (
         db.execute(
             select(OhlcvDaily)

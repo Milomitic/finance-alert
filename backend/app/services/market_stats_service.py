@@ -15,6 +15,7 @@ from app.indicators.periods import FIXED_EMA_MID, FIXED_EMA_SLOW, FIXED_RSI_PERI
 from app.indicators.rsi import rsi as rsi_indicator
 from app.models import Index, MarketSnapshot, OhlcvDaily, Stock
 from app.models.index import StockIndex
+from app.services import ohlcv_service
 from app.services.fx_service import to_usd
 
 # Bull (long) leveraged ETFs — 2×/3× daily-reset funds. They swing
@@ -665,6 +666,21 @@ def _load_metrics(db: Session) -> tuple[list[StockMetrics], list[tuple[str, str]
 
     metrics: list[StockMetrics] = []
     for stock in stocks:
+        # ⚠️ FA-087. Un titolo che ha smesso di quotare esce da OGNI lettura che
+        # parte da qui: ampiezza globale, per indice e per settore, movers,
+        # distribuzione RSI, treemap, e la tabella `stock_metrics` dello
+        # screener — che senza riga lo tiene nel catalogo a metriche vuote.
+        #
+        # La guardia sulle righe in ritardo piu' sotto NON basta, e il motivo e'
+        # misurato: annulla solo le variazioni %. EMA, RSI e massimi a 52
+        # settimane restavano, congelati nella forma lusinghiera di una serie
+        # piatta — in produzione il 2026-09-16 9 dei 12 titoli fermi erano
+        # «sopra la EMA200», 8 «vicino al massimo annuale», 4 dei 27 ipercomprati.
+        #
+        # Un punto solo e all'origine, come la guardia della scansione di FA-071:
+        # `_load_metrics` ha un chiamante, e ogni lettura futura lo eredita.
+        if ohlcv_service.series_is_stalled(stock.ohlcv_nodata_streak):
+            continue
         rows = by_stock.get(stock.id, [])
         if not rows:
             continue

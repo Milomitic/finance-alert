@@ -318,7 +318,12 @@ def recompute_stock_technical(
     ).scalars().first()
     if stock is None:
         raise HTTPException(status_code=404, detail=f"Ticker not found: {ticker}")
-    ts = technical_score_service.recompute_one(db, stock.id)
+    try:
+        ts = technical_score_service.recompute_one(db, stock.id)
+    except technical_score_service.SerieFerma as e:
+        # 409 e non il 422 qui sotto: «storico insufficiente» per un titolo con
+        # anni di barre sarebbe una spiegazione falsa, a schermo nella scheda.
+        raise HTTPException(status_code=409, detail=str(e)) from e
     if ts is None:
         raise HTTPException(
             status_code=422,

@@ -22,16 +22,27 @@ finisce in fondo alla classifica, finisce in cima.
 """
 from datetime import UTC, date, datetime, timedelta
 
+import pytest
+from fastapi.testclient import TestClient
 from sqlalchemy import select
 
-from app.models import Alert, OhlcvDaily, Stock, TechnicalScore
+from app.api.deps import get_current_user, get_db
+from app.main import app
+from app.models import Alert, MarketSnapshot, OhlcvDaily, Stock, TechnicalScore, User
+from app.models.stock_metrics import StockMetrics as StockMetricsRow
 from app.models.stock_setup import (
     REASON_NO_DATA,
     STATUS_ACTIVE,
     STATUS_EXPIRED,
     StockSetup,
 )
-from app.services import ohlcv_service, scan_service, setup_service, technical_score_service
+from app.services import (
+    market_stats_service,
+    ohlcv_service,
+    scan_service,
+    setup_service,
+    technical_score_service,
+)
 
 NOW = datetime.now(UTC)
 
@@ -211,3 +222,121 @@ def test_un_setup_su_un_titolo_VIVO_resta_aperto(db):
     db.refresh(row)
     assert row.status == STATUS_ACTIVE
     assert row.closed_reason is None
+
+
+# ── FA-087: le due letture che la guardia della SCANSIONE non vedeva ────────
+#
+# Verificando FA-071 in produzione (2026-09-16) i dodici titoli fermi erano
+# fuori dalla classifica Tecnico, dai setup e dagli alert — e ancora dentro
+# l'ampiezza: 9 su 12 «sopra la EMA200», 8 «vicino al massimo a 52 settimane»,
+# 4 dei 27 ipercomprati. E il pulsante «aggiorna» della scheda Tecnico poteva
+# rimetterli in classifica, perche' `recompute_one` non passa dalla scansione.
+
+
+def _titolo_recente(db, ticker, *, streak=0, barre=60):
+    """Barre in SALITA che finiscono IERI.
+
+    Ieri e non una data fissa: l'ampiezza legge gli ultimi 400 giorni da OGGI,
+    e barre scritte a mano uscirebbero dalla finestra col passare del tempo,
+    rendendo vero di niente ogni test sotto.
+
+    E fresche anche per il titolo fermo, di proposito: cosi' a escluderlo puo'
+    essere SOLO lo streak, non la guardia sulle righe in ritardo che
+    `_load_metrics` ha gia' (quella annulla le variazioni, non esclude).
+    """
+    s = Stock(
+        ticker=ticker, exchange="NASDAQ", name=ticker, country="US",
+        sector="Technology", market_cap=1e9,
+        ohlcv_nodata_streak=streak,
+        ohlcv_last_nodata_at=date.today() if streak else None,
+    )
+    db.add(s)
+    db.flush()
+    oggi = date.today()
+    for i in range(barre):
+        prezzo = 100.0 + i
+        db.add(OhlcvDaily(stock_id=s.id, date=oggi - timedelta(days=barre - i),
+                          open=prezzo, high=prezzo + 1, low=prezzo - 1, close=prezzo, volume=1000))
+    db.commit()
+    return s
+
+
+def test_un_titolo_fermo_non_entra_nell_ampiezza_ne_nelle_metriche_dello_screener(db):
+    vivo = _titolo_recente(db, "AMPVIVO")
+    fermo = _titolo_recente(db, "AMPFERMO", streak=99)
+
+    market_stats_service.recompute_snapshot(db)
+
+    payload = db.get(MarketSnapshot, 1).payload
+    # Il ticker non compare in NESSUNA lettura dell'istantanea: ampiezza,
+    # indici, settori, movers, distribuzione RSI, treemap.
+    assert "AMPFERMO" not in payload
+    # Controllo positivo: senza, l'asserzione sopra sarebbe vera anche di
+    # un'istantanea vuota.
+    assert "AMPVIVO" in payload
+    assert db.get(MarketSnapshot, 1).stocks_total == 1
+
+    # Lo screener filtra e ordina su `stock_metrics`: senza riga il titolo resta
+    # nel catalogo con metriche vuote, invece di un RSI calcolato su prezzi fermi.
+    righe = {r.stock_id for r in db.query(StockMetricsRow).all()}
+    assert righe == {vivo.id}
+    assert fermo.id not in righe
+
+
+def test_un_titolo_con_qualche_fetch_fallito_resta_nell_ampiezza(db):
+    """Controllo negativo sul confine: il predicato e' quello di FA-071
+    (`QUARANTINE_STREAK`), non «un fetch andato male». Un titolo sotto soglia
+    deve restare — altrimenti un giorno di rate limiting svuoterebbe
+    l'ampiezza."""
+    quasi = _titolo_recente(db, "AMPQUASI", streak=ohlcv_service.QUARANTINE_STREAK - 1)
+
+    market_stats_service.recompute_snapshot(db)
+
+    assert "AMPQUASI" in db.get(MarketSnapshot, 1).payload
+    assert {r.stock_id for r in db.query(StockMetricsRow).all()} == {quasi.id}
+
+
+def test_il_ricalcolo_a_mano_rifiuta_una_serie_ferma(db):
+    fermo = _titolo_recente(db, "RICFERMO", streak=99)
+
+    with pytest.raises(technical_score_service.SerieFerma):
+        technical_score_service.recompute_one(db, fermo.id)
+    db.commit()
+    assert db.query(TechnicalScore).filter(TechnicalScore.stock_id == fermo.id).count() == 0
+
+
+def test_il_ricalcolo_a_mano_di_un_titolo_VIVO_funziona_ancora(db):
+    """Controllo negativo: senza, il test sopra sarebbe vero anche di un
+    `recompute_one` che rifiuta tutto."""
+    vivo = _titolo_recente(db, "RICVIVO")
+
+    riga = technical_score_service.recompute_one(db, vivo.id)
+    db.commit()
+
+    assert riga is not None
+    assert db.query(TechnicalScore).filter(TechnicalScore.stock_id == vivo.id).count() == 1
+
+
+@pytest.fixture
+def client(db):
+    utente = User(username="admin", password_hash="x")
+    db.add(utente)
+    db.commit()
+    app.dependency_overrides[get_db] = lambda: db
+    app.dependency_overrides[get_current_user] = lambda: utente
+    yield TestClient(app)
+    app.dependency_overrides.clear()
+
+
+def test_il_pulsante_aggiorna_dice_PERCHE_non_ricalcola(db, client):
+    """⚠️ La ragione conta quanto il rifiuto, come in FA-071. Il 422 esistente
+    dice «storico prezzi insufficiente», che per un titolo con dieci anni di
+    barre e' falso: la scheda mostrerebbe una spiegazione sbagliata con la
+    stessa sicurezza di una giusta."""
+    _titolo_recente(db, "APIFERMO", streak=99)
+
+    r = client.post("/api/stocks/APIFERMO/technical/recompute", json={})
+
+    assert r.status_code == 409
+    assert "ferma" in r.json()["detail"]
+    assert "insufficiente" not in r.json()["detail"]
