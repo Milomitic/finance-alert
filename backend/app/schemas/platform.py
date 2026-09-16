@@ -351,6 +351,8 @@ class DetectorPerfMetaOut(BaseModel):
     # True when the historical-replay artifact (B4-5) is present and the
     # response carries the separate `replay` segment.
     replay_available: bool = False
+    #: {versione del metodo d'esito: righe}. «non registrata» = storico.
+    method_versions: dict[str, int] = {}
 
 
 class DetectorReplayRowOut(BaseModel):

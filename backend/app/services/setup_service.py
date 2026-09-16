@@ -23,6 +23,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.provenance import SETUP_CONVERSION_VERSION
 from app.models import Alert, ScanRun, Stock, StockSetup
 from app.models.stock_setup import (
     CONVERSION_LIVE,
@@ -275,6 +276,7 @@ def convert_setups_for_event(
     row.converted_price = price
     row.converted_tone = tone
     row.conversion_source = CONVERSION_LIVE
+    row.conversion_version = SETUP_CONVERSION_VERSION
     # L'anticipo rispetto al MERCATO: barra d'apertura -> barra dell'evento.
     row.bar_lead_days = (signal_date - aperta).days
     logger.info(
@@ -613,6 +615,9 @@ def conversion_stats(db: Session) -> dict:
         #: sopra e' l'attesa fino alla RILEVAZIONE.
         "median_bar_lead_days": _median_of(bar_leads),
         "bar_lead_days_n": len(bar_leads),
+        #: Quante conversioni per versione delle regole. `null` = storico, la
+        #: regola di allora non e' registrata: e' la popolazione di prima.
+        "conversion_versions": _version_counts(r.conversion_version for r in converted),
     }
 
 
@@ -710,6 +715,15 @@ def _outcome_unavailable(
         if sd is None or sd > r.resolved_at.date():
             n += 1
     return n
+
+
+def _version_counts(versions) -> dict[str, int]:
+    """{versione: conteggio}, con lo storico sotto una chiave che lo DICE."""
+    out: dict[str, int] = {}
+    for v in versions:
+        k = v or "non registrata"
+        out[k] = out.get(k, 0) + 1
+    return out
 
 
 def _pct(x: float | None) -> float | None:

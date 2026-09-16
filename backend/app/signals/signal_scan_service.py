@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.provenance import emission_stamp
 from app.models import Alert, SignalOutcome, Stock
 from app.signals.context import build_context
 from app.signals.detectors.registry import DETECTORS
@@ -201,6 +202,10 @@ def evaluate_signals(
             # Fire-time market regime (close vs EMA200) — audit trail for the
             # regime-conditioned Probabilita (#8); null on <200-bar histories.
             "regime_at_fire": m.regime,
+            # Con quali regole e' stata prodotta QUESTA analisi. Rinnovata a ogni
+            # aggiornamento, come il resto dello snapshot: descrive l'analisi
+            # corrente, non l'emissione originale.
+            "provenance": emission_stamp(),
         }
         now_iso = datetime.now(UTC).isoformat()
         # Cooldown + refresh dedup. Several "state" detectors stamp signal_date

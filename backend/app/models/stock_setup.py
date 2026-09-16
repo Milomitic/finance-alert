@@ -216,3 +216,7 @@ class StockSetup(Base):
     outcome_matured_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    #: Le regole che hanno prodotto la conversione e l'esito
+    #: (`app.core.provenance`). NULL sullo storico e sulle riconciliate.
+    conversion_version: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    outcome_method_version: Mapped[str | None] = mapped_column(String(16), nullable=True)

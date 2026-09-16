@@ -25,6 +25,7 @@ from loguru import logger
 from sqlalchemy import and_, exists, func, select
 from sqlalchemy.orm import Session
 
+from app.core.provenance import OUTCOME_METHOD_VERSION
 from app.indicators.periods import FIXED_EMA_SLOW
 from app.models import Alert, OhlcvDaily, SignalOutcome, Stock, StockSetup
 from app.services.signal_drift_service import _horizon_days
@@ -384,6 +385,7 @@ def mature_outcomes(db: Session, *, commit: bool = True) -> int:
             universe_mean_fwd=lab.universe_median, mkt_neutral_excess=lab.mkt_excess,
             abs_hit=lab.abs_hit, mkt_neutral_hit=lab.mkt_hit, regime_at_signal=regime,
             strength=strength, probability=probability,
+            method_version=OUTCOME_METHOD_VERSION,
         ))
         added += 1
 
@@ -449,6 +451,7 @@ def mature_setup_outcomes(db: Session, *, commit: bool = True) -> int:
             r.outcome_mkt_neutral_excess = lab.mkt_excess
             r.outcome_mkt_neutral_hit = lab.mkt_hit
             r.outcome_matured_at = now
+            r.outcome_method_version = OUTCOME_METHOD_VERSION
             added += 1
 
     undated = db.execute(
@@ -472,6 +475,8 @@ def mature_setup_outcomes(db: Session, *, commit: bool = True) -> int:
         r.outcome_mkt_neutral_excess = o.mkt_neutral_excess
         r.outcome_mkt_neutral_hit = o.mkt_neutral_hit
         r.outcome_matured_at = now
+        # Il metodo e' quello della riga del magazzino da cui l'esito e' preso.
+        r.outcome_method_version = o.method_version
         added += 1
 
     if commit and added:

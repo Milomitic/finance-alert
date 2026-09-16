@@ -98,6 +98,11 @@ class SignalOutcome(Base):
         String(8), nullable=False, server_default=text("'live'"), default="live",
     )
 
+    #: Con quale metodo e' stata etichettata la riga
+    #: (`app.core.provenance.OUTCOME_METHOD_VERSION`). NULL sulle righe
+    #: maturate prima del 2026-09-16: il metodo di allora non e' registrato.
+    method_version: Mapped[str | None] = mapped_column(String(16), nullable=True)
+
     matured_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

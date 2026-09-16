@@ -55,7 +55,7 @@ block is None and `meta.replay_available` is False.
 from __future__ import annotations
 
 import json
-from collections import defaultdict
+from collections import Counter, defaultdict
 from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
@@ -253,6 +253,7 @@ def compute_detector_performance(db: Session, *, min_n: int = _DEFAULT_MIN_N) ->
             SignalOutcome.fwd_return,
             SignalOutcome.signal_date,
             SignalOutcome.horizon_days,
+            SignalOutcome.method_version,
         )
     ).all()
 
@@ -292,6 +293,12 @@ def compute_detector_performance(db: Session, *, min_n: int = _DEFAULT_MIN_N) ->
         "min_n": min_n,
         "computed_at": datetime.now(UTC).isoformat(),
         "replay_available": replay_summary is not None,
+        # Quanti esiti per metodo di etichettatura. «non registrata» = righe
+        # maturate prima che il metodo si scrivesse: un'altra popolazione.
+        "method_versions": {
+            (k or "non registrata"): n
+            for k, n in Counter(r.method_version for r in rows).items()
+        },
     }
     return {
         "meta": meta,
