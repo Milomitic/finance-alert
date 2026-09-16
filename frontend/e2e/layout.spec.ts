@@ -118,3 +118,78 @@ test("il rilevatore SA fallire", async ({ page }) => {
   expect(dopo.over, "una sonda larga il doppio di <main> deve essere vista").toBeGreaterThan(100);
   expect(dopo.colpevole).toContain("SONDA");
 });
+
+/* ─── Un'intestazione di tabella sta su UN RIGO, in tutta l'app ─────────────
+ *
+ * La regola vive in `index.css` (selettore `th`), e vitest non puo' vederla:
+ * il glob `?raw` trova il file e lo rende lungo zero. Questo e' l'unico posto
+ * con gli stili veri, quindi e' qui che la regola si dimostra.
+ *
+ * Solo sul progetto desktop, e non per pigrizia: e' una regola di ELEMENTO,
+ * identica a ogni larghezza, mentre sotto `sm` diverse tabelle non sono
+ * montate affatto (lo schermo usa le schede di `metric-card-list`) e il
+ * pavimento misurerebbe l'assenza. Le CONSEGUENZE a 375px — una testata piu'
+ * larga che sbordi — le sorveglia gia' il test di traboccamento qui sopra,
+ * rotta per rotta. */
+test("un'intestazione di tabella sta su un rigo, in ogni tabella", async ({ page }) => {
+  test.skip(
+    (page.viewportSize()?.width ?? 0) < 1024,
+    "regola di elemento: basta misurarla dove le tabelle sono montate",
+  );
+
+  let totale = 0;
+  const aCapo: string[] = [];
+  for (const path of ["/alerts", "/stocks", "/institutionals"]) {
+    await page.goto(path, { waitUntil: "networkidle" });
+    await page.waitForTimeout(1200);
+    const m = await page.evaluate(() => {
+      const th = Array.from(document.querySelectorAll("th"));
+      return {
+        totale: th.length,
+        aCapo: th
+          .filter((e) => getComputedStyle(e).whiteSpace !== "nowrap")
+          .map((e) => (e.textContent ?? "").trim().replace(/\s+/g, " ").slice(0, 30)),
+      };
+    });
+    totale += m.totale;
+    aCapo.push(...m.aCapo.map((t) => `${path}: «${t}»`));
+  }
+
+  /* ⚠️ IL PAVIMENTO PRIMA. Senza intestazioni sulle tre rotte, «nessuna va a
+   * capo» sarebbe vero di niente — la forma che CLAUDE.md registra piu' di
+   * ogni altra. */
+  expect(
+    totale,
+    `solo ${totale} <th> su /alerts, /stocks e /institutionals: il seme non ha ` +
+      `reso le tabelle, e il controllo sotto non misurerebbe nulla`,
+  ).toBeGreaterThanOrEqual(10);
+  expect(aCapo, `intestazioni che possono andare a capo su ${totale}`).toEqual([]);
+
+  /* Due sonde, e servono entrambe:
+   * - una tabella NUOVA, senza classi, eredita la regola: e' cio' che prova che
+   *   la regola e' GLOBALE e non una classe messa sito per sito — il motivo
+   *   per cui sta in `index.css`;
+   * - un'intestazione con `white-space: normal` deve essere VISTA: senza, il
+   *   filtro sopra potrebbe non saper distinguere niente e passare sempre. */
+  const sonda = await page.evaluate(() => {
+    const main = document.querySelector("main")!;
+    const tabella = document.createElement("table");
+    const riga = document.createElement("tr");
+    const nuda = document.createElement("th");
+    nuda.textContent = "SONDA NUDA";
+    const normale = document.createElement("th");
+    normale.textContent = "SONDA NORMALE";
+    normale.style.whiteSpace = "normal";
+    riga.append(nuda, normale);
+    tabella.append(riga);
+    main.append(tabella);
+    const esito = {
+      nuda: getComputedStyle(nuda).whiteSpace,
+      normale: getComputedStyle(normale).whiteSpace,
+    };
+    tabella.remove();
+    return esito;
+  });
+  expect(sonda.nuda, "una tabella nuova deve ereditare la regola").toBe("nowrap");
+  expect(sonda.normale, "il rilevatore deve saper vedere un'intestazione che va a capo").toBe("normal");
+});

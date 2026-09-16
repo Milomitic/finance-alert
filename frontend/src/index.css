@@ -169,6 +169,43 @@
     overflow-x: clip;
   }
 
+  /* Un'intestazione di tabella sta su UN RIGO.
+   *
+   * Il blocco sulla scala tipografica qui sopra registra gia' il sintomo —
+   * «a 18px le tabelle del cruscotto iniziano ad andare a capo» — e l'aveva
+   * risolto tenendo il testo piu' piccolo del necessario ovunque. Andare a
+   * capo e' pero' il difetto a se': su due righi «EST REV» si legge come due
+   * etichette invece che come una, le celle della riga si disallineano
+   * verticalmente e l'intera testata raddoppia in altezza per la colonna
+   * piu' lunga. Richiesta dell'utente (2026-09-15): che valga in tutta l'app.
+   *
+   * ⚠️ Perche' qui e non nel primitivo `TableHead` di `ui/table.tsx`: nel
+   * censimento del 2026-09-16, DICIOTTO file usano `<th>` grezzo (108
+   * occorrenze) e solo QUATTRO passano da `TableHead`. Una regola messa nel
+   * primitivo coprirebbe una minoranza e — peggio — sembrerebbe generale.
+   * E' la forma che CLAUDE.md registra due volte: una fonte unica che chi ne
+   * ha bisogno non puo' consumare e' una fonte unica solo nel commento.
+   * Il selettore di elemento e' l'unico proprietario che raggiunge sia le
+   * tabelle di oggi sia quelle che verranno scritte domani.
+   *
+   * Il traboccamento che ne consegue e' contenuto: ogni tabella dell'app con
+   * un `<th>` vive dentro un `overflow-x-auto` (o un `overflow-y-auto`, che
+   * per specifica forza anche l'asse orizzontale ad `auto`), quindi una
+   * testata piu' larga SCORRE invece di sfondare. Verificato file per file
+   * prima di scrivere questa riga; le tabelle annidate di
+   * `DetectorPerformancePanel` stanno dentro la riga di una tabella che scorre.
+   *
+   * ⚠️ vitest NON puo' verificarla: il glob `?raw` trova `index.css` e lo rende
+   * lungo ZERO (misurato). La sorveglia il gate UI, che ha gli stili veri —
+   * `e2e/layout.spec.ts`, «un'intestazione di tabella sta su un rigo».
+   *
+   * Via d'uscita: `whitespace-normal` sulla singola cella. Le utility di
+   * Tailwind stanno in un layer successivo a `base`, quindi vincono senza
+   * `!important`. */
+  th {
+    white-space: nowrap;
+  }
+
   * {
     @apply border-border;
   }

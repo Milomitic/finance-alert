@@ -212,7 +212,7 @@ function AnnualTabBody({
       </div>
       <div className="mt-2 flex-1 min-h-0 overflow-y-auto pr-1 -mr-1">
         <table className="w-full text-[0.7647rem] tabular-nums">
-          <thead className="text-sm text-muted-foreground uppercase sticky top-0 bg-card z-10">
+          <thead className="text-[0.7059rem] tracking-wide text-muted-foreground uppercase sticky top-0 bg-card z-10">
             <tr>
               <th className="px-1.5 py-1 text-left">FY</th>
               <th className="px-1.5 py-1 text-right">Rev</th>
@@ -421,7 +421,7 @@ function QuarterlyTabBody({
       </div>
       <div className="mt-2 flex-1 min-h-0 overflow-y-auto pr-1 -mr-1">
         <table className="w-full text-[0.7647rem] tabular-nums">
-          <thead className="text-sm text-muted-foreground uppercase sticky top-0 bg-card z-10">
+          <thead className="text-[0.7059rem] tracking-wide text-muted-foreground uppercase sticky top-0 bg-card z-10">
             <tr>
               <th className="px-1.5 py-1 text-left">Data</th>
               <th className="px-1.5 py-1 text-right">Rev</th>
