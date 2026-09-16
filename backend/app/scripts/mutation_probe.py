@@ -467,6 +467,22 @@ EQUIVALENTI: dict[str, str] = {
         "corto-circuitano allo stesso risultato. Il caso in cui divergono — "
         "`ema_arr` vuoto — richiede zero barre, che `_trigger_index` ha gia' "
         "escluso rendendo None.",
+    "app/services/setup_service.py::convert_setups_for_event#0  And -> Or":
+        "`first is not None and first.tzinfo is None`: `first_seen_at` e' NOT "
+        "NULL, quindi il primo termine e' sempre vero e `or` rende vero anche "
+        "su un datetime gia' consapevole — dove `replace(tzinfo=UTC)` su un "
+        "valore gia' in UTC non cambia niente. Il database scrive sempre UTC.",
+    "app/services/setup_service.py::<modulo>#0  True -> False":
+        "`@dataclass(frozen=True)` su `EventOutcome`: nessun consumatore prova "
+        "a scriverci, quindi l'immutabilita' non e' esercitata (famiglia 5).",
+    "app/services/setup_service.py::_event_outcomes#0  And -> Or":
+        "`outcome_matured_at` e `outcome_signal_date` sono scritte INSIEME "
+        "da `mature_setup_outcomes`, in entrambi i rami: una riga con una "
+        "sola delle due non esiste, e i due connettivi coincidono.",
+    "app/services/setup_service.py::_per_detector#0  And -> Or":
+        "`if judged and horizon`: `horizon` e' il massimo di "
+        "`outcome_horizon_days` degli esiti giudicati, colonna scritta insieme "
+        "all'esito, quindi e' None esattamente quando `judged` e' vuoto.",
     "app/core/security.py::hash_password#0  12 -> 13":
         "Il fattore di costo di bcrypt e' una TARATURA, non un contratto: 13 e' "
         "piu' forte di 12, e qualunque asserzione onesta e' un pavimento "

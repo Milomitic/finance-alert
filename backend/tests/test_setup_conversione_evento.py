@@ -356,3 +356,27 @@ def test_lo_storico_senza_data_accetta_solo_un_esito_non_successivo(db) -> None:
     assert st["converted_positive"] == 1
     assert st["converted_outcome_unavailable"] == 2
     assert st["converted_pending"] == 0
+
+
+def test_un_attesa_nello_stesso_giorno_vale_zero_giorni(db) -> None:
+    # Aperto dalla scansione del mattino, convertito da quella della sera: il
+    # preavviso fino alla rilevazione e' ZERO giorni, non uno.
+    s = _stock(db)
+    row = _setup(db, s, bar=date(2026, 9, 11))
+    row.first_seen_at = datetime.now(UTC)
+    _converti(db, _alert(db, s))
+    assert row.lead_days == 0
+
+
+def test_un_alert_fermo_sul_giorno_della_conversione_resta_misurabile(db) -> None:
+    # Il confine esatto: l'esito misurerebbe una barra NON successiva alla
+    # conversione, quindi e' in attesa, non perso.
+    conv = datetime(2026, 9, 1, 20, tzinfo=UTC)
+    s = _stock(db)
+    stesso = _alert(db, s, detector="z", giorno=date(2026, 9, 1))
+    _setup(db, s, detector="z", status=STATUS_CONVERTED, resolved_at=conv,
+           conversion_source=CONVERSION_LEGACY, converted_alert_id=stesso.id)
+    db.commit()
+    st = setup_service.conversion_stats(db)
+    assert st["converted_outcome_unavailable"] == 0
+    assert st["converted_pending"] == 1
