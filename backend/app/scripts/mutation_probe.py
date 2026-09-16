@@ -93,6 +93,8 @@ BERSAGLI: dict[str, list[str]] = {
     # Il tetto di 28 giorni sull'attesa di un setup: la scelta fra finestra
     # scorrevole e tetto e' stata misurata, e un fuori-di-uno la disfa.
     "app/services/setup_service.py": [
+        # Versioni delle regole scritte e contate (2026-09-16).
+        "tests/test_provenienza_regole.py",
         # Conversione per evento e suo esito (2026-09-16).
         "tests/test_setup_conversione_evento.py",
         "tests/test_setup_service.py",
@@ -149,6 +151,8 @@ BERSAGLI: dict[str, list[str]] = {
     # fuori-di-uno qui STRINGE gli intervalli, cioe' sbaglia nella direzione
     # che fa sembrare il motore migliore di com'e'.
     "app/services/detector_performance_service.py": [
+        # Versioni delle regole scritte e contate (2026-09-16).
+        "tests/test_provenienza_regole.py",
         "tests/test_detector_performance.py",
         "tests/test_effective_sample.py",
         "tests/test_equity_curve_direction.py",
@@ -175,6 +179,8 @@ BERSAGLI: dict[str, list[str]] = {
     # Il magazzino degli esiti: l'unica fonte di verita' su se un segnale ha
     # funzionato. Ha gia' avuto un difetto che ne misurava 19 righe su 4.880.
     "app/services/signal_outcome_service.py": [
+        # Versioni delle regole scritte e contate (2026-09-16).
+        "tests/test_provenienza_regole.py",
         # Prefiltro dei maturabili: equivalenza e confine (2026-09-16).
         "tests/test_maturazione_prefiltro.py",
         # Conversione per evento e suo esito (2026-09-16).
