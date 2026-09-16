@@ -14,12 +14,11 @@ Tre difetti distinti, che vanno tenuti separati perche' hanno cause diverse:
    i conteggi dei chip contavano la pagina.
 3. **Le statistiche descrivono una popolazione diversa dalla lista.**
 
-⚠️ Il terzo NON e' un difetto da correggere, ed e' la distinzione che conta:
-`conversion_stats` filtra `shortlisted=True` con la ragione scritta accanto —
-*un setup che l'utente non ha mai visto non gli ha fatto nessuna promessa* — ed
-e' difendibile. Il difetto e' che la pagina non lo DICE. Si corregge dichiarando
-il perimetro, non uniformando le due popolazioni: uniformarle significherebbe
-misurare l'efficacia su setup che il prodotto non ha mai offerto.
+Il terzo e' stato prima dichiarato e poi, il 2026-09-16, deciso dall'utente:
+le misure contano TUTTI i setup registrati, non i soli in shortlist. Filtrate
+sulla shortlist dicevano «nessun esito maturato» mentre fra tutti i convertiti
+gli esiti maturati erano 83. La shortlist resta il perimetro della lista e
+viaggia a parte come `active_shortlisted`.
 """
 
 from __future__ import annotations
@@ -179,18 +178,13 @@ def test_sorting_by_waiting_puts_the_OLDEST_wait_first(client, db) -> None:
 # ─── 3. Il perimetro STATISTICO, che va dichiarato e non uniformato ──────
 
 
-def test_the_stats_declare_which_population_they_describe(client, db) -> None:
-    """⚠️ Il filtro `shortlisted` delle statistiche NON e' un difetto e non va
-    tolto: `conversion_stats` lo applica con la ragione scritta accanto — un
-    setup che l'utente non ha mai visto non gli ha fatto nessuna promessa.
-    Uniformare le due popolazioni significherebbe misurare l'efficacia su setup
-    che il prodotto non ha mai offerto.
-
-    Il difetto e' che la pagina mostrava una popolazione e ne descriveva
-    un'altra SENZA DIRLO. Si corregge dichiarando il perimetro."""
+def test_the_stats_describe_the_whole_population(client, db) -> None:
+    """Le misure contano TUTTI i setup registrati (decisione dell'utente,
+    2026-09-16), e il perimetro della lista — la shortlist — viaggia a parte
+    come `active_shortlisted`, cosi' che la pagina non confonda i due numeri."""
     _semina(db)
-    # Un setup attivo FUORI shortlist: sta nella lista per ticker, non nelle
-    # statistiche.
+    # Un setup attivo FUORI shortlist: non sta nella lista globale, ma e' parte
+    # della popolazione misurata.
     s = Stock(ticker="FUORI", exchange="NASDAQ", name="Fuori", country="US")
     db.add(s)
     db.flush()
@@ -202,10 +196,9 @@ def test_the_stats_declare_which_population_they_describe(client, db) -> None:
     db.commit()
 
     stats = client.get("/api/setups").json()["stats"]
-    assert stats["scope"] == "shortlisted"
-    # Il numero che il perimetro descrive, cosi' che la UI possa affiancarlo al
-    # totale della lista invece di lasciarli sembrare lo stesso.
-    assert stats["total"] == _N, "le statistiche contano i soli shortlisted"
+    assert stats["scope"] == "all"
+    assert stats["total"] == _N + 1, "le statistiche contano anche i setup fuori shortlist"
+    assert stats["active_shortlisted"] == stats["active"] - 1
 
 
 def test_the_close_reason_reaches_the_payload(client, db) -> None:

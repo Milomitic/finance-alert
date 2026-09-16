@@ -7,6 +7,7 @@ its field docs so a future consumer can't mistake one for the other.
 from __future__ import annotations
 
 import json
+import re
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
@@ -19,6 +20,17 @@ from app.models.stock_setup import STATUS_ACTIVE, STATUS_CONVERTED, STATUS_EXPIR
 from app.services import setup_service, stock_fundamentals_service
 
 router = APIRouter(prefix="/api/setups", tags=["setups"])
+
+_NUMERO_DECIMALE = re.compile(r"\d+[.,]\d+")
+
+
+def condition_key(missing: str) -> str:
+    """La chiave di raggruppamento per condizione, gemella di `conditionKey` in
+    `frontend/src/lib/setupGrouping.ts`: i numeri decimali diventano «#», poi
+    trim e minuscole. Deve restare IDENTICA a quella, altrimenti i conteggi
+    per condizione non trovano il loro gruppo a schermo
+    (`tests/test_setups_conteggi_popolazione.py` le confronta)."""
+    return _NUMERO_DECIMALE.sub("#", missing).strip().lower()
 
 
 class SetupOut(BaseModel):
@@ -95,6 +107,11 @@ class SetupListOut(BaseModel):
     #: conteggio — e devono restare tutti visibili dopo che se ne preme uno:
     #: un chip che sparisce appena lo selezioni e' una trappola.
     counts_by_detector: dict[str, int] = {}
+    #: Quanti setup per CONDIZIONE (la chiave di `condition_key`) nella
+    #: popolazione filtrata, filtro `detector` compreso: sono i gruppi che la
+    #: lista rende. Il gruppo a schermo contava le righe della pagina, cioe'
+    #: un numero che cambiava con la paginazione.
+    counts_by_condition: dict[str, int] = {}
     #: The feature's own report card: does it convert, and with how much
     #: warning. `conversion_rate`/`avg_lead_days` are null until something
     #: resolves — null means "not known yet", not "zero".
@@ -165,6 +182,11 @@ def list_setups(
     totale = int(db.execute(
         select(func.count()).select_from(q.subquery())
     ).scalar_one())
+    _filtrata = q.subquery()
+    per_condizione: dict[str, int] = {}
+    for (missing,) in db.execute(select(_filtrata.c.missing)).all():
+        k = condition_key(missing or "")
+        per_condizione[k] = per_condizione.get(k, 0) + 1
 
     # L'ordinamento vive nella QUERY, non nella pagina: ordinare lato client
     # riordina le righe ricevute, quindi «il primo per ticker» era il minimo
@@ -240,5 +262,6 @@ def list_setups(
         total=totale,
         has_more=offset + len(out) < totale,
         counts_by_detector=conteggi,
+        counts_by_condition=per_condizione,
         stats=setup_service.conversion_stats(db),
     )

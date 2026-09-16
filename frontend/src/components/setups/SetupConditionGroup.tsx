@@ -239,10 +239,15 @@ function SetupLine({
 export function SetupConditionGroup({
   group,
   onOpen,
+  populationCount,
 }: {
   group: ConditionGroup;
   onOpen: (s: Setup) => void;
+  /** Quanti titoli ha questa condizione in TUTTA la popolazione filtrata, dal
+   *  server. Senza, il gruppo contava le righe della pagina corrente. */
+  populationCount?: number;
 }) {
+  const titoli = populationCount ?? group.setups.length;
   // ⚠️ Era `const bull = group.tone === "bull"`, cioè un booleano: con un
   // terzo tono avrebbe reso le compressioni RIBASSISTE — la direzione
   // sbagliata, con la stessa sicurezza di prima. Il tipo di `setupTone`
@@ -269,8 +274,8 @@ export function SetupConditionGroup({
           </span>
           <span className="text-xs text-muted-foreground">{group.hint}</span>
           <span className="ml-auto text-xs text-muted-foreground whitespace-nowrap">
-            <b className="text-foreground tabular-nums">{group.setups.length}</b>{" "}
-            {group.setups.length === 1 ? "titolo" : "titoli"}
+            <b className="text-foreground tabular-nums">{titoli}</b>{" "}
+            {titoli === 1 ? "titolo" : "titoli"}
             {" · "}
             {/* Stated once per group, and labelled for what it is. It counts
                 how much of the detector's fixed gate chain is satisfied, so it

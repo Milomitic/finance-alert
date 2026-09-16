@@ -292,9 +292,11 @@ def test_a_setup_that_re_enters_the_shortlist_keeps_its_original_wait(db):
     assert (datetime.now(UTC) - again.first_seen_at.replace(tzinfo=UTC)).days == 5
 
 
-def test_stats_count_only_what_was_actually_surfaced(db):
-    """A setup the user never saw made no claim to them, so its outcome must
-    not move the conversion rate the page advertises."""
+def test_stats_count_the_whole_population_not_only_the_shortlist(db):
+    """Rovesciato il 2026-09-16 su decisione dell'utente: le misure contano
+    TUTTI i setup registrati. Col filtro sulla shortlist la pagina riportava
+    11 convertiti e nessun esito maturato, mentre i convertiti erano 334 e 83
+    avevano gia' un esito."""
     shown = _stock(db, "SHOWN")
     hidden = _stock(db, "HIDDEN")
     a = setup_service.upsert_setup(db, stock_id=shown.id, match=_match())
@@ -304,7 +306,9 @@ def test_stats_count_only_what_was_actually_surfaced(db):
     b.shortlisted = False
     db.flush()
 
-    assert setup_service.conversion_stats(db)["converted"] == 1
+    stats = setup_service.conversion_stats(db)
+    assert stats["converted"] == 2
+    assert stats["scope"] == "all"
 
 
 def test_distance_atr_survives_the_round_trip(db):

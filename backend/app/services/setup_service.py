@@ -412,12 +412,16 @@ def conversion_stats(db: Session) -> dict:
         on its trigger date, is PENDING. Folding either into "negativo" would
         invent losses that never happened.
     """
-    # Only setups that were actually SURFACED. A setup the user never saw made
-    # no claim to them, so counting its outcome would measure something the
-    # feature never offered.
-    rows = db.execute(
-        select(StockSetup).where(StockSetup.shortlisted.is_(True))
-    ).scalars().all()
+    # ⚠️ TUTTA la popolazione, non i soli setup in shortlist (decisione
+    # dell'utente, 2026-09-16). Il filtro precedente — «un setup mai mostrato
+    # non ha fatto promesse» — riduceva le misure a 98 righe su 2.267 e a 11
+    # convertiti su 334, nessuno dei quali con un esito maturato, mentre fra
+    # tutti i convertiti gli esiti maturati erano 83: la pagina diceva «nessun
+    # esito» su dati che esistevano. `shortlisted` descrive cosa la lista
+    # mostra OGGI, non una proprieta' storica del setup, quindi non e' un
+    # perimetro su cui misurare il passato. La shortlist resta il perimetro
+    # della LISTA, ed e' riportata a parte (`active_shortlisted`).
+    rows = db.execute(select(StockSetup)).scalars().all()
     active = [r for r in rows if r.status == STATUS_ACTIVE]
     converted = [r for r in rows if r.status == STATUS_CONVERTED]
     # ⚠️ Le chiusure per DECADIMENTO restano fuori dal denominatore, e la
@@ -458,15 +462,12 @@ def conversion_stats(db: Session) -> dict:
     by_detector = _per_detector(converted, expired, outcomes)
 
     return {
-        # ⚠️ Il perimetro che questi numeri descrivono, ed e' DIVERSO da quello
-        # della lista. Il filtro `shortlisted` sopra non e' un difetto e non va
-        # tolto — un setup che l'utente non ha mai visto non gli ha fatto
-        # nessuna promessa — ma la pagina mostrava una popolazione e ne
-        # descriveva un'altra senza dirlo. Si dichiara, non si uniforma:
-        # uniformare significherebbe misurare l'efficacia su setup che il
-        # prodotto non ha mai offerto.
-        "scope": "shortlisted",
+        # Il perimetro resta dichiarato nel payload: tutti i setup registrati.
+        "scope": "all",
         "active": len(active),
+        # Quanti degli attivi sono in lista adesso: il perimetro della LISTA,
+        # distinto da quello delle misure e riportato come tale.
+        "active_shortlisted": sum(1 for r in active if r.shortlisted),
         #: Chiusi per decadimento: FUORI dal denominatore ma NON invisibili.
         #: Escluderli senza mostrarli sarebbe indistinguibile dal cancellarli,
         #: che e' cio' che si e' appena smesso di fare.

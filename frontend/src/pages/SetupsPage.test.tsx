@@ -5,6 +5,7 @@ import { MemoryRouter, useLocation } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import SetupsPage from "./SetupsPage";
+import { conditionKey } from "@/lib/setupGrouping";
 import {
   LAST_SEEN_STALE_DAYS,
   type SetupDetectorStat,
@@ -163,22 +164,40 @@ describe("SetupsPage — perimetro", () => {
     expect(screen.queryByRole("button", { name: /Successivi/ })).not.toBeInTheDocument();
   });
 
-  it("dichiara che le statistiche descrivono un'altra popolazione", async () => {
-    /* ⚠️ Il filtro `shortlisted` delle statistiche NON e' un difetto e non va
-     * tolto: un setup che l'utente non ha mai visto non gli ha fatto nessuna
-     * promessa, quindi misurarci sopra l'efficacia giudicherebbe il prodotto su
-     * cio' che non ha offerto. Il difetto era che la pagina mostrava una
-     * popolazione e ne descriveva un'altra SENZA DIRLO. */
+  it("dichiara che le misure contano TUTTI i setup del database", async () => {
+    /* Decisione dell'utente, 2026-09-16: le misure non si limitano alla
+     * shortlist, e la nota lo dice con il numero della popolazione accanto. */
     renderWith({
       setups: [setup],
-      stats: { ...stats, scope: "shortlisted", total: 59 },
-      total: 1415,
+      stats: { ...stats, scope: "all", total: 2267 },
+      total: 70,
     }, MISURAZIONE);
-    const nota = await screen.findByText(/mostrati in shortlist/i);
-    // ⚠️ Il NUMERO accanto alla frase, non la frase da sola: senza, una nota
-    // che dichiara il perimetro e non dice quanto grande sia passerebbe — e il
-    // punto di dichiararlo e' poterlo confrontare col totale della lista.
-    expect(nota.closest("p")?.textContent).toMatch(/59/);
+    const nota = await screen.findByText(/tutti i setup registrati nel database/i);
+    expect(nota.closest("p")?.textContent).toMatch(/2\.?267/);
+  });
+
+  it("il titolo degli esiti conta la POPOLAZIONE, non la pagina", async () => {
+    /* Diceva "50 setup chiusi" perche' 50 erano le righe rese, su 795. */
+    renderWith({
+      setups: [{ ...setup, status: "converted" }],   // UNA riga in pagina
+      stats,
+      total: 795,
+      has_more: true,
+    }, "/setups?vista=esiti");
+    expect(await screen.findByText(/Esiti — 795 setup chiusi/)).toBeInTheDocument();
+  });
+
+  it("ogni gruppo conta i titoli della condizione in tutta la popolazione", async () => {
+    renderWith({
+      setups: [setup],
+      stats,
+      total: 70,
+      has_more: true,
+      counts_by_condition: { [conditionKey(setup)]: 42 },
+    });
+    expect(await screen.findByText(/Setup attivi — 70 in 1 condizioni/)).toBeInTheDocument();
+    // Il gruppo dice 42, non 1: la riga in pagina e' una sola.
+    expect(screen.getByText("42")).toBeInTheDocument();
   });
 });
 

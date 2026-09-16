@@ -86,16 +86,16 @@ export type SetupStatus = "active" | "converted" | "expired";
 export type SetupStatusFilter = SetupStatus | "closed";
 
 export interface SetupStats {
-  /** Quale popolazione descrivono questi numeri, ed e' DIVERSA da quella della
-   *  lista: "shortlisted" = i soli setup che il prodotto ha davvero mostrato.
-   *
-   *  ⚠️ Non e' un difetto da uniformare. Un setup che l'utente non ha mai visto
-   *  non gli ha fatto nessuna promessa, quindi misurarci sopra l'efficacia
-   *  significherebbe giudicare il prodotto su cio' che non ha offerto. Il
-   *  difetto era che la pagina mostrava una popolazione e ne descriveva
-   *  un'altra SENZA DIRLO. */
+  /** Quale popolazione descrivono questi numeri: "all" = tutti i setup
+   *  registrati nel database (decisione dell'utente, 2026-09-16). Prima era
+   *  la sola shortlist, e la pagina diceva "nessun esito maturato" mentre fra
+   *  tutti i convertiti gli esiti maturati erano 83. */
   scope?: string;
   active: number;
+  /** Quanti degli attivi sono nella lista in questo momento. */
+  active_shortlisted?: number;
+  /** Chiusi per decadimento: fuori dal tasso di conversione, ma esiti. */
+  decayed?: number;
   converted: number;
   expired: number;
   /** null = nothing has resolved yet. NOT the same as 0 — do not render it as 0%. */
@@ -193,6 +193,9 @@ export interface SetupsResponse {
   /** Setup per detector nella POPOLAZIONE, ignorando il filtro detector: i
    *  chip devono restare tutti visibili dopo che se ne preme uno. */
   counts_by_detector: Record<string, number>;
+  /** Setup per CONDIZIONE (chiave di `conditionKey`) nella popolazione
+   *  filtrata: il numero che ogni gruppo mostra, invece delle righe in pagina. */
+  counts_by_condition?: Record<string, number>;
   stats: SetupStats;
 }
 

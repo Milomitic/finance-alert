@@ -97,7 +97,11 @@ function StatsStrip({ stats }: { stats: SetupStats }) {
     {
       label: "Esiti",
       value: String(resolved),
-      hint: `${stats.converted} convertiti · ${stats.expired} scaduti`,
+      // I ritirati completano il conto: convertiti + scaduti + ritirati sono
+      // tutti i setup chiusi, cioe' il totale della vista Esiti.
+      hint:
+        `${stats.converted} convertiti · ${stats.expired} scaduti` +
+        (stats.decayed ? ` · ${stats.decayed} ritirati (fuori dal tasso)` : ""),
     },
     {
       label: "Tasso conversione",
@@ -210,13 +214,13 @@ function StatsStrip({ stats }: { stats: SetupStats }) {
           : `da ${stats.lead_days_min}g a ${stats.lead_days_max}g · media ${stats.avg_lead_days}g`,
     },
     {
-      label: "Totale in lista",
+      label: "Setup registrati",
       value: String(stats.total),
-      // Non è la tabella intera. `conversion_stats` conta solo i setup
-      // effettivamente SURFACED: uno che l'utente non ha mai visto non gli ha
-      // promesso niente, quindi contarne l'esito misurerebbe qualcosa che la
-      // funzione non ha mai offerto. In produzione sono 71 su ~1.800 righe.
-      note: "Conta i setup effettivamente mostrati in lista, non l'intera tabella.",
+      hint:
+        stats.active_shortlisted != null
+          ? `${stats.active_shortlisted} attivi mostrati in lista ora`
+          : undefined,
+      note: "Tutti i setup registrati nel database, attivi e chiusi. Ogni misura di questa pagina li considera tutti, non solo quelli in lista.",
     },
   ];
 
@@ -290,6 +294,8 @@ export default function SetupsPage() {
   // presentazione e non un perimetro.
   const groups = useMemo(() => groupByCondition(all, sort), [all, sort]);
   const totale = q.data?.total ?? all.length;
+  const perCondizione = q.data?.counts_by_condition;
+  const nCondizioni = perCondizione ? Object.keys(perCondizione).length : groups.length;
   /** Cambia un controllo che ridefinisce il perimetro, e torna alla prima
    *  pagina. In render, non in un effect: `set-state-in-effect` e' gated. */
   const cambia = <T,>(set: (v: T) => void) => (v: T) => { set(v); setOffset(0); };
@@ -383,14 +389,11 @@ export default function SetupsPage() {
                 — ma la pagina mostrava un insieme e ne descriveva un altro senza
                 dirlo. In produzione: 1.415 setup attivi, 59 in shortlist, 18
                 chiusi dentro il perimetro statistico. */}
-            {q.data.stats.scope === "shortlisted" && (
-              <p className="text-xs text-muted-foreground">
-                Le misure qui sopra contano i soli setup{" "}
-                <strong>mostrati in shortlist</strong> ({q.data.stats.total}), non
-                tutti quelli tracciati: un setup mai mostrato non ha fatto nessuna
-                promessa da verificare. La lista ha un perimetro suo.
-              </p>
-            )}
+            <p className="text-xs text-muted-foreground">
+              Le misure contano <strong>tutti i setup registrati nel database</strong>{" "}
+              ({q.data.stats.total.toLocaleString("it-IT")}), attivi e chiusi, compresi
+              quelli fuori dalla lista e dalla pagina corrente.
+            </p>
             <SetupDetectorStats rows={q.data.stats.by_detector} />
           </>
         ) : null
@@ -464,11 +467,14 @@ export default function SetupsPage() {
         <div className="mb-3 flex items-center justify-between gap-3 flex-wrap">
           <SectionTitle
             icon={Target}
+            /* Il numero nel titolo e' la POPOLAZIONE filtrata dal server,
+               mai le righe in pagina: diceva "50 setup chiusi" perche' 50
+               erano le righe rese, su 795. */
             label={
               view === "closed"
-                ? `Esiti — ${all.length} setup chiusi`
-                : groups.length > 0
-                  ? `Setup attivi — ${groups.reduce((n, g) => n + g.setups.length, 0)} in ${groups.length} condizioni`
+                ? `Esiti — ${totale.toLocaleString("it-IT")} setup chiusi`
+                : totale > 0
+                  ? `Setup attivi — ${totale.toLocaleString("it-IT")} in ${nCondizioni} condizioni`
                   : "Setup attivi"
             }
           />
@@ -498,7 +504,12 @@ export default function SetupsPage() {
         ) : (
           <div className="space-y-3">
             {groups.map((g) => (
-              <SetupConditionGroup key={g.key} group={g} onOpen={setOpenSetup} />
+              <SetupConditionGroup
+                key={g.key}
+                group={g}
+                onOpen={setOpenSetup}
+                populationCount={perCondizione?.[g.key]}
+              />
             ))}
           </div>
         )}
