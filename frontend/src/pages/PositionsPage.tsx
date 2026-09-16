@@ -131,11 +131,20 @@ function TickerCell({
           {p.alert_id != null && onOpenSignal && (
             <button
               type="button"
-              onClick={() => onOpenSignal(p.alert_id as number)}
-              disabled={pending}
+              // ⚠️ `aria-disabled`, NON `disabled`. Trovato nel collaudo in browser
+              // (2026-09-16): durante il caricamento del segnale il pulsante era
+              // `disabled` proprio quando il dialogo si apre, e un elemento
+              // disabilitato non puo' ricevere il focus di ritorno — alla chiusura
+              // il focus finiva sul BODY e chi naviga da tastiera ripartiva
+              // dall'inizio della pagina. Col segnale gia' in cache non succedeva,
+              // che e' perche' nessun test lo vedeva.
+              onClick={() => {
+                if (!pending) onOpenSignal(p.alert_id as number);
+              }}
+              aria-disabled={pending || undefined}
               aria-label={`Segnale che ha aperto la posizione su ${p.ticker}`}
               title="Apri il segnale che ha aperto questa posizione"
-              className="inline-flex items-center rounded p-0.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50"
+              className="inline-flex items-center rounded p-0.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground aria-disabled:opacity-50"
             >
               {pending ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />

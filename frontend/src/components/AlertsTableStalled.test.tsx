@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
@@ -53,7 +54,7 @@ function _alert(id: number, over: Partial<Alert> = {}): Alert {
   } as Alert;
 }
 
-function monta(alerts: Alert[]) {
+function monta(alerts: Alert[], onRowClick: (a: Alert) => void = () => {}) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
@@ -65,7 +66,7 @@ function monta(alerts: Alert[]) {
           selectedIds={new Set()}
           onSelect={() => {}}
           onSelectAll={() => {}}
-          onRowClick={() => {}}
+          onRowClick={onRowClick}
           q=""
           onQueryChange={() => {}}
           onSort={() => {}}
@@ -117,5 +118,30 @@ describe("la cella Esito", () => {
     const { container } = monta([_alert(4)]);
     expect(screen.queryByText("Fermo")).toBeNull();
     expect(container.textContent).toContain("…");
+  });
+});
+
+describe("la riga si apre anche da tastiera", () => {
+  it("Invio e Spazio sulla riga aprono il segnale", async () => {
+    const user = userEvent.setup();
+    const aperto = vi.fn();
+    monta([_alert(7)], aperto);
+    const riga = screen.getByText("Titolo 7").closest("tr") as HTMLTableRowElement;
+    expect(riga).toHaveAttribute("tabindex", "0");
+
+    riga.focus();
+    await user.keyboard("{Enter}");
+    await user.keyboard(" ");
+    expect(aperto).toHaveBeenCalledTimes(2);
+    expect(aperto.mock.calls[0][0].id).toBe(7);
+  });
+
+  it("Invio sul link del ticker non apre il dialogo", async () => {
+    const user = userEvent.setup();
+    const aperto = vi.fn();
+    monta([_alert(8)], aperto);
+    screen.getByRole("link", { name: "T8" }).focus();
+    await user.keyboard("{Enter}");
+    expect(aperto).not.toHaveBeenCalled();
   });
 });

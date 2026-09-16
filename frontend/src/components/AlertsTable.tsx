@@ -400,7 +400,24 @@ export function AlertsTable({
           </TableRow>
         )}
         {alerts.map((a) => (
-          <TableRow key={a.id} className="cursor-pointer group" onClick={() => onRowClick(a)}>
+          <TableRow
+            key={a.id}
+            // ⚠️ Raggiungibile da tastiera. Trovato nel collaudo in browser
+            // (2026-09-16): nel dettaglio titolo le righe non contenevano un
+            // solo elemento focalizzabile, quindi senza mouse un segnale non si
+            // apriva affatto. Solo la RIGA reagisce a Invio/Spazio: la casella
+            // e il link del ticker dentro fanno il loro mestiere.
+            tabIndex={0}
+            className="cursor-pointer group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+            onClick={() => onRowClick(a)}
+            onKeyDown={(e) => {
+              if (e.target !== e.currentTarget) return;
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onRowClick(a);
+              }
+            }}
+          >
             {showCheckbox && (
               <TableCell onClick={(e) => e.stopPropagation()}>
                 <Checkbox
