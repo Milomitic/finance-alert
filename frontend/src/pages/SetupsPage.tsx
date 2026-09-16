@@ -63,6 +63,16 @@ function vistaDa(raw: string | null): VistaId {
   return VISTE.some((v) => v.id === raw) ? (raw as VistaId) : "formazione";
 }
 
+function formatPct1(v: number): string {
+  return `${v.toFixed(1)}%`;
+}
+
+/** «3,1 volte». Sotto 1 il setup annuncia il segnale MENO di un titolo a caso,
+ *  e lo si dice con le stesse parole invece di nasconderlo. */
+function formatLift(v: number): string {
+  return `${v.toFixed(1)} volte`;
+}
+
 /** Il colore di un'efficacia: solo quando l'intervallo esclude il 50, cioe'
  *  quando il campione dice qualcosa. Una banda che contiene il 50 non ha
  *  detto niente, e non riceve colore. */
@@ -157,7 +167,16 @@ function StatsStrip({ stats }: { stats: SetupStats }) {
           ? "nessuno ancora risolto"
           : resolved < MIN_RATE_N
             ? `troppo pochi per un tasso (servono ${MIN_RATE_N})`
-            : `${stats.converted} su ${resolved} inclusi nel tasso`,
+            : `${stats.converted} su ${resolved} inclusi nel tasso` +
+              // Il paragone sta A SCHERMO accanto al numero: senza, «48%» si
+              // legge nel vuoto (richiesta dell'utente, 2026-09-16).
+              (stats.base_rate_pct != null
+                ? ` · su un titolo qualsiasi ${formatPct1(stats.base_rate_pct)}` +
+                  (stats.base_lift != null ? ` (${formatLift(stats.base_lift)})` : "")
+                : ""),
+      note:
+        "Quota dei setup chiusi il cui segnale è poi scattato. Il paragone è quanto spesso lo stesso segnale, negli stessi versi, scatta su un titolo qualsiasi in una finestra da 28 giorni — il tempo massimo di attesa di un setup. " +
+        "È un paragone prudente: il titolo qualsiasi ha sempre 28 giorni, il setup spesso meno. Un rapporto sopra 1 dice che il setup annuncia davvero il segnale, non che il segnale renda: quello è l'efficacia.",
     },
     {
       // Una tessera sola per «e poi?». Erano due: «Convertiti: esito» contava

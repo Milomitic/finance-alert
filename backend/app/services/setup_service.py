@@ -546,7 +546,15 @@ def conversion_stats(db: Session) -> dict:
     unavailable = _outcome_unavailable(db, converted, outcomes)
 
     returns = _return_summary(list(outcomes.values()))
-    by_detector = _per_detector(converted, expired, outcomes)
+    # Il termine di paragone del tasso: quanto spesso lo stesso segnale scatta
+    # su un titolo qualsiasi in 28 giorni. Senza, «48%» si legge nel vuoto.
+    from app.services.setup_base_rate import base_firing_rates
+
+    nel_tasso = converted + expired
+    aperture = [r.first_seen_at for r in nel_tasso if r.first_seen_at is not None]
+    base = base_firing_rates(db, min(aperture).date()) if aperture else None
+    by_detector = _per_detector(converted, expired, outcomes, base)
+    base_pct, base_lift = _aggregate_base(by_detector, len(converted), resolved)
 
     return {
         # Il perimetro resta dichiarato nel payload: tutti i setup registrati.
@@ -613,6 +621,14 @@ def conversion_stats(db: Session) -> dict:
         #: L'anticipo rispetto al MERCATO (barra d'apertura -> barra
         #: dell'evento), solo dove l'evento e' registrato. `median_lead_days`
         #: sopra e' l'attesa fino alla RILEVAZIONE.
+        #: Quota di titoli qualsiasi su cui lo stesso segnale scatta in una
+        #: finestra da 28 giorni, pesata per tipo e verso dei setup chiusi nel
+        #: tasso. `base_lift` = tasso di conversione / tasso di base. Null
+        #: finche' non esiste una finestra completa. Vedi `setup_base_rate`.
+        "base_rate_pct": base_pct,
+        "base_lift": base_lift,
+        "base_windows": base.windows if base else 0,
+        "base_window_days": 28,
         "median_bar_lead_days": _median_of(bar_leads),
         "bar_lead_days_n": len(bar_leads),
         #: Quante conversioni per versione delle regole. `null` = storico, la
@@ -813,10 +829,27 @@ def _return_summary(outcomes: list[EventOutcome]) -> dict:
     }
 
 
+def _aggregate_base(rows: list[dict], converted: int, resolved: int) -> tuple[float | None, float | None]:
+    """Il tasso di base dell'intera funzione, pesato sui setup chiusi di ogni
+    tipo — lo stesso peso che ogni tipo ha nel tasso di conversione aggregato.
+
+    Solo i tipi con un tasso di base contano, al numeratore E al denominatore:
+    un tipo senza paragone non deve abbassare il tasso di base facendo finta di
+    valere zero."""
+    pesati = [(r["resolved"], r["base_rate_pct"]) for r in rows if r["base_rate_pct"] is not None]
+    peso = sum(n for n, _ in pesati)
+    if not peso or not resolved:
+        return None, None
+    base = sum(n * b for n, b in pesati) / peso
+    rate = converted / resolved * 100.0
+    return round(base, 1), (round(rate / base, 1) if base > 0 else None)
+
+
 def _per_detector(
     converted: list[StockSetup],
     expired: list[StockSetup],
     outcomes: dict[int, EventOutcome],
+    base: object | None = None,
 ) -> list[dict]:
     """One row per setup detector: does THIS setup convert, and is it worth it.
 
@@ -858,12 +891,27 @@ def _per_detector(
             float(o.mkt_neutral_excess) for o in judged if o.mkt_neutral_excess is not None
         ]
 
+        conversion_rate = round(len(conv) / resolved * 100.0, 1) if resolved else None
+        toni: dict[str, int] = {}
+        for r in conv + exp:
+            toni[r.tone] = toni.get(r.tone, 0) + 1
+        base_frac = base.for_tone_mix(name, toni) if base is not None else None
+        base_pct = round(base_frac * 100.0, 1) if base_frac is not None else None
+
         rows.append({
             "detector": name,
             "converted": len(conv),
             "expired": len(exp),
             "resolved": resolved,
-            "conversion_rate": round(len(conv) / resolved * 100.0, 1) if resolved else None,
+            "conversion_rate": conversion_rate,
+            # Quanto spesso lo stesso segnale, negli stessi versi, scatta su un
+            # titolo qualsiasi in 28 giorni; e quante volte piu' spesso scatta
+            # dopo un setup.
+            "base_rate_pct": base_pct,
+            "lift": (
+                round(conversion_rate / base_pct, 1)
+                if conversion_rate is not None and base_pct else None
+            ),
             "judged": len(judged),
             "positive": hits,
             "negative": len(judged) - hits,

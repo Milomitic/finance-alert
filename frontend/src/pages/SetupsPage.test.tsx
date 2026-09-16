@@ -409,6 +409,17 @@ describe("SetupsPage", () => {
     expect(chiesta).toContain("sort=convenience");
   });
 
+  it("il tasso di conversione porta il suo paragone a schermo", async () => {
+    renderWith({
+      setups: [setup],
+      stats: {
+        ...stats, converted: 363, expired: 384, closed: 747, conversion_rate: 0.486,
+        base_rate_pct: 15.9, base_lift: 3.1, base_windows: 3,
+      },
+    }, MISURAZIONE);
+    expect(await screen.findByText(/363 su 747 inclusi nel tasso · su un titolo qualsiasi 15\.9% \(3\.1 volte\)/)).toBeInTheDocument();
+  });
+
   it("explains the empty state instead of looking broken", async () => {
     renderWith({ setups: [], stats: { ...stats, active: 0 } });
     expect(await screen.findByText(/nessun setup in formazione/i)).toBeInTheDocument();

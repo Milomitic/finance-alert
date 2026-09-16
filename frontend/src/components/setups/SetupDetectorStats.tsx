@@ -90,7 +90,19 @@ function Num({ value, suffix = "" }: { value: number | null; suffix?: string }) 
   );
 }
 
+/** Il rapporto solo quando regge. Sotto i 20 setup chiusi la pagina non
+ *  mostra nemmeno una percentuale; e su un tasso di base sotto l'1% un
+ *  rapporto esplode — 11 setup contro lo 0,2% davano «363 volte» nel collaudo
+ *  del 2026-09-16, un numero che non significa niente. */
+const MIN_CHIUSI_RAPPORTO = 20;
+function mostraRapporto(r: SetupDetectorStat): boolean {
+  return r.resolved >= MIN_CHIUSI_RAPPORTO && r.base_rate_pct != null && r.base_rate_pct >= 1;
+}
+
 const METODO =
+  "«Titolo qualsiasi» è quanto spesso lo stesso segnale, negli stessi versi, scatta su " +
+  "un titolo a caso in 28 giorni; il numero accanto è quante volte più spesso scatta " +
+  "dopo un setup di questo tipo. Dice se il setup annuncia il segnale, non se rende. " +
   "L'efficacia è market-neutral: il setup ha battuto la mediana dell'universo " +
   "nella propria direzione. Il conteggio delle finestre indipendenti, non delle " +
   "righe, dimensiona la banda — setup che scattano a pochi giorni di distanza " +
@@ -133,6 +145,7 @@ export default function SetupDetectorStats({ rows }: { rows: SetupDetectorStat[]
                 <th className="text-left font-normal px-4 py-2">Setup</th>
                 <th className="text-right font-normal px-2 py-2">Conv. / Scad.</th>
                 <th className="text-right font-normal px-2 py-2">Tasso conv.</th>
+                <th className="text-right font-normal px-2 py-2">Titolo qualsiasi</th>
                 <th className="text-right font-normal px-2 py-2">Giudicati</th>
                 <th className="text-left font-normal px-2 py-2">Efficacia</th>
                 <th className="text-right font-normal px-4 py-2">Ecc. mediano</th>
@@ -150,6 +163,20 @@ export default function SetupDetectorStats({ rows }: { rows: SetupDetectorStat[]
                   <td className="px-2 py-2 text-right">
                     <Num value={r.conversion_rate} suffix="" />
                     {r.conversion_rate !== null && <span>%</span>}
+                  </td>
+                  <td className="px-2 py-2 text-right tabular-nums whitespace-nowrap">
+                    {/* Il paragone del tasso accanto: quanto spesso lo stesso
+                        segnale scatta comunque in 28 giorni, e il rapporto. */}
+                    {r.base_rate_pct == null ? (
+                      <span className="text-muted-foreground">—</span>
+                    ) : (
+                      <>
+                        {r.base_rate_pct < 1 ? "<1" : r.base_rate_pct.toFixed(1)}%
+                        {mostraRapporto(r) && r.lift != null && (
+                          <span className="text-muted-foreground"> · {r.lift.toFixed(1)}×</span>
+                        )}
+                      </>
+                    )}
                   </td>
                   <td className="px-2 py-2 text-right tabular-nums">
                     {/* The count that produced the band beside it, plus the

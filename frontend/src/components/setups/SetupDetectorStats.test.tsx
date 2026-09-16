@@ -22,6 +22,8 @@ const row = (over: Partial<SetupDetectorStat> = {}): SetupDetectorStat => ({
   expired: 2,
   resolved: 10,
   conversion_rate: 80,
+  base_rate_pct: 16,
+  lift: 5,
   judged: 8,
   positive: 6,
   negative: 2,
@@ -121,5 +123,36 @@ describe("il pannello sparisce quando non ha nulla da dire", () => {
 
     expect(screen.getByText("sr_flip")).toBeInTheDocument();
     expect(screen.getByText("squeeze")).toBeInTheDocument();
+  });
+});
+
+describe("il tasso di conversione ha il suo paragone", () => {
+  it("mostra il tasso di base e il rapporto accanto al tasso", () => {
+    render(<SetupDetectorStats rows={[row({ resolved: 351, converted: 171, expired: 180, conversion_rate: 48.7, base_rate_pct: 15.8, lift: 3.1 })]} />);
+    expect(screen.getByText("Titolo qualsiasi")).toBeInTheDocument();
+    expect(screen.getByText(/15\.8%/)).toBeInTheDocument();
+    expect(screen.getByText(/3\.1×/)).toBeInTheDocument();
+  });
+
+  it("senza paragone dice un trattino, non uno zero", () => {
+    const { container } = render(
+      <SetupDetectorStats rows={[row({ base_rate_pct: null, lift: null })]} />,
+    );
+    const celle = [...container.querySelectorAll("tbody td")].map((td) => td.textContent);
+    expect(celle[3]).toBe("—");
+  });
+});
+
+describe("il rapporto compare solo quando regge", () => {
+  it("pochi setup chiusi: il paragone si, il rapporto no", () => {
+    render(<SetupDetectorStats rows={[row({ resolved: 11, converted: 8, expired: 3, base_rate_pct: 4, lift: 18.2 })]} />);
+    expect(screen.getByText(/4\.0%/)).toBeInTheDocument();
+    expect(screen.queryByText(/18\.2×/)).toBeNull();
+  });
+
+  it("tasso di base sotto l'1%: detto come tale, senza rapporto", () => {
+    render(<SetupDetectorStats rows={[row({ resolved: 64, base_rate_pct: 0.2, lift: 363.5 })]} />);
+    expect(screen.getByText(/<1%/)).toBeInTheDocument();
+    expect(screen.queryByText(/363/)).toBeNull();
   });
 });

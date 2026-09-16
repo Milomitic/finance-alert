@@ -134,6 +134,14 @@ export interface SetupStats {
   expired: number;
   /** null = nothing has resolved yet. NOT the same as 0 — do not render it as 0%. */
   conversion_rate: number | null;
+  /** Il termine di paragone del tasso: quota di titoli QUALSIASI su cui lo
+   *  stesso segnale, negli stessi versi, scatta in una finestra da 28 giorni,
+   *  pesata sui tipi di setup chiusi. `base_lift` = conversione / base. Null
+   *  finche' non c'e' una finestra completa. */
+  base_rate_pct?: number | null;
+  base_lift?: number | null;
+  base_windows?: number;
+  base_window_days?: number;
   avg_lead_days: number | null;
 
   /** The two tabs, each with its own total. `total` is everything the feature
@@ -207,6 +215,10 @@ export interface SetupDetectorStat {
   expired: number;
   resolved: number;
   conversion_rate: number | null;
+  /** Quanto spesso lo stesso segnale scatta su un titolo qualsiasi in 28
+   *  giorni, e quante volte piu' spesso dopo un setup di questo tipo. */
+  base_rate_pct?: number | null;
+  lift?: number | null;
   judged: number;
   positive: number;
   negative: number;
