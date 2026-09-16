@@ -1189,13 +1189,31 @@ def get_quotes_batch(
     # wait_budget: a follower inside this batch must never outlive the batch's
     # own deadline — see the note in get_quote. Passing it here is what keeps
     # the two bounds from inverting when either constant is retuned.
-    futures = {
-        _pool(background=background).submit(
-            get_quote, t, allow_remote_today_fetch=False,
-            wait_budget=deadline_seconds,
-        ): t
-        for t in misses
-    }
+    if background:
+        futures = {
+            _pool(background=True).submit(
+                get_quote, t, allow_remote_today_fetch=False,
+                wait_budget=deadline_seconds,
+            ): t
+            for t in misses
+        }
+    else:
+        # FA-006, seconda misura: il pool interattivo recupera ~8 quotazioni al
+        # secondo e una pagina ne chiede ~240 ogni 15 s. Due regole impediscono
+        # che il deficit diventi una coda infinita:
+        #
+        # 1. un titolo gia' in coda non si riaccoda (il single-flight di
+        #    `get_quote` lo vede solo quando il recupero PARTE);
+        # 2. chi ha gia' un valore noto lo riceve SUBITO e l'aggiornamento
+        #    prosegue in coda: prima aspettava 6 s per ricevere lo stesso
+        #    valore. Aspetta la scadenza solo chi non ha niente da mostrare.
+        futures = {}
+        for t in misses:
+            fut = _submit_interactive(t, deadline_seconds)
+            if has_any_value(t):
+                out[t] = _warm_or_eod(t)
+            else:
+                futures[fut] = t
     deadline = None if deadline_seconds is None else time.time() + deadline_seconds
     timed_out = 0
     for fut, t in futures.items():
@@ -1208,9 +1226,37 @@ def get_quotes_batch(
             timed_out += 1
     if timed_out:
         logger.info(
-            f"[live_quote] batch deadline: {timed_out}/{len(misses)} served warm"
+            f"[live_quote] batch deadline: {timed_out}/{len(futures)} senza valore noto "
+            f"serviti dal ripiego ({len(misses)} scaduti nel batch)"
         )
     return out
+
+
+# Titoli accodati nel pool interattivo e non ancora conclusi, con la loro
+# future. Vedi la regola 1 in `get_quotes_batch`.
+_QUEUED: dict[str, Any] = {}
+_QUEUED_LOCK = Lock()
+
+
+def _run_queued(ticker: str, wait_budget: float | None) -> LiveQuote:
+    try:
+        return get_quote(ticker, allow_remote_today_fetch=False, wait_budget=wait_budget)
+    finally:
+        with _QUEUED_LOCK:
+            _QUEUED.pop(ticker, None)
+
+
+def _submit_interactive(ticker: str, wait_budget: float | None) -> Any:
+    """La future del recupero di `ticker` nel pool interattivo, riusando quella
+    gia' in coda se c'e'. L'inserimento avviene sotto lo stesso lock con cui il
+    task si toglie dall'elenco, quindi un recupero rapidissimo non puo' lasciare
+    una voce orfana."""
+    with _QUEUED_LOCK:
+        fut = _QUEUED.get(ticker)
+        if fut is None:
+            fut = _pool().submit(_run_queued, ticker, wait_budget)
+            _QUEUED[ticker] = fut
+        return fut
 
 
 def clear_cache() -> None:
