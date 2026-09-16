@@ -40,7 +40,7 @@ le ultime due dal fix B4-2 sui test flaky):
 from collections.abc import Iterator
 
 import pytest
-from sqlalchemy import create_engine, event
+from sqlalchemy import String, create_engine, event
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -154,6 +154,41 @@ def _no_real_network(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(urllib3.connectionpool.HTTPConnectionPool, "urlopen", _blocked_network_call)
 
 
+def enforce_varchar_lengths(engine) -> int:
+    """Fa rispettare a SQLite le lunghezze `String(n)`, come fa Postgres.
+
+    SQLite accetta 12 caratteri in una `VARCHAR(8)` senza fiatare. E' cosi' che
+    il tono `undetermined` e' passato per 2.456 test verdi e ha fermato ogni
+    scansione in produzione per ~19 ore (`StringDataRightTruncation`, FA-077).
+    Un test per colonna protegge solo le colonne a cui qualcuno ha pensato;
+    questo protegge TUTTE, per ogni test che scrive nel database.
+
+    Un trigger per colonna e non un listener ORM: copre anche gli `insert()`
+    Core e gli upsert, che il flush della sessione non vede. `length()` conta
+    caratteri, come `VARCHAR(n)` in Postgres. Rende il numero di trigger creati,
+    cosi' il test di guardia puo' pretendere che non sia zero.
+    """
+    istruzioni = [
+        f'CREATE TRIGGER "varchar_{table.name}_{col.name}_{evento.lower()}" '
+        f'BEFORE {evento} ON "{table.name}" '
+        f'WHEN length(NEW."{col.name}") > {col.type.length} '
+        f"BEGIN SELECT RAISE(ABORT, 'value too long for "
+        f"{table.name}.{col.name} VARCHAR({col.type.length})'); END;"
+        for table in Base.metadata.sorted_tables
+        for col in table.columns
+        if isinstance(col.type, String) and col.type.length
+        for evento in ("INSERT", "UPDATE")
+    ]
+    # Uno script solo invece di 128 `execute`: gira per OGNI test che usa
+    # `db`, e cosi' costa ~3 ms invece di ~8.
+    raw = engine.raw_connection()
+    try:
+        raw.driver_connection.executescript("\n".join(istruzioni))
+    finally:
+        raw.close()
+    return len(istruzioni)
+
+
 @pytest.fixture
 def db(monkeypatch: pytest.MonkeyPatch) -> Iterator[Session]:
     engine = create_engine(
@@ -170,6 +205,7 @@ def db(monkeypatch: pytest.MonkeyPatch) -> Iterator[Session]:
         cursor.close()
 
     Base.metadata.create_all(engine)
+    enforce_varchar_lengths(engine)
     TestSession = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
     # Aggancia anche `SessionLocal` globale all'engine in-memory di questo

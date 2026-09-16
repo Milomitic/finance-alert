@@ -1277,9 +1277,15 @@ Correzione `33ad6a7` (colonna a 16, migrazione `5e2f0b7c9d41`).
 confrontata con quella lunghezza.** `tests/test_setup_tone_entra_nella_colonna.py`
 e' la forma: importa le COSTANTI (non copie) e le confronta con
 `Model.__table__.c[col].type.length`, quindi gira su SQLite e fallisce lo stesso.
-Colonne a 8 caratteri gia' in schema, da tenere d'occhio: `positions.side`,
-`price_alerts.direction`, `signal_outcomes.{tone,source,regime_at_signal}`,
-`stocks.{country,currency}`, `indices.country`, `macro_series.region`.
+**Dal 2026-09-16 la suite lo fa rispettare a TUTTE le colonne**:
+`conftest.enforce_varchar_lengths` crea su SQLite un trigger `BEFORE
+INSERT/UPDATE` per ogni `String(n)` (128 trigger, ~3 ms a test, copre anche gli
+`insert()` Core che il flush ORM non vede), e
+`tests/test_varchar_rispettato_in_sqlite.py` lo sorveglia con un controllo
+negativo. Acceso, la suite intera e' rimasta verde; in produzione la colonna
+piu' vicina al tetto e' `scan_runs.phase` (28 su 32, insieme chiuso di fasi).
+⚠️ Vale solo per i test che passano dalla fixture `db`: un engine creato a mano
+in un test non ha i trigger.
 
 **2. In un ordinamento decrescente Postgres mette i NULL PER PRIMI.** Due punti
 chiedevano `ORDER BY completed_at DESC LIMIT 1` per «l'ultima scansione
