@@ -46,8 +46,8 @@
       "uccisi": 36
     },
     "app/services/setup_service.py": {
-      "mutanti": 86,
-      "uccisi": 53
+      "mutanti": 108,
+      "uccisi": 81
     }
   },
   "sopravvissuti": [
@@ -81,15 +81,10 @@
     "app/services/setup_service.py::_per_detector#1  1 -> 2",
     "app/services/setup_service.py::_per_detector#1  And -> Or",
     "app/services/setup_service.py::_per_detector#2  1 -> 2",
-    "app/services/setup_service.py::_per_detector#2  And -> Or",
     "app/services/setup_service.py::_per_detector#2  Eq -> NotEq",
     "app/services/setup_service.py::_per_detector#3  1 -> 2",
     "app/services/setup_service.py::_return_summary#0  And -> Or",
     "app/services/setup_service.py::_return_summary#1  And -> Or",
-    "app/services/setup_service.py::conversion_stats#0  3 -> 4",
-    "app/services/setup_service.py::convert_setups_for_alert#0  0 -> 1",
-    "app/services/setup_service.py::convert_setups_for_alert#0  And -> Or",
-    "app/services/setup_service.py::convert_setups_for_alert#0  Or -> And",
     "app/services/setup_service.py::expire_stale_setups#0  And -> Or",
     "app/services/setup_service.py::expire_stale_setups#0  GtE -> Gt",
     "app/services/setup_service.py::expire_stale_setups#1  1 -> 2",
