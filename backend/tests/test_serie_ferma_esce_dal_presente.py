@@ -167,6 +167,19 @@ def test_forget_non_cancella_cio_che_non_gli_e_stato_chiesto(db):
     assert technical_score_service.forget(db, []) == 0
 
 
+def test_forget_su_titoli_senza_punteggio_conta_zero(db):
+    """Il conteggio e' quello delle righe CANCELLATE, non dei titoli chiesti.
+
+    Un titolo fermo da giorni non ha piu' un punteggio da togliere: ogni
+    scansione lo ripassa a `forget`, e un conteggio che rendesse 1 scriverebbe
+    «1 punteggi rimossi» nel log a ogni giro. La notturna di mutazione lo ha
+    segnalato (`rowcount or 0` -> `or 1` sopravviveva): nessun test chiedeva
+    il caso in cui non c'e' niente da cancellare.
+    """
+    gia_dimenticato = _titolo(db, "FC", streak=99, barre=3)
+    assert technical_score_service.forget(db, [gia_dimenticato.id]) == 0
+
+
 # ── la quarta ragione di chiusura ───────────────────────────────────────────
 
 def test_un_setup_su_serie_ferma_si_chiude_per_DATI_non_per_decadenza(db):

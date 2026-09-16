@@ -16,7 +16,14 @@ from pathlib import Path
 from sqlalchemy.orm import Session
 
 from app.models import Stock
-from app.models.stock_setup import STATUS_ACTIVE, StockSetup
+from app.models.stock_setup import (
+    REASON_DECAYED,
+    REASON_STALE,
+    STATUS_ACTIVE,
+    STATUS_CONVERTED,
+    STATUS_EXPIRED,
+    StockSetup,
+)
 from app.services.setup_service import conversion_stats
 from app.signals.setups.base import TONE_BEAR, TONE_BULL, TONE_UNDETERMINED
 
@@ -24,30 +31,35 @@ NOW = datetime(2026, 8, 26, 12, 0, tzinfo=UTC)
 _SEQ = {"n": 0}
 
 
-def _attivo(db: Session, tone: str, detector: str = "trend_pullback"):
+def _attivo(db: Session, tone: str, detector: str = "trend_pullback", **campi):
     _SEQ["n"] += 1
     k = _SEQ["n"]
     stock = Stock(ticker=f"A{k}", exchange="NASDAQ", name=f"A{k}")
     db.add(stock)
     db.flush()
+    riga = {"status": STATUS_ACTIVE, **campi}
     db.add(StockSetup(
         stock_id=stock.id, detector=detector, tone=tone,
         proximity=0.6, convenience=55.0, missing="—", factors_json="{}",
-        status=STATUS_ACTIVE, shortlisted=True,
-        first_seen_at=NOW - timedelta(days=3), last_seen_at=NOW,
+        shortlisted=True,
+        first_seen_at=NOW - timedelta(days=3), last_seen_at=NOW, **riga,
     ))
     db.commit()
 
 
 def test_le_tre_voci_sommano_agli_attivi(db):
-    for _ in range(3):
+    # ⚠️ QUATTRO rialzisti, non tre. Con 3/1/2 i non-rialzisti erano anch'essi
+    # 3, quindi `tone != TONE_BULL` rendeva lo stesso numero di `==` e la
+    # notturna di mutazione lo ha lasciato vivo: un caso di prova che non
+    # distingue l'originale dal mutante non verifica niente.
+    for _ in range(4):
         _attivo(db, TONE_BULL)
     _attivo(db, TONE_BEAR)
     for _ in range(2):
         _attivo(db, TONE_UNDETERMINED, detector="squeeze_expansion")
 
     s = conversion_stats(db)
-    assert (s["active_bull"], s["active_bear"], s["active_undetermined"]) == (3, 1, 2)
+    assert (s["active_bull"], s["active_bear"], s["active_undetermined"]) == (4, 1, 2)
     assert s["active_bull"] + s["active_bear"] + s["active_undetermined"] == s["active"]
 
 
@@ -94,3 +106,26 @@ def test_le_costanti_non_obbligano_a_importare_il_modello():
         "il detector della compressione si tira dietro SQLAlchemy: le costanti "
         "dei toni sono state spostate su un modulo che porta i modelli"
     )
+
+
+def test_i_decaduti_si_contano_e_restano_fuori_dal_denominatore(db):
+    """`decayed` e' a schermo proprio perche' esce dal tasso: escluderli senza
+    mostrarli sarebbe indistinguibile dal cancellarli. Nessun test contava la
+    voce, e `status == STATUS_EXPIRED` -> `!=` sopravviveva."""
+    _attivo(db, TONE_BULL, status=STATUS_EXPIRED, closed_reason=REASON_DECAYED)
+    _attivo(db, TONE_BULL, status=STATUS_EXPIRED, closed_reason=REASON_STALE)
+    _attivo(db, TONE_BULL, status=STATUS_CONVERTED, lead_days=5)
+
+    s = conversion_stats(db)
+    assert s["decayed"] == 1
+    assert s["expired"] == 1
+    # 1 convertito su (1 convertito + 1 scaduto): il decaduto non entra.
+    assert s["conversion_rate"] == 0.5
+
+
+def test_l_anticipo_medio_tiene_UNA_cifra_decimale(db):
+    """1, 2, 2 giorni -> 1,666... La media va a schermo come 1,7: con due
+    cifre sarebbe 1,67, una precisione che tre campioni non reggono."""
+    for giorni in (1, 2, 2):
+        _attivo(db, TONE_BULL, status=STATUS_CONVERTED, lead_days=giorni)
+    assert conversion_stats(db)["avg_lead_days"] == 1.7

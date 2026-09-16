@@ -102,6 +102,15 @@ BERSAGLI: dict[str, list[str]] = {
         # (che era duplicata e in una copia NON ordinava) e i confini del
         # sommario dei rendimenti.
         "tests/test_setup_service_mutanti.py",
+        # ⚠️ Aggiunti il 2026-09-16, quando la notturna ha segnalato 9
+        # sopravvissuti «nuovi» su codice di FA-061 (terzo tono, episodi,
+        # perimetro) e FA-071 (serie ferma). I test di quelle correzioni
+        # esistevano gia' ma non stavano in questo elenco: falsi
+        # sopravvissuti, la forma che CLAUDE.md registra per `base.py`.
+        "tests/test_setup_tone_terzo_valore.py",
+        "tests/test_setup_episodi.py",
+        "tests/test_setups_perimetro.py",
+        "tests/test_serie_ferma_esce_dal_presente.py",
     ],
     # ─── Ampliamento 2026-09-13: da 4 a 12 moduli ─────────────────────────
     #
@@ -193,6 +202,8 @@ BERSAGLI: dict[str, list[str]] = {
         # (bande di postura, pavimento di storia, guardie sui denominatori
         # nulli, estremi della percentile, il titolo giusto), non le tarature.
         "tests/test_technical_score_mutanti.py",
+        # `forget` (FA-071): i suoi test stanno col resto della correzione.
+        "tests/test_serie_ferma_esce_dal_presente.py",
     ],
     # La de-correlazione per famiglia: N segnali correlati devono contare ~1.3,
     # non N. Se smette di funzionare la confluenza si gonfia in silenzio.
