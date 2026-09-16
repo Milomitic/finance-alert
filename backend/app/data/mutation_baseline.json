@@ -46,8 +46,8 @@
       "uccisi": 81
     },
     "app/services/signal_outcome_service.py": {
-      "mutanti": 68,
-      "uccisi": 58
+      "mutanti": 72,
+      "uccisi": 62
     }
   },
   "sopravvissuti": [
