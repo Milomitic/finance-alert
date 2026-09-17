@@ -26,6 +26,13 @@ from typing import NamedTuple
 
 from app.signals.trade_plan import PianoDiTrade
 
+#: Gli esiti che la gara sa produrre. ⚠️ Costanti e non stringhe sparse: la
+#: colonna `plan_outcomes.esito` ha una lunghezza, e in questo repo una
+#: costante piu' lunga della sua colonna ha gia' fermato ogni scansione per
+#: ~19 ore — Postgres rifiuta il valore, SQLite lo accetta, quindi la suite
+#: era verde. Un test le confronta con la lunghezza dichiarata sul modello.
+ESITI: frozenset[str] = frozenset({"tp1", "stop", "ambigua", "scaduto"})
+
 
 class Barra(NamedTuple):
     """Una seduta. `alto`/`basso` servono perche' la gara e' sul PERCORSO: una

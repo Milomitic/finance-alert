@@ -475,3 +475,79 @@ def test_il_tono_senza_direzione_entra_nella_colonna_su_POSTGRES(monkeypatch) ->
             c.execute(text("DELETE FROM stock_setups"))
         command.downgrade(cfg, _PRIMA)
         command.upgrade(cfg, "head")
+
+
+def test_la_migrazione_PLAN_OUTCOMES_gira_su_POSTGRES_andata_e_ritorno(monkeypatch) -> None:
+    """La tabella degli esiti di piano, su Postgres vero, in entrambi i versi.
+
+    Il test generale qui sopra confronta i modelli con le tabelle create e
+    coprirebbe gia' l'esistenza. Questo aggiunge le due cose che quel confronto
+    NON vede, ed entrambe sono trappole di dialetto:
+
+    1. Il default di una colonna BOOLEANA. Scritto `sa_text("0")` renderebbe
+       `DEFAULT 0` su Postgres, che li' e' un errore di TIPO; `sa.false()` e'
+       dialect-aware. Su SQLite i due sono indistinguibili, quindi la corsia
+       veloce non puo' dirlo — la stessa nota sta su `stocks.ohlcv_in_pounds`,
+       dove e' gia' costata una volta.
+    2. Il RITORNO. Una migrazione che non si ripercorre va scoperta adesso e
+       non durante un ripristino.
+    """
+    from sqlalchemy import text
+    from sqlalchemy.exc import IntegrityError
+
+    from alembic import command
+
+    _PRIMA = "d9e4b6a1c7f2"   # la revisione su cui questa si innesta
+
+    with _database_vuoto(monkeypatch) as (cfg, eng):
+        command.upgrade(cfg, _PRIMA)
+        assert "plan_outcomes" not in set(inspect(eng).get_table_names()), (
+            "la tabella esiste gia' PRIMA della sua migrazione: il test "
+            "proverebbe una trasformazione che non avviene"
+        )
+
+        command.upgrade(cfg, "head")
+        assert "plan_outcomes" in set(inspect(eng).get_table_names())
+
+        with eng.begin() as c:
+            c.execute(text(
+                "INSERT INTO stocks (ticker, exchange, name, country, "
+                "ohlcv_in_pounds, ohlcv_nodata_streak, instrument_type) "
+                "VALUES ('AAA', 'NASDAQ', 'AAA Corp', 'US', false, 0, 'equity')"))
+            sid = c.execute(text("SELECT id FROM stocks WHERE ticker='AAA'")).scalar_one()
+            c.execute(text(
+                "INSERT INTO alerts (stock_id, triggered_at, trigger_price, snapshot) "
+                "VALUES (:s, now(), 100.0, '{}')"), {"s": sid})
+            aid = c.execute(text("SELECT id FROM alerts")).scalar_one()
+            # ⚠️ `tp2_reached` e `source` NON sono passati: se i loro default
+            # non fossero validi per Postgres, questa INSERT fallirebbe qui.
+            c.execute(text(
+                "INSERT INTO plan_outcomes (alert_id, stock_id, detector, "
+                "signal_date, tone, horizon_days, entry_date, entry, stop, tp1, "
+                "tp2, r, esito, resolved_date, bars_to_outcome, r_multiple, "
+                "mae_r, mfe_r, matured_at) VALUES (:a, :s, 'sr_flip', "
+                "'2026-03-01', 'bull', 21, '2026-03-02', 100, 96, 108, 112, 4, "
+                "'ambigua', '2026-03-10', 6, -1, 0.25, 2.25, now())"),
+                {"a": aid, "s": sid})
+
+        with eng.connect() as c:
+            fatto, fonte = c.execute(text(
+                "SELECT tp2_reached, source FROM plan_outcomes")).one()
+        assert fatto is False, "il default booleano non e' arrivato come booleano"
+        assert fonte == "emesso"
+
+        # L'unicita' e' del DATABASE, non della diligenza del chiamante.
+        with pytest.raises(IntegrityError), eng.begin() as c:
+            c.execute(text(
+                "INSERT INTO plan_outcomes (alert_id, stock_id, detector, "
+                "signal_date, tone, horizon_days, entry_date, entry, stop, "
+                "tp1, r, esito, resolved_date, bars_to_outcome, r_multiple, "
+                "mae_r, mfe_r, matured_at) VALUES (:a, :s, 'sr_flip', "
+                "'2026-03-01', 'bull', 21, '2026-03-02', 100, 96, 108, 4, "
+                "'stop', '2026-03-11', 7, -1, 1.0, 0.5, now())"),
+                {"a": aid, "s": sid})
+
+        command.downgrade(cfg, _PRIMA)
+        assert "plan_outcomes" not in set(inspect(eng).get_table_names()), (
+            "il downgrade non ha rimosso la tabella"
+        )
