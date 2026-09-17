@@ -58,7 +58,13 @@ def test_filter_options_exclude_hidden_countries_and_exchanges(
     _stock(db, "AAPL", exchange="NASDAQ", country="US", sector="Information Technology")
     _stock(db, "600519.SS", exchange="SSE", country="CN", sector="Consumer Staples")
     _stock(db, "7203.T", exchange="JPX", country="JP", sector="Consumer Discretionary")
-    _stock(db, "005930.KS", exchange="KRX", country="KR", sector="Information Technology")
+    # ⚠️ NAVER e non Samsung: `005930.KS` sta in `SURFACED_TICKERS` dal
+    # 2026-09-17 (eccezione per ticker, vedi app/core/visibility.py), quindi
+    # come campione di "riga KRX nascosta" non vale piu' — con lei in tabella
+    # KRX comparirebbe fra le borse offerte, ed e' giusto cosi': selezionarlo
+    # restituisce righe. La premessa del test ("KRX darebbe sempre 0
+    # risultati") regge solo su una coreana NON esposta.
+    _stock(db, "035420.KS", exchange="KRX", country="KR", sector="Information Technology")
     # HKEX listing of a CN company — surfaced exchange, must stay offered.
     _stock(db, "0700.HK", exchange="HKEX", country="CN", sector="Communication Services")
     db.commit()

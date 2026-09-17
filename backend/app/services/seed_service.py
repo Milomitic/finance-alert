@@ -131,10 +131,30 @@ def seed_stocks_no_index_from_csv(
     and screener (which both work fine without index membership) while
     keeping the Indices semantic clean.
     """
+    return seed_stocks_subset_from_csv(db, csv_source, only=None)
+
+
+def seed_stocks_subset_from_csv(
+    db: Session, csv_source: IO[str], *, only: frozenset[str] | None
+) -> SeedResult:
+    """Come sopra, ma limitato ai ticker in `only` (None = tutte le righe).
+
+    ⚠️ Serve perche' il seme e' idempotente per RIGA mentre lo script canonico
+    lavora per FILE, e dal 2026-06 le due cose non coincidono piu': la potatura
+    (1494 -> 1000) ha cancellato righe dal DB senza toccare i CSV, quindi
+    `direxion_etfs.csv` dichiara 36 prodotti di cui 26 tolti di proposito e
+    `catalog_extras.csv` 197 righe di cui 85. Riseminare un intero file per
+    riprendersi UNA riga ne riporterebbe dentro decine che nessuno ha chiesto.
+
+    Il filtro sta qui e non nel chiamante cosi' il parsing del CSV resta di un
+    proprietario solo.
+    """
     added = 0
     updated = 0
     reader = csv.DictReader(csv_source)
     for row in reader:
+        if only is not None and row["ticker"] not in only:
+            continue
         _, created = _upsert_stock(db, row)
         added += int(created)
         updated += int(not created)

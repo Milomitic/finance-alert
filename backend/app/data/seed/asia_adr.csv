@@ -1,0 +1,15 @@
+ticker,name,exchange,sector,industry,country,currency
+TM,Toyota Motor Corporation,NYSE,Consumer Cyclical,Auto Manufacturers,JP,USD
+SONY,Sony Group Corporation,NYSE,Technology,Consumer Electronics,JP,USD
+MUFG,Mitsubishi UFJ Financial Group Inc,NYSE,Financial Services,Banks - Diversified,JP,USD
+HMC,Honda Motor Co Ltd,NYSE,Consumer Cyclical,Auto Manufacturers,JP,USD
+TAK,Takeda Pharmaceutical Company Ltd,NYSE,Healthcare,Drug Manufacturers - Specialty & Generic,JP,USD
+BABA,Alibaba Group Holding Ltd,NYSE,Consumer Cyclical,Internet Retail,CN,USD
+JD,JD.com Inc,NASDAQ,Consumer Cyclical,Internet Retail,CN,USD
+NTES,NetEase Inc,NASDAQ,Communication Services,Electronic Gaming & Multimedia,CN,USD
+LI,Li Auto Inc,NASDAQ,Consumer Cyclical,Auto Manufacturers,CN,USD
+KB,KB Financial Group Inc,NYSE,Financial Services,Banks - Regional,KR,USD
+SHG,Shinhan Financial Group Co Ltd,NYSE,Financial Services,Banks - Regional,KR,USD
+PKX,POSCO Holdings Inc,NYSE,Basic Materials,Steel,KR,USD
+KT,KT Corporation,NYSE,Communication Services,Telecom Services,KR,USD
+CPNG,Coupang Inc,NYSE,Consumer Cyclical,Internet Retail,KR,USD

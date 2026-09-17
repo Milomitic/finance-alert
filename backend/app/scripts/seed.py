@@ -51,6 +51,19 @@ NO_INDEX_SEEDS = [
     # — and the existing sector field plus search bar already make them
     # findable. See backend/app/data/seed/catalog_extras.csv.
     "catalog_extras.csv",
+    # asia_adr: i maggiori ADR giapponesi/cinesi/coreani negoziabili in dollari
+    # su NYSE/NASDAQ (2026-09-17). Il catalogo copriva l'Asia quasi solo con le
+    # linee LOCALI — KRX 20, JPX 40, HKEX 59 — e su borsa americana aveva
+    # QUATTRO nomi asiatici in tutto, quindi Toyota, Alibaba o POSCO non erano
+    # raggiungibili nella valuta e nell'orario in cui si negoziano davvero.
+    # Senza indice per la stessa ragione di direxion_etfs: «ADR asiatici» e' un
+    # tema, non un indice, e un finto indice sporcherebbe il menu.
+    #
+    # ⚠️ Per aggiungerli a un DB VIVO non usare questo script: `seed.py` semina
+    # per FILE e riporterebbe dentro le 111 righe che la potatura del 2026-06 ha
+    # tolto da questo file e da direxion_etfs. Si usa
+    # `app.scripts.seed_asia_adr`, che e' ristretto alle righe.
+    "asia_adr.csv",
 ]
 
 SEED_DIR = Path(__file__).resolve().parent.parent / "data" / "seed"

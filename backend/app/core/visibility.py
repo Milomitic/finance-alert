@@ -45,6 +45,28 @@ HIDDEN_COUNTRIES: frozenset[str] = frozenset({"CN", "JP", "KR"})
 # devono essere visibili e generare segnali".
 SURFACED_EXCHANGES: frozenset[str] = frozenset({"NASDAQ", "NYSE", "NYSE Arca", "HKEX"})
 
+# Singoli titoli esposti NONOSTANTE la loro borsa sia breadth-only, richiesti
+# dall'utente uno per uno (2026-09-17). Samsung e SK Hynix sono in catalogo da
+# sempre con dieci anni di storico, ma stanno su KRX: erano nel motore per
+# l'ampiezza e invisibili a ricerca, screener e generazione segnali — che e'
+# esattamente come sono state descritte, «non riesco a trovarle dalla barra di
+# ricerca».
+#
+# ⚠️ L'eccezione e' per TICKER e non per paese DI PROPOSITO. Togliere "KR" da
+# HIDDEN_COUNTRIES otterrebbe lo stesso risultato per queste due e
+# sbloccherebbe anche le altre diciotto KOSPI, che nessuno ha chiesto. Il
+# controllo negativo in `tests/test_asia_nel_motore.py` fissa proprio questa
+# differenza: se qualcuno "semplifica" verso il paese, quel test diventa rosso.
+#
+# ⚠️ Questo elenco e' ANCHE il marcatore di non-potabilita': la potatura del
+# 2026-06 (1494 -> 1000) e' un'operazione a mano, e la sua regola era «si
+# tengono i membri di indice, le scelte a mano e i nomi con un price_alert».
+# Un ticker nominato qui e' una scelta a mano esplicita e non va tolto.
+SURFACED_TICKERS: frozenset[str] = frozenset({
+    "005930.KS",  # Samsung Electronics
+    "000660.KS",  # SK Hynix
+})
+
 
 def visible_country_clause():
     """SQLAlchemy WHERE clause: rows whose country is NULL OR not in
@@ -59,17 +81,30 @@ def visible_country_clause():
         ~Stock.country.in_(HIDDEN_COUNTRIES),
         # US-listed ADRs + HK-listed names of CN/JP/KR companies stay visible.
         Stock.exchange.in_(SURFACED_EXCHANGES),
+        # Singoli titoli esposti a mano, borsa breadth-only compresa.
+        Stock.ticker.in_(SURFACED_TICKERS),
     )
 
 
-def is_visible_country(country: str | None, exchange: str | None = None) -> bool:
+def is_visible_country(
+    country: str | None,
+    exchange: str | None = None,
+    ticker: str | None = None,
+) -> bool:
     """Python-side equivalent of `visible_country_clause()` for callsites
     that already have a `country` value in memory (e.g. filtering an
     in-memory metrics list before passing to mover/treemap aggregators).
 
     `exchange`, when supplied, applies the surfaced-exchange exception: a
     stock on NASDAQ / NYSE / NYSE Arca / HKEX is always visible regardless
-    of its domicile."""
+    of its domicile. `ticker`, when supplied, applies the per-ticker
+    exception (`SURFACED_TICKERS`).
+
+    ⚠️ Le due forme della stessa regola vanno tenute in pari: un test le
+    confronta caso per caso, perche' due copie divergono al primo ritocco e
+    qui la divergenza farebbe sparire un titolo da una superficie sola."""
+    if ticker is not None and ticker in SURFACED_TICKERS:
+        return True
     if country is None:
         return True
     if exchange is not None and exchange in SURFACED_EXCHANGES:
