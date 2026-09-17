@@ -257,3 +257,38 @@ def test_ogni_livello_porta_una_ragione_leggibile() -> None:
         assert isinstance(m, SignalMatch) and m.invalidation is not None
         ragione = m.invalidation.get("reason")
         assert isinstance(ragione, str) and len(ragione) > 8, f"{nome}: ragione assente"
+
+
+# ─── 6. La forma VERA del DataFrame ────────────────────────────────────────
+
+def test_i_livelli_reggono_una_colonna_date_con_orario() -> None:
+    """⚠️ Le fixture dei test passano date come STRINGHE; il DataFrame che il
+    motore costruisce dal database porta dei `Timestamp`.
+
+    Su un Timestamp `str()` rende "2026-02-01 00:00:00", ed e' per questo che
+    tutto il codice degli eventi tronca a dieci caratteri (`events._iso` fa la
+    stessa identica cosa). Con un taglio sbagliato di UNO le chiavi diventano
+    "2026-02-01 " con lo spazio in coda, la data del pivot non combacia piu' e
+    il livello torna None: nessun errore, nessun test rosso, semplicemente il
+    piano sparisce in produzione e resta a schermo nei test.
+
+    Trovato dalla sonda di mutazione, non leggendo il codice.
+    """
+    df = _df(estremi={"2026-02-01": (88.5, 101.0)})
+    df["date"] = pd.to_datetime(df["date"])   # la forma che arriva dal DB
+    assert str(df["date"].iloc[0]) != str(df["date"].iloc[0])[:10], (
+        "la fixture non riproduce il caso: le date non portano un orario"
+    )
+
+    eventi = [Event("2026-02-01", "rsi_divergence", "bull", magnitude=0.4,
+                    payload={"period": 14, "rsi": [22.0, 42.0],
+                             "pivot_dates": ["2026-01-10", "2026-02-01"]})]
+    assert _livello(RsiDivergence().detect(eventi, df, build_context(df))) == 88.5
+
+    df_sq = _df(estremi={"2026-01-15": (93.75, 101.0)})
+    df_sq["date"] = pd.to_datetime(df_sq["date"])
+    eventi_sq = [
+        Event("2026-01-10", "bb_squeeze", None, magnitude=1.4, payload={"period": 20}),
+        Event("2026-01-20", "bb_expansion", "bull", magnitude=0.05, payload={"period": 20}),
+    ]
+    assert _livello(SqueezeExpansion().detect(eventi_sq, df_sq, build_context(df_sq))) == 93.75

@@ -356,6 +356,18 @@ EQUIVALENTI: dict[str, str] = {
     #     perche' un ramo precedente ha gia' restituito. (d) Un `return`
     #     difensivo che nessun cammino raggiunge. (e) `frozen=True` senza un
     #     consumatore che eserciti l'immutabilita'.
+    "app/signals/detectors/base.py::estremi_per_data#0  False -> True":
+        "`itertuples(index=False)` -> `index=True`. Col mutante la namedtuple "
+        "guadagna un campo `Index` in testa, ma l'accesso e' PER NOME "
+        "(`r.date`, `r.low`, `r.high`), quindi ogni valore letto e' identico. "
+        "Sarebbe un difetto solo con lo spacchettamento posizionale, che qui "
+        "non c'e'. ⚠️ I quattro gemelli sulla stessa famiglia — i tagli "
+        "`str(...)[:10]` in questa funzione, in `invalidazione_da_pivot` e in "
+        "`invalidazione_da_finestra` — NON sono equivalenti: con un Timestamp "
+        "`str()` rende '2026-02-01 00:00:00' e un carattere in piu' lascia uno "
+        "spazio in coda che non combacia con la data del pivot, quindi il "
+        "livello sparisce in silenzio. Li uccide "
+        "`test_i_livelli_reggono_una_colonna_date_con_orario`.",
     "app/signals/detectors/base.py::soft01#0  LtE -> Lt":
         "Il termine `x <= 0` della guardia. Col mutante `x < 0` uno zero passa, "
         "ma la formula rende `0 / (0 + 0.25*ref)` = 0.0 — lo STESSO valore del "
