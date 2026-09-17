@@ -7,6 +7,7 @@ import { MarketMoodStrip } from "@/components/dashboard/MarketMoodStrip";
 import { LiveVolumeMoversCard } from "@/components/dashboard/LiveVolumeMoversCard";
 import { MarketEventsRail } from "@/components/dashboard/MarketEventsRail";
 import { MarketTickerTape } from "@/components/dashboard/MarketTickerTape";
+import { MarketPulseJumbotron } from "@/components/dashboard/MarketPulseJumbotron";
 import { AnalystActionsCard } from "@/components/dashboard/AnalystActionsCard";
 import { ScanHeaderButton } from "@/components/dashboard/ScanHeaderButton";
 import { TopMoversCard } from "@/components/dashboard/TopMoversCard";
@@ -216,6 +217,12 @@ function HomePageContent() {
           Sets the "trading floor" tone for the page — the rest of the
           UI feels static without it. */}
       <MarketTickerTape />
+      {/* PROTOTIPO — il battito dei mercati, dedicato al pre-market e alle ore
+          di Wall Street. Sta SOPRA l'intestazione perche' e' la risposta alla
+          domanda per cui questa pagina viene aperta la mattina: cosa sta
+          succedendo adesso. Non fa nessuna richiesta nuova — riusa per chiave
+          le stesse interrogazioni del nastro qui sopra e delle schede sotto. */}
+      <MarketPulseJumbotron global={m?.global} computedAt={m?.computed_at} />
       <div className="flex flex-wrap items-center justify-between gap-2 px-1">
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 min-w-0">
           {/* Nascosto sul telefono: la barra di navigazione dice gia' dove

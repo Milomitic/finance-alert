@@ -127,6 +127,13 @@ LIVE_ASSET_DEFINITIONS: list[tuple[str, str, str, str | None, str | None]] = [
     ("^GSPC",        "S&P 500",            "index",     "us", "ES=F"),
     ("^IXIC",        "Nasdaq Composite",   "index",     "us", "NQ=F"),
     ("^DJI",         "Dow Jones",          "index",     "us", "YM=F"),
+    # Il VIX e' un INDICE (quello della volatilita' attesa a 30 giorni
+    # sull'S&P 500), quindi sta qui senza bisogno di una categoria nuova, e la
+    # pagina di dettaglio lo apre come qualunque altro simbolo. Nessun futures
+    # accoppiato di proposito: VX=F e' un contratto con la sua scadenza e la
+    # sua base, non lo stesso numero visto fuori orario — scambiarlo col cash
+    # direbbe «VIX» mostrando un'altra cosa.
+    ("^VIX",         "VIX",                "index",     "us", None),
     ("^N225",        "Nikkei 225",         "index",     "jp", "NKD=F"),
     ("^STOXX50E",    "Euro Stoxx 50",      "index",     "eu", None),
     ("FTSEMIB.MI",   "FTSE MIB",           "index",     "it", None),
