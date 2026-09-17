@@ -293,3 +293,71 @@ def probability_from_factors(
             total += interp_adjustment(raw, pts)
     total = max(-max_total_adj, min(max_total_adj, total))
     return round(max(floor, min(ceil, base_rate + total)))
+
+
+# ─── Livelli di invalidazione ──────────────────────────────────────────────
+# Il livello strutturale oltre il quale la PREMESSA del segnale e' falsa. Non
+# e' un preferenza di rischio: il piano di trade lo usa come stop, lo pavimenta
+# a floor*ATR e ci dimensiona sopra la posizione (`lib/tradePlaybook.ts`), e un
+# esito basato sul piano ci corre contro il target.
+#
+# ⚠️ Un livello ASSENTE e' un caso legittimo e va restituito come None. Un
+# livello INVENTATO no: il piano lo mostrerebbe con la stessa faccia di uno
+# misurato, e chi lo legge non ha modo di distinguerli.
+
+def estremi_per_data(ohlcv: pd.DataFrame) -> dict[str, tuple[float, float]]:
+    """{data ISO: (minimo, massimo)} — le barre indicizzate per giorno."""
+    return {str(r.date)[:10]: (float(r.low), float(r.high))
+            for r in ohlcv.itertuples(index=False)}
+
+
+def invalidazione_da_pivot(
+    ohlcv: pd.DataFrame, pivot_dates: list | None, tone: str,
+) -> dict | None:
+    """L'estremo di prezzo su cui poggia una divergenza.
+
+    Proprietario unico delle tre divergenze (RSI, MACD, nascosta): sono lo
+    stesso enunciato — «il prezzo ha fatto questo estremo mentre l'oscillatore
+    ne faceva un altro» — quindi hanno la stessa condizione di falsita', e il
+    prezzo che va OLTRE quell'estremo la realizza. Non c'e' una soglia da
+    scegliere: la struttura la fornisce.
+
+    Si prende l'ULTIMO pivot, che e' quello che chiude la divergenza: per una
+    rialzista e' il minimo piu' basso, per una ribassista il massimo piu' alto.
+    Vale anche per la divergenza NASCOSTA, dove l'estremo e' un minimo piu'
+    ALTO (o un massimo piu' basso) ma la condizione di falsita' e' identica.
+
+    None quando il pivot non e' fra le barre note — accade con payload storici
+    o con una finestra piu' corta della divergenza.
+    """
+    if not pivot_dates:
+        return None
+    ultimo = str(pivot_dates[-1])[:10]
+    estremi = estremi_per_data(ohlcv)
+    if ultimo not in estremi:
+        return None
+    minimo, massimo = estremi[ultimo]
+    if tone == "bull":
+        return {"level": minimo,
+                "reason": "prezzo sotto il minimo su cui poggia la divergenza"}
+    return {"level": massimo,
+            "reason": "prezzo sopra il massimo su cui poggia la divergenza"}
+
+
+def invalidazione_da_finestra(
+    ohlcv: pd.DataFrame, dal: str, al: str, tone: str, reason: str,
+) -> dict | None:
+    """Il lato opposto dell'intervallo di prezzo fra due date, incluse.
+
+    ⚠️ La finestra e' quella dell'evento, NON tutto lo storico: il minimo
+    assoluto di dieci anni produrrebbe uno stop enorme su un livello che col
+    segnale non c'entra niente, e siccome il piano dimensiona la posizione
+    sulla distanza dello stop, l'errore si vedrebbe come una size minuscola e
+    non come un livello sbagliato.
+    """
+    d1, d2 = sorted((str(dal)[:10], str(al)[:10]))
+    dentro = [(lo, hi) for d, (lo, hi) in estremi_per_data(ohlcv).items() if d1 <= d <= d2]
+    if not dentro:
+        return None
+    livello = min(lo for lo, _ in dentro) if tone == "bull" else max(hi for _, hi in dentro)
+    return {"level": float(livello), "reason": reason}

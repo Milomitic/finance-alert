@@ -9,7 +9,12 @@ import pandas as pd
 
 from app.signals.calibration_map import get_calibration
 from app.signals.context import SignalContext
-from app.signals.detectors.base import SignalMatch, concave, score_v2
+from app.signals.detectors.base import (
+    SignalMatch,
+    concave,
+    invalidazione_da_pivot,
+    score_v2,
+)
 from app.signals.events import Event
 
 _COUNTER_TREND = 1.0
@@ -59,5 +64,7 @@ class MacdDivergence:
                   for dt in pivots if dt in close_by_date]
         return SignalMatch(name=self.name, tone=tone,
                            strength=strength, probability=probability,
-                           signal_date=d.date, chain=chain, invalidation=None, factors=factors,
+                           signal_date=d.date, chain=chain,
+                           invalidation=invalidazione_da_pivot(ohlcv, pivots, tone),
+                           factors=factors,
                            annotations={"levels": [], "points": points})

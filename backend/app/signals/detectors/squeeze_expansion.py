@@ -8,7 +8,13 @@ import pandas as pd
 
 from app.signals.calibration_map import get_calibration
 from app.signals.context import SignalContext
-from app.signals.detectors.base import SignalMatch, concave, find_after, score_v2
+from app.signals.detectors.base import (
+    SignalMatch,
+    concave,
+    find_after,
+    invalidazione_da_finestra,
+    score_v2,
+)
 from app.signals.events import Event
 from app.signals.setups.base import TONE_UNDETERMINED, SetupMatch
 
@@ -56,9 +62,17 @@ class SqueezeExpansion:
             {"date": exp.date, "label": f"Espansione {tone}",
              "detail": "le bande si riaprono: rilascio nel verso del trend"},
         ]
+        # Il segnale dice «l'energia accumulata si e' rilasciata in questo
+        # verso». Tornare oltre il lato opposto della compressione dice che non
+        # era un rilascio: la finestra e' quella fra compressione ed espansione,
+        # non lo storico.
+        invalidation = invalidazione_da_finestra(
+            ohlcv, sq.date, exp.date, tone,
+            "rientro nella compressione: il rilascio non ha tenuto")
         return SignalMatch(name=self.name, tone=tone,
                            strength=strength, probability=probability,
-                           signal_date=exp.date, chain=chain, invalidation=None,
+                           signal_date=exp.date, chain=chain,
+                           invalidation=invalidation,
                            factors=factors)
 
     # ── Setup (pre-trigger) ─────────────────────────────────────────────

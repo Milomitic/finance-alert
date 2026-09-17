@@ -36,10 +36,17 @@ class AdxConfirmation:
         a = adxs[-1]
         tone = a.direction or "bull"
         # Confirmation: a breakout in the same direction on/around the adx bar.
-        bo_same = any(e.type == "breakout" and e.direction == tone and e.date == a.date for e in events)
+        # ⚠️ Si CATTURA l'evento invece di limitarsi a contarlo: il breakout
+        # porta nel payload il livello Donchian che ha superato, ed e' quello
+        # l'invalidazione strutturale. La condizione d'uscita resta identica —
+        # `bo_before` era gia' «un breakout concorde esiste», e qui e' l'ultimo.
+        bo_same = next((e for e in events
+                        if e.type == "breakout" and e.direction == tone and e.date == a.date), None)
         bo_after = find_after(events, "breakout", after=a.date, within_days=_BREAK_WINDOW_DAYS, direction=tone)
-        bo_before = any(e.type == "breakout" and e.direction == tone for e in events)
-        if not (bo_same or bo_after or bo_before):
+        bo_before = next((e for e in reversed(events)
+                          if e.type == "breakout" and e.direction == tone), None)
+        bo = bo_same or bo_after or bo_before
+        if bo is None:
             return None
         di_spread_raw = abs((a.payload.get("plus_di") or 0) - (a.payload.get("minus_di") or 0))
         factors = {
@@ -62,6 +69,13 @@ class AdxConfirmation:
             {"date": a.date, "label": "Conferma breakout",
              "detail": "rottura nel verso del trend"},
         ]
+        livello_rotto = bo.payload.get("level")
+        invalidation = (
+            {"level": float(livello_rotto),
+             "reason": "rientro oltre il livello rotto: la rottura non ha tenuto"}
+            if isinstance(livello_rotto, (int, float)) and livello_rotto > 0 else None
+        )
         return SignalMatch(name=self.name, tone=tone,
                            strength=strength, probability=probability,
-                           signal_date=a.date, chain=chain, invalidation=None, factors=factors)
+                           signal_date=a.date, chain=chain,
+                           invalidation=invalidation, factors=factors)

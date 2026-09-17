@@ -68,6 +68,18 @@ class GapAndGo:
             {"date": gap.date, "label": "Conferma volume",
              "detail": f"{vol_mag:.1f}x la media: gap partecipato"},
         ]
+        # Il gap colmato e' la negazione letterale del segnale: «apertura in
+        # gap che TIENE, con volume». `prev_close` lo calcola gia' l'estrattore
+        # di eventi. ⚠️ I payload storici non ce l'hanno — allora niente livello,
+        # perche' ricostruirlo dalle barre darebbe un numero indistinguibile da
+        # uno misurato ma preso da una barra che non e' quella del gap.
+        prev_close = gap.payload.get("prev_close")
+        invalidation = (
+            {"level": float(prev_close),
+             "reason": "gap colmato: ritorno alla chiusura precedente"}
+            if isinstance(prev_close, (int, float)) and prev_close > 0 else None
+        )
         return SignalMatch(name=self.name, tone=tone,
                            strength=strength, probability=probability,
-                           signal_date=gap.date, chain=chain, invalidation=None, factors=factors)
+                           signal_date=gap.date, chain=chain,
+                           invalidation=invalidation, factors=factors)
