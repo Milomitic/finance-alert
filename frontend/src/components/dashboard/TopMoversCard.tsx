@@ -177,9 +177,20 @@ function MoverRow({ m, field, window, live, computedAt, livePrice, livePulse, fl
         to={`/stocks/${encodeURIComponent(m.ticker)}`}
         className={cn(
           "grid items-center gap-1 px-1.5 py-1.5 hover:bg-accent/30 transition-colors",
+          /* ⚠️ Le colonne numeriche erano px FISSI, quindi TUTTO lo spazio in
+             piu' andava all'identita': a 1280px la colonna del nome valeva
+             229px e il prezzo ne aveva 46 per `$1234.56`, che a quel corpo ne
+             chiede ~55. Il nome aveva acri, i numeri si toccavano.
+             Ora ogni colonna ha un PAVIMENTO (la larghezza di prima, quindi
+             niente puo' peggiorare rispetto a oggi) e una QUOTA del surplus:
+             se lo spazio e' poco le numeriche si congelano al pavimento e
+             l'identita' prende il resto, esattamente come prima; se ce n'e', il
+             surplus si divide invece di finire tutto nel nome. Misurato sulla
+             riga larga: a 482px l'identita' passa da 229 a ~188 e le numeriche
+             da 176 a ~218 complessivi. */
           wide
-            ? "grid-cols-[minmax(0,1fr)_46px_52px_48px_30px_auto]"
-            : "grid-cols-[minmax(0,1fr)_46px_52px_auto] row-full:grid-cols-[minmax(0,1fr)_46px_52px_48px_30px_auto]",
+            ? "grid-cols-[minmax(0,1.9fr)_minmax(46px,0.6fr)_minmax(52px,0.62fr)_minmax(48px,0.56fr)_minmax(30px,0.42fr)_auto]"
+            : "grid-cols-[minmax(0,2fr)_minmax(46px,0.62fr)_minmax(52px,0.66fr)_auto] row-full:grid-cols-[minmax(0,1.9fr)_minmax(46px,0.6fr)_minmax(52px,0.62fr)_minmax(48px,0.56fr)_minmax(30px,0.42fr)_auto]",
         )}
       >
         {/* Col 1: identity + per-row live-poll dot. A classic pulsing green

@@ -181,7 +181,16 @@ export function LiveVolumeMoversCard({ movers, computedAt }: Props) {
                 <li key={r.ticker}>
                   <Link
                     to={`/stocks/${encodeURIComponent(r.ticker)}`}
-                    className="grid grid-cols-[minmax(0,1fr)_auto_auto_auto] row-full:grid-cols-[minmax(0,1fr)_auto_auto_auto_auto_auto] items-center gap-2 px-3 py-1.5 hover:bg-accent/30 transition-colors"
+                    /* Stessa correzione della scheda Top movers accanto: le
+                       colonne numeriche erano `auto`, cioe' larghe quanto il
+                       loro contenuto e non un pixel di piu', quindi l'intero
+                       avanzo andava al nome — a 1280px, dove questa scheda
+                       mostra quattro colonne, erano ~266px di nome contro
+                       ~168px di numeri. Il minimo resta `auto` (una colonna non
+                       puo' diventare piu' stretta del suo numero, quindi niente
+                       puo' essere tagliato), ma ora anche le numeriche hanno una
+                       quota dell'avanzo. */
+                    className="grid grid-cols-[minmax(0,2.1fr)_minmax(auto,0.62fr)_minmax(auto,0.62fr)_auto] row-full:grid-cols-[minmax(0,1.9fr)_minmax(auto,0.56fr)_minmax(auto,0.56fr)_minmax(auto,0.56fr)_minmax(auto,0.5fr)_auto] items-center gap-2 px-3 py-1.5 hover:bg-accent/30 transition-colors"
                   >
                     {/* Col 1: identity + per-row live-poll dot.
                         Previously the "is this row being polled
