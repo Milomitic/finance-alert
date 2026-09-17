@@ -257,3 +257,25 @@ def test_lo_screener_offre_krx_proprio_perche_esiste_l_eccezione(db: Session) ->
 
     assert "KRX" in dati["exchanges"], "la borsa del titolo esposto non e' filtrabile"
     assert "JPX" not in dati["exchanges"], "JPX non ha titoli esposti: non va offerta"
+
+
+def test_run_semina_e_COMMITTA_sulla_sessione_giusta(db: Session, monkeypatch) -> None:
+    """`run()` e' cio' che gira davvero nel pod, `db.commit()` compreso.
+
+    ⚠️ Il monkeypatch non e' una formalita': lo script fa
+    `from app.core.db import SessionLocal` al caricamento del modulo, quindi
+    resta legato all'ORIGINALE anche quando il conftest sostituisce quello di
+    `app.core.db`. Senza, questo test scriverebbe nel database di SVILUPPO e
+    poi fallirebbe leggendo quello di test — o peggio passerebbe misurando il
+    database sbagliato. La stessa trappola e' documentata in
+    `test_institutionals_catchup.py`, dove e' gia' costata una volta.
+    """
+    from app.core import db as db_module
+    from app.scripts import seed_asia_adr
+
+    monkeypatch.setattr(seed_asia_adr, "SessionLocal", db_module.SessionLocal)
+    seed_asia_adr.run()
+
+    presenti = set(db.execute(select(Stock.ticker)).scalars())
+    assert {"TM", "BABA", "KB", "YINN"} <= presenti
+    assert "YANG" not in presenti, "il filtro per riga non ha retto dentro run()"
