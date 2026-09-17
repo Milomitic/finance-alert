@@ -12,6 +12,7 @@ import { mergeLiveQuoteIntoOhlcv } from "@/lib/liveOhlcvMerge";
 import { alertBarIndex, buildEarningsMarkers, buildSignalOverlay } from "@/lib/signalMarkers";
 import { rebaseBenchmark } from "@/lib/benchmarkOverlay";
 import { defaultVisibleRange } from "@/lib/chartClamp";
+import { serieVisibile } from "@/lib/chartInitialView";
 import { DEFAULT_RANGE, resolveRange, writeRange } from "@/lib/chartPrefs";
 import { downloadChartPng } from "@/lib/chartExport";
 import { defaultVisibleBars } from "@/lib/timeframeZoom";
@@ -106,6 +107,13 @@ export default function StockDetailPage() {
     () => mergeLiveQuoteIntoOhlcv(detail.data?.ohlcv ?? [], live.data, range),
     [detail.data?.ohlcv, live.data, range],
   );
+  /* La SERIE a schermo, per i tre grafici. Decide quando rimettere la vista
+   * d'apertura — cioe' quasi mai: `mergedOhlcv` cambia identita' a ogni
+   * quotazione live (~15 s), e prima questo bastava a buttare lo zoom
+   * dell'utente. `isPlaceholderData` la tiene nulla mentre a schermo ci sono
+   * ancora le barre del timeframe precedente, altrimenti la finestra si
+   * calcolerebbe sul numero di barre sbagliato. Vedi `lib/chartInitialView`. */
+  const serieGrafico = serieVisibile(ticker, range, !detail.isPlaceholderData);
   // Stale-intraday detection: last sub-daily bar older than 3 calendar days
   // while the (DB-served) daily feed is fine → upstream intraday gap. The
   // banner above the chart names the cutoff date instead of letting the
@@ -509,7 +517,14 @@ export default function StockDetailPage() {
                 value={range}
                 onChange={(r) => {
                   writeRange(r);
-                  setSearchParams({ range: r });
+                  // ⚠️ `replace`, non una voce di cronologia nuova. Difetto
+                  // riportato dall'utente il 2026-09-17: cambiando timeframe
+                  // la pagina tornava in cima. `useScrollRestoration` porta a
+                  // zero lo scorrimento a ogni PUSH — una pagina nuova comincia
+                  // dall'alto — e questa e' la stessa pagina con un'altra
+                  // vista, come i filtri altrove. In piu' evitiamo che
+                  // «indietro» debba ripercorrere un timeframe alla volta.
+                  setSearchParams({ range: r }, { replace: true });
                 }}
               />
               {/* Phone-only disclosure. The timeframe stays out (it is the one
@@ -601,7 +616,9 @@ export default function StockDetailPage() {
                   className="underline underline-offset-2 hover:opacity-80"
                   onClick={() => {
                     writeRange(DEFAULT_RANGE);
-                    setSearchParams({ range: DEFAULT_RANGE });
+                    // Stessa ragione del selettore qui sopra: cambia la vista,
+                    // non la pagina.
+                    setSearchParams({ range: DEFAULT_RANGE }, { replace: true });
                   }}
                 >
                   Passa a 1G per dati aggiornati
@@ -636,6 +653,7 @@ export default function StockDetailPage() {
                 <PriceChart
                   key={range}
                   ohlcv={mergedOhlcv}
+                  serie={serieGrafico}
                   currency={d.stock.currency}
                   indicators={ind}
                   styles={{
@@ -695,6 +713,7 @@ export default function StockDetailPage() {
                 >
                   <RsiPanel
                     key={range}
+                    serie={serieGrafico}
                     rsi14={ind.rsi14}
                     color={indicators.rsi.color}
                     width={indicators.rsi.width}
@@ -722,6 +741,7 @@ export default function StockDetailPage() {
                 >
                   <MacdPanel
                     key={range}
+                    serie={serieGrafico}
                     line={ind.macd_line ?? []}
                     signal={ind.macd_signal ?? []}
                     hist={ind.macd_hist ?? []}

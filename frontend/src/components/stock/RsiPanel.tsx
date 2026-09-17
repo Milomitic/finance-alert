@@ -6,6 +6,7 @@ import {
 
 import type { IndicatorPoint } from "@/api/types";
 import type { RegisterChart } from "@/hooks/useChartSync";
+import { deveAprireLaFinestra } from "@/lib/chartInitialView";
 
 interface Props {
   rsi14: IndicatorPoint[];
@@ -14,6 +15,10 @@ interface Props {
   /** Register with the parent chart-sync orchestrator so panning/zooming
    *  this panel propagates to PriceChart + MacdPanel. */
   onReady?: RegisterChart;
+  /** La serie a schermo (`titolo|timeframe`), `null` finche' i dati sono
+   *  ancora quelli precedenti: decide QUANDO rimettere la vista d'apertura.
+   *  Vedi `lib/chartInitialView`. */
+  serie?: string | null;
 }
 
 function dateToTime(d: string): UTCTimestamp {
@@ -54,10 +59,12 @@ const COLORE_RSI = "#7c3aed";
 const SPESSORE_RSI = 2;
 
 export function RsiPanel({
-  rsi14, color = COLORE_RSI, width = SPESSORE_RSI, onReady,
+  rsi14, color = COLORE_RSI, width = SPESSORE_RSI, onReady, serie = null,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
+  // La serie per cui la vista d'apertura e' gia' stata messa.
+  const finestraPer = useRef<string | null>(null);
   const lineRef = useRef<ISeriesApi<"Line"> | null>(null);
   // Three background slabs, all in the same hue (derived from the line
   // color via alpha): light in the neutral band, darker in the alert
@@ -234,8 +241,13 @@ export function RsiPanel({
     neutralRef.current.setData(times.map((time) => ({ time, value: 70 })));
     overboughtRef.current.setData(times.map((time) => ({ time, value: 100 })));
     oversoldRef.current.setData(times.map((time) => ({ time, value: 0 })));
-    chartRef.current?.timeScale().fitContent();
-  }, [rsi14]);
+    // ⚠️ Una volta per SERIE — stessa ragione del pannello MACD: la sincronia
+    // fa di questo `fitContent` un reset dello zoom su tutti e tre i grafici.
+    if (deveAprireLaFinestra(finestraPer.current, serie, points.length)) {
+      finestraPer.current = serie;
+      chartRef.current?.timeScale().fitContent();
+    }
+  }, [rsi14, serie]);
 
   return <div ref={containerRef} className="w-full h-full" />;
 }

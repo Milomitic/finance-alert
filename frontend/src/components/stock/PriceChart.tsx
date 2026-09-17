@@ -13,6 +13,7 @@ import type { RegisterChart } from "@/hooks/useChartSync";
 import type { LinePoint } from "@/lib/benchmarkOverlay";
 import type { SignalHoverItem } from "@/lib/signalMarkers";
 import { EDGE_MARGIN_BARS, defaultVisibleRange } from "@/lib/chartClamp";
+import { deveAprireLaFinestra } from "@/lib/chartInitialView";
 import { defaultVisibleBars, isIntraday } from "@/lib/timeframeZoom";
 
 interface Props {
@@ -40,6 +41,12 @@ interface Props {
   /** Active timeframe key (30m/1h/1d/...) — drives the initial visible
    *  range so e.g. 30m doesn't render 60 days of 30-min bars at once. */
   timeframe?: string;
+  /** La SERIE a schermo (`titolo|timeframe`), o `null` finche' le barre sono
+   *  ancora quelle della serie precedente. La finestra d'apertura si applica
+   *  una volta per serie e non a ogni aggiornamento: senza, la quotazione
+   *  live di ogni ~15 s buttava zoom e posizione dell'utente. Vedi
+   *  `lib/chartInitialView`. */
+  serie?: string | null;
   /** Listing currency, for the legend's unit. */
   currency?: string | null;
   /** Signal markers (arrows) drawn on the candles — one per bar, tone by
@@ -95,7 +102,7 @@ function pointsToChartData(points: IndicatorPoint[] | undefined) {
 export function PriceChart({
   ohlcv, indicators, styles,
   priceAlerts, horizontalDrawings = [], trendDrawings = [],
-  onChartClick, onReady, timeframe, currency = null,
+  onChartClick, onReady, timeframe, serie = null, currency = null,
   signalMarkers = [], signalsByTime, earningsMarkers = [],
   chartType = "candle",
   benchmarkLine = [], benchmarkColor = "#7c3aed", benchmarkLabel, chartApiRef,
@@ -116,6 +123,9 @@ export function PriceChart({
   // because the handler is registered once at chart mount and
   // would otherwise close over the initial `ohlcv` snapshot.
   const ohlcvRef = useRef<OhlcvBar[]>([]);
+  // La serie per cui la finestra d'apertura e' gia' stata applicata: finche'
+  // resta la stessa, un dato nuovo NON rimette la vista (vedi l'effetto OHLCV).
+  const finestraPer = useRef<string | null>(null);
   const timeframeRef = useRef<string | undefined>(timeframe);
   const exchangeTzRef = useRef<string>(exchangeTz);
   // The fixed top-left legend. `null` only before the first data load;
@@ -499,12 +509,21 @@ export function PriceChart({
     // Initial visible window: clamp to the most recent N bars based on
     // timeframe so the user sees a sensible "default zoom" instead of
     // the full upstream history. `null` (e.g. timeframe=all) → fitContent.
+    //
+    // ⚠️ UNA VOLTA PER SERIE, non a ogni aggiornamento dei dati. Questo
+    // effetto dipende da `ohlcv`, che cambia identita' da solo: la quotazione
+    // in tempo reale ricostruisce l'array ogni ~15 s e la query si riaggiorna
+    // dopo 30 s. Rimettere qui la finestra buttava zoom e posizione mentre
+    // l'utente stava guardando — il difetto riportato il 2026-09-17. La
+    // regola e il perche' stanno in `lib/chartInitialView`.
     const ts = chartRef.current?.timeScale();
     if (!ts) return;
+    if (!deveAprireLaFinestra(finestraPer.current, serie, ohlcv.length)) return;
+    finestraPer.current = serie;
     const rest = defaultVisibleRange(ohlcv.length, defaultVisibleBars(timeframe));
     if (rest) ts.setVisibleLogicalRange(rest as never);
     else ts.fitContent();
-  }, [ohlcv, timeframe]);
+  }, [ohlcv, timeframe, serie]);
 
   // Chart-type switch: show exactly one price series (candle / line / area).
   useEffect(() => {

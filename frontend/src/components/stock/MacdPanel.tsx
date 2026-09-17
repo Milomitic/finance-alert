@@ -6,6 +6,7 @@ import {
 
 import type { IndicatorPoint } from "@/api/types";
 import type { RegisterChart } from "@/hooks/useChartSync";
+import { deveAprireLaFinestra } from "@/lib/chartInitialView";
 
 interface Props {
   line: IndicatorPoint[];
@@ -16,6 +17,10 @@ interface Props {
   /** Register with the parent chart-sync orchestrator so panning/zooming
    *  this panel propagates to PriceChart + RsiPanel. */
   onReady?: RegisterChart;
+  /** La serie a schermo (`titolo|timeframe`), `null` finche' i dati sono
+   *  ancora quelli precedenti: decide QUANDO rimettere la vista d'apertura.
+   *  Vedi `lib/chartInitialView`. */
+  serie?: string | null;
 }
 
 function dateToTime(d: string): UTCTimestamp {
@@ -44,9 +49,12 @@ const SPESSORE_MACD = 2;
 
 export function MacdPanel({
   line, signal, hist, color = COLORE_MACD, width = SPESSORE_MACD, onReady,
+  serie = null,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
+  // La serie per cui la vista d'apertura e' gia' stata messa.
+  const finestraPer = useRef<string | null>(null);
   const lineRef = useRef<ISeriesApi<"Line"> | null>(null);
   const signalRef = useRef<ISeriesApi<"Line"> | null>(null);
   const histRef = useRef<ISeriesApi<"Histogram"> | null>(null);
@@ -143,8 +151,18 @@ export function MacdPanel({
           };
         }),
     );
-    chartRef.current?.timeScale().fitContent();
-  }, [line, signal, hist]);
+    // ⚠️ Una volta per SERIE. Questo pannello e' sincronizzato con gli altri
+    // due: un `fitContent` qui diventa un cambio di finestra che
+    // `useChartSync` propaga al grafico dei prezzi, quindi rimetterlo a ogni
+    // aggiornamento dei dati resettava lo zoom dell'utente anche di la'.
+    // Vedi `lib/chartInitialView`.
+    // `linePoints`, non `line`: le barre di riscaldamento del MACD sono nulle
+    // e una serie di soli valori nulli non ha niente da inquadrare.
+    if (deveAprireLaFinestra(finestraPer.current, serie, linePoints.length)) {
+      finestraPer.current = serie;
+      chartRef.current?.timeScale().fitContent();
+    }
+  }, [line, signal, hist, serie]);
 
   return <div ref={containerRef} className="w-full h-full" />;
 }
