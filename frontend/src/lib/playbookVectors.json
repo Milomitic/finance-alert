@@ -1,0 +1,401 @@
+{
+  "_perche": "Vettori d'oro della geometria del piano di trade. Li devono soddisfare ENTRAMBE le implementazioni: `frontend/src/lib/tradePlaybook.ts` (che li ha generati, ed e' cio' che l'utente vede a schermo) e `backend/app/signals/trade_plan.py` (che serve a far correre stop e target sulle barre per l'esito basato sul piano). Due copie della stessa aritmetica divergono al primo ritocco, e qui la divergenza farebbe misurare un piano diverso da quello mostrato. Chi tocca una meta' sola rende rosso il test dell'altra.",
+  "_generato": "dal TS, 2026-09-17, via src/lib/playbookVectors.test.ts",
+  "_non_coperto": "riskBudgetPct / positionPct / leverage / leverageNote restano solo nel TS: sono una scelta di propensione al rischio e di resa a schermo, non geometria, e il backend non ne ha bisogno per far correre la gara.",
+  "casi": [
+    {
+      "nome": "long_breve",
+      "name": "sr_flip",
+      "entry": 100,
+      "snapshot": {
+        "tone": "bull",
+        "atr": 2,
+        "horizon": "short",
+        "invalidation": {
+          "level": 96
+        },
+        "chain": []
+      },
+      "atteso": {
+        "side": "long",
+        "entry": 100,
+        "stop": 96,
+        "stopPct": 4,
+        "stopCapped": false,
+        "horizon": "Breve",
+        "targets": [
+          {
+            "label": "Target 1",
+            "price": 104,
+            "rr": 1
+          },
+          {
+            "label": "Target 2",
+            "price": 107.2,
+            "rr": 1.8
+          }
+        ]
+      }
+    },
+    {
+      "nome": "short_breve",
+      "name": "sr_flip",
+      "entry": 100,
+      "snapshot": {
+        "tone": "bear",
+        "atr": 2,
+        "horizon": "short",
+        "invalidation": {
+          "level": 104
+        },
+        "chain": []
+      },
+      "atteso": {
+        "side": "short",
+        "entry": 100,
+        "stop": 104,
+        "stopPct": 4,
+        "stopCapped": false,
+        "horizon": "Breve",
+        "targets": [
+          {
+            "label": "Target 1",
+            "price": 96,
+            "rr": 1
+          },
+          {
+            "label": "Target 2",
+            "price": 92.8,
+            "rr": 1.8
+          }
+        ]
+      }
+    },
+    {
+      "nome": "long_medio",
+      "name": "trend_pullback",
+      "entry": 250.5,
+      "snapshot": {
+        "tone": "bull",
+        "atr": 6.25,
+        "horizon": "medium",
+        "invalidation": {
+          "level": 230.1
+        },
+        "chain": []
+      },
+      "atteso": {
+        "side": "long",
+        "entry": 250.5,
+        "stop": 230.1,
+        "stopPct": 8.143712574850301,
+        "stopCapped": false,
+        "horizon": "Medio",
+        "targets": [
+          {
+            "label": "Target 1",
+            "price": 291.3,
+            "rr": 2
+          },
+          {
+            "label": "Target 2",
+            "price": 311.70000000000005,
+            "rr": 3
+          }
+        ]
+      }
+    },
+    {
+      "nome": "long_lungo",
+      "name": "high52_momentum",
+      "entry": 80,
+      "snapshot": {
+        "tone": "bull",
+        "atr": 1.5,
+        "horizon": "long",
+        "invalidation": {
+          "level": 74.5
+        },
+        "chain": []
+      },
+      "atteso": {
+        "side": "long",
+        "entry": 80,
+        "stop": 74.5,
+        "stopPct": 6.875000000000001,
+        "stopCapped": false,
+        "horizon": "Lungo",
+        "targets": [
+          {
+            "label": "Target 1",
+            "price": 92,
+            "rr": 2.1818181818181817
+          },
+          {
+            "label": "Target 2",
+            "price": 101,
+            "rr": 3.8181818181818183
+          }
+        ]
+      }
+    },
+    {
+      "nome": "stop_al_pavimento",
+      "name": "sr_flip",
+      "entry": 100,
+      "snapshot": {
+        "tone": "bull",
+        "atr": 4,
+        "horizon": "short",
+        "invalidation": {
+          "level": 99.9
+        },
+        "chain": []
+      },
+      "atteso": {
+        "side": "long",
+        "entry": 100,
+        "stop": 98,
+        "stopPct": 2,
+        "stopCapped": false,
+        "horizon": "Breve",
+        "targets": [
+          {
+            "label": "Target 1",
+            "price": 108,
+            "rr": 4
+          },
+          {
+            "label": "Target 2",
+            "price": 112,
+            "rr": 6
+          }
+        ]
+      }
+    },
+    {
+      "nome": "stop_al_tetto",
+      "name": "sr_flip",
+      "entry": 100,
+      "snapshot": {
+        "tone": "bull",
+        "atr": 1,
+        "horizon": "short",
+        "invalidation": {
+          "level": 60
+        },
+        "chain": []
+      },
+      "atteso": {
+        "side": "long",
+        "entry": 100,
+        "stop": 92,
+        "stopPct": 8,
+        "stopCapped": true,
+        "horizon": "Breve",
+        "targets": [
+          {
+            "label": "Target 1",
+            "price": 102,
+            "rr": 0.25
+          },
+          {
+            "label": "Target 2",
+            "price": 103.6,
+            "rr": 0.45
+          }
+        ]
+      }
+    },
+    {
+      "nome": "senza_atr_ripiego_2pct",
+      "name": "sr_flip",
+      "entry": 100,
+      "snapshot": {
+        "tone": "bull",
+        "horizon": "short",
+        "invalidation": {
+          "level": 95
+        },
+        "chain": []
+      },
+      "atteso": {
+        "side": "long",
+        "entry": 100,
+        "stop": 95,
+        "stopPct": 5,
+        "stopCapped": false,
+        "horizon": "Breve",
+        "targets": [
+          {
+            "label": "Target 1",
+            "price": 104,
+            "rr": 0.8
+          },
+          {
+            "label": "Target 2",
+            "price": 107.2,
+            "rr": 1.44
+          }
+        ]
+      }
+    },
+    {
+      "nome": "target_degeneri_tp2_uguale_tp1",
+      "name": "trend_pullback",
+      "entry": 10,
+      "snapshot": {
+        "tone": "bull",
+        "atr": 5,
+        "horizon": "medium",
+        "invalidation": {
+          "level": 4
+        },
+        "chain": []
+      },
+      "atteso": {
+        "side": "long",
+        "entry": 10,
+        "stop": -2.5,
+        "stopPct": 125,
+        "stopCapped": false,
+        "horizon": "Medio",
+        "targets": [
+          {
+            "label": "Target 1",
+            "price": 19.5,
+            "rr": 0.76
+          },
+          {
+            "label": "Target 2",
+            "price": 19.5,
+            "rr": 0.76
+          }
+        ]
+      }
+    },
+    {
+      "nome": "short_limite_del_100pct",
+      "name": "sr_flip",
+      "entry": 12,
+      "snapshot": {
+        "tone": "bear",
+        "atr": 6,
+        "horizon": "short",
+        "invalidation": {
+          "level": 30
+        },
+        "chain": []
+      },
+      "atteso": {
+        "side": "short",
+        "entry": 12,
+        "stop": 30,
+        "stopPct": 150,
+        "stopCapped": false,
+        "horizon": "Breve",
+        "targets": [
+          {
+            "label": "Target 1",
+            "price": 0.6000000000000014,
+            "rr": 0.6333333333333333
+          },
+          {
+            "label": "Target 2",
+            "price": 0.6000000000000014,
+            "rr": 0.6333333333333333
+          }
+        ]
+      }
+    },
+    {
+      "nome": "orizzonte_dal_prior_del_detector",
+      "name": "candle_reversal",
+      "entry": 100,
+      "snapshot": {
+        "tone": "bull",
+        "atr": 2,
+        "invalidation": {
+          "level": 96
+        },
+        "chain": [
+          {
+            "date": "2026-03-01"
+          }
+        ]
+      },
+      "atteso": {
+        "side": "long",
+        "entry": 100,
+        "stop": 96,
+        "stopPct": 4,
+        "stopCapped": false,
+        "horizon": "Breve",
+        "targets": [
+          {
+            "label": "Target 1",
+            "price": 104,
+            "rr": 1
+          },
+          {
+            "label": "Target 2",
+            "price": 107.2,
+            "rr": 1.8
+          }
+        ]
+      }
+    },
+    {
+      "nome": "orizzonte_dalla_catena_lunga",
+      "name": "sr_flip",
+      "entry": 100,
+      "snapshot": {
+        "tone": "bull",
+        "atr": 2,
+        "invalidation": {
+          "level": 96
+        },
+        "chain": [
+          {
+            "date": "2026-01-01"
+          },
+          {
+            "date": "2026-03-20"
+          }
+        ]
+      },
+      "atteso": {
+        "side": "long",
+        "entry": 100,
+        "stop": 96,
+        "stopPct": 4,
+        "stopCapped": false,
+        "horizon": "Lungo",
+        "targets": [
+          {
+            "label": "Target 1",
+            "price": 112,
+            "rr": 3
+          },
+          {
+            "label": "Target 2",
+            "price": 118,
+            "rr": 4.5
+          }
+        ]
+      }
+    },
+    {
+      "nome": "senza_invalidazione_nessun_piano",
+      "name": "sr_flip",
+      "entry": 100,
+      "snapshot": {
+        "tone": "bull",
+        "atr": 2,
+        "horizon": "short",
+        "chain": []
+      },
+      "atteso": null
+    }
+  ]
+}

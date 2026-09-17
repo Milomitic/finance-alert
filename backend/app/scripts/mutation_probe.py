@@ -361,13 +361,38 @@ EQUIVALENTI: dict[str, str] = {
         "guadagna un campo `Index` in testa, ma l'accesso e' PER NOME "
         "(`r.date`, `r.low`, `r.high`), quindi ogni valore letto e' identico. "
         "Sarebbe un difetto solo con lo spacchettamento posizionale, che qui "
-        "non c'e'. ⚠️ I quattro gemelli sulla stessa famiglia — i tagli "
-        "`str(...)[:10]` in questa funzione, in `invalidazione_da_pivot` e in "
-        "`invalidazione_da_finestra` — NON sono equivalenti: con un Timestamp "
-        "`str()` rende '2026-02-01 00:00:00' e un carattere in piu' lascia uno "
-        "spazio in coda che non combacia con la data del pivot, quindi il "
-        "livello sparisce in silenzio. Li uccide "
-        "`test_i_livelli_reggono_una_colonna_date_con_orario`.",
+        "non c'e'.",
+    # ── I tre tagli `str(...)[:10]` che NON contano, e l'uno che conta ──
+    #
+    # ⚠️ Quattro mutanti identici a vista, `10 -> 11`, con esiti OPPOSTI — ed e'
+    # la distinzione che rende leggibile questo gruppo. La differenza non sta
+    # nel codice ma in CHE COSA GLI ARRIVA:
+    #
+    #   - la colonna `date` del DataFrame porta dei `Timestamp`, quindi `str()`
+    #     rende "2026-02-01 00:00:00" e un carattere in piu' lascia uno spazio
+    #     in coda: la chiave non combacia e il livello sparisce in silenzio.
+    #     Quel mutante e' UCCISO da `test_i_livelli_reggono_una_colonna_date_
+    #     con_orario`, ed e' l'unico dei quattro che era una lacuna vera.
+    #   - `Event.date` e i `pivot_dates` dei payload sono gia' stringhe ISO da
+    #     DIECI caratteri per costruzione, perche' li produce `events._iso`,
+    #     che tronca esattamente allo stesso modo. Li' il taglio e' difensivo,
+    #     non portante, e tagliare a undici non cambia nulla.
+    #
+    # L'invariante dichiarata e' quindi: «le date che arrivano dagli EVENTI
+    # sono gia' normalizzate, quelle che arrivano dal DATAFRAME no». Il taglio
+    # difensivo resta: costa nulla e chiude la porta a un chiamante futuro che
+    # passi un Timestamp.
+    "app/signals/detectors/base.py::invalidazione_da_pivot#0  10 -> 11":
+        "`pivot_dates` viene dal payload di un Event, gia' normalizzato a dieci "
+        "caratteri da `events._iso`: tagliare a undici rende la stessa stringa.",
+    "app/signals/detectors/base.py::invalidazione_da_finestra#0  10 -> 11":
+        "`dal` e' `Event.date`, prodotta da `events._iso`, quindi gia' lunga "
+        "dieci: il taglio e' difensivo e il mutante rende la stessa stringa.",
+    "app/signals/detectors/base.py::invalidazione_da_finestra#1  10 -> 11":
+        "`al` e' l'altra estremita' della finestra e ha la stessa provenienza "
+        "di `dal`: e' `Event.date`, prodotta da `events._iso`, quindi gia' "
+        "lunga esattamente dieci caratteri. Tagliare a undici rende la stessa "
+        "stringa e l'ordinamento delle due estremita' non cambia.",
     "app/signals/detectors/base.py::soft01#0  LtE -> Lt":
         "Il termine `x <= 0` della guardia. Col mutante `x < 0` uno zero passa, "
         "ma la formula rende `0 / (0 + 0.25*ref)` = 0.0 — lo STESSO valore del "

@@ -33,10 +33,6 @@
       "mutanti": 92,
       "uccisi": 39
     },
-    "app/signals/detectors/base.py": {
-      "mutanti": 58,
-      "uccisi": 43
-    },
     "app/services/detector_performance_service.py": {
       "mutanti": 50,
       "uccisi": 36
@@ -48,6 +44,10 @@
     "app/services/setup_service.py": {
       "mutanti": 111,
       "uccisi": 84
+    },
+    "app/signals/detectors/base.py": {
+      "mutanti": 66,
+      "uccisi": 47
     }
   },
   "sopravvissuti": [
