@@ -70,8 +70,14 @@ afterEach(() => vi.useRealTimers());
 describe("la fase la dicono i dati, non l'orologio", () => {
   it("con le americane sul cash durante la seduta dice che Wall Street e' aperta", () => {
     assets = AMERICANE.map((s) => indice(s, { using_futures: false, is_live: true }));
-    montaA(SEDUTA);
+    const { container } = montaA(SEDUTA);
     expect(screen.getByText("Wall Street aperta")).toBeInTheDocument();
+    // Il pallino «live» ha un RUOLO, altrimenti il suo `aria-label` sarebbe un
+    // attributo proibito su uno span generico; e cercarlo per ruolo prova che
+    // il ramo viene reso davvero.
+    expect(screen.getAllByRole("img", { name: "prezzo live" })).toHaveLength(3);
+    // Un commento JSX fuori posto finirebbe a schermo come testo.
+    expect(container.textContent).not.toContain("aria-prohibited-attr");
   });
 
   it("⚠️ se alle 15:00 di New York TUTTE e tre sono sul future, la borsa e' chiusa", () => {

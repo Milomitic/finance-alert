@@ -120,10 +120,16 @@ function IndiceTile({ asset, nome }: { asset: LiveAsset | undefined; nome: strin
             FUT
           </span>
         ) : live ? (
+          /* ⚠️ `role="img"` non e' decorazione: un `aria-label` su uno span
+             senza ruolo e' un attributo PROIBITO per axe (`aria-prohibited-attr`,
+             lo stesso rilievo che /calendar porta in linea di base). Le due
+             schede movers hanno la stessa forma e oggi passano solo perche' il
+             gate gira senza rete e il pallino non viene mai reso. */
           <span
+            role="img"
             className="relative inline-flex h-1.5 w-1.5 shrink-0"
             title="Prezzo in aggiornamento ogni 15 secondi"
-            aria-label="live"
+            aria-label="prezzo live"
           >
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
             <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
