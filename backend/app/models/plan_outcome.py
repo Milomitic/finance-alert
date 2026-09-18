@@ -77,11 +77,23 @@ class PlanOutcome(Base):
     # riletta domani con una geometria diversa da quella che ha prodotto
     # l'esito, e il magazzino direbbe cose che non sono mai successe.
     #
-    #: La barra da cui parte la gara: quella dello SCATTO dell'alert, non del
-    #: segnale. E' il primo momento in cui si sarebbe potuto agire davvero —
-    #: fra segnale e scatto passano fino a dieci giorni, e attribuire al piano
-    #: un movimento avvenuto prima che l'alert esistesse lo farebbe sembrare
-    #: migliore di quanto sia.
+    #: La barra da cui parte la gara: quella della PRIMA EMISSIONE dell'alert,
+    #: non del segnale e non dell'ultima revisione.
+    #:
+    #: E' il primo momento in cui si sarebbe potuto agire davvero. Fra la barra
+    #: del segnale e la prima emissione passa la cadenza della scansione
+    #: (mediana ZERO giorni, 82% entro un giorno, misurato in produzione), e
+    #: attribuire al piano un movimento avvenuto prima che l'alert esistesse lo
+    #: farebbe sembrare migliore di quanto sia.
+    #:
+    #: ⚠️ E NON `triggered_at`, che sembra questo campo e non lo e'. Un alert e'
+    #: una riga VIVA: finche' il segnale persiste ogni scansione lo rivede e
+    #: riscrive sia `triggered_at` sia `trigger_price`. Misurato il 2026-09-18
+    #: su 8.736 alert: 80% ha almeno una revisione, 73% ha una prima emissione
+    #: anteriore a `triggered_at`, uno ne conta 103, e nel 18% dei casi il
+    #: prezzo mostrato dista oltre il 2% dalla chiusura della barra del
+    #: segnale. Ancorare li' renderebbe l'esito dipendente da QUANDO gira la
+    #: maturazione — un magazzino che cambia con l'ora in cui lo si guarda.
     entry_date: Mapped[date] = mapped_column(Date, nullable=False)
     entry: Mapped[float] = mapped_column(Float, nullable=False)
     stop: Mapped[float] = mapped_column(Float, nullable=False)

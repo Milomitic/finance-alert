@@ -214,22 +214,39 @@ def _esito(
 PLAN_METHOD_VERSION = "1"
 
 
-def _barre_dopo(db: Session, stock_id: int, dal: date) -> list[Barra]:
-    """Le barre STRETTAMENTE successive a `dal`, in ordine.
-
-    ⚠️ Strettamente: la barra dello scatto porta massimo e minimo dell'INTERA
-    giornata, inclusa la parte precedente all'alert. Contarla attribuirebbe al
-    piano un movimento avvenuto prima che l'alert esistesse — un target
-    «colpito» da un massimo del mattino su un alert scattato nel pomeriggio —
-    e lo farebbe in modo sistematico e invisibile.
-    """
+def _tutte_le_barre(db: Session, stock_id: int) -> list[Barra]:
+    """Le barre del titolo, in ordine."""
     righe = db.execute(
         select(OhlcvDaily.date, OhlcvDaily.high, OhlcvDaily.low, OhlcvDaily.close)
-        .where(OhlcvDaily.stock_id == stock_id, OhlcvDaily.date > dal)
+        .where(OhlcvDaily.stock_id == stock_id)
         .order_by(OhlcvDaily.date)
     ).all()
     return [Barra(str(d)[:10], float(hi), float(lo), float(cl))
             for d, hi, lo, cl in righe]
+
+
+def _prima_emissione(snapshot: dict) -> date | None:
+    """La data in cui quell'alert e' ESISTITO per la prima volta.
+
+    ⚠️ E' l'unica ancora stabile che l'alert possiede, e la ragione e' che un
+    alert e' una riga VIVA: finche' il segnale persiste ogni scansione lo
+    rivede e riscrive sia `triggered_at` sia `trigger_price`
+    (`signal_scan_service`, ~riga 287). Misurato in produzione il 2026-09-18:
+    su 8.736 alert, 7.010 (80%) hanno almeno una revisione, 6.345 (73%) hanno
+    una prima emissione ANTERIORE a `triggered_at`, e uno ne conta 103.
+
+    Ancorare la gara a quei campi renderebbe l'esito dipendente dal MOMENTO in
+    cui gira la maturazione: la stessa riga, maturata due giorni prima, avrebbe
+    un altro ingresso. Un magazzino il cui contenuto dipende da quando lo si e'
+    guardato non e' una misura.
+    """
+    grezzo = snapshot.get("first_emitted_at")
+    if not isinstance(grezzo, str) or len(grezzo) < 10:
+        return None
+    try:
+        return date.fromisoformat(grezzo[:10])
+    except ValueError:
+        return None
 
 
 #: I detector il cui livello di invalidazione si RICOSTRUISCE in modo esatto
@@ -299,7 +316,7 @@ def mature_plan_outcomes(
     candidati = db.execute(
         select(Alert)
         .where(~exists().where(PlanOutcome.alert_id == Alert.id))
-        .order_by(Alert.id)
+        .order_by(Alert.stock_id, Alert.id)
     ).scalars().all()
 
     scritte = 0
@@ -315,26 +332,54 @@ def mature_plan_outcomes(
         if not isinstance(snap, dict):
             continue
 
+        # ── 1. L'ancora, e la barra da cui si entra ────────────────────
+        # La PRIMA emissione, col ripiego dichiarato su `triggered_at` per i
+        # 116 alert storici (1,3%) che precedono il campo.
+        ancora = _prima_emissione(snap) or a.triggered_at.date()
+        if a.stock_id not in barre_per_titolo:
+            # Una voce alla volta: i candidati sono ordinati per titolo, e
+            # tenere in memoria le barre di mille titoli sarebbe mezzo giga.
+            barre_per_titolo.clear()
+            barre_per_titolo[a.stock_id] = _tutte_le_barre(db, a.stock_id)
+        tutte = barre_per_titolo[a.stock_id]
+
+        # La barra d'ingresso: l'ultima non successiva all'ancora, cioe' quella
+        # il cui prezzo l'alert mostrava quando e' comparso.
+        ingresso = None
+        for b in tutte:
+            if b.data > ancora.isoformat():
+                break
+            ingresso = b
+        if ingresso is None:
+            continue   # nessuna barra alla prima emissione: niente da misurare
+
+        # ── 2. Il piano, costruito su QUEL prezzo ──────────────────────
+        # ⚠️ Non su `a.trigger_price`: quello viene riscritto a ogni revisione
+        # insieme a `triggered_at`, quindi l'esito dipenderebbe dal momento in
+        # cui gira questa passata.
         fonte = FONTE_EMESSO
-        piano = costruisci_piano(snap, float(a.trigger_price), a.signal_name)
+        piano = costruisci_piano(snap, ingresso.chiusura, a.signal_name)
         if piano is None and ricostruisci and a.signal_date is not None:
-            # ⚠️ Solo per gli alert che un livello non ce l'hanno: uno EMESSO
-            # non viene mai scavalcato, altrimenti `source` smetterebbe di
-            # dire la verita' proprio sulle righe di cui ci si fida di piu'.
+            # Solo per gli alert che un livello non ce l'hanno: uno EMESSO non
+            # viene mai scavalcato, altrimenti `source` smetterebbe di dire la
+            # verita' proprio sulle righe di cui ci si fida di piu'.
             livello = _invalidazione_ricostruita(
                 db, stock_id=a.stock_id, detector=a.signal_name or "",
                 signal_date=a.signal_date, tone=snap.get("tone") or "")
             if livello is not None:
                 piano = costruisci_piano({**snap, "invalidation": livello},
-                                         float(a.trigger_price), a.signal_name)
+                                         ingresso.chiusura, a.signal_name)
                 fonte = FONTE_RICOSTRUITO
         if piano is None:
             continue   # nessun livello strutturale: niente piano, niente gara
 
-        scatto = a.triggered_at.date()
-        if a.stock_id not in barre_per_titolo:
-            barre_per_titolo[a.stock_id] = _barre_dopo(db, a.stock_id, scatto)
-        barre = [b for b in barre_per_titolo[a.stock_id] if b.data > str(scatto)[:10]]
+        # ── 3. La gara, dalla barra STRETTAMENTE successiva ────────────
+        # La barra d'ingresso porta massimo e minimo dell'INTERA giornata,
+        # inclusa la parte precedente all'alert: contarla attribuirebbe al
+        # piano un movimento avvenuto prima che l'alert esistesse — un target
+        # «colpito» da un massimo del mattino su un alert comparso la sera — in
+        # modo sistematico e invisibile.
+        barre = [b for b in tutte if b.data > ingresso.data]
 
         orizzonte = _horizon_days(a.signal_name or "")
         esito = corri_la_gara(piano, barre, orizzonte)
@@ -343,9 +388,9 @@ def mature_plan_outcomes(
 
         db.add(PlanOutcome(
             alert_id=a.id, stock_id=a.stock_id, detector=a.signal_name or "",
-            signal_date=a.signal_date or scatto, tone=snap.get("tone") or "",
+            signal_date=a.signal_date or ancora, tone=snap.get("tone") or "",
             horizon_days=orizzonte,
-            entry_date=scatto, entry=piano.entry, stop=piano.stop,
+            entry_date=date.fromisoformat(ingresso.data), entry=piano.entry, stop=piano.stop,
             tp1=piano.targets[0].price,
             tp2=piano.targets[1].price if len(piano.targets) > 1 else None,
             r=piano.r,

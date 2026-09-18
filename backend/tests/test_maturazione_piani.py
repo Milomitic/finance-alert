@@ -50,7 +50,7 @@ def _alert(db: Session, stock: Stock, *, detector: str = "sr_flip",
 def test_un_piano_risolto_produce_una_riga(db: Session) -> None:
     s = _titolo(db)
     a = _alert(db, s)
-    _barre(db, s, [("2026-03-03", 103, 99, 102), ("2026-03-04", 109, 101, 108)])
+    _barre(db, s, [("2026-03-02", 101, 99, 100.0), ("2026-03-03", 103, 99, 102), ("2026-03-04", 109, 101, 108)])
 
     scritte = mature_plan_outcomes(db, commit=False)
     assert scritte == 1
@@ -73,7 +73,7 @@ def test_girare_due_volte_non_duplica(db: Session) -> None:
     dichiarerebbe un campione che non esiste."""
     s = _titolo(db)
     _alert(db, s)
-    _barre(db, s, [("2026-03-03", 109, 99, 108)])
+    _barre(db, s, [("2026-03-02", 101, 99, 100.0), ("2026-03-03", 109, 99, 108)])
 
     assert mature_plan_outcomes(db, commit=False) == 1
     assert mature_plan_outcomes(db, commit=False) == 0
@@ -120,7 +120,7 @@ def test_un_alert_senza_invalidazione_non_produce_nulla_e_non_esplode(db: Sessio
     """
     s = _titolo(db)
     _alert(db, s, invalidazione=None)
-    _barre(db, s, [("2026-03-03", 109, 99, 108)])
+    _barre(db, s, [("2026-03-02", 101, 99, 100.0), ("2026-03-03", 109, 99, 108)])
 
     assert mature_plan_outcomes(db, commit=False) == 0
     assert db.query(PlanOutcome).count() == 0
@@ -131,7 +131,7 @@ def test_un_trade_ancora_aperto_NON_viene_etichettato(db: Session) -> None:
     scrivera' quando ci sara' qualcosa da scrivere."""
     s = _titolo(db)
     _alert(db, s)
-    _barre(db, s, [("2026-03-03", 103, 99, 101), ("2026-03-04", 102, 98, 100)])
+    _barre(db, s, [("2026-03-02", 101, 99, 100.0), ("2026-03-03", 103, 99, 101), ("2026-03-04", 102, 98, 100)])
 
     assert mature_plan_outcomes(db, commit=False) == 0
     assert db.query(PlanOutcome).count() == 0
@@ -154,7 +154,7 @@ def test_l_orizzonte_e_quello_del_detector_non_un_numero_fisso(db: Session) -> N
 
     s = _titolo(db)
     _alert(db, s, detector="analyst_momentum")
-    _barre(db, s, [("2026-03-03", 109, 99, 108)])
+    _barre(db, s, [("2026-03-02", 101, 99, 100.0), ("2026-03-03", 109, 99, 108)])
 
     mature_plan_outcomes(db, commit=False)
     riga = db.query(PlanOutcome).one()
@@ -168,8 +168,8 @@ def test_titoli_diversi_maturano_nella_stessa_passata(db: Session) -> None:
     s1, s2 = _titolo(db, "AAA"), _titolo(db, "BBB")
     _alert(db, s1)
     _alert(db, s2, tono="bear", invalidazione=104.0)
-    _barre(db, s1, [("2026-03-03", 109, 99, 108)])
-    _barre(db, s2, [("2026-03-03", 101, 91, 92)])
+    _barre(db, s1, [("2026-03-02", 101, 99, 100.0), ("2026-03-03", 109, 99, 108)])
+    _barre(db, s2, [("2026-03-02", 101, 99, 100.0), ("2026-03-03", 101, 91, 92)])
 
     assert mature_plan_outcomes(db, commit=False) == 2
     esiti = {r.stock_id: r.esito for r in db.query(PlanOutcome).all()}
@@ -186,7 +186,7 @@ def test_un_titolo_senza_barre_non_impedisce_agli_altri_di_maturare(db: Session)
     s1, s2 = _titolo(db, "AAA"), _titolo(db, "BBB")
     _alert(db, s1)
     _alert(db, s2)
-    _barre(db, s2, [("2026-03-03", 109, 99, 108)])   # solo il secondo ha barre
+    _barre(db, s2, [("2026-03-02", 101, 99, 100.0), ("2026-03-03", 109, 99, 108)])   # solo il secondo ha barre
 
     assert mature_plan_outcomes(db, commit=False) == 1
     assert db.query(PlanOutcome).one().stock_id == s2.id
@@ -277,7 +277,9 @@ def test_la_ricostruzione_e_SPENTA_per_la_scansione_normale(db: Session) -> None
 def test_un_livello_EMESSO_non_viene_mai_sovrascritto_da_una_ricostruzione(db: Session) -> None:
     s = _titolo(db)
     _alert(db, s, detector="gap_and_go", invalidazione=96.0)
-    _barre(db, s, [("2026-02-27", 96, 94, 80.0), ("2026-03-03", 109, 99, 108)])
+    _barre(db, s, [("2026-02-27", 96, 94, 80.0),    # il livello che la ricostruzione userebbe
+                   ("2026-03-02", 101, 99, 100.0),  # la barra d'ingresso
+                   ("2026-03-03", 109, 99, 108)])
 
     assert mature_plan_outcomes(db, commit=False, ricostruisci=True) == 1
     riga = db.query(PlanOutcome).one()
@@ -302,7 +304,7 @@ def test_lo_script_in_sola_lettura_NON_scrive(db: Session, monkeypatch) -> None:
 
     s = _titolo(db)
     _alert(db, s)
-    _barre(db, s, [("2026-03-03", 109, 99, 108)])
+    _barre(db, s, [("2026-03-02", 101, 99, 100.0), ("2026-03-03", 109, 99, 108)])
     db.commit()
 
     monkeypatch.setattr(backfill_plan_outcomes, "SessionLocal", db_module.SessionLocal)
@@ -317,7 +319,7 @@ def test_lo_script_con_applica_scrive(db: Session, monkeypatch) -> None:
 
     s = _titolo(db)
     _alert(db, s)
-    _barre(db, s, [("2026-03-03", 109, 99, 108)])
+    _barre(db, s, [("2026-03-02", 101, 99, 100.0), ("2026-03-03", 109, 99, 108)])
     db.commit()
 
     monkeypatch.setattr(backfill_plan_outcomes, "SessionLocal", db_module.SessionLocal)
@@ -348,3 +350,114 @@ def test_main_inoltra_i_flag_alla_run(monkeypatch) -> None:
     backfill_plan_outcomes.main()
 
     assert visti == [(False, False), (True, True)]
+
+
+# ─── 8. L'ancora e' la PRIMA emissione, non l'ultima revisione ─────────────
+#
+# ⚠️ Difetto trovato il 2026-09-18, misurato in produzione. Un alert e' una
+# riga VIVA: finche' il segnale persiste, ogni scansione lo rivede e riscrive
+# sia `triggered_at` sia `trigger_price` (signal_scan_service ~287-290). Su
+# 8.736 alert, 7.010 (80%) hanno almeno una revisione e 6.345 (73%) hanno un
+# `first_emitted_at` ANTERIORE a `triggered_at` — uno ne ha 103.
+#
+# Ancorare la gara a quei due campi rende la misura DIPENDENTE DAL MOMENTO in
+# cui gira la maturazione: la stessa riga, maturata due giorni prima, avrebbe
+# un altro ingresso e un altro esito. Un magazzino il cui contenuto dipende da
+# quando lo si e' guardato non e' una misura.
+#
+# `first_emitted_at` non cambia mai: e' il primo istante in cui quell'alert e'
+# esistito, cioe' il primo in cui si sarebbe potuto agire.
+
+def _alert_rivisto(db: Session, stock: Stock, *, prima_emissione: str,
+                   rivisto_il: str, prezzo_rivisto: float) -> Alert:
+    """Un alert come sono l'80% di quelli veri: emesso una volta, riscritto poi."""
+    import json as _json
+    a = _alert(db, stock, scattato=rivisto_il, prezzo=prezzo_rivisto)
+    snap = _json.loads(a.snapshot)
+    snap["first_emitted_at"] = f"{prima_emissione}T23:32:00+00:00"
+    snap["amend_count"] = 13
+    a.snapshot = _json.dumps(snap)
+    a.signal_date = date.fromisoformat(prima_emissione)
+    db.flush()
+    return a
+
+
+def test_l_ingresso_e_il_prezzo_della_PRIMA_emissione_non_dell_ultima_revisione(
+    db: Session,
+) -> None:
+    s = _titolo(db)
+    _alert_rivisto(db, s, prima_emissione="2026-03-02", rivisto_il="2026-03-06",
+                   prezzo_rivisto=140.0)
+    _barre(db, s, [
+        ("2026-03-02", 101, 99, 100.0),   # la chiusura alla prima emissione
+        ("2026-03-03", 103, 99, 102),
+        ("2026-03-04", 109, 101, 108),
+        ("2026-03-05", 112, 107, 110),
+        ("2026-03-06", 145, 138, 140.0),  # la chiusura all'ultima revisione
+    ])
+
+    assert mature_plan_outcomes(db, commit=False) == 1
+    riga = db.query(PlanOutcome).one()
+    assert riga.entry == pytest.approx(100.0), (
+        "l'ingresso e' il prezzo riscritto all'ultima revisione, non quello della "
+        "prima emissione"
+    )
+    assert riga.entry_date == date(2026, 3, 2)
+    # E la gara parte dal 3, quindi il target del 4 e' colpito.
+    assert riga.resolved_date == date(2026, 3, 4)
+
+
+def test_la_misura_NON_dipende_da_quando_gira_la_maturazione(db: Session) -> None:
+    """⚠️ La proprieta', non il valore. E' il test che rende il difetto chiuso.
+
+    Due alert identici salvo il momento dell'ultima revisione — cioe' la stessa
+    situazione vista da due maturazioni che girano in giorni diversi — devono
+    produrre lo STESSO esito. Con l'ancora sbagliata divergono, ed e'
+    esattamente cio' che rendeva il magazzino non riproducibile.
+    """
+    s1, s2 = _titolo(db, "AAA"), _titolo(db, "BBB")
+    barre = [
+        ("2026-03-02", 101, 99, 100.0),
+        ("2026-03-03", 103, 99, 102),
+        ("2026-03-04", 109, 101, 108),
+        ("2026-03-05", 112, 107, 110),
+        ("2026-03-06", 145, 138, 140.0),
+    ]
+    # Stessa prima emissione, revisioni in due momenti diversi.
+    _alert_rivisto(db, s1, prima_emissione="2026-03-02", rivisto_il="2026-03-04",
+                   prezzo_rivisto=108.0)
+    _alert_rivisto(db, s2, prima_emissione="2026-03-02", rivisto_il="2026-03-06",
+                   prezzo_rivisto=140.0)
+    _barre(db, s1, barre)
+    _barre(db, s2, barre)
+
+    mature_plan_outcomes(db, commit=False)
+    righe = {r.stock_id: r for r in db.query(PlanOutcome).all()}
+    a, b = righe[s1.id], righe[s2.id]
+    assert a.entry == b.entry
+    assert a.entry_date == b.entry_date
+    assert a.esito == b.esito
+    assert a.resolved_date == b.resolved_date
+    assert a.r_multiple == pytest.approx(b.r_multiple)
+
+
+def test_senza_first_emitted_at_si_ripiega_su_triggered_at(db: Session) -> None:
+    """I 116 alert storici (l'1,3%) che precedono il campo. Il ripiego e'
+    dichiarato: e' il meglio disponibile, non una ricostruzione."""
+    s = _titolo(db)
+    _alert(db, s, scattato="2026-03-02")   # `_alert` non mette first_emitted_at
+    _barre(db, s, [("2026-03-02", 101, 99, 100.0), ("2026-03-03", 109, 99, 108)])
+
+    assert mature_plan_outcomes(db, commit=False) == 1
+    assert db.query(PlanOutcome).one().entry_date == date(2026, 3, 2)
+
+
+def test_senza_una_barra_alla_prima_emissione_non_si_misura(db: Session) -> None:
+    """Niente prezzo d'ingresso, niente geometria. Il ripiego corretto e'
+    nessuna riga, non il primo prezzo che capita."""
+    s = _titolo(db)
+    _alert_rivisto(db, s, prima_emissione="2026-03-02", rivisto_il="2026-03-06",
+                   prezzo_rivisto=140.0)
+    _barre(db, s, [("2026-03-05", 112, 107, 110), ("2026-03-06", 145, 138, 140)])
+
+    assert mature_plan_outcomes(db, commit=False) == 0
