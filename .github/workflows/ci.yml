@@ -306,9 +306,15 @@ jobs:
       # NOT continue-on-error any more. It used to be, and that is exactly why
       # 18 known CVEs (6 in starlette, the ASGI layer under FastAPI) sat in the
       # lockfile unnoticed: the job printed them and went green. An audit that
-      # can never fail is decorative. This job does NOT gate deploys — `image`
-      # needs [backend, frontend], not [audit] — so a new advisory turns CI red
-      # and visible without blocking a release.
+      # can never fail is decorative.
+      #
+      # ⚠️ E questo job GATTA il rilascio: `gitops` porta
+      # `needs: [image, audit, image-scan]`. Questa nota diceva il contrario —
+      # «does NOT gate deploys, `image` needs [backend, frontend]» — ed era
+      # rimasta indietro rispetto alla riga che l'ha cambiato. Un commento
+      # sbagliato accanto al codice giusto e' credibile proprio perche' sta
+      # li': una nuova advisory su un transitivo ferma il rilascio, e chi legge
+      # solo qui conclude che sia passato.
       - name: pip-audit (backend runtime deps)
         working-directory: backend
         run: |
