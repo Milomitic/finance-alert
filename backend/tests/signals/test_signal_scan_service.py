@@ -357,3 +357,77 @@ def test_setup_records_the_evaluated_bar_with_its_levels(db, monkeypatch):
     assert annotations["evaluation"]["close"] == 109
     assert annotations["levels"] == match.annotations["levels"]
     assert "evaluation" not in match.annotations
+# ─── Il PREZZO della prima emissione, conservato come l'istante ────────────
+#
+# ⚠️ Un alert e' una riga viva: finche' il segnale persiste, ogni scansione lo
+# rivede e riscrive `trigger_price` con la chiusura corrente. Misurato in
+# produzione il 2026-09-18: 80% degli alert ha almeno una revisione, uno ne ha
+# 103, e nel 18% dei casi il prezzo mostrato dista oltre il 2% dalla chiusura
+# della barra del segnale. Su FICO il box «prezzo trigger» diceva 985,39, che
+# e' la chiusura dell'11 settembre, accanto a una data segnale del 4 — mentre
+# la chiusura vera del 4 era 932,26.
+#
+# `first_emitted_at` gia' conservava l'ISTANTE della prima emissione; il
+# PREZZO di quel momento non era conservato da nessuna parte, e una volta
+# sovrascritto non era piu' recuperabile dall'alert. Ora lo e'.
+
+def test_un_alert_nuovo_conserva_il_prezzo_della_prima_emissione(db, monkeypatch):
+    _relax(monkeypatch)
+    s = Stock(ticker="PREZZO_NEW", exchange="NASDAQ", name="Prezzo", country="US")
+    db.add(s); db.flush()
+    evaluate_signals(db, s, _confirmed_df())
+    db.commit()
+
+    a = db.query(Alert).filter(Alert.stock_id == s.id,
+                               Alert.signal_name == "volume_breakout").first()
+    snap = json.loads(a.snapshot)
+    assert snap.get("first_price") == float(a.trigger_price)
+
+
+def test_una_revisione_NON_sovrascrive_il_prezzo_della_prima_emissione(db, monkeypatch):
+    """⚠️ Il test che chiude il difetto.
+
+    `trigger_price` avanza con la revisione — ed e' voluto, perche' descrive il
+    segnale vivo — ma il prezzo a cui l'alert e' COMPARSO non deve muoversi:
+    e' l'ingresso che il magazzino misura e quello su cui il piano a schermo
+    dovrebbe poggiare. Due numeri diversi che oggi erano lo stesso campo.
+    """
+    _relax(monkeypatch)
+    s = Stock(ticker="PREZZO_AMEND", exchange="NASDAQ", name="Prezzo", country="US")
+    db.add(s); db.flush()
+    prior = _seed_prior(db, s, signal_date=date(2026, 4, 28), price=50.0)
+    snap0 = json.loads(prior.snapshot)
+    snap0["first_price"] = 50.0
+    snap0["first_emitted_at"] = "2026-04-28T21:00:00+00:00"
+    prior.snapshot = json.dumps(snap0)
+    db.commit()
+
+    evaluate_signals(db, s, _confirmed_df())   # chiusura corrente 110.0
+    db.commit()
+
+    riga = _vb_rows(db, s)[0]
+    snap = json.loads(riga.snapshot)
+    assert float(riga.trigger_price) == 110.0, "il prezzo del segnale vivo deve avanzare"
+    assert snap.get("first_price") == 50.0, (
+        "la revisione ha sovrascritto il prezzo della prima emissione"
+    )
+    assert snap.get("first_emitted_at") == "2026-04-28T21:00:00+00:00"
+
+
+def test_una_revisione_su_un_alert_storico_senza_first_price_non_ne_inventa_uno(
+    db, monkeypatch,
+):
+    """Gli alert che precedono il campo non ricevono il prezzo di OGGI spacciato
+    per quello della prima emissione: resta assente, e il ricalcolo storico lo
+    riempie dalla barra giusta."""
+    _relax(monkeypatch)
+    s = Stock(ticker="PREZZO_LEGACY", exchange="NASDAQ", name="Prezzo", country="US")
+    db.add(s); db.flush()
+    _seed_prior(db, s, signal_date=date(2026, 4, 28), price=50.0)
+    db.commit()
+
+    evaluate_signals(db, s, _confirmed_df())
+    db.commit()
+
+    snap = json.loads(_vb_rows(db, s)[0].snapshot)
+    assert "first_price" not in snap

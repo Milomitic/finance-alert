@@ -69,3 +69,53 @@ export function isDelayedDetection(
   const d = daysBetween(triggeredAt, signalDate);
   return d != null && d >= DELAYED_DETECTION_MIN_DAYS;
 }
+
+/* ─── Quando il sistema ha NOTATO il segnale ─────────────────────────────── *
+ *
+ * ⚠️ Non è `triggered_at`, che sembra questo campo e non lo è.
+ *
+ * Un alert è una riga VIVA: finché il segnale persiste, ogni scansione lo
+ * rivede e riscrive `triggered_at` insieme a `trigger_price`. Misurato in
+ * produzione il 2026-09-18 su 8.736 alert: 7.010 (80%) hanno almeno una
+ * revisione, 6.345 (73%) hanno una prima emissione anteriore a
+ * `triggered_at`, e un alert FICO ne contava 103 — mostrava «rilevato in
+ * ritardo di 10 giorni» su un segnale notato la sera stessa della candela.
+ *
+ * Il difetto è sistematico per detector e non casuale: colpisce quelli la cui
+ * ancora è un evento FISSO nel passato — squeeze_expansion 91% di pastiglie
+ * contro 25% di ritardi veri, gap_and_go 80% contro 26% — e risparmia quelli
+ * la cui ancora avanza a ogni scansione, trend_pullback 4% contro 1%. Il
+ * motore lo dichiarava impossibile in un commento («signal_date + triggered_at
+ * advance together»): per un'ancora fissa non avanzano insieme.
+ *
+ * ⚠️ E la soglia di 4 giorni resta dov'è. Era stata ALZATA da 1 nel luglio
+ * 2026 perché il 93% degli alert portava la pastiglia — una cura del sintomo,
+ * visto che la causa era il campo. Ma la ragione scritta allora («il weekend
+ * più una scansione saltata valgono 1-3 giorni») è vera proprio di QUESTA
+ * misura, quindi ora quel 4 è giustificato invece che tirato.
+ */
+type AlertDatabile = {
+  triggered_at: string;
+  signal_date?: string | null;
+  snapshot?: Record<string, unknown> | null;
+};
+
+/** L'istante della PRIMA emissione, col ripiego su `triggered_at` per i 116
+ *  alert (1,3%) che precedono il campo — il meglio disponibile, non una
+ *  ricostruzione. */
+export function detectionInstant(alert: AlertDatabile): string {
+  const grezzo = alert.snapshot?.["first_emitted_at"];
+  return typeof grezzo === "string" && grezzo.length >= 10 ? grezzo : alert.triggered_at;
+}
+
+/** I giorni di calendario fra la barra del segnale e la rilevazione VERA. */
+export function alertDelayDays(alert: AlertDatabile): number | null {
+  return daysBetween(detectionInstant(alert), alert.signal_date);
+}
+
+/** ⚠️ Da preferire SEMPRE a `isDelayedDetection` su un alert intero: tiene la
+ *  scelta del campo in un posto solo. Con tre chiamanti che passavano
+ *  `triggered_at` a mano, il quarto avrebbe ricominciato da capo. */
+export function isAlertDelayed(alert: AlertDatabile): boolean {
+  return isDelayedDetection(detectionInstant(alert), alert.signal_date);
+}

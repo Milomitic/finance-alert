@@ -19,9 +19,9 @@ import { TableSearchInput } from "@/components/ui/table-search-input";
 import { useColumnVisibility } from "@/hooks/useColumnVisibility";
 import { useSignalCalibration } from "@/hooks/useSignalCalibration";
 import {
-  daysBetween,
+  alertDelayDays,
   formatShortDate,
-  isDelayedDetection,
+  isAlertDelayed,
 } from "@/lib/alertDates";
 import { PROBABILITA_TOOLTIP, isSignalKind, snapshotForza, snapshotProbabilita } from "@/lib/alertMeta";
 import { InfoHint } from "@/components/ui/info-hint";
@@ -445,8 +445,8 @@ export function AlertsTable({
             {showRilevato && (
               <TableCell className="text-muted-foreground tabular-nums">
                 {(() => {
-                  const delayed = isDelayedDetection(a.triggered_at, a.signal_date);
-                  const delta = daysBetween(a.triggered_at, a.signal_date);
+                  const delayed = isAlertDelayed(a);
+                  const delta = alertDelayDays(a);
                   return (
                     <span
                       className="inline-flex items-center gap-1"

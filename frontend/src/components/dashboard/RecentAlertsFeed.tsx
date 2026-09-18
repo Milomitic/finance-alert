@@ -13,7 +13,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { formatMoney } from "@/lib/money";
-import { isDelayedDetection } from "@/lib/alertDates";
+import { isAlertDelayed } from "@/lib/alertDates";
 import { PROBABILITA_TOOLTIP, snapshotForza, snapshotProbabilita } from "@/lib/alertMeta";
 import { cn } from "@/lib/utils";
 
@@ -56,7 +56,7 @@ export function RecentAlertsFeed({ alerts }: Props) {
         <caption className="sr-only">Segnali più recenti</caption>
         <TableBody>
           {alerts.map((a) => {
-            const delayed = isDelayedDetection(a.triggered_at, a.signal_date);
+            const delayed = isAlertDelayed(a);
             const snap = a.snapshot as Record<string, unknown> | undefined;
             const forza = snapshotForza(snap);
             const forzaTxt =

@@ -166,6 +166,11 @@ export interface Alert {
   stock_id: number;
   ticker: string | null;
   name: string | null;
+  /** ⚠️ L'istante dell'ULTIMA revisione, non della rilevazione. Finché il
+   *  segnale persiste, ogni scansione riscrive questo campo: misurato in
+   *  produzione, 73% degli alert ha una prima emissione anteriore e uno conta
+   *  103 revisioni. Per datare la rilevazione si usa
+   *  `lib/alertDates.detectionInstant`, che legge `snapshot.first_emitted_at`. */
   triggered_at: string;
   /** Valuta di quotazione del titolo, grezza (`GBp` compreso: l'etichetta la
    *  normalizza `displayCurrency`). null = sconosciuta, mai dollari per
@@ -283,6 +288,20 @@ export interface SignalSnapshot {
    *  with the backend confluence + calibration services). Absent on legacy
    *  alerts -> the playbook recomputes it locally. */
   horizon?: "short" | "medium" | "long";
+  /** L'istante della PRIMA emissione, fissato alla creazione e mai
+   *  sovrascritto. ⚠️ È la rilevazione VERA: `triggered_at` sulla riga avanza
+   *  a ogni revisione. Vedi `lib/alertDates.detectionInstant`. */
+  first_emitted_at?: string;
+  /** Il prezzo a quella prima emissione, fissato insieme all'istante.
+   *  ⚠️ `trigger_price` sulla riga avanza con le revisioni: misurato in
+   *  produzione, nel 18% dei casi dista oltre il 2% dalla chiusura della barra
+   *  del segnale. Vedi `lib/alertEntry.entryPrice`. */
+  first_price?: number;
+  /** Vero quando `first_price` è stato RICOSTRUITO all'indietro dalla barra
+   *  invece che registrato: uno scarto di una barra è possibile. */
+  first_price_ricostruito?: boolean;
+  amended_at?: string;
+  amend_count?: number;
 }
 
 export interface AlertList {

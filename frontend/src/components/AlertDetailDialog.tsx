@@ -40,7 +40,9 @@ import { useHolderCounts } from "@/hooks/useInstitutionals";
 import { useSignalOhlcv } from "@/hooks/useSignalOhlcv";
 import { formatMoney } from "@/lib/money";
 import { earningsProximityDays as sharedEarningsProximityDays } from "@/lib/earningsProximity";
-import { daysBetween, isDelayedDetection } from "@/lib/alertDates";
+import { alertDelayDays, detectionInstant, isAlertDelayed } from "@/lib/alertDates";
+import { InfoHint } from "@/components/ui/info-hint";
+import { entryPrice, priceHasMoved } from "@/lib/alertEntry";
 import {
   TONE_BORDER_LEFT,
   TONE_TEXT,
@@ -176,8 +178,11 @@ export function AlertDetailDialog({ alert, onClose, chart }: Props) {
   const hasResolvedRows = resolution.rows.length > 0;
   const hasRawData = Object.keys(alert.snapshot ?? {}).length > 0;
   const isArchived = alert.archived_at != null;
-  const delayed = isDelayedDetection(alert.triggered_at, alert.signal_date);
-  const delta = daysBetween(alert.triggered_at, alert.signal_date);
+  // ⚠️ Dall'alert intero e non da `triggered_at`: quel campo viene riscritto
+  // a ogni revisione, quindi misurava da quanto il segnale PERSISTE invece di
+  // quanto ci ha messo a comparire. Vedi `alertDates.detectionInstant`.
+  const delayed = isAlertDelayed(alert);
+  const delta = alertDelayDays(alert);
   // Provenance: a snapshot revised after first emission (by a later scan or
   // an enrichment pass) carries `amended_at`. Surface it so the displayed
   // content — incl. confirmation steps appended later — is never mistaken for
@@ -259,7 +264,7 @@ export function AlertDetailDialog({ alert, onClose, chart }: Props) {
                 {delayed ? "Rilevato in ritardo" : "Rilevato"}
               </div>
               <div className="text-[0.7059rem] text-muted-foreground tabular-nums mt-0.5">
-                {formatRelative(alert.triggered_at)} - {formatAbsolute(alert.triggered_at)}
+                {formatRelative(detectionInstant(alert))} - {formatAbsolute(detectionInstant(alert))}
               </div>
               {delayed && delta != null && (
                 <div className="text-[0.6765rem] text-amber-700 dark:text-amber-300 italic mt-0.5">
@@ -340,13 +345,29 @@ export function AlertDetailDialog({ alert, onClose, chart }: Props) {
           <div className="rounded-lg border border-border/60 bg-muted/30 dark:bg-muted/15 p-3">
             <div className="flex items-center gap-1 text-[0.7059rem] uppercase tracking-wider text-muted-foreground font-semibold">
               <DollarSign className="h-3 w-3" />
-              Prezzo trigger
+              Prezzo alla rilevazione
+              <InfoHint
+                label="Prezzo alla rilevazione"
+                text={
+                  "Il prezzo a cui il segnale è comparso, cioè l'ingresso su cui poggia il piano " +
+                  "qui sotto. Non cambia più. Il prezzo del segnale VIVO avanza invece a ogni " +
+                  "revisione: quando i due si sono scostati, trovi anche quello."
+                }
+              />
             </div>
             <div className="text-2xl font-bold tabular-nums mt-1 leading-tight">
               {/* ⚠️ Era `$` cablato. Misurato in produzione, 2.669 segnali su
                   8.905 — il 30% — sono su titoli non quotati in dollari. */}
-              {formatMoney(alert.trigger_price, alert.currency)}
+              {formatMoney(entryPrice(alert), alert.currency)}
             </div>
+            {/* Due fatti diversi, entrambi giusti, mostrati come DUE invece di
+                lasciarne vedere uno: il prezzo della rilevazione sopra, quello
+                del segnale vivo qui, solo quando si sono scostati. */}
+            {priceHasMoved(alert) && (
+              <div className="text-[0.6765rem] text-muted-foreground mt-0.5">
+                segnale vivo a {formatMoney(alert.trigger_price, alert.currency)}
+              </div>
+            )}
           </div>
 
           <div
@@ -492,7 +513,12 @@ export function AlertDetailDialog({ alert, onClose, chart }: Props) {
                          del segnale: due fatti diversi, entrambi giusti, che
                          vanno mostrati come DUE invece di lasciarne vedere uno.
                          Nella coda sono i titoli riparati per rottura di base
-                         prezzo, dove il rapporto vale 10 o 0,1 (FA-069). */
+                         prezzo, dove il rapporto vale 10 o 0,1 (FA-069).
+
+                         ⚠️ Dal 2026-09-18 il box in cima mostra il prezzo della
+                         PRIMA emissione, non quello dell'ultima revisione,
+                         quindi lo scarto qui si e' ridotto alla sola coda: la
+                         contraddizione non viene piu' spiegata, non c'e'. */
                       const entry = alert.outcome_entry_close;
                       const tp = alert.trigger_price;
                       if (entry == null || tp == null) return null;
@@ -645,7 +671,10 @@ export function AlertDetailDialog({ alert, onClose, chart }: Props) {
         </div>
 
         {isSignalKind(alert.rule_kind) && (() => {
-          const pb = buildPlaybook(alert.snapshot ?? {}, alert.trigger_price, alert.rule_kind ?? null);
+          // ⚠️ Sul prezzo della PRIMA emissione: e' l'ingresso che il
+          // magazzino dei piani misura, e mostrare una geometria mentre se ne
+          // misura un'altra e' peggio di non mostrarla.
+          const pb = buildPlaybook(alert.snapshot ?? {}, entryPrice(alert), alert.rule_kind ?? null);
           return (
             <div className="px-5 pt-2 pb-4">
               <div className="text-[0.7059rem] uppercase tracking-wider text-muted-foreground font-semibold mb-2">

@@ -290,6 +290,26 @@ def evaluate_signals(
                     _prior_snap.get("first_emitted_at")
                     or (prior.triggered_at.isoformat() if prior.triggered_at else now_iso)
                 )
+                # ⚠️ E il PREZZO della prima emissione si conserva accanto
+                # all'istante. `trigger_price` avanza — descrive il segnale
+                # VIVO, ed e' voluto — ma il prezzo a cui l'alert e' COMPARSO
+                # non deve muoversi: e' l'ingresso che il magazzino dei piani
+                # misura e quello su cui poggia il piano a schermo.
+                #
+                # Senza, quel numero non era recuperabile dall'alert una volta
+                # sovrascritto. Misurato in produzione: 80% degli alert ha
+                # almeno una revisione, uno ne ha 103, e nel 18% dei casi il
+                # prezzo mostrato dista oltre il 2% dalla chiusura della barra
+                # del segnale. Su FICO il box diceva la chiusura dell'11
+                # settembre accanto a una data segnale del 4.
+                #
+                # Assente sugli alert che precedono il campo: NON si scrive
+                # quello di oggi spacciandolo per quello di allora — lo riempie
+                # il ricalcolo storico, dalla barra giusta.
+                if "first_price" in _prior_snap:
+                    snapshot["first_price"] = _prior_snap["first_price"]
+                else:
+                    snapshot.pop("first_price", None)
                 snapshot["amended_at"] = now_iso
                 snapshot["amend_count"] = int(_prior_snap.get("amend_count") or 0) + 1
                 prior.trigger_price = last_close
@@ -310,6 +330,9 @@ def evaluate_signals(
         # New alert: pin the original emission timestamp (never overwritten by
         # later refreshes), no amendment yet.
         snapshot["first_emitted_at"] = now_iso
+        # Il prezzo di quel momento, fissato insieme all'istante: `trigger_price`
+        # lo perdera' alla prima revisione.
+        snapshot["first_price"] = float(last_close)
         alert = Alert(
             stock_id=stock.id, trigger_price=last_close,
             signal_date=sig_date, signal_name=m.name,
