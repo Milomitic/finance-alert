@@ -10,7 +10,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { useLiveQuote } from "@/hooks/useLiveQuote";
 import { waitingDays, type Setup } from "@/hooks/useSetups";
+import { setupDate, setupPrice, setupPriceComparison } from "@/lib/setupEvaluation";
 import { detectorLabel } from "@/lib/setupGrouping";
 import {
   SETUP_TONE_BORDER,
@@ -78,9 +80,10 @@ function Metric({
 }
 
 export function SetupDetailDialog({ setup, onClose }: Props) {
-  // Hooks would go here, above any early return — the rule that blanked this
-  // app once already. There are none, and the guard below stays a plain
-  // conditional render rather than an early `return null`.
+  const { data: quote } = useLiveQuote(setup?.ticker,
+    setup?.status === "active" && setup?.detector === "trend_pullback");
+  const comparison = setup ? setupPriceComparison(setup, quote) : null;
+  const evaluation = setup?.annotations?.evaluation;
   const open = setup !== null;
   // Stesso booleano, stessa trappola: vedi SetupConditionGroup.
   const tono = setupTone(setup?.tone);
@@ -163,13 +166,27 @@ export function SetupDetailDialog({ setup, onClose }: Props) {
                 <Target className="h-4 w-4 mt-0.5 shrink-0 text-muted-foreground" aria-hidden />
                 <div className="min-w-0">
                   <div className="text-[0.6765rem] uppercase tracking-wider text-muted-foreground font-semibold">
-                    Cosa manca
+                    {setup.status === "active" ? "Cosa manca all’ultima analisi" : "Condizione attesa"}
                   </div>
                   <p className="text-base leading-snug mt-1">{setup.missing}</p>
                   {level && (
                     <p className="text-sm text-muted-foreground tabular-nums mt-2">
-                      {level.label}: <b className="text-foreground">{level.price.toFixed(2)}</b>
-                      <span className="ml-2 text-xs">— il livello su cui imposteresti l'allerta</span>
+                      {level.label}: <b className="text-foreground">{setupPrice(level.price, evaluation?.currency ?? setup.currency)}</b>
+                      <span className="ml-2 text-xs">— riferimento dell’analisi</span>
+                    </p>
+                  )}
+                  {(evaluation || setup.last_seen_at) && (
+                    <p className="text-xs text-muted-foreground mt-2">
+                      {evaluation
+                        ? `Barra del ${setupDate(evaluation.bar_date)} · chiusura ${setupPrice(evaluation.close, evaluation.currency)}`
+                        : `Ultima analisi: ${new Date(setup.last_seen_at!).toLocaleString("it-IT", { dateStyle: "short", timeStyle: "short" })}`}
+                    </p>
+                  )}
+                  {comparison && quote?.price != null && quote.as_of_date && (
+                    <p className="text-xs text-muted-foreground mt-2">
+                      Quotazione del {setupDate(quote.as_of_date)}: {setupPrice(quote.price, quote.currency)},
+                      {comparison === "above" ? " sopra" : " sotto"} la EMA50 dell’analisi.
+                      La verifica del segnale avviene alla scansione, con EMA ricalcolata.
                     </p>
                   )}
                 </div>
@@ -224,8 +241,8 @@ export function SetupDetailDialog({ setup, onClose }: Props) {
 
             <div className="p-5 flex items-center justify-between gap-3">
               <p className="text-[0.7059rem] text-muted-foreground leading-snug max-w-md">
-                Un setup descrive lo stato di oggi, non una previsione. Diventa un segnale solo
-                quando la condizione qui sopra si verifica.
+                Il setup descrive l’ultima analisi. Il segnale viene verificato durante
+                la scansione sulle barre giornaliere, insieme alle altre condizioni del detector.
               </p>
               <Button asChild variant="secondary" size="sm">
                 <Link to={`/stocks/${encodeURIComponent(setup.ticker)}`} onClick={onClose}>

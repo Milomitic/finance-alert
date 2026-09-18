@@ -37,6 +37,7 @@ class SetupOut(BaseModel):
     id: int
     ticker: str
     name: str | None = None
+    currency: str | None = None
     detector: str
     tone: str
     #: 0..1 — share of the detector's gate chain already satisfied. A property
@@ -249,7 +250,7 @@ def list_setups(
             fac = None
         out.append(
             SetupOut(
-                id=row.id, ticker=stock.ticker, name=stock.name,
+                id=row.id, ticker=stock.ticker, name=stock.name, currency=stock.currency,
                 detector=row.detector, tone=row.tone,
                 proximity=row.proximity, distance_atr=row.distance_atr,
                 convenience=row.convenience,

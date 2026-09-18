@@ -17,6 +17,7 @@ export interface Setup {
   id: number;
   ticker: string;
   name: string | null;
+  currency?: string | null;
   detector: string;
   tone: string;
   /** 0..1 — share of the detector's gate chain already satisfied. A property
@@ -38,7 +39,10 @@ export interface Setup {
   missing: string;
   first_seen_at: string | null;
   last_seen_at: string | null;
-  annotations: { levels?: { label: string; price: number; kind: string }[] } | null;
+  annotations: {
+    levels?: { label: string; price: number; kind: string }[];
+    evaluation?: { bar_date: string; close: number; currency: string | null };
+  } | null;
   /** Measured 0..1 factors behind the setup — evidence for the wait. */
   factors?: Record<string, number> | null;
   /** "active" | "converted" | "expired". Closed setups are kept, never

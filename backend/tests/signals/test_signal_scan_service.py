@@ -326,3 +326,34 @@ def test_new_alert_after_cooldown_gap(db, monkeypatch):
     db.commit()
     rows = _vb_rows(db, s)
     assert len(rows) == 2                       # old + new (gap exceeds cooldown)
+
+
+def test_setup_records_the_evaluated_bar_with_its_levels(db, monkeypatch):
+    from app.models import StockSetup
+    from app.signals.setups.base import SetupMatch
+
+    stock = Stock(ticker="SNAPSHOT", exchange="KRX", name="Snapshot", currency="KRW")
+    db.add(stock)
+    db.flush()
+    match = SetupMatch(detector="trend_pullback", tone="bull", proximity=0.8,
+                       missing="waiting", factors={"trend_strength": 0.9}, annotations={"levels": [{"label": "EMA50", "price": 111}]})
+    monkeypatch.setattr("app.signals.signal_scan_service.detect_signals_and_setups",
+                        lambda *args, **kwargs: ([], [match]))
+    bars = _confirmed_df()
+    evaluate_signals(db, stock, bars)
+    db.flush()
+    row = db.query(StockSetup).filter_by(stock_id=stock.id).one()
+    first_id, opening_bar = row.id, row.first_seen_bar
+    assert json.loads(row.annotations_json)["evaluation"] == {
+        "bar_date": "2026-05-01", "close": 110.0, "currency": "KRW",
+    }
+    # A later evaluation updates its snapshot, not the episode's opening bar.
+    bars.loc[bars.index[-1], ["date", "close"]] = ["2026-05-02", 109]
+    evaluate_signals(db, stock, bars)
+    db.flush()
+    assert row.id == first_id and row.first_seen_bar == opening_bar
+    annotations = json.loads(row.annotations_json)
+    assert annotations["evaluation"]["bar_date"] == "2026-05-02"
+    assert annotations["evaluation"]["close"] == 109
+    assert annotations["levels"] == match.annotations["levels"]
+    assert "evaluation" not in match.annotations

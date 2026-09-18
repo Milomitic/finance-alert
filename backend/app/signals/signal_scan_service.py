@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from datetime import UTC, date, datetime
 
 import pandas as pd
@@ -99,7 +100,7 @@ def effective_max_age_days(db: Session) -> int:
     return min(max(base, gap_days + 2), _MAX_AGE_RELAX_CAP)
 
 
-def _persist_setups(db, stock, setups, bar_date: date | None = None) -> None:
+def _persist_setups(db, stock, setups, bar_date: date | None = None, bar_close: float | None = None) -> None:
     """Persist the pre-trigger setups for one stock.
 
     The two lens scores are looked up so `convenience` can express the
@@ -117,6 +118,13 @@ def _persist_setups(db, stock, setups, bar_date: date | None = None) -> None:
         select(StockScore.composite).where(StockScore.stock_id == stock.id)
     ).scalars().first()
     for sm in setups:
+        # Record the input alongside its levels, never substitute a newer bar
+        # at API read time. Existing episodes gain this at their next evaluation.
+        if bar_date is not None and bar_close is not None:
+            sm = replace(sm, annotations={**sm.annotations, "evaluation": {
+                "bar_date": bar_date.isoformat(), "close": bar_close,
+                "currency": stock.currency,
+            }})
         setup_service.upsert_setup(
             db, stock_id=stock.id, match=sm,
             technical_composite=float(tech) if tech is not None else None,
@@ -154,7 +162,7 @@ def evaluate_signals(
     # Best-effort — a setup problem must never cost a signal.
     if setups and stock is not None and getattr(stock, "id", None):
         try:
-            _persist_setups(db, stock, setups, bar_date=last_bar_date)
+            _persist_setups(db, stock, setups, bar_date=last_bar_date, bar_close=last_close)
         except Exception as e:  # noqa: BLE001
             logger.warning(f"[setups] persist failed for {stock.ticker}: {e}")
     for m in matches:
