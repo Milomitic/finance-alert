@@ -327,6 +327,63 @@ export async function fetchDetectorPerformance(signal?: AbortSignal): Promise<De
   return r.json();
 }
 
+/* ─── Esiti di PIANO: la gara fra stop e target ──────────────────────────
+ *
+ * Domanda diversa da `DetectorPerformance`, e le due non vanno confuse:
+ * quella misura se il detector prevede la deriva a orizzonte fisso, questa se
+ * il piano mostrato a schermo avrebbe pagato.
+ */
+export type PlanCoverage = {
+  detector: string;
+  alerts: number;
+  with_plan: number;
+  without_plan: number;
+};
+
+export type PlanPerfMeta = {
+  rows: number;
+  /** Righe il cui livello di invalidazione e' stato ricostruito all'indietro. */
+  reconstructed: number;
+  detectors_present: number;
+  date_range: { from: string | null; to: string | null };
+  /** ⚠️ Quanti alert di ogni detector NON hanno un piano. Senza, la classifica
+   *  ometterebbe in silenzio i detector che non emettevano un livello. */
+  coverage: PlanCoverage[];
+  min_n: number;
+};
+
+export type PlanPerfRow = {
+  detector: string;
+  n: number;
+  /** Finestre INDIPENDENTI: righe che si sovrappongono non sono estrazioni
+   *  indipendenti, e l'intervallo lo paga. */
+  effective_n: number;
+  horizon_days: number;
+  /** L'intestazione. ⚠️ NON il tasso di successo. */
+  expectancy_r: number;
+  expectancy_ci: [number, number] | null;
+  verdict: "positive" | "negative" | "inconclusive";
+  win_rate: number;
+  esiti: Record<string, number>;
+  /** Stop colpito PRIMA di un target poi raggiunto: stop troppo stretto. */
+  stop_too_tight: number;
+  mae_r_on_wins: number | null;
+  mfe_r_on_losses: number | null;
+  median_bars: number | null;
+  low_confidence: boolean;
+};
+
+export type PlanPerformance = { meta: PlanPerfMeta; rows: PlanPerfRow[] };
+
+export async function fetchPlanPerformance(signal?: AbortSignal): Promise<PlanPerformance> {
+  const r = await fetch("/api/platform/plan-performance", {
+    credentials: "include",
+    signal,
+  });
+  if (!r.ok) throw new Error(`plan-performance ${r.status}`);
+  return r.json();
+}
+
 export async function runProbesNow(): Promise<{ accepted: boolean }> {
   const r = await fetch("/api/platform/probes/run", {
     method: "POST",

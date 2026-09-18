@@ -3,6 +3,7 @@ import { Suspense, lazy, useState } from "react";
 
 import { CalibrationPanel } from "@/components/settings/CalibrationPanel";
 import { DetectorPerformancePanel } from "@/components/settings/DetectorPerformancePanel";
+import { PlanPerformancePanel } from "@/components/settings/PlanPerformancePanel";
 import { SignalEffectivenessPanel } from "@/components/settings/SignalEffectiveness";
 import { CardSkeleton } from "@/components/ui/card-skeleton";
 import { MetricStrip } from "@/components/ui/metric-tile";
@@ -59,6 +60,7 @@ export function SignalStatsSection() {
           <SignalEffectivenessPanel />
           <CalibrationPanel />
           <DetectorPerformancePanel />
+          <PlanPerformancePanel />
           <Suspense fallback={<div className="h-48 animate-pulse rounded-lg bg-muted/30" />}>
             <EquityCurvePanel />
           </Suspense>

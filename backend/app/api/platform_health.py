@@ -29,6 +29,7 @@ from app.schemas.platform import (
     InfraLogSourceOut,
     InfraLogsOut,
     LogRecordOut,
+    PlanPerformanceOut,
     PlatformHealthOut,
     RecentScanOut,
     SchedulerJobStatOut,
@@ -43,6 +44,7 @@ from app.services import (
     image_provenance,
     infra_health_service,
     loki_log_service,
+    plan_performance_service,
     signal_drift_service,
     source_catalog,
     verification_posture,
@@ -386,6 +388,36 @@ def infra_health(_user: User = Depends(get_current_user)) -> InfraHealthOut:
     was down for months behind uniformly green dashboards.
     """
     return InfraHealthOut(**infra_health_service.compute_infra_health())
+
+
+@router.get("/plan-performance", response_model=PlanPerformanceOut)
+def plan_performance(
+    min_n: Annotated[int, Query(ge=1, le=500)] = 30,
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+) -> PlanPerformanceOut:
+    """Il magazzino degli esiti di PIANO, aggregato per detector (sola lettura).
+
+    Risponde a una domanda diversa da `/detector-performance`, e le due non
+    vanno confuse: quella misura se il detector prevede la deriva a orizzonte
+    fisso, questa se il piano mostrato a schermo avrebbe pagato — cioe' quale
+    fra stop e target e' stato toccato per primo.
+
+    ⚠️ L'intestazione e' l'ATTESA IN R e non il tasso di successo: TP1 sta a
+    R:R fino a 4,0, quindi un tasso letto da solo sembrerebbe pessimo mentre il
+    sistema guadagna. Ogni riga porta le FINESTRE INDIPENDENTI e un intervallo
+    largo quanto quelle giustificano; sotto due finestre non c'e' intervallo e
+    il verdetto e' «non concludente», che e' la risposta vera.
+
+    `meta.coverage` dichiara quanti alert di ogni detector NON hanno un piano:
+    sei detector non emettevano un livello di invalidazione, e senza questa
+    sezione la classifica li ometterebbe in silenzio.
+
+      min_n   pavimento sotto il quale una riga e' marcata low_confidence
+    """
+    return PlanPerformanceOut(
+        **plan_performance_service.compute_plan_performance(db, min_n=min_n)
+    )
 
 
 @router.get("/detector-performance", response_model=DetectorPerformanceOut)

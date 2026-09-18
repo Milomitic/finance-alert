@@ -56,6 +56,8 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from app.stats.beta import betai
+
 _IN_DEFAULT = "app/data/conditional_screen_rows.csv.gz"
 _OUT_DEFAULT = "app/data/conditional_screen_report.json"
 
@@ -148,64 +150,13 @@ def _bh(pvals: list[float], q: float) -> tuple[list[float], float | None]:
     return (qv, threshold)
 
 
-def _betacf(a: float, b: float, x: float) -> float:
-    """Continued fraction for the incomplete beta (Lentz's method)."""
-    tiny = 1e-30
-    qab, qap, qam = a + b, a + 1.0, a - 1.0
-    c, d = 1.0, 1.0 - qab * x / qap
-    if abs(d) < tiny:
-        d = tiny
-    d = 1.0 / d
-    h = d
-    for m in range(1, 200):
-        m2 = 2 * m
-        aa = m * (b - m) * x / ((qam + m2) * (a + m2))
-        d = 1.0 + aa * d
-        c = 1.0 + aa / c
-        if abs(d) < tiny:
-            d = tiny
-        if abs(c) < tiny:
-            c = tiny
-        d = 1.0 / d
-        h *= d * c
-        aa = -(a + m) * (qab + m) * x / ((a + m2) * (qap + m2))
-        d = 1.0 + aa * d
-        c = 1.0 + aa / c
-        if abs(d) < tiny:
-            d = tiny
-        if abs(c) < tiny:
-            c = tiny
-        d = 1.0 / d
-        delta = d * c
-        h *= delta
-        if abs(delta - 1.0) < 3e-9:
-            break
-    return h
-
-
-def _betai(a: float, b: float, x: float) -> float:
-    """Regularized incomplete beta I_x(a, b)."""
-    if x <= 0.0:
-        return 0.0
-    if x >= 1.0:
-        return 1.0
-    lbeta = (
-        math.lgamma(a + b) - math.lgamma(a) - math.lgamma(b)
-        + a * math.log(x) + b * math.log(1.0 - x)
-    )
-    front = math.exp(lbeta)
-    if x < (a + 1.0) / (a + b + 2.0):
-        return front * _betacf(a, b, x) / a
-    return 1.0 - front * _betacf(b, a, 1.0 - x) / b
-
-
 def _t_two_sided_p(t: float, df: int) -> float:
     """Two-sided Student-t p-value. Needed because the block-level test runs on
     a handful of observations, where the normal approximation is far too
     generous — which is exactly the regime where a false finding is born."""
     if df < 1 or not math.isfinite(t):
         return 1.0
-    return _betai(df / 2.0, 0.5, df / (df + t * t))
+    return betai(df / 2.0, 0.5, df / (df + t * t))
 
 
 def _block_test(diffs: list[float]) -> tuple[float, float, float]:

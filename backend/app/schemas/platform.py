@@ -388,6 +388,61 @@ class DetectorPerformanceOut(BaseModel):
     replay: DetectorReplayOut | None = None
 
 
+class PlanCoverageOut(BaseModel):
+    """Quanti alert di un detector hanno un esito di piano, e quanti no.
+
+    ⚠️ Non e' un ornamento. Sei detector su diciassette non emettevano un
+    livello di invalidazione, quindi non producevano piani: una classifica
+    costruita su questi dati li avrebbe omessi IN SILENZIO, coprendo undici
+    detector su diciassette e sembrando completa.
+    """
+    detector: str
+    alerts: int
+    with_plan: int
+    without_plan: int
+
+
+class PlanPerfMetaOut(BaseModel):
+    rows: int
+    #: Righe il cui livello di invalidazione e' stato RICOSTRUITO all'indietro.
+    #: Dichiarato perche' una ricostruzione sbagliata e' indistinguibile da una
+    #: giusta finche' nessuno guarda il campo.
+    reconstructed: int
+    detectors_present: int
+    date_range: dict[str, str | None]
+    coverage: list[PlanCoverageOut]
+    min_n: int
+
+
+class PlanPerfRowOut(BaseModel):
+    detector: str
+    n: int
+    #: Le finestre INDIPENDENTI: righe le cui finestre si sovrappongono non
+    #: sono estrazioni indipendenti, e l'intervallo lo paga.
+    effective_n: int
+    horizon_days: int
+    #: L'intestazione. ⚠️ NON il tasso di successo: TP1 sta a R:R fino a 4,0,
+    #: quindi un tasso letto da solo sembrerebbe pessimo mentre il sistema
+    #: guadagna.
+    expectancy_r: float
+    expectancy_ci: list[float] | None = None
+    verdict: str          # positive | negative | inconclusive
+    win_rate: float
+    esiti: dict[str, int]
+    #: Quante volte lo stop e' stato colpito PRIMA di un target poi raggiunto
+    #: lo stesso: la misura di uno stop troppo stretto.
+    stop_too_tight: int
+    mae_r_on_wins: float | None = None
+    mfe_r_on_losses: float | None = None
+    median_bars: float | None = None
+    low_confidence: bool
+
+
+class PlanPerformanceOut(BaseModel):
+    meta: PlanPerfMetaOut
+    rows: list[PlanPerfRowOut]
+
+
 class InfraComponentOut(BaseModel):
     """One scrape target, so the card can NAME what is down rather than only
     counting it — "1 target giù" sends you to kubectl; the job name is the
