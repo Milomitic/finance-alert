@@ -29,7 +29,7 @@ from typing import TYPE_CHECKING, NamedTuple
 from sqlalchemy import exists, select
 
 from app.models import Alert, OhlcvDaily, PlanOutcome
-from app.models.plan_outcome import FONTE_EMESSO
+from app.models.plan_outcome import FONTE_EMESSO, FONTE_RICOSTRUITO
 from app.signals.trade_plan import PianoDiTrade, costruisci_piano
 
 if TYPE_CHECKING:
@@ -232,7 +232,62 @@ def _barre_dopo(db: Session, stock_id: int, dal: date) -> list[Barra]:
             for d, hi, lo, cl in righe]
 
 
-def mature_plan_outcomes(db: Session, *, commit: bool = True) -> int:
+#: I detector il cui livello di invalidazione si RICOSTRUISCE in modo esatto
+#: da un fatto delle barre, per gli alert storici che non ce l'hanno:
+#:
+#:   gap_and_go          la chiusura della barra precedente al gap
+#:   le tre divergenze   l'estremo della barra del segnale, che e' l'ultimo
+#:                       pivot per costruzione — l'evento porta
+#:                       `date == pivot_dates[-1]` (verificato in events.py)
+#:
+#: ⚠️ `adx_confirmation` e `squeeze_expansion` sono ESCLUSI, e l'esclusione e'
+#: la parte importante. Il primo vorrebbe ricalcolare un livello Donchian con
+#: un parametro che potrebbe essere cambiato, il secondo una finestra di
+#: compressione. Il risultato sarebbe indistinguibile da un livello misurato, e
+#: questo repo ha gia' pagato quella lezione su SOXS: un fattore dedotto e
+#: applicato all'indietro «sembra perfettamente sano ed e' silenziosamente
+#: sbagliato».
+RICOSTRUIBILI: frozenset[str] = frozenset({
+    "gap_and_go", "rsi_divergence", "macd_divergence", "hidden_divergence",
+})
+
+
+def _invalidazione_ricostruita(
+    db: Session, *, stock_id: int, detector: str, signal_date: date, tone: str,
+) -> dict | None:
+    """Il livello che quell'alert AVREBBE avuto, letto dalle barre.
+
+    None quando il detector non e' fra i ricostruibili o la barra non c'e'.
+    """
+    if detector not in RICOSTRUIBILI:
+        return None
+    if detector == "gap_and_go":
+        chiusura = db.execute(
+            select(OhlcvDaily.close)
+            .where(OhlcvDaily.stock_id == stock_id, OhlcvDaily.date < signal_date)
+            .order_by(OhlcvDaily.date.desc()).limit(1)
+        ).scalar()
+        if chiusura is None:
+            return None
+        return {"level": float(chiusura),
+                "reason": "gap colmato: ritorno alla chiusura precedente"}
+    estremi = db.execute(
+        select(OhlcvDaily.low, OhlcvDaily.high)
+        .where(OhlcvDaily.stock_id == stock_id, OhlcvDaily.date == signal_date)
+    ).first()
+    if estremi is None:
+        return None
+    minimo, massimo = float(estremi[0]), float(estremi[1])
+    if tone == "bull":
+        return {"level": minimo,
+                "reason": "prezzo sotto il minimo su cui poggia la divergenza"}
+    return {"level": massimo,
+            "reason": "prezzo sopra il massimo su cui poggia la divergenza"}
+
+
+def mature_plan_outcomes(
+    db: Session, *, commit: bool = True, ricostruisci: bool = False,
+) -> int:
     """Scrive una riga di `plan_outcomes` per ogni alert il cui piano si e'
     risolto e che non ne ha ancora una. Rende il numero di righe scritte.
 
@@ -260,7 +315,19 @@ def mature_plan_outcomes(db: Session, *, commit: bool = True) -> int:
         if not isinstance(snap, dict):
             continue
 
+        fonte = FONTE_EMESSO
         piano = costruisci_piano(snap, float(a.trigger_price), a.signal_name)
+        if piano is None and ricostruisci and a.signal_date is not None:
+            # ⚠️ Solo per gli alert che un livello non ce l'hanno: uno EMESSO
+            # non viene mai scavalcato, altrimenti `source` smetterebbe di
+            # dire la verita' proprio sulle righe di cui ci si fida di piu'.
+            livello = _invalidazione_ricostruita(
+                db, stock_id=a.stock_id, detector=a.signal_name or "",
+                signal_date=a.signal_date, tone=snap.get("tone") or "")
+            if livello is not None:
+                piano = costruisci_piano({**snap, "invalidation": livello},
+                                         float(a.trigger_price), a.signal_name)
+                fonte = FONTE_RICOSTRUITO
         if piano is None:
             continue   # nessun livello strutturale: niente piano, niente gara
 
@@ -289,7 +356,7 @@ def mature_plan_outcomes(db: Session, *, commit: bool = True) -> int:
             stop_hit_date=_giorno(esito.data_stop),
             tp1_hit_date=_giorno(esito.data_tp1),
             tp2_hit_date=_giorno(esito.data_tp2),
-            source=FONTE_EMESSO, method_version=PLAN_METHOD_VERSION,
+            source=fonte, method_version=PLAN_METHOD_VERSION,
             matured_at=datetime.now(UTC),
         ))
         scritte += 1

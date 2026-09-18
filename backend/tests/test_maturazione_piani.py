@@ -190,3 +190,161 @@ def test_un_titolo_senza_barre_non_impedisce_agli_altri_di_maturare(db: Session)
 
     assert mature_plan_outcomes(db, commit=False) == 1
     assert db.query(PlanOutcome).one().stock_id == s2.id
+
+
+# ─── 6. Il ricalcolo storico: ricostruire SOLO dove e' esatto ──────────────
+#
+# I sei detector scoperti emettono il livello da adesso. I loro ~2.508 alert
+# storici hanno `invalidation: None` nello snapshot per sempre, e resterebbero
+# fuori dalla misura per settimane.
+#
+# Per QUATTRO di loro il livello si ricostruisce da un FATTO delle barre:
+#   gap_and_go          la chiusura della barra precedente al gap
+#   le tre divergenze   il minimo/massimo della barra del segnale, che e'
+#                       l'ultimo pivot per costruzione (l'evento porta
+#                       `date == pivot_dates[-1]`, verificato in events.py)
+#
+# Per gli altri DUE no: `adx_confirmation` vorrebbe ricalcolare un livello
+# Donchian con un parametro che potrebbe essere cambiato, e `squeeze_expansion`
+# la finestra di compressione. Un livello DEDOTTO applicato all'indietro e'
+# esattamente cio' che questo repo ha imparato a non fare su SOXS: sembra
+# perfettamente sano ed e' silenziosamente sbagliato.
+
+def test_il_gap_storico_si_ricostruisce_dalla_chiusura_precedente(db: Session) -> None:
+    s = _titolo(db)
+    _alert(db, s, detector="gap_and_go", invalidazione=None, scattato="2026-03-02")
+    _barre(db, s, [
+        ("2026-02-27", 96, 94, 95.2),   # la chiusura PRIMA del gap: il livello
+        ("2026-03-01", 101, 99, 100),   # la barra del segnale (gap)
+        ("2026-03-03", 103, 99, 102),
+        ("2026-03-04", 109, 101, 108),
+    ])
+
+    assert mature_plan_outcomes(db, commit=False, ricostruisci=True) == 1
+    riga = db.query(PlanOutcome).one()
+    assert riga.source == "ricostruito"
+    assert riga.stop == pytest.approx(95.2)
+
+
+def test_la_divergenza_storica_si_ricostruisce_dall_estremo_della_barra(db: Session) -> None:
+    s = _titolo(db)
+    _alert(db, s, detector="rsi_divergence", invalidazione=None, scattato="2026-03-02")
+    _barre(db, s, [
+        ("2026-03-01", 101, 88.5, 100),   # la barra del segnale: minimo = livello
+        ("2026-03-03", 103, 99, 102),
+        ("2026-03-04", 109, 101, 108),
+    ])
+
+    assert mature_plan_outcomes(db, commit=False, ricostruisci=True) == 1
+    riga = db.query(PlanOutcome).one()
+    assert riga.source == "ricostruito"
+    assert riga.stop == pytest.approx(88.5)
+
+
+def test_adx_e_squeeze_NON_si_ricostruiscono(db: Session) -> None:
+    """⚠️ L'esclusione e' la parte importante, ed e' deliberata.
+
+    Ricostruire un livello Donchian o una finestra di compressione vorrebbe
+    dire ricalcolarli con parametri che potrebbero essere cambiati. Il
+    risultato sarebbe indistinguibile da un livello misurato — che e'
+    precisamente la ragione per cui non si fa.
+    """
+    s1, s2 = _titolo(db, "AAA"), _titolo(db, "BBB")
+    _alert(db, s1, detector="adx_confirmation", invalidazione=None)
+    _alert(db, s2, detector="squeeze_expansion", invalidazione=None)
+    for s in (s1, s2):
+        _barre(db, s, [("2026-03-01", 101, 88, 100), ("2026-03-03", 109, 99, 108)])
+
+    assert mature_plan_outcomes(db, commit=False, ricostruisci=True) == 0
+    assert db.query(PlanOutcome).count() == 0
+
+
+def test_la_ricostruzione_e_SPENTA_per_la_scansione_normale(db: Session) -> None:
+    """⚠️ Il percorso incrementale non deve mai ricostruire.
+
+    Da adesso i sei detector emettono il livello, quindi un alert nuovo senza
+    invalidazione e' un alert che non ne ha una — e riempirlo all'indietro
+    renderebbe `source='emesso'` una promessa falsa. Il ricalcolo storico e'
+    un'operazione dichiarata e una tantum.
+    """
+    s = _titolo(db)
+    _alert(db, s, detector="gap_and_go", invalidazione=None)
+    _barre(db, s, [("2026-02-27", 96, 94, 95.2), ("2026-03-03", 109, 99, 108)])
+
+    assert mature_plan_outcomes(db, commit=False) == 0
+
+
+def test_un_livello_EMESSO_non_viene_mai_sovrascritto_da_una_ricostruzione(db: Session) -> None:
+    s = _titolo(db)
+    _alert(db, s, detector="gap_and_go", invalidazione=96.0)
+    _barre(db, s, [("2026-02-27", 96, 94, 80.0), ("2026-03-03", 109, 99, 108)])
+
+    assert mature_plan_outcomes(db, commit=False, ricostruisci=True) == 1
+    riga = db.query(PlanOutcome).one()
+    assert riga.source == "emesso"
+    assert riga.stop == pytest.approx(96.0), "la ricostruzione ha scavalcato il livello vero"
+
+
+# ─── 7. Lo script di ricalcolo ─────────────────────────────────────────────
+
+def test_lo_script_in_sola_lettura_NON_scrive(db: Session, monkeypatch) -> None:
+    """⚠️ Una modalita' «sola lettura» che lascia le righe in sessione e' peggio
+    di nessuna modalita' sola lettura: il primo commit di qualcun altro le
+    scriverebbe comunque, e chi ha letto il rapporto crederebbe di non aver
+    toccato niente.
+
+    Il monkeypatch di SessionLocal non e' una formalita': lo script lo importa
+    al caricamento del modulo, quindi senza scriverebbe nel database di
+    SVILUPPO — la trappola gia' documentata in test_institutionals_catchup.
+    """
+    from app.core import db as db_module
+    from app.scripts import backfill_plan_outcomes
+
+    s = _titolo(db)
+    _alert(db, s)
+    _barre(db, s, [("2026-03-03", 109, 99, 108)])
+    db.commit()
+
+    monkeypatch.setattr(backfill_plan_outcomes, "SessionLocal", db_module.SessionLocal)
+    backfill_plan_outcomes.run(applica=False)
+
+    assert db.query(PlanOutcome).count() == 0, "la sola lettura ha scritto"
+
+
+def test_lo_script_con_applica_scrive(db: Session, monkeypatch) -> None:
+    from app.core import db as db_module
+    from app.scripts import backfill_plan_outcomes
+
+    s = _titolo(db)
+    _alert(db, s)
+    _barre(db, s, [("2026-03-03", 109, 99, 108)])
+    db.commit()
+
+    monkeypatch.setattr(backfill_plan_outcomes, "SessionLocal", db_module.SessionLocal)
+    backfill_plan_outcomes.run(applica=True)
+
+    assert db.query(PlanOutcome).count() == 1
+
+
+def test_main_inoltra_i_flag_alla_run(monkeypatch) -> None:
+    """⚠️ Il passaggio dei flag e' esattamente cio' che si rompe in silenzio.
+
+    Un `--applica` non inoltrato produce uno script che gira, stampa un
+    rapporto, esce con zero e non scrive MAI — e il modo in cui ce se ne
+    accorge e' che dopo settimane il magazzino e' ancora vuoto.
+    """
+    import sys
+
+    from app.scripts import backfill_plan_outcomes
+
+    visti: list[tuple[bool, bool]] = []
+    monkeypatch.setattr(backfill_plan_outcomes, "run",
+                        lambda applica=False, ricostruisci=False:
+                            visti.append((applica, ricostruisci)))
+
+    monkeypatch.setattr(sys, "argv", ["backfill_plan_outcomes"])
+    backfill_plan_outcomes.main()
+    monkeypatch.setattr(sys, "argv", ["backfill_plan_outcomes", "--applica", "--ricostruisci"])
+    backfill_plan_outcomes.main()
+
+    assert visti == [(False, False), (True, True)]
