@@ -13,6 +13,8 @@ let assets: LiveAsset[] = [];
 let premarket: unknown = undefined;
 let liveMovers: unknown = undefined;
 let eventi: CalendarEvent[] = [];
+/** Quotazioni del paniere a leva (`/api/stocks/quotes`). */
+let quotazioni: unknown[] = [];
 
 vi.mock("@/hooks/useLiveAssets", () => ({
   useLiveAssets: () => ({ data: { assets }, isLoading: false }),
@@ -25,6 +27,9 @@ vi.mock("@/hooks/useLiveUniverseMovers", () => ({
 }));
 vi.mock("@/hooks/useCalendar", () => ({
   useCalendar: () => ({ data: { events: eventi } }),
+}));
+vi.mock("@/hooks/useLiveQuote", () => ({
+  useLiveQuotes: () => ({ data: { quotes: quotazioni } }),
 }));
 
 const { MarketPulseJumbotron } = await import("./MarketPulseJumbotron");
@@ -93,6 +98,7 @@ beforeEach(() => {
   premarket = undefined;
   liveMovers = undefined;
   eventi = [];
+  quotazioni = [];
 });
 afterEach(() => vi.useRealTimers());
 
@@ -184,6 +190,51 @@ describe("i numeri parlano una lingua sola", () => {
     expect(screen.getByText("Indici")).toBeInTheDocument();
     expect(screen.getByText("Materie prime")).toBeInTheDocument();
     expect(screen.getByText("Cripto")).toBeInTheDocument();
+  });
+});
+
+describe("il paniere a leva e le icone", () => {
+  it("mostra gli ETF a leva con la loro quotazione", () => {
+    quotazioni = [
+      { ticker: "YINN", price: 23.45, change_pct: 2.1, market_state: "OPEN" },
+      { ticker: "NUGT", price: 88.2, change_pct: -1.4, market_state: "OPEN" },
+    ];
+    montaA(SEDUTA);
+    expect(screen.getByText("Leva")).toBeInTheDocument();
+    expect(screen.getByText("YINN")).toBeInTheDocument();
+    expect(screen.getByText("23,45")).toBeInTheDocument();
+    expect(screen.getByText("NUGT")).toBeInTheDocument();
+    expect(screen.getByText("−1,40%")).toBeInTheDocument();
+  });
+
+  it("⚠️ un ETF senza quotazione resta a schermo come n/d, non sparisce", () => {
+    /* Se il titolo non e' in catalogo, `/api/stocks/quotes` non lo rende e la
+     * voce sparirebbe in silenzio: l'utente vedrebbe una fascia coerente e non
+     * saprebbe che manca. YINN e' esattamente questo caso — non aveva una riga
+     * in catalogo, e per questo non si trovava nemmeno dalla ricerca. */
+    quotazioni = [{ ticker: "NUGT", price: 88.2, change_pct: -1.4, market_state: "OPEN" }];
+    montaA(SEDUTA);
+    expect(screen.getByText("YINN")).toBeInTheDocument();
+    const senzaQuota = screen.getByTitle(/YINN: quotazione non disponibile/);
+    expect(senzaQuota.textContent).toBe("n/d");
+  });
+
+  it("chi non ha una bandiera ha un'icona: oro, petrolio, bitcoin", () => {
+    // Senza un segno la riga di contesto e' una fila di parole tutte uguali.
+    // Le bandiere restano `<img>`, le altre classi diventano un glifo.
+    assets = [
+      indice("^N225", { category: "index", flag: "jp" }),
+      indice("GC=F", { category: "commodity", flag: null }),
+      indice("BTC-USD", { category: "crypto", flag: null }),
+    ];
+    montaA(SEDUTA);
+    const nikkei = screen.getByText("Nikkei").closest("a")!;
+    const oro = screen.getByText("Oro").closest("a")!;
+    const btc = screen.getByText("Bitcoin").closest("a")!;
+    expect(nikkei.querySelector("img")).not.toBeNull();
+    expect(oro.querySelector("img")).toBeNull();
+    expect(oro.querySelector("svg")).not.toBeNull();
+    expect(btc.querySelector("svg")).not.toBeNull();
   });
 });
 

@@ -6,7 +6,9 @@ import { ConfluenceRows } from "@/components/dashboard/ConfluenceCard";
 import { RecentAlertsFeed } from "@/components/dashboard/RecentAlertsFeed";
 import { TopStocksTable } from "@/components/dashboard/TopStocksTable";
 import { Card, CardContent } from "@/components/ui/card";
+import { InfoHint } from "@/components/ui/info-hint";
 import { SectionTitle } from "@/components/ui/section-title";
+import { PROBABILITA_TOOLTIP } from "@/lib/alertMeta";
 
 interface Props {
   topStocks: TopStock[];
@@ -16,10 +18,21 @@ interface Props {
   alertsPrev24h: number;
 }
 
-const COLUMNS: { key: string; label: string }[] = [
+const COLUMNS: { key: string; label: string; nota?: string }[] = [
   { key: "confluence", label: "Top confluenze" },
   { key: "top", label: "Top stocks" },
-  { key: "feed", label: "Feed" },
+  /* ⚠️ La `nota` raccoglie le spiegazioni che stavano nell'intestazione della
+     tabella Feed, tolta su richiesta dell'utente. Non sono state cancellate ma
+     SPOSTATE: quella sulla Probabilita' dice che e' un tasso di base per
+     rilevatore, identico per ogni segnale dello stesso tipo, ed e' la parte
+     onesta di quel numero. */
+  {
+    key: "feed",
+    label: "Feed",
+    nota:
+      "Colonne: titolo, natura del segnale, regola che è scattata, Forza del pattern (0-100), " +
+      `Probabilità, prezzo e data. ${PROBABILITA_TOOLTIP}`,
+  },
   { key: "byindex", label: "Per indice" },
 ];
 
@@ -79,8 +92,9 @@ export function AlertsCompactPanel({
         <div className="flex-1 min-h-0 grid grid-cols-1 sm:grid-cols-2 dense-4:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x dense-4:divide-y-0 dense-4:divide-x divide-border/40">
           {COLUMNS.map((col) => (
             <div key={col.key} className="flex flex-col min-h-0 min-w-0">
-              <div className="shrink-0 px-3 py-1.5 text-xs uppercase tracking-[0.16em] font-bold text-muted-foreground border-b bg-muted/40">
+              <div className="flex shrink-0 items-center gap-1 border-b bg-muted/40 px-3 py-1.5 text-xs font-bold uppercase tracking-[0.16em] text-muted-foreground">
                 {col.label}
+                {col.nota && <InfoHint label={col.label} text={col.nota} />}
               </div>
               {/* Mobile/tablet: natural flow capped at 55vh so a long Feed
                   doesn't run away — the page scrolls. lg+: fixed-height

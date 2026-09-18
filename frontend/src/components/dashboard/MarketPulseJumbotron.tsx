@@ -1,8 +1,10 @@
-import { CalendarClock, Clock3, TrendingDown, TrendingUp } from "lucide-react";
+import {
+  Bitcoin, CalendarClock, Clock3, Coins, Flame, Fuel, Gem, TrendingDown, TrendingUp, Zap,
+} from "lucide-react";
 import { useMemo, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 
-import type { IndexBreadth, MarketGlobal } from "@/api/types";
+import type { IndexBreadth, LiveQuote, MarketGlobal } from "@/api/types";
 import type { PremarketMover } from "@/api/dashboard";
 import { MarketBreadthBand } from "@/components/dashboard/MarketBreadthBand";
 import { MarketStateBadge, type MarketPhase } from "@/components/dashboard/MarketStateBadge";
@@ -10,6 +12,7 @@ import { Card } from "@/components/ui/card";
 import { NoValue } from "@/components/ui/no-value";
 import { useCalendar } from "@/hooks/useCalendar";
 import { useLiveAssets, type LiveAsset } from "@/hooks/useLiveAssets";
+import { useLiveQuotes } from "@/hooks/useLiveQuote";
 import { useLiveUniverseMovers } from "@/hooks/useLiveUniverseMovers";
 import { useNowTick } from "@/hooks/useNowTick";
 import { usePremarketMovers } from "@/hooks/usePremarketMovers";
@@ -76,6 +79,31 @@ const NOMI_BREVI: Record<string, string> = {
   "^HSI": "Hang Seng", "000300.SS": "CSI 300", "GC=F": "Oro", "SI=F": "Argento",
   "CL=F": "WTI", "NG=F": "Gas", "BTC-USD": "Bitcoin", "ETH-USD": "Ethereum",
 };
+
+/** Un'icona per chi non ha una bandiera. Indici e valute hanno un paese;
+ *  l'oro e il bitcoin no, e senza un segno la riga di contesto e' una fila di
+ *  parole tutte uguali. Le icone sono di SIGNIFICATO, non decorative: la
+ *  fiamma e' il gas, la pompa e' il petrolio, il lingotto i metalli. */
+const ICONA_ASSET: Record<string, typeof Coins> = {
+  "GC=F": Coins, "SI=F": Coins, "CL=F": Fuel, "NG=F": Flame,
+  "BTC-USD": Bitcoin, "ETH-USD": Gem,
+};
+
+/* ─── Il paniere a leva ───────────────────────────────────────────────────
+ *
+ * ETF a leva e inversi: si muovono di due o tre punti quando il sottostante ne
+ * fa uno. Stanno in un gruppo LORO e non fra gli indici, per la stessa ragione
+ * per cui sono usciti dalla lista dei movers del pre-market — comparire in cima
+ * a una classifica di variazioni non e' una notizia, e' la definizione dello
+ * strumento. Qui invece sono il soggetto: chi li guarda li guarda apposta.
+ *
+ * ⚠️ Sono titoli di CATALOGO, non simboli del paniere live: le quotazioni
+ * arrivano da `/api/stocks/quotes`, che filtra sui titoli in catalogo. YINN ha
+ * una riga solo da quando il seme scelto a mano gira all'avvio — prima non si
+ * trovava nemmeno dalla barra di ricerca. Un ticker assente dal catalogo
+ * compare qui come «n/d» invece di sparire in silenzio: l'assenza si vede.
+ */
+const ETF_LEVA: readonly string[] = ["YINN", "NUGT", "SOXL", "TQQQ", "TNA", "LABU"];
 
 /** Le bandiere che esistono davvero in `public/flags/`. Una `<img>` verso un
  *  file assente lascia l'icona rotta a schermo: si rende solo cio' che c'e'. */
@@ -233,6 +261,7 @@ function Chip({ asset }: { asset: LiveAsset }) {
   const cambio = asset.quote?.change_pct ?? null;
   const nome = nomeBreve(asset);
   const bandiera = asset.flag && BANDIERE.has(asset.flag) ? `/flags/${asset.flag}.svg` : null;
+  const Icona = ICONA_ASSET[asset.symbol];
   const forte = cambio != null && Math.abs(cambio) >= CONTESTO_RILEVANTE;
   return (
     <Link
@@ -244,7 +273,7 @@ function Chip({ asset }: { asset: LiveAsset }) {
         asset.is_live ? "mercato aperto adesso" : "mercato chiuso — ultimo prezzo",
       ].filter(Boolean).join(" · ")}
     >
-      {bandiera && (
+      {bandiera ? (
         <img
           src={bandiera}
           alt=""
@@ -253,7 +282,9 @@ function Chip({ asset }: { asset: LiveAsset }) {
           style={{ width: "14px", height: "10px", objectFit: "cover" }}
           className="shrink-0 rounded-[1px] shadow-sm"
         />
-      )}
+      ) : Icona ? (
+        <Icona className="h-3 w-3 shrink-0 text-muted-foreground" aria-hidden />
+      ) : null}
       <span className="text-[0.7059rem] font-semibold uppercase tracking-wide text-muted-foreground">
         {nome}
       </span>
@@ -273,6 +304,35 @@ function Chip({ asset }: { asset: LiveAsset }) {
           tono(cambio),
         )}
       >
+        {formatVariazione(cambio) ?? ""}
+      </span>
+    </Link>
+  );
+}
+
+/** Una voce del paniere a leva. Stessa grammatica delle altre — nome,
+ *  prezzo, variazione — ma il collegamento porta alla scheda del TITOLO,
+ *  perche' questi sono titoli di catalogo e non simboli di mercato. */
+function ChipLeva({ ticker, quote }: { ticker: string; quote: LiveQuote | undefined }) {
+  const cambio = quote?.change_pct ?? null;
+  const forte = cambio != null && Math.abs(cambio) >= CONTESTO_RILEVANTE;
+  return (
+    <Link
+      to={`/stocks/${encodeURIComponent(ticker)}`}
+      className="inline-flex min-w-0 items-center gap-1.5 rounded px-1 py-0.5 hover:bg-accent/40"
+      title={
+        quote
+          ? `${ticker} — ETF a leva, apri la scheda`
+          : `${ticker}: nessuna quotazione. Se manca anche dalla ricerca, il titolo non e' in catalogo.`
+      }
+    >
+      <span className="text-[0.7059rem] font-semibold uppercase tracking-wide text-muted-foreground">
+        {ticker}
+      </span>
+      <span className="text-xs font-semibold tabular-nums">
+        {formatLivello(quote?.price) ?? <NoValue hint={`${ticker}: quotazione non disponibile`} />}
+      </span>
+      <span className={cn("text-xs tabular-nums", forte ? "font-bold" : "font-semibold", tono(cambio))}>
         {formatVariazione(cambio) ?? ""}
       </span>
     </Link>
@@ -412,6 +472,16 @@ export function MarketPulseJumbotron({ global, byIndex, computedAt }: Props) {
       ? ["09:30", "16:00"]
       : ["16:00", "20:00"];
 
+  /* Le quotazioni del paniere a leva. Stessa cadenza delle altre schede live
+   * (15 s, cache di 10 s lato server), e la chiave della query e' la lista
+   * ordinata: chi altro chiede gli stessi ticker condivide la risposta. */
+  const levaQ = useLiveQuotes(ETF_LEVA as string[]);
+  const perTicker = useMemo(() => {
+    const m = new Map<string, LiveQuote>();
+    for (const q of levaQ.data?.quotes ?? []) m.set(q.ticker, q);
+    return m;
+  }, [levaQ.data]);
+
   const vix = perSimbolo.get("^VIX");
   const vixValore = vix?.quote?.price ?? null;
   const contesto = assets.filter((a) => !USA.includes(a.symbol) && a.symbol !== "^VIX");
@@ -541,14 +611,21 @@ export function MarketPulseJumbotron({ global, byIndex, computedAt }: Props) {
 
         {/* Fascia 2: il resto del mondo, raggruppato. Prima era una fila
             indistinta di undici voci: indici, metalli, energia e cripto tutti
-            della stessa taglia e senza un confine. */}
-        {contesto.length > 0 && (
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t pt-2">
+            della stessa taglia e senza un confine.
+            ⚠️ La riga si rende SEMPRE, non solo quando il paniere live ha
+            risposto: il gruppo a leva viene da un'altra interrogazione
+            (`/api/stocks/quotes`), e legarlo alla presenza degli indici lo
+            faceva sparire insieme a loro quando quella query taceva. */}
+        {(
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-1 border-t pt-2">
             {gruppi.map(([titolo, voci], i) =>
               voci.length === 0 ? null : (
-                <span key={titolo} className="flex min-w-0 flex-wrap items-center gap-x-1 gap-y-1">
+                /* `gap-x-3` dentro il gruppo e `gap-x-5` fra i gruppi: prima
+                   erano rispettivamente 1 e 3, e undici voci attaccate si
+                   leggevano come una sola stringa lunga. */
+                <span key={titolo} className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
                   {i > 0 && <span className="mr-1 hidden h-4 w-px bg-border lg:block" aria-hidden />}
-                  <span className="mr-0.5 text-[0.6471rem] font-bold uppercase tracking-[0.14em] text-muted-foreground/70">
+                  <span className="text-[0.6471rem] font-bold uppercase tracking-[0.14em] text-muted-foreground/70">
                     {titolo}
                   </span>
                   {voci.map((a) => (
@@ -557,6 +634,21 @@ export function MarketPulseJumbotron({ global, byIndex, computedAt }: Props) {
                 </span>
               ),
             )}
+            {/* Il paniere a leva, in coda alle materie prime e alle cripto:
+                e' l'ultimo gruppo perche' e' il piu' specialistico, non il
+                meno importante. */}
+            <span className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+              {contesto.length > 0 && (
+                <span className="mr-1 hidden h-4 w-px bg-border lg:block" aria-hidden />
+              )}
+              <span className="flex items-center gap-1 text-[0.6471rem] font-bold uppercase tracking-[0.14em] text-muted-foreground/70">
+                <Zap className="h-3 w-3" aria-hidden />
+                Leva
+              </span>
+              {ETF_LEVA.map((t) => (
+                <ChipLeva key={t} ticker={t} quote={perTicker.get(t)} />
+              ))}
+            </span>
           </div>
         )}
 

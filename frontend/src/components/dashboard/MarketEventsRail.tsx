@@ -2,17 +2,21 @@ import { Radar } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import type { Mover, MoversBlock, VolumeSpike } from "@/api/types";
-import type { PremarketMover } from "@/api/dashboard";
 import { Card, CardContent } from "@/components/ui/card";
 import { SectionTitle } from "@/components/ui/section-title";
-import { usePremarketMovers } from "@/hooks/usePremarketMovers";
 import { StockIdentity } from "@/components/dashboard/StockIdentity";
 import { cn } from "@/lib/utils";
 
 /* ─── MarketEventsRail — the deliberately thin one ──────────────────────── *
  *
- * Three event feeds (52-week highs/lows, volume spikes, US pre-market) in one
- * narrow column, each row reduced to ticker + one number.
+ * Due flussi di eventi (massimi/minimi a 52 settimane, volume spike) in una
+ * colonna stretta, ogni riga ridotta a ticker piu' un numero.
+ *
+ * ⚠️ Erano TRE: il pre-market e' uscito di qui quando la fascia in cima alla
+ * pagina l'ha preso come soggetto, con la sua finestra, i volumi e la
+ * distinzione fra aziende e fondi a leva. Tre righe per lato senza contesto
+ * erano la stessa informazione detta peggio, in un secondo posto da tenere
+ * allineato.
  *
  * IL NOME DELL'AZIENDA C'E'. Per un periodo non c'era, e la ragione era
  * buona: quando la riga delle attivita' erano quattro card uguali, a 1280px
@@ -93,19 +97,14 @@ function Empty({ label }: { label: string }) {
 }
 
 export function MarketEventsRail({ movers }: Props) {
-  // Same query the standalone pre-market card used, and the same strict gate:
-  // `available` already aggregates "US market closed AND cache fresh AND
-  // non-empty", so a false here means there is genuinely nothing to show and
-  // the section is omitted rather than rendered empty.
-  const premarketQ = usePremarketMovers();
-  const pm = premarketQ.data;
-  const pmAvailable = !!pm?.available;
-
+  /* ⚠️ La terza sezione era il PRE-MARKET, ed e' stata tolta: il pre-market e'
+   * il soggetto della fascia in cima alla pagina, dove ha la sua finestra, i
+   * volumi, la distinzione fra aziende e fondi a leva e il perche' di un
+   * eventuale vuoto. Qui erano tre righe per lato senza contesto — e due posti
+   * che dicono la stessa cosa sono due posti da tenere allineati. */
   const highs = movers.new_52w_high.slice(0, 5);
   const lows = movers.new_52w_low.slice(0, 3);
   const spikes = movers.volume_spikes.slice(0, 5);
-  const pmG: PremarketMover[] = pmAvailable ? (pm?.gainers ?? []).slice(0, 3) : [];
-  const pmL: PremarketMover[] = pmAvailable ? (pm?.losers ?? []).slice(0, 3) : [];
 
   return (
     <Card className="h-full overflow-hidden">
@@ -122,7 +121,7 @@ export function MarketEventsRail({ movers }: Props) {
             same three sections read far better side by side than as one very
             long column. `dense-3:grid-cols-1` comes last so the wider
             breakpoint wins. */}
-        <div className="flex-1 min-h-0 overflow-y-auto grid grid-cols-1 md:grid-cols-3 dense-3:grid-cols-1 md:divide-x dense-3:divide-x-0 divide-border/40 [&>*]:min-w-0">
+        <div className="flex-1 min-h-0 overflow-y-auto grid grid-cols-1 md:grid-cols-2 dense-3:grid-cols-1 md:divide-x dense-3:divide-x-0 divide-border/40 [&>*]:min-w-0">
           <section className="min-w-0">
             <RailHeader
               label="52 settimane"
@@ -176,50 +175,6 @@ export function MarketEventsRail({ movers }: Props) {
             )}
           </section>
 
-          {/* Rendered even when empty so the three-column arrangement keeps
-              its shape; the header explains the absence rather than leaving a
-              hole where a section used to be. */}
-          <section className="min-w-0">
-            <RailHeader label="Pre-market USA" />
-            {pmAvailable && (pmG.length > 0 || pmL.length > 0) ? (
-              <ul>
-                {pmG.map((m) => (
-                  <RailRow
-                    key={`pg-${m.ticker}`}
-                    ticker={m.ticker}
-                    name={m.name}
-                    value={`+${m.change_pct.toFixed(1)}%`}
-                    tone="pos"
-                    title={`${m.name} — $${m.price.toFixed(2)} in pre-market`}
-                  />
-                ))}
-                {pmL.map((m) => (
-                  <RailRow
-                    key={`pl-${m.ticker}`}
-                    ticker={m.ticker}
-                    name={m.name}
-                    value={`${m.change_pct.toFixed(1)}%`}
-                    tone="neg"
-                    title={`${m.name} — $${m.price.toFixed(2)} in pre-market`}
-                  />
-                ))}
-              </ul>
-            ) : (
-              /* Diceva sempre "Sessione USA aperta", anche a cache fredda,
-                 anche su errore, anche a mercato chiuso. Alle 3 del mattino
-                 con gli USA chiusi affermava che la sessione fosse aperta.
-                 `pm.market_open` era gia' nel payload, inutilizzato. */
-              <Empty
-                label={
-                  premarketQ.isError
-                    ? "Dati pre-market non raggiungibili"
-                    : pm?.market_open
-                      ? "Sessione USA aperta"
-                      : "Nessun dato pre-market"
-                }
-              />
-            )}
-          </section>
         </div>
       </CardContent>
     </Card>

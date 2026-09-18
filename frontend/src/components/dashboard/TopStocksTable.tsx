@@ -6,8 +6,6 @@ import {
   Table,
   TableBody,
   TableCell,
-  TableHead,
-  TableHeader,
   TableRow,
 } from "@/components/ui/table";
 import {
@@ -62,14 +60,11 @@ export function TopStocksTable({ data }: Props) {
           ("TOP STOCKS") in AlertsCompactPanel already conveys this,
           and a second subtitle just stole vertical space. */}
       <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="text-xs">Stock</TableHead>
-            <TableHead className="text-xs">Natura</TableHead>
-            <TableHead className="text-xs">Regola top</TableHead>
-            <TableHead className="text-xs text-right pr-4">Segnali</TableHead>
-          </TableRow>
-        </TableHeader>
+        {/* Vedi la nota in cima al file: l'intestazione visibile e' stata
+            tolta, il nome della tabella resta per chi la ascolta. */}
+        <caption className="sr-only">
+          Titoli con più segnali negli ultimi 30 giorni
+        </caption>
         <TableBody>
           {data.map((s) => {
             const meta = s.top_kind ? getAlertKindMeta(s.top_kind) : null;

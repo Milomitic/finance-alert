@@ -10,8 +10,6 @@ import {
   Table,
   TableBody,
   TableCell,
-  TableHead,
-  TableHeader,
   TableRow,
 } from "@/components/ui/table";
 import { formatMoney } from "@/lib/money";
@@ -49,17 +47,13 @@ export function RecentAlertsFeed({ alerts }: Props) {
   return (
     <>
       <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="text-xs">Titolo</TableHead>
-            <TableHead className="text-xs">Natura</TableHead>
-            <TableHead className="text-xs">Regola</TableHead>
-            <TableHead className="text-xs text-right" hint="Forza del pattern (0-100)">Forza</TableHead>
-            <TableHead className="text-xs text-right" hint={PROBABILITA_TOOLTIP}>Prob.</TableHead>
-            <TableHead className="text-xs text-right">Prezzo</TableHead>
-            <TableHead className="text-xs text-right pr-4">Data</TableHead>
-          </TableRow>
-        </TableHeader>
+        {/* L'intestazione visibile e' stata tolta (richiesta dell'utente).
+            ⚠️ Portava DUE spiegazioni — Forza e Probabilita' — e non sono state
+            cancellate: sono risalite accanto al titolo «Feed» della colonna, in
+            `AlertsCompactPanel`. Toglierle sarebbe stato togliere proprio la
+            prosa che dice che la Probabilita' e' un tasso di base per
+            rilevatore, cioe' la parte onesta del numero. */}
+        <caption className="sr-only">Segnali più recenti</caption>
         <TableBody>
           {alerts.map((a) => {
             const delayed = isDelayedDetection(a.triggered_at, a.signal_date);
