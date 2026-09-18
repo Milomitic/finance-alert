@@ -3,21 +3,16 @@ import {
   ArrowUp,
   ArrowUpDown,
   Building2,
-  TrendingDown,
-  TrendingUp,
   Users,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
-import type {
-  ActionAggregate,
-  InstitutionalSummary,
-  TickerAggregate,
-} from "@/api/types";
+import type { InstitutionalSummary, TickerAggregate } from "@/api/types";
 import { StockLogo } from "@/components/dashboard/StockLogo";
 import { Card, CardContent } from "@/components/ui/card";
 import { SectionTitle } from "@/components/ui/section-title";
+import { SmartMoneyHighlights } from "@/components/institutionals/SmartMoneyHighlights";
 
 /* ─── TickerNameCell — local copy of dashboard's StockIdentity ────────── *
  *
@@ -105,11 +100,6 @@ import { InfoHint } from "@/components/ui/info-hint";
  */
 
 
-function fmtPct(v: number | null | undefined, digits = 1): string {
-  if (v == null) return "—";
-  return `${v.toFixed(digits)}%`;
-}
-
 function shortDate(s: string | null): string {
   if (!s) return "—";
   const [y, m, d] = s.split("-");
@@ -150,52 +140,6 @@ function MostPickedRow({ row }: { row: TickerAggregate }) {
       >
         {row.holders.slice(0, 3).join(", ")}
         {row.holders.length > 3 ? "…" : ""}
-      </td>
-    </tr>
-  );
-}
-
-function ActionRow({ row, kind }: { row: ActionAggregate; kind: "buy" | "sell" }) {
-  const tone =
-    kind === "buy"
-      ? "text-emerald-800 dark:text-emerald-300"
-      : "text-rose-700 dark:text-rose-300";
-  return (
-    <tr className="hover:bg-muted/30">
-      <td className="px-2 py-2">
-        <TickerNameCell ticker={row.ticker} name={row.company_name} />
-      </td>
-      <td className={cn("px-2 py-2 text-sm", tone)}>{row.action}</td>
-      <td className="px-2 py-2 text-right tabular-nums text-sm">
-        {fmtPct(row.qoq_change_pct)}
-      </td>
-      {/* Valore column: absolute $ context for the % delta. A "+12% Q/Q"
-          at a $1B fund (= ~$120M move) tells a different story than the
-          same delta at a $50B fund. Sourced from
-          ActionAggregate.value_usd (Phase 3D-add). */}
-      <td className="px-2 py-2 text-right tabular-nums text-sm">
-        {fmtBig(row.value_usd)}
-      </td>
-      <td className="px-2 py-2 text-right tabular-nums text-sm text-muted-foreground">
-        {fmtPct(row.portfolio_pct)}
-      </td>
-      {/* Fund names run long — "Norges Bank Investment Management",
-          "Capital Research Global Investors" — and with no width bound the
-          cell wrapped onto three lines, so ONE long name made the whole row
-          three times taller than its neighbours. The column now holds a single
-          line and truncates; the full name lives in the tooltip and one click
-          away on the fund page. */}
-      <td className="px-2 py-2 text-sm">
-        <Link
-          to={`/institutionals/${row.institutional_slug}`}
-          className="block max-w-[11rem] truncate hover:underline"
-          title={row.institutional_name}
-        >
-          {row.institutional_name}
-        </Link>
-      </td>
-      <td className="px-2 py-2 text-sm text-muted-foreground tabular-nums">
-        {shortDate(row.period_end_date)}
       </td>
     </tr>
   );
@@ -381,9 +325,9 @@ export default function InstitutionalsPage() {
     <div className="flex flex-col gap-4">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
-          <Building2 className="h-7 w-7 text-foreground/80" />
+          <Building2 className="h-6 w-6 text-foreground/80" />
           <div>
-            <h1 className="text-2xl font-semibold">Superinvestor &amp; istituzionali</h1>
+            <h1 className="text-xl font-semibold">Superinvestor &amp; istituzionali</h1>
             <p className="flex items-center gap-1 text-sm text-muted-foreground">
               <span className="min-w-0">
                 Portafogli 13F-equivalenti tracciati. {counts} fondi disponibili.
@@ -467,8 +411,14 @@ export default function InstitutionalsPage() {
         />
       )}
 
-      {/* Aggregate strip: most-picked + recent buys + recent sells */}
-      <div className="grid gap-3 lg:grid-cols-3 [&>*]:min-w-0">
+      {/* La fascia iniziale: le mosse piu' pesanti dei fondi, con le
+          statistiche che dicono su che base sono calcolate. Ha ASSORBITO le
+          schede «Acquisti recenti» e «Vendite recenti», che mostravano
+          esattamente questi dati con lo stesso ordinamento del server. */}
+      <SmartMoneyHighlights agg={agg.data} fondi={list.data} />
+
+      {/* Chi e' posseduto da piu' fondi, e come si distribuisce il capitale. */}
+      <div className="grid gap-3 lg:grid-cols-[2fr_1fr] [&>*]:min-w-0">
         <Card>
           <CardContent className="p-3">
             <SectionTitle
@@ -509,7 +459,7 @@ export default function InstitutionalsPage() {
                   inside TickerNameCell so the ticker font keeps its
                   current size. The "Nome" column is gone — name is
                   now stacked under the ticker à la TopPicksCard. */}
-              <table className="w-full text-base">
+              <table className="w-full text-sm">
                 <thead className="text-[0.7647rem] uppercase tracking-wide text-muted-foreground">
                   <tr>
                     <th className="px-2 py-1.5 text-left">Ticker</th>
@@ -538,109 +488,10 @@ export default function InstitutionalsPage() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardContent className="p-3">
-            <SectionTitle
-              icon={TrendingUp}
-              label="Acquisti recenti"
-              tone="text-emerald-800 dark:text-emerald-300"
-              className="mb-1"
-            />
-            {/* Sub-line clarifies the editorial model: 13F-HR is
-                long-only — "buys" doesn't mean "long" vs "short", it
-                means bullish actions on long positions (open OR grow). */}
-            <p className="text-xs text-muted-foreground mb-2">
-              Azioni rialziste: <span className="font-semibold">nuove posizioni</span> (new) + <span className="font-semibold">aumenti</span> (add)
-            </p>
-            {/* ⚠️ role+tabIndex+aria-label: un contenitore che scorre e non
-                puo' ricevere il fuoco non e' raggiungibile da tastiera, e il
-                contenuto oltre i 30rem non esiste per chi non usa il mouse.
-                Il gate UI l'ha trovato su due di queste tre card; la terza e'
-                identica e lo diventa appena i suoi dati crescono. */}
-            <div
-              role="region"
-              aria-label="Acquisti recenti dei superinvestor"
-              tabIndex={0}
-              className="overflow-x-auto overflow-y-auto max-h-[30rem]"
-            >
-              <table className="w-full text-base">
-                <thead className="text-[0.7647rem] uppercase tracking-wide text-muted-foreground">
-                  <tr>
-                    <th className="px-2 py-1.5 text-left">Ticker</th>
-                    <th className="px-2 py-1.5 text-left">Action</th>
-                    <th className="px-2 py-1.5 text-right">Q/Q</th>
-                    <th className="px-2 py-1.5 text-right">Valore</th>
-                    <th className="px-2 py-1.5 text-right">% port</th>
-                    <th className="px-2 py-1.5 text-left">Fondo</th>
-                    <th className="px-2 py-1.5 text-left">Q-end</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {agg.data?.recent_buys.slice(0, 12).map((row, idx) => (
-                    <ActionRow
-                      key={`${row.ticker}-${row.institutional_slug}-${idx}`}
-                      row={row}
-                      kind="buy"
-                    />
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-3">
-            <SectionTitle
-              icon={TrendingDown}
-              label="Vendite recenti"
-              tone="text-rose-700 dark:text-rose-300"
-              className="mb-1"
-            />
-            <p className="text-xs text-muted-foreground mb-2">
-              Azioni ribassiste: <span className="font-semibold">riduzioni</span> (reduce) + <span className="font-semibold">uscite complete</span> (sold out)
-            </p>
-            {/* ⚠️ role+tabIndex+aria-label: un contenitore che scorre e non
-                puo' ricevere il fuoco non e' raggiungibile da tastiera, e il
-                contenuto oltre i 30rem non esiste per chi non usa il mouse.
-                Il gate UI l'ha trovato su due di queste tre card; la terza e'
-                identica e lo diventa appena i suoi dati crescono. */}
-            <div
-              role="region"
-              aria-label="Vendite recenti dei superinvestor"
-              tabIndex={0}
-              className="overflow-x-auto overflow-y-auto max-h-[30rem]"
-            >
-              <table className="w-full text-base">
-                <thead className="text-[0.7647rem] uppercase tracking-wide text-muted-foreground">
-                  <tr>
-                    <th className="px-2 py-1.5 text-left">Ticker</th>
-                    <th className="px-2 py-1.5 text-left">Action</th>
-                    <th className="px-2 py-1.5 text-right">Q/Q</th>
-                    <th className="px-2 py-1.5 text-right">Valore</th>
-                    <th className="px-2 py-1.5 text-right">% port</th>
-                    <th className="px-2 py-1.5 text-left">Fondo</th>
-                    <th className="px-2 py-1.5 text-left">Q-end</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {agg.data?.recent_sells.slice(0, 12).map((row, idx) => (
-                    <ActionRow
-                      key={`${row.ticker}-${row.institutional_slug}-${idx}`}
-                      row={row}
-                      kind="sell"
-                    />
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
+        {agg.data && Object.keys(agg.data.sector_tilt).length > 0 && (
+          <SectorTiltBar tilt={agg.data.sector_tilt} />
+        )}
       </div>
-
-      {agg.data && Object.keys(agg.data.sector_tilt).length > 0 && (
-        <SectorTiltBar tilt={agg.data.sector_tilt} />
-      )}
 
       <Card>
         <CardContent className="p-3">
@@ -655,7 +506,7 @@ export default function InstitutionalsPage() {
             }
           />
           <div className="overflow-x-auto">
-            <table className="w-full text-base">
+            <table className="w-full text-sm">
               <thead className="text-[0.7647rem] uppercase tracking-wide text-muted-foreground border-b">
                 <tr>
                   <th className="px-2 py-1.5 text-left">Portfolio</th>

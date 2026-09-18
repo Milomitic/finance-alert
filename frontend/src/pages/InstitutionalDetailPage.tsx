@@ -275,9 +275,9 @@ export default function InstitutionalDetailPage() {
             Tutti i portafogli
           </Link>
           <div className="mt-2 flex items-center gap-3">
-            <Building2 className="h-7 w-7 text-foreground/80" />
+            <Building2 className="h-6 w-6 text-foreground/80" />
             <div>
-              <h1 className="text-2xl font-semibold leading-tight">
+              <h1 className="text-xl font-semibold leading-tight">
                 {institutional.name}
               </h1>
               {institutional.manager_name && (
@@ -289,7 +289,7 @@ export default function InstitutionalDetailPage() {
             </div>
           </div>
           {institutional.description && (
-            <p className="mt-2 max-w-2xl text-base text-muted-foreground">
+            <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
               {institutional.description}
             </p>
           )}
@@ -314,7 +314,7 @@ export default function InstitutionalDetailPage() {
             <div className="text-[0.7647rem] uppercase tracking-wide text-muted-foreground">
               Posizioni dichiarate
             </div>
-            <div className="text-2xl font-semibold tabular-nums">
+            <div className="text-lg font-semibold tabular-nums">
               {institutional.total_positions ?? "—"}
             </div>
             {/* ⚠️ I due numeri contano cose diverse e su 145 dichiarazioni su
@@ -343,7 +343,7 @@ export default function InstitutionalDetailPage() {
             <div className="text-[0.7647rem] uppercase tracking-wide text-muted-foreground">
               Valore totale
             </div>
-            <div className="text-2xl font-semibold tabular-nums">
+            <div className="text-lg font-semibold tabular-nums">
               {fmtBig(totalValue)}
             </div>
           </CardContent>
@@ -353,7 +353,7 @@ export default function InstitutionalDetailPage() {
             <div className="text-[0.7647rem] uppercase tracking-wide text-muted-foreground">
               Top-10 weight
             </div>
-            <div className="text-2xl font-semibold tabular-nums">
+            <div className="text-lg font-semibold tabular-nums">
               {fmtPct(top10Pct, 1)}
             </div>
           </CardContent>
@@ -462,7 +462,7 @@ export default function InstitutionalDetailPage() {
                 explicitly resets to text-sm inside HoldingRow so the
                 ticker font keeps its current size. "Nome" header is
                 gone — name now lives stacked under the ticker. */}
-            <table className="w-full text-base">
+            <table className="w-full text-sm">
               <thead className="text-[0.7647rem] uppercase tracking-wide text-muted-foreground border-b">
                 <tr>
                   <th className="px-2 py-1.5 text-left">Ticker</th>
