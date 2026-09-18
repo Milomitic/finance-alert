@@ -112,14 +112,16 @@ def _candidate_us_tickers(db: Session) -> list[str]:
     if not want:
         return []
     rows = db.execute(
-        select(Stock.ticker, Stock.name, Stock.country).where(
+        select(Stock.ticker, Stock.name, Stock.country, Stock.instrument_type).where(
             Stock.ticker.in_(want)
         )
     ).all()
-    name_by = {t: n for (t, n, _c) in rows}
-    us_set = {t for (t, _n, c) in rows if c == "US"}
+    name_by = {t: n for (t, n, _c, _it) in rows}
+    type_by = {t: it for (t, _n, _c, it) in rows}
+    us_set = {t for (t, _n, c, _it) in rows if c == "US"}
 
     _NAME_BY_TICKER.clear()
+    _TYPE_BY_TICKER.clear()
     ordered: list[str] = []
     seen: set[str] = set()
     for t in [*mover_tickers, *liquid]:  # movers first
@@ -127,10 +129,16 @@ def _candidate_us_tickers(db: Session) -> list[str]:
             seen.add(t)
             ordered.append(t)
             _NAME_BY_TICKER[t] = name_by.get(t, t)
+            _TYPE_BY_TICKER[t] = type_by.get(t) or "equity"
     return ordered[:_CANDIDATE_CAP]
 
 
 _NAME_BY_TICKER: dict[str, str] = {}
+# "equity" | "etf" per i candidati del giro corrente. Vive accanto ai nomi
+# perche' si popola nello stesso punto e dalla stessa interrogazione: un
+# secondo giro sul database per un campo che avevamo gia' in mano sarebbe
+# lavoro sprecato.
+_TYPE_BY_TICKER: dict[str, str] = {}
 
 
 def _premarket_from_frame(df) -> tuple[float, float, int | None] | None:
@@ -365,6 +373,7 @@ def _recompute(db: Session) -> None:
                             "prev_close": round(prev_close, 4),
                             "change_pct": round(chg, 2),
                             "volume": pm_vol,
+                            "instrument_type": _TYPE_BY_TICKER.get(t, "equity"),
                         })
                 except Exception as exc:  # noqa: BLE001 — per-ticker
                     logger.debug(f"[premarket] {t} skipped: {exc}")

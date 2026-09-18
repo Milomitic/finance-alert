@@ -99,6 +99,11 @@ class PremarketMoverOut(BaseModel):
     prev_close: float               # prior regular-session close
     change_pct: float               # (price - prev_close)/prev_close * 100
     volume: int | None = None       # summed pre-market volume (None = n/d)
+    # "equity" | "etf" dal catalogo. Il cruscotto NON mescola nella stessa
+    # lista un'azienda e un fondo a leva 3x: il secondo si muove del triplo
+    # per costruzione, quindi comparire fra i movers non e' una notizia.
+    # None sulle righe in cache scritte prima di questo campo.
+    instrument_type: str | None = None
 
 
 class PremarketMoversOut(BaseModel):
