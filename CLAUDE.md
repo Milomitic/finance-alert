@@ -2471,6 +2471,37 @@ rimettere la dipendenza su una copia e pretendere il rosso.
   (also: `npx tsc -b` for type-only check)
 - **Single test file**: append the file path to the pytest command
 
+### ⚠️ Il cancello del codice morto va letto con una copertura FRESCA (2026-09-18)
+
+`dead_code_report` non misura niente: LEGGE `.coverage.json`. Eseguito senza
+rigenerarlo risponde sulla copertura di ieri — e quindi, su un file scritto
+cinque minuti prima, risponde «nessuna funzione nuova mai eseguita». Pulito e
+falso. Costato un rosso di CI (`891a3eb4`) su `seed_asia_adr.py::run` dopo che
+il controllo locale aveva detto che non c'era nulla. Si esegue **come in CI**:
+
+```bash
+cd backend && ./.venv/Scripts/python.exe -m coverage run --source=app -m pytest tests/ -q \
+  && ./.venv/Scripts/python.exe -m coverage json -o .coverage.json \
+  && ./.venv/Scripts/python.exe -m app.scripts.dead_code_report
+```
+
+⚠️ E NON stringere la linea di base da qui: in locale `main.py::spa_fallback`
+risulta coperta perché `frontend/dist` esiste, in CI è morta. Vale la regola
+già scritta sopra — una linea di base si genera DOVE viene applicata.
+
+**Stessa famiglia, altri due modi di leggere male uno strumento**, entrambi
+pagati lo stesso giorno:
+
+- **Una pipe maschera il codice di uscita.** `mutation_probe ... | tail -28`
+  restituisce l'esito di `tail`, sempre zero: la sonda aveva trovato CINQUE
+  sopravvissuti nuovi e sembrava verde. Si legge `${PIPESTATUS[0]}`, o si
+  scrive su file e si controlla `$?`.
+- **La sonda di mutazione non si lancia mentre si modifica l'albero dei test.**
+  Controlla che la suite bersaglio sia verde UNA VOLTA, all'inizio; se diventa
+  rossa dopo, ogni mutante risulta «ucciso» e il rapporto è un verde che non
+  significa niente. Misurato: 61 uccisi su 66 contro i 47 veri, perché nel
+  frattempo avevo creato un file di test che non compilava ancora.
+
 ⚠️ `npm run lint` (the FULL config) reports **ZERO** findings, misurato
 2026-09-13. Era 60 a settembre e 31 stamattina. **Un rosso li' adesso e' una
 regressione, non l'arretrato** — la frase «a red result there is expected», che
@@ -2834,17 +2865,68 @@ next reader.
 
 Every alert has two dates (since commit `e22bec5`):
 - `signal_date` (Date): bar where the rule's condition matched
-- `triggered_at` (DateTime): wall-clock when the row was created
+- `triggered_at` (DateTime): ⚠️ **l'ultima REVISIONE, non la creazione.** Leggi
+  la sezione qui sotto prima di usarlo per datare qualunque cosa.
 
 The two diverge meaningfully on backfill / weekend / skipped scans. UI
-distinguishes them via `lib/alertDates.ts:isDelayedDetection` (≥ 4 calendar
-days delta → orange clock chip + "in ritardo" label; the threshold was
-raised from 1 in 2026-07 because weekend + normal scan cadence made ~93%
-of alerts wear the chip — alarm fatigue). The exact +Ng delta always stays
-in the tooltip.
+distinguishes them via `lib/alertDates.ts` (≥ 4 calendar days delta → orange
+clock chip + "in ritardo" label; threshold raised from 1 in 2026-07 because
+~93% of alerts wore the chip — alarm fatigue). The exact +Ng delta always
+stays in the tooltip.
 
 Legacy alerts predate the column → `signal_date = null`. UI falls back to
 `triggered_at` and shows "—" or "n/d · legacy" for the signal slot.
+
+### ⚠️ Un alert è una riga VIVA: `triggered_at` e `trigger_price` DERIVANO (2026-09-18)
+
+Finché il segnale persiste, ogni scansione lo rivede e **riscrive entrambi**
+(`signal_scan_service`, ~riga 287). Sono due campi che sembrano «quando e a
+quanto è scattato» e non lo sono. Misurato su 8.736 alert in produzione:
+
+    con almeno una revisione                   7.010  (80%)
+    first_emitted_at anteriore a triggered_at  6.345  (73%)
+    prezzo oltre il 2% dalla chiusura del segnale 1.607 (18%)
+    revisioni su un singolo alert FICO           103
+
+⚠️ **Il difetto è SISTEMATICO PER DETECTOR, e per questo è credibile.** Colpisce
+quelli la cui ancora è un evento FISSO nel passato e risparmia quelli la cui
+ancora avanza a ogni scansione:
+
+    squeeze_expansion  91% di pastiglie «in ritardo» contro 25% di ritardi VERI
+    gap_and_go         80% contro 26%       candle_reversal 40% contro 17%
+    trend_pullback      4% contro  1%       sr_flip          4% contro  1%
+
+Il motore lo dichiarava impossibile in un commento — *«signal_date +
+triggered_at advance together (the anchor moves forward) without faking a
+delayed-detection gap»*. Per un'ancora fissa **non avanzano insieme**, e il
+commento non lo diceva: un'assunzione scritta che i dati contraddicono.
+
+In totale 1.409 pastiglie su 2.625 erano false. E la soglia era stata ALZATA da
+1 a 4 giorni nel 2026-07 perché il 93% degli alert la portava: una cura del
+sintomo, mentre la causa era il campo. ⚠️ La soglia resta a 4, ma ora la ragione
+scritta allora («weekend + una scansione saltata valgono 1-3 giorni») è vera
+proprio di questa misura invece che tirata.
+
+⚠️ **Le tre divergenze leggono 100% di ritardo VERO, e va lasciato suonare**: un
+pivot si conferma solo alcune barre dopo essersi formato, quindi quel segnale
+NON PUÒ esistere il giorno della candela.
+
+**Le regole operative.** Non leggere mai `triggered_at` per datare una
+rilevazione né `trigger_price` per prezzarla. I proprietari unici sono
+`lib/alertDates.detectionInstant` e `lib/alertEntry.entryPrice`, che leggono
+`snapshot.first_emitted_at` e `snapshot.first_price` (fissati alla creazione,
+preservati a ogni revisione, con ripiego dichiarato sui campi vecchi per i 116
+alert che li precedono). Gli storici sono stati riempiti da
+`app.scripts.backfill_first_price` e portano `first_price_ricostruito: true`,
+perché una scansione girata prima della chiusura mostrava la barra precedente:
+uno scarto di una barra che dall'alert non è determinabile.
+
+⚠️ **E non è un difetto cosmetico: ribalta gli esiti.** Il magazzino
+`plan_outcomes` ancorato ai campi che derivano dava risultati dipendenti da
+QUANDO girava la maturazione. Sul caso FLNC (alert 18987) l'ingresso corretto è
+10,86 del 24 agosto, non 11,43 del 27: con quello il trade va a **stop il 25
+agosto (−1R)** invece di colpire il target il 14 settembre (+3,98R). Stesso
+alert, stesso codice, due conti opposti.
 
 ---
 
