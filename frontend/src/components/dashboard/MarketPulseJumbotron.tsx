@@ -9,9 +9,11 @@ import type { PremarketMover } from "@/api/dashboard";
 import { MarketBreadthBand } from "@/components/dashboard/MarketBreadthBand";
 import { MarketStateBadge, type MarketPhase } from "@/components/dashboard/MarketStateBadge";
 import { Card } from "@/components/ui/card";
+import { FlashValue } from "@/components/ui/FlashValue";
 import { NoValue } from "@/components/ui/no-value";
 import { useCalendar } from "@/hooks/useCalendar";
 import { useLiveAssets, type LiveAsset } from "@/hooks/useLiveAssets";
+import { useFlipList } from "@/hooks/useFlipList";
 import { useLiveQuotes } from "@/hooks/useLiveQuote";
 import { useLiveUniverseMovers } from "@/hooks/useLiveUniverseMovers";
 import { useNowTick } from "@/hooks/useNowTick";
@@ -84,10 +86,20 @@ const NOMI_BREVI: Record<string, string> = {
  *  l'oro e il bitcoin no, e senza un segno la riga di contesto e' una fila di
  *  parole tutte uguali. Le icone sono di SIGNIFICATO, non decorative: la
  *  fiamma e' il gas, la pompa e' il petrolio, il lingotto i metalli. */
-const ICONA_ASSET: Record<string, typeof Coins> = {
-  "GC=F": Coins, "SI=F": Coins, "CL=F": Fuel, "NG=F": Flame,
-  "BTC-USD": Bitcoin, "ETH-USD": Gem,
+const ICONA_ASSET: Record<string, { icona: typeof Coins; classe: string }> = {
+  "GC=F": { icona: Coins, classe: "text-amber-500" },
+  "SI=F": { icona: Coins, classe: "text-slate-400" },
+  "CL=F": { icona: Fuel, classe: "text-stone-500 dark:text-stone-400" },
+  "NG=F": { icona: Flame, classe: "text-orange-500" },
+  "BTC-USD": { icona: Bitcoin, classe: "text-amber-500" },
+  "ETH-USD": { icona: Gem, classe: "text-indigo-400" },
 };
+
+/* ⚠️ Questi colori NON sono la palette direzionale. In questa app rosa e verde
+ * dicono se un prezzo sale o scende; qui l'ambra e' l'oro, l'arancio la fiamma
+ * del gas, l'indaco il rombo di Ethereum — dicono DI COSA si parla, non come
+ * sta andando. Vivono su icone `aria-hidden`, quindi nessuna regola di
+ * contrasto le tocca: il valore accanto resta il colore del testo. */
 
 /* ─── Il paniere a leva ───────────────────────────────────────────────────
  *
@@ -113,6 +125,11 @@ const BANDIERE = new Set(["us", "jp", "eu", "it", "hk", "cn", "gb", "de", "fr", 
  *  un prezzo. Non si NASCONDE la riga — si dice che gli scambi sono sottili,
  *  cosi' il lettore giudica il +6% invece di riceverlo come un fatto. */
 const VOLUME_SOTTILE = 10_000;
+
+/** Righe per colonna in «si muove adesso». Dieci per lato, come la scheda Top
+ *  movers: con quattro si vedeva solo la coda estrema, che e' quasi sempre un
+ *  titolo sottile, e il movimento vero del giorno restava sotto il taglio. */
+const RIGHE_MOVERS = 10;
 
 /** Un movimento grosso in un contesto per lo piu' calmo va notato a colpo
  *  d'occhio: sotto questa soglia le voci della riga di contesto restano tutte
@@ -160,7 +177,17 @@ function IndiceTile({ asset, nome }: { asset: LiveAsset | undefined; nome: strin
   const corpo = (
     <>
       <div className="flex min-w-0 items-center gap-1.5">
-        <span className="truncate text-[0.7059rem] font-semibold uppercase tracking-wider text-muted-foreground">
+        {/* La bandiera dice a colpo d'occhio che le tre grandi sono americane,
+            come gia' fanno le voci della riga di contesto qui sotto. */}
+        <img
+          src="/flags/us.svg"
+          alt=""
+          width={14}
+          height={10}
+          style={{ width: "14px", height: "10px", objectFit: "cover" }}
+          className="shrink-0 rounded-[1px] shadow-sm"
+        />
+        <span className="truncate text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           {nome}
         </span>
         {suFutures ? (
@@ -190,13 +217,39 @@ function IndiceTile({ asset, nome }: { asset: LiveAsset | undefined; nome: strin
           variazione affiancati non ci stanno, e affidarsi a `truncate`
           significherebbe tagliare proprio la cifra. Si impilano sotto `sm`. */}
       <div className="mt-0.5 flex min-w-0 flex-col sm:flex-row sm:items-baseline sm:gap-2">
+        {/* Effetto tape: a ogni battito il valore lampeggia verde o rosso nel
+            verso del movimento. `noTween` perche' su una fascia con una
+            ventina di numeri l'interpolazione simultanea costa piu' di quanto
+            renda. */}
         <span className="truncate text-lg font-bold tabular-nums leading-none sm:text-xl">
-          {formatLivello(q?.price) ?? <NoValue hint={perche(asset, nome)} />}
+          {q?.price != null
+            ? <FlashValue value={q.price} format={(v) => formatLivello(v) ?? "—"} noTween />
+            : <NoValue hint={perche(asset, nome)} />}
         </span>
         <span className={cn("shrink-0 text-sm font-semibold tabular-nums", tono(cambio))}>
-          {formatVariazione(cambio) ?? <NoValue hint={perche(asset, nome)} />}
+          {cambio != null
+            ? <FlashValue value={cambio} format={(v) => formatVariazione(v) ?? "—"} noTween showArrow />
+            : <NoValue hint={perche(asset, nome)} />}
         </span>
       </div>
+      {/* Due informazioni che il riquadro aveva sotto mano e non diceva: di
+          quanti PUNTI si e' mosso (una percentuale su un indice a cinque cifre
+          non da' la misura del movimento) e da dove era partito stamattina —
+          un indice sopra la sua apertura e uno sotto raccontano sedute
+          diverse a parita' di segno. */}
+      {(q?.change_abs != null || q?.day_open != null) && (
+        <div className="mt-0.5 flex flex-wrap items-baseline gap-x-2 text-[0.6765rem] tabular-nums text-muted-foreground">
+          {q?.change_abs != null && (
+            <span title="Variazione in punti indice rispetto alla chiusura precedente">
+              {q.change_abs >= 0 ? "+" : "−"}
+              {formatLivello(Math.abs(q.change_abs))} pt
+            </span>
+          )}
+          {q?.day_open != null && (
+            <span title="Apertura della sessione">ap. {formatLivello(q.day_open)}</span>
+          )}
+        </div>
+      )}
       {punti && (
         <div className="mt-1 hidden sm:block">
           {/* Il tracciato e' decorativo: la variazione qui sopra e' gia' il
@@ -220,7 +273,10 @@ function IndiceTile({ asset, nome }: { asset: LiveAsset | undefined; nome: strin
         </div>
       )}
       {q?.day_low != null && q?.day_high != null && (
-        <div className="mt-1 hidden lg:block">
+        /* `mt-3`: la barra dell'intervallo stava appiccicata al tracciato e le
+           due si leggevano come un unico disegno — l'etichetta «30 giorni»
+           sembrava riferita al minimo e massimo, che sono di GIORNATA. */
+        <div className="mt-3 hidden lg:block">
           {/* Il minimo e il massimo da soli non dicono DOVE sta il prezzo. Il
               marcatore lo dice senza far fare il conto. */}
           <div
@@ -261,7 +317,7 @@ function Chip({ asset }: { asset: LiveAsset }) {
   const cambio = asset.quote?.change_pct ?? null;
   const nome = nomeBreve(asset);
   const bandiera = asset.flag && BANDIERE.has(asset.flag) ? `/flags/${asset.flag}.svg` : null;
-  const Icona = ICONA_ASSET[asset.symbol];
+  const segno = ICONA_ASSET[asset.symbol];
   const forte = cambio != null && Math.abs(cambio) >= CONTESTO_RILEVANTE;
   return (
     <Link
@@ -282,10 +338,10 @@ function Chip({ asset }: { asset: LiveAsset }) {
           style={{ width: "14px", height: "10px", objectFit: "cover" }}
           className="shrink-0 rounded-[1px] shadow-sm"
         />
-      ) : Icona ? (
-        <Icona className="h-3 w-3 shrink-0 text-muted-foreground" aria-hidden />
+      ) : segno ? (
+        <segno.icona className={cn("h-3.5 w-3.5 shrink-0", segno.classe)} aria-hidden />
       ) : null}
-      <span className="text-[0.7059rem] font-semibold uppercase tracking-wide text-muted-foreground">
+      <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
         {nome}
       </span>
       {/* Il pallino «aperto adesso» e' decorativo: il titolo del collegamento
@@ -294,17 +350,21 @@ function Chip({ asset }: { asset: LiveAsset }) {
       {asset.is_live && (
         <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" aria-hidden />
       )}
-      <span className="text-xs font-semibold tabular-nums">
-        {formatLivello(asset.quote?.price) ?? <NoValue hint={perche(asset, nome)} />}
+      <span className="text-sm font-semibold tabular-nums">
+        {asset.quote?.price != null
+          ? <FlashValue value={asset.quote.price} format={(v) => formatLivello(v) ?? "—"} noTween />
+          : <NoValue hint={perche(asset, nome)} />}
       </span>
       <span
         className={cn(
-          "text-xs tabular-nums",
+          "text-sm tabular-nums",
           forte ? "font-bold" : "font-semibold",
           tono(cambio),
         )}
       >
-        {formatVariazione(cambio) ?? ""}
+        {cambio != null
+          ? <FlashValue value={cambio} format={(v) => formatVariazione(v) ?? "—"} noTween />
+          : ""}
       </span>
     </Link>
   );
@@ -326,21 +386,25 @@ function ChipLeva({ ticker, quote }: { ticker: string; quote: LiveQuote | undefi
           : `${ticker}: nessuna quotazione. Se manca anche dalla ricerca, il titolo non e' in catalogo.`
       }
     >
-      <span className="text-[0.7059rem] font-semibold uppercase tracking-wide text-muted-foreground">
+      <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
         {ticker}
       </span>
-      <span className="text-xs font-semibold tabular-nums">
-        {formatLivello(quote?.price) ?? <NoValue hint={`${ticker}: quotazione non disponibile`} />}
+      <span className="text-sm font-semibold tabular-nums">
+        {quote?.price != null
+          ? <FlashValue value={quote.price} format={(v) => formatLivello(v) ?? "—"} noTween />
+          : <NoValue hint={`${ticker}: quotazione non disponibile`} />}
       </span>
-      <span className={cn("text-xs tabular-nums", forte ? "font-bold" : "font-semibold", tono(cambio))}>
-        {formatVariazione(cambio) ?? ""}
+      <span className={cn("text-sm tabular-nums", forte ? "font-bold" : "font-semibold", tono(cambio))}>
+        {cambio != null
+          ? <FlashValue value={cambio} format={(v) => formatVariazione(v) ?? "—"} noTween />
+          : ""}
       </span>
     </Link>
   );
 }
 
 /* ─── Una riga della classifica «si muove adesso» ────────────────────────── */
-function RigaMover({ ticker, nome, cambio, prezzoOra, volume, etf }: {
+function RigaMover({ ticker, nome, cambio, prezzoOra, volume, etf, flipRef }: {
   ticker: string;
   nome: string | null;
   cambio: number;
@@ -349,10 +413,16 @@ function RigaMover({ ticker, nome, cambio, prezzoOra, volume, etf }: {
    *  spazzata porta solo prezzo e variazione. */
   volume?: number | null;
   etf?: boolean;
+  /** Registro FLIP: la riga SCIVOLA alla nuova posizione quando il rango
+   *  cambia, invece di teletrasportarsi. E' la stessa animazione della scheda
+   *  Top movers piu' in basso — senza, con dieci righe che si riordinano ogni
+   *  quindici secondi non si capisce chi ha superato chi. */
+  flipRef?: (el: HTMLElement | null) => void;
 }) {
   const sottile = volume != null && volume < VOLUME_SOTTILE;
   return (
     <Link
+      ref={flipRef}
       to={`/stocks/${encodeURIComponent(ticker)}`}
       className="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-2 rounded px-1 py-0.5 hover:bg-accent/40"
       title={[
@@ -362,7 +432,7 @@ function RigaMover({ ticker, nome, cambio, prezzoOra, volume, etf }: {
         etf ? "ETF: molti sono a leva o inversi, quindi si muovono per costruzione" : null,
       ].filter(Boolean).join(" · ")}
     >
-      <span className="truncate text-xs">
+      <span className="truncate text-sm">
         <span className="font-bold tabular-nums">{ticker}</span>
         {etf && (
           <span className="ml-1 rounded bg-muted px-1 text-[0.6471rem] font-bold uppercase tracking-wide text-muted-foreground">
@@ -375,7 +445,7 @@ function RigaMover({ ticker, nome, cambio, prezzoOra, volume, etf }: {
         {volume != null && (
           <span
             className={cn(
-              "text-[0.6765rem] tabular-nums",
+              "hidden text-[0.7059rem] tabular-nums lg:inline",
               sottile ? "text-amber-700 dark:text-amber-400" : "text-muted-foreground",
             )}
             title={sottile ? "Scambi sottili: il prezzo lo fa un pugno di ordini" : undefined}
@@ -383,8 +453,16 @@ function RigaMover({ ticker, nome, cambio, prezzoOra, volume, etf }: {
             {fmtVolume(volume)}
           </span>
         )}
-        <span className={cn("w-[62px] text-right text-xs font-semibold tabular-nums", tono(cambio))}>
-          {formatVariazione(cambio)}
+        {/* Il PREZZO accanto alla variazione, come nella scheda Top movers: un
+            +9% su un titolo da 2 dollari e uno su un titolo da 400 non sono la
+            stessa notizia, e senza il prezzo la riga non lo dice. */}
+        {prezzoOra != null && (
+          <span className="hidden w-[64px] text-right text-[0.7059rem] tabular-nums text-foreground/80 sm:inline">
+            <FlashValue value={prezzoOra} format={(v) => formatLivello(v) ?? "—"} noTween />
+          </span>
+        )}
+        <span className={cn("w-[66px] text-right text-sm font-semibold tabular-nums", tono(cambio))}>
+          <FlashValue value={cambio} format={(v) => formatVariazione(v) ?? "—"} noTween />
         </span>
       </span>
     </Link>
@@ -398,7 +476,7 @@ function Colonna({ titolo, icona: Icona, children }: {
 }) {
   return (
     <div className="min-w-0">
-      <div className="mb-0.5 flex items-center gap-1 text-[0.6765rem] font-bold uppercase tracking-[0.14em] text-muted-foreground">
+      <div className="mb-0.5 flex items-center gap-1 text-xs font-bold uppercase tracking-[0.14em] text-muted-foreground">
         <Icona className="h-3 w-3" aria-hidden />
         {titolo}
       </div>
@@ -411,7 +489,7 @@ function Colonna({ titolo, icona: Icona, children }: {
  *  Senza la provenienza due liste sembrano la stessa cosa e non lo sono. */
 function Intestazione({ titolo, fonte }: { titolo: string; fonte?: ReactNode }) {
   return (
-    <div className="mb-1 flex flex-wrap items-baseline gap-x-2 text-[0.6765rem] font-bold uppercase tracking-[0.14em] text-muted-foreground">
+    <div className="mb-1 flex flex-wrap items-baseline gap-x-2 text-xs font-bold uppercase tracking-[0.14em] text-muted-foreground">
       {titolo}
       {fonte && <span className="font-normal normal-case tracking-normal">{fonte}</span>}
     </div>
@@ -423,6 +501,11 @@ export function MarketPulseJumbotron({ global, byIndex, computedAt }: Props) {
   // Un battito al minuto: il conto alla rovescia si legge in minuti, e un
   // timer al secondo su una scheda sempre a schermo e' lavoro sprecato.
   const ora = useNowTick(60_000);
+  /* Registro per l'animazione di rango delle righe «si muove adesso»: una
+   * chiave per riga, con il PREFISSO della colonna — lo stesso titolo puo'
+   * comparire in due liste diverse e due chiavi uguali farebbero scivolare la
+   * riga sbagliata. */
+  const registraFlip = useFlipList();
   const sessione = useMemo(() => usSessionClock(new Date(ora)), [ora]);
 
   const assetsQ = useLiveAssets();
@@ -510,16 +593,21 @@ export function MarketPulseJumbotron({ global, byIndex, computedAt }: Props) {
     <Card className="overflow-hidden bg-gradient-to-br from-slate-50 via-card to-card dark:from-slate-900/60 dark:via-card dark:to-card">
       <div className="flex flex-col gap-3 p-3 sm:p-4">
         {/* Fascia 1: la sessione a sinistra, le tre americane a destra. */}
-        <div className="grid gap-3 dense-3:grid-cols-[minmax(0,268px)_minmax(0,1fr)]">
+        {/* 268px -> 330px: la colonna della sessione porta il titolo, due
+            orologi, il conto alla rovescia grande, la barra della finestra, il
+            volume tipico e il VIX, e li stava incastrando in meno di un quinto
+            della fascia. I tre riquadri perdono ~60px in tre e non se ne
+            accorgono: il loro contenuto e' numerico e corto. */}
+        <div className="grid gap-3 dense-3:grid-cols-[minmax(0,330px)_minmax(0,1fr)]">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
               {/* Nessuna icona accanto al titolo: la pastiglia qui a fianco
                   porta gia' il suo glifo per la fase, e le due erano lo stesso
                   sole che sorge, due volte. */}
-              <span className="text-base font-bold tracking-tight sm:text-lg">{TITOLO[fase]}</span>
+              <span className="text-lg font-bold tracking-tight sm:text-xl">{TITOLO[fase]}</span>
               <MarketStateBadge phase={badge} />
             </div>
-            <div className="mt-0.5 flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+            <div className="mt-0.5 flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-sm text-muted-foreground">
               <span className="tabular-nums" title="Ora di New York, cambi d'ora compresi">
                 <Clock3 className="mr-1 inline h-3 w-3" aria-hidden />
                 {sessione.etLabel} New York
@@ -534,7 +622,7 @@ export function MarketPulseJumbotron({ global, byIndex, computedAt }: Props) {
             <div className="mt-1.5">
               {sessione.minutesToNext != null ? (
                 <>
-                  <div className="text-[0.6765rem] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                  <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                     {sessione.nextLabel} fra
                   </div>
                   <div className="text-2xl font-bold leading-none tabular-nums">
@@ -570,7 +658,7 @@ export function MarketPulseJumbotron({ global, byIndex, computedAt }: Props) {
                 </div>
               </div>
             )}
-            <div className="mt-1.5 flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-[0.7059rem] text-muted-foreground">
+            <div className="mt-1.5 flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
               {frazioneVolume != null && (
                 <span title="Quota del volume di una giornata tipica gia' scambiata a quest'ora, dalla stessa curva intraday che proietta i volumi delle schede sotto">
                   volume tipico già scambiato ≈{" "}
@@ -617,15 +705,22 @@ export function MarketPulseJumbotron({ global, byIndex, computedAt }: Props) {
             (`/api/stocks/quotes`), e legarlo alla presenza degli indici lo
             faceva sparire insieme a loro quando quella query taceva. */}
         {(
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-1 border-t pt-2">
-            {gruppi.map(([titolo, voci], i) =>
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-1.5 border-t pt-2">
+            {gruppi.map(([titolo, voci]) =>
               voci.length === 0 ? null : (
                 /* `gap-x-3` dentro il gruppo e `gap-x-5` fra i gruppi: prima
                    erano rispettivamente 1 e 3, e undici voci attaccate si
                    leggevano come una sola stringa lunga. */
+                /* ⚠️ Niente separatore verticale fra i gruppi. Ce n'era uno
+                   davanti a ogni gruppo tranne il primo, e quando la riga
+                   andava A CAPO il gruppo che apriva la riga nuova se lo
+                   portava dietro: «CRIPTO» partiva qualche pixel piu' a destra
+                   di «INDICI», per un tratto che li' non separava niente. Il
+                   CSS non sa dove cade il ritorno a capo, quindi l'unica forma
+                   che regge e' non averlo — lo spazio fra i gruppi lo fa
+                   `gap-x-6`, che e' il doppio di quello interno. */
                 <span key={titolo} className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
-                  {i > 0 && <span className="mr-1 hidden h-4 w-px bg-border lg:block" aria-hidden />}
-                  <span className="text-[0.6471rem] font-bold uppercase tracking-[0.14em] text-muted-foreground/70">
+                  <span className="text-[0.6765rem] font-bold uppercase tracking-[0.14em] text-muted-foreground/70">
                     {titolo}
                   </span>
                   {voci.map((a) => (
@@ -638,10 +733,7 @@ export function MarketPulseJumbotron({ global, byIndex, computedAt }: Props) {
                 e' l'ultimo gruppo perche' e' il piu' specialistico, non il
                 meno importante. */}
             <span className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
-              {contesto.length > 0 && (
-                <span className="mr-1 hidden h-4 w-px bg-border lg:block" aria-hidden />
-              )}
-              <span className="flex items-center gap-1 text-[0.6471rem] font-bold uppercase tracking-[0.14em] text-muted-foreground/70">
+              <span className="flex items-center gap-1 text-[0.6765rem] font-bold uppercase tracking-[0.14em] text-muted-foreground/70">
                 <Zap className="h-3 w-3" aria-hidden />
                 Leva
               </span>
@@ -656,9 +748,9 @@ export function MarketPulseJumbotron({ global, byIndex, computedAt }: Props) {
             subito dopo «dove sono i futures», e un dato macro alle 08:30 di New
             York muove l'apertura piu' di qualunque movimento di stanotte. */}
         {!agendaVuota(agenda) && (
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t pt-2 text-xs">
-            <span className="flex shrink-0 items-center gap-1 text-[0.6765rem] font-bold uppercase tracking-[0.14em] text-muted-foreground">
-              <CalendarClock className="h-3 w-3" aria-hidden />
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t pt-2 text-sm">
+            <span className="flex shrink-0 items-center gap-1 text-xs font-bold uppercase tracking-[0.14em] text-muted-foreground">
+              <CalendarClock className="h-3.5 w-3.5" aria-hidden />
               Oggi
             </span>
             {agenda.macro.slice(0, 4).map((m) => (
@@ -725,15 +817,17 @@ export function MarketPulseJumbotron({ global, byIndex, computedAt }: Props) {
               <>
                 <div className="grid gap-x-4 gap-y-1 xl:grid-cols-2">
                   <Colonna titolo="Su" icona={TrendingUp}>
-                    {equity(pre.gainers).slice(0, 4).map((m) => (
+                    {equity(pre.gainers).slice(0, RIGHE_MOVERS).map((m) => (
                       <RigaMover key={m.ticker} ticker={m.ticker} nome={m.name} cambio={m.change_pct}
-                        prezzoOra={m.price} volume={m.volume} />
+                        prezzoOra={m.price} volume={m.volume}
+                        flipRef={registraFlip(`pre-su:${m.ticker}`)} />
                     ))}
                   </Colonna>
                   <Colonna titolo="Giù" icona={TrendingDown}>
-                    {equity(pre.losers).slice(0, 4).map((m) => (
+                    {equity(pre.losers).slice(0, RIGHE_MOVERS).map((m) => (
                       <RigaMover key={m.ticker} ticker={m.ticker} nome={m.name} cambio={m.change_pct}
-                        prezzoOra={m.price} volume={m.volume} />
+                        prezzoOra={m.price} volume={m.volume}
+                        flipRef={registraFlip(`pre-giu:${m.ticker}`)} />
                     ))}
                   </Colonna>
                 </div>
@@ -766,15 +860,15 @@ export function MarketPulseJumbotron({ global, byIndex, computedAt }: Props) {
             ) : mostraLive && liveMovers ? (
               <div className="grid gap-x-4 gap-y-1 xl:grid-cols-2">
                 <Colonna titolo="Su" icona={TrendingUp}>
-                  {liveMovers.gainers.slice(0, 4).map((m) => (
+                  {liveMovers.gainers.slice(0, RIGHE_MOVERS).map((m) => (
                     <RigaMover key={m.ticker} ticker={m.ticker} nome={m.name} cambio={m.change_pct}
-                      prezzoOra={m.price} />
+                      prezzoOra={m.price} flipRef={registraFlip(`live-su:${m.ticker}`)} />
                   ))}
                 </Colonna>
                 <Colonna titolo="Giù" icona={TrendingDown}>
-                  {liveMovers.losers.slice(0, 4).map((m) => (
+                  {liveMovers.losers.slice(0, RIGHE_MOVERS).map((m) => (
                     <RigaMover key={m.ticker} ticker={m.ticker} nome={m.name} cambio={m.change_pct}
-                      prezzoOra={m.price} />
+                      prezzoOra={m.price} flipRef={registraFlip(`live-giu:${m.ticker}`)} />
                   ))}
                 </Colonna>
               </div>

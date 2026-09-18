@@ -238,6 +238,95 @@ describe("il paniere a leva e le icone", () => {
   });
 });
 
+describe("i riquadri delle americane", () => {
+  it("portano la bandiera, i punti e l'apertura accanto alla percentuale", () => {
+    /* La percentuale su un indice a cinque cifre non da' la misura del
+     * movimento, e un indice sopra o sotto la propria apertura racconta due
+     * sedute diverse a parita' di segno. */
+    assets = [indice("^GSPC", {
+      quote: {
+        price: 7622, change_pct: -0.2, change_abs: -15.3, day_open: 7640,
+        day_low: 7620, day_high: 7657, market_state: "OPEN",
+      } as LiveAsset["quote"],
+    })];
+    const { container } = montaA(SEDUTA);
+    expect(screen.getByText("−15,30 pt")).toBeInTheDocument();
+    expect(screen.getByText("ap. 7.640")).toBeInTheDocument();
+    expect(container.querySelector('img[src="/flags/us.svg"]')).not.toBeNull();
+  });
+});
+
+describe("la riga di contesto sta allineata", () => {
+  it("⚠️ nessun separatore verticale fra i gruppi", () => {
+    /* Ce n'era uno davanti a ogni gruppo tranne il primo, e quando la riga
+     * andava a capo il gruppo che apriva la riga nuova se lo portava dietro:
+     * «CRIPTO» partiva piu' a destra di «INDICI», per un tratto che li' non
+     * separava niente. Il CSS non sa dove cade il ritorno a capo, quindi
+     * l'unica forma che regge e' non averlo. */
+    assets = [
+      indice("^N225", { category: "index" }),
+      indice("GC=F", { category: "commodity" }),
+      indice("BTC-USD", { category: "crypto" }),
+    ];
+    montaA(SEDUTA);
+    const contesto = screen.getByText("Indici").closest("div")!;
+    expect(contesto.querySelectorAll(".w-px")).toHaveLength(0);
+    // Controllo negativo: il gruppo c'e' davvero, quindi «zero separatori» non
+    // e' il risultato di una riga che non e' stata resa.
+    expect(contesto.textContent).toContain("Cripto");
+  });
+
+  it("le icone di materie prime e cripto sono a colori, e non sono la palette direzionale", () => {
+    // Ambra = oro, indaco = il rombo di Ethereum: dicono DI COSA si parla.
+    // Verde e rosa restano riservati al verso del prezzo.
+    // ⚠️ `flag: null` non e' un dettaglio: la fixture mette "us" di default e
+    // la bandiera VINCE sull'icona, quindi senza questa riga si misurerebbe
+    // un ramo che in produzione non esiste per oro e cripto.
+    assets = [
+      indice("GC=F", { category: "commodity", flag: null }),
+      indice("ETH-USD", { category: "crypto", flag: null }),
+    ];
+    const { container } = montaA(SEDUTA);
+    const oro = screen.getByText("Oro").closest("a")!;
+    const eth = screen.getByText("Ethereum").closest("a")!;
+    expect(oro.querySelector("svg")?.getAttribute("class")).toContain("text-amber-500");
+    expect(eth.querySelector("svg")?.getAttribute("class")).toContain("text-indigo-400");
+    expect(container.querySelector("svg.text-emerald-500")).toBeNull();
+  });
+});
+
+describe("«si muove adesso» lavora come la scheda Top movers", () => {
+  it("mostra dieci righe per lato, non quattro", () => {
+    liveMovers = {
+      swept: 786,
+      gainers: Array.from({ length: 14 }, (_, i) => ({
+        ticker: `SU${i}`, name: `Su ${i}`, change_pct: 10 - i * 0.1, price: 100 + i,
+      })),
+      losers: Array.from({ length: 14 }, (_, i) => ({
+        ticker: `GIU${i}`, name: `Giu ${i}`, change_pct: -10 + i * 0.1, price: 50 + i,
+      })),
+    };
+    montaA(SEDUTA);
+    expect(screen.getByText("SU9")).toBeInTheDocument();
+    expect(screen.queryByText("SU10")).not.toBeInTheDocument();
+    expect(screen.getByText("GIU9")).toBeInTheDocument();
+    expect(screen.queryByText("GIU10")).not.toBeInTheDocument();
+  });
+
+  it("ogni riga porta il prezzo accanto alla variazione", () => {
+    // Un +9% su un titolo da 2 dollari e uno su un titolo da 400 non sono la
+    // stessa notizia, e senza il prezzo la riga non lo dice.
+    liveMovers = {
+      swept: 10,
+      gainers: [{ ticker: "MSTR", name: "MicroStrategy", change_pct: 9.19, price: 412.5 }],
+      losers: [],
+    };
+    montaA(SEDUTA);
+    expect(screen.getByText("+9,19%")).toBeInTheDocument();
+    expect(screen.getByText("412,50")).toBeInTheDocument();
+  });
+});
+
 describe("l'ampiezza non si spaccia per un dato live", () => {
   it("dice quanto e' VECCHIA, non a che ora e' stata presa", () => {
     /* «istantanea delle 23:54» letto alle 10:34 del mattino dopo si legge come
