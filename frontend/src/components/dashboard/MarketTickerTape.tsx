@@ -6,6 +6,7 @@ import { NoValue } from "@/components/ui/no-value";
 import { hasValue } from "@/lib/hasValue";
 import { useIsPhone } from "@/hooks/useMediaQuery";
 import { useLiveAssets, type LiveAsset } from "@/hooks/useLiveAssets";
+import { formatLivello, formatVariazione } from "@/lib/marketNumber";
 import { cn } from "@/lib/utils";
 import { advanceScroll } from "@/lib/tickerScroll";
 
@@ -98,14 +99,11 @@ function useAutoScroll(durationSeconds: number) {
   return ref;
 }
 
-function fmtPrice(v: number | null | undefined): string {
-  if (v == null || !Number.isFinite(v)) return "—";
-  const abs = Math.abs(v);
-  if (abs >= 1000) return v.toLocaleString("it-IT", { maximumFractionDigits: 0 });
-  if (abs >= 100) return v.toFixed(2);
-  if (abs >= 1) return v.toFixed(2);
-  return v.toFixed(4);
-}
+/* ⚠️ La formattazione sta in `lib/marketNumber` e NON qui, perche' questo
+ * nastro e la fascia del battito subito sotto mostrano lo STESSO paniere a
+ * pochi pixel di distanza. Due formattatori diversi si notano solo quando
+ * divergono, ed erano gia' divergenti: qui «67.63» col punto decimale accanto
+ * a «65.620» col punto delle migliaia, lo stesso segno per due significati. */
 
 /* Returns null when there is no number — the caller renders <NoValue/>.
  *
@@ -116,8 +114,7 @@ function fmtPrice(v: number | null | undefined): string {
  * real quote. A missing value must look missing. */
 function fmtPct(v: number | null | undefined): string | null {
   if (!hasValue(v)) return null;
-  const sign = v >= 0 ? "+" : "";
-  return `${sign}${v.toFixed(2)}%`;
+  return formatVariazione(v);
 }
 
 function TickerItem({ asset }: { asset: LiveAsset }) {
@@ -184,7 +181,7 @@ function TickerItem({ asset }: { asset: LiveAsset }) {
         {asset.name}
       </span>
       <span className="font-mono text-sm tabular-nums text-foreground/85">
-        {hasValue(price) ? fmtPrice(price) : <NoValue hint={unavailableHint} />}
+        {hasValue(price) ? formatLivello(price) : <NoValue hint={unavailableHint} />}
       </span>
       <span
         className={cn(

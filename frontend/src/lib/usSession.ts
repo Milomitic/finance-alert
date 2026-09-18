@@ -148,6 +148,22 @@ export function formatDelta(minutes: number): string {
   return h > 0 ? `${h}h ${String(m).padStart(2, "0")}m` : `${m}m`;
 }
 
+/* Il GIORNO di New York in forma ISO. Serve perche' un'agenda della seduta
+ * americana si chiude a mezzanotte a New York, non a Roma: alle 01:00 italiane
+ * a Wall Street sono ancora le 19:00 del giorno prima, e chiedere «gli eventi
+ * di oggi» col calendario locale salterebbe l'intera serata americana. */
+const FORMATTER_GIORNO = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "America/New_York",
+  year: "numeric", month: "2-digit", day: "2-digit",
+});
+
+/** "2026-09-18" secondo il calendario di New York. */
+export function etToday(now: Date): string {
+  // en-CA rende gia' AAAA-MM-GG: nessuna ricomposizione a mano dei pezzi, che
+  // e' il punto in cui si sbaglia l'ordine dei campi.
+  return FORMATTER_GIORNO.format(now);
+}
+
 /** Il giorno di New York in italiano, per le etichette assolute. */
 export function etGiorno(weekday: number): string {
   return GIORNI[weekday] ?? "";

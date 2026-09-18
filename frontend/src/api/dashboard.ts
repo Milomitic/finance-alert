@@ -35,6 +35,11 @@ export type PremarketMover = {
   prev_close: number;
   change_pct: number;
   volume: number | null; // summed pre-market volume (null = n/d)
+  /** "equity" | "etf" dal catalogo. Serve a NON mescolare nella stessa lista
+   *  un'azienda e un fondo a leva 3x, che si muove del triplo per costruzione.
+   *  Assente sulle risposte piu' vecchie della cache: chi legge tratta
+   *  l'assenza come "equity", cioe' il comportamento di prima. */
+  instrument_type?: string | null;
 };
 
 /** Mirrors `schemas.dashboard.PremarketMoversOut`. `available` is the

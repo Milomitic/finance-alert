@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import {
   AFTER_CLOSE_MIN, RTH_CLOSE_MIN, RTH_OPEN_MIN,
-  etWallClock, formatDelta, usSessionClock,
+  etToday, etWallClock, formatDelta, usSessionClock,
 } from "./usSession";
 
 /* Gli istanti sono scritti in UTC perche' `Date.parse` di una stringa con la
@@ -119,6 +119,24 @@ describe("quando il prossimo passaggio non e' oggi", () => {
     expect(c.phase).toBe("closed");
     expect(c.progress).toBeNull();
     expect(c.nextDayLabel).toBe("lunedì");
+  });
+});
+
+describe("etToday", () => {
+  it("rende il giorno di NEW YORK, che dopo le 18 italiane non e' quello di qui", () => {
+    // 02:30 del 19 a Roma = 20:30 del 18 a New York. Un'agenda della seduta
+    // americana chiesta col giorno locale salterebbe l'intera serata.
+    nodeEnv().TZ = "Europe/Rome";
+    expect(etToday(new Date("2026-09-19T00:30:00Z"))).toBe("2026-09-18");
+    expect(etToday(VEN_0930_ET)).toBe("2026-09-18");
+  });
+
+  it("non dipende dal fuso della macchina", () => {
+    const letture = ["Europe/Rome", "UTC", "Asia/Tokyo"].map((tz) => {
+      nodeEnv().TZ = tz;
+      return etToday(new Date("2026-09-19T00:30:00Z"));
+    });
+    expect(new Set(letture)).toEqual(new Set(["2026-09-18"]));
   });
 });
 

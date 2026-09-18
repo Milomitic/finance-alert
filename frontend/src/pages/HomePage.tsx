@@ -3,7 +3,6 @@ import { Suspense, lazy } from "react";
 
 import { AlertsCompactPanel } from "@/components/dashboard/AlertsCompactPanel";
 import { BreadthMatrixTable } from "@/components/dashboard/BreadthMatrixTable";
-import { MarketMoodStrip } from "@/components/dashboard/MarketMoodStrip";
 import { LiveVolumeMoversCard } from "@/components/dashboard/LiveVolumeMoversCard";
 import { MarketEventsRail } from "@/components/dashboard/MarketEventsRail";
 import { MarketTickerTape } from "@/components/dashboard/MarketTickerTape";
@@ -41,9 +40,12 @@ import { useMarketSummary } from "@/hooks/useMarketSummary";
  * every card behind the slowest of the two summary queries).
  */
 
-function HeroRowSkeleton() {
-  // One thin bar: the mood hero is a strip now, not a 340px row.
-  return <CardSkeleton className="h-[52px]" rows={1} />;
+function JumbotronRowSkeleton() {
+  // La fascia del battito: sessione + tre indici + contesto + agenda +
+  // movers/ampiezza. Lo scheletro ne tiene l'altezza, altrimenti la pagina
+  // sobbalza nel momento in cui i dati arrivano — che e' esattamente cio' che
+  // il cancello di primo disegno esiste per evitare.
+  return <CardSkeleton className="h-[250px]" rows={4} />;
 }
 
 function SpotlightRowSkeleton() {
@@ -85,7 +87,7 @@ function AlertsPanelSkeleton() {
 function DashboardSkeleton() {
   return (
     <div className="space-y-4">
-      <HeroRowSkeleton />
+      <JumbotronRowSkeleton />
       <AlertsPanelSkeleton />
       <SpotlightRowSkeleton />
       <BreadthRowSkeleton />
@@ -222,7 +224,11 @@ function HomePageContent() {
           domanda per cui questa pagina viene aperta la mattina: cosa sta
           succedendo adesso. Non fa nessuna richiesta nuova — riusa per chiave
           le stesse interrogazioni del nastro qui sopra e delle schede sotto. */}
-      <MarketPulseJumbotron global={m?.global} computedAt={m?.computed_at} />
+      <MarketPulseJumbotron
+        global={m?.global}
+        byIndex={m?.by_index}
+        computedAt={m?.computed_at}
+      />
       <div className="flex flex-wrap items-center justify-between gap-2 px-1">
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 min-w-0">
           {/* Nascosto sul telefono: la barra di navigazione dice gia' dove
@@ -263,11 +269,6 @@ function HomePageContent() {
           market summary is still in flight (the inline field guards
           double as the TS narrowing — past the validation above a
           settled payload always has all of them). */}
-      {m?.global && m.by_index ? (
-        <MarketMoodStrip global={m.global} byIndex={m.by_index} />
-      ) : (
-        <HeroRowSkeleton />
-      )}
       {/* Segnali, above the fold.
        *
        * The app is called finance-ALERT and this is the panel that says what
