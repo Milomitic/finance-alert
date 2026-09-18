@@ -20,11 +20,20 @@ sola e su numeri veri.
 """
 from __future__ import annotations
 
+import json
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import NamedTuple
+from datetime import UTC, date, datetime
+from typing import TYPE_CHECKING, NamedTuple
 
-from app.signals.trade_plan import PianoDiTrade
+from sqlalchemy import exists, select
+
+from app.models import Alert, OhlcvDaily, PlanOutcome
+from app.models.plan_outcome import FONTE_EMESSO
+from app.signals.trade_plan import PianoDiTrade, costruisci_piano
+
+if TYPE_CHECKING:
+    from sqlalchemy.orm import Session
 
 #: Gli esiti che la gara sa produrre. ⚠️ Costanti e non stringhe sparse: la
 #: colonna `plan_outcomes.esito` ha una lunghezza, e in questo repo una
@@ -58,9 +67,24 @@ class EsitoGara:
     #: un binario per osservazione perche' sono continui.
     mae_r: float
     mfe_r: float
-    #: Il secondo target e' stato toccato prima dello stop. Tenuto a parte
-    #: dall'esito: mescolarlo renderebbe incomparabili le righe.
+    #: Il secondo target e' stato toccato MENTRE LA POSIZIONE ERA APERTA.
+    #: Tenuto a parte dall'esito: mescolarlo renderebbe incomparabili le righe.
     tp2_raggiunto: bool
+    #: ⚠️ La data di PRIMO TOCCO di ciascuna gamba nell'orizzonte, a
+    #: prescindere da chi ha vinto — anche quella toccata DOPO la chiusura
+    #: della posizione.
+    #:
+    #: Serve a una domanda diversa dall'esito. «Stop il giorno 3, target il
+    #: giorno 12» rende -1R ed e' giusto — la posizione era chiusa — ma dice
+    #: anche che quello stop era troppo stretto e il trade aveva ragione. Quel
+    #: fatto non e' ricavabile ne' dall'esito ne' da MAE/MFE, che si fermano
+    #: alla risoluzione perche' misurano il TRADE e non la TARATURA.
+    #:
+    #: Da queste tre date l'ordine si deduce, «entrambe toccate» si deduce, e
+    #: l'esito resta quello che era.
+    data_stop: str | None
+    data_tp1: str | None
+    data_tp2: str | None
 
 
 def corri_la_gara(
@@ -90,21 +114,40 @@ def corri_la_gara(
 
     peggio = migliore = piano.entry
     tp2_visto = False
+    data_stop = data_tp1 = data_tp2 = None
+    risolta: tuple[str, str, int] | None = None
 
     for i, b in enumerate(finestra, 1):
         if lungo:
-            peggio = min(peggio, b.basso)
-            migliore = max(migliore, b.alto)
             colpo_stop = b.basso <= piano.stop
             colpo_tp1 = b.alto >= tp1
             colpo_tp2 = tp2 is not None and b.alto >= tp2
         else:
-            peggio = max(peggio, b.alto)
-            migliore = min(migliore, b.basso)
             colpo_stop = b.alto >= piano.stop
             colpo_tp1 = b.basso <= tp1
             colpo_tp2 = tp2 is not None and b.basso <= tp2
 
+        # Il censimento delle gambe continua per TUTTA la finestra: e' la
+        # diagnosi, e vale anche dopo che la posizione si e' chiusa.
+        if colpo_stop and data_stop is None:
+            data_stop = b.data
+        if colpo_tp1 and data_tp1 is None:
+            data_tp1 = b.data
+        if colpo_tp2 and data_tp2 is None:
+            data_tp2 = b.data
+
+        if risolta is not None:
+            continue
+
+        # ⚠️ Da qui in giu' solo finche' la posizione e' APERTA. L'escursione
+        # oltre la chiusura non appartiene al trade: un crollo il giorno dopo
+        # un target colpito non e' una perdita di nessuno.
+        if lungo:
+            peggio = min(peggio, b.basso)
+            migliore = max(migliore, b.alto)
+        else:
+            peggio = max(peggio, b.alto)
+            migliore = min(migliore, b.basso)
         if colpo_tp2 and not colpo_stop:
             tp2_visto = True
 
@@ -112,15 +155,23 @@ def corri_la_gara(
             # ⚠️ Stop e target nella STESSA barra: il dato giornaliero non dice
             # quale sia venuto prima. Si assegna lo stop (pessimista) ma
             # l'esito resta una categoria a se', cosi' dopo si puo' misurare
-            # quanto costa questa convenzione invece di darla per buona.
+            # quanto costa questa convenzione invece di darla per buona. Le
+            # DATE intanto dicono la verita' disponibile: entrambe quel giorno.
             if colpo_stop and colpo_tp1:
-                esito, r_mult = "ambigua", -1.0
+                risolta = ("ambigua", b.data, i)
             elif colpo_stop:
-                esito, r_mult = "stop", -1.0
+                risolta = ("stop", b.data, i)
             else:
-                esito, r_mult = "tp1", rr1
-            return _esito(esito, b.data, i, r_mult, piano, peggio, migliore,
-                          tp2_visto and not colpo_stop)
+                risolta = ("tp1", b.data, i)
+            if colpo_stop:
+                tp2_visto = False
+
+    date = (data_stop, data_tp1, data_tp2)
+    if risolta is not None:
+        esito, quando, quante = risolta
+        r_mult = rr1 if esito == "tp1" else -1.0
+        return _esito(esito, quando, quante, r_mult, piano, peggio, migliore,
+                      tp2_visto, date)
 
     # Nessun tocco. Se l'orizzonte e' trascorso si valorizza alla chiusura;
     # altrimenti il trade e' ancora aperto e non si etichetta.
@@ -130,12 +181,13 @@ def corri_la_gara(
     segno = 1.0 if lungo else -1.0
     r_mult = (ultima.chiusura - piano.entry) * segno / piano.r
     return _esito("scaduto", ultima.data, len(finestra), r_mult, piano,
-                  peggio, migliore, tp2_visto)
+                  peggio, migliore, tp2_visto, date)
 
 
 def _esito(
     esito: str, data: str, barre: int, r_mult: float, piano: PianoDiTrade,
     peggio: float, migliore: float, tp2: bool,
+    date: tuple[str | None, str | None, str | None],
 ) -> EsitoGara:
     if piano.side == "long":
         mae = (piano.entry - peggio) / piano.r
@@ -148,5 +200,106 @@ def _esito(
     # giusta — «massima escursione avversa» col segno meno sarebbe una
     # contraddizione, e zero dice la cosa vera, cioe' che lo stop non e' mai
     # stato avvicinato.
+    data_stop, data_tp1, data_tp2 = date
     return EsitoGara(esito=esito, data=data, barre=barre, r_multiplo=r_mult,
-                     mae_r=mae, mfe_r=mfe, tp2_raggiunto=tp2)
+                     mae_r=mae, mfe_r=mfe, tp2_raggiunto=tp2,
+                     data_stop=data_stop, data_tp1=data_tp1, data_tp2=data_tp2)
+
+
+# ─── La maturazione ────────────────────────────────────────────────────────
+
+#: Versione della regola con cui una riga e' stata etichettata. Senza, una
+#: modifica al metodo mescolerebbe in silenzio le popolazioni di prima e di
+#: dopo — la stessa ragione per cui esiste `OUTCOME_METHOD_VERSION`.
+PLAN_METHOD_VERSION = "1"
+
+
+def _barre_dopo(db: Session, stock_id: int, dal: date) -> list[Barra]:
+    """Le barre STRETTAMENTE successive a `dal`, in ordine.
+
+    ⚠️ Strettamente: la barra dello scatto porta massimo e minimo dell'INTERA
+    giornata, inclusa la parte precedente all'alert. Contarla attribuirebbe al
+    piano un movimento avvenuto prima che l'alert esistesse — un target
+    «colpito» da un massimo del mattino su un alert scattato nel pomeriggio —
+    e lo farebbe in modo sistematico e invisibile.
+    """
+    righe = db.execute(
+        select(OhlcvDaily.date, OhlcvDaily.high, OhlcvDaily.low, OhlcvDaily.close)
+        .where(OhlcvDaily.stock_id == stock_id, OhlcvDaily.date > dal)
+        .order_by(OhlcvDaily.date)
+    ).all()
+    return [Barra(str(d)[:10], float(hi), float(lo), float(cl))
+            for d, hi, lo, cl in righe]
+
+
+def mature_plan_outcomes(db: Session, *, commit: bool = True) -> int:
+    """Scrive una riga di `plan_outcomes` per ogni alert il cui piano si e'
+    risolto e che non ne ha ancora una. Rende il numero di righe scritte.
+
+    Idempotente: gli alert che hanno gia' un esito non vengono riesaminati, e
+    l'unicita' e' comunque imposta dal database.
+    """
+    from app.services.signal_drift_service import _horizon_days
+
+    candidati = db.execute(
+        select(Alert)
+        .where(~exists().where(PlanOutcome.alert_id == Alert.id))
+        .order_by(Alert.id)
+    ).scalars().all()
+
+    scritte = 0
+    barre_per_titolo: dict[int, list[Barra]] = {}
+    for a in candidati:
+        # ⚠️ Un guasto per riga non deve costare la passata: e' la stessa
+        # forma per cui `ohlcv_service` cattura per titolo dentro il ciclo,
+        # cosi' un ticker morto non ferma gli altri.
+        try:
+            snap = json.loads(a.snapshot) if a.snapshot else {}
+        except (ValueError, TypeError):
+            continue
+        if not isinstance(snap, dict):
+            continue
+
+        piano = costruisci_piano(snap, float(a.trigger_price), a.signal_name)
+        if piano is None:
+            continue   # nessun livello strutturale: niente piano, niente gara
+
+        scatto = a.triggered_at.date()
+        if a.stock_id not in barre_per_titolo:
+            barre_per_titolo[a.stock_id] = _barre_dopo(db, a.stock_id, scatto)
+        barre = [b for b in barre_per_titolo[a.stock_id] if b.data > str(scatto)[:10]]
+
+        orizzonte = _horizon_days(a.signal_name or "")
+        esito = corri_la_gara(piano, barre, orizzonte)
+        if esito is None:
+            continue   # ancora aperto, o senza barre
+
+        db.add(PlanOutcome(
+            alert_id=a.id, stock_id=a.stock_id, detector=a.signal_name or "",
+            signal_date=a.signal_date or scatto, tone=snap.get("tone") or "",
+            horizon_days=orizzonte,
+            entry_date=scatto, entry=piano.entry, stop=piano.stop,
+            tp1=piano.targets[0].price,
+            tp2=piano.targets[1].price if len(piano.targets) > 1 else None,
+            r=piano.r,
+            esito=esito.esito, resolved_date=date.fromisoformat(esito.data),
+            bars_to_outcome=esito.barre, r_multiple=esito.r_multiplo,
+            mae_r=esito.mae_r, mfe_r=esito.mfe_r,
+            tp2_reached=esito.tp2_raggiunto,
+            stop_hit_date=_giorno(esito.data_stop),
+            tp1_hit_date=_giorno(esito.data_tp1),
+            tp2_hit_date=_giorno(esito.data_tp2),
+            source=FONTE_EMESSO, method_version=PLAN_METHOD_VERSION,
+            matured_at=datetime.now(UTC),
+        ))
+        scritte += 1
+
+    if scritte:
+        db.flush()
+        if commit:
+            db.commit()
+    return scritte
+
+
+def _giorno(iso: str | None) -> date | None:
+    return date.fromisoformat(iso) if iso else None

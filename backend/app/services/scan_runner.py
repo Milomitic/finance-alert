@@ -522,6 +522,19 @@ def run_tracked_scan(
         except Exception as set_exc:  # noqa: BLE001
             db.rollback()
             logger.warning(f"[scan_runner] setup outcome maturation failed (non-fatal): {set_exc}")
+        # La gara fra stop e target dei piani. Separata dalle due sopra, e
+        # ⚠️ non e' una precauzione generica: un esito di piano si risolve
+        # quando il prezzo TOCCA una gamba, cioe' di regola PRIMA che
+        # l'orizzonte fisso sia trascorso. Legarla alle altre la farebbe
+        # aspettare, che e' esattamente il difetto per cui esiste.
+        try:
+            from app.services import plan_outcome_service
+            scritte = plan_outcome_service.mature_plan_outcomes(db, commit=False)
+            if scritte:
+                logger.info(f"[scan_runner] esiti di piano maturati: {scritte}")
+        except Exception as plan_exc:  # noqa: BLE001
+            db.rollback()
+            logger.warning(f"[scan_runner] plan outcome maturation failed (non-fatal): {plan_exc}")
         # Auto-archive concluded alerts (outcome matured + signal_date past the
         # confluence window). Runs AFTER mature_outcomes so this scan's freshly
         # matured rows are eligible immediately. Best-effort + gated by

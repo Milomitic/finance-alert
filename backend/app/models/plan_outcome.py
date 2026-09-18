@@ -109,9 +109,27 @@ class PlanOutcome(Base):
     #: (MAE sui vinti) e target (MFE sui persi e sui non risolti).
     mae_r: Mapped[float] = mapped_column(Float, nullable=False)
     mfe_r: Mapped[float] = mapped_column(Float, nullable=False)
-    #: Il secondo target e' stato toccato prima dello stop. Tenuto fuori
-    #: dall'esito primario perche' mescolarlo renderebbe incomparabili le righe.
+    #: Il secondo target e' stato toccato MENTRE LA POSIZIONE ERA APERTA.
+    #: Tenuto fuori dall'esito primario perche' mescolarlo renderebbe
+    #: incomparabili le righe.
     tp2_reached: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
+    # ── L'ORDINE degli eventi ──────────────────────────────────────────────
+    # La data di PRIMO TOCCO di ciascuna gamba nell'orizzonte, a prescindere da
+    # chi ha vinto — anche quella toccata DOPO la chiusura della posizione.
+    #
+    # ⚠️ Rispondono a una domanda diversa dall'esito, e senza di loro quella
+    # domanda non e' ponibile. «Stop il giorno 3, target il giorno 12» rende
+    # -1R ed e' giusto, perche' la posizione era chiusa; ma dice anche che
+    # quello stop era troppo stretto e il trade aveva ragione. Quel fatto non
+    # e' ricavabile dall'esito, e nemmeno da MAE/MFE, che si fermano alla
+    # risoluzione proprio perche' misurano il TRADE e non la TARATURA.
+    #
+    # Da queste tre l'ordine si deduce, «entrambe toccate» si deduce, e nessuna
+    # aggregazione e' congelata nello schema.
+    stop_hit_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    tp1_hit_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    tp2_hit_date: Mapped[date | None] = mapped_column(Date, nullable=True)
 
     # ── Provenienza ────────────────────────────────────────────────────────
     source: Mapped[str] = mapped_column(String(16), nullable=False,

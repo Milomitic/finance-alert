@@ -199,3 +199,105 @@ def test_il_caso_FLNC_del_28_agosto_si_chiude_al_target_il_14_settembre() -> Non
     assert e.esito == "tp1"
     assert e.data == "2026-09-14"
     assert e.r_multiplo > 3.9
+
+
+# ─── L'ORDINE degli eventi, non solo chi ha vinto ──────────────────────────
+#
+# La gara si ferma al primo tocco perche' a quel punto la posizione e' chiusa.
+# Ma l'ALTRA gamba, toccata dopo, e' la diagnosi piu' preziosa che ci sia — e
+# non e' ricavabile dall'esito ne' da MAE/MFE, che si fermano alla risoluzione
+# proprio perche' misurano il trade e non la taratura.
+#
+# Si registra quindi la data di primo tocco di OGNI gamba nell'orizzonte,
+# indipendentemente da chi ha vinto. L'ordine si deduce, «entrambi toccati» si
+# deduce, e l'esito resta quello che era.
+
+def test_stop_prima_e_target_DOPO_e_il_caso_che_dice_stop_troppo_stretto() -> None:
+    """Il caso piu' istruttivo del magazzino.
+
+    Senza le due date questa riga direbbe soltanto «stop, -1R»: vero, e meta'
+    della verita'. L'altra meta' e' che il trade aveva ragione e lo stop era
+    nel posto sbagliato — che e' esattamente il numero che serve per tararlo.
+    """
+    barre = [_b(2, 103, 95, 97), _b(3, 104, 99, 103), _b(4, 109, 102, 108)]
+    e = corri_la_gara(_piano(), barre, orizzonte=21)
+    assert e is not None
+    assert e.esito == "stop"          # l'esito non cambia: la posizione e' chiusa
+    assert e.r_multiplo == pytest.approx(-1.0)
+    assert e.data_stop == "2026-03-02"
+    assert e.data_tp1 == "2026-03-04"  # <- il fatto che oggi si perderebbe
+    assert e.data_stop < e.data_tp1
+
+
+def test_target_prima_e_stop_DOPO_conferma_che_l_uscita_era_giusta() -> None:
+    barre = [_b(2, 109, 101, 108), _b(3, 104, 95, 96)]
+    e = corri_la_gara(_piano(), barre, orizzonte=21)
+    assert e is not None
+    assert e.esito == "tp1"
+    assert e.data_tp1 == "2026-03-02"
+    assert e.data_stop == "2026-03-03"
+
+
+def test_la_gamba_mai_toccata_resta_senza_data() -> None:
+    barre = [_b(2, 109, 101, 108)] + [_b(g, 104, 99, 102) for g in range(3, 8)]
+    e = corri_la_gara(_piano(), barre, orizzonte=21)
+    assert e is not None
+    assert e.data_tp1 == "2026-03-02"
+    assert e.data_stop is None
+
+
+def test_nessuna_gamba_toccata_entro_l_orizzonte_lascia_tutte_e_due_vuote() -> None:
+    barre = [_b(g, 103, 99, 101.5) for g in range(2, 7)]
+    e = corri_la_gara(_piano(), barre, orizzonte=5)
+    assert e is not None and e.esito == "scaduto"
+    assert e.data_stop is None
+    assert e.data_tp1 is None
+
+
+def test_nella_stessa_barra_le_due_date_coincidono_e_l_esito_e_ambiguo() -> None:
+    """Le date dicono la verita' disponibile — entrambe toccate quel giorno —
+    mentre l'esito porta la convenzione. Tenerli separati e' cio' che permette
+    di misurare dopo quanto costa la convenzione."""
+    barre = [_b(2, 109, 95, 104)]
+    e = corri_la_gara(_piano(), barre, orizzonte=21)
+    assert e is not None
+    assert e.esito == "ambigua"
+    assert e.data_stop == e.data_tp1 == "2026-03-02"
+
+
+def test_un_tocco_OLTRE_l_orizzonte_non_viene_registrato() -> None:
+    """⚠️ Il limite dell'orizzonte vale anche per la gamba perdente.
+
+    Senza, un target raggiunto alla trentesima seduta di un detector
+    etichettato a cinque farebbe leggere «stop troppo stretto» su una finestra
+    che a quel detector non appartiene.
+    """
+    barre = [_b(2, 103, 95, 97)] + [_b(g, 104, 99, 102) for g in range(3, 7)] \
+        + [_b(7, 115, 110, 114)]
+    e = corri_la_gara(_piano(), barre, orizzonte=5)
+    assert e is not None
+    assert e.esito == "stop"
+    assert e.data_tp1 is None, "il tocco fuori finestra non va registrato"
+
+
+def test_anche_il_secondo_target_porta_la_sua_data() -> None:
+    barre = [_b(2, 109, 101, 108), _b(3, 113, 107, 112)]
+    e = corri_la_gara(_piano(), barre, orizzonte=21)
+    assert e is not None
+    assert e.esito == "tp1"
+    assert e.data_tp1 == "2026-03-02"
+    assert e.data_tp2 == "2026-03-03"
+    # ⚠️ Raggiunto DOPO la chiusura della posizione: la data lo registra, il
+    # flag no. Sono due fatti diversi e servono a due cose diverse.
+    assert e.tp2_raggiunto is False
+
+
+def test_l_escursione_resta_ferma_alla_risoluzione_anche_col_censimento_esteso() -> None:
+    """Controllo negativo del cambiamento: estendere la scansione a tutta la
+    finestra NON deve far crescere MAE e MFE oltre la barra che risolve."""
+    barre = [_b(2, 109, 99, 108), _b(3, 200, 50, 60)]
+    e = corri_la_gara(_piano(), barre, orizzonte=21)
+    assert e is not None
+    assert e.mfe_r == pytest.approx(2.25)
+    assert e.mae_r == pytest.approx(0.25)
+    assert e.data_stop == "2026-03-03"   # censito, ma fuori dal conto del trade

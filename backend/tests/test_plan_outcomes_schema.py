@@ -167,6 +167,7 @@ def test_la_migrazione_crea_e_ripercorre_su_sqlite(tmp_path, monkeypatch) -> Non
     from alembic import command
     from app.core.config import settings
 
+    _PRIMA_DELLA_TABELLA = "d9e4b6a1c7f2"
     url = f"sqlite:///{tmp_path / 'prova.db'}"
     monkeypatch.setattr(settings, "database_url", url)
     cfg = Config("alembic.ini")
@@ -174,6 +175,10 @@ def test_la_migrazione_crea_e_ripercorre_su_sqlite(tmp_path, monkeypatch) -> Non
     command.upgrade(cfg, "head")
     ispettore = inspect(create_engine(url))
     assert "plan_outcomes" in ispettore.get_table_names()
+    colonne = {c["name"] for c in ispettore.get_columns("plan_outcomes")}
+    # Le date per gamba sono cio' che rende ponibile la domanda sulla taratura:
+    # senza, resterebbe solo «chi ha vinto».
+    assert {"stop_hit_date", "tp1_hit_date", "tp2_hit_date"} <= colonne
     indici = {i["name"]: i for i in ispettore.get_indexes("plan_outcomes")}
     # ⚠️ `bool(...)`: SQLite rende 1 e Postgres True per la stessa proprieta'.
     # Un `is True` qui sarebbe rosso su un indice perfettamente unico.
@@ -181,7 +186,12 @@ def test_la_migrazione_crea_e_ripercorre_su_sqlite(tmp_path, monkeypatch) -> Non
         "senza unicita' la maturazione duplicherebbe a ogni scansione"
     )
 
-    command.downgrade(cfg, "-1")
+    # ⚠️ Si scende alla REVISIONE, non a "-1". Un passo relativo significa
+    # «l'ultima migrazione», quindi questo test cambierebbe significato a ogni
+    # migrazione aggiunta dopo — ed e' gia' successo, con quella che porta le
+    # date di tocco: `-1` toglieva tre colonne invece della tabella e il test
+    # era rosso senza che nulla fosse rotto.
+    command.downgrade(cfg, _PRIMA_DELLA_TABELLA)
     assert "plan_outcomes" not in inspect(create_engine(url)).get_table_names()
 
     # E si risale: una migrazione deve reggere anche il secondo giro, che e'
