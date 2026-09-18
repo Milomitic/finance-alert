@@ -136,18 +136,25 @@ function ColonnaMosse({
         /* ⚠️ role + tabIndex + aria-label: un contenitore che scorre e non puo'
            ricevere il fuoco non e' raggiungibile da tastiera, e cio' che sta
            oltre il taglio non esiste per chi non usa il mouse. Il gate UI
-           l'aveva gia' trovato sulle schede che questa fascia sostituisce. */
-        <ul
+           l'aveva gia' trovato sulle schede che questa fascia sostituisce.
+           ⚠️ E il ruolo sta su un DIV che avvolge la lista, non sulla lista:
+           messo sull'`<ul>` sostituisce il ruolo `list`, quindi ogni `<li>`
+           resta orfano del genitore che la specifica ARIA gli richiede. Il
+           gate l'ha misurato: `aria-allowed-role` 0 -> 2 e `listitem` 0 -> 30,
+           cioe' due attributi sbagliati e trenta righe senza lista. */
+        <div
           role="region"
           aria-label={`${titolo} piu' rilevanti dei fondi tracciati`}
           tabIndex={0}
           className="overflow-y-auto"
           style={{ maxHeight: `${righeVisibili * 2.9}rem` }}
         >
-          {righe.map((row, i) => (
-            <Mossa key={`${row.ticker}-${row.institutional_slug}-${i}`} row={row} kind={kind} />
-          ))}
-        </ul>
+          <ul>
+            {righe.map((row, i) => (
+              <Mossa key={`${row.ticker}-${row.institutional_slug}-${i}`} row={row} kind={kind} />
+            ))}
+          </ul>
+        </div>
       )}
     </div>
   );
