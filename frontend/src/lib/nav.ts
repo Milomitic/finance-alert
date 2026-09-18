@@ -14,7 +14,6 @@ import {
   CalendarDays,
   Filter,
   HeartPulse,
-  Hourglass,
   LayoutDashboard,
   ScanSearch,
 } from "lucide-react";
@@ -82,11 +81,14 @@ export const NAV_GROUPS: NavGroup[] = [
     // ⚠️ L'ordine non e estetico: e la vita di un'idea. Un setup diventa un
     // segnale che diventa una posizione, e da settembre 2026 quella catena e
     // percorribile davvero — `converted_alert_id` e `Position.alert_id` la
-    // rendono nei dati. Segnali stava prima di In formazione, cioe la barra
-    // raccontava la storia al contrario.
+    // rendono nei dati.
+    //
+    // ⚠️ «In formazione» non e piu una voce: dal 2026-09-19 e la prima SCHEDA
+    // di Segnali, insieme a Esiti. Due voci di menu per due momenti della
+    // stessa storia obbligavano a navigare per seguirla, e la destinazione
+    // che le contiene entrambe si chiama gia col nome del momento centrale.
     label: "Monitoraggio",
     items: [
-      { to: "/setups", label: "In formazione", icon: Hourglass, enabled: true },
       // Rules used to be a separate page; now lives in the AlertsPage right
       // sidebar so the user composes rules + reviews their alerts in one
       // surface. The /rules route was removed.

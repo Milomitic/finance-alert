@@ -12,7 +12,7 @@ import pytest
 from sqlalchemy.orm import Session
 
 from app.models import Alert, OhlcvDaily, PlanOutcome, Stock
-from app.services.plan_outcome_service import mature_plan_outcomes
+from app.services.plan_outcome_service import PLAN_METHOD_VERSION, mature_plan_outcomes
 
 
 def _titolo(db: Session, ticker: str = "AAA") -> Stock:
@@ -461,3 +461,55 @@ def test_senza_una_barra_alla_prima_emissione_non_si_misura(db: Session) -> None
     _barre(db, s, [("2026-03-05", 112, 107, 110), ("2026-03-06", 145, 138, 140)])
 
     assert mature_plan_outcomes(db, commit=False) == 0
+
+
+# ─── 6. La riscrittura quando la REGOLA cambia ─────────────────────────────
+
+def test_una_riga_di_versione_vecchia_viene_RIMISURATA(db: Session) -> None:
+    """⚠️ Il difetto che questo chiude e' gia' successo, dentro questo stesso
+    magazzino.
+
+    L'ingresso e' passato dall'ultima revisione alla PRIMA EMISSIONE
+    (`916697d2`), e la correzione fu spedita senza bumpare
+    `PLAN_METHOD_VERSION`. Una maturazione che salta ogni alert gia'
+    etichettato avrebbe tenuto quelle righe ancorate al campo che ogni
+    scansione riscrive — cioe' il difetto che la correzione chiudeva,
+    sopravvissuto dentro il magazzino costruito per ripararlo. E le due
+    popolazioni, una volta nella stessa tabella, sono indistinguibili.
+    """
+    s = _titolo(db)
+    a = _alert(db, s)
+    _barre(db, s, [("2026-03-02", 101, 99, 100.0), ("2026-03-03", 109, 99, 108)])
+    # Una riga scritta da una regola precedente: esito sbagliato, versione vecchia.
+    db.add(PlanOutcome(
+        alert_id=a.id, stock_id=s.id, detector="sr_flip",
+        signal_date=date(2026, 3, 1), tone="bull", horizon_days=21,
+        entry_date=date(2026, 3, 2), entry=999.0, stop=888.0, tp1=1111.0, tp2=None,
+        r=111.0, esito="scaduto", resolved_date=date(2026, 3, 3),
+        bars_to_outcome=1, r_multiple=-1.0, mae_r=0.0, mfe_r=0.0,
+        tp2_reached=False, source="emesso", method_version="1",
+        matured_at=datetime.now(UTC),
+    ))
+    db.flush()
+
+    assert mature_plan_outcomes(db, commit=False) == 1
+
+    riga = db.query(PlanOutcome).one()      # una sola: scambiata, non doppia
+    assert riga.method_version == PLAN_METHOD_VERSION
+    assert riga.esito == "tp1"
+    assert riga.entry == pytest.approx(100.0), "la riga vecchia e' sopravvissuta"
+
+
+def test_una_riga_ALLA_VERSIONE_CORRENTE_non_viene_toccata(db: Session) -> None:
+    """Controllo negativo del test sopra. Senza, una maturazione che riscrive
+    TUTTO a ogni passata lo supererebbe — e riscrivere ottomila righe a ogni
+    scansione e' un difetto diverso, non una correzione."""
+    s = _titolo(db)
+    _alert(db, s)
+    _barre(db, s, [("2026-03-02", 101, 99, 100.0), ("2026-03-03", 109, 99, 108)])
+
+    assert mature_plan_outcomes(db, commit=False) == 1
+    prima = db.query(PlanOutcome).one().matured_at
+
+    assert mature_plan_outcomes(db, commit=False) == 0
+    assert db.query(PlanOutcome).one().matured_at == prima

@@ -527,9 +527,20 @@ def run_tracked_scan(
         # quando il prezzo TOCCA una gamba, cioe' di regola PRIMA che
         # l'orizzonte fisso sia trascorso. Legarla alle altre la farebbe
         # aspettare, che e' esattamente il difetto per cui esiste.
+        #
+        # ⚠️ `ricostruisci=True`, cioe' anche gli alert STORICI dei detector che
+        # non emettevano un livello di invalidazione ne ricevono uno — ma solo
+        # dove quel livello e' un FATTO delle barre (la chiusura precedente di
+        # un gap, l'estremo del pivot di una divergenza; vedi `RICOSTRUIBILI`).
+        # Era acceso soltanto dallo script a mano, il che significava che la
+        # copertura dello storico dipendeva dal fatto che qualcuno si
+        # ricordasse di lanciarlo — «una cadenza che dipende da chi se la
+        # ricorda non e' una cadenza». Le righe cosi' prodotte portano
+        # `source='ricostruito'` e restano escludibili con un WHERE per sempre.
         try:
             from app.services import plan_outcome_service
-            scritte = plan_outcome_service.mature_plan_outcomes(db, commit=False)
+            scritte = plan_outcome_service.mature_plan_outcomes(
+                db, commit=False, ricostruisci=True)
             if scritte:
                 logger.info(f"[scan_runner] esiti di piano maturati: {scritte}")
         except Exception as plan_exc:  # noqa: BLE001

@@ -13,7 +13,7 @@ import { describe, expect, it } from "vitest";
  * l'intera pagina e misurerebbe la stessa cosa.
  */
 
-const SORGENTI = import.meta.glob("/src/pages/AlertsPage.tsx", {
+const SORGENTI = import.meta.glob("/src/components/alert/SignalsView.tsx", {
   query: "?raw",
   import: "default",
   eager: true,

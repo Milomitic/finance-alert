@@ -269,11 +269,11 @@ export function StockAlertsHistoryCard({ alerts, ticker, chart }: Props) {
                   )}
                   </>
                 )}
-                {/* FA-066: i setup di questo titolo stanno su /setups, filtrati.
+                {/* FA-066: i setup di questo titolo stanno nella scheda «In formazione» di /alerts, filtrati.
                     Un collegamento e non una seconda lista: la scheda setup
                     rimossa dal dettaglio titolo non torna. */}
                 <Link
-                  to={`/setups?ticker=${encodeURIComponent(ticker)}`}
+                  to={`/alerts?vista=formazione&ticker=${encodeURIComponent(ticker)}`}
                   className="text-muted-foreground hover:text-foreground hover:underline underline-offset-2"
                 >
                   Setup del titolo

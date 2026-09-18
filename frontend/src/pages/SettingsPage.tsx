@@ -53,7 +53,7 @@ export default function SettingsPage({ embedded = false }: { embedded?: boolean 
           Segnali
         </Link>
         , sopra la tabella; quelle dei setup nella pagina{" "}
-        <Link to="/setups" className="font-semibold underline underline-offset-2">
+        <Link to="/alerts?vista=formazione" className="font-semibold underline underline-offset-2">
           In formazione
         </Link>
         .

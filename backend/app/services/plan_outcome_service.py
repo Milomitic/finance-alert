@@ -26,7 +26,7 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from typing import TYPE_CHECKING, NamedTuple
 
-from sqlalchemy import exists, select
+from sqlalchemy import delete, exists, or_, select
 
 from app.models import Alert, OhlcvDaily, PlanOutcome
 from app.models.plan_outcome import FONTE_EMESSO, FONTE_RICOSTRUITO
@@ -211,7 +211,18 @@ def _esito(
 #: Versione della regola con cui una riga e' stata etichettata. Senza, una
 #: modifica al metodo mescolerebbe in silenzio le popolazioni di prima e di
 #: dopo — la stessa ragione per cui esiste `OUTCOME_METHOD_VERSION`.
-PLAN_METHOD_VERSION = "1"
+#:
+#: ⚠️ E NON e' solo un'etichetta: `mature_plan_outcomes` RISCRIVE le righe che
+#: portano una versione diversa da questa. Chi cambia la regola bumpa il
+#: numero, e la passata successiva rimisura lo storico da sola.
+#:
+#:   "1"  la prima scrittura
+#:   "2"  l'ingresso e' la PRIMA EMISSIONE dell'alert e non l'ultima revisione
+#:        (`916697d2`). La correzione fu spedita SENZA bumpare la versione,
+#:        quindi le righe scritte prima sono rimaste ancorate al campo che una
+#:        scansione riscrive — il difetto che quella correzione chiudeva,
+#:        sopravvissuto dentro il magazzino che doveva ripararlo.
+PLAN_METHOD_VERSION = "2"
 
 
 def _tutte_le_barre(db: Session, stock_id: int) -> list[Barra]:
@@ -306,18 +317,44 @@ def mature_plan_outcomes(
     db: Session, *, commit: bool = True, ricostruisci: bool = False,
 ) -> int:
     """Scrive una riga di `plan_outcomes` per ogni alert il cui piano si e'
-    risolto e che non ne ha ancora una. Rende il numero di righe scritte.
+    risolto e che non ne ha una ALLA VERSIONE CORRENTE. Rende le righe scritte.
 
-    Idempotente: gli alert che hanno gia' un esito non vengono riesaminati, e
-    l'unicita' e' comunque imposta dal database.
+    Idempotente a parita' di versione: un alert gia' etichettato con
+    `PLAN_METHOD_VERSION` non viene riesaminato, e l'unicita' e' comunque
+    imposta dal database.
+
+    ⚠️ La passata guarda TUTTI gli alert, non solo quelli nati oggi: un esito
+    di piano e' una funzione delle barre e dello snapshot, quindi lo storico si
+    misura con la stessa chiamata dell'incrementale. Non c'e' un percorso
+    «retroattivo» separato da ricordarsi di lanciare — sarebbe una seconda
+    implementazione della stessa regola, e questo repo ha gia' pagato quella
+    lezione (la postura duplicata fra `finalize` e `recompute_one`).
     """
     from app.services.signal_drift_service import _horizon_days
 
+    # ⚠️ Candidati: gli alert senza riga, PIU' quelli la cui riga porta una
+    # versione di metodo diversa da quella corrente.
+    #
+    # La seconda meta' non e' un ornamento. La regola e' gia' cambiata una
+    # volta dopo la prima scrittura — l'ingresso e' passato dall'ultima
+    # revisione alla prima emissione — e una maturazione che salta ogni alert
+    # gia' etichettato avrebbe tenuto quelle righe sulla regola vecchia per
+    # sempre, in un magazzino dove le due popolazioni sono indistinguibili.
     candidati = db.execute(
         select(Alert)
-        .where(~exists().where(PlanOutcome.alert_id == Alert.id))
+        .where(~exists().where(
+            (PlanOutcome.alert_id == Alert.id)
+            & (PlanOutcome.method_version == PLAN_METHOD_VERSION)
+        ))
         .order_by(Alert.stock_id, Alert.id)
     ).scalars().all()
+    # Gli alert cui va TOLTA una riga vecchia prima di scriverne una nuova.
+    da_riscrivere = set(db.execute(
+        select(PlanOutcome.alert_id).where(or_(
+            PlanOutcome.method_version.is_(None),
+            PlanOutcome.method_version != PLAN_METHOD_VERSION,
+        ))
+    ).scalars())
 
     scritte = 0
     barre_per_titolo: dict[int, list[Barra]] = {}
@@ -386,6 +423,12 @@ def mature_plan_outcomes(
         if esito is None:
             continue   # ancora aperto, o senza barre
 
+        # ⚠️ La riga vecchia si toglie SOLO ora, non quando il candidato viene
+        # scelto: se la regola nuova non producesse un esito — piano non piu'
+        # costruibile, barre sparite — cancellarla in anticipo avrebbe perso
+        # una misura senza sostituirla. Lo scambio e' l'unica forma sicura.
+        if a.id in da_riscrivere:
+            db.execute(delete(PlanOutcome).where(PlanOutcome.alert_id == a.id))
         db.add(PlanOutcome(
             alert_id=a.id, stock_id=a.stock_id, detector=a.signal_name or "",
             signal_date=a.signal_date or ancora, tone=snap.get("tone") or "",

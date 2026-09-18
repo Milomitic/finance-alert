@@ -1,4 +1,4 @@
-import { ChevronDown, Hourglass, Target, X } from "lucide-react";
+import { ChevronDown, Target, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
@@ -39,29 +39,19 @@ import { MetricStrip, type MetricTileProps } from "@/components/ui/metric-tile";
  *  fraction rather than a percentage — see the tile comment. */
 const MIN_RATE_N = 20;
 
-/* ─── Due viste, nell'URL ──────────────────────────────────────────────────
+/* ─── Non piu' una pagina: due viste della pagina Segnali ──────────────────
  *
- * FA-066 aveva spostato le misure in una terza vista, «Misurazione». Il
- * 2026-09-16 l'utente le ha volute di nuovo SOPRA la lista, con le metriche
- * che contano in evidenza: quattro tessere principali (tasso, efficacia,
- * rendimento, anticipo), le altre compatte, e la tabella per tipo di setup
- * chiusa di default. Un vecchio link a ?vista=misurazione apre la lista, che
- * ora le contiene.
+ * Questo file era `pages/SetupsPage.tsx`, con una destinazione propria e un
+ * proprio selettore «In formazione / Esiti». Dal 2026-09-19 le due viste sono
+ * schede della pagina Segnali, insieme alla lista dei segnali: un setup
+ * diventa un segnale che diventa una posizione, e tenere il primo anello in
+ * un'altra destinazione obbligava a navigare per seguire una storia sola.
  *
- * Nell'URL, come Diagnostica: il dettaglio titolo deve poter mandare qui una
- * lista gia' filtrata (`?ticker=`), e un link a una vista resta condivisibile. */
-const VISTE = [
-  { id: "formazione", label: "In formazione" },
-  { id: "esiti", label: "Esiti" },
-] as const;
-
-type VistaId = (typeof VISTE)[number]["id"];
-
-/** La vista chiesta dall'URL. Un valore sconosciuto — un segnalibro vecchio,
- *  un refuso — apre la lista invece di una pagina vuota. */
-function vistaDa(raw: string | null): VistaId {
-  return VISTE.some((v) => v.id === raw) ? (raw as VistaId) : "formazione";
-}
+ * ⚠️ Cio' che NON e' cambiato: i filtri, l'ordinamento, la pagina e il titolo
+ * vivono ancora nell'URL, con gli stessi nomi di chiave. Il dettaglio titolo
+ * manda qui una lista gia' filtrata (`?ticker=`) e i segnalibri vecchi
+ * continuano a valere — `/setups` reindirizza portandosi dietro la query.
+ * A cambiare e' solo CHI possiede la vista: il contenitore, non questo file. */
 
 function formatPct1(v: number): string {
   return `${v.toFixed(1)}%`;
@@ -320,7 +310,13 @@ function offsetDa(raw: string | null): number {
   return Number.isInteger(pagina) && pagina > 1 ? (pagina - 1) * SETUP_PER_PAGINA : 0;
 }
 
-export default function SetupsPage() {
+export interface SetupsViewProps {
+  /** Quale meta' del ciclo di vita: i setup che si stanno formando, o quelli
+   *  che si sono chiusi. La sceglie la scheda, non questo componente. */
+  vista: "formazione" | "esiti";
+}
+
+export function SetupsView({ vista }: SetupsViewProps) {
   // The setup whose detail panel is open. Named `openSetup`, not `open`:
   // a bare `open` resolves to `window.open` when the declaration is missing,
   // and TypeScript then reports a type error somewhere else entirely.
@@ -332,7 +328,6 @@ export default function SetupsPage() {
   const tone = tonoDa(params.get("tono"));
   const detector = params.get("condizione") || null;
   const sort = ordinamentoDa(params.get("ordina"));
-  const vista = vistaDa(params.get("vista"));
   const ticker = params.get("ticker")?.trim().toUpperCase() || undefined;
   const view: "active" | "closed" = vista === "esiti" ? "closed" : "active";
   // Il segnale in cui un setup e scattato. Per id, non per ricerca nella lista
@@ -380,10 +375,8 @@ export default function SetupsPage() {
   /** Un controllo che ridefinisce il PERIMETRO torna alla prima pagina. */
   const cambiaPerimetro = (cambi: Record<string, string | null>) =>
     scriviUrl({ ...cambi, pagina: null });
-  const cambiaUrl = (chiave: "vista" | "ticker", valore: string | null) =>
-    cambiaPerimetro({
-      [chiave]: valore === null || (chiave === "vista" && valore === "formazione") ? null : valore,
-    });
+  const cambiaUrl = (chiave: "ticker", valore: string | null) =>
+    cambiaPerimetro({ [chiave]: valore });
   const vaiA = (nuovoOffset: number) => {
     const pagina = Math.floor(Math.max(0, nuovoOffset) / SETUP_PER_PAGINA) + 1;
     scriviUrl({ pagina: pagina > 1 ? String(pagina) : null });
@@ -391,44 +384,25 @@ export default function SetupsPage() {
 
   return (
     <div className="space-y-4 max-w-5xl">
-      <div>
-        <h2 className="text-2xl sm:text-3xl font-semibold tracking-tight flex items-center gap-3">
-          <Hourglass className="h-7 w-7 text-muted-foreground" aria-hidden />
-          In formazione
-        </h2>
-        <p className="text-sm text-muted-foreground mt-1 max-w-2xl">
-          Condizioni che stanno convergendo, <strong>prima</strong> che il segnale scatti —
-          così hai il tempo di preparare una posizione. Non sono previsioni: descrivono
-          lo stato di oggi e dicono cosa manca perché il segnale si attivi.
-        </p>
-      </div>
+      <p className="text-sm text-muted-foreground max-w-2xl">
+        {vista === "formazione" ? (
+          <>
+            Condizioni che stanno convergendo, <strong>prima</strong> che il segnale scatti —
+            così hai il tempo di preparare una posizione. Non sono previsioni: descrivono
+            lo stato di oggi e dicono cosa manca perché il segnale si attivi.
+          </>
+        ) : (
+          <>
+            I setup che si sono <strong>chiusi</strong>: quelli il cui segnale è poi scattato e
+            quelli che sono scaduti aspettandolo. Le due metà insieme sono il tasso di
+            conversione — mostrare solo le prime farebbe sembrare la funzione migliore di
+            quanto è.
+          </>
+        )}
+      </p>
 
-      {/* Bottoni con `aria-pressed`, non tab: non c'e' un tabpanel da
-          promettere (CLAUDE.md, «Recenti / Storico»). */}
-      <div className="flex flex-wrap items-center gap-2">
-        <div
-          role="group"
-          aria-label="Vista"
-          className="inline-flex rounded-md border overflow-hidden text-xs font-semibold"
-        >
-          {VISTE.map((v) => (
-            <button
-              key={v.id}
-              type="button"
-              aria-pressed={vista === v.id}
-              onClick={() => cambiaUrl("vista", v.id)}
-              className={cn(
-                "min-h-[36px] px-3 transition-colors",
-                vista === v.id
-                  ? "bg-accent text-foreground"
-                  : "text-muted-foreground hover:bg-accent/40",
-              )}
-            >
-              {v.label}
-            </button>
-          ))}
-        </div>
-        {ticker && (
+      {ticker && (
+        <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={() => cambiaUrl("ticker", null)}
@@ -438,8 +412,8 @@ export default function SetupsPage() {
             Solo {ticker}
             <X className="h-3 w-3" aria-hidden />
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Le misure SOPRA la lista (richiesta dell'utente, 2026-09-16), con le
           metriche principali in evidenza. `conversion_stats` non guarda i

@@ -16,7 +16,7 @@ import { conversionBarNote } from "@/lib/setupTimeline";
  * condizioni hanno cominciato a formarsi e con quanto anticipo, e niente che
  * si legga come conferma.
  *
- * ⚠️ E porta a `/setups`, filtrato su esiti e titolo, invece di elencare qui
+ * ⚠️ E porta agli Esiti dei setup, filtrati su questo titolo, invece di elencare qui
  * gli altri episodi: la scheda setup rimossa dal dettaglio titolo non torna,
  * e «In formazione» resta il luogo dove si confrontano le attese. */
 export function AlertSetupOrigin({
@@ -62,7 +62,7 @@ export function AlertSetupOrigin({
         })()}
         {alert.ticker && (
           <Link
-            to={`/setups?vista=esiti&ticker=${encodeURIComponent(alert.ticker)}`}
+            to={`/alerts?vista=esiti&esiti=setup&ticker=${encodeURIComponent(alert.ticker)}`}
             onClick={onNavigate}
             className="text-xs font-medium text-muted-foreground hover:text-foreground hover:underline underline-offset-2"
           >

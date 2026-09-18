@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import SetupsPage from "./SetupsPage";
+import { SetupsView } from "./SetupsView";
 import { conditionKey } from "@/lib/setupGrouping";
 import {
   LAST_SEEN_STALE_DAYS,
@@ -32,7 +32,15 @@ function Posizione() {
   return <output data-testid="url">{useLocation().search}</output>;
 }
 
-function renderWith(parziale: RispostaParziale, url = "/setups") {
+/** ⚠️ La vista arriva per PROP, non dall'URL: dal 2026-09-19 la possiede la
+ *  scheda (`AlertsPage`), e le prove del selettore stanno li'. Qui resta cio'
+ *  che questo componente decide davvero — che cosa chiede al server e che cosa
+ *  rende. */
+function renderWith(
+  parziale: RispostaParziale,
+  url = "/alerts",
+  vista: "formazione" | "esiti" = "formazione",
+) {
   const data: SetupsResponse = {
     total: parziale.setups.length,
     has_more: false,
@@ -45,7 +53,7 @@ function renderWith(parziale: RispostaParziale, url = "/setups") {
   return render(
     <QueryClientProvider client={qc}>
       <MemoryRouter initialEntries={[url]}>
-        <SetupsPage />
+        <SetupsView vista={vista} />
         <Posizione />
       </MemoryRouter>
     </QueryClientProvider>,
@@ -54,7 +62,7 @@ function renderWith(parziale: RispostaParziale, url = "/setups") {
 
 /** Le misure stanno in una vista loro (FA-066). */
 /** Dal 2026-09-16 le misure stanno sopra la lista: nessuna vista dedicata. */
-const MISURAZIONE = "/setups";
+const MISURAZIONE = "/alerts";
 
 const setup = {
   id: 1,
@@ -112,7 +120,7 @@ beforeEach(() => {
  * GIA' RICEVUTO, quindi un detector i cui setup cadevano oltre la
  * cinquantesima riga era irraggiungibile e i chip contavano la pagina.
  */
-describe("SetupsPage — perimetro", () => {
+describe("SetupsView — perimetro", () => {
   /** L'ultima query string che la pagina ha chiesto. */
   const ultimaUrl = () => String(mockGet.mock.calls.at(-1)?.[0] ?? "");
 
@@ -184,7 +192,7 @@ describe("SetupsPage — perimetro", () => {
       stats,
       total: 795,
       has_more: true,
-    }, "/setups?vista=esiti");
+    }, "/alerts", "esiti");
     expect(await screen.findByText(/Esiti — 795 setup chiusi/)).toBeInTheDocument();
   });
 
@@ -202,7 +210,7 @@ describe("SetupsPage — perimetro", () => {
   });
 });
 
-describe("SetupsPage", () => {
+describe("SetupsView", () => {
   it("leads with what still has to happen — the actionable part", async () => {
     /* Unchanged in intent, changed in shape: the condition used to be printed
      * on every card and is now the heading its group is named after. What must
@@ -377,7 +385,7 @@ describe("SetupsPage", () => {
     // aperto un titolo e tornati indietro, la lista ripartiva da «Tutti».
     renderWith(
       { setups: [setup], stats, total: 120, has_more: true },
-      "/setups?tono=ribassisti&condizione=oversold_reversal&ordina=waiting&pagina=2",
+      "/alerts?tono=ribassisti&condizione=oversold_reversal&ordina=waiting&pagina=2",
     );
     await screen.findByText(/51–51 di 120/);
     const chiesta = String(mockGet.mock.calls.at(-1)?.[0] ?? "");
@@ -390,7 +398,7 @@ describe("SetupsPage", () => {
   });
 
   it("un filtro scrive l'URL e riporta alla prima pagina", async () => {
-    renderWith({ setups: [setup], stats, total: 120, has_more: true }, "/setups?pagina=3");
+    renderWith({ setups: [setup], stats, total: 120, has_more: true }, "/alerts?pagina=3");
     await screen.findByText(/101–101 di 120/);
     await userEvent.click(screen.getByRole("button", { name: "Rialzisti" }));
     await waitFor(() =>
@@ -401,7 +409,7 @@ describe("SetupsPage", () => {
   });
 
   it("un valore sconosciuto nell'URL vale il default, non una lista vuota", async () => {
-    renderWith({ setups: [setup], stats }, "/setups?tono=qualcosa&ordina=boh&pagina=-4");
+    renderWith({ setups: [setup], stats }, "/alerts?tono=qualcosa&ordina=boh&pagina=-4");
     await screen.findByText(/nessun setup in formazione|Setup attivi/i);
     const chiesta = String(mockGet.mock.calls.at(-1)?.[0] ?? "");
     expect(chiesta).not.toContain("tone=");
@@ -435,7 +443,7 @@ const rigaDetector: SetupDetectorStat = {
   low_confidence: true, median_excess_pct: 0.5,
 };
 
-describe("SetupsPage — le viste (FA-066)", () => {
+describe("SetupsView — le due viste", () => {
   const ultimaUrl = () => String(mockGet.mock.calls.at(-1)?.[0] ?? "");
 
   it("le misure stanno SOPRA la lista, con le principali in evidenza", async () => {
@@ -463,34 +471,20 @@ describe("SetupsPage — le viste (FA-066)", () => {
     expect(screen.getByRole("heading", { name: /per tipo di setup/i })).toBeInTheDocument();
   });
 
-  it("la vista vive nell'URL, e il default non si scrive", async () => {
-    renderWith({ setups: [setup], stats });
-    await screen.findByText(/la barra deve chiudere sopra la sua apertura/i);
-
-    await userEvent.click(screen.getByRole("button", { name: "Esiti" }));
-    await waitFor(() => expect(screen.getByTestId("url")).toHaveTextContent("vista=esiti"));
-    expect(screen.getByRole("button", { name: "Esiti" })).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByRole("button", { name: "In formazione" })).toHaveAttribute("aria-pressed", "false");
-
-    await userEvent.click(screen.getByRole("button", { name: "In formazione" }));
-    expect(await screen.findByText(/la barra deve chiudere sopra la sua apertura/i)).toBeInTheDocument();
-    expect(screen.getByTestId("url")).not.toHaveTextContent("vista");
-  });
-
   it("«Esiti» chiede al server i setup chiusi", async () => {
-    renderWith({ setups: [], stats }, "/setups?vista=esiti");
+    renderWith({ setups: [], stats }, "/alerts", "esiti");
     await waitFor(() => expect(ultimaUrl()).toContain("status=closed"));
   });
 
-  it("una vista sconosciuta apre la lista invece di una pagina vuota", async () => {
-    renderWith({ setups: [setup], stats }, "/setups?vista=qualcosaltro");
-    expect(
-      await screen.findByText(/la barra deve chiudere sopra la sua apertura/i),
-    ).toBeInTheDocument();
+  it("«In formazione» chiede invece quelli attivi", async () => {
+    // Controllo negativo del test sopra: senza, una vista che chiedesse
+    // sempre `closed` lo supererebbe.
+    renderWith({ setups: [setup], stats });
+    await waitFor(() => expect(ultimaUrl()).not.toContain("status=closed"));
   });
 
   it("?ticker= filtra sul server, si vede, e si toglie", async () => {
-    renderWith({ setups: [setup], stats }, "/setups?ticker=aapl");
+    renderWith({ setups: [setup], stats }, "/alerts?ticker=aapl");
     await waitFor(() => expect(ultimaUrl()).toContain("ticker=AAPL"));
 
     await userEvent.click(await screen.findByRole("button", { name: /solo AAPL/i }));
@@ -502,7 +496,7 @@ describe("SetupsPage — le viste (FA-066)", () => {
   it("con un titolo filtrato le misure dicono che non sono solo di quel titolo", async () => {
     /* `conversion_stats` non guarda i filtri: accanto a «Solo AAPL» la nota
      * deve dire che i numeri sono di tutti i titoli. */
-    renderWith({ setups: [setup], stats }, "/setups?ticker=AAPL");
+    renderWith({ setups: [setup], stats }, "/alerts?ticker=AAPL");
     const nota = await screen.findByText(/tutti i setup registrati nel database/i);
     expect(nota.closest("p")?.textContent).toMatch(/non solo AAPL/);
   });

@@ -46,12 +46,16 @@ describe("i gruppi della navigazione", () => {
     expect(new Set(dai_gruppi).size).toBe(dai_gruppi.length);
   });
 
-  it("le nove destinazioni di oggi ci sono tutte", () => {
-    expect(NAV).toHaveLength(9);
+  it("le otto destinazioni di oggi ci sono tutte", () => {
+    // Erano nove fino al 2026-09-19: «In formazione» non e' piu' una
+    // destinazione, e' la prima SCHEDA di /alerts insieme a Esiti. Il conteggio
+    // resta fissato perche' una voce che sparisce in un raggruppamento non si
+    // vede — la barra continua a sembrare piena.
+    expect(NAV).toHaveLength(8);
     expect(NAV.map((n) => n.to)).toEqual(
       expect.arrayContaining([
         "/", "/sectors", "/stocks", "/calendar", "/institutionals",
-        "/alerts", "/setups", "/positions", "/diagnostics",
+        "/alerts", "/positions", "/diagnostics",
       ]),
     );
   });
@@ -80,7 +84,7 @@ describe("i gruppi della navigazione", () => {
     // L'ordine non e estetico: e la vita di un'idea, e da oggi e percorribile
     // davvero — setup -> segnale -> posizione sono collegati nei dati.
     const mon = NAV_GROUPS.find((g) => g.label === "Monitoraggio");
-    expect(mon?.items.map((i) => i.to)).toEqual(["/setups", "/alerts", "/positions"]);
+    expect(mon?.items.map((i) => i.to)).toEqual(["/alerts", "/positions"]);
   });
 
   it("ogni gruppo e annunciato come tale, non solo disegnato", () => {

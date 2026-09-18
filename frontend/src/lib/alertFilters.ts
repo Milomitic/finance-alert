@@ -11,6 +11,12 @@ export function filtersFromSearch(sp: URLSearchParams): AlertListParams {
   const s = (k: string) => sp.get(k) || undefined;
   return {
     archived: sp.get("archived") === "true",
+    // Vedi `STATUS_OPTIONS` in AlertFilters: quasi ogni esito maturato vive su
+    // un alert archiviato, quindi «attivi e archiviati» e' l'unico modo di
+    // leggere la colonna Esito — e va nell'URL come ogni altro filtro,
+    // altrimenti un segnalibro riaprirebbe una lista diversa da quella
+    // condivisa.
+    include_archived: sp.get("include_archived") === "true" || undefined,
     ticker: s("ticker"),
     q: s("q"),
     rule_kind: s("rule_kind"),
@@ -38,4 +44,74 @@ function numParam(sp: URLSearchParams, key: string): number | undefined {
   if (raw == null || raw === "") return undefined;
   const n = Number(raw);
   return Number.isFinite(n) && n >= 0 && n <= 100 ? n : undefined;
+}
+
+/* ─── URL ⇄ state (filters + sort + page) ────────────────────────────────
+ *
+ * The working set (filters, sort, page) is serialized into the URL search
+ * params so back-navigation and shared links restore exactly what the user
+ * was looking at. Only non-default values are written, keeping URLs short.
+ * AlertListParams is flat strings/numbers, so the mapping is 1:1.
+ */
+
+/** ⚠️ Le chiavi che QUESTA vista possiede, e solo quelle.
+ *
+ * Dal 2026-09-19 i segnali sono una scheda fra tre, e le altre due scrivono
+ * nello stesso URL: `vista` dice quale scheda e' aperta, `tono`/`condizione`/
+ * `pagina`/`esiti`/`gara` appartengono a «In formazione» e «Esiti». La
+ * serializzazione qui sotto ricostruiva la query da zero, quindi il primo
+ * render della lista cancellava `vista` e la scheda rimbalzava su se stessa —
+ * un difetto che si presenta come «la scheda non si apre» e si cerca ovunque
+ * tranne che in un `useEffect` di sincronizzazione.
+ *
+ * Si riparte dai parametri CORRENTI, si tolgono le chiavi proprie e si
+ * riscrivono quelle non di default: cosi' i filtri di una scheda sopravvivono
+ * al passaggio su un'altra e tornare indietro ritrova la lista com'era. */
+const CHIAVI_PROPRIE = [
+  "ticker", "q", "rule_kind", "tone", "nature", "outcome", "horizon",
+  "date_from", "date_to", "strength_min", "archived", "include_archived",
+  "page", "sort_by", "sort_dir",
+] as const;
+
+export function searchFromState(
+  filters: AlertListParams,
+  page: number,
+  sortBy: string,
+  sortDir: "asc" | "desc",
+  correnti: URLSearchParams,
+): URLSearchParams {
+  const sp = new URLSearchParams(correnti);
+  for (const k of CHIAVI_PROPRIE) sp.delete(k);
+  if (filters.ticker) sp.set("ticker", filters.ticker);
+  if (filters.q) sp.set("q", filters.q);
+  if (filters.rule_kind) sp.set("rule_kind", filters.rule_kind);
+  if (filters.tone) sp.set("tone", filters.tone);
+  if (filters.nature) sp.set("nature", filters.nature);
+  if (filters.outcome) sp.set("outcome", filters.outcome);
+  if (filters.horizon) sp.set("horizon", filters.horizon);
+  if (filters.date_from) sp.set("date_from", filters.date_from);
+  if (filters.date_to) sp.set("date_to", filters.date_to);
+  if (filters.strength_min != null) sp.set("strength_min", String(filters.strength_min));
+  if (filters.archived) sp.set("archived", "true");
+  if (filters.include_archived) sp.set("include_archived", "true");
+  if (page > 0) sp.set("page", String(page + 1)); // 1-based in the URL
+  if (sortBy !== "triggered_at") sp.set("sort_by", sortBy);
+  if (sortDir !== "desc") sp.set("sort_dir", sortDir);
+  return sp;
+}
+
+/** Il filtro Esito e' attivo, ma la lista sta guardando solo i segnali NON
+ *  archiviati — cioe' quasi nessuno di quelli che un esito ce l'hanno.
+ *
+ *  ⚠️ Non e' una preferenza di visualizzazione: `archive_concluded_alerts`
+ *  archivia un segnale appena il suo esito matura E la data e' uscita dalla
+ *  finestra delle confluenze (7 giorni). Per ogni detector con orizzonte da 21
+ *  o 63 sedute le due condizioni diventano vere nella STESSA passata di
+ *  scansione, perche' la maturazione gira subito prima dell'archiviazione.
+ *  Misurato in produzione: 5.312 dei 5.313 esiti maturati stanno su alert
+ *  archiviati. Chiedere «Azzeccato» fra i soli attivi restituisce quindi una
+ *  manciata di righe, e quel numero descrive la regola di archiviazione, non
+ *  il motore. */
+export function esitoNascostoDallArchivio(f: AlertListParams): boolean {
+  return !!f.outcome && !f.include_archived && !f.archived;
 }

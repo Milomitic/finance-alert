@@ -72,7 +72,7 @@ describe("AlertSetupOrigin", () => {
     const onNavigate = vi.fn();
     monta(origine(), onNavigate);
     const link = screen.getByRole("link", { name: /esiti dei setup di ACME/i });
-    expect(link).toHaveAttribute("href", "/setups?vista=esiti&ticker=ACME");
+    expect(link).toHaveAttribute("href", "/alerts?vista=esiti&esiti=setup&ticker=ACME");
     await userEvent.click(link);
     expect(onNavigate).toHaveBeenCalledTimes(1);
   });

@@ -120,7 +120,7 @@ describe("StockAlertsHistoryCard", () => {
     monta([_alert(1)]);
     expect(screen.getByRole("link", { name: /setup del titolo/i })).toHaveAttribute(
       "href",
-      "/setups?ticker=ACME",
+      "/alerts?vista=formazione&ticker=ACME",
     );
     // ⚠️ La scheda «In formazione su questo titolo» e' stata rimossa, e il
     // gate e2e pretende che non torni.

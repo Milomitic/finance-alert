@@ -22,7 +22,7 @@ from collections.abc import Sequence
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.models import Alert, PlanOutcome
+from app.models import Alert, PlanOutcome, Stock
 from app.models.plan_outcome import FONTE_RICOSTRUITO
 from app.stats.media import mean_interval
 from app.stats.sizing import independent_blocks
@@ -156,4 +156,101 @@ def compute_plan_performance(db: Session, *, min_n: int = _DEFAULT_MIN_N) -> dic
             "min_n": min_n,
         },
         "rows": celle,
+    }
+
+
+# ─── L'elenco, un segnale per riga ─────────────────────────────────────────
+
+def _riga(esito: PlanOutcome, ticker: str, nome: str | None) -> dict:
+    """Una riga per lo schermo. ⚠️ Nessuna conclusione precalcolata qui: le
+    tre date delle gambe escono grezze, e chi rende decide come raccontarle.
+    Congelare «stop troppo stretto» in un booleano dentro l'API vorrebbe dire
+    che la definizione vive in due posti il giorno che qualcuno la affina."""
+    return {
+        "alert_id": esito.alert_id,
+        "ticker": ticker,
+        "name": nome,
+        "detector": esito.detector,
+        "tone": esito.tone,
+        "signal_date": esito.signal_date,
+        "entry_date": esito.entry_date,
+        "entry": esito.entry,
+        "stop": esito.stop,
+        "tp1": esito.tp1,
+        "tp2": esito.tp2,
+        "r": esito.r,
+        "horizon_days": esito.horizon_days,
+        "esito": esito.esito,
+        "resolved_date": esito.resolved_date,
+        "bars_to_outcome": esito.bars_to_outcome,
+        "r_multiple": esito.r_multiple,
+        "mae_r": esito.mae_r,
+        "mfe_r": esito.mfe_r,
+        "tp2_reached": esito.tp2_reached,
+        "stop_hit_date": esito.stop_hit_date,
+        "tp1_hit_date": esito.tp1_hit_date,
+        "tp2_hit_date": esito.tp2_hit_date,
+        "source": esito.source,
+    }
+
+
+def elenco_esiti_piano(
+    db: Session,
+    *,
+    esito: str | None = None,
+    detector: str | None = None,
+    tone: str | None = None,
+    ticker: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+    min_n: int = _DEFAULT_MIN_N,
+) -> dict:
+    """Gli esiti di piano, uno per segnale, i piu' recenti per primi.
+
+    ⚠️ Il riassunto e' calcolato sulla POPOLAZIONE FILTRATA, mai sulla pagina.
+    Questo progetto ha gia' stampato «50 setup chiusi» sopra una lista di 795 e
+    conteggi di chip presi dalle righe ricevute invece che dal server: un
+    numero che cambia con la dimensione della pagina non e' un conteggio.
+
+    ⚠️ E il riassunto passa da `_cella`, la stessa funzione che alimenta il
+    pannello per detector, invece di rifare le medie qui. Due implementazioni
+    della stessa aggregazione divergono al primo ritocco, e allora due schermi
+    direbbero due numeri diversi sullo stesso magazzino.
+    """
+    stmt = (
+        select(PlanOutcome, Stock.ticker, Stock.name)
+        .join(Stock, Stock.id == PlanOutcome.stock_id)
+    )
+    if esito:
+        stmt = stmt.where(PlanOutcome.esito == esito)
+    if detector:
+        stmt = stmt.where(PlanOutcome.detector == detector)
+    if tone:
+        stmt = stmt.where(PlanOutcome.tone == tone)
+    if ticker:
+        stmt = stmt.where(Stock.ticker == ticker.strip().upper())
+
+    # ⚠️ `resolved_date` e non `signal_date`: la domanda di questa vista e'
+    # «che cosa si e' chiuso di recente», e un segnale vecchio che ha toccato
+    # il target ieri e' una notizia di ieri.
+    righe = db.execute(
+        stmt.order_by(PlanOutcome.resolved_date.desc(), PlanOutcome.id.desc())
+    ).all()
+    esiti = [r[0] for r in righe]
+
+    per_detector: dict[str, int] = defaultdict(int)
+    for e in esiti:
+        per_detector[e.detector] += 1
+
+    riassunto = _cella("tutti", esiti, min_n) if esiti else None
+    if riassunto is not None:
+        riassunto.pop("detector", None)
+
+    fetta = righe[offset: offset + limit] if limit > 0 else righe
+    return {
+        "items": [_riga(e, tick, nome) for e, tick, nome in fetta],
+        "total": len(righe),
+        "has_more": offset + len(fetta) < len(righe),
+        "counts_by_detector": dict(per_detector),
+        "summary": riassunto,
     }

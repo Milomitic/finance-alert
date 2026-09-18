@@ -29,9 +29,11 @@ from app.schemas.alert import (
     StockSignalScanOut,
 )
 from app.schemas.confluence import ConfluenceOut
-from app.services import alert_service, confluence_service
+from app.schemas.plan_outcome import PlanOutcomeListOut
+from app.services import alert_service, confluence_service, plan_performance_service
 from app.services.notifier_service import send_daily_digest
 from app.services.ohlcv_service import fetch_and_upsert
+from app.services.plan_outcome_service import ESITI
 from app.services.scan_runner import run_tracked_scan
 
 router = APIRouter(prefix="/api/alerts", tags=["alerts"])
@@ -792,6 +794,47 @@ def export_csv(
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=alerts.csv"},
     )
+
+
+@router.get("/plan-outcomes", response_model=PlanOutcomeListOut)
+def plan_outcomes(
+    esito: str | None = None,
+    detector: str | None = None,
+    tone: str | None = None,
+    ticker: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+) -> PlanOutcomeListOut:
+    """Gli esiti di piano, un segnale per riga: quale fra stop e target e'
+    stato toccato per primo, e quando sono state toccate le ALTRE gambe.
+
+    ⚠️ Sta PRIMA di `/{alert_id}`: una rotta letterale dichiarata dopo un
+    segnaposto non viene mai raggiunta — FastAPI proverebbe a leggere
+    «plan-outcomes» come un intero e risponderebbe 422.
+
+    ⚠️ E non e' la colonna «Esito» della tabella dei segnali. Quella viene da
+    `signal_outcomes` e dice se la DIREZIONE ha pagato a orizzonte fisso;
+    questa dice se il PIANO si sarebbe chiuso in guadagno. Un segnale puo'
+    prendere il target e finire l'orizzonte sotto il prezzo d'ingresso, e
+    viceversa.
+    """
+    if esito is not None and esito not in ESITI:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"esito must be one of {sorted(ESITI)}",
+        )
+    if tone is not None and tone not in ("bull", "bear"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="tone must be 'bull' or 'bear'",
+        )
+    dati = plan_performance_service.elenco_esiti_piano(
+        db, esito=esito, detector=detector, tone=tone, ticker=ticker,
+        limit=max(1, min(limit, 200)), offset=max(0, offset),
+    )
+    return PlanOutcomeListOut(**dati)
 
 
 @router.get("/{alert_id}", response_model=AlertOut)

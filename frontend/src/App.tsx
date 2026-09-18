@@ -1,6 +1,6 @@
 import { lazy, Suspense } from "react";
 import { Loader2 } from "lucide-react";
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 
 import Layout from "@/components/Layout";
 import ProtectedRoute from "@/components/ProtectedRoute";
@@ -11,7 +11,6 @@ import ProtectedRoute from "@/components/ProtectedRoute";
 // unchanged — each page still mounts exactly as before, just fetched on
 // demand the first time its route is visited.
 const AlertsPage = lazy(() => import("@/pages/AlertsPage"));
-const SetupsPage = lazy(() => import("@/pages/SetupsPage"));
 const CalendarPage = lazy(() => import("@/pages/CalendarPage"));
 const HomePage = lazy(() => import("@/pages/HomePage"));
 const InstitutionalDetailPage = lazy(() => import("@/pages/InstitutionalDetailPage"));
@@ -26,6 +25,24 @@ const DiagnosticsPage = lazy(() => import("@/pages/DiagnosticsPage"));
 const StockDetailPage = lazy(() => import("@/pages/StockDetailPage"));
 const StocksBrowserPage = lazy(() => import("@/pages/StocksBrowserPage"));
 const NotFoundPage = lazy(() => import("@/pages/NotFoundPage"));
+
+/** `/setups` e' diventata una scheda di `/alerts` (2026-09-19) e reindirizza
+ *  PORTANDOSI DIETRO LA QUERY: i link interni e i segnalibri esistenti
+ *  filtravano per titolo (`?ticker=`) e per vista (`?vista=esiti`), e un
+ *  redirect che perdesse i parametri li aprirebbe su una lista intera senza
+ *  dire che il filtro e' caduto.
+ *
+ *  ⚠️ `vista=esiti` nel vecchio indirizzo significava «i SETUP chiusi», che
+ *  nella pagina nuova e' la sottovista `esiti=setup`: senza la traduzione, il
+ *  link «guarda il setup che ha annunciato questo segnale» finirebbe sui
+ *  piani risolti, che e' un altro elenco. */
+function VaiAllaScheda() {
+  const { search } = useLocation();
+  const p = new URLSearchParams(search);
+  if (p.get("vista") === "esiti") p.set("esiti", "setup");
+  else p.set("vista", "formazione");
+  return <Navigate to={`/alerts?${p.toString()}`} replace />;
+}
 
 /** Centered spinner shown while a lazily-loaded route chunk is fetched.
  *  Matches the existing Loader2 + animate-spin pattern used across pages. */
@@ -58,10 +75,12 @@ export default function App() {
               the existing /sectors/:name detail page. */}
           <Route path="/sectors" element={<SectorsOverviewPage />} />
           <Route path="/alerts" element={<AlertsPage />} />
-          {/* Setups: the pre-trigger state of the same detectors. Its own
-              route, never folded into /alerts — a setup is a wait, not a
-              call, and the two must not be browsed as one list. */}
-          <Route path="/setups" element={<SetupsPage />} />
+          {/* Setups: lo stato pre-scatto degli stessi detector. Dal
+              2026-09-19 e' una SCHEDA di /alerts — restano due liste distinte
+              (un setup e' un'attesa, non una chiamata) dentro una
+              destinazione sola, perche' il ciclo di vita e' uno: setup →
+              segnale → posizione. La rotta storica reindirizza. */}
+          <Route path="/setups" element={<VaiAllaScheda />} />
           {/* Tracked trades (B3-6): playbook entries persisted as positions
               with live P&L + auto stop/target closing. */}
           <Route path="/positions" element={<PositionsPage />} />

@@ -20,20 +20,39 @@ interface Props {
 }
 
 // Archive axis only — read/unread was removed from the UI in a prior pass.
+//
+// ⚠️ «Tutti» non e' una comodita': senza, la colonna Esito era di fatto
+// illeggibile. Un segnale viene archiviato DA SOLO appena il suo esito matura
+// e la data supera la finestra delle confluenze (`archive_concluded_alerts`),
+// e per ogni detector con orizzonte da 21 o 63 sedute le due cose accadono
+// nella STESSA passata di scansione. Misurato in produzione: 5.312 dei 5.313
+// esiti maturati stanno su alert archiviati. Filtrare «Azzeccato» restando su
+// «Attivi» restituiva quindi una manciata di righe — un numero che misura la
+// regola di archiviazione, non il motore.
 const STATUS_OPTIONS: { value: string; label: string }[] = [
   // The select is half the grid width on a phone, where the parenthetical
   // was sliced to "Tutti (esclusi arch". "Attivi" says the same thing in
   // a word — the archived option sits right below it for contrast.
   { value: "active", label: "Attivi" },
   { value: "archived", label: "Solo archiviati" },
+  { value: "tutti", label: "Attivi e archiviati" },
 ];
 
-function statusToParams(status: string): Pick<AlertListParams, "archived"> {
-  return status === "archived" ? { archived: true } : { archived: false };
+function statusToParams(
+  status: string,
+): Pick<AlertListParams, "archived" | "include_archived"> {
+  if (status === "archived") return { archived: true, include_archived: false };
+  // ⚠️ `archived: false` accanto a `include_archived: true` non e' una
+  // contraddizione: il backend rende `false` quando il parametro manca, quindi
+  // da una query string «entrambi» sarebbe inesprimibile — `include_archived`
+  // e' la chiave che spegne del tutto il filtro.
+  if (status === "tutti") return { archived: false, include_archived: true };
+  return { archived: false, include_archived: false };
 }
 
 function paramsToStatus(p: AlertListParams): string {
-  return p.archived ? "archived" : "active";
+  if (p.archived) return "archived";
+  return p.include_archived ? "tutti" : "active";
 }
 
 // The 17 signal kinds the engine can emit.

@@ -1,294 +1,100 @@
-import { Download, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Bell } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 
-import { alerts as alertsApi, type AlertListParams } from "@/api/alerts";
-import type { Alert } from "@/api/types";
-import { AlertDetailDialog } from "@/components/AlertDetailDialog";
-import { SignalStatsSection } from "@/components/alert/SignalStatsSection";
-import { AlertFilters } from "@/components/AlertFilters";
-import { AlertsInsightCard } from "@/components/AlertsInsightCard";
-import { AlertsTable } from "@/components/AlertsTable";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { QueryError } from "@/components/ui/query-error";
-import { useAlertsList, useConfluence } from "@/hooks/useAlerts";
-import { useBulkAlerts, usePatchAlert } from "@/hooks/useAlertMutations";
-import { filtersFromSearch } from "@/lib/alertFilters";
+import { OutcomesView } from "@/components/alert/OutcomesView";
+import { SignalsView } from "@/components/alert/SignalsView";
+import { SetupsView } from "@/components/setups/SetupsView";
+import { SCHEDE, schedaDa, type SchedaId } from "@/lib/schedeSegnali";
+import { cn } from "@/lib/utils";
 
-const PAGE_SIZE = 50;
-
-/* ─── URL ⇄ state (filters + sort + page) ────────────────────────────────
+/* ─── Segnali: una destinazione, il ciclo di vita intero ──────────────────
  *
- * The working set (filters, sort, page) is serialized into the URL search
- * params so back-navigation and shared links restore exactly what the user
- * was looking at. Only non-default values are written, keeping URLs short.
- * AlertListParams is flat strings/numbers, so the mapping is 1:1.
+ * Tre schede, nell'ordine in cui un'idea vive:
+ *
+ *   In formazione   le condizioni stanno convergendo, il segnale non c'e' ancora
+ *   Segnali         il segnale e' scattato
+ *   Esiti           l'episodio si e' chiuso — il piano, e il setup che l'ha annunciato
+ *
+ * ⚠️ «In formazione» era una destinazione a se' (`/setups`) con dentro il
+ * proprio selettore «In formazione / Esiti». Cioe' esistevano DUE posti che si
+ * chiamavano Esiti — uno dentro i setup, uno implicito nella colonna Esito
+ * della lista segnali — e nessuno dei due conteneva l'altro. Il ciclo di vita
+ * e' uno solo: setup → segnale → posizione, e `converted_alert_id` insieme a
+ * `Position.alert_id` lo rendono percorribile nei dati. Tenerlo spezzato fra
+ * due voci di menu obbligava a navigare per seguire una storia sola.
+ *
+ * ⚠️ `/setups` NON sparisce: reindirizza qui portandosi dietro la query, cosi'
+ * i segnalibri e i link interni continuano a valere. Stessa scelta di
+ * `/health` verso Diagnostica.
+ *
+ * ⚠️ Bottoni con `aria-pressed`, non `role="tab"`. Un gruppo di tab promette
+ * un `tabpanel` con un id, e senza di quello axe segnala un `aria-controls`
+ * pendente — gia' costato due corse rosse del gate UI su questo repo. Due
+ * bottoni con `aria-pressed` sono la forma corretta di un controllo segmentato
+ * e non promettono niente che non ci sia.
  */
 
-function searchFromState(
-  filters: AlertListParams,
-  page: number,
-  sortBy: string,
-  sortDir: "asc" | "desc",
-): URLSearchParams {
-  const sp = new URLSearchParams();
-  if (filters.ticker) sp.set("ticker", filters.ticker);
-  if (filters.q) sp.set("q", filters.q);
-  if (filters.rule_kind) sp.set("rule_kind", filters.rule_kind);
-  if (filters.tone) sp.set("tone", filters.tone);
-  if (filters.nature) sp.set("nature", filters.nature);
-  if (filters.outcome) sp.set("outcome", filters.outcome);
-  if (filters.horizon) sp.set("horizon", filters.horizon);
-  if (filters.date_from) sp.set("date_from", filters.date_from);
-  if (filters.date_to) sp.set("date_to", filters.date_to);
-  if (filters.strength_min != null) sp.set("strength_min", String(filters.strength_min));
-  if (filters.archived) sp.set("archived", "true");
-  if (page > 0) sp.set("page", String(page + 1)); // 1-based in the URL
-  if (sortBy !== "triggered_at") sp.set("sort_by", sortBy);
-  if (sortDir !== "desc") sp.set("sort_dir", sortDir);
-  return sp;
-}
-
-/* ─── AlertsPage layout ─────────────────────────────────────────────────
- *
- * Top: title + count
- * Body: AlertFilters + AlertsTable + pagination + detail dialog
- *
- * Rule management UI removed: the rule engine was deleted backend-side.
- * Alerts are now signals-only.
- */
 export default function AlertsPage() {
-  const [searchParams, setSearchParams] = useSearchParams();
-  // Hydrate the working set from the URL once on mount (lazy initializers);
-  // afterwards the effect below keeps the URL in sync with the state.
-  const [filters, setFilters] = useState<AlertListParams>(() =>
-    filtersFromSearch(searchParams),
-  );
-  const [page, setPage] = useState(() => {
-    const p = Number(searchParams.get("page"));
-    return Number.isInteger(p) && p > 1 ? p - 1 : 0;
-  });
-  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
-  const [openDetail, setOpenDetail] = useState<Alert | null>(null);
-  const [sortBy, setSortBy] = useState(
-    // Same reasoning as probability_min above: sorting by Probabilità ordered
-    // rows by DETECTOR (the value is a per-detector constant), so the sort was
-    // removed. An old link asking for it falls back to the default instead of
-    // producing an order nothing on screen can explain.
-    () => {
-      const sb = searchParams.get("sort_by");
-      return sb && sb !== "probability" ? sb : "triggered_at";
-    },
-  );
-  const [sortDir, setSortDir] = useState<"asc" | "desc">(() =>
-    searchParams.get("sort_dir") === "asc" ? "asc" : "desc",
-  );
+  const [params, setParams] = useSearchParams();
+  const scheda = schedaDa(params.get("vista"));
 
-  // State → URL. `replace: true` so per-keystroke filter edits don't spam
-  // the history stack; back-nav returns to the PAGE the user came from,
-  // with this URL still carrying the final working set.
-  useEffect(() => {
-    setSearchParams(searchFromState(filters, page, sortBy, sortDir), {
-      replace: true,
-    });
-  }, [filters, page, sortBy, sortDir, setSearchParams]);
-
-  const list = useAlertsList({
-    ...filters,
-    limit: PAGE_SIZE,
-    offset: page * PAGE_SIZE,
-    sort_by: sortBy,
-    sort_dir: sortDir,
-  });
-
-  const handleSort = (col: string) => {
-    if (col === sortBy) {
-      setSortDir((d) => (d === "desc" ? "asc" : "desc"));
-    } else {
-      setSortBy(col);
-      // Ticker sorts ascending by default; all others default desc.
-      setSortDir(col === "ticker" ? "asc" : "desc");
-    }
-    setPage(0);
-  };
-  // Confluence is always fetched now (no more view toggle) — it feeds the
-  // insight card that sits above the table.
-  const conf = useConfluence(7);
-  const bulk = useBulkAlerts();
-  const patchAlert = usePatchAlert();
-
-  const items = list.data?.items ?? [];
-  const total = list.data?.total ?? 0;
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-
-  const onSelect = (id: number, sel: boolean) => {
-    const next = new Set(selectedIds);
-    if (sel) next.add(id);
-    else next.delete(id);
-    setSelectedIds(next);
-  };
-
-  const onSelectAll = (sel: boolean) => {
-    setSelectedIds(sel ? new Set(items.map((a) => a.id)) : new Set());
-  };
-
-  const doBulk = async (action: "archive" | "unarchive") => {
-    if (selectedIds.size === 0) return;
-    await bulk.mutateAsync({ ids: Array.from(selectedIds), action });
-    setSelectedIds(new Set());
-  };
-
-  // Confluence drill-down: clicking a cluster in the insight card filters
-  // the table below to that ticker (exact-match `ticker` param, so it also
-  // flows into the CSV export and the URL).
-  const selectTicker = (t: string) => {
-    setPage(0);
-    setFilters((f) => ({ ...f, ticker: t }));
+  /** ⚠️ Cambiare scheda azzera la PAGINA, non i filtri. La pagina 4 di una
+   *  lista non significa niente in un'altra; `ticker`, `tono` e `condizione`
+   *  invece descrivono che cosa si sta guardando e sopravvivono al passaggio,
+   *  che e' il motivo per cui le tre viste stanno insieme. */
+  const apri = (id: SchedaId) => {
+    const p = new URLSearchParams(params);
+    if (id === "segnali") p.delete("vista");
+    else p.set("vista", id);
+    p.delete("pagina");
+    p.delete("page");
+    setParams(p, { replace: true });
   };
 
   return (
     <div className="space-y-4">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h2 className="text-2xl font-semibold">Segnali</h2>
-          <p className="text-sm text-muted-foreground">
-            {total} segnali totali con i filtri attuali
-          </p>
-        </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            // Same-origin GET with cookie auth: navigating to the URL triggers
-            // the CSV download. Export respects the CURRENT filters (without
-            // pagination — the endpoint streams every matching row).
-            const { limit: _l, offset: _o, ...exportParams } = filters;
-            window.location.assign(alertsApi.exportCsvUrl(exportParams));
-          }}
-          title="Esporta i segnali filtrati in CSV"
-        >
-          <Download className="h-4 w-4 mr-1.5" /> Esporta CSV
-        </Button>
+      <div>
+        {/* Il titolo e' l'IDENTITA' della destinazione e non cambia con la
+            scheda: cio' che appartiene alla vista varia sotto. */}
+        <h2 className="flex items-center gap-3 text-2xl font-semibold tracking-tight sm:text-3xl">
+          <Bell className="h-7 w-7 text-muted-foreground" aria-hidden />
+          Segnali
+        </h2>
       </div>
 
-      {/* Le statistiche di efficacia, spostate qui da Diagnostica (2026-09-16):
-          tutti gli esiti maturati, non la pagina ne' i filtri della tabella. */}
-      <SignalStatsSection />
+      <div
+        role="group"
+        aria-label="Scheda"
+        className="inline-flex overflow-hidden rounded-md border text-xs font-semibold"
+      >
+        {SCHEDE.map((s) => (
+          <button
+            key={s.id}
+            type="button"
+            aria-pressed={scheda === s.id}
+            onClick={() => apri(s.id)}
+            className={cn(
+              "min-h-[36px] px-3 transition-colors",
+              scheda === s.id
+                ? "bg-accent text-foreground"
+                : "text-muted-foreground hover:bg-accent/40",
+            )}
+          >
+            {s.label}
+          </button>
+        ))}
+      </div>
 
-      {/* Confluence digest — always visible above the table (replaced the old
-          list/confluence view toggle). Cluster rows drill down into the table. */}
-      <AlertsInsightCard
-        clusters={conf.data ?? []}
-        loading={conf.isLoading}
-        onTickerSelect={selectTicker}
-      />
-
-      {/* ⚠️ I filtri stanno SOTTO le confluenze e SOPRA la tabella, e l'ordine
-          e' una scelta di lettura, non estetica.
-          Le confluenze sono un digest: si leggono per prime e si clicca un
-          cluster per restringere la tabella. Con i filtri in cima, il primo
-          controllo della pagina agiva su una tabella che il lettore non aveva
-          ancora visto. Ora i tre blocchi seguono cio' che si fa: guarda il
-          quadro, restringi, leggi le righe — e il controllo sta accanto a cio'
-          che governa. */}
-      <AlertFilters value={filters} onChange={(v) => { setPage(0); setFilters(v); }} />
-
-      {/* Drill-down chip: shows the cluster ticker currently filtering the
-          table, with an X to go back to the full list. */}
-      {filters.ticker && (
-        <div className="flex items-center gap-2 text-sm">
-          <span className="text-muted-foreground">filtro attivo:</span>
-          <span className="inline-flex items-center gap-1.5 rounded-md border border-border bg-muted px-2 py-0.5 text-xs font-semibold">
-            {filters.ticker}
-            <button
-              type="button"
-              onClick={() => {
-                setPage(0);
-                setFilters((f) => ({ ...f, ticker: undefined }));
-              }}
-              className="opacity-70 hover:opacity-100 transition-opacity"
-              aria-label="Rimuovi filtro ticker"
-            >
-              <X className="h-3 w-3" />
-            </button>
-          </span>
-        </div>
+      {/* Una sola vista montata alla volta: `hidden` terrebbe in piedi due
+          alberi e due serie di query, e quello nascosto verrebbe comunque
+          letto dagli assistivi. */}
+      {scheda === "formazione" ? (
+        <SetupsView vista="formazione" />
+      ) : scheda === "esiti" ? (
+        <OutcomesView />
+      ) : (
+        <SignalsView />
       )}
-
-      {selectedIds.size > 0 && (
-        <Card>
-          <CardContent className="flex items-center gap-2 p-3">
-            <span className="text-sm">{selectedIds.size} selezionati</span>
-            <Button size="sm" onClick={() => doBulk("archive")}>Archivia</Button>
-            <Button size="sm" onClick={() => doBulk("unarchive")}>Disarchivia</Button>
-          </CardContent>
-        </Card>
-      )}
-
-      <Card>
-        <CardContent className="p-0">
-          {/* Always render AlertsTable — even with 0 rows — so the
-              ticker/name search input in its header stays visible and
-              the user can adjust the query that's filtering things to
-              empty. The empty-state message renders inside the tbody. */}
-          {list.isLoading ? (
-            <div className="p-6 text-sm text-muted-foreground">Caricamento…</div>
-          ) : list.isError ? (
-            <QueryError
-              message="dei segnali"
-              onRetry={() => list.refetch()}
-              isRetrying={list.isFetching}
-              className="p-6"
-            />
-          ) : (
-            <AlertsTable
-              alerts={items}
-              selectedIds={selectedIds}
-              onSelect={onSelect}
-              onSelectAll={onSelectAll}
-              onRowClick={setOpenDetail}
-              q={filters.q ?? ""}
-              onQueryChange={(v) => {
-                setPage(0);
-                setFilters({ ...filters, q: v || undefined });
-              }}
-              sortBy={sortBy}
-              sortDir={sortDir}
-              onSort={handleSort}
-              onArchiveToggle={(a) =>
-                patchAlert.mutate({ id: a.id, archived: a.archived_at == null })
-              }
-            />
-          )}
-        </CardContent>
-      </Card>
-
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between text-sm">
-          <span>Pagina {page + 1} di {totalPages}</span>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={page === 0}
-              onClick={() => setPage((p) => p - 1)}
-            >
-              Precedente
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={page + 1 >= totalPages}
-              onClick={() => setPage((p) => p + 1)}
-            >
-              Successiva
-            </Button>
-          </div>
-        </div>
-      )}
-
-      <AlertDetailDialog alert={openDetail} onClose={() => setOpenDetail(null)} />
     </div>
   );
 }
