@@ -425,6 +425,39 @@ def _ensure_admin_on_boot() -> None:
         logger.warning(f"[startup] ensure admin user failed (non-fatal): {exc}")
 
 
+def _ensure_hand_picked_on_boot() -> None:
+    """Rimette in catalogo le righe scelte a mano (ADR asiatici + YINN).
+
+    ⚠️ Esisteva gia' lo script — `app.scripts.seed_asia_adr` — e non era mai
+    stato eseguito in produzione, quindi YINN non si trovava dalla barra di
+    ricerca: la riga non c'era. Uno script che va lanciato a mano viene
+    lanciato quando qualcuno se lo ricorda, che e' la stessa ragione per cui il
+    drill di ripristino e' diventato un CronJob.
+
+    Stessa forma di `_ensure_admin_on_boot`: idempotente (upsert per riga), a
+    costo trascurabile (~15 righe, nessuna rete), e best-effort — un catalogo
+    che non si semina non deve impedire all'app di partire.
+
+    ⚠️ E' ristretto ALLE RIGHE volute, non ai file: `direxion_etfs.csv`
+    dichiara 36 prodotti di cui 26 tolti dalla potatura, e riseminare il file
+    intero li riporterebbe dentro tutti, in silenzio. Il filtro vive dentro lo
+    script (`SOLO_DA_DIREXION`) ed e' li' che va cambiato.
+
+    Lo storico arriva da se': una riga senza barre entra nel gruppo `backfill`
+    del piano OHLCV e paga il download alla prima scansione utile.
+    """
+    import os
+
+    if os.environ.get("PYTEST_CURRENT_TEST"):
+        return
+    try:
+        from app.scripts.seed_asia_adr import run as semina_scelti_a_mano
+
+        semina_scelti_a_mano()
+    except Exception as exc:  # noqa: BLE001 — boot-time best effort
+        logger.warning(f"[startup] semina delle righe scelte a mano saltata: {exc}")
+
+
 def _hydrate_revoked_sessions() -> None:
     """Restore the session revocation list from the DB.
 
@@ -498,6 +531,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         )
     _cleanup_orphan_scans()
     _ensure_admin_on_boot()
+    _ensure_hand_picked_on_boot()
     _hydrate_fetch_caches()
     _hydrate_run_metrics()
     _hydrate_revoked_sessions()
