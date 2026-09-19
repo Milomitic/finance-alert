@@ -228,6 +228,7 @@ function HomePageContent() {
         global={m?.global}
         byIndex={m?.by_index}
         computedAt={m?.computed_at}
+        movers={m?.movers}
       />
       <div className="flex flex-wrap items-center justify-between gap-2 px-1">
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 min-w-0">

@@ -2,7 +2,7 @@ import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { CalendarEvent, IndexBreadth, MarketGlobal } from "@/api/types";
+import type { CalendarEvent, IndexBreadth, MarketGlobal, MoversBlock } from "@/api/types";
 import type { LiveAsset } from "@/hooks/useLiveAssets";
 
 /* Le interrogazioni vive sono finte: qui si verifica cosa la fascia DICHIARA a
@@ -83,11 +83,25 @@ const PER_INDICE: IndexBreadth[] = [
     volume_spikes_count: 12 },
 ];
 
-function montaA(istante: Date, global?: MarketGlobal, computedAt?: string) {
+/** I movers della SEDUTA, cioe' il ripiego sempre disponibile del riquadro
+ *  «si muove adesso». Pochi campi: la riga ne rende tre. */
+const SEDUTA_MOVERS = {
+  gainers: [{ ticker: "SALE", name: "Sale SpA", index: null, sector: null,
+    change_pct: 7.1, last_close: 42.5, prev_close: 39.7 }],
+  losers: [{ ticker: "SCENDE", name: "Scende SpA", index: null, sector: null,
+    change_pct: -5.4, last_close: 12.0, prev_close: 12.7 }],
+  volume_spikes: [], new_52w_high: [], new_52w_low: [],
+} as unknown as MoversBlock;
+
+function montaA(
+  istante: Date, global?: MarketGlobal, computedAt?: string, movers?: MoversBlock,
+) {
   vi.setSystemTime(istante);
   return render(
     <MemoryRouter>
-      <MarketPulseJumbotron global={global} byIndex={PER_INDICE} computedAt={computedAt} />
+      <MarketPulseJumbotron
+        global={global} byIndex={PER_INDICE} computedAt={computedAt} movers={movers}
+      />
     </MemoryRouter>,
   );
 }
@@ -157,10 +171,26 @@ describe("quello che non si sa non diventa un numero", () => {
     expect(container.textContent).not.toContain("0,00%");
   });
 
-  it("il vuoto dice PERCHE' e' vuoto", () => {
-    // Sabato: «nessun dato» manderebbe a cercare un guasto che non esiste.
+  it("fuori dalle finestre live mostra i TOP DELLA SEDUTA, non un messaggio", () => {
+    /* ⚠️ Sabato, o un pomeriggio italiano prima dell'apertura: il riquadro
+     * diceva «niente da mostrare in tempo reale» — vero e inutile, perche' i
+     * movers della seduta erano nell'istantanea che la pagina aveva gia'
+     * scaricato. E' per questo che non poteva sostituire la scheda sotto. */
+    montaA(new Date("2026-09-19T15:00:00Z"), GLOBAL, undefined, SEDUTA_MOVERS);
+    expect(screen.getByText("Top della seduta")).toBeInTheDocument();
+    expect(screen.getByText("SALE")).toBeInTheDocument();
+    expect(screen.getByText("SCENDE")).toBeInTheDocument();
+    // ⚠️ E DICE che non e' live: un dato di chiusura accanto a numeri che
+    // battono ogni quindici secondi si legge come fresco se nessuno lo nega.
+    expect(screen.getByText(/ultima chiusura dell'istantanea/)).toBeInTheDocument();
+  });
+
+  it("senza nemmeno l'istantanea dice PERCHE' e' vuoto", () => {
+    // Controllo negativo del test sopra, e la vecchia dottrina: «nessun dato»
+    // manderebbe a cercare un guasto che non esiste.
     montaA(new Date("2026-09-19T15:00:00Z"));
-    expect(screen.getByText(/Fuori dalla finestra del pre-market/)).toBeInTheDocument();
+    expect(screen.getByText(/istantanea dei movers non è ancora arrivata/)).toBeInTheDocument();
+    expect(screen.queryByText("Top della seduta")).not.toBeInTheDocument();
   });
 });
 
@@ -336,14 +366,37 @@ describe("l'ampiezza non si spaccia per un dato live", () => {
     expect(screen.getByText("11h fa")).toBeInTheDocument();
   });
 
-  it("ogni numero ha il suo nome accanto", () => {
-    // Prima diceva «in rialzo 639 · 348»: il 348 era rosa e basta.
+  it("⚠️ TRE continenti confrontabili, non un umore unico", () => {
+    /* Un solo verdetto sul catalogo intero media tre mercati che quel giorno
+     * possono fare cose opposte: «Neutrale» nasceva da un'America ferma,
+     * un'Europa in rosso e un'Asia in verde — tre notizie, nessuna delle quali
+     * era «neutrale». */
     montaA(SEDUTA, GLOBAL, SEDUTA.toISOString());
-    expect(screen.getByText("639")).toBeInTheDocument();
-    expect(screen.getByText("su")).toBeInTheDocument();
-    expect(screen.getByText("giù")).toBeInTheDocument();
-    expect(screen.getByText("348")).toBeInTheDocument();
-    expect(screen.getByText("Bullish")).toBeInTheDocument();
+    for (const continente of ["USA", "Europa", "Asia"]) {
+      expect(screen.getByText(continente)).toBeInTheDocument();
+    }
+    // I conteggi dell'unica regione MISURATA dalla fixture (solo SP500).
+    expect(screen.getByText("300")).toBeInTheDocument();
+    expect(screen.getByText("190")).toBeInTheDocument();
+  });
+
+  it("una regione senza titoli lo DICE, invece di disegnare uno zero", () => {
+    /* ⚠️ Il controllo che conta in una vista confrontabile: una barra vuota
+     * accanto a «Neutrale» si legge come un verdetto sul mercato europeo,
+     * mentre e' l'assenza di una misura. La fixture ha il solo S&P 500,
+     * quindi Europa e Asia non hanno titoli. */
+    montaA(SEDUTA, GLOBAL, SEDUTA.toISOString());
+    expect(screen.getAllByText("nessun titolo misurato")).toHaveLength(2);
+    expect(screen.getAllByText("n/d").length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("le misure che NON hanno un equivalente regionale restano dichiarate globali", () => {
+    // I conteggi 52 settimane del globale contano i titoli VICINI
+    // all'estremo, quelli per indice i NUOVI estremi: due definizioni, e
+    // spacchettarle a occhio darebbe due numeri con lo stesso nome.
+    montaA(SEDUTA, GLOBAL, SEDUTA.toISOString());
+    expect(screen.getByText("993")).toBeInTheDocument();     // catalogo
+    expect(screen.getByText("158")).toBeInTheDocument();     // al max 52s
   });
 
   it("senza titoli misurati non stampa zeri", () => {
@@ -351,7 +404,10 @@ describe("l'ampiezza non si spaccia per un dato live", () => {
     // titoli in rialzo su zero misurati non e' una lettura di mercato.
     montaA(SEDUTA, { ...GLOBAL, stocks_with_data: 0 });
     expect(screen.getByText(/Nessun dato di ampiezza/)).toBeInTheDocument();
-    expect(screen.queryByText("639")).not.toBeInTheDocument();
+    // Nessuna riga per continente: senza misure non c'e' niente da
+    // confrontare, e tre righe di zeri sarebbero tre verdetti sul nulla.
+    expect(screen.queryByText("USA")).not.toBeInTheDocument();
+    expect(screen.queryByText("300")).not.toBeInTheDocument();
   });
 });
 

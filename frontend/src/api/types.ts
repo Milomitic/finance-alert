@@ -502,6 +502,25 @@ export interface IndexBreadth {
   new_52w_highs: number;
   new_52w_lows: number;
   volume_spikes_count: number;
+  /** Chi tira e chi frena QUESTO indice: fino a tre per lato, gia' ordinate
+   *  (il migliore e il peggiore per primi).
+   *
+   *  ⚠️ Perimetro INDICE, non catalogo: i Top movers del cruscotto ordinano
+   *  tutto, e li' i primi posti sono quasi sempre micro-cap ed ETF a leva,
+   *  che non dicono niente su come sta andando l'S&P 500.
+   *
+   *  Vuote quando nessun titolo si e' mosso in quel verso — il backend non le
+   *  riempie col meno peggio, perche' una colonna «su» piena di ribassi
+   *  direbbe il contrario di cio' che e' successo. Opzionali: un'istantanea
+   *  salvata prima di questo campo non le ha. */
+  top_gainers?: IndexMover[];
+  top_losers?: IndexMover[];
+}
+
+export interface IndexMover {
+  ticker: string;
+  name: string;
+  change_pct: number;
 }
 
 export interface RsiDistribution {

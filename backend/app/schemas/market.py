@@ -20,6 +20,20 @@ class MarketGlobalOut(BaseModel):
     mood: str   # "bullish" | "neutral" | "bearish"
 
 
+class IndexMoverOut(BaseModel):
+    """Un titolo fra gli estremi di un indice.
+
+    ⚠️ Perimetro INDICE, non catalogo. I Top movers del cruscotto ordinano
+    tutto, e li' i primi posti sono quasi sempre micro-cap e ETF a leva: non
+    dicono niente su come sta andando l'S&P 500. Qui la domanda e' «chi lo
+    tira e chi lo frena», e ha una risposta solo dentro il paniere.
+    """
+
+    ticker: str
+    name: str
+    change_pct: float
+
+
 class IndexBreadthOut(BaseModel):
     code: str
     name: str
@@ -35,6 +49,11 @@ class IndexBreadthOut(BaseModel):
     new_52w_highs: int
     new_52w_lows: int
     volume_spikes_count: int
+    #: Fino a tre per lato, gia' ordinate. Vuote quando nessun titolo
+    #: dell'indice si e' mosso in quel verso — che non e' lo stesso di «non
+    #: misurato», e per questo non si riempiono col primo che capita.
+    top_gainers: list[IndexMoverOut] = []
+    top_losers: list[IndexMoverOut] = []
 
 
 class RsiDistributionOut(BaseModel):

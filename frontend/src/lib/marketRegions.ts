@@ -36,6 +36,11 @@ export const REGIONS: RegionDef[] = [
 export interface RegionMood {
   mood: MoodKey;
   pct_above_ema200: number;
+  /** ⚠️ Esposta, e non piu' solo calcolata dentro `deriveMood` per decidere
+   *  l'umore: tre regioni messe a confronto hanno senso se portano le STESSE
+   *  misure, e la partecipazione di medio periodo e' quella che si muove
+   *  prima. Era gia' qui dentro, semplicemente non usciva. */
+  pct_above_ema50: number;
   advancers: number;
   decliners: number;
   avg_change: number;
@@ -44,7 +49,10 @@ export interface RegionMood {
 
 export function deriveMood(indices: IndexBreadth[]): RegionMood {
   if (indices.length === 0) {
-    return { mood: "neutral", pct_above_ema200: 0, advancers: 0, decliners: 0, avg_change: 0, total_stocks: 0 };
+    return {
+      mood: "neutral", pct_above_ema200: 0, pct_above_ema50: 0,
+      advancers: 0, decliners: 0, avg_change: 0, total_stocks: 0,
+    };
   }
   const totalN = indices.reduce((s, i) => s + i.n, 0);
   const weightedPct = totalN > 0
@@ -66,7 +74,10 @@ export function deriveMood(indices: IndexBreadth[]): RegionMood {
   let mood: MoodKey = "neutral";
   if (breadth >= 60 && advancers > decliners) mood = "bullish";
   else if (breadth <= 40 && decliners > advancers) mood = "bearish";
-  return { mood, pct_above_ema200: weightedPct, advancers, decliners, avg_change: weightedChange, total_stocks: totalN };
+  return {
+    mood, pct_above_ema200: weightedPct, pct_above_ema50: weightedPct50,
+    advancers, decliners, avg_change: weightedChange, total_stocks: totalN,
+  };
 }
 
 /** Region rows for a snapshot, in display order. */

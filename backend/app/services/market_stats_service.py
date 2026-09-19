@@ -307,6 +307,36 @@ def aggregate_global(metrics: list[StockMetrics]) -> dict:
     }
 
 
+#: Quante voci per lato nella classifica di un indice. Tre: e' un corredo di
+#: una piastrella larga un terzo di riga, non una classifica — chi vuole
+#: l'elenco lungo ha i Top movers, che guardano tutto il catalogo.
+TOP_PER_INDICE = 3
+
+
+def _estremi(bucket: list[StockMetrics], quanti: int = TOP_PER_INDICE) -> tuple[list[dict], list[dict]]:
+    """I titoli che salgono e scendono di piu' DENTRO un indice.
+
+    ⚠️ E' una cosa diversa dai Top movers del cruscotto, che ordinano l'intero
+    catalogo: li' i primi posti sono quasi sempre micro-cap e ETF a leva, cioe'
+    non dicono niente su come sta andando l'S&P 500. Qui il perimetro e'
+    l'indice, quindi «chi lo tira e chi lo frena» e' una risposta vera.
+
+    Rende due liste gia' ordinate, al massimo `quanti` ciascuna. Un titolo
+    senza variazione resta fuori da entrambe: «ignota» non e' «ferma».
+    """
+    mossi = [m for m in bucket if m.change_pct is not None]
+    mossi.sort(key=lambda m: m.change_pct or 0.0, reverse=True)
+    su = [
+        {"ticker": m.ticker, "name": m.name, "change_pct": round(m.change_pct or 0.0, 2)}
+        for m in mossi[:quanti] if (m.change_pct or 0.0) > 0
+    ]
+    giu = [
+        {"ticker": m.ticker, "name": m.name, "change_pct": round(m.change_pct or 0.0, 2)}
+        for m in reversed(mossi[-quanti:]) if (m.change_pct or 0.0) < 0
+    ]
+    return su, giu
+
+
 def aggregate_by_index(
     metrics: list[StockMetrics],
     indices: list[tuple[str, str]],     # [(code, name), ...]
@@ -332,6 +362,7 @@ def aggregate_by_index(
                 "advancers": 0, "decliners": 0,
                 "new_52w_highs": 0, "new_52w_lows": 0,
                 "volume_spikes_count": 0,
+                "top_gainers": [], "top_losers": [],
             })
             continue
         full_data = [m for m in bucket if m.has_full_data]
@@ -359,6 +390,7 @@ def aggregate_by_index(
         )
         changes = [m.change_pct for m in bucket if m.change_pct is not None]
         avg_change = round(sum(changes) / len(changes), 2) if changes else None
+        estremi_su, estremi_giu = _estremi(bucket)
         out.append({
             "code": code, "name": name, "n": len(bucket),
             "pct_above_ema200": pct_ema200, "pct_above_ema50": pct_ema50,
@@ -371,6 +403,9 @@ def aggregate_by_index(
             "new_52w_highs": sum(1 for m in bucket if m.new_52w_high),
             "new_52w_lows": sum(1 for m in bucket if m.new_52w_low),
             "volume_spikes_count": sum(1 for m in bucket if m.vol_ratio is not None and m.vol_ratio > 2.0),
+            # Chi tira e chi frena QUESTO indice. Vedi `_estremi`.
+            "top_gainers": estremi_su,
+            "top_losers": estremi_giu,
         })
     return out
 

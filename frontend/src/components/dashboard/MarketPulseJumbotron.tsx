@@ -4,7 +4,9 @@ import {
 import { useMemo, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 
-import type { IndexBreadth, LiveQuote, MarketGlobal } from "@/api/types";
+import type {
+  IndexBreadth, IndexMover, LiveQuote, MarketGlobal, MoversBlock,
+} from "@/api/types";
 import type { PremarketMover } from "@/api/dashboard";
 import { MarketBreadthBand } from "@/components/dashboard/MarketBreadthBand";
 import { MarketStateBadge, type MarketPhase } from "@/components/dashboard/MarketStateBadge";
@@ -64,6 +66,12 @@ interface Props {
   global?: MarketGlobal;
   /** Ampiezza per indice — alimenta le regioni con le bandiere. */
   byIndex?: IndexBreadth[];
+  /** I movers della SEDUTA, dall'istantanea. ⚠️ Sono il ripiego che rende
+   *  questo riquadro utile a mercati chiusi: senza, fuori dalla finestra del
+   *  pre-market e prima che la spazzata live si popoli il riquadro diceva
+   *  «niente da mostrare» — cioe' era vuoto per la maggior parte della
+   *  giornata italiana, che e' quando lo si guarda. */
+  movers?: MoversBlock;
   /** `computed_at` dell'istantanea — l'eta' dell'ampiezza, dichiarata. */
   computedAt?: string | null;
 }
@@ -72,6 +80,16 @@ interface Props {
  * chiavi di `LIVE_ASSET_DEFINITIONS` nel backend; il resto del paniere finisce
  * nella riga di contesto. */
 const USA: readonly string[] = ["^GSPC", "^IXIC", "^DJI"];
+
+/** Il simbolo di mercato di un indice e il CODICE con cui l'ampiezza lo
+ *  chiama sono due cose diverse, e la mappa e' l'unico posto in cui si
+ *  incontrano. `^GSPC` e' cio' che quota Yahoo; `SP500` e' il paniere del
+ *  catalogo su cui si contano i titoli. */
+const CODICE_AMPIEZZA: Record<string, string> = {
+  "^GSPC": "SP500",
+  "^IXIC": "NDX",
+  "^DJI": "DJI",
+};
 
 /** I nomi lunghi non entrano in un riquadro da 110px su un telefono, e
  *  troncati perdono proprio la parte che li distingue. */
@@ -166,8 +184,67 @@ function bandaVix(v: number): string {
   return "stress";
 }
 
+/** Chi tira e chi frena un indice, tre per lato.
+ *
+ * ⚠️ Perimetro INDICE, non catalogo, ed e' tutta la differenza. I Top movers
+ * ordinano i mille titoli: i primi posti sono quasi sempre micro-cap ed ETF a
+ * leva, che si muovono del 15% per costruzione e non dicono niente su come sta
+ * andando l'S&P 500. Dentro il paniere, invece, «chi lo tira» e' una risposta
+ * vera — sono i titoli che quella percentuale grande la fanno.
+ *
+ * ⚠️ Una colonna VUOTA resta vuota. In una seduta tutta in rosso prendere «i
+ * primi tre» qualunque siano riempirebbe la colonna «su» col meno peggio dei
+ * ribassi: una riga che dice il contrario di cio' che e' successo, con l'aria
+ * di un dato. Il backend li filtra per segno; qui si rende cio' che arriva.
+ */
+function EstremiIndice({ ampiezza }: { ampiezza: IndexBreadth | undefined }) {
+  const su = ampiezza?.top_gainers ?? [];
+  const giu = ampiezza?.top_losers ?? [];
+  if (su.length === 0 && giu.length === 0) return null;
+  const riga = (voci: IndexMover[], verso: "su" | "giu") =>
+    voci.map((v) => (
+      <Link
+        key={v.ticker}
+        to={`/stocks/${encodeURIComponent(v.ticker)}`}
+        className="inline-flex items-baseline gap-1 rounded px-0.5 hover:bg-accent/40"
+        title={`${v.name} · ${formatVariazione(v.change_pct)}`}
+      >
+        <span className="font-bold tabular-nums">{v.ticker}</span>
+        <span className={cn("tabular-nums", tono(verso === "su" ? 1 : -1))}>
+          {formatVariazione(v.change_pct)}
+        </span>
+      </Link>
+    ));
+  /* ⚠️ Vengono dall'ISTANTANEA, non dal battito live che sta due righe
+     sopra nella stessa piastrella. Un ticker con una percentuale accanto a un
+     prezzo che si aggiorna ogni quindici secondi si legge come live: il
+     suggerimento lo nega a parole, che e' l'unico posto dove ci sta. */
+  const daIstantanea = "Dall'ultima istantanea di mercato, come i numeri di ampiezza — non dal prezzo live qui sopra";
+  return (
+    <div className="mt-2 hidden border-t pt-1 text-[0.6471rem] leading-tight lg:block">
+      {su.length > 0 && (
+        <div className="flex min-w-0 flex-wrap items-baseline gap-x-1.5">
+          <span className="shrink-0 font-bold uppercase tracking-wider text-muted-foreground" title={daIstantanea}>su</span>
+          {riga(su, "su")}
+        </div>
+      )}
+      {giu.length > 0 && (
+        <div className="mt-0.5 flex min-w-0 flex-wrap items-baseline gap-x-1.5">
+          <span className="shrink-0 font-bold uppercase tracking-wider text-muted-foreground" title={daIstantanea}>giù</span>
+          {riga(giu, "giu")}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ─── Il riquadro grande di un indice americano ──────────────────────────── */
-function IndiceTile({ asset, nome }: { asset: LiveAsset | undefined; nome: string }) {
+function IndiceTile({ asset, nome, ampiezza }: {
+  asset: LiveAsset | undefined;
+  nome: string;
+  /** La riga di ampiezza di QUESTO indice, per gli estremi in fondo. */
+  ampiezza: IndexBreadth | undefined;
+}) {
   const q = asset?.quote;
   const cambio = q?.change_pct ?? null;
   const punti = sparklinePoints(asset?.history, 120, 26, 2);
@@ -273,10 +350,12 @@ function IndiceTile({ asset, nome }: { asset: LiveAsset | undefined; nome: strin
         </div>
       )}
       {q?.day_low != null && q?.day_high != null && (
-        /* `mt-3`: la barra dell'intervallo stava appiccicata al tracciato e le
+        /* `mt-5`: la barra dell'intervallo stava appiccicata al tracciato e le
            due si leggevano come un unico disegno — l'etichetta «30 giorni»
-           sembrava riferita al minimo e massimo, che sono di GIORNATA. */
-        <div className="mt-3 hidden lg:block">
+           sembrava riferita al minimo e massimo, che sono di GIORNATA. Era
+           `mt-3` e non bastava: fra i due c'e' gia' una riga di testo, quindi
+           lo stacco che si vede e' quello che avanza dopo di essa. */
+        <div className="mt-5 hidden lg:block">
           {/* Il minimo e il massimo da soli non dicono DOVE sta il prezzo. Il
               marcatore lo dice senza far fare il conto. */}
           <div
@@ -297,6 +376,7 @@ function IndiceTile({ asset, nome }: { asset: LiveAsset | undefined; nome: strin
           </div>
         </div>
       )}
+      <EstremiIndice ampiezza={ampiezza} />
     </>
   );
   return asset ? (
@@ -341,7 +421,12 @@ function Chip({ asset }: { asset: LiveAsset }) {
       ) : segno ? (
         <segno.icona className={cn("h-3.5 w-3.5 shrink-0", segno.classe)} aria-hidden />
       ) : null}
-      <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+      {/* ⚠️ Stessa taglia del prezzo. Il nome e' l'IDENTITA' della voce e il
+          prezzo il suo valore: renderlo piu' piccolo del numero fa leggere la
+          riga come una fila di cifre in cerca di un'etichetta. E' la stessa
+          regola che questo progetto applica allo spazio che finisce — quando
+          manca, cede la decorazione, non l'etichetta. */}
+      <span className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
         {nome}
       </span>
       {/* Il pallino «aperto adesso» e' decorativo: il titolo del collegamento
@@ -355,9 +440,13 @@ function Chip({ asset }: { asset: LiveAsset }) {
           ? <FlashValue value={asset.quote.price} format={(v) => formatLivello(v) ?? "—"} noTween />
           : <NoValue hint={perche(asset, nome)} />}
       </span>
+      {/* La variazione un gradino SOTTO nome e prezzo: in una riga da venti
+          voci tre corpi uguali non hanno gerarchia, e la percentuale e' il
+          contorno di un prezzo, non un terzo dato indipendente. Il neretto
+          oltre la soglia di rilevanza resta: e' li' che serve l'occhio. */}
       <span
         className={cn(
-          "text-sm tabular-nums",
+          "text-xs tabular-nums",
           forte ? "font-bold" : "font-semibold",
           tono(cambio),
         )}
@@ -386,7 +475,7 @@ function ChipLeva({ ticker, quote }: { ticker: string; quote: LiveQuote | undefi
           : `${ticker}: nessuna quotazione. Se manca anche dalla ricerca, il titolo non e' in catalogo.`
       }
     >
-      <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+      <span className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
         {ticker}
       </span>
       <span className="text-sm font-semibold tabular-nums">
@@ -394,7 +483,7 @@ function ChipLeva({ ticker, quote }: { ticker: string; quote: LiveQuote | undefi
           ? <FlashValue value={quote.price} format={(v) => formatLivello(v) ?? "—"} noTween />
           : <NoValue hint={`${ticker}: quotazione non disponibile`} />}
       </span>
-      <span className={cn("text-sm tabular-nums", forte ? "font-bold" : "font-semibold", tono(cambio))}>
+      <span className={cn("text-xs tabular-nums", forte ? "font-bold" : "font-semibold", tono(cambio))}>
         {cambio != null
           ? <FlashValue value={cambio} format={(v) => formatVariazione(v) ?? "—"} noTween />
           : ""}
@@ -497,7 +586,7 @@ function Intestazione({ titolo, fonte }: { titolo: string; fonte?: ReactNode }) 
 }
 
 /* ─── La fascia ─────────────────────────────────────────────────────────── */
-export function MarketPulseJumbotron({ global, byIndex, computedAt }: Props) {
+export function MarketPulseJumbotron({ global, byIndex, computedAt, movers }: Props) {
   // Un battito al minuto: il conto alla rovescia si legge in minuti, e un
   // timer al secondo su una scheda sempre a schermo e' lavoro sprecato.
   const ora = useNowTick(60_000);
@@ -573,6 +662,14 @@ export function MarketPulseJumbotron({ global, byIndex, computedAt }: Props) {
     ["Materie prime", contesto.filter((a) => a.category === "commodity")],
     ["Cripto", contesto.filter((a) => a.category === "crypto")],
   ];
+
+  /* I movers della SEDUTA, dall'istantanea: il ripiego sempre disponibile.
+   * ⚠️ Tagliati alle stesse dieci righe delle altre due liste, cosi' il
+   * riquadro non cambia altezza passando da una fonte all'altra — una fascia
+   * che si allunga di duecento pixel quando apre Wall Street sposta tutto
+   * quello che sta sotto. */
+  const sedutaSu = (movers?.gainers ?? []).slice(0, RIGHE_MOVERS);
+  const sedutaGiu = (movers?.losers ?? []).slice(0, RIGHE_MOVERS);
 
   const mostraPre = !!pre?.available && (pre.gainers.length > 0 || pre.losers.length > 0);
   const mostraLive =
@@ -692,7 +789,12 @@ export function MarketPulseJumbotron({ global, byIndex, computedAt }: Props) {
 
           <div className="grid min-w-0 grid-cols-3 gap-2">
             {USA.map((s) => (
-              <IndiceTile key={s} asset={perSimbolo.get(s)} nome={NOMI_BREVI[s]} />
+              <IndiceTile
+                key={s}
+                asset={perSimbolo.get(s)}
+                nome={NOMI_BREVI[s]}
+                ampiezza={(byIndex ?? []).find((i) => i.code === CODICE_AMPIEZZA[s])}
+              />
             ))}
           </div>
         </div>
@@ -804,13 +906,28 @@ export function MarketPulseJumbotron({ global, byIndex, computedAt }: Props) {
         <div className="grid gap-3 border-t pt-2 md:grid-cols-2">
           <div className="min-w-0">
             <Intestazione
-              titolo={mostraPre ? "Si muove nel pre-market" : "Si muove adesso"}
+              /* ⚠️ Il titolo segue CIO' CHE C'E' SOTTO, e l'ultimo ramo non
+                 e' una ripetizione: senza, il riquadro annunciava «Top della
+                 seduta» sopra un messaggio che dice che l'istantanea non e'
+                 ancora arrivata — un'intestazione che promette righe che non
+                 esistono. Trovato da un test, non a occhio. */
+              titolo={
+                mostraPre
+                  ? "Si muove nel pre-market"
+                  : mostraLive && liveMovers
+                    ? "Si muove adesso"
+                    : sedutaSu.length > 0 || sedutaGiu.length > 0
+                      ? "Top della seduta"
+                      : "Si muove adesso"
+              }
               fonte={
                 mostraPre && pre?.as_of
                   ? `seduta ${pre.as_of}`
                   : mostraLive && liveMovers
                     ? `su ${liveMovers.swept} titoli con quotazione fresca`
-                    : null
+                    : sedutaSu.length > 0
+                      ? "ultima chiusura dell'istantanea"
+                      : null
               }
             />
             {mostraPre && pre ? (
@@ -872,6 +989,33 @@ export function MarketPulseJumbotron({ global, byIndex, computedAt }: Props) {
                   ))}
                 </Colonna>
               </div>
+            ) : sedutaSu.length > 0 || sedutaGiu.length > 0 ? (
+              /* ⚠️ Il ripiego che rende questo riquadro utile per la maggior
+                 parte della giornata italiana. Prima, fuori dalla finestra del
+                 pre-market, diceva «niente da mostrare in tempo reale» — vero
+                 e inutile: i movers della SEDUTA erano nell'istantanea che la
+                 pagina aveva gia' scaricato, due schede piu' in basso.
+
+                 La fonte lo dichiara («ultima chiusura dell'istantanea»),
+                 perche' un dato di chiusura accanto a numeri che battono ogni
+                 quindici secondi si legge come live se nessuno dice che non
+                 lo e'. */
+              <div className="grid gap-x-4 gap-y-1 xl:grid-cols-2">
+                <Colonna titolo="Su" icona={TrendingUp}>
+                  {sedutaSu.map((m) => (
+                    <RigaMover key={m.ticker} ticker={m.ticker} nome={m.name}
+                      cambio={m.change_pct ?? 0} prezzoOra={m.last_close}
+                      flipRef={registraFlip(`seduta-su:${m.ticker}`)} />
+                  ))}
+                </Colonna>
+                <Colonna titolo="Giù" icona={TrendingDown}>
+                  {sedutaGiu.map((m) => (
+                    <RigaMover key={m.ticker} ticker={m.ticker} nome={m.name}
+                      cambio={m.change_pct ?? 0} prezzoOra={m.last_close}
+                      flipRef={registraFlip(`seduta-giu:${m.ticker}`)} />
+                  ))}
+                </Colonna>
+              </div>
             ) : (
               /* PERCHE' non c'e' niente. «Nessun dato» manda a cercare un
                  guasto che non esiste: il pre-market si calcola solo nella sua
@@ -881,9 +1025,7 @@ export function MarketPulseJumbotron({ global, byIndex, computedAt }: Props) {
                   ? `Pre-market in aggiornamento — ${pre.progress_pct}%`
                   : fase === "open"
                     ? "Nessuna quotazione fresca ancora: la spazzata live ruota sull'universo e si popola nei primi minuti."
-                    : fase === "pre"
-                      ? "Il pre-market si popola dalle 04:00 di New York; l'ultimo calcolo non è ancora arrivato."
-                      : "Fuori dalla finestra del pre-market: niente da mostrare in tempo reale."}
+                    : "L'istantanea dei movers non è ancora arrivata: compaiono dopo la prima scansione."}
               </div>
             )}
           </div>
