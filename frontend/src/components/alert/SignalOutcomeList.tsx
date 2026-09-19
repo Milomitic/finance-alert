@@ -1,5 +1,4 @@
-import { CircleSlash, Target, TrendingDown, XCircle } from "lucide-react";
-import { Link } from "react-router-dom";
+import { ArrowRight, CircleSlash, Target, TrendingDown, XCircle } from "lucide-react";
 
 import type { PlanOutcomeRow } from "@/api/planOutcomes";
 import { StockLogo } from "@/components/dashboard/StockLogo";
@@ -23,12 +22,19 @@ import { cn } from "@/lib/utils";
  * il prezzo d'ingresso. Il primo numero lo chiama «mancato», il secondo
  * «target»: sono entrambi veri.
  *
- * ⚠️ E la riga mostra TUTTE le gambe toccate, non solo quella che ha chiuso.
- * La posizione si chiude alla prima — e' una gara, non un «ha mai toccato il
- * target» — ma «stop il 5, target il 18» dice due cose: che il trade e' andato
- * a -1R, e che quello stop era troppo stretto. La seconda non e' ricavabile
- * dall'esito, ed e' la sola ragione per cui le date delle gambe vengono
- * registrate anche dopo la chiusura.
+ * ⚠️ UNA RIGA PER SEGNALE, alta una riga, come la tabella dei setup. La prima
+ * versione impilava quattro righe per episodio — identita', geometria,
+ * sequenza delle gambe, nota — e a quaranta episodi erano quattro schermate
+ * per una lista che si legge scorrendo. Stessa aritmetica che ha tolto la
+ * doppia riga dall'identita' dei setup: 50 righe x 66px erano 3.300px.
+ *
+ * ⚠️ E la colonna «Poi» e' la ragione per cui questa vista esiste. La
+ * posizione si chiude alla PRIMA gamba toccata — e' una gara, non un «ha mai
+ * toccato il target» — ma se lo stop e' arrivato il 5 e il target il 18, il
+ * trade vale -1R *ed* era nel verso giusto con lo stop troppo stretto. Quel
+ * secondo fatto non e' ricavabile dall'esito, e va tenuto a schermo come DATO
+ * (la data), con la spiegazione in prosa nell'intestazione, una volta sola,
+ * invece che ripetuta su ogni riga.
  */
 
 const ICONA = {
@@ -46,127 +52,165 @@ const PASTIGLIA: Record<string, string> = {
   neutro: "border-border bg-muted/50 text-muted-foreground",
 };
 
-function Riga({ riga, onApri }: { riga: PlanOutcomeRow; onApri?: (id: number) => void }) {
+/* ⚠️ I tre template sono LETTERALI, e il numero di colonne segue quante celle
+ * sono VISIBILI a quella larghezza: una cella `hidden` e' `display:none` e non
+ * occupa una traccia. Stessa forma della tabella dei setup.
+ *
+ *   < sm    titolo · esito · R
+ *   >= sm   + chiusa, poi
+ *   >= lg   + condizione, sedute
+ */
+const COLONNE =
+  "grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-x-2 " +
+  "sm:grid-cols-[minmax(0,1fr)_116px_68px_100px_64px] sm:gap-x-3 " +
+  "lg:grid-cols-[minmax(0,1fr)_124px_116px_68px_100px_64px_60px]";
+
+const INTESTAZIONE = "text-[0.6765rem] uppercase tracking-[0.14em] text-muted-foreground";
+
+/** Titolo e nome su UNA riga. Stessa scelta di `InlineIdentity` nei setup, e
+ *  per la stessa ragione: la seconda riga non dice niente che il titolo non
+ *  dica gia', e su quaranta righe e' mezza schermata. */
+function Identita({ riga }: { riga: PlanOutcomeRow }) {
+  return (
+    <span className="flex min-w-0 items-center gap-2">
+      <StockLogo ticker={riga.ticker} size="xs" />
+      <span className="shrink-0 text-sm font-bold tabular-nums">{riga.ticker}</span>
+      {riga.name && (
+        <span className="truncate text-xs text-muted-foreground" title={riga.name}>
+          {riga.name}
+        </span>
+      )}
+      {riga.source === "ricostruito" && (
+        /* Una ricostruzione sbagliata e' indistinguibile da una giusta finche'
+           nessuno guarda il campo: quindi il campo si guarda, su ogni riga. Il
+           perche' sta nella nota sotto la tabella, scritto una volta. */
+        <span
+          className="shrink-0 rounded border border-border px-1 text-[0.6176rem] font-semibold text-muted-foreground"
+          title="Livello di invalidazione ricostruito all'indietro da un fatto delle barre"
+        >
+          ric
+        </span>
+      )}
+    </span>
+  );
+}
+
+function Esito({ riga }: { riga: PlanOutcomeRow }) {
   const meta = ESITO_META[riga.esito] ?? {
     label: riga.esito, tono: "neutro" as const, spiegazione: "",
   };
   const Icona = ICONA[riga.esito as keyof typeof ICONA] ?? CircleSlash;
-  const gambe = sequenzaGambe(riga);
-  const stretto = stopTroppoStretto(riga);
-
   return (
-    <li className="border-b border-border/50 transition-colors last:border-b-0 hover:bg-accent/40">
-      <div className="flex min-w-0 items-start gap-3 px-3 py-2">
-        <span
-          className={cn(
-            "mt-0.5 inline-flex shrink-0 items-center gap-1 rounded-full border px-1.5 py-0.5 text-[0.7059rem] font-semibold sm:px-2",
-            PASTIGLIA[meta.tono],
-          )}
-          title={meta.spiegazione}
-        >
-          <Icona className="h-3 w-3" aria-hidden />
-          {/* Sul telefono resta l'icona: l'identita' della riga e' il titolo,
-              e lo stato vive nel colore e nel testo per gli assistivi. */}
-          <span className="sr-only sm:not-sr-only">{meta.label}</span>
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 justify-self-start rounded-full border px-1.5 py-0.5 text-[0.6765rem] font-semibold whitespace-nowrap",
+        PASTIGLIA[meta.tono],
+      )}
+      title={meta.spiegazione}
+    >
+      <Icona className="h-3 w-3 shrink-0" aria-hidden />
+      {/* Sul telefono resta l'icona: l'identita' della riga e' il titolo, e lo
+          stato vive nel colore e nel testo per gli assistivi. */}
+      <span className="sr-only sm:not-sr-only">{meta.label}</span>
+    </span>
+  );
+}
+
+/** Le gambe toccate DOPO la chiusura. Quasi sempre nessuna o una. */
+function Poi({ riga }: { riga: PlanOutcomeRow }) {
+  const dopo = sequenzaGambe(riga).filter((g) => g.dopo);
+  if (dopo.length === 0) {
+    return <span className="hidden text-xs text-muted-foreground sm:block">—</span>;
+  }
+  const stretto = stopTroppoStretto(riga);
+  return (
+    <span
+      className={cn(
+        "hidden items-center gap-1 whitespace-nowrap text-xs tabular-nums sm:flex",
+        stretto ? "font-semibold text-foreground" : "text-muted-foreground",
+      )}
+      title={
+        stretto
+          ? "Lo stop è arrivato prima di un target poi raggiunto: il verso era giusto, la distanza dello stop no."
+          : "Toccata dopo la chiusura della posizione: il prezzo ci è arrivato, ma la posizione non c'era più."
+      }
+    >
+      <ArrowRight className="h-3 w-3 shrink-0" aria-hidden />
+      {dopo.map((g) => `${g.etichetta} ${giornoBreve(g.data)}`).join(" · ")}
+    </span>
+  );
+}
+
+function Riga({ riga, onApri }: { riga: PlanOutcomeRow; onApri?: (id: number) => void }) {
+  return (
+    <li>
+      {/* Un bottone, non un link: la domanda che una riga di questo elenco
+          solleva e' «perche' e' finita cosi'», e la risposta e' il segnale —
+          non la scheda dell'azienda. E un'ancora dentro un bottone sarebbe
+          HTML non valido, quindi il titolo NON e' un link qui. */}
+      <button
+        type="button"
+        onClick={() => onApri?.(riga.alert_id)}
+        className={cn(COLONNE, "w-full px-3 py-1 text-left transition-colors hover:bg-accent/30")}
+      >
+        <Identita riga={riga} />
+
+        <span className="hidden truncate text-xs text-muted-foreground lg:block">
+          {detectorLabel(riga.detector)}
         </span>
 
-        <StockLogo ticker={riga.ticker} size="xs" />
+        <Esito riga={riga} />
 
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
-            <Link
-              to={`/stocks/${encodeURIComponent(riga.ticker)}`}
-              className="text-sm font-semibold tabular-nums hover:underline"
-            >
-              {riga.ticker}
-            </Link>
-            <span className="min-w-0 truncate text-[0.7059rem] text-muted-foreground">
-              {detectorLabel(riga.detector)} ·{" "}
-              {riga.tone === "bear" ? "ribassista" : "rialzista"}
-            </span>
-          </div>
+        <span className="hidden whitespace-nowrap text-xs tabular-nums text-muted-foreground sm:block">
+          {giornoBreve(riga.resolved_date)}
+        </span>
 
-          {/* La geometria, com'era il giorno dell'ingresso. */}
-          <p className="text-[0.7059rem] tabular-nums text-muted-foreground">
-            ingresso {giornoBreve(riga.entry_date)} a {riga.entry.toFixed(2)} · stop{" "}
-            {riga.stop.toFixed(2)} · target {riga.tp1.toFixed(2)}
-            {riga.source === "ricostruito" && (
-              <>
-                {" · "}
-                <span className="italic">livello ricostruito</span>
-                <InfoHint
-                  label="Livello ricostruito"
-                  text={
-                    "Questo detector non emetteva un livello di invalidazione quando il segnale è scattato: lo stop è stato ricostruito all'indietro da un fatto delle barre — la chiusura precedente di un gap, l'estremo del pivot di una divergenza. Resta dichiarato per sempre, perché una ricostruzione sbagliata è indistinguibile da una giusta finché nessuno guarda questo campo."
-                  }
-                />
-              </>
-            )}
-          </p>
+        <Poi riga={riga} />
 
-          {/* ⚠️ La sequenza. Ogni gamba con la sua data, e quella toccata dopo
-              la chiusura dichiarata tale: senza, leggerebbe come un guadagno
-              che non e' andato a nessuno. */}
-          {gambe.length > 0 && (
-            <p className="text-[0.7059rem] tabular-nums">
-              {gambe.map((g, i) => (
-                <span key={g.chiave}>
-                  {i > 0 && <span className="text-muted-foreground"> → </span>}
-                  <span
-                    className={cn(
-                      g.dopo
-                        ? "text-muted-foreground"
-                        : g.chiave === "stop"
-                          ? "text-rose-700 dark:text-rose-300"
-                          : "text-emerald-800 dark:text-emerald-300",
-                    )}
-                  >
-                    {g.etichetta} {giornoBreve(g.data)}
-                    {g.chiude && " · chiude"}
-                    {g.dopo && " · a posizione chiusa"}
-                  </span>
-                </span>
-              ))}
-            </p>
+        <span
+          className={cn(
+            "justify-self-end text-sm font-bold tabular-nums",
+            riga.r_multiple > 0
+              ? "text-emerald-800 dark:text-emerald-300"
+              : riga.r_multiple < 0
+                ? "text-rose-700 dark:text-rose-300"
+                : "text-muted-foreground",
           )}
-          {stretto && (
-            <p className="text-[0.7059rem] text-muted-foreground">
-              Lo stop è arrivato <strong>prima</strong> di un target poi raggiunto: il verso era
-              giusto, la distanza dello stop no.
-            </p>
-          )}
-        </div>
+        >
+          {formatR(riga.r_multiple)}
+        </span>
 
-        <div className="shrink-0 text-right">
-          <span
-            className={cn(
-              "block text-sm font-bold tabular-nums",
-              riga.r_multiple > 0
-                ? "text-emerald-800 dark:text-emerald-300"
-                : riga.r_multiple < 0
-                  ? "text-rose-700 dark:text-rose-300"
-                  : "text-muted-foreground",
-            )}
-          >
-            {formatR(riga.r_multiple)}
-          </span>
-          <span className="block text-[0.7059rem] tabular-nums text-muted-foreground">
-            {riga.bars_to_outcome} sedute
-          </span>
-          {onApri && (
-            /* ⚠️ Fuori dall'ancora del titolo, non dentro: un controllo
-               annidato in un `<a>` e' HTML non valido e si comporta male da
-               tastiera. */
-            <button
-              type="button"
-              onClick={() => onApri(riga.alert_id)}
-              className="mt-0.5 text-[0.7059rem] font-semibold text-muted-foreground underline underline-offset-2 hover:text-foreground"
-            >
-              segnale
-            </button>
-          )}
-        </div>
-      </div>
+        <span className="hidden justify-self-end whitespace-nowrap text-xs tabular-nums text-muted-foreground lg:block">
+          {riga.bars_to_outcome}
+        </span>
+      </button>
+    </li>
+  );
+}
+
+function Intestazione() {
+  return (
+    <li className={cn(COLONNE, "border-b bg-muted/20 px-3 py-1")}>
+      <span className={INTESTAZIONE}>Titolo</span>
+      <span className={cn(INTESTAZIONE, "hidden lg:block")}>Condizione</span>
+      <span className={INTESTAZIONE}>Esito</span>
+      <span className={cn(INTESTAZIONE, "hidden sm:block")}>Chiusa</span>
+      <span className={cn(INTESTAZIONE, "hidden items-center gap-1 sm:flex")}>
+        Poi
+        {/* La prosa sta qui, una volta, e non su ogni riga: e' una
+            spiegazione, non un dato. Il dato — la data — resta a schermo. */}
+        <InfoHint
+          label="Poi"
+          text={
+            "Le gambe toccate DOPO che la posizione si era chiusa. La posizione si chiude alla prima fra stop e target, quindi qui non c'è mai la gamba che ha chiuso. " +
+            "Quando è un target dopo uno stop, il verso del segnale era giusto e la distanza dello stop no: è la sola diagnosi che questo magazzino sa dare, e non è ricavabile dall'esito."
+          }
+        />
+      </span>
+      <span className={cn(INTESTAZIONE, "justify-self-end")}>R</span>
+      <span className={cn(INTESTAZIONE, "hidden justify-self-end lg:block")} title="Sedute dall'ingresso alla chiusura">
+        Sedute
+      </span>
     </li>
   );
 }
@@ -188,14 +232,24 @@ export function SignalOutcomeList({
       </Card>
     );
   }
+  const ricostruiti = righe.filter((r) => r.source === "ricostruito").length;
   return (
-    <Card>
+    <Card className="overflow-hidden">
       <CardContent className="p-0">
-        <ul>
+        <ul className="divide-y divide-border/40">
+          <Intestazione />
           {righe.map((r) => (
             <Riga key={r.alert_id} riga={r} onApri={onApriSegnale} />
           ))}
         </ul>
+        {ricostruiti > 0 && (
+          <p className="border-t bg-muted/20 px-3 py-1.5 text-[0.7059rem] text-muted-foreground">
+            <b className="tabular-nums text-foreground">{ricostruiti}</b> righe marcate{" "}
+            <b>ric</b>: il detector non emetteva un livello di invalidazione quando il segnale è
+            scattato, e lo stop è stato ricostruito all'indietro da un fatto delle barre — la
+            chiusura precedente di un gap, l'estremo del pivot di una divergenza.
+          </p>
+        )}
       </CardContent>
     </Card>
   );

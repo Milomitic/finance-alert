@@ -176,3 +176,24 @@ def test_un_esito_inventato_e_un_400_che_dice_quali_esistono(client: TestClient)
 
     assert r.status_code == 400
     assert "tp1" in r.json()["detail"]
+
+
+def test_il_menu_delle_condizioni_non_si_svuota_selezionandone_una(db: Session) -> None:
+    """⚠️ I conteggi per condizione sono il MENU del filtro, quindi si contano
+    prima che il filtro si applichi.
+
+    Calcolati dopo, scegliere un detector farebbe sparire tutti gli altri dal
+    menu: il controllo si disabiliterebbe da solo al primo uso, e per tornare
+    indietro bisognerebbe sapere che esiste un «tutte».
+    """
+    s = _titolo(db, "HHH")
+    _esito(db, s, detector="sr_flip")
+    _esito(db, s, detector="gap_and_go")
+
+    filtrato = elenco_esiti_piano(db, detector="sr_flip")
+
+    assert filtrato["total"] == 1, "il filtro non restringe piu' le righe"
+    assert filtrato["counts_by_detector"] == {"sr_flip": 1, "gap_and_go": 1}
+    # Controllo negativo: gli ALTRI filtri invece devono restringere anche il
+    # menu, altrimenti mostrerebbe condizioni che non hanno nessuna riga.
+    assert elenco_esiti_piano(db, esito="stop")["counts_by_detector"] == {}

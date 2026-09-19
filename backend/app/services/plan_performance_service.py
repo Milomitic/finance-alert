@@ -223,8 +223,6 @@ def elenco_esiti_piano(
     )
     if esito:
         stmt = stmt.where(PlanOutcome.esito == esito)
-    if detector:
-        stmt = stmt.where(PlanOutcome.detector == detector)
     if tone:
         stmt = stmt.where(PlanOutcome.tone == tone)
     if ticker:
@@ -236,11 +234,18 @@ def elenco_esiti_piano(
     righe = db.execute(
         stmt.order_by(PlanOutcome.resolved_date.desc(), PlanOutcome.id.desc())
     ).all()
-    esiti = [r[0] for r in righe]
 
+    # ⚠️ I conteggi per condizione si calcolano PRIMA di applicare il filtro
+    # per condizione, e non e' un dettaglio: sono il menu del filtro stesso.
+    # Calcolati dopo, selezionare un detector farebbe sparire tutti gli altri
+    # dall'elenco — cioe' il controllo si disabiliterebbe da solo al primo uso,
+    # e tornare indietro richiederebbe di sapere che esiste un «tutte».
     per_detector: dict[str, int] = defaultdict(int)
-    for e in esiti:
+    for e, _tick, _nome in righe:
         per_detector[e.detector] += 1
+    if detector:
+        righe = [r for r in righe if r[0].detector == detector]
+    esiti = [r[0] for r in righe]
 
     riassunto = _cella("tutti", esiti, min_n) if esiti else None
     if riassunto is not None:

@@ -1,4 +1,4 @@
-import { Target } from "lucide-react";
+import { Target, X } from "lucide-react";
 import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
@@ -45,6 +45,12 @@ const MIN_TASSO_N = 20;
 
 const GARE = ["tp1", "stop", "ambigua", "scaduto"] as const;
 
+const VERSI = [
+  { id: null, label: "Tutti" },
+  { id: "rialzisti", label: "Rialzisti" },
+  { id: "ribassisti", label: "Ribassisti" },
+] as const;
+
 function sottovistaDa(raw: string | null): SottoVista {
   return SOTTOVISTE.some((v) => v.id === raw) ? (raw as SottoVista) : "segnali";
 }
@@ -55,25 +61,59 @@ function tonoDa(raw: string | null): "bull" | "bear" | undefined {
   return raw && raw in TONO_DA_URL ? TONO_DA_URL[raw as keyof typeof TONO_DA_URL] : undefined;
 }
 
-function Chip({
-  attivo, onClick, children,
+/* ─── I controlli ─────────────────────────────────────────────────────────
+ *
+ * ⚠️ Gruppi con un'ETICHETTA, non una fila di pastiglie tutte uguali. La
+ * prima versione metteva «Ogni esito», quattro esiti, un separatore, «Ogni
+ * condizione» e QUATTORDICI condizioni su una riga sola che andava a capo tre
+ * volte: nessuna delle due dimensioni si leggeva come una dimensione, e
+ * «Target» accanto a «Divergenza RSI» sembrava lo stesso tipo di scelta.
+ *
+ * ⚠️ E le condizioni stanno in un `<select>`, non in pastiglie: sono quante
+ * ne emette il motore, quindi il loro numero non e' una costante di
+ * progetto. Un select si dimensiona sull'opzione PIU' LUNGA e ignora il
+ * genitore finche' non gli si mette `min-w-0 max-w-full` — gia' pagato su
+ * questo repo. */
+
+function Segmentato<T extends string | null>({
+  etichetta, voci, valore, onCambia,
 }: {
-  attivo: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
+  etichetta: string;
+  voci: readonly { id: T; label: string }[];
+  valore: T;
+  onCambia: (v: T) => void;
 }) {
   return (
-    <button
-      type="button"
-      aria-pressed={attivo}
-      onClick={onClick}
-      className={cn(
-        "min-h-[36px] rounded-md border px-3 text-xs font-semibold transition-colors",
-        attivo ? "bg-primary text-primary-foreground" : "hover:bg-accent",
-      )}
-    >
-      {children}
-    </button>
+    <div className="flex min-w-0 items-center gap-2">
+      <span className="shrink-0 text-[0.6765rem] uppercase tracking-[0.14em] text-muted-foreground">
+        {etichetta}
+      </span>
+      {/* Bottoni con `aria-pressed`, non `role="tab"`: non c'e' un tabpanel da
+          promettere, e un `aria-controls` verso un id che non esiste fa
+          annunciare agli assistivi una relazione inventata. */}
+      <div
+        role="group"
+        aria-label={etichetta}
+        className="inline-flex overflow-hidden rounded-md border text-xs font-semibold"
+      >
+        {voci.map((v) => (
+          <button
+            key={v.id ?? "tutti"}
+            type="button"
+            aria-pressed={valore === v.id}
+            onClick={() => onCambia(v.id)}
+            className={cn(
+              "min-h-[36px] whitespace-nowrap px-2.5 transition-colors",
+              valore === v.id
+                ? "bg-accent text-foreground"
+                : "text-muted-foreground hover:bg-accent/40",
+            )}
+          >
+            {v.label}
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -165,9 +205,11 @@ export function OutcomesView() {
   const sotto = sottovistaDa(params.get("esiti"));
   const gara = GARE.includes(params.get("gara") as (typeof GARE)[number])
     ? (params.get("gara") as string)
-    : undefined;
-  const detector = params.get("condizione") || undefined;
-  const tone = tonoDa(params.get("tono"));
+    : null;
+  const detector = params.get("condizione") || null;
+  const versoUrl = params.get("tono");
+  const verso = VERSI.some((v) => v.id === versoUrl) ? (versoUrl as string | null) : null;
+  const tone = tonoDa(verso);
   const ticker = params.get("ticker")?.trim().toUpperCase() || undefined;
   const paginaUrl = Number(params.get("pagina"));
   const offset =
@@ -176,7 +218,10 @@ export function OutcomesView() {
   const signal = useAlert(signalId);
 
   const q = usePlanOutcomes(
-    { esito: gara, detector, tone, ticker, limit: ESITI_PER_PAGINA, offset },
+    {
+      esito: gara ?? undefined, detector: detector ?? undefined, tone, ticker,
+      limit: ESITI_PER_PAGINA, offset,
+    },
     sotto === "segnali",
   );
 
@@ -197,14 +242,17 @@ export function OutcomesView() {
   const righe = q.data?.items ?? [];
   const totale = q.data?.total ?? 0;
   const detectors = Object.entries(q.data?.counts_by_detector ?? {})
-    .map(([d, n]) => ({ detector: d, count: n }))
-    .sort((a, b) => b.count - a.count || a.detector.localeCompare(b.detector));
+    .map(([d, n]) => ({ detector: d, count: n, label: detectorLabel(d) }))
+    .sort((a, b) => a.label.localeCompare(b.label));
+  const filtriAttivi = !!gara || !!detector || !!verso || !!ticker;
+  /** ⚠️ La somma dei conteggi, non `totale`: quello e' gia' ristretto dalla
+   *  condizione scelta, quindi «Tutte (12)» annuncerebbe dodici righe mentre
+   *  toglierlo ne mostra trecento. I conteggi arrivano dal server misurati
+   *  PRIMA del filtro per condizione, apposta. */
+  const totaleCondizioni = detectors.reduce((s, d) => s + d.count, 0);
 
   return (
     <div className="max-w-5xl space-y-4">
-      {/* Bottoni con `aria-pressed`, non tab: non c'e' un tabpanel da
-          promettere, e un `aria-controls` verso un id che non esiste fa
-          annunciare agli assistivi una relazione inesistente. */}
       <div className="flex flex-wrap items-center gap-2">
         <div
           role="group"
@@ -259,34 +307,67 @@ export function OutcomesView() {
             </section>
           ) : null}
 
-          <div className="flex flex-wrap items-center gap-2">
-            <Chip attivo={!gara} onClick={() => cambiaPerimetro({ gara: null })}>
-              Ogni esito
-            </Chip>
-            {GARE.map((g) => (
-              <Chip key={g} attivo={gara === g} onClick={() => cambiaPerimetro({ gara: g })}>
-                {ESITO_META[g].label}
-              </Chip>
-            ))}
+          {/* I controlli, per dimensione. Vedi la nota sopra `Segmentato`. */}
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+            <Segmentato
+              etichetta="Esito"
+              valore={gara}
+              onCambia={(v) => cambiaPerimetro({ gara: v })}
+              voci={[
+                { id: null, label: "Tutti" },
+                ...GARE.map((g) => ({ id: g as string, label: ESITO_META[g].label })),
+              ]}
+            />
+
+            <Segmentato
+              etichetta="Verso"
+              valore={verso}
+              onCambia={(v) => cambiaPerimetro({ tono: v })}
+              voci={VERSI}
+            />
+
             {detectors.length > 1 && (
-              <>
-                <span className="mx-1 h-5 w-px bg-border" aria-hidden />
-                <Chip
-                  attivo={!detector}
-                  onClick={() => cambiaPerimetro({ condizione: null })}
+              <label className="flex min-w-0 items-center gap-2">
+                <span className="shrink-0 text-[0.6765rem] uppercase tracking-[0.14em] text-muted-foreground">
+                  Condizione
+                </span>
+                <select
+                  value={detector ?? ""}
+                  onChange={(e) => cambiaPerimetro({ condizione: e.target.value || null })}
+                  className="min-h-[36px] min-w-0 max-w-full rounded-md border bg-background px-2 text-xs font-semibold"
                 >
-                  Ogni condizione
-                </Chip>
-                {detectors.map(({ detector: d, count }) => (
-                  <Chip
-                    key={d}
-                    attivo={detector === d}
-                    onClick={() => cambiaPerimetro({ condizione: d })}
-                  >
-                    {detectorLabel(d)} <span className="tabular-nums opacity-70">{count}</span>
-                  </Chip>
-                ))}
-              </>
+                  <option value="">Tutte ({totaleCondizioni.toLocaleString("it-IT")})</option>
+                  {detectors.map(({ detector: d, count, label }) => (
+                    <option key={d} value={d}>
+                      {label} ({count})
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+
+            {ticker && (
+              <button
+                type="button"
+                onClick={() => cambiaPerimetro({ ticker: null })}
+                aria-label={`Solo ${ticker}, togli il filtro`}
+                className="inline-flex min-h-[36px] items-center gap-1 rounded-md border px-3 text-xs font-semibold hover:bg-accent"
+              >
+                Solo {ticker}
+                <X className="h-3 w-3" aria-hidden />
+              </button>
+            )}
+
+            {filtriAttivi && (
+              <button
+                type="button"
+                onClick={() =>
+                  cambiaPerimetro({ gara: null, tono: null, condizione: null, ticker: null })
+                }
+                className="min-h-[36px] text-xs font-semibold text-muted-foreground underline underline-offset-2 hover:text-foreground"
+              >
+                Azzera i filtri
+              </button>
             )}
           </div>
 
@@ -302,8 +383,8 @@ export function OutcomesView() {
             </div>
             {q.isLoading ? (
               <div className="space-y-2">
-                {Array.from({ length: 5 }).map((_, i) => (
-                  <CardSkeleton key={i} rows={2} className="h-[86px]" />
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <CardSkeleton key={i} rows={1} className="h-[34px]" />
                 ))}
               </div>
             ) : q.isError ? (

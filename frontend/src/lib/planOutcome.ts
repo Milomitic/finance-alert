@@ -84,6 +84,10 @@ export function stopTroppoStretto(riga: PlanOutcomeRow): boolean {
 }
 
 export interface EsitoMeta {
+  /** ⚠️ CORTA: sta in una pastiglia dentro una colonna da 116px e nei chip
+   *  del filtro. La distinzione fra «stop» e «stop e target nella stessa
+   *  barra» resta — e' una categoria a se' apposta — ma si dice in due
+   *  parole, e il perche' sta nella spiegazione. */
   label: string;
   /** ⚠️ `emerald`/`rose` — la DIREZIONE di un risultato di mercato. `red`/
    *  `green` in questo repo vogliono dire «rotto/a posto». */
@@ -103,7 +107,7 @@ export const ESITO_META: Record<string, EsitoMeta> = {
     spiegazione: "Lo stop è arrivato per primo: la posizione si sarebbe chiusa in perdita, di 1R per costruzione.",
   },
   ambigua: {
-    label: "Stop (stessa barra)",
+    label: "Stessa barra",
     tono: "bad",
     spiegazione:
       "Stop e target sono stati toccati nella stessa seduta. Il dato giornaliero non dice quale sia venuto prima, quindi si assegna lo stop — la convenzione pessimista — e la categoria resta separata per poter misurare quanto costa.",
