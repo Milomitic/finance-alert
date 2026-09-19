@@ -419,6 +419,40 @@ rilasciato niente:
 gh api "repos/Milomitic/finance-alert/actions/runs/<id>/jobs"   --jq '.jobs[] | "\(.conclusion // .status)\t\(.name)"'
 ```
 
+### ⚠️ `head_sha` vuole lo SHA INTERO, e con quello corto risponde VUOTO (2026-09-19)
+
+Settima istanza di «uno strumento risponde pulito e falso», e costata venti
+minuti di attesa a vuoto. `actions/runs?head_sha=0bf2ba18` non e' un errore:
+e' una lista VUOTA, perche' l'API confronta i quaranta caratteri e non fa
+prefisso. In uno script che ne estrae l'id, la variabile resta vuota, l'URL
+successivo diventa `.../runs//jobs` e ogni giro stampa `404` — cioe' il
+sintomo indica la rotta sbagliata invece del parametro sbagliato.
+
+    gh api "repos/.../actions/runs?head_sha=$(git rev-parse HEAD)"   # SI
+    gh api "repos/.../actions/runs?head_sha=$(git rev-parse --short HEAD)"  # lista vuota
+
+⚠️ Il ciclo di attesa va scritto in modo che una lista vuota lo FERMI. Un
+`for` che ripete sessanta volte una chiamata con l'id vuoto non sta
+aspettando la CI: sta aspettando niente, e lo fa con l'aria di funzionare.
+
+### ⚠️ Una advisory nuova su un TRANSITIVO ferma il rilascio (2026-09-19)
+
+`gitops` porta `needs: [image, audit, image-scan]`, quindi `dependency audit`
+rosso salta il bump del tag. Il commento sopra quel job in `ci.yml` diceva il
+contrario — «does NOT gate deploys» — ed era rimasto indietro rispetto alla
+riga che l'aveva cambiato; corretto il 2026-09-19.
+
+Ne segue che una CVE pubblicata durante la notte su un pacchetto che nessuno
+ha toccato basta a fermare un rilascio, e il primo istinto («cosa ho aggiunto
+io?») e' tempo perso: si legge la corsa PRECEDENTE, e se era verde la causa e'
+a monte. La correzione minima per un transitivo senza vincolo in `pyproject`
+e' `uv lock --upgrade-package <nome>`: diff di TRE righe — versione, sdist,
+wheel — e nessun altro pacchetto che si muove. Backup del lock prima, perche'
+un comando `uv` in questo repo ha gia' aggiornato di sua iniziativa un
+pacchetto che nessuno aveva chiesto. E si verifica col venv SINCRONIZZATO
+sulla versione nuova: `anyio` sta sotto `TestClient`, quindi una rottura si
+vede nella suite solo dopo `uv sync`.
+
 ### ⚠️ "Synced + Healthy" does NOT mean your change is on screen
 
 Cost a round-trip on 2026-09-04 ("non vedo le modifiche"). Everything looked
