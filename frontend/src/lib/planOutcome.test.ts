@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import type { PlanOutcomeRow } from "@/api/planOutcomes";
 
-import { formatR, gambaChiudente, sequenzaGambe, stopTroppoStretto } from "./planOutcome";
+import {
+  formatR, gambaChiudente, raccontaPiano, sequenzaGambe, stopTroppoStretto,
+} from "./planOutcome";
 
 function riga(p: Partial<PlanOutcomeRow> = {}): PlanOutcomeRow {
   return {
@@ -99,5 +101,40 @@ describe("formatR", () => {
     expect(formatR(2.44)).toBe("+2.4R");
     expect(formatR(-1)).toBe("−1.0R");
     expect(formatR(0)).toBe("0.0R");
+  });
+});
+
+describe("raccontaPiano", () => {
+  it("dice quale gamba ha chiuso e quanto ha reso", () => {
+    expect(raccontaPiano(riga())).toBe("Target colpito il 10 mar (+2.0R).");
+  });
+
+  it("⚠️ e dice anche che cosa e' successo DOPO, con la diagnosi", () => {
+    // È la seconda metà della storia: la posizione era chiusa allo stop,
+    // quindi −1R è giusto, e il prezzo al target ci è arrivato lo stesso.
+    const s = raccontaPiano(riga({
+      esito: "stop", r_multiple: -1, resolved_date: "2026-03-05",
+      stop_hit_date: "2026-03-05", tp1_hit_date: "2026-03-18",
+    }));
+    expect(s).toContain("Stop colpito il 5 mar (−1.0R)");
+    expect(s).toContain("target il 18 mar");
+    expect(s).toContain("la distanza dello stop no");
+  });
+
+  it("non aggiunge la diagnosi quando l'ordine e' l'altro", () => {
+    // Controllo negativo: «entrambe toccate» non è una diagnosi, l'ORDINE lo è.
+    const s = raccontaPiano(riga({
+      esito: "tp1", resolved_date: "2026-03-10",
+      tp1_hit_date: "2026-03-10", stop_hit_date: "2026-03-20",
+    }));
+    expect(s).toContain("stop il 20 mar");
+    expect(s).not.toContain("la distanza dello stop no");
+  });
+
+  it("uno scaduto dice che non ha toccato niente, invece di tacere", () => {
+    expect(raccontaPiano(riga({
+      esito: "scaduto", r_multiple: 0.4, resolved_date: "2026-03-30",
+      tp1_hit_date: null, stop_hit_date: null,
+    }))).toBe("Orizzonte trascorso il 30 mar senza toccare né stop né target (+0.4R).");
   });
 });

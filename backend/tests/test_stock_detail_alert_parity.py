@@ -55,6 +55,12 @@ _CANONICI = {
     "outcome_hit", "outcome_fwd_return", "outcome_horizon_days",
     "outcome_mkt_excess", "outcome_entry_close", "next_earnings_date",
     "setup_origin",
+    # ⚠️ L'esito del PIANO (`plan_outcomes`), che e' una domanda diversa da
+    # `outcome_*`: «il piano si sarebbe chiuso in guadagno» contro «la
+    # direzione ha pagato a orizzonte fisso». Arriva qui perche' la storia di
+    # un titolo passa da `list_alerts`, cioe' dallo stesso serializzatore —
+    # che e' esattamente il difetto FA-055 che questo file sorveglia, evitato.
+    "plan",
 }
 
 

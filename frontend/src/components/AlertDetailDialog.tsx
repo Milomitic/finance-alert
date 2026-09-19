@@ -24,6 +24,7 @@ import { AlertChartButton, type AlertChartLink } from "@/components/alert/AlertC
 import { AlertSetupOrigin } from "@/components/alert/AlertSetupOrigin";
 import { SignalBreadthRow } from "@/components/alert/SignalBreadthRow";
 import { SignalSnapshotView } from "@/components/SignalSnapshotView";
+import { PlanOutcomeBlock } from "@/components/alert/PlanOutcomeBlock";
 import { PlaybookView } from "@/components/PlaybookView";
 import { TrackTradeForm } from "@/components/TrackTradeForm";
 import { StockLogo } from "@/components/dashboard/StockLogo";
@@ -459,8 +460,12 @@ export function AlertDetailDialog({ alert, onClose, chart }: Props) {
             nessuna sezione. */}
         {isSignalKind(alert.rule_kind) && alert.signal_date && (
           <div className="px-5 pt-4">
+            {/* «Direzione», non «Esito»: quel nome prometteva di rispondere a
+                «com'e' andato questo segnale» e rispondeva a una domanda
+                sola — se la direzione avesse pagato a orizzonte fisso. Il
+                piano, cioe' stop e target, sta nel blocco qui sotto. */}
             <div className="text-[0.7059rem] uppercase tracking-wider text-muted-foreground font-semibold mb-2">
-              Esito realizzato
+              Direzione all'orizzonte
             </div>
             {alert.outcome_hit != null ? (
               (() => {
@@ -587,6 +592,22 @@ export function AlertDetailDialog({ alert, onClose, chart }: Props) {
                 </div>
               )
             )}
+          </div>
+        )}
+
+        {/* ⚠️ La SECONDA domanda, accanto a quella sopra e non al posto suo.
+            «Direzione» dice se il detector ha previsto la deriva a orizzonte
+            fisso; questo dice se il piano si sarebbe chiuso in guadagno, e
+            quale gamba l'ha chiuso. Un segnale puo' prendere il target in tre
+            sedute e finire l'orizzonte sotto il prezzo d'ingresso: sono due
+            fatti diversi, entrambi veri, e fonderli cambierebbe in silenzio
+            ogni numero d'efficacia gia' a schermo. */}
+        {isSignalKind(alert.rule_kind) && (
+          <div className="px-5 pt-4">
+            <div className="mb-2 flex items-center gap-1 text-[0.7059rem] font-semibold uppercase tracking-wider text-muted-foreground">
+              Piano · stop contro target
+            </div>
+            <PlanOutcomeBlock plan={alert.plan} />
           </div>
         )}
 

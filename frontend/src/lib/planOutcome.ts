@@ -1,5 +1,3 @@
-import type { PlanOutcomeRow } from "@/api/planOutcomes";
-
 /* ─── Raccontare una gara stop-contro-target ──────────────────────────────
  *
  * Calcolo puro, fuori dal JSX, perche' ogni riga di questa vista e'
@@ -18,6 +16,23 @@ import type { PlanOutcomeRow } from "@/api/planOutcomes";
  * prima o poi — che non corrisponde a nessun guadagno, perche' una posizione
  * con quel target aveva anche uno stop e si sarebbe chiusa da sola in perdita.
  */
+
+/** Il minimo che serve per raccontare una gara.
+ *
+ *  ⚠️ Una forma STRUTTURALE, non `PlanOutcomeRow`: la stessa gara arriva da
+ *  due percorsi — l'elenco degli esiti (che porta anche titolo e detector) e
+ *  il campo `plan` di un alert (che no) — e legare queste funzioni al tipo
+ *  piu' ricco costringerebbe il secondo chiamante a inventare i campi che non
+ *  ha. Entrambi i tipi soddisfano questo. */
+export interface GaraDiPiano {
+  /** tp1 | stop | ambigua | scaduto */
+  esito: string;
+  resolved_date: string;
+  r_multiple: number;
+  stop_hit_date: string | null;
+  tp1_hit_date: string | null;
+  tp2_hit_date: string | null;
+}
 
 export interface Gamba {
   chiave: "stop" | "tp1" | "tp2";
@@ -47,7 +62,7 @@ export function gambaChiudente(esito: string): "stop" | "tp1" | null {
  *
  *  A parita' di data lo stop viene per primo, per la stessa ragione per cui
  *  una barra ambigua si assegna allo stop. */
-export function sequenzaGambe(riga: PlanOutcomeRow): Gamba[] {
+export function sequenzaGambe(riga: GaraDiPiano): Gamba[] {
   const chiude = gambaChiudente(riga.esito);
   const grezze: { chiave: Gamba["chiave"]; etichetta: string; data: string | null }[] = [
     { chiave: "stop", etichetta: "stop", data: riga.stop_hit_date },
@@ -75,7 +90,7 @@ export function sequenzaGambe(riga: PlanOutcomeRow): Gamba[] {
  *  E' il numero che nessun altro magazzino sa dare, e la ragione per cui le
  *  date delle gambe sono registrate anche dopo la chiusura: non «entrambe
  *  toccate», ma l'ORDINE, che e' tutta la diagnosi. */
-export function stopTroppoStretto(riga: PlanOutcomeRow): boolean {
+export function stopTroppoStretto(riga: GaraDiPiano): boolean {
   return (
     !!riga.stop_hit_date &&
     !!riga.tp1_hit_date &&
@@ -132,4 +147,31 @@ export function giornoBreve(iso: string | null | undefined): string {
   return Number.isNaN(d.getTime())
     ? "—"
     : d.toLocaleDateString("it-IT", { day: "numeric", month: "short" });
+}
+
+/** La chiusura del piano in una frase, per un titolo accessibile o una riga
+ *  di dettaglio.
+ *
+ *  ⚠️ Dice sempre DUE cose quando ci sono: quale gamba ha chiuso, e quali
+ *  altre il prezzo ha toccato dopo. La seconda meta' e' la sola diagnosi che
+ *  questo magazzino sa dare — «stop il 5, target il 18» vale -1R ed e'
+ *  giusto, e dice anche che quello stop era troppo stretto. */
+export function raccontaPiano(riga: GaraDiPiano): string {
+  const r = formatR(riga.r_multiple);
+  const quando = giornoBreve(riga.resolved_date);
+  const testa =
+    riga.esito === "tp1"
+      ? `Target colpito il ${quando} (${r})`
+      : riga.esito === "stop"
+        ? `Stop colpito il ${quando} (${r})`
+        : riga.esito === "ambigua"
+          ? `Stop e target nella stessa barra, il ${quando} (${r}): il dato giornaliero non dice quale sia venuto prima, si assegna lo stop`
+          : `Orizzonte trascorso il ${quando} senza toccare né stop né target (${r})`;
+  const dopo = sequenzaGambe(riga).filter((g) => g.dopo);
+  if (dopo.length === 0) return `${testa}.`;
+  const coda = dopo.map((g) => `${g.etichetta} il ${giornoBreve(g.data)}`).join(", ");
+  const diagnosi = stopTroppoStretto(riga)
+    ? " — il verso era giusto, la distanza dello stop no"
+    : "";
+  return `${testa}. Dopo la chiusura il prezzo ha toccato ${coda}${diagnosi}.`;
 }

@@ -154,6 +154,38 @@ export interface AlertPeer {
   sector: string | null;
 }
 
+/** La gara stop-contro-target di un segnale (`plan_outcomes`).
+ *
+ * ⚠️ Le tre date delle gambe sono GREZZE: l'ordine si deduce, e «stop il 5,
+ * target il 18» dice due cose — il trade e' andato a -1R, e quello stop era
+ * troppo stretto. Nessun booleano precalcolato, perche' una conclusione
+ * congelata qui vivrebbe in due posti il giorno che qualcuno la affina.
+ * I lettori sono in `lib/planOutcome.ts`. */
+export interface PlanBrief {
+  /** tp1 | stop | ambigua | scaduto */
+  esito: string;
+  resolved_date: string;
+  /** La barra da cui parte la gara: la PRIMA emissione dell'alert. */
+  entry_date: string;
+  entry: number;
+  stop: number;
+  tp1: number;
+  tp2: number | null;
+  /** La distanza di rischio in prezzo: 1R. */
+  r: number;
+  r_multiple: number;
+  bars_to_outcome: number;
+  horizon_days: number;
+  mae_r: number;
+  mfe_r: number;
+  tp2_reached: boolean;
+  stop_hit_date: string | null;
+  tp1_hit_date: string | null;
+  tp2_hit_date: string | null;
+  /** emesso | ricostruito */
+  source: string;
+}
+
 export interface Alert {
   id: number;
   /** ISO date (YYYY-MM-DD) of the market-data bar where the rule's
@@ -194,6 +226,18 @@ export interface Alert {
   same_day_same_tone?: number | null;
   same_day_same_tone_sector?: number | null;
   same_day_opposite_tone?: number | null;
+  /** L'esito del PIANO: quale fra stop e target e' stato toccato per primo.
+   *
+   *  ⚠️ Una domanda DIVERSA da `outcome_*` qui sotto, non la stessa misurata
+   *  meglio — «il piano si sarebbe chiuso in guadagno?» contro «la direzione
+   *  ha pagato a orizzonte fisso?». Un segnale puo' prendere il target in tre
+   *  sedute e finire l'orizzonte sotto il prezzo d'ingresso: il primo lo
+   *  chiama «mancato», il secondo «target», e sono entrambi veri.
+   *
+   *  `null` e' il caso ordinario: o il detector non ha emesso un livello di
+   *  invalidazione (sei su diciassette non lo facevano), o la gara non si e'
+   *  ancora chiusa. */
+  plan?: PlanBrief | null;
   /** Realized outcome from the signal_outcomes warehouse (LEFT JOIN on
    *  alert_id). All four are null while the signal's forward horizon hasn't
    *  elapsed yet — the UI shows "in maturazione" for a signal alert that has

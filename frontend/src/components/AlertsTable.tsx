@@ -1,8 +1,11 @@
-import { Archive, ArchiveRestore, ArrowDown, ArrowUp, ArrowUpDown, Check, Clock, Unplug, X } from "lucide-react";
+import {
+  Archive, ArchiveRestore, ArrowDown, ArrowUp, ArrowUpDown, Check, Clock, Hourglass,
+  Target, Unplug, X,
+} from "lucide-react";
 import { type MouseEvent, useState } from "react";
 import { Link } from "react-router-dom";
 
-import type { Alert } from "@/api/types";
+import type { Alert, PlanBrief } from "@/api/types";
 import { AlertKindChip, AlertNatureCell, AlertToneCell } from "@/components/AlertChips";
 import { StockLogo } from "@/components/dashboard/StockLogo";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -24,6 +27,7 @@ import {
   isAlertDelayed,
 } from "@/lib/alertDates";
 import { PROBABILITA_TOOLTIP, isSignalKind, snapshotForza, snapshotProbabilita } from "@/lib/alertMeta";
+import { ESITO_META, formatR, raccontaPiano, stopTroppoStretto } from "@/lib/planOutcome";
 import { InfoHint } from "@/components/ui/info-hint";
 import { cn } from "@/lib/utils";
 
@@ -41,7 +45,13 @@ const ALERTS_COLS = [
   { id: "orizzonte",   label: "Orizzonte" },
   { id: "forza",       label: "Forza" },
   { id: "probabilita", label: "Prob." },
-  { id: "esito",       label: "Esito" },
+  // ⚠️ «Direzione» e non «Esito», e l'id resta `esito` perche' le preferenze
+  // salvate dell'utente sono indicizzate su quello. Il nome vecchio era
+  // ambiguo proprio dove conta: quella colonna dice se la DIREZIONE ha pagato
+  // a orizzonte fisso, e accanto ora c'e' «Piano», che dice se il piano si
+  // sarebbe chiuso in guadagno. Due domande diverse, due nomi.
+  { id: "esito",       label: "Direzione" },
+  { id: "piano",       label: "Piano" },
 ] as const;
 
 /** Horizon label + tone classes (plain string-literal Record so Tailwind's
@@ -142,6 +152,58 @@ function SortableHeader({
   );
 }
 
+/** La gara stop-contro-target di un segnale, in una cella.
+ *
+ * ⚠️ Il numero e' l'R, non la percentuale: R e' la distanza dello stop, quindi
+ * «+2,4R» dice quanto il piano ha reso RISPETTO A CIO' CHE RISCHIAVA, che e'
+ * la sola lettura confrontabile fra segnali con stop diversi. Il titolo porta
+ * la storia intera, comprese le gambe toccate DOPO la chiusura — «stop il 5,
+ * target il 18» vale -1R ed e' giusto, e dice anche che quello stop era
+ * troppo stretto.
+ *
+ * ⚠️ E un marcatore quando quell'ordine si e' verificato: e' la sola diagnosi
+ * che `plan_outcomes` sa dare e nessun'altra colonna la porta. Ambra no —
+ * `amber-600` vale 3,19:1 su fondo scheda, sotto la soglia AA; resta il
+ * grassetto e il titolo.
+ */
+function PianoCell({ plan }: { plan: PlanBrief | null }) {
+  if (!plan) {
+    return (
+      <span
+        className="text-muted-foreground"
+        title="Nessun piano risolto: o il detector non emetteva un livello di invalidazione quando il segnale è scattato, o la gara fra stop e target non si è ancora chiusa."
+      >
+        —
+      </span>
+    );
+  }
+  const meta = ESITO_META[plan.esito];
+  const stretto = stopTroppoStretto(plan);
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 whitespace-nowrap rounded px-1.5 py-0.5 text-xs font-semibold tabular-nums",
+        meta?.tono === "ok"
+          ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300"
+          : meta?.tono === "bad"
+            ? "bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300"
+            : "bg-muted text-muted-foreground",
+      )}
+      title={raccontaPiano(plan)}
+    >
+      {plan.esito === "tp1" ? (
+        <Target className="h-3 w-3 shrink-0" />
+      ) : plan.esito === "scaduto" ? (
+        <Hourglass className="h-3 w-3 shrink-0" />
+      ) : (
+        <X className="h-3 w-3 shrink-0" />
+      )}
+      {formatR(plan.r_multiple)}
+      {stretto && <span aria-hidden>*</span>}
+    </span>
+  );
+}
+
 export function AlertsTable({
   alerts,
   selectedIds,
@@ -204,6 +266,7 @@ export function AlertsTable({
   const showForza = embedded || isVisible("forza");
   const showProbabilita = embedded || isVisible("probabilita");
   const showEsito = embedded || isVisible("esito");
+  const showPiano = embedded || isVisible("piano");
   // Archive action column: always-on when the callback is wired (full page),
   // never in embedded mode — like the checkbox, it's an action, not data,
   // so it doesn't participate in the column-visibility menu.
@@ -213,7 +276,7 @@ export function AlertsTable({
   const colSpan = [
     showCheckbox, showDataSegnale, showRilevato, showTitolo, showRegola,
     showCatena, showNatura, showTono, showOrizzonte, showForza, showProbabilita,
-    showEsito, showArchive,
+    showEsito, showPiano, showArchive,
   ].filter(Boolean).length;
 
   // Per user spec: header cells at 1rem (text-base), body rows at
@@ -375,9 +438,17 @@ export function AlertsTable({
           {showEsito && (
             <TableHead
               className="text-base"
-              hint="Esito realizzato del segnale all'orizzonte di riferimento: verde = direzione azzeccata, rosso = mancata, … = in attesa dell'orizzonte, «Fermo» = la serie prezzi del titolo non avanza più e l'orizzonte non potrà mai completarsi"
+              hint="La DIREZIONE ha pagato all'orizzonte del detector: verde = azzeccata, rosso = mancata, … = in attesa dell'orizzonte, «Fermo» = la serie prezzi del titolo non avanza più e l'orizzonte non potrà mai completarsi. ⚠️ Non dice niente su stop e target: quella è la colonna «Piano» qui accanto, e le due possono discordare — un segnale può prendere il target in tre sedute e finire l'orizzonte sotto il prezzo d'ingresso."
             >
-              Esito
+              Direzione
+            </TableHead>
+          )}
+          {showPiano && (
+            <TableHead
+              className="text-base"
+              hint="Quale fra stop e target il prezzo ha toccato per PRIMO, con il guadagno in multipli di R (R = la distanza dello stop). È una gara, non un «ha mai toccato il target»: contare i soli tocchi produrrebbe un tasso lusinghiero che non corrisponde a nessun guadagno, perché una posizione con quel target aveva anche uno stop. «—» quando il detector non emetteva un livello di invalidazione, o quando la gara non si è ancora chiusa."
+            >
+              Piano
             </TableHead>
           )}
           {showArchive && (
@@ -687,6 +758,16 @@ export function AlertsTable({
                     </span>
                   );
                 })()}
+              </TableCell>
+            )}
+            {/* Piano — la gara stop-contro-target (plan_outcomes). ⚠️ Domanda
+                DIVERSA da quella della colonna accanto, non la stessa
+                misurata meglio: il titolo della pastiglia racconta quale
+                gamba ha chiuso E quali il prezzo ha toccato dopo, che e'
+                l'unica diagnosi che questo magazzino sa dare. */}
+            {showPiano && (
+              <TableCell>
+                <PianoCell plan={a.plan ?? null} />
               </TableCell>
             )}
             {/* Archivia/Disarchivia — hover-visible icon at the row end.

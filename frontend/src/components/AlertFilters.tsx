@@ -393,7 +393,7 @@ export function AlertFilters({ value, onChange }: Props) {
             in maturazione. "tutti" clears. */}
         <SelectField
           labelClassName={ETICHETTA}
-          label="Esito"
+          label="Direzione"
           value={value.outcome ?? "tutti"}
           placeholder="Tutti"
           onValueChange={(v) =>
@@ -588,7 +588,7 @@ export function AlertFilters({ value, onChange }: Props) {
               <FilterChip
                 label={
                   <>
-                    <span className="text-muted-foreground">Esito:</span>{" "}
+                    <span className="text-muted-foreground">Direzione:</span>{" "}
                     {outcomeLabel}
                   </>
                 }

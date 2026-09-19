@@ -10,7 +10,15 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.db_json import json_text
-from app.models import Alert, OhlcvDaily, Position, SignalOutcome, Stock, StockSetup
+from app.models import (
+    Alert,
+    OhlcvDaily,
+    PlanOutcome,
+    Position,
+    SignalOutcome,
+    Stock,
+    StockSetup,
+)
 from app.models.stock_setup import STATUS_CONVERTED
 
 # ⚠️ Il predicato ha un proprietario unico in `ohlcv_service`, accanto a
@@ -273,9 +281,16 @@ def list_alerts(
             SignalOutcome.horizon_days.label("outcome_horizon_days"),
             SignalOutcome.mkt_neutral_excess.label("outcome_mkt_excess"),
             SignalOutcome.entry_close.label("outcome_entry_close"),
+            # ⚠️ L'ENTITA' intera, non dieci colonne sciolte: sono tutte di
+            # una riga sola e sfilarle una per una moltiplicherebbe per dieci
+            # i punti in cui le due select possono divergere. Un solo `outerjoin`
+            # in piu', e l'unicita' su `alert_id` e' imposta dall'indice, quindi
+            # non puo' moltiplicare le righe ne' falsare conteggio e pagine.
+            PlanOutcome,
         )
         .join(Stock, Stock.id == Alert.stock_id)
         .outerjoin(SignalOutcome, SignalOutcome.alert_id == Alert.id)
+        .outerjoin(PlanOutcome, PlanOutcome.alert_id == Alert.id)
     )
     base = _apply_filters(
         base,
@@ -368,6 +383,41 @@ def _setup_origins(db: Session, alert_ids: list[int]) -> dict[int, dict[str, Any
     return out
 
 
+def _piano_dict(piano: PlanOutcome | None) -> dict[str, Any] | None:
+    """L'esito di piano di un alert, o None quando non ne ha uno.
+
+    ⚠️ None e' il caso ORDINARIO e non un dato mancante: un piano nasce solo
+    se il detector ha emesso un livello di invalidazione, e si risolve solo
+    quando il prezzo tocca una gamba o l'orizzonte passa. Sei detector su
+    diciassette non emettevano un livello, quindi i loro alert non hanno un
+    piano da misurare e non lo avranno mai.
+    """
+    if piano is None:
+        return None
+    return {
+        "esito": piano.esito,
+        "resolved_date": piano.resolved_date,
+        "entry_date": piano.entry_date,
+        "entry": piano.entry,
+        "stop": piano.stop,
+        "tp1": piano.tp1,
+        "tp2": piano.tp2,
+        "r": piano.r,
+        "r_multiple": piano.r_multiple,
+        "bars_to_outcome": piano.bars_to_outcome,
+        "horizon_days": piano.horizon_days,
+        "mae_r": piano.mae_r,
+        "mfe_r": piano.mfe_r,
+        "tp2_reached": piano.tp2_reached,
+        # Il primo tocco di ciascuna gamba NELL'ORIZZONTE, anche dopo la
+        # chiusura: e' la sola diagnosi che questo magazzino sa dare.
+        "stop_hit_date": piano.stop_hit_date,
+        "tp1_hit_date": piano.tp1_hit_date,
+        "tp2_hit_date": piano.tp2_hit_date,
+        "source": piano.source,
+    }
+
+
 def _row_to_item(
     row: Any,
     next_earnings: date | None,
@@ -382,7 +432,7 @@ def _row_to_item(
     quando lo apre da una posizione invece che dalla lista.
     """
     (alert, ticker_val, name_val, currency_val, nodata_streak,
-     o_hit, o_fwd, o_horizon, o_mkt, o_entry) = row
+     o_hit, o_fwd, o_horizon, o_mkt, o_entry, piano) = row
     return {
         "id": alert.id,
         "rule_kind": derive_rule_kind(None, alert.signal_name),
@@ -416,6 +466,19 @@ def _row_to_item(
         # e il confronto sempre vero, e questo campo esiste per mostrare
         # una DIVERGENZA.
         "outcome_entry_close": float(o_entry) if o_entry is not None else None,
+        # ⚠️ L'ALTRA domanda, e non la stessa misurata meglio:
+        #
+        #   outcome_*   la DIREZIONE ha pagato a orizzonte fisso? (signal_outcomes)
+        #   plan        il PIANO si sarebbe chiuso in guadagno?   (plan_outcomes)
+        #
+        # Un segnale puo' prendere il target in tre sedute e finire
+        # l'orizzonte sotto il prezzo d'ingresso: il primo lo chiama
+        # «mancato», il secondo «target», e sono entrambi veri. Restano due
+        # campi perche' fonderli cambierebbe in silenzio il significato di
+        # ogni numero d'efficacia gia' a schermo — calibrazione, monitor di
+        # deriva, cubo dei detector e curva di equity sono tutti costruiti
+        # sulla chiusura a orizzonte fisso.
+        "plan": _piano_dict(piano),
         # La serie prezzi del titolo si e' fermata: l'alert senza esito non
         # sta aspettando l'orizzonte, non lo raggiungera'. Vedi
         # `_series_stalled_clause`. La DATA accompagna sempre la bandiera:
@@ -467,9 +530,11 @@ def get_alert_detail(db: Session, alert_id: int) -> dict[str, Any] | None:
             # solo qui non diverge in silenzio, esplode — che e' cio' che
             # un serializzatore unico compra.
             SignalOutcome.entry_close.label("outcome_entry_close"),
+            PlanOutcome,
         )
         .join(Stock, Stock.id == Alert.stock_id)
         .outerjoin(SignalOutcome, SignalOutcome.alert_id == Alert.id)
+        .outerjoin(PlanOutcome, PlanOutcome.alert_id == Alert.id)
         .where(Alert.id == alert_id)
     ).first()
     if row is None:

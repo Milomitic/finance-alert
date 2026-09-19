@@ -46,6 +46,44 @@ class AlertSetupOriginOut(BaseModel):
     converted_signal_date: date | None = None
 
 
+
+class PlanBriefOut(BaseModel):
+    """La gara stop-contro-target di un alert, come la vede la sua scheda.
+
+    ⚠️ Le tre date delle gambe escono GREZZE, senza nessun «stop troppo
+    stretto» precalcolato: l'ordine si deduce, e una conclusione congelata qui
+    vivrebbe in due posti il giorno che qualcuno la affina.
+    """
+
+    #: tp1 | stop | ambigua | scaduto. `ambigua` = stop e target nella stessa
+    #: barra: il dato giornaliero non dice quale sia venuto prima, si assegna
+    #: lo stop (pessimista) e la categoria resta a se' per poter misurare dopo
+    #: quanto costa quella convenzione.
+    esito: str
+    resolved_date: date
+    #: La barra da cui parte la gara: la PRIMA emissione dell'alert, non
+    #: l'ultima revisione — quella la riscrive ogni scansione.
+    entry_date: date
+    entry: float
+    stop: float
+    tp1: float
+    tp2: float | None = None
+    #: La distanza di rischio in prezzo: 1R, il denominatore di tutto il resto.
+    r: float
+    r_multiple: float
+    bars_to_outcome: int
+    horizon_days: int
+    mae_r: float
+    mfe_r: float
+    tp2_reached: bool
+    #: Primo tocco di ciascuna gamba NELL'ORIZZONTE, anche dopo la chiusura.
+    stop_hit_date: date | None = None
+    tp1_hit_date: date | None = None
+    tp2_hit_date: date | None = None
+    #: emesso | ricostruito.
+    source: str
+
+
 class AlertOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -82,6 +120,17 @@ class AlertOut(BaseModel):
     same_day_same_tone: int | None = None
     same_day_same_tone_sector: int | None = None
     same_day_opposite_tone: int | None = None
+    # ── L'esito del PIANO (plan_outcomes, LEFT JOIN su alert_id) ────────────
+    #: ⚠️ Una domanda DIVERSA da `outcome_*` qui sotto, non la stessa misurata
+    #: meglio: «il piano si sarebbe chiuso in guadagno?» contro «la direzione
+    #: ha pagato a orizzonte fisso?». Un segnale puo' prendere il target in
+    #: tre sedute e finire l'orizzonte sotto il prezzo d'ingresso.
+    #:
+    #: `None` e' il caso ordinario: un piano esiste solo se il detector ha
+    #: emesso un livello di invalidazione, e si risolve solo quando il prezzo
+    #: tocca una gamba o l'orizzonte passa.
+    plan: PlanBriefOut | None = None
+
     # ── Realised outcome (signal_outcomes warehouse, LEFT JOIN on alert_id) ──
     # All four are None while the signal's forward horizon hasn't elapsed yet
     # (the UI shows "in corso" for a signal alert with signal_date + no
