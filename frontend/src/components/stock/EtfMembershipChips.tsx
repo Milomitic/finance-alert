@@ -41,3 +41,35 @@ export function EtfMembershipChips({
     </>
   );
 }
+
+/* ─── La stessa informazione, in EVIDENZA ─────────────────────────────────
+ *
+ * Le chip dei fondi stavano nella fila di borsa, settore e indici, alla
+ * stessa taglia: si leggevano come un'etichetta in piu' e non come la notizia
+ * che sono — «questo titolo muove quei fondi». L'utente l'aveva chiesto in
+ * evidenza; ora e' una fascia propria, con un titolo che dice la misura.
+ *
+ * ⚠️ Il titolo dice «fra le prime 25 posizioni» e non «componente di», per la
+ * stessa ragione scritta sopra: la cache tiene 25 posizioni per fondo, quindi
+ * la fascia afferma solo cio' che ha misurato. E l'ASSENZA della fascia non
+ * vuol dire «in nessun ETF»: vuol dire che nessun fondo in cache lo tiene fra
+ * i suoi pesi massimi.
+ */
+export function EtfMembershipStrip({
+  ticker,
+  funds,
+}: {
+  ticker: string;
+  funds: string[] | undefined;
+}) {
+  if (!funds?.length) return null;
+  return (
+    <div className="flex min-w-0 flex-wrap items-center gap-2 rounded-lg border border-primary/30 bg-primary/[0.06] px-3 py-2">
+      <span className="inline-flex shrink-0 items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-foreground/85">
+        <Layers className="h-4 w-4 shrink-0" aria-hidden />
+        Fra le prime 25 posizioni di {funds.length} ETF
+      </span>
+      <EtfMembershipChips ticker={ticker} funds={funds} />
+    </div>
+  );
+}

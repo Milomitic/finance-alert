@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 
 import type { OhlcvBar, Stock, StockKpis } from "@/api/types";
 import { MarketStateBadge } from "@/components/dashboard/MarketStateBadge";
-import { EtfMembershipChips } from "@/components/stock/EtfMembershipChips";
+import { EtfMembershipStrip } from "@/components/stock/EtfMembershipChips";
 import { IndexMembershipChips } from "@/components/stock/IndexMembershipChips";
 import { StockLogo } from "@/components/dashboard/StockLogo";
 import { Card, CardContent } from "@/components/ui/card";
@@ -138,15 +138,14 @@ export function StockHeader({ stock, kpis, ohlcv, sotto }: Props) {
       <HeaderSparkline closes={closes} up={sparkUp} />
       <div className={cn("absolute left-0 top-0 bottom-0 w-1.5 z-10", tone.stripe)} aria-hidden />
       {/* Smaller padding now that the KPI strip is gone */}
-      {/* ⚠️ `justify-center` solo QUANDO la card contiene la sola identita'.
-          Con il profilo sotto, centrare verticalmente lascerebbe l'aria in
-          cima e in fondo e schiaccerebbe i due blocchi l'uno sull'altro. */}
-      <CardContent
-        className={cn(
-          "relative z-10 h-full flex flex-col p-4 pl-7",
-          sotto ? "justify-start gap-4" : "justify-center",
-        )}
-      >
+      {/* Contenuto centrato verticalmente SEMPRE, anche col profilo sotto
+          (richiesta dell'utente, 2026-09-21). Prima si centrava solo la sola
+          identita', per il timore che due blocchi finissero schiacciati: non
+          succede, perche' `gap-4` resta fra loro e `justify-center`
+          distribuisce solo lo spazio AVANZATO, sopra e sotto in parti uguali.
+          Allineati in alto lasciavano tutto il vuoto in fondo, sopra lo
+          sparkline. */}
+      <CardContent className="relative z-10 flex h-full flex-col justify-center gap-4 p-4 pl-7">
         <div className="flex items-center gap-6 flex-wrap">
           {/* Identity column: logo aligned + vertically centered with the
               ticker/name on one row; the exchange/sector tags sit BELOW. */}
@@ -203,7 +202,9 @@ export function StockHeader({ stock, kpis, ohlcv, sotto }: Props) {
                   Le due formulazioni sono vincolate da test separati — sembrano
                   la stessa chip e affermano cose diverse. */}
               <IndexMembershipChips ticker={stock.ticker} indices={stock.in_indices} />
-              <EtfMembershipChips ticker={stock.ticker} funds={stock.in_etfs} />
+              {/* I FONDI non stanno piu' qui: hanno una fascia propria sotto,
+                  in evidenza. Alla stessa taglia di borsa e settore si
+                  leggevano come un'etichetta in piu'. */}
             </div>
           </div>
 
@@ -303,6 +304,8 @@ export function StockHeader({ stock, kpis, ohlcv, sotto }: Props) {
             )}
           </div>
         </div>
+
+        <EtfMembershipStrip ticker={stock.ticker} funds={stock.in_etfs} />
 
         {/* ⚠️ Il divisore e' `border-border/40` e non pieno: sotto c'e' lo
             sparkline, e una riga netta lo taglierebbe a meta' invece di

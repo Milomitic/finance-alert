@@ -350,11 +350,31 @@ def get_one(
     if stock is None:
         raise HTTPException(status_code=404, detail="Stock not found")
     out = StockOut.model_validate(stock)
-    # Cache-only read, so this costs one indexed query and never a network
-    # fan-out across two dozen funds on a page load.
+    _con_appartenenze(db, out, stock)
+    return out
+
+
+
+
+def _con_appartenenze(db: Session, out: StockOut, stock: Stock) -> StockOut:
+    """Riempie le appartenenze di un titolo: indici e fondi.
+
+    ⚠️ Esiste perche' la rotta del DETTAGLIO non le riempiva. `StockOut` le
+    dichiara con un default (`[]`), quindi la pagina riceveva due liste vuote
+    invece di un errore, e le pastiglie «S&P 500» e «fra i primi 25 di SOXX»
+    semplicemente non comparivano — su ogni titolo, per sempre. E' la stessa
+    forma di FA-055: un campo che una rotta non popola si serializza come
+    vuoto, e da fuori «non e' in nessun indice» e «questa rotta non lo
+    riempie» sono indistinguibili.
+
+    Da qui in avanti le due rotte chiamano questa, quindi non possono piu'
+    divergere in silenzio.
+    """
+    # Lettura da CACHE, quindi una query indicizzata e mai un fan-out di rete
+    # su due dozzine di fondi al caricamento di una pagina.
     out.in_etfs = etf_holdings_service.etfs_containing(db, stock.ticker)
-    # Index membership was already in the catalogue and read by nothing but
-    # the screener's filter list — 813 of 986 stocks carry one.
+    # L'appartenenza a un indice era gia' nel catalogo e la leggeva soltanto
+    # l'elenco dei filtri dello screener — 813 titoli su 986 ne hanno una.
     out.in_indices = [
         IndexOptionOut(code=code, name=name)
         for code, name in db.execute(
@@ -365,8 +385,6 @@ def get_one(
         ).all()
     ]
     return out
-
-
 
 
 def _safe_volume(v) -> int:
@@ -415,7 +433,11 @@ def get_stock_detail(
     if detail is None:
         raise HTTPException(status_code=404, detail="Ticker not found")
     return StockDetailOut(
-        stock=StockOut.model_validate(detail.stock),
+        # ⚠️ `_con_appartenenze`, non una `model_validate` nuda: quella
+        # lasciava `in_indices` e `in_etfs` ai loro default vuoti, e la pagina
+        # di dettaglio — l'unica che mostra quelle pastiglie — non ne ha mai
+        # resa una.
+        stock=_con_appartenenze(db, StockOut.model_validate(detail.stock), detail.stock),
         exchange_tz=live_quote_service.exchange_timezone(ticker),
         ohlcv=[
             OhlcvBarOut(

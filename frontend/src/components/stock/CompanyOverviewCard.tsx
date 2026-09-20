@@ -134,6 +134,12 @@ export function CompanyOverviewCard({ ticker, stock, variante = "card" }: Props)
           className={cn(
             "mt-4 grid grid-cols-1 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)] gap-5 lg:gap-8",
             inCornice && "lg:flex-1 lg:min-h-0",
+            // Dentro l'intestazione le due colonne hanno altezze diverse, e in
+            // alto la descrizione restava appesa sopra un vuoto. Centrate fra
+            // loro si leggono come un blocco solo (richiesta dell'utente,
+            // 2026-09-21). Non nella scheda con cornice: li' la descrizione
+            // scorre dentro la riga, e l'allineamento lo fa gia' l'altezza.
+            !inCornice && "lg:items-center",
           )}
         >
           {/* ── Description ──────────────────────────────────────────── */}
@@ -182,7 +188,7 @@ export function CompanyOverviewCard({ ticker, stock, variante = "card" }: Props)
               value={founded ? String(founded) : null}
             />
             {website && (
-              <div className="grid grid-cols-[6.5rem_minmax(0,1fr)] items-baseline gap-3 py-2">
+              <div className="grid grid-cols-[6.5rem_minmax(0,1fr)] items-baseline gap-3 py-1.5">
                 <dt className="flex items-center gap-1.5 text-[0.7059rem] font-semibold uppercase tracking-wider text-muted-foreground">
                   <ExternalLink className="h-3 w-3 shrink-0" />
                   Sito web
@@ -229,7 +235,7 @@ function Row({
 }) {
   if (!value) return null;
   return (
-    <div className="grid grid-cols-[6.5rem_minmax(0,1fr)] items-baseline gap-3 py-2">
+    <div className="grid grid-cols-[6.5rem_minmax(0,1fr)] items-baseline gap-3 py-1.5">
       <dt className="flex items-center gap-1.5 text-[0.7059rem] font-semibold uppercase tracking-wider text-muted-foreground">
         <Icon className="h-3 w-3 shrink-0" />
         {label}
@@ -255,7 +261,7 @@ function CeoRow({
 }) {
   const flag = getStockFlagCode(country);
   return (
-    <div className="grid grid-cols-[6.5rem_minmax(0,1fr)] items-baseline gap-3 py-2">
+    <div className="grid grid-cols-[6.5rem_minmax(0,1fr)] items-baseline gap-3 py-1.5">
       <dt className="flex items-center gap-1.5 text-[0.7059rem] font-semibold uppercase tracking-wider text-muted-foreground">
         <User className="h-3 w-3 shrink-0" />
         CEO

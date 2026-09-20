@@ -2,7 +2,7 @@ import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it } from "vitest";
 
-import { EtfMembershipChips } from "./EtfMembershipChips";
+import { EtfMembershipChips, EtfMembershipStrip } from "./EtfMembershipChips";
 
 /* The chips say which funds hold this stock. What they must never say is that
  * the stock is IN those funds.
@@ -79,5 +79,32 @@ describe("each chip opens the fund", () => {
       "href",
       "/stocks/BRK-B",
     );
+  });
+});
+
+describe("EtfMembershipStrip — la stessa informazione in evidenza", () => {
+  it("ha un titolo che dice la MISURA, e le chip dei fondi", () => {
+    render(
+      <MemoryRouter>
+        <EtfMembershipStrip ticker="NVDA" funds={["SOXX", "QQQ", "XLK"]} />
+      </MemoryRouter>,
+    );
+    // «Fra le prime 25 posizioni», non «componente di»: la cache tiene 25
+    // posizioni per fondo, e la fascia afferma solo cio' che ha misurato.
+    expect(screen.getByText(/Fra le prime 25 posizioni di 3 ETF/)).toBeInTheDocument();
+    for (const f of ["SOXX", "QQQ", "XLK"]) {
+      expect(screen.getByRole("link", { name: f })).toBeInTheDocument();
+    }
+  });
+
+  it("senza fondi non occupa spazio", () => {
+    // Controllo negativo: una fascia vuota con «0 ETF» si leggerebbe come
+    // «non e' in nessun ETF», che e' un'affermazione che la cache non sa fare.
+    const { container } = render(
+      <MemoryRouter>
+        <EtfMembershipStrip ticker="SOLO" funds={[]} />
+      </MemoryRouter>,
+    );
+    expect(container).toBeEmptyDOMElement();
   });
 });
