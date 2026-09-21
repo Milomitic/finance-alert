@@ -446,7 +446,7 @@ export function AlertsTable({
           {showPiano && (
             <TableHead
               className="text-base"
-              hint="Quale fra stop e target il prezzo ha toccato per PRIMO, con il guadagno in multipli di R (R = la distanza dello stop). È una gara, non un «ha mai toccato il target»: contare i soli tocchi produrrebbe un tasso lusinghiero che non corrisponde a nessun guadagno, perché una posizione con quel target aveva anche uno stop. «—» quando il detector non emetteva un livello di invalidazione, o quando la gara non si è ancora chiusa."
+              hint="Quale fra stop e target il prezzo ha toccato per PRIMO, con il guadagno in multipli di R (R = la distanza dello stop). L'ESITO è quello della gara, perché una posizione con quel target aveva anche uno stop: contare i soli tocchi darebbe un tasso che non corrisponde a nessun guadagno. Ma ogni tocco viene REGISTRATO comunque — la data del primo tocco di stop, 1° e 2° target su tutto l'orizzonte, anche dopo la chiusura — ed è da lì che la scheda Esiti conta gli «stop troppo stretti». Passa sulla cella per la sequenza. «—» quando il detector non emetteva un livello di invalidazione, o quando la gara non si è ancora chiusa."
             >
               Piano
             </TableHead>

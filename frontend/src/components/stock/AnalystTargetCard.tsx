@@ -162,6 +162,7 @@ function RatingBar({ r }: { r: AnalystRating }) {
   const total = buy + hold + sell;
   if (total === 0) return null;
   const pct = (n: number) => `${(n / total) * 100}%`;
+  const quota = (n: number) => ({ flex: `${n} 1 0%` });
   return (
     <div>
       <SectionTitle
@@ -198,32 +199,37 @@ function RatingBar({ r }: { r: AnalystRating }) {
           />
         )}
       </div>
-      {/* Labels: each one matches the WIDTH of the bar segment above it
-          and centers itself within that width. Zero-count categories are
-          skipped entirely (no "0 sell" placeholder). The non-zero
-          segments naturally widen to fill the row, keeping their labels
-          aligned under the corresponding bar slice. */}
-      <div className="flex mt-1 text-[0.7647rem] tabular-nums">
+      {/* Labels: each one centers itself under its bar segment. Zero-count
+          categories are skipped entirely (no "0 sell" placeholder).
+
+          ⚠️ The share is a flex-GROW, not a width. With `width: 4.8%` — one
+          hold out of 21 — the label got ~30px, "1 hold" does not fit in 30px,
+          and it broke onto two lines, doubling the card's height for the
+          smallest number on it. `flex: n 1 0%` + `min-w-max` keeps the labels
+          proportional while there is room and lets a small one take its own
+          width when there is not, borrowing it from the big neighbour. A label
+          on one line slightly off-centre beats a label on two. */}
+      <div className="mt-1 flex gap-x-2 text-[0.7647rem] tabular-nums">
         {buy > 0 && (
           <span
-            className="text-center text-emerald-800 dark:text-emerald-300 font-semibold"
-            style={{ width: pct(buy) }}
+            className="min-w-max whitespace-nowrap text-center text-emerald-800 dark:text-emerald-300 font-semibold"
+            style={quota(buy)}
           >
             {buy} buy
           </span>
         )}
         {hold > 0 && (
           <span
-            className="text-center text-amber-700 dark:text-amber-300 font-semibold"
-            style={{ width: pct(hold) }}
+            className="min-w-max whitespace-nowrap text-center text-amber-700 dark:text-amber-300 font-semibold"
+            style={quota(hold)}
           >
             {hold} hold
           </span>
         )}
         {sell > 0 && (
           <span
-            className="text-center text-rose-700 dark:text-rose-300 font-semibold"
-            style={{ width: pct(sell) }}
+            className="min-w-max whitespace-nowrap text-center text-rose-700 dark:text-rose-300 font-semibold"
+            style={quota(sell)}
           >
             {sell} sell
           </span>
