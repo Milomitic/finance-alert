@@ -286,8 +286,11 @@ are in sync … Missing: @emnapi/core@… from lock file
 ```
 
 It is invisible locally — `npm run build` and even `npm ci` pass on Windows. Only
-a clean `npm ci` on Linux shows it. And because the `frontend` job gates `image`,
-a broken lock silently stops the deploy (image + bump get skipped).
+a clean `npm ci` on Linux shows it. And because the `frontend` job gates the
+release, a broken lock silently stops the deploy. (Since 2026-09-21 `image`
+builds in parallel and only `bump` is skipped — the image of a red commit
+exists in the registry and nothing deploys it. A broken lock ALSO breaks the
+image itself now: its frontend stage runs `npm ci` on arm64 musl.)
 
 **The recipe (from a594b29, re-applied 2026-07-17):**
 
@@ -493,6 +496,13 @@ Tre accorgimenti, ognuno misurato:
 - **Playwright scarica solo la «headless shell»** (`--only-shell`), in cache
   per versione; le dipendenze di sistema no, perche' i font decidono il
   layout che il gate misura.
+- **Il job `frontend` e' una matrice di tre**: lint + build, e vitest in due
+  meta' con `--shard`. ⚠️ L'id resta `frontend` di proposito: `bump` lo ha in
+  `needs`, e una matrice sotto lo stesso id fa aspettare al rilascio tutte le
+  parti. Dividere un job in job con id NUOVI li lascerebbe fuori dal
+  cancello. Il costo di vitest e' la creazione degli ambienti jsdom (128 s
+  sommati contro 49 s di test), e da una run all'altra oscilla fra 58 e 88 s
+  a parita' di codice: e' rumore dei runner, non una regressione.
 
 ### ⚠️ "Synced + Healthy" does NOT mean your change is on screen
 

@@ -133,8 +133,34 @@ jobs:
         run: uv run pytest tests/test_postgres_integration.py -v
 
   frontend:
-    name: frontend — hooks lint + vitest + tsc + vite build
+    name: frontend — ${{ matrix.parte }}
     runs-on: ubuntu-latest
+    # ⚠️ TRE macchine, e l'id del job resta `frontend` di proposito: `bump` lo
+    # porta in `needs`, e una matrice sotto lo stesso id vuol dire che il
+    # rilascio aspetta TUTTE le parti senza che nessuno debba aggiornare
+    # quella lista. Un job nuovo con un id nuovo sarebbe stato fuori dal
+    # cancello finche' qualcuno non se ne ricordava.
+    #
+    # Perche' diviso: era diventato il job piu' lungo della pipeline dopo che
+    # immagine e gate si erano accorciati — vitest da solo 58-88 s a parita'
+    # di codice, lint e build in coda altri ~30 s. Il costo di vitest non
+    # sono i test (49 s sommati sui worker) ma gli ambienti jsdom (128 s
+    # sommati): si divide per FILE con `--shard`, che Vitest fa da se'.
+    # Verificato in locale: 60 + 60 file, 498 + 486 = 984 test, cioe' la
+    # suite intera e nient'altro. Una parte senza file fallisce da sola
+    # («No test files found»), quindi non puo' passare misurando niente.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - parte: hooks lint + tsc + vite build
+            compito: build
+          - parte: vitest 1/2
+            compito: vitest
+            shard: 1/2
+          - parte: vitest 2/2
+            compito: vitest
+            shard: 2/2
     defaults:
       run:
         working-directory: frontend
@@ -156,13 +182,19 @@ jobs:
       # pre-existing stylistic errors, so it would fail on day one and get
       # switched off. See frontend/eslint.hooks.config.js.
       - name: hook rules (blank-screen class)
+        if: matrix.compito == 'build'
         run: npm run lint:hooks
       # The suite existed and passed, but nothing ran it on a push — so a test
-      # could go red and merge anyway. ~3s for 87 tests; there is no reason for
-      # it not to gate.
-      - name: vitest
-        run: npm run test:run
-      - run: npm run build
+      # could go red and merge anyway. There is no reason for it not to gate.
+      - name: vitest (${{ matrix.shard }})
+        if: matrix.compito == 'vitest'
+        run: npm run test:run -- --shard=${{ matrix.shard }}
+      # ⚠️ Il typecheck sta QUI e non in vitest, che traspila senza
+      # controllare i tipi (CLAUDE.md): un errore di tipo in un file di test
+      # e' visibile solo a questo passo.
+      - name: build (tsc + vite)
+        if: matrix.compito == 'build'
+        run: npm run build
 
   ui-gate:
     name: gate UI — layout e accessibilità in un browser vero (${{ matrix.parte }})
