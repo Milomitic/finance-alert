@@ -8,6 +8,7 @@ import { Link } from "react-router-dom";
 
 import type { EarningsEvent, RiskTier } from "@/api/types";
 import { StockLogo } from "@/components/dashboard/StockLogo";
+import { HintAnchor, HintUnderline } from "@/components/ui/info-hint";
 import { TableSearchInput } from "@/components/ui/table-search-input";
 import { formatEps, formatMarketCap } from "@/lib/calendarMeta";
 import { cn } from "@/lib/utils";
@@ -199,7 +200,11 @@ function ColHeader({
       ? ArrowUp
       : ArrowDown
     : ChevronsUpDown;
+  /* La spiegazione della colonna si apre in hover sulla parola sottolineata
+     a tratti, al posto del `title` che su un telefono non si apre mai; il
+     click resta all'ordinamento. */
   return (
+    <HintAnchor text={title}>
     <button
       type="button"
       onClick={() => onClick(sortKey)}
@@ -211,7 +216,7 @@ function ColHeader({
             : "descending"
           : "none"
       }
-      title={title ?? label}
+      title={title ? undefined : label}
       className={cn(
         "group/h flex items-center gap-1 px-1.5 py-0.5 -my-0.5 rounded transition-colors",
         align === "right" ? "justify-end" : "justify-start",
@@ -220,7 +225,7 @@ function ColHeader({
           : "hover:text-foreground hover:bg-muted/50",
       )}
     >
-      <span>{label}</span>
+      {title ? <HintUnderline>{label}</HintUnderline> : <span>{label}</span>}
       <Icon
         className={cn(
           "h-3 w-3 shrink-0 transition-opacity",
@@ -229,6 +234,7 @@ function ColHeader({
         aria-hidden
       />
     </button>
+    </HintAnchor>
   );
 }
 

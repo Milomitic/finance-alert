@@ -28,7 +28,7 @@ import {
 } from "@/lib/alertDates";
 import { PROBABILITA_TOOLTIP, isSignalKind, snapshotForza, snapshotProbabilita } from "@/lib/alertMeta";
 import { ESITO_META, formatR, raccontaPiano, stopTroppoStretto } from "@/lib/planOutcome";
-import { InfoHint } from "@/components/ui/info-hint";
+import { HintAnchor, HintUnderline } from "@/components/ui/info-hint";
 import { cn } from "@/lib/utils";
 
 /** Toggleable columns for the non-embedded alerts table.
@@ -123,30 +123,32 @@ function SortableHeader({
         align === "right" ? "text-right" : "text-left",
       )}
     >
-      {/* L'aiuto e' FRATELLO del bottone di ordinamento, non figlio: un
-          <button> dentro un <button> e' HTML non valido, e il browser
-          scioglie l'annidamento in modi che rompono il click e la
-          navigazione da tastiera. */}
+      {/* ⚠️ La spiegazione si aggancia al bottone di ordinamento, non gli
+          sta accanto: era un'icona «i» sorella del bottone (un <button>
+          dentro un <button> non e' HTML valido) e allargava la colonna su
+          ogni riga. Ora la parola e' sottolineata a tratti e si apre in
+          hover; il click resta all'ordinamento. */}
       <span
         className={cn(
           "inline-flex items-center gap-1",
           align === "right" && "ml-auto",
         )}
       >
-        <button
-          type="button"
-          onClick={() => onSort(column)}
-          className={cn(
-            "inline-flex items-center gap-1 hover:text-foreground transition-colors",
-            active && "text-foreground",
-          )}
-        >
-          <span>{label}</span>
-          {active && sortDir === "desc" && <ArrowDown className="h-3 w-3" />}
-          {active && sortDir === "asc" && <ArrowUp className="h-3 w-3" />}
-          {!active && <ArrowUpDown className="h-3 w-3 opacity-30" />}
-        </button>
-        {hint && <InfoHint label={label} text={hint} />}
+        <HintAnchor text={hint}>
+          <button
+            type="button"
+            onClick={() => onSort(column)}
+            className={cn(
+              "inline-flex items-center gap-1 hover:text-foreground transition-colors",
+              active && "text-foreground",
+            )}
+          >
+            {hint ? <HintUnderline>{label}</HintUnderline> : <span>{label}</span>}
+            {active && sortDir === "desc" && <ArrowDown className="h-3 w-3" />}
+            {active && sortDir === "asc" && <ArrowUp className="h-3 w-3" />}
+            {!active && <ArrowUpDown className="h-3 w-3 opacity-30" />}
+          </button>
+        </HintAnchor>
       </span>
     </th>
   );

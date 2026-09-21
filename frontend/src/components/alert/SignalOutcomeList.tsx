@@ -3,7 +3,7 @@ import { ArrowRight, CircleSlash, Target, TrendingDown, XCircle } from "lucide-r
 import type { PlanOutcomeRow } from "@/api/planOutcomes";
 import { StockLogo } from "@/components/dashboard/StockLogo";
 import { Card, CardContent } from "@/components/ui/card";
-import { InfoHint } from "@/components/ui/info-hint";
+import { HintLabel } from "@/components/ui/info-hint";
 import {
   ESITO_META, formatR, giornoBreve, sequenzaGambe, stopTroppoStretto,
 } from "@/lib/planOutcome";
@@ -195,21 +195,21 @@ function Intestazione() {
       <span className={cn(INTESTAZIONE, "hidden lg:block")}>Condizione</span>
       <span className={INTESTAZIONE}>Esito</span>
       <span className={cn(INTESTAZIONE, "hidden sm:block")}>Chiusa</span>
-      <span className={cn(INTESTAZIONE, "hidden items-center gap-1 sm:flex")}>
-        Poi
+      <span className={cn(INTESTAZIONE, "hidden sm:block")}>
         {/* La prosa sta qui, una volta, e non su ogni riga: e' una
             spiegazione, non un dato. Il dato — la data — resta a schermo. */}
-        <InfoHint
-          label="Poi"
+        <HintLabel
           text={
             "Le gambe toccate DOPO che la posizione si era chiusa. La posizione si chiude alla prima fra stop e target, quindi qui non c'è mai la gamba che ha chiuso. " +
             "Quando è un target dopo uno stop, il verso del segnale era giusto e la distanza dello stop no: è la sola diagnosi che questo magazzino sa dare, e non è ricavabile dall'esito."
           }
-        />
+        >
+          Poi
+        </HintLabel>
       </span>
       <span className={cn(INTESTAZIONE, "justify-self-end")}>R</span>
-      <span className={cn(INTESTAZIONE, "hidden justify-self-end lg:block")} title="Sedute dall'ingresso alla chiusura">
-        Sedute
+      <span className={cn(INTESTAZIONE, "hidden justify-self-end lg:block")}>
+        <HintLabel text="Sedute dall'ingresso alla chiusura della posizione.">Sedute</HintLabel>
       </span>
     </li>
   );

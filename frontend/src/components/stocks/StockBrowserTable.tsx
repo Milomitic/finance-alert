@@ -26,7 +26,7 @@ import { RISK_LABEL, RISK_TONE, scoreColor } from "@/lib/scoreMeta";
 import { getStockFlagCode } from "@/lib/stockMeta";
 import { formatCompactMoney, formatMoney } from "@/lib/money";
 import { GAP_TEXT, formatGap, lensGapOf } from "@/lib/lensGap";
-import { InfoHint } from "@/components/ui/info-hint";
+import { HintAnchor, HintLabel, HintUnderline } from "@/components/ui/info-hint";
 import { cn } from "@/lib/utils";
 import { SCREENER_COLS } from "@/lib/screenerColumns";
 
@@ -243,21 +243,27 @@ function SortableHeader({
   const active = sortBy === column;
   return (
     <th className={cn("px-3 py-1.5 text-base", align === "right" ? "text-right" : "text-left")}>
-      <button
-        type="button"
-        onClick={() => onClick(column)}
-        title={title ?? (clientOnly ? "Ordina la pagina corrente (lato client)" : undefined)}
-        className={cn(
-          "inline-flex items-center gap-1 hover:text-foreground transition-colors uppercase tracking-wide font-semibold",
-          active && "text-foreground",
-          align === "right" && "ml-auto",
-        )}
-      >
-        <span>{label}</span>
-        {active && sortDir === "desc" && <ArrowDown className="h-3 w-3" />}
-        {active && sortDir === "asc" && <ArrowUp className="h-3 w-3" />}
-        {!active && <ArrowUpDown className="h-3 w-3 opacity-30" />}
-      </button>
+      {/* La spiegazione della colonna si apre in hover sulla parola
+          sottolineata a tratti; il click resta all'ordinamento. La nota
+          «lato client» resta un `title`: descrive il comportamento del
+          bottone, non il significato della colonna. */}
+      <HintAnchor text={title}>
+        <button
+          type="button"
+          onClick={() => onClick(column)}
+          title={!title && clientOnly ? "Ordina la pagina corrente (lato client)" : undefined}
+          className={cn(
+            "inline-flex items-center gap-1 hover:text-foreground transition-colors uppercase tracking-wide font-semibold",
+            active && "text-foreground",
+            align === "right" && "ml-auto",
+          )}
+        >
+          {title ? <HintUnderline>{label}</HintUnderline> : <span>{label}</span>}
+          {active && sortDir === "desc" && <ArrowDown className="h-3 w-3" />}
+          {active && sortDir === "asc" && <ArrowUp className="h-3 w-3" />}
+          {!active && <ArrowUpDown className="h-3 w-3 opacity-30" />}
+        </button>
+      </HintAnchor>
     </th>
   );
 }
@@ -619,7 +625,7 @@ export function StockBrowserTable({
                   <SortableHeader column="pct_off_high" label="% da max 52w" align="right" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} />
                 )}
                 {isVisible("vs_ema200") && (
-                  <th className="px-3 py-1.5 text-right text-base uppercase tracking-wide font-semibold"><span className="inline-flex items-center gap-1">vs EMA200<InfoHint label="vs EMA200" text="Distanza % dalla EMA200" /></span></th>
+                  <th className="px-3 py-1.5 text-right text-base uppercase tracking-wide font-semibold"><HintLabel text="Distanza % dalla EMA200">vs EMA200</HintLabel></th>
                 )}
                 {isVisible("score") && (
                   <SortableHeader column="composite" label="Score" align="right" sortBy={sortBy} sortDir={sortDir} onClick={onSortChange} />

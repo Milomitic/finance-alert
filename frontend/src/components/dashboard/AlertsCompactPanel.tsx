@@ -6,7 +6,7 @@ import { ConfluenceRows } from "@/components/dashboard/ConfluenceCard";
 import { RecentAlertsFeed } from "@/components/dashboard/RecentAlertsFeed";
 import { TopStocksTable } from "@/components/dashboard/TopStocksTable";
 import { Card, CardContent } from "@/components/ui/card";
-import { InfoHint } from "@/components/ui/info-hint";
+import { HintLabel } from "@/components/ui/info-hint";
 import { SectionTitle } from "@/components/ui/section-title";
 import { PROBABILITA_TOOLTIP } from "@/lib/alertMeta";
 
@@ -93,8 +93,7 @@ export function AlertsCompactPanel({
           {COLUMNS.map((col) => (
             <div key={col.key} className="flex flex-col min-h-0 min-w-0">
               <div className="flex shrink-0 items-center gap-1 border-b bg-muted/40 px-3 py-1.5 text-xs font-bold uppercase tracking-[0.16em] text-muted-foreground">
-                {col.label}
-                {col.nota && <InfoHint label={col.label} text={col.nota} />}
+                {col.nota ? <HintLabel text={col.nota}>{col.label}</HintLabel> : col.label}
               </div>
               {/* Mobile/tablet: natural flow capped at 55vh so a long Feed
                   doesn't run away — the page scrolls. lg+: fixed-height

@@ -4,7 +4,7 @@ import { useState } from "react";
 import type { PlanPerfRow, PlanPerformance } from "@/api/platformHealth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { InfoHint } from "@/components/ui/info-hint";
+import { HintLabel, InfoHint } from "@/components/ui/info-hint";
 import { SectionTitle } from "@/components/ui/section-title";
 import { usePlanPerformance } from "@/hooks/usePlanPerformance";
 import { expectancyInterval, expectancyLabel, verdictTone } from "@/lib/planPerformance";
@@ -114,19 +114,10 @@ function Contenuto({ dati }: { dati: PlanPerformance }) {
           <thead>
             <tr className="border-b text-left text-xs text-muted-foreground">
               <th className="py-2 pr-3 font-medium">Detector</th>
-              <th className="py-2 pr-3 text-right font-medium">
-                Attesa
-                <InfoHint label="Attesa" text="Il guadagno medio in multipli di R (R = la distanza dello stop). È l'unico numero che aggrega: un tasso di successo del 35% con target a 4:1 batte un 60% a 1:1." />
-              </th>
-              <th className="py-2 pr-3 text-right font-medium">
-                Campione
-                <InfoHint label="Campione" text="Righe, e fra parentesi le FINESTRE INDIPENDENTI. Due segnali a tre giorni di distanza etichettati a 21 sedute condividono quasi tutta la finestra: non sono due osservazioni." />
-              </th>
+              <th className="py-2 pr-3 text-right font-medium"><HintLabel text="Il guadagno medio in multipli di R (R = la distanza dello stop). È l'unico numero che aggrega: un tasso di successo del 35% con target a 4:1 batte un 60% a 1:1.">Attesa</HintLabel></th>
+              <th className="py-2 pr-3 text-right font-medium"><HintLabel text="Righe, e fra parentesi le FINESTRE INDIPENDENTI. Due segnali a tre giorni di distanza etichettati a 21 sedute condividono quasi tutta la finestra: non sono due osservazioni.">Campione</HintLabel></th>
               <th className="py-2 pr-3 text-right font-medium">Esiti</th>
-              <th className="py-2 text-right font-medium">
-                Stop stretto
-                <InfoHint label="Stop stretto" text="Quante volte lo stop è stato colpito PRIMA di un target che poi è arrivato lo stesso. Quei trade avevano ragione e lo stop era nel posto sbagliato." />
-              </th>
+              <th className="py-2 text-right font-medium"><HintLabel text="Quante volte lo stop è stato colpito PRIMA di un target che poi è arrivato lo stesso. Quei trade avevano ragione e lo stop era nel posto sbagliato.">Stop stretto</HintLabel></th>
             </tr>
           </thead>
           <tbody>

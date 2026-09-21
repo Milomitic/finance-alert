@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 
 import type { IndexBreadth } from "@/api/types";
 import { Card, CardContent } from "@/components/ui/card";
+import { HintAnchor, HintUnderline } from "@/components/ui/info-hint";
 import { ACRONYM_HELP } from "@/lib/acronymHelp";
 import { getIndexMeta } from "@/lib/indexMeta";
 import { cn } from "@/lib/utils";
@@ -97,21 +98,24 @@ function SortableHeader({ column, label, align = "right", help, state, onClick }
   const dir = active ? state.dir : null;
   return (
     <th className={cn("px-3 py-2", align === "left" ? "text-left" : "text-right")}>
-      <button
-        type="button"
-        onClick={() => onClick(column)}
-        title={help}
-        className={cn(
-          "inline-flex items-center gap-1 hover:text-foreground transition-colors",
-          help && "cursor-help",
-          align === "right" && "ml-auto",
-        )}
-      >
-        <span>{label}</span>
-        {dir === "desc" && <ArrowDown className="h-3 w-3 text-foreground" />}
-        {dir === "asc" && <ArrowUp className="h-3 w-3 text-foreground" />}
-        {!active && <ArrowUpDown className="h-3 w-3 opacity-30" />}
-      </button>
+      {/* ⚠️ Era un `title`, che su un telefono non si apre mai. Ora la sigla
+          e' sottolineata a tratti e la spiegazione si apre in hover (o con
+          la pressione lunga); il click resta all'ordinamento. */}
+      <HintAnchor text={help}>
+        <button
+          type="button"
+          onClick={() => onClick(column)}
+          className={cn(
+            "inline-flex items-center gap-1 hover:text-foreground transition-colors",
+            align === "right" && "ml-auto",
+          )}
+        >
+          {help ? <HintUnderline>{label}</HintUnderline> : <span>{label}</span>}
+          {dir === "desc" && <ArrowDown className="h-3 w-3 text-foreground" />}
+          {dir === "asc" && <ArrowUp className="h-3 w-3 text-foreground" />}
+          {!active && <ArrowUpDown className="h-3 w-3 opacity-30" />}
+        </button>
+      </HintAnchor>
     </th>
   );
 }

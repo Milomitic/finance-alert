@@ -12,7 +12,7 @@ import { SectionTitle } from "@/components/ui/section-title";
 import { useDetectorPerformance } from "@/hooks/useDetectorPerformance";
 import { getAlertKindMeta } from "@/lib/alertMeta";
 import { cn } from "@/lib/utils";
-import { InfoHint } from "@/components/ui/info-hint";
+import { HintLabel } from "@/components/ui/info-hint";
 import { cellTone } from "@/lib/detectorPerformance";
 
 /* ─── DetectorPerformancePanel — esplora esiti per detector ─────────────── *
@@ -91,10 +91,7 @@ export function DetectorPerformancePanel() {
                         <th
                           className="text-right px-3 py-2 font-semibold"
                         >
-                          <span className="inline-flex items-center gap-1">
-                            Hit neutro
-                            <InfoHint label="Hit neutro" text="Hit-rate market-neutral: quota di segnali che hanno battuto la media dell'universo nella loro direzione (skill al netto del mercato)." />
-                          </span>
+                          <HintLabel text="Hit-rate market-neutral: quota di segnali che hanno battuto la media dell'universo nella loro direzione (skill al netto del mercato).">Hit neutro</HintLabel>
                         </th>
                         <th className="text-right px-3 py-2 font-semibold">
                           Fwd medio

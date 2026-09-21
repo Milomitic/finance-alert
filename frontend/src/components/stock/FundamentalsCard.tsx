@@ -21,7 +21,7 @@ import { useStockFundamentals } from "@/hooks/useStockFundamentals";
 import { fmtBig } from "@/lib/format";
 import { formatMoney } from "@/lib/money";
 import { cn } from "@/lib/utils";
-import { InfoHint } from "@/components/ui/info-hint";
+import { HintLabel } from "@/components/ui/info-hint";
 
 const EPS_GAAP_TRIMESTRALE =
   "EPS GAAP del trimestre (conto economico) — include poste straordinarie (es. costi di fusione, impairment).";
@@ -221,21 +221,15 @@ function AnnualTabBody({
               <th
                 className="px-1.5 py-1 text-right"
               >
-                <span className="inline-flex items-center gap-1">
-                  <span>
+                <HintLabel text={EPS_GAAP_ANNUALE}><span>
                     EPS
                     <span className="ml-0.5 text-[0.6471rem] align-top text-muted-foreground">GAAP</span>
-                  </span>
-                  <InfoHint label="EPS GAAP" text={EPS_GAAP_ANNUALE} />
-                </span>
+                  </span></HintLabel>
               </th>
               <th
                 className="px-1.5 py-1 text-right"
               >
-                <span className="inline-flex items-center gap-1">
-                  EPS adj.
-                  <InfoHint label="EPS adj." text="EPS adjusted — somma degli EPS reported trimestrali (esclude le poste straordinarie). È la metrica confrontata col consensus analisti (Est EPS) e usata per la Surprise." />
-                </span>
+                <HintLabel text="EPS adjusted — somma degli EPS reported trimestrali (esclude le poste straordinarie). È la metrica confrontata col consensus analisti (Est EPS) e usata per la Surprise.">EPS adj.</HintLabel>
               </th>
               <th className="px-1.5 py-1 text-right">Est EPS</th>
               <th className="px-1.5 py-1 text-right">Surp</th>
@@ -429,21 +423,15 @@ function QuarterlyTabBody({
               <th
                 className="px-1.5 py-1 text-right"
               >
-                <span className="inline-flex items-center gap-1">
-                  <span>
+                <HintLabel text={EPS_GAAP_TRIMESTRALE}><span>
                     EPS
                     <span className="ml-0.5 text-[0.6471rem] align-top text-muted-foreground">GAAP</span>
-                  </span>
-                  <InfoHint label="EPS GAAP" text={EPS_GAAP_TRIMESTRALE} />
-                </span>
+                  </span></HintLabel>
               </th>
               <th
                 className="px-1.5 py-1 text-right"
               >
-                <span className="inline-flex items-center gap-1">
-                  EPS adj.
-                  <InfoHint label="EPS adj." text="EPS adjusted reported — la cifra confrontata col consensus (Est EPS) e usata per la Surprise." />
-                </span>
+                <HintLabel text="EPS adjusted reported — la cifra confrontata col consensus (Est EPS) e usata per la Surprise.">EPS adj.</HintLabel>
               </th>
               <th className="px-1.5 py-1 text-right">Est EPS</th>
               <th className="px-1.5 py-1 text-right">Surp</th>

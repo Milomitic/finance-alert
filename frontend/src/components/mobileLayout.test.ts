@@ -139,7 +139,60 @@ describe("le spiegazioni delle intestazioni sono raggiungibili al tocco", () => 
      * StockBrowserTable. */
     const usi = Object.entries(SORGENTI)
       .filter(([f]) => !f.includes(".test."))
-      .reduce((n, [, t]) => n + (t.match(/\bhint=|<InfoHint\b/g)?.length ?? 0), 0);
+      .reduce((n, [, t]) => n + (t.match(/\bhint=|<InfoHint\b|<HintLabel\b|<HintAnchor\b/g)?.length ?? 0), 0);
     expect(usi).toBeGreaterThanOrEqual(15);
+  });
+});
+
+describe("le intestazioni di tabella non portano l'icona «i»", () => {
+  /* L'icona allargava ogni colonna che ne aveva una, su tutte le righe della
+   * tabella, per una spiegazione che si legge una volta. Nelle intestazioni
+   * il grilletto è ora la parola stessa, sottolineata a tratti
+   * (`HintLabel` / `HintAnchor` in `ui/info-hint.tsx`). Fuori dalle tabelle —
+   * tessere, schede, dialog — l'icona resta: lì non costa una colonna. */
+  const CELLA = /<(th|TableHead)\b[^>]*>([\s\S]*?)<\/\1>/g;
+
+  function offensori(testo: string): string[] {
+    const out: string[] = [];
+    for (const m of testo.matchAll(CELLA)) {
+      if (/<InfoHint\b/.test(m[2])) out.push(m[0].replace(/\s+/g, " ").slice(0, 90));
+    }
+    return out;
+  }
+
+  it("il rilevatore vede il difetto (controllo negativo)", () => {
+    // Senza, un'espressione che non trova mai niente renderebbe verde il test
+    // qui sotto per sempre.
+    expect(offensori('<th className="x">Prob.<InfoHint label="Prob." text="t" /></th>')).toHaveLength(1);
+    expect(offensori("<TableHead>Prob.</TableHead>")).toEqual([]);
+  });
+
+  it("nessuna <th> o <TableHead> contiene un InfoHint", () => {
+    const siti = Object.entries(SORGENTI)
+      .filter(([f]) => !f.includes(".test."))
+      .flatMap(([f, t]) => offensori(t).map((o) => `${f}: ${o}`));
+    expect(siti).toEqual([]);
+  });
+
+  it("neanche le intestazioni fatte a griglia, che il rilevatore sopra non vede", () => {
+    for (const f of ["alert/SignalOutcomeList.tsx", "dashboard/AlertsCompactPanel.tsx"]) {
+      expect(sorgente(f), f).not.toMatch(/<InfoHint\b/);
+    }
+  });
+
+  it("`TableHead hint=` monta l'etichetta sottolineata, non l'icona", () => {
+    const t = sorgente("components/ui/table.tsx");
+    expect(t).toMatch(/<HintLabel\b/);
+    expect(t).not.toMatch(/InfoHint/);
+  });
+
+  it("e le spiegazioni ci sono ancora: il pavimento", () => {
+    // 23 alla conversione, senza i `TableHead hint=` che passano da
+    // `table.tsx`: se qualcuno le cancellasse invece di spostarle, il
+    // censimento qui sopra resterebbe verde.
+    const usi = Object.entries(SORGENTI)
+      .filter(([f]) => !f.includes(".test.") && !f.endsWith("ui/info-hint.tsx"))
+      .reduce((n, [, t]) => n + (t.match(/<HintLabel\b|<HintAnchor\b/g)?.length ?? 0), 0);
+    expect(usi).toBeGreaterThanOrEqual(20);
   });
 });

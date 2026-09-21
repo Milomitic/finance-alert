@@ -21,7 +21,7 @@ import { CardSkeleton } from "@/components/ui/card-skeleton";
 import { useMacroDetail } from "@/hooks/useCalendar";
 import { regionFlagAsset, regionLabel } from "@/lib/calendarMeta";
 import { cn } from "@/lib/utils";
-import { InfoHint } from "@/components/ui/info-hint";
+import { HintLabel } from "@/components/ui/info-hint";
 import { formatMacroValue } from "@/lib/macroFormat";
 
 /* ─── /macro/:seriesId — Investing-style indicator detail page ─────────── *
@@ -434,10 +434,7 @@ export default function MacroDetailPage() {
                 <th
                   className="text-left font-semibold pb-2"
                 >
-                  <span className="inline-flex items-center gap-1">
-                    Periodo osservato
-                    <InfoHint label="Periodo osservato" text="Il periodo che il dato misura. La data di pubblicazione non e' fornita dalla fonte per le osservazioni storiche." />
-                  </span>
+                  <HintLabel text="Il periodo che il dato misura. La data di pubblicazione non e' fornita dalla fonte per le osservazioni storiche.">Periodo osservato</HintLabel>
                 </th>
                 <th className="text-left font-semibold pb-2 hidden sm:table-cell">Periodo</th>
                 <th className="text-right font-semibold pb-2">Attuale</th>

@@ -1,6 +1,6 @@
 import * as React from "react"
 
-import { InfoHint } from "@/components/ui/info-hint"
+import { HintLabel } from "@/components/ui/info-hint"
 import { cn } from "@/lib/utils"
 
 const Table = React.forwardRef<
@@ -73,8 +73,11 @@ TableRow.displayName = "TableRow"
  * hover da produrre, e il long-press apre il menu del sistema — quindi la
  * spiegazione di una colonna era leggibile solo col mouse. `hint` la rende
  * raggiungibile al tap e la tiene comunque FUORI dal documento finché non
- * viene chiesta, cioè senza occupare spazio nell'intestazione. Dettagli in
- * `info-hint.tsx`. */
+ * viene chiesta.
+ *
+ * ⚠️ E il grilletto è l'etichetta stessa, sottolineata a tratti, non
+ * un'icona «i» accanto: in un'intestazione l'icona allargava la colonna su
+ * ogni riga della tabella. Dettagli in `info-hint.tsx`. */
 const TableHead = React.forwardRef<
   HTMLTableCellElement,
   React.ThHTMLAttributes<HTMLTableCellElement> & { hint?: string }
@@ -87,16 +90,7 @@ const TableHead = React.forwardRef<
     )}
     {...props}
   >
-    {hint ? (
-      /* `align-middle` sul contenitore, non sul bottone: in una cella
-       * allineata a destra il flex deve restare in linea col testo. */
-      <span className="inline-flex items-center gap-1 align-middle">
-        {children}
-        <InfoHint label={typeof children === "string" ? children : (props["aria-label"] ?? "colonna")} text={hint} />
-      </span>
-    ) : (
-      children
-    )}
+    {hint ? <HintLabel text={hint}>{children}</HintLabel> : children}
   </th>
 ))
 TableHead.displayName = "TableHead"
