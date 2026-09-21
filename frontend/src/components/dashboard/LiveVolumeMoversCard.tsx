@@ -201,7 +201,7 @@ export function LiveVolumeMoversCard({ movers, computedAt }: Props) {
                         ticker, visible at a glance for every row
                         whose 15s polling is currently active. */}
                     <div className="flex items-center gap-2 min-w-0">
-                      <StockIdentity ticker={r.ticker} name={r.name} />
+                      <StockIdentity ticker={r.ticker} name={r.name} forma="riga" />
                       {livePulse && (
                         <span
                           className="relative inline-flex h-2 w-2 shrink-0"

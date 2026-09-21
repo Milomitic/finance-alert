@@ -105,7 +105,7 @@ export function ConfluenceRows({ limit = 8 }: { limit?: number }) {
               className="flex items-center gap-2 px-3 py-1.5 hover:bg-accent/30 transition-colors min-w-0"
               title={`${c.name ?? c.ticker} — ${c.n_signals} segnali concordi · direzione ${dirWord.toLowerCase()} · forza ${pct}/100${c.multi_horizon ? " · multi-orizzonte" : ""}${c.contested ? " · conteso" : ""}`}
             >
-              <StockIdentity ticker={c.ticker} name={c.name} />
+              <StockIdentity ticker={c.ticker} name={c.name} forma="riga" />
               {/* Fixed-width meta cluster → the Long/Short pill, the flag
                   icons, the bar and the score all line up vertically across
                   rows regardless of word width ("Short" vs "Long") or whether

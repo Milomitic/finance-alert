@@ -251,8 +251,11 @@ export function AlertsTable({
 
   // Per-column visibility resolved ONCE so the header and body stay in
   // lockstep. Embedded mode (the per-ticker history card) shows a fixed
-  // compact set — Rilevato | Regola | Tono | Forza | Prob. | Prezzo — while the
-  // full alerts page honours the column-visibility menu. (Previous embedded
+  // compact set — Rilevato | Regola | Orizzonte | Forza | Prob. | Direzione |
+  // Piano — while the full alerts page honours the column-visibility menu.
+  // ⚠️ No Tono column there: the Regola chip already wears the tone's colour
+  // and icon, so «BULLISH» beside it was the same fact twice, in the card
+  // where horizontal room is scarcest. (Previous embedded
   // bug: the signal_date CELL rendered but its HEADER was gated `!embedded`,
   // so every header sat one column right of its data. Deriving both from the
   // same flag makes that drift impossible.)
@@ -263,7 +266,7 @@ export function AlertsTable({
   const showRegola = embedded || isVisible("regola");
   const showCatena = !embedded && isVisible("catena");
   const showNatura = !embedded && isVisible("natura");
-  const showTono = embedded || isVisible("tono");
+  const showTono = !embedded && isVisible("tono");
   const showOrizzonte = embedded || isVisible("orizzonte");
   const showForza = embedded || isVisible("forza");
   const showProbabilita = embedded || isVisible("probabilita");

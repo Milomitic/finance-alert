@@ -84,7 +84,7 @@ export function RecentAlertsFeed({ alerts }: Props) {
                       onClick={(e) => e.stopPropagation()}
                       className="flex items-center gap-2 min-w-0 max-w-[200px] hover:underline"
                     >
-                      <StockIdentity ticker={a.ticker} name={a.name} />
+                      <StockIdentity ticker={a.ticker} name={a.name} forma="riga" />
                     </Link>
                   ) : (
                     <span className="font-medium">—</span>

@@ -183,6 +183,9 @@ describe("quello che non si sa non diventa un numero", () => {
     // ⚠️ E DICE che non e' live: un dato di chiusura accanto a numeri che
     // battono ogni quindici secondi si legge come fresco se nessuno lo nega.
     expect(screen.getByText(/ultima chiusura dell'istantanea/)).toBeInTheDocument();
+    // E quindi niente punto che lampeggia: un'istantanea di chiusura non e'
+    // un dato live, e il punto direbbe il contrario della fonte scritta.
+    expect(screen.queryByRole("img", { name: "dati live" })).not.toBeInTheDocument();
   });
 
   it("senza nemmeno l'istantanea dice PERCHE' e' vuoto", () => {
@@ -223,14 +226,17 @@ describe("i numeri parlano una lingua sola", () => {
   });
 });
 
-describe("il paniere a leva e le icone", () => {
-  it("mostra gli ETF a leva con la loro quotazione", () => {
+describe("la riga ETF e le icone", () => {
+  it("mostra gli ETF a leva con la loro quotazione, sotto il nome «ETF»", () => {
     quotazioni = [
       { ticker: "YINN", price: 23.45, change_pct: 2.1, market_state: "OPEN" },
       { ticker: "NUGT", price: 88.2, change_pct: -1.4, market_state: "OPEN" },
     ];
     montaA(SEDUTA);
-    expect(screen.getByText("Leva")).toBeInTheDocument();
+    // «Leva» e' diventato «ETF»: la riga ora porta anche i fondi che si
+    // muovono nel pre-market, e non tutti sono a leva.
+    expect(screen.getByText("ETF")).toBeInTheDocument();
+    expect(screen.queryByText("Leva")).not.toBeInTheDocument();
     expect(screen.getByText("YINN")).toBeInTheDocument();
     expect(screen.getByText("23,45")).toBeInTheDocument();
     expect(screen.getByText("NUGT")).toBeInTheDocument();
@@ -355,6 +361,31 @@ describe("«si muove adesso» lavora come la scheda Top movers", () => {
     expect(screen.getByText("+9,19%")).toBeInTheDocument();
     expect(screen.getByText("412,50")).toBeInTheDocument();
   });
+
+  it("dichiara che e' live col punto, e il campione sta nel suo suggerimento", () => {
+    liveMovers = {
+      swept: 786,
+      gainers: [{ ticker: "MSTR", name: "MicroStrategy", change_pct: 9.19, price: 412.5 }],
+      losers: [],
+    };
+    montaA(SEDUTA);
+    const punto = screen.getByRole("img", { name: "dati live" });
+    expect(punto).toHaveAttribute("title", expect.stringContaining("786 titoli"));
+  });
+
+  it("senza i titoletti «Su» e «Giù»: il verso lo dice il colore", () => {
+    liveMovers = {
+      swept: 10,
+      gainers: [{ ticker: "MSTR", name: "MicroStrategy", change_pct: 9.19, price: 412.5 }],
+      losers: [{ ticker: "NUE", name: "Nucor", change_pct: -2.36, price: 258.88 }],
+    };
+    montaA(SEDUTA);
+    expect(screen.queryByText("Su")).not.toBeInTheDocument();
+    expect(screen.queryByText("Giù")).not.toBeInTheDocument();
+    // ⚠️ Ma chi non vede il colore sente ancora quale lista e' quale.
+    expect(screen.getByRole("group", { name: "In rialzo" })).toHaveTextContent("MSTR");
+    expect(screen.getByRole("group", { name: "In ribasso" })).toHaveTextContent("NUE");
+  });
 });
 
 describe("l'ampiezza non si spaccia per un dato live", () => {
@@ -428,10 +459,16 @@ describe("il pre-market e' il soggetto della fascia", () => {
     };
   });
 
-  it("mostra i titoli in movimento con la seduta a cui appartengono", () => {
+  it("si chiama «Pre-market» e dice che e' live col punto, non con la data", () => {
     montaA(PREMARKET);
-    expect(screen.getByText("Si muove nel pre-market")).toBeInTheDocument();
-    expect(screen.getByText("seduta 2026-09-18")).toBeInTheDocument();
+    expect(screen.getByText("Pre-market")).toBeInTheDocument();
+    expect(screen.queryByText("Si muove nel pre-market")).not.toBeInTheDocument();
+    // La seduta non e' piu' scritta accanto al titolo: resta nel
+    // suggerimento del punto, per chi la cerca.
+    expect(screen.queryByText("seduta 2026-09-18")).not.toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "dati live" })).toHaveAttribute(
+      "title", expect.stringContaining("2026-09-18"),
+    );
     expect(screen.getByText("PURR")).toBeInTheDocument();
     expect(screen.getByText("+6,43%")).toBeInTheDocument();
     expect(screen.getByText("−2,51%")).toBeInTheDocument();
@@ -440,13 +477,32 @@ describe("il pre-market e' il soggetto della fascia", () => {
   it("⚠️ i fondi non stanno nella lista delle aziende, ma non spariscono", () => {
     /* Su otto righe misurate a schermo QUATTRO erano fondi a leva 3x: si
      * muovono del triplo per costruzione, quindi comparire fra i movers non e'
-     * una notizia. Toglierli in silenzio sarebbe pero' peggio — stanno in una
-     * riga loro, marcati. */
-    const { container } = montaA(PREMARKET);
-    const listaPrincipale = screen.getByText("Su").closest("div")?.parentElement;
-    expect(listaPrincipale?.textContent).not.toContain("SOXL");
-    expect(container.textContent).toContain("SOXL");
-    expect(container.textContent).toContain("SOXS");
+     * una notizia. Toglierli in silenzio sarebbe pero' peggio — stanno nella
+     * riga ETF della fascia sopra, marcati «pre». */
+    montaA(PREMARKET);
+    for (const lista of ["In rialzo", "In ribasso"]) {
+      const g = screen.getByRole("group", { name: lista });
+      expect(g.textContent).not.toContain("SOXL");
+      expect(g.textContent).not.toContain("SOXS");
+    }
+    const soxs = screen.getByTitle(/SOXS Inc\. — in movimento nel pre-market/);
+    expect(soxs).toHaveTextContent("pre");
+    expect(soxs).toHaveTextContent("−3,07%");
+  });
+
+  it("un fondo gia' nel paniere non compare due volte", () => {
+    // SOXL e' nel paniere fisso a leva E fra i movers del pre-market: una
+    // riga con due SOXL darebbe due numeri diversi per lo stesso fondo.
+    montaA(PREMARKET);
+    expect(screen.getAllByText("SOXL")).toHaveLength(1);
+    expect(screen.queryByTitle(/SOXL Inc\. — in movimento/)).not.toBeInTheDocument();
+  });
+
+  it("la riga in fondo al riquadro non c'e' piu'", () => {
+    // Controllo negativo sulla vecchia forma: un'etichetta «ETF» sola, con la
+    // spiegazione nel suo `title`, sotto le due liste.
+    montaA(PREMARKET);
+    expect(screen.getAllByText("ETF")).toHaveLength(1);
   });
 
   it("un movimento su scambi sottili lo dichiara invece di darlo per buono", () => {

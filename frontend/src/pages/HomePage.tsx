@@ -169,7 +169,6 @@ function HomePageContent() {
           <AlertsCompactPanel
             topStocks={summaryData.top_stocks_30d}
             recentAlerts={summaryData.recent_alerts}
-            alertsByIndex={summaryData.alerts_by_index_30d}
             alertsLast24h={summaryData.kpis.alerts_last_24h}
             alertsPrev24h={summaryData.kpis.alerts_prev_24h}
           />
@@ -190,7 +189,6 @@ function HomePageContent() {
           <AlertsCompactPanel
             topStocks={summaryData.top_stocks_30d}
             recentAlerts={summaryData.recent_alerts}
-            alertsByIndex={summaryData.alerts_by_index_30d}
             alertsLast24h={summaryData.kpis.alerts_last_24h}
             alertsPrev24h={summaryData.kpis.alerts_prev_24h}
           />
@@ -282,17 +280,17 @@ function HomePageContent() {
        * Market context did not disappear, it moved behind: the strip above
        * carries the verdict, and breadth / RSI / sectors are one scroll down
        * for when the answer to "what fired" prompts "in what weather". */}
-      {/* Height follows the panel's own column count, which is 2 up to dense-4
-          and 4 above it — a 2-column panel needs roughly twice the rows, so a
-          single cap wrong-foots one of the two. Leaving it uncapped was worse
+      {/* Height follows the panel's own column count, which is 2 up to
+          row-full and 3 above it — a 2-column panel puts the Feed on a row of
+          its own and needs roughly twice the height, so a single cap
+          wrong-foots one of the two. Leaving it uncapped was worse
           still: measured, the page grew from 5.4 to 6.0 screens at 1280px, and
           the whole point of moving Segnali up was to make the page shorter. */}
       {summaryData ? (
-        <div className="lg:h-[520px] dense-4:h-[420px]">
+        <div className="lg:h-[520px] row-full:h-[420px]">
           <AlertsCompactPanel
             topStocks={summaryData.top_stocks_30d}
             recentAlerts={summaryData.recent_alerts}
-            alertsByIndex={summaryData.alerts_by_index_30d}
             alertsLast24h={summaryData.kpis.alerts_last_24h}
             alertsPrev24h={summaryData.kpis.alerts_prev_24h}
           />

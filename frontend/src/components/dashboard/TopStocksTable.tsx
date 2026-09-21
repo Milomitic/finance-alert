@@ -81,7 +81,7 @@ export function TopStocksTable({ data }: Props) {
                     to={`/stocks/${encodeURIComponent(s.ticker)}`}
                     className="flex items-center gap-2 group/row hover:underline min-w-0"
                   >
-                    <StockIdentity ticker={s.ticker} name={s.name} />
+                    <StockIdentity ticker={s.ticker} name={s.name} forma="riga" />
                   </Link>
                 </TableCell>
                 {/* Natura cell: continuazione / inversione chip, mirroring

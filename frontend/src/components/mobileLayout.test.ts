@@ -196,3 +196,39 @@ describe("le intestazioni di tabella non portano l'icona «i»", () => {
     expect(usi).toBeGreaterThanOrEqual(20);
   });
 });
+
+describe("le card della home: una riga per titolo, e niente nome su telefono", () => {
+  /* Richiesta del 2026-09-21: ticker e nome sulla STESSA riga su desktop,
+   * per una vista piu' densa, e il nome mai su telefono. Le card la prendono
+   * da `StockIdentity forma="riga"`, un proprietario solo: se una card torna
+   * alla forma impilata, questa lista lo dice. */
+  const CARD = [
+    "dashboard/ConfluenceCard.tsx",
+    "dashboard/LiveVolumeMoversCard.tsx",
+    "dashboard/MarketEventsRail.tsx",
+    "dashboard/RecentAlertsFeed.tsx",
+    "dashboard/TopMoversCard.tsx",
+    "dashboard/TopPicksCard.tsx",
+    "dashboard/TopStocksTable.tsx",
+  ];
+
+  it.each(CARD)("%s usa l'identita' in riga", (f) => {
+    const t = sorgente(f);
+    // Uno spazio dopo il nome: un commento che cita `<StockIdentity>` non e'
+    // un uso.
+    const usi = t.match(/<StockIdentity\s[^>]*>/g) ?? [];
+    // Il pavimento: una card che smettesse di usare StockIdentity passerebbe
+    // l'asserzione sotto senza averne nessuna.
+    expect(usi.length).toBeGreaterThan(0);
+    for (const u of usi) expect(u, f).toContain('forma="riga"');
+  });
+
+  it("il pannello Segnali ha tre colonne: «Per indice» e' stato tolto", () => {
+    const t = sorgente("dashboard/AlertsCompactPanel.tsx");
+    // Il CODICE, non la prosa: il commento che racconta la rimozione nomina
+    // ancora la colonna, ed e' giusto che lo faccia.
+    expect(t).not.toMatch(/key: "byindex"|AlertsByIndexBars/);
+    for (const k of ["confluence", "top", "feed"]) expect(t).toContain(`key: "${k}"`);
+    expect(t).toMatch(/row-full:grid-cols-3/);
+  });
+});

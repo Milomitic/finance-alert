@@ -61,7 +61,7 @@ function PickRow({ item }: { item: TopPickItem }) {
         to={`/stocks/${encodeURIComponent(item.ticker)}`}
         className="flex-1 min-w-0 flex items-center gap-2 px-3 py-1.5 hover:bg-accent/30 transition-colors"
       >
-        <StockIdentity ticker={item.ticker} name={item.name} />
+        <StockIdentity ticker={item.ticker} name={item.name} forma="riga" />
         {/* Right-side meta cluster — fixed widths so chip + score
             line up vertically across rows in the same column.
             "CONSERVATIVE" used to dictate the row's right edge with

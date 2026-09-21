@@ -75,7 +75,7 @@ function RailRow({
         title={title}
         className="flex items-center gap-2 px-3 py-1.5 hover:bg-accent/30 transition-colors"
       >
-        <StockIdentity ticker={ticker} name={name} />
+        <StockIdentity ticker={ticker} name={name} forma="riga" />
         <span
           className={cn(
             "ml-auto shrink-0 text-[0.7647rem] font-semibold tabular-nums",

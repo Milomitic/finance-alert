@@ -227,3 +227,18 @@ describe("StockAlertsHistoryCard", () => {
     await waitFor(() => expect(screen.getByText(/1–1 di 40/)).toBeInTheDocument());
   });
 });
+
+describe("StockAlertsHistoryCard — colonne", () => {
+  it("non ha la colonna Tono: la regola porta gia' il colore e l'icona del tono", () => {
+    // Nella scheda del dettaglio, dove lo spazio orizzontale e' il piu'
+    // scarso, «BULLISH» accanto a una regola gia' verde era lo stesso fatto
+    // detto due volte.
+    monta([_alert(1)]);
+    const intestazioni = screen.getAllByRole("columnheader").map((h) => h.textContent?.trim());
+    expect(intestazioni).not.toContain("Tono");
+    // Il pavimento: senza, l'asserzione sopra sarebbe vera anche di una
+    // tabella che non rende nessuna intestazione.
+    expect(intestazioni).toContain("Regola");
+    expect(intestazioni).toContain("Forza");
+  });
+});

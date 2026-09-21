@@ -1,5 +1,5 @@
 import {
-  Bitcoin, CalendarClock, Clock3, Coins, Flame, Fuel, Gem, TrendingDown, TrendingUp, Zap,
+  Bitcoin, CalendarClock, Clock3, Coins, Flame, Fuel, Gem,
 } from "lucide-react";
 import { useMemo, type ReactNode } from "react";
 import { Link } from "react-router-dom";
@@ -279,15 +279,7 @@ function IndiceTile({ asset, nome, ampiezza }: {
              senza ruolo e' un attributo PROIBITO per axe
              (`aria-prohibited-attr`, lo stesso rilievo che /calendar porta in
              linea di base). */
-          <span
-            role="img"
-            className="relative inline-flex h-1.5 w-1.5 shrink-0"
-            title="Prezzo in aggiornamento ogni 15 secondi"
-            aria-label="prezzo live"
-          >
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
-            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
-          </span>
+          <PuntoLive titolo="Prezzo in aggiornamento ogni 15 secondi" etichetta="prezzo live" />
         ) : null}
       </div>
       {/* Su un telefono il riquadro vale ~87px di contenuto: prezzo e
@@ -459,28 +451,39 @@ function Chip({ asset }: { asset: LiveAsset }) {
   );
 }
 
-/** Una voce del paniere a leva. Stessa grammatica delle altre — nome,
- *  prezzo, variazione — ma il collegamento porta alla scheda del TITOLO,
- *  perche' questi sono titoli di catalogo e non simboli di mercato. */
-function ChipLeva({ ticker, quote }: { ticker: string; quote: LiveQuote | undefined }) {
-  const cambio = quote?.change_pct ?? null;
+/** Una voce della riga ETF. Stessa grammatica delle altre — nome, prezzo,
+ *  variazione — ma il collegamento porta alla scheda del TITOLO, perche'
+ *  questi sono titoli di catalogo e non simboli di mercato.
+ *
+ *  `pre` marca un fondo che sta nella riga perche' si muove nel PRE-MARKET, e
+ *  non perche' e' nel paniere fisso: la sua variazione e' sul prezzo di
+ *  pre-market, quella dei vicini sulla quotazione live. Due misure diverse
+ *  affiancate senza dirlo si leggerebbero come la stessa. */
+function ChipEtf({ ticker, prezzo, cambio, titolo, pre = false }: {
+  ticker: string;
+  prezzo: number | null;
+  cambio: number | null;
+  titolo: string;
+  pre?: boolean;
+}) {
   const forte = cambio != null && Math.abs(cambio) >= CONTESTO_RILEVANTE;
   return (
     <Link
       to={`/stocks/${encodeURIComponent(ticker)}`}
       className="inline-flex min-w-0 items-center gap-1.5 rounded px-1 py-0.5 hover:bg-accent/40"
-      title={
-        quote
-          ? `${ticker} — ETF a leva, apri la scheda`
-          : `${ticker}: nessuna quotazione. Se manca anche dalla ricerca, il titolo non e' in catalogo.`
-      }
+      title={titolo}
     >
       <span className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
         {ticker}
       </span>
+      {pre && (
+        <span className="rounded bg-muted px-1 text-[0.6176rem] font-bold uppercase tracking-wide text-muted-foreground">
+          pre
+        </span>
+      )}
       <span className="text-sm font-semibold tabular-nums">
-        {quote?.price != null
-          ? <FlashValue value={quote.price} format={(v) => formatLivello(v) ?? "—"} noTween />
+        {prezzo != null
+          ? <FlashValue value={prezzo} format={(v) => formatLivello(v) ?? "—"} noTween />
           : <NoValue hint={`${ticker}: quotazione non disponibile`} />}
       </span>
       <span className={cn("text-xs tabular-nums", forte ? "font-bold" : "font-semibold", tono(cambio))}>
@@ -528,7 +531,9 @@ function RigaMover({ ticker, nome, cambio, prezzoOra, volume, etf, flipRef }: {
             ETF
           </span>
         )}
-        {nome && <span className="ml-1.5 text-muted-foreground">{nome}</span>}
+        {/* Mai su telefono: la riga ha posto per ticker e numeri, non per
+            «Hyperliquid Strategies Inc.». Stessa regola delle card sotto. */}
+        {nome && <span className="ml-1.5 hidden text-muted-foreground sm:inline">{nome}</span>}
       </span>
       <span className="flex shrink-0 items-baseline gap-2">
         {volume != null && (
@@ -558,19 +563,40 @@ function RigaMover({ ticker, nome, cambio, prezzoOra, volume, etf, flipRef }: {
   );
 }
 
-function Colonna({ titolo, icona: Icona, children }: {
-  titolo: string;
-  icona: typeof TrendingUp;
+/** Una delle due liste, senza titoletto: il verso lo dice gia' il colore di
+ *  ogni variazione, e «Su»/«Giu'» costavano una riga di altezza per lato.
+ *
+ *  ⚠️ Il nome resta, per chi non vede il colore: un `group` con
+ *  un'etichetta. E sotto `xl` le due liste sono IMPILATE, quindi la seconda
+ *  porta un filo sopra — senza, il punto in cui finiscono i rialzi e
+ *  cominciano i ribassi si leggerebbe solo dal cambio di colore. */
+function Colonna({ etichetta, seconda = false, children }: {
+  etichetta: string;
+  seconda?: boolean;
   children: ReactNode;
 }) {
   return (
-    <div className="min-w-0">
-      <div className="mb-0.5 flex items-center gap-1 text-xs font-bold uppercase tracking-[0.14em] text-muted-foreground">
-        <Icona className="h-3 w-3" aria-hidden />
-        {titolo}
-      </div>
+    <div
+      role="group"
+      aria-label={etichetta}
+      className={cn("min-w-0", seconda && "border-t pt-1 xl:border-t-0 xl:pt-0")}
+    >
       {children}
     </div>
+  );
+}
+
+/** Il punto che lampeggia: dati che si aggiornano da soli.
+ *
+ *  ⚠️ `role="img"` non e' decorazione: un `aria-label` su uno span senza
+ *  ruolo e' un attributo PROIBITO per axe (`aria-prohibited-attr`, lo stesso
+ *  rilievo che /calendar porta in linea di base). */
+function PuntoLive({ titolo, etichetta }: { titolo: string; etichetta: string }) {
+  return (
+    <span role="img" className="relative inline-flex h-1.5 w-1.5 shrink-0" title={titolo} aria-label={etichetta}>
+      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60 motion-reduce:hidden" />
+      <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
+    </span>
   );
 }
 
@@ -680,11 +706,17 @@ export function MarketPulseJumbotron({ global, byIndex, computedAt, movers }: Pr
    * sottostante ne fa uno. Non e' una notizia, e' la loro definizione. */
   const equity = (righe: PremarketMover[]) => righe.filter((r) => r.instrument_type !== "etf");
   const fondi = (righe: PremarketMover[]) => righe.filter((r) => r.instrument_type === "etf");
-  const etfInMovimento = pre
+  const etfInMovimento = mostraPre && pre
     ? [...fondi(pre.gainers), ...fondi(pre.losers)]
+      .filter((r) => !ETF_LEVA.includes(r.ticker))
       .sort((a, b) => Math.abs(b.change_pct) - Math.abs(a.change_pct))
       .slice(0, 5)
     : [];
+  /* Il punto live accanto al titolo: quando la lista e' fatta di variazioni
+   * che si aggiornano da sole. Il pre-market lo e' finche' la sua finestra e'
+   * aperta; la spazzata della seduta lo e' sempre. L'istantanea di chiusura
+   * no, e lo dice con la sua fonte scritta. */
+  const listaLive = (mostraPre && fase === "pre") || (!mostraPre && mostraLive && !!liveMovers);
 
   return (
     <Card className="overflow-hidden bg-gradient-to-br from-slate-50 via-card to-card dark:from-slate-900/60 dark:via-card dark:to-card">
@@ -831,16 +863,41 @@ export function MarketPulseJumbotron({ global, byIndex, computedAt, movers }: Pr
                 </span>
               ),
             )}
-            {/* Il paniere a leva, in coda alle materie prime e alle cripto:
-                e' l'ultimo gruppo perche' e' il piu' specialistico, non il
-                meno importante. */}
+            {/* Gli ETF, in coda alle materie prime e alle cripto: e'
+                l'ultimo gruppo perche' e' il piu' specialistico, non il meno
+                importante. Il paniere fisso a leva, e dietro i fondi che si
+                muovono nel pre-market — prima stavano in una riga loro in
+                fondo al riquadro dei movers, cioe' due righe di ETF sulla
+                stessa fascia. */}
             <span className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
-              <span className="flex items-center gap-1 text-[0.6765rem] font-bold uppercase tracking-[0.14em] text-muted-foreground/70">
-                <Zap className="h-3 w-3" aria-hidden />
-                Leva
+              <span className="text-[0.6765rem] font-bold uppercase tracking-[0.14em] text-muted-foreground/70">
+                ETF
               </span>
-              {ETF_LEVA.map((t) => (
-                <ChipLeva key={t} ticker={t} quote={perTicker.get(t)} />
+              {ETF_LEVA.map((t) => {
+                const q = perTicker.get(t);
+                return (
+                  <ChipEtf
+                    key={t}
+                    ticker={t}
+                    prezzo={q?.price ?? null}
+                    cambio={q?.change_pct ?? null}
+                    titolo={
+                      q
+                        ? `${t} — ETF a leva, apri la scheda`
+                        : `${t}: nessuna quotazione. Se manca anche dalla ricerca, il titolo non e' in catalogo.`
+                    }
+                  />
+                );
+              })}
+              {etfInMovimento.map((m) => (
+                <ChipEtf
+                  key={`pre-${m.ticker}`}
+                  ticker={m.ticker}
+                  prezzo={m.price}
+                  cambio={m.change_pct}
+                  pre
+                  titolo={`${m.name ?? m.ticker} — in movimento nel pre-market. Molti di questi fondi sono a leva o inversi: si muovono piu' del mercato per costruzione, non perche' stia succedendo qualcosa di loro.`}
+                />
               ))}
             </span>
           </div>
@@ -913,7 +970,7 @@ export function MarketPulseJumbotron({ global, byIndex, computedAt, movers }: Pr
                  esistono. Trovato da un test, non a occhio. */
               titolo={
                 mostraPre
-                  ? "Si muove nel pre-market"
+                  ? "Pre-market"
                   : mostraLive && liveMovers
                     ? "Si muove adesso"
                     : sedutaSu.length > 0 || sedutaGiu.length > 0
@@ -921,26 +978,33 @@ export function MarketPulseJumbotron({ global, byIndex, computedAt, movers }: Pr
                       : "Si muove adesso"
               }
               fonte={
-                mostraPre && pre?.as_of
-                  ? `seduta ${pre.as_of}`
-                  : mostraLive && liveMovers
-                    ? `su ${liveMovers.swept} titoli con quotazione fresca`
-                    : sedutaSu.length > 0
-                      ? "ultima chiusura dell'istantanea"
-                      : null
+                listaLive ? (
+                  <PuntoLive
+                    titolo={
+                      mostraPre
+                        ? `Variazioni di pre-market in aggiornamento${pre?.as_of ? ` · seduta ${pre.as_of}` : ""}`
+                        : `Variazioni live su ${liveMovers?.swept ?? 0} titoli con quotazione fresca`
+                    }
+                    etichetta="dati live"
+                  />
+                ) : !mostraPre && !mostraLive && sedutaSu.length > 0 ? (
+                  "ultima chiusura dell'istantanea"
+                ) : null
               }
             />
             {mostraPre && pre ? (
               <>
+                {/* Gli ETF in movimento non stanno qui: sono nella riga ETF
+                    della fascia sopra, accanto al paniere a leva. */}
                 <div className="grid gap-x-4 gap-y-1 xl:grid-cols-2">
-                  <Colonna titolo="Su" icona={TrendingUp}>
+                  <Colonna etichetta="In rialzo">
                     {equity(pre.gainers).slice(0, RIGHE_MOVERS).map((m) => (
                       <RigaMover key={m.ticker} ticker={m.ticker} nome={m.name} cambio={m.change_pct}
                         prezzoOra={m.price} volume={m.volume}
                         flipRef={registraFlip(`pre-su:${m.ticker}`)} />
                     ))}
                   </Colonna>
-                  <Colonna titolo="Giù" icona={TrendingDown}>
+                  <Colonna etichetta="In ribasso" seconda>
                     {equity(pre.losers).slice(0, RIGHE_MOVERS).map((m) => (
                       <RigaMover key={m.ticker} ticker={m.ticker} nome={m.name} cambio={m.change_pct}
                         prezzoOra={m.price} volume={m.volume}
@@ -948,41 +1012,16 @@ export function MarketPulseJumbotron({ global, byIndex, computedAt, movers }: Pr
                     ))}
                   </Colonna>
                 </div>
-                {etfInMovimento.length > 0 && (
-                  <div className="mt-1 border-t pt-1">
-                    <div
-                      className="text-[0.6471rem] font-bold uppercase tracking-[0.14em] text-muted-foreground"
-                      title="Molti di questi fondi sono a leva o inversi: si muovono di piu' del mercato per costruzione, non perche' stia succedendo qualcosa di loro"
-                    >
-                      ETF
-                    </div>
-                    <div className="flex flex-wrap gap-x-3 gap-y-0.5">
-                      {etfInMovimento.map((m) => (
-                        <Link
-                          key={m.ticker}
-                          to={`/stocks/${encodeURIComponent(m.ticker)}`}
-                          className="inline-flex items-baseline gap-1 rounded px-1 text-xs hover:bg-accent/40"
-                          title={m.name ?? m.ticker}
-                        >
-                          <span className="font-bold tabular-nums">{m.ticker}</span>
-                          <span className={cn("font-semibold tabular-nums", tono(m.change_pct))}>
-                            {formatVariazione(m.change_pct)}
-                          </span>
-                        </Link>
-                      ))}
-                    </div>
-                  </div>
-                )}
               </>
             ) : mostraLive && liveMovers ? (
               <div className="grid gap-x-4 gap-y-1 xl:grid-cols-2">
-                <Colonna titolo="Su" icona={TrendingUp}>
+                <Colonna etichetta="In rialzo">
                   {liveMovers.gainers.slice(0, RIGHE_MOVERS).map((m) => (
                     <RigaMover key={m.ticker} ticker={m.ticker} nome={m.name} cambio={m.change_pct}
                       prezzoOra={m.price} flipRef={registraFlip(`live-su:${m.ticker}`)} />
                   ))}
                 </Colonna>
-                <Colonna titolo="Giù" icona={TrendingDown}>
+                <Colonna etichetta="In ribasso" seconda>
                   {liveMovers.losers.slice(0, RIGHE_MOVERS).map((m) => (
                     <RigaMover key={m.ticker} ticker={m.ticker} nome={m.name} cambio={m.change_pct}
                       prezzoOra={m.price} flipRef={registraFlip(`live-giu:${m.ticker}`)} />
@@ -1001,14 +1040,14 @@ export function MarketPulseJumbotron({ global, byIndex, computedAt, movers }: Pr
                  quindici secondi si legge come live se nessuno dice che non
                  lo e'. */
               <div className="grid gap-x-4 gap-y-1 xl:grid-cols-2">
-                <Colonna titolo="Su" icona={TrendingUp}>
+                <Colonna etichetta="In rialzo">
                   {sedutaSu.map((m) => (
                     <RigaMover key={m.ticker} ticker={m.ticker} nome={m.name}
                       cambio={m.change_pct ?? 0} prezzoOra={m.last_close}
                       flipRef={registraFlip(`seduta-su:${m.ticker}`)} />
                   ))}
                 </Colonna>
-                <Colonna titolo="Giù" icona={TrendingDown}>
+                <Colonna etichetta="In ribasso" seconda>
                   {sedutaGiu.map((m) => (
                     <RigaMover key={m.ticker} ticker={m.ticker} nome={m.name}
                       cambio={m.change_pct ?? 0} prezzoOra={m.last_close}

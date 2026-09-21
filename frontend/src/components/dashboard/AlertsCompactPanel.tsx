@@ -1,7 +1,6 @@
 import { Bell } from "lucide-react";
 
-import type { Alert, AlertsByIndexPoint, TopStock } from "@/api/types";
-import { AlertsByIndexBars } from "@/components/dashboard/AlertsByIndexBars";
+import type { Alert, TopStock } from "@/api/types";
 import { ConfluenceRows } from "@/components/dashboard/ConfluenceCard";
 import { RecentAlertsFeed } from "@/components/dashboard/RecentAlertsFeed";
 import { TopStocksTable } from "@/components/dashboard/TopStocksTable";
@@ -13,7 +12,6 @@ import { PROBABILITA_TOOLTIP } from "@/lib/alertMeta";
 interface Props {
   topStocks: TopStock[];
   recentAlerts: Alert[];
-  alertsByIndex: AlertsByIndexPoint[];
   alertsLast24h: number;
   alertsPrev24h: number;
 }
@@ -33,20 +31,29 @@ const COLUMNS: { key: string; label: string; nota?: string }[] = [
       "Colonne: titolo, natura del segnale, regola che è scattata, Forza del pattern (0-100), " +
       `Probabilità, prezzo e data. ${PROBABILITA_TOOLTIP}`,
   },
-  { key: "byindex", label: "Per indice" },
 ];
+
+/* ⚠️ Il bordo di ciascuna colonna, per larghezza. Non `divide-x`: sotto
+   `row-full` il Feed va a capo su una riga sua, e `divide-x` gli metterebbe
+   un bordo SINISTRO contro la cornice e nessun bordo sopra. Letterali, perche'
+   il purger di Tailwind legge solo stringhe intere. */
+const COLONNA: Record<string, string> = {
+  confluence: "",
+  top: "border-t border-border/40 sm:border-t-0 sm:border-l",
+  feed: "border-t border-border/40 sm:col-span-2 row-full:col-span-1 row-full:border-t-0 row-full:border-l",
+};
 
 /**
  * Was: a 3-tab card (Top stocks / Feed / Per indice), then 3 side-by-side
  * columns. 2026-05: absorbed the former standalone "Top confluenze" card as
- * a FOURTH column on the left (4 equal columns → the original three each
- * shrink proportionally to ~75% width). Each column is a flex-col with a
+ * a FOURTH column on the left. 2026-09-21: «Per indice» removed (user
+ * request) to give the other three room — the per-index view lives in the
+ * breadth table further down the page. Each column is a flex-col with a
  * fixed header and a scrollable body so the card height stays predictable.
  */
 export function AlertsCompactPanel({
   topStocks,
   recentAlerts,
-  alertsByIndex,
   alertsLast24h,
 }: Props) {
   return (
@@ -84,14 +91,15 @@ export function AlertsCompactPanel({
             intermediate keeps each readable until there's room for all
             four. The fixed-height + divide-x behavior aligns to lg (where
             the 4-col row lives) so the card grows naturally below that. */}
-        {/* Four sub-columns only at dense-4. At lg this panel is 964px wide,
-            so a 4-way split gave each column 231px — and the confluence rows
-            put their identity cell in `min-w-0 flex-1` next to shrink-0
-            numbers, so the ticker and company name resolved to 0px. Two
-            columns in between keeps every row readable. */}
-        <div className="flex-1 min-h-0 grid grid-cols-1 sm:grid-cols-2 dense-4:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x dense-4:divide-y-0 dense-4:divide-x divide-border/40">
+        {/* Three across only at row-full (1750px). At lg a 4-way split gave
+            each column 231px and the confluence identity resolved to 0px;
+            the Feed row (identity + natura + regola + Forza) needs ~500px,
+            which a three-way split reaches at row-full — the same width two
+            columns get at 1280. Below it Top confluenze and Top stocks share
+            a row and the Feed takes the full width underneath. */}
+        <div className="flex-1 min-h-0 grid grid-cols-1 sm:grid-cols-2 row-full:grid-cols-3">
           {COLUMNS.map((col) => (
-            <div key={col.key} className="flex flex-col min-h-0 min-w-0">
+            <div key={col.key} className={`flex flex-col min-h-0 min-w-0 ${COLONNA[col.key] ?? ""}`}>
               <div className="flex shrink-0 items-center gap-1 border-b bg-muted/40 px-3 py-1.5 text-xs font-bold uppercase tracking-[0.16em] text-muted-foreground">
                 {col.nota ? <HintLabel text={col.nota}>{col.label}</HintLabel> : col.label}
               </div>
@@ -103,7 +111,6 @@ export function AlertsCompactPanel({
                 {col.key === "confluence" && <ConfluenceRows />}
                 {col.key === "top" && <TopStocksTable data={topStocks} />}
                 {col.key === "feed" && <RecentAlertsFeed alerts={recentAlerts} />}
-                {col.key === "byindex" && <AlertsByIndexBars data={alertsByIndex} />}
               </div>
             </div>
           ))}

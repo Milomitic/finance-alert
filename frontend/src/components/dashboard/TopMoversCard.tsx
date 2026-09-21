@@ -198,7 +198,7 @@ function MoverRow({ m, field, window, live, computedAt, livePrice, livePulse, fl
             active AND whose market is open/pre — surfaces "this price is
             live" at a glance (same treatment as the Volumi maggiori card). */}
         <div className="flex items-center gap-1.5 min-w-0">
-          <StockIdentity ticker={m.ticker} name={m.name} />
+          <StockIdentity ticker={m.ticker} name={m.name} forma="riga" />
           {livePulse && (
             <span
               className="relative inline-flex h-2 w-2 shrink-0"
