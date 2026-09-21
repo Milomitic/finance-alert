@@ -471,12 +471,28 @@ Tre accorgimenti, ognuno misurato:
   censimento degli istogrammi saltava in silenzio il tetto dei Web Vital
   (seriale 10 salti, `-n 4` 11). **Confrontare i SALTATI, non solo i
   superati**, quando si tocca la parallelizzazione: il verde non cambia.
-- **Gate UI diviso per viewport su tre macchine**, non con piu' worker sulla
-  stessa: `workers: 1` resta, per la ragione scritta in playwright.config.ts.
+- **Gate UI diviso su quattro macchine**, non con piu' worker sulla stessa:
+  `workers: 1` resta, per la ragione scritta in playwright.config.ts. Mobile,
+  tablet, e il desktop in due meta' con `--grep a11y\.spec` /
+  `--grep-invert a11y\.spec` — `--grep` confronta anche il percorso del file.
+  ⚠️ L'inversione e' voluta: un file di specifica nuovo cade da solo nella
+  seconda meta'; un ELENCO di file lo lascerebbe fuori dal desktop in
+  silenzio. Chi cambia la divisione verifica con `--list` che la somma delle
+  parti sia il totale.
 - **Dockerfile: niente che cambi a ogni commit sopra le dipendenze.** `ARG
   GIT_SHA` sopra `uv sync` e un `chown -R /app` finale rifacevano ~74 s su 109
   a OGNI build per un lockfile identico. Lo SHA sta ora sopra i soli COPY del
   codice, la proprieta' si da' dove i file nascono.
+- **L'immagine si costruisce su un runner arm64 NATIVO** (`ubuntu-24.04-arm`,
+  gratuito per i repository pubblici), non piu' sotto QEMU: la prova degli
+  import valeva 60 s emulata. ⚠️ Lo stadio frontend usa `$BUILDPLATFORM`,
+  quindi ora fa `npm ci` su **arm64 musl**: il lockfile deve portare i binari
+  arm64-musl di ogni pacchetto nativo (oggi rolldown e lightningcss). E' un
+  QUARTO ramo della regola del superset qui sopra — Windows, Linux x64 e
+  ora anche Linux arm64.
+- **Playwright scarica solo la «headless shell»** (`--only-shell`), in cache
+  per versione; le dipendenze di sistema no, perche' i font decidono il
+  layout che il gate misura.
 
 ### ⚠️ "Synced + Healthy" does NOT mean your change is on screen
 

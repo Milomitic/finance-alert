@@ -165,7 +165,7 @@ jobs:
       - run: npm run build
 
   ui-gate:
-    name: gate UI — layout e accessibilità in un browser vero (${{ matrix.progetti }})
+    name: gate UI — layout e accessibilità in un browser vero (${{ matrix.parte }})
     runs-on: ubuntu-latest
     # ⚠️ DIVISO PER VIEWPORT, su macchine diverse, e non con piu' worker sulla
     # stessa. Il gate gira con `workers: 1` di proposito — «un gate che
@@ -176,15 +176,28 @@ jobs:
     # prima, un terzo del tempo. Misurato il 2026-09-21: 143 s di test in
     # serie, di cui desktop ~80, mobile ~33, tablet ~30.
     #
-    # Per PROGETTO e non per file, perche' cosi' non ci sono buchi: un file di
-    # specifica nuovo gira su tutti e quattro i progetti senza che nessuno
-    # debba ricordarsi di aggiungerlo a una lista. E il raccolto della linea
-    # di base a11y resta in una macchina sola, perche' quelle misure girano
-    # solo sul progetto desktop.
+    # Per PROGETTO, e il desktop — che da solo pesava ~80 s — in DUE meta' su
+    # un filtro, non su un elenco di file. `--grep` di Playwright confronta
+    # anche il percorso del file, quindi «a11y.spec» da una parte e tutto il
+    # resto dall'altra: verificato in locale 15 + 16 = 31 test, nessuno perso
+    # ne' doppio. ⚠️ E' un `--grep-invert`, non una lista, di proposito: un
+    # file di specifica NUOVO cade da solo nella seconda meta'. Con una lista
+    # resterebbe fuori dal desktop finche' qualcuno non se ne ricorda.
+    #
+    # Il raccolto della linea di base a11y resta in una macchina sola, perche'
+    # le misure che lo riempiono girano solo nella prima meta'.
     strategy:
       fail-fast: false
       matrix:
-        progetti: ["desktop over-fhd", "mobile", "tablet"]
+        include:
+          - parte: desktop · accessibilità
+            argomenti: --project=desktop --grep a11y\.spec
+          - parte: desktop · layout
+            argomenti: --project=desktop --project=over-fhd --grep-invert a11y\.spec
+          - parte: mobile
+            argomenti: --project=mobile
+          - parte: tablet
+            argomenti: --project=tablet
     # ⚠️ Questo job esiste perché jsdom NON FA LAYOUT. L'11 settembre 2026 la
     # suite vitest era verde su 590 test e OTTO rotte traboccavano su un
     # telefono, in produzione: `getBoundingClientRect` restituisce zeri in
@@ -301,21 +314,34 @@ jobs:
           echo "::add-mask::$TOK"
           echo "cookie=$TOK" >> "$GITHUB_OUTPUT"
 
+      # ⚠️ Solo la «headless shell»: senza `channel` nella configurazione,
+      # Playwright in headless lancia quella, e il Chromium completo che
+      # `install chromium` scaricava accanto (~5 s) non girava mai.
+      #
+      # In cache i BINARI, non le dipendenze di sistema: i font arrivano da
+      # apt a ogni corsa, e devono — la larghezza del testo decide il layout
+      # che questo gate misura, e un font diverso sposterebbe ogni conteggio.
+      # La chiave e' il lockfile, cioe' la versione di Playwright.
+      - uses: actions/cache@v4
+        id: browser-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-shell-${{ runner.os }}-${{ hashFiles('frontend/package-lock.json') }}
       - name: browser
         working-directory: frontend
-        run: npx playwright install --with-deps chromium
+        run: |
+          if [ "${{ steps.browser-cache.outputs.cache-hit }}" = "true" ]; then
+            npx playwright install-deps chromium
+          else
+            npx playwright install --with-deps --only-shell chromium
+          fi
 
       - name: gate
         working-directory: frontend
         env:
           E2E_BASE_URL: http://127.0.0.1:8000
           E2E_SESSION_COOKIE: ${{ steps.sess.outputs.cookie }}
-          PROGETTI: ${{ matrix.progetti }}
-        run: |
-          # `--project` una volta per nome: la matrice ne porta uno o due.
-          ARGS=""
-          for p in $PROGETTI; do ARGS="$ARGS --project=$p"; done
-          npx playwright test $ARGS
+        run: npx playwright test ${{ matrix.argomenti }}
 
       - if: failure()
         uses: actions/upload-artifact@v4
@@ -382,14 +408,23 @@ jobs:
     # esattamente come prima succedeva a un'immagine bocciata da trivy.
     # `latest` invece si sposta solo DOPO il bump (job `latest`): un tag che
     # si legge come «l'ultima buona» non puo' puntare a una non verificata.
-    runs-on: ubuntu-latest
+    #
+    # ⚠️ Su arm64 NATIVO dal 2026-09-21: il nodo e' un A1, e fino a qui ogni
+    # istruzione dello stadio runtime girava EMULATA da QEMU su un runner
+    # x64. Misurato: la sola prova degli import 60 s, il vecchio `chown -R`
+    # 20 s. In regime quei livelli stanno in cache, ma la prima build del
+    # giorno rifa' le patch di sicurezza e tutto cio' che le segue, ed era
+    # quella che tornava sul percorso critico. I runner arm64 sono gratuiti
+    # per i repository pubblici. Lo stadio frontend usa `$BUILDPLATFORM`,
+    # che qui diventa arm64: il lockfile porta gia' i binari arm64-musl di
+    # rolldown e lightningcss, verificato prima di spostarlo.
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 90
     permissions:
       contents: read
       packages: write
     steps:
       - uses: actions/checkout@v4
-      - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
         with:
@@ -430,8 +465,8 @@ jobs:
       # delle patch, quindi se la data e' di oggi le patch sono state
       # scaricate oggi. Non c'e' modo di avere l'una senza le altre.
       #
-      # Gira sotto qemu (gia' predisposto sopra): e' un `cat`, il costo e'
-      # trascurabile e l'immagine e' quella VERA appena pubblicata.
+      # Nativo sul runner arm64: e' un `cat`, il costo e' trascurabile e
+      # l'immagine e' quella VERA appena pubblicata.
       - name: le patch di sicurezza devono essere di oggi
         run: |
           set -euo pipefail
