@@ -453,6 +453,31 @@ pacchetto che nessuno aveva chiesto. E si verifica col venv SINCRONIZZATO
 sulla versione nuova: `anyio` sta sotto `TestClient`, quindi una rottura si
 vede nella suite solo dopo `uv sync`.
 
+### La forma della pipeline dal 2026-09-21: tutto in parallelo, il RILASCIO aspetta
+
+Prima: quattro job di test → immagine → trivy → bump, ~7,5 min, di cui il
+percorso critico era il gate UI (~4 min) SOMMATO a build + scansione (~3 min).
+Ora `image` non ha `needs`: si costruisce e si scansiona mentre girano i test,
+e `bump` porta in `needs` OGNI job di test piu' `audit`, `image`,
+`image-scan`. **Il cancello e' `bump`: togliere un job da quella lista vuol
+dire rilasciare senza di esso.** Un commit rosso lascia nel registro
+un'immagine col suo SHA che nessuno usa; `latest` si sposta solo dopo il bump.
+
+Tre accorgimenti, ognuno misurato:
+
+- **pytest su tutti i core** (`-n auto`, pytest-xdist + pytest-cov). 168 s in
+  un processo solo. ⚠️ Con piu' processi un test che conta su cio' che un
+  ALTRO test ha fatto nello stesso processo diventa una lotteria: il
+  censimento degli istogrammi saltava in silenzio il tetto dei Web Vital
+  (seriale 10 salti, `-n 4` 11). **Confrontare i SALTATI, non solo i
+  superati**, quando si tocca la parallelizzazione: il verde non cambia.
+- **Gate UI diviso per viewport su tre macchine**, non con piu' worker sulla
+  stessa: `workers: 1` resta, per la ragione scritta in playwright.config.ts.
+- **Dockerfile: niente che cambi a ogni commit sopra le dipendenze.** `ARG
+  GIT_SHA` sopra `uv sync` e un `chown -R /app` finale rifacevano ~74 s su 109
+  a OGNI build per un lockfile identico. Lo SHA sta ora sopra i soli COPY del
+  codice, la proprieta' si da' dove i file nascono.
+
 ### ⚠️ "Synced + Healthy" does NOT mean your change is on screen
 
 Cost a round-trip on 2026-09-04 ("non vedo le modifiche"). Everything looked

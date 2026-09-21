@@ -49,20 +49,34 @@ ATTESE: dict[str, tuple[float, str]] = {
 }
 
 #: Sotto questo numero il censimento non sta misurando l'app.
-MINIMO_FAMIGLIE = 2
-#: ⚠️ Le famiglie compaiono solo DOPO che qualcosa le ha osservate, quindi il
-#: censimento dipende da quali test hanno gia' girato nel processo. Da sola
-#: questa suite ne vede due; con l'intera suite ne vede tre, perche' i test
-#: della RUM registrano `finance_alert_web_vital_value`. Ecco perche' ATTESE
-#: elenca anche famiglie che un'esecuzione isolata non incontra: una
-#: dichiarazione in piu' non fa danno, una in meno rende il test ordine-
-#: dipendente — e un test che cambia esito con l'ordine non e' un cancello.
+MINIMO_FAMIGLIE = 3
+#: ⚠️ Le famiglie compaiono solo DOPO che qualcosa le ha osservate. Fino al
+#: 2026-09-21 il censimento contava su quali test avessero gia' girato NELLO
+#: STESSO PROCESSO: da sola questa suite vedeva due famiglie, con l'intera
+#: suite tre, perche' i test della RUM registrano `finance_alert_web_vital_value`.
+#:
+#: Con la suite divisa fra piu' processi (pytest-xdist, in CI) quella
+#: dipendenza diventa una lotteria: il test della RUM finisce in un altro
+#: worker e il tetto dei Web Vital non viene controllato, con uno SKIP che si
+#: legge come legittimo. Misurato: seriale 10 salti, `-n 4` 11. Quindi la
+#: fixture ora osserva da se' ogni famiglia dichiarata, e il pavimento sale a
+#: tre — una famiglia che smette di comparire e' un rosso, non un salto.
 
 
 @pytest.fixture(scope="module")
 def testo_metriche() -> str:
+    from app.api.deps import get_current_user
+    from app.models import User
+
     client = TestClient(app)
-    client.get("/api/health")  # una richiesta, o gli istogrammi non esistono
+    client.get("/api/health")  # una richiesta, o gli istogrammi HTTP non esistono
+    # Un campione di Web Vital, per la stessa ragione: l'istogramma nasce alla
+    # prima osservazione. Utente finto, perche' la rotta e' autenticata.
+    app.dependency_overrides[get_current_user] = lambda: User(username="censimento", password_hash="x")
+    try:
+        client.post("/api/rum/web-vitals", json={"metric": "LCP", "value": 1200, "device": "desktop"})
+    finally:
+        app.dependency_overrides.pop(get_current_user, None)
     return client.get("/metrics").text
 
 

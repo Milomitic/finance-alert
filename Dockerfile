@@ -127,14 +127,6 @@ RUN echo "archivio sicurezza Debian: ${APT_SECURITY_DATE}" \
 # needed again if you exec into the container.
 COPY --from=ghcr.io/astral-sh/uv:0.7 /uv /uvx /usr/local/bin/
 
-# Commit da cui questa immagine e' stata costruita. Risponde, DA DENTRO
-# L'APP, all'unica domanda che conta dopo un deploy: "sto eseguendo la mia
-# modifica?". CI verde e ArgoCD Synced/Healthy non la rispondono, perche' il
-# bump del tag immagine e' un commit SUCCESSIVO: esiste sempre una finestra in
-# cui tutto e' verde e gira l'immagine precedente.
-ARG GIT_SHA=unknown
-ENV GIT_SHA=${GIT_SHA}
-
 ENV PYTHONUNBUFFERED=1 \
     # Never let uv download its own Python: use the image's interpreter, so
     # the runtime is exactly python:3.11-slim's (security patches come from
@@ -145,13 +137,34 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app/backend
 
+# ── Non-root user ────────────────────────────────────────────────────────────
+# Containers share the host kernel: root-in-container is root for kernel
+# attack surface. A fixed high UID (no name lookup needed) also matches K8s
+# `runAsNonRoot`/securityContext checks later (M2).
+# /app/backend/data is pre-created and owned by the app user so the named
+# volume inherits correct ownership on first use.
+#
+# ⚠️ Created HERE, before the dependencies, and not at the end with a
+# `chown -R app:app /app` as it used to be. That final chown sat after
+# `COPY backend/app`, so it re-ran on EVERY commit and rewrote the whole venv
+# into a new layer: 20.5 s under QEMU per build, measured on 2026-09-21. The
+# ownership is the same as before — everything under /app belongs to `app` —
+# but each piece now gets it where it is created: the venv inside the same
+# RUN as `uv sync` (a separate chown layer would store the venv twice), the
+# code with `COPY --chown`, which costs nothing.
+RUN useradd --uid 10001 --create-home --shell /usr/sbin/nologin app \
+    && mkdir -p /app/backend/data/logs \
+    && chown app:app /app /app/backend \
+    && chown -R app:app /app/backend/data
+
 # Lockfile-first again (same caching logic as the frontend stage).
-COPY backend/pyproject.toml backend/uv.lock ./
+COPY --chown=app:app backend/pyproject.toml backend/uv.lock ./
 # --frozen: uv.lock is law — fail instead of re-resolving (reproducibility).
 # --no-dev: pytest/ruff/etc. stay out of the runtime image.
 # --no-install-project: only 3rd-party deps; the app runs from source, it is
 #   not an installed package.
-RUN uv sync --frozen --no-dev --no-install-project
+RUN uv sync --frozen --no-dev --no-install-project \
+ && chown -R app:app /app/backend/.venv
 
 # Drop the SYSTEM interpreter's packaging tools. Not a cosmetic cleanup: they
 # were the only findings in the image scan, and this removes them rather than
@@ -187,24 +200,29 @@ RUN python -m pip uninstall -y pip setuptools wheel 2>/dev/null || true; \
 RUN python -c "import uvicorn, alembic, fastapi, sqlalchemy, pandas, yfinance" \
  && echo "runtime imports OK without pip/setuptools"
 
+# Commit da cui questa immagine e' stata costruita. Risponde, DA DENTRO
+# L'APP, all'unica domanda che conta dopo un deploy: "sto eseguendo la mia
+# modifica?". CI verde e ArgoCD Synced/Healthy non la rispondono, perche' il
+# bump del tag immagine e' un commit SUCCESSIVO: esiste sempre una finestra in
+# cui tutto e' verde e gira l'immagine precedente.
+#
+# ⚠️ Sta QUI, dopo le dipendenze, e non in cima. Un ARG che cambia a ogni
+# commit invalida ogni livello che lo segue: quando stava sopra `uv sync`,
+# ogni build rifaceva installazione, pulizia di pip e prova degli import —
+# 53 s sotto QEMU su 109, misurati il 2026-09-21 — per un lockfile identico.
+# Da qui invalida soltanto i COPY del codice, che cambiano comunque.
+ARG GIT_SHA=unknown
+ENV GIT_SHA=${GIT_SHA}
+
 # Application code + migrations. tests/ and data/ are excluded by
 # .dockerignore — runtime state NEVER ships inside an image.
-COPY backend/alembic.ini ./
-COPY backend/alembic ./alembic
-COPY backend/app ./app
+COPY --chown=app:app backend/alembic.ini ./
+COPY --chown=app:app backend/alembic ./alembic
+COPY --chown=app:app backend/app ./app
 
 # The built SPA lands where main.py expects it (see layout note above).
-COPY --from=frontend-build /fe/dist /app/frontend/dist
+COPY --chown=app:app --from=frontend-build /fe/dist /app/frontend/dist
 
-# ── Non-root user ────────────────────────────────────────────────────────────
-# Containers share the host kernel: root-in-container is root for kernel
-# attack surface. A fixed high UID (no name lookup needed) also matches K8s
-# `runAsNonRoot`/securityContext checks later (M2).
-# /app/backend/data is pre-created and owned by the app user so the named
-# volume inherits correct ownership on first use.
-RUN useradd --uid 10001 --create-home --shell /usr/sbin/nologin app \
-    && mkdir -p /app/backend/data/logs \
-    && chown -R app:app /app
 USER app
 
 EXPOSE 8000

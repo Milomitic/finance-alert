@@ -58,13 +58,19 @@ jobs:
       # E701/E702…) live in pyproject `ignore` / per-file-ignores, documented there.
       - name: ruff (full config)
         run: uv run ruff check app tests
-      # La suite gira UNA volta sotto coverage: stesso costo di prima piu'
-      # qualche secondo, e in cambio si puo' chiedere quali funzioni non sono
-      # mai partite.
-      - name: pytest (suite con guardia di rete), sotto coverage
-        run: |
-          uv run coverage run --source=app -m pytest tests/ -q
-          uv run coverage json -o .coverage.json
+      # La suite gira UNA volta sotto coverage, e in cambio si puo' chiedere
+      # quali funzioni non sono mai partite.
+      #
+      # ⚠️ Su tutti i core (`-n auto`, pytest-xdist) dal 2026-09-21: era il
+      # passo piu' lungo del job, 168 s su un runner a quattro vCPU con la
+      # suite in un processo solo. La copertura la raccoglie pytest-cov da ogni
+      # worker e la unisce: verificato in locale che il rapporto del codice
+      # mai eseguito qui sotto e' IDENTICO fra seriale e parallelo. Un test che
+      # dipendeva da cio' che un altro aveva gia' fatto nello stesso processo
+      # (il censimento degli istogrammi) e' stato reso autosufficiente prima
+      # di accendere il parallelo — con `-n 4` saltava in silenzio.
+      - name: pytest (suite con guardia di rete), sotto coverage, su tutti i core
+        run: uv run pytest tests/ -q -n auto --cov=app --cov-report=json:.coverage.json
 
       # ⚠️ NON una percentuale di copertura: quella misura quante righe sono
       # state toccate e si Goodhart-izza al primo tentativo di alzarla. Questo
@@ -159,8 +165,26 @@ jobs:
       - run: npm run build
 
   ui-gate:
-    name: gate UI — layout e accessibilità in un browser vero
+    name: gate UI — layout e accessibilità in un browser vero (${{ matrix.progetti }})
     runs-on: ubuntu-latest
+    # ⚠️ DIVISO PER VIEWPORT, su macchine diverse, e non con piu' worker sulla
+    # stessa. Il gate gira con `workers: 1` di proposito — «un gate che
+    # fallisce a intermittenza viene disattivato: meglio lento», dice
+    # playwright.config.ts — e quattro browser contro un backend solo su
+    # quattro vCPU sono esattamente la contesa che quella scelta evita. Qui
+    # ogni parte ha il SUO backend, il suo seme e un worker: stessa misura di
+    # prima, un terzo del tempo. Misurato il 2026-09-21: 143 s di test in
+    # serie, di cui desktop ~80, mobile ~33, tablet ~30.
+    #
+    # Per PROGETTO e non per file, perche' cosi' non ci sono buchi: un file di
+    # specifica nuovo gira su tutti e quattro i progetti senza che nessuno
+    # debba ricordarsi di aggiungerlo a una lista. E il raccolto della linea
+    # di base a11y resta in una macchina sola, perche' quelle misure girano
+    # solo sul progetto desktop.
+    strategy:
+      fail-fast: false
+      matrix:
+        progetti: ["desktop over-fhd", "mobile", "tablet"]
     # ⚠️ Questo job esiste perché jsdom NON FA LAYOUT. L'11 settembre 2026 la
     # suite vitest era verde su 590 test e OTTO rotte traboccavano su un
     # telefono, in produzione: `getBoundingClientRect` restituisce zeri in
@@ -286,12 +310,19 @@ jobs:
         env:
           E2E_BASE_URL: http://127.0.0.1:8000
           E2E_SESSION_COOKIE: ${{ steps.sess.outputs.cookie }}
-        run: npx playwright test
+          PROGETTI: ${{ matrix.progetti }}
+        run: |
+          # `--project` una volta per nome: la matrice ne porta uno o due.
+          ARGS=""
+          for p in $PROGETTI; do ARGS="$ARGS --project=$p"; done
+          npx playwright test $ARGS
 
       - if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-report
+          # Un nome per parte: upload-artifact v4 rifiuta due artefatti con lo
+          # stesso nome nella stessa run.
+          name: playwright-report-${{ strategy.job-index }}
           path: frontend/test-results/
           retention-days: 7
 
@@ -339,11 +370,18 @@ jobs:
   image:
     name: arm64 image → GHCR
     if: github.event_name == 'push' && github.ref == 'refs/heads/cloud'
-    # ⚠️ `ui-gate` è nella catena: un bundle che sborda dallo schermo o che
-    # aggiunge violazioni di accessibilità non deve diventare un'immagine.
-    # È la stessa scelta fatta il 2026-09-09 mettendo trivy sulla catena del
-    # bump — un cancello fuori dalla catena è un avviso, non un cancello.
-    needs: [backend, backend-postgres, frontend, ui-gate]
+    # ⚠️ NESSUN `needs`: l'immagine si costruisce e si scansiona MENTRE girano
+    # i test, e ad aspettarli e' il RILASCIO (`bump`), non la build. Fino al
+    # 2026-09-21 questo job aspettava tutti e quattro i job di test, cioe' il
+    # piu' lento dei quattro (~4 min) si sommava a build + scansione (~3 min).
+    #
+    # Il cancello non si e' spostato di un millimetro: un bundle che sborda o
+    # che aggiunge violazioni di accessibilita' non viene RILASCIATO, perche'
+    # `bump` ha tutti i test in `needs`. Si pubblica solo col tag dello SHA —
+    # un'immagine di un commit rosso esiste nel registro e non la usa nessuno,
+    # esattamente come prima succedeva a un'immagine bocciata da trivy.
+    # `latest` invece si sposta solo DOPO il bump (job `latest`): un tag che
+    # si legge come «l'ultima buona» non puo' puntare a una non verificata.
     runs-on: ubuntu-latest
     timeout-minutes: 90
     permissions:
@@ -378,7 +416,6 @@ jobs:
             APT_SECURITY_DATE=${{ steps.apt.outputs.date }}
           tags: |
             ghcr.io/milomitic/finance-alert:${{ github.sha }}
-            ghcr.io/milomitic/finance-alert:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
       # ── Il gate anti-cache ──────────────────────────────────────────────
@@ -448,7 +485,11 @@ jobs:
     # emergency ships by removing a dependency here in a commit, which leaves
     # the deroga in the git history where it can be reviewed, rather than in
     # someone's memory.
-    needs: [image, audit, image-scan]
+    #
+    # ⚠️ Dal 2026-09-21 porta ANCHE i test: `image` non li aspetta piu' (si
+    # costruisce in parallelo), quindi e' qui che il rilascio li attende tutti.
+    # Toglierne uno da questa lista vorrebbe dire rilasciare senza di esso.
+    needs: [backend, backend-postgres, frontend, ui-gate, audit, image, image-scan]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -478,3 +519,28 @@ jobs:
             sleep $((i * 5))
           done
           echo "::error::bump push failed after 5 attempts"; exit 1
+
+  latest:
+    name: ghcr — latest sull'immagine rilasciata
+    if: github.event_name == 'push' && github.ref == 'refs/heads/cloud'
+    # Dopo il bump, fuori dal percorso critico: niente dipende da `latest` nel
+    # chart (che punta allo SHA), ma chi scarica l'immagine a mano deve
+    # trovare l'ultima RILASCIATA, non l'ultima costruita. Il ri-etichettamento
+    # copia il manifesto nel registro, senza scaricare ne' ricostruire nulla.
+    needs: bump
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: latest -> ${{ github.sha }}
+        run: |
+          docker buildx imagetools create \
+            -t ghcr.io/milomitic/finance-alert:latest \
+            ghcr.io/milomitic/finance-alert:${{ github.sha }}
