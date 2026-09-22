@@ -3002,9 +3002,13 @@ rilevazione né `trigger_price` per prezzarla. I proprietari unici sono
 `snapshot.first_emitted_at` e `snapshot.first_price` (fissati alla creazione,
 preservati a ogni revisione, con ripiego dichiarato sui campi vecchi per i 116
 alert che li precedono). Gli storici sono stati riempiti da
-`app.scripts.backfill_first_price` e portano `first_price_ricostruito: true`,
-perché una scansione girata prima della chiusura mostrava la barra precedente:
-uno scarto di una barra che dall'alert non è determinabile.
+`app.scripts.backfill_first_price`. ⚠️ Quel riempimento portava un marcatore
+`first_price_ricostruito`, **tolto il 2026-09-22 da tutti gli 8.141 snapshot che
+lo avevano** insieme a `plan_outcomes.source` e alle sue pastiglie a schermo:
+finché la base è in costruzione un valore o è giusto o si corregge, e una
+distinzione fra popolazioni che nessuno usa è solo rumore. Misurato prima di
+toglierlo: il prezzo ricalcolato combacia al centesimo con quello mostrato in
+8.892 casi su 8.910.
 
 ⚠️ **E non è un difetto cosmetico: ribalta gli esiti.** Il magazzino
 `plan_outcomes` ancorato ai campi che derivano dava risultati dipendenti da
@@ -3012,6 +3016,54 @@ QUANDO girava la maturazione. Sul caso FLNC (alert 18987) l'ingresso corretto è
 10,86 del 24 agosto, non 11,43 del 27: con quello il trade va a **stop il 25
 agosto (−1R)** invece di colpire il target il 14 settembre (+3,98R). Stesso
 alert, stesso codice, due conti opposti.
+
+---
+
+### ⚠️ E il piano leggeva DUE istanti: il prezzo di allora, l'ATR di adesso (2026-09-22)
+
+Seguito diretto della regola qui sopra, e la metà che mancava. Fissare il solo
+PREZZO lasciava `atr`, `invalidation` e `horizon` a farsi sostituire a ogni
+revisione insieme al resto dello snapshot — quindi il piano mostrava un
+ingresso di un giorno e una geometria di un altro.
+
+Il caso che l'ha aperto, MRNA (alert 18192, rottura di struttura del 12 agosto
+a 63,67). Il 19 agosto il titolo fa **+177% in una seduta** (62,96 → 174,38),
+l'alert resta vivo fino al 21 perché la condizione «chiusura sopra 59,49» resta
+vera, e l'ATR passa da 3,96 a 14,89:
+
+    a schermo   stop 26,46 (il 58% sotto l'ingresso)   target 124,16 e 124,16   +1,6R
+    coerente    stop 53,76                             target 83,48 e 93,39     +2,0R
+
+I due target IDENTICI sono il sintomo da riconoscere: con un ATR gonfiato
+entrambi finiscono sul tetto del +95%. Su 7.296 alert rivisti, 296 hanno uno
+scarto di ATR oltre il 25% e 37 oltre il doppio; il magazzino misurava la
+stessa geometria mescolata (5.540 righe rimisurate alla versione "3": 20
+target in più, 7 stop in meno).
+
+**La regola: tutti gli ingressi del piano vengono dallo stesso istante di
+quello d'ingresso.** Non «​l'ATR non deve muoversi​» — il resto dello snapshot
+(Forza, catena, regime) continua e deve continuare a descrivere l'analisi di
+ADESSO. Quello che mancava era la separazione fra le due letture.
+
+`first_atr`, `first_invalidation`, `first_horizon` si fissano alla creazione e
+si conservano a ogni revisione; i due gemelli del piano li leggono da un
+proprietario solo (`trade_plan.ingressi_del_piano` /
+`tradePlaybook.ingressiDelPiano`), campo per campo, coi correnti come ripiego
+per gli alert che li precedono. Due vettori d'oro nuovi li tengono d'accordo.
+
+⚠️ **Invalidazione e orizzonte non si ricavano dalle barre all'indietro**: il
+livello è un fatto del detector e l'orizzonte si calcola dalla catena
+ORIGINALE, che la revisione ha sovrascritto. L'ATR sì, perché è la stessa
+funzione sugli stessi dati — e `backfill_plan_inputs` MISURA il proprio
+ricalcolo sugli alert mai rivisti, dove la verità si conosce: scarto mediano
+0,93%, 138 su 1.839 oltre il 5%.
+
+⚠️ Ordine delle operazioni, se si rifa: **prima il riempimento, poi la
+maturazione.** Una maturazione che gira fra il rilascio e il riempimento
+scrive righe alla versione nuova con la geometria vecchia, e non verrebbero
+più riesaminate. Qui è stato verificato leggendo `method_version` prima
+(5.521 a "2", una a "1", nessuna a "3") e rimettendo comunque tutte le righe
+in discussione prima di rimisurarle.
 
 ---
 
